@@ -31,6 +31,14 @@ public:
     add_uint64(static_cast<std::uint64_t>(value));
   }
 
+  void add_string(const std::string & value) noexcept
+  {
+    add_size(value.size());
+    for (const unsigned char character : value) {
+      add_uint64(static_cast<std::uint64_t>(character));
+    }
+  }
+
   void add_double(const double value) noexcept
   {
     std::uint64_t bits{};
@@ -108,6 +116,81 @@ retained::RetainedPathSegmentEvaluation make_segment_evaluation(
   return evaluation;
 }
 
+bool follow_observation_shape_valid(
+  const FollowDynamicObstacleObservation & observation) noexcept
+{
+  if (
+    observation.target_id.empty() || observation.observation_generation == 0U ||
+    !std::isfinite(observation.observation_sec) ||
+    observation.observation_sec < 0.0 ||
+    !std::isfinite(observation.hard_gap_m) || observation.hard_gap_m < 0.0 ||
+    observation.elapsed_time_sec.size() < 2U ||
+    observation.elapsed_time_sec.size() !=
+    observation.target_relative_progress_m.size())
+  {
+    return false;
+  }
+  if (
+    std::abs(observation.elapsed_time_sec.front()) > kIdentityTolerance ||
+    !std::isfinite(observation.target_relative_progress_m.front()) ||
+    observation.target_relative_progress_m.front() < 0.0)
+  {
+    return false;
+  }
+  for (std::size_t index = 1U; index < observation.elapsed_time_sec.size(); ++index) {
+    if (
+      !std::isfinite(observation.elapsed_time_sec[index]) ||
+      observation.elapsed_time_sec[index] <=
+      observation.elapsed_time_sec[index - 1U] ||
+      !std::isfinite(observation.target_relative_progress_m[index]) ||
+      observation.target_relative_progress_m[index] + kIdentityTolerance <
+      observation.target_relative_progress_m[index - 1U])
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<double> sample_follow_target_progress(
+  const FollowDynamicObstacleObservation & observation,
+  const double relative_time_sec) noexcept
+{
+  if (!follow_observation_shape_valid(observation) ||
+    !std::isfinite(relative_time_sec) || relative_time_sec < 0.0 ||
+    relative_time_sec > observation.elapsed_time_sec.back() + kIdentityTolerance)
+  {
+    return std::nullopt;
+  }
+  if (relative_time_sec <= kIdentityTolerance) {
+    return observation.target_relative_progress_m.front();
+  }
+  const auto upper = std::lower_bound(
+    observation.elapsed_time_sec.begin(), observation.elapsed_time_sec.end(),
+    relative_time_sec);
+  if (upper == observation.elapsed_time_sec.end()) {
+    return observation.target_relative_progress_m.back();
+  }
+  const std::size_t upper_index = static_cast<std::size_t>(
+    std::distance(observation.elapsed_time_sec.begin(), upper));
+  if (std::abs(*upper - relative_time_sec) <= kIdentityTolerance) {
+    return observation.target_relative_progress_m[upper_index];
+  }
+  if (upper_index == 0U) {
+    return std::nullopt;
+  }
+  const std::size_t lower_index = upper_index - 1U;
+  const double duration =
+    observation.elapsed_time_sec[upper_index] -
+    observation.elapsed_time_sec[lower_index];
+  const double fraction =
+    (relative_time_sec - observation.elapsed_time_sec[lower_index]) / duration;
+  return observation.target_relative_progress_m[lower_index] +
+    fraction *
+    (observation.target_relative_progress_m[upper_index] -
+    observation.target_relative_progress_m[lower_index]);
+}
+
 }  // namespace
 
 const char * to_string(const CurrentWorldProofReason reason) noexcept
@@ -140,6 +223,47 @@ const char * to_string(const CurrentWorldProofReason reason) noexcept
     case CurrentWorldProofReason::StagePathBlocked:
       return "stage-path-blocked";
     case CurrentWorldProofReason::ProofRejected:
+      return "proof-rejected";
+  }
+  return "unknown";
+}
+
+const char * to_string(const FollowCurrentWorldProofReason reason) noexcept
+{
+  switch (reason) {
+    case FollowCurrentWorldProofReason::Accepted:
+      return "accepted";
+    case FollowCurrentWorldProofReason::InvalidInput:
+      return "invalid-input";
+    case FollowCurrentWorldProofReason::WindowRejected:
+      return "window-rejected";
+    case FollowCurrentWorldProofReason::ProgressLiftRejected:
+      return "progress-lift-rejected";
+    case FollowCurrentWorldProofReason::ControlPoseIdentityMismatch:
+      return "control-pose-identity-mismatch";
+    case FollowCurrentWorldProofReason::CourseFrameIdentityMismatch:
+      return "course-frame-identity-mismatch";
+    case FollowCurrentWorldProofReason::TargetObservationUnavailable:
+      return "target-observation-unavailable";
+    case FollowCurrentWorldProofReason::TargetIdentityMismatch:
+      return "target-identity-mismatch";
+    case FollowCurrentWorldProofReason::TargetTubeIdentityMismatch:
+      return "target-tube-identity-mismatch";
+    case FollowCurrentWorldProofReason::TargetHorizonUnavailable:
+      return "target-horizon-unavailable";
+    case FollowCurrentWorldProofReason::InitialHardGapViolation:
+      return "initial-hard-gap-violation";
+    case FollowCurrentWorldProofReason::CourseFrameUnavailable:
+      return "course-frame-unavailable";
+    case FollowCurrentWorldProofReason::DelayPrefixBlocked:
+      return "delay-prefix-blocked";
+    case FollowCurrentWorldProofReason::ConnectorBlocked:
+      return "connector-blocked";
+    case FollowCurrentWorldProofReason::StagePathBlocked:
+      return "stage-path-blocked";
+    case FollowCurrentWorldProofReason::StageGapViolation:
+      return "stage-gap-violation";
+    case FollowCurrentWorldProofReason::ProofRejected:
       return "proof-rejected";
   }
   return "unknown";
@@ -208,6 +332,26 @@ std::uint64_t fingerprint_empty_obstacle_observation(
   builder.add_uint64(observation_generation);
   builder.add_double(observation_sec);
   builder.add_size(0U);
+  return builder.value();
+}
+
+std::uint64_t fingerprint_follow_obstacle_observation(
+  const FollowDynamicObstacleObservation & observation) noexcept
+{
+  if (!follow_observation_shape_valid(observation)) {
+    return 0U;
+  }
+  FingerprintBuilder builder;
+  builder.add_string("follow-target-tube-v1");
+  builder.add_string(observation.target_id);
+  builder.add_uint64(observation.observation_generation);
+  builder.add_double(observation.observation_sec);
+  builder.add_double(observation.hard_gap_m);
+  builder.add_size(observation.elapsed_time_sec.size());
+  for (std::size_t index = 0U; index < observation.elapsed_time_sec.size(); ++index) {
+    builder.add_double(observation.elapsed_time_sec[index]);
+    builder.add_double(observation.target_relative_progress_m[index]);
+  }
   return builder.value();
 }
 
@@ -373,6 +517,219 @@ CurrentWorldProofResult build_current_world_retained_proof(
     return result;
   }
   result.reason = CurrentWorldProofReason::Accepted;
+  result.proof = std::move(proof.proof);
+  return result;
+}
+
+FollowCurrentWorldProofResult build_follow_current_world_retained_proof(
+  const plan::CanonicalExecutionPlan & execution_plan,
+  const plan::CanonicalExecutionCursor & cursor,
+  const FollowCurrentWorldProofRequest & request,
+  const recovery_footprint::OccupancyGrid & wall_grid,
+  const recovery_footprint::FootprintExtents & footprint)
+{
+  FollowCurrentWorldProofResult result;
+  const auto window = retained::build_retained_execution_window(
+    execution_plan, cursor);
+  if (!window.window.has_value()) {
+    result.reason = FollowCurrentWorldProofReason::WindowRejected;
+    return result;
+  }
+  if (!wall_grid.valid() || !footprint.valid() ||
+    request.measured_to_control_path.empty() ||
+    !std::isfinite(request.swept_step_m) || request.swept_step_m <= 0.0)
+  {
+    return result;
+  }
+  if (!request.target.current ||
+    !follow_observation_shape_valid(request.target))
+  {
+    result.reason = FollowCurrentWorldProofReason::TargetObservationUnavailable;
+    return result;
+  }
+  if (
+    request.current.intent != mpcc_execution_contract::ControlIntent::Follow ||
+    request.current.target_id != request.target.target_id ||
+    request.current.target_obstacle_generation !=
+    request.target.observation_generation ||
+    execution_plan.problem.target_id != request.target.target_id ||
+    execution_plan.problem.target_obstacle_generation == 0U)
+  {
+    result.reason = FollowCurrentWorldProofReason::TargetIdentityMismatch;
+    return result;
+  }
+  if (
+    request.target.tube_id == 0U ||
+    request.current.obstacle_tube_id != request.target.tube_id ||
+    fingerprint_follow_obstacle_observation(request.target) !=
+    request.target.tube_id)
+  {
+    result.reason = FollowCurrentWorldProofReason::TargetTubeIdentityMismatch;
+    return result;
+  }
+  if (!retained::current_execution_provenance_complete(request.current)) {
+    return result;
+  }
+  const auto lift = retained::lift_progress_to_retained_branch(
+    retained::CircularProgressLiftRequest{
+      request.measured_course_progress_m,
+      window.window->expected_current_progress_m,
+      request.current.path_length_m,
+      request.progress_continuity_tolerance_m,
+      request.current.circular});
+  if (lift.reason != retained::CircularProgressLiftReason::Accepted) {
+    result.reason = FollowCurrentWorldProofReason::ProgressLiftRejected;
+    return result;
+  }
+  if (!same_pose(request.measured_to_control_path.back(), request.control_pose) ||
+    fingerprint_control_pose_path(
+      request.measured_to_control_path, request.control_pose) !=
+    request.current.control_pose_id)
+  {
+    result.reason = FollowCurrentWorldProofReason::ControlPoseIdentityMismatch;
+    return result;
+  }
+  if (fingerprint_course_frame_window(request.course_frame_knots) !=
+    request.current.course_frame_window_id)
+  {
+    result.reason = FollowCurrentWorldProofReason::CourseFrameIdentityMismatch;
+    return result;
+  }
+  const auto expected_current_pose = reconstruct_pose(
+    request.course_frame_knots, window.window->expected_current_state);
+  if (!expected_current_pose.has_value()) {
+    result.reason = FollowCurrentWorldProofReason::CourseFrameUnavailable;
+    return result;
+  }
+
+  const auto current_target_relative = sample_follow_target_progress(
+    request.target, 0.0);
+  if (!current_target_relative.has_value()) {
+    result.reason = FollowCurrentWorldProofReason::TargetHorizonUnavailable;
+    return result;
+  }
+  const double current_target_absolute =
+    lift.lifted_progress_m + current_target_relative.value();
+  const double expected_current_ego =
+    window.window->expected_current_state.progress_m +
+    window.window->expected_current_state.lag_m;
+  const double current_gap = std::min(
+    current_target_relative.value(),
+    current_target_absolute - expected_current_ego);
+  result.minimum_gap_m = current_gap;
+  if (!std::isfinite(current_gap) ||
+    current_gap + kIdentityTolerance < request.target.hard_gap_m)
+  {
+    result.reason = FollowCurrentWorldProofReason::InitialHardGapViolation;
+    return result;
+  }
+
+  retained::RetainedExecutionProofRequest proof_request;
+  proof_request.current = request.current;
+  proof_request.measured_course_progress_m = request.measured_course_progress_m;
+  proof_request.progress_continuity_tolerance_m =
+    request.progress_continuity_tolerance_m;
+  const auto delay_wall = recovery_footprint::evaluate_clear_footprint_path(
+    wall_grid, footprint, request.measured_to_control_path,
+    request.swept_step_m);
+  proof_request.measured_to_control_prefix = make_segment_evaluation(
+    request.current, lift.lifted_progress_m, lift.lifted_progress_m,
+    delay_wall);
+  proof_request.measured_to_control_prefix.obstacles_clear = true;
+  proof_request.measured_to_control_prefix.minimum_obstacle_clearance_m =
+    current_gap - request.target.hard_gap_m;
+  if (!delay_wall.valid || !delay_wall.clear) {
+    result.reason = FollowCurrentWorldProofReason::DelayPrefixBlocked;
+    return result;
+  }
+
+  const std::vector<recovery_footprint::Pose2D> connector_path{
+    request.control_pose, expected_current_pose.value()};
+  const auto connector_wall = recovery_footprint::evaluate_clear_footprint_path(
+    wall_grid, footprint, connector_path, request.swept_step_m);
+  proof_request.control_to_retained_connector = make_segment_evaluation(
+    request.current, lift.lifted_progress_m,
+    window.window->expected_current_progress_m, connector_wall);
+  proof_request.control_to_retained_connector.obstacles_clear = true;
+  proof_request.control_to_retained_connector.minimum_obstacle_clearance_m =
+    current_gap - request.target.hard_gap_m;
+  if (!connector_wall.valid || !connector_wall.clear) {
+    result.reason = FollowCurrentWorldProofReason::ConnectorBlocked;
+    return result;
+  }
+
+  auto previous_pose = expected_current_pose.value();
+  proof_request.stage_evaluations.reserve(window.window->samples.size());
+  for (std::size_t index = 0U; index < window.window->samples.size(); ++index) {
+    const auto & sample = window.window->samples[index];
+    const auto target_relative = sample_follow_target_progress(
+      request.target, sample.relative_time_sec);
+    if (!target_relative.has_value()) {
+      result.reason = FollowCurrentWorldProofReason::TargetHorizonUnavailable;
+      result.rejected_stage_index = index;
+      return result;
+    }
+    const double target_absolute =
+      lift.lifted_progress_m + target_relative.value();
+    const double ego_absolute =
+      sample.endpoint.progress_m + sample.endpoint.lag_m;
+    const double gap = target_absolute - ego_absolute;
+    result.minimum_gap_m = std::min(result.minimum_gap_m, gap);
+    if (!std::isfinite(gap) ||
+      gap + kIdentityTolerance < request.target.hard_gap_m)
+    {
+      result.reason = FollowCurrentWorldProofReason::StageGapViolation;
+      result.rejected_stage_index = index;
+      return result;
+    }
+    const auto endpoint_pose = reconstruct_pose(
+      request.course_frame_knots, sample.endpoint);
+    if (!endpoint_pose.has_value()) {
+      result.reason = FollowCurrentWorldProofReason::CourseFrameUnavailable;
+      result.rejected_stage_index = index;
+      return result;
+    }
+    const std::vector<recovery_footprint::Pose2D> stage_path{
+      previous_pose, endpoint_pose.value()};
+    const auto stage_wall = recovery_footprint::evaluate_clear_footprint_path(
+      wall_grid, footprint, stage_path, request.swept_step_m);
+    retained::RetainedStageSafetyEvaluation evaluation;
+    evaluation.control_stage_index = sample.control_stage_index;
+    evaluation.relative_time_sec = sample.relative_time_sec;
+    evaluation.segment_duration_sec = sample.segment_duration_sec;
+    evaluation.segment_start_progress_m = sample.segment_start_progress_m;
+    evaluation.absolute_progress_m = sample.absolute_progress_m;
+    evaluation.observation_generation = request.current.observation_generation;
+    evaluation.stage_geometry_id = request.current.stage_geometry_id;
+    evaluation.target_obstacle_generation =
+      request.current.target_obstacle_generation;
+    evaluation.course_frame_window_id = request.current.course_frame_window_id;
+    evaluation.obstacle_tube_id = request.current.obstacle_tube_id;
+    evaluation.course_frame_available = true;
+    evaluation.wall_checked = stage_wall.valid;
+    evaluation.wall_clear = stage_wall.valid && stage_wall.clear;
+    evaluation.obstacle_checked = true;
+    evaluation.obstacles_clear = true;
+    evaluation.minimum_wall_clearance_m = 0.0;
+    evaluation.minimum_obstacle_clearance_m =
+      gap - request.target.hard_gap_m;
+    proof_request.stage_evaluations.push_back(evaluation);
+    if (!stage_wall.valid || !stage_wall.clear) {
+      result.reason = FollowCurrentWorldProofReason::StagePathBlocked;
+      result.rejected_stage_index = index;
+      return result;
+    }
+    previous_pose = endpoint_pose.value();
+  }
+
+  auto proof = retained::build_retained_execution_proof(
+    execution_plan, cursor, proof_request);
+  result.proof_reason = proof.reason;
+  if (!proof.proof.has_value()) {
+    result.reason = FollowCurrentWorldProofReason::ProofRejected;
+    return result;
+  }
+  result.reason = FollowCurrentWorldProofReason::Accepted;
   result.proof = std::move(proof.proof);
   return result;
 }

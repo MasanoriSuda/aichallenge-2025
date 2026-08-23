@@ -532,8 +532,7 @@ bool current_execution_provenance_complete(
     provenance.target_obstacle_generation == 0U :
     provenance.target_obstacle_generation != 0U;
   return provenance.decision_id != 0U &&
-         (provenance.intent == contract::ControlIntent::Track ||
-         provenance.intent == contract::ControlIntent::Cruise) &&
+         contract::canonical_normal_intent_supported(provenance.intent) &&
          provenance.observation_generation != 0U &&
          provenance.stage_geometry_id != 0U && target_identity_complete &&
          provenance.control_pose_id != 0U &&

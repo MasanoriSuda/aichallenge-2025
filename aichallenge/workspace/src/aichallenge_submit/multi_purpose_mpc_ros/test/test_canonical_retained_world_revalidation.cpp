@@ -109,6 +109,47 @@ world::CurrentWorldProofRequest make_request()
   return request;
 }
 
+plan::CanonicalExecutionPlan make_follow_plan()
+{
+  auto value = make_plan();
+  value.problem.intent = contract::ControlIntent::Follow;
+  value.problem.target_id = "d2";
+  value.problem.target_obstacle_generation = 5U;
+  value.problem.bounds_schema_id = "progress-stage-wall-follow-target-v1";
+  value.problem.cost_schema_id = "velocity-progress-follow-gap-v1";
+  value.problem = contract::seal_problem_context(std::move(value.problem));
+  value.solution.problem_fingerprint = value.problem.fingerprint;
+  return value;
+}
+
+world::FollowCurrentWorldProofRequest make_follow_request()
+{
+  const auto empty = make_request();
+  world::FollowCurrentWorldProofRequest request;
+  request.current = empty.current;
+  request.current.intent = contract::ControlIntent::Follow;
+  request.current.target_id = "d2";
+  request.current.target_obstacle_generation = 8U;
+  request.measured_course_progress_m = empty.measured_course_progress_m;
+  request.progress_continuity_tolerance_m =
+    empty.progress_continuity_tolerance_m;
+  request.measured_to_control_path = empty.measured_to_control_path;
+  request.control_pose = empty.control_pose;
+  request.course_frame_knots = empty.course_frame_knots;
+  request.target.target_id = "d2";
+  request.target.observation_generation = 8U;
+  request.target.observation_sec = 10.6;
+  request.target.hard_gap_m = 3.0;
+  request.target.elapsed_time_sec = {0.0, 0.4, 1.4};
+  request.target.target_relative_progress_m = {5.0, 5.2, 5.7};
+  request.target.current = true;
+  request.target.tube_id =
+    world::fingerprint_follow_obstacle_observation(request.target);
+  request.current.obstacle_tube_id = request.target.tube_id;
+  request.swept_step_m = empty.swept_step_m;
+  return request;
+}
+
 }  // namespace
 
 TEST(CanonicalRetainedWorldRevalidation, BuildsProofFromCurrentEmptyWorld)
@@ -183,4 +224,90 @@ TEST(CanonicalRetainedWorldRevalidation, RejectsUnsealedCurrentInputs)
       execution_plan, cursor, changed_obstacle_identity,
       make_grid(footprint::CellState::Free), extents).reason,
     world::CurrentWorldProofReason::ObstacleTubeIdentityMismatch);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, BuildsFollowProofFromCurrentTargetTube)
+{
+  const auto execution_plan = make_follow_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const auto request = make_follow_request();
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+  const auto result = world::build_follow_current_world_retained_proof(
+    execution_plan, cursor, request,
+    make_grid(footprint::CellState::Free), extents);
+
+  ASSERT_EQ(result.reason, world::FollowCurrentWorldProofReason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(result.proof->current.target_id, "d2");
+  EXPECT_EQ(result.proof->current.target_obstacle_generation, 8U);
+  EXPECT_EQ(result.proof->stage_evaluations.size(), 2U);
+  EXPECT_GT(result.minimum_gap_m, request.target.hard_gap_m);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, RejectsFollowTargetIdentityAndTubeMutation)
+{
+  const auto execution_plan = make_follow_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+
+  auto changed_target = make_follow_request();
+  changed_target.target.target_id = "d3";
+  changed_target.target.tube_id =
+    world::fingerprint_follow_obstacle_observation(changed_target.target);
+  changed_target.current.obstacle_tube_id = changed_target.target.tube_id;
+  EXPECT_EQ(
+    world::build_follow_current_world_retained_proof(
+      execution_plan, cursor, changed_target,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::FollowCurrentWorldProofReason::TargetIdentityMismatch);
+
+  auto changed_tube = make_follow_request();
+  changed_tube.target.target_relative_progress_m.back() += 0.5;
+  EXPECT_EQ(
+    world::build_follow_current_world_retained_proof(
+      execution_plan, cursor, changed_tube,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::FollowCurrentWorldProofReason::TargetTubeIdentityMismatch);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, RejectsFollowCurrentAndFutureHardGap)
+{
+  const auto execution_plan = make_follow_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+
+  auto current_gap = make_follow_request();
+  current_gap.target.target_relative_progress_m = {2.9, 3.1, 3.6};
+  current_gap.target.tube_id =
+    world::fingerprint_follow_obstacle_observation(current_gap.target);
+  current_gap.current.obstacle_tube_id = current_gap.target.tube_id;
+  EXPECT_EQ(
+    world::build_follow_current_world_retained_proof(
+      execution_plan, cursor, current_gap,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::FollowCurrentWorldProofReason::InitialHardGapViolation);
+
+  auto future_gap = make_follow_request();
+  future_gap.target.target_relative_progress_m = {5.0, 3.0, 3.0};
+  // A regressing target tube is malformed and must fail before it can be used
+  // to manufacture a future gap certificate.
+  future_gap.target.tube_id = 1U;
+  future_gap.current.obstacle_tube_id = future_gap.target.tube_id;
+  EXPECT_EQ(
+    world::build_follow_current_world_retained_proof(
+      execution_plan, cursor, future_gap,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::FollowCurrentWorldProofReason::TargetObservationUnavailable);
+
+  auto stage_gap = make_follow_request();
+  stage_gap.target.target_relative_progress_m = {5.0, 5.0, 5.0};
+  stage_gap.target.hard_gap_m = 4.3;
+  stage_gap.target.tube_id =
+    world::fingerprint_follow_obstacle_observation(stage_gap.target);
+  stage_gap.current.obstacle_tube_id = stage_gap.target.tube_id;
+  EXPECT_EQ(
+    world::build_follow_current_world_retained_proof(
+      execution_plan, cursor, stage_gap,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::FollowCurrentWorldProofReason::StageGapViolation);
 }

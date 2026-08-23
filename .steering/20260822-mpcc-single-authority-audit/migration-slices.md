@@ -244,6 +244,14 @@ Express longitudinal interaction as stage constraints/references of the same MPC
   coverage is still required.
 - Follow remains shadow-only. Its scalar production owner is intentionally not
   deleted until the positive dynamic gate and a separate authority approval.
+- `.steering/20260823-follow-retained-current-world` closes the static retained-lifecycle gap.
+  A fresh Follow plan is now stored only after its complete canonical command chain succeeds.
+  A later fresh miss can be checked against the current coherent target tube, physical
+  `theta + e_lag` gap, current wall, exact retained cursor and the same canonical selector.
+- The retained path is shadow-only and has deterministic fail-closed coverage for target/tube
+  mutation, malformed or short horizon, current/stage gap violations and wall/provenance failures.
+  Static validation passes 38/38 package tests; dynamic evidence of an actual fresh-miss replacement
+  is still required before production authority may be considered.
 
 ### 2026-08-23 Hold/Stop intent provenance status
 

@@ -5757,12 +5757,21 @@ struct FollowShadowCycleResult
   bool canonical_fresh_authority_ready{false};
   bool canonical_actuation_extracted{false};
   bool canonical_command_available{false};
+  bool canonical_plan_stored{false};
+  bool retained_shadow_attempted{false};
+  bool retained_world_certified{false};
+  bool retained_candidate_accepted{false};
+  bool retained_authority_ready{false};
+  bool retained_actuation_extracted{false};
+  bool retained_command_available{false};
   bool warm_start_applied{false};
   bool solver_context_reset{false};
   std::uint64_t decision_id{};
   std::uint64_t problem_fingerprint{};
   std::uint64_t target_observation_generation{};
   std::uint64_t canonical_plan_id{};
+  std::uint64_t retained_plan_id{};
+  std::uint64_t retained_target_tube_id{};
   std::string target_id;
   race_mpcc::FollowShadowEligibilityReason eligibility_reason{
     race_mpcc::FollowShadowEligibilityReason::ProgressMpccDisabled};
@@ -5823,9 +5832,28 @@ struct FollowShadowCycleResult
     mpcc_contract::CanonicalNormalCandidateRejectReason::NotEvaluated};
   canonical_plan::CanonicalActuationReason canonical_actuation_reason{
     canonical_plan::CanonicalActuationReason::InvalidPlan};
+  canonical_plan::CanonicalExecutionPlanStoreReason canonical_store_reason{
+    canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
+  canonical_plan::CanonicalExecutionCursorReason retained_cursor_reason{
+    canonical_plan::CanonicalExecutionCursorReason::InvalidPlan};
+  canonical_retained_world::FollowCurrentWorldProofReason retained_world_reason{
+    canonical_retained_world::FollowCurrentWorldProofReason::InvalidInput};
+  canonical_retained::RetainedExecutionProofReason retained_proof_reason{
+    canonical_retained::RetainedExecutionProofReason::InvalidPlan};
+  canonical_retained::RetainedCandidateBuildReason retained_candidate_reason{
+    canonical_retained::RetainedCandidateBuildReason::InvalidPlan};
+  mpcc_contract::CanonicalNormalAuthoritySource retained_authority_source{
+    mpcc_contract::CanonicalNormalAuthoritySource::EmergencyStop};
+  mpcc_contract::CanonicalNormalAuthorityReason retained_authority_reason{
+    mpcc_contract::CanonicalNormalAuthorityReason::NoCanonicalCandidate};
+  canonical_plan::CanonicalActuationReason retained_actuation_reason{
+    canonical_plan::CanonicalActuationReason::InvalidPlan};
+  std::size_t retained_rejected_stage{};
+  double retained_minimum_gap_m{std::numeric_limits<double>::infinity()};
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
+  std::string retained_detail{"not-attempted"};
 };
 
 struct FollowShadowTelemetryWindow
@@ -5845,6 +5873,13 @@ struct FollowShadowTelemetryWindow
   std::uint64_t canonical_authority_count{};
   std::uint64_t canonical_actuation_count{};
   std::uint64_t canonical_command_count{};
+  std::uint64_t canonical_stored_count{};
+  std::uint64_t retained_attempt_count{};
+  std::uint64_t retained_world_count{};
+  std::uint64_t retained_candidate_count{};
+  std::uint64_t retained_authority_count{};
+  std::uint64_t retained_actuation_count{};
+  std::uint64_t retained_command_count{};
   std::uint64_t accepted_count{};
   std::uint64_t warm_start_count{};
   std::uint64_t reset_count{};
@@ -21314,7 +21349,7 @@ struct MPC
   }
 
   std::optional<std::vector<recovery_footprint::Pose2D>>
-  build_track_cruise_current_control_path() const
+  build_canonical_current_control_path() const
   {
     if (!actual_wall_monitor_pose_.has_value() ||
       !predicted_execution_pose_.has_value() ||
@@ -21508,7 +21543,7 @@ struct MPC
       return;
     }
     const auto measured_to_control_path =
-      build_track_cruise_current_control_path();
+      build_canonical_current_control_path();
     if (!measured_to_control_path.has_value() ||
       !predicted_execution_pose_.has_value())
     {
@@ -21646,6 +21681,227 @@ struct MPC
       "retained candidate current-world-certified for production";
   }
 
+  void evaluate_follow_retained_shadow(
+    const MpcProblem & problem, const double now_sec,
+    const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
+    retained_plan,
+    FollowShadowCycleResult & result)
+  {
+    if (!result.eligible || result.canonical_command_available) {
+      return;
+    }
+    result.retained_shadow_attempted = true;
+    if (retained_plan == nullptr) {
+      result.retained_detail = "no prior Follow canonical plan";
+      return;
+    }
+    result.retained_plan_id = retained_plan->plan_id;
+    if (
+      !problem.follow_longitudinal_contract.valid ||
+      model == nullptr || model->reference_path == nullptr ||
+      overtake_static_wall_grid_ == nullptr ||
+      !overtake_static_wall_footprint_.valid() ||
+      !std::isfinite(problem.progress_origin_m) ||
+      !std::isfinite(model->reference_path->length) ||
+      model->reference_path->length <= 0.0)
+    {
+      result.retained_detail = "current Follow world provenance unavailable";
+      return;
+    }
+    const auto cursor = canonical_plan::resolve_execution_cursor(
+      *retained_plan, now_sec);
+    result.retained_cursor_reason = cursor.reason;
+    if (!cursor.available) {
+      result.retained_detail = std::string{"cursor rejected: "} +
+        canonical_plan::to_string(cursor.reason);
+      return;
+    }
+    const auto window = canonical_retained::build_retained_execution_window(
+      *retained_plan, cursor);
+    if (!window.window.has_value()) {
+      result.retained_detail = std::string{"window rejected: "} +
+        canonical_retained::to_string(window.reason);
+      return;
+    }
+    const auto current_origin = canonical_retained::lift_progress_to_retained_branch(
+      canonical_retained::CircularProgressLiftRequest{
+        problem.progress_origin_m,
+        window.window->expected_current_progress_m,
+        model->reference_path->length,
+        kV2XCourseProgressContinuityToleranceM,
+        model->reference_path->circular});
+    if (
+      current_origin.reason !=
+      canonical_retained::CircularProgressLiftReason::Accepted)
+    {
+      result.retained_world_reason =
+        canonical_retained_world::FollowCurrentWorldProofReason::
+        ProgressLiftRejected;
+      result.retained_detail = std::string{"current origin rejected: "} +
+        canonical_retained::to_string(current_origin.reason);
+      return;
+    }
+    double required_maximum_progress_m =
+      window.window->expected_current_progress_m;
+    for (const auto & sample : window.window->samples) {
+      required_maximum_progress_m = std::max(
+        required_maximum_progress_m, sample.absolute_progress_m);
+    }
+    const auto course_frame_knots = build_progress_course_frame_knots(
+      problem.progress_stage_geometry, current_origin.lifted_progress_m,
+      required_maximum_progress_m);
+    if (!course_frame_knots.has_value()) {
+      result.retained_world_reason =
+        canonical_retained_world::FollowCurrentWorldProofReason::
+        CourseFrameUnavailable;
+      result.retained_detail = "current course-frame window unavailable";
+      return;
+    }
+    const auto measured_to_control_path =
+      build_canonical_current_control_path();
+    if (!measured_to_control_path.has_value() ||
+      !predicted_execution_pose_.has_value())
+    {
+      result.retained_detail = "current control-pose prefix unavailable";
+      return;
+    }
+    const auto target_provenance = selected_target_provenance(
+      last_v2x_behavior_output_);
+    const auto & follow_contract = problem.follow_longitudinal_contract;
+    const double target_age_sec = now_sec - target_provenance.receipt_sec;
+    const bool target_current =
+      target_provenance.valid &&
+      target_provenance.target_id == follow_contract.target_id &&
+      target_provenance.observation_generation ==
+      follow_contract.target_observation_generation &&
+      overtake_core::is_v2x_receipt_age_fresh(
+      target_age_sec, cfg.v2x_gap.timeout_sec,
+      kV2XReceiptFutureToleranceSec);
+
+    const auto context = make_problem_context(
+      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    canonical_retained_world::FollowCurrentWorldProofRequest proof_request;
+    proof_request.current.decision_id = context.decision_id;
+    proof_request.current.intent = context.intent;
+    proof_request.current.intent_generation = context.intent_generation;
+    proof_request.current.observation_generation = context.observation_generation;
+    proof_request.current.stage_geometry_id = context.stage_geometry_id;
+    proof_request.current.target_obstacle_generation =
+      context.target_obstacle_generation;
+    proof_request.current.target_id = context.target_id;
+    proof_request.current.observation_sec = now_sec;
+    proof_request.current.path_length_m = model->reference_path->length;
+    proof_request.current.circular = model->reference_path->circular;
+    proof_request.measured_course_progress_m = problem.progress_origin_m;
+    proof_request.progress_continuity_tolerance_m =
+      kV2XCourseProgressContinuityToleranceM;
+    proof_request.measured_to_control_path = measured_to_control_path.value();
+    proof_request.control_pose = predicted_execution_pose_.value();
+    proof_request.current.control_pose_id =
+      canonical_retained_world::fingerprint_control_pose_path(
+      proof_request.measured_to_control_path, proof_request.control_pose);
+    proof_request.course_frame_knots = course_frame_knots.value();
+    proof_request.current.course_frame_window_id =
+      canonical_retained_world::fingerprint_course_frame_window(
+      proof_request.course_frame_knots);
+    proof_request.target.target_id = follow_contract.target_id;
+    proof_request.target.observation_generation =
+      follow_contract.target_observation_generation;
+    proof_request.target.observation_sec = target_provenance.receipt_sec;
+    proof_request.target.hard_gap_m = follow_contract.hard_gap_m;
+    proof_request.target.elapsed_time_sec = follow_contract.elapsed_time_sec;
+    proof_request.target.target_relative_progress_m =
+      follow_contract.target_progress_m;
+    proof_request.target.current = target_current;
+    proof_request.target.tube_id =
+      canonical_retained_world::fingerprint_follow_obstacle_observation(
+      proof_request.target);
+    proof_request.current.obstacle_tube_id = proof_request.target.tube_id;
+    result.retained_target_tube_id = proof_request.target.tube_id;
+    proof_request.swept_step_m = std::max(
+      1e-3, std::min(0.10, 0.5 * overtake_static_wall_grid_->resolution_m));
+
+    const auto world_proof =
+      canonical_retained_world::build_follow_current_world_retained_proof(
+      *retained_plan, cursor, proof_request, *overtake_static_wall_grid_,
+      overtake_static_wall_footprint_);
+    result.retained_world_reason = world_proof.reason;
+    result.retained_proof_reason = world_proof.proof_reason;
+    result.retained_rejected_stage = world_proof.rejected_stage_index;
+    result.retained_minimum_gap_m = world_proof.minimum_gap_m;
+    if (!world_proof.proof.has_value()) {
+      result.retained_detail = std::string{"world proof rejected: "} +
+        canonical_retained_world::to_string(world_proof.reason) + "/" +
+        canonical_retained::to_string(world_proof.proof_reason);
+      return;
+    }
+    result.retained_world_certified = true;
+    const auto candidate = canonical_retained::build_canonical_retained_candidate(
+      *retained_plan, cursor, proof_request.current,
+      world_proof.proof.value());
+    result.retained_candidate_reason = candidate.reason;
+    result.retained_proof_reason = candidate.proof_reason;
+    if (!candidate.candidate.has_value()) {
+      result.retained_detail = std::string{"candidate rejected: "} +
+        canonical_retained::to_string(candidate.reason) + "/" +
+        canonical_retained::to_string(candidate.proof_reason);
+      return;
+    }
+    result.retained_candidate_accepted = true;
+    const auto authority = mpcc_contract::resolve_canonical_normal_authority(
+      mpcc_contract::CanonicalNormalAuthorityRequest{
+        result.decision_id, now_sec,
+        mpcc_contract::CanonicalNormalCandidate{}, candidate.candidate.value(),
+        mpcc_contract::ControlIntent::Follow});
+    result.retained_authority_source = authority.source;
+    result.retained_authority_reason = authority.reason;
+    if (
+      authority.source !=
+      mpcc_contract::CanonicalNormalAuthoritySource::RetainedCertified)
+    {
+      result.retained_detail = std::string{"shadow selector rejected: "} +
+        mpcc_contract::to_string(authority.source) + "/" +
+        mpcc_contract::to_string(authority.reason);
+      return;
+    }
+    result.retained_authority_ready = true;
+    const auto actuation = canonical_plan::extract_canonical_actuation(
+      *retained_plan, cursor, model->length);
+    result.retained_actuation_reason = actuation.reason;
+    if (!actuation.actuation.has_value()) {
+      result.retained_detail = std::string{"actuation rejected: "} +
+        canonical_plan::to_string(actuation.reason);
+      return;
+    }
+    result.retained_actuation_extracted = true;
+    const auto & selected_actuation = actuation.actuation.value();
+    const auto command = mpcc_contract::build_canonical_normal_command(
+      authority,
+      mpcc_contract::CanonicalActuation{
+        selected_actuation.predicted_speed_mps,
+        selected_actuation.acceleration_mps2,
+        selected_actuation.curvature_radpm,
+        selected_actuation.steering_tire_angle_rad,
+        selected_actuation.virtual_progress_speed_mps});
+    if (!command.command.has_value()) {
+      result.retained_detail = std::string{"command rejected: "} +
+        mpcc_contract::to_string(command.reason);
+      return;
+    }
+    std::string prediction_reject_reason;
+    const auto prediction = build_canonical_world_prediction(
+      *retained_plan, cursor, course_frame_knots.value(),
+      canonical_retained_world::kCourseFrameIdentityToleranceM,
+      prediction_reject_reason);
+    if (!prediction.has_value()) {
+      result.retained_detail = prediction_reject_reason;
+      return;
+    }
+    result.retained_command_available = true;
+    result.retained_detail =
+      "retained Follow candidate current-target-certified; shadow only";
+  }
+
   FollowShadowCycleResult evaluate_follow_shadow(
     const MpcProblem & problem, const double now_sec)
   {
@@ -21662,6 +21918,8 @@ struct MPC
     result.target_observation_generation =
       problem.follow_longitudinal_contract.target_observation_generation;
     result.measured_ego_speed_mps = problem.progress_measured_speed_mps;
+    const auto retained_plan_before_fresh =
+      follow_shadow_plan_store_.snapshot();
     const auto & follow_contract = problem.follow_longitudinal_contract;
     if (!follow_contract.target_progress_m.empty()) {
       result.current_target_gap_m = follow_contract.target_progress_m.front();
@@ -21699,7 +21957,17 @@ struct MPC
         follow_contract.progress_upper_m.back();
     }
     const auto started = SteadyClock::now();
-    const auto finish = [&result, &started]() {
+    const auto finish = [this, &problem, now_sec, &result, &started,
+        &retained_plan_before_fresh]() {
+        try {
+          evaluate_follow_retained_shadow(
+            problem, now_sec, retained_plan_before_fresh, result);
+        } catch (const std::exception & error) {
+          result.retained_detail = std::string{"retained shadow exception: "} +
+            error.what();
+        } catch (...) {
+          result.retained_detail = "retained shadow exception: unknown";
+        }
         result.total_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started).count();
         return result;
@@ -22032,7 +22300,7 @@ struct MPC
       extraction_request.progress_origin_m = extended_problem->progress_origin_m;
       extraction_request.stage_duration_sec = problem.progress_stage_dt_sec;
       extraction_request.extended_primal = execution_primal.primal;
-      const auto canonical_chain =
+      auto canonical_chain =
         canonical_plan_adapter::build_fresh_canonical_command(
         canonical_plan_adapter::FreshCanonicalCommandRequest{
           extraction_request,
@@ -22093,6 +22361,27 @@ struct MPC
         result.detail = detail.str();
         return finish();
       }
+      if (!canonical_chain.plan.has_value()) {
+        result.status = "canonical-store-reject";
+        result.detail = "accepted Follow canonical chain has no plan";
+        result.canonical_command.reset();
+        result.canonical_command_available = false;
+        return finish();
+      }
+      result.canonical_store_reason = follow_shadow_plan_store_.replace(
+        std::move(canonical_chain.plan.value()));
+      if (
+        result.canonical_store_reason !=
+        canonical_plan::CanonicalExecutionPlanStoreReason::Accepted)
+      {
+        result.status = "canonical-store-reject";
+        result.detail = std::string{"Follow canonical store rejected: "} +
+          canonical_plan::to_string(result.canonical_store_reason);
+        result.canonical_command.reset();
+        result.canonical_command_available = false;
+        return finish();
+      }
+      result.canonical_plan_stored = true;
       result.status = "canonical-ready-shadow";
       result.detail =
         "Follow fresh canonical command reconstructed; authority remains shadow";
@@ -22131,6 +22420,15 @@ struct MPC
       result.canonical_actuation_extracted ? 1U : 0U;
     window.canonical_command_count +=
       result.canonical_command_available ? 1U : 0U;
+    window.canonical_stored_count += result.canonical_plan_stored ? 1U : 0U;
+    window.retained_attempt_count += result.retained_shadow_attempted ? 1U : 0U;
+    window.retained_world_count += result.retained_world_certified ? 1U : 0U;
+    window.retained_candidate_count +=
+      result.retained_candidate_accepted ? 1U : 0U;
+    window.retained_authority_count += result.retained_authority_ready ? 1U : 0U;
+    window.retained_actuation_count +=
+      result.retained_actuation_extracted ? 1U : 0U;
+    window.retained_command_count += result.retained_command_available ? 1U : 0U;
     window.accepted_count += result.canonical_command_available ? 1U : 0U;
     window.warm_start_count += result.warm_start_applied ? 1U : 0U;
     window.reset_count += result.solver_context_reset ? 1U : 0U;
@@ -22194,7 +22492,10 @@ struct MPC
       canonical_plan::to_string(result.canonical_cursor_reason) + "/" +
       canonical_plan::to_string(result.canonical_candidate_reason) + "/" +
       mpcc_contract::to_string(result.canonical_authority_source) + "/" +
-      canonical_plan::to_string(result.canonical_actuation_reason);
+      canonical_plan::to_string(result.canonical_actuation_reason) + "/" +
+      canonical_plan::to_string(result.canonical_store_reason) + "/retained-" +
+      canonical_retained_world::to_string(result.retained_world_reason) + "/" +
+      (result.retained_command_available ? "ready" : "unavailable");
     if (status_key != last_follow_shadow_status_) {
       std::ostringstream message;
       message << "Follow MPCC shadow: decision=" << result.decision_id
@@ -22226,6 +22527,7 @@ struct MPC
               << (result.canonical_fresh_authority_ready ? 1 : 0) << '/'
               << (result.canonical_actuation_extracted ? 1 : 0) << '/'
               << (result.canonical_command_available ? 1 : 0)
+              << "/stored=" << (result.canonical_plan_stored ? 1 : 0)
               << ", canonical_reason="
               << canonical_plan_adapter::to_string(
         result.canonical_chain_reason) << '/'
@@ -22296,8 +22598,20 @@ struct MPC
         std::numeric_limits<double>::quiet_NaN())
               << ", status=" << result.status
               << ", detail=" << result.detail
+              << ", retained=" << (result.retained_shadow_attempted ? 1 : 0)
+              << '/' << canonical_retained_world::to_string(
+        result.retained_world_reason)
+              << '/' << (result.retained_command_available ? "ready" : "unavailable")
+              << ", retained_plan=" << result.retained_plan_id
+              << ", retained_tube=" << result.retained_target_tube_id
+              << ", retained_gap=" << result.retained_minimum_gap_m
+              << "m@" << result.retained_rejected_stage
+              << ", retained_detail=" << result.retained_detail
               << ", authority=shadow, selected=0";
-      if (!result.eligible || result.canonical_command_available) {
+      if (
+        !result.eligible || result.canonical_command_available ||
+        result.retained_command_available)
+      {
         RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", message.str().c_str());
       } else {
         RCLCPP_WARN(rclcpp::get_logger("mpc_controller"), "%s", message.str().c_str());
@@ -22377,6 +22691,34 @@ struct MPC
         result.execution_primal_rejected_value,
         result.execution_primal_rejected_violation,
         result.execution_primal_rejected_tolerance);
+      if (window.retained_attempt_count > 0U) {
+        RCLCPP_INFO(
+          rclcpp::get_logger("mpc_controller"),
+          "Follow retained MPCC shadow: attempted=%zu, world=%zu, "
+          "candidate=%zu, selector=%zu, actuation=%zu, command=%zu, "
+          "fresh_stored=%zu, plan=%lu, tube=%lu, cursor=%s, "
+          "world_reason=%s, proof_reason=%s, candidate_reason=%s, "
+          "selector_reason=%s/%s, actuation_reason=%s, min_gap=%.3f m@%zu, "
+          "detail=%s, authority=shadow, selected=0",
+          static_cast<std::size_t>(window.retained_attempt_count),
+          static_cast<std::size_t>(window.retained_world_count),
+          static_cast<std::size_t>(window.retained_candidate_count),
+          static_cast<std::size_t>(window.retained_authority_count),
+          static_cast<std::size_t>(window.retained_actuation_count),
+          static_cast<std::size_t>(window.retained_command_count),
+          static_cast<std::size_t>(window.canonical_stored_count),
+          static_cast<unsigned long>(result.retained_plan_id),
+          static_cast<unsigned long>(result.retained_target_tube_id),
+          canonical_plan::to_string(result.retained_cursor_reason),
+          canonical_retained_world::to_string(result.retained_world_reason),
+          canonical_retained::to_string(result.retained_proof_reason),
+          canonical_retained::to_string(result.retained_candidate_reason),
+          mpcc_contract::to_string(result.retained_authority_source),
+          mpcc_contract::to_string(result.retained_authority_reason),
+          canonical_plan::to_string(result.retained_actuation_reason),
+          result.retained_minimum_gap_m, result.retained_rejected_stage,
+          result.retained_detail.c_str());
+      }
     }
     window = FollowShadowTelemetryWindow{};
     last_follow_shadow_telemetry_log_sec_ = now_sec;
@@ -25227,6 +25569,7 @@ struct MPC
   std::string last_track_cruise_shadow_status_;
   std::optional<race_mpcc::ShadowWarmStartIdentity>
   follow_shadow_warm_start_identity_;
+  canonical_plan::CanonicalExecutionPlanStore follow_shadow_plan_store_;
   std::uint64_t follow_shadow_context_epoch_{};
   FollowShadowTelemetryWindow follow_shadow_telemetry_window_;
   double last_follow_shadow_telemetry_log_sec_{

@@ -387,6 +387,13 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   initialized without the canonical row-normalized physical-unit policy used by Follow and live
   extended Overtake. Fix and dynamically prove that initialization contract before repeating the
   Overtake live gate; no tolerance/config/fallback change is authorized.
+- `.steering/20260824-track-cruise-row-tolerance-contract` tested that initialization hypothesis
+  and rejected it. In `output/20260824-011002`, Domain 1 alternated 33 certified cycles with 32
+  solve failures and Domain 2 alternated 10 with 9. Strict row-normalized admission exposed
+  input-bound rows 210/212/270 which do not reliably converge inside their own physical
+  tolerance; it did not provide stable authority. The source experiment was removed. Audit the
+  five-state input-row construction and warm-start transport next, before changing solver
+  tolerances or expanding retained-plan eligibility.
 
 ## Slice 6: Legacy and migration path removal
 

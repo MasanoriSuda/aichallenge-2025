@@ -98,6 +98,21 @@ adapter::CanonicalPlanExtractionRequest make_follow_request()
   return request;
 }
 
+adapter::CanonicalPlanExtractionRequest make_overtake_request(
+  const contract::ControlIntent intent)
+{
+  auto request = make_request();
+  request.plan_id = request.problem.decision_id;
+  request.problem.intent = intent;
+  request.problem.target_id = "d2";
+  request.problem.target_obstacle_generation =
+    request.problem.observation_generation;
+  request.problem = contract::seal_problem_context(std::move(request.problem));
+  request.solution = make_solution(request.problem);
+  request.solution.solution_id = request.problem.decision_id;
+  return request;
+}
+
 }  // namespace
 
 TEST(CanonicalExecutionPlanAdapter, ExtractsEveryStateAndInputWithoutLegacyFlattening)
@@ -222,6 +237,40 @@ TEST(CanonicalExecutionPlanAdapter, FollowFreshChainPreservesExactActuation)
   EXPECT_EQ(result.command->intent, contract::ControlIntent::Follow);
   EXPECT_EQ(result.command->execution_plan_id, result.plan->plan_id);
   EXPECT_DOUBLE_EQ(result.maximum_actuation_difference, 0.0);
+}
+
+TEST(CanonicalExecutionPlanAdapter, OvertakeFreshChainPreservesExactIntent)
+{
+  for (const auto intent : {
+      contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass,
+      contract::ControlIntent::Return})
+  {
+    const auto request = make_overtake_request(intent);
+    constexpr double wheelbase_m = 2.0;
+    const auto direct = progress::extract_actuation_proposal(
+      request.extended_primal,
+      static_cast<int>(request.problem.horizon_steps), wheelbase_m);
+    ASSERT_TRUE(direct.has_value());
+    const auto result = adapter::build_fresh_canonical_command(
+      adapter::FreshCanonicalCommandRequest{
+        request, request.problem.decision_id, request.solved_sec, intent,
+        wheelbase_m,
+        contract::CanonicalActuation{
+          direct->predicted_speed_mps,
+          direct->acceleration_mps2,
+          direct->curvature_radpm,
+          direct->steering_tire_angle_rad,
+          direct->virtual_progress_speed_mps},
+        0.0});
+    EXPECT_EQ(result.reason, adapter::FreshCanonicalCommandReason::Accepted);
+    ASSERT_TRUE(result.plan.has_value());
+    ASSERT_TRUE(result.command.has_value());
+    EXPECT_EQ(result.plan->problem.intent, intent);
+    EXPECT_EQ(result.command->intent, intent);
+    EXPECT_EQ(result.plan->problem.target_id, "d2");
+    EXPECT_DOUBLE_EQ(result.maximum_actuation_difference, 0.0);
+  }
 }
 
 TEST(CanonicalExecutionPlanAdapter, FollowFreshChainRejectsActuationMutation)

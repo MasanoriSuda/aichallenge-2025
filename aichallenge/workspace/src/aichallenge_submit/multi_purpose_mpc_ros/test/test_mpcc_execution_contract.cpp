@@ -111,6 +111,20 @@ contract::CanonicalNormalCandidate make_follow_candidate(
   return candidate;
 }
 
+contract::CanonicalNormalCandidate make_overtake_candidate(
+  const contract::ControlIntent intent,
+  const std::uint64_t decision_id = 42U)
+{
+  auto context = make_context();
+  context.decision_id = decision_id;
+  context.intent = intent;
+  context = contract::seal_problem_context(std::move(context));
+  auto candidate = make_canonical_candidate(decision_id);
+  candidate.problem = context;
+  candidate.solution = make_solution(context);
+  return candidate;
+}
+
 contract::CanonicalNormalCommand make_normal_command(
   const contract::MpccProblemContext & context,
   const contract::CertifiedMpccSolution & solution,
@@ -151,6 +165,53 @@ TEST(MpccExecutionContract, FingerprintIsStableAndSensitiveToContext)
   changed = contract::seal_problem_context(std::move(changed));
   EXPECT_TRUE(contract::problem_context_complete(changed));
   EXPECT_NE(first.fingerprint, changed.fingerprint);
+}
+
+TEST(MpccExecutionContract, CanonicalNormalIntentDomainIsExplicit)
+{
+  for (const auto intent : {
+      contract::ControlIntent::Track,
+      contract::ControlIntent::Cruise,
+      contract::ControlIntent::Follow,
+      contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass,
+      contract::ControlIntent::Return})
+  {
+    EXPECT_TRUE(contract::canonical_normal_intent_supported(intent));
+  }
+  for (const auto intent : {
+      contract::ControlIntent::Unknown,
+      contract::ControlIntent::Hold,
+      contract::ControlIntent::Stop,
+      contract::ControlIntent::Rejoin})
+  {
+    EXPECT_FALSE(contract::canonical_normal_intent_supported(intent));
+  }
+}
+
+TEST(MpccExecutionContract, CanonicalOvertakeIntentsRequireTargetProvenance)
+{
+  for (const auto intent : {
+      contract::ControlIntent::Follow,
+      contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass,
+      contract::ControlIntent::Return})
+  {
+    EXPECT_TRUE(contract::canonical_normal_intent_requires_target(intent));
+    auto context = make_context();
+    context.intent = intent;
+    context.target_id.clear();
+    context.target_obstacle_generation = 0U;
+    context = contract::seal_problem_context(std::move(context));
+    EXPECT_FALSE(contract::problem_context_complete(context));
+  }
+
+  EXPECT_FALSE(
+    contract::canonical_normal_intent_requires_target(
+      contract::ControlIntent::Track));
+  EXPECT_FALSE(
+    contract::canonical_normal_intent_requires_target(
+      contract::ControlIntent::Cruise));
 }
 
 TEST(MpccExecutionContract, StageGeometryFingerprintUsesGeometryContent)
@@ -652,6 +713,26 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityAcceptsCertifiedFollowIntent
   EXPECT_EQ(result.command->intent, contract::ControlIntent::Follow);
 }
 
+TEST(MpccExecutionContract, CanonicalNormalAuthorityAcceptsExactOvertakeIntent)
+{
+  for (const auto intent : {
+      contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass,
+      contract::ControlIntent::Return})
+  {
+    const auto resolution = contract::resolve_canonical_normal_authority(
+      contract::CanonicalNormalAuthorityRequest{
+        42U, 12.0, make_overtake_candidate(intent), {}, intent});
+    ASSERT_EQ(
+      resolution.source,
+      contract::CanonicalNormalAuthoritySource::FreshCertified);
+    ASSERT_TRUE(resolution.problem.has_value());
+    EXPECT_EQ(resolution.problem->intent, intent);
+    EXPECT_EQ(resolution.problem->target_id, "d2");
+    EXPECT_GT(resolution.problem->target_obstacle_generation, 0U);
+  }
+}
+
 TEST(MpccExecutionContract, BuildsRetainedCanonicalCommandWithOriginalPlanIdentity)
 {
   const auto resolution = contract::resolve_canonical_normal_authority(
@@ -756,7 +837,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsUnsupportedCurrentInt
 {
   auto request = contract::CanonicalNormalAuthorityRequest{
     42U, 12.0, make_canonical_candidate(), {}};
-  request.current_intent = contract::ControlIntent::Pass;
+  request.current_intent = contract::ControlIntent::Hold;
 
   const auto resolution =
     contract::resolve_canonical_normal_authority(request);
@@ -947,7 +1028,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsThreeStateTrack)
     contract::CanonicalNormalCandidateRejectReason::NoncanonicalFormulation);
 }
 
-TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsUnsupportedCandidateIntent)
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsCrossIntentCandidate)
 {
   const auto context = make_context();
   auto fresh = make_canonical_candidate();
@@ -963,7 +1044,7 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsUnsupportedCandidateI
     contract::CanonicalNormalAuthoritySource::EmergencyStop);
   EXPECT_EQ(
     resolution.fresh_reject_reason,
-    contract::CanonicalNormalCandidateRejectReason::UnsupportedIntent);
+    contract::CanonicalNormalCandidateRejectReason::IntentMismatch);
 }
 
 TEST(MpccExecutionContract, CanonicalNormalAuthorityFailsClosedWithoutCandidate)

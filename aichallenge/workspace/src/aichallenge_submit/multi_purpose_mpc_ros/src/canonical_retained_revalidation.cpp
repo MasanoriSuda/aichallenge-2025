@@ -527,6 +527,9 @@ CircularProgressLiftResult lift_progress_to_retained_branch(
 bool current_execution_provenance_complete(
   const CurrentExecutionProvenance & provenance) noexcept
 {
+  const bool required_target_present =
+    !contract::canonical_normal_intent_requires_target(provenance.intent) ||
+    !provenance.target_id.empty();
   const bool target_identity_complete =
     provenance.target_id.empty() ?
     provenance.target_obstacle_generation == 0U :
@@ -534,7 +537,8 @@ bool current_execution_provenance_complete(
   return provenance.decision_id != 0U &&
          contract::canonical_normal_intent_supported(provenance.intent) &&
          provenance.observation_generation != 0U &&
-         provenance.stage_geometry_id != 0U && target_identity_complete &&
+         provenance.stage_geometry_id != 0U && required_target_present &&
+         target_identity_complete &&
          provenance.control_pose_id != 0U &&
          provenance.course_frame_window_id != 0U &&
          provenance.obstacle_tube_id != 0U &&

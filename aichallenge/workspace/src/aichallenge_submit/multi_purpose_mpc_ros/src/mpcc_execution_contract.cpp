@@ -249,7 +249,15 @@ bool canonical_normal_intent_supported(const ControlIntent intent) noexcept
 {
   return
     intent == ControlIntent::Track || intent == ControlIntent::Cruise ||
-    intent == ControlIntent::Follow;
+    intent == ControlIntent::Follow || intent == ControlIntent::ShiftOut ||
+    intent == ControlIntent::Pass || intent == ControlIntent::Return;
+}
+
+bool canonical_normal_intent_requires_target(const ControlIntent intent) noexcept
+{
+  return
+    intent == ControlIntent::Follow || intent == ControlIntent::ShiftOut ||
+    intent == ControlIntent::Pass || intent == ControlIntent::Return;
 }
 
 std::uint64_t fingerprint_stage_geometry(
@@ -467,7 +475,8 @@ MpccProblemContext seal_problem_context(MpccProblemContext context) noexcept
 bool problem_context_complete(const MpccProblemContext & context) noexcept
 {
   const bool required_target_present =
-    context.intent != ControlIntent::Follow || !context.target_id.empty();
+    !canonical_normal_intent_requires_target(context.intent) ||
+    !context.target_id.empty();
   const bool target_generation_complete =
     context.target_id.empty() ||
     (context.observation_generation > 0U && context.target_obstacle_generation > 0U);

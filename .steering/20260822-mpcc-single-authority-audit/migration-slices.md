@@ -357,6 +357,14 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
 - The next bounded Slice is the Overtake canonical-intent contract. It must extend exact-intent
   support and rerun this shadow without promoting authority. Solver, clearance and weight tuning
   remain prohibited until that contract passes.
+- `.steering/20260823-overtake-canonical-intent-contract` closes that intent-domain defect. The
+  canonical normal contract now admits ShiftOut/Pass/Return, requires target identity for every
+  Follow/Overtake intent and retains exact-intent matching. Replay advanced 353/353 physically
+  certified artifacts through plan/cursor/candidate/authority/command and world prediction with
+  zero actuation difference; `unsupported-intent` became zero.
+- The next fresh Gate A blocker is 37 stage-zero lateral-row violations (roughly 0.057--0.097 m
+  against 0.0164 m tolerance). Audit x0 and stage-zero bound provenance before authority promotion;
+  do not tune tolerance or wall clearance.
 
 ## Slice 6: Legacy and migration path removal
 

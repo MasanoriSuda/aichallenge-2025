@@ -138,6 +138,19 @@ make_request(
 
 } // namespace
 
+TEST(CanonicalRetainedRevalidation, OvertakeProvenanceRequiresTargetIdentity) {
+  auto current = make_current();
+  current.intent = contract::ControlIntent::Pass;
+  EXPECT_FALSE(retained::current_execution_provenance_complete(current));
+
+  current.target_id = "d2";
+  current.target_obstacle_generation = current.observation_generation;
+  EXPECT_TRUE(retained::current_execution_provenance_complete(current));
+
+  current.target_obstacle_generation = 0U;
+  EXPECT_FALSE(retained::current_execution_provenance_complete(current));
+}
+
 TEST(
   CanonicalRetainedRevalidation,
   PartialFirstStageUsesRemainingTimeAndNextState) {

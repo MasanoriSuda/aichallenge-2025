@@ -83,6 +83,19 @@ plan::CanonicalExecutionPlan make_follow_plan()
   return value;
 }
 
+plan::CanonicalExecutionPlan make_overtake_plan(
+  const contract::ControlIntent intent)
+{
+  auto value = make_plan();
+  value.problem.intent = intent;
+  value.problem.target_id = "d2";
+  value.problem.target_obstacle_generation =
+    value.problem.observation_generation;
+  value.problem = contract::seal_problem_context(std::move(value.problem));
+  value.solution.problem_fingerprint = value.problem.fingerprint;
+  return value;
+}
+
 contract::PhysicalCertificate make_current_physical_certificate()
 {
   contract::PhysicalCertificate certificate;
@@ -131,6 +144,31 @@ TEST(CanonicalExecutionPlan, AcceptsFollowPlanWithTargetProvenance)
   EXPECT_EQ(
     plan::validate_canonical_execution_plan(missing_target_id),
     plan::CanonicalExecutionPlanRejectReason::IncompleteProblem);
+}
+
+TEST(CanonicalExecutionPlan, AcceptsOvertakePlansOnlyWithTargetProvenance)
+{
+  for (const auto intent : {
+      contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass,
+      contract::ControlIntent::Return})
+  {
+    const auto value = make_overtake_plan(intent);
+    EXPECT_EQ(
+      plan::validate_canonical_execution_plan(value),
+      plan::CanonicalExecutionPlanRejectReason::None);
+
+    auto missing_target = value;
+    missing_target.problem.target_id.clear();
+    missing_target.problem.target_obstacle_generation = 0U;
+    missing_target.problem = contract::seal_problem_context(
+      std::move(missing_target.problem));
+    missing_target.solution.problem_fingerprint =
+      missing_target.problem.fingerprint;
+    EXPECT_EQ(
+      plan::validate_canonical_execution_plan(missing_target),
+      plan::CanonicalExecutionPlanRejectReason::IncompleteProblem);
+  }
 }
 
 TEST(CanonicalExecutionPlan, RejectsPartialPredictionAndControlSequences)

@@ -43,6 +43,10 @@ const char * to_string(Formulation formulation) noexcept;
 /// intentionally outside this contract.
 bool canonical_normal_intent_supported(ControlIntent intent) noexcept;
 
+/// Canonical normal intents whose identity is incomplete without the observed
+/// target vehicle and its observation generation.
+bool canonical_normal_intent_requires_target(ControlIntent intent) noexcept;
+
 struct StageGeometryIdentity
 {
   int transition_from_waypoint{};

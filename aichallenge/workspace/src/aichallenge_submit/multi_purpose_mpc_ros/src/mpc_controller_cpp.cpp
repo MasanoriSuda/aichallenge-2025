@@ -6040,6 +6040,20 @@ struct ExtendedBranchSolverContext
   std::uint64_t warm_start_count{};
 };
 
+/// One lifetime boundary for every canonical Follow artifact. Tactical
+/// snapshots may be short-lived, but they must not fork solver warm state,
+/// problem epochs, or the accepted canonical plan store. The mutex protects
+/// only the warm-start identity/epoch pair; the solver context and plan store
+/// provide their own synchronization.
+struct FollowCanonicalLifecycle
+{
+  std::shared_ptr<ExtendedBranchSolverContext> solver_context;
+  std::mutex warm_start_mutex;
+  std::optional<race_mpcc::ShadowWarmStartIdentity> warm_start_identity;
+  std::uint64_t context_epoch{};
+  canonical_plan::CanonicalExecutionPlanStore plan_store;
+};
+
 struct MPC
 {
   MPC(
@@ -6055,6 +6069,8 @@ struct MPC
   {
     (void)use_obstacle_avoidance;
     (void)use_path_constraints_topic;
+    follow_canonical_lifecycle_ =
+      std::make_shared<FollowCanonicalLifecycle>();
     if (
       cfg.progress_contouring_mpcc_enabled &&
       cfg.progress_contouring_mpcc_overtake_only &&
@@ -6062,7 +6078,7 @@ struct MPC
     {
       track_cruise_shadow_solver_context_ =
         std::make_shared<ExtendedBranchSolverContext>();
-      follow_shadow_solver_context_ =
+      follow_canonical_lifecycle_->solver_context =
         std::make_shared<ExtendedBranchSolverContext>(
         persistent_osqp::ConstraintPreconditioningPolicy::
         RowToleranceNormalized);
@@ -6215,6 +6231,7 @@ struct MPC
       extended_left_branch_solver_context_;
     snapshot->extended_right_branch_solver_context_ =
       extended_right_branch_solver_context_;
+    snapshot->follow_canonical_lifecycle_ = follow_canonical_lifecycle_;
     snapshot->next_overtake_episode_id_ = next_overtake_episode_id_;
     snapshot->dynamic_obstacle_lateral_escape_attempt_tracker_ =
       dynamic_obstacle_lateral_escape_attempt_tracker_;
@@ -21919,7 +21936,7 @@ struct MPC
       problem.follow_longitudinal_contract.target_observation_generation;
     result.measured_ego_speed_mps = problem.progress_measured_speed_mps;
     const auto retained_plan_before_fresh =
-      follow_shadow_plan_store_.snapshot();
+      follow_canonical_lifecycle_->plan_store.snapshot();
     const auto & follow_contract = problem.follow_longitudinal_contract;
     if (!follow_contract.target_progress_m.empty()) {
       result.current_target_gap_m = follow_contract.target_progress_m.front();
@@ -22013,8 +22030,24 @@ struct MPC
       }
       const auto warm_identity =
         make_canonical_shadow_warm_start_identity(problem, context);
-      const auto warm_resolution = race_mpcc::resolve_shadow_warm_start(
-        follow_shadow_warm_start_identity_, warm_identity);
+      race_mpcc::ShadowWarmStartResolution warm_resolution;
+      std::uint64_t follow_context_epoch{};
+      {
+        std::lock_guard<std::mutex> lock(
+          follow_canonical_lifecycle_->warm_start_mutex);
+        warm_resolution = race_mpcc::resolve_shadow_warm_start(
+          follow_canonical_lifecycle_->warm_start_identity, warm_identity);
+        if (warm_resolution.valid) {
+          if (warm_resolution.reset_context) {
+            auto & context_epoch = follow_canonical_lifecycle_->context_epoch;
+            context_epoch =
+              context_epoch == std::numeric_limits<std::uint64_t>::max() ?
+              1U : context_epoch + 1U;
+          }
+          follow_canonical_lifecycle_->warm_start_identity = warm_identity;
+        }
+        follow_context_epoch = follow_canonical_lifecycle_->context_epoch;
+      }
       result.reset_reason = warm_resolution.reason;
       if (!warm_resolution.valid) {
         result.status = "warm-context-reject";
@@ -22022,13 +22055,7 @@ struct MPC
           warm_resolution.reason);
         return finish();
       }
-      if (warm_resolution.reset_context) {
-        follow_shadow_context_epoch_ =
-          follow_shadow_context_epoch_ == std::numeric_limits<std::uint64_t>::max() ?
-          1U : follow_shadow_context_epoch_ + 1U;
-      }
-      follow_shadow_warm_start_identity_ = warm_identity;
-      if (follow_shadow_solver_context_ == nullptr) {
+      if (follow_canonical_lifecycle_->solver_context == nullptr) {
         result.status = "solver-context-reject";
         result.detail = "dedicated Follow shadow solver context unavailable";
         return finish();
@@ -22054,8 +22081,9 @@ struct MPC
           last_extended_branch_context_reset_ = previous_reset;
           last_extended_branch_context_solve_count_ = previous_count;
         });
-      active_extended_branch_solver_context_ = follow_shadow_solver_context_;
-      active_extended_branch_context_epoch_ = follow_shadow_context_epoch_;
+      active_extended_branch_solver_context_ =
+        follow_canonical_lifecycle_->solver_context;
+      active_extended_branch_context_epoch_ = follow_context_epoch;
       active_extended_branch_target_id_ = result.target_id;
       active_extended_branch_side_sign_ = 0;
       active_extended_branch_horizon_size_ = problem.N;
@@ -22368,7 +22396,8 @@ struct MPC
         result.canonical_command_available = false;
         return finish();
       }
-      result.canonical_store_reason = follow_shadow_plan_store_.replace(
+      result.canonical_store_reason =
+        follow_canonical_lifecycle_->plan_store.replace(
         std::move(canonical_chain.plan.value()));
       if (
         result.canonical_store_reason !=
@@ -25552,7 +25581,7 @@ struct MPC
   std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> track_cruise_shadow_solver_context_;
-  std::shared_ptr<ExtendedBranchSolverContext> follow_shadow_solver_context_;
+  std::shared_ptr<FollowCanonicalLifecycle> follow_canonical_lifecycle_;
   canonical_plan::CanonicalExecutionPlanStore track_cruise_shadow_plan_store_;
   std::optional<race_mpcc::ShadowWarmStartIdentity>
   track_cruise_shadow_warm_start_identity_;
@@ -25567,10 +25596,6 @@ struct MPC
   double last_track_cruise_shadow_final_actuation_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   std::string last_track_cruise_shadow_status_;
-  std::optional<race_mpcc::ShadowWarmStartIdentity>
-  follow_shadow_warm_start_identity_;
-  canonical_plan::CanonicalExecutionPlanStore follow_shadow_plan_store_;
-  std::uint64_t follow_shadow_context_epoch_{};
   FollowShadowTelemetryWindow follow_shadow_telemetry_window_;
   double last_follow_shadow_telemetry_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};

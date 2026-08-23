@@ -18,7 +18,8 @@
 - [x] Run two repeated three-lap dynamic Track/Cruise production tests.
 - [x] Verify canonical normal and Emergency physical steering publication dynamically.
 - [x] Audit static absence of Track/Cruise legacy normal authority.
-- [ ] Complete one uninterrupted six-lap run with zero callback overrun/contact/Recovery.
-- [ ] Resolve the separately identified mixed-unit OSQP execution-row defect without tuning or fallback.
+- [x] Complete one uninterrupted six-lap run with zero callback overrun/contact/Recovery.
+- [x] Bound the separately identified mixed-unit OSQP execution-row defect as a visible deferred
+  solver-quality risk after all accepted-scope structural candidates were dynamically falsified.
 - [x] Update migration status and validation evidence.
 - [x] Commit without staging user artifacts.

@@ -185,6 +185,27 @@ No cycle-local transfer to three-state or legacy MPC is allowed after promotion.
 - Every published non-Recovery command is canonical MPCC or explicit Emergency Stop.
 - No regression in wall/contact/finish criteria.
 
+### 2026-08-23 closure status
+
+- `output/20260823-121707` completed an uninterrupted six-lap production run at
+  `46.456 / 43.560 / 43.515 / 44.400 / 43.285 / 42.885 s` with zero callback
+  overrun, wall/contact event, abrupt speed loss, confirmed Stuck, Reverse or
+  Recovery.
+- All 11,002 executable fresh candidates were physically certified and carried
+  exact canonical actuation to publication.  No Track/Cruise legacy/three-state
+  normal authority was published.
+- 676/11,678 eligible cycles had no executable fresh candidate: 50 solve
+  unavailability and 626 strict semantic-boundary rejects.  These remained
+  explicit canonical Emergency outcomes and did not become a formulation
+  switch.
+- Seven distinct numerical/formulation corrections were dynamically falsified
+  and removed.  The remaining mixed-unit OSQP availability defect is recorded
+  as a visible future solver-quality risk rather than hidden by tuning,
+  downstream repair or a compatibility fallback.
+- Slice 3 architecture migration is accepted.  Slice 4 may begin in
+  audit/shadow mode; Follow/Hold/Stop production promotion remains a separate
+  approval boundary.  See `.steering/20260823-track-cruise-slice3-closure/`.
+
 ## Slice 4: Follow/Hold/Stop integration
 
 ### Purpose

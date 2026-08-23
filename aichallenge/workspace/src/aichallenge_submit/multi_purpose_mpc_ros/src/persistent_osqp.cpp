@@ -97,7 +97,12 @@ void shift_stage_block(
 struct PreparedProblem
 {
   Eigen::SparseMatrix<double> quadratic_cost;
+  /// Original physical constraint matrix used for the returned certificate.
   Eigen::SparseMatrix<double> constraints;
+  /// Numerically preconditioned matrix passed to OSQP.
+  Eigen::SparseMatrix<double> solver_constraints;
+  /// S_ii in solver_constraints = S * constraints.
+  Eigen::VectorXd constraint_row_scale;
   std::vector<c_float> quadratic_values;
   std::vector<c_int> quadratic_rows;
   std::vector<c_int> quadratic_columns;
@@ -113,6 +118,8 @@ std::optional<PreparedProblem> prepare_problem(
   Eigen::SparseMatrix<double> quadratic_cost,
   Eigen::SparseMatrix<double> constraints, const Eigen::VectorXd & linear_cost,
   const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
+  const ConstraintPreconditioningPolicy preconditioning_policy,
+  const double absolute_tolerance, const double relative_tolerance,
   std::string & failure_detail)
 {
   quadratic_cost.makeCompressed();
@@ -146,6 +153,86 @@ std::optional<PreparedProblem> prepare_problem(
   PreparedProblem problem;
   problem.quadratic_cost = std::move(quadratic_cost);
   problem.constraints = std::move(constraints);
+  problem.solver_constraints = problem.constraints;
+  problem.constraint_row_scale =
+    Eigen::VectorXd::Ones(problem.constraints.rows());
+  if (preconditioning_policy ==
+    ConstraintPreconditioningPolicy::RowToleranceNormalized)
+  {
+    if (!std::isfinite(absolute_tolerance) || absolute_tolerance < 0.0 ||
+      !std::isfinite(relative_tolerance) || relative_tolerance < 0.0)
+    {
+      failure_detail =
+        "stage=preconditioning, reason=invalid physical tolerances";
+      return std::nullopt;
+    }
+    Eigen::VectorXd row_tolerance =
+      Eigen::VectorXd::Zero(problem.constraints.rows());
+    double maximum_row_tolerance = 0.0;
+    for (Eigen::Index row = 0; row < lower_bound.size(); ++row) {
+      const bool finite_lower = std::isfinite(lower_bound[row]);
+      const bool finite_upper = std::isfinite(upper_bound[row]);
+      if (!finite_lower && !finite_upper) {
+        continue;
+      }
+      double characteristic = 0.0;
+      if (finite_lower) {
+        characteristic = std::max(characteristic, std::abs(lower_bound[row]));
+      }
+      if (finite_upper) {
+        characteristic = std::max(characteristic, std::abs(upper_bound[row]));
+      }
+      const double tolerance =
+        absolute_tolerance + relative_tolerance * characteristic;
+      if (!std::isfinite(tolerance) || tolerance <= 0.0) {
+        std::ostringstream detail;
+        detail << "stage=preconditioning, reason=invalid row tolerance, row="
+               << row << ", tolerance=" << tolerance;
+        failure_detail = detail.str();
+        return std::nullopt;
+      }
+      row_tolerance[row] = tolerance;
+      maximum_row_tolerance = std::max(maximum_row_tolerance, tolerance);
+    }
+    if (!std::isfinite(maximum_row_tolerance)) {
+      failure_detail =
+        "stage=preconditioning, reason=non-finite maximum row tolerance";
+      return std::nullopt;
+    }
+    if (maximum_row_tolerance > 0.0) {
+      for (Eigen::Index row = 0; row < row_tolerance.size(); ++row) {
+        if (row_tolerance[row] == 0.0) {
+          continue;
+        }
+        const double row_scale = maximum_row_tolerance / row_tolerance[row];
+        if (!std::isfinite(row_scale) || row_scale < 1.0) {
+          std::ostringstream detail;
+          detail << "stage=preconditioning, reason=invalid row scale, row="
+                 << row << ", scale=" << row_scale;
+          failure_detail = detail.str();
+          return std::nullopt;
+        }
+        problem.constraint_row_scale[row] = row_scale;
+      }
+    }
+    for (
+      int column = 0; column < problem.solver_constraints.outerSize();
+      ++column)
+    {
+      for (
+        Eigen::SparseMatrix<double>::InnerIterator entry(
+          problem.solver_constraints, column);
+        entry; ++entry)
+      {
+        entry.valueRef() *= problem.constraint_row_scale[entry.row()];
+      }
+    }
+    if (!sparse_values_are_finite(problem.solver_constraints)) {
+      failure_detail =
+        "stage=preconditioning, reason=non-finite scaled constraint matrix";
+      return std::nullopt;
+    }
+  }
   problem.quadratic_values.resize(
     static_cast<std::size_t>(problem.quadratic_cost.nonZeros()));
   problem.quadratic_rows.resize(problem.quadratic_values.size());
@@ -163,19 +250,19 @@ std::optional<PreparedProblem> prepare_problem(
   }
 
   problem.constraint_values.resize(
-    static_cast<std::size_t>(problem.constraints.nonZeros()));
+    static_cast<std::size_t>(problem.solver_constraints.nonZeros()));
   problem.constraint_rows.resize(problem.constraint_values.size());
   problem.constraint_columns.resize(
-    static_cast<std::size_t>(problem.constraints.cols() + 1));
-  for (int index = 0; index < problem.constraints.nonZeros(); ++index) {
+    static_cast<std::size_t>(problem.solver_constraints.cols() + 1));
+  for (int index = 0; index < problem.solver_constraints.nonZeros(); ++index) {
     problem.constraint_values[static_cast<std::size_t>(index)] =
-      static_cast<c_float>(problem.constraints.valuePtr()[index]);
+      static_cast<c_float>(problem.solver_constraints.valuePtr()[index]);
     problem.constraint_rows[static_cast<std::size_t>(index)] =
-      static_cast<c_int>(problem.constraints.innerIndexPtr()[index]);
+      static_cast<c_int>(problem.solver_constraints.innerIndexPtr()[index]);
   }
-  for (int index = 0; index < problem.constraints.cols() + 1; ++index) {
+  for (int index = 0; index < problem.solver_constraints.cols() + 1; ++index) {
     problem.constraint_columns[static_cast<std::size_t>(index)] =
-      static_cast<c_int>(problem.constraints.outerIndexPtr()[index]);
+      static_cast<c_int>(problem.solver_constraints.outerIndexPtr()[index]);
   }
 
   const auto copy_dense = [](const Eigen::VectorXd & source) {
@@ -187,8 +274,28 @@ std::optional<PreparedProblem> prepare_problem(
       return destination;
     };
   problem.linear_cost = copy_dense(linear_cost);
-  problem.lower_bound = copy_dense(lower_bound);
-  problem.upper_bound = copy_dense(upper_bound);
+  Eigen::VectorXd solver_lower_bound = lower_bound;
+  Eigen::VectorXd solver_upper_bound = upper_bound;
+  for (Eigen::Index row = 0; row < lower_bound.size(); ++row) {
+    if (std::isfinite(solver_lower_bound[row])) {
+      solver_lower_bound[row] *= problem.constraint_row_scale[row];
+      if (!std::isfinite(solver_lower_bound[row])) {
+        failure_detail =
+          "stage=preconditioning, reason=non-finite scaled lower bound";
+        return std::nullopt;
+      }
+    }
+    if (std::isfinite(solver_upper_bound[row])) {
+      solver_upper_bound[row] *= problem.constraint_row_scale[row];
+      if (!std::isfinite(solver_upper_bound[row])) {
+        failure_detail =
+          "stage=preconditioning, reason=non-finite scaled upper bound";
+        return std::nullopt;
+      }
+    }
+  }
+  problem.lower_bound = copy_dense(solver_lower_bound);
+  problem.upper_bound = copy_dense(solver_upper_bound);
   return problem;
 }
 
@@ -328,8 +435,11 @@ struct PersistentOsqpSolver::Impl
   std::vector<c_float> upper_bound;
   c_int variable_count{};
   c_int constraint_count{};
+  ConstraintPreconditioningPolicy preconditioning_policy{
+    ConstraintPreconditioningPolicy::None};
 
-  Impl()
+  explicit Impl(const ConstraintPreconditioningPolicy policy)
+  : preconditioning_policy(policy)
   {
     osqp_set_default_settings(&settings);
     settings.verbose = false;
@@ -461,7 +571,11 @@ struct PersistentOsqpSolver::Impl
 };
 
 PersistentOsqpSolver::PersistentOsqpSolver()
-: impl_(std::make_unique<Impl>()) {}
+: PersistentOsqpSolver(ConstraintPreconditioningPolicy::None) {}
+
+PersistentOsqpSolver::PersistentOsqpSolver(
+  const ConstraintPreconditioningPolicy policy)
+: impl_(std::make_unique<Impl>(policy)) {}
 
 PersistentOsqpSolver::~PersistentOsqpSolver() = default;
 PersistentOsqpSolver::PersistentOsqpSolver(PersistentOsqpSolver &&) noexcept =
@@ -487,7 +601,9 @@ SolveOutcome PersistentOsqpSolver::solve(
   std::string preparation_failure;
   auto prepared = prepare_problem(
     std::move(quadratic_cost), std::move(constraints), linear_cost,
-    lower_bound, upper_bound, preparation_failure);
+    lower_bound, upper_bound, impl_->preconditioning_policy,
+    static_cast<double>(impl_->settings.eps_abs),
+    static_cast<double>(impl_->settings.eps_rel), preparation_failure);
   if (!prepared.has_value()) {
     outcome.failure_detail = std::move(preparation_failure);
     outcome.telemetry.cold_reset_after_failure = impl_->workspace != nullptr;
@@ -546,8 +662,10 @@ SolveOutcome PersistentOsqpSolver::solve(
           static_cast<c_float>(warm_start->primal[index]);
       }
       for (Eigen::Index index = 0; index < warm_start->dual.size(); ++index) {
+        const double scaled_dual = warm_start->dual[index] /
+          prepared->constraint_row_scale[index];
         dual[static_cast<std::size_t>(index)] =
-          static_cast<c_float>(warm_start->dual[index]);
+          static_cast<c_float>(scaled_dual);
       }
       const auto warm_start_begin = SteadyClock::now();
       const c_int warm_start_exit =
@@ -641,7 +759,9 @@ SolveOutcome PersistentOsqpSolver::solve(
     primal[index] = static_cast<double>(impl_->workspace->solution->x[index]);
   }
   for (Eigen::Index index = 0; index < dual.size(); ++index) {
-    dual[index] = static_cast<double>(impl_->workspace->solution->y[index]);
+    dual[index] =
+      prepared->constraint_row_scale[index] *
+      static_cast<double>(impl_->workspace->solution->y[index]);
   }
   if (!primal.allFinite() || !dual.allFinite()) {
     outcome.failure_detail =
@@ -687,11 +807,20 @@ SolveOutcome PersistentOsqpSolver::solve(
     inaccurate_multiplier *
     (static_cast<double>(impl_->settings.eps_abs) +
     static_cast<double>(impl_->settings.eps_rel) * constraint_scale);
-  if (residual_report->maximum_absolute_violation > tolerance) {
+  const bool constraint_rejected =
+    impl_->preconditioning_policy ==
+      ConstraintPreconditioningPolicy::RowToleranceNormalized ?
+    residual_report->maximum_normalized_violation > 1.0 :
+    residual_report->maximum_absolute_violation > tolerance;
+  if (constraint_rejected) {
     std::ostringstream detail;
     detail << "stage=constraint_check, max_violation="
            << residual_report->maximum_absolute_violation
-           << ", tolerance=" << tolerance << ", " << describe_info(info);
+           << ", tolerance=" << tolerance
+           << ", max_normalized="
+           << residual_report->maximum_normalized_violation
+           << ", row=" << residual_report->maximum_normalized_row
+           << ", " << describe_info(info);
     outcome.failure_detail = detail.str();
     impl_->reset();
     outcome.telemetry.cold_reset_after_failure = true;

@@ -5928,6 +5928,11 @@ struct MpcRtiSqpTelemetryWindow
 /// changes.
 struct ExtendedBranchSolverContext
 {
+  explicit ExtendedBranchSolverContext(
+    const persistent_osqp::ConstraintPreconditioningPolicy policy =
+      persistent_osqp::ConstraintPreconditioningPolicy::None)
+  : solver(policy) {}
+
   std::mutex mutex;
   std::uint64_t context_epoch{};
   std::string target_id;
@@ -5966,7 +5971,9 @@ struct MPC
       track_cruise_shadow_solver_context_ =
         std::make_shared<ExtendedBranchSolverContext>();
       follow_shadow_solver_context_ =
-        std::make_shared<ExtendedBranchSolverContext>();
+        std::make_shared<ExtendedBranchSolverContext>(
+        persistent_osqp::ConstraintPreconditioningPolicy::
+        RowToleranceNormalized);
     }
     if (
       !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_offset) ||

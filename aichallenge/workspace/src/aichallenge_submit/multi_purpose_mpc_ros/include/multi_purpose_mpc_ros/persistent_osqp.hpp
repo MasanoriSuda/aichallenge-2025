@@ -77,6 +77,16 @@ struct SolveOutcome
   SolveTelemetry telemetry;
 };
 
+/// Optional exact row transformation applied before OSQP. The normalized
+/// policy multiplies A, l and u by the same positive per-row factor, so it does
+/// not change the physical feasible set or primal optimum. Returned duals stay
+/// in the original physical constraint coordinates.
+enum class ConstraintPreconditioningPolicy
+{
+  None,
+  RowToleranceNormalized,
+};
+
 /// Shift one successful MPC QP solution by one stage. The expected layout is
 /// state[0..N], input[0..N-1] for primal variables and dynamics/state,
 /// box(state,input), steering-rate for dual variables.
@@ -90,6 +100,7 @@ class PersistentOsqpSolver
 {
 public:
   PersistentOsqpSolver();
+  explicit PersistentOsqpSolver(ConstraintPreconditioningPolicy policy);
   ~PersistentOsqpSolver();
 
   PersistentOsqpSolver(const PersistentOsqpSolver &) = delete;

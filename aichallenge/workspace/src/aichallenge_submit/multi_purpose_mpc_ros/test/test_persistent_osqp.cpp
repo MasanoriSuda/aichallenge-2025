@@ -154,6 +154,72 @@ TEST(PersistentOsqpSolver, ReusesWorkspaceAndAppliesWarmStart) {
   EXPECT_NEAR(third.result->primal[0], 1.0, 1e-2);
 }
 
+TEST(PersistentOsqpSolver, RowToleranceNormalizationClosesMixedUnitToleranceLeak)
+{
+  const auto quadratic = diagonal_matrix({1.0, 1.0});
+  const auto constraints = identity_constraints(2);
+  Eigen::VectorXd cost(2);
+  cost << -0.4, -500.0;
+  Eigen::VectorXd lower(2);
+  lower << 0.0, 0.0;
+  Eigen::VectorXd upper(2);
+  upper << 0.25, 1000.0;
+
+  PersistentOsqpSolver baseline;
+  PersistentOsqpSolver normalized(
+    ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto baseline_outcome = baseline.solve(
+    quadratic, constraints, cost, lower, upper);
+  const auto normalized_outcome = normalized.solve(
+    quadratic, constraints, cost, lower, upper);
+
+  ASSERT_TRUE(baseline_outcome.result.has_value())
+    << baseline_outcome.failure_detail;
+  ASSERT_TRUE(normalized_outcome.result.has_value())
+    << normalized_outcome.failure_detail;
+  EXPECT_GT(baseline_outcome.result->primal[0], 0.35);
+  EXPECT_GT(
+    baseline_outcome.result->maximum_normalized_constraint_violation, 50.0);
+  EXPECT_NEAR(normalized_outcome.result->primal[0], 0.25, 5e-3);
+  EXPECT_NEAR(normalized_outcome.result->primal[1], 500.0, 5e-2);
+  EXPECT_LE(
+    normalized_outcome.result->maximum_normalized_constraint_violation, 1.0);
+}
+
+TEST(PersistentOsqpSolver, NormalizedWarmStartKeepsDualInPhysicalCoordinates)
+{
+  PersistentOsqpSolver solver(
+    ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto quadratic = diagonal_matrix({1.0});
+  const auto constraints = identity_constraints(1);
+  Eigen::VectorXd cost(1);
+  cost << -2.0;
+  Eigen::VectorXd lower(1);
+  lower << 0.0;
+  Eigen::VectorXd first_upper(1);
+  first_upper << 1.0;
+
+  const auto first = solver.solve(
+    quadratic, constraints, cost, lower, first_upper);
+  ASSERT_TRUE(first.result.has_value()) << first.failure_detail;
+  EXPECT_NEAR(first.result->primal[0], 1.0, 5e-3);
+  EXPECT_NEAR(first.result->dual[0], 1.0, 5e-3);
+
+  Eigen::VectorXd second_upper(1);
+  second_upper << 0.5;
+  const WarmStart warm_start{first.result->primal, first.result->dual};
+  const auto second = solver.solve(
+    quadratic, constraints, cost, lower, second_upper, warm_start);
+
+  ASSERT_TRUE(second.result.has_value()) << second.failure_detail;
+  EXPECT_TRUE(second.telemetry.update_performed);
+  EXPECT_TRUE(second.telemetry.warm_start_applied);
+  EXPECT_NEAR(second.result->primal[0], 0.5, 5e-3);
+  EXPECT_NEAR(second.result->dual[0], 1.5, 5e-3);
+  EXPECT_LE(
+    second.result->maximum_normalized_constraint_violation, 1.0);
+}
+
 TEST(PersistentOsqpSolver, RebuildsWhenSparsityDimensionsChange) {
   PersistentOsqpSolver solver;
   Eigen::VectorXd first_cost(1);

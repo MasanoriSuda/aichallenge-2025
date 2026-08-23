@@ -98,6 +98,8 @@ struct MailboxState
   std::uint64_t context_mismatch_count{};
   std::uint64_t sequence_rollback_count{};
   std::uint64_t sequence_not_submitted_count{};
+  ResultValidationReason last_validation_reason{
+    ResultValidationReason::InvalidIdentity};
   PublishReason last_publish_reason{PublishReason::InvalidResult};
   bool result_available{false};
 };
@@ -127,6 +129,8 @@ private:
   std::uint64_t context_mismatch_count_{};
   std::uint64_t sequence_rollback_count_{};
   std::uint64_t sequence_not_submitted_count_{};
+  ResultValidationReason last_validation_reason_{
+    ResultValidationReason::InvalidIdentity};
   PublishReason last_publish_reason_{PublishReason::InvalidResult};
   std::optional<WorkerResult> latest_result_;
 };

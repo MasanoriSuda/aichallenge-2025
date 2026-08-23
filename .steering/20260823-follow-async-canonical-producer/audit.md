@@ -91,3 +91,21 @@ The callback still constructs an immutable model/reference snapshot, and the wor
 with other tactical work. The dynamic gate must therefore measure snapshot cost, callback tail,
 worker replacement/publish reasons, result age and current-world acceptance. Static success is not
 evidence that the 25 ms runtime deadline is repaired.
+
+## Dynamic gate attempt: 20260823-191318
+
+The normal two-vehicle run routes the 15 km/h vehicle through LowSpeedAvoidance or the all-vehicle
+dynamic-obstacle Cruise authority before a coherent Follow contract exists. A diagnostic-only run
+therefore disabled those two owners and OvertakeLine without committing the configuration change.
+Domain 1 then entered a coherent Follow window against `d2` at about 4--6 m.
+
+- Worker: 268 submitted, 268 started, 268 completed, 0 exceptions.
+- Callback: no 25 ms overruns in the observed Follow window; logged maxima remained below 15 ms.
+- Snapshot construction: about 0.17--0.39 ms in the observed window.
+- Mailbox: 0 accepted, 268 invalid; no result reached current-world proof.
+
+This falsifies Slice C as production-ready. The asynchronous scheduling boundary works, but every
+completed payload is rejected before publication. The existing mailbox telemetry collapses all
+typed validation failures into `invalid-result`, so the immediate next action is observability at
+that contract boundary, not solver or clearance tuning. `MailboxState` now exposes the exact last
+`ResultValidationReason`; the diagnostic run must be repeated before any root-cause correction.

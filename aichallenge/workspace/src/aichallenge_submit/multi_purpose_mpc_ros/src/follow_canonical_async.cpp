@@ -168,13 +168,16 @@ bool Mailbox::register_submission(
 
 PublishReason Mailbox::publish(WorkerResult result)
 {
-  if (validate_worker_result(result) != ResultValidationReason::Accepted) {
+  const auto validation_reason = validate_worker_result(result);
+  if (validation_reason != ResultValidationReason::Accepted) {
     std::lock_guard<std::mutex> lock(mutex_);
     ++invalid_result_count_;
+    last_validation_reason_ = validation_reason;
     last_publish_reason_ = PublishReason::InvalidResult;
     return PublishReason::InvalidResult;
   }
   std::lock_guard<std::mutex> lock(mutex_);
+  last_validation_reason_ = ResultValidationReason::Accepted;
   const auto & identity = result.identity;
   if (identity.context_epoch != context_epoch_) {
     ++context_mismatch_count_;
@@ -235,6 +238,7 @@ MailboxState Mailbox::state() const
     context_mismatch_count_,
     sequence_rollback_count_,
     sequence_not_submitted_count_,
+    last_validation_reason_,
     last_publish_reason_,
     latest_result_.has_value()};
 }

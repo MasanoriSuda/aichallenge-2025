@@ -22679,7 +22679,7 @@ struct MPC
       rclcpp::get_logger("mpc_controller"),
       "Follow canonical worker: submitted=%lu, replaced=%lu, started=%lu, "
       "completed=%lu, exceptions=%lu, running=%d, pending=%d, "
-      "mailbox=%lu/%lu/%d/%s, publish=%lu/%lu/%lu/%lu/%lu, "
+      "mailbox=%lu/%lu/%d/%s/%s, publish=%lu/%lu/%lu/%lu/%lu, "
       "consumed=%lu, current_ready=%lu, "
       "identity_reject=%lu, submit_reject=%lu, snapshot_fail=%lu, "
       "snapshot_ms=%.3f, compute_ms=%.3f, result_age=%.3f, detail=%s",
@@ -22693,6 +22693,7 @@ struct MPC
       static_cast<unsigned long>(mailbox_state.latest_published_sequence),
       mailbox_state.result_available ? 1 : 0,
       follow_async::to_string(mailbox_state.last_publish_reason),
+      follow_async::to_string(mailbox_state.last_validation_reason),
       static_cast<unsigned long>(mailbox_state.accepted_count),
       static_cast<unsigned long>(mailbox_state.invalid_result_count),
       static_cast<unsigned long>(mailbox_state.context_mismatch_count),

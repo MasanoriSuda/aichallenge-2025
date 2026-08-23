@@ -224,3 +224,19 @@ TEST(FollowCanonicalAsyncMailbox, AcceptsTypedFailureWithoutPlan)
   EXPECT_EQ(published->outcome, async::WorkerOutcome::Rejected);
   EXPECT_EQ(published->detail, "solve rejected");
 }
+
+TEST(FollowCanonicalAsyncMailbox, ExposesExactPayloadValidationFailure)
+{
+  async::Mailbox mailbox;
+  mailbox.reset_context(7U);
+  ASSERT_TRUE(mailbox.register_submission(7U, 10U));
+  auto result = make_result();
+  result.identity.target_id = "d3";
+  EXPECT_EQ(
+    mailbox.publish(std::move(result)), async::PublishReason::InvalidResult);
+  const auto state = mailbox.state();
+  EXPECT_EQ(
+    state.last_validation_reason,
+    async::ResultValidationReason::PlanIdentityMismatch);
+  EXPECT_FALSE(state.result_available);
+}

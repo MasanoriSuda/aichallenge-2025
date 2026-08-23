@@ -5,6 +5,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
+#include <cmath>
 #include <limits>
 #include <optional>
 #include <vector>
@@ -262,6 +263,32 @@ TEST(PersistentOsqpSolver, ReusesWorkspaceAndAppliesWarmStart) {
   EXPECT_TRUE(third.telemetry.warm_start_rejected);
   EXPECT_FALSE(third.telemetry.warm_start_applied);
   EXPECT_NEAR(third.result->primal[0], 1.0, 1e-2);
+}
+
+TEST(PersistentOsqpSolver, ReportsSuccessfulConvergenceProvenance)
+{
+  PersistentOsqpSolver solver;
+  const auto outcome = solver.solve(
+    diagonal_matrix({1.0}), identity_constraints(1),
+    Eigen::VectorXd::Constant(1, -1.0),
+    Eigen::VectorXd::Constant(1, 0.0),
+    Eigen::VectorXd::Constant(1, 2.0));
+
+  ASSERT_TRUE(outcome.result.has_value()) << outcome.failure_detail;
+  EXPECT_TRUE(std::isfinite(outcome.telemetry.primal_residual));
+  EXPECT_TRUE(std::isfinite(outcome.telemetry.dual_residual));
+  EXPECT_TRUE(std::isfinite(outcome.telemetry.objective_value));
+  EXPECT_TRUE(std::isfinite(outcome.telemetry.rho_estimate));
+  EXPECT_GT(outcome.telemetry.absolute_tolerance, 0.0);
+  EXPECT_GT(outcome.telemetry.relative_tolerance, 0.0);
+  EXPECT_GT(outcome.telemetry.scaling_iterations, 0);
+  EXPECT_FALSE(outcome.telemetry.scaled_termination);
+  EXPECT_FALSE(outcome.telemetry.row_tolerance_preconditioned);
+  EXPECT_DOUBLE_EQ(outcome.telemetry.maximum_row_scale, 1.0);
+  EXPECT_TRUE(std::isfinite(outcome.telemetry.physical_constraint_scale));
+  EXPECT_TRUE(std::isfinite(outcome.telemetry.physical_global_tolerance));
+  EXPECT_GT(outcome.telemetry.physical_global_tolerance, 0.0);
+  EXPECT_GE(outcome.result->maximum_normalized_constraint_row, -1);
 }
 
 TEST(PersistentOsqpSolver, RowToleranceNormalizationClosesMixedUnitToleranceLeak)

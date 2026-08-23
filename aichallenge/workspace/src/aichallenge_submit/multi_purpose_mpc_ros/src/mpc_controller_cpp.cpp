@@ -5688,6 +5688,31 @@ struct TrackCruiseShadowCycleResult
   double certificate_ms{};
   double total_ms{};
   int iterations{};
+  int solver_status{};
+  double solver_objective_value{
+    std::numeric_limits<double>::quiet_NaN()};
+  double solver_primal_residual{
+    std::numeric_limits<double>::quiet_NaN()};
+  double solver_dual_residual{
+    std::numeric_limits<double>::quiet_NaN()};
+  int solver_rho_updates{};
+  double solver_rho_estimate{
+    std::numeric_limits<double>::quiet_NaN()};
+  double solver_absolute_tolerance{};
+  double solver_relative_tolerance{};
+  int solver_scaling_iterations{};
+  bool solver_scaled_termination{false};
+  bool solver_row_tolerance_preconditioned{false};
+  double solver_maximum_row_scale{1.0};
+  double solver_physical_constraint_scale{
+    std::numeric_limits<double>::quiet_NaN()};
+  double solver_physical_global_tolerance{
+    std::numeric_limits<double>::quiet_NaN()};
+  double solver_maximum_absolute_constraint_violation{
+    std::numeric_limits<double>::quiet_NaN()};
+  double solver_maximum_normalized_constraint_violation{
+    std::numeric_limits<double>::quiet_NaN()};
+  int solver_maximum_normalized_constraint_row{-1};
   double predicted_speed_vs_legacy_target_difference_mps{
     std::numeric_limits<double>::quiet_NaN()};
   double predicted_steering_vs_legacy_difference_rad{
@@ -20282,8 +20307,36 @@ struct MPC
         combined_telemetry.solve_ms += refined_outcome.telemetry.solve_ms;
         combined_telemetry.total_ms += refined_outcome.telemetry.total_ms;
         combined_telemetry.iterations += refined_outcome.telemetry.iterations;
-        combined_telemetry.status = refined_outcome.telemetry.status;
         if (refined_outcome.result.has_value()) {
+          // Aggregate timing/attempt counters above, but keep convergence
+          // provenance bound to the result that will actually execute.
+          combined_telemetry.status = refined_outcome.telemetry.status;
+          combined_telemetry.objective_value =
+            refined_outcome.telemetry.objective_value;
+          combined_telemetry.primal_residual =
+            refined_outcome.telemetry.primal_residual;
+          combined_telemetry.dual_residual =
+            refined_outcome.telemetry.dual_residual;
+          combined_telemetry.rho_updates =
+            refined_outcome.telemetry.rho_updates;
+          combined_telemetry.rho_estimate =
+            refined_outcome.telemetry.rho_estimate;
+          combined_telemetry.absolute_tolerance =
+            refined_outcome.telemetry.absolute_tolerance;
+          combined_telemetry.relative_tolerance =
+            refined_outcome.telemetry.relative_tolerance;
+          combined_telemetry.scaling_iterations =
+            refined_outcome.telemetry.scaling_iterations;
+          combined_telemetry.scaled_termination =
+            refined_outcome.telemetry.scaled_termination;
+          combined_telemetry.row_tolerance_preconditioned =
+            refined_outcome.telemetry.row_tolerance_preconditioned;
+          combined_telemetry.maximum_row_scale =
+            refined_outcome.telemetry.maximum_row_scale;
+          combined_telemetry.physical_constraint_scale =
+            refined_outcome.telemetry.physical_constraint_scale;
+          combined_telemetry.physical_global_tolerance =
+            refined_outcome.telemetry.physical_global_tolerance;
           outcome = std::move(refined_outcome);
           outcome.telemetry = combined_telemetry;
           wall_refinement_succeeded = true;
@@ -23876,6 +23929,30 @@ struct MPC
         (result.warm_start_applied ? "1" : "0") + ", reset=" +
         (result.solver_context_reset ? "1" : "0") + "/" +
         race_mpcc::shadow_warm_start_reset_reason_name(result.reset_reason) +
+        ", osqp=" + std::to_string(result.solver_status) + "/" +
+        std::to_string(result.iterations) + "/" +
+        std::to_string(result.solver_primal_residual) + "/" +
+        std::to_string(result.solver_dual_residual) + "/" +
+        std::to_string(result.solver_rho_updates) + "/" +
+        std::to_string(result.solver_rho_estimate) +
+        "(status/iter/pri/dua/rho_updates/rho_estimate)" +
+        ", termination=" +
+        std::to_string(result.solver_absolute_tolerance) + "/" +
+        std::to_string(result.solver_relative_tolerance) + "/" +
+        std::to_string(result.solver_scaling_iterations) + "/" +
+        (result.solver_scaled_termination ? "1" : "0") + "/" +
+        (result.solver_row_tolerance_preconditioned ? "1" : "0") + "/" +
+        std::to_string(result.solver_maximum_row_scale) +
+        "(abs/rel/scaling/scaled/row_norm/max_row_scale)" +
+        ", solver_constraint=" +
+        std::to_string(
+        result.solver_maximum_absolute_constraint_violation) + "/" +
+        std::to_string(
+        result.solver_maximum_normalized_constraint_violation) + "@" +
+        std::to_string(result.solver_maximum_normalized_constraint_row) +
+        "/" + std::to_string(result.solver_physical_constraint_scale) +
+        "/" + std::to_string(result.solver_physical_global_tolerance) +
+        "(max_abs/max_norm@row/global_scale/global_tol)" +
         ", lateral_constraint=" +
         std::to_string(result.lateral_constraint_maximum_violation_m) + "/" +
         std::to_string(result.lateral_constraint_maximum_tolerance_m) +
@@ -24930,6 +25007,28 @@ struct MPC
         extended_problem.value(), now_sec, false);
       result.solve_ms = outcome.telemetry.total_ms;
       result.iterations = outcome.telemetry.iterations;
+      result.solver_status = outcome.telemetry.status;
+      result.solver_objective_value = outcome.telemetry.objective_value;
+      result.solver_primal_residual = outcome.telemetry.primal_residual;
+      result.solver_dual_residual = outcome.telemetry.dual_residual;
+      result.solver_rho_updates = outcome.telemetry.rho_updates;
+      result.solver_rho_estimate = outcome.telemetry.rho_estimate;
+      result.solver_absolute_tolerance =
+        outcome.telemetry.absolute_tolerance;
+      result.solver_relative_tolerance =
+        outcome.telemetry.relative_tolerance;
+      result.solver_scaling_iterations =
+        outcome.telemetry.scaling_iterations;
+      result.solver_scaled_termination =
+        outcome.telemetry.scaled_termination;
+      result.solver_row_tolerance_preconditioned =
+        outcome.telemetry.row_tolerance_preconditioned;
+      result.solver_maximum_row_scale =
+        outcome.telemetry.maximum_row_scale;
+      result.solver_physical_constraint_scale =
+        outcome.telemetry.physical_constraint_scale;
+      result.solver_physical_global_tolerance =
+        outcome.telemetry.physical_global_tolerance;
       result.warm_start_applied = outcome.telemetry.warm_start_applied;
       result.solver_context_reset =
         warm_resolution.reset_context || last_extended_branch_context_reset_;
@@ -24940,6 +25039,12 @@ struct MPC
       }
       result.solved = true;
       result.finite = outcome.result->primal.allFinite();
+      result.solver_maximum_absolute_constraint_violation =
+        outcome.result->maximum_constraint_violation;
+      result.solver_maximum_normalized_constraint_violation =
+        outcome.result->maximum_normalized_constraint_violation;
+      result.solver_maximum_normalized_constraint_row =
+        outcome.result->maximum_normalized_constraint_row;
       const auto lateral_constraint_contract =
         mpcc_progress::evaluate_extended_lateral_constraint_contract(
         outcome.result->constraint_violation,

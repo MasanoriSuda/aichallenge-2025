@@ -4,6 +4,7 @@
 #include <Eigen/Sparse>
 
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -75,6 +76,21 @@ struct SolveTelemetry
   double total_ms{};
   int iterations{};
   int status{};
+  double objective_value{std::numeric_limits<double>::quiet_NaN()};
+  double primal_residual{std::numeric_limits<double>::quiet_NaN()};
+  double dual_residual{std::numeric_limits<double>::quiet_NaN()};
+  int rho_updates{};
+  double rho_estimate{std::numeric_limits<double>::quiet_NaN()};
+  double absolute_tolerance{};
+  double relative_tolerance{};
+  int scaling_iterations{};
+  bool scaled_termination{false};
+  bool row_tolerance_preconditioned{false};
+  double maximum_row_scale{1.0};
+  double physical_constraint_scale{
+    std::numeric_limits<double>::quiet_NaN()};
+  double physical_global_tolerance{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct SolveResult

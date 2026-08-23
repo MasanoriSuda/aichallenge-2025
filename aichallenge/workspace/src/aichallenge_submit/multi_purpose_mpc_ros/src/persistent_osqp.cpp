@@ -710,6 +710,17 @@ SolveOutcome PersistentOsqpSolver::solve(
 {
   SolveOutcome outcome;
   const auto total_start = SteadyClock::now();
+  outcome.telemetry.absolute_tolerance =
+    static_cast<double>(impl_->settings.eps_abs);
+  outcome.telemetry.relative_tolerance =
+    static_cast<double>(impl_->settings.eps_rel);
+  outcome.telemetry.scaling_iterations =
+    static_cast<int>(impl_->settings.scaling);
+  outcome.telemetry.scaled_termination =
+    impl_->settings.scaled_termination != 0;
+  outcome.telemetry.row_tolerance_preconditioned =
+    impl_->preconditioning_policy ==
+    ConstraintPreconditioningPolicy::RowToleranceNormalized;
   std::string preparation_failure;
   auto prepared = prepare_problem(
     std::move(quadratic_cost), std::move(constraints), linear_cost,
@@ -722,6 +733,10 @@ SolveOutcome PersistentOsqpSolver::solve(
     impl_->reset();
     outcome.telemetry.total_ms = elapsed_ms(total_start);
     return outcome;
+  }
+  if (prepared->constraint_row_scale.size() > 0) {
+    outcome.telemetry.maximum_row_scale =
+      prepared->constraint_row_scale.maxCoeff();
   }
 
   const bool structure_matches = impl_->same_structure(prepared.value());
@@ -831,6 +846,13 @@ SolveOutcome PersistentOsqpSolver::solve(
   const OSQPInfo * info = impl_->workspace ? impl_->workspace->info : nullptr;
   outcome.telemetry.iterations = info ? static_cast<int>(info->iter) : 0;
   outcome.telemetry.status = info ? static_cast<int>(info->status_val) : 0;
+  if (info != nullptr) {
+    outcome.telemetry.objective_value = static_cast<double>(info->obj_val);
+    outcome.telemetry.primal_residual = static_cast<double>(info->pri_res);
+    outcome.telemetry.dual_residual = static_cast<double>(info->dua_res);
+    outcome.telemetry.rho_updates = static_cast<int>(info->rho_updates);
+    outcome.telemetry.rho_estimate = static_cast<double>(info->rho_estimate);
+  }
   outcome.telemetry.maximum_iterations_reached =
     info != nullptr && info->status_val == OSQP_MAX_ITER_REACHED;
   if (solve_exit != 0 || info == nullptr) {
@@ -919,6 +941,8 @@ SolveOutcome PersistentOsqpSolver::solve(
     inaccurate_multiplier *
     (static_cast<double>(impl_->settings.eps_abs) +
     static_cast<double>(impl_->settings.eps_rel) * constraint_scale);
+  outcome.telemetry.physical_constraint_scale = constraint_scale;
+  outcome.telemetry.physical_global_tolerance = tolerance;
   const bool constraint_rejected =
     impl_->preconditioning_policy ==
       ConstraintPreconditioningPolicy::RowToleranceNormalized ?

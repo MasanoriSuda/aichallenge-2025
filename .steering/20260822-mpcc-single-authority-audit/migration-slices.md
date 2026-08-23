@@ -419,6 +419,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   rejected and all source/test changes were removed. The next earliest break is the mismatch
   between OSQP's successful convergence report and the downstream per-physical-row certificate;
   inspect scaled/unscaled residual provenance and solver settings before modifying tolerances.
+- `.steering/20260824-osqp-convergence-provenance` added observation-only provenance and accepted
+  that mismatch as the next root cause. In bounded pre-race `dev2` evidence
+  `output/20260824-022828`, Domain 2 produced 31 certified and 34
+  execution-primal-rejected Track/Cruise outcomes even though every solve reported OSQP success.
+  The common unscaled/global physical tolerance was approximately 0.015--0.019 because progress
+  rows carried 14--18 m scales, while rejected acceleration, predicted-velocity and virtual-progress
+  rows had their own approximately 0.001--0.005 tolerances. Moreover many currently certified
+  outcomes exceeded local curvature-rate row tolerances, with maximum normalized violation 17.22.
+  Active command bounds amplify the failure frequency, but warm transport is falsified as the root.
+  Repair the five-state variable/constraint nondimensionalization and require a complete physical-row
+  certificate next; do not tune OSQP, clamp commands, loosen bounds or add cold retry.
 
 ## Slice 6: Legacy and migration path removal
 

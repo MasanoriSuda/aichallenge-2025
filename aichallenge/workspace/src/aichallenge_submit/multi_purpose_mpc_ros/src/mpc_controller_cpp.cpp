@@ -5745,6 +5745,7 @@ struct FollowShadowCycleResult
   bool constraints_satisfied{false};
   bool execution_primal_accepted{false};
   bool longitudinal_contract_satisfied{false};
+  bool effective_gap_satisfied{false};
   bool warm_start_applied{false};
   bool solver_context_reset{false};
   std::uint64_t decision_id{};
@@ -5773,6 +5774,8 @@ struct FollowShadowCycleResult
   double terminal_predicted_gap_m{std::numeric_limits<double>::quiet_NaN()};
   double terminal_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
   double maximum_longitudinal_violation_m{};
+  double maximum_effective_gap_violation_m{};
+  int effective_gap_worst_stage{-1};
   mpcc_progress::ExtendedExecutionPrimalBoundaryField
   execution_primal_rejected_field{
     mpcc_progress::ExtendedExecutionPrimalBoundaryField::None};
@@ -5806,6 +5809,7 @@ struct FollowShadowTelemetryWindow
   std::uint64_t velocity_box_failure_count{};
   std::uint64_t virtual_progress_speed_box_failure_count{};
   std::uint64_t curvature_rate_failure_count{};
+  std::uint64_t follow_effective_gap_failure_count{};
   std::uint64_t other_constraint_failure_count{};
   double total_build_ms{};
   double maximum_build_ms{};
@@ -19033,10 +19037,14 @@ struct MPC
       static_cast<std::size_t>(N + 1) ||
       legacy.follow_longitudinal_contract.progress_upper_m.size() !=
       static_cast<std::size_t>(N + 1) ||
+      legacy.follow_longitudinal_contract.target_progress_m.size() !=
+      static_cast<std::size_t>(N + 1) ||
       legacy.follow_longitudinal_contract.velocity_reference_mps.size() !=
       static_cast<std::size_t>(N) ||
       legacy.follow_longitudinal_contract.velocity_upper_mps.size() !=
-      static_cast<std::size_t>(N)))
+      static_cast<std::size_t>(N) ||
+      !std::isfinite(legacy.follow_longitudinal_contract.hard_gap_m) ||
+      legacy.follow_longitudinal_contract.hard_gap_m < 0.0))
     {
       reject_reason = "Follow longitudinal contract horizon malformed";
       return std::nullopt;
@@ -19198,8 +19206,11 @@ struct MPC
     }
 
     std::vector<Eigen::Triplet<double>> a_triplets;
+    const int follow_gap_row_count =
+      legacy.follow_shadow_requested ? N + 1 : 0;
     a_triplets.reserve(static_cast<std::size_t>(
-      nx_N + N * (nx * nx + nx * nu) + variable_count + 3 * N));
+      nx_N + N * (nx * nx + nx * nu) + variable_count + 3 * N +
+      2 * follow_gap_row_count));
     for (int row = 0; row < nx_N; ++row) {
       a_triplets.emplace_back(row, row, -1.0);
     }
@@ -19233,8 +19244,19 @@ struct MPC
         rate_offset + stage,
         nx_N + stage * nu + mpcc_progress::kExtendedCurvatureIndex, 1.0);
     }
+    const int follow_gap_offset = rate_offset + N;
+    if (legacy.follow_shadow_requested) {
+      for (int state = 0; state < N + 1; ++state) {
+        a_triplets.emplace_back(
+          follow_gap_offset + state,
+          state * nx + mpcc_progress::kExtendedLagIndex, 1.0);
+        a_triplets.emplace_back(
+          follow_gap_offset + state,
+          state * nx + mpcc_progress::kExtendedProgressIndex, 1.0);
+      }
+    }
     Eigen::SparseMatrix<double> constraints(
-      nx_N + variable_count + N, variable_count);
+      nx_N + variable_count + N + follow_gap_row_count, variable_count);
     constraints.setFromTriplets(a_triplets.begin(), a_triplets.end());
 
     Eigen::Matrix<double, nx, 1> x0;
@@ -19267,10 +19289,32 @@ struct MPC
       rate_lower[stage] = -maximum_change;
       rate_upper[stage] = maximum_change;
     }
-    Eigen::VectorXd lower(equality.size() + box_lower.size() + rate_lower.size());
-    Eigen::VectorXd upper(equality.size() + box_upper.size() + rate_upper.size());
-    lower << equality, box_lower, rate_lower;
-    upper << equality, box_upper, rate_upper;
+    const Eigen::Index standard_constraint_count =
+      equality.size() + box_lower.size() + rate_lower.size();
+    Eigen::VectorXd lower = Eigen::VectorXd::Zero(
+      standard_constraint_count + follow_gap_row_count);
+    Eigen::VectorXd upper = Eigen::VectorXd::Zero(
+      standard_constraint_count + follow_gap_row_count);
+    Eigen::Index bound_offset = 0;
+    lower.segment(bound_offset, equality.size()) = equality;
+    upper.segment(bound_offset, equality.size()) = equality;
+    bound_offset += equality.size();
+    lower.segment(bound_offset, box_lower.size()) = box_lower;
+    upper.segment(bound_offset, box_upper.size()) = box_upper;
+    bound_offset += box_lower.size();
+    lower.segment(bound_offset, rate_lower.size()) = rate_lower;
+    upper.segment(bound_offset, rate_upper.size()) = rate_upper;
+    bound_offset += rate_lower.size();
+    if (legacy.follow_shadow_requested) {
+      for (int state = 0; state < N + 1; ++state) {
+        lower[bound_offset + state] =
+          -std::numeric_limits<double>::infinity();
+        upper[bound_offset + state] =
+          legacy.follow_longitudinal_contract.target_progress_m[
+          static_cast<std::size_t>(state)] -
+          legacy.follow_longitudinal_contract.hard_gap_m;
+      }
+    }
 
     Eigen::VectorXd q = Eigen::VectorXd::Zero(variable_count);
     std::vector<Eigen::Triplet<double>> p_triplets;
@@ -21766,9 +21810,17 @@ struct MPC
       const double tolerance_m = std::max(
         1e-5, outcome.result->maximum_constraint_violation + 1e-6);
       bool longitudinal_valid = true;
+      std::vector<double> solved_progress_m;
+      std::vector<double> solved_lag_m;
+      solved_progress_m.reserve(static_cast<std::size_t>(problem.N + 1));
+      solved_lag_m.reserve(static_cast<std::size_t>(problem.N + 1));
       for (int state = 0; state < problem.N + 1; ++state) {
         const double solved_progress = execution_primal.primal[
           state * nx + mpcc_progress::kExtendedProgressIndex];
+        const double solved_lag = execution_primal.primal[
+          state * nx + mpcc_progress::kExtendedLagIndex];
+        solved_progress_m.push_back(solved_progress);
+        solved_lag_m.push_back(solved_lag);
         const double lower =
           problem.follow_longitudinal_contract.progress_lower_m[
           static_cast<std::size_t>(state)];
@@ -21782,13 +21834,7 @@ struct MPC
           lower_violation, upper_violation});
         longitudinal_valid = longitudinal_valid &&
           lower_violation <= tolerance_m && upper_violation <= tolerance_m;
-        const double predicted_gap =
-          problem.follow_longitudinal_contract.target_progress_m[
-          static_cast<std::size_t>(state)] - solved_progress;
-        result.minimum_predicted_gap_m = std::min(
-          result.minimum_predicted_gap_m, predicted_gap);
         if (state == problem.N) {
-          result.terminal_predicted_gap_m = predicted_gap;
           result.terminal_velocity_mps = execution_primal.primal[
             state * nx + mpcc_progress::kExtendedVelocityIndex];
         }
@@ -21799,8 +21845,31 @@ struct MPC
         result.detail = "solved horizon violates Follow progress interval";
         return finish();
       }
+      const auto effective_gap = race_mpcc::evaluate_follow_effective_gap(
+        problem.follow_longitudinal_contract.target_progress_m,
+        solved_progress_m, solved_lag_m,
+        problem.follow_longitudinal_contract.hard_gap_m, tolerance_m);
+      if (!effective_gap.valid) {
+        result.status = "effective-gap-certificate-invalid";
+        result.detail = "Follow effective-gap evidence malformed";
+        return finish();
+      }
+      result.minimum_predicted_gap_m = effective_gap.minimum_gap_m;
+      result.terminal_predicted_gap_m =
+        problem.follow_longitudinal_contract.target_progress_m.back() -
+        (solved_progress_m.back() + solved_lag_m.back());
+      result.maximum_effective_gap_violation_m =
+        effective_gap.maximum_violation_m;
+      result.effective_gap_worst_stage = effective_gap.worst_stage;
+      result.effective_gap_satisfied = effective_gap.satisfied;
+      if (!result.effective_gap_satisfied) {
+        result.status = "effective-gap-certificate-reject";
+        result.detail = "solved horizon violates Follow physical hard gap";
+        return finish();
+      }
       result.status = "accepted-shadow";
-      result.detail = "Follow contract solved; authority remains legacy";
+      result.detail =
+        "Follow progress and effective-gap contracts solved; authority remains legacy";
       return finish();
     } catch (const std::exception & error) {
       result.status = "exception";
@@ -21824,7 +21893,7 @@ struct MPC
     window.attempt_count += result.solve_attempted ? 1U : 0U;
     window.solved_count += result.solved ? 1U : 0U;
     window.execution_primal_count += result.execution_primal_accepted ? 1U : 0U;
-    window.accepted_count += result.longitudinal_contract_satisfied ? 1U : 0U;
+    window.accepted_count += result.effective_gap_satisfied ? 1U : 0U;
     window.warm_start_count += result.warm_start_applied ? 1U : 0U;
     window.reset_count += result.solver_context_reset ? 1U : 0U;
     if (result.solver_constraint_failure.has_value()) {
@@ -21848,6 +21917,11 @@ struct MPC
           mpcc_progress::ExtendedConstraintRowKind::CurvatureRate)
       {
         ++window.curvature_rate_failure_count;
+      } else if (
+        result.solver_constraint_semantic.kind ==
+          mpcc_progress::ExtendedConstraintRowKind::FollowEffectiveGap)
+      {
+        ++window.follow_effective_gap_failure_count;
       } else {
         ++window.other_constraint_failure_count;
       }
@@ -21888,6 +21962,8 @@ struct MPC
               << ", solve=" << (result.solved ? 1 : 0)
               << ", longitudinal="
               << (result.longitudinal_contract_satisfied ? 1 : 0)
+              << ", effective_gap="
+              << (result.effective_gap_satisfied ? 1 : 0)
               << ", ego_v=" << result.measured_ego_speed_mps
               << "mps, target_gap=" << result.current_target_gap_m
               << "m, target_v=" << result.predicted_target_speed_mps
@@ -21901,7 +21977,10 @@ struct MPC
               << "m, terminal_gap=" << result.terminal_predicted_gap_m
               << "m, terminal_v=" << result.terminal_velocity_mps
               << "mps, violation=" << result.maximum_longitudinal_violation_m
-              << "m, primal_reject="
+              << "m, effective_gap_violation="
+              << result.maximum_effective_gap_violation_m
+              << "m@" << result.effective_gap_worst_stage
+              << ", primal_reject="
               << mpcc_progress::extended_execution_primal_boundary_field_name(
         result.execution_primal_rejected_field)
               << '@' << result.execution_primal_rejected_stage
@@ -21941,7 +22020,7 @@ struct MPC
               << ", status=" << result.status
               << ", detail=" << result.detail
               << ", authority=shadow, selected=0";
-      if (!result.eligible || result.longitudinal_contract_satisfied) {
+      if (!result.eligible || result.effective_gap_satisfied) {
         RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", message.str().c_str());
       } else {
         RCLCPP_WARN(rclcpp::get_logger("mpc_controller"), "%s", message.str().c_str());
@@ -21965,7 +22044,8 @@ struct MPC
         "Follow MPCC shadow runtime: eligible=%zu, contract=%zu, metadata=%zu, "
         "build=%zu, attempts=%zu, solved=%zu, primal=%zu, accepted=%zu/%.1f%%, "
         "warm=%zu, reset=%zu, build_ms=%.3f/%.3f(avg/max), "
-        "row_reject=%zu(velocity=%zu,progress_speed=%zu,curvature_rate=%zu,other=%zu), "
+        "row_reject=%zu(velocity=%zu,progress_speed=%zu,curvature_rate=%zu,"
+        "follow_gap=%zu,other=%zu), "
         "solve_ms=%.3f/%.3f(avg/max), total_ms=%.3f/%.3f(avg/max), "
         "last=%s, detail=%s, ego_v=%.3f, target_gap=%.3f, target_v=%.3f, "
         "v_ref0=%.3f, v_upper0=%.3f, terminal_s_bounds=[%.3f,%.3f], "
@@ -21988,6 +22068,7 @@ struct MPC
         static_cast<std::size_t>(
           window.virtual_progress_speed_box_failure_count),
         static_cast<std::size_t>(window.curvature_rate_failure_count),
+        static_cast<std::size_t>(window.follow_effective_gap_failure_count),
         static_cast<std::size_t>(window.other_constraint_failure_count),
         window.total_solve_ms / attempts, window.maximum_solve_ms,
         window.total_ms / eligible, window.maximum_total_ms,

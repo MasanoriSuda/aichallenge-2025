@@ -200,6 +200,7 @@ TEST(RaceMpccFoundation, BuildsMovingFollowContractAtConfiguredGap)
   EXPECT_EQ(result.reason, race::FollowLongitudinalContractReason::Accepted);
   EXPECT_EQ(result.target_id, "d2");
   EXPECT_EQ(result.target_observation_generation, 7U);
+  EXPECT_NEAR(result.hard_gap_m, 2.05, 1e-9);
   ASSERT_EQ(result.target_progress_m.size(), 3U);
   EXPECT_NEAR(result.target_progress_m[0], 4.0, 1e-9);
   EXPECT_NEAR(result.target_progress_m[1], 5.5, 1e-9);
@@ -210,6 +211,34 @@ TEST(RaceMpccFoundation, BuildsMovingFollowContractAtConfiguredGap)
   ASSERT_EQ(result.velocity_reference_mps.size(), 2U);
   EXPECT_NEAR(result.velocity_reference_mps[0], 3.0, 1e-9);
   EXPECT_NEAR(result.velocity_reference_mps[1], 3.0, 1e-9);
+}
+
+TEST(RaceMpccFoundation, EffectiveFollowGapIncludesFrenetLag)
+{
+  const auto safe = race::evaluate_follow_effective_gap(
+    {4.0, 5.0}, {0.0, 2.0}, {0.0, 0.5}, 2.05, 1e-5);
+  ASSERT_TRUE(safe.valid);
+  EXPECT_TRUE(safe.satisfied);
+  EXPECT_NEAR(safe.minimum_gap_m, 2.5, 1e-9);
+
+  // theta alone leaves 2.1 m and would pass the legacy check. The physical
+  // along-track state is theta + e_lag, leaving only 1.8 m.
+  const auto forward_lag = race::evaluate_follow_effective_gap(
+    {4.0}, {1.9}, {0.3}, 2.05, 1e-5);
+  ASSERT_TRUE(forward_lag.valid);
+  EXPECT_FALSE(forward_lag.satisfied);
+  EXPECT_EQ(forward_lag.worst_stage, 0);
+  EXPECT_NEAR(forward_lag.minimum_gap_m, 1.8, 1e-9);
+  EXPECT_NEAR(forward_lag.maximum_violation_m, 0.25, 1e-9);
+}
+
+TEST(RaceMpccFoundation, EffectiveFollowGapRejectsMalformedEvidence)
+{
+  EXPECT_FALSE(race::evaluate_follow_effective_gap(
+      {4.0}, {1.0, 2.0}, {0.0}, 2.05, 1e-5).valid);
+  EXPECT_FALSE(race::evaluate_follow_effective_gap(
+      {4.0}, {1.0}, {std::numeric_limits<double>::infinity()},
+      2.05, 1e-5).valid);
 }
 
 TEST(RaceMpccFoundation, BuildsStoppedTargetContractThatStopsAtDesiredGap)

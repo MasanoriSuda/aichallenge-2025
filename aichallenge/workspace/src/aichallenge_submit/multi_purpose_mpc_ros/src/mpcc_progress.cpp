@@ -549,6 +549,8 @@ const char * extended_constraint_row_kind_name(
       return "input-box";
     case ExtendedConstraintRowKind::CurvatureRate:
       return "curvature-rate";
+    case ExtendedConstraintRowKind::FollowEffectiveGap:
+      return "follow-effective-gap";
   }
   return "unknown";
 }
@@ -591,7 +593,8 @@ ExtendedConstraintRowSemantic decode_extended_constraint_row(
   const int variable_rows = state_rows + input_rows;
   const int box_offset = state_rows;
   const int rate_offset = box_offset + variable_rows;
-  const int constraint_rows = rate_offset + horizon_size;
+  const int follow_gap_offset = rate_offset + horizon_size;
+  const int constraint_rows = follow_gap_offset + horizon_size + 1;
   if (row >= constraint_rows) {
     return result;
   }
@@ -644,9 +647,15 @@ ExtendedConstraintRowSemantic decode_extended_constraint_row(
     }
     return result;
   }
-  result.kind = ExtendedConstraintRowKind::CurvatureRate;
-  result.field = ExtendedConstraintField::Curvature;
-  result.stage = row - rate_offset;
+  if (row < follow_gap_offset) {
+    result.kind = ExtendedConstraintRowKind::CurvatureRate;
+    result.field = ExtendedConstraintField::Curvature;
+    result.stage = row - rate_offset;
+  } else {
+    result.kind = ExtendedConstraintRowKind::FollowEffectiveGap;
+    result.field = ExtendedConstraintField::Progress;
+    result.stage = row - follow_gap_offset;
+  }
   return result;
 }
 
@@ -683,13 +692,19 @@ ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
   const int state_rows = kExtendedStateDimension * (horizon_size + 1);
   const int variable_rows =
     state_rows + kExtendedInputDimension * horizon_size;
-  const int constraint_rows = state_rows + variable_rows + horizon_size;
+  const int standard_constraint_rows =
+    state_rows + variable_rows + horizon_size;
+  const int follow_constraint_rows =
+    standard_constraint_rows + horizon_size + 1;
+  const bool supported_constraint_layout =
+    constraint_lower.size() == standard_constraint_rows ||
+    constraint_lower.size() == follow_constraint_rows;
   if (
     primal.size() != variable_rows ||
-    constraint_lower.size() != constraint_rows ||
-    constraint_upper.size() != constraint_rows ||
-    constraint_violation.size() != constraint_rows ||
-    constraint_tolerance.size() != constraint_rows)
+    !supported_constraint_layout ||
+    constraint_upper.size() != constraint_lower.size() ||
+    constraint_violation.size() != constraint_lower.size() ||
+    constraint_tolerance.size() != constraint_lower.size())
   {
     return result;
   }
@@ -1570,9 +1585,13 @@ ExtendedLateralConstraintContract evaluate_extended_lateral_constraint_contract(
   const int state_rows = kExtendedStateDimension * (horizon_size + 1);
   const int variable_rows =
     state_rows + kExtendedInputDimension * horizon_size;
-  const int expected_constraint_rows = state_rows + variable_rows + horizon_size;
+  const int standard_constraint_rows =
+    state_rows + variable_rows + horizon_size;
+  const int follow_constraint_rows =
+    standard_constraint_rows + horizon_size + 1;
   if (
-    constraint_violation.size() != expected_constraint_rows ||
+    (constraint_violation.size() != standard_constraint_rows &&
+    constraint_violation.size() != follow_constraint_rows) ||
     constraint_tolerance.size() != constraint_violation.size())
   {
     return result;

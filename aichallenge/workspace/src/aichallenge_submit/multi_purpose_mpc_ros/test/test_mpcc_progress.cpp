@@ -371,6 +371,9 @@ TEST(MpccProgress, DecodesEveryExtendedConstraintRowFamily)
   const auto first_curvature_rate =
     multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
     270, horizon);
+  const auto first_follow_effective_gap =
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    290, horizon);
 
   EXPECT_TRUE(dynamics.valid);
   EXPECT_EQ(dynamics.kind, ExtendedConstraintRowKind::DynamicsEquality);
@@ -391,6 +394,12 @@ TEST(MpccProgress, DecodesEveryExtendedConstraintRowFamily)
     first_curvature_rate.kind, ExtendedConstraintRowKind::CurvatureRate);
   EXPECT_EQ(first_curvature_rate.field, ExtendedConstraintField::Curvature);
   EXPECT_EQ(first_curvature_rate.stage, 0);
+  EXPECT_TRUE(first_follow_effective_gap.valid);
+  EXPECT_EQ(
+    first_follow_effective_gap.kind,
+    ExtendedConstraintRowKind::FollowEffectiveGap);
+  EXPECT_EQ(first_follow_effective_gap.field, ExtendedConstraintField::Progress);
+  EXPECT_EQ(first_follow_effective_gap.stage, 0);
 }
 
 TEST(MpccProgress, RejectsInvalidExtendedConstraintRows)
@@ -400,7 +409,7 @@ TEST(MpccProgress, RejectsInvalidExtendedConstraintRows)
     -1, 20).valid);
   EXPECT_FALSE(
     multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
-    290, 20).valid);
+    311, 20).valid);
   EXPECT_FALSE(
     multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
     0, 0).valid);
@@ -463,6 +472,26 @@ TEST(MpccProgress, AcceptsFiveStateLateralRowsWithinReportedTolerance)
   EXPECT_TRUE(contract.valid);
   EXPECT_TRUE(contract.satisfied);
   EXPECT_DOUBLE_EQ(contract.maximum_tolerance_m, 0.005);
+}
+
+TEST(MpccProgress, AcceptsLateralCertificateWithCompleteFollowGapRowBlock)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension * (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+  constexpr int standard_rows = state_rows + variable_rows + horizon;
+  constexpr int follow_rows = standard_rows + horizon + 1;
+  Eigen::VectorXd violation = Eigen::VectorXd::Zero(follow_rows);
+  Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(follow_rows, 1e-5);
+
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::
+    evaluate_extended_lateral_constraint_contract(
+    violation, tolerance, horizon);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.satisfied);
 }
 
 TEST(MpccProgress, RejectsMalformedFiveStateLateralConstraintReport)
@@ -528,6 +557,38 @@ TEST(MpccProgress, NormalizesCertifiedSignedBoundaryForSemanticExecution)
   EXPECT_DOUBLE_EQ(normalized.maximum_adjustment, 2e-7);
   EXPECT_DOUBLE_EQ(normalized.primal[velocity_variable], 0.0);
   EXPECT_DOUBLE_EQ(normalized.primal[virtual_speed_variable], 0.0);
+}
+
+TEST(MpccProgress, NormalizesExecutionPrimalWithCompleteFollowGapRowBlock)
+{
+  constexpr int horizon = 2;
+  constexpr int state_rows =
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedStateDimension *
+    (horizon + 1);
+  constexpr int variable_rows = state_rows +
+    multi_purpose_mpc_ros::mpcc_progress::kExtendedInputDimension * horizon;
+  constexpr int standard_rows = state_rows + variable_rows + horizon;
+  constexpr int follow_rows = standard_rows + horizon + 1;
+  Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_rows);
+  const auto [standard_lower, standard_upper] =
+    make_extended_test_bounds(horizon);
+  Eigen::VectorXd lower = Eigen::VectorXd::Constant(
+    follow_rows, -std::numeric_limits<double>::infinity());
+  Eigen::VectorXd upper = Eigen::VectorXd::Constant(
+    follow_rows, std::numeric_limits<double>::infinity());
+  lower.head(standard_rows) = standard_lower;
+  upper.head(standard_rows) = standard_upper;
+  Eigen::VectorXd violation = Eigen::VectorXd::Zero(follow_rows);
+  Eigen::VectorXd tolerance = Eigen::VectorXd::Constant(follow_rows, 1e-5);
+
+  const auto normalized =
+    multi_purpose_mpc_ros::mpcc_progress::normalize_extended_execution_primal(
+    primal, lower, upper, violation, tolerance, horizon);
+
+  EXPECT_EQ(
+    normalized.reason,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ExtendedExecutionPrimalNormalizationReason::Accepted);
 }
 
 TEST(MpccProgress, NormalizesCertifiedActuatorBoundaryForSemanticExecution)

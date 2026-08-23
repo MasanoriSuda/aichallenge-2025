@@ -167,6 +167,7 @@ enum class ExtendedConstraintRowKind
   StateBox,
   InputBox,
   CurvatureRate,
+  FollowEffectiveGap,
 };
 
 enum class ExtendedConstraintField

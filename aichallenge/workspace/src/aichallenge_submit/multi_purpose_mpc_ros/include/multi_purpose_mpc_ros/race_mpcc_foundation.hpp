@@ -252,6 +252,7 @@ struct FollowLongitudinalContract
     FollowLongitudinalContractReason::InvalidHorizon};
   std::string target_id;
   std::uint64_t target_observation_generation{};
+  double hard_gap_m{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> elapsed_time_sec;
   std::vector<double> target_progress_m;
   std::vector<double> progress_reference_m;
@@ -267,6 +268,23 @@ struct FollowLongitudinalContract
 /// a moving target uses the existing signed distance-gain policy.
 FollowLongitudinalContract build_follow_longitudinal_contract(
   const FollowLongitudinalContractRequest & request) noexcept;
+
+/// Physical longitudinal certificate for the extended Frenet state. The
+/// vehicle's along-track position is theta + e_lag, not theta alone.
+struct FollowEffectiveGapCertificate
+{
+  bool valid{false};
+  bool satisfied{false};
+  int worst_stage{-1};
+  double minimum_gap_m{std::numeric_limits<double>::infinity()};
+  double maximum_violation_m{};
+};
+
+FollowEffectiveGapCertificate evaluate_follow_effective_gap(
+  const std::vector<double> & target_progress_m,
+  const std::vector<double> & solved_progress_m,
+  const std::vector<double> & solved_lag_m,
+  double hard_gap_m, double tolerance_m) noexcept;
 
 enum class ShadowWarmStartResetReason
 {

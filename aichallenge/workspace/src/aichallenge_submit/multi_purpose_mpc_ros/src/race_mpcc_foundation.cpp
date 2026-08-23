@@ -348,6 +348,7 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
   FollowLongitudinalContract result;
   result.target_id = request.target_id;
   result.target_observation_generation = request.target_observation_generation;
+  result.hard_gap_m = request.hard_gap_m;
   if (request.intent != mpcc_execution_contract::ControlIntent::Follow) {
     result.reason = FollowLongitudinalContractReason::IntentNotFollow;
     return result;
@@ -524,6 +525,45 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
 
   result.valid = true;
   result.reason = FollowLongitudinalContractReason::Accepted;
+  return result;
+}
+
+FollowEffectiveGapCertificate evaluate_follow_effective_gap(
+  const std::vector<double> & target_progress_m,
+  const std::vector<double> & solved_progress_m,
+  const std::vector<double> & solved_lag_m,
+  const double hard_gap_m, const double tolerance_m) noexcept
+{
+  FollowEffectiveGapCertificate result;
+  if (
+    target_progress_m.empty() ||
+    target_progress_m.size() != solved_progress_m.size() ||
+    target_progress_m.size() != solved_lag_m.size() ||
+    !std::isfinite(hard_gap_m) || hard_gap_m < 0.0 ||
+    !std::isfinite(tolerance_m) || tolerance_m < 0.0)
+  {
+    return result;
+  }
+  for (std::size_t stage = 0U; stage < target_progress_m.size(); ++stage) {
+    const double target_progress = target_progress_m[stage];
+    const double solved_progress = solved_progress_m[stage];
+    const double solved_lag = solved_lag_m[stage];
+    if (
+      !std::isfinite(target_progress) || !std::isfinite(solved_progress) ||
+      !std::isfinite(solved_lag))
+    {
+      return result;
+    }
+    const double gap = target_progress - (solved_progress + solved_lag);
+    const double violation = std::max(0.0, hard_gap_m - gap);
+    result.minimum_gap_m = std::min(result.minimum_gap_m, gap);
+    if (violation > result.maximum_violation_m) {
+      result.maximum_violation_m = violation;
+      result.worst_stage = static_cast<int>(stage);
+    }
+  }
+  result.valid = true;
+  result.satisfied = result.maximum_violation_m <= tolerance_m;
   return result;
 }
 

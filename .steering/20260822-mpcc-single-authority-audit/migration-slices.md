@@ -394,6 +394,14 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   tolerance; it did not provide stable authority. The source experiment was removed. Audit the
   five-state input-row construction and warm-start transport next, before changing solver
   tolerances or expanding retained-plan eligibility.
+- `.steering/20260824-mpcc-warm-start-dual-semantics` tested whether the two category-changing
+  dual boundaries caused the warm-only rejects. The source experiment passed 1700 tests and the
+  25-package build, but `output/20260824-013035` still produced eight D2 execution-primal rejects,
+  all with `warm=1`. The dual patch was removed. Inspection then found the more upstream lifecycle
+  break: `solve_extended_progress_problem()` publishes every OSQP-successful result into warm-start
+  history before semantic execution-primal normalization and physical certification. A downstream
+  rejected result can therefore seed the next horizon. Correct that publication boundary before
+  retrying strict Track/Cruise row normalization; do not add a cold-retry flag or relax bounds.
 
 ## Slice 6: Legacy and migration path removal
 

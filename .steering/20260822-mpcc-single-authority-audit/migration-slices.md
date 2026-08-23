@@ -430,6 +430,19 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   Active command bounds amplify the failure frequency, but warm transport is falsified as the root.
   Repair the five-state variable/constraint nondimensionalization and require a complete physical-row
   certificate next; do not tune OSQP, clamp commands, loosen bounds or add cold retry.
+- `.steering/20260824-five-state-nondimensionalization` repairs that common numerical contract.
+  Variable-coordinate and row-tolerance scaling now preserve one exact physical certificate;
+  `output/20260824-031300` observed zero `stage=constraint_check` failures in Track/Cruise and
+  Follow. No vehicle parameter, clearance, retry or fallback was added.
+- `.steering/20260824-overtake-live-gate-after-numerical-repair` then repeated the live Gate at
+  `output/20260824-031752`. Two Overtake episodes proved that the numerical blocker is gone but
+  exposed the next structural defect. Of 322 evaluated cycles, 198 completed the exact fresh
+  canonical chain; all 58 retained attempts failed (40 expired cursors, 18 unavailable course-frame
+  windows), while production used 102 circuit/reentry/three-state fallback cycles. Final joined
+  traces contained no canonical-satisfied Overtake state: certified five-state emissions lacked the
+  canonical command identity and the rest were legacy bypass or wall hold. Production promotion is
+  therefore still blocked. Repair the Overtake canonical producer lifecycle and same-formulation
+  continuity before connecting the publisher; do not patch only the command identity.
 
 ## Slice 6: Legacy and migration path removal
 

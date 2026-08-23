@@ -230,6 +230,21 @@ Express longitudinal interaction as stage constraints/references of the same MPC
   canonical formulation.
 - Lateral and longitudinal solution IDs always match.
 
+### 2026-08-23 Follow shadow status
+
+- `.steering/20260823-follow-longitudinal-contract` implements a pure typed
+  stage-wise Follow contract and a dedicated five-state shadow solve.
+- The first dynamic run exposed that a retained `Follow` action can exist with
+  no current front observation (`front=0`, `fd/fs=inf`). Shadow admission now
+  rejects that semantic mismatch before contract construction instead of
+  misclassifying it as invalid configuration.
+- Moving, stopped, opening-gap and invalid-observation behavior is covered by
+  deterministic tests. The available `dev2` run produced stopped-front
+  `LowSpeedAvoidance`, not moving Follow, so positive moving-front dynamic
+  coverage is still required.
+- Follow remains shadow-only. Its scalar production owner is intentionally not
+  deleted until the positive dynamic gate and a separate authority approval.
+
 ## Slice 5: Overtake/Dynamic Escape integration
 
 ### Purpose

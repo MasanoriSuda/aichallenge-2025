@@ -155,6 +155,118 @@ struct TrackCruiseShadowEligibility
 TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
   const TrackCruiseShadowEligibilityRequest & request) noexcept;
 
+enum class FollowShadowEligibilityReason
+{
+  Eligible,
+  ProgressMpccDisabled,
+  MigrationBoundaryInactive,
+  ExtendedDynamicsDisabled,
+  LiveProgressAlreadyActive,
+  TacticalSnapshot,
+  IntentNotFollow,
+  NoCoherentFrontObservation,
+};
+
+const char * follow_shadow_eligibility_reason_name(
+  FollowShadowEligibilityReason reason) noexcept;
+
+struct FollowShadowEligibilityRequest
+{
+  bool progress_mpcc_enabled{false};
+  bool overtake_only_boundary{true};
+  bool extended_dynamics_enabled{false};
+  bool live_progress_active{false};
+  bool tactical_snapshot{false};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  /// True only when the current behavior cycle selected a physically front
+  /// vehicle and its finite longitudinal observation belongs to the same
+  /// target provenance. A retained Follow label alone is not sufficient.
+  bool coherent_front_observation{false};
+};
+
+struct FollowShadowEligibility
+{
+  bool eligible{false};
+  FollowShadowEligibilityReason reason{
+    FollowShadowEligibilityReason::ProgressMpccDisabled};
+};
+
+/// Reuse the existing migration boundary for Follow observation. This does
+/// not grant command authority; it only requests canonical metadata/solve.
+FollowShadowEligibility resolve_follow_shadow_eligibility(
+  const FollowShadowEligibilityRequest & request) noexcept;
+
+enum class FollowLongitudinalContractReason
+{
+  Accepted,
+  IntentNotFollow,
+  InvalidTargetIdentity,
+  InvalidTargetObservation,
+  StaleTargetObservation,
+  InvalidTargetKinematics,
+  InvalidConfiguration,
+  InvalidHorizon,
+  InitialHardGapViolation,
+  InfeasibleProgressInterval,
+};
+
+const char * follow_longitudinal_contract_reason_name(
+  FollowLongitudinalContractReason reason) noexcept;
+
+/// Inputs required to turn one fresh front-target observation into the
+/// longitudinal portion of a five-state Follow horizon. All progress values
+/// are relative to the current MPCC progress origin.
+struct FollowLongitudinalContractRequest
+{
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  std::string target_id;
+  std::uint64_t target_observation_generation{};
+  double target_observation_age_sec{std::numeric_limits<double>::infinity()};
+  double maximum_target_observation_age_sec{};
+  double current_target_relative_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double moving_target_speed_threshold_mps{};
+  double desired_gap_m{};
+  double hard_gap_m{};
+  double maximum_closing_speed_mps{};
+  double maximum_recovery_speed_mps{};
+  double distance_gain_per_sec{};
+  double slow_target_velocity_cap_mps{};
+  double braking_deceleration_mps2{};
+  double maximum_velocity_mps{};
+  std::vector<double> stage_dt_sec;
+  std::vector<double> base_progress_reference_m;
+  std::vector<double> base_progress_upper_m;
+  std::vector<double> base_velocity_reference_mps;
+  std::vector<double> base_velocity_upper_mps;
+};
+
+struct FollowLongitudinalContract
+{
+  bool valid{false};
+  FollowLongitudinalContractReason reason{
+    FollowLongitudinalContractReason::InvalidHorizon};
+  std::string target_id;
+  std::uint64_t target_observation_generation{};
+  std::vector<double> elapsed_time_sec;
+  std::vector<double> target_progress_m;
+  std::vector<double> progress_reference_m;
+  std::vector<double> progress_lower_m;
+  std::vector<double> progress_upper_m;
+  std::vector<double> velocity_reference_mps;
+  std::vector<double> velocity_upper_mps;
+};
+
+/// Build a fail-closed stage-wise Follow contract. This function has no
+/// authority side effects and never repairs an already violated current hard
+/// gap. A stopped target is approached using the configured ego braking limit;
+/// a moving target uses the existing signed distance-gain policy.
+FollowLongitudinalContract build_follow_longitudinal_contract(
+  const FollowLongitudinalContractRequest & request) noexcept;
+
 enum class ShadowWarmStartResetReason
 {
   None,

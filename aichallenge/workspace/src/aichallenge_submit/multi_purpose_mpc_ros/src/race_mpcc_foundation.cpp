@@ -253,6 +253,268 @@ TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
   return result;
 }
 
+const char * follow_shadow_eligibility_reason_name(
+  const FollowShadowEligibilityReason reason) noexcept
+{
+  switch (reason) {
+    case FollowShadowEligibilityReason::Eligible:
+      return "eligible";
+    case FollowShadowEligibilityReason::ProgressMpccDisabled:
+      return "progress-mpcc-disabled";
+    case FollowShadowEligibilityReason::MigrationBoundaryInactive:
+      return "migration-boundary-inactive";
+    case FollowShadowEligibilityReason::ExtendedDynamicsDisabled:
+      return "extended-dynamics-disabled";
+    case FollowShadowEligibilityReason::LiveProgressAlreadyActive:
+      return "live-progress-already-active";
+    case FollowShadowEligibilityReason::TacticalSnapshot:
+      return "tactical-snapshot";
+    case FollowShadowEligibilityReason::IntentNotFollow:
+      return "intent-not-follow";
+    case FollowShadowEligibilityReason::NoCoherentFrontObservation:
+      return "no-coherent-front-observation";
+  }
+  return "unknown";
+}
+
+FollowShadowEligibility resolve_follow_shadow_eligibility(
+  const FollowShadowEligibilityRequest & request) noexcept
+{
+  FollowShadowEligibility result;
+  if (!request.progress_mpcc_enabled) {
+    result.reason = FollowShadowEligibilityReason::ProgressMpccDisabled;
+    return result;
+  }
+  if (!request.overtake_only_boundary) {
+    result.reason = FollowShadowEligibilityReason::MigrationBoundaryInactive;
+    return result;
+  }
+  if (!request.extended_dynamics_enabled) {
+    result.reason = FollowShadowEligibilityReason::ExtendedDynamicsDisabled;
+    return result;
+  }
+  if (request.live_progress_active) {
+    result.reason = FollowShadowEligibilityReason::LiveProgressAlreadyActive;
+    return result;
+  }
+  if (request.tactical_snapshot) {
+    result.reason = FollowShadowEligibilityReason::TacticalSnapshot;
+    return result;
+  }
+  if (request.intent != mpcc_execution_contract::ControlIntent::Follow) {
+    result.reason = FollowShadowEligibilityReason::IntentNotFollow;
+    return result;
+  }
+  if (!request.coherent_front_observation) {
+    result.reason = FollowShadowEligibilityReason::NoCoherentFrontObservation;
+    return result;
+  }
+  result.eligible = true;
+  result.reason = FollowShadowEligibilityReason::Eligible;
+  return result;
+}
+
+const char * follow_longitudinal_contract_reason_name(
+  const FollowLongitudinalContractReason reason) noexcept
+{
+  switch (reason) {
+    case FollowLongitudinalContractReason::Accepted:
+      return "accepted";
+    case FollowLongitudinalContractReason::IntentNotFollow:
+      return "intent-not-follow";
+    case FollowLongitudinalContractReason::InvalidTargetIdentity:
+      return "invalid-target-identity";
+    case FollowLongitudinalContractReason::InvalidTargetObservation:
+      return "invalid-target-observation";
+    case FollowLongitudinalContractReason::StaleTargetObservation:
+      return "stale-target-observation";
+    case FollowLongitudinalContractReason::InvalidTargetKinematics:
+      return "invalid-target-kinematics";
+    case FollowLongitudinalContractReason::InvalidConfiguration:
+      return "invalid-configuration";
+    case FollowLongitudinalContractReason::InvalidHorizon:
+      return "invalid-horizon";
+    case FollowLongitudinalContractReason::InitialHardGapViolation:
+      return "initial-hard-gap-violation";
+    case FollowLongitudinalContractReason::InfeasibleProgressInterval:
+      return "infeasible-progress-interval";
+  }
+  return "unknown";
+}
+
+FollowLongitudinalContract build_follow_longitudinal_contract(
+  const FollowLongitudinalContractRequest & request) noexcept
+{
+  FollowLongitudinalContract result;
+  result.target_id = request.target_id;
+  result.target_observation_generation = request.target_observation_generation;
+  if (request.intent != mpcc_execution_contract::ControlIntent::Follow) {
+    result.reason = FollowLongitudinalContractReason::IntentNotFollow;
+    return result;
+  }
+  if (request.target_id.empty() || request.target_observation_generation == 0U) {
+    result.reason = FollowLongitudinalContractReason::InvalidTargetIdentity;
+    return result;
+  }
+  if (
+    !std::isfinite(request.target_observation_age_sec) ||
+    request.target_observation_age_sec < 0.0 ||
+    !std::isfinite(request.maximum_target_observation_age_sec) ||
+    request.maximum_target_observation_age_sec < 0.0)
+  {
+    result.reason = FollowLongitudinalContractReason::InvalidTargetObservation;
+    return result;
+  }
+  if (
+    request.target_observation_age_sec >
+    request.maximum_target_observation_age_sec + 1e-9)
+  {
+    result.reason = FollowLongitudinalContractReason::StaleTargetObservation;
+    return result;
+  }
+  const std::array<double, 8U> configuration{
+    request.moving_target_speed_threshold_mps,
+    request.desired_gap_m,
+    request.hard_gap_m,
+    request.maximum_closing_speed_mps,
+    request.maximum_recovery_speed_mps,
+    request.distance_gain_per_sec,
+    request.slow_target_velocity_cap_mps,
+    request.braking_deceleration_mps2};
+  if (
+    !std::isfinite(request.current_target_relative_progress_m) ||
+    request.current_target_relative_progress_m < 0.0 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0)
+  {
+    result.reason = FollowLongitudinalContractReason::InvalidTargetKinematics;
+    return result;
+  }
+  if (
+    !std::all_of(
+      configuration.begin(), configuration.end(),
+      [](const double value) {return std::isfinite(value) && value >= 0.0;}) ||
+    !std::isfinite(request.maximum_velocity_mps) ||
+    request.maximum_velocity_mps < 0.0 ||
+    request.desired_gap_m + 1e-9 < request.hard_gap_m ||
+    request.braking_deceleration_mps2 <= 0.0)
+  {
+    result.reason = FollowLongitudinalContractReason::InvalidConfiguration;
+    return result;
+  }
+  const std::size_t horizon_steps = request.stage_dt_sec.size();
+  if (
+    horizon_steps == 0U ||
+    request.base_progress_reference_m.size() != horizon_steps + 1U ||
+    request.base_progress_upper_m.size() != horizon_steps + 1U ||
+    request.base_velocity_reference_mps.size() != horizon_steps ||
+    request.base_velocity_upper_mps.size() != horizon_steps)
+  {
+    result.reason = FollowLongitudinalContractReason::InvalidHorizon;
+    return result;
+  }
+  const auto finite_nonnegative = [](const std::vector<double> & values) {
+      return std::all_of(
+        values.begin(), values.end(),
+        [](const double value) {return std::isfinite(value) && value >= 0.0;});
+    };
+  if (
+    !finite_nonnegative(request.stage_dt_sec) ||
+    !finite_nonnegative(request.base_progress_reference_m) ||
+    !finite_nonnegative(request.base_progress_upper_m) ||
+    !finite_nonnegative(request.base_velocity_reference_mps) ||
+    !finite_nonnegative(request.base_velocity_upper_mps) ||
+    std::any_of(
+      request.stage_dt_sec.begin(), request.stage_dt_sec.end(),
+      [](const double value) {return value <= 0.0;}))
+  {
+    result.reason = FollowLongitudinalContractReason::InvalidHorizon;
+    return result;
+  }
+  if (
+    request.current_target_relative_progress_m + 1e-9 < request.hard_gap_m)
+  {
+    result.reason = FollowLongitudinalContractReason::InitialHardGapViolation;
+    return result;
+  }
+
+  result.elapsed_time_sec.reserve(horizon_steps + 1U);
+  result.target_progress_m.reserve(horizon_steps + 1U);
+  result.progress_reference_m.reserve(horizon_steps + 1U);
+  result.progress_lower_m.reserve(horizon_steps + 1U);
+  result.progress_upper_m.reserve(horizon_steps + 1U);
+  result.velocity_reference_mps.reserve(horizon_steps);
+  result.velocity_upper_mps.reserve(horizon_steps);
+
+  double elapsed_sec = 0.0;
+  for (std::size_t state = 0U; state <= horizon_steps; ++state) {
+    if (state > 0U) {
+      elapsed_sec += request.stage_dt_sec[state - 1U];
+    }
+    const double target_progress =
+      request.current_target_relative_progress_m +
+      request.target_speed_mps * elapsed_sec;
+    const double desired_progress = std::max(
+      0.0, target_progress - request.desired_gap_m);
+    const double hard_progress_upper =
+      target_progress - request.hard_gap_m;
+    const double progress_upper = std::min(
+      request.base_progress_upper_m[state], hard_progress_upper);
+    if (!std::isfinite(progress_upper) || progress_upper < -1e-9) {
+      result.reason = FollowLongitudinalContractReason::InfeasibleProgressInterval;
+      return result;
+    }
+    result.elapsed_time_sec.push_back(elapsed_sec);
+    result.target_progress_m.push_back(target_progress);
+    result.progress_reference_m.push_back(std::min(
+      request.base_progress_reference_m[state], desired_progress));
+    // Normal Follow may hold its current progress. Monotonicity is enforced
+    // by the non-negative virtual-progress input in the five-state model.
+    result.progress_lower_m.push_back(0.0);
+    result.progress_upper_m.push_back(std::max(0.0, progress_upper));
+  }
+
+  const bool moving_target =
+    request.target_speed_mps > request.moving_target_speed_threshold_mps;
+  for (std::size_t stage = 0U; stage < horizon_steps; ++stage) {
+    const std::size_t next_state = stage + 1U;
+    const double predicted_gap =
+      result.target_progress_m[next_state] -
+      request.base_progress_reference_m[next_state];
+    double longitudinal_reference = 0.0;
+    if (moving_target) {
+      const double signed_margin = std::clamp(
+        request.distance_gain_per_sec *
+        (predicted_gap - request.desired_gap_m),
+        -request.maximum_recovery_speed_mps,
+        request.maximum_closing_speed_mps);
+      longitudinal_reference = std::max(
+        0.0, request.target_speed_mps + signed_margin);
+    } else {
+      const double approach_distance = std::max(
+        0.0, predicted_gap - request.desired_gap_m);
+      longitudinal_reference = std::min(
+        request.slow_target_velocity_cap_mps,
+        std::sqrt(
+          2.0 * request.braking_deceleration_mps2 * approach_distance));
+    }
+    const double velocity_upper = std::min({
+      request.base_velocity_upper_mps[stage],
+      request.maximum_velocity_mps,
+      longitudinal_reference});
+    if (!std::isfinite(velocity_upper) || velocity_upper < 0.0) {
+      result.reason = FollowLongitudinalContractReason::InvalidHorizon;
+      return result;
+    }
+    result.velocity_upper_mps.push_back(velocity_upper);
+    result.velocity_reference_mps.push_back(std::min(
+      request.base_velocity_reference_mps[stage], velocity_upper));
+  }
+
+  result.valid = true;
+  result.reason = FollowLongitudinalContractReason::Accepted;
+  return result;
+}
+
 const char * shadow_warm_start_reset_reason_name(
   const ShadowWarmStartResetReason reason) noexcept
 {
@@ -286,7 +548,8 @@ bool shadow_identity_complete(const ShadowWarmStartIdentity & identity) noexcept
 {
   const bool intent_valid =
     identity.intent == mpcc_execution_contract::ControlIntent::Track ||
-    identity.intent == mpcc_execution_contract::ControlIntent::Cruise;
+    identity.intent == mpcc_execution_contract::ControlIntent::Cruise ||
+    identity.intent == mpcc_execution_contract::ControlIntent::Follow;
   if (
     !intent_valid ||
     identity.formulation !=

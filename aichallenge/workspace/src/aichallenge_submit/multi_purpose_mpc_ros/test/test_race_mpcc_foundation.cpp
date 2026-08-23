@@ -130,6 +130,181 @@ TEST(RaceMpccFoundation, EnablesTrackAndCruiseOnlyAtTheExistingMigrationBoundary
     race::TrackCruiseShadowEligibilityReason::TacticalSnapshot);
 }
 
+TEST(RaceMpccFoundation, EnablesFollowShadowWithoutPromotingOtherIntents)
+{
+  const auto follow = race::resolve_follow_shadow_eligibility(
+    race::FollowShadowEligibilityRequest{
+      true, true, true, false, false, contract::ControlIntent::Follow, true});
+  const auto cruise = race::resolve_follow_shadow_eligibility(
+    race::FollowShadowEligibilityRequest{
+      true, true, true, false, false, contract::ControlIntent::Cruise, true});
+  const auto live = race::resolve_follow_shadow_eligibility(
+    race::FollowShadowEligibilityRequest{
+      true, true, true, true, false, contract::ControlIntent::Follow, true});
+  const auto retained_label_without_front =
+    race::resolve_follow_shadow_eligibility(
+    race::FollowShadowEligibilityRequest{
+      true, true, true, false, false, contract::ControlIntent::Follow, false});
+
+  EXPECT_TRUE(follow.eligible);
+  EXPECT_EQ(follow.reason, race::FollowShadowEligibilityReason::Eligible);
+  EXPECT_FALSE(cruise.eligible);
+  EXPECT_EQ(cruise.reason, race::FollowShadowEligibilityReason::IntentNotFollow);
+  EXPECT_FALSE(live.eligible);
+  EXPECT_EQ(live.reason, race::FollowShadowEligibilityReason::LiveProgressAlreadyActive);
+  EXPECT_FALSE(retained_label_without_front.eligible);
+  EXPECT_EQ(
+    retained_label_without_front.reason,
+    race::FollowShadowEligibilityReason::NoCoherentFrontObservation);
+}
+
+namespace
+{
+
+race::FollowLongitudinalContractRequest follow_contract_request()
+{
+  race::FollowLongitudinalContractRequest request;
+  request.intent = contract::ControlIntent::Follow;
+  request.target_id = "d2";
+  request.target_observation_generation = 7U;
+  request.target_observation_age_sec = 0.1;
+  request.maximum_target_observation_age_sec = 1.0;
+  request.current_target_relative_progress_m = 4.0;
+  request.target_speed_mps = 3.0;
+  request.moving_target_speed_threshold_mps = 0.5;
+  request.desired_gap_m = 4.0;
+  request.hard_gap_m = 2.05;
+  request.maximum_closing_speed_mps = 0.8;
+  request.maximum_recovery_speed_mps = 0.6;
+  request.distance_gain_per_sec = 1.0;
+  request.slow_target_velocity_cap_mps = 5.0;
+  request.braking_deceleration_mps2 = 3.0;
+  request.maximum_velocity_mps = 11.11;
+  request.stage_dt_sec = {0.5, 0.5};
+  request.base_progress_reference_m = {0.0, 1.5, 3.0};
+  request.base_progress_upper_m = {0.0, 2.0, 4.0};
+  request.base_velocity_reference_mps = {6.0, 6.0};
+  request.base_velocity_upper_mps = {11.11, 11.11};
+  return request;
+}
+
+}  // namespace
+
+TEST(RaceMpccFoundation, BuildsMovingFollowContractAtConfiguredGap)
+{
+  const auto result = race::build_follow_longitudinal_contract(
+    follow_contract_request());
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.reason, race::FollowLongitudinalContractReason::Accepted);
+  EXPECT_EQ(result.target_id, "d2");
+  EXPECT_EQ(result.target_observation_generation, 7U);
+  ASSERT_EQ(result.target_progress_m.size(), 3U);
+  EXPECT_NEAR(result.target_progress_m[0], 4.0, 1e-9);
+  EXPECT_NEAR(result.target_progress_m[1], 5.5, 1e-9);
+  EXPECT_NEAR(result.target_progress_m[2], 7.0, 1e-9);
+  EXPECT_NEAR(result.progress_reference_m[0], 0.0, 1e-9);
+  EXPECT_NEAR(result.progress_reference_m[1], 1.5, 1e-9);
+  EXPECT_NEAR(result.progress_reference_m[2], 3.0, 1e-9);
+  ASSERT_EQ(result.velocity_reference_mps.size(), 2U);
+  EXPECT_NEAR(result.velocity_reference_mps[0], 3.0, 1e-9);
+  EXPECT_NEAR(result.velocity_reference_mps[1], 3.0, 1e-9);
+}
+
+TEST(RaceMpccFoundation, BuildsStoppedTargetContractThatStopsAtDesiredGap)
+{
+  auto request = follow_contract_request();
+  request.current_target_relative_progress_m = 10.0;
+  request.target_speed_mps = 0.0;
+  request.stage_dt_sec = {0.5, 0.5, 0.5};
+  request.base_progress_reference_m = {0.0, 2.0, 4.0, 6.0};
+  request.base_progress_upper_m = {0.0, 3.0, 6.0, 9.0};
+  request.base_velocity_reference_mps = {6.0, 6.0, 6.0};
+  request.base_velocity_upper_mps = {11.11, 11.11, 11.11};
+
+  const auto result = race::build_follow_longitudinal_contract(request);
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.progress_reference_m.back(), 6.0, 1e-9);
+  EXPECT_NEAR(result.progress_upper_m.back(), 7.95, 1e-9);
+  EXPECT_GT(result.velocity_reference_mps.front(), 0.0);
+  EXPECT_NEAR(result.velocity_reference_mps.back(), 0.0, 1e-9);
+}
+
+TEST(RaceMpccFoundation, DoesNotRestrictAnOpeningFollowGap)
+{
+  auto request = follow_contract_request();
+  request.current_target_relative_progress_m = 6.0;
+  request.target_speed_mps = 8.0;
+  request.stage_dt_sec = {0.5, 0.5};
+  request.base_progress_reference_m = {0.0, 2.0, 4.0};
+  request.base_progress_upper_m = {0.0, 3.0, 6.0};
+  request.base_velocity_reference_mps = {6.0, 6.0};
+  request.base_velocity_upper_mps = {11.11, 11.11};
+
+  const auto result = race::build_follow_longitudinal_contract(request);
+
+  ASSERT_TRUE(result.valid);
+  EXPECT_NEAR(result.progress_reference_m[1], 2.0, 1e-9);
+  EXPECT_NEAR(result.progress_reference_m[2], 4.0, 1e-9);
+  EXPECT_NEAR(result.velocity_reference_mps[0], 6.0, 1e-9);
+  EXPECT_NEAR(result.velocity_reference_mps[1], 6.0, 1e-9);
+}
+
+TEST(RaceMpccFoundation, RejectsStaleOrDisappearingFollowTarget)
+{
+  auto stale = follow_contract_request();
+  stale.target_observation_age_sec = 1.01;
+  const auto stale_result = race::build_follow_longitudinal_contract(stale);
+  EXPECT_FALSE(stale_result.valid);
+  EXPECT_EQ(
+    stale_result.reason,
+    race::FollowLongitudinalContractReason::StaleTargetObservation);
+
+  auto missing = follow_contract_request();
+  missing.target_observation_generation = 0U;
+  const auto missing_result = race::build_follow_longitudinal_contract(missing);
+  EXPECT_FALSE(missing_result.valid);
+  EXPECT_EQ(
+    missing_result.reason,
+    race::FollowLongitudinalContractReason::InvalidTargetIdentity);
+}
+
+TEST(RaceMpccFoundation, RejectsCurrentHardGapViolationInsteadOfClampingIt)
+{
+  auto request = follow_contract_request();
+  request.current_target_relative_progress_m = 2.0;
+
+  const auto result = race::build_follow_longitudinal_contract(request);
+
+  EXPECT_FALSE(result.valid);
+  EXPECT_EQ(
+    result.reason,
+    race::FollowLongitudinalContractReason::InitialHardGapViolation);
+}
+
+TEST(RaceMpccFoundation, SeparatesInvalidTargetKinematicsFromInvalidConfiguration)
+{
+  auto invalid_target = follow_contract_request();
+  invalid_target.current_target_relative_progress_m =
+    std::numeric_limits<double>::infinity();
+  const auto target_result =
+    race::build_follow_longitudinal_contract(invalid_target);
+  EXPECT_FALSE(target_result.valid);
+  EXPECT_EQ(
+    target_result.reason,
+    race::FollowLongitudinalContractReason::InvalidTargetKinematics);
+
+  auto invalid_configuration = follow_contract_request();
+  invalid_configuration.desired_gap_m = 1.0;
+  const auto configuration_result =
+    race::build_follow_longitudinal_contract(invalid_configuration);
+  EXPECT_FALSE(configuration_result.valid);
+  EXPECT_EQ(
+    configuration_result.reason,
+    race::FollowLongitudinalContractReason::InvalidConfiguration);
+}
+
 namespace
 {
 
@@ -175,6 +350,20 @@ TEST(RaceMpccFoundation, KeepsWarmStartAcrossCompatibleRollingStageGeometry)
   EXPECT_TRUE(result.apply_warm_start);
   EXPECT_FALSE(result.reset_context);
   EXPECT_EQ(result.reason, race::ShadowWarmStartResetReason::None);
+}
+
+TEST(RaceMpccFoundation, AcceptsCompatibleFollowWarmStartIdentity)
+{
+  const auto previous = shadow_identity(
+    contract::ControlIntent::Follow, 10, {11, 12, 13, 14});
+  const auto current = shadow_identity(
+    contract::ControlIntent::Follow, 11, {12, 13, 14, 15});
+
+  const auto result = race::resolve_shadow_warm_start(previous, current);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.apply_warm_start);
+  EXPECT_FALSE(result.reset_context);
 }
 
 TEST(RaceMpccFoundation, ResetsWarmStartWhenIntentChanges)

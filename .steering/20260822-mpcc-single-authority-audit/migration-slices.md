@@ -250,8 +250,13 @@ Express longitudinal interaction as stage constraints/references of the same MPC
   `theta + e_lag` gap, current wall, exact retained cursor and the same canonical selector.
 - The retained path is shadow-only and has deterministic fail-closed coverage for target/tube
   mutation, malformed or short horizon, current/stage gap violations and wall/provenance failures.
-  Static validation passes 38/38 package tests; dynamic evidence of an actual fresh-miss replacement
-  is still required before production authority may be considered.
+  Static validation passes 38/38 package tests. In `output/20260823-181103`, the first dynamic
+  retained window re-certified 5 of 8 fresh-miss attempts through world proof, candidate, selector,
+  exact actuation and command reconstruction; a later window added one more retained command.
+  All stayed `authority=shadow, selected=0`.
+- This is enough to accept the retained mechanism, but not production promotion. The same run has
+  intervals where the retained certificate expires while fresh Follow remains unavailable, and it
+  records callback overruns. A separate coverage/latency authority gate remains mandatory.
 
 ### 2026-08-23 Hold/Stop intent provenance status
 

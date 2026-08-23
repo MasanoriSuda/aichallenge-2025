@@ -61,3 +61,39 @@ Result: infrastructure-inconclusive; it is not a Follow retained rejection.
 The containers were stopped with `make down`. This run cannot satisfy or falsify the dynamic gate.
 The next valid run must first demonstrate a normally advancing AWSIM race before its Follow evidence
 is interpreted.
+
+### Accepted attempt `output/20260823-181103`
+
+Before this rerun, `make autoware-build` installed the committed runtime into the workspace used by
+`make dev2`. Both vehicles then advanced through `grounded`, `ready` and `start`, so this run is
+valid dynamic evidence.
+
+Domain 1 produced the required causal sequence:
+
+1. decision 2865 completed and stored a fresh canonical Follow plan;
+2. later fresh solves became unavailable or failed their physical certificate;
+3. the retained evaluator used a current observation of the same `d2` target;
+4. retained world proof, candidate, selector, actuation and command all completed;
+5. every result remained `authority=shadow, selected=0`.
+
+The first retained telemetry window reports:
+
+```text
+attempted=8, world=5, candidate=5, selector=5,
+actuation=5, command=5, fresh_stored=32,
+world_reason=accepted, proof_reason=accepted,
+selector_reason=retained-certified/retained-certified,
+min_gap=2.633 m, authority=shadow, selected=0
+```
+
+A later window supplied one further complete retained command. Fail-closed outcomes were also
+observed: course-frame unavailable, progress discontinuity, no stored plan and certificate expiry.
+None was converted into an age lease, legacy fallback or executable shadow command.
+
+## Gate result
+
+Static proof and the requested dynamic retained-selection event pass. This validates the retained
+Follow mechanism in shadow; it does **not** approve production Follow authority. The same run also
+contains long fresh-solver-unavailable intervals after the retained certificate expired, plus
+control callback overruns. Production promotion therefore requires a separate coverage/latency
+gate and must not be inferred from this Slice.

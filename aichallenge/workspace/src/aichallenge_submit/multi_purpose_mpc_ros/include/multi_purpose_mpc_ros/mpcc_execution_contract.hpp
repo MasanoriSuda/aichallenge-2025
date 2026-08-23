@@ -415,6 +415,7 @@ struct FinalControlDecisionRequest
   std::optional<CertifiedMpccSolution> solution;
   bool retained_solution{false};
   std::optional<CanonicalNormalCommand> canonical_normal_command;
+  ControlIntent supervisor_intent{ControlIntent::Unknown};
 
   FinalControlDecisionRequest() = default;
 
@@ -426,14 +427,16 @@ struct FinalControlDecisionRequest
     const std::optional<CertifiedMpccSolution> & solution_in = std::nullopt,
     const bool retained_solution_in = false,
     const std::optional<CanonicalNormalCommand> & canonical_normal_command_in =
-    std::nullopt)
+    std::nullopt,
+    const ControlIntent supervisor_intent_in = ControlIntent::Unknown)
   : decision_id(decision_id_in),
     authority(authority_in),
     source(source_in),
     problem(problem_in),
     solution(solution_in),
     retained_solution(retained_solution_in),
-    canonical_normal_command(canonical_normal_command_in)
+    canonical_normal_command(canonical_normal_command_in),
+    supervisor_intent(supervisor_intent_in)
   {
   }
 };

@@ -859,6 +859,9 @@ FinalControlDecision resolve_final_control_decision(
     request.authority == FinalAuthorityClass::RecoveryOverride ||
     request.authority == FinalAuthorityClass::ControlDisabled)
   {
+    if (request.supervisor_intent != ControlIntent::Unknown) {
+      decision.intent = request.supervisor_intent;
+    }
     decision.identity_complete = true;
     decision.canonical_contract_satisfied = true;
     decision.reason = "explicit-supervisor-override";

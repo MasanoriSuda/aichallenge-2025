@@ -24980,12 +24980,21 @@ struct MPC
         if (
           control_intent == mpcc_contract::ControlIntent::Track ||
           control_intent == mpcc_contract::ControlIntent::Cruise ||
-          control_intent == mpcc_contract::ControlIntent::Follow)
+          control_intent == mpcc_contract::ControlIntent::Follow ||
+          control_intent == mpcc_contract::ControlIntent::Stop)
         {
           return canonical_normal_emergency_stop(
             problem, control_intent, "invalid lateral bound contract");
         }
         return safe_failure_control("invalid lateral bound contract", now_sec);
+      }
+      if (
+        race_mpcc::resolve_stop_authority_action(control_intent) ==
+        race_mpcc::StopAuthorityAction::EmergencyStop)
+      {
+        invalidate_follow_canonical_async_context();
+        return canonical_normal_emergency_stop(
+          problem, control_intent, "safety-brake-stop-authority");
       }
       if (control_intent == mpcc_contract::ControlIntent::Follow) {
         const auto follow_result = evaluate_follow_async_shadow(problem, now_sec);
@@ -48499,6 +48508,18 @@ private:
       final_authority =
         mpcc_contract::FinalAuthorityClass::CertifiedNormalSolution;
     }
+    auto supervisor_intent = mpcc_contract::ControlIntent::Unknown;
+    if (
+      final_authority == mpcc_contract::FinalAuthorityClass::EmergencyOverride &&
+      trace.authority.has_value())
+    {
+      const auto resolution =
+        overtake_orchestrator::resolve_canonical_control_intent(
+        trace.authority->request, trace.authority->resolution);
+      if (resolution.valid) {
+        supervisor_intent = resolution.intent;
+      }
+    }
     trace.execution_contract = mpcc_contract::resolve_final_control_decision(
       mpcc_contract::FinalControlDecisionRequest{
         active_control_decision_id_, final_authority,
@@ -48508,7 +48529,7 @@ private:
         mpc_ != nullptr ? mpc_->last_solution_contract() :
         std::optional<mpcc_contract::CertifiedMpccSolution>{},
         mpc_ != nullptr && mpc_->last_solution_is_retained(),
-        canonical_normal_command});
+        canonical_normal_command, supervisor_intent});
     trace.published = published;
     trace.actual_speed_mps = actual_speed_mps;
     trace.target_speed_mps = raw_control[0];

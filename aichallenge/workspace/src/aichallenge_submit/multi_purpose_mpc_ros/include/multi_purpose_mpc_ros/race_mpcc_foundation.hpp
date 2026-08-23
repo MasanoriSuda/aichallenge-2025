@@ -211,6 +211,18 @@ FollowProductionAction resolve_follow_production_action(
   mpcc_execution_contract::ControlIntent intent,
   bool complete_canonical_selection) noexcept;
 
+enum class StopAuthorityAction
+{
+  NotOwned,
+  EmergencyStop,
+};
+
+/// The currently proven Stop producer is SafetyBrake, an emergency supervisor
+/// action. It must terminate normal routing instead of borrowing a normal
+/// solver for lateral control before braking is applied downstream.
+StopAuthorityAction resolve_stop_authority_action(
+  mpcc_execution_contract::ControlIntent intent) noexcept;
+
 enum class FollowLongitudinalContractReason
 {
   Accepted,

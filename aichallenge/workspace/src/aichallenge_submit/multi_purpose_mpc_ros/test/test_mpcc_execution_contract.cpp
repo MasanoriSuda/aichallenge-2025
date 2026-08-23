@@ -561,6 +561,23 @@ TEST(MpccExecutionContract, ExplicitOverridesDoNotInventSolverIdentity)
   }
 }
 
+TEST(MpccExecutionContract, EmergencyOverridePreservesExplicitSupervisorIntent)
+{
+  const auto decision = contract::resolve_final_control_decision(
+    contract::FinalControlDecisionRequest{
+      77U, contract::FinalAuthorityClass::EmergencyOverride,
+      "explicit-supervisor", std::nullopt, std::nullopt, false,
+      std::nullopt, contract::ControlIntent::Stop});
+
+  EXPECT_TRUE(decision.identity_complete);
+  EXPECT_TRUE(decision.canonical_contract_satisfied);
+  EXPECT_EQ(decision.intent, contract::ControlIntent::Stop);
+  EXPECT_EQ(decision.formulation, contract::Formulation::Unresolved);
+  EXPECT_EQ(decision.problem_fingerprint, 0U);
+  EXPECT_EQ(decision.solution_id, 0U);
+  EXPECT_EQ(decision.reason, "explicit-supervisor-override");
+}
+
 TEST(MpccExecutionContract, CanonicalNormalAuthoritySelectsFreshCurrentDecision)
 {
   const auto fresh = make_canonical_candidate();

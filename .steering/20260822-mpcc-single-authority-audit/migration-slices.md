@@ -294,6 +294,16 @@ Express longitudinal interaction as stage constraints/references of the same MPC
 - No Hold/Stop QP, command selection or production authority was added. A Hold
   shadow is blocked until a real longitudinal-hold producer is identified;
   DynamicWait must remain ShiftOut/Pass.
+- `.steering/20260823-stop-emergency-authority-boundary` separates the proven Stop case from that
+  blocked nominal Hold work. The only observed Stop producer is SafetyBrake, an explicit emergency
+  supervisor action. Previously it resolved `intent=stop` but fell through to a legacy normal solve
+  before downstream braking, creating split authority.
+- Stop now returns before low-speed direct and every normal solver through canonical emergency
+  authority. A separate supervisor-intent field preserves `intent=stop` without inventing solver
+  identity. Accepted replay `output/20260823-214300-stop-authority-replay-v2/d1/autoware.log`
+  observed 10/10 Stop traces as `emergency-override`, `formulation=unresolved`,
+  `canonical=satisfied`, and zero legacy Stop traces. Stop emergency integration is complete;
+  nominal Hold remains blocked for the producer reason above.
 
 ## Slice 5: Overtake/Dynamic Escape integration
 

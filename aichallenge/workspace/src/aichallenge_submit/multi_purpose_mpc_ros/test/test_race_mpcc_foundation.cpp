@@ -174,6 +174,22 @@ TEST(RaceMpccFoundation, FollowProductionNeverFallsThroughToAnotherNormalOwner)
     race::FollowProductionAction::EmergencyStop);
 }
 
+TEST(RaceMpccFoundation, StopEmergencyAuthorityNeverBorrowsNormalControl)
+{
+  EXPECT_EQ(
+    race::resolve_stop_authority_action(contract::ControlIntent::Cruise),
+    race::StopAuthorityAction::NotOwned);
+  EXPECT_EQ(
+    race::resolve_stop_authority_action(contract::ControlIntent::Follow),
+    race::StopAuthorityAction::NotOwned);
+  EXPECT_EQ(
+    race::resolve_stop_authority_action(contract::ControlIntent::Hold),
+    race::StopAuthorityAction::NotOwned);
+  EXPECT_EQ(
+    race::resolve_stop_authority_action(contract::ControlIntent::Stop),
+    race::StopAuthorityAction::EmergencyStop);
+}
+
 namespace
 {
 

@@ -326,6 +326,13 @@ FollowProductionAction resolve_follow_production_action(
     FollowProductionAction::EmergencyStop;
 }
 
+StopAuthorityAction resolve_stop_authority_action(
+  const mpcc_execution_contract::ControlIntent intent) noexcept
+{
+  return intent == mpcc_execution_contract::ControlIntent::Stop ?
+    StopAuthorityAction::EmergencyStop : StopAuthorityAction::NotOwned;
+}
+
 const char * follow_longitudinal_contract_reason_name(
   const FollowLongitudinalContractReason reason) noexcept
 {

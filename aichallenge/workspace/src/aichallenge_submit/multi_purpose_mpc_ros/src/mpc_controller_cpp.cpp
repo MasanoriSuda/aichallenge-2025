@@ -5938,6 +5938,58 @@ struct MpcControlCycleResult
   }
 };
 
+struct PhysicalWallCertificateRejectTelemetry
+{
+  std::uint64_t invalid_input_count{};
+  std::uint64_t lateral_bound_count{};
+  std::uint64_t heading_unavailable_count{};
+  std::uint64_t wall_sample_unavailable_count{};
+  std::uint64_t hard_wall_contact_count{};
+  std::uint64_t current_pose_sample_unavailable_count{};
+  std::uint64_t current_pose_hard_wall_contact_count{};
+  std::uint64_t course_frame_unavailable_count{};
+  std::uint64_t swept_path_count{};
+
+  void record(
+    const mpcc_contract::PhysicalWallCertificateDiagnostic & diagnostic) noexcept
+  {
+    switch (diagnostic.reason) {
+      case mpcc_contract::PhysicalWallCertificateReason::InvalidInput:
+        ++invalid_input_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::LateralBoundViolation:
+        ++lateral_bound_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::HeadingUnavailable:
+        ++heading_unavailable_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::WallSampleUnavailable:
+        ++wall_sample_unavailable_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::HardWallContact:
+        ++hard_wall_contact_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::
+        CurrentPoseWallSampleUnavailable:
+        ++current_pose_sample_unavailable_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::
+        CurrentPoseHardWallContact:
+        ++current_pose_hard_wall_contact_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::CourseFrameUnavailable:
+        ++course_frame_unavailable_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation:
+        ++swept_path_count;
+        break;
+      case mpcc_contract::PhysicalWallCertificateReason::NotEvaluated:
+      case mpcc_contract::PhysicalWallCertificateReason::Accepted:
+        break;
+    }
+  }
+};
+
 struct TrackCruiseShadowTelemetryWindow
 {
   std::uint64_t eligible_count{};
@@ -5966,15 +6018,7 @@ struct TrackCruiseShadowTelemetryWindow
   std::uint64_t retained_candidate_count{};
   std::uint64_t retained_authority_count{};
   std::uint64_t retained_actuation_count{};
-  std::uint64_t physical_invalid_input_count{};
-  std::uint64_t physical_bound_reject_count{};
-  std::uint64_t physical_heading_reject_count{};
-  std::uint64_t physical_sample_reject_count{};
-  std::uint64_t physical_contact_reject_count{};
-  std::uint64_t physical_current_sample_reject_count{};
-  std::uint64_t physical_current_contact_reject_count{};
-  std::uint64_t physical_course_frame_reject_count{};
-  std::uint64_t physical_swept_reject_count{};
+  PhysicalWallCertificateRejectTelemetry physical_rejects;
   std::uint64_t warm_start_count{};
   std::uint64_t reset_count{};
   std::uint64_t total_iterations{};
@@ -6044,6 +6088,9 @@ struct OvertakeCanonicalFreshShadowTelemetryWindow
   std::uint64_t chain_count{};
   std::uint64_t prediction_count{};
   std::uint64_t complete_count{};
+  PhysicalWallCertificateRejectTelemetry physical_rejects;
+  std::uint64_t last_physical_reject_decision_id{};
+  std::string last_physical_reject_detail{"none"};
   double total_ms{};
   double maximum_ms{};
   double maximum_actuation_difference{};
@@ -23142,40 +23189,7 @@ struct MPC
     window.retained_authority_count += result.retained_authority_ready ? 1U : 0U;
     window.retained_actuation_count += result.retained_actuation_extracted ? 1U : 0U;
     if (result.physical_certificate_checked && !result.physically_certified) {
-      switch (result.physical_wall_diagnostic.reason) {
-        case mpcc_contract::PhysicalWallCertificateReason::InvalidInput:
-          ++window.physical_invalid_input_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::LateralBoundViolation:
-          ++window.physical_bound_reject_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::HeadingUnavailable:
-          ++window.physical_heading_reject_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::WallSampleUnavailable:
-          ++window.physical_sample_reject_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::HardWallContact:
-          ++window.physical_contact_reject_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::
-          CurrentPoseWallSampleUnavailable:
-          ++window.physical_current_sample_reject_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::
-          CurrentPoseHardWallContact:
-          ++window.physical_current_contact_reject_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::CourseFrameUnavailable:
-          ++window.physical_course_frame_reject_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::SweptPathViolation:
-          ++window.physical_swept_reject_count;
-          break;
-        case mpcc_contract::PhysicalWallCertificateReason::NotEvaluated:
-        case mpcc_contract::PhysicalWallCertificateReason::Accepted:
-          break;
-      }
+      window.physical_rejects.record(result.physical_wall_diagnostic);
     }
     window.warm_start_count += result.warm_start_applied ? 1U : 0U;
     window.reset_count += result.solver_context_reset ? 1U : 0U;
@@ -23359,15 +23373,19 @@ struct MPC
       static_cast<std::size_t>(window.canonical_actuation_count),
       canonical_plan::to_string(result.canonical_actuation_reason),
       result.canonical_actuation_maximum_difference,
-      static_cast<std::size_t>(window.physical_invalid_input_count),
-      static_cast<std::size_t>(window.physical_bound_reject_count),
-      static_cast<std::size_t>(window.physical_heading_reject_count),
-      static_cast<std::size_t>(window.physical_sample_reject_count),
-      static_cast<std::size_t>(window.physical_contact_reject_count),
-      static_cast<std::size_t>(window.physical_current_sample_reject_count),
-      static_cast<std::size_t>(window.physical_current_contact_reject_count),
-      static_cast<std::size_t>(window.physical_course_frame_reject_count),
-      static_cast<std::size_t>(window.physical_swept_reject_count),
+      static_cast<std::size_t>(window.physical_rejects.invalid_input_count),
+      static_cast<std::size_t>(window.physical_rejects.lateral_bound_count),
+      static_cast<std::size_t>(window.physical_rejects.heading_unavailable_count),
+      static_cast<std::size_t>(
+        window.physical_rejects.wall_sample_unavailable_count),
+      static_cast<std::size_t>(window.physical_rejects.hard_wall_contact_count),
+      static_cast<std::size_t>(
+        window.physical_rejects.current_pose_sample_unavailable_count),
+      static_cast<std::size_t>(
+        window.physical_rejects.current_pose_hard_wall_contact_count),
+      static_cast<std::size_t>(
+        window.physical_rejects.course_frame_unavailable_count),
+      static_cast<std::size_t>(window.physical_rejects.swept_path_count),
       static_cast<std::size_t>(window.warm_start_count),
       static_cast<std::size_t>(window.reset_count),
       race_mpcc::shadow_warm_start_reset_reason_name(result.reset_reason),
@@ -23690,6 +23708,13 @@ struct MPC
     window.chain_count += result.canonical_chain_ready ? 1U : 0U;
     window.prediction_count += result.prediction_available ? 1U : 0U;
     window.complete_count += result.selection_complete ? 1U : 0U;
+    if (result.physical_certificate_checked && !result.physically_certified) {
+      window.physical_rejects.record(result.physical_wall_diagnostic);
+      window.last_physical_reject_decision_id = result.decision_id;
+      window.last_physical_reject_detail =
+        mpcc_contract::format_physical_wall_certificate_diagnostic(
+        result.physical_wall_diagnostic);
+    }
     window.total_ms += result.total_ms;
     window.maximum_ms = std::max(window.maximum_ms, result.total_ms);
     if (std::isfinite(result.maximum_actuation_difference)) {
@@ -23714,6 +23739,9 @@ struct MPC
         "Overtake canonical fresh shadow: evaluated=%lu, eligible=%lu, "
         "context=%lu, lateral=%lu, primal=%lu, actuation=%lu, trajectory=%lu, "
         "physical=%lu, chain=%lu, prediction=%lu, complete=%lu, "
+        "physical_rejects=invalid:%lu/bound:%lu/heading:%lu/sample:%lu/"
+        "contact:%lu/current_sample:%lu/current_contact:%lu/course_frame:%lu/"
+        "swept:%lu, last_physical_reject=%lu/%s, "
         "time=%.3f/%.3fms(avg/max), actuation_diff_max=%.3g, "
         "initial_lag_abs_max=%.3fm, last=%s/%s, authority=shadow",
         static_cast<unsigned long>(window.evaluated_count),
@@ -23727,6 +23755,23 @@ struct MPC
         static_cast<unsigned long>(window.chain_count),
         static_cast<unsigned long>(window.prediction_count),
         static_cast<unsigned long>(window.complete_count),
+        static_cast<unsigned long>(window.physical_rejects.invalid_input_count),
+        static_cast<unsigned long>(window.physical_rejects.lateral_bound_count),
+        static_cast<unsigned long>(
+          window.physical_rejects.heading_unavailable_count),
+        static_cast<unsigned long>(
+          window.physical_rejects.wall_sample_unavailable_count),
+        static_cast<unsigned long>(
+          window.physical_rejects.hard_wall_contact_count),
+        static_cast<unsigned long>(
+          window.physical_rejects.current_pose_sample_unavailable_count),
+        static_cast<unsigned long>(
+          window.physical_rejects.current_pose_hard_wall_contact_count),
+        static_cast<unsigned long>(
+          window.physical_rejects.course_frame_unavailable_count),
+        static_cast<unsigned long>(window.physical_rejects.swept_path_count),
+        static_cast<unsigned long>(window.last_physical_reject_decision_id),
+        window.last_physical_reject_detail.c_str(),
         average_ms, window.maximum_ms,
         window.maximum_actuation_difference,
         window.maximum_absolute_initial_lag_m,

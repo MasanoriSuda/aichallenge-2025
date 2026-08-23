@@ -108,6 +108,43 @@ struct ExactPhysicalExecutionTrajectory
     std::numeric_limits<double>::quiet_NaN()};
 };
 
+enum class ExactPhysicalExecutionTrajectoryReason
+{
+  Accepted,
+  TooFewStages,
+  InvalidProgressOrigin,
+  InvalidMinimumLateralReserve,
+  LateralShapeMismatch,
+  LagShapeMismatch,
+  HeadingShapeMismatch,
+  VelocityShapeMismatch,
+  ProgressShapeMismatch,
+  LowerBoundShapeMismatch,
+  UpperBoundShapeMismatch,
+  InvalidPathDistance,
+  NonFiniteLateral,
+  NonFiniteLag,
+  NonFiniteHeading,
+  InvalidVelocity,
+  ProgressRegressed,
+  InvalidLateralBounds,
+};
+
+struct ExactPhysicalExecutionTrajectoryValidation
+{
+  bool complete{false};
+  ExactPhysicalExecutionTrajectoryReason reason{
+    ExactPhysicalExecutionTrajectoryReason::TooFewStages};
+  int stage{-1};
+};
+
+const char * exact_physical_execution_trajectory_reason_name(
+  ExactPhysicalExecutionTrajectoryReason reason) noexcept;
+
+ExactPhysicalExecutionTrajectoryValidation
+validate_exact_physical_execution_trajectory(
+  const ExactPhysicalExecutionTrajectory & trajectory) noexcept;
+
 /// A certificate without every five-state pose/progress field is not exact
 /// and must not admit or revalidate an Overtake execution path.
 bool exact_physical_execution_trajectory_complete(

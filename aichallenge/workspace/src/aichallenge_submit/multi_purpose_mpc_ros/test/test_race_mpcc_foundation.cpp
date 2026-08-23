@@ -647,8 +647,41 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryRejectsSemanticDiscontinuity)
   trajectory.minimum_lateral_bound_reserve_m = 0.4;
 
   trajectory.progress_m[1] = 100.5;
-  EXPECT_FALSE(race::exact_physical_execution_trajectory_complete(trajectory));
+  const auto progress = race::validate_exact_physical_execution_trajectory(trajectory);
+  EXPECT_FALSE(progress.complete);
+  EXPECT_EQ(
+    progress.reason,
+    race::ExactPhysicalExecutionTrajectoryReason::ProgressRegressed);
+  EXPECT_EQ(progress.stage, 1);
   trajectory.progress_m[1] = 102.2;
   trajectory.lateral_lower_m[1] = 0.9;
-  EXPECT_FALSE(race::exact_physical_execution_trajectory_complete(trajectory));
+  const auto bounds = race::validate_exact_physical_execution_trajectory(trajectory);
+  EXPECT_FALSE(bounds.complete);
+  EXPECT_EQ(
+    bounds.reason,
+    race::ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds);
+  EXPECT_EQ(bounds.stage, 1);
+}
+
+TEST(RaceMpccFoundation, ExactPhysicalTrajectoryReportsNegativeVelocityStage)
+{
+  race::ExactPhysicalExecutionTrajectory trajectory;
+  trajectory.progress_origin_m = 100.0;
+  trajectory.path_distance_m = {1.0, 2.0};
+  trajectory.lateral_m = {0.2, 0.4};
+  trajectory.lag_m = {0.1, -0.1};
+  trajectory.heading_offset_rad = {0.15, -0.20};
+  trajectory.velocity_mps = {4.0, -1e-8};
+  trajectory.progress_m = {101.1, 102.2};
+  trajectory.lateral_lower_m = {-0.5, -0.5};
+  trajectory.lateral_upper_m = {0.8, 0.8};
+  trajectory.minimum_lateral_bound_reserve_m = 0.4;
+
+  const auto validation =
+    race::validate_exact_physical_execution_trajectory(trajectory);
+  EXPECT_FALSE(validation.complete);
+  EXPECT_EQ(
+    validation.reason,
+    race::ExactPhysicalExecutionTrajectoryReason::InvalidVelocity);
+  EXPECT_EQ(validation.stage, 1);
 }

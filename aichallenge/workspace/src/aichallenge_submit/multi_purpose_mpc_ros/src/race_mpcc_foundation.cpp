@@ -163,23 +163,90 @@ TargetProvenanceValidation validate_target_provenance(
   return result;
 }
 
-bool exact_physical_execution_trajectory_complete(
+const char * exact_physical_execution_trajectory_reason_name(
+  const ExactPhysicalExecutionTrajectoryReason reason) noexcept
+{
+  switch (reason) {
+    case ExactPhysicalExecutionTrajectoryReason::Accepted: return "accepted";
+    case ExactPhysicalExecutionTrajectoryReason::TooFewStages: return "too-few-stages";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidProgressOrigin:
+      return "invalid-progress-origin";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidMinimumLateralReserve:
+      return "invalid-minimum-lateral-reserve";
+    case ExactPhysicalExecutionTrajectoryReason::LateralShapeMismatch:
+      return "lateral-shape-mismatch";
+    case ExactPhysicalExecutionTrajectoryReason::LagShapeMismatch:
+      return "lag-shape-mismatch";
+    case ExactPhysicalExecutionTrajectoryReason::HeadingShapeMismatch:
+      return "heading-shape-mismatch";
+    case ExactPhysicalExecutionTrajectoryReason::VelocityShapeMismatch:
+      return "velocity-shape-mismatch";
+    case ExactPhysicalExecutionTrajectoryReason::ProgressShapeMismatch:
+      return "progress-shape-mismatch";
+    case ExactPhysicalExecutionTrajectoryReason::LowerBoundShapeMismatch:
+      return "lower-bound-shape-mismatch";
+    case ExactPhysicalExecutionTrajectoryReason::UpperBoundShapeMismatch:
+      return "upper-bound-shape-mismatch";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidPathDistance:
+      return "invalid-path-distance";
+    case ExactPhysicalExecutionTrajectoryReason::NonFiniteLateral:
+      return "non-finite-lateral";
+    case ExactPhysicalExecutionTrajectoryReason::NonFiniteLag: return "non-finite-lag";
+    case ExactPhysicalExecutionTrajectoryReason::NonFiniteHeading:
+      return "non-finite-heading";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidVelocity:
+      return "invalid-velocity";
+    case ExactPhysicalExecutionTrajectoryReason::ProgressRegressed:
+      return "progress-regressed";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds:
+      return "invalid-lateral-bounds";
+  }
+  return "unknown";
+}
+
+ExactPhysicalExecutionTrajectoryValidation
+validate_exact_physical_execution_trajectory(
   const ExactPhysicalExecutionTrajectory & trajectory) noexcept
 {
   const std::size_t stage_count = trajectory.path_distance_m.size();
+  const auto reject = [](
+      const ExactPhysicalExecutionTrajectoryReason reason,
+      const int stage = -1) {
+      return ExactPhysicalExecutionTrajectoryValidation{false, reason, stage};
+    };
+  if (stage_count < 2U) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::TooFewStages);
+  }
+  if (!std::isfinite(trajectory.progress_origin_m)) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::InvalidProgressOrigin);
+  }
   if (
-    stage_count < 2U || !std::isfinite(trajectory.progress_origin_m) ||
     !std::isfinite(trajectory.minimum_lateral_bound_reserve_m) ||
-    trajectory.minimum_lateral_bound_reserve_m < 0.0 ||
-    trajectory.lateral_m.size() != stage_count ||
-    trajectory.lag_m.size() != stage_count ||
-    trajectory.heading_offset_rad.size() != stage_count ||
-    trajectory.velocity_mps.size() != stage_count ||
-    trajectory.progress_m.size() != stage_count ||
-    trajectory.lateral_lower_m.size() != stage_count ||
-    trajectory.lateral_upper_m.size() != stage_count)
+    trajectory.minimum_lateral_bound_reserve_m < 0.0)
   {
-    return false;
+    return reject(
+      ExactPhysicalExecutionTrajectoryReason::InvalidMinimumLateralReserve);
+  }
+  if (trajectory.lateral_m.size() != stage_count) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::LateralShapeMismatch);
+  }
+  if (trajectory.lag_m.size() != stage_count) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::LagShapeMismatch);
+  }
+  if (trajectory.heading_offset_rad.size() != stage_count) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::HeadingShapeMismatch);
+  }
+  if (trajectory.velocity_mps.size() != stage_count) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::VelocityShapeMismatch);
+  }
+  if (trajectory.progress_m.size() != stage_count) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::ProgressShapeMismatch);
+  }
+  if (trajectory.lateral_lower_m.size() != stage_count) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::LowerBoundShapeMismatch);
+  }
+  if (trajectory.lateral_upper_m.size() != stage_count) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::UpperBoundShapeMismatch);
   }
   double previous_distance_m = -std::numeric_limits<double>::infinity();
   double previous_progress_m = -std::numeric_limits<double>::infinity();
@@ -192,20 +259,45 @@ bool exact_physical_execution_trajectory_complete(
     const double progress_m = trajectory.progress_m[stage];
     const double lower_m = trajectory.lateral_lower_m[stage];
     const double upper_m = trajectory.lateral_upper_m[stage];
-    if (
-      !std::isfinite(distance_m) || distance_m <= previous_distance_m ||
-      !std::isfinite(lateral_m) || !std::isfinite(lag_m) ||
-      !std::isfinite(heading_rad) || !std::isfinite(velocity_mps) ||
-      velocity_mps < 0.0 || !std::isfinite(progress_m) ||
-      progress_m < previous_progress_m || !std::isfinite(lower_m) ||
-      !std::isfinite(upper_m) || lower_m > upper_m)
-    {
-      return false;
+    const int stage_index = static_cast<int>(stage);
+    if (!std::isfinite(distance_m) || distance_m <= previous_distance_m) {
+      return reject(
+        ExactPhysicalExecutionTrajectoryReason::InvalidPathDistance, stage_index);
+    }
+    if (!std::isfinite(lateral_m)) {
+      return reject(
+        ExactPhysicalExecutionTrajectoryReason::NonFiniteLateral, stage_index);
+    }
+    if (!std::isfinite(lag_m)) {
+      return reject(ExactPhysicalExecutionTrajectoryReason::NonFiniteLag, stage_index);
+    }
+    if (!std::isfinite(heading_rad)) {
+      return reject(
+        ExactPhysicalExecutionTrajectoryReason::NonFiniteHeading, stage_index);
+    }
+    if (!std::isfinite(velocity_mps) || velocity_mps < 0.0) {
+      return reject(
+        ExactPhysicalExecutionTrajectoryReason::InvalidVelocity, stage_index);
+    }
+    if (!std::isfinite(progress_m) || progress_m < previous_progress_m) {
+      return reject(
+        ExactPhysicalExecutionTrajectoryReason::ProgressRegressed, stage_index);
+    }
+    if (!std::isfinite(lower_m) || !std::isfinite(upper_m) || lower_m > upper_m) {
+      return reject(
+        ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds, stage_index);
     }
     previous_distance_m = distance_m;
     previous_progress_m = progress_m;
   }
-  return true;
+  return ExactPhysicalExecutionTrajectoryValidation{
+    true, ExactPhysicalExecutionTrajectoryReason::Accepted, -1};
+}
+
+bool exact_physical_execution_trajectory_complete(
+  const ExactPhysicalExecutionTrajectory & trajectory) noexcept
+{
+  return validate_exact_physical_execution_trajectory(trajectory).complete;
 }
 
 std::string format_shadow_decision(const ShadowDecision & decision)

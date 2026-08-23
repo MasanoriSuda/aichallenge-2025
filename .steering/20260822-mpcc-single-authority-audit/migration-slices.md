@@ -505,6 +505,15 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   immediately rolled back because the exact five-state trajectory was unavailable. Repair atomic
   entry/canonical readiness next; do not hide the gap with grace, lease, retry or legacy hold. Repeat
   the continuous-wall comparison only after the upstream authority gate is sound.
+- `.steering/20260824-overtake-exact-artifact-contract` replaces the boolean-only exact trajectory
+  completeness boundary with typed reason/stage provenance, without changing its acceptance policy.
+  The intermittent incomplete-artifact rejection from `output/20260824-065336` did not recur in the
+  rebuilt run `output/20260824-071238`; its first ShiftOut exact proof passed. That run instead
+  reconfirmed the planned authority migration blocker: canonical Overtake produced repeated complete
+  current-world selections (including 40/40-cycle windows), while production traces remained
+  `legacy-normal-bypass`, `plan=0`, and `missing-canonical-command-identity`. Promote the certified
+  canonical selection and delete the competing converted/three-state normal path in the same Slice;
+  do not tune around or add a grace to the intermittent completeness outcome.
 
 ## Slice 6: Legacy and migration path removal
 

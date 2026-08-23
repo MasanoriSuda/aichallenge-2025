@@ -22103,8 +22103,27 @@ struct MPC
     exact.lateral_upper_m = upper_bound_m;
     exact.minimum_lateral_bound_reserve_m =
       extracted->minimum_lateral_bound_reserve_m;
-    if (!race_mpcc::exact_physical_execution_trajectory_complete(exact)) {
-      reject_reason = "exact five-state trajectory contract incomplete";
+    const auto exact_validation =
+      race_mpcc::validate_exact_physical_execution_trajectory(exact);
+    if (!exact_validation.complete) {
+      std::ostringstream reason;
+      reason << "exact five-state trajectory contract incomplete: reason="
+             << race_mpcc::exact_physical_execution_trajectory_reason_name(
+        exact_validation.reason)
+             << ", stage=" << exact_validation.stage;
+      if (
+        exact_validation.stage >= 0 &&
+        static_cast<std::size_t>(exact_validation.stage) < exact.path_distance_m.size())
+      {
+        const auto stage = static_cast<std::size_t>(exact_validation.stage);
+        reason << ", distance=" << exact.path_distance_m[stage]
+               << ", velocity=" << exact.velocity_mps[stage]
+               << ", progress=" << exact.progress_m[stage];
+        if (stage > 0U) {
+          reason << ", previous_progress=" << exact.progress_m[stage - 1U];
+        }
+      }
+      reject_reason = reason.str();
       return std::nullopt;
     }
 

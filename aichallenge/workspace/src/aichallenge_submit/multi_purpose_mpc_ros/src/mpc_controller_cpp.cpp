@@ -25353,6 +25353,17 @@ struct MPC
       intent == mpcc_contract::ControlIntent::Return;
   }
 
+  bool unresolved_dynamic_wait_canonical_scope() const noexcept
+  {
+    if (!last_overtake_authority_trace_.has_value()) {
+      return false;
+    }
+    const auto & authority = last_overtake_authority_trace_.value();
+    return
+      authority.request.dynamic_wait_active &&
+      authority.resolution.action == overtake_orchestrator::Action::DynamicWait;
+  }
+
   void invalidate_overtake_canonical_async_context()
   {
     const auto invalidated = follow_async::invalidate_context_lifecycle(
@@ -27442,6 +27453,25 @@ struct MPC
     return output;
   }
 
+  MpcControlCycleResult canonical_overtake_production_control(
+    const MpcProblem & problem, const double now_sec,
+    const mpcc_contract::ControlIntent intent)
+  {
+    auto async_result = evaluate_overtake_async_shadow(problem, now_sec);
+    record_overtake_canonical_async_status(now_sec);
+    record_problem_context(
+      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    record_overtake_canonical_fresh_shadow_telemetry(async_result, now_sec);
+    if (async_result.selected.complete()) {
+      return canonical_normal_control(problem, intent, async_result.selected);
+    }
+    return canonical_normal_emergency_stop(
+      problem, intent,
+      "canonical Overtake async authority unavailable: " +
+      async_result.status + "/" + async_result.detail + "/" +
+      async_result.retained_detail);
+  }
+
   MpcControlCycleResult get_control(
     const double now_sec, const std::uint64_t decision_id)
   {
@@ -27569,6 +27599,15 @@ struct MPC
           follow_result.status + "/" + follow_result.retained_detail);
       } else {
         invalidate_follow_canonical_async_context();
+      }
+      if (overtake_canonical_async_intent(control_intent)) {
+        return canonical_overtake_production_control(
+          problem, now_sec, control_intent);
+      }
+      if (unresolved_dynamic_wait_canonical_scope()) {
+        return canonical_normal_emergency_stop(
+          problem, control_intent,
+          "dynamic wait has no executable canonical lateral authority");
       }
       if (problem.track_cruise_shadow_requested) {
         record_problem_context(
@@ -55209,6 +55248,7 @@ private:
     const bool active_overtake_wall_monitor_relevant =
       enable_control_ && overtake_authority.has_value() &&
       overtake_authority->resolution.relevant && !mpc_fallback_active &&
+      !canonical_normal_command.has_value() && !canonical_emergency_stop &&
       !executed_solution_wall_hold_active &&
       (overtake_authority->request.phase ==
       overtake_orchestrator::Phase::ShiftOut ||

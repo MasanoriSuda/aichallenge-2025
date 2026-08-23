@@ -156,3 +156,74 @@ def test_canonical_overtake_uses_production_wall_clearance_contract() -> None:
         "proof_request.required_wall_clearance_m =\n"
         "      problem.progress_execution_required_wall_clearance_m"
     ) in retained
+
+
+def test_overtake_intents_return_through_one_canonical_production_boundary() -> None:
+    """ShiftOut/Pass/Return cannot fall through to an older normal solver."""
+
+    resolver_start = SOURCE.index("canonical_overtake_production_control(")
+    resolver_end = SOURCE.index("MpcControlCycleResult get_control(", resolver_start)
+    resolver = SOURCE[resolver_start:resolver_end]
+
+    assert "evaluate_overtake_async_shadow(problem, now_sec)" in resolver
+    assert "return canonical_normal_control(" in resolver
+    assert "return canonical_normal_emergency_stop(" in resolver
+    assert "build_extended_progress_problem(" not in resolver
+    assert "solve_extended_progress_problem(" not in resolver
+    assert "evaluate_overtake_canonical_fresh_shadow(" not in resolver
+    assert "convert_extended_solution_to_legacy(" not in resolver
+    assert "solve_problem(" not in resolver
+    assert "extended_progress_circuit_breaker_" not in resolver
+    assert "extended_progress_reentry_gate_" not in resolver
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    old_path_start = SOURCE.index("Eigen::VectorXd dec;", control_start)
+    canonical_boundary = SOURCE.index(
+        "if (overtake_canonical_async_intent(control_intent))", control_start
+    )
+    assert canonical_boundary < old_path_start
+    before_old_path = SOURCE[canonical_boundary:old_path_start]
+    assert (
+        "return canonical_overtake_production_control(\n"
+        "          problem, now_sec, control_intent);"
+    ) in before_old_path
+
+
+def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:
+    """A broken ShiftOut/Pass wait handoff must fail closed, not change authority."""
+
+    scope_start = SOURCE.index("unresolved_dynamic_wait_canonical_scope() const")
+    scope_end = SOURCE.index(
+        "void invalidate_overtake_canonical_async_context()", scope_start
+    )
+    scope = SOURCE[scope_start:scope_end]
+    assert "authority.request.dynamic_wait_active" in scope
+    assert (
+        "authority.resolution.action == overtake_orchestrator::Action::DynamicWait"
+        in scope
+    )
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    old_path_start = SOURCE.index("Eigen::VectorXd dec;", control_start)
+    fail_closed = SOURCE.index(
+        "if (unresolved_dynamic_wait_canonical_scope())", control_start
+    )
+    assert fail_closed < old_path_start
+    before_old_path = SOURCE[fail_closed:old_path_start]
+    assert "return canonical_normal_emergency_stop(" in before_old_path
+    assert "dynamic wait has no executable canonical lateral authority" in before_old_path
+
+
+def test_canonical_overtake_wall_certificate_is_not_reinterpreted_downstream() -> None:
+    """The legacy x/y wall monitor cannot replace a certified canonical command."""
+
+    monitor_start = SOURCE.index(
+        "const bool active_overtake_wall_monitor_relevant ="
+    )
+    monitor_end = SOURCE.index(
+        "const int wall_path_scan_interval_cycles", monitor_start
+    )
+    monitor = SOURCE[monitor_start:monitor_end]
+
+    assert "!canonical_normal_command.has_value()" in monitor
+    assert "!canonical_emergency_stop" in monitor

@@ -496,6 +496,15 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   This closes certificate-provenance ambiguity and isolates the next formulation defect: stage-wise
   wall rows do not yet prove the swept segment between states. Audit that continuous-geometry
   contract next; do not tune margin/tolerance or add Recovery policy.
+- `.steering/20260824-course-frame-swept-wall-provenance` adds observation-only evidence for that
+  continuous contract. Swept failures now retain the actual interpolated collision pose and segment
+  fraction, and a rejected sparse world chord is compared with a course/Frenet-resampled sweep under
+  the same grid and footprint without changing admission. The first dynamic run
+  `output/20260824-065336` did not reach that comparison: tactical entry promoted ShiftOut with a
+  20-stage certificate while the canonical Overtake worker was still pending, then live execution
+  immediately rolled back because the exact five-state trajectory was unavailable. Repair atomic
+  entry/canonical readiness next; do not hide the gap with grace, lease, retry or legacy hold. Repeat
+  the continuous-wall comparison only after the upstream authority gate is sound.
 
 ## Slice 6: Legacy and migration path removal
 

@@ -2,6 +2,7 @@
 
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -111,4 +112,35 @@ TEST(MpcStageGeometry, ClampsOnlyWithinAcceptedSolverTolerance)
 
   EXPECT_FALSE(geometry::sample_course_frame(
       knots, 9.997, 0.002).has_value());
+}
+
+TEST(MpcStageGeometry, CourseFollowingTrajectoryDoesNotUseWorldChord)
+{
+  const double pi = std::acos(-1.0);
+  const double half_pi = 0.5 * pi;
+  const std::vector<geometry::CourseFrameKnot> course{
+    {0.0, 1.0, 0.0, half_pi, 0},
+    {0.5 * half_pi, std::sqrt(0.5), std::sqrt(0.5), 0.75 * pi, 1},
+    {half_pi, 0.0, 1.0, pi, 2}};
+  const std::vector<geometry::FrenetTrajectoryState> states{
+    {0.0, 0.0, 0.0, 0.0},
+    {half_pi, 0.0, 0.0, 0.0}};
+
+  const auto sampled = geometry::sample_course_following_trajectory(
+    course, states, 0.1);
+
+  ASSERT_TRUE(sampled.has_value());
+  ASSERT_GT(sampled->size(), 3U);
+  const auto midpoint = std::min_element(
+    sampled->begin(), sampled->end(),
+    [](const auto & lhs, const auto & rhs) {
+      return std::abs(lhs.segment_ratio - 0.5) <
+             std::abs(rhs.segment_ratio - 0.5);
+    });
+  ASSERT_NE(midpoint, sampled->end());
+  // A direct world chord would pass through (0.5, 0.5). The reconstructed
+  // course-following sample remains on the quarter circle instead.
+  EXPECT_GT(midpoint->x_m, 0.65);
+  EXPECT_GT(midpoint->y_m, 0.65);
+  EXPECT_EQ(midpoint->destination_state_index, 1U);
 }

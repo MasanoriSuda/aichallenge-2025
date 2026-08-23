@@ -179,6 +179,10 @@ struct PhysicalWallCertificateDiagnostic
   std::size_t contact_cell_count{};
   std::size_t swept_rejected_path_index{std::numeric_limits<std::size_t>::max()};
   std::size_t swept_checked_pose_count{};
+  std::size_t swept_rejected_substep{};
+  std::size_t swept_rejected_subdivision_count{};
+  double swept_rejected_segment_ratio{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 std::string format_physical_wall_certificate_diagnostic(

@@ -677,6 +677,13 @@ TEST(RecoveryFootprintPathClearance, DetectsCollisionBetweenClearEndpoints)
   EXPECT_EQ(result.reason, recovery::RejectReason::Collision);
   EXPECT_EQ(result.rejected_path_index, 1U);
   EXPECT_GT(result.checked_pose_count, 1U);
+  ASSERT_TRUE(result.rejected_pose_available);
+  EXPECT_GT(result.rejected_segment_ratio, 0.0);
+  EXPECT_LT(result.rejected_segment_ratio, 1.0);
+  EXPECT_GT(result.rejected_segment_substep, 0U);
+  EXPECT_GT(result.rejected_segment_subdivision_count, 1U);
+  EXPECT_NEAR(result.rejected_pose.x_m, 7.0, 0.7);
+  EXPECT_NE(result.rejected_pose.x_m, path.back().x_m);
 }
 
 TEST(RecoveryFootprintPathClearance, RejectsOutOfMapAndInvalidStep)

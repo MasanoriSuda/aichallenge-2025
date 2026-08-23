@@ -54,6 +54,27 @@ struct CourseFrameSample
   double interpolation_ratio{};
 };
 
+/// One solved Frenet state on the same unwrapped progress axis as
+/// CourseFrameKnot.
+struct FrenetTrajectoryState
+{
+  double progress_m{};
+  double lateral_m{};
+  double lag_m{};
+  double heading_offset_rad{};
+};
+
+/// Dense world sample reconstructed by interpolating in Frenet/course space,
+/// rather than drawing a straight world-frame chord between sparse states.
+struct CourseFollowingPose
+{
+  double x_m{};
+  double y_m{};
+  double heading_rad{};
+  std::size_t destination_state_index{};
+  double segment_ratio{};
+};
+
 /// Build the single stage-index contract shared by dynamics, lateral bounds,
 /// wall validation and execution certificates.  Stage zero is the state after
 /// the transition tracking_waypoint -> tracking_waypoint + 1.
@@ -69,6 +90,15 @@ std::optional<CourseFrameSample> sample_course_frame(
   const std::vector<CourseFrameKnot> & knots,
   double query_progress_m,
   double query_tolerance_m = 1e-9) noexcept;
+
+/// Densify a solved Frenet trajectory on the course frame. The first state is
+/// included once; every later segment is sampled at no more than
+/// maximum_progress_step_m in solved progress. States must be finite and
+/// nondecreasing in progress.
+std::optional<std::vector<CourseFollowingPose>> sample_course_following_trajectory(
+  const std::vector<CourseFrameKnot> & course_knots,
+  const std::vector<FrenetTrajectoryState> & states,
+  double maximum_progress_step_m) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpc_stage_geometry
 

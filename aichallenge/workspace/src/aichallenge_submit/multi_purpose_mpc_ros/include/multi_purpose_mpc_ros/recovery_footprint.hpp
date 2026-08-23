@@ -207,6 +207,13 @@ struct PathClearanceResult
   RejectReason reason{RejectReason::InvalidRollout};
   std::size_t checked_pose_count{};
   std::size_t rejected_path_index{};
+  /// Exact sampled pose which caused rejection. For an interpolated collision
+  /// this is deliberately not the segment endpoint at rejected_path_index.
+  bool rejected_pose_available{false};
+  Pose2D rejected_pose{};
+  std::size_t rejected_segment_substep{};
+  std::size_t rejected_segment_subdivision_count{};
+  double rejected_segment_ratio{std::numeric_limits<double>::quiet_NaN()};
 };
 
 enum class MarginEscapePathReason

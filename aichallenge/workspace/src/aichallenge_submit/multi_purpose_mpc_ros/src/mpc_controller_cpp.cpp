@@ -21880,10 +21880,47 @@ struct MPC
         *overtake_static_wall_grid_, clearance_footprint,
         swept_path, swept_step_m);
       if (!swept_clearance.valid || !swept_clearance.clear) {
+        std::optional<recovery_footprint::PathClearanceResult>
+          course_following_swept_clearance;
+        if (
+          !trajectory.progress_m.empty() &&
+          trajectory.lag_m.size() == trajectory.progress_m.size() &&
+          trajectory.heading_offset_rad.size() == trajectory.progress_m.size())
+        {
+          std::vector<mpc_stage_geometry::FrenetTrajectoryState> states;
+          states.reserve(trajectory.progress_m.size());
+          for (std::size_t stage = 0U; stage < trajectory.progress_m.size(); ++stage) {
+            states.push_back(mpc_stage_geometry::FrenetTrajectoryState{
+              trajectory.progress_m[stage], trajectory.lateral_m[stage],
+              trajectory.lag_m[stage], trajectory.heading_offset_rad[stage]});
+          }
+          const auto course_following =
+            mpc_stage_geometry::sample_course_following_trajectory(
+            trajectory.course_frame_knots, states, swept_step_m);
+          if (course_following.has_value()) {
+            std::vector<recovery_footprint::Pose2D> course_following_path;
+            course_following_path.reserve(course_following->size() + 1U);
+            course_following_path.push_back(actual_wall_monitor_pose_.value());
+            for (const auto & sample : course_following.value()) {
+              course_following_path.push_back(recovery_footprint::Pose2D{
+                sample.x_m, sample.y_m, sample.heading_rad});
+            }
+            course_following_swept_clearance =
+              recovery_footprint::evaluate_clear_footprint_path(
+              *overtake_static_wall_grid_, clearance_footprint,
+              course_following_path, swept_step_m);
+          }
+        }
         wall_diagnostic.swept_rejected_path_index =
           swept_clearance.rejected_path_index;
         wall_diagnostic.swept_checked_pose_count =
           swept_clearance.checked_pose_count;
+        wall_diagnostic.swept_rejected_substep =
+          swept_clearance.rejected_segment_substep;
+        wall_diagnostic.swept_rejected_subdivision_count =
+          swept_clearance.rejected_segment_subdivision_count;
+        wall_diagnostic.swept_rejected_segment_ratio =
+          swept_clearance.rejected_segment_ratio;
         const auto failure_location =
           mpcc_contract::resolve_swept_path_failure_origin(
           swept_clearance.rejected_path_index,
@@ -21917,7 +21954,8 @@ struct MPC
             std::numeric_limits<double>::quiet_NaN();
           wall_diagnostic.progress_delta_m =
             std::numeric_limits<double>::quiet_NaN();
-          const auto & failed_pose = swept_path.front();
+          const auto & failed_pose = swept_clearance.rejected_pose_available ?
+            swept_clearance.rejected_pose : swept_path.front();
           wall_diagnostic.pose_x_m = failed_pose.x_m;
           wall_diagnostic.pose_y_m = failed_pose.y_m;
           wall_diagnostic.pose_yaw_rad = failed_pose.yaw_rad;
@@ -21950,7 +21988,8 @@ struct MPC
               wall_diagnostic.solved_progress_m -
               wall_diagnostic.reference_progress_m;
           }
-          const auto & failed_pose =
+          const auto & failed_pose = swept_clearance.rejected_pose_available ?
+            swept_clearance.rejected_pose :
             swept_path[swept_clearance.rejected_path_index];
           wall_diagnostic.heading_offset_rad = wrap_to_pi(
             failed_pose.yaw_rad - solved_course_heading_rad[failed_stage]);
@@ -21968,7 +22007,28 @@ struct MPC
                << recovery_footprint::to_string(swept_clearance.reason)
                << " at path index " << swept_clearance.rejected_path_index
                << ", checked_poses=" << swept_clearance.checked_pose_count
-               << ", validation=" << to_string(validation_scope);
+               << ", segment_ratio=" << swept_clearance.rejected_segment_ratio
+               << ", rejected_pose=";
+        if (swept_clearance.rejected_pose_available) {
+          reason << swept_clearance.rejected_pose.x_m << "/"
+                 << swept_clearance.rejected_pose.y_m << "/"
+                 << swept_clearance.rejected_pose.yaw_rad;
+        } else {
+          reason << "unavailable";
+        }
+        reason << ", course_sweep=";
+        if (!course_following_swept_clearance.has_value()) {
+          reason << "unavailable";
+        } else {
+          reason << (course_following_swept_clearance->valid ?
+            (course_following_swept_clearance->clear ? "accepted" : "rejected") :
+            "invalid")
+                 << "/" << recovery_footprint::to_string(
+            course_following_swept_clearance->reason)
+                 << "/checked="
+                 << course_following_swept_clearance->checked_pose_count;
+        }
+        reason << ", validation=" << to_string(validation_scope);
         reject_reason = reason.str();
         return false;
       }

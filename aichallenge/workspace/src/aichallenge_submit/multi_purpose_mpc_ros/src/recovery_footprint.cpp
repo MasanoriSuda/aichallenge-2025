@@ -819,10 +819,17 @@ PathClearanceResult evaluate_clear_footprint_path(
 
   result.valid = true;
   const auto evaluate_pose =
-    [&](const Pose2D & pose, const std::size_t path_index) {
+    [&](const Pose2D & pose, const std::size_t path_index,
+      const std::size_t substep, const std::size_t subdivision_count,
+      const double segment_ratio) {
       const auto sample = sample_footprint(grid, footprint, pose);
       ++result.checked_pose_count;
       result.rejected_path_index = path_index;
+      result.rejected_pose_available = true;
+      result.rejected_pose = pose;
+      result.rejected_segment_substep = substep;
+      result.rejected_segment_subdivision_count = subdivision_count;
+      result.rejected_segment_ratio = segment_ratio;
       if (!sample.valid) {
         result.reason = RejectReason::InvalidInitialPose;
         return false;
@@ -839,7 +846,7 @@ PathClearanceResult evaluate_clear_footprint_path(
       return true;
     };
 
-  if (!evaluate_pose(path.front(), 0U)) {
+  if (!evaluate_pose(path.front(), 0U, 0U, 0U, 0.0)) {
     return result;
   }
 
@@ -867,7 +874,9 @@ PathClearanceResult evaluate_clear_footprint_path(
         from.x_m + ratio * (to.x_m - from.x_m),
         from.y_m + ratio * (to.y_m - from.y_m),
         wrap_to_pi(from.yaw_rad + ratio * yaw_delta)};
-      if (!evaluate_pose(pose, path_index)) {
+      if (!evaluate_pose(
+          pose, path_index, substep, subdivisions.value(), ratio))
+      {
         return result;
       }
     }
@@ -876,6 +885,10 @@ PathClearanceResult evaluate_clear_footprint_path(
   result.clear = true;
   result.reason = RejectReason::None;
   result.rejected_path_index = path.size() - 1U;
+  result.rejected_pose_available = false;
+  result.rejected_segment_substep = 0U;
+  result.rejected_segment_subdivision_count = 0U;
+  result.rejected_segment_ratio = std::numeric_limits<double>::quiet_NaN();
   return result;
 }
 

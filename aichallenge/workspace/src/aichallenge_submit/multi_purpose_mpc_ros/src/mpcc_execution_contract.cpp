@@ -450,6 +450,11 @@ std::string format_physical_wall_certificate_diagnostic(
   if (diagnostic.swept_checked_pose_count > 0U) {
     output << ", swept_checked=" << diagnostic.swept_checked_pose_count;
   }
+  if (std::isfinite(diagnostic.swept_rejected_segment_ratio)) {
+    output << ", swept_substep=" << diagnostic.swept_rejected_substep << "/"
+           << diagnostic.swept_rejected_subdivision_count
+           << ", swept_ratio=" << diagnostic.swept_rejected_segment_ratio;
+  }
   return output.str();
 }
 

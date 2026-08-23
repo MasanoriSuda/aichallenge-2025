@@ -18167,6 +18167,7 @@ struct MPC
     authority_request.pass_side_sign = overtake_line_state_.pass_side_sign;
     authority_request.phase = orchestrator_phase(overtake_line_state_.phase);
     authority_request.behavior = orchestrator_behavior(behavior_output.state);
+    authority_request.race_session_active = v2x_race_session_active_;
     if (overtake_line_output.active) {
       if (overtake_line_state_.mission_frenet_dp_execution_active) {
         authority_request.path_source_hint =
@@ -18217,6 +18218,8 @@ struct MPC
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active;
     authority_request.dynamic_wait_lateral_authority_active =
       authority_request.dynamic_wait_active && overtake_line_output.active;
+    authority_request.dynamic_wait_origin_phase =
+      orchestrator_phase(overtake_line_state_.follow_prepare_origin_phase);
     authority_request.contact_continuation_active =
       behavior_output.recoverable_side_contact_active;
     authority_request.precontact_escape_active =
@@ -24471,29 +24474,12 @@ struct MPC
         mpcc_contract::ControlIntent::Cruise :
         mpcc_contract::ControlIntent::Track;
     }
-    switch (last_overtake_authority_trace_->resolution.action) {
-      case overtake_orchestrator::Action::Cruise:
-        return v2x_race_session_active_ ?
-          mpcc_contract::ControlIntent::Cruise :
-          mpcc_contract::ControlIntent::Track;
-      case overtake_orchestrator::Action::Follow:
-        return mpcc_contract::ControlIntent::Follow;
-      case overtake_orchestrator::Action::DynamicEscape:
-      case overtake_orchestrator::Action::ShiftOut:
-        return mpcc_contract::ControlIntent::ShiftOut;
-      case overtake_orchestrator::Action::Pass:
-      case overtake_orchestrator::Action::ContactEscape:
-        return mpcc_contract::ControlIntent::Pass;
-      case overtake_orchestrator::Action::Return:
-        return mpcc_contract::ControlIntent::Return;
-      case overtake_orchestrator::Action::DynamicWait:
-        return mpcc_contract::ControlIntent::Hold;
-      case overtake_orchestrator::Action::Recovery:
-        return mpcc_contract::ControlIntent::Rejoin;
-      case overtake_orchestrator::Action::SafetyBrake:
-        return mpcc_contract::ControlIntent::Stop;
-    }
-    return mpcc_contract::ControlIntent::Unknown;
+    const auto resolution =
+      overtake_orchestrator::resolve_canonical_control_intent(
+      last_overtake_authority_trace_->request,
+      last_overtake_authority_trace_->resolution);
+    return resolution.valid ? resolution.intent :
+      mpcc_contract::ControlIntent::Unknown;
   }
 
   mpcc_contract::MpccProblemContext make_problem_context(

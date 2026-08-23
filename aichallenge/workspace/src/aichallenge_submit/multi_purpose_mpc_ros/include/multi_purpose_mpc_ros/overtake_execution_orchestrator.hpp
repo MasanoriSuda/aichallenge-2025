@@ -189,6 +189,7 @@ struct AuthorityRequest {
   int pass_side_sign{0};
   Phase phase{Phase::Idle};
   Behavior behavior{Behavior::Cruise};
+  bool race_session_active{false};
   PathSource path_source_hint{PathSource::RacingLine};
   double path_age_sec{std::numeric_limits<double>::infinity()};
   bool line_active{false};
@@ -199,6 +200,7 @@ struct AuthorityRequest {
   bool dynamic_wait_active{false};
   bool dynamic_wait_forward_prefix_active{false};
   bool dynamic_wait_lateral_authority_active{false};
+  Phase dynamic_wait_origin_phase{Phase::Idle};
   bool contact_continuation_active{false};
   bool precontact_escape_active{false};
   bool emergency_brake_active{false};
@@ -244,6 +246,37 @@ struct AuthorityResolution {
 };
 
 AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept;
+
+enum class CanonicalControlIntentReason {
+  ResolvedAction,
+  TrackBeforeRaceSession,
+  CruiseDuringRaceSession,
+  LateralHoldDynamicWaitShiftOut,
+  LateralHoldDynamicWaitPass,
+  RollingDynamicWaitShiftOut,
+  RollingDynamicWaitPass,
+  DynamicWaitWithoutLateralAuthority,
+  DynamicWaitWithoutMissionIdentity,
+  UnsupportedDynamicWaitOrigin,
+};
+
+const char * to_string(CanonicalControlIntentReason reason) noexcept;
+
+struct CanonicalControlIntentResolution {
+  bool valid{false};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  CanonicalControlIntentReason reason{
+    CanonicalControlIntentReason::ResolvedAction};
+};
+
+/// Convert the complete authority decision into one canonical problem intent.
+/// DynamicWait is a lateral execution mode.  Its longitudinal problem intent
+/// remains the committed ShiftOut/Pass origin whether the owned lateral path
+/// is a rolling prefix or a held mission path.
+CanonicalControlIntentResolution resolve_canonical_control_intent(
+  const AuthorityRequest & request,
+  const AuthorityResolution & resolution) noexcept;
 
 const char * to_string(Phase phase) noexcept;
 const char * to_string(Behavior behavior) noexcept;

@@ -245,6 +245,21 @@ Express longitudinal interaction as stage constraints/references of the same MPC
 - Follow remains shadow-only. Its scalar production owner is intentionally not
   deleted until the positive dynamic gate and a separate authority approval.
 
+### 2026-08-23 Hold/Stop intent provenance status
+
+- `.steering/20260823-hold-stop-intent-provenance` found that the existing
+  `DynamicWait` action combines rolling replan prefixes and held lateral
+  Mission paths; neither is evidence of a longitudinal zero-progress Hold.
+- One pure canonical-intent resolver now preserves the committed ShiftOut/Pass
+  origin for both forms, maps SafetyBrake to Stop and fails closed on
+  incomplete combinations.
+- Both the MPCC problem fingerprint and final published-command trace consume
+  that resolver. `output/20260823-132619` verified Track, Cruise and Follow
+  telemetry joins; the short run did not exercise DynamicWait.
+- No Hold/Stop QP, command selection or production authority was added. A Hold
+  shadow is blocked until a real longitudinal-hold producer is identified;
+  DynamicWait must remain ShiftOut/Pass.
+
 ## Slice 5: Overtake/Dynamic Escape integration
 
 ### Purpose

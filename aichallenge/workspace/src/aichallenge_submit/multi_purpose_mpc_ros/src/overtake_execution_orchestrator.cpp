@@ -414,6 +414,124 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
   return result;
 }
 
+const char * to_string(const CanonicalControlIntentReason reason) noexcept
+{
+  switch (reason) {
+    case CanonicalControlIntentReason::ResolvedAction:
+      return "resolved-action";
+    case CanonicalControlIntentReason::TrackBeforeRaceSession:
+      return "track-before-race-session";
+    case CanonicalControlIntentReason::CruiseDuringRaceSession:
+      return "cruise-during-race-session";
+    case CanonicalControlIntentReason::LateralHoldDynamicWaitShiftOut:
+      return "lateral-hold-dynamic-wait-shiftout";
+    case CanonicalControlIntentReason::LateralHoldDynamicWaitPass:
+      return "lateral-hold-dynamic-wait-pass";
+    case CanonicalControlIntentReason::RollingDynamicWaitShiftOut:
+      return "rolling-dynamic-wait-shiftout";
+    case CanonicalControlIntentReason::RollingDynamicWaitPass:
+      return "rolling-dynamic-wait-pass";
+    case CanonicalControlIntentReason::DynamicWaitWithoutLateralAuthority:
+      return "dynamic-wait-without-lateral-authority";
+    case CanonicalControlIntentReason::DynamicWaitWithoutMissionIdentity:
+      return "dynamic-wait-without-mission-identity";
+    case CanonicalControlIntentReason::UnsupportedDynamicWaitOrigin:
+      return "unsupported-dynamic-wait-origin";
+  }
+  return "unknown";
+}
+
+CanonicalControlIntentResolution resolve_canonical_control_intent(
+  const AuthorityRequest & request,
+  const AuthorityResolution & resolution) noexcept
+{
+  CanonicalControlIntentResolution result;
+  const auto accept = [&result](
+      const mpcc_execution_contract::ControlIntent intent,
+      const CanonicalControlIntentReason reason)
+    {
+      result.valid = true;
+      result.intent = intent;
+      result.reason = reason;
+    };
+  switch (resolution.action) {
+    case Action::Cruise:
+      accept(
+        request.race_session_active ?
+        mpcc_execution_contract::ControlIntent::Cruise :
+        mpcc_execution_contract::ControlIntent::Track,
+        request.race_session_active ?
+        CanonicalControlIntentReason::CruiseDuringRaceSession :
+        CanonicalControlIntentReason::TrackBeforeRaceSession);
+      break;
+    case Action::Follow:
+      accept(
+        mpcc_execution_contract::ControlIntent::Follow,
+        CanonicalControlIntentReason::ResolvedAction);
+      break;
+    case Action::DynamicEscape:
+    case Action::ShiftOut:
+      accept(
+        mpcc_execution_contract::ControlIntent::ShiftOut,
+        CanonicalControlIntentReason::ResolvedAction);
+      break;
+    case Action::Pass:
+    case Action::ContactEscape:
+      accept(
+        mpcc_execution_contract::ControlIntent::Pass,
+        CanonicalControlIntentReason::ResolvedAction);
+      break;
+    case Action::Return:
+      accept(
+        mpcc_execution_contract::ControlIntent::Return,
+        CanonicalControlIntentReason::ResolvedAction);
+      break;
+    case Action::DynamicWait:
+      if (
+        !request.dynamic_wait_lateral_authority_active ||
+        resolution.lateral_owner != LateralOwner::DynamicWaitPrefix ||
+        resolution.path_source != PathSource::DynamicWaitPrefix)
+      {
+        result.reason =
+          CanonicalControlIntentReason::DynamicWaitWithoutLateralAuthority;
+        break;
+      }
+      if (request.mission_generation == 0U || request.target_id.empty()) {
+        result.reason =
+          CanonicalControlIntentReason::DynamicWaitWithoutMissionIdentity;
+        break;
+      }
+      if (request.dynamic_wait_origin_phase == Phase::ShiftOut) {
+        accept(
+          mpcc_execution_contract::ControlIntent::ShiftOut,
+          request.dynamic_wait_forward_prefix_active ?
+          CanonicalControlIntentReason::RollingDynamicWaitShiftOut :
+          CanonicalControlIntentReason::LateralHoldDynamicWaitShiftOut);
+      } else if (request.dynamic_wait_origin_phase == Phase::Pass) {
+        accept(
+          mpcc_execution_contract::ControlIntent::Pass,
+          request.dynamic_wait_forward_prefix_active ?
+          CanonicalControlIntentReason::RollingDynamicWaitPass :
+          CanonicalControlIntentReason::LateralHoldDynamicWaitPass);
+      } else {
+        result.reason =
+          CanonicalControlIntentReason::UnsupportedDynamicWaitOrigin;
+      }
+      break;
+    case Action::Recovery:
+      accept(
+        mpcc_execution_contract::ControlIntent::Rejoin,
+        CanonicalControlIntentReason::ResolvedAction);
+      break;
+    case Action::SafetyBrake:
+      accept(
+        mpcc_execution_contract::ControlIntent::Stop,
+        CanonicalControlIntentReason::ResolvedAction);
+      break;
+  }
+  return result;
+}
+
 const char * to_string(const Phase phase) noexcept
 {
   switch (phase) {
@@ -533,6 +651,8 @@ std::string format_conflicts(const std::uint32_t conflicts)
 
 std::string categorical_signature(const AuthorityTrace & trace)
 {
+  const auto canonical_intent = resolve_canonical_control_intent(
+    trace.request, trace.resolution);
   std::ostringstream stream;
   stream << (trace.resolution.relevant ? 1 : 0) << "|"
          << trace.request.episode_id << "|" << trace.request.mission_generation << "|"
@@ -542,6 +662,8 @@ std::string categorical_signature(const AuthorityTrace & trace)
          << static_cast<int>(trace.resolution.lateral_owner) << "|"
          << static_cast<int>(trace.resolution.longitudinal_owner) << "|"
          << static_cast<int>(trace.resolution.path_source) << "|"
+         << static_cast<int>(canonical_intent.intent) << "|"
+         << static_cast<int>(canonical_intent.reason) << "|"
          << trace.request.pass_side_sign << "|"
          << trace.resolution.conflicts << "|"
          << (std::isfinite(trace.request.speed_reference_mps) ? 1 : 0) << "|"
@@ -559,6 +681,8 @@ std::string categorical_signature(const AuthorityTrace & trace)
 
 std::string format_authority_trace(const AuthorityTrace & trace)
 {
+  const auto canonical_intent = resolve_canonical_control_intent(
+    trace.request, trace.resolution);
   std::ostringstream stream;
   stream << "Overtake execution authority: decision=" << trace.request.decision_id
          << ", episode=" << trace.request.episode_id
@@ -568,6 +692,9 @@ std::string format_authority_trace(const AuthorityTrace & trace)
          << ", phase=" << to_string(trace.request.phase)
          << ", behavior=" << to_string(trace.request.behavior)
          << ", action=" << to_string(trace.resolution.action)
+         << ", canonical_intent=" <<
+    mpcc_execution_contract::to_string(canonical_intent.intent)
+         << "/" << to_string(canonical_intent.reason)
          << ", lateral_owner=" << to_string(trace.resolution.lateral_owner)
          << ", longitudinal_owner=" << to_string(trace.resolution.longitudinal_owner)
          << ", path_source=" << to_string(trace.resolution.path_source)
@@ -580,6 +707,7 @@ std::string format_authority_trace(const AuthorityTrace & trace)
          << "/lateral=" <<
     (trace.request.dynamic_wait_lateral_authority_active ? 1 : 0)
          << "/forward=" << (trace.request.dynamic_wait_forward_prefix_active ? 1 : 0)
+         << "/origin=" << to_string(trace.request.dynamic_wait_origin_phase)
          << ", contact=" << (trace.request.contact_continuation_active ? 1 : 0)
          << "/precontact=" << (trace.request.precontact_escape_active ? 1 : 0)
          << ", safety="
@@ -770,6 +898,8 @@ std::string structural_final_control_signature(const FinalControlTrace & trace)
   std::ostringstream stream;
   if (trace.authority.has_value()) {
     const auto & authority = trace.authority.value();
+    const auto canonical_intent = resolve_canonical_control_intent(
+      authority.request, authority.resolution);
     stream << (authority.resolution.relevant ? 1 : 0) << "|"
            << authority.request.episode_id << "|"
            << authority.request.mission_generation << "|"
@@ -777,6 +907,8 @@ std::string structural_final_control_signature(const FinalControlTrace & trace)
            << static_cast<int>(authority.request.phase) << "|"
            << static_cast<int>(authority.request.behavior) << "|"
            << static_cast<int>(authority.resolution.action) << "|"
+           << static_cast<int>(canonical_intent.intent) << "|"
+           << static_cast<int>(canonical_intent.reason) << "|"
            << static_cast<int>(authority.resolution.lateral_owner) << "|"
            << static_cast<int>(authority.resolution.path_source) << "|"
            << authority.request.pass_side_sign << "|"
@@ -824,6 +956,8 @@ std::string format_final_control_trace(const FinalControlTrace & trace)
   stream << "Overtake control decision: decision=" << trace.decision_id;
   if (trace.authority.has_value()) {
     const auto & authority = trace.authority.value();
+    const auto canonical_intent = resolve_canonical_control_intent(
+      authority.request, authority.resolution);
     stream << ", episode=" << authority.request.episode_id
            << ", generation=" << authority.request.mission_generation
            << ", target="
@@ -832,6 +966,9 @@ std::string format_final_control_trace(const FinalControlTrace & trace)
            << ", side=" << authority.request.pass_side_sign
            << ", phase=" << to_string(authority.request.phase)
            << ", action=" << to_string(authority.resolution.action)
+           << ", canonical_intent=" <<
+      mpcc_execution_contract::to_string(canonical_intent.intent)
+           << "/" << to_string(canonical_intent.reason)
            << ", lateral_owner=" << to_string(authority.resolution.lateral_owner)
            << ", longitudinal_owner="
            << to_string(authority.resolution.longitudinal_owner)

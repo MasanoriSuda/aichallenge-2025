@@ -122,6 +122,155 @@ TEST(OvertakeExecutionOrchestrator, DynamicWaitLateralHoldOwnsPathWithoutForward
     result.conflicts & orchestrator::DynamicWaitWithoutLateralAuthority, 0U);
 }
 
+TEST(OvertakeExecutionOrchestrator, PreservesLateralHoldDynamicWaitOriginIntent)
+{
+  orchestrator::AuthorityRequest shiftout;
+  shiftout.mission_generation = 2U;
+  shiftout.target_id = "d2";
+  shiftout.dynamic_wait_active = true;
+  shiftout.dynamic_wait_lateral_authority_active = true;
+  shiftout.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
+  shiftout.line_active = true;
+  const auto shiftout_authority = orchestrator::resolve_authority(shiftout);
+  const auto shiftout_intent = orchestrator::resolve_canonical_control_intent(
+    shiftout, shiftout_authority);
+
+  EXPECT_TRUE(shiftout_intent.valid);
+  EXPECT_EQ(
+    shiftout_intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::ShiftOut);
+  EXPECT_EQ(
+    shiftout_intent.reason,
+    orchestrator::CanonicalControlIntentReason::
+    LateralHoldDynamicWaitShiftOut);
+
+  auto pass = shiftout;
+  pass.dynamic_wait_origin_phase = orchestrator::Phase::Pass;
+  const auto pass_authority = orchestrator::resolve_authority(pass);
+  const auto pass_intent = orchestrator::resolve_canonical_control_intent(
+    pass, pass_authority);
+  EXPECT_TRUE(pass_intent.valid);
+  EXPECT_EQ(
+    pass_intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Pass);
+  EXPECT_EQ(
+    pass_intent.reason,
+    orchestrator::CanonicalControlIntentReason::LateralHoldDynamicWaitPass);
+}
+
+TEST(OvertakeExecutionOrchestrator, PreservesRollingDynamicWaitOriginIntent)
+{
+  orchestrator::AuthorityRequest shiftout;
+  shiftout.mission_generation = 3U;
+  shiftout.target_id = "d2";
+  shiftout.dynamic_wait_active = true;
+  shiftout.dynamic_wait_forward_prefix_active = true;
+  shiftout.dynamic_wait_lateral_authority_active = true;
+  shiftout.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
+  shiftout.line_active = true;
+  const auto shiftout_authority = orchestrator::resolve_authority(shiftout);
+  const auto shiftout_intent = orchestrator::resolve_canonical_control_intent(
+    shiftout, shiftout_authority);
+
+  EXPECT_TRUE(shiftout_intent.valid);
+  EXPECT_EQ(
+    shiftout_intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::ShiftOut);
+  EXPECT_EQ(
+    shiftout_intent.reason,
+    orchestrator::CanonicalControlIntentReason::RollingDynamicWaitShiftOut);
+
+  auto pass = shiftout;
+  pass.dynamic_wait_origin_phase = orchestrator::Phase::Pass;
+  const auto pass_authority = orchestrator::resolve_authority(pass);
+  const auto pass_intent = orchestrator::resolve_canonical_control_intent(
+    pass, pass_authority);
+  EXPECT_TRUE(pass_intent.valid);
+  EXPECT_EQ(
+    pass_intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Pass);
+  EXPECT_EQ(
+    pass_intent.reason,
+    orchestrator::CanonicalControlIntentReason::RollingDynamicWaitPass);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsDynamicWaitWithoutExecutableProvenance)
+{
+  orchestrator::AuthorityRequest missing_lateral;
+  missing_lateral.dynamic_wait_active = true;
+  const auto missing_authority = orchestrator::resolve_authority(missing_lateral);
+  const auto missing_intent = orchestrator::resolve_canonical_control_intent(
+    missing_lateral, missing_authority);
+  EXPECT_FALSE(missing_intent.valid);
+  EXPECT_EQ(
+    missing_intent.reason,
+    orchestrator::CanonicalControlIntentReason::DynamicWaitWithoutLateralAuthority);
+
+  orchestrator::AuthorityRequest missing_identity;
+  missing_identity.dynamic_wait_active = true;
+  missing_identity.dynamic_wait_lateral_authority_active = true;
+  missing_identity.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
+  missing_identity.line_active = true;
+  const auto missing_identity_authority =
+    orchestrator::resolve_authority(missing_identity);
+  const auto missing_identity_intent =
+    orchestrator::resolve_canonical_control_intent(
+    missing_identity, missing_identity_authority);
+  EXPECT_FALSE(missing_identity_intent.valid);
+  EXPECT_EQ(
+    missing_identity_intent.reason,
+    orchestrator::CanonicalControlIntentReason::
+    DynamicWaitWithoutMissionIdentity);
+
+  orchestrator::AuthorityRequest unsupported;
+  unsupported.mission_generation = 3U;
+  unsupported.target_id = "d2";
+  unsupported.dynamic_wait_active = true;
+  unsupported.dynamic_wait_forward_prefix_active = true;
+  unsupported.dynamic_wait_lateral_authority_active = true;
+  unsupported.dynamic_wait_origin_phase = orchestrator::Phase::Idle;
+  unsupported.line_active = true;
+  const auto unsupported_authority = orchestrator::resolve_authority(unsupported);
+  const auto unsupported_intent = orchestrator::resolve_canonical_control_intent(
+    unsupported, unsupported_authority);
+  EXPECT_FALSE(unsupported_intent.valid);
+  EXPECT_EQ(
+    unsupported_intent.reason,
+    orchestrator::CanonicalControlIntentReason::UnsupportedDynamicWaitOrigin);
+}
+
+TEST(OvertakeExecutionOrchestrator, ResolvesSafetyAndRacingCanonicalIntents)
+{
+  orchestrator::AuthorityRequest safety;
+  safety.behavior = orchestrator::Behavior::SafetyBrake;
+  const auto safety_authority = orchestrator::resolve_authority(safety);
+  const auto safety_intent = orchestrator::resolve_canonical_control_intent(
+    safety, safety_authority);
+  EXPECT_TRUE(safety_intent.valid);
+  EXPECT_EQ(
+    safety_intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Stop);
+
+  orchestrator::AuthorityRequest track;
+  track.race_session_active = false;
+  const auto track_authority = orchestrator::resolve_authority(track);
+  const auto track_intent = orchestrator::resolve_canonical_control_intent(
+    track, track_authority);
+  EXPECT_TRUE(track_intent.valid);
+  EXPECT_EQ(
+    track_intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Track);
+
+  track.race_session_active = true;
+  const auto cruise_authority = orchestrator::resolve_authority(track);
+  const auto cruise_intent = orchestrator::resolve_canonical_control_intent(
+    track, cruise_authority);
+  EXPECT_TRUE(cruise_intent.valid);
+  EXPECT_EQ(
+    cruise_intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Cruise);
+}
+
 TEST(OvertakeExecutionOrchestrator, NormalizesContradictorySpeedFloor)
 {
   const auto result = orchestrator::normalize_speed_window(5.78, 8.0, 5.80, true);
@@ -485,6 +634,9 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
   EXPECT_FALSE(first.warning);
   EXPECT_NE(first.message.find("decision=42"), std::string::npos);
   EXPECT_NE(first.message.find("path_source=receding-dp"), std::string::npos);
+  EXPECT_NE(
+    first.message.find("canonical_intent=pass/resolved-action"),
+    std::string::npos);
   EXPECT_NE(
     first.message.find("front=6.50/safety=4.20/protected=4.50m"),
     std::string::npos);

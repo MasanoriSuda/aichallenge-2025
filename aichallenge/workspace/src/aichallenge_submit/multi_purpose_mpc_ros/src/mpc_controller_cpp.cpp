@@ -18071,57 +18071,11 @@ struct MPC
       (planner_output.feasible || apply_no_gap_velocity_limit)) {
       apply_velocity_limit(umax_dyn, ur, N, planner_output.target_velocity_limit);
     }
-    if (
-      use_low_speed_local_path && planner_output.active && planner_output.feasible &&
-      behavior_output.state == V2XBehaviorState::LowSpeedAvoidance &&
-      !low_speed_shift_control_was_active_)
-    {
-      const auto direct_entry =
-        v2x_overtake_core::resolve_low_speed_direct_control_entry_feasibility(
-        v2x_overtake_core::LowSpeedDirectControlEntryFeasibilityRequest{
-          std::max(0.0, current_speed_mps_),
-          std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_shift_velocity),
-          std::abs(cfg.a_min),
-          behavior_output.front_distance,
-          std::max(
-            std::max(0.0, cfg.v2x_behavior.low_speed_avoidance_min_prepare_distance),
-            std::max(0.0, cfg.v2x_behavior.moving_follow_hard_distance)),
-          std::max(0.0, cfg.state_prediction_delay_sec)});
-      if (direct_entry.valid && direct_entry.feasible) {
-        low_speed_shift_control_active_ = true;
-        low_speed_shift_pass_side_sign_ = planner_output.pass_side_sign;
-        low_speed_shift_target_vehicle_id_ =
-          !behavior_output.low_speed_stopped_candidate_id.empty() ?
-          behavior_output.low_speed_stopped_candidate_id :
-          behavior_output.target_vehicle_id;
-        low_speed_retained_pass_reject_reason_ =
-          v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
-        low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
-        low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
-        low_speed_shift_rejoin_active_ = false;
-        low_speed_shift_handoff_deferred_logged_ = false;
-        low_speed_direct_entry_deferred_logged_ = false;
-        low_speed_shift_side_completion_logged_ = false;
-        low_speed_shift_corridor_blocked_ = false;
-        set_low_speed_direct_control_phase(
-          v2x_overtake_core::resolve_low_speed_direct_control_entry_phase(
-            planner_output.pass_corridor_enforced));
-        low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
-      } else if (!low_speed_direct_entry_deferred_logged_) {
-        RCLCPP_WARN(
-          rclcpp::get_logger("mpc_controller"),
-          "Low-speed direct control deferred to MPC: actual_speed=%.2f, "
-          "shift_speed=%.2f, front_distance=%.2f, required=%.2f, "
-          "available=%.2f, valid=%d",
-          current_speed_mps_,
-          cfg.v2x_behavior.low_speed_avoidance_shift_velocity,
-          behavior_output.front_distance,
-          direct_entry.required_distance_m,
-          direct_entry.available_distance_m,
-          direct_entry.valid ? 1 : 0);
-        low_speed_direct_entry_deferred_logged_ = true;
-      }
-    }
+    // The stopped-vehicle local path is now a planning input to the progress
+    // MPCC, not an independent command authority.  The former direct entry
+    // returned before the MPCC solve and cleared the prediction required by
+    // the final physical wall admission, making every fresh Dynamic Escape
+    // self-reject as prediction-unavailable.
     if (!use_low_speed_local_path) {
       low_speed_direct_entry_deferred_logged_ = false;
     }
@@ -25012,12 +24966,6 @@ struct MPC
       } else {
         invalidate_follow_canonical_async_context();
       }
-      if (low_speed_shift_control_active_) {
-        record_problem_context(
-          problem, mpcc_contract::Formulation::LowSpeedDirect);
-        last_control_resolution_reason_ = "low-speed-direct-control";
-        return low_speed_shift_control(tracking_waypoint);
-      }
       if (problem.track_cruise_shadow_requested) {
         record_problem_context(
           problem, mpcc_contract::Formulation::VelocityProgress5State);
@@ -25032,7 +24980,6 @@ struct MPC
           problem, canonical_result.intent,
           canonical_result.status + "/" + canonical_result.retained_detail);
       }
-      const bool low_speed_shift_handoff_requested = low_speed_shift_control_was_active_;
       Eigen::VectorXd dec;
       double maximum_constraint_violation = 0.0;
       bool solved_with_extended_progress = false;
@@ -25150,19 +25097,6 @@ struct MPC
         legacy_outcome = solve_problem(problem, now_sec);
       }
       if (!solved_with_extended_progress && !legacy_outcome.result.has_value()) {
-        if (low_speed_shift_handoff_requested) {
-          low_speed_shift_control_active_ = true;
-          record_problem_context(
-            problem, mpcc_contract::Formulation::LowSpeedDirect);
-          if (!low_speed_shift_handoff_deferred_logged_) {
-            RCLCPP_WARN(
-              rclcpp::get_logger("mpc_controller"),
-              "Low-speed pass MPC handoff deferred: %s; continuing rejoin control",
-              legacy_outcome.failure_detail.c_str());
-            low_speed_shift_handoff_deferred_logged_ = true;
-          }
-          return low_speed_shift_control(tracking_waypoint);
-        }
         throw std::runtime_error("OSQP failed: " + legacy_outcome.failure_detail);
       }
       if (!solved_with_extended_progress) {
@@ -25275,32 +25209,6 @@ struct MPC
       previous_steering = delta;
       current_control = std::move(control_signals);
       current_prediction = std::move(prediction);
-      if (low_speed_shift_handoff_requested) {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "Low-speed pass shift control completed: e_y=%.2f, e_psi=%.2f; "
-          "MPC handoff solve succeeded",
-          model->spatial_state.e_y, model->spatial_state.e_psi);
-        low_speed_shift_control_active_ = false;
-        low_speed_shift_control_was_active_ = false;
-        low_speed_shift_rejoin_active_ = false;
-        low_speed_shift_handoff_deferred_logged_ = false;
-        low_speed_direct_entry_deferred_logged_ = false;
-        low_speed_shift_side_completion_logged_ = false;
-        low_speed_shift_pass_side_sign_ = 0;
-        low_speed_shift_target_vehicle_id_.clear();
-        low_speed_retained_pass_reject_reason_ =
-          v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
-        low_speed_shift_steering_lower_rad_ = 0.0;
-        low_speed_shift_steering_upper_rad_ = 0.0;
-        low_speed_shift_wall_stop_active_ = false;
-        low_speed_shift_corridor_blocked_ = false;
-        low_speed_shift_last_relevant_vehicle_sec_ =
-          std::numeric_limits<double>::quiet_NaN();
-        if (gap_planner != nullptr) {
-          gap_planner->reset_low_speed_targets();
-        }
-      }
       if (infeasibility_counter > 0) {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),

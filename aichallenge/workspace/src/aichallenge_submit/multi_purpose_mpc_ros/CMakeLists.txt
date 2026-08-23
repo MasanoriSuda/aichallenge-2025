@@ -544,6 +544,9 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_localization_scope
     test/test_localization_scope.py
   )
+  ament_add_pytest_test(test_single_authority_source_contract
+    test/test_single_authority_source_contract.py
+  )
 endif()
 
 ament_python_install_package(${PROJECT_NAME}

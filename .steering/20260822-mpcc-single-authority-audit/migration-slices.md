@@ -304,6 +304,14 @@ Express longitudinal interaction as stage constraints/references of the same MPC
   observed 10/10 Stop traces as `emergency-override`, `formulation=unresolved`,
   `canonical=satisfied`, and zero legacy Stop traces. Stop emergency integration is complete;
   nominal Hold remains blocked for the producer reason above.
+- `.steering/20260823-low-speed-direct-authority-retirement` retires the obsolete Gate2
+  stopped-vehicle direct normal owner. The stopped-vehicle gap/local path remains an MPCC planning
+  input, but no call site can activate or publish `LowSpeedDirect`. Deterministic replay changed
+  `formulation=low-speed-direct` from 31 to zero and `prediction-unavailable` from 44 to zero; the
+  first reproduced stopped-front decision at 6.30 m published a prediction-backed five-state MPCC
+  result. This closes the low-speed direct part of Slice 4. The replay also exposes the existing
+  five-state-to-three-state normal fallback, which remains Slice 5 work rather than a reason to
+  restore the direct controller.
 
 ## Slice 5: Overtake/Dynamic Escape integration
 

@@ -133,6 +133,76 @@ struct FollowCurrentWorldProofResult
   double minimum_gap_m{std::numeric_limits<double>::infinity()};
 };
 
+/// Current target-dependent lateral corridor used to re-certify a retained
+/// ShiftOut/Pass/Return plan. The corridor timestamps start at zero and cover
+/// the complete remaining retained execution window. Target exclusion is
+/// either encoded directly in the bounds or accompanied by the exact physical
+/// release evidence which allowed the target bound to be removed.
+struct OvertakeDynamicCorridorObservation
+{
+  std::string target_id;
+  std::uint64_t observation_generation{};
+  double observation_sec{};
+  std::vector<double> elapsed_time_sec;
+  std::vector<double> lateral_lower_m;
+  std::vector<double> lateral_upper_m;
+  bool target_exclusion_encoded{false};
+  bool release_current_body_clear{false};
+  bool release_prediction_valid{false};
+  bool release_predicted_sweep_clear{false};
+  std::uint64_t tube_id{};
+  bool current{false};
+};
+
+struct OvertakeCurrentWorldProofRequest
+{
+  retained::CurrentExecutionProvenance current;
+  double measured_course_progress_m{};
+  double measured_lateral_m{};
+  double progress_continuity_tolerance_m{};
+  std::vector<recovery_footprint::Pose2D> measured_to_control_path;
+  recovery_footprint::Pose2D control_pose;
+  std::vector<mpc_stage_geometry::CourseFrameKnot> course_frame_knots;
+  OvertakeDynamicCorridorObservation corridor;
+  double lateral_tolerance_m{};
+  double swept_step_m{};
+};
+
+enum class OvertakeCurrentWorldProofReason
+{
+  Accepted,
+  InvalidInput,
+  WindowRejected,
+  ProgressLiftRejected,
+  ControlPoseIdentityMismatch,
+  CourseFrameIdentityMismatch,
+  TargetObservationUnavailable,
+  TargetIdentityMismatch,
+  CorridorIdentityMismatch,
+  CorridorHorizonUnavailable,
+  TargetReleaseUncertified,
+  InitialCorridorViolation,
+  CourseFrameUnavailable,
+  DelayPrefixBlocked,
+  ConnectorBlocked,
+  StagePathBlocked,
+  StageCorridorViolation,
+  ProofRejected,
+};
+
+const char * to_string(OvertakeCurrentWorldProofReason reason) noexcept;
+
+struct OvertakeCurrentWorldProofResult
+{
+  OvertakeCurrentWorldProofReason reason{
+    OvertakeCurrentWorldProofReason::InvalidInput};
+  retained::RetainedExecutionProofReason proof_reason{
+    retained::RetainedExecutionProofReason::InvalidPlan};
+  std::optional<retained::RetainedExecutionProof> proof;
+  std::size_t rejected_stage_index{};
+  double minimum_corridor_reserve_m{std::numeric_limits<double>::infinity()};
+};
+
 std::uint64_t fingerprint_control_pose_path(
   const std::vector<recovery_footprint::Pose2D> & measured_to_control_path,
   const recovery_footprint::Pose2D & control_pose) noexcept;
@@ -146,6 +216,9 @@ std::uint64_t fingerprint_empty_obstacle_observation(
 std::uint64_t fingerprint_follow_obstacle_observation(
   const FollowDynamicObstacleObservation & observation) noexcept;
 
+std::uint64_t fingerprint_overtake_corridor_observation(
+  const OvertakeDynamicCorridorObservation & observation) noexcept;
+
 CurrentWorldProofResult build_current_world_retained_proof(
   const plan::CanonicalExecutionPlan & execution_plan,
   const plan::CanonicalExecutionCursor & cursor,
@@ -157,6 +230,13 @@ FollowCurrentWorldProofResult build_follow_current_world_retained_proof(
   const plan::CanonicalExecutionPlan & execution_plan,
   const plan::CanonicalExecutionCursor & cursor,
   const FollowCurrentWorldProofRequest & request,
+  const recovery_footprint::OccupancyGrid & wall_grid,
+  const recovery_footprint::FootprintExtents & footprint);
+
+OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
+  const plan::CanonicalExecutionPlan & execution_plan,
+  const plan::CanonicalExecutionCursor & cursor,
+  const OvertakeCurrentWorldProofRequest & request,
   const recovery_footprint::OccupancyGrid & wall_grid,
   const recovery_footprint::FootprintExtents & footprint);
 

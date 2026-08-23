@@ -365,6 +365,20 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
 - The next fresh Gate A blocker is 37 stage-zero lateral-row violations (roughly 0.057--0.097 m
   against 0.0164 m tolerance). Audit x0 and stage-zero bound provenance before authority promotion;
   do not tune tolerance or wall clearance.
+- `.steering/20260823-progress-aligned-wall-contract` replaces fixed-spatial wall boxes in the
+  five-state problem with progress-coupled piecewise-affine wall rows. Its accepted replay advanced
+  794/794 eligible fresh chains through physical certification with zero wall reject; no wall margin
+  or solver tolerance was relaxed.
+- `.steering/20260824-overtake-retained-current-world` adds the missing same-formulation retained
+  evidence in shadow. A complete fresh Overtake plan is stored immutably and can continue only after
+  exact cursor, current target/corridor fingerprint, control pose, course frame, progress branch,
+  wall path, and every remaining dynamic-corridor segment are re-certified.
+- Two final typed-outcome replays covered 85.5--85.6% of eligible Overtake cycles with fresh or
+  retained canonical authority. The retained path completed 58--59 cycles per run, but 14.4--14.5%
+  remained fail-closed, led by certificate expiry, progress discontinuity, and insufficient current
+  course-frame coverage. Retained proof cost was 0.162 ms average / 0.760 ms maximum in the final
+  replay. The mechanism is accepted as shadow infrastructure; production promotion and legacy
+  deletion remain blocked until the upstream continuity contract yields complete coverage.
 
 ## Slice 6: Legacy and migration path removal
 

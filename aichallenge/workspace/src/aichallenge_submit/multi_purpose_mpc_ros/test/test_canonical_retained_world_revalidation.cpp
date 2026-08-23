@@ -150,6 +150,49 @@ world::FollowCurrentWorldProofRequest make_follow_request()
   return request;
 }
 
+plan::CanonicalExecutionPlan make_overtake_plan()
+{
+  auto value = make_plan();
+  value.problem.intent = contract::ControlIntent::ShiftOut;
+  value.problem.target_id = "d2";
+  value.problem.target_obstacle_generation = 5U;
+  value.problem = contract::seal_problem_context(std::move(value.problem));
+  value.solution.problem_fingerprint = value.problem.fingerprint;
+  return value;
+}
+
+world::OvertakeCurrentWorldProofRequest make_overtake_request()
+{
+  const auto empty = make_request();
+  world::OvertakeCurrentWorldProofRequest request;
+  request.current = empty.current;
+  request.current.intent = contract::ControlIntent::ShiftOut;
+  request.current.intent_generation = 3U;
+  request.current.target_id = "d2";
+  request.current.target_obstacle_generation = 8U;
+  request.measured_course_progress_m = empty.measured_course_progress_m;
+  request.measured_lateral_m = 0.11;
+  request.progress_continuity_tolerance_m =
+    empty.progress_continuity_tolerance_m;
+  request.measured_to_control_path = empty.measured_to_control_path;
+  request.control_pose = empty.control_pose;
+  request.course_frame_knots = empty.course_frame_knots;
+  request.corridor.target_id = "d2";
+  request.corridor.observation_generation = 8U;
+  request.corridor.observation_sec = 10.6;
+  request.corridor.elapsed_time_sec = {0.0, 0.5, 1.5};
+  request.corridor.lateral_lower_m = {-0.5, -0.4, -0.3};
+  request.corridor.lateral_upper_m = {0.5, 0.45, 0.4};
+  request.corridor.target_exclusion_encoded = true;
+  request.corridor.current = true;
+  request.corridor.tube_id =
+    world::fingerprint_overtake_corridor_observation(request.corridor);
+  request.current.obstacle_tube_id = request.corridor.tube_id;
+  request.lateral_tolerance_m = 1e-6;
+  request.swept_step_m = empty.swept_step_m;
+  return request;
+}
+
 }  // namespace
 
 TEST(CanonicalRetainedWorldRevalidation, BuildsProofFromCurrentEmptyWorld)
@@ -310,4 +353,77 @@ TEST(CanonicalRetainedWorldRevalidation, RejectsFollowCurrentAndFutureHardGap)
       execution_plan, cursor, stage_gap,
       make_grid(footprint::CellState::Free), extents).reason,
     world::FollowCurrentWorldProofReason::StageGapViolation);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, BuildsOvertakeProofFromCurrentCorridor)
+{
+  const auto execution_plan = make_overtake_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const auto request = make_overtake_request();
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+  const auto result = world::build_overtake_current_world_retained_proof(
+    execution_plan, cursor, request,
+    make_grid(footprint::CellState::Free), extents);
+
+  ASSERT_EQ(result.reason, world::OvertakeCurrentWorldProofReason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(result.proof->current.target_id, "d2");
+  EXPECT_EQ(result.proof->current.target_obstacle_generation, 8U);
+  EXPECT_EQ(result.proof->stage_evaluations.size(), 2U);
+  EXPECT_GT(result.minimum_corridor_reserve_m, 0.0);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, RejectsOvertakeIdentityAndCorridorMutation)
+{
+  const auto execution_plan = make_overtake_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+
+  auto changed_target = make_overtake_request();
+  changed_target.corridor.target_id = "d3";
+  changed_target.corridor.tube_id =
+    world::fingerprint_overtake_corridor_observation(changed_target.corridor);
+  changed_target.current.obstacle_tube_id = changed_target.corridor.tube_id;
+  EXPECT_EQ(
+    world::build_overtake_current_world_retained_proof(
+      execution_plan, cursor, changed_target,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::OvertakeCurrentWorldProofReason::TargetIdentityMismatch);
+
+  auto changed_corridor = make_overtake_request();
+  changed_corridor.corridor.lateral_upper_m.back() -= 0.1;
+  EXPECT_EQ(
+    world::build_overtake_current_world_retained_proof(
+      execution_plan, cursor, changed_corridor,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::OvertakeCurrentWorldProofReason::CorridorIdentityMismatch);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, RejectsOvertakeUncertifiedReleaseAndBlockedStage)
+{
+  const auto execution_plan = make_overtake_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+
+  auto release = make_overtake_request();
+  release.corridor.target_exclusion_encoded = false;
+  release.corridor.tube_id =
+    world::fingerprint_overtake_corridor_observation(release.corridor);
+  release.current.obstacle_tube_id = release.corridor.tube_id;
+  EXPECT_EQ(
+    world::build_overtake_current_world_retained_proof(
+      execution_plan, cursor, release,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::OvertakeCurrentWorldProofReason::TargetReleaseUncertified);
+
+  auto blocked = make_overtake_request();
+  blocked.corridor.lateral_upper_m = {0.5, 0.11, 0.10};
+  blocked.corridor.tube_id =
+    world::fingerprint_overtake_corridor_observation(blocked.corridor);
+  blocked.current.obstacle_tube_id = blocked.corridor.tube_id;
+  EXPECT_EQ(
+    world::build_overtake_current_world_retained_proof(
+      execution_plan, cursor, blocked,
+      make_grid(footprint::CellState::Free), extents).reason,
+    world::OvertakeCurrentWorldProofReason::StageCorridorViolation);
 }

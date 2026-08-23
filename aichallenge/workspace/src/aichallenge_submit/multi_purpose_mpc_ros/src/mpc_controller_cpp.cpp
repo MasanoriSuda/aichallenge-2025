@@ -6055,6 +6055,40 @@ struct TrackCruiseShadowTelemetryWindow
 
 struct OvertakeCanonicalFreshShadowResult
 {
+  enum class RetainedOutcome
+  {
+    NotEvaluated,
+    Ineligible,
+    FreshSelected,
+    NoPlan,
+    ProvenanceUnavailable,
+    CursorRejected,
+    WindowRejected,
+    ProgressRejected,
+    CourseFrameUnavailable,
+    ControlPoseUnavailable,
+    TargetObservationUnavailable,
+    TargetIdentityMismatch,
+    CorridorIdentityMismatch,
+    CorridorHorizonUnavailable,
+    TargetReleaseUncertified,
+    InitialCorridorViolation,
+    DelayPrefixBlocked,
+    ConnectorBlocked,
+    StagePathBlocked,
+    StageCorridorViolation,
+    ProofRejected,
+    CandidateRejected,
+    AuthorityRejected,
+    ActuationRejected,
+    CommandRejected,
+    PredictionRejected,
+    SelectionIncomplete,
+    RetainedSelected,
+    Exception,
+    Count,
+  };
+
   bool eligible{false};
   race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason eligibility_reason{
     race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason::
@@ -6069,21 +6103,96 @@ struct OvertakeCanonicalFreshShadowResult
   bool canonical_chain_ready{false};
   bool prediction_available{false};
   bool selection_complete{false};
+  bool canonical_plan_stored{false};
+  bool retained_shadow_attempted{false};
+  bool retained_world_certified{false};
+  bool retained_candidate_accepted{false};
+  bool retained_authority_ready{false};
+  bool retained_actuation_extracted{false};
+  bool retained_selection_complete{false};
   std::uint64_t decision_id{};
+  std::uint64_t retained_plan_id{};
+  std::uint64_t retained_corridor_tube_id{};
   mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
   double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
   double total_ms{};
+  double retained_total_ms{};
   double maximum_actuation_difference{
     std::numeric_limits<double>::quiet_NaN()};
   mpcc_progress::ExtendedExecutionPrimalNormalizationReason primal_reason{
     mpcc_progress::ExtendedExecutionPrimalNormalizationReason::InvalidShape};
   canonical_plan_adapter::FreshCanonicalCommandReason chain_reason{
     canonical_plan_adapter::FreshCanonicalCommandReason::PlanRejected};
+  canonical_plan::CanonicalExecutionPlanStoreReason canonical_store_reason{
+    canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
+  canonical_plan::CanonicalExecutionCursorReason retained_cursor_reason{
+    canonical_plan::CanonicalExecutionCursorReason::InvalidPlan};
+  canonical_retained_world::OvertakeCurrentWorldProofReason
+  retained_world_reason{
+    canonical_retained_world::OvertakeCurrentWorldProofReason::InvalidInput};
+  canonical_retained::RetainedExecutionProofReason retained_proof_reason{
+    canonical_retained::RetainedExecutionProofReason::InvalidPlan};
+  canonical_retained::RetainedCandidateBuildReason retained_candidate_reason{
+    canonical_retained::RetainedCandidateBuildReason::InvalidPlan};
+  mpcc_contract::CanonicalNormalAuthoritySource retained_authority_source{
+    mpcc_contract::CanonicalNormalAuthoritySource::EmergencyStop};
+  mpcc_contract::CanonicalNormalAuthorityReason retained_authority_reason{
+    mpcc_contract::CanonicalNormalAuthorityReason::NoCanonicalCandidate};
+  canonical_plan::CanonicalActuationReason retained_actuation_reason{
+    canonical_plan::CanonicalActuationReason::InvalidPlan};
+  std::size_t retained_rejected_stage{};
+  double retained_minimum_corridor_reserve_m{
+    std::numeric_limits<double>::infinity()};
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   CanonicalNormalSelection selected;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
+  std::string retained_detail{"not-attempted"};
+  RetainedOutcome retained_outcome{RetainedOutcome::NotEvaluated};
 };
+
+const char * to_string(
+  const OvertakeCanonicalFreshShadowResult::RetainedOutcome outcome) noexcept
+{
+  using Outcome = OvertakeCanonicalFreshShadowResult::RetainedOutcome;
+  switch (outcome) {
+    case Outcome::NotEvaluated: return "not-evaluated";
+    case Outcome::Ineligible: return "ineligible";
+    case Outcome::FreshSelected: return "fresh-selected";
+    case Outcome::NoPlan: return "no-plan";
+    case Outcome::ProvenanceUnavailable: return "provenance-unavailable";
+    case Outcome::CursorRejected: return "cursor-rejected";
+    case Outcome::WindowRejected: return "window-rejected";
+    case Outcome::ProgressRejected: return "progress-rejected";
+    case Outcome::CourseFrameUnavailable: return "course-frame-unavailable";
+    case Outcome::ControlPoseUnavailable: return "control-pose-unavailable";
+    case Outcome::TargetObservationUnavailable:
+      return "target-observation-unavailable";
+    case Outcome::TargetIdentityMismatch: return "target-identity-mismatch";
+    case Outcome::CorridorIdentityMismatch: return "corridor-identity-mismatch";
+    case Outcome::CorridorHorizonUnavailable:
+      return "corridor-horizon-unavailable";
+    case Outcome::TargetReleaseUncertified:
+      return "target-release-uncertified";
+    case Outcome::InitialCorridorViolation:
+      return "initial-corridor-violation";
+    case Outcome::DelayPrefixBlocked: return "delay-prefix-blocked";
+    case Outcome::ConnectorBlocked: return "connector-blocked";
+    case Outcome::StagePathBlocked: return "stage-path-blocked";
+    case Outcome::StageCorridorViolation: return "stage-corridor-violation";
+    case Outcome::ProofRejected: return "proof-rejected";
+    case Outcome::CandidateRejected: return "candidate-rejected";
+    case Outcome::AuthorityRejected: return "authority-rejected";
+    case Outcome::ActuationRejected: return "actuation-rejected";
+    case Outcome::CommandRejected: return "command-rejected";
+    case Outcome::PredictionRejected: return "prediction-rejected";
+    case Outcome::SelectionIncomplete: return "selection-incomplete";
+    case Outcome::RetainedSelected: return "retained-selected";
+    case Outcome::Exception: return "exception";
+    case Outcome::Count: break;
+  }
+  return "unknown";
+}
 
 struct OvertakeCanonicalFreshShadowTelemetryWindow
 {
@@ -6098,11 +6207,25 @@ struct OvertakeCanonicalFreshShadowTelemetryWindow
   std::uint64_t chain_count{};
   std::uint64_t prediction_count{};
   std::uint64_t complete_count{};
+  std::uint64_t stored_count{};
+  std::uint64_t retained_attempt_count{};
+  std::uint64_t retained_world_count{};
+  std::uint64_t retained_candidate_count{};
+  std::uint64_t retained_authority_count{};
+  std::uint64_t retained_actuation_count{};
+  std::uint64_t retained_complete_count{};
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(
+      OvertakeCanonicalFreshShadowResult::RetainedOutcome::Count)>
+  retained_outcome_counts{};
   PhysicalWallCertificateRejectTelemetry physical_rejects;
   std::uint64_t last_physical_reject_decision_id{};
   std::string last_physical_reject_detail{"none"};
   double total_ms{};
   double maximum_ms{};
+  double retained_total_ms{};
+  double retained_maximum_ms{};
   double maximum_actuation_difference{};
   double maximum_absolute_initial_lag_m{};
 };
@@ -23884,24 +24007,12 @@ struct MPC
     last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
   }
 
-  OvertakeCanonicalFreshShadowResult
-  evaluate_overtake_canonical_fresh_shadow(
-    const MpcProblem & problem,
-    const ExtendedProgressMpcProblem & extended_problem,
-    const persistent_osqp::SolveResult & solve_result,
-    const double now_sec)
+  OvertakeCanonicalFreshShadowResult make_overtake_canonical_shadow_result(
+    const MpcProblem & problem) const
   {
-    constexpr int progress_metadata_nx = 3;
     OvertakeCanonicalFreshShadowResult result;
     result.decision_id = active_control_decision_id_;
     result.intent = current_control_intent();
-    result.initial_lag_m = extended_problem.initial_lag_m;
-    const auto started = SteadyClock::now();
-    const auto finish = [&result, &started]() {
-        result.total_ms = std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - started).count();
-        return result;
-      };
     result.eligibility_reason =
       race_mpcc::resolve_overtake_canonical_fresh_shadow_eligibility(
       race_mpcc::OvertakeCanonicalFreshShadowEligibilityRequest{
@@ -23914,6 +24025,25 @@ struct MPC
         problem.lateral_bounds_contract_valid}).reason;
     result.eligible = result.eligibility_reason ==
       race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason::Eligible;
+    return result;
+  }
+
+  OvertakeCanonicalFreshShadowResult
+  evaluate_overtake_canonical_fresh_shadow(
+    const MpcProblem & problem,
+    const ExtendedProgressMpcProblem & extended_problem,
+    const persistent_osqp::SolveResult & solve_result,
+    const double now_sec)
+  {
+    constexpr int progress_metadata_nx = 3;
+    auto result = make_overtake_canonical_shadow_result(problem);
+    result.initial_lag_m = extended_problem.initial_lag_m;
+    const auto started = SteadyClock::now();
+    const auto finish = [&result, &started]() {
+        result.total_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return result;
+      };
     if (!result.eligible) {
       result.status = "eligibility-reject";
       result.detail =
@@ -24138,6 +24268,353 @@ struct MPC
     return finish();
   }
 
+  void evaluate_overtake_canonical_retained_shadow(
+    const MpcProblem & problem, const double now_sec,
+    const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
+    retained_plan,
+    OvertakeCanonicalFreshShadowResult & result)
+  {
+    constexpr int progress_metadata_nx = 3;
+    if (!result.eligible) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::Ineligible;
+      return;
+    }
+    if (result.selection_complete) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::FreshSelected;
+      return;
+    }
+    result.retained_shadow_attempted = true;
+    if (retained_plan == nullptr) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::NoPlan;
+      result.retained_detail = "no prior Overtake canonical plan";
+      return;
+    }
+    result.retained_plan_id = retained_plan->plan_id;
+    if (
+      model == nullptr || model->reference_path == nullptr ||
+      gap_planner == nullptr || overtake_static_wall_grid_ == nullptr ||
+      !overtake_static_wall_footprint_.valid() ||
+      !std::isfinite(problem.progress_origin_m) ||
+      !std::isfinite(model->reference_path->length) ||
+      model->reference_path->length <= 0.0 || problem.N <= 0 ||
+      problem.progress_state_lower.size() !=
+      progress_metadata_nx * (problem.N + 1) ||
+      problem.progress_state_upper.size() !=
+      progress_metadata_nx * (problem.N + 1) ||
+      problem.progress_stage_dt_sec.size() !=
+      static_cast<std::size_t>(problem.N))
+    {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::
+        ProvenanceUnavailable;
+      result.retained_detail = "current Overtake world provenance unavailable";
+      return;
+    }
+    const auto cursor = canonical_plan::resolve_execution_cursor(
+      *retained_plan, now_sec);
+    result.retained_cursor_reason = cursor.reason;
+    if (!cursor.available) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::CursorRejected;
+      result.retained_detail = std::string{"cursor rejected: "} +
+        canonical_plan::to_string(cursor.reason);
+      return;
+    }
+    const auto window = canonical_retained::build_retained_execution_window(
+      *retained_plan, cursor);
+    if (!window.window.has_value()) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::WindowRejected;
+      result.retained_detail = std::string{"window rejected: "} +
+        canonical_retained::to_string(window.reason);
+      return;
+    }
+    const auto current_origin = canonical_retained::lift_progress_to_retained_branch(
+      canonical_retained::CircularProgressLiftRequest{
+        problem.progress_origin_m,
+        window.window->expected_current_progress_m,
+        model->reference_path->length,
+        kV2XCourseProgressContinuityToleranceM,
+        model->reference_path->circular});
+    if (
+      current_origin.reason !=
+      canonical_retained::CircularProgressLiftReason::Accepted)
+    {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::ProgressRejected;
+      result.retained_world_reason =
+        canonical_retained_world::OvertakeCurrentWorldProofReason::
+        ProgressLiftRejected;
+      result.retained_detail = std::string{"current origin rejected: "} +
+        canonical_retained::to_string(current_origin.reason);
+      return;
+    }
+    double required_maximum_progress_m =
+      window.window->expected_current_progress_m;
+    for (const auto & sample : window.window->samples) {
+      required_maximum_progress_m = std::max(
+        required_maximum_progress_m, sample.absolute_progress_m);
+    }
+    const auto course_frame_knots = build_progress_course_frame_knots(
+      problem.progress_stage_geometry, current_origin.lifted_progress_m,
+      required_maximum_progress_m);
+    if (!course_frame_knots.has_value()) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::
+        CourseFrameUnavailable;
+      result.retained_world_reason =
+        canonical_retained_world::OvertakeCurrentWorldProofReason::
+        CourseFrameUnavailable;
+      result.retained_detail = "current course-frame window unavailable";
+      return;
+    }
+    const auto measured_to_control_path = build_canonical_current_control_path();
+    if (!measured_to_control_path.has_value() ||
+      !predicted_execution_pose_.has_value())
+    {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::
+        ControlPoseUnavailable;
+      result.retained_detail = "current control-pose prefix unavailable";
+      return;
+    }
+
+    const auto context = make_problem_context(
+      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    const auto target_provenance = selected_target_provenance(
+      last_v2x_behavior_output_);
+    const double target_age_sec = now_sec - target_provenance.receipt_sec;
+    const bool target_current =
+      target_provenance.valid &&
+      target_provenance.target_id == context.target_id &&
+      target_provenance.observation_generation ==
+      context.target_obstacle_generation &&
+      overtake_core::is_v2x_receipt_age_fresh(
+      target_age_sec, cfg.v2x_gap.timeout_sec,
+      kV2XReceiptFutureToleranceSec);
+
+    canonical_retained_world::OvertakeCurrentWorldProofRequest proof_request;
+    proof_request.current.decision_id = context.decision_id;
+    proof_request.current.intent = context.intent;
+    proof_request.current.intent_generation = context.intent_generation;
+    proof_request.current.observation_generation = context.observation_generation;
+    proof_request.current.stage_geometry_id = context.stage_geometry_id;
+    proof_request.current.target_obstacle_generation =
+      context.target_obstacle_generation;
+    proof_request.current.target_id = context.target_id;
+    proof_request.current.observation_sec = now_sec;
+    proof_request.current.path_length_m = model->reference_path->length;
+    proof_request.current.circular = model->reference_path->circular;
+    proof_request.measured_course_progress_m = problem.progress_origin_m;
+    proof_request.measured_lateral_m = model->spatial_state.e_y;
+    proof_request.progress_continuity_tolerance_m =
+      kV2XCourseProgressContinuityToleranceM;
+    proof_request.measured_to_control_path = measured_to_control_path.value();
+    proof_request.control_pose = predicted_execution_pose_.value();
+    proof_request.current.control_pose_id =
+      canonical_retained_world::fingerprint_control_pose_path(
+      proof_request.measured_to_control_path, proof_request.control_pose);
+    proof_request.course_frame_knots = course_frame_knots.value();
+    proof_request.current.course_frame_window_id =
+      canonical_retained_world::fingerprint_course_frame_window(
+      proof_request.course_frame_knots);
+    auto & corridor = proof_request.corridor;
+    corridor.target_id = context.target_id;
+    corridor.observation_generation = context.target_obstacle_generation;
+    corridor.observation_sec = target_provenance.receipt_sec;
+    corridor.current = target_current;
+    corridor.target_exclusion_encoded =
+      stage_corridor_mpc_target_bound_was_active_ ||
+      problem.dynamic_obstacle_lateral_escape_active ||
+      problem.dynamic_obstacle_margin_escape_tracking_contract_active;
+    corridor.release_current_body_clear =
+      last_v2x_behavior_output_.locked_target_current_body_footprints_separated;
+    corridor.release_prediction_valid =
+      last_v2x_behavior_output_.locked_target_footprint_prediction_valid;
+    corridor.release_predicted_sweep_clear =
+      last_v2x_behavior_output_.
+      locked_target_predicted_body_footprint_sweep_separated;
+    corridor.elapsed_time_sec.reserve(static_cast<std::size_t>(problem.N + 1));
+    corridor.lateral_lower_m.reserve(static_cast<std::size_t>(problem.N + 1));
+    corridor.lateral_upper_m.reserve(static_cast<std::size_t>(problem.N + 1));
+    corridor.elapsed_time_sec.push_back(0.0);
+    corridor.lateral_lower_m.push_back(
+      problem.progress_state_lower[progress_metadata_nx]);
+    corridor.lateral_upper_m.push_back(
+      problem.progress_state_upper[progress_metadata_nx]);
+    double elapsed_sec = 0.0;
+    for (int stage = 0; stage < problem.N; ++stage) {
+      elapsed_sec += problem.progress_stage_dt_sec[static_cast<std::size_t>(stage)];
+      corridor.elapsed_time_sec.push_back(elapsed_sec);
+      const int state = stage + 1;
+      corridor.lateral_lower_m.push_back(
+        problem.progress_state_lower[progress_metadata_nx * state]);
+      corridor.lateral_upper_m.push_back(
+        problem.progress_state_upper[progress_metadata_nx * state]);
+    }
+    corridor.tube_id =
+      canonical_retained_world::fingerprint_overtake_corridor_observation(
+      corridor);
+    proof_request.current.obstacle_tube_id = corridor.tube_id;
+    result.retained_corridor_tube_id = corridor.tube_id;
+    proof_request.lateral_tolerance_m = 1e-5;
+    proof_request.swept_step_m = std::max(
+      1e-3, std::min(0.10, 0.5 * overtake_static_wall_grid_->resolution_m));
+
+    const auto world_proof =
+      canonical_retained_world::build_overtake_current_world_retained_proof(
+      *retained_plan, cursor, proof_request, *overtake_static_wall_grid_,
+      overtake_static_wall_footprint_);
+    result.retained_world_reason = world_proof.reason;
+    result.retained_proof_reason = world_proof.proof_reason;
+    result.retained_rejected_stage = world_proof.rejected_stage_index;
+    result.retained_minimum_corridor_reserve_m =
+      world_proof.minimum_corridor_reserve_m;
+    if (!world_proof.proof.has_value()) {
+      using Outcome = OvertakeCanonicalFreshShadowResult::RetainedOutcome;
+      using Reason =
+        canonical_retained_world::OvertakeCurrentWorldProofReason;
+      switch (world_proof.reason) {
+        case Reason::TargetObservationUnavailable:
+          result.retained_outcome = Outcome::TargetObservationUnavailable;
+          break;
+        case Reason::TargetIdentityMismatch:
+          result.retained_outcome = Outcome::TargetIdentityMismatch;
+          break;
+        case Reason::CorridorIdentityMismatch:
+          result.retained_outcome = Outcome::CorridorIdentityMismatch;
+          break;
+        case Reason::CorridorHorizonUnavailable:
+          result.retained_outcome = Outcome::CorridorHorizonUnavailable;
+          break;
+        case Reason::TargetReleaseUncertified:
+          result.retained_outcome = Outcome::TargetReleaseUncertified;
+          break;
+        case Reason::InitialCorridorViolation:
+          result.retained_outcome = Outcome::InitialCorridorViolation;
+          break;
+        case Reason::DelayPrefixBlocked:
+          result.retained_outcome = Outcome::DelayPrefixBlocked;
+          break;
+        case Reason::ConnectorBlocked:
+          result.retained_outcome = Outcome::ConnectorBlocked;
+          break;
+        case Reason::StagePathBlocked:
+          result.retained_outcome = Outcome::StagePathBlocked;
+          break;
+        case Reason::StageCorridorViolation:
+          result.retained_outcome = Outcome::StageCorridorViolation;
+          break;
+        case Reason::ProgressLiftRejected:
+          result.retained_outcome = Outcome::ProgressRejected;
+          break;
+        case Reason::CourseFrameUnavailable:
+          result.retained_outcome = Outcome::CourseFrameUnavailable;
+          break;
+        case Reason::Accepted:
+        case Reason::InvalidInput:
+        case Reason::WindowRejected:
+        case Reason::ControlPoseIdentityMismatch:
+        case Reason::CourseFrameIdentityMismatch:
+        case Reason::ProofRejected:
+          result.retained_outcome = Outcome::ProofRejected;
+          break;
+      }
+      result.retained_detail = std::string{"world proof rejected: "} +
+        canonical_retained_world::to_string(world_proof.reason) + "/" +
+        canonical_retained::to_string(world_proof.proof_reason);
+      return;
+    }
+    result.retained_world_certified = true;
+    const auto candidate = canonical_retained::build_canonical_retained_candidate(
+      *retained_plan, cursor, proof_request.current,
+      world_proof.proof.value());
+    result.retained_candidate_reason = candidate.reason;
+    result.retained_proof_reason = candidate.proof_reason;
+    if (!candidate.candidate.has_value()) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::CandidateRejected;
+      result.retained_detail = std::string{"candidate rejected: "} +
+        canonical_retained::to_string(candidate.reason) + "/" +
+        canonical_retained::to_string(candidate.proof_reason);
+      return;
+    }
+    result.retained_candidate_accepted = true;
+    const auto authority = mpcc_contract::resolve_canonical_normal_authority(
+      mpcc_contract::CanonicalNormalAuthorityRequest{
+        result.decision_id, now_sec,
+        mpcc_contract::CanonicalNormalCandidate{}, candidate.candidate.value(),
+        result.intent});
+    result.retained_authority_source = authority.source;
+    result.retained_authority_reason = authority.reason;
+    if (
+      authority.source !=
+      mpcc_contract::CanonicalNormalAuthoritySource::RetainedCertified)
+    {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::AuthorityRejected;
+      result.retained_detail = std::string{"shadow selector rejected: "} +
+        mpcc_contract::to_string(authority.source) + "/" +
+        mpcc_contract::to_string(authority.reason);
+      return;
+    }
+    result.retained_authority_ready = true;
+    const auto actuation = canonical_plan::extract_canonical_actuation(
+      *retained_plan, cursor, model->length);
+    result.retained_actuation_reason = actuation.reason;
+    if (!actuation.actuation.has_value()) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::ActuationRejected;
+      result.retained_detail = std::string{"actuation rejected: "} +
+        canonical_plan::to_string(actuation.reason);
+      return;
+    }
+    result.retained_actuation_extracted = true;
+    const auto & selected_actuation = actuation.actuation.value();
+    const auto command = mpcc_contract::build_canonical_normal_command(
+      authority,
+      mpcc_contract::CanonicalActuation{
+        selected_actuation.predicted_speed_mps,
+        selected_actuation.acceleration_mps2,
+        selected_actuation.curvature_radpm,
+        selected_actuation.steering_tire_angle_rad,
+        selected_actuation.virtual_progress_speed_mps});
+    if (!command.command.has_value()) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::CommandRejected;
+      result.retained_detail = std::string{"command rejected: "} +
+        mpcc_contract::to_string(command.reason);
+      return;
+    }
+    std::string prediction_reject_reason;
+    const auto prediction = build_canonical_world_prediction(
+      *retained_plan, cursor, course_frame_knots.value(),
+      canonical_retained_world::kCourseFrameIdentityToleranceM,
+      prediction_reject_reason);
+    if (!prediction.has_value()) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::PredictionRejected;
+      result.retained_detail = prediction_reject_reason;
+      return;
+    }
+    result.selected.command = command.command;
+    result.selected.problem = authority.problem;
+    result.selected.solution = authority.solution;
+    result.selected.plan = retained_plan;
+    result.selected.cursor = cursor;
+    result.selected.prediction = prediction.value();
+    result.retained_selection_complete = result.selected.complete();
+    result.retained_outcome = result.retained_selection_complete ?
+      OvertakeCanonicalFreshShadowResult::RetainedOutcome::RetainedSelected :
+      OvertakeCanonicalFreshShadowResult::RetainedOutcome::SelectionIncomplete;
+    result.retained_detail = result.retained_selection_complete ?
+      "retained Overtake candidate current-world-certified for shadow" :
+      "retained Overtake selection incomplete";
+  }
+
   void record_overtake_canonical_fresh_shadow_telemetry(
     const OvertakeCanonicalFreshShadowResult & result,
     const double now_sec)
@@ -24155,6 +24632,28 @@ struct MPC
     window.chain_count += result.canonical_chain_ready ? 1U : 0U;
     window.prediction_count += result.prediction_available ? 1U : 0U;
     window.complete_count += result.selection_complete ? 1U : 0U;
+    window.stored_count += result.canonical_plan_stored ? 1U : 0U;
+    window.retained_attempt_count += result.retained_shadow_attempted ? 1U : 0U;
+    window.retained_world_count += result.retained_world_certified ? 1U : 0U;
+    window.retained_candidate_count +=
+      result.retained_candidate_accepted ? 1U : 0U;
+    window.retained_authority_count += result.retained_authority_ready ? 1U : 0U;
+    window.retained_actuation_count +=
+      result.retained_actuation_extracted ? 1U : 0U;
+    window.retained_complete_count +=
+      result.retained_selection_complete ? 1U : 0U;
+    auto retained_outcome = result.retained_outcome;
+    if (result.selection_complete) {
+      retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::FreshSelected;
+    } else if (!result.eligible) {
+      retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::Ineligible;
+    } else if (result.retained_selection_complete) {
+      retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::RetainedSelected;
+    }
+    ++window.retained_outcome_counts[static_cast<std::size_t>(retained_outcome)];
     if (result.physical_certificate_checked && !result.physically_certified) {
       window.physical_rejects.record(result.physical_wall_diagnostic);
       window.last_physical_reject_decision_id = result.decision_id;
@@ -24164,6 +24663,9 @@ struct MPC
     }
     window.total_ms += result.total_ms;
     window.maximum_ms = std::max(window.maximum_ms, result.total_ms);
+    window.retained_total_ms += result.retained_total_ms;
+    window.retained_maximum_ms = std::max(
+      window.retained_maximum_ms, result.retained_total_ms);
     if (std::isfinite(result.maximum_actuation_difference)) {
       window.maximum_actuation_difference = std::max(
         window.maximum_actuation_difference,
@@ -24181,16 +24683,37 @@ struct MPC
     {
       const double average_ms = window.evaluated_count > 0U ?
         window.total_ms / static_cast<double>(window.evaluated_count) : 0.0;
+      const double retained_average_ms = window.retained_attempt_count > 0U ?
+        window.retained_total_ms /
+        static_cast<double>(window.retained_attempt_count) : 0.0;
+      std::ostringstream retained_outcomes;
+      for (std::size_t index = 0U;
+        index < window.retained_outcome_counts.size(); ++index)
+      {
+        if (window.retained_outcome_counts[index] == 0U) {
+          continue;
+        }
+        if (retained_outcomes.tellp() > 0) {
+          retained_outcomes << '/';
+        }
+        retained_outcomes << to_string(
+          static_cast<OvertakeCanonicalFreshShadowResult::RetainedOutcome>(
+            index)) << ':' << window.retained_outcome_counts[index];
+      }
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Overtake canonical fresh shadow: evaluated=%lu, eligible=%lu, "
         "context=%lu, lateral=%lu, primal=%lu, actuation=%lu, trajectory=%lu, "
-        "physical=%lu, chain=%lu, prediction=%lu, complete=%lu, "
+        "physical=%lu, chain=%lu, prediction=%lu, complete=%lu, stored=%lu, "
+        "retained=attempt:%lu/world:%lu/candidate:%lu/authority:%lu/"
+        "actuation:%lu/complete:%lu, retained_outcomes=%s, "
         "physical_rejects=invalid:%lu/bound:%lu/heading:%lu/sample:%lu/"
         "contact:%lu/current_sample:%lu/current_contact:%lu/course_frame:%lu/"
         "swept:%lu, last_physical_reject=%lu/%s, "
-        "time=%.3f/%.3fms(avg/max), actuation_diff_max=%.3g, "
-        "initial_lag_abs_max=%.3fm, last=%s/%s, authority=shadow",
+        "time=%.3f/%.3fms(avg/max), retained_time=%.3f/%.3fms(avg/max), "
+        "actuation_diff_max=%.3g, "
+        "initial_lag_abs_max=%.3fm, last=%s/%s, retained_last=%s/%s/"
+        "stage:%zu/reserve:%.3f, authority=shadow",
         static_cast<unsigned long>(window.evaluated_count),
         static_cast<unsigned long>(window.eligible_count),
         static_cast<unsigned long>(window.context_count),
@@ -24202,6 +24725,14 @@ struct MPC
         static_cast<unsigned long>(window.chain_count),
         static_cast<unsigned long>(window.prediction_count),
         static_cast<unsigned long>(window.complete_count),
+        static_cast<unsigned long>(window.stored_count),
+        static_cast<unsigned long>(window.retained_attempt_count),
+        static_cast<unsigned long>(window.retained_world_count),
+        static_cast<unsigned long>(window.retained_candidate_count),
+        static_cast<unsigned long>(window.retained_authority_count),
+        static_cast<unsigned long>(window.retained_actuation_count),
+        static_cast<unsigned long>(window.retained_complete_count),
+        retained_outcomes.str().c_str(),
         static_cast<unsigned long>(window.physical_rejects.invalid_input_count),
         static_cast<unsigned long>(window.physical_rejects.lateral_bound_count),
         static_cast<unsigned long>(
@@ -24220,9 +24751,13 @@ struct MPC
         static_cast<unsigned long>(window.last_physical_reject_decision_id),
         window.last_physical_reject_detail.c_str(),
         average_ms, window.maximum_ms,
+        retained_average_ms, window.retained_maximum_ms,
         window.maximum_actuation_difference,
         window.maximum_absolute_initial_lag_m,
-        result.status.c_str(), result.detail.c_str());
+        result.status.c_str(), result.detail.c_str(),
+        canonical_retained_world::to_string(result.retained_world_reason),
+        result.retained_detail.c_str(), result.retained_rejected_stage,
+        result.retained_minimum_corridor_reserve_m);
       window = OvertakeCanonicalFreshShadowTelemetryWindow{};
       overtake_canonical_fresh_shadow_last_log_sec_ = now_sec;
     }
@@ -25857,6 +26392,8 @@ struct MPC
         problem.progress_contouring_active &&
         cfg.progress_contouring.extended_dynamics_enabled)
       {
+        auto canonical_overtake_shadow =
+          make_overtake_canonical_shadow_result(problem);
         record_problem_context(
           problem, mpcc_contract::Formulation::VelocityProgress5State);
         if (extended_progress_circuit_breaker_.active(now_sec)) {
@@ -25891,12 +26428,10 @@ struct MPC
             auto extended_outcome = solve_extended_progress_problem(
               extended_problem.value(), now_sec);
             if (extended_outcome.result.has_value()) {
-              const auto canonical_fresh_shadow =
+              canonical_overtake_shadow =
                 evaluate_overtake_canonical_fresh_shadow(
                 problem, extended_problem.value(),
                 extended_outcome.result.value(), now_sec);
-              record_overtake_canonical_fresh_shadow_telemetry(
-                canonical_fresh_shadow, now_sec);
               const auto legacy_solution =
                 mpcc_progress::convert_extended_solution_to_legacy(
                 extended_outcome.result->primal, N,
@@ -25947,6 +26482,50 @@ struct MPC
               ExtendedMpccCycleStatus::BuildReject, nullptr, now_sec);
           }
         }
+        if (
+          canonical_overtake_shadow.selection_complete &&
+          canonical_overtake_shadow.selected.plan != nullptr)
+        {
+          canonical_overtake_shadow.canonical_store_reason =
+            overtake_canonical_shadow_plan_store_.replace(
+            *canonical_overtake_shadow.selected.plan);
+          canonical_overtake_shadow.canonical_plan_stored =
+            canonical_overtake_shadow.canonical_store_reason ==
+            canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
+          if (!canonical_overtake_shadow.canonical_plan_stored) {
+            canonical_overtake_shadow.retained_detail =
+              std::string{"fresh plan store rejected: "} +
+              canonical_plan::to_string(
+              canonical_overtake_shadow.canonical_store_reason);
+          }
+        }
+        if (
+          canonical_overtake_shadow.eligible &&
+          !canonical_overtake_shadow.selection_complete)
+        {
+          const auto retained_started = SteadyClock::now();
+          try {
+            evaluate_overtake_canonical_retained_shadow(
+              problem, now_sec,
+              overtake_canonical_shadow_plan_store_.snapshot(),
+              canonical_overtake_shadow);
+          } catch (const std::exception & error) {
+            canonical_overtake_shadow.retained_outcome =
+              OvertakeCanonicalFreshShadowResult::RetainedOutcome::Exception;
+            canonical_overtake_shadow.retained_detail =
+              std::string{"retained shadow exception: "} + error.what();
+          } catch (...) {
+            canonical_overtake_shadow.retained_outcome =
+              OvertakeCanonicalFreshShadowResult::RetainedOutcome::Exception;
+            canonical_overtake_shadow.retained_detail =
+              "retained shadow exception: unknown";
+          }
+          canonical_overtake_shadow.retained_total_ms =
+            std::chrono::duration<double, std::milli>(
+            SteadyClock::now() - retained_started).count();
+        }
+        record_overtake_canonical_fresh_shadow_telemetry(
+          canonical_overtake_shadow, now_sec);
         if (
           !solved_with_extended_progress &&
           cfg.v2x_behavior.overtake_line.debug_log_enabled &&
@@ -26761,6 +27340,8 @@ struct MPC
   double last_canonical_normal_final_actuation_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   std::string last_track_cruise_shadow_status_;
+  canonical_plan::CanonicalExecutionPlanStore
+  overtake_canonical_shadow_plan_store_;
   OvertakeCanonicalFreshShadowTelemetryWindow
   overtake_canonical_fresh_shadow_telemetry_window_;
   double overtake_canonical_fresh_shadow_last_log_sec_{

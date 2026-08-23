@@ -1,0 +1,103 @@
+#ifndef MULTI_PURPOSE_MPC_ROS__FOLLOW_CANONICAL_ASYNC_HPP_
+#define MULTI_PURPOSE_MPC_ROS__FOLLOW_CANONICAL_ASYNC_HPP_
+
+#include "multi_purpose_mpc_ros/canonical_execution_plan.hpp"
+
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+
+namespace multi_purpose_mpc_ros::follow_canonical_async
+{
+
+namespace plan = canonical_execution_plan;
+
+struct ResultIdentity
+{
+  std::uint64_t sequence{};
+  std::uint64_t context_epoch{};
+  std::uint64_t snapshot_decision_id{};
+  std::uint64_t intent_generation{};
+  std::uint64_t target_observation_generation{};
+  std::uint64_t problem_fingerprint{};
+  std::string target_id;
+  double snapshot_sec{};
+};
+
+enum class WorkerOutcome
+{
+  PlanAvailable,
+  Rejected,
+  Exception,
+};
+
+struct WorkerResult
+{
+  ResultIdentity identity;
+  WorkerOutcome outcome{WorkerOutcome::Rejected};
+  double completed_sec{};
+  double compute_ms{};
+  std::string detail;
+  std::shared_ptr<const plan::CanonicalExecutionPlan> canonical_plan;
+};
+
+enum class ResultValidationReason
+{
+  Accepted,
+  InvalidIdentity,
+  InvalidTiming,
+  InvalidPlanPayload,
+  PlanIdentityMismatch,
+};
+
+const char * to_string(ResultValidationReason reason) noexcept;
+ResultValidationReason validate_worker_result(
+  const WorkerResult & result) noexcept;
+
+enum class PublishReason
+{
+  Accepted,
+  InvalidResult,
+  ContextMismatch,
+  SequenceRollback,
+  SequenceNotSubmitted,
+};
+
+const char * to_string(PublishReason reason) noexcept;
+
+struct MailboxState
+{
+  std::uint64_t context_epoch{};
+  std::uint64_t latest_submitted_sequence{};
+  std::uint64_t latest_published_sequence{};
+  bool result_available{false};
+};
+
+/// Typed latest-only boundary for Follow canonical worker results. Publishing
+/// never mutates the canonical execution-plan store; the live controller must
+/// separately check current intent/target identity and current-world physical
+/// proof before storing or executing a plan.
+class Mailbox
+{
+public:
+  void reset_context(std::uint64_t context_epoch);
+  bool register_submission(
+    std::uint64_t context_epoch, std::uint64_t sequence);
+  PublishReason publish(WorkerResult result);
+  std::optional<WorkerResult> latest_after(
+    std::uint64_t consumed_sequence) const;
+  MailboxState state() const;
+
+private:
+  mutable std::mutex mutex_;
+  std::uint64_t context_epoch_{};
+  std::uint64_t latest_submitted_sequence_{};
+  std::uint64_t latest_published_sequence_{};
+  std::optional<WorkerResult> latest_result_;
+};
+
+}  // namespace multi_purpose_mpc_ros::follow_canonical_async
+
+#endif  // MULTI_PURPOSE_MPC_ROS__FOLLOW_CANONICAL_ASYNC_HPP_

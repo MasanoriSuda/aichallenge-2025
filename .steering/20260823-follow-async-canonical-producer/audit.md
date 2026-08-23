@@ -54,3 +54,15 @@ isolates ownership without changing command semantics.
 - `make autoware-build`: 25 packages successful.
 - `ctest --test-dir /aichallenge/build/multi_purpose_mpc_ros --output-on-failure`: 38/38 passed.
 - No normal authority, fallback, feature flag or parameter was added.
+
+## Slice B verification
+
+`follow_canonical_async` now defines a typed worker result and mailbox independent from the ROS node.
+It rejects invalid plan payloads, internal plan/provenance mismatches, old context epochs, sequence
+rollback and results that were never submitted. Rejected publication leaves the previously published
+result unchanged; the mailbox cannot mutate the canonical execution-plan store.
+
+- Formal `make autoware-build`: 25 packages successful.
+- Focused CTest from `/aichallenge/workspace/build`: 3/3 passed.
+- Full package CTest from `/aichallenge/workspace/build`: 39/39 passed.
+- The older `/aichallenge/build` tree is not accepted as current evidence.

@@ -130,6 +130,16 @@ ament_auto_add_library(${PROJECT_NAME}_latest_only_worker SHARED
 )
 target_link_libraries(${PROJECT_NAME}_latest_only_worker Threads::Threads)
 
+ament_auto_add_library(${PROJECT_NAME}_follow_canonical_async SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/follow_canonical_async.cpp
+)
+target_link_libraries(${PROJECT_NAME}_follow_canonical_async
+  ${PROJECT_NAME}_canonical_execution_plan
+  ${PROJECT_NAME}_latest_only_worker
+  Threads::Threads
+)
+
 ament_auto_add_library(${PROJECT_NAME}_overtake_decision_trace SHARED
   NO_TARGET_LINK_LIBRARIES
   src/overtake_decision_trace.cpp
@@ -207,6 +217,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_latest_only_worker
+  ${PROJECT_NAME}_follow_canonical_async
   ${PROJECT_NAME}_overtake_decision_trace
   ${PROJECT_NAME}_overtake_execution_orchestrator
   ${PROJECT_NAME}_mpc_state_prediction
@@ -337,6 +348,15 @@ if(BUILD_TESTING)
   if(TARGET test_latest_only_worker)
     target_link_libraries(test_latest_only_worker
       ${PROJECT_NAME}_latest_only_worker
+    )
+  endif()
+
+  ament_add_gtest(test_follow_canonical_async
+    test/test_follow_canonical_async.cpp
+  )
+  if(TARGET test_follow_canonical_async)
+    target_link_libraries(test_follow_canonical_async
+      ${PROJECT_NAME}_follow_canonical_async
     )
   endif()
 

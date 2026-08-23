@@ -221,6 +221,35 @@ TEST(PersistentOsqpConstraintResiduals, ReportsWorstRowInPhysicalCoordinates)
   EXPECT_GT(diagnostic->normalized_violation, 100.0);
 }
 
+TEST(PersistentOsqpScaling, DerivesPhysicalUnitsFromFiniteBoxBounds)
+{
+  Eigen::VectorXd lower(4);
+  lower << -2.0, -std::numeric_limits<double>::infinity(), 0.0, 0.0;
+  Eigen::VectorXd upper(4);
+  upper << 1.0, std::numeric_limits<double>::infinity(), 20.0, 0.25;
+
+  const auto scaling = derive_box_variable_coordinate_scaling(lower, upper);
+
+  ASSERT_TRUE(scaling.has_value());
+  Eigen::VectorXd expected(4);
+  expected << 2.0, 1.0, 20.0, 0.25;
+  EXPECT_TRUE(
+    scaling->physical_units_per_solver_unit.isApprox(expected, 1e-12));
+}
+
+TEST(PersistentOsqpScaling, RejectsMalformedBoxBounds)
+{
+  Eigen::VectorXd lower(2);
+  lower << 0.0, 2.0;
+  Eigen::VectorXd upper(2);
+  upper << 1.0, 1.0;
+  EXPECT_FALSE(
+    derive_box_variable_coordinate_scaling(lower, upper).has_value());
+  EXPECT_FALSE(
+    derive_box_variable_coordinate_scaling(
+      Eigen::VectorXd::Zero(1), Eigen::VectorXd::Zero(2)).has_value());
+}
+
 TEST(PersistentOsqpSolver, ReusesWorkspaceAndAppliesWarmStart) {
   PersistentOsqpSolver solver;
   const auto quadratic = diagonal_matrix({1.0});
@@ -323,6 +352,134 @@ TEST(PersistentOsqpSolver, RowToleranceNormalizationClosesMixedUnitToleranceLeak
     normalized_outcome.result->maximum_normalized_constraint_violation, 1.0);
 }
 
+TEST(PersistentOsqpSolver, RowToleranceNormalizationUsesDimensionlessRows)
+{
+  const auto quadratic = diagonal_matrix({1.0, 1.0});
+  const auto constraints = identity_constraints(2);
+  const Eigen::VectorXd cost = Eigen::VectorXd::Zero(2);
+  Eigen::VectorXd lower(2);
+  lower << -0.25, 0.0;
+  Eigen::VectorXd upper(2);
+  upper << 0.25, 20.0;
+
+  PersistentOsqpSolver solver(
+    ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto outcome = solver.solve(
+    quadratic, constraints, cost, lower, upper);
+
+  ASSERT_TRUE(outcome.result.has_value()) << outcome.failure_detail;
+  // The zero lower bound owns the strict 0.001 physical tolerance. It maps to
+  // OSQP's 0.001 absolute tolerance with scale 1, independent of the 20 m
+  // opposite bound. The global relative stopping term is disabled for this
+  // already-normalized policy.
+  EXPECT_NEAR(outcome.telemetry.maximum_row_scale, 1.0, 1e-9);
+  EXPECT_DOUBLE_EQ(outcome.telemetry.relative_tolerance, 0.0);
+}
+
+TEST(PersistentOsqpSolver, RowToleranceNormalizationUsesStrictAsymmetricSide)
+{
+  const auto quadratic = diagonal_matrix({1.0, 1.0});
+  const auto constraints = identity_constraints(2);
+  const Eigen::VectorXd cost = Eigen::VectorXd::Zero(2);
+  Eigen::VectorXd lower(2);
+  lower << -3.0, 0.0;
+  Eigen::VectorXd upper(2);
+  upper << 1.37, 12.0;
+
+  PersistentOsqpSolver solver(
+    ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto outcome = solver.solve(
+    quadratic, constraints, cost, lower, upper);
+
+  ASSERT_TRUE(outcome.result.has_value()) << outcome.failure_detail;
+  // A violation is certified against the side it crosses. The zero lower
+  // bound therefore owns a 0.001 tolerance even though the opposite bound is
+  // 12, and maps directly to OSQP's 0.001 absolute tolerance.
+  EXPECT_NEAR(outcome.telemetry.maximum_row_scale, 1.0, 1e-9);
+  EXPECT_DOUBLE_EQ(outcome.telemetry.relative_tolerance, 0.0);
+}
+
+TEST(PersistentOsqpSolver, ExplicitVariableScalingCertifiesCoupledMixedUnitChain)
+{
+  constexpr int stage_count = 20;
+  constexpr int progress_count = stage_count + 1;
+  constexpr int curvature_count = stage_count;
+  constexpr int acceleration_index = progress_count + curvature_count;
+  constexpr int variable_count = acceleration_index + 1;
+  constexpr int dynamics_count = progress_count;
+  constexpr int box_count = variable_count;
+  constexpr int rate_count = stage_count;
+  constexpr int constraint_count = dynamics_count + box_count + rate_count;
+
+  std::vector<double> diagonal(static_cast<std::size_t>(variable_count), 1.0);
+  Eigen::VectorXd cost = Eigen::VectorXd::Zero(variable_count);
+  for (int stage = 0; stage < progress_count; ++stage) {
+    const double reference = static_cast<double>(stage);
+    cost[stage] = -reference;
+  }
+  for (int stage = 0; stage < curvature_count; ++stage) {
+    const int index = progress_count + stage;
+    diagonal[static_cast<std::size_t>(index)] = 100.0;
+    cost[index] = -25.0;
+  }
+  cost[acceleration_index] = -1.38;
+
+  Eigen::SparseMatrix<double> constraints(constraint_count, variable_count);
+  std::vector<Eigen::Triplet<double>> entries;
+  entries.emplace_back(0, 0, 1.0);
+  for (int stage = 1; stage < progress_count; ++stage) {
+    entries.emplace_back(stage, stage - 1, -1.0);
+    entries.emplace_back(stage, stage, 1.0);
+  }
+  for (int index = 0; index < variable_count; ++index) {
+    entries.emplace_back(dynamics_count + index, index, 1.0);
+  }
+  const int rate_offset = dynamics_count + box_count;
+  entries.emplace_back(rate_offset, progress_count, 1.0);
+  for (int stage = 1; stage < stage_count; ++stage) {
+    entries.emplace_back(rate_offset + stage, progress_count + stage - 1, -1.0);
+    entries.emplace_back(rate_offset + stage, progress_count + stage, 1.0);
+  }
+  constraints.setFromTriplets(entries.begin(), entries.end());
+
+  Eigen::VectorXd lower = Eigen::VectorXd::Zero(constraint_count);
+  Eigen::VectorXd upper = Eigen::VectorXd::Zero(constraint_count);
+  for (int stage = 1; stage < progress_count; ++stage) {
+    lower[stage] = 1.0;
+    upper[stage] = 1.0;
+  }
+  const int box_offset = dynamics_count;
+  for (int stage = 0; stage < progress_count; ++stage) {
+    lower[box_offset + stage] = 0.0;
+    upper[box_offset + stage] = 20.0;
+  }
+  for (int stage = 0; stage < curvature_count; ++stage) {
+    lower[box_offset + progress_count + stage] = -0.25;
+    upper[box_offset + progress_count + stage] = 0.25;
+  }
+  lower[box_offset + acceleration_index] = -3.0;
+  upper[box_offset + acceleration_index] = 1.37;
+  for (int stage = 0; stage < rate_count; ++stage) {
+    lower[rate_offset + stage] = -0.001;
+    upper[rate_offset + stage] = 0.001;
+  }
+
+  PersistentOsqpSolver row_only(
+    ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto variable_scaling = derive_box_variable_coordinate_scaling(
+    lower.segment(box_offset, variable_count),
+    upper.segment(box_offset, variable_count));
+  ASSERT_TRUE(variable_scaling.has_value());
+  const auto outcome = row_only.solve(
+    diagonal_matrix(diagonal), constraints, cost, lower, upper,
+    std::nullopt, variable_scaling);
+
+  ASSERT_TRUE(outcome.result.has_value()) << outcome.failure_detail;
+  EXPECT_LE(outcome.result->maximum_normalized_constraint_violation, 1.0);
+  EXPECT_NEAR(outcome.result->primal[acceleration_index], 1.37, 5e-3);
+  EXPECT_NEAR(outcome.result->primal[progress_count], 0.001, 3e-3);
+}
+
 TEST(PersistentOsqpSolver, NormalizedWarmStartKeepsDualInPhysicalCoordinates)
 {
   PersistentOsqpSolver solver(
@@ -355,6 +512,42 @@ TEST(PersistentOsqpSolver, NormalizedWarmStartKeepsDualInPhysicalCoordinates)
   EXPECT_NEAR(second.result->dual[0], 1.5, 5e-3);
   EXPECT_LE(
     second.result->maximum_normalized_constraint_violation, 1.0);
+}
+
+TEST(PersistentOsqpSolver, VariableScalingPreservesPhysicalPrimalAndDual)
+{
+  PersistentOsqpSolver solver(
+    ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto quadratic = diagonal_matrix({1.0});
+  const auto constraints = identity_constraints(1);
+  Eigen::VectorXd cost(1);
+  cost << -2.0;
+  Eigen::VectorXd lower(1);
+  lower << 0.0;
+  Eigen::VectorXd upper(1);
+  upper << 1.0;
+  Eigen::VectorXd scale(1);
+  scale << 3.0;
+
+  const auto first = solver.solve(
+    quadratic, constraints, cost, lower, upper, std::nullopt,
+    VariableCoordinateScaling{scale});
+  ASSERT_TRUE(first.result.has_value()) << first.failure_detail;
+  EXPECT_TRUE(first.telemetry.variable_coordinate_scaled);
+  EXPECT_DOUBLE_EQ(first.telemetry.minimum_variable_scale, 3.0);
+  EXPECT_DOUBLE_EQ(first.telemetry.maximum_variable_scale, 3.0);
+  EXPECT_NEAR(first.result->primal[0], 1.0, 5e-3);
+  EXPECT_NEAR(first.result->dual[0], 1.0, 5e-3);
+
+  upper << 0.5;
+  const auto second = solver.solve(
+    quadratic, constraints, cost, lower, upper,
+    WarmStart{first.result->primal, first.result->dual},
+    VariableCoordinateScaling{scale});
+  ASSERT_TRUE(second.result.has_value()) << second.failure_detail;
+  EXPECT_TRUE(second.telemetry.warm_start_applied);
+  EXPECT_NEAR(second.result->primal[0], 0.5, 5e-3);
+  EXPECT_NEAR(second.result->dual[0], 1.5, 5e-3);
 }
 
 TEST(PersistentOsqpSolver, RebuildsWhenSparsityDimensionsChange) {

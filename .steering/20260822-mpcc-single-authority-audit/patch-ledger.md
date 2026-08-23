@@ -26,6 +26,7 @@ history is too opaque to infer intent safely and must be resolved before deletio
 | Dynamic Escape retained execution lease | `d78cba9`, `b079830`, `dc51093` | Prevent fresh-candidate gaps from dropping lateral authority | Necessary while candidate and execution lifetimes are separate; still adds handoff states | I-02, I-13 | Keep until canonical solve owns every cycle | Receding canonical MPCC or bounded same-certificate continuation replaces the lease |
 | Central decision trace/authority resolver | `db430a1`, `4806298`, `6bc809f` | Make final owner and transition reasons observable | Does not itself enforce one solver/certificate authority | I-14 | Keep and generalize | Trace is emitted from `FinalControlDecision` and uses canonical fingerprint |
 | Stuck Recovery | multiple July recovery commits; current spec marks it separate | Recover from stopped/contact/gear conditions outside forward model | Can mask normal-control wall departure if analysis begins at Recovery entry | I-09, I-10 | Keep separate | Recovery entry records the upstream normal-control failure fingerprint |
+| Five-state mixed-unit solver admission / `RowToleranceNormalized` | `a56c19e`, 20260824 nondimensionalization Slice | Make OSQP convergence and physical execution certificate use one row contract | Distant asymmetric bounds and global relative tolerance previously relaxed the crossed side | I-02, I-04 | Repaired for all five-state contexts | Repeat live Overtake Gate, then delete remaining three-state/global authority |
 
 ## Patch concentration finding
 

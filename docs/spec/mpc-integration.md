@@ -243,6 +243,14 @@ Follow canonical solverは`RowToleranceNormalized`で各rowを物理許容差へ
 不成立とEmergency Stopが増えることをreplayで確認したため、Track/Cruiseは別の
 failure-first sliceで定式化・scalingを監査するまで従来policyを維持する。
 
+2026-08-24のfailure-first監査により、5-state QPはTrack/Cruiseを含む全contextで同じ
+数値契約へ統一した。各変数は有限box boundから導いた物理scaleで座標変換し、各制約rowは
+上下限のうち厳しい側の物理許容差をOSQPのabsolute toleranceへ写像する。物理relative
+toleranceはrow scaleへ一度だけ埋め込み、`RowToleranceNormalized`内部ではglobalな
+`eps_rel`を0として二重適用を禁止する。返却後は元の物理`A/l/u`ですべてのrowを再証明し、
+primal/dual warm startも同一scaleで往復変換する。これは車両制約値の緩和ではなく、solverと
+certificateが異なる許容差を使っていた契約不良の修正である。
+
 2026-08-22のshadow A/Bでは、exact headingによるpost-solve physical certificateをhard oracleとして
 維持した。post-solve再solve、reference-heading固定の横box、単一勾配による横位置・姿勢結合rowは、
 いずれも40 Hz超過またはQP不成立を増やし、非線形の向き付き車体footprintを保守的に証明できなかった

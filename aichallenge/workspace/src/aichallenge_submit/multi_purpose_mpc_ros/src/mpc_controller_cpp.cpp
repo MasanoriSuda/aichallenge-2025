@@ -5408,6 +5408,7 @@ struct ExtendedProgressMpcProblem
   Eigen::VectorXd u;
   Eigen::SparseMatrix<double> P;
   Eigen::SparseMatrix<double> A;
+  persistent_osqp::VariableCoordinateScaling variable_scaling;
   int N{};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
   double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
@@ -5703,6 +5704,9 @@ struct TrackCruiseShadowCycleResult
   int solver_scaling_iterations{};
   bool solver_scaled_termination{false};
   bool solver_row_tolerance_preconditioned{false};
+  bool solver_variable_coordinate_scaled{false};
+  double solver_minimum_variable_scale{1.0};
+  double solver_maximum_variable_scale{1.0};
   double solver_maximum_row_scale{1.0};
   double solver_physical_constraint_scale{
     std::numeric_limits<double>::quiet_NaN()};
@@ -6356,7 +6360,8 @@ struct MPC
       cfg.progress_contouring.extended_dynamics_enabled)
     {
       track_cruise_shadow_solver_context_ =
-        std::make_shared<ExtendedBranchSolverContext>();
+        std::make_shared<ExtendedBranchSolverContext>(
+        kCanonicalPhysicalRowTolerancePolicy);
       follow_canonical_lifecycle_->solver_context =
         std::make_shared<ExtendedBranchSolverContext>(
         kCanonicalPhysicalRowTolerancePolicy);
@@ -19863,6 +19868,13 @@ struct MPC
     Eigen::VectorXd box_upper(variable_count);
     box_lower << state_lower, input_lower;
     box_upper << state_upper, input_upper;
+    const auto variable_scaling =
+      persistent_osqp::derive_box_variable_coordinate_scaling(
+      box_lower, box_upper);
+    if (!variable_scaling.has_value()) {
+      reject_reason = "extended MPCC variable scaling invalid";
+      return std::nullopt;
+    }
     Eigen::VectorXd rate_lower(N);
     Eigen::VectorXd rate_upper(N);
     const double previous_curvature = std::tan(previous_steering) / model->length;
@@ -20073,7 +20085,8 @@ struct MPC
         static_cast<std::size_t>(N), 2U});
     return ExtendedProgressMpcProblem{
       std::move(q), std::move(lower), std::move(upper),
-      std::move(quadratic_cost), std::move(constraints), N,
+      std::move(quadratic_cost), std::move(constraints),
+      std::move(variable_scaling.value()), N,
       legacy.progress_origin_m, initial_lag_m,
       wall_aware_reference_adjustment_count,
       minimum_wall_tracking_weight_scale,
@@ -20238,7 +20251,8 @@ struct MPC
       }
     }
     auto outcome = solver->solve(
-      problem.P, problem.A, problem.q, problem.l, problem.u, warm_start);
+      problem.P, problem.A, problem.q, problem.l, problem.u, warm_start,
+      problem.variable_scaling);
     last_extended_branch_warm_start_applied_ =
       outcome.telemetry.warm_start_applied;
     if (
@@ -20274,7 +20288,8 @@ struct MPC
           outcome.result->primal, outcome.result->dual};
         auto refined_outcome = solver->solve(
           refined_problem.P, refined_problem.A, refined_problem.q,
-          refined_problem.l, refined_problem.u, refinement_warm_start);
+          refined_problem.l, refined_problem.u, refinement_warm_start,
+          refined_problem.variable_scaling);
         auto combined_telemetry = outcome.telemetry;
         combined_telemetry.setup_performed =
           combined_telemetry.setup_performed ||
@@ -20331,6 +20346,12 @@ struct MPC
             refined_outcome.telemetry.scaled_termination;
           combined_telemetry.row_tolerance_preconditioned =
             refined_outcome.telemetry.row_tolerance_preconditioned;
+          combined_telemetry.variable_coordinate_scaled =
+            refined_outcome.telemetry.variable_coordinate_scaled;
+          combined_telemetry.minimum_variable_scale =
+            refined_outcome.telemetry.minimum_variable_scale;
+          combined_telemetry.maximum_variable_scale =
+            refined_outcome.telemetry.maximum_variable_scale;
           combined_telemetry.maximum_row_scale =
             refined_outcome.telemetry.maximum_row_scale;
           combined_telemetry.physical_constraint_scale =
@@ -23944,6 +23965,11 @@ struct MPC
         (result.solver_row_tolerance_preconditioned ? "1" : "0") + "/" +
         std::to_string(result.solver_maximum_row_scale) +
         "(abs/rel/scaling/scaled/row_norm/max_row_scale)" +
+        ", variable_scale=" +
+        (result.solver_variable_coordinate_scaled ? "1" : "0") + "/" +
+        std::to_string(result.solver_minimum_variable_scale) + "/" +
+        std::to_string(result.solver_maximum_variable_scale) +
+        "(active/min/max)" +
         ", solver_constraint=" +
         std::to_string(
         result.solver_maximum_absolute_constraint_violation) + "/" +
@@ -25023,6 +25049,12 @@ struct MPC
         outcome.telemetry.scaled_termination;
       result.solver_row_tolerance_preconditioned =
         outcome.telemetry.row_tolerance_preconditioned;
+      result.solver_variable_coordinate_scaled =
+        outcome.telemetry.variable_coordinate_scaled;
+      result.solver_minimum_variable_scale =
+        outcome.telemetry.minimum_variable_scale;
+      result.solver_maximum_variable_scale =
+        outcome.telemetry.maximum_variable_scale;
       result.solver_maximum_row_scale =
         outcome.telemetry.maximum_row_scale;
       result.solver_physical_constraint_scale =

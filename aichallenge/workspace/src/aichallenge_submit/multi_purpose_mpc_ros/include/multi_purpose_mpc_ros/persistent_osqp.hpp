@@ -19,6 +19,21 @@ struct WarmStart
   Eigen::VectorXd dual;
 };
 
+/// Diagonal change of variables used only inside the numerical solver.
+/// `physical = physical_units_per_solver_unit * solver_coordinate`.
+/// Callers, certificates and warm-start stores remain in physical units.
+struct VariableCoordinateScaling
+{
+  Eigen::VectorXd physical_units_per_solver_unit;
+};
+
+/// Derive a unit scale from the finite physical box bounds of each variable.
+/// A coordinate with no non-zero finite bound uses the neutral scale 1.0.
+std::optional<VariableCoordinateScaling>
+derive_box_variable_coordinate_scaling(
+  const Eigen::VectorXd & lower_bound,
+  const Eigen::VectorXd & upper_bound) noexcept;
+
 /// One certified five-state warm-start artifact. The progress origin belongs
 /// to the same solved horizon as the primal/dual and must never be updated on
 /// its own.
@@ -86,6 +101,9 @@ struct SolveTelemetry
   int scaling_iterations{};
   bool scaled_termination{false};
   bool row_tolerance_preconditioned{false};
+  bool variable_coordinate_scaled{false};
+  double minimum_variable_scale{1.0};
+  double maximum_variable_scale{1.0};
   double maximum_row_scale{1.0};
   double physical_constraint_scale{
     std::numeric_limits<double>::quiet_NaN()};
@@ -194,7 +212,9 @@ public:
     const Eigen::VectorXd & linear_cost,
     const Eigen::VectorXd & lower_bound,
     const Eigen::VectorXd & upper_bound,
-    const std::optional<WarmStart> & warm_start = std::nullopt);
+    const std::optional<WarmStart> & warm_start = std::nullopt,
+    const std::optional<VariableCoordinateScaling> & variable_scaling =
+    std::nullopt);
 
   void reset() noexcept;
   bool initialized() const noexcept;

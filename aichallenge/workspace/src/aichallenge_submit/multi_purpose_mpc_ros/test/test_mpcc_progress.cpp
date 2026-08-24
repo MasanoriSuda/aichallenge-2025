@@ -207,7 +207,7 @@ TEST(MpccProgress, ExtendedModelAdvancesVelocityAndVirtualProgress)
   const auto result =
     multi_purpose_mpc_ros::mpcc_progress::linearize_extended_temporal_frenet(
     ExtendedLinearizationRequest{
-      0.0, 0.0, 0.0, 5.0, 10.0, 1.0, 0.0, 0.0, 5.0, 0.5, Config{}});
+      0.0, 0.0, 0.0, 5.0, 10.0, 1.0, 0.0, 0.0, 5.0, 0.1, Config{}});
   ASSERT_TRUE(result.has_value());
   EXPECT_NEAR(result->stage_dt_sec, 0.1, 1e-12);
   Eigen::Matrix<double, kExtendedStateDimension, 1> state;
@@ -232,7 +232,7 @@ TEST(MpccProgress, ExtendedModelExposesPhysicalVirtualProgressLag)
   const auto result =
     multi_purpose_mpc_ros::mpcc_progress::linearize_extended_temporal_frenet(
     ExtendedLinearizationRequest{
-      0.0, 0.0, 0.0, 5.0, 10.0, 0.0, 0.0, 0.0, 4.0, 0.5, Config{}});
+      0.0, 0.0, 0.0, 5.0, 10.0, 0.0, 0.0, 0.0, 4.0, 0.1, Config{}});
   ASSERT_TRUE(result.has_value());
   Eigen::Matrix<double, kExtendedStateDimension, 1> state;
   state << 0.0, 0.0, 0.0, 5.0, 10.0;

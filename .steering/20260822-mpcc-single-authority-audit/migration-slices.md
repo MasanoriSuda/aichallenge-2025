@@ -607,6 +607,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   to Pass while canonical authority was unavailable, after which Pass QPs repeatedly reached
   maximum iterations. Audit atomic canonical phase-transition admission next; do not restore a
   Mission-exit fallback or tune solver/wall parameters in response.
+- `.steering/20260824-rejoin-canonical-production-gate` closes the remaining Rejoin normal-authority
+  switch. Failure-first evidence showed that the fixed delay-compensated state zero and its first
+  affine dynamics block used different linearization anchors. Stage zero is now tangent at the
+  actual Frenet state, measured speed and reachable curvature while immutable stage timing remains
+  unchanged. The qualified Rejoin boundary publishes only a fresh physically certified five-state
+  command or explicit Emergency; retained Rejoin stays unavailable and the legacy three-state
+  fallthrough is unreachable. In post-promotion run `output/20260824-192226`, all 83 Rejoin problems
+  solved, 69 were physically certified, 14 failed closed on exact wall proof, no sampled Rejoin
+  decision used legacy normal authority, and Recovery exited once. This is a structural Slice 5
+  pass, not a claim that Overtake runtime quality is complete; the wall-reject/Emergency tail and
+  unexercised Pass/Return scenario coverage remain later acceptance work.
 
 ## Slice 6: Legacy and migration path removal
 

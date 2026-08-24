@@ -1842,6 +1842,28 @@ toleranceを超える周期が残る。その周期は後段でfail closeして�
 ならない。全constraint rowの一括scaleは`output/20260823-063519`で収束率0%へ退行したため撤回済み
 である。この数値定式化は別Sliceでfailure-firstに扱い、本Sliceへsolver設定調整やfallbackを混ぜない。
 
+#### Rejoin canonical production authority（2026-08-24、2025由来の暫定）
+
+OvertakeLineの`Recovery`から通常ラインへ戻る`ControlIntent::Rejoin`は、専用solver context、
+warm-start identity、plan storeを持つvelocity-progress 5-state MPCCだけを通常出力権限とする。
+当周期のfresh解が数値・物理・canonical artifact証明をすべて満たす場合だけpublishし、証明できない
+周期は明示Emergency Stopへ移る。Rejoinにはcurrent-world semanticsを定義したretained証明がまだ
+存在しないため、plan ageだけで直前解を再利用しない。legacy 3-state normal solverへのfallthroughは
+削除し、EmergencyおよびStuck/gear/reverse Recoveryは独立した上位authorityとして維持する。
+
+5-state問題の固定state zeroはdelay補償後の実行poseである。そのstateから出る最初のaffine dynamics
+だけは、同じ実測Frenet lateral/lag/heading、実測速度、現在到達可能な曲率で線形化する。desired path
+とdesired velocityで最初の遷移を線形化すると、固定stateと異なる接点からstage 1を予測し、QP可行でも
+exact footprint証明と実行commandが一致しない。stage時間はlinearization anchorから逆算せず、既存の
+immutable stage-geometry scheduleを正本とする。stage 1以降は従来どおりnominal trajectoryを接点にする。
+
+修正前の`output/20260824-191213`では、最初の1周期だけmaximum iterationsへ到達した後、33/33周期が
+fresh physical certificateを通過した。production昇格後の`output/20260824-192226`では83/83周期がsolveし、
+69周期がfresh canonical、14周期がhard-wallまたはswept-wall不成立としてfail closeした。最終decision
+traceでRejoinのlegacy normal sourceとcontract join failureは0、Recoveryからの離脱は1回確認した。
+したがってsingle-authority構造は合格とするが、物理reject期間のEmergency率と25 ms callback超過は
+Overtake実用品質の残課題であり、wall margin緩和やretained fallbackで隠してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

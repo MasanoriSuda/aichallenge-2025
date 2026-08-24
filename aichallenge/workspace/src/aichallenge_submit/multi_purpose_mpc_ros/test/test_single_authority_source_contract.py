@@ -456,8 +456,8 @@ def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:
     assert "dynamic wait has no executable canonical lateral authority" in before_old_path
 
 
-def test_rejoin_is_observed_by_an_isolated_shadow_without_production_promotion() -> None:
-    """Recovery evidence must not silently promote or share Track/Cruise state."""
+def test_rejoin_uses_isolated_canonical_production_without_legacy_fallthrough() -> None:
+    """Qualified Rejoin must publish canonical or Emergency, never legacy normal."""
 
     activation_start = SOURCE.index(
         "const bool progress_contouring_execution_phase ="
@@ -487,9 +487,41 @@ def test_rejoin_is_observed_by_an_isolated_shadow_without_production_promotion()
     assert rejoin_shadow < old_path_start
     observation = SOURCE[rejoin_shadow:old_path_start]
     assert "CanonicalNormalShadowMode::Rejoin" in observation
-    assert "record_rejoin_shadow_telemetry" in observation
-    assert "return canonical_normal_control(" not in observation
-    assert "return canonical_normal_emergency_stop(" not in observation
+    assert "record_rejoin_canonical_telemetry" in observation
+    assert "return canonical_normal_control(" in observation
+    assert "return canonical_normal_emergency_stop(" in observation
+    assert "canonical_result.selected.complete()" in observation
+    assert "legacy command" not in observation
+
+    telemetry_start = SOURCE.index("void record_rejoin_canonical_telemetry(")
+    telemetry_end = SOURCE.index("void record_overtake_canonical", telemetry_start)
+    telemetry = SOURCE[telemetry_start:telemetry_end]
+    assert "production_authority=canonical" in telemetry
+    assert "authority=production" in telemetry
+    assert "legacy-unchanged" not in telemetry
+
+
+def test_extended_first_stage_linearization_is_anchored_to_the_execution_state() -> None:
+    """The first affine dynamics block must be tangent at the fixed state zero."""
+
+    builder_start = SOURCE.index(
+        "std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem("
+    )
+    builder_end = SOURCE.index(
+        "relinearize_extended_progress_wall_bounds(", builder_start
+    )
+    builder = SOURCE[builder_start:builder_end]
+    assert "const bool initial_stage = stage == 0;" in builder
+    assert "initial_stage ? initial_frenet_pose->lateral_m" in builder
+    assert "initial_stage ? initial_lag_m" in builder
+    assert re.search(
+        r"initial_stage\s*\?\s*initial_frenet_pose->heading_offset_rad", builder
+    )
+    assert re.search(
+        r"initial_stage\s*\?\s*legacy\.progress_measured_speed_mps", builder
+    )
+    assert "initial_stage ? previous_curvature" in builder
+    assert "legacy.progress_stage_dt_sec[static_cast<std::size_t>(stage)]" in builder
 
 
 def test_canonical_overtake_wall_certificate_is_not_reinterpreted_downstream() -> None:

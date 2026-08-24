@@ -290,7 +290,10 @@ struct ExtendedLinearizationRequest
   double reference_path_curvature_radpm{};
   double reference_input_curvature_radpm{};
   double reference_virtual_progress_speed_mps{};
-  double stage_distance_m{};
+  /// Time represented by this dynamics transition.  It is supplied by the
+  /// immutable stage-geometry schedule so changing the linearization anchor
+  /// (notably state zero) cannot silently change the horizon timing.
+  double stage_dt_sec{};
   Config config;
 };
 

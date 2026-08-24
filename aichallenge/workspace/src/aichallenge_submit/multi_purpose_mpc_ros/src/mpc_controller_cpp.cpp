@@ -20261,8 +20261,19 @@ struct MPC
     linearizations.reserve(static_cast<std::size_t>(N));
     std::vector<double> acceleration_reference(static_cast<std::size_t>(N), 0.0);
     std::vector<double> virtual_progress_reference(static_cast<std::size_t>(N), 0.0);
+    const double previous_curvature = std::tan(previous_steering) / model->length;
     for (int stage = 0; stage < N; ++stage) {
-      const double velocity = velocity_horizon->reference_velocity_mps[static_cast<std::size_t>(stage)];
+      // State zero is a hard equality at the delay-compensated execution
+      // pose.  The first affine dynamics block must therefore be tangent at
+      // that same state and the currently reachable curvature.  Linearizing
+      // it at the desired path/velocity creates a different stage-one pose;
+      // the QP can then be numerically feasible while its reconstructed
+      // footprint disagrees with the command that will actually execute.
+      const bool initial_stage = stage == 0;
+      const double nominal_velocity =
+        velocity_horizon->reference_velocity_mps[static_cast<std::size_t>(stage)];
+      const double velocity = initial_stage ?
+        legacy.progress_measured_speed_mps : nominal_velocity;
       const double next_velocity = stage + 1 < N ?
         velocity_horizon->reference_velocity_mps[static_cast<std::size_t>(stage + 1)] :
         velocity_horizon->terminal_target_velocity_mps;
@@ -20272,9 +20283,14 @@ struct MPC
         return std::nullopt;
       }
       const double acceleration = clip((next_velocity - velocity) / dt, cfg.a_min, cfg.a_max);
-      const double lateral = legacy.progress_reference_state[legacy_nx * stage];
-      const double heading = legacy.progress_reference_state[legacy_nx * stage + 1];
-      const double progress = legacy.follow_shadow_requested ?
+      const double lateral = initial_stage ? initial_frenet_pose->lateral_m :
+        legacy.progress_reference_state[legacy_nx * stage];
+      const double lag = initial_stage ? initial_lag_m : 0.0;
+      const double heading = initial_stage ?
+        initial_frenet_pose->heading_offset_rad :
+        legacy.progress_reference_state[legacy_nx * stage + 1];
+      const double progress = initial_stage ? 0.0 :
+        legacy.follow_shadow_requested ?
         legacy.follow_longitudinal_contract.progress_reference_m[
         static_cast<std::size_t>(stage)] :
         legacy.progress_reference_state[legacy_nx * stage + 2] -
@@ -20291,13 +20307,12 @@ struct MPC
       }
       const double virtual_progress_speed = std::max(
         0.0, velocity * std::cos(heading) / denominator);
+      const double input_curvature = initial_stage ? previous_curvature :
+        legacy.progress_input_reference[legacy_nu * stage + 1];
       const auto linearization = mpcc_progress::linearize_extended_temporal_frenet(
         mpcc_progress::ExtendedLinearizationRequest{
-          lateral, 0.0, heading, velocity, progress, acceleration,
-          path_curvature,
-          legacy.progress_input_reference[legacy_nu * stage + 1],
-          virtual_progress_speed,
-          legacy.progress_stage_distance_m[static_cast<std::size_t>(stage)],
+          lateral, lag, heading, velocity, progress, acceleration,
+          path_curvature, input_curvature, virtual_progress_speed, dt,
           cfg.progress_contouring});
       if (!linearization.has_value()) {
         reject_reason = "extended MPCC linearization rejected stage " +
@@ -20537,7 +20552,6 @@ struct MPC
     }
     Eigen::VectorXd rate_lower(N);
     Eigen::VectorXd rate_upper(N);
-    const double previous_curvature = std::tan(previous_steering) / model->length;
     // Row zero remains structurally present so certified dual warm-start
     // layouts do not migrate in this Slice, but its duplicate bound is
     // inactive. Inter-stage curvature-rate rows remain hard constraints.
@@ -25431,13 +25445,13 @@ struct MPC
     last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
   }
 
-  void record_rejoin_shadow_telemetry(
+  void record_rejoin_canonical_telemetry(
     const TrackCruiseShadowCycleResult & result, const double now_sec)
   {
     if (!result.eligible) {
       return;
     }
-    auto & window = rejoin_shadow_telemetry_window_;
+    auto & window = rejoin_canonical_telemetry_window_;
     ++window.eligible_count;
     window.metadata_count += result.metadata_available ? 1U : 0U;
     window.build_count += result.build_succeeded ? 1U : 0U;
@@ -25469,13 +25483,13 @@ struct MPC
       status_key += mpcc_contract::physical_wall_certificate_reason_name(
         result.physical_wall_diagnostic.reason);
     }
-    if (status_key != last_rejoin_shadow_status_) {
+    if (status_key != last_rejoin_canonical_status_) {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "Rejoin canonical shadow outcome: decision=%lu, status=%s, detail=%s, "
+        "Rejoin canonical production outcome: decision=%lu, status=%s, detail=%s, "
         "solve=%d/%d, physical=%d/%s, canonical=%d/%d/%d, "
         "retained=disabled, solve_ms=%.3f, total_ms=%.3f, "
-        "production_authority=legacy-unchanged, selected=0",
+        "production_authority=canonical, selected=%d",
         static_cast<unsigned long>(result.decision_id), result.status.c_str(),
         result.detail.c_str(), result.solved ? 1 : 0, result.iterations,
         result.physically_certified ? 1 : 0,
@@ -25484,14 +25498,14 @@ struct MPC
         result.canonical_plan_extracted ? 1 : 0,
         result.canonical_fresh_authority_ready ? 1 : 0,
         result.canonical_actuation_extracted ? 1 : 0,
-        result.solve_ms, result.total_ms);
-      last_rejoin_shadow_status_ = std::move(status_key);
+        result.solve_ms, result.total_ms, result.selected.complete() ? 1 : 0);
+      last_rejoin_canonical_status_ = std::move(status_key);
     }
     if (
       !std::isfinite(now_sec) ||
-      (std::isfinite(last_rejoin_shadow_telemetry_log_sec_) &&
-      now_sec >= last_rejoin_shadow_telemetry_log_sec_ &&
-      now_sec - last_rejoin_shadow_telemetry_log_sec_ < 1.0))
+      (std::isfinite(last_rejoin_canonical_telemetry_log_sec_) &&
+      now_sec >= last_rejoin_canonical_telemetry_log_sec_ &&
+      now_sec - last_rejoin_canonical_telemetry_log_sec_ < 1.0))
     {
       return;
     }
@@ -25499,14 +25513,14 @@ struct MPC
       std::max<std::uint64_t>(1U, window.attempt_count));
     RCLCPP_INFO(
       rclcpp::get_logger("mpc_controller"),
-      "Rejoin canonical shadow: eligible=%lu, metadata=%lu, build=%lu, "
+      "Rejoin canonical production: eligible=%lu, metadata=%lu, build=%lu, "
       "attempt=%lu, solved=%lu, finite=%lu, constraint=%lu, primal=%lu, "
       "physical=%lu/%lu(check/certified), canonical=%lu/%lu/%lu/%lu"
       "(extract/store/authority/actuation), physical_rejects="
       "invalid:%lu/bound:%lu/heading:%lu/sample:%lu/contact:%lu/"
       "current_sample:%lu/current_contact:%lu/course_frame:%lu/swept:%lu, "
       "solve_ms=%.3f/%.3f(avg/max), total_ms=%.3f/%.3f(avg/max), "
-      "iterations=%.1f/%d(avg/max), last=%s, authority=shadow",
+      "iterations=%.1f/%d(avg/max), last=%s, authority=production",
       static_cast<unsigned long>(window.eligible_count),
       static_cast<unsigned long>(window.metadata_count),
       static_cast<unsigned long>(window.build_count),
@@ -25539,7 +25553,7 @@ struct MPC
       static_cast<double>(window.total_iterations) / attempted,
       window.maximum_iterations, result.status.c_str());
     window = TrackCruiseShadowTelemetryWindow{};
-    last_rejoin_shadow_telemetry_log_sec_ = now_sec;
+    last_rejoin_canonical_telemetry_log_sec_ = now_sec;
   }
 
   OvertakeCanonicalFreshShadowResult make_overtake_canonical_shadow_result(
@@ -28829,12 +28843,18 @@ struct MPC
           canonical_result.status + "/" + canonical_result.retained_detail);
       }
       if (problem.rejoin_shadow_requested) {
-        // Rejoin remains observation-only in this Slice.  The legacy command
-        // below is deliberately unchanged until dynamic evidence proves the
-        // complete five-state chain and a retained/current-world policy.
+        record_problem_context(
+          problem, mpcc_contract::Formulation::VelocityProgress5State);
         const auto canonical_result = evaluate_canonical_normal_shadow(
           problem, now_sec, CanonicalNormalShadowMode::Rejoin);
-        record_rejoin_shadow_telemetry(canonical_result, now_sec);
+        record_rejoin_canonical_telemetry(canonical_result, now_sec);
+        if (canonical_result.selected.complete()) {
+          return canonical_normal_control(
+            problem, canonical_result.intent, canonical_result.selected);
+        }
+        return canonical_normal_emergency_stop(
+          problem, canonical_result.intent,
+          canonical_result.status + "/" + canonical_result.retained_detail);
       }
       Eigen::VectorXd dec;
       double maximum_constraint_violation = 0.0;
@@ -29889,10 +29909,10 @@ struct MPC
   TrackCruiseShadowTelemetryWindow track_cruise_shadow_telemetry_window_;
   double last_track_cruise_shadow_telemetry_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
-  TrackCruiseShadowTelemetryWindow rejoin_shadow_telemetry_window_;
-  double last_rejoin_shadow_telemetry_log_sec_{
+  TrackCruiseShadowTelemetryWindow rejoin_canonical_telemetry_window_;
+  double last_rejoin_canonical_telemetry_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
-  std::string last_rejoin_shadow_status_;
+  std::string last_rejoin_canonical_status_;
   std::optional<CanonicalNormalPendingActuation>
   pending_canonical_normal_actuation_;
   CanonicalNormalFinalActuationTelemetryWindow

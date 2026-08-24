@@ -449,17 +449,16 @@ std::optional<ExtendedLinearization> linearize_extended_temporal_frenet(
     !std::isfinite(request.reference_input_curvature_radpm) ||
     !std::isfinite(request.reference_virtual_progress_speed_mps) ||
     request.reference_virtual_progress_speed_mps < 0.0 ||
-    !std::isfinite(request.stage_distance_m) || request.stage_distance_m <= 0.0)
+    !std::isfinite(request.stage_dt_sec) ||
+    request.stage_dt_sec < request.config.minimum_stage_dt_sec ||
+    request.stage_dt_sec > request.config.maximum_stage_dt_sec)
   {
     return std::nullopt;
   }
 
   const double reference_velocity = std::max(
     request.config.minimum_reference_speed_mps, request.reference_velocity_mps);
-  const double stage_dt = std::clamp(
-    request.stage_distance_m / reference_velocity,
-    request.config.minimum_stage_dt_sec,
-    request.config.maximum_stage_dt_sec);
+  const double stage_dt = request.stage_dt_sec;
   const double lateral = request.reference_lateral_m;
   const double heading = request.reference_heading_rad;
   const double path_curvature = request.reference_path_curvature_radpm;

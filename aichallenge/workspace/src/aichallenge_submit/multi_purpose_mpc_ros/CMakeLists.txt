@@ -113,6 +113,20 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_problem
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_shadow STATIC
+  src/mpcc_rate_resolved_shadow.cpp
+)
+target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved_shadow PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_shadow
+  ${PROJECT_NAME}_mpcc_rate_resolved_adapter
+  ${PROJECT_NAME}_persistent_osqp
+  Threads::Threads
+)
+
 ament_auto_add_library(${PROJECT_NAME}_mpcc_execution_contract SHARED
   NO_TARGET_LINK_LIBRARIES
   src/mpcc_execution_contract.cpp
@@ -248,6 +262,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_canonical_retained_world_revalidation
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_mpcc_progress
+  ${PROJECT_NAME}_mpcc_rate_resolved_shadow
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_latest_only_worker
@@ -318,6 +333,18 @@ if(BUILD_TESTING)
     target_link_libraries(test_mpcc_rate_resolved_adapter
       ${PROJECT_NAME}_mpcc_rate_resolved_adapter
       ${PROJECT_NAME}_persistent_osqp
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_rate_resolved_shadow
+    test/test_mpcc_rate_resolved_shadow.cpp
+  )
+  if(TARGET test_mpcc_rate_resolved_shadow)
+    target_include_directories(test_mpcc_rate_resolved_shadow PRIVATE
+      ${EIGEN3_INCLUDE_DIRS}
+    )
+    target_link_libraries(test_mpcc_rate_resolved_shadow
+      ${PROJECT_NAME}_mpcc_rate_resolved_shadow
     )
   endif()
 

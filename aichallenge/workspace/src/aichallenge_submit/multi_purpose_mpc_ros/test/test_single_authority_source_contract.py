@@ -789,3 +789,55 @@ def test_runtime_wall_preplanner_cannot_destroy_canonical_mission() -> None:
     assert "transition_overtake_line_phase" not in prefix_failure
     assert "reset_overtake_line_state" not in prefix_failure
     assert "canonical-reference-only" in prefix_failure
+
+
+def test_rate_resolved_track_cruise_runtime_is_observation_only() -> None:
+    """The new six-state runtime path may solve and log, but never own control."""
+
+    submit_start = SOURCE.index(
+        "bool submit_rate_resolved_track_cruise_shadow("
+    )
+    evaluator_start = SOURCE.index(
+        "TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow("
+    )
+    transport = SOURCE[submit_start:evaluator_start]
+    assert "rate_resolved_track_cruise_shadow_worker_->submit_latest(" in transport
+    assert "rate_resolved_track_cruise_shadow_mailbox_->latest_after(" in transport
+    assert "authority=shadow, selected=0" in transport
+    for forbidden in (
+        "canonical_normal_control(",
+        "canonical_normal_emergency_stop(",
+        "track_cruise_shadow_plan_store_.publish(",
+        "record_solution_contract(",
+        "previous_steering =",
+        "current_control =",
+    ):
+        assert forbidden not in transport
+
+    branch_start = SOURCE.index("if (problem.track_cruise_shadow_requested)")
+    branch_end = SOURCE.index("if (problem.rejoin_shadow_requested)", branch_start)
+    branch = SOURCE[branch_start:branch_end]
+    assert "record_rate_resolved_track_cruise_shadow(problem, now_sec);" in branch
+    assert "canonical_result.selected.complete()" in branch
+    assert "rate_resolved" not in branch[branch.index("if (canonical_result") :]
+
+
+def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> None:
+    """Six-state reachability must not inherit the old one-cycle curvature patch."""
+
+    builder_start = SOURCE.index(
+        "std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem("
+    )
+    builder_end = SOURCE.index(
+        "relinearize_extended_progress_wall_bounds(", builder_start
+    )
+    builder = SOURCE[builder_start:builder_end]
+    semantic_start = builder.index("rate_resolved_shadow_request.emplace();")
+    semantic_end = builder.index("Eigen::VectorXd q =", semantic_start)
+    semantic = builder[semantic_start:semantic_end]
+    assert "request.current_steering_rad = previous_steering;" in semantic
+    assert "request.maximum_abs_steering_rate_radps" in semantic
+    assert "first_curvature_input_lower" in semantic
+    assert "first_curvature_input_upper" in semantic
+    assert "physical_first_curvature->reachable_lower_radpm" not in semantic
+    assert "physical_first_curvature->reachable_upper_radpm" not in semantic

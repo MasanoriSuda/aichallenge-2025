@@ -703,6 +703,16 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   11 rejects were publication intervals crossing the first-stage boundary. The reachability Slice
   is accepted. Next implement certified piecewise cross-stage sampling without changing immutable
   stage timing, then repeat the shadow Gate before considering authority migration.
+- `.steering/20260825-rate-resolved-piecewise-publication-sample` closes that time-base boundary.
+  The certified sampler now integrates the whole solved piecewise steering-rate sequence from the
+  immutable semantic steering to the fixed 25 ms publication time. It validates every crossed
+  physical endpoint and the final partial endpoint, removes the obsolete certified single-stage
+  migration API, and does not change stage timing or solver settings. All 1,832 package tests and
+  the 25-package build pass. In final run `output/20260825-015302`, 11 samples explicitly crossed
+  into stage one and all 6,163 solved QPs produced valid samples with zero sampling reject. The
+  Slice is accepted, but production promotion remains blocked by one independent solve reject whose
+  typed detail was overwritten by the aggregate's later solved result. Preserve and classify that
+  failure next; do not add retry, fallback or solver tuning before its cause is known.
 
 ## Slice 6: Legacy and migration path removal
 

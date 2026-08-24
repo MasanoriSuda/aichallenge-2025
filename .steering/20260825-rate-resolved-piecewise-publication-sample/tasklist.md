@@ -7,8 +7,8 @@
 - [x] Add sampled-stage telemetry provenance.
 - [x] Run build, full package tests and authority audit.
 - [x] Commit the static Slice (`172e4d2`).
-- [ ] Run `make dev2` and confirm time rejects disappear.
-- [ ] Record the authority-migration decision.
+- [x] Run `make dev2` and confirm time rejects disappear.
+- [x] Record the authority-migration decision.
 
 ## Definition of Done
 

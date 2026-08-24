@@ -50,4 +50,41 @@ crossing seen in the preceding run actually exercised stage one.
 
 This run is therefore not the final Gate. Aggregate cross-stage count and
 maximum-stage telemetry were added without changing calculation or authority.
-Committed-source revalidation is pending.
+
+### Final run
+
+Committed source `02c7ee5` was exercised with `make dev2`.
+
+Evidence: `output/20260825-015302`.
+
+| Metric | Domain 1 | Domain 2 | Combined |
+|---|---:|---:|---:|
+| submitted | 451 | 5,840 | 6,291 |
+| consumed | 408 | 5,756 | 6,164 |
+| solved and publishable | 408 | 5,755 | 6,163 |
+| sample rejected | 0 | 0 | 0 |
+| cross-stage samples | 0 | 11 | 11 |
+| maximum sampled stage | 0 | 1 | 1 |
+| solve rejected | 0 | 1 | 1 |
+| build / assembly / nonfinite / exception | 0 | 0 | 0 |
+| maximum compute time | 3.565 ms | 12.371 ms | 12.371 ms |
+| maximum solve time | 3.496 ms | 12.295 ms | 12.295 ms |
+
+All 6,163 solved QPs supplied a physically valid publication sample. The 11
+stage-zero crossings were explicitly sampled from stage one rather than being
+discarded, and all sample-rejection categories remained zero. All 80 aggregate
+records retained `authority=shadow, selected=0`; mailbox invalid, rollback and
+unsubmitted counts were zero.
+
+One independent `SolveRejected` result occurred among 6,164 consumed results.
+The current 2-second aggregate retained only the last result, which was solved,
+so its existing typed `Result::detail` was not preserved in the log. This does
+not invalidate the cross-stage sampling proof, but it blocks production
+authority promotion and defines the next failure-first diagnostic Slice.
+
+## Decision
+
+Accept the piecewise publication Slice. The QP-to-publication sample boundary
+is complete for every solved result observed in this Gate, including actual
+cross-stage cases. Do not promote authority yet. First preserve and classify
+the isolated solver reject without adding retry, fallback or solver tuning.

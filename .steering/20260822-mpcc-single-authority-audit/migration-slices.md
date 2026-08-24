@@ -752,6 +752,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   `authority=shadow, selected=0` in all 61 windows. The artifact Gate is accepted. Production remains
   blocked until the same complete trajectory has current-world physical wall/obstacle proof and a
   fresh/retained admission comparison; do not connect it to the five-state publisher contract.
+- `.steering/20260825-rate-resolved-physical-wall-shadow` adds that exact current-world wall proof
+  without authority promotion. A diagnostic run first exposed solver-certified microscopic
+  negative progress residuals crossing a downstream exact-zero monotonicity boundary. The raw
+  primal is not clamped: the artifact now carries the physical virtual-progress bounds and derives
+  the only admitted regression from the accepted row certificate. All 45 CTest targets and the
+  25-package build pass. In committed-source run `output/20260825-041116`, all 2,417 current-semantic
+  physical evaluations were accepted with zero adapter/course-frame/wall rejection, and every
+  result stayed `authority=shadow, selected=0`. Physical correctness is accepted, but scheduling is
+  not: the synchronous observation-only proof reached 10.485 ms and coincided with two 25 ms control
+  callback overruns. Move the unchanged proof to a latest-only worker with exact result provenance
+  before retained admission; do not tune cadence or weaken the wall proof.
 
 ## Slice 6: Legacy and migration path removal
 

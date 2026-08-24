@@ -7,5 +7,5 @@
 - [x] Add deterministic unit and source-contract tests.
 - [x] Run build and full package tests.
 - [x] Commit the static Slice.
-- [ ] Run a bounded `make dev2` dynamic Gate.
-- [ ] Update the migration ledger and record the next blocked gate.
+- [x] Run a bounded `make dev2` dynamic Gate.
+- [x] Update the migration ledger and record the next blocked gate.

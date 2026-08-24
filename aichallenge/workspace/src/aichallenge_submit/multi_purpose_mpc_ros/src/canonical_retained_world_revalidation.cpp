@@ -126,6 +126,8 @@ bool follow_observation_shape_valid(
     !std::isfinite(observation.current_target_gap_m) ||
     observation.current_target_gap_m < 0.0 ||
     !std::isfinite(observation.hard_gap_m) || observation.hard_gap_m < 0.0 ||
+    !std::isfinite(observation.target_speed_mps) ||
+    observation.target_speed_mps < 0.0 ||
     observation.elapsed_time_sec.size() < 2U ||
     observation.elapsed_time_sec.size() !=
     observation.target_progress_from_current_origin_m.size())
@@ -599,12 +601,13 @@ std::uint64_t fingerprint_follow_obstacle_observation(
     return 0U;
   }
   FingerprintBuilder builder;
-  builder.add_string("follow-target-tube-v1");
+  builder.add_string("follow-target-tube-v2");
   builder.add_string(observation.target_id);
   builder.add_uint64(observation.observation_generation);
   builder.add_double(observation.observation_sec);
   builder.add_double(observation.current_target_gap_m);
   builder.add_double(observation.hard_gap_m);
+  builder.add_double(observation.target_speed_mps);
   builder.add_size(observation.elapsed_time_sec.size());
   for (std::size_t index = 0U; index < observation.elapsed_time_sec.size(); ++index) {
     builder.add_double(observation.elapsed_time_sec[index]);
@@ -612,6 +615,63 @@ std::uint64_t fingerprint_follow_obstacle_observation(
       observation.target_progress_from_current_origin_m[index]);
   }
   return builder.value();
+}
+
+const char * to_string(const FollowObservationCoverageReason reason) noexcept
+{
+  switch (reason) {
+    case FollowObservationCoverageReason::Accepted:
+      return "accepted";
+    case FollowObservationCoverageReason::InvalidObservation:
+      return "invalid-observation";
+    case FollowObservationCoverageReason::InvalidRequiredHorizon:
+      return "invalid-required-horizon";
+    case FollowObservationCoverageReason::InvalidPrediction:
+      return "invalid-prediction";
+  }
+  return "unknown";
+}
+
+FollowObservationCoverageResult cover_follow_observation_horizon(
+  const FollowDynamicObstacleObservation & observation,
+  const double required_horizon_sec) noexcept
+{
+  FollowObservationCoverageResult result;
+  result.observation = observation;
+  result.required_horizon_sec = required_horizon_sec;
+  if (!follow_observation_shape_valid(observation) || !observation.current) {
+    return result;
+  }
+  result.available_horizon_sec = observation.elapsed_time_sec.back();
+  if (!std::isfinite(required_horizon_sec) || required_horizon_sec < 0.0) {
+    result.reason = FollowObservationCoverageReason::InvalidRequiredHorizon;
+    return result;
+  }
+  if (required_horizon_sec > result.available_horizon_sec + kIdentityTolerance) {
+    const double extended_progress =
+      observation.target_progress_from_current_origin_m.back() +
+      observation.target_speed_mps *
+      (required_horizon_sec - result.available_horizon_sec);
+    if (!std::isfinite(extended_progress) ||
+      extended_progress + kIdentityTolerance <
+      observation.target_progress_from_current_origin_m.back())
+    {
+      result.reason = FollowObservationCoverageReason::InvalidPrediction;
+      return result;
+    }
+    result.observation.elapsed_time_sec.push_back(required_horizon_sec);
+    result.observation.target_progress_from_current_origin_m.push_back(
+      extended_progress);
+    result.extended = true;
+  }
+  result.observation.tube_id =
+    fingerprint_follow_obstacle_observation(result.observation);
+  if (result.observation.tube_id == 0U) {
+    result.reason = FollowObservationCoverageReason::InvalidPrediction;
+    return result;
+  }
+  result.reason = FollowObservationCoverageReason::Accepted;
+  return result;
 }
 
 std::uint64_t fingerprint_overtake_corridor_observation(

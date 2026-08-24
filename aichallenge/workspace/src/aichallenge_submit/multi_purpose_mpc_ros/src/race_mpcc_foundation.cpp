@@ -626,6 +626,7 @@ FollowLongitudinalContract build_follow_longitudinal_contract(
   result.target_observation_generation = request.target_observation_generation;
   result.current_target_gap_m = request.current_target_relative_progress_m;
   result.current_ego_progress_offset_m = request.current_ego_progress_offset_m;
+  result.target_speed_mps = request.target_speed_mps;
   result.hard_gap_m = request.hard_gap_m;
   if (request.intent != mpcc_execution_contract::ControlIntent::Follow) {
     result.reason = FollowLongitudinalContractReason::IntentNotFollow;

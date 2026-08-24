@@ -315,6 +315,7 @@ TEST(RaceMpccFoundation, BuildsMovingFollowContractAtConfiguredGap)
   EXPECT_EQ(result.target_observation_generation, 7U);
   EXPECT_NEAR(result.current_target_gap_m, 4.0, 1e-9);
   EXPECT_NEAR(result.current_ego_progress_offset_m, 0.3, 1e-9);
+  EXPECT_NEAR(result.target_speed_mps, 3.0, 1e-9);
   EXPECT_NEAR(result.planning_gap_m, 4.0, 1e-9);
   EXPECT_NEAR(result.hard_gap_m, 2.05, 1e-9);
   ASSERT_EQ(result.target_progress_m.size(), 3U);

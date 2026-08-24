@@ -426,6 +426,7 @@ struct FollowLongitudinalContract
   double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
   double current_ego_progress_offset_m{
     std::numeric_limits<double>::quiet_NaN()};
+  double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double planning_gap_m{std::numeric_limits<double>::quiet_NaN()};
   double hard_gap_m{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> elapsed_time_sec;

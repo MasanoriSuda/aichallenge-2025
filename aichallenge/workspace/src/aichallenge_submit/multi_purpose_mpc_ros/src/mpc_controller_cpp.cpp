@@ -6083,6 +6083,11 @@ struct FollowShadowCycleResult
     canonical_plan::CanonicalActuationReason::InvalidPlan};
   std::size_t retained_rejected_stage{};
   double retained_minimum_gap_m{std::numeric_limits<double>::infinity()};
+  bool retained_target_horizon_extended{false};
+  double retained_target_horizon_available_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double retained_target_horizon_required_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
@@ -23955,13 +23960,31 @@ struct MPC
     proof_request.target.current_target_gap_m =
       follow_contract.current_target_gap_m;
     proof_request.target.hard_gap_m = follow_contract.hard_gap_m;
+    proof_request.target.target_speed_mps = follow_contract.target_speed_mps;
     proof_request.target.elapsed_time_sec = follow_contract.elapsed_time_sec;
     proof_request.target.target_progress_from_current_origin_m =
       follow_contract.target_progress_m;
     proof_request.target.current = target_current;
-    proof_request.target.tube_id =
-      canonical_retained_world::fingerprint_follow_obstacle_observation(
-      proof_request.target);
+    const auto target_coverage =
+      canonical_retained_world::cover_follow_observation_horizon(
+      proof_request.target, window.window->samples.back().relative_time_sec);
+    result.retained_target_horizon_extended = target_coverage.extended;
+    result.retained_target_horizon_available_sec =
+      target_coverage.available_horizon_sec;
+    result.retained_target_horizon_required_sec =
+      target_coverage.required_horizon_sec;
+    if (
+      target_coverage.reason !=
+      canonical_retained_world::FollowObservationCoverageReason::Accepted)
+    {
+      result.retained_world_reason =
+        canonical_retained_world::FollowCurrentWorldProofReason::
+        TargetHorizonUnavailable;
+      result.retained_detail = std::string{"current target coverage rejected: "} +
+        canonical_retained_world::to_string(target_coverage.reason);
+      return;
+    }
+    proof_request.target = target_coverage.observation;
     proof_request.current.obstacle_tube_id = proof_request.target.tube_id;
     result.retained_target_tube_id = proof_request.target.tube_id;
     proof_request.swept_step_m = std::max(
@@ -24079,22 +24102,11 @@ struct MPC
     const auto & follow_contract = problem.follow_longitudinal_contract;
     result.planning_gap_m = follow_contract.planning_gap_m;
     result.hard_gap_m = follow_contract.hard_gap_m;
+    result.predicted_target_speed_mps = follow_contract.target_speed_mps;
     result.current_ego_progress_offset_m =
       follow_contract.current_ego_progress_offset_m;
     if (!follow_contract.target_progress_m.empty()) {
       result.current_target_gap_m = follow_contract.current_target_gap_m;
-    }
-    if (
-      follow_contract.target_progress_m.size() >= 2U &&
-      follow_contract.elapsed_time_sec.size() >= 2U)
-    {
-      const double target_dt =
-        follow_contract.elapsed_time_sec[1] - follow_contract.elapsed_time_sec[0];
-      if (std::isfinite(target_dt) && target_dt > kEps) {
-        result.predicted_target_speed_mps =
-          (follow_contract.target_progress_m[1] -
-          follow_contract.target_progress_m[0]) / target_dt;
-      }
     }
     if (!follow_contract.velocity_reference_mps.empty()) {
       result.initial_velocity_reference_mps =
@@ -25163,6 +25175,11 @@ struct MPC
               << '/' << (result.retained_command_available ? "ready" : "unavailable")
               << ", retained_plan=" << result.retained_plan_id
               << ", retained_tube=" << result.retained_target_tube_id
+              << ", retained_target_horizon="
+              << result.retained_target_horizon_available_sec << "->"
+              << result.retained_target_horizon_required_sec
+              << "s/extended="
+              << (result.retained_target_horizon_extended ? 1 : 0)
               << ", retained_gap=" << result.retained_minimum_gap_m
               << "m@" << result.retained_rejected_stage
               << ", retained_detail=" << result.retained_detail

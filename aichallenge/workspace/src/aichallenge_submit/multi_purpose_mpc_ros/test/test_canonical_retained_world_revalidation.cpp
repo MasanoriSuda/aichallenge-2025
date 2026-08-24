@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <utility>
 
 namespace
@@ -155,6 +156,7 @@ world::FollowCurrentWorldProofRequest make_follow_request()
   request.target.observation_sec = 10.6;
   request.target.current_target_gap_m = 5.0;
   request.target.hard_gap_m = 3.0;
+  request.target.target_speed_mps = 0.5;
   request.target.elapsed_time_sec = {0.0, 0.4, 1.4};
   request.target.target_progress_from_current_origin_m = {5.0, 5.2, 5.7};
   request.target.current = true;
@@ -303,6 +305,99 @@ TEST(CanonicalRetainedWorldRevalidation, BuildsFollowProofFromCurrentTargetTube)
   EXPECT_EQ(result.proof->current.target_obstacle_generation, 8U);
   EXPECT_EQ(result.proof->stage_evaluations.size(), 2U);
   EXPECT_GT(result.minimum_gap_m, request.target.hard_gap_m);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, CoversExactRetainedFollowTimeDomain)
+{
+  auto observation = make_follow_request().target;
+
+  const auto covered = world::cover_follow_observation_horizon(
+    observation, observation.elapsed_time_sec.back());
+  ASSERT_EQ(
+    covered.reason, world::FollowObservationCoverageReason::Accepted);
+  EXPECT_FALSE(covered.extended);
+  EXPECT_EQ(
+    covered.observation.elapsed_time_sec,
+    observation.elapsed_time_sec);
+  EXPECT_EQ(
+    covered.observation.target_progress_from_current_origin_m,
+    observation.target_progress_from_current_origin_m);
+  EXPECT_EQ(
+    covered.observation.tube_id,
+    world::fingerprint_follow_obstacle_observation(covered.observation));
+
+  const auto moving = world::cover_follow_observation_horizon(observation, 1.8);
+  ASSERT_EQ(
+    moving.reason, world::FollowObservationCoverageReason::Accepted);
+  ASSERT_TRUE(moving.extended);
+  ASSERT_EQ(moving.observation.elapsed_time_sec.size(), 4U);
+  EXPECT_DOUBLE_EQ(moving.observation.elapsed_time_sec.back(), 1.8);
+  EXPECT_NEAR(
+    moving.observation.target_progress_from_current_origin_m.back(),
+    5.9, 1e-12);
+  EXPECT_NE(
+    moving.observation.tube_id,
+    observation.tube_id);
+
+  observation.target_speed_mps = 0.0;
+  observation.tube_id =
+    world::fingerprint_follow_obstacle_observation(observation);
+  const auto stationary =
+    world::cover_follow_observation_horizon(observation, 1.8);
+  ASSERT_EQ(
+    stationary.reason, world::FollowObservationCoverageReason::Accepted);
+  ASSERT_TRUE(stationary.extended);
+  EXPECT_DOUBLE_EQ(
+    stationary.observation.target_progress_from_current_origin_m.back(),
+    observation.target_progress_from_current_origin_m.back());
+}
+
+TEST(CanonicalRetainedWorldRevalidation, RejectsInvalidFollowTimeCoverage)
+{
+  auto observation = make_follow_request().target;
+  observation.current = false;
+  EXPECT_EQ(
+    world::cover_follow_observation_horizon(observation, 1.8).reason,
+    world::FollowObservationCoverageReason::InvalidObservation);
+
+  observation = make_follow_request().target;
+  EXPECT_EQ(
+    world::cover_follow_observation_horizon(
+      observation, std::numeric_limits<double>::infinity()).reason,
+    world::FollowObservationCoverageReason::InvalidRequiredHorizon);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, CoveredTubeCertifiesLongerRetainedWindow)
+{
+  const auto execution_plan = make_follow_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  auto request = make_follow_request();
+  request.target.elapsed_time_sec = {0.0, 0.4, 1.3};
+  request.target.target_progress_from_current_origin_m = {5.0, 5.2, 5.65};
+  request.target.tube_id =
+    world::fingerprint_follow_obstacle_observation(request.target);
+  request.current.obstacle_tube_id = request.target.tube_id;
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+
+  const auto uncovered = world::build_follow_current_world_retained_proof(
+    execution_plan, cursor, request,
+    make_grid(footprint::CellState::Free), extents);
+  EXPECT_EQ(
+    uncovered.reason,
+    world::FollowCurrentWorldProofReason::TargetHorizonUnavailable);
+
+  const auto coverage =
+    world::cover_follow_observation_horizon(request.target, 1.4);
+  ASSERT_EQ(
+    coverage.reason, world::FollowObservationCoverageReason::Accepted);
+  ASSERT_TRUE(coverage.extended);
+  request.target = coverage.observation;
+  request.current.obstacle_tube_id = request.target.tube_id;
+  const auto covered = world::build_follow_current_world_retained_proof(
+    execution_plan, cursor, request,
+    make_grid(footprint::CellState::Free), extents);
+  EXPECT_EQ(covered.reason, world::FollowCurrentWorldProofReason::Accepted);
+  EXPECT_TRUE(covered.proof.has_value());
 }
 
 TEST(CanonicalRetainedWorldRevalidation, RejectsFollowTargetIdentityAndTubeMutation)

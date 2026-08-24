@@ -83,10 +83,31 @@ struct FollowDynamicObstacleObservation
   double observation_sec{};
   double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
   double hard_gap_m{};
+  double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> elapsed_time_sec;
   std::vector<double> target_progress_from_current_origin_m;
   std::uint64_t tube_id{};
   bool current{false};
+};
+
+enum class FollowObservationCoverageReason
+{
+  Accepted,
+  InvalidObservation,
+  InvalidRequiredHorizon,
+  InvalidPrediction,
+};
+
+const char * to_string(FollowObservationCoverageReason reason) noexcept;
+
+struct FollowObservationCoverageResult
+{
+  FollowObservationCoverageReason reason{
+    FollowObservationCoverageReason::InvalidObservation};
+  FollowDynamicObstacleObservation observation;
+  bool extended{false};
+  double available_horizon_sec{};
+  double required_horizon_sec{};
 };
 
 struct FollowCurrentWorldProofRequest
@@ -266,6 +287,13 @@ std::uint64_t fingerprint_empty_obstacle_observation(
 
 std::uint64_t fingerprint_follow_obstacle_observation(
   const FollowDynamicObstacleObservation & observation) noexcept;
+
+/// Seal a current constant-velocity target observation over the exact time
+/// domain required by a retained canonical plan. The returned tube is always
+/// re-fingerprinted; missing future coverage is never accepted implicitly.
+FollowObservationCoverageResult cover_follow_observation_horizon(
+  const FollowDynamicObstacleObservation & observation,
+  double required_horizon_sec) noexcept;
 
 std::uint64_t fingerprint_overtake_corridor_observation(
   const OvertakeDynamicCorridorObservation & observation) noexcept;

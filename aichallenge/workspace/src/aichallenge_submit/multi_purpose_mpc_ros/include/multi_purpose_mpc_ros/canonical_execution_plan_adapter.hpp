@@ -23,6 +23,8 @@ struct CanonicalPlanExtractionRequest
   double solved_sec{};
   double progress_origin_m{};
   std::vector<double> stage_duration_sec;
+  std::vector<double> lateral_lower_m;
+  std::vector<double> lateral_upper_m;
   Eigen::VectorXd extended_primal;
 };
 
@@ -32,6 +34,7 @@ enum class CanonicalPlanExtractionReason
   InvalidMetadata,
   InvalidProgressOrigin,
   StageDurationCountMismatch,
+  CorridorCountMismatch,
   PrimalSizeMismatch,
   NonfinitePrimal,
   PlanContractRejected,

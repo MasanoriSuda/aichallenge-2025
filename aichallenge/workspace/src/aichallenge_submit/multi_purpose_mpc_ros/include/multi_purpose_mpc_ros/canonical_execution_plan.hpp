@@ -40,6 +40,12 @@ struct CanonicalExecutionPlan
   double solved_sec{};
   std::vector<CanonicalPredictedState> predicted_states;
   std::vector<CanonicalControlStage> control_stages;
+  /// Lateral state bounds owned by the exact optimization problem which
+  /// produced this immutable plan. They are indexed identically to
+  /// `predicted_states`; retained proof must not substitute a later Mission's
+  /// regenerated trust corridor for these bounds.
+  std::vector<double> lateral_lower_m;
+  std::vector<double> lateral_upper_m;
 };
 
 enum class CanonicalExecutionPlanRejectReason
@@ -55,8 +61,10 @@ enum class CanonicalExecutionPlanRejectReason
   EmptyHorizon,
   StateCountMismatch,
   ControlCountMismatch,
+  CorridorCountMismatch,
   InvalidPredictedState,
   InvalidControlStage,
+  InvalidLateralCorridor,
 };
 
 const char * to_string(CanonicalExecutionPlanRejectReason reason) noexcept;

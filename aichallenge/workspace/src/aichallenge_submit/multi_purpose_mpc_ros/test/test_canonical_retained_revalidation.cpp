@@ -53,6 +53,8 @@ plan::CanonicalExecutionPlan make_plan()
     plan::CanonicalPredictedState{0.14, 0.03, 0.04, 5.4, 101.0}};
   value.control_stages = {plan::CanonicalControlStage{1.0, 0.02, 5.1, 1.0},
     plan::CanonicalControlStage{0.5, 0.03, 5.3, 1.0}};
+  value.lateral_lower_m = {-0.5, -0.5, -0.5};
+  value.lateral_upper_m = {0.5, 0.5, 0.5};
   return value;
 }
 
@@ -207,6 +209,55 @@ TEST(
 
 TEST(
   CanonicalRetainedRevalidation,
+  SamplesSelectedPlanProgressInsteadOfWaypointSpacing) {
+  const auto execution_plan = make_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const auto window =
+    retained::build_retained_execution_window(execution_plan, cursor);
+  ASSERT_TRUE(window.window.has_value());
+
+  const auto advance = retained::sample_retained_progress_advance(
+    window.window.value(), {0.0, 0.2, 0.4, 0.9, 1.4, 2.0});
+  ASSERT_TRUE(advance.has_value());
+  ASSERT_EQ(advance->size(), 6U);
+  EXPECT_NEAR((*advance)[0], 0.0, 1e-12);
+  EXPECT_NEAR((*advance)[1], 0.1, 1e-12);
+  EXPECT_NEAR((*advance)[2], 0.2, 1e-12);
+  EXPECT_NEAR((*advance)[3], 0.45, 1e-12);
+  EXPECT_NEAR((*advance)[4], 0.7, 1e-12);
+  // Current proof may have a longer base corridor than the remaining plan.
+  // The unused tail must hold the final selected-plan progress, not invent
+  // additional waypoint-distance motion.
+  EXPECT_NEAR((*advance)[5], 0.7, 1e-12);
+}
+
+TEST(
+  CanonicalRetainedRevalidation,
+  SlicesTheSelectedPlansOwnLateralCorridorAtTheCursor)
+{
+  auto execution_plan = make_plan();
+  execution_plan.lateral_lower_m = {-0.50, -0.40, -0.30};
+  execution_plan.lateral_upper_m = {0.50, 0.45, 0.40};
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  const auto window =
+    retained::build_retained_execution_window(execution_plan, cursor);
+  ASSERT_TRUE(window.window.has_value());
+
+  const auto corridor = retained::build_retained_lateral_corridor(
+    execution_plan, window.window.value());
+  ASSERT_TRUE(corridor.has_value());
+  ASSERT_EQ(corridor->relative_time_sec.size(), 3U);
+  EXPECT_NEAR(corridor->relative_time_sec[0], 0.0, 1e-12);
+  EXPECT_NEAR(corridor->relative_time_sec[1], 0.4, 1e-12);
+  EXPECT_NEAR(corridor->relative_time_sec[2], 1.4, 1e-12);
+  EXPECT_NEAR(corridor->lower_m[0], -0.44, 1e-12);
+  EXPECT_NEAR(corridor->upper_m[0], 0.47, 1e-12);
+  EXPECT_NEAR(corridor->lower_m[1], -0.40, 1e-12);
+  EXPECT_NEAR(corridor->upper_m[2], 0.40, 1e-12);
+}
+
+TEST(
+  CanonicalRetainedRevalidation,
   CourseFrameRangeIncludesRetainedStateBehindMeasuredOrigin) {
   const auto execution_plan = make_plan();
   const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
@@ -235,6 +286,8 @@ TEST(
   ASSERT_FALSE(window->samples.empty());
   window->samples.front().segment_start_progress_m += 0.01;
 
+  EXPECT_FALSE(retained::sample_retained_progress_advance(
+    window.value(), {0.0, 0.2}).has_value());
   EXPECT_FALSE(retained::required_course_frame_progress_range(
     window.value(), 100.36).has_value());
 }

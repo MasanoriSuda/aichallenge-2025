@@ -66,6 +66,8 @@ plan::CanonicalExecutionPlan make_plan(
   value.control_stages = {
     plan::CanonicalControlStage{1.0, 0.02, 5.1, 1.0},
     plan::CanonicalControlStage{0.5, 0.03, 5.3, 1.0}};
+  value.lateral_lower_m = {-0.5, -0.5, -0.5};
+  value.lateral_upper_m = {0.5, 0.5, 0.5};
   return value;
 }
 

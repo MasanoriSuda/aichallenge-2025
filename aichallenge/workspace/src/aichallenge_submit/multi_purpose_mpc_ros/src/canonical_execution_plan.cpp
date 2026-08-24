@@ -55,10 +55,14 @@ const char * to_string(const CanonicalExecutionPlanRejectReason reason) noexcept
       return "state-count-mismatch";
     case CanonicalExecutionPlanRejectReason::ControlCountMismatch:
       return "control-count-mismatch";
+    case CanonicalExecutionPlanRejectReason::CorridorCountMismatch:
+      return "corridor-count-mismatch";
     case CanonicalExecutionPlanRejectReason::InvalidPredictedState:
       return "invalid-predicted-state";
     case CanonicalExecutionPlanRejectReason::InvalidControlStage:
       return "invalid-control-stage";
+    case CanonicalExecutionPlanRejectReason::InvalidLateralCorridor:
+      return "invalid-lateral-corridor";
   }
   return "unknown";
 }
@@ -109,9 +113,25 @@ CanonicalExecutionPlanRejectReason validate_canonical_execution_plan(
   {
     return CanonicalExecutionPlanRejectReason::ControlCountMismatch;
   }
-  for (const auto & state : plan.predicted_states) {
+  if (
+    plan.lateral_lower_m.size() != horizon + 1U ||
+    plan.lateral_upper_m.size() != horizon + 1U)
+  {
+    return CanonicalExecutionPlanRejectReason::CorridorCountMismatch;
+  }
+  for (std::size_t index = 0U; index < plan.predicted_states.size(); ++index) {
+    const auto & state = plan.predicted_states[index];
     if (!finite_state(state)) {
       return CanonicalExecutionPlanRejectReason::InvalidPredictedState;
+    }
+    const double lower_m = plan.lateral_lower_m[index];
+    const double upper_m = plan.lateral_upper_m[index];
+    if (
+      !std::isfinite(lower_m) || !std::isfinite(upper_m) ||
+      upper_m < lower_m || state.lateral_m < lower_m - 1e-5 ||
+      state.lateral_m > upper_m + 1e-5)
+    {
+      return CanonicalExecutionPlanRejectReason::InvalidLateralCorridor;
     }
   }
   for (const auto & control : plan.control_stages) {

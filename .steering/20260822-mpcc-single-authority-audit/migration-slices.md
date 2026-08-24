@@ -541,6 +541,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   to Idle by Stuck/AWSIM Recovery. Rejoin production promotion remains blocked. Audit that earlier
   async producer/consumer availability break before repeating the Rejoin Gate; do not add a lease,
   retry, legacy hold or parameter relaxation.
+- `.steering/20260824-overtake-preentry-canonical-artifact` closes that upstream availability break.
+  Each pre-entry left/right five-state solve now carries its selected immutable state/control plan,
+  current target prediction and exact solved lateral corridor through tactical selection. Mission,
+  canonical lifecycle and plan store are committed before `Idle -> ShiftOut`; retained proof slices
+  the same sealed corridor and intersects it with the current wall/target world rather than using a
+  later regenerated Mission corridor. In `output/20260824-110945`, the accepted entry at log lines
+  611--613 published `canonical-shiftout-retained` on its first observed ShiftOut decision at line
+  621. The entry-start async Emergency defect is closed without tuning or fallback. A separate
+  runtime replacement defect remains: after receding-DP authority expiry, progress discontinuity
+  and a cross-side Mission replacement can again precede a matching canonical artifact. Address
+  that lifecycle in a new Slice before Rejoin promotion or Slice 6 deletion.
 
 ## Slice 6: Legacy and migration path removal
 

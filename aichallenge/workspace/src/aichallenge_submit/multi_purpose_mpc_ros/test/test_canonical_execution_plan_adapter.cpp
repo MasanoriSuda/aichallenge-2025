@@ -78,6 +78,8 @@ adapter::CanonicalPlanExtractionRequest make_request()
   request.solved_sec = 10.0;
   request.progress_origin_m = 100.0;
   request.stage_duration_sec = {0.4, 0.6};
+  request.lateral_lower_m = {-0.5, -0.5, -0.5};
+  request.lateral_upper_m = {0.5, 0.5, 0.5};
   request.extended_primal = make_primal();
   return request;
 }
@@ -126,6 +128,8 @@ TEST(CanonicalExecutionPlanAdapter, ExtractsEveryStateAndInputWithoutLegacyFlatt
     plan::CanonicalExecutionPlanRejectReason::None);
   EXPECT_EQ(result.plan->predicted_states.size(), 3U);
   EXPECT_EQ(result.plan->control_stages.size(), 2U);
+  EXPECT_EQ(result.plan->lateral_lower_m.size(), 3U);
+  EXPECT_EQ(result.plan->lateral_upper_m.size(), 3U);
   EXPECT_DOUBLE_EQ(result.plan->predicted_states[1].lateral_m, 0.20);
   EXPECT_DOUBLE_EQ(result.plan->predicted_states[1].lag_m, 0.02);
   EXPECT_DOUBLE_EQ(result.plan->predicted_states[1].heading_offset_rad, 0.03);
@@ -145,6 +149,16 @@ TEST(CanonicalExecutionPlanAdapter, RejectsMalformedPrimalSize)
   const auto result = adapter::extract_canonical_execution_plan(request);
   EXPECT_EQ(
     result.reason, adapter::CanonicalPlanExtractionReason::PrimalSizeMismatch);
+  EXPECT_FALSE(result.plan.has_value());
+}
+
+TEST(CanonicalExecutionPlanAdapter, RejectsMissingSolvedLateralCorridor)
+{
+  auto request = make_request();
+  request.lateral_upper_m.pop_back();
+  const auto result = adapter::extract_canonical_execution_plan(request);
+  EXPECT_EQ(
+    result.reason, adapter::CanonicalPlanExtractionReason::CorridorCountMismatch);
   EXPECT_FALSE(result.plan.has_value());
 }
 

@@ -450,6 +450,82 @@ const char * to_string(const OvertakeCurrentWorldProofReason reason) noexcept
   return "unknown";
 }
 
+const char * to_string(const OvertakeTargetTubeIntersectionReason reason) noexcept
+{
+  switch (reason) {
+    case OvertakeTargetTubeIntersectionReason::Accepted:
+      return "accepted";
+    case OvertakeTargetTubeIntersectionReason::InvalidInput:
+      return "invalid-input";
+    case OvertakeTargetTubeIntersectionReason::Infeasible:
+      return "infeasible";
+  }
+  return "unknown";
+}
+
+OvertakeTargetTubeIntersectionResult intersect_overtake_target_tube(
+  const OvertakeTargetTubeIntersectionRequest & request) noexcept
+{
+  OvertakeTargetTubeIntersectionResult result;
+  const auto & base = request.base_corridor;
+  const std::size_t sample_count = base.elapsed_time_sec.size();
+  if (
+    (request.pass_side_sign != -1 && request.pass_side_sign != 1) ||
+    !std::isfinite(request.required_center_separation_m) ||
+    request.required_center_separation_m < 0.0 || sample_count == 0U ||
+    base.lateral_lower_m.size() != sample_count ||
+    base.lateral_upper_m.size() != sample_count ||
+    request.target_lateral_m.size() != sample_count ||
+    request.target_separation_active.size() != sample_count)
+  {
+    return result;
+  }
+
+  auto corridor = base;
+  for (std::size_t index = 0U; index < sample_count; ++index) {
+    if (
+      !std::isfinite(corridor.elapsed_time_sec[index]) ||
+      !std::isfinite(corridor.lateral_lower_m[index]) ||
+      !std::isfinite(corridor.lateral_upper_m[index]) ||
+      !std::isfinite(request.target_lateral_m[index]) ||
+      (index > 0U && corridor.elapsed_time_sec[index] + kIdentityTolerance <
+      corridor.elapsed_time_sec[index - 1U]) ||
+      corridor.lateral_upper_m[index] + kIdentityTolerance <
+      corridor.lateral_lower_m[index])
+    {
+      result.rejected_sample_index = index;
+      return result;
+    }
+    if (!request.target_separation_active[index]) {
+      continue;
+    }
+    if (request.pass_side_sign > 0) {
+      corridor.lateral_lower_m[index] = std::max(
+        corridor.lateral_lower_m[index],
+        request.target_lateral_m[index] +
+        request.required_center_separation_m);
+    } else {
+      corridor.lateral_upper_m[index] = std::min(
+        corridor.lateral_upper_m[index],
+        request.target_lateral_m[index] -
+        request.required_center_separation_m);
+    }
+    if (
+      corridor.lateral_upper_m[index] + kIdentityTolerance <
+      corridor.lateral_lower_m[index])
+    {
+      result.reason = OvertakeTargetTubeIntersectionReason::Infeasible;
+      result.rejected_sample_index = index;
+      return result;
+    }
+  }
+  corridor.target_exclusion_encoded = true;
+  corridor.tube_id = 0U;
+  result.reason = OvertakeTargetTubeIntersectionReason::Accepted;
+  result.corridor = std::move(corridor);
+  return result;
+}
+
 std::uint64_t fingerprint_control_pose_path(
   const std::vector<recovery_footprint::Pose2D> & measured_to_control_path,
   const recovery_footprint::Pose2D & control_pose) noexcept

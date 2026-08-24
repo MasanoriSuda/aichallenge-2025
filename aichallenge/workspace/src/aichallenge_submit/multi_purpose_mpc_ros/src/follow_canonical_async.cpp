@@ -261,6 +261,105 @@ CurrentIdentityReason validate_current_identity(
   return CurrentIdentityReason::Accepted;
 }
 
+const char * to_string(const OvertakePreentryPlanReason reason) noexcept
+{
+  switch (reason) {
+    case OvertakePreentryPlanReason::Accepted:
+      return "accepted";
+    case OvertakePreentryPlanReason::MissingPlan:
+      return "missing-plan";
+    case OvertakePreentryPlanReason::InvalidExpectedIdentity:
+      return "invalid-expected-identity";
+    case OvertakePreentryPlanReason::InvalidPlan:
+      return "invalid-plan";
+    case OvertakePreentryPlanReason::UnsupportedIntent:
+      return "unsupported-intent";
+    case OvertakePreentryPlanReason::IntentMismatch:
+      return "intent-mismatch";
+    case OvertakePreentryPlanReason::IntentGenerationMismatch:
+      return "intent-generation-mismatch";
+    case OvertakePreentryPlanReason::TargetMismatch:
+      return "target-mismatch";
+    case OvertakePreentryPlanReason::TargetObservationRollback:
+      return "target-observation-rollback";
+    case OvertakePreentryPlanReason::ExecutionSideMismatch:
+      return "execution-side-mismatch";
+    case OvertakePreentryPlanReason::CursorUnavailable:
+      return "cursor-unavailable";
+  }
+  return "unknown";
+}
+
+OvertakePreentryPlanResolution resolve_overtake_preentry_plan(
+  const OvertakePreentryPlanRequest & request) noexcept
+{
+  OvertakePreentryPlanResolution result;
+  if (request.plan == nullptr) {
+    return result;
+  }
+  const bool expected_intent_supported =
+    request.expected_intent ==
+    mpcc_execution_contract::ControlIntent::ShiftOut ||
+    request.expected_intent == mpcc_execution_contract::ControlIntent::Pass;
+  if (
+    !expected_intent_supported || request.expected_intent_generation == 0U ||
+    request.current_target_observation_generation == 0U ||
+    request.expected_target_id.empty() ||
+    (request.expected_execution_side_sign != -1 &&
+    request.expected_execution_side_sign != 1) ||
+    !std::isfinite(request.now_sec) || request.now_sec < 0.0)
+  {
+    result.reason = OvertakePreentryPlanReason::InvalidExpectedIdentity;
+    return result;
+  }
+  if (
+    plan::validate_canonical_execution_plan(*request.plan) !=
+    plan::CanonicalExecutionPlanRejectReason::None)
+  {
+    result.reason = OvertakePreentryPlanReason::InvalidPlan;
+    return result;
+  }
+  const auto & problem = request.plan->problem;
+  if (
+    problem.intent != mpcc_execution_contract::ControlIntent::ShiftOut &&
+    problem.intent != mpcc_execution_contract::ControlIntent::Pass)
+  {
+    result.reason = OvertakePreentryPlanReason::UnsupportedIntent;
+    return result;
+  }
+  if (problem.intent != request.expected_intent) {
+    result.reason = OvertakePreentryPlanReason::IntentMismatch;
+    return result;
+  }
+  if (problem.intent_generation != request.expected_intent_generation) {
+    result.reason = OvertakePreentryPlanReason::IntentGenerationMismatch;
+    return result;
+  }
+  if (problem.target_id != request.expected_target_id) {
+    result.reason = OvertakePreentryPlanReason::TargetMismatch;
+    return result;
+  }
+  if (
+    problem.target_obstacle_generation == 0U ||
+    problem.target_obstacle_generation >
+    request.current_target_observation_generation)
+  {
+    result.reason = OvertakePreentryPlanReason::TargetObservationRollback;
+    return result;
+  }
+  if (problem.execution_side_sign != request.expected_execution_side_sign) {
+    result.reason = OvertakePreentryPlanReason::ExecutionSideMismatch;
+    return result;
+  }
+  if (!plan::resolve_execution_cursor(*request.plan, request.now_sec).available) {
+    result.reason = OvertakePreentryPlanReason::CursorUnavailable;
+    return result;
+  }
+  result.admitted = true;
+  result.reason = OvertakePreentryPlanReason::Accepted;
+  return result;
+}
+
 const char * to_string(const PublishReason reason) noexcept
 {
   switch (reason) {

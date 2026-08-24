@@ -57,6 +57,8 @@ plan::CanonicalExecutionPlan make_plan()
   value.control_stages = {
     plan::CanonicalControlStage{1.0, 0.02, 5.1, 1.0},
     plan::CanonicalControlStage{0.5, 0.03, 5.3, 1.0}};
+  value.lateral_lower_m = {-0.5, -0.5, -0.5};
+  value.lateral_upper_m = {0.5, 0.5, 0.5};
   return value;
 }
 
@@ -388,6 +390,53 @@ TEST(CanonicalRetainedWorldRevalidation, BuildsOvertakeProofFromCurrentCorridor)
   EXPECT_EQ(result.proof->current.target_obstacle_generation, 8U);
   EXPECT_EQ(result.proof->stage_evaluations.size(), 2U);
   EXPECT_GT(result.minimum_corridor_reserve_m, 0.0);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, IntersectsCurrentTargetTubeByPassSide)
+{
+  auto base = make_overtake_request().corridor;
+  base.lateral_lower_m = {-2.0, -2.0, -2.0};
+  base.lateral_upper_m = {2.0, 2.0, 2.0};
+  base.target_exclusion_encoded = false;
+  base.tube_id = 0U;
+
+  const auto right = world::intersect_overtake_target_tube(
+    world::OvertakeTargetTubeIntersectionRequest{
+      base, 1, 1.0, {0.0, 0.1, 0.2}, {false, true, true}});
+  ASSERT_EQ(
+    right.reason, world::OvertakeTargetTubeIntersectionReason::Accepted);
+  ASSERT_TRUE(right.corridor.has_value());
+  EXPECT_TRUE(right.corridor->target_exclusion_encoded);
+  EXPECT_DOUBLE_EQ(right.corridor->lateral_lower_m[0], -2.0);
+  EXPECT_DOUBLE_EQ(right.corridor->lateral_lower_m[1], 1.1);
+  EXPECT_DOUBLE_EQ(right.corridor->lateral_lower_m[2], 1.2);
+
+  const auto left = world::intersect_overtake_target_tube(
+    world::OvertakeTargetTubeIntersectionRequest{
+      base, -1, 1.0, {0.0, -0.1, -0.2}, {false, true, true}});
+  ASSERT_EQ(
+    left.reason, world::OvertakeTargetTubeIntersectionReason::Accepted);
+  ASSERT_TRUE(left.corridor.has_value());
+  EXPECT_DOUBLE_EQ(left.corridor->lateral_upper_m[0], 2.0);
+  EXPECT_DOUBLE_EQ(left.corridor->lateral_upper_m[1], -1.1);
+  EXPECT_DOUBLE_EQ(left.corridor->lateral_upper_m[2], -1.2);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, RejectsInfeasibleCurrentTargetTube)
+{
+  auto base = make_overtake_request().corridor;
+  base.lateral_lower_m = {-0.5, -0.5, -0.5};
+  base.lateral_upper_m = {0.5, 0.5, 0.5};
+  base.target_exclusion_encoded = false;
+  base.tube_id = 0U;
+  const auto result = world::intersect_overtake_target_tube(
+    world::OvertakeTargetTubeIntersectionRequest{
+      base, 1, 1.0, {0.0, 0.0, 0.0}, {false, true, true}});
+
+  EXPECT_EQ(
+    result.reason, world::OvertakeTargetTubeIntersectionReason::Infeasible);
+  EXPECT_FALSE(result.corridor.has_value());
+  EXPECT_EQ(result.rejected_sample_index, 1U);
 }
 
 TEST(CanonicalRetainedWorldRevalidation, RejectsOvertakeIdentityAndCorridorMutation)

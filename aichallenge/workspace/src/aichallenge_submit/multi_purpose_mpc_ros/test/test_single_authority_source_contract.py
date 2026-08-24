@@ -43,7 +43,10 @@ def test_overtake_worker_fresh_chain_uses_sealed_snapshot_context() -> None:
         "      problem, snapshot_context)"
     ) in worker
 
-    fresh_start = SOURCE.index("evaluate_overtake_canonical_fresh_shadow(")
+    fresh_start = SOURCE.index(
+        "OvertakeCanonicalFreshShadowResult\n"
+        "  evaluate_overtake_canonical_fresh_shadow("
+    )
     fresh_end = SOURCE.index(
         "evaluate_overtake_canonical_worker_fresh(", fresh_start
     )
@@ -131,7 +134,10 @@ def test_overtake_wall_proof_uses_exact_five_state_trajectory() -> None:
 def test_canonical_overtake_uses_production_wall_clearance_contract() -> None:
     """Fresh and retained candidates must not certify a zero-margin shadow."""
 
-    fresh_start = SOURCE.index("evaluate_overtake_canonical_fresh_shadow(")
+    fresh_start = SOURCE.index(
+        "OvertakeCanonicalFreshShadowResult\n"
+        "  evaluate_overtake_canonical_fresh_shadow("
+    )
     fresh_end = SOURCE.index(
         "evaluate_overtake_canonical_worker_fresh(", fresh_start
     )
@@ -187,6 +193,119 @@ def test_overtake_intents_return_through_one_canonical_production_boundary() -> 
         "return canonical_overtake_production_control(\n"
         "          problem, now_sec, control_intent);"
     ) in before_old_path
+
+
+def test_overtake_entry_adopts_the_already_solved_canonical_artifact() -> None:
+    """ShiftOut may not commit first and launch a duplicate initial solve later."""
+
+    branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
+    branch_end = SOURCE.index(
+        "evaluate_isolated_extended_mpcc_branch(", branch_start
+    )
+    branch = SOURCE[branch_start:branch_end]
+    solve = branch.index("solve_extended_progress_problem(")
+    target_proof = branch.index("build_current_overtake_target_tube(")
+    canonical = branch.index("evaluate_overtake_canonical_fresh_shadow(")
+    assert solve < target_proof < canonical
+    assert "legacy.progress_execution_target_exclusion_certified = true" in branch
+    assert "preentry_canonical_plan" in branch
+
+    entry_start = SOURCE.index("const bool fresh_normal_mission_entry =")
+    entry_end = SOURCE.index(
+        "transition_overtake_line_phase(\n"
+        "          direct_pass ? OvertakeLinePhase::Pass",
+        entry_start,
+    )
+    entry = SOURCE[entry_start:entry_end]
+    assert "resolve_overtake_preentry_plan(" in entry
+    assert "prepare_overtake_canonical_async_context(" in entry
+    assert "plan_store.replace(" in entry
+    assert entry.index("freeze_selected_overtake_mission(") < entry.index(
+        "prepare_overtake_canonical_async_context("
+    )
+
+    certificate_start = SOURCE.index(
+        "bool revalidate_overtake_entry_execution_certificate("
+    )
+    certificate_end = SOURCE.index(
+        "bool dynamic_margin_escape_solution_wall_safe(", certificate_start
+    )
+    certificate = SOURCE[certificate_start:certificate_end]
+    assert "const canonical_plan::CanonicalExecutionPlan & preentry_plan" in certificate
+    assert "sample_retained_progress_advance(" in certificate
+    assert "preentry_plan.predicted_states" in certificate
+    assert "&plan_time_sec" in certificate
+    assert "build_current_overtake_target_tube(" in certificate
+    assert "validate_frenet_dp_target_bound_horizon(" in certificate
+
+    retained_start = SOURCE.index(
+        "void evaluate_overtake_canonical_retained_shadow("
+    )
+    retained_end = SOURCE.index(
+        "void invalidate_overtake_canonical_async_context()", retained_start
+    )
+    retained = SOURCE[retained_start:retained_end]
+    assert "sample_retained_progress_advance(" in retained
+    assert "build_retained_lateral_corridor(" in retained
+    assert (
+        "corridor.lateral_lower_m = retained_lateral_corridor->lower_m"
+        in retained
+    )
+    assert (
+        "corridor.lateral_upper_m = retained_lateral_corridor->upper_m"
+        in retained
+    )
+    assert "problem.progress_state_lower[" not in retained
+    assert "problem.progress_state_upper[" not in retained
+    assert "&corridor.elapsed_time_sec" in retained
+    assert (
+        "corridor_path_distance_m.push_back(\n"
+        "        problem.progress_stage_geometry"
+    ) not in retained
+    assert "intersect_overtake_target_tube(" in retained
+    assert "stage_corridor_mpc_target_bound_was_active_ ||" not in retained
+
+    fresh_start = SOURCE.index(
+        "OvertakeCanonicalFreshShadowResult\n"
+        "  evaluate_overtake_canonical_fresh_shadow("
+    )
+    fresh_end = SOURCE.index(
+        "evaluate_overtake_canonical_worker_fresh(", fresh_start
+    )
+    fresh = SOURCE[fresh_start:fresh_end]
+    assert "extraction.lateral_lower_m.push_back(" in fresh
+    assert "extraction.lateral_upper_m.push_back(" in fresh
+
+
+def test_overtake_preentry_target_prediction_is_an_explicit_snapshot_contract() -> None:
+    """Idle-side workers cannot depend on a committed target that does not exist yet."""
+
+    behavior_start = SOURCE.index("struct V2XBehaviorOutput")
+    behavior_end = SOURCE.index("struct ExtendedMpccBranchArtifact", behavior_start)
+    behavior = SOURCE[behavior_start:behavior_end]
+    assert "target_execution_prediction_valid" in behavior
+    assert "target_execution_predicted_longitudinal" in behavior
+    assert "target_execution_predicted_lateral" in behavior
+
+    selection_start = SOURCE.index("const auto set_target_execution_prediction =")
+    selection_end = SOURCE.index(
+        "output.overtake_entry_target_speed =", selection_start
+    )
+    selection = SOURCE[selection_start:selection_end]
+    assert "nearest_front_course_lateral" in selection
+    assert "nearest_front_lateral_velocity_valid" in selection
+    assert "target_execution_prediction_valid" in selection
+
+    tube_start = SOURCE.index("CurrentOvertakeTargetTube build_current_overtake_target_tube(")
+    tube_end = SOURCE.index(
+        "bool revalidate_overtake_entry_execution_certificate(", tube_start
+    )
+    tube = SOURCE[tube_start:tube_end]
+    assert "committed_target_prediction_available" in tube
+    assert "entry_target_prediction_available" in tube
+    assert "behavior.target_execution_predicted_lateral" in tube
+    assert "behavior.target_execution_predicted_longitudinal" in tube
+
 
 
 def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:

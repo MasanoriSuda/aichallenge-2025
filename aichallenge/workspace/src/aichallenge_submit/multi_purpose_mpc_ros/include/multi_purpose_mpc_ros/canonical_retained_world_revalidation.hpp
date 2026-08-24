@@ -156,6 +156,38 @@ struct OvertakeDynamicCorridorObservation
   bool current{false};
 };
 
+enum class OvertakeTargetTubeIntersectionReason
+{
+  Accepted,
+  InvalidInput,
+  Infeasible,
+};
+
+const char * to_string(OvertakeTargetTubeIntersectionReason reason) noexcept;
+
+struct OvertakeTargetTubeIntersectionRequest
+{
+  OvertakeDynamicCorridorObservation base_corridor;
+  int pass_side_sign{};
+  double required_center_separation_m{};
+  std::vector<double> target_lateral_m;
+  std::vector<bool> target_separation_active;
+};
+
+struct OvertakeTargetTubeIntersectionResult
+{
+  OvertakeTargetTubeIntersectionReason reason{
+    OvertakeTargetTubeIntersectionReason::InvalidInput};
+  std::optional<OvertakeDynamicCorridorObservation> corridor;
+  std::size_t rejected_sample_index{};
+};
+
+/// Intersect a wall/trust corridor with the current target occupancy tube.
+/// The result is immutable evidence that target exclusion is represented in
+/// every time sample consumed by retained-plan world revalidation.
+OvertakeTargetTubeIntersectionResult intersect_overtake_target_tube(
+  const OvertakeTargetTubeIntersectionRequest & request) noexcept;
+
 struct OvertakeCurrentWorldProofRequest
 {
   retained::CurrentExecutionProvenance current;

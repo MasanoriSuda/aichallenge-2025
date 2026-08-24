@@ -453,6 +453,159 @@ RetainedExecutionWindowResult build_retained_execution_window(
   return result;
 }
 
+std::optional<std::vector<double>> sample_retained_progress_advance(
+  const RetainedExecutionWindow & window,
+  const std::vector<double> & relative_time_sec) noexcept
+{
+  if (
+    relative_time_sec.empty() || window.samples.empty() ||
+    !std::isfinite(window.expected_current_progress_m) ||
+    !std::isfinite(window.expected_current_state.progress_m) ||
+    std::abs(
+      window.expected_current_progress_m -
+      window.expected_current_state.progress_m) > kIdentityTolerance ||
+    std::abs(relative_time_sec.front()) > kIdentityTolerance)
+  {
+    return std::nullopt;
+  }
+  double validated_time_sec = 0.0;
+  double validated_progress_m = window.expected_current_progress_m;
+  for (const auto & sample : window.samples) {
+    if (
+      !std::isfinite(sample.relative_time_sec) ||
+      !std::isfinite(sample.segment_duration_sec) ||
+      !std::isfinite(sample.segment_start_progress_m) ||
+      !std::isfinite(sample.absolute_progress_m) ||
+      !std::isfinite(sample.endpoint.progress_m) ||
+      sample.segment_duration_sec <= 0.0 ||
+      sample.relative_time_sec <= validated_time_sec ||
+      std::abs(
+        sample.relative_time_sec - validated_time_sec -
+        sample.segment_duration_sec) > kIdentityTolerance ||
+      std::abs(
+        sample.segment_start_progress_m - validated_progress_m) >
+      kIdentityTolerance ||
+      std::abs(sample.absolute_progress_m - sample.endpoint.progress_m) >
+      kIdentityTolerance ||
+      sample.endpoint.progress_m + kIdentityTolerance < validated_progress_m)
+    {
+      return std::nullopt;
+    }
+    validated_time_sec = sample.relative_time_sec;
+    validated_progress_m = sample.endpoint.progress_m;
+  }
+  std::vector<double> result;
+  result.reserve(relative_time_sec.size());
+  std::size_t sample_index = 0U;
+  double start_time_sec = 0.0;
+  double start_progress_m = window.expected_current_progress_m;
+  for (std::size_t query_index = 0U; query_index < relative_time_sec.size(); ++query_index) {
+    const double query_time_sec = relative_time_sec[query_index];
+    if (
+      !std::isfinite(query_time_sec) || query_time_sec < 0.0 ||
+      (query_index > 0U && query_time_sec + kIdentityTolerance <
+      relative_time_sec[query_index - 1U]))
+    {
+      return std::nullopt;
+    }
+    while (
+      sample_index < window.samples.size() &&
+      query_time_sec >
+      window.samples[sample_index].relative_time_sec + kIdentityTolerance)
+    {
+      start_time_sec = window.samples[sample_index].relative_time_sec;
+      start_progress_m = window.samples[sample_index].endpoint.progress_m;
+      ++sample_index;
+    }
+    double sampled_progress_m = start_progress_m;
+    if (sample_index < window.samples.size()) {
+      const auto & sample = window.samples[sample_index];
+      const double duration_sec = sample.relative_time_sec - start_time_sec;
+      if (
+        !std::isfinite(duration_sec) || duration_sec <= 0.0 ||
+        !std::isfinite(sample.endpoint.progress_m) ||
+        sample.endpoint.progress_m + kIdentityTolerance < start_progress_m)
+      {
+        return std::nullopt;
+      }
+      const double fraction = std::clamp(
+        (query_time_sec - start_time_sec) / duration_sec, 0.0, 1.0);
+      sampled_progress_m = start_progress_m +
+        fraction * (sample.endpoint.progress_m - start_progress_m);
+    }
+    const double advance_m =
+      sampled_progress_m - window.expected_current_progress_m;
+    if (!std::isfinite(advance_m) || advance_m < -kIdentityTolerance) {
+      return std::nullopt;
+    }
+    result.push_back(std::max(0.0, advance_m));
+  }
+  return result;
+}
+
+std::optional<RetainedLateralCorridor> build_retained_lateral_corridor(
+  const plan::CanonicalExecutionPlan & execution_plan,
+  const RetainedExecutionWindow & window) noexcept
+{
+  if (
+    plan::validate_canonical_execution_plan(execution_plan) !=
+    plan::CanonicalExecutionPlanRejectReason::None ||
+    execution_plan.plan_id != window.plan_id || !window.cursor.available ||
+    window.cursor.plan_id != execution_plan.plan_id)
+  {
+    return std::nullopt;
+  }
+  const auto rebuilt = build_retained_execution_window(
+    execution_plan, window.cursor);
+  if (!rebuilt.window.has_value() ||
+    !same_window(rebuilt.window.value(), window))
+  {
+    return std::nullopt;
+  }
+  const std::size_t control_index = window.cursor.first_control_stage_index;
+  if (
+    control_index >= execution_plan.control_stages.size() ||
+    control_index + 1U >= execution_plan.lateral_lower_m.size() ||
+    control_index + 1U >= execution_plan.lateral_upper_m.size())
+  {
+    return std::nullopt;
+  }
+  const double duration_sec =
+    execution_plan.control_stages[control_index].duration_sec;
+  const double fraction = window.cursor.stage_elapsed_sec / duration_sec;
+  if (!std::isfinite(fraction) || fraction < 0.0 || fraction >= 1.0) {
+    return std::nullopt;
+  }
+
+  RetainedLateralCorridor corridor;
+  corridor.relative_time_sec.reserve(window.samples.size() + 1U);
+  corridor.lower_m.reserve(window.samples.size() + 1U);
+  corridor.upper_m.reserve(window.samples.size() + 1U);
+  corridor.relative_time_sec.push_back(0.0);
+  corridor.lower_m.push_back(
+    execution_plan.lateral_lower_m[control_index] + fraction *
+    (execution_plan.lateral_lower_m[control_index + 1U] -
+    execution_plan.lateral_lower_m[control_index]));
+  corridor.upper_m.push_back(
+    execution_plan.lateral_upper_m[control_index] + fraction *
+    (execution_plan.lateral_upper_m[control_index + 1U] -
+    execution_plan.lateral_upper_m[control_index]));
+  for (const auto & sample : window.samples) {
+    if (
+      sample.endpoint_state_index >= execution_plan.lateral_lower_m.size() ||
+      sample.endpoint_state_index >= execution_plan.lateral_upper_m.size())
+    {
+      return std::nullopt;
+    }
+    corridor.relative_time_sec.push_back(sample.relative_time_sec);
+    corridor.lower_m.push_back(
+      execution_plan.lateral_lower_m[sample.endpoint_state_index]);
+    corridor.upper_m.push_back(
+      execution_plan.lateral_upper_m[sample.endpoint_state_index]);
+  }
+  return corridor;
+}
+
 std::optional<RetainedCourseFrameProgressRange>
 required_course_frame_progress_range(
   const RetainedExecutionWindow & window,

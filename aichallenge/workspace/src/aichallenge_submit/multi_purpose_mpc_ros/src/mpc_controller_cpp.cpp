@@ -2339,6 +2339,11 @@ struct V2XBehaviorOutput
   mpcc_progress::ExtendedBranchEvaluation extended_mpcc_left_branch;
   mpcc_progress::ExtendedBranchEvaluation extended_mpcc_right_branch;
   mpcc_progress::ExtendedBranchSelectionResolution extended_mpcc_branch_selection;
+  /// Immutable executable artifact produced by the same selected dual branch
+  /// as `overtake_selected_mission`.  It is entry evidence only; the live
+  /// controller repeats current-world proof before publishing it.
+  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
+  overtake_preentry_canonical_plan;
   bool overtake_selected_side_conflict{false};
   int overtake_lookahead_inner_side{0};
   bool overtake_inner_preference_selected{false};
@@ -2421,6 +2426,21 @@ struct V2XBehaviorOutput
   /// OvertakeLine Mission owns it. This closes the Entry-time gap between V2X
   /// observation and the later locked-target lifecycle.
   race_mpcc::TargetProvenance target_observation_provenance;
+  /// Immutable current-cycle prediction for `target_vehicle_id` before an
+  /// OvertakeLine Mission owns that target. Pre-entry branch workers must use
+  /// this observation instead of the committed `locked_target_*` lifecycle,
+  /// which is intentionally unavailable while the line is Idle.
+  bool target_execution_prediction_valid{false};
+  bool target_execution_position_jump{false};
+  bool target_execution_course_progress_rejected{false};
+  double target_execution_longitudinal{
+    std::numeric_limits<double>::infinity()};
+  double target_execution_lateral{
+    std::numeric_limits<double>::infinity()};
+  double target_execution_predicted_longitudinal{
+    std::numeric_limits<double>::infinity()};
+  double target_execution_predicted_lateral{
+    std::numeric_limits<double>::infinity()};
   bool locked_target_seen{false};
   bool locked_target_near_field_fallback_used{false};
   bool locked_target_position_jump{false};
@@ -2489,6 +2509,13 @@ struct V2XBehaviorOutput
   double low_speed_avoidance_stalled_sec{0.0};
   std::string reason;
   std::string overtake_block_reason;
+};
+
+struct ExtendedMpccBranchArtifact
+{
+  mpcc_progress::ExtendedBranchEvaluation evaluation;
+  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
+  preentry_canonical_plan;
 };
 
 struct MpccLiteAsyncResult
@@ -5359,6 +5386,7 @@ struct MpcProblem
   double progress_execution_mission_traveled_m{};
   double progress_execution_required_wall_clearance_m{
     std::numeric_limits<double>::quiet_NaN()};
+  bool progress_execution_target_exclusion_certified{false};
   std::vector<double> progress_execution_path_distance_m;
   std::vector<double> progress_execution_lateral_lower_m;
   std::vector<double> progress_execution_lateral_upper_m;
@@ -6600,6 +6628,8 @@ struct MPC
       mpcc_lite_shadow_last_feasible_resolution_;
     snapshot->mpcc_lite_control_last_feasible_entry_mission_ =
       mpcc_lite_control_last_feasible_entry_mission_;
+    snapshot->mpcc_lite_control_last_feasible_entry_plan_ =
+      mpcc_lite_control_last_feasible_entry_plan_;
     snapshot->mpcc_lite_control_last_feasible_target_id_ =
       mpcc_lite_control_last_feasible_target_id_;
     snapshot->mpcc_lite_control_last_feasible_entry_sec_ =
@@ -7230,6 +7260,7 @@ struct MPC
       -std::numeric_limits<double>::infinity();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
     mpcc_lite_control_last_feasible_entry_mission_.reset();
+    mpcc_lite_control_last_feasible_entry_plan_.reset();
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
       -std::numeric_limits<double>::infinity();
@@ -7918,8 +7949,13 @@ struct MPC
   mpcc_progress::ExtendedBranchEvaluation evaluate_extended_mpcc_branch(
     const V2XBehaviorOutput & source_behavior,
     const V2XTacticalSideAssessment & assessment,
-    const int horizon_size, const double now_sec)
+    const int horizon_size, const double now_sec,
+    std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> * const
+    preentry_canonical_plan)
   {
+    if (preentry_canonical_plan != nullptr) {
+      preentry_canonical_plan->reset();
+    }
     mpcc_progress::ExtendedBranchEvaluation evaluation;
     evaluation.side_sign = assessment.side;
     const auto candidate_resolution =
@@ -8008,7 +8044,7 @@ struct MPC
       stage_corridor_target_bound_suppressed_until_sec_ =
         -std::numeric_limits<double>::infinity();
 
-      const MpcProblem legacy = init_problem(
+      MpcProblem legacy = init_problem(
         N, model->safety_margin, now_sec, tracking_wp_id,
         get_preview_wp_id(tracking_wp_id), &behavior);
       if (!legacy.lateral_bounds_contract_valid) {
@@ -8118,6 +8154,43 @@ struct MPC
           "physical execution contract: " + physical_wall_reject_reason;
         return evaluation;
       }
+      const bool target_release_certified =
+        source_behavior.locked_target_current_body_footprints_separated &&
+        source_behavior.locked_target_footprint_prediction_valid &&
+        source_behavior.locked_target_predicted_body_footprint_sweep_separated;
+      if (!target_release_certified) {
+        double planned_ego_speed_mps = std::max(1.0, current_speed_mps_);
+        for (const double velocity_mps : exact_wall_proof->exact.velocity_mps) {
+          if (std::isfinite(velocity_mps)) {
+            planned_ego_speed_mps = std::max(
+              planned_ego_speed_mps, std::max(0.0, velocity_mps));
+          }
+        }
+        const auto target_tube = build_current_overtake_target_tube(
+          source_behavior, exact_wall_proof->exact.path_distance_m,
+          planned_ego_speed_mps);
+        const auto target_path = target_tube.valid ?
+          overtake_core::validate_frenet_dp_target_bound_horizon(
+          overtake_core::FrenetDpTargetBoundHorizonRequest{
+            true, assessment.side,
+            std::max(0.0, cfg.v2x_gap.vehicle_radius),
+            exact_wall_proof->exact.lateral_m, target_tube.lateral_m,
+            target_tube.separation_active}) :
+          overtake_core::FrenetDpTargetBoundHorizonResolution{};
+        if (!target_tube.valid || !target_path.valid || !target_path.feasible) {
+          std::ostringstream reason;
+          reason << "physical execution target contract: "
+                 << target_tube.reason;
+          if (target_tube.valid) {
+            reason << ", sample=" << target_path.failure_index
+                   << ", separation="
+                   << target_path.minimum_signed_separation_m << " m";
+          }
+          evaluation.failure_reason = reason.str();
+          return evaluation;
+        }
+      }
+      legacy.progress_execution_target_exclusion_certified = true;
       evaluation.physical_execution_certificate_valid = true;
       evaluation.physical_execution_certificate_source_sec = now_sec;
       evaluation.physical_execution_certificate_source_course_progress_m =
@@ -8170,13 +8243,43 @@ struct MPC
         std::isfinite(evaluation.terminal_velocity_mps);
       if (!evaluation.feasible) {
         evaluation.failure_reason = "extended branch metrics are non-finite";
-      } else if (!publish_certified_extended_progress_warm_start(
-          primal, outcome.result->dual, now_sec,
-          extended->progress_origin_m))
-      {
-        evaluation.feasible = false;
-        evaluation.failure_reason =
-          "extended branch certified warm-start publication rejected";
+      } else {
+        // Preserve the executable artifact from this already-solved branch.
+        // Reducing it to Mission metrics here forced production to launch a
+        // second solve after ShiftOut had already taken authority.
+        const auto target_provenance = selected_target_provenance(source_behavior);
+        mpcc_contract::MpccProblemContext prospective_context;
+        prospective_context.decision_id = active_control_decision_id_;
+        prospective_context.observation_generation = active_control_decision_id_;
+        prospective_context.intent =
+          overtake_line_state_.phase == OvertakeLinePhase::Pass ?
+          mpcc_contract::ControlIntent::Pass :
+          mpcc_contract::ControlIntent::ShiftOut;
+        prospective_context.intent_generation =
+          overtake_line_state_.mission_generation;
+        prospective_context.target_id = source_behavior.target_vehicle_id;
+        prospective_context.target_obstacle_generation =
+          target_provenance.observation_generation;
+        prospective_context.execution_side_sign = assessment.side;
+        prospective_context.formulation =
+          mpcc_contract::Formulation::VelocityProgress5State;
+        prospective_context = seal_problem_context_for_problem(
+          legacy, std::move(prospective_context));
+        const auto canonical = evaluate_overtake_canonical_fresh_shadow(
+          legacy, extended.value(), outcome.result.value(), now_sec,
+          prospective_context);
+        if (!canonical.selection_complete || canonical.selected.plan == nullptr) {
+          evaluation.feasible = false;
+          evaluation.failure_reason =
+            std::string{"pre-entry canonical artifact rejected: "} +
+            canonical.status + "/" + canonical.detail;
+        } else if (preentry_canonical_plan == nullptr) {
+          evaluation.feasible = false;
+          evaluation.failure_reason =
+            "pre-entry canonical artifact output unavailable";
+        } else {
+          *preentry_canonical_plan = canonical.selected.plan;
+        }
       }
     } catch (const std::exception & error) {
       evaluation.failure_reason = error.what();
@@ -8186,17 +8289,18 @@ struct MPC
     return evaluation;
   }
 
-  mpcc_progress::ExtendedBranchEvaluation evaluate_isolated_extended_mpcc_branch(
+  ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch(
     const V2XBehaviorOutput & behavior,
     const V2XTacticalSideAssessment & assessment,
     const int horizon_size, const double now_sec)
   {
-    mpcc_progress::ExtendedBranchEvaluation evaluation;
+    ExtendedMpccBranchArtifact artifact;
+    auto & evaluation = artifact.evaluation;
     evaluation.side_sign = assessment.side;
     try {
       if (model == nullptr || model->reference_path == nullptr || gap_planner == nullptr) {
         evaluation.failure_reason = "branch snapshot dependencies unavailable";
-        return evaluation;
+        return artifact;
       }
       auto reference_path_owner =
         std::make_shared<ReferencePath>(*model->reference_path);
@@ -8216,14 +8320,16 @@ struct MPC
       branch->active_extended_branch_target_id_ = behavior.target_vehicle_id;
       branch->active_extended_branch_side_sign_ = assessment.side;
       branch->active_extended_branch_horizon_size_ = horizon_size;
-      return branch->evaluate_extended_mpcc_branch(
-        behavior, assessment, horizon_size, now_sec);
+      artifact.evaluation = branch->evaluate_extended_mpcc_branch(
+        behavior, assessment, horizon_size, now_sec,
+        &artifact.preentry_canonical_plan);
+      return artifact;
     } catch (const std::exception & error) {
       evaluation.failure_reason = error.what();
     } catch (...) {
       evaluation.failure_reason = "unknown isolated branch exception";
     }
-    return evaluation;
+    return artifact;
   }
 
   void evaluate_and_select_extended_mpcc_branches(
@@ -8248,9 +8354,11 @@ struct MPC
           behavior, behavior.overtake_left_tactical_assessment,
           horizon_size, now_sec);
       });
-    behavior.extended_mpcc_right_branch = evaluate_isolated_extended_mpcc_branch(
+    auto right_artifact = evaluate_isolated_extended_mpcc_branch(
       behavior, behavior.overtake_right_tactical_assessment, horizon_size, now_sec);
-    behavior.extended_mpcc_left_branch = left_future.get();
+    auto left_artifact = left_future.get();
+    behavior.extended_mpcc_right_branch = std::move(right_artifact.evaluation);
+    behavior.extended_mpcc_left_branch = std::move(left_artifact.evaluation);
     behavior.extended_mpcc_branch_selection = mpcc_progress::select_extended_branch(
       mpcc_progress::ExtendedBranchSelectionRequest{
         behavior.extended_mpcc_left_branch,
@@ -8277,6 +8385,7 @@ struct MPC
         behavior.overtake_tiny_shift_direct_pass = false;
         behavior.validated_overtake_entry_longitudinal_owner = false;
         behavior.validated_overtake_entry_immediate_execution = false;
+        behavior.overtake_preentry_canonical_plan.reset();
         behavior.reason = std::string{"dual MPCC entry held: "} + reason;
       };
     if (!selection.valid || selection.selected_side_sign == 0) {
@@ -8321,6 +8430,9 @@ struct MPC
     }
     const auto & selected_branch = selection.selected_side_sign > 0 ?
       behavior.extended_mpcc_left_branch : behavior.extended_mpcc_right_branch;
+    const auto & selected_preentry_plan = selection.selected_side_sign > 0 ?
+      left_artifact.preentry_canonical_plan :
+      right_artifact.preentry_canonical_plan;
     if (
       selected_branch.side_sign == selected_mission.pass_side_sign &&
       selected_branch.physical_execution_certificate_valid &&
@@ -8343,6 +8455,7 @@ struct MPC
       selected_mission.physical_execution_certificate_target_provenance =
         selected_branch.physical_execution_certificate_target_provenance;
     }
+    behavior.overtake_preentry_canonical_plan = selected_preentry_plan;
     const bool base_line = std::abs(selected_mission.goal_lateral_m) <= kEps;
     behavior.overtake_pass_side_sign = selection.selected_side_sign;
     behavior.overtake_gap_available = true;
@@ -8500,6 +8613,7 @@ struct MPC
       -std::numeric_limits<double>::infinity();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
     mpcc_lite_control_last_feasible_entry_mission_.reset();
+    mpcc_lite_control_last_feasible_entry_plan_.reset();
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
       -std::numeric_limits<double>::infinity();
@@ -8798,8 +8912,11 @@ struct MPC
     double nearest_front_safety_distance = std::numeric_limits<double>::infinity();
     double nearest_front_speed = std::numeric_limits<double>::infinity();
     double nearest_front_lateral = std::numeric_limits<double>::infinity();
+    double nearest_front_course_lateral = std::numeric_limits<double>::infinity();
     double nearest_front_lateral_velocity = 0.0;
     bool nearest_front_lateral_velocity_valid = false;
+    bool nearest_front_position_jump = false;
+    bool nearest_front_course_progress_rejected = false;
     double nearest_front_longitudinal_acceleration = 0.0;
     bool nearest_front_longitudinal_acceleration_valid = false;
     double nearest_front_local_longitudinal = std::numeric_limits<double>::infinity();
@@ -8812,8 +8929,11 @@ struct MPC
       double distance{std::numeric_limits<double>::infinity()};
       double speed{std::numeric_limits<double>::infinity()};
       double lateral{std::numeric_limits<double>::infinity()};
+      double course_lateral{std::numeric_limits<double>::infinity()};
       double lateral_velocity{0.0};
       bool lateral_velocity_valid{false};
+      bool position_jump{false};
+      bool course_progress_rejected{false};
       double longitudinal_acceleration{0.0};
       bool longitudinal_acceleration_valid{false};
       double local_longitudinal{std::numeric_limits<double>::infinity()};
@@ -8829,6 +8949,12 @@ struct MPC
     double nearest_low_speed_corridor_distance = std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_speed = std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_lateral = std::numeric_limits<double>::infinity();
+    double nearest_low_speed_corridor_course_lateral =
+      std::numeric_limits<double>::infinity();
+    double nearest_low_speed_corridor_lateral_velocity = 0.0;
+    bool nearest_low_speed_corridor_lateral_velocity_valid = false;
+    bool nearest_low_speed_corridor_position_jump = false;
+    bool nearest_low_speed_corridor_course_progress_rejected = false;
     double nearest_low_speed_corridor_local_longitudinal =
       std::numeric_limits<double>::infinity();
     double nearest_low_speed_corridor_receipt_sec =
@@ -9314,9 +9440,13 @@ struct MPC
         nearest_dynamic_corridor.distance = clearance_longitudinal;
         nearest_dynamic_corridor.speed = low_speed_candidate_speed;
         nearest_dynamic_corridor.lateral = front_lateral;
+        nearest_dynamic_corridor.course_lateral = vehicle_course_lateral;
         nearest_dynamic_corridor.lateral_velocity = observed_course_lateral_velocity;
         nearest_dynamic_corridor.lateral_velocity_valid =
           observed_course_lateral_velocity_valid;
+        nearest_dynamic_corridor.position_jump = vehicle.position_jump;
+        nearest_dynamic_corridor.course_progress_rejected =
+          course_progress_continuity_rejected;
         nearest_dynamic_corridor.longitudinal_acceleration =
           front_longitudinal_acceleration;
         nearest_dynamic_corridor.longitudinal_acceleration_valid =
@@ -9349,6 +9479,14 @@ struct MPC
         nearest_low_speed_corridor_distance = clearance_longitudinal;
         nearest_low_speed_corridor_speed = low_speed_candidate_speed;
         nearest_low_speed_corridor_lateral = front_lateral;
+        nearest_low_speed_corridor_course_lateral = vehicle_course_lateral;
+        nearest_low_speed_corridor_lateral_velocity =
+          observed_course_lateral_velocity;
+        nearest_low_speed_corridor_lateral_velocity_valid =
+          observed_course_lateral_velocity_valid;
+        nearest_low_speed_corridor_position_jump = vehicle.position_jump;
+        nearest_low_speed_corridor_course_progress_rejected =
+          course_progress_continuity_rejected;
         nearest_low_speed_corridor_local_longitudinal = longitudinal;
         nearest_low_speed_corridor_receipt_sec = vehicle.receipt_sec;
         nearest_low_speed_corridor_progress_used = use_course_progress;
@@ -9547,9 +9685,13 @@ struct MPC
             std::numeric_limits<double>::infinity();
           nearest_front_speed = front_vehicle_speed;
           nearest_front_lateral = front_lateral;
+          nearest_front_course_lateral = vehicle_course_lateral;
           nearest_front_lateral_velocity = observed_course_lateral_velocity;
           nearest_front_lateral_velocity_valid =
             observed_course_lateral_velocity_valid;
+          nearest_front_position_jump = vehicle.position_jump;
+          nearest_front_course_progress_rejected =
+            course_progress_continuity_rejected;
           nearest_front_longitudinal_acceleration =
             front_longitudinal_acceleration;
           nearest_front_longitudinal_acceleration_valid =
@@ -9654,9 +9796,13 @@ struct MPC
         promoted_front_safety_envelope.safety_distance_m :
         std::numeric_limits<double>::infinity();
       nearest_front_lateral = nearest_dynamic_corridor.lateral;
+      nearest_front_course_lateral = nearest_dynamic_corridor.course_lateral;
       nearest_front_lateral_velocity = nearest_dynamic_corridor.lateral_velocity;
       nearest_front_lateral_velocity_valid =
         nearest_dynamic_corridor.lateral_velocity_valid;
+      nearest_front_position_jump = nearest_dynamic_corridor.position_jump;
+      nearest_front_course_progress_rejected =
+        nearest_dynamic_corridor.course_progress_rejected;
       nearest_front_longitudinal_acceleration =
         nearest_dynamic_corridor.longitudinal_acceleration;
       nearest_front_longitudinal_acceleration_valid =
@@ -9707,6 +9853,49 @@ struct MPC
     output.target_vehicle_id = has_front_vehicle ? nearest_front_id : nearest_side_id;
     output.target_observation_provenance = has_front_vehicle ?
       nearest_front_provenance : nearest_side_provenance;
+    const auto set_target_execution_prediction =
+      [&output, this](
+        const bool observed, const bool position_jump,
+        const bool course_progress_rejected, const double longitudinal_m,
+        const double course_lateral_m, const double target_speed_mps,
+        const bool lateral_velocity_valid, const double lateral_velocity_mps) {
+        output.target_execution_prediction_valid = false;
+        output.target_execution_position_jump = position_jump;
+        output.target_execution_course_progress_rejected =
+          course_progress_rejected;
+        output.target_execution_longitudinal = longitudinal_m;
+        output.target_execution_lateral = course_lateral_m;
+        output.target_execution_predicted_longitudinal =
+          std::numeric_limits<double>::infinity();
+        output.target_execution_predicted_lateral =
+          std::numeric_limits<double>::infinity();
+        const double prediction_time_sec =
+          std::max(0.0, cfg.v2x_gap.prediction_time);
+        if (
+          !observed || position_jump || course_progress_rejected ||
+          !std::isfinite(longitudinal_m) ||
+          !std::isfinite(course_lateral_m) ||
+          !std::isfinite(target_speed_mps) ||
+          !std::isfinite(current_speed_mps_) ||
+          !lateral_velocity_valid || !std::isfinite(lateral_velocity_mps) ||
+          !std::isfinite(prediction_time_sec))
+        {
+          return;
+        }
+        output.target_execution_predicted_longitudinal =
+          longitudinal_m +
+          (target_speed_mps - current_speed_mps_) * prediction_time_sec;
+        output.target_execution_predicted_lateral =
+          course_lateral_m + lateral_velocity_mps * prediction_time_sec;
+        output.target_execution_prediction_valid =
+          std::isfinite(output.target_execution_predicted_longitudinal) &&
+          std::isfinite(output.target_execution_predicted_lateral);
+      };
+    set_target_execution_prediction(
+      has_front_vehicle, nearest_front_position_jump,
+      nearest_front_course_progress_rejected, nearest_front_distance,
+      nearest_front_course_lateral, nearest_front_speed,
+      nearest_front_lateral_velocity_valid, nearest_front_lateral_velocity);
     output.overtake_entry_target_speed =
       has_front_vehicle ? nearest_front_speed : nearest_side_speed;
     if (
@@ -10559,6 +10748,14 @@ struct MPC
         output.target_vehicle_id = nearest_low_speed_corridor_id;
         output.target_observation_provenance =
           nearest_low_speed_corridor_provenance;
+        set_target_execution_prediction(
+          true, nearest_low_speed_corridor_position_jump,
+          nearest_low_speed_corridor_course_progress_rejected,
+          nearest_low_speed_corridor_distance,
+          nearest_low_speed_corridor_course_lateral,
+          nearest_low_speed_corridor_speed,
+          nearest_low_speed_corridor_lateral_velocity_valid,
+          nearest_low_speed_corridor_lateral_velocity);
       };
     bool low_speed_avoidance_gap_blocked = false;
     if (
@@ -14887,6 +15084,8 @@ struct MPC
       };
     const auto apply_mpcc_entry_execution_contract = [&] (
       overtake_core::OvertakeMissionCandidate & mission,
+      const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
+      preentry_plan,
       const char * source)
       {
         if (mission.pass_side_sign != -1 && mission.pass_side_sign != 1) {
@@ -14901,8 +15100,16 @@ struct MPC
         std::string certificate_reason = "not-required";
         if (
           physical_execution_certificate_required &&
+          preentry_plan == nullptr)
+        {
+          certificate_reason = "pre-entry canonical plan unavailable";
+        }
+        if (
+          physical_execution_certificate_required &&
+          (preentry_plan == nullptr ||
           !revalidate_overtake_entry_execution_certificate(
-            mission, output, ref_wp_id, N, lb, ub, now_sec, certificate_reason))
+            mission, *preentry_plan, output,
+            ref_wp_id, N, lb, ub, now_sec, certificate_reason)))
         {
           authoritative_assessment.gap_available = false;
           authoritative_assessment.selected_mission.reset();
@@ -15134,6 +15341,7 @@ struct MPC
           async_extended_entry_admission.admitted &&
           (async_entry_side == -1 || async_entry_side == 1) &&
           async_entry_mission.has_value() &&
+          async_behavior.overtake_preentry_canonical_plan != nullptr &&
           async_entry_mission->pass_side_sign == async_entry_side &&
           async_entry_mission->feasible &&
           async_entry_prefix_resolution.valid &&
@@ -15145,10 +15353,16 @@ struct MPC
         if (async_entry_context) {
           auto accepted_async_entry_mission = async_entry_mission.value();
           if (apply_mpcc_entry_execution_contract(
-              accepted_async_entry_mission, "async-result"))
+              accepted_async_entry_mission,
+              async_behavior.overtake_preentry_canonical_plan,
+              "async-result"))
           {
+            output.overtake_preentry_canonical_plan =
+              async_behavior.overtake_preentry_canonical_plan;
             mpcc_lite_control_last_feasible_entry_mission_ =
               accepted_async_entry_mission;
+            mpcc_lite_control_last_feasible_entry_plan_ =
+              async_behavior.overtake_preentry_canonical_plan;
             mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
             mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
             mpcc_authority_action =
@@ -16041,11 +16255,18 @@ struct MPC
         auto cached_mission = winning_mission.value();
         cached_mission.pass_side_sign = authority.selected_side_sign;
         const bool entry_contract_applied =
-          apply_mpcc_entry_execution_contract(cached_mission, "dual-current");
+          apply_mpcc_entry_execution_contract(
+          cached_mission, output.overtake_preentry_canonical_plan,
+          "dual-current");
         // Prefix execution uses the shared progressive-entry admission.
         // Complete Missions retain their full-plan contract.
-        if (entry_contract_applied && !last_feasible_hold) {
+        if (
+          entry_contract_applied && !last_feasible_hold &&
+          output.overtake_preentry_canonical_plan != nullptr)
+        {
           mpcc_lite_control_last_feasible_entry_mission_ = cached_mission;
+          mpcc_lite_control_last_feasible_entry_plan_ =
+            output.overtake_preentry_canonical_plan;
           mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
           mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
         }
@@ -16064,6 +16285,7 @@ struct MPC
         output.mpcc_lite_cross_side_replan_mission = winning_mission;
       } else if (shadow_runtime_hard_fault) {
         mpcc_lite_control_last_feasible_entry_mission_.reset();
+        mpcc_lite_control_last_feasible_entry_plan_.reset();
         mpcc_lite_control_last_feasible_target_id_.clear();
         mpcc_lite_control_last_feasible_entry_sec_ =
           -std::numeric_limits<double>::infinity();
@@ -16161,6 +16383,7 @@ struct MPC
     }
     const bool mpcc_entry_cache_fresh =
       mpcc_lite_control_last_feasible_entry_mission_.has_value() &&
+      mpcc_lite_control_last_feasible_entry_plan_ != nullptr &&
       std::isfinite(mpcc_lite_control_last_feasible_entry_sec_) &&
       now_sec >= mpcc_lite_control_last_feasible_entry_sec_ &&
       now_sec - mpcc_lite_control_last_feasible_entry_sec_ <=
@@ -16295,7 +16518,13 @@ struct MPC
       }
       if (admitted_mission.has_value()) {
         auto & mission = admitted_mission.value();
-        apply_mpcc_entry_execution_contract(mission, "cached-fresh");
+        if (apply_mpcc_entry_execution_contract(
+            mission, mpcc_lite_control_last_feasible_entry_plan_,
+            "cached-fresh"))
+        {
+          output.overtake_preentry_canonical_plan =
+            mpcc_lite_control_last_feasible_entry_plan_;
+        }
       }
     } else if (
       mpcc_lite_control_last_feasible_entry_mission_.has_value() &&
@@ -16305,6 +16534,7 @@ struct MPC
       overtake_solver_recovery_active_))
     {
       mpcc_lite_control_last_feasible_entry_mission_.reset();
+      mpcc_lite_control_last_feasible_entry_plan_.reset();
       mpcc_lite_control_last_feasible_target_id_.clear();
       mpcc_lite_control_last_feasible_entry_sec_ =
         -std::numeric_limits<double>::infinity();
@@ -19633,6 +19863,11 @@ struct MPC
       progress_execution_context_active ? overtake_line_state_.pass_side_sign : 0,
       progress_execution_context_active ? overtake_mission_progress_traveled() : 0.0,
       progress_execution_required_wall_clearance_m,
+      progress_execution_context_active &&
+      (stage_corridor_target_bound_effective ||
+      (behavior_output.locked_target_current_body_footprints_separated &&
+      behavior_output.locked_target_footprint_prediction_valid &&
+      behavior_output.locked_target_predicted_body_footprint_sweep_separated)),
       std::move(progress_execution_path_distance_m),
       std::move(progress_execution_lateral_lower_m),
       std::move(progress_execution_lateral_upper_m),
@@ -22214,8 +22449,141 @@ struct MPC
       diagnostic);
   }
 
+  struct CurrentOvertakeTargetTube
+  {
+    bool valid{false};
+    std::vector<double> lateral_m;
+    std::vector<bool> separation_active;
+    std::string reason{"invalid-input"};
+  };
+
+  CurrentOvertakeTargetTube build_current_overtake_target_tube(
+    const V2XBehaviorOutput & behavior,
+    const std::vector<double> & path_distance_m,
+    const double planned_ego_speed_mps,
+    const std::vector<double> * const arrival_time_sec = nullptr) const
+  {
+    CurrentOvertakeTargetTube result;
+    const bool committed_target_prediction_available =
+      behavior.locked_target_seen &&
+      !behavior.locked_target_position_jump &&
+      !behavior.locked_target_course_progress_rejected &&
+      std::isfinite(behavior.locked_target_longitudinal) &&
+      std::isfinite(behavior.locked_target_lateral) &&
+      behavior.locked_target_footprint_prediction_valid &&
+      std::isfinite(behavior.locked_target_predicted_longitudinal);
+    const bool entry_target_prediction_available =
+      behavior.target_execution_prediction_valid &&
+      !behavior.target_execution_position_jump &&
+      !behavior.target_execution_course_progress_rejected &&
+      std::isfinite(behavior.target_execution_longitudinal) &&
+      std::isfinite(behavior.target_execution_lateral) &&
+      std::isfinite(behavior.target_execution_predicted_longitudinal) &&
+      std::isfinite(behavior.target_execution_predicted_lateral);
+    if (
+      model == nullptr || path_distance_m.empty() ||
+      (arrival_time_sec != nullptr &&
+      arrival_time_sec->size() != path_distance_m.size()) ||
+      (!committed_target_prediction_available &&
+      !entry_target_prediction_available) ||
+      !std::isfinite(planned_ego_speed_mps) || planned_ego_speed_mps <= 0.0 ||
+      cfg.v2x_gap.prediction_time <= kEps)
+    {
+      result.reason = "current target prediction unavailable";
+      return result;
+    }
+
+    const double target_lateral_now = committed_target_prediction_available ?
+      (std::isfinite(behavior.locked_target_relative_lateral) ?
+      model->spatial_state.e_y + behavior.locked_target_relative_lateral :
+      behavior.locked_target_lateral) :
+      behavior.target_execution_lateral;
+    const double target_lateral_predicted = committed_target_prediction_available ?
+      (behavior.locked_target_lateral_prediction_valid &&
+      std::isfinite(behavior.locked_target_predicted_relative_lateral) ?
+      model->spatial_state.e_y +
+      behavior.locked_target_predicted_relative_lateral :
+      target_lateral_now) :
+      behavior.target_execution_predicted_lateral;
+    const double target_longitudinal_now = committed_target_prediction_available ?
+      behavior.locked_target_longitudinal :
+      behavior.target_execution_longitudinal;
+    const double target_longitudinal_predicted =
+      committed_target_prediction_available ?
+      behavior.locked_target_predicted_longitudinal :
+      behavior.target_execution_predicted_longitudinal;
+    const auto prediction_speed =
+      overtake_core::resolve_conservative_prediction_speed(
+      overtake_core::ConservativePredictionSpeedRequest{
+        std::max(0.0, current_speed_mps_), planned_ego_speed_mps, 1.0});
+    if (!prediction_speed.valid) {
+      result.reason = "current target prediction speed invalid";
+      return result;
+    }
+    const double maximum_prediction_time_sec = std::max(
+      std::max(0.0, cfg.v2x_gap.prediction_time),
+      std::max(
+        0.0,
+        cfg.v2x_behavior.overtake_line.
+        receding_horizon_encounter_prediction_max_sec));
+    const double longitudinal_overlap_threshold_m =
+      0.5 * (std::max(0.0, cfg.v2x_gap.vehicle_length) +
+      std::max(0.0, model->length)) +
+      std::max(
+        0.0,
+        cfg.v2x_behavior.overtake_line.
+        receding_horizon_target_longitudinal_buffer);
+
+    result.lateral_m.reserve(path_distance_m.size());
+    result.separation_active.reserve(path_distance_m.size());
+    for (std::size_t index = 0U; index < path_distance_m.size(); ++index) {
+      const double distance_m = path_distance_m[index];
+      double sample_ego_speed_mps = prediction_speed.prediction_ego_speed_mps;
+      if (arrival_time_sec != nullptr) {
+        const double sample_time_sec = (*arrival_time_sec)[index];
+        if (
+          !std::isfinite(sample_time_sec) || sample_time_sec < 0.0 ||
+          (index > 0U && sample_time_sec + kEps <
+          (*arrival_time_sec)[index - 1U]) ||
+          (sample_time_sec <= kEps && std::abs(distance_m) > kEps) ||
+          (sample_time_sec > kEps && distance_m <= kEps))
+        {
+          result.lateral_m.clear();
+          result.separation_active.clear();
+          result.reason = "current target plan-time alignment invalid";
+          return result;
+        }
+        if (sample_time_sec > kEps) {
+          sample_ego_speed_mps = distance_m / sample_time_sec;
+        }
+      }
+      const auto prediction =
+        overtake_core::resolve_receding_horizon_target_prediction(
+        overtake_core::RecedingHorizonTargetPredictionRequest{
+          true, distance_m, std::max(1.0, current_speed_mps_),
+          sample_ego_speed_mps,
+          std::max(0.0, cfg.v2x_gap.prediction_time),
+          maximum_prediction_time_sec, target_lateral_now,
+          target_lateral_predicted, target_longitudinal_now,
+          target_longitudinal_predicted,
+          longitudinal_overlap_threshold_m});
+      if (!prediction.valid) {
+        result.lateral_m.clear();
+        result.separation_active.clear();
+        result.reason = "current target tube prediction failed";
+        return result;
+      }
+      result.lateral_m.push_back(prediction.target_lateral_m);
+      result.separation_active.push_back(prediction.body_overlap_window);
+    }
+    result.valid = true;
+    result.reason = "current target tube available";
+    return result;
+  }
+
   bool revalidate_overtake_entry_execution_certificate(
     overtake_core::OvertakeMissionCandidate & mission,
+    const canonical_plan::CanonicalExecutionPlan & preentry_plan,
     const V2XBehaviorOutput & current_behavior,
     const int ref_wp_id, const int horizon_size,
     const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
@@ -22329,6 +22697,67 @@ struct MPC
     if (!trust_envelope.valid || !trust_envelope.active) {
       reject_reason = "physical execution certificate trust envelope failed";
       return false;
+    }
+
+    const bool target_release_certified =
+      current_behavior.locked_target_current_body_footprints_separated &&
+      current_behavior.locked_target_footprint_prediction_valid &&
+      current_behavior.locked_target_predicted_body_footprint_sweep_separated;
+    if (!target_release_certified) {
+      const auto cursor = canonical_plan::resolve_execution_cursor(
+        preentry_plan, now_sec);
+      const auto window = canonical_retained::build_retained_execution_window(
+        preentry_plan, cursor);
+      if (!window.window.has_value()) {
+        reject_reason = "physical execution canonical window unavailable";
+        return false;
+      }
+      std::vector<double> plan_time_sec{0.0};
+      std::vector<double> plan_lateral_m{
+        window.window->expected_current_state.lateral_m};
+      plan_time_sec.reserve(window.window->samples.size() + 1U);
+      plan_lateral_m.reserve(window.window->samples.size() + 1U);
+      for (const auto & sample : window.window->samples) {
+        plan_time_sec.push_back(sample.relative_time_sec);
+        plan_lateral_m.push_back(sample.endpoint.lateral_m);
+      }
+      const auto plan_distance_m =
+        canonical_retained::sample_retained_progress_advance(
+        window.window.value(), plan_time_sec);
+      if (!plan_distance_m.has_value()) {
+        reject_reason = "physical execution canonical progress unavailable";
+        return false;
+      }
+      double planned_ego_speed_mps = std::max(1.0, current_speed_mps_);
+      for (const auto & state : preentry_plan.predicted_states) {
+        if (std::isfinite(state.velocity_mps)) {
+          planned_ego_speed_mps = std::max(
+            planned_ego_speed_mps, std::max(0.0, state.velocity_mps));
+        }
+      }
+      const auto target_tube = build_current_overtake_target_tube(
+        current_behavior, plan_distance_m.value(), planned_ego_speed_mps,
+        &plan_time_sec);
+      const auto target_path = target_tube.valid ?
+        overtake_core::validate_frenet_dp_target_bound_horizon(
+        overtake_core::FrenetDpTargetBoundHorizonRequest{
+          true, mission.pass_side_sign,
+          std::max(0.0, cfg.v2x_gap.vehicle_radius),
+          plan_lateral_m, target_tube.lateral_m,
+          target_tube.separation_active}) :
+        overtake_core::FrenetDpTargetBoundHorizonResolution{};
+      if (!target_tube.valid || !target_path.valid || !target_path.feasible) {
+        std::ostringstream reason;
+        reason << "physical execution current target tube rejected: "
+               << target_tube.reason;
+        if (target_tube.valid) {
+          reason << ", sample=" << target_path.failure_index
+                 << ", separation="
+                 << target_path.minimum_signed_separation_m << " m";
+        }
+        reject_reason = reason.str();
+        return false;
+      }
     }
 
     const auto robust_clearance = resolve_robust_clearance(ref_wp_id, horizon_size);
@@ -23568,6 +23997,16 @@ struct MPC
       extraction_request.solved_sec = now_sec;
       extraction_request.progress_origin_m = extended_problem->progress_origin_m;
       extraction_request.stage_duration_sec = problem.progress_stage_dt_sec;
+      extraction_request.lateral_lower_m.reserve(
+        static_cast<std::size_t>(problem.N + 1));
+      extraction_request.lateral_upper_m.reserve(
+        static_cast<std::size_t>(problem.N + 1));
+      for (int state = 0; state <= problem.N; ++state) {
+        extraction_request.lateral_lower_m.push_back(
+          problem.progress_state_lower[state * progress_metadata_nx]);
+        extraction_request.lateral_upper_m.push_back(
+          problem.progress_state_upper[state * progress_metadata_nx]);
+      }
       extraction_request.extended_primal = execution_primal.primal;
       auto canonical_chain =
         canonical_plan_adapter::build_fresh_canonical_command(
@@ -24904,6 +25343,12 @@ struct MPC
         result.physical_wall_diagnostic);
       return finish();
     }
+    if (!problem.progress_execution_target_exclusion_certified) {
+      result.status = "target-certificate-reject";
+      result.detail =
+        "exact five-state trajectory lacks current target exclusion proof";
+      return finish();
+    }
 
     double horizon_sec = 0.0;
     for (const double stage_dt_sec : problem.progress_stage_dt_sec) {
@@ -24923,6 +25368,7 @@ struct MPC
     canonical_solution.physical.checked = true;
     canonical_solution.physical.wall_clear = result.physically_certified;
     canonical_solution.physical.obstacles_clear =
+      problem.progress_execution_target_exclusion_certified &&
       problem.lateral_bounds_contract_valid &&
       result.lateral_contract_satisfied;
     canonical_solution.prediction_stage_count =
@@ -24936,6 +25382,16 @@ struct MPC
     extraction.solved_sec = now_sec;
     extraction.progress_origin_m = extended_problem.progress_origin_m;
     extraction.stage_duration_sec = problem.progress_stage_dt_sec;
+    extraction.lateral_lower_m.reserve(
+      static_cast<std::size_t>(problem.N + 1));
+    extraction.lateral_upper_m.reserve(
+      static_cast<std::size_t>(problem.N + 1));
+    for (int state = 0; state <= problem.N; ++state) {
+      extraction.lateral_lower_m.push_back(
+        problem.progress_state_lower[state * progress_metadata_nx]);
+      extraction.lateral_upper_m.push_back(
+        problem.progress_state_upper[state * progress_metadata_nx]);
+    }
     extraction.extended_primal = execution_primal.primal;
     auto chain = canonical_plan_adapter::build_fresh_canonical_command(
       canonical_plan_adapter::FreshCanonicalCommandRequest{
@@ -25126,7 +25582,6 @@ struct MPC
     retained_plan,
     OvertakeCanonicalFreshShadowResult & result)
   {
-    constexpr int progress_metadata_nx = 3;
     if (!result.eligible) {
       result.retained_outcome =
         OvertakeCanonicalFreshShadowResult::RetainedOutcome::Ineligible;
@@ -25152,11 +25607,7 @@ struct MPC
       !std::isfinite(problem.progress_origin_m) ||
       !std::isfinite(model->reference_path->length) ||
       model->reference_path->length <= 0.0 || problem.N <= 0 ||
-      problem.progress_state_lower.size() !=
-      progress_metadata_nx * (problem.N + 1) ||
-      problem.progress_state_upper.size() !=
-      progress_metadata_nx * (problem.N + 1) ||
-      problem.progress_stage_dt_sec.size() !=
+      problem.progress_stage_geometry.stages.size() !=
       static_cast<std::size_t>(problem.N))
     {
       result.retained_outcome =
@@ -25182,6 +25633,15 @@ struct MPC
         OvertakeCanonicalFreshShadowResult::RetainedOutcome::WindowRejected;
       result.retained_detail = std::string{"window rejected: "} +
         canonical_retained::to_string(window.reason);
+      return;
+    }
+    const auto retained_lateral_corridor =
+      canonical_retained::build_retained_lateral_corridor(
+      *retained_plan, window.window.value());
+    if (!retained_lateral_corridor.has_value()) {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::WindowRejected;
+      result.retained_detail = "retained plan lateral corridor unavailable";
       return;
     }
     const auto current_origin = canonical_retained::lift_progress_to_retained_branch(
@@ -25287,10 +25747,7 @@ struct MPC
     corridor.observation_generation = context.target_obstacle_generation;
     corridor.observation_sec = target_provenance.receipt_sec;
     corridor.current = target_current;
-    corridor.target_exclusion_encoded =
-      stage_corridor_mpc_target_bound_was_active_ ||
-      problem.dynamic_obstacle_lateral_escape_active ||
-      problem.dynamic_obstacle_margin_escape_tracking_contract_active;
+    corridor.target_exclusion_encoded = false;
     corridor.release_current_body_clear =
       last_v2x_behavior_output_.locked_target_current_body_footprints_separated;
     corridor.release_prediction_valid =
@@ -25298,23 +25755,50 @@ struct MPC
     corridor.release_predicted_sweep_clear =
       last_v2x_behavior_output_.
       locked_target_predicted_body_footprint_sweep_separated;
-    corridor.elapsed_time_sec.reserve(static_cast<std::size_t>(problem.N + 1));
-    corridor.lateral_lower_m.reserve(static_cast<std::size_t>(problem.N + 1));
-    corridor.lateral_upper_m.reserve(static_cast<std::size_t>(problem.N + 1));
-    corridor.elapsed_time_sec.push_back(0.0);
-    corridor.lateral_lower_m.push_back(
-      problem.progress_state_lower[progress_metadata_nx]);
-    corridor.lateral_upper_m.push_back(
-      problem.progress_state_upper[progress_metadata_nx]);
-    double elapsed_sec = 0.0;
-    for (int stage = 0; stage < problem.N; ++stage) {
-      elapsed_sec += problem.progress_stage_dt_sec[static_cast<std::size_t>(stage)];
-      corridor.elapsed_time_sec.push_back(elapsed_sec);
-      const int state = stage + 1;
-      corridor.lateral_lower_m.push_back(
-        problem.progress_state_lower[progress_metadata_nx * state]);
-      corridor.lateral_upper_m.push_back(
-        problem.progress_state_upper[progress_metadata_nx * state]);
+    corridor.elapsed_time_sec = retained_lateral_corridor->relative_time_sec;
+    corridor.lateral_lower_m = retained_lateral_corridor->lower_m;
+    corridor.lateral_upper_m = retained_lateral_corridor->upper_m;
+    const bool target_release_certified =
+      corridor.release_current_body_clear && corridor.release_prediction_valid &&
+      corridor.release_predicted_sweep_clear;
+    if (!target_release_certified) {
+      const auto corridor_path_distance_m =
+        canonical_retained::sample_retained_progress_advance(
+        window.window.value(), corridor.elapsed_time_sec);
+      if (!corridor_path_distance_m.has_value()) {
+        result.retained_outcome =
+          OvertakeCanonicalFreshShadowResult::RetainedOutcome::
+          ProvenanceUnavailable;
+        result.retained_detail =
+          "retained canonical progress-time alignment unavailable";
+        return;
+      }
+      double planned_ego_speed_mps = std::max(1.0, current_speed_mps_);
+      for (
+        std::size_t state = cursor.first_control_stage_index;
+        state < retained_plan->predicted_states.size(); ++state)
+      {
+        const double velocity_mps =
+          retained_plan->predicted_states[state].velocity_mps;
+        if (std::isfinite(velocity_mps)) {
+          planned_ego_speed_mps = std::max(
+            planned_ego_speed_mps, std::max(0.0, velocity_mps));
+        }
+      }
+      const auto target_tube = build_current_overtake_target_tube(
+        last_v2x_behavior_output_, corridor_path_distance_m.value(),
+        planned_ego_speed_mps, &corridor.elapsed_time_sec);
+      if (target_tube.valid) {
+        const auto intersection =
+          canonical_retained_world::intersect_overtake_target_tube(
+          canonical_retained_world::OvertakeTargetTubeIntersectionRequest{
+            corridor, context.execution_side_sign,
+            std::max(0.0, cfg.v2x_gap.vehicle_radius),
+            target_tube.lateral_m, target_tube.separation_active});
+        if (intersection.corridor.has_value()) {
+          corridor = std::move(intersection.corridor.value());
+        }
+      }
     }
     corridor.tube_id =
       canonical_retained_world::fingerprint_overtake_corridor_observation(
@@ -26435,6 +26919,16 @@ struct MPC
       extraction_request.solved_sec = now_sec;
       extraction_request.progress_origin_m = extended_problem->progress_origin_m;
       extraction_request.stage_duration_sec = problem.progress_stage_dt_sec;
+      extraction_request.lateral_lower_m.reserve(
+        static_cast<std::size_t>(problem.N + 1));
+      extraction_request.lateral_upper_m.reserve(
+        static_cast<std::size_t>(problem.N + 1));
+      for (int state = 0; state <= problem.N; ++state) {
+        extraction_request.lateral_lower_m.push_back(
+          problem.progress_state_lower[state * progress_metadata_nx]);
+        extraction_request.lateral_upper_m.push_back(
+          problem.progress_state_upper[state * progress_metadata_nx]);
+      }
       extraction_request.extended_primal = execution_primal.primal;
       auto canonical_extraction =
         canonical_plan_adapter::extract_canonical_execution_plan(
@@ -28347,6 +28841,8 @@ struct MPC
   mpcc_lite_shadow_last_feasible_resolution_;
   std::optional<overtake_core::OvertakeMissionCandidate>
   mpcc_lite_control_last_feasible_entry_mission_;
+  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
+  mpcc_lite_control_last_feasible_entry_plan_;
   std::string mpcc_lite_control_last_feasible_target_id_;
   double mpcc_lite_control_last_feasible_entry_sec_{
     -std::numeric_limits<double>::infinity()};
@@ -29116,6 +29612,7 @@ private:
       std::numeric_limits<double>::quiet_NaN();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
     mpcc_lite_control_last_feasible_entry_mission_.reset();
+    mpcc_lite_control_last_feasible_entry_plan_.reset();
     mpcc_lite_control_last_feasible_target_id_.clear();
     mpcc_lite_control_last_feasible_entry_sec_ =
       -std::numeric_limits<double>::infinity();
@@ -37642,6 +38139,8 @@ private:
             candidate_available &&
             behavior_output.overtake_selected_mission->
             physical_execution_certificate_valid;
+          const bool canonical_plan_available =
+            behavior_output.overtake_preentry_canonical_plan != nullptr;
           const auto prepared_pass_plan = candidate_available ?
             overtake_core::build_overtake_pass_plan(
             overtake_core::OvertakePassPlanRequest{
@@ -37649,18 +38148,20 @@ private:
             overtake_core::OvertakePassPlan{};
           if (
             !candidate_available || !prepared_pass_plan.valid ||
-            (physical_execution_certificate_required && !certificate_available))
+            (physical_execution_certificate_required &&
+            (!certificate_available || !canonical_plan_available)))
           {
             overtake_locked_side_sign_ = 0;
             static rclcpp::Clock atomic_commit_log_clock{RCL_STEADY_TIME};
             RCLCPP_WARN_THROTTLE(
               rclcpp::get_logger("mpc_controller"), atomic_commit_log_clock, 250,
               "Overtake entry commit rejected: source=fsm-atomic-commit, target=%s, "
-              "side=%d, candidate=%d, pass_plan=%d, certificate=%d, "
+              "side=%d, candidate=%d, pass_plan=%d, certificate=%d, plan=%d, "
               "phase=%s, action=keep-cruise-follow, wp_id=%d",
               behavior_output.target_vehicle_id.c_str(), pass_side_sign,
               candidate_available ? 1 : 0, prepared_pass_plan.valid ? 1 : 0,
               certificate_available ? 1 : 0,
+              canonical_plan_available ? 1 : 0,
               to_string(overtake_line_state_.phase), model->wp_id);
             return output;
           }
@@ -37668,6 +38169,8 @@ private:
           // before changing the FSM phase.  A phase transition without the
           // execution contract previously exposed one cycle of legacy path
           // ownership and made admission non-atomic.
+          const OvertakeLineState entry_rollback_state = overtake_line_state_;
+          const int entry_rollback_side_sign = overtake_locked_side_sign_;
           freeze_selected_overtake_mission(
             behavior_output.overtake_selected_mission, now_sec);
           if (
@@ -37676,7 +38179,8 @@ private:
             (physical_execution_certificate_required &&
             !overtake_line_state_.mission_frenet_dp_execution_active))
           {
-            overtake_locked_side_sign_ = 0;
+            overtake_line_state_ = entry_rollback_state;
+            overtake_locked_side_sign_ = entry_rollback_side_sign;
             RCLCPP_ERROR(
               rclcpp::get_logger("mpc_controller"),
               "Overtake entry commit rejected: source=fsm-freeze, target=%s, "
@@ -37687,6 +38191,53 @@ private:
               overtake_line_state_.mission_plan.has_value() ? 1 : 0,
               overtake_line_state_.mission_frenet_dp_execution_active ? 1 : 0,
               model->wp_id);
+            return output;
+          }
+          const auto expected_intent = direct_pass ?
+            mpcc_contract::ControlIntent::Pass :
+            mpcc_contract::ControlIntent::ShiftOut;
+          const auto target_provenance =
+            selected_target_provenance(behavior_output);
+          const auto preentry_admission =
+            follow_async::resolve_overtake_preentry_plan(
+            follow_async::OvertakePreentryPlanRequest{
+              behavior_output.overtake_preentry_canonical_plan,
+              expected_intent, overtake_line_state_.mission_generation,
+              target_provenance.observation_generation,
+              behavior_output.target_vehicle_id, pass_side_sign, now_sec});
+          canonical_plan::CanonicalExecutionPlanStoreReason preentry_store_reason{
+            canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
+          const bool preentry_context_ready =
+            preentry_admission.admitted &&
+            prepare_overtake_canonical_async_context(
+            behavior_output.overtake_preentry_canonical_plan->problem);
+          if (preentry_context_ready && overtake_canonical_lifecycle_ != nullptr) {
+            preentry_store_reason =
+              overtake_canonical_lifecycle_->plan_store.replace(
+              *behavior_output.overtake_preentry_canonical_plan);
+          }
+          const bool preentry_plan_stored =
+            preentry_context_ready &&
+            preentry_store_reason ==
+            canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
+          if (!preentry_plan_stored) {
+            overtake_line_state_ = entry_rollback_state;
+            overtake_locked_side_sign_ = entry_rollback_side_sign;
+            invalidate_overtake_canonical_async_context();
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "Overtake entry commit rejected: source=preentry-canonical, "
+              "target=%s, side=%d, intent=%s, generation=%lu, admission=%s, "
+              "context=%d, store=%s, action=keep-cruise-follow, wp_id=%d",
+              behavior_output.target_vehicle_id.c_str(), pass_side_sign,
+              mpcc_contract::to_string(expected_intent),
+              static_cast<unsigned long>(
+                behavior_output.overtake_preentry_canonical_plan != nullptr ?
+                behavior_output.overtake_preentry_canonical_plan->problem.
+                intent_generation : 0U),
+              follow_async::to_string(preentry_admission.reason),
+              preentry_context_ready ? 1 : 0,
+              canonical_plan::to_string(preentry_store_reason), model->wp_id);
             return output;
           }
         }

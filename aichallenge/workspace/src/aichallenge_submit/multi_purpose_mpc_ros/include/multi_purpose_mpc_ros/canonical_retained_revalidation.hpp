@@ -59,6 +59,28 @@ RetainedExecutionWindowResult build_retained_execution_window(
   const plan::CanonicalExecutionPlan & execution_plan,
   const plan::CanonicalExecutionCursor & cursor);
 
+/// Sample the retained plan's reference-progress advance at current-horizon
+/// times. This is the spatial coordinate owned by the selected canonical
+/// plan; using waypoint spacing here would assign a different opponent tube
+/// to the same immutable plan during current-world proof.
+std::optional<std::vector<double>> sample_retained_progress_advance(
+  const RetainedExecutionWindow & window,
+  const std::vector<double> & relative_time_sec) noexcept;
+
+struct RetainedLateralCorridor
+{
+  std::vector<double> relative_time_sec;
+  std::vector<double> lower_m;
+  std::vector<double> upper_m;
+};
+
+/// Slice the immutable lateral bounds that belonged to the exact problem
+/// solved for this plan. The first sample is interpolated at the retained
+/// cursor; later samples preserve the remaining plan-state endpoints.
+std::optional<RetainedLateralCorridor> build_retained_lateral_corridor(
+  const plan::CanonicalExecutionPlan & execution_plan,
+  const RetainedExecutionWindow & window) noexcept;
+
 struct RetainedCourseFrameProgressRange
 {
   double minimum_progress_m{};

@@ -19,6 +19,8 @@ const char * to_string(const CanonicalPlanExtractionReason reason) noexcept
       return "invalid-progress-origin";
     case CanonicalPlanExtractionReason::StageDurationCountMismatch:
       return "stage-duration-count-mismatch";
+    case CanonicalPlanExtractionReason::CorridorCountMismatch:
+      return "corridor-count-mismatch";
     case CanonicalPlanExtractionReason::PrimalSizeMismatch:
       return "primal-size-mismatch";
     case CanonicalPlanExtractionReason::NonfinitePrimal: return "nonfinite-primal";
@@ -50,6 +52,13 @@ CanonicalPlanExtractionResult extract_canonical_execution_plan(
   const std::size_t horizon = request.problem.horizon_steps;
   if (request.stage_duration_sec.size() != horizon) {
     result.reason = CanonicalPlanExtractionReason::StageDurationCountMismatch;
+    return result;
+  }
+  if (
+    request.lateral_lower_m.size() != horizon + 1U ||
+    request.lateral_upper_m.size() != horizon + 1U)
+  {
+    result.reason = CanonicalPlanExtractionReason::CorridorCountMismatch;
     return result;
   }
   constexpr std::size_t state_dimension =
@@ -84,6 +93,8 @@ CanonicalPlanExtractionResult extract_canonical_execution_plan(
   plan.problem = request.problem;
   plan.solution = request.solution;
   plan.solved_sec = request.solved_sec;
+  plan.lateral_lower_m = request.lateral_lower_m;
+  plan.lateral_upper_m = request.lateral_upper_m;
   plan.predicted_states.reserve(horizon + 1U);
   plan.control_stages.reserve(horizon);
   for (std::size_t stage = 0U; stage <= horizon; ++stage) {

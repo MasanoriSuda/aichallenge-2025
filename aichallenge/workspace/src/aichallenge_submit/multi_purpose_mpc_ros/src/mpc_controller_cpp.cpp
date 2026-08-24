@@ -20,6 +20,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
@@ -144,6 +145,8 @@ namespace rate_resolved_physical =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
 namespace rate_resolved_physical_wall =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
+namespace rate_resolved_certified =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
 namespace runtime_speed_profile = ::multi_purpose_mpc_ros::runtime_speed_profile;
@@ -6766,6 +6769,8 @@ struct MPC
           std::make_unique<LatestOnlyWorker>();
         rate_resolved_track_cruise_physical_wall_mailbox_ =
           std::make_shared<rate_resolved_physical_wall::Mailbox>();
+        rate_resolved_track_cruise_certified_plan_store_ =
+          std::make_shared<rate_resolved_certified::Store>();
         follow_canonical_async_mailbox_ =
           std::make_shared<follow_async::Mailbox>();
         follow_canonical_async_mailbox_->reset_context(
@@ -27704,11 +27709,13 @@ struct MPC
     const auto mailbox = rate_resolved_track_cruise_shadow_mailbox_;
     const auto solver_context =
       rate_resolved_track_cruise_shadow_solver_context_;
+    const auto certified_plan_store =
+      rate_resolved_track_cruise_certified_plan_store_;
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
       [snapshot = std::move(snapshot), mailbox, solver_context,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
-        physical_registered]() mutable {
+        physical_registered, certified_plan_store]() mutable {
         const auto started = SteadyClock::now();
         rate_resolved_shadow::Result result;
         try {
@@ -27804,6 +27811,13 @@ struct MPC
             SteadyClock::now() - physical_started).count();
           candidate.completed_sec = candidate.identity.captured_sec +
             candidate.compute_ms * 1.0e-3;
+          if (
+            candidate.outcome == rate_resolved_physical_wall::Outcome::Accepted &&
+            certified_plan_store != nullptr)
+          {
+            static_cast<void>(certified_plan_store->certify_and_replace(
+              result.execution_artifact, candidate));
+          }
           physical_result = std::move(candidate);
         }
         static_cast<void>(mailbox->publish(std::move(result)));
@@ -27996,6 +28010,10 @@ struct MPC
       rate_resolved_track_cruise_physical_wall_mailbox_ != nullptr ?
       rate_resolved_track_cruise_physical_wall_mailbox_->state() :
       rate_resolved_physical_wall::MailboxState{};
+    const auto certified_plan_store_state =
+      rate_resolved_track_cruise_certified_plan_store_ != nullptr ?
+      rate_resolved_track_cruise_certified_plan_store_->state() :
+      rate_resolved_certified::StoreState{};
     const double denominator = static_cast<double>(
       std::max<std::uint64_t>(1U, window.consumed_count));
     const std::uint64_t physical_evaluated_count =
@@ -28187,7 +28205,9 @@ struct MPC
       "rollback:%lu/unsubmitted:%lu/superseded:%lu/identity_mismatch:%lu, "
       "consumed=%lu/current_semantic=%lu/"
       "stale_semantic=%lu/worker_reject=%lu, outcome=%s, time=%.3f/%.3fms"
-      "(avg/max), authority=shadow, selected=0",
+      "(avg/max), certified_store=available:%d/sequence:%lu/accepted:%lu/"
+      "invalid:%lu/stale:%lu/cert_reject:%lu/cert_reason:%s/last:%s, "
+      "authority=shadow, selected=0",
       static_cast<unsigned long>(window.physical_submission_count),
       static_cast<unsigned long>(window.physical_replaced_pending_count),
       static_cast<unsigned long>(window.physical_submission_reject_count),
@@ -28211,7 +28231,19 @@ struct MPC
       static_cast<unsigned long>(window.physical_worker_reject_count),
       to_string(window.last_physical.outcome),
       window.total_physical_ms / physical_denominator,
-      window.maximum_physical_ms);
+      window.maximum_physical_ms,
+      certified_plan_store_state.plan_available ? 1 : 0,
+      static_cast<unsigned long>(
+        certified_plan_store_state.latest_accepted_sequence),
+      static_cast<unsigned long>(certified_plan_store_state.accepted_count),
+      static_cast<unsigned long>(certified_plan_store_state.invalid_plan_count),
+      static_cast<unsigned long>(certified_plan_store_state.stale_sequence_count),
+      static_cast<unsigned long>(
+        certified_plan_store_state.certification_reject_count),
+      rate_resolved_certified::to_string(
+        certified_plan_store_state.last_certification_reason),
+      rate_resolved_certified::to_string(
+        certified_plan_store_state.last_reason));
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(
@@ -31041,6 +31073,8 @@ struct MPC
   rate_resolved_track_cruise_shadow_worker_;
   std::shared_ptr<rate_resolved_physical_wall::Mailbox>
   rate_resolved_track_cruise_physical_wall_mailbox_;
+  std::shared_ptr<rate_resolved_certified::Store>
+  rate_resolved_track_cruise_certified_plan_store_;
   std::uint64_t
   rate_resolved_track_cruise_physical_wall_last_consumed_sequence_{};
   std::uint64_t rate_resolved_track_cruise_shadow_next_sequence_{1U};

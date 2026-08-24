@@ -1887,6 +1887,25 @@ traceでRejoinのlegacy normal sourceとcontract join failureは0、Recoveryか�
 したがってsingle-authority構造は合格とするが、物理reject期間のEmergency率と25 ms callback超過は
 Overtake実用品質の残課題であり、wall margin緩和やretained fallbackで隠してはならない。
 
+#### Steering-rate 6-state certified plan store（2026-08-25、移行shadow）
+
+操舵角を状態、操舵レートを入力として解くrate-resolved 6-state MPCCでは、数値解の
+`ExecutionArtifact`と、同じartifactをexact course frameへ復元した物理wall証明を、別々の
+latest-resultから後段で推測結合してはならない。既存の単一直列worker内でsolve、artifact抽出、
+物理証明を完了し、物理結果が`Accepted`かつartifact identity、decision、problem fingerprint、
+stage geometry、intent、snapshot時刻が完全一致する場合だけ、1個のimmutable `CertifiedPlan`を
+構築する。
+
+`mpcc_rate_resolved_certified_plan::Store`はartifact sequenceに対して単調なall-or-nothing置換を行う。invalid／staleな
+置換は直前のaccepted planを破壊しない。これは将来のsame-formulation retained pathの証拠保管で
+あり、元のpose snapshotとcourse-frame windowに対する証明を後の制御周期へ延命するものではない。
+retained実行には、exact cursor、現在intent、現在poseからremaining horizonへのconnector、現在の
+wall／obstacle worldを別のdecision identityで再証明する必要がある。
+
+本段階は`authority=shadow, selected=0`であり、5-state Track/Cruise publisher、Emergency、Recovery、
+solver設定、wall margin、制御parameterを変更しない。6-state production昇格はcurrent-world retained
+admissionの動的証拠と、旧5-state通常ownerを同じSliceで削除できる条件が揃うまで禁止する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

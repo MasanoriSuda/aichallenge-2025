@@ -64,6 +64,15 @@ bool identity_valid(const Identity & identity) noexcept
          std::isfinite(identity.snapshot_sec) && identity.snapshot_sec >= 0.0;
 }
 
+bool same_identity(const Identity & lhs, const Identity & rhs) noexcept
+{
+  return lhs.sequence == rhs.sequence &&
+         lhs.decision_id == rhs.decision_id &&
+         lhs.source_problem_fingerprint == rhs.source_problem_fingerprint &&
+         lhs.stage_geometry_id == rhs.stage_geometry_id &&
+         lhs.intent == rhs.intent && lhs.snapshot_sec == rhs.snapshot_sec;
+}
+
 const char * to_string(const RejectReason reason) noexcept
 {
   switch (reason) {

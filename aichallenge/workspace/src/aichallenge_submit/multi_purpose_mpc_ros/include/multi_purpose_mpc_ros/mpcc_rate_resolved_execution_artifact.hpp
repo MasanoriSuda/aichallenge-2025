@@ -24,6 +24,7 @@ struct Identity
 };
 
 bool identity_valid(const Identity & identity) noexcept;
+bool same_identity(const Identity & lhs, const Identity & rhs) noexcept;
 
 struct PredictedState
 {

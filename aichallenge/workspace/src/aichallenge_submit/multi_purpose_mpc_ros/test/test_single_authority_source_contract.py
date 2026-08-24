@@ -894,6 +894,10 @@ def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
     assert "fingerprint_course_frame_window(" in snapshot_builder
     assert "rate_resolved_physical::build(" in pipeline
     assert "rate_resolved_physical_wall::evaluate(" in pipeline
+    assert "certified_plan_store->certify_and_replace(" in pipeline
+    assert pipeline.index("rate_resolved_physical_wall::evaluate(") < pipeline.index(
+        "certified_plan_store->certify_and_replace("
+    )
     assert pipeline.count(
         "rate_resolved_track_cruise_shadow_worker_->submit_latest("
     ) == 1
@@ -938,6 +942,22 @@ def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
         "rclcpp",
     ):
         assert forbidden not in wall_source
+
+    certified_header = (
+        Path(__file__).resolve().parents[1]
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_certified_plan.hpp"
+    ).read_text(encoding="utf-8")
+    assert "std::shared_ptr<const artifact::ExecutionArtifact>" in certified_header
+    assert "physical::Identity physical_identity" in certified_header
+    for forbidden in (
+        "CanonicalExecutionPlanStore",
+        "CanonicalNormalCommand",
+        "publish_control",
+        "rclcpp",
+    ):
+        assert forbidden not in certified_header
 
 
 def test_control_callback_overrun_trace_is_observation_only() -> None:

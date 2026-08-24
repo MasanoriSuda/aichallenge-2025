@@ -88,6 +88,7 @@ enum class ActuationSampleReason
   TerminalSteeringLimitViolation,
   SampledSteeringLimitViolation,
   CurvatureNonfinite,
+  SolverCertificateInvalid,
   Count,
 };
 
@@ -105,6 +106,27 @@ struct ActuationSampleEvaluation
 /// provenance. This function never clamps a solver result.
 ActuationSampleEvaluation evaluate_actuation_sample(
   const ActuationSampleRequest & request) noexcept;
+
+/// A sample request whose rate and predicted stage states have already passed
+/// the whole-QP physical row certificate. The semantic current steering is the
+/// integration origin; the solver's reconstructed state zero is diagnostic.
+struct CertifiedActuationSampleRequest
+{
+  double semantic_initial_steering_rad{};
+  double certified_steering_rate_radps{};
+  double elapsed_sec{};
+  double stage_duration_sec{};
+  double maximum_abs_steering_rad{};
+  double wheelbase_m{};
+  double maximum_normalized_constraint_violation{};
+};
+
+/// Sample a certified first-stage rate at the publisher time. QP-owned rate,
+/// future-state and dynamics constraints are not duplicated here. Timing and
+/// the actual sampled physical steering remain fail-closed; no value is
+/// clamped.
+ActuationSampleEvaluation evaluate_certified_actuation_sample(
+  const CertifiedActuationSampleRequest & request) noexcept;
 
 /// Resolve an intermediate actuator sample from one certified constant-rate
 /// stage. Invalid rate, time, or steering bounds are rejected, never clamped.

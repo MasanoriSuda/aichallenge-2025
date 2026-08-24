@@ -27634,7 +27634,7 @@ struct MPC
       "constraint=%.3g/norm:%.3g, first_rate=%.3fradps, "
       "publish_step=%.4frad, last=seq:%lu/decision:%lu/intent:%s/"
       "source:0x%016lx/geometry:0x%016lx/outcome:%s/sample_reason:%s/"
-      "dt:%.6f/stage_dt:%.6f/delta0:%.9f/rate:%.9f/terminal:%.9f/"
+      "dt:%.6f/stage_dt:%.6f/delta0:%.9f/solver_delta0:%.9f/rate:%.9f/terminal:%.9f/"
       "sampled:%.9f/delta_max:%.9f/rate_max:%.9f/%s, "
       "authority=shadow, selected=0, physical=not-evaluated, warm=none",
       static_cast<unsigned long>(window.submission_count),
@@ -27722,6 +27722,7 @@ struct MPC
       window.last_result_available ? last.publication_interval_sec : 0.0,
       window.last_result_available ? last.first_stage_duration_sec : 0.0,
       window.last_result_available ? last.initial_steering_rad : 0.0,
+      window.last_result_available ? last.solver_initial_steering_rad : 0.0,
       window.last_result_available ? last.first_steering_rate_radps : 0.0,
       window.last_result_available ? last.calculated_terminal_steering_rad : 0.0,
       window.last_result_available ? last.sampled_steering_rad : 0.0,

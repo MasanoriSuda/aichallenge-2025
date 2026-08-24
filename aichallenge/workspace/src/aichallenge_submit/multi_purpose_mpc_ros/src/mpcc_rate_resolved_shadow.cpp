@@ -86,6 +86,7 @@ bool result_valid(const Result & result) noexcept
          std::isfinite(result.first_steering_rate_radps) &&
          std::isfinite(result.first_virtual_progress_speed_mps) &&
          std::isfinite(result.initial_steering_rad) &&
+         std::isfinite(result.solver_initial_steering_rad) &&
          std::isfinite(result.sampled_steering_rad) &&
          std::isfinite(result.sampled_curvature_radpm) &&
          std::isfinite(result.terminal_velocity_mps) &&
@@ -165,7 +166,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   const int horizon = snapshot.request.horizon_steps;
   const int state_values = model::kStateDimension * (horizon + 1);
   const auto & primal = outcome.result->primal;
-  result.initial_steering_rad = primal[model::kSteeringIndex];
+  result.initial_steering_rad = snapshot.request.current_steering_rad;
+  result.solver_initial_steering_rad = primal[model::kSteeringIndex];
   result.first_acceleration_mps2 =
     primal[state_values + model::kAccelerationIndex];
   result.first_steering_rate_radps =
@@ -185,14 +187,14 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     primal[terminal_state + model::kProgressIndex];
   result.terminal_steering_rad =
     primal[terminal_state + model::kSteeringIndex];
-  const auto sample = model::evaluate_actuation_sample(
-    model::ActuationSampleRequest{
+  const auto sample = model::evaluate_certified_actuation_sample(
+    model::CertifiedActuationSampleRequest{
       result.initial_steering_rad, result.first_steering_rate_radps,
       snapshot.publication_interval_sec,
       snapshot.request.inputs.front().stage_dt_sec,
       snapshot.request.maximum_abs_steering_rad,
-      snapshot.request.maximum_abs_steering_rate_radps,
-      snapshot.request.wheelbase_m});
+      snapshot.request.wheelbase_m,
+      result.maximum_normalized_constraint_violation});
   result.actuation_sample_reason = sample.reason;
   result.calculated_terminal_steering_rad = sample.terminal_steering_rad;
   result.sampled_steering_rad = sample.sampled_steering_rad;

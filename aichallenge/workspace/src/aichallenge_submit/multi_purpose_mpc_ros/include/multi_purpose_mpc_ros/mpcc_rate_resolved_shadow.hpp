@@ -65,6 +65,7 @@ struct Result
   double first_steering_rate_radps{};
   double first_virtual_progress_speed_mps{};
   double initial_steering_rad{};
+  double solver_initial_steering_rad{};
   double sampled_steering_rad{};
   double calculated_terminal_steering_rad{};
   double first_stage_duration_sec{};

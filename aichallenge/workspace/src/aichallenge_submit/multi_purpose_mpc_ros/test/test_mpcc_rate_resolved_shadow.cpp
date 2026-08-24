@@ -74,6 +74,8 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_TRUE(shadow::result_valid(result));
   EXPECT_TRUE(result.constraints_satisfied);
   EXPECT_TRUE(result.actuation_sampled);
+  EXPECT_DOUBLE_EQ(result.initial_steering_rad, input.request.current_steering_rad);
+  EXPECT_TRUE(std::isfinite(result.solver_initial_steering_rad));
   EXPECT_NEAR(
     result.sampled_steering_rad,
     result.initial_steering_rad +

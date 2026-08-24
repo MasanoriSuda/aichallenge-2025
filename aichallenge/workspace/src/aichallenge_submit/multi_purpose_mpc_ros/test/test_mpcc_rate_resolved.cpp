@@ -164,3 +164,34 @@ TEST(MpccRateResolved, RejectsUncertifiedActuationSamples)
   EXPECT_FALSE(rate::sample_actuation(rate::ActuationSampleRequest{
     0.10, 0.80, 0.025, 0.12, 0.6, 0.7, 2.0}).has_value());
 }
+
+TEST(MpccRateResolved, SamplesOnlyPublicationBoundaryFromCertifiedQp)
+{
+  const auto accepted = rate::evaluate_certified_actuation_sample(
+    rate::CertifiedActuationSampleRequest{
+      0.10, 0.70001, 0.025, 0.12, 0.60, 2.0, 0.75});
+  ASSERT_EQ(accepted.reason, rate::ActuationSampleReason::Accepted);
+  ASSERT_TRUE(accepted.sample.has_value());
+  EXPECT_NEAR(accepted.sample->steering_rad, 0.11750025, 1e-12);
+
+  const auto uncertified = rate::evaluate_certified_actuation_sample(
+    rate::CertifiedActuationSampleRequest{
+      0.10, 0.10, 0.025, 0.12, 0.60, 2.0, 1.01});
+  EXPECT_EQ(
+    uncertified.reason,
+    rate::ActuationSampleReason::SolverCertificateInvalid);
+
+  const auto late = rate::evaluate_certified_actuation_sample(
+    rate::CertifiedActuationSampleRequest{
+      0.10, 0.10, 0.13, 0.12, 0.60, 2.0, 0.50});
+  EXPECT_EQ(
+    late.reason,
+    rate::ActuationSampleReason::PublicationAfterStageEnd);
+
+  const auto sampled_violation = rate::evaluate_certified_actuation_sample(
+    rate::CertifiedActuationSampleRequest{
+      0.59, 0.70, 0.025, 0.12, 0.60, 2.0, 0.50});
+  EXPECT_EQ(
+    sampled_violation.reason,
+    rate::ActuationSampleReason::SampledSteeringLimitViolation);
+}

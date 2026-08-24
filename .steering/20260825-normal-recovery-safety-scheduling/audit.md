@@ -25,3 +25,17 @@ not delete or bypass any of them; it changes only their scheduling boundary.
 Make Recovery safety eligibility a typed pure contract and apply it once to
 all map safety acquisition. Do not optimize MPCC or tune Recovery parameters in
 the same Slice.
+
+## Dynamic conclusion
+
+The committed-source dev2 run confirmed the causal hypothesis. Once normal
+motion began, both domains produced skip-only windows and Recovery time fell
+from millisecond-scale map work to roughly 0.01--0.02 ms while the detector
+continued to report `Moving/vehicle_moving`. Windows before race start and
+other explicitly eligible contexts retained full safety work. No callback
+overrun occurred.
+
+The remaining 22.679 ms maximum is no longer a Recovery-scheduling defect: its
+Recovery region was only 0.013 ms. Production MPCC still owns the largest
+runtime tail and should be assessed separately as part of the rate-resolved
+authority migration, not patched by changing Recovery or control cadence.

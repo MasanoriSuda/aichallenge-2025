@@ -725,6 +725,20 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   expose one independent 25 ms production callback overrun. Attribute that production timing tail
   before promoting the rate-resolved formulation; do not conflate it with the asynchronous shadow
   solver or bypass it by changing cadence.
+- `.steering/20260825-control-callback-overrun-provenance` assigns an exact offending production
+  callback to bounded regions without changing behavior. Decision 2096 in
+  `output/20260825-023027` used 20.786 ms in `MPC::get_control()` and another 5.046 ms in synchronous
+  Recovery evaluation, while post-MPCC work and publication were negligible. Code audit found that
+  ordinary moving Cruise still performed Recovery wall classification and footprint sampling before
+  `StuckDetector` rejected it as `VehicleMoving`.
+- `.steering/20260825-normal-recovery-safety-scheduling` repairs that responsibility order through a
+  typed fail-closed eligibility contract. Clearly moving Normal cycles still update the detector/core
+  but skip Recovery occupancy-grid work; low-speed candidates, solver fallback, rearm, dynamic lateral
+  execution and every non-Normal Recovery state retain full evaluation. All 1,837 package tests and
+  the 25-package build pass. In `output/20260825-024731`, 5,570 evaluations were skipped and 643 stayed
+  full; skip-only Recovery time averaged 0.0164 ms and no 25 ms callback overrun occurred. Active
+  Recovery and Overtake completion were `NOT EXERCISED`. The remaining production MPCC runtime tail
+  is independent; do not reintroduce Recovery work or tune cadence in response.
 
 ## Slice 6: Legacy and migration path removal
 

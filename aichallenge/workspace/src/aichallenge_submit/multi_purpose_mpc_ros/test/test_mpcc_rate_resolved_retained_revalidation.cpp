@@ -160,6 +160,30 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
   EXPECT_EQ(result.proof->obstacle_generation, 7U);
 }
 
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  UsesObservationToControlDurationForVelocityReachability)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 1.0;
+  request.control_origin_sec = 1.05;
+  request.current_speed_mps = 2.0;
+  request.measured_to_control_path = {
+    {50.0, 0.0, 0.0}, request.control_pose};
+  request.measured_to_control_elapsed_sec = {0.0, 0.05};
+  request.obstacles.observed_sec = request.now_sec;
+
+  const auto result = retained::evaluate(request);
+
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_NEAR(result.proof->velocity_difference_mps, 0.05, 1e-9);
+  EXPECT_NEAR(result.proof->reachable_velocity_lower_mps, 1.849999, 1e-9);
+  EXPECT_NEAR(result.proof->reachable_velocity_upper_mps, 2.050001, 1e-9);
+  EXPECT_NEAR(result.proof->velocity_reachability_duration_sec, 0.05, 1e-9);
+}
+
 TEST(MpccRateResolvedRetainedRevalidation, AcceptsClearDynamicObstacle)
 {
   const auto plan = certified_plan();
@@ -306,9 +330,13 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableVelocity)
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
   request.current_speed_mps = 4.0;
-  EXPECT_EQ(
-    retained::evaluate(request).reason,
-    retained::Reason::VelocityUnreachable);
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::VelocityUnreachable);
+  EXPECT_FALSE(result.proof.has_value());
+  EXPECT_NEAR(result.velocity_difference_mps, -1.95, 1e-9);
+  EXPECT_NEAR(result.reachable_velocity_lower_mps, 3.999999, 1e-9);
+  EXPECT_NEAR(result.reachable_velocity_upper_mps, 4.000001, 1e-9);
+  EXPECT_NEAR(result.velocity_reachability_duration_sec, 0.0, 1e-9);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsBlockedConnector)

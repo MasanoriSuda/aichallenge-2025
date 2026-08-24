@@ -443,18 +443,28 @@ Result evaluate(const Request & request)
   const double maximum_steering_step_rad =
     execution.maximum_abs_steering_rate_radps *
     request.publication_interval_sec + execution.physical_global_tolerance;
+  result.steering_difference_rad = steering_difference_rad;
+  result.maximum_steering_step_rad = maximum_steering_step_rad;
   if (std::abs(steering_difference_rad) > maximum_steering_step_rad) {
     result.reason = Reason::SteeringUnreachable;
     return result;
   }
+  const double velocity_reachability_duration_sec =
+    request.control_origin_sec - request.now_sec;
   const double velocity_lower_mps = std::max(
     0.0, request.current_speed_mps +
-    request.minimum_acceleration_mps2 * request.publication_interval_sec -
+    request.minimum_acceleration_mps2 * velocity_reachability_duration_sec -
     execution.physical_global_tolerance);
   const double velocity_upper_mps = std::max(
     0.0, request.current_speed_mps +
-    request.maximum_acceleration_mps2 * request.publication_interval_sec +
+    request.maximum_acceleration_mps2 * velocity_reachability_duration_sec +
     execution.physical_global_tolerance);
+  result.velocity_difference_mps =
+    actuation.actuation->predicted_speed_mps - request.current_speed_mps;
+  result.reachable_velocity_lower_mps = velocity_lower_mps;
+  result.reachable_velocity_upper_mps = velocity_upper_mps;
+  result.velocity_reachability_duration_sec =
+    velocity_reachability_duration_sec;
   if (actuation.actuation->predicted_speed_mps < velocity_lower_mps ||
     actuation.actuation->predicted_speed_mps > velocity_upper_mps)
   {
@@ -556,10 +566,11 @@ Result evaluate(const Request & request)
   proof.lap_offset = lift.lap_offset;
   proof.steering_difference_rad = steering_difference_rad;
   proof.maximum_steering_step_rad = maximum_steering_step_rad;
-  proof.velocity_difference_mps =
-    actuation.actuation->predicted_speed_mps - request.current_speed_mps;
-  proof.reachable_velocity_lower_mps = velocity_lower_mps;
-  proof.reachable_velocity_upper_mps = velocity_upper_mps;
+  proof.velocity_difference_mps = result.velocity_difference_mps;
+  proof.reachable_velocity_lower_mps = result.reachable_velocity_lower_mps;
+  proof.reachable_velocity_upper_mps = result.reachable_velocity_upper_mps;
+  proof.velocity_reachability_duration_sec =
+    result.velocity_reachability_duration_sec;
   proof.delay_checked_pose_count = delay.checked_pose_count;
   proof.connector_checked_pose_count = connector_result.checked_pose_count;
   proof.dynamic_checked_pose_count = dynamic.checked_pose_count;

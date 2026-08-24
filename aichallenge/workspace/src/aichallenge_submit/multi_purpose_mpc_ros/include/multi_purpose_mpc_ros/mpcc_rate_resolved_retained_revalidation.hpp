@@ -104,6 +104,7 @@ struct Proof
   double velocity_difference_mps{};
   double reachable_velocity_lower_mps{};
   double reachable_velocity_upper_mps{};
+  double velocity_reachability_duration_sec{};
   std::size_t delay_checked_pose_count{};
   std::size_t connector_checked_pose_count{};
   std::size_t dynamic_checked_pose_count{};
@@ -121,6 +122,18 @@ struct Result
   std::size_t dynamic_checked_pose_count{};
   double minimum_dynamic_clearance_m{
     std::numeric_limits<double>::infinity()};
+  double steering_difference_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double maximum_steering_step_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double velocity_difference_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double reachable_velocity_lower_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double reachable_velocity_upper_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double velocity_reachability_duration_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   std::optional<Proof> proof;
 };
 

@@ -6471,6 +6471,9 @@ struct RateResolvedRetainedShadowEvaluation
   double steering_difference_rad{};
   double maximum_steering_step_rad{};
   double velocity_difference_mps{};
+  double reachable_velocity_lower_mps{};
+  double reachable_velocity_upper_mps{};
+  double velocity_reachability_duration_sec{};
   std::size_t obstacle_count{};
   std::size_t dynamic_checked_pose_count{};
   double minimum_dynamic_clearance_m{
@@ -28166,6 +28169,16 @@ struct MPC
     evaluation.reason = result.reason;
     evaluation.cursor_reason = result.cursor_reason;
     evaluation.actuation_reason = result.actuation_reason;
+    evaluation.steering_difference_rad = result.steering_difference_rad;
+    evaluation.maximum_steering_step_rad =
+      result.maximum_steering_step_rad;
+    evaluation.velocity_difference_mps = result.velocity_difference_mps;
+    evaluation.reachable_velocity_lower_mps =
+      result.reachable_velocity_lower_mps;
+    evaluation.reachable_velocity_upper_mps =
+      result.reachable_velocity_upper_mps;
+    evaluation.velocity_reachability_duration_sec =
+      result.velocity_reachability_duration_sec;
     evaluation.dynamic_checked_pose_count = result.dynamic_checked_pose_count;
     evaluation.minimum_dynamic_clearance_m =
       result.minimum_dynamic_clearance_m;
@@ -28182,12 +28195,6 @@ struct MPC
         result.proof->observation_origin_sec;
       evaluation.control_origin_sec = result.proof->control_origin_sec;
       evaluation.prediction_delay_sec = result.proof->prediction_delay_sec;
-      evaluation.steering_difference_rad =
-        result.proof->steering_difference_rad;
-      evaluation.maximum_steering_step_rad =
-        result.proof->maximum_steering_step_rad;
-      evaluation.velocity_difference_mps =
-        result.proof->velocity_difference_mps;
       evaluation.dynamic_checked_pose_count =
         result.proof->dynamic_checked_pose_count;
       evaluation.minimum_dynamic_clearance_m =
@@ -28626,6 +28633,7 @@ struct MPC
       "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
       "time=observation:%.6f/control:%.6f/delay:%.6f/cursor_elapsed:%.6f/"
       "steering_delta:%.6f/limit:%.6f/velocity_delta:%.6f/"
+      "velocity_bounds:[%.6f,%.6f]/velocity_duration:%.6f/"
       "peers:%lu/dynamic_samples:%lu/min_dynamic_clearance:%.3f/blocked_by:%s, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.retained_attempt_count),
@@ -28683,6 +28691,9 @@ struct MPC
       window.last_retained.steering_difference_rad,
       window.last_retained.maximum_steering_step_rad,
       window.last_retained.velocity_difference_mps,
+      window.last_retained.reachable_velocity_lower_mps,
+      window.last_retained.reachable_velocity_upper_mps,
+      window.last_retained.velocity_reachability_duration_sec,
       static_cast<unsigned long>(window.last_retained.obstacle_count),
       static_cast<unsigned long>(
         window.last_retained.dynamic_checked_pose_count),

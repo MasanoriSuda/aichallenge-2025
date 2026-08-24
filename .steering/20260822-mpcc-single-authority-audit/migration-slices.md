@@ -773,6 +773,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   `authority=shadow, selected=0` and zero artifact/mailbox identity rejection. The d2 final window had
   73 command candidates from 81 solves, so production promotion remains blocked by retained-admission
   availability rather than hidden cross-formulation fallback.
+- `.steering/20260825-rate-resolved-velocity-time-origin` closes the largest retained-admission hole.
+  Measured velocity is observation-time state while retained predicted velocity is control-origin
+  state, but the validator had allowed only one 25 ms publication-period acceleration between them.
+  Velocity reachability now uses the exact observation-to-control interval; steering retains its
+  command-to-command publication interval. A failure-first test reproduced the old false rejection,
+  all 49 package test targets and the 25-package build pass, and `output/20260825-084721` reduced
+  velocity rejects from 137 to zero over the directly comparable first 404 d1 attempts and from 178
+  to zero across d2. Dynamic-path blocks remained fail closed, both callback overrun counts were zero,
+  and every six-state candidate remained `authority=shadow, selected=0`. Next design the atomic
+  fresh/retained production admission and genuinely blocked-path behavior; do not promote a retained
+  blocked suffix or create a cross-formulation fallback.
 
 ## Slice 6: Legacy and migration path removal
 

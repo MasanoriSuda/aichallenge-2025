@@ -1917,7 +1917,8 @@ retained consumerは元のsuffixを制御callbackで再走査しない。元suff
 
 - Track/Cruise intentとexact time cursor
 - circular course progressの同一branchへのlift
-- 現在速度・操舵から1 publication intervalで到達可能なactuation
+- 前回publish済み操舵から1 publication intervalで到達可能な操舵actuation
+- 観測時刻の現在速度からcontrol originまでの実delayで到達可能な予測速度
 - measured-to-control delay pathと、current control poseからretained expected poseへのconnector
 - 同一wall-grid owner・footprint
 - currentかつ明示的にemptyなV2X observation
@@ -2013,6 +2014,17 @@ production昇格Sliceの複数周timing gateへ残す。
 本Sliceは時刻producerの不変条件を修復したものであり、delay margin、age lease、fallback、normal
 authorityを追加していない。次のproduction昇格は6-state Track/Cruise owner接続と5-state通常owner削除を
 同じSliceで行い、二重authorityを恒久化しない。
+
+この時刻契約はactuation種別ごとのpredecessor provenanceにも適用する。操舵角は直前にpublishした
+command履歴から次のpublicationまでの到達可能性を検査する。一方、`current_speed_mps`はcallbackの
+観測時刻、retained artifactの`predicted_speed_mps`はcurrent control originを表すため、その速度差は
+`control_origin_sec - observation_sec`で検査する。両者へ同じpublication intervalを使わない。
+
+`output/20260825-084721`では、この修正前後でd1の最初の404 retained周期を直接比較できた。修正前
+`output/20260825-081954`はvelocity reject 137、accepted 236だったのに対し、修正後はvelocity reject
+0、accepted 382だった。d2も修正前178件、修正後0件となった。動的path blockはd1で17件、d2で95件
+として独立して残り、速度判定の緩和で障害物証明を迂回していない。結果は全件
+`authority=shadow, selected=0`で、両domainのcallback overrunは0だった。
 
 #### Steering-rate 6-state canonical identity（2026-08-25、移行shadow）
 

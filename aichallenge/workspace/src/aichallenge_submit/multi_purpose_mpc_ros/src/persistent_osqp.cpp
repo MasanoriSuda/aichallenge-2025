@@ -834,6 +834,14 @@ bool PersistentOsqpSolver::initialized() const noexcept
   return impl_->workspace != nullptr;
 }
 
+PhysicalConstraintTolerance
+PersistentOsqpSolver::physical_constraint_tolerance() const noexcept
+{
+  return PhysicalConstraintTolerance{
+    static_cast<double>(impl_->physical_absolute_tolerance),
+    static_cast<double>(impl_->physical_relative_tolerance)};
+}
+
 SolveOutcome PersistentOsqpSolver::solve(
   Eigen::SparseMatrix<double> quadratic_cost,
   Eigen::SparseMatrix<double> constraints, const Eigen::VectorXd & linear_cost,

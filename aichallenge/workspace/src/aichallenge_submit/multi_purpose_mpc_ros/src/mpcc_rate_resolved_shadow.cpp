@@ -88,6 +88,18 @@ bool result_valid(const Result & result) noexcept
          std::isfinite(result.initial_steering_rad) &&
          std::isfinite(result.solver_initial_steering_rad) &&
          std::isfinite(result.sampled_steering_rad) &&
+         std::isfinite(result.first_steering_rate_physical_lower_radps) &&
+         std::isfinite(result.first_steering_rate_physical_upper_radps) &&
+         std::isfinite(result.first_steering_rate_solver_lower_radps) &&
+         std::isfinite(result.first_steering_rate_solver_upper_radps) &&
+         std::isfinite(result.first_steering_rate_certificate_margin_radps) &&
+         result.first_steering_rate_certificate_margin_radps >= 0.0 &&
+         result.first_steering_rate_physical_lower_radps <=
+         result.first_steering_rate_solver_lower_radps &&
+         result.first_steering_rate_solver_lower_radps <=
+         result.first_steering_rate_solver_upper_radps &&
+         result.first_steering_rate_solver_upper_radps <=
+         result.first_steering_rate_physical_upper_radps &&
          std::isfinite(result.sampled_curvature_radpm) &&
          std::isfinite(result.terminal_velocity_mps) &&
          std::isfinite(result.terminal_progress_m) &&
@@ -118,7 +130,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     return finish();
   }
 
-  const auto adapted = mpcc_rate_resolved_adapter::build(snapshot.request);
+  const auto adapted = mpcc_rate_resolved_adapter::build(
+    snapshot.request, solver_.physical_constraint_tolerance());
   if (!adapted.has_value()) {
     result.detail = "rate-resolved semantic adapter rejected snapshot";
     return finish();
@@ -133,6 +146,16 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     return finish();
   }
   result.assembled = true;
+  result.first_steering_rate_physical_lower_radps =
+    adapted->first_steering_rate_physical_lower_radps;
+  result.first_steering_rate_physical_upper_radps =
+    adapted->first_steering_rate_physical_upper_radps;
+  result.first_steering_rate_solver_lower_radps =
+    adapted->first_steering_rate_solver_lower_radps;
+  result.first_steering_rate_solver_upper_radps =
+    adapted->first_steering_rate_solver_upper_radps;
+  result.first_steering_rate_certificate_margin_radps =
+    adapted->first_steering_rate_certificate_margin_radps;
   result.solve_attempted = true;
 
   std::lock_guard<std::mutex> lock(mutex_);

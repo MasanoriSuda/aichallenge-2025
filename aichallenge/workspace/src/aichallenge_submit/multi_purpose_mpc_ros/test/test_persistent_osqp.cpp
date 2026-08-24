@@ -47,6 +47,27 @@ Eigen::SparseMatrix<double> scalar_constraint(const double value)
   return matrix;
 }
 
+TEST(PersistentOsqpSolver, ExposesImmutablePhysicalConstraintTolerance)
+{
+  PersistentOsqpSolver solver(
+    ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto before = solver.physical_constraint_tolerance();
+  EXPECT_TRUE(std::isfinite(before.absolute));
+  EXPECT_GT(before.absolute, 0.0);
+  EXPECT_TRUE(std::isfinite(before.relative));
+  EXPECT_GE(before.relative, 0.0);
+  EXPECT_LT(before.relative, 1.0);
+
+  const auto outcome = solver.solve(
+    diagonal_matrix({1.0}), scalar_constraint(1.0),
+    Eigen::VectorXd::Zero(1), Eigen::VectorXd::Constant(1, -1.0),
+    Eigen::VectorXd::Constant(1, 1.0));
+  ASSERT_TRUE(outcome.result.has_value()) << outcome.failure_detail;
+  const auto after = solver.physical_constraint_tolerance();
+  EXPECT_DOUBLE_EQ(after.absolute, before.absolute);
+  EXPECT_DOUBLE_EQ(after.relative, before.relative);
+}
+
 TEST(PersistentOsqpWarmStart, ShiftsMpcPrimalAndDualByOneStage) {
   WarmStart previous;
   previous.primal = Eigen::VectorXd(5);

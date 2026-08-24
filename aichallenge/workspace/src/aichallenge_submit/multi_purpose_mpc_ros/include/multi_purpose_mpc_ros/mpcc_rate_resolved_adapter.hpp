@@ -72,9 +72,16 @@ struct Result
   std::vector<double> steering_lower_rad;
   std::vector<double> steering_upper_rad;
   std::vector<double> curvature_to_steering_jacobian_radpm_per_rad;
+  double first_steering_rate_physical_lower_radps{};
+  double first_steering_rate_physical_upper_radps{};
+  double first_steering_rate_solver_lower_radps{};
+  double first_steering_rate_solver_upper_radps{};
+  double first_steering_rate_certificate_margin_radps{};
 };
 
-std::optional<Result> build(const Request & request) noexcept;
+std::optional<Result> build(
+  const Request & request,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_adapter
 

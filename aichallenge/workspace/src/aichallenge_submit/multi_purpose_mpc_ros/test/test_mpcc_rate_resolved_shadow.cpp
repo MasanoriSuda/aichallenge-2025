@@ -5,6 +5,7 @@
 #include <Eigen/Dense>
 
 #include <cmath>
+#include <limits>
 
 namespace shadow =
   multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
@@ -84,6 +85,26 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_LE(
     std::abs(result.first_steering_rate_radps),
     input.request.maximum_abs_steering_rate_radps + 1e-6);
+  EXPECT_LT(
+    result.first_steering_rate_physical_lower_radps,
+    result.first_steering_rate_solver_lower_radps);
+  EXPECT_LT(
+    result.first_steering_rate_solver_upper_radps,
+    result.first_steering_rate_physical_upper_radps);
+  EXPECT_GT(result.first_steering_rate_certificate_margin_radps, 0.0);
+  EXPECT_GE(
+    result.first_steering_rate_radps,
+    result.first_steering_rate_solver_lower_radps -
+    result.solver.physical_global_tolerance);
+  EXPECT_LE(
+    result.first_steering_rate_radps,
+    result.first_steering_rate_solver_upper_radps +
+    result.solver.physical_global_tolerance);
+
+  auto invalid = result;
+  invalid.first_steering_rate_certificate_margin_radps =
+    std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(shadow::result_valid(invalid));
 }
 
 TEST(MpccRateResolvedShadow, RejectsPublicationPeriodBeyondFirstStage)

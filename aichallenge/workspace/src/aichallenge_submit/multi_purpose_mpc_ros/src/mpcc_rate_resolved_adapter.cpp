@@ -59,7 +59,9 @@ double curvature_jacobian(
 
 }  // namespace
 
-std::optional<Result> build(const Request & request) noexcept
+std::optional<Result> build(
+  const Request & request,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept
 {
   namespace model = mpcc_rate_resolved;
   constexpr double half_pi = 1.57079632679489661923;
@@ -75,6 +77,10 @@ std::optional<Result> build(const Request & request) noexcept
     request.maximum_abs_steering_rad ||
     !std::isfinite(request.maximum_abs_steering_rate_radps) ||
     request.maximum_abs_steering_rate_radps < 0.0 ||
+    !std::isfinite(solver_tolerance.absolute) ||
+    solver_tolerance.absolute < 0.0 ||
+    !std::isfinite(solver_tolerance.relative) ||
+    solver_tolerance.relative < 0.0 || solver_tolerance.relative >= 1.0 ||
     !std::isfinite(request.minimum_frenet_denominator) ||
     request.minimum_frenet_denominator <= 0.0 ||
     !std::isfinite(request.minimum_stage_dt_sec) ||
@@ -133,6 +139,14 @@ std::optional<Result> build(const Request & request) noexcept
     request.previous_input[0], 0.0, request.previous_input[2];
   problem.input_delta_weight <<
     request.input_delta_weight[0], 0.0, request.input_delta_weight[2];
+
+  const double first_rate_certificate_margin =
+    (solver_tolerance.absolute + solver_tolerance.relative *
+    request.maximum_abs_steering_rate_radps) /
+    (1.0 - solver_tolerance.relative);
+  if (!std::isfinite(first_rate_certificate_margin)) {
+    return std::nullopt;
+  }
 
   result.steering_reference_rad.resize(static_cast<std::size_t>(horizon + 1));
   result.steering_lower_rad.resize(static_cast<std::size_t>(horizon + 1));
@@ -239,6 +253,35 @@ std::optional<Result> build(const Request & request) noexcept
       -request.maximum_abs_steering_rate_radps;
     problem.input_upper[input_offset + model::kSteeringRateIndex] =
       request.maximum_abs_steering_rate_radps;
+    if (stage == 0) {
+      const double physical_lower = std::max(
+        -request.maximum_abs_steering_rate_radps,
+        (-request.maximum_abs_steering_rad - request.current_steering_rad) /
+        legacy_input.stage_dt_sec);
+      const double physical_upper = std::min(
+        request.maximum_abs_steering_rate_radps,
+        (request.maximum_abs_steering_rad - request.current_steering_rad) /
+        legacy_input.stage_dt_sec);
+      const double solver_lower =
+        physical_lower + first_rate_certificate_margin;
+      const double solver_upper =
+        physical_upper - first_rate_certificate_margin;
+      if (
+        !std::isfinite(physical_lower) || !std::isfinite(physical_upper) ||
+        !std::isfinite(solver_lower) || !std::isfinite(solver_upper) ||
+        solver_lower > solver_upper)
+      {
+        return std::nullopt;
+      }
+      problem.input_lower[input_offset + model::kSteeringRateIndex] = solver_lower;
+      problem.input_upper[input_offset + model::kSteeringRateIndex] = solver_upper;
+      result.first_steering_rate_physical_lower_radps = physical_lower;
+      result.first_steering_rate_physical_upper_radps = physical_upper;
+      result.first_steering_rate_solver_lower_radps = solver_lower;
+      result.first_steering_rate_solver_upper_radps = solver_upper;
+      result.first_steering_rate_certificate_margin_radps =
+        first_rate_certificate_margin;
+    }
     problem.input_lower[
       input_offset + model::kVirtualProgressSpeedIndex] =
       legacy_input.lower[2];

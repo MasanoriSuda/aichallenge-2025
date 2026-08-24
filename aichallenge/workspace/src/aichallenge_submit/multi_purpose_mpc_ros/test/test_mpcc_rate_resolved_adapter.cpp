@@ -12,6 +12,8 @@ namespace solver = multi_purpose_mpc_ros::persistent_osqp;
 namespace
 {
 
+constexpr solver::PhysicalConstraintTolerance kSolverTolerance{1e-3, 1e-3};
+
 adapter::Request curved_request(const int horizon = 4)
 {
   adapter::Request request;
@@ -50,7 +52,7 @@ adapter::Request curved_request(const int horizon = 4)
 TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
 {
   const auto request = curved_request();
-  const auto result = adapter::build(request);
+  const auto result = adapter::build(request, kSolverTolerance);
   ASSERT_TRUE(result.has_value());
   constexpr int stage = 1;
   const int state_offset = model::kStateDimension * stage;
@@ -76,12 +78,18 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
   EXPECT_DOUBLE_EQ(
     result->problem.input_reference[
       input_offset + model::kSteeringRateIndex], 0.0);
-  EXPECT_DOUBLE_EQ(
+  const double first_rate_margin = (1e-3 + 1e-3 * 1.0) / (1.0 - 1e-3);
+  EXPECT_NEAR(
     result->problem.input_lower[
-      input_offset + model::kSteeringRateIndex], -1.0);
-  EXPECT_DOUBLE_EQ(
+      input_offset + model::kSteeringRateIndex],
+    -1.0 + first_rate_margin, 1e-12);
+  EXPECT_NEAR(
     result->problem.input_upper[
-      input_offset + model::kSteeringRateIndex], 1.0);
+      input_offset + model::kSteeringRateIndex],
+    1.0 - first_rate_margin, 1e-12);
+  EXPECT_NEAR(
+    result->first_steering_rate_certificate_margin_radps,
+    first_rate_margin, 1e-12);
   EXPECT_NEAR(
     result->problem.input_weight[
       input_offset + model::kSteeringRateIndex],
@@ -109,7 +117,7 @@ TEST(MpccRateResolvedAdapter, KeepsObservedSteeringAsTheOnlyStageZeroValue)
   auto request = curved_request();
   request.current_steering_rad = -0.12;
   request.states.front().reference << 1.0, 1.0, 0.2, 4.0, 0.5;
-  const auto result = adapter::build(request);
+  const auto result = adapter::build(request, kSolverTolerance);
   ASSERT_TRUE(result.has_value());
   EXPECT_TRUE(
     result->problem.state_reference.head<adapter::kLegacyStateDimension>().
@@ -128,14 +136,15 @@ TEST(MpccRateResolvedAdapter, KeepsObservedSteeringAsTheOnlyStageZeroValue)
 
 TEST(MpccRateResolvedAdapter, CurvedSnapshotSolvesWithinPhysicalActuatorBoxes)
 {
-  const auto adapted = adapter::build(curved_request());
+  solver::PersistentOsqpSolver osqp(
+    solver::ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto adapted = adapter::build(
+    curved_request(), osqp.physical_constraint_tolerance());
   ASSERT_TRUE(adapted.has_value());
   const auto assembled =
     multi_purpose_mpc_ros::mpcc_rate_resolved_problem::assemble(
     adapted->problem);
   ASSERT_TRUE(assembled.has_value());
-  solver::PersistentOsqpSolver osqp(
-    solver::ConstraintPreconditioningPolicy::RowToleranceNormalized);
   const auto outcome = osqp.solve(
     assembled->quadratic_cost, assembled->constraints,
     assembled->linear_cost, assembled->lower_bound,
@@ -172,40 +181,65 @@ TEST(MpccRateResolvedAdapter, RejectsMalformedOrUnphysicalSnapshots)
 {
   auto request = curved_request();
   request.states.pop_back();
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
   request.wheelbase_m = 0.0;
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
   request.current_steering_rad = 0.7;
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
   request.inputs.front().stage_dt_sec = 0.0;
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
   request.inputs.front().lower[adapter::kLegacyCurvatureIndex] = 0.4;
   request.inputs.front().upper[adapter::kLegacyCurvatureIndex] = 0.3;
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
   request.states.front().reference[0] =
     std::numeric_limits<double>::quiet_NaN();
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
   request.states.front().linear_cost[0] =
     std::numeric_limits<double>::quiet_NaN();
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
   request.inputs.front().linear_cost[adapter::kLegacyCurvatureIndex] = 1.0;
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
   request.states.front().upper[0] = -0.1;
-  EXPECT_FALSE(adapter::build(request).has_value());
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
+}
+
+TEST(MpccRateResolvedAdapter, FirstRateIsRobustlyReachableFromSemanticSteering)
+{
+  auto request = curved_request();
+  request.current_steering_rad = request.maximum_abs_steering_rad;
+  const auto result = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(result.has_value());
+
+  const double margin = (1e-3 + 1e-3 * 1.0) / (1.0 - 1e-3);
+  EXPECT_DOUBLE_EQ(result->first_steering_rate_physical_upper_radps, 0.0);
+  EXPECT_NEAR(result->first_steering_rate_solver_upper_radps, -margin, 1e-12);
+  const double accepted_upper_residual =
+    kSolverTolerance.absolute + kSolverTolerance.relative *
+    std::abs(result->first_steering_rate_solver_upper_radps);
+  EXPECT_LE(
+    result->first_steering_rate_solver_upper_radps + accepted_upper_residual,
+    result->first_steering_rate_physical_upper_radps);
+
+  request.maximum_abs_steering_rate_radps = 0.001;
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
+
+  auto invalid_tolerance = kSolverTolerance;
+  invalid_tolerance.relative = 1.0;
+  EXPECT_FALSE(adapter::build(curved_request(), invalid_tolerance).has_value());
 }

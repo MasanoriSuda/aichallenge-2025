@@ -27635,7 +27635,8 @@ struct MPC
       "publish_step=%.4frad, last=seq:%lu/decision:%lu/intent:%s/"
       "source:0x%016lx/geometry:0x%016lx/outcome:%s/sample_reason:%s/"
       "dt:%.6f/stage_dt:%.6f/delta0:%.9f/solver_delta0:%.9f/rate:%.9f/terminal:%.9f/"
-      "sampled:%.9f/delta_max:%.9f/rate_max:%.9f/%s, "
+      "sampled:%.9f/delta_max:%.9f/rate_max:%.9f/"
+      "rate_bounds:physical[%.9f,%.9f]/solver[%.9f,%.9f]/margin:%.9f/%s, "
       "authority=shadow, selected=0, physical=not-evaluated, warm=none",
       static_cast<unsigned long>(window.submission_count),
       static_cast<unsigned long>(window.replaced_pending_count),
@@ -27728,6 +27729,16 @@ struct MPC
       window.last_result_available ? last.sampled_steering_rad : 0.0,
       window.last_result_available ? last.maximum_abs_steering_rad : 0.0,
       window.last_result_available ? last.maximum_abs_steering_rate_radps : 0.0,
+      window.last_result_available ?
+      last.first_steering_rate_physical_lower_radps : 0.0,
+      window.last_result_available ?
+      last.first_steering_rate_physical_upper_radps : 0.0,
+      window.last_result_available ?
+      last.first_steering_rate_solver_lower_radps : 0.0,
+      window.last_result_available ?
+      last.first_steering_rate_solver_upper_radps : 0.0,
+      window.last_result_available ?
+      last.first_steering_rate_certificate_margin_radps : 0.0,
       window.last_result_available ? last.detail.c_str() : "not-evaluated");
     window = RateResolvedTrackCruiseShadowTelemetryWindow{};
     rate_resolved_track_cruise_shadow_last_log_sec_ = now_sec;

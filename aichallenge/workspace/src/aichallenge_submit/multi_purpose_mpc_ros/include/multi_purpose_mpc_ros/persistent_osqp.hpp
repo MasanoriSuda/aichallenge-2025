@@ -200,6 +200,15 @@ enum class ConstraintPreconditioningPolicy
   RowToleranceNormalized,
 };
 
+/// Physical-unit tolerances used to certify every original constraint row.
+/// These values are captured before any row preconditioning changes the
+/// solver-coordinate settings.
+struct PhysicalConstraintTolerance
+{
+  double absolute{};
+  double relative{};
+};
+
 /// Shift one successful MPC QP solution by the exact physical stage advance.
 /// The expected layout is
 /// state[0..N], input[0..N-1] for primal variables and dynamics/state,
@@ -242,6 +251,7 @@ public:
 
   void reset() noexcept;
   bool initialized() const noexcept;
+  PhysicalConstraintTolerance physical_constraint_tolerance() const noexcept;
 
 private:
   struct Impl;

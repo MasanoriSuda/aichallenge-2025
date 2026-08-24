@@ -72,6 +72,11 @@ struct Result
   double publication_interval_sec{};
   double maximum_abs_steering_rad{};
   double maximum_abs_steering_rate_radps{};
+  double first_steering_rate_physical_lower_radps{};
+  double first_steering_rate_physical_upper_radps{};
+  double first_steering_rate_solver_lower_radps{};
+  double first_steering_rate_solver_upper_radps{};
+  double first_steering_rate_certificate_margin_radps{};
   double sampled_curvature_radpm{};
   double terminal_velocity_mps{};
   double terminal_progress_m{};

@@ -734,6 +734,28 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryRejectsSemanticDiscontinuity)
   EXPECT_EQ(bounds.stage, 1);
 }
 
+TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAcceptsCertifiedTinyRegression)
+{
+  race::ExactPhysicalExecutionTrajectory trajectory;
+  trajectory.progress_origin_m = 100.0;
+  trajectory.path_distance_m = {1.0, 2.0};
+  trajectory.lateral_m = {0.2, 0.4};
+  trajectory.lag_m = {0.1, -0.1};
+  trajectory.heading_offset_rad = {0.15, -0.20};
+  trajectory.velocity_mps = {4.0, 4.5};
+  trajectory.progress_m = {101.1, 101.09999};
+  trajectory.lateral_lower_m = {-0.5, -0.5};
+  trajectory.lateral_upper_m = {0.8, 0.8};
+  trajectory.minimum_lateral_bound_reserve_m = 0.4;
+  trajectory.progress_regression_tolerance_m = 2.0e-5;
+
+  EXPECT_TRUE(race::exact_physical_execution_trajectory_complete(trajectory));
+  trajectory.progress_regression_tolerance_m = 1.0e-6;
+  EXPECT_EQ(
+    race::validate_exact_physical_execution_trajectory(trajectory).reason,
+    race::ExactPhysicalExecutionTrajectoryReason::ProgressRegressed);
+}
+
 TEST(RaceMpccFoundation, ExactPhysicalTrajectoryReportsNegativeVelocityStage)
 {
   race::ExactPhysicalExecutionTrajectory trajectory;

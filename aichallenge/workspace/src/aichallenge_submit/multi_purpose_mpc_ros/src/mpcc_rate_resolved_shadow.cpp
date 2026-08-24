@@ -317,7 +317,9 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       primal[input_offset + model::kAccelerationIndex],
       primal[input_offset + model::kSteeringRateIndex],
       primal[input_offset + model::kVirtualProgressSpeedIndex],
-      snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec});
+      snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec,
+      snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[2],
+      snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[2]});
   }
   result.execution_artifact_reject_reason =
     artifact::validate(execution_artifact);

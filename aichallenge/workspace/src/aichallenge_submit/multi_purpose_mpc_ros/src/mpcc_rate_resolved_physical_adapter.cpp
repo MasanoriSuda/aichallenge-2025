@@ -58,6 +58,7 @@ Result build(
   exact.lateral_upper_m.reserve(state_count - 1U);
   exact.minimum_lateral_bound_reserve_m =
     std::numeric_limits<double>::infinity();
+  const double residual_bound_m = artifact.maximum_constraint_violation + 1e-9;
   for (std::size_t state_index = 1U; state_index < state_count; ++state_index) {
     const auto & state = artifact.predicted_states[state_index];
     const auto & previous_state = artifact.predicted_states[state_index - 1U];
@@ -73,6 +74,11 @@ Result build(
       result.progress_dynamics_defect_m = progress_delta_m -
         transition.virtual_progress_speed_mps * transition.duration_sec;
     }
+    result.certified_progress_regression_tolerance_m = std::max(
+      result.certified_progress_regression_tolerance_m,
+      std::max(
+        0.0, residual_bound_m * (1.0 + transition.duration_sec) -
+        transition.virtual_progress_lower_mps * transition.duration_sec));
     const double lower_m = artifact.lateral_lower_m[state_index];
     const double upper_m = artifact.lateral_upper_m[state_index];
     exact.path_distance_m.push_back(
@@ -93,6 +99,8 @@ Result build(
     exact.minimum_lateral_bound_reserve_m = std::max(
       0.0, exact.minimum_lateral_bound_reserve_m);
   }
+  exact.progress_regression_tolerance_m =
+    result.certified_progress_regression_tolerance_m;
   const auto validation =
     race::validate_exact_physical_execution_trajectory(exact);
   result.exact_reason = validation.reason;

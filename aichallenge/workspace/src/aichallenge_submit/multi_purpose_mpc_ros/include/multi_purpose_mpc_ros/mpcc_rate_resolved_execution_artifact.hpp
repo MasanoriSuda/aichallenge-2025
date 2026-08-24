@@ -41,6 +41,8 @@ struct ControlStage
   double steering_rate_radps{};
   double virtual_progress_speed_mps{};
   double duration_sec{};
+  double virtual_progress_lower_mps{};
+  double virtual_progress_upper_mps{};
 };
 
 /// Complete immutable representation of one physically row-certified
@@ -81,9 +83,12 @@ enum class RejectReason
   CorridorCountMismatch,
   InvalidPredictedState,
   InvalidControlStage,
+  InvalidProgressControlBounds,
   InvalidLateralCorridor,
   InitialSteeringMismatch,
   SteeringDynamicsMismatch,
+  ProgressDynamicsMismatch,
+  ProgressRegressionBeyondCertificate,
   SemanticSteeringSequenceRejected,
 };
 

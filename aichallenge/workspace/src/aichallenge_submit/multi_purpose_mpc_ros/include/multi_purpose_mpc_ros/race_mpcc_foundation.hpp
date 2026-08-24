@@ -106,6 +106,9 @@ struct ExactPhysicalExecutionTrajectory
   std::vector<double> lateral_upper_m;
   double minimum_lateral_bound_reserve_m{
     std::numeric_limits<double>::quiet_NaN()};
+  /// Maximum solver-certified backwards progress admitted between adjacent
+  /// raw states. The world-pose samples are never clamped or rewritten.
+  double progress_regression_tolerance_m{};
 };
 
 enum class ExactPhysicalExecutionTrajectoryReason
@@ -113,6 +116,7 @@ enum class ExactPhysicalExecutionTrajectoryReason
   Accepted,
   TooFewStages,
   InvalidProgressOrigin,
+  InvalidProgressRegressionTolerance,
   InvalidMinimumLateralReserve,
   LateralShapeMismatch,
   LagShapeMismatch,

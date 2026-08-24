@@ -30,7 +30,9 @@ bool finite_control(const ControlStage & control) noexcept
   return std::isfinite(control.acceleration_mps2) &&
          std::isfinite(control.steering_rate_radps) &&
          std::isfinite(control.virtual_progress_speed_mps) &&
-         std::isfinite(control.duration_sec) && control.duration_sec > 0.0;
+         std::isfinite(control.duration_sec) && control.duration_sec > 0.0 &&
+         std::isfinite(control.virtual_progress_lower_mps) &&
+         std::isfinite(control.virtual_progress_upper_mps);
 }
 
 mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation sample_steering(
@@ -80,9 +82,15 @@ const char * to_string(const RejectReason reason) noexcept
     case RejectReason::CorridorCountMismatch: return "corridor-count-mismatch";
     case RejectReason::InvalidPredictedState: return "invalid-predicted-state";
     case RejectReason::InvalidControlStage: return "invalid-control-stage";
+    case RejectReason::InvalidProgressControlBounds:
+      return "invalid-progress-control-bounds";
     case RejectReason::InvalidLateralCorridor: return "invalid-lateral-corridor";
     case RejectReason::InitialSteeringMismatch: return "initial-steering-mismatch";
     case RejectReason::SteeringDynamicsMismatch: return "steering-dynamics-mismatch";
+    case RejectReason::ProgressDynamicsMismatch:
+      return "progress-dynamics-mismatch";
+    case RejectReason::ProgressRegressionBeyondCertificate:
+      return "progress-regression-beyond-certificate";
     case RejectReason::SemanticSteeringSequenceRejected:
       return "semantic-steering-sequence-rejected";
   }
@@ -189,12 +197,27 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     return RejectReason::InitialSteeringMismatch;
   }
   double horizon_sec = 0.0;
+  const double residual_bound_m = artifact.maximum_constraint_violation + 1e-9;
   for (std::size_t index = 0U; index < artifact.control_stages.size(); ++index) {
     const auto & control = artifact.control_stages[index];
     if (
       !finite_control(control) ||
       std::abs(control.steering_rate_radps) >
       artifact.maximum_abs_steering_rate_radps + tolerance)
+    {
+      return RejectReason::InvalidControlStage;
+    }
+    if (
+      control.virtual_progress_lower_mps < 0.0 ||
+      control.virtual_progress_lower_mps > control.virtual_progress_upper_mps)
+    {
+      return RejectReason::InvalidProgressControlBounds;
+    }
+    if (
+      control.virtual_progress_speed_mps <
+      control.virtual_progress_lower_mps - residual_bound_m ||
+      control.virtual_progress_speed_mps >
+      control.virtual_progress_upper_mps + residual_bound_m)
     {
       return RejectReason::InvalidControlStage;
     }
@@ -211,6 +234,20 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
         artifact.predicted_states[index + 1U].steering_rad) > tolerance)
     {
       return RejectReason::SteeringDynamicsMismatch;
+    }
+    const double progress_delta_m =
+      artifact.predicted_states[index + 1U].progress_m -
+      artifact.predicted_states[index].progress_m;
+    const double progress_dynamics_defect_m = progress_delta_m -
+      control.virtual_progress_speed_mps * control.duration_sec;
+    if (std::abs(progress_dynamics_defect_m) > residual_bound_m) {
+      return RejectReason::ProgressDynamicsMismatch;
+    }
+    const double certified_regression_bound_m = std::max(
+      0.0, residual_bound_m * (1.0 + control.duration_sec) -
+      control.virtual_progress_lower_mps * control.duration_sec);
+    if (progress_delta_m < -certified_regression_bound_m) {
+      return RejectReason::ProgressRegressionBeyondCertificate;
     }
   }
   if (!sample_steering(artifact, horizon_sec).sample.has_value()) {

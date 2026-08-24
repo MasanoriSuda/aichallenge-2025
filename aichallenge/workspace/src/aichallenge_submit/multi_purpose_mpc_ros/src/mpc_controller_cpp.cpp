@@ -27558,6 +27558,8 @@ struct MPC
              << "/vtheta=" << adapted.transition_virtual_progress_speed_mps
              << "/dt=" << adapted.transition_duration_sec
              << "/dynamics_defect=" << adapted.progress_dynamics_defect_m
+             << "/progress_tolerance=" <<
+        adapted.certified_progress_regression_tolerance_m
              << "/certificate_tolerance=" <<
         solved_result.execution_artifact->physical_global_tolerance;
       evaluation.detail = detail.str();

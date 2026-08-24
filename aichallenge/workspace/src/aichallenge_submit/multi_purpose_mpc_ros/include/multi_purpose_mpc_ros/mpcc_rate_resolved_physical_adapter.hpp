@@ -40,6 +40,7 @@ struct Result
     std::numeric_limits<double>::quiet_NaN()};
   double progress_dynamics_defect_m{
     std::numeric_limits<double>::quiet_NaN()};
+  double certified_progress_regression_tolerance_m{};
   std::optional<race_mpcc_foundation::ExactPhysicalExecutionTrajectory>
   exact_trajectory;
 };

@@ -32,8 +32,8 @@ execution::ExecutionArtifact artifact()
     {0.2, 0.0, 0.02, 2.2, 0.4, 0.12},
   };
   value.control_stages = {
-    {1.0, 0.10, 2.0, 0.10},
-    {1.0, 0.10, 2.0, 0.10},
+    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0},
+    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0},
   };
   value.nominal_path_distance_m = {0.0, 0.2, 0.4};
   value.lateral_lower_m = {-1.0, -1.0, -1.0};
@@ -93,22 +93,39 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsInvalidArtifactBeforeConversion)
   EXPECT_FALSE(result.exact_trajectory.has_value());
 }
 
-TEST(MpccRateResolvedPhysicalAdapter, PreservesProgressRegressionProvenance)
+TEST(MpccRateResolvedPhysicalAdapter, AcceptsCertifiedProgressRegression)
 {
   auto source = artifact();
   source.predicted_states[2].progress_m = 0.19999;
   source.control_stages[1].virtual_progress_speed_mps = 0.0;
+  source.maximum_constraint_violation = 1.0e-5;
   const auto result = adapter::build(
     source, contract::ControlIntent::Track, source.identity.stage_geometry_id);
-  EXPECT_EQ(result.reason, adapter::RejectReason::ExactTrajectoryRejected);
+  EXPECT_EQ(result.reason, adapter::RejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  EXPECT_GT(result.certified_progress_regression_tolerance_m, 1.0e-5);
   EXPECT_EQ(
-    result.exact_reason,
     multi_purpose_mpc_ros::race_mpcc_foundation::
-    ExactPhysicalExecutionTrajectoryReason::ProgressRegressed);
-  EXPECT_EQ(result.rejected_stage, 1);
+    validate_exact_physical_execution_trajectory(
+      result.exact_trajectory.value()).reason,
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    ExactPhysicalExecutionTrajectoryReason::Accepted);
   EXPECT_EQ(result.minimum_progress_transition_state, 2);
   EXPECT_NEAR(result.minimum_progress_delta_m, -1.0e-5, 1e-12);
   EXPECT_DOUBLE_EQ(result.transition_virtual_progress_speed_mps, 0.0);
   EXPECT_DOUBLE_EQ(result.transition_duration_sec, 0.10);
   EXPECT_NEAR(result.progress_dynamics_defect_m, -1.0e-5, 1e-12);
+}
+
+TEST(MpccRateResolvedPhysicalAdapter, RejectsProgressOutsideSolverCertificate)
+{
+  auto source = artifact();
+  source.predicted_states[2].progress_m = 0.10;
+  source.control_stages[1].virtual_progress_speed_mps = 0.0;
+  const auto result = adapter::build(
+    source, contract::ControlIntent::Track, source.identity.stage_geometry_id);
+  EXPECT_EQ(result.reason, adapter::RejectReason::InvalidArtifact);
+  EXPECT_EQ(
+    result.artifact_reason,
+    execution::RejectReason::ProgressDynamicsMismatch);
 }

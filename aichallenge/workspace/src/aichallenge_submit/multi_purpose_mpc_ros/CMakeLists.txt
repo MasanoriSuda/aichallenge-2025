@@ -101,6 +101,18 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_problem
   ${PROJECT_NAME}_persistent_osqp
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_adapter STATIC
+  src/mpcc_rate_resolved_adapter.cpp
+)
+target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved_adapter PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_adapter
+  ${PROJECT_NAME}_mpcc_rate_resolved_problem
+)
+
 ament_auto_add_library(${PROJECT_NAME}_mpcc_execution_contract SHARED
   NO_TARGET_LINK_LIBRARIES
   src/mpcc_execution_contract.cpp
@@ -292,6 +304,19 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_problem
       ${PROJECT_NAME}_mpcc_rate_resolved_problem
+      ${PROJECT_NAME}_persistent_osqp
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_rate_resolved_adapter
+    test/test_mpcc_rate_resolved_adapter.cpp
+  )
+  if(TARGET test_mpcc_rate_resolved_adapter)
+    target_include_directories(test_mpcc_rate_resolved_adapter PRIVATE
+      ${EIGEN3_INCLUDE_DIRS}
+    )
+    target_link_libraries(test_mpcc_rate_resolved_adapter
+      ${PROJECT_NAME}_mpcc_rate_resolved_adapter
       ${PROJECT_NAME}_persistent_osqp
     )
   endif()

@@ -650,6 +650,14 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   25-package build pass, and neither rate-resolved library is linked into `mpc_controller_cpp`.
   Next add a controller-side shadow adapter and runtime comparison; do not promote authority or tune
   parameters before new-schema physical and timing evidence exists.
+- `.steering/20260825-rate-resolved-track-cruise-shadow-adapter` freezes the semantic bridge for that
+  next runtime step without linking production. The first five state fields keep their existing
+  Track/Cruise meaning, observed state zero owns the first linearization anchor, and legacy curvature
+  reference/box/cost becomes steering-state reference/box/cost in physical units. Adjacent-curvature
+  cost becomes steering-rate magnitude cost through the immutable stage duration, so no curvature
+  actuator or duplicate rate owner survives. A deterministic curved QP solves within its certified
+  steering/rate boxes; all 1,819 package tests and the 25-package build pass. Next connect this exact
+  snapshot to a latest-only runtime shadow worker with identity/age/timing telemetry only.
 
 ## Slice 6: Legacy and migration path removal
 

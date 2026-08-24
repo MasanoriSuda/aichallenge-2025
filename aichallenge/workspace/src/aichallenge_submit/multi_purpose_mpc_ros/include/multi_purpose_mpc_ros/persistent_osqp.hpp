@@ -74,6 +74,19 @@ struct DualStageBlockLayout
   std::size_t rows_per_stage{};
 };
 
+/// Explicit physical-stage layout for receding-horizon warm-start transport.
+/// `rate_rows_per_stage` is one for the established curvature-input MPC and
+/// zero for a steering-state/steering-rate-input formulation whose actuator
+/// rate is already an input box. Keeping it explicit prevents a supposedly
+/// generic state/input shift from silently requiring a legacy constraint row.
+struct MpcWarmStartLayout
+{
+  std::size_t state_dimension{};
+  std::size_t input_dimension{};
+  std::size_t rate_rows_per_stage{1U};
+  std::vector<DualStageBlockLayout> trailing_dual_stage_blocks;
+};
+
 struct SolveTelemetry
 {
   bool setup_performed{false};
@@ -197,6 +210,12 @@ shift_mpc_warm_start(
   std::size_t state_dimension = 3U,
   std::size_t input_dimension = 2U,
   const std::vector<DualStageBlockLayout> & trailing_dual_stage_blocks = {},
+  std::size_t stage_advance = 1U) noexcept;
+
+std::optional<WarmStart>
+shift_mpc_warm_start(
+  const WarmStart & previous, std::size_t horizon_steps,
+  const MpcWarmStartLayout & layout,
   std::size_t stage_advance = 1U) noexcept;
 
 class PersistentOsqpSolver

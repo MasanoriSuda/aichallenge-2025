@@ -641,6 +641,15 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   is linked only into its tests; all 1,808 package tests and the 25-package build pass. A complete
   six-state QP remains shadow-only work and must obtain solver/runtime/physical evidence before any
   canonical schema or authority migration.
+- `.steering/20260824-rate-resolved-qp-contract` completes the isolated six-state numerical skeleton.
+  It assembles exact dynamics and box rows for `[e_y,e_lag,e_psi,v,theta,delta]` and
+  `[a,delta_dot,v_theta]`, exposes row semantics, derives physical coordinate scaling and solves a
+  deterministic problem through persistent OSQP. The Slice also removes a hidden legacy assumption
+  from the generic warm-start helper: curvature-rate rows are now an explicit layout property, while
+  the old production API preserves one row per stage unchanged. All 1,814 package tests and the
+  25-package build pass, and neither rate-resolved library is linked into `mpc_controller_cpp`.
+  Next add a controller-side shadow adapter and runtime comparison; do not promote authority or tune
+  parameters before new-schema physical and timing evidence exists.
 
 ## Slice 6: Legacy and migration path removal
 

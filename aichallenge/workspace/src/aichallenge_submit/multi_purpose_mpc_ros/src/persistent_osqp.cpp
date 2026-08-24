@@ -455,6 +455,21 @@ shift_mpc_warm_start(
   const std::vector<DualStageBlockLayout> & trailing_dual_stage_blocks,
   const std::size_t stage_advance) noexcept
 {
+  return shift_mpc_warm_start(
+    previous, horizon_steps,
+    MpcWarmStartLayout{
+      state_dimension, input_dimension, 1U, trailing_dual_stage_blocks},
+    stage_advance);
+}
+
+std::optional<WarmStart>
+shift_mpc_warm_start(
+  const WarmStart & previous, const std::size_t horizon_steps,
+  const MpcWarmStartLayout & layout,
+  const std::size_t stage_advance) noexcept
+{
+  const std::size_t state_dimension = layout.state_dimension;
+  const std::size_t input_dimension = layout.input_dimension;
   if (horizon_steps == 0U || state_dimension == 0U || input_dimension == 0U ||
     stage_advance > horizon_steps ||
     !finite_vector(previous.primal) || !finite_vector(previous.dual))
@@ -465,9 +480,26 @@ shift_mpc_warm_start(
   const std::size_t state_values = state_stage_count * state_dimension;
   const std::size_t input_values = horizon_steps * input_dimension;
   const std::size_t primal_size = state_values + input_values;
-  const std::size_t base_dual_size = state_values + primal_size + horizon_steps;
+  if (
+    layout.rate_rows_per_stage > 0U &&
+    horizon_steps > std::numeric_limits<std::size_t>::max() /
+    layout.rate_rows_per_stage)
+  {
+    return std::nullopt;
+  }
+  const std::size_t rate_dual_size =
+    horizon_steps * layout.rate_rows_per_stage;
+  if (
+    state_values > std::numeric_limits<std::size_t>::max() - primal_size ||
+    state_values + primal_size >
+    std::numeric_limits<std::size_t>::max() - rate_dual_size)
+  {
+    return std::nullopt;
+  }
+  const std::size_t base_dual_size =
+    state_values + primal_size + rate_dual_size;
   std::size_t trailing_dual_size = 0U;
-  for (const auto & block : trailing_dual_stage_blocks) {
+  for (const auto & block : layout.trailing_dual_stage_blocks) {
     if (
       block.stage_count == 0U || block.rows_per_stage == 0U ||
       block.rows_per_stage >
@@ -520,11 +552,13 @@ shift_mpc_warm_start(
   shift_stage_block(
     previous.dual, shifted.dual, box_input_offset,
     box_input_offset, horizon_steps, input_dimension, stage_advance);
-  shift_stage_block(
-    previous.dual, shifted.dual, rate_offset, rate_offset,
-    horizon_steps, 1U, stage_advance);
+  if (layout.rate_rows_per_stage > 0U) {
+    shift_stage_block(
+      previous.dual, shifted.dual, rate_offset, rate_offset,
+      horizon_steps, layout.rate_rows_per_stage, stage_advance);
+  }
   std::size_t trailing_offset = base_dual_size;
-  for (const auto & block : trailing_dual_stage_blocks) {
+  for (const auto & block : layout.trailing_dual_stage_blocks) {
     shift_stage_block(
       previous.dual, shifted.dual, trailing_offset, trailing_offset,
       block.stage_count, block.rows_per_stage, stage_advance);

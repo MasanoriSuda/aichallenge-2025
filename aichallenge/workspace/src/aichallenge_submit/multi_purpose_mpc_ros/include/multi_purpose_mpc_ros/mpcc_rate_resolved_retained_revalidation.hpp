@@ -38,12 +38,14 @@ struct Request
   std::shared_ptr<const certified::CertifiedPlan> plan;
   std::uint64_t decision_id{};
   double now_sec{};
+  double control_origin_sec{};
   contract::ControlIntent current_intent{contract::ControlIntent::Unknown};
   double measured_course_progress_m{};
   double path_length_m{};
   double progress_continuity_tolerance_m{};
   bool circular{false};
   std::vector<recovery::Pose2D> measured_to_control_path;
+  std::vector<double> measured_to_control_elapsed_sec;
   recovery::Pose2D control_pose;
   std::shared_ptr<const recovery::OccupancyGrid> current_wall_grid;
   recovery::FootprintExtents current_footprint;
@@ -87,6 +89,9 @@ struct Proof
   std::uint64_t decision_id{};
   std::uint64_t obstacle_generation{};
   double observed_sec{};
+  double observation_origin_sec{};
+  double control_origin_sec{};
+  double prediction_delay_sec{};
   artifact::Cursor cursor;
   artifact::Actuation actuation;
   artifact::PredictedState expected_current_state;

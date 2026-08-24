@@ -305,6 +305,23 @@ def test_rate_resolved_track_cruise_snapshot_is_submitted_after_output_commit() 
     assert emergency < bind < submit
 
 
+def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
+    """Latency-predicted state, cursor, and dynamic prefix share one clock."""
+
+    assert (
+        "draft.control_prediction_origin_sec =\n"
+        "          now_sec + execution_prediction_delay_sec_;"
+        in SOURCE
+    )
+    assert (
+        "snapshot.control_prediction_origin_sec =\n"
+        "      bound_submission.control_prediction_origin_sec;"
+        in SOURCE
+    )
+    assert "request.control_origin_sec = now_sec + control_path->duration_sec;" in SOURCE
+    assert "request.measured_to_control_elapsed_sec = control_path->elapsed_sec;" in SOURCE
+
+
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     """Intent elevation must be atomic with a current executable Follow plan."""
 

@@ -84,9 +84,9 @@ LiftResult lift_progress(
 {
   LiftResult result;
   if (!std::isfinite(measured_progress_m) ||
-      !std::isfinite(retained_progress_m) ||
-      !std::isfinite(path_length_m) || path_length_m <= 0.0 ||
-      !std::isfinite(tolerance_m) || tolerance_m < 0.0)
+    !std::isfinite(retained_progress_m) ||
+    !std::isfinite(path_length_m) || path_length_m <= 0.0 ||
+    !std::isfinite(tolerance_m) || tolerance_m < 0.0)
   {
     return result;
   }
@@ -106,7 +106,7 @@ LiftResult lift_progress(
   const double raw_offset =
     (retained_progress_m - measured_progress_m) / path_length_m;
   if (raw_offset < static_cast<double>(std::numeric_limits<long>::min()) ||
-      raw_offset > static_cast<double>(std::numeric_limits<long>::max()))
+    raw_offset > static_cast<double>(std::numeric_limits<long>::max()))
   {
     return result;
   }
@@ -139,7 +139,7 @@ std::optional<recovery::Pose2D> reconstruct_pose(
   const auto world = contract::reconstruct_planar_pose_from_frenet(
     contract::PlanarPose{frame->x_m, frame->y_m, frame->heading_rad},
     contract::FrenetPose{
-      state.lateral_m, state.lag_m, state.heading_offset_rad});
+        state.lateral_m, state.lag_m, state.heading_offset_rad});
   if (!world.has_value()) {
     return std::nullopt;
   }
@@ -281,26 +281,33 @@ void evaluate_dynamic_segment(
   }
 }
 
-void evaluate_zero_time_dynamic_path(
+void evaluate_timed_dynamic_path(
   const recovery::FootprintExtents & footprint,
-  const std::vector<recovery::Pose2D> & path, const double swept_step_m,
+  const std::vector<recovery::Pose2D> & path,
+  const std::vector<double> & elapsed_sec, const double swept_step_m,
   const DynamicWorldObservation & observation, DynamicPathResult & result)
 {
   if (!result.valid || !result.clear) {
     return;
   }
-  if (path.empty()) {
+  if (
+    path.empty() || path.size() != elapsed_sec.size() ||
+    !std::isfinite(elapsed_sec.front()) ||
+    std::abs(elapsed_sec.front()) > kIdentityTolerance)
+  {
     result.valid = false;
     result.clear = false;
     return;
   }
   if (path.size() == 1U) {
-    evaluate_dynamic_pose(footprint, path.front(), 0.0, observation, result);
+    evaluate_dynamic_pose(
+      footprint, path.front(), elapsed_sec.front(), observation, result);
     return;
   }
   for (std::size_t index = 1U; index < path.size(); ++index) {
     evaluate_dynamic_segment(
-      footprint, path[index - 1U], path[index], 0.0, 0.0,
+      footprint, path[index - 1U], path[index],
+      elapsed_sec[index - 1U], elapsed_sec[index],
       swept_step_m, observation, result);
     if (!result.valid || !result.clear) {
       return;
@@ -351,47 +358,58 @@ Result evaluate(const Request & request)
   }
   const auto & execution = *request.plan->execution_artifact;
   const auto & source = *request.plan->physical_snapshot;
-  const auto cursor = artifact::resolve_cursor(execution, request.now_sec);
+  const auto cursor = artifact::resolve_cursor(
+    execution, request.control_origin_sec);
   result.cursor_reason = cursor.reason;
   if (!cursor.available) {
     result.reason = Reason::CursorUnavailable;
     return result;
   }
   if (!track_cruise(request.current_intent) ||
-      request.current_intent != execution.identity.intent)
+    request.current_intent != execution.identity.intent)
   {
     result.reason = Reason::IntentMismatch;
     return result;
   }
-  if (!request.obstacles.current)
-  {
+  if (!request.obstacles.current) {
     result.reason = Reason::DynamicObservationUnavailable;
     return result;
   }
   if (!dynamic_observation_valid(request.obstacles) ||
-      request.obstacles.observed_sec > request.now_sec + kIdentityTolerance)
+    request.obstacles.observed_sec > request.now_sec + kIdentityTolerance)
   {
     result.reason = Reason::DynamicObservationInvalid;
     return result;
   }
   if (request.current_wall_grid == nullptr ||
-      request.current_wall_grid.get() != source.wall_grid.get() ||
-      !same_footprint(request.current_footprint, source.footprint))
+    request.current_wall_grid.get() != source.wall_grid.get() ||
+    !same_footprint(request.current_footprint, source.footprint))
   {
     result.reason = Reason::StaticWorldMismatch;
     return result;
   }
   if (request.decision_id == 0U || !std::isfinite(request.now_sec) ||
-      !std::isfinite(request.current_speed_mps) ||
-      request.current_speed_mps < 0.0 ||
-      !std::isfinite(request.current_steering_rad) ||
-      !std::isfinite(request.minimum_acceleration_mps2) ||
-      !std::isfinite(request.maximum_acceleration_mps2) ||
-      request.minimum_acceleration_mps2 > request.maximum_acceleration_mps2 ||
-      !std::isfinite(request.publication_interval_sec) ||
-      request.publication_interval_sec <= 0.0 ||
-      request.measured_to_control_path.empty() ||
-      !same_pose(request.measured_to_control_path.back(), request.control_pose))
+    !std::isfinite(request.current_speed_mps) ||
+    request.current_speed_mps < 0.0 ||
+    !std::isfinite(request.current_steering_rad) ||
+    !std::isfinite(request.minimum_acceleration_mps2) ||
+    !std::isfinite(request.maximum_acceleration_mps2) ||
+    request.minimum_acceleration_mps2 > request.maximum_acceleration_mps2 ||
+    !std::isfinite(request.publication_interval_sec) ||
+    request.publication_interval_sec <= 0.0 ||
+    !std::isfinite(request.control_origin_sec) ||
+    request.control_origin_sec < request.now_sec ||
+    request.measured_to_control_path.empty() ||
+    request.measured_to_control_path.size() !=
+    request.measured_to_control_elapsed_sec.size() ||
+    !std::isfinite(request.measured_to_control_elapsed_sec.front()) ||
+    std::abs(request.measured_to_control_elapsed_sec.front()) >
+    kIdentityTolerance ||
+    !std::isfinite(request.measured_to_control_elapsed_sec.back()) ||
+    std::abs(
+      request.measured_to_control_elapsed_sec.back() -
+      (request.control_origin_sec - request.now_sec)) > kIdentityTolerance ||
+    !same_pose(request.measured_to_control_path.back(), request.control_pose))
   {
     result.reason = Reason::InvalidCurrentState;
     return result;
@@ -438,7 +456,7 @@ Result evaluate(const Request & request)
     request.maximum_acceleration_mps2 * request.publication_interval_sec +
     execution.physical_global_tolerance);
   if (actuation.actuation->predicted_speed_mps < velocity_lower_mps ||
-      actuation.actuation->predicted_speed_mps > velocity_upper_mps)
+    actuation.actuation->predicted_speed_mps > velocity_upper_mps)
   {
     result.reason = Reason::VelocityUnreachable;
     return result;
@@ -473,14 +491,18 @@ Result evaluate(const Request & request)
   }
 
   DynamicPathResult dynamic;
-  evaluate_zero_time_dynamic_path(
+  evaluate_timed_dynamic_path(
     source.footprint, request.measured_to_control_path,
-    source.swept_step_m, request.obstacles, dynamic);
-  evaluate_zero_time_dynamic_path(
-    source.footprint, connector, source.swept_step_m,
+    request.measured_to_control_elapsed_sec, source.swept_step_m,
+    request.obstacles, dynamic);
+  const double prediction_delay_sec =
+    request.control_origin_sec - request.now_sec;
+  evaluate_dynamic_segment(
+    source.footprint, connector.front(), connector.back(),
+    prediction_delay_sec, prediction_delay_sec, source.swept_step_m,
     request.obstacles, dynamic);
   auto previous_dynamic_pose = expected_pose.value();
-  double dynamic_time_sec = 0.0;
+  double dynamic_time_sec = prediction_delay_sec;
   for (
     std::size_t stage_index = cursor.control_stage_index;
     stage_index < execution.control_stages.size(); ++stage_index)
@@ -522,6 +544,9 @@ Result evaluate(const Request & request)
   proof.decision_id = request.decision_id;
   proof.obstacle_generation = request.obstacles.generation;
   proof.observed_sec = request.obstacles.observed_sec;
+  proof.observation_origin_sec = request.now_sec;
+  proof.control_origin_sec = request.control_origin_sec;
+  proof.prediction_delay_sec = prediction_delay_sec;
   proof.cursor = cursor;
   proof.actuation = actuation.actuation.value();
   proof.expected_current_state = expected;

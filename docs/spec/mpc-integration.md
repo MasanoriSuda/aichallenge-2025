@@ -1987,6 +1987,33 @@ state-zero steeringとcommitted predecessorの最大表示差はd1で0.00004876 
 retained suffix originの時刻意味を1つに定義し、fresh／retained／worker replacement／rejectの
 動的Acceptanceを得た後、6-state owner接続と5-state Track/Cruise owner削除を同一Sliceで行う。
 
+#### Steering-rate 6-state control time origin（2026-08-25、移行診断）
+
+5-state MPCのstate zeroは、観測poseそのものではなく
+`state_prediction_delay_sec`後の実行poseである。したがって6-state artifact、retained cursor、
+measured-to-control prefix、動的障害物予測は、callback観測時刻とcontrol-effective時刻を区別する。
+
+- `observation_sec`はV2X freshnessと生観測の時刻。
+- `control_origin_sec = observation_sec + state_prediction_delay_sec`はsolver state zeroが表す時刻。
+- artifactの`prediction_origin_sec`は`control_origin_sec`と一致する。
+- async solveのcompletionは未来のcontrol originより早くてもよく、capture時刻以降であることを要求する。
+- retained cursorは現在周期の`control_origin_sec`で解決する。
+
+measured poseからcontrol poseまでのprefixは、poseと単調なelapsed timeを同じ型で保持する。動的証明は
+peerを時刻0へ固定せず、prefixを`0..delay`、control poseからretained expected poseへのconnectorを
+`delay`、retained suffixを`delay`以降として1本の連続時刻軸で評価する。pose/time個数不一致、開始時刻
+非0、終端時刻とdelayの不一致、時刻逆行はfail closeする。
+
+`output/20260825-074847`の`make dev2`では、両domainでcontrol delayが一貫して`0.130000 s`となり、
+d2最終窓はsolve 81/81、retained current-world 81/81、command candidate 81/81だった。すべて
+`authority=shadow, selected=0`を維持した。約208秒の走行中、d2で25 ms周期を1回だけ1.559 ms超過したが、
+連続overrunはなく、最終窓のsolver最大は2.281 ms、retained proof最大は0.260 msだった。この単発超過は
+production昇格Sliceの複数周timing gateへ残す。
+
+本Sliceは時刻producerの不変条件を修復したものであり、delay margin、age lease、fallback、normal
+authorityを追加していない。次のproduction昇格は6-state Track/Cruise owner接続と5-state通常owner削除を
+同じSliceで行い、二重authorityを恒久化しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

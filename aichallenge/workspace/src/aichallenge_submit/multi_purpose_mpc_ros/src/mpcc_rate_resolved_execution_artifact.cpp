@@ -48,10 +48,10 @@ mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation sample_steering(
   }
   return mpcc_rate_resolved::evaluate_certified_actuation_sequence_sample(
     mpcc_rate_resolved::CertifiedActuationSequenceSampleRequest{
-      artifact.semantic_initial_steering_rad, std::move(rates),
-      std::move(durations), elapsed_sec, artifact.maximum_abs_steering_rad,
-      artifact.wheelbase_m,
-      artifact.maximum_normalized_constraint_violation});
+        artifact.semantic_initial_steering_rad, std::move(rates),
+        std::move(durations), elapsed_sec, artifact.maximum_abs_steering_rad,
+        artifact.wheelbase_m,
+        artifact.maximum_normalized_constraint_violation});
 }
 
 }  // namespace
@@ -116,9 +116,8 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     !std::isfinite(artifact.prediction_origin_sec) ||
     !std::isfinite(artifact.completed_sec) ||
     artifact.prediction_origin_sec < 0.0 ||
-    artifact.completed_sec < artifact.prediction_origin_sec ||
-    std::abs(
-      artifact.prediction_origin_sec - artifact.identity.snapshot_sec) > 1e-12)
+    artifact.prediction_origin_sec < artifact.identity.snapshot_sec ||
+    artifact.completed_sec < artifact.identity.snapshot_sec)
   {
     return RejectReason::InvalidTiming;
   }
@@ -152,7 +151,7 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   }
   if (
     artifact.control_stages.size() ==
-      std::numeric_limits<std::size_t>::max() ||
+    std::numeric_limits<std::size_t>::max() ||
     artifact.predicted_states.size() != artifact.control_stages.size() + 1U)
   {
     return RejectReason::StateCountMismatch;

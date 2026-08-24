@@ -125,6 +125,7 @@ retained::Request accepted_request(
   request.plan = plan;
   request.decision_id = 100U;
   request.now_sec = 1.05;
+  request.control_origin_sec = 1.05;
   request.current_intent = contract::ControlIntent::Track;
   request.measured_course_progress_m = 50.10;
   request.path_length_m = 100.0;
@@ -132,6 +133,7 @@ retained::Request accepted_request(
   request.circular = true;
   request.control_pose = {50.05, 0.05, 0.0};
   request.measured_to_control_path = {request.control_pose};
+  request.measured_to_control_elapsed_sec = {0.0};
   request.current_wall_grid = plan->physical_snapshot->wall_grid;
   request.current_footprint = plan->physical_snapshot->footprint;
   request.obstacles.generation = 7U;
@@ -193,6 +195,34 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsFutureCrossingObstacle)
   EXPECT_EQ(
     retained::evaluate(request).reason,
     retained::Reason::DynamicPathBlocked);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, RejectsObstacleCrossingDuringDelayPrefix)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 1.0;
+  request.control_origin_sec = 1.05;
+  request.measured_to_control_path = {
+    {49.95, 0.05, 0.0}, request.control_pose};
+  request.measured_to_control_elapsed_sec = {0.0, 0.05};
+  request.obstacles.observed_sec = request.now_sec;
+  request.obstacles.obstacles.push_back(
+    {"delay-crossing", {50.0, 0.30, 0.0, -10.0, 0.02}});
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::DynamicPathBlocked);
+  EXPECT_EQ(result.blocking_obstacle_id, "delay-crossing");
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, RejectsInconsistentControlTimePrefix)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.control_origin_sec = request.now_sec + 0.05;
+  request.measured_to_control_elapsed_sec = {0.0};
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::InvalidCurrentState);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, AcceptsMultipleClearPeers)
@@ -302,6 +332,7 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsExhaustedArtifact)
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
   request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::CursorUnavailable);
   EXPECT_EQ(result.cursor_reason, artifact::CursorReason::Exhausted);

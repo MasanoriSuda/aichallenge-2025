@@ -5686,6 +5686,8 @@ struct ExtendedProgressMpcProblem
 struct RateResolvedTrackCruiseSubmissionDraft
 {
   mpcc_rate_resolved_adapter::Request request;
+  double control_prediction_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double course_progress_origin_m{
     std::numeric_limits<double>::quiet_NaN()};
   int horizon_steps{};
@@ -5695,12 +5697,31 @@ struct RateResolvedTrackCruiseSubmissionDraft
 struct BoundRateResolvedTrackCruiseSubmission
 {
   mpcc_rate_resolved_adapter::Request request;
+  double control_prediction_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double course_progress_origin_m{
     std::numeric_limits<double>::quiet_NaN()};
   int horizon_steps{};
   mpcc_contract::MpccProblemContext source_context;
   double committed_predecessor_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
+};
+
+struct CanonicalCurrentControlPath
+{
+  std::vector<recovery_footprint::Pose2D> poses;
+  std::vector<double> elapsed_sec;
+  double duration_sec{};
+
+  bool complete() const noexcept
+  {
+    return !poses.empty() && poses.size() == elapsed_sec.size() &&
+      std::isfinite(duration_sec) && duration_sec >= 0.0 &&
+      std::isfinite(elapsed_sec.front()) &&
+      std::abs(elapsed_sec.front()) <= 1e-12 &&
+      std::isfinite(elapsed_sec.back()) &&
+      std::abs(elapsed_sec.back() - duration_sec) <= 1e-12;
+  }
 };
 
 struct FirstStageShadowReachabilityDiagnostic
@@ -6443,6 +6464,10 @@ struct RateResolvedRetainedShadowEvaluation
     rate_resolved_shadow::artifact::ActuationReason::InvalidArtifact};
   std::uint64_t sequence{};
   std::size_t stage_index{};
+  double cursor_elapsed_sec{};
+  double observation_origin_sec{};
+  double control_origin_sec{};
+  double prediction_delay_sec{};
   double steering_difference_rad{};
   double maximum_steering_step_rad{};
   double velocity_difference_mps{};
@@ -23827,7 +23852,7 @@ struct MPC
     return identity;
   }
 
-  std::optional<std::vector<recovery_footprint::Pose2D>>
+  std::optional<CanonicalCurrentControlPath>
   build_canonical_current_control_path() const
   {
     if (!actual_wall_monitor_pose_.has_value() ||
@@ -23846,8 +23871,10 @@ struct MPC
       static_cast<std::size_t>(std::ceil(
         current_speed_mps_ * execution_prediction_delay_sec_ / step_m)),
       1U, 512U);
-    std::vector<recovery_footprint::Pose2D> path;
-    path.reserve(steps + 1U);
+    CanonicalCurrentControlPath path;
+    path.duration_sec = execution_prediction_delay_sec_;
+    path.poses.reserve(steps + 2U);
+    path.elapsed_sec.reserve(steps + 2U);
     for (std::size_t step = 0U; step <= steps; ++step) {
       const double elapsed_sec = execution_prediction_delay_sec_ *
         static_cast<double>(step) / static_cast<double>(steps);
@@ -23857,20 +23884,26 @@ struct MPC
           actual_wall_monitor_pose_->y_m,
           actual_wall_monitor_pose_->yaw_rad},
         current_speed_mps_, execution_prediction_yaw_rate_radps_, elapsed_sec);
-      path.push_back(recovery_footprint::Pose2D{
+      path.poses.push_back(recovery_footprint::Pose2D{
         predicted.x, predicted.y, predicted.yaw});
+      path.elapsed_sec.push_back(elapsed_sec);
     }
     // Bind the proof to the exact pose consumed by the current execution
     // adapter. Any producer difference becomes an explicitly swept final
     // segment rather than an untracked pose substitution.
     if (
-      std::abs(path.back().x_m - predicted_execution_pose_->x_m) > 1e-12 ||
-      std::abs(path.back().y_m - predicted_execution_pose_->y_m) > 1e-12 ||
-      std::abs(path.back().yaw_rad - predicted_execution_pose_->yaw_rad) > 1e-12)
+      std::abs(path.poses.back().x_m - predicted_execution_pose_->x_m) > 1e-12 ||
+      std::abs(path.poses.back().y_m - predicted_execution_pose_->y_m) > 1e-12 ||
+      std::abs(path.poses.back().yaw_rad - predicted_execution_pose_->yaw_rad) > 1e-12)
     {
-      path.push_back(predicted_execution_pose_.value());
+      path.poses.push_back(predicted_execution_pose_.value());
+      path.elapsed_sec.push_back(path.duration_sec);
     } else {
-      path.back() = predicted_execution_pose_.value();
+      path.poses.back() = predicted_execution_pose_.value();
+      path.elapsed_sec.back() = path.duration_sec;
+    }
+    if (!path.complete()) {
+      return std::nullopt;
     }
     return path;
   }
@@ -24099,7 +24132,8 @@ struct MPC
     proof_request.measured_course_progress_m = problem.progress_origin_m;
     proof_request.progress_continuity_tolerance_m =
       kV2XCourseProgressContinuityToleranceM;
-    proof_request.measured_to_control_path = measured_to_control_path.value();
+    proof_request.measured_to_control_path =
+      measured_to_control_path->poses;
     proof_request.control_pose = predicted_execution_pose_.value();
     proof_request.current.control_pose_id =
       canonical_retained_world::fingerprint_control_pose_path(
@@ -24333,7 +24367,8 @@ struct MPC
     proof_request.measured_course_progress_m = problem.progress_origin_m;
     proof_request.progress_continuity_tolerance_m =
       kV2XCourseProgressContinuityToleranceM;
-    proof_request.measured_to_control_path = measured_to_control_path.value();
+    proof_request.measured_to_control_path =
+      measured_to_control_path->poses;
     proof_request.control_pose = predicted_execution_pose_.value();
     proof_request.current.control_pose_id =
       canonical_retained_world::fingerprint_control_pose_path(
@@ -26815,7 +26850,8 @@ struct MPC
     proof_request.measured_lateral_m = model->spatial_state.e_y;
     proof_request.progress_continuity_tolerance_m =
       kV2XCourseProgressContinuityToleranceM;
-    proof_request.measured_to_control_path = measured_to_control_path.value();
+    proof_request.measured_to_control_path =
+      measured_to_control_path->poses;
     proof_request.control_pose = predicted_execution_pose_.value();
     proof_request.current.control_pose_id =
       canonical_retained_world::fingerprint_control_pose_path(
@@ -27791,6 +27827,7 @@ struct MPC
     if (
       draft.horizon_steps <= 0 ||
       draft.request.horizon_steps != draft.horizon_steps ||
+      !std::isfinite(draft.control_prediction_origin_sec) ||
       !std::isfinite(draft.course_progress_origin_m) ||
       !mpcc_contract::problem_context_complete(draft.source_context) ||
       !std::isfinite(committed_output.control[1]) ||
@@ -27802,6 +27839,8 @@ struct MPC
     BoundRateResolvedTrackCruiseSubmission bound;
     bound.request = draft.request;
     bound.request.current_steering_rad = committed_output.control[1];
+    bound.control_prediction_origin_sec =
+      draft.control_prediction_origin_sec;
     bound.course_progress_origin_m = draft.course_progress_origin_m;
     bound.horizon_steps = draft.horizon_steps;
     bound.source_context = draft.source_context;
@@ -27822,6 +27861,8 @@ struct MPC
       bound_submission.horizon_steps <= 0 ||
       bound_submission.request.horizon_steps !=
       bound_submission.horizon_steps ||
+      !std::isfinite(bound_submission.control_prediction_origin_sec) ||
+      bound_submission.control_prediction_origin_sec < now_sec ||
       !std::isfinite(
       bound_submission.committed_predecessor_steering_rad) ||
       bound_submission.request.current_steering_rad !=
@@ -27849,6 +27890,8 @@ struct MPC
       bound_submission.source_context.stage_geometry_id;
     snapshot.identity.intent = bound_submission.source_context.intent;
     snapshot.identity.snapshot_sec = now_sec;
+    snapshot.control_prediction_origin_sec =
+      bound_submission.control_prediction_origin_sec;
     snapshot.request = bound_submission.request;
     snapshot.course_progress_origin_m =
       bound_submission.course_progress_origin_m;
@@ -28082,13 +28125,15 @@ struct MPC
     request.plan = plan;
     request.decision_id = active_control_decision_id_;
     request.now_sec = now_sec;
+    request.control_origin_sec = now_sec + control_path->duration_sec;
     request.current_intent = current_control_intent();
     request.measured_course_progress_m = problem.progress_origin_m;
     request.path_length_m = model->reference_path->length;
     request.progress_continuity_tolerance_m =
       kV2XCourseProgressContinuityToleranceM;
     request.circular = model->reference_path->circular;
-    request.measured_to_control_path = control_path.value();
+    request.measured_to_control_path = control_path->poses;
+    request.measured_to_control_elapsed_sec = control_path->elapsed_sec;
     request.control_pose = predicted_execution_pose_.value();
     request.current_wall_grid = overtake_static_wall_grid_snapshot_owner_;
     request.current_footprint = overtake_static_wall_footprint_;
@@ -28130,6 +28175,11 @@ struct MPC
       evaluation.sequence =
         result.proof->plan->execution_artifact->identity.sequence;
       evaluation.stage_index = result.proof->cursor.control_stage_index;
+      evaluation.cursor_elapsed_sec = result.proof->cursor.elapsed_sec;
+      evaluation.observation_origin_sec =
+        result.proof->observation_origin_sec;
+      evaluation.control_origin_sec = result.proof->control_origin_sec;
+      evaluation.prediction_delay_sec = result.proof->prediction_delay_sec;
       evaluation.steering_difference_rad =
         result.proof->steering_difference_rad;
       evaluation.maximum_steering_step_rad =
@@ -28357,6 +28407,7 @@ struct MPC
       "sampled:%.9f/delta_max:%.9f/rate_max:%.9f/"
       "rate_bounds:physical[%.9f,%.9f]/solver[%.9f,%.9f]/margin:%.9f/"
       "sample_stage:%lu/sample_stage_dt:%.6f/horizon_dt:%.6f/"
+      "time_origin:capture:%.6f/control:%.6f/delay:%.6f/"
       "artifact_valid:%d/states:%lu/controls:%lu/artifact_reason:%s/%s, "
       "physical=adapter_reject:%lu/course_reject:%lu/wall_reject:%lu/"
       "accepted:%lu/time:%.3f/%.3fms(avg/max), physical_last=%s/%s/%s, "
@@ -28475,6 +28526,12 @@ struct MPC
       window.last_result_available ? last.sampled_stage_index : 0U),
       window.last_result_available ? last.sampled_stage_elapsed_sec : 0.0,
       window.last_result_available ? last.certified_horizon_duration_sec : 0.0,
+      window.last_result_available ? last.identity.snapshot_sec : 0.0,
+      window.last_result_available && last.execution_artifact != nullptr ?
+      last.execution_artifact->prediction_origin_sec : 0.0,
+      window.last_result_available && last.execution_artifact != nullptr ?
+      last.execution_artifact->prediction_origin_sec -
+      last.identity.snapshot_sec : 0.0,
       window.last_result_available && last.execution_artifact != nullptr ? 1 : 0,
       static_cast<unsigned long>(
         window.last_result_available && last.execution_artifact != nullptr ?
@@ -28565,6 +28622,7 @@ struct MPC
       "progress:%lu/course:%lu/actuation:%lu/steering:%lu/velocity:%lu/"
       "control_path:%lu/delay:%lu/connector:%lu, time=%.3f/%.3fms(avg/max), "
       "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
+      "time=observation:%.6f/control:%.6f/delay:%.6f/cursor_elapsed:%.6f/"
       "steering_delta:%.6f/limit:%.6f/velocity_delta:%.6f/"
       "peers:%lu/dynamic_samples:%lu/min_dynamic_clearance:%.3f/blocked_by:%s, "
       "authority=shadow, selected=0",
@@ -28616,6 +28674,10 @@ struct MPC
         window.last_retained.cursor_reason),
       rate_resolved_shadow::artifact::to_string(
         window.last_retained.actuation_reason),
+      window.last_retained.observation_origin_sec,
+      window.last_retained.control_origin_sec,
+      window.last_retained.prediction_delay_sec,
+      window.last_retained.cursor_elapsed_sec,
       window.last_retained.steering_difference_rad,
       window.last_retained.maximum_steering_step_rad,
       window.last_retained.velocity_difference_mps,
@@ -28835,6 +28897,8 @@ struct MPC
         // assigned only after this cycle's production output is resolved.
         draft.request.current_steering_rad =
           std::numeric_limits<double>::quiet_NaN();
+        draft.control_prediction_origin_sec =
+          now_sec + execution_prediction_delay_sec_;
         draft.course_progress_origin_m = extended_problem->progress_origin_m;
         draft.horizon_steps = extended_problem->N;
         draft.source_context = context;

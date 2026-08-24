@@ -23,6 +23,7 @@ using Identity = artifact::Identity;
 struct Snapshot
 {
   Identity identity;
+  double control_prediction_origin_sec{};
   mpcc_rate_resolved_adapter::Request request;
   double course_progress_origin_m{};
   std::vector<double> nominal_path_distance_m;

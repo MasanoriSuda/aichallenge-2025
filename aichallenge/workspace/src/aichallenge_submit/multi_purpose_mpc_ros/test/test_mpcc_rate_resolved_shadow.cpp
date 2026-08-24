@@ -61,6 +61,7 @@ shadow::Snapshot snapshot(const std::uint64_t sequence = 1U)
   result.identity.stage_geometry_id = 201U + sequence;
   result.identity.intent = contract::ControlIntent::Track;
   result.identity.snapshot_sec = 10.0 + 0.1 * sequence;
+  result.control_prediction_origin_sec = result.identity.snapshot_sec + 0.13;
   result.request = straight_request();
   result.course_progress_origin_m = 50.0;
   result.nominal_path_distance_m = {0.0, 0.2, 0.4, 0.6};
@@ -117,6 +118,12 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_EQ(result.execution_artifact->nominal_path_distance_m.size(), 4U);
   EXPECT_EQ(result.execution_artifact->lateral_lower_m.size(), 4U);
   EXPECT_DOUBLE_EQ(result.execution_artifact->course_progress_origin_m, 50.0);
+  EXPECT_DOUBLE_EQ(
+    result.execution_artifact->prediction_origin_sec,
+    input.control_prediction_origin_sec);
+  EXPECT_LT(
+    result.execution_artifact->completed_sec,
+    result.execution_artifact->prediction_origin_sec);
   EXPECT_DOUBLE_EQ(
     result.execution_artifact->semantic_initial_steering_rad,
     input.request.current_steering_rad);

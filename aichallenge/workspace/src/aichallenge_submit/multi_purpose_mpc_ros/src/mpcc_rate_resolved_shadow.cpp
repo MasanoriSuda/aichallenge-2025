@@ -135,6 +135,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     };
   if (
     !artifact::identity_valid(snapshot.identity) ||
+    !std::isfinite(snapshot.control_prediction_origin_sec) ||
+    snapshot.control_prediction_origin_sec < snapshot.identity.snapshot_sec ||
     !std::isfinite(snapshot.course_progress_origin_m) ||
     snapshot.request.horizon_steps <= 0 ||
     snapshot.nominal_path_distance_m.size() !=
@@ -258,7 +260,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   if (!sample.sample.has_value()) {
     result.outcome = Outcome::ActuationSampleRejected;
     result.detail = std::string{"actuation sample rejected: "} +
-      model::to_string(sample.reason);
+    model::to_string(sample.reason);
     result.solved = false;
     result.constraints_satisfied = false;
     return finish();
@@ -269,7 +271,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
 
   artifact::ExecutionArtifact execution_artifact;
   execution_artifact.identity = snapshot.identity;
-  execution_artifact.prediction_origin_sec = snapshot.identity.snapshot_sec;
+  execution_artifact.prediction_origin_sec =
+    snapshot.control_prediction_origin_sec;
   execution_artifact.completed_sec = snapshot.identity.snapshot_sec +
     std::chrono::duration<double>(SteadyClock::now() - started).count();
   execution_artifact.course_progress_origin_m =
@@ -297,13 +300,14 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     static_cast<std::size_t>(horizon + 1));
   for (int stage = 0; stage <= horizon; ++stage) {
     const int state_offset = model::kStateDimension * stage;
-    execution_artifact.predicted_states.push_back(artifact::PredictedState{
-      primal[state_offset + model::kLateralIndex],
-      primal[state_offset + model::kLagIndex],
-      primal[state_offset + model::kHeadingIndex],
-      primal[state_offset + model::kVelocityIndex],
-      primal[state_offset + model::kProgressIndex],
-      primal[state_offset + model::kSteeringIndex]});
+    execution_artifact.predicted_states.push_back(
+      artifact::PredictedState{
+        primal[state_offset + model::kLateralIndex],
+        primal[state_offset + model::kLagIndex],
+        primal[state_offset + model::kHeadingIndex],
+        primal[state_offset + model::kVelocityIndex],
+        primal[state_offset + model::kProgressIndex],
+        primal[state_offset + model::kSteeringIndex]});
     const auto & semantic =
       snapshot.request.states[static_cast<std::size_t>(stage)];
     execution_artifact.lateral_lower_m.push_back(semantic.lower[0]);
@@ -313,13 +317,14 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   for (int stage = 0; stage < horizon; ++stage) {
     const int input_offset =
       state_values + model::kInputDimension * stage;
-    execution_artifact.control_stages.push_back(artifact::ControlStage{
-      primal[input_offset + model::kAccelerationIndex],
-      primal[input_offset + model::kSteeringRateIndex],
-      primal[input_offset + model::kVirtualProgressSpeedIndex],
-      snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec,
-      snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[2],
-      snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[2]});
+    execution_artifact.control_stages.push_back(
+      artifact::ControlStage{
+        primal[input_offset + model::kAccelerationIndex],
+        primal[input_offset + model::kSteeringRateIndex],
+        primal[input_offset + model::kVirtualProgressSpeedIndex],
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec,
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[2],
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[2]});
   }
   result.execution_artifact_reject_reason =
     artifact::validate(execution_artifact);
@@ -329,7 +334,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   {
     result.outcome = Outcome::ArtifactRejected;
     result.detail = std::string{"execution artifact rejected: "} +
-      artifact::to_string(result.execution_artifact_reject_reason);
+    artifact::to_string(result.execution_artifact_reject_reason);
     result.solved = false;
     result.constraints_satisfied = false;
     return finish();

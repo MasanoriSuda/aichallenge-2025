@@ -713,6 +713,18 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   Slice is accepted, but production promotion remains blocked by one independent solve reject whose
   typed detail was overwritten by the aggregate's later solved result. Preserve and classify that
   failure next; do not add retry, fallback or solver tuning before its cause is known.
+- `.steering/20260825-rate-resolved-solve-reject-provenance` preserves the newest non-solved result
+  independently from the ordinary newest-result summary in each two-second telemetry window. The
+  trace includes immutable sequence/decision/intent/fingerprint identity, typed outcome, persistent-
+  OSQP status/iteration/setup/update/reset provenance and the existing row-level detail; it remains
+  `authority=shadow, selected=0` and cannot affect commands. All 1,832 package tests and the
+  25-package build pass. In `output/20260825-020710` and `output/20260825-021144`, all 14,082
+  consumed results solved and sampled successfully, including 22 cross-stage publication samples;
+  no mailbox or sample failure occurred. The historical one-off solve rejection is therefore
+  `NOT EXERCISED`, not assumed fixed, and no solver tuning or fallback is authorized. Both runs did
+  expose one independent 25 ms production callback overrun. Attribute that production timing tail
+  before promoting the rate-resolved formulation; do not conflate it with the asynchronous shadow
+  solver or bypass it by changing cadence.
 
 ## Slice 6: Legacy and migration path removal
 

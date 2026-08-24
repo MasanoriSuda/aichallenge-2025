@@ -21,8 +21,42 @@ Docker/colcon run loaded the package overlay and passed all tests.
 
 ## Dynamic validation
 
-Pending. Run `make dev2`, then confirm one of:
+### Run 1: `output/20260825-020710`
 
-- a non-solved result emits `Rate-resolved Track/Cruise shadow failure` with
-  exact solver detail; or
-- no non-solved result occurs, recorded explicitly as `NOT EXERCISED`.
+- D1: 399 consumed / 399 solved
+- D2: 6,959 consumed / 6,959 solved
+- Combined: 7,358 solved; build/assembly/solve/nonfinite/sample/exception
+  rejects all zero
+- 11 publication samples crossed into stage one; sampled maximum stage was one
+- Mailbox invalid/rollback/unsubmitted: zero
+- Every one of 94 aggregate records remained
+  `authority=shadow, selected=0`
+- Maximum rate-resolved compute / solve time: 11.645 / 11.576 ms
+
+### Run 2: `output/20260825-021144`
+
+- D1: 396 consumed / 396 solved
+- D2: 6,328 consumed / 6,328 solved
+- Combined: 6,724 solved; build/assembly/solve/nonfinite/sample/exception
+  rejects all zero
+- 11 publication samples crossed into stage one; sampled maximum stage was one
+- Mailbox invalid/rollback/unsubmitted: zero
+- Every one of 86 aggregate records remained
+  `authority=shadow, selected=0`
+- Maximum rate-resolved compute / solve time: 10.325 / 10.246 ms
+
+### Result
+
+Across both runs, all 14,082 consumed results solved and sampled successfully.
+The historical rare `SolveRejected` did not recur, so the new failure trace was
+`NOT EXERCISED` dynamically. This does not prove that the historical failure is
+fixed; it proves that the observation path is installed without changing
+authority and that no further behavioral repair is justified without evidence.
+
+Each run had one independent 25 ms control-callback overrun (25.644 ms and
+27.513 ms). The first coincided with initial cold production solve activity; the
+second occurred during normal Track/Cruise with a nearby production certificate
+window whose maximum certificate time was 19.225 ms. The rate-resolved worker
+itself remained asynchronous and below 11.645 ms. Callback attribution is a
+separate production-quality blocker and is not repaired in this diagnostic
+Slice.

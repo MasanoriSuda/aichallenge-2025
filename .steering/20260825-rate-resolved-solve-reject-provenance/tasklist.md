@@ -7,8 +7,9 @@
 - [x] Add/extend observation-only source contract.
 - [x] Run build and full package tests.
 - [x] Commit the diagnostic Slice.
-- [ ] Run `make dev2` until exercised or record NOT EXERCISED.
-- [ ] Classify the failure before any behavioral change.
+- [x] Run `make dev2` until exercised or record NOT EXERCISED.
+- [x] Classify the failure before any behavioral change (`NOT EXERCISED` after
+  14,082 solved results; no behavioral change authorized).
 
 ## Definition of Done
 

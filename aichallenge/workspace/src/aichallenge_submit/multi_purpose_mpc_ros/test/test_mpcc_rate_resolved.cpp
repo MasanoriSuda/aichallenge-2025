@@ -165,32 +165,57 @@ TEST(MpccRateResolved, RejectsUncertifiedActuationSamples)
     0.10, 0.80, 0.025, 0.12, 0.6, 0.7, 2.0}).has_value());
 }
 
-TEST(MpccRateResolved, SamplesOnlyPublicationBoundaryFromCertifiedQp)
+TEST(MpccRateResolved, SamplesCertifiedPiecewiseSequenceAtPublicationBoundary)
 {
-  const auto accepted = rate::evaluate_certified_actuation_sample(
-    rate::CertifiedActuationSampleRequest{
-      0.10, 0.70001, 0.025, 0.12, 0.60, 2.0, 0.75});
+  const auto accepted = rate::evaluate_certified_actuation_sequence_sample(
+    rate::CertifiedActuationSequenceSampleRequest{
+      0.10, {0.40, -0.20}, {0.01, 0.02}, 0.025, 0.60, 2.0, 0.75});
   ASSERT_EQ(accepted.reason, rate::ActuationSampleReason::Accepted);
   ASSERT_TRUE(accepted.sample.has_value());
-  EXPECT_NEAR(accepted.sample->steering_rad, 0.11750025, 1e-12);
+  EXPECT_NEAR(accepted.sample->steering_rad, 0.101, 1e-12);
+  EXPECT_EQ(accepted.sampled_stage_index, 1U);
+  EXPECT_NEAR(accepted.sampled_stage_elapsed_sec, 0.015, 1e-12);
+  EXPECT_NEAR(accepted.certified_horizon_duration_sec, 0.03, 1e-12);
 
-  const auto uncertified = rate::evaluate_certified_actuation_sample(
-    rate::CertifiedActuationSampleRequest{
-      0.10, 0.10, 0.025, 0.12, 0.60, 2.0, 1.01});
+  const auto exact_boundary =
+    rate::evaluate_certified_actuation_sequence_sample(
+    rate::CertifiedActuationSequenceSampleRequest{
+      0.10, {0.40, -0.20}, {0.01, 0.02}, 0.01, 0.60, 2.0, 0.75});
+  ASSERT_EQ(exact_boundary.reason, rate::ActuationSampleReason::Accepted);
+  ASSERT_TRUE(exact_boundary.sample.has_value());
+  EXPECT_NEAR(exact_boundary.sample->steering_rad, 0.104, 1e-12);
+  EXPECT_EQ(exact_boundary.sampled_stage_index, 0U);
+  EXPECT_NEAR(exact_boundary.sampled_stage_elapsed_sec, 0.01, 1e-12);
+}
+
+TEST(MpccRateResolved, RejectsUncertifiedPiecewiseSequence)
+{
+  const auto uncertified =
+    rate::evaluate_certified_actuation_sequence_sample(
+    rate::CertifiedActuationSequenceSampleRequest{
+      0.10, {0.10}, {0.12}, 0.025, 0.60, 2.0, 1.01});
   EXPECT_EQ(
     uncertified.reason,
     rate::ActuationSampleReason::SolverCertificateInvalid);
 
-  const auto late = rate::evaluate_certified_actuation_sample(
-    rate::CertifiedActuationSampleRequest{
-      0.10, 0.10, 0.13, 0.12, 0.60, 2.0, 0.50});
+  const auto late = rate::evaluate_certified_actuation_sequence_sample(
+    rate::CertifiedActuationSequenceSampleRequest{
+      0.10, {0.10, -0.10}, {0.01, 0.02}, 0.031, 0.60, 2.0, 0.50});
   EXPECT_EQ(
     late.reason,
-    rate::ActuationSampleReason::PublicationAfterStageEnd);
+    rate::ActuationSampleReason::PublicationAfterHorizonEnd);
 
-  const auto sampled_violation = rate::evaluate_certified_actuation_sample(
-    rate::CertifiedActuationSampleRequest{
-      0.59, 0.70, 0.025, 0.12, 0.60, 2.0, 0.50});
+  const auto malformed = rate::evaluate_certified_actuation_sequence_sample(
+    rate::CertifiedActuationSequenceSampleRequest{
+      0.10, {0.10}, {0.01, 0.02}, 0.01, 0.60, 2.0, 0.50});
+  EXPECT_EQ(
+    malformed.reason,
+    rate::ActuationSampleReason::StageSequenceInvalid);
+
+  const auto sampled_violation =
+    rate::evaluate_certified_actuation_sequence_sample(
+    rate::CertifiedActuationSequenceSampleRequest{
+      0.59, {2.0, -2.0}, {0.01, 0.02}, 0.025, 0.60, 2.0, 0.50});
   EXPECT_EQ(
     sampled_violation.reason,
     rate::ActuationSampleReason::SampledSteeringLimitViolation);

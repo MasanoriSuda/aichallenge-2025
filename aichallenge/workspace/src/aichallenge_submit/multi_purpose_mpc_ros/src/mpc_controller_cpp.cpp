@@ -27636,7 +27636,8 @@ struct MPC
       "source:0x%016lx/geometry:0x%016lx/outcome:%s/sample_reason:%s/"
       "dt:%.6f/stage_dt:%.6f/delta0:%.9f/solver_delta0:%.9f/rate:%.9f/terminal:%.9f/"
       "sampled:%.9f/delta_max:%.9f/rate_max:%.9f/"
-      "rate_bounds:physical[%.9f,%.9f]/solver[%.9f,%.9f]/margin:%.9f/%s, "
+      "rate_bounds:physical[%.9f,%.9f]/solver[%.9f,%.9f]/margin:%.9f/"
+      "sample_stage:%lu/sample_stage_dt:%.6f/horizon_dt:%.6f/%s, "
       "authority=shadow, selected=0, physical=not-evaluated, warm=none",
       static_cast<unsigned long>(window.submission_count),
       static_cast<unsigned long>(window.replaced_pending_count),
@@ -27669,7 +27670,9 @@ struct MPC
       window.maximum_result_age_sec,
       static_cast<unsigned long>(window.actuation_sample_reason_count[
         static_cast<std::size_t>(
-        mpcc_rate_resolved::ActuationSampleReason::PublicationAfterStageEnd)]),
+        mpcc_rate_resolved::ActuationSampleReason::PublicationAfterStageEnd)] +
+      window.actuation_sample_reason_count[static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::PublicationAfterHorizonEnd)]),
       static_cast<unsigned long>(window.actuation_sample_reason_count[
         static_cast<std::size_t>(
         mpcc_rate_resolved::ActuationSampleReason::InitialSteeringLimitViolation)]),
@@ -27687,6 +27690,8 @@ struct MPC
         rate_resolved_shadow::Outcome::ActuationSampleRejected)] -
         window.actuation_sample_reason_count[static_cast<std::size_t>(
         mpcc_rate_resolved::ActuationSampleReason::PublicationAfterStageEnd)] -
+        window.actuation_sample_reason_count[static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::PublicationAfterHorizonEnd)] -
         window.actuation_sample_reason_count[static_cast<std::size_t>(
         mpcc_rate_resolved::ActuationSampleReason::InitialSteeringLimitViolation)] -
         window.actuation_sample_reason_count[static_cast<std::size_t>(
@@ -27739,6 +27744,10 @@ struct MPC
       last.first_steering_rate_solver_upper_radps : 0.0,
       window.last_result_available ?
       last.first_steering_rate_certificate_margin_radps : 0.0,
+      static_cast<unsigned long>(
+      window.last_result_available ? last.sampled_stage_index : 0U),
+      window.last_result_available ? last.sampled_stage_elapsed_sec : 0.0,
+      window.last_result_available ? last.certified_horizon_duration_sec : 0.0,
       window.last_result_available ? last.detail.c_str() : "not-evaluated");
     window = RateResolvedTrackCruiseShadowTelemetryWindow{};
     rate_resolved_track_cruise_shadow_last_log_sec_ = now_sec;

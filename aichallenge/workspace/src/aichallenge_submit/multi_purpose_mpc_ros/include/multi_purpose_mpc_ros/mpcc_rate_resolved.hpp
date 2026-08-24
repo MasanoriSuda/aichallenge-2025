@@ -3,7 +3,9 @@
 
 #include <Eigen/Dense>
 
+#include <cstddef>
 #include <optional>
+#include <vector>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved
 {
@@ -79,7 +81,9 @@ enum class ActuationSampleReason
   SteeringRateNonfinite,
   ElapsedTimeInvalid,
   StageDurationInvalid,
+  StageSequenceInvalid,
   PublicationAfterStageEnd,
+  PublicationAfterHorizonEnd,
   SteeringLimitInvalid,
   SteeringRateLimitInvalid,
   WheelbaseInvalid,
@@ -107,26 +111,37 @@ struct ActuationSampleEvaluation
 ActuationSampleEvaluation evaluate_actuation_sample(
   const ActuationSampleRequest & request) noexcept;
 
-/// A sample request whose rate and predicted stage states have already passed
-/// the whole-QP physical row certificate. The semantic current steering is the
-/// integration origin; the solver's reconstructed state zero is diagnostic.
-struct CertifiedActuationSampleRequest
+/// A publication request whose piecewise rate sequence and predicted stage
+/// states have already passed the whole-QP physical row certificate. Semantic
+/// current steering is the only integration origin.
+struct CertifiedActuationSequenceSampleRequest
 {
   double semantic_initial_steering_rad{};
-  double certified_steering_rate_radps{};
+  std::vector<double> certified_steering_rates_radps;
+  std::vector<double> stage_durations_sec;
   double elapsed_sec{};
-  double stage_duration_sec{};
   double maximum_abs_steering_rad{};
   double wheelbase_m{};
   double maximum_normalized_constraint_violation{};
 };
 
-/// Sample a certified first-stage rate at the publisher time. QP-owned rate,
-/// future-state and dynamics constraints are not duplicated here. Timing and
-/// the actual sampled physical steering remain fail-closed; no value is
-/// clamped.
-ActuationSampleEvaluation evaluate_certified_actuation_sample(
-  const CertifiedActuationSampleRequest & request) noexcept;
+struct CertifiedActuationSequenceSampleEvaluation
+{
+  ActuationSampleReason reason{ActuationSampleReason::StageSequenceInvalid};
+  std::optional<ActuationSample> sample;
+  double sampled_steering_rad{};
+  double certified_horizon_duration_sec{};
+  std::size_t sampled_stage_index{};
+  double sampled_stage_elapsed_sec{};
+};
+
+/// Integrate a certified piecewise-constant rate sequence to the exact
+/// publisher time. QP-owned rate/state/dynamics constraints are not duplicated
+/// here. Every crossed semantic steering boundary and the actual sample remain
+/// fail-closed; no value is clamped.
+CertifiedActuationSequenceSampleEvaluation
+evaluate_certified_actuation_sequence_sample(
+  const CertifiedActuationSequenceSampleRequest & request) noexcept;
 
 /// Resolve an intermediate actuator sample from one certified constant-rate
 /// stage. Invalid rate, time, or steering bounds are rejected, never clamped.

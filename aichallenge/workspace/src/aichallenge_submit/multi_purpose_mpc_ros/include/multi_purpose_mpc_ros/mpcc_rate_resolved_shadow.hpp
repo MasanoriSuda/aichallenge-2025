@@ -6,6 +6,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <optional>
@@ -77,6 +78,10 @@ struct Result
   double first_steering_rate_solver_lower_radps{};
   double first_steering_rate_solver_upper_radps{};
   double first_steering_rate_certificate_margin_radps{};
+  std::size_t certified_stage_count{};
+  std::size_t sampled_stage_index{};
+  double sampled_stage_elapsed_sec{};
+  double certified_horizon_duration_sec{};
   double sampled_curvature_radpm{};
   double terminal_velocity_mps{};
   double terminal_progress_m{};

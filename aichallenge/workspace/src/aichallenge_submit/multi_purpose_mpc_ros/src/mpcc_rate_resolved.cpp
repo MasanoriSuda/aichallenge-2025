@@ -1,5 +1,6 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved
@@ -132,8 +133,12 @@ const char * to_string(const ActuationSampleReason reason) noexcept
       return "elapsed-time-invalid";
     case ActuationSampleReason::StageDurationInvalid:
       return "stage-duration-invalid";
+    case ActuationSampleReason::StageSequenceInvalid:
+      return "stage-sequence-invalid";
     case ActuationSampleReason::PublicationAfterStageEnd:
       return "publication-after-stage-end";
+    case ActuationSampleReason::PublicationAfterHorizonEnd:
+      return "publication-after-horizon-end";
     case ActuationSampleReason::SteeringLimitInvalid:
       return "steering-limit-invalid";
     case ActuationSampleReason::SteeringRateLimitInvalid:
@@ -252,18 +257,15 @@ ActuationSampleEvaluation evaluate_actuation_sample(
   return result;
 }
 
-ActuationSampleEvaluation evaluate_certified_actuation_sample(
-  const CertifiedActuationSampleRequest & request) noexcept
+CertifiedActuationSequenceSampleEvaluation
+evaluate_certified_actuation_sequence_sample(
+  const CertifiedActuationSequenceSampleRequest & request) noexcept
 {
   constexpr double half_pi = 1.57079632679489661923;
   constexpr double tolerance = 1e-12;
-  ActuationSampleEvaluation result;
+  CertifiedActuationSequenceSampleEvaluation result;
   if (!std::isfinite(request.semantic_initial_steering_rad)) {
     result.reason = ActuationSampleReason::InitialSteeringNonfinite;
-    return result;
-  }
-  if (!std::isfinite(request.certified_steering_rate_radps)) {
-    result.reason = ActuationSampleReason::SteeringRateNonfinite;
     return result;
   }
   if (!std::isfinite(request.elapsed_sec) || request.elapsed_sec < 0.0) {
@@ -271,14 +273,11 @@ ActuationSampleEvaluation evaluate_certified_actuation_sample(
     return result;
   }
   if (
-    !std::isfinite(request.stage_duration_sec) ||
-    request.stage_duration_sec <= 0.0)
+    request.certified_steering_rates_radps.empty() ||
+    request.certified_steering_rates_radps.size() !=
+    request.stage_durations_sec.size())
   {
-    result.reason = ActuationSampleReason::StageDurationInvalid;
-    return result;
-  }
-  if (request.elapsed_sec > request.stage_duration_sec + tolerance) {
-    result.reason = ActuationSampleReason::PublicationAfterStageEnd;
+    result.reason = ActuationSampleReason::StageSequenceInvalid;
     return result;
   }
   if (
@@ -309,19 +308,60 @@ ActuationSampleEvaluation evaluate_certified_actuation_sample(
     return result;
   }
 
-  result.terminal_steering_rad =
-    request.semantic_initial_steering_rad +
-    request.certified_steering_rate_radps * request.stage_duration_sec;
-  result.sampled_steering_rad =
-    request.semantic_initial_steering_rad +
-    request.certified_steering_rate_radps * request.elapsed_sec;
-  if (
-    std::abs(result.sampled_steering_rad) >
-    request.maximum_abs_steering_rad + tolerance)
+  for (
+    std::size_t index = 0U; index < request.stage_durations_sec.size();
+    ++index)
   {
-    result.reason = ActuationSampleReason::SampledSteeringLimitViolation;
+    const double rate = request.certified_steering_rates_radps[index];
+    const double duration = request.stage_durations_sec[index];
+    if (!std::isfinite(rate)) {
+      result.reason = ActuationSampleReason::SteeringRateNonfinite;
+      return result;
+    }
+    if (!std::isfinite(duration) || duration <= 0.0) {
+      result.reason = ActuationSampleReason::StageDurationInvalid;
+      return result;
+    }
+    result.certified_horizon_duration_sec += duration;
+    if (!std::isfinite(result.certified_horizon_duration_sec)) {
+      result.reason = ActuationSampleReason::StageDurationInvalid;
+      return result;
+    }
+  }
+  if (
+    request.elapsed_sec >
+    result.certified_horizon_duration_sec + tolerance)
+  {
+    result.reason = ActuationSampleReason::PublicationAfterHorizonEnd;
     return result;
   }
+
+  double remaining_sec = request.elapsed_sec;
+  double steering_rad = request.semantic_initial_steering_rad;
+  for (
+    std::size_t index = 0U; index < request.stage_durations_sec.size();
+    ++index)
+  {
+    const double duration = request.stage_durations_sec[index];
+    const double stage_elapsed_sec = std::min(remaining_sec, duration);
+    steering_rad +=
+      request.certified_steering_rates_radps[index] * stage_elapsed_sec;
+    if (
+      !std::isfinite(steering_rad) ||
+      std::abs(steering_rad) > request.maximum_abs_steering_rad + tolerance)
+    {
+      result.reason = ActuationSampleReason::SampledSteeringLimitViolation;
+      result.sampled_steering_rad = steering_rad;
+      return result;
+    }
+    if (remaining_sec <= duration + tolerance) {
+      result.sampled_stage_index = index;
+      result.sampled_stage_elapsed_sec = stage_elapsed_sec;
+      break;
+    }
+    remaining_sec -= duration;
+  }
+  result.sampled_steering_rad = steering_rad;
   const double curvature =
     std::tan(result.sampled_steering_rad) / request.wheelbase_m;
   if (!std::isfinite(curvature)) {

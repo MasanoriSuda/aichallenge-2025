@@ -100,6 +100,14 @@ bool result_valid(const Result & result) noexcept
          result.first_steering_rate_solver_upper_radps &&
          result.first_steering_rate_solver_upper_radps <=
          result.first_steering_rate_physical_upper_radps &&
+         result.certified_stage_count > 0U &&
+         result.sampled_stage_index < result.certified_stage_count &&
+         std::isfinite(result.sampled_stage_elapsed_sec) &&
+         result.sampled_stage_elapsed_sec >= 0.0 &&
+         std::isfinite(result.certified_horizon_duration_sec) &&
+         result.certified_horizon_duration_sec > 0.0 &&
+         result.publication_interval_sec <=
+         result.certified_horizon_duration_sec + 1e-12 &&
          std::isfinite(result.sampled_curvature_radpm) &&
          std::isfinite(result.terminal_velocity_mps) &&
          std::isfinite(result.terminal_progress_m) &&
@@ -210,17 +218,35 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     primal[terminal_state + model::kProgressIndex];
   result.terminal_steering_rad =
     primal[terminal_state + model::kSteeringIndex];
-  const auto sample = model::evaluate_certified_actuation_sample(
-    model::CertifiedActuationSampleRequest{
-      result.initial_steering_rad, result.first_steering_rate_radps,
-      snapshot.publication_interval_sec,
-      snapshot.request.inputs.front().stage_dt_sec,
+  std::vector<double> certified_steering_rates_radps;
+  std::vector<double> stage_durations_sec;
+  certified_steering_rates_radps.reserve(static_cast<std::size_t>(horizon));
+  stage_durations_sec.reserve(static_cast<std::size_t>(horizon));
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int input_offset =
+      state_values + model::kInputDimension * stage;
+    certified_steering_rates_radps.push_back(
+      primal[input_offset + model::kSteeringRateIndex]);
+    stage_durations_sec.push_back(
+      snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec);
+  }
+  result.certified_stage_count = certified_steering_rates_radps.size();
+  result.calculated_terminal_steering_rad =
+    result.initial_steering_rad + result.first_steering_rate_radps *
+    result.first_stage_duration_sec;
+  const auto sample = model::evaluate_certified_actuation_sequence_sample(
+    model::CertifiedActuationSequenceSampleRequest{
+      result.initial_steering_rad, std::move(certified_steering_rates_radps),
+      std::move(stage_durations_sec), snapshot.publication_interval_sec,
       snapshot.request.maximum_abs_steering_rad,
       snapshot.request.wheelbase_m,
       result.maximum_normalized_constraint_violation});
   result.actuation_sample_reason = sample.reason;
-  result.calculated_terminal_steering_rad = sample.terminal_steering_rad;
   result.sampled_steering_rad = sample.sampled_steering_rad;
+  result.sampled_stage_index = sample.sampled_stage_index;
+  result.sampled_stage_elapsed_sec = sample.sampled_stage_elapsed_sec;
+  result.certified_horizon_duration_sec =
+    sample.certified_horizon_duration_sec;
   if (!sample.sample.has_value()) {
     result.outcome = Outcome::ActuationSampleRejected;
     result.detail = std::string{"actuation sample rejected: "} +

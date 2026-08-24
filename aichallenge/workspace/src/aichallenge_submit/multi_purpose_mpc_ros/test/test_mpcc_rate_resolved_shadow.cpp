@@ -100,6 +100,10 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
     result.first_steering_rate_radps,
     result.first_steering_rate_solver_upper_radps +
     result.solver.physical_global_tolerance);
+  EXPECT_EQ(result.certified_stage_count, 3U);
+  EXPECT_EQ(result.sampled_stage_index, 0U);
+  EXPECT_NEAR(result.sampled_stage_elapsed_sec, 0.025, 1e-12);
+  EXPECT_NEAR(result.certified_horizon_duration_sec, 0.30, 1e-12);
 
   auto invalid = result;
   invalid.first_steering_rate_certificate_margin_radps =
@@ -107,19 +111,33 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_FALSE(shadow::result_valid(invalid));
 }
 
-TEST(MpccRateResolvedShadow, RejectsPublicationPeriodBeyondFirstStage)
+TEST(MpccRateResolvedShadow, SamplesPublicationPeriodAcrossStageBoundary)
 {
   shadow::SolverContext context;
   auto input = snapshot();
   input.publication_interval_sec = 0.20;
   const auto result = context.evaluate(input);
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  EXPECT_TRUE(shadow::result_valid(result));
+  EXPECT_EQ(result.sampled_stage_index, 1U);
+  EXPECT_NEAR(result.sampled_stage_elapsed_sec, 0.10, 1e-12);
+  EXPECT_NEAR(result.certified_horizon_duration_sec, 0.30, 1e-12);
+}
+
+TEST(MpccRateResolvedShadow, RejectsPublicationPeriodBeyondCertifiedHorizon)
+{
+  shadow::SolverContext context;
+  auto input = snapshot();
+  input.publication_interval_sec = 0.31;
+  const auto result = context.evaluate(input);
   EXPECT_EQ(result.outcome, shadow::Outcome::ActuationSampleRejected);
   EXPECT_EQ(
     result.actuation_sample_reason,
     multi_purpose_mpc_ros::mpcc_rate_resolved::ActuationSampleReason::
-    PublicationAfterStageEnd);
-  EXPECT_DOUBLE_EQ(result.publication_interval_sec, 0.20);
+    PublicationAfterHorizonEnd);
+  EXPECT_DOUBLE_EQ(result.publication_interval_sec, 0.31);
   EXPECT_DOUBLE_EQ(result.first_stage_duration_sec, 0.10);
+  EXPECT_NEAR(result.certified_horizon_duration_sec, 0.30, 1e-12);
   EXPECT_TRUE(shadow::result_valid(result));
 }
 

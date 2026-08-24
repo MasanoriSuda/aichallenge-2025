@@ -365,6 +365,34 @@ TEST(CanonicalRetainedRevalidation, CircularProgressLiftIsExplicitAndUnique) {
     retained::CircularProgressLiftReason::AmbiguousBranch);
 }
 
+TEST(CanonicalRetainedRevalidation, CircularProgressLiftAcceptsEquivalentSeamCoordinates) {
+  const auto exact_endpoint = retained::lift_progress_to_retained_branch(
+    retained::CircularProgressLiftRequest{100.0, 100.05, 100.0, 0.10, true});
+  EXPECT_EQ(
+    exact_endpoint.reason, retained::CircularProgressLiftReason::Accepted);
+  EXPECT_NEAR(exact_endpoint.lifted_progress_m, 100.0, 1e-12);
+  EXPECT_EQ(exact_endpoint.lap_offset, 0L);
+
+  const auto negative_seam = retained::lift_progress_to_retained_branch(
+    retained::CircularProgressLiftRequest{-0.05, 99.95, 100.0, 0.10, true});
+  EXPECT_EQ(
+    negative_seam.reason, retained::CircularProgressLiftReason::Accepted);
+  EXPECT_NEAR(negative_seam.lifted_progress_m, 99.95, 1e-12);
+  EXPECT_EQ(negative_seam.lap_offset, 1L);
+
+  const auto unwrapped = retained::lift_progress_to_retained_branch(
+    retained::CircularProgressLiftRequest{200.30, 100.30, 100.0, 0.10, true});
+  EXPECT_EQ(unwrapped.reason, retained::CircularProgressLiftReason::Accepted);
+  EXPECT_NEAR(unwrapped.lifted_progress_m, 100.30, 1e-12);
+  EXPECT_EQ(unwrapped.lap_offset, -1L);
+
+  const auto discontinuous_endpoint = retained::lift_progress_to_retained_branch(
+    retained::CircularProgressLiftRequest{100.0, 100.30, 100.0, 0.20, true});
+  EXPECT_EQ(
+    discontinuous_endpoint.reason,
+    retained::CircularProgressLiftReason::Discontinuous);
+}
+
 TEST(CanonicalRetainedRevalidation, BuildsSealedCurrentObservationProof) {
   const auto execution_plan = make_plan();
   const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);

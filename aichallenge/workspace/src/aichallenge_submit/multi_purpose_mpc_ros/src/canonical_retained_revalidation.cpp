@@ -738,16 +738,16 @@ CircularProgressLiftResult lift_progress_to_retained_branch(
     result.lifted_progress_m = request.measured_progress_m;
     return result;
   }
-  if (request.measured_progress_m < 0.0 ||
-    request.measured_progress_m >= request.path_length_m ||
-    request.continuity_tolerance_m >= 0.5 * request.path_length_m)
+  if (request.continuity_tolerance_m >= 0.5 * request.path_length_m)
   {
-    result.reason =
-      request.continuity_tolerance_m >= 0.5 * request.path_length_m ?
-      CircularProgressLiftReason::AmbiguousBranch :
-      CircularProgressLiftReason::InvalidInput;
+    result.reason = CircularProgressLiftReason::AmbiguousBranch;
     return result;
   }
+  // A circular projection may encode the seam as 0, path_length, a small
+  // negative value, or an already-unwrapped lap coordinate.  These are
+  // equivalent representations; the retained branch and the continuity
+  // proof below, rather than a local [0, path_length) convention, own which
+  // representation is executable.
   const double raw_offset =
     (request.retained_reference_progress_m - request.measured_progress_m) /
     request.path_length_m;

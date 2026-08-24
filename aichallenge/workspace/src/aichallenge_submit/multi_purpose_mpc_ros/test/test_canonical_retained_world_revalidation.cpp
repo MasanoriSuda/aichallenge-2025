@@ -390,6 +390,38 @@ TEST(CanonicalRetainedWorldRevalidation, BuildsOvertakeProofFromCurrentCorridor)
   EXPECT_EQ(result.proof->current.target_obstacle_generation, 8U);
   EXPECT_EQ(result.proof->stage_evaluations.size(), 2U);
   EXPECT_GT(result.minimum_corridor_reserve_m, 0.0);
+  EXPECT_TRUE(result.initial_corridor.sampled);
+  EXPECT_EQ(result.initial_corridor.first_control_stage_index, 0U);
+  EXPECT_DOUBLE_EQ(result.initial_corridor.measured_lateral_m, 0.11);
+  EXPECT_NEAR(result.initial_corridor.expected_lateral_m, 0.112, 1e-12);
+  EXPECT_DOUBLE_EQ(result.initial_corridor.corridor_lower_m, -0.5);
+  EXPECT_DOUBLE_EQ(result.initial_corridor.corridor_upper_m, 0.5);
+  EXPECT_NEAR(result.initial_corridor.measured_reserve_m, 0.39, 1e-12);
+  EXPECT_NEAR(result.initial_corridor.expected_reserve_m, 0.388, 1e-12);
+}
+
+TEST(CanonicalRetainedWorldRevalidation, PreservesInitialCorridorRejectOperands)
+{
+  const auto execution_plan = make_overtake_plan();
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.6);
+  auto request = make_overtake_request();
+  request.measured_lateral_m = 0.55;
+  const footprint::FootprintExtents extents{0.15, 0.15, 0.10, 0.10, 0.0};
+
+  const auto result = world::build_overtake_current_world_retained_proof(
+    execution_plan, cursor, request,
+    make_grid(footprint::CellState::Free), extents);
+
+  EXPECT_EQ(
+    result.reason, world::OvertakeCurrentWorldProofReason::InitialCorridorViolation);
+  EXPECT_FALSE(result.proof.has_value());
+  ASSERT_TRUE(result.initial_corridor.sampled);
+  EXPECT_DOUBLE_EQ(result.initial_corridor.measured_lateral_m, 0.55);
+  EXPECT_NEAR(result.initial_corridor.expected_lateral_m, 0.112, 1e-12);
+  EXPECT_DOUBLE_EQ(result.initial_corridor.corridor_lower_m, -0.5);
+  EXPECT_DOUBLE_EQ(result.initial_corridor.corridor_upper_m, 0.5);
+  EXPECT_NEAR(result.initial_corridor.measured_reserve_m, -0.05, 1e-12);
+  EXPECT_NEAR(result.initial_corridor.expected_reserve_m, 0.388, 1e-12);
 }
 
 TEST(CanonicalRetainedWorldRevalidation, IntersectsCurrentTargetTubeByPassSide)

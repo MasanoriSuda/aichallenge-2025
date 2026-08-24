@@ -1031,6 +1031,12 @@ OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
     result.reason = OvertakeCurrentWorldProofReason::WindowRejected;
     return result;
   }
+  result.initial_corridor.first_control_stage_index =
+    cursor.first_control_stage_index;
+  result.initial_corridor.measured_course_progress_m =
+    request.measured_course_progress_m;
+  result.initial_corridor.expected_course_progress_m =
+    window.window->expected_current_progress_m;
   if (
     !wall_grid.valid() || !footprint.valid() ||
     request.measured_to_control_path.empty() ||
@@ -1124,6 +1130,8 @@ OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
     result.reason = OvertakeCurrentWorldProofReason::ProgressLiftRejected;
     return result;
   }
+  result.initial_corridor.lifted_measured_course_progress_m =
+    lift.lifted_progress_m;
   if (!same_pose(request.measured_to_control_path.back(), request.control_pose) ||
     fingerprint_control_pose_path(
       request.measured_to_control_path, request.control_pose) !=
@@ -1145,6 +1153,24 @@ OvertakeCurrentWorldProofResult build_overtake_current_world_retained_proof(
   if (!expected_current_pose.has_value()) {
     result.reason = OvertakeCurrentWorldProofReason::CourseFrameUnavailable;
     return result;
+  }
+  result.initial_corridor.measured_lateral_m = request.measured_lateral_m;
+  result.initial_corridor.expected_lateral_m =
+    window.window->expected_current_state.lateral_m;
+  const auto initial_corridor_sample = sample_overtake_corridor(
+    request.corridor, 0.0);
+  if (initial_corridor_sample.has_value()) {
+    result.initial_corridor.sampled = true;
+    result.initial_corridor.corridor_lower_m = initial_corridor_sample->lower_m;
+    result.initial_corridor.corridor_upper_m = initial_corridor_sample->upper_m;
+    result.initial_corridor.measured_reserve_m = std::min(
+      request.measured_lateral_m - initial_corridor_sample->lower_m,
+      initial_corridor_sample->upper_m - request.measured_lateral_m);
+    result.initial_corridor.expected_reserve_m = std::min(
+      window.window->expected_current_state.lateral_m -
+      initial_corridor_sample->lower_m,
+      initial_corridor_sample->upper_m -
+      window.window->expected_current_state.lateral_m);
   }
   const auto initial_corridor = evaluate_overtake_corridor_segment(
     request.corridor, 0.0, 0.0, request.measured_lateral_m,

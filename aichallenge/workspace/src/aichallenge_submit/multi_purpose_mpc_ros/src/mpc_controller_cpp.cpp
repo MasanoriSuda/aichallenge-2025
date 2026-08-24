@@ -6325,6 +6325,8 @@ struct OvertakeCanonicalFreshShadowResult
   std::size_t retained_rejected_stage{};
   double retained_minimum_corridor_reserve_m{
     std::numeric_limits<double>::infinity()};
+  canonical_retained_world::OvertakeCurrentWorldProofResult::
+    InitialCorridorDiagnostic retained_initial_corridor;
   double required_wall_clearance_m{
     std::numeric_limits<double>::quiet_NaN()};
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
@@ -25942,6 +25944,7 @@ struct MPC
     result.retained_rejected_stage = world_proof.rejected_stage_index;
     result.retained_minimum_corridor_reserve_m =
       world_proof.minimum_corridor_reserve_m;
+    result.retained_initial_corridor = world_proof.initial_corridor;
     if (!world_proof.proof.has_value()) {
       using Outcome = OvertakeCanonicalFreshShadowResult::RetainedOutcome;
       using Reason =
@@ -25995,9 +25998,29 @@ struct MPC
           result.retained_outcome = Outcome::ProofRejected;
           break;
       }
-      result.retained_detail = std::string{"world proof rejected: "} +
-        canonical_retained_world::to_string(world_proof.reason) + "/" +
+      std::ostringstream retained_detail;
+      retained_detail << "world proof rejected: " <<
+        canonical_retained_world::to_string(world_proof.reason) << '/' <<
         canonical_retained::to_string(world_proof.proof_reason);
+      if (
+        world_proof.reason == Reason::InitialCorridorViolation ||
+        world_proof.reason == Reason::ProgressLiftRejected)
+      {
+        const auto & initial = world_proof.initial_corridor;
+        retained_detail << ", initial_corridor=" <<
+          (initial.sampled ? "sampled" : "unavailable") <<
+          ", stage=" << initial.first_control_stage_index <<
+          ", progress=" << initial.measured_course_progress_m << '/' <<
+          initial.lifted_measured_course_progress_m << '/' <<
+          initial.expected_course_progress_m <<
+          ", ey=" << initial.measured_lateral_m << '/' <<
+          initial.expected_lateral_m <<
+          ", bounds=[" << initial.corridor_lower_m << ',' <<
+          initial.corridor_upper_m << ']' <<
+          ", reserve=" << initial.measured_reserve_m << '/' <<
+          initial.expected_reserve_m;
+      }
+      result.retained_detail = retained_detail.str();
       return;
     }
     result.retained_world_certified = true;

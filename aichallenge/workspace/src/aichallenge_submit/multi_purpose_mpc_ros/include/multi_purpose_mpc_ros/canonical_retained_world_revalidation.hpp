@@ -237,6 +237,21 @@ struct OvertakeCurrentWorldProofResult
   std::optional<retained::RetainedExecutionProof> proof;
   std::size_t rejected_stage_index{};
   double minimum_corridor_reserve_m{std::numeric_limits<double>::infinity()};
+  struct InitialCorridorDiagnostic
+  {
+    bool sampled{false};
+    std::size_t first_control_stage_index{};
+    double measured_course_progress_m{std::numeric_limits<double>::quiet_NaN()};
+    double lifted_measured_course_progress_m{
+      std::numeric_limits<double>::quiet_NaN()};
+    double expected_course_progress_m{std::numeric_limits<double>::quiet_NaN()};
+    double measured_lateral_m{std::numeric_limits<double>::quiet_NaN()};
+    double expected_lateral_m{std::numeric_limits<double>::quiet_NaN()};
+    double corridor_lower_m{std::numeric_limits<double>::quiet_NaN()};
+    double corridor_upper_m{std::numeric_limits<double>::quiet_NaN()};
+    double measured_reserve_m{std::numeric_limits<double>::quiet_NaN()};
+    double expected_reserve_m{std::numeric_limits<double>::quiet_NaN()};
+  } initial_corridor;
 };
 
 std::uint64_t fingerprint_control_pose_path(

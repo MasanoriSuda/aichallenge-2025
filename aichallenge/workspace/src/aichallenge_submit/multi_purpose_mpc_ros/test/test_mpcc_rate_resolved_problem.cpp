@@ -127,6 +127,33 @@ TEST(MpccRateResolvedProblem, RejectsMalformedOrInconsistentContracts)
   request.linearizations.front().stage_dt_sec =
     std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(problem::assemble(request).has_value());
+
+  request = straight_request();
+  request.additional_linear_cost = Eigen::VectorXd::Zero(1);
+  EXPECT_FALSE(problem::assemble(request).has_value());
+
+  request = straight_request();
+  const int variables = model::kStateDimension * (request.horizon_steps + 1) +
+    model::kInputDimension * request.horizon_steps;
+  request.additional_linear_cost = Eigen::VectorXd::Zero(variables);
+  request.additional_linear_cost[0] =
+    std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(problem::assemble(request).has_value());
+}
+
+TEST(MpccRateResolvedProblem, AddsIndependentLinearObjectiveToReferenceCost)
+{
+  auto request = straight_request();
+  const int variables = model::kStateDimension * (request.horizon_steps + 1) +
+    model::kInputDimension * request.horizon_steps;
+  request.additional_linear_cost = Eigen::VectorXd::Zero(variables);
+  constexpr int index = model::kProgressIndex;
+  request.state_weight[index] = 2.0;
+  request.state_reference[index] = 3.0;
+  request.additional_linear_cost[index] = -4.0;
+  const auto assembled = problem::assemble(request);
+  ASSERT_TRUE(assembled.has_value());
+  EXPECT_DOUBLE_EQ(assembled->linear_cost[index], -10.0);
 }
 
 TEST(MpccRateResolvedProblem, SolvesStraightProblemWithinActuatorBounds)

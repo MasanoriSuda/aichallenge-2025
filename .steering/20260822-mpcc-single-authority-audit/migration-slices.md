@@ -658,6 +658,13 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   actuator or duplicate rate owner survives. A deterministic curved QP solves within its certified
   steering/rate boxes; all 1,819 package tests and the 25-package build pass. Next connect this exact
   snapshot to a latest-only runtime shadow worker with identity/age/timing telemetry only.
+- `.steering/20260825-rate-resolved-linear-objective-contract` closes one semantic loss found before
+  that runtime connection. The established formulation's independent linear progress reward could
+  not be represented by quadratic references alone. The six-state QP now accepts an explicit exact-
+  size linear objective and the adapter maps legacy state and non-curvature input terms without
+  conflating them with reference ownership. Unsupported nonzero curvature-linear terms fail closed.
+  All 1,820 package tests and the 25-package build pass; production remains unlinked. Runtime shadow
+  construction may now begin without silently weakening the progress objective.
 
 ## Slice 6: Legacy and migration path removal
 

@@ -26,6 +26,7 @@ bool valid_bounds(const Vector & lower, const Vector & upper) noexcept
 bool valid_state_stage(const StateStage & stage) noexcept
 {
   return stage.reference.allFinite() && stage.weight.allFinite() &&
+    stage.linear_cost.allFinite() &&
     (stage.weight.array() >= 0.0).all() &&
     valid_bounds(stage.lower, stage.upper);
 }
@@ -33,8 +34,10 @@ bool valid_state_stage(const StateStage & stage) noexcept
 bool valid_input_stage(const InputStage & stage) noexcept
 {
   return stage.reference.allFinite() && stage.weight.allFinite() &&
+    stage.linear_cost.allFinite() &&
     (stage.weight.array() >= 0.0).all() &&
     valid_bounds(stage.lower, stage.upper) &&
+    stage.linear_cost[kLegacyCurvatureIndex] == 0.0 &&
     std::isfinite(stage.lower[kLegacyCurvatureIndex]) &&
     std::isfinite(stage.upper[kLegacyCurvatureIndex]) &&
     std::isfinite(stage.path_curvature_radpm) &&
@@ -124,6 +127,8 @@ std::optional<Result> build(const Request & request) noexcept
   problem.input_lower = Eigen::VectorXd::Zero(input_values);
   problem.input_upper = Eigen::VectorXd::Zero(input_values);
   problem.input_weight = Eigen::VectorXd::Zero(input_values);
+  problem.additional_linear_cost = Eigen::VectorXd::Zero(
+    state_values + input_values);
   problem.previous_input <<
     request.previous_input[0], 0.0, request.previous_input[2];
   problem.input_delta_weight <<
@@ -146,6 +151,8 @@ std::optional<Result> build(const Request & request) noexcept
       request.states[static_cast<std::size_t>(stage)].upper;
     problem.state_weight.segment<kLegacyStateDimension>(state_offset) =
       request.states[static_cast<std::size_t>(stage)].weight;
+    problem.additional_linear_cost.segment<kLegacyStateDimension>(state_offset) =
+      request.states[static_cast<std::size_t>(stage)].linear_cost;
 
     const int source_input = std::max(0, stage - 1);
     const double steering_reference = stage == 0 ?
@@ -243,6 +250,13 @@ std::optional<Result> build(const Request & request) noexcept
     problem.input_weight[
       input_offset + model::kVirtualProgressSpeedIndex] =
       legacy_input.weight[2];
+    const int linear_input_offset = state_values + input_offset;
+    problem.additional_linear_cost[
+      linear_input_offset + model::kAccelerationIndex] =
+      legacy_input.linear_cost[0];
+    problem.additional_linear_cost[
+      linear_input_offset + model::kVirtualProgressSpeedIndex] =
+      legacy_input.linear_cost[2];
 
     const double jacobian = curvature_jacobian(
       request.wheelbase_m, steering_reference);

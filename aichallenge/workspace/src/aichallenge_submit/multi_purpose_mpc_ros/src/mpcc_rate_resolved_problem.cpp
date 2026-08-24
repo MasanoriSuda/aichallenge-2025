@@ -53,10 +53,14 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
     request.input_lower.size() != input_values ||
     request.input_upper.size() != input_values ||
     request.input_weight.size() != input_values ||
+    (request.additional_linear_cost.size() != 0 &&
+    request.additional_linear_cost.size() != variable_count) ||
     !request.state_reference.allFinite() ||
     !request.input_reference.allFinite() ||
     !finite_non_negative(request.state_weight) ||
     !finite_non_negative(request.input_weight) ||
+    (request.additional_linear_cost.size() != 0 &&
+    !request.additional_linear_cost.allFinite()) ||
     !request.previous_input.allFinite() ||
     !request.input_delta_weight.allFinite() ||
     (request.input_delta_weight.array() < 0.0).any() ||
@@ -140,6 +144,9 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
   upper_bound << equality, box_upper;
 
   Eigen::VectorXd linear_cost = Eigen::VectorXd::Zero(variable_count);
+  if (request.additional_linear_cost.size() != 0) {
+    linear_cost = request.additional_linear_cost;
+  }
   std::vector<Eigen::Triplet<double>> cost_triplets;
   cost_triplets.reserve(static_cast<std::size_t>(
     variable_count + nu * (3 * horizon - 2)));

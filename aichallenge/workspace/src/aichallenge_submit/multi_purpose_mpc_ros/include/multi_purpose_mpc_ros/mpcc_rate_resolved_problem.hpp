@@ -29,6 +29,7 @@ struct AssemblyRequest
   Eigen::VectorXd input_lower;
   Eigen::VectorXd input_upper;
   Eigen::VectorXd input_weight;
+  Eigen::VectorXd additional_linear_cost;
   Eigen::Matrix<double, model::kInputDimension, 1> previous_input{
     Eigen::Matrix<double, model::kInputDimension, 1>::Zero()};
   Eigen::Matrix<double, model::kInputDimension, 1> input_delta_weight{

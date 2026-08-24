@@ -25,6 +25,8 @@ struct StateStage
     Eigen::Matrix<double, kLegacyStateDimension, 1>::Zero()};
   Eigen::Matrix<double, kLegacyStateDimension, 1> weight{
     Eigen::Matrix<double, kLegacyStateDimension, 1>::Zero()};
+  Eigen::Matrix<double, kLegacyStateDimension, 1> linear_cost{
+    Eigen::Matrix<double, kLegacyStateDimension, 1>::Zero()};
 };
 
 struct InputStage
@@ -36,6 +38,8 @@ struct InputStage
   Eigen::Matrix<double, kLegacyInputDimension, 1> upper{
     Eigen::Matrix<double, kLegacyInputDimension, 1>::Zero()};
   Eigen::Matrix<double, kLegacyInputDimension, 1> weight{
+    Eigen::Matrix<double, kLegacyInputDimension, 1>::Zero()};
+  Eigen::Matrix<double, kLegacyInputDimension, 1> linear_cost{
     Eigen::Matrix<double, kLegacyInputDimension, 1>::Zero()};
   double path_curvature_radpm{};
   double stage_dt_sec{};

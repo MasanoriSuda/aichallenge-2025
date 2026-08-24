@@ -30,6 +30,7 @@ adapter::Request curved_request(const int horizon = 4)
     state.lower << -2.0, -2.0, -1.0, 0.0, -1.0;
     state.upper << 2.0, 2.0, 1.0, 6.0, 10.0;
     state.weight << 10.0, 2.0, 4.0, 5.0, 1.0;
+    state.linear_cost << 0.0, 0.0, 0.0, 0.0, -2.0;
   }
   request.inputs.resize(static_cast<std::size_t>(horizon));
   for (auto & input : request.inputs) {
@@ -37,6 +38,7 @@ adapter::Request curved_request(const int horizon = 4)
     input.lower << -1.0, -0.30, 0.0;
     input.upper << 1.0, 0.30, 6.0;
     input.weight << 1.0, 8.0, 1.0;
+    input.linear_cost << -0.1, 0.0, -0.2;
     input.path_curvature_radpm = 0.08;
     input.stage_dt_sec = 0.10;
   }
@@ -86,6 +88,20 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
     0.2 * std::pow(1.0 / 2.5, 2.0) * 0.1 * 0.1, 1e-12);
   EXPECT_DOUBLE_EQ(
     result->problem.input_delta_weight[model::kSteeringRateIndex], 0.0);
+  EXPECT_DOUBLE_EQ(
+    result->problem.additional_linear_cost[
+      state_offset + model::kProgressIndex], -2.0);
+  const int state_values =
+    model::kStateDimension * (request.horizon_steps + 1);
+  EXPECT_DOUBLE_EQ(
+    result->problem.additional_linear_cost[
+      state_values + input_offset + model::kAccelerationIndex], -0.1);
+  EXPECT_DOUBLE_EQ(
+    result->problem.additional_linear_cost[
+      state_values + input_offset + model::kSteeringRateIndex], 0.0);
+  EXPECT_DOUBLE_EQ(
+    result->problem.additional_linear_cost[
+      state_values + input_offset + model::kVirtualProgressSpeedIndex], -0.2);
 }
 
 TEST(MpccRateResolvedAdapter, KeepsObservedSteeringAsTheOnlyStageZeroValue)
@@ -178,6 +194,15 @@ TEST(MpccRateResolvedAdapter, RejectsMalformedOrUnphysicalSnapshots)
   request = curved_request();
   request.states.front().reference[0] =
     std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(adapter::build(request).has_value());
+
+  request = curved_request();
+  request.states.front().linear_cost[0] =
+    std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(adapter::build(request).has_value());
+
+  request = curved_request();
+  request.inputs.front().linear_cost[adapter::kLegacyCurvatureIndex] = 1.0;
   EXPECT_FALSE(adapter::build(request).has_value());
 
   request = curved_request();

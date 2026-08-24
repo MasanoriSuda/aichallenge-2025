@@ -277,6 +277,34 @@ def test_follow_async_snapshot_is_sealed_after_current_output_commit() -> None:
     assert "submit_follow_canonical_async(problem, now_sec)" not in evaluator
 
 
+def test_rate_resolved_track_cruise_snapshot_is_submitted_after_output_commit() -> None:
+    """Six-state state zero must inherit the command committed this cycle."""
+
+    evaluator_start = SOURCE.index(
+        "TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow("
+    )
+    evaluator_end = SOURCE.index(
+        "resolve_physically_validated_mpcc_execution_trajectory(", evaluator_start
+    )
+    evaluator = SOURCE[evaluator_start:evaluator_end]
+    assert "submit_rate_resolved_track_cruise_shadow(" not in evaluator
+    assert "rate_resolved_submission_draft" in evaluator
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    track_start = SOURCE.index(
+        "if (problem.track_cruise_shadow_requested)", control_start
+    )
+    track_end = SOURCE.index("if (problem.rejoin_shadow_requested)", track_start)
+    track = SOURCE[track_start:track_end]
+
+    resolve = track.index("output = canonical_normal_control(")
+    emergency = track.index("output = canonical_normal_emergency_stop(")
+    bind = track.index("bind_rate_resolved_track_cruise_submission(")
+    submit = track.index("submit_rate_resolved_track_cruise_shadow(")
+    assert resolve < bind < submit
+    assert emergency < bind < submit
+
+
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     """Intent elevation must be atomic with a current executable Follow plan."""
 
@@ -826,9 +854,18 @@ def test_rate_resolved_track_cruise_runtime_is_observation_only() -> None:
     branch_start = SOURCE.index("if (problem.track_cruise_shadow_requested)")
     branch_end = SOURCE.index("if (problem.rejoin_shadow_requested)", branch_start)
     branch = SOURCE[branch_start:branch_end]
-    assert "record_rate_resolved_track_cruise_shadow(problem, now_sec);" in branch
+    assert (
+        "record_rate_resolved_track_cruise_shadow(\n"
+        "          problem, now_sec, retained_rate_resolved);"
+        in branch
+    )
+    assert "record_rate_resolved_track_cruise_command_shadow(" in branch
     assert "canonical_result.selected.complete()" in branch
-    assert "rate_resolved" not in branch[branch.index("if (canonical_result") :]
+    assert "output = canonical_normal_control(" in branch
+    assert "output = canonical_normal_emergency_stop(" in branch
+    assert "return output;" in branch
+    assert "output.control =" not in branch
+    assert "output.canonical_normal_command =" not in branch
 
     shadow_header = (
         Path(__file__).resolve().parents[1]

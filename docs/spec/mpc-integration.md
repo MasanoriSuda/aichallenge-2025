@@ -1957,6 +1957,36 @@ d1がd2へ接近した区間は`blocked_by=d2`、最小signed clearance `-0.006 
 `authority=shadow, selected=0`である。これによりdynamic Acceptanceの証拠は得たが、production昇格は
 Track/Cruise retained authority接続と旧5-state通常owner削除を同一Sliceで行うまで禁止する。
 
+#### Steering-rate 6-state causal command shadow（2026-08-25、移行診断）
+
+rate-resolved worker requestを同期5-state評価の途中でsubmitすると、そのrequestのstate-zero steeringは
+当該周期のproduction出力が確定する前の`previous_steering`になる。その後5-state commandまたは
+EmergencyStopが別の操舵をpublishすると、非同期artifactが内部的に正しくても、実際の制御履歴から
+到達不能になる。この因果不整合を、solver後のclampやartifact補正で隠してはならない。
+
+Track/Cruise周期の順序を次へ固定した。
+
+1. 5-state候補を評価し、rate-resolved request draftをsealする。
+2. production出力を解決し、実際にpublishする操舵をcommitted historyへ反映する。
+3. draftのstate-zero steeringを、そのcommitted predecessorへbindする。
+4. 完全なsource problem contextとともにimmutable snapshotをworkerへsubmitする。
+
+accepted retained proofからは、5-state専用`CanonicalNormalCommand`を流用せず、別型の
+`RateResolvedCommandCandidate`を構築する。candidateはcurrent decision、artifact sequence、source
+decision、problem fingerprint、stage geometry、intent、stage index、速度、加速度、操舵レート、操舵角、
+曲率、virtual progressを保持し、identity欠損または非有限actuationを拒否する。publisherとの接続は
+持たず、production 5-state commandとの差分観測だけを行う。
+
+`output/20260825-072127`の`make dev2`では、両domainでcandidateを生成し、全件が
+`authority=shadow, selected=0`だった。fresh workerのdecisionとcausal submissionを対応付けた結果、
+state-zero steeringとcommitted predecessorの最大表示差はd1で0.00004876 rad、d2で
+0.000049244 radであり、predecessorを小数4桁で出力するログ丸め範囲内だった。control callbackの
+25 ms超過は両domainとも0で、観測最大は12.4 ms未満だった。
+
+このSliceはcommand provenanceを閉じたが、production昇格ではない。measured-to-control connectorと
+retained suffix originの時刻意味を1つに定義し、fresh／retained／worker replacement／rejectの
+動的Acceptanceを得た後、6-state owner接続と5-state Track/Cruise owner削除を同一Sliceで行う。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

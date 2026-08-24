@@ -21,6 +21,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
@@ -148,6 +149,8 @@ namespace rate_resolved_physical_wall =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
 namespace rate_resolved_certified =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
+namespace rate_resolved_command =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate;
 namespace rate_resolved_retained =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
@@ -5680,6 +5683,26 @@ struct ExtendedProgressMpcProblem
   rate_resolved_track_cruise_shadow_request;
 };
 
+struct RateResolvedTrackCruiseSubmissionDraft
+{
+  mpcc_rate_resolved_adapter::Request request;
+  double course_progress_origin_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  int horizon_steps{};
+  mpcc_contract::MpccProblemContext source_context;
+};
+
+struct BoundRateResolvedTrackCruiseSubmission
+{
+  mpcc_rate_resolved_adapter::Request request;
+  double course_progress_origin_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  int horizon_steps{};
+  mpcc_contract::MpccProblemContext source_context;
+  double committed_predecessor_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+};
+
 struct FirstStageShadowReachabilityDiagnostic
 {
   bool evaluated{false};
@@ -6011,6 +6034,8 @@ struct TrackCruiseShadowCycleResult
   double execution_primal_rejected_tolerance{
     std::numeric_limits<double>::quiet_NaN()};
   std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
+  std::optional<RateResolvedTrackCruiseSubmissionDraft>
+  rate_resolved_submission_draft;
   CanonicalNormalSelection selected;
   canonical_plan_adapter::CanonicalPlanExtractionReason canonical_extraction_reason{
     canonical_plan_adapter::CanonicalPlanExtractionReason::InvalidMetadata};
@@ -6426,7 +6451,27 @@ struct RateResolvedRetainedShadowEvaluation
   double minimum_dynamic_clearance_m{
     std::numeric_limits<double>::infinity()};
   std::string blocking_obstacle_id;
+  rate_resolved_command::Reason command_reason{
+    rate_resolved_command::Reason::RetainedProofUnavailable};
+  std::optional<rate_resolved_command::Candidate> command_candidate;
   double elapsed_ms{};
+};
+
+struct RateResolvedCommandShadowTelemetryWindow
+{
+  std::uint64_t attempt_count{};
+  std::uint64_t available_count{};
+  std::uint64_t production_canonical_count{};
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(rate_resolved_command::Reason::Count)>
+  reason_count{};
+  double maximum_absolute_speed_difference_mps{};
+  double maximum_absolute_acceleration_difference_mps2{};
+  double maximum_absolute_steering_difference_rad{};
+  RateResolvedRetainedShadowEvaluation last_evaluation;
+  std::optional<mpcc_contract::CanonicalNormalCommand> last_production_command;
+  Eigen::Vector2d last_production_control{Eigen::Vector2d::Zero()};
 };
 
 struct RateResolvedTrackCruiseShadowTelemetryWindow
@@ -27738,21 +27783,53 @@ struct MPC
     return snapshot;
   }
 
+  std::optional<BoundRateResolvedTrackCruiseSubmission>
+  bind_rate_resolved_track_cruise_submission(
+    const RateResolvedTrackCruiseSubmissionDraft & draft,
+    const MpcControlCycleResult & committed_output) const noexcept
+  {
+    if (
+      draft.horizon_steps <= 0 ||
+      draft.request.horizon_steps != draft.horizon_steps ||
+      !std::isfinite(draft.course_progress_origin_m) ||
+      !mpcc_contract::problem_context_complete(draft.source_context) ||
+      !std::isfinite(committed_output.control[1]) ||
+      !std::isfinite(previous_steering) ||
+      std::abs(committed_output.control[1] - previous_steering) > 1e-12)
+    {
+      return std::nullopt;
+    }
+    BoundRateResolvedTrackCruiseSubmission bound;
+    bound.request = draft.request;
+    bound.request.current_steering_rad = committed_output.control[1];
+    bound.course_progress_origin_m = draft.course_progress_origin_m;
+    bound.horizon_steps = draft.horizon_steps;
+    bound.source_context = draft.source_context;
+    bound.committed_predecessor_steering_rad = committed_output.control[1];
+    return bound;
+  }
+
   bool submit_rate_resolved_track_cruise_shadow(
     const MpcProblem & source_problem,
-    const ExtendedProgressMpcProblem & problem,
-    const mpcc_contract::MpccProblemContext & source_context,
+    const BoundRateResolvedTrackCruiseSubmission & bound_submission,
     const double now_sec)
   {
     if (
-      !problem.rate_resolved_track_cruise_shadow_request.has_value() ||
       rate_resolved_track_cruise_shadow_worker_ == nullptr ||
       rate_resolved_track_cruise_shadow_mailbox_ == nullptr ||
       rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
       model == nullptr || !std::isfinite(model->Ts) || model->Ts <= 0.0 ||
-      problem.N <= 0 ||
+      bound_submission.horizon_steps <= 0 ||
+      bound_submission.request.horizon_steps !=
+      bound_submission.horizon_steps ||
+      !std::isfinite(
+      bound_submission.committed_predecessor_steering_rad) ||
+      bound_submission.request.current_steering_rad !=
+      bound_submission.committed_predecessor_steering_rad ||
+      !mpcc_contract::problem_context_complete(
+      bound_submission.source_context) ||
       source_problem.progress_stage_geometry.stages.size() <
-      static_cast<std::size_t>(problem.N) ||
+      static_cast<std::size_t>(bound_submission.horizon_steps) ||
       rate_resolved_track_cruise_shadow_next_sequence_ ==
       std::numeric_limits<std::uint64_t>::max())
     {
@@ -27764,18 +27841,21 @@ struct MPC
       rate_resolved_track_cruise_shadow_next_sequence_++;
     rate_resolved_shadow::Snapshot snapshot;
     snapshot.identity.sequence = sequence;
-    snapshot.identity.decision_id = source_context.decision_id;
-    snapshot.identity.source_problem_fingerprint = source_context.fingerprint;
-    snapshot.identity.stage_geometry_id = source_context.stage_geometry_id;
-    snapshot.identity.intent = source_context.intent;
+    snapshot.identity.decision_id =
+      bound_submission.source_context.decision_id;
+    snapshot.identity.source_problem_fingerprint =
+      bound_submission.source_context.fingerprint;
+    snapshot.identity.stage_geometry_id =
+      bound_submission.source_context.stage_geometry_id;
+    snapshot.identity.intent = bound_submission.source_context.intent;
     snapshot.identity.snapshot_sec = now_sec;
-    snapshot.request =
-      problem.rate_resolved_track_cruise_shadow_request.value();
-    snapshot.course_progress_origin_m = problem.progress_origin_m;
+    snapshot.request = bound_submission.request;
+    snapshot.course_progress_origin_m =
+      bound_submission.course_progress_origin_m;
     snapshot.nominal_path_distance_m.reserve(
-      static_cast<std::size_t>(problem.N + 1));
+      static_cast<std::size_t>(bound_submission.horizon_steps + 1));
     snapshot.nominal_path_distance_m.push_back(0.0);
-    for (int stage = 0; stage < problem.N; ++stage) {
+    for (int stage = 0; stage < bound_submission.horizon_steps; ++stage) {
       snapshot.nominal_path_distance_m.push_back(
         source_problem.progress_stage_geometry.stages[
         static_cast<std::size_t>(stage)].cumulative_distance_m);
@@ -27959,6 +28039,10 @@ struct MPC
         physical_replaced_pending_count +=
         submission.replaced_pending ? 1U : 0U;
     }
+    rate_resolved_track_cruise_last_causal_submission_decision_id_ =
+      bound_submission.source_context.decision_id;
+    rate_resolved_track_cruise_last_causal_predecessor_steering_rad_ =
+      bound_submission.committed_predecessor_steering_rad;
     return true;
   }
 
@@ -28039,6 +28123,9 @@ struct MPC
     evaluation.minimum_dynamic_clearance_m =
       result.minimum_dynamic_clearance_m;
     evaluation.blocking_obstacle_id = result.blocking_obstacle_id;
+    const auto command = rate_resolved_command::build(result);
+    evaluation.command_reason = command.reason;
+    evaluation.command_candidate = command.candidate;
     if (result.proof.has_value()) {
       evaluation.sequence =
         result.proof->plan->execution_artifact->identity.sequence;
@@ -28058,11 +28145,10 @@ struct MPC
   }
 
   void record_rate_resolved_track_cruise_shadow(
-    const MpcProblem & problem, const double now_sec)
+    const MpcProblem & problem, const double now_sec,
+    const RateResolvedRetainedShadowEvaluation & retained)
   {
     auto & window = rate_resolved_track_cruise_shadow_telemetry_window_;
-    const auto retained =
-      evaluate_rate_resolved_track_cruise_retained_shadow(problem, now_sec);
     ++window.retained_attempt_count;
     const auto retained_reason_index =
       static_cast<std::size_t>(retained.reason);
@@ -28565,6 +28651,105 @@ struct MPC
     rate_resolved_track_cruise_shadow_last_log_sec_ = now_sec;
   }
 
+  void record_rate_resolved_track_cruise_command_shadow(
+    const RateResolvedRetainedShadowEvaluation & retained,
+    const MpcControlCycleResult & production_output, const double now_sec)
+  {
+    auto & window = rate_resolved_track_cruise_command_telemetry_window_;
+    ++window.attempt_count;
+    const auto reason_index = static_cast<std::size_t>(retained.command_reason);
+    if (reason_index < window.reason_count.size()) {
+      ++window.reason_count[reason_index];
+    }
+    window.last_evaluation = retained;
+    window.last_production_command = production_output.canonical_normal_command;
+    window.last_production_control = production_output.control;
+    if (retained.command_candidate.has_value()) {
+      ++window.available_count;
+      const auto & candidate = retained.command_candidate.value();
+      const double speed_difference =
+        candidate.predicted_speed_mps - production_output.control[0];
+      const double steering_difference =
+        candidate.steering_rad - production_output.control[1];
+      window.maximum_absolute_speed_difference_mps = std::max(
+        window.maximum_absolute_speed_difference_mps,
+        std::abs(speed_difference));
+      window.maximum_absolute_steering_difference_rad = std::max(
+        window.maximum_absolute_steering_difference_rad,
+        std::abs(steering_difference));
+      if (production_output.canonical_normal_command.has_value()) {
+        ++window.production_canonical_count;
+        window.maximum_absolute_acceleration_difference_mps2 = std::max(
+          window.maximum_absolute_acceleration_difference_mps2,
+          std::abs(
+          candidate.acceleration_mps2 -
+          production_output.canonical_normal_command->acceleration_mps2));
+      }
+    }
+
+    constexpr double log_interval_sec = 2.0;
+    if (
+      !cfg.v2x_behavior.debug_log_enabled ||
+      (std::isfinite(rate_resolved_track_cruise_command_last_log_sec_) &&
+      now_sec - rate_resolved_track_cruise_command_last_log_sec_ <
+      log_interval_sec))
+    {
+      return;
+    }
+    const auto & last = window.last_evaluation;
+    const bool candidate_available = last.command_candidate.has_value();
+    const rate_resolved_command::Candidate empty_candidate;
+    const auto & candidate = candidate_available ?
+      last.command_candidate.value() : empty_candidate;
+    const double speed_difference = candidate_available ?
+      candidate.predicted_speed_mps - window.last_production_control[0] : 0.0;
+    const double steering_difference = candidate_available ?
+      candidate.steering_rad - window.last_production_control[1] : 0.0;
+    const double acceleration_difference =
+      candidate_available && window.last_production_command.has_value() ?
+      candidate.acceleration_mps2 -
+      window.last_production_command->acceleration_mps2 : 0.0;
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Rate-resolved command candidate shadow: attempted=%lu/available=%lu/"
+      "production_canonical=%lu, last=reason:%s/formulation:%s/decision:%lu/"
+      "artifact:%lu/source_decision:%lu/source:0x%016lx/geometry:0x%016lx/"
+      "intent:%s/stage:%lu, command=speed:%.3f/accel:%.3f/"
+      "steering_rate:%.3f/steering:%.4f/curvature:%.4f/vtheta:%.3f, "
+      "production=speed:%.3f/steering:%.4f/emergency:%d, "
+      "delta=speed:%.3f/accel:%.3f/steering:%.4f, "
+      "max_abs_delta=speed:%.3f/accel:%.3f/steering:%.4f, "
+      "causal_submit=decision:%lu/predecessor_steering:%.4f, "
+      "authority=shadow, selected=0",
+      static_cast<unsigned long>(window.attempt_count),
+      static_cast<unsigned long>(window.available_count),
+      static_cast<unsigned long>(window.production_canonical_count),
+      rate_resolved_command::to_string(last.command_reason),
+      candidate_available ?
+      rate_resolved_command::to_string(candidate.formulation) : "none",
+      static_cast<unsigned long>(candidate.decision_id),
+      static_cast<unsigned long>(candidate.artifact_sequence),
+      static_cast<unsigned long>(candidate.source_decision_id),
+      static_cast<unsigned long>(candidate.source_problem_fingerprint),
+      static_cast<unsigned long>(candidate.stage_geometry_id),
+      candidate_available ? mpcc_contract::to_string(candidate.intent) : "none",
+      static_cast<unsigned long>(candidate.control_stage_index),
+      candidate.predicted_speed_mps, candidate.acceleration_mps2,
+      candidate.steering_rate_radps, candidate.steering_rad,
+      candidate.curvature_radpm, candidate.virtual_progress_speed_mps,
+      window.last_production_control[0], window.last_production_control[1],
+      production_output.canonical_emergency_stop ? 1 : 0,
+      speed_difference, acceleration_difference, steering_difference,
+      window.maximum_absolute_speed_difference_mps,
+      window.maximum_absolute_acceleration_difference_mps2,
+      window.maximum_absolute_steering_difference_rad,
+      static_cast<unsigned long>(
+      rate_resolved_track_cruise_last_causal_submission_decision_id_),
+      rate_resolved_track_cruise_last_causal_predecessor_steering_rad_);
+    window = RateResolvedCommandShadowTelemetryWindow{};
+    rate_resolved_track_cruise_command_last_log_sec_ = now_sec;
+  }
+
   TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow(
     const MpcProblem & problem, const double now_sec,
     const CanonicalNormalShadowMode mode)
@@ -28639,9 +28824,21 @@ struct MPC
         result.detail = "canonical shadow context incomplete";
         return finish();
       }
-      if (!rejoin_mode) {
-        static_cast<void>(submit_rate_resolved_track_cruise_shadow(
-          problem, extended_problem.value(), context, now_sec));
+      if (
+        !rejoin_mode &&
+        extended_problem->rate_resolved_track_cruise_shadow_request.has_value())
+      {
+        RateResolvedTrackCruiseSubmissionDraft draft;
+        draft.request =
+          extended_problem->rate_resolved_track_cruise_shadow_request.value();
+        // The request is intentionally unbound here.  State-zero steering is
+        // assigned only after this cycle's production output is resolved.
+        draft.request.current_steering_rad =
+          std::numeric_limits<double>::quiet_NaN();
+        draft.course_progress_origin_m = extended_problem->progress_origin_m;
+        draft.horizon_steps = extended_problem->N;
+        draft.source_context = context;
+        result.rate_resolved_submission_draft = std::move(draft);
       }
       const auto warm_identity =
         make_canonical_shadow_warm_start_identity(problem, context);
@@ -30331,14 +30528,38 @@ struct MPC
         const auto canonical_result = evaluate_canonical_normal_shadow(
           problem, now_sec, CanonicalNormalShadowMode::TrackCruise);
         record_track_cruise_shadow_telemetry(canonical_result, now_sec);
-        record_rate_resolved_track_cruise_shadow(problem, now_sec);
+        // Revalidate the retained six-state candidate against the predecessor
+        // which entered this cycle.  Do this before resolving the current
+        // production output; after resolution, previous_steering belongs to
+        // the next asynchronous problem.
+        const auto retained_rate_resolved =
+          evaluate_rate_resolved_track_cruise_retained_shadow(problem, now_sec);
+        record_rate_resolved_track_cruise_shadow(
+          problem, now_sec, retained_rate_resolved);
+        MpcControlCycleResult output;
         if (canonical_result.selected.complete()) {
-          return canonical_normal_control(
+          output = canonical_normal_control(
             problem, canonical_result.intent, canonical_result.selected);
+        } else {
+          output = canonical_normal_emergency_stop(
+            problem, canonical_result.intent,
+            canonical_result.status + "/" + canonical_result.retained_detail);
         }
-        return canonical_normal_emergency_stop(
-          problem, canonical_result.intent,
-          canonical_result.status + "/" + canonical_result.retained_detail);
+        record_rate_resolved_track_cruise_command_shadow(
+          retained_rate_resolved, output, now_sec);
+        if (canonical_result.rate_resolved_submission_draft.has_value()) {
+          const auto bound_submission =
+            bind_rate_resolved_track_cruise_submission(
+            canonical_result.rate_resolved_submission_draft.value(), output);
+          if (bound_submission.has_value()) {
+            static_cast<void>(submit_rate_resolved_track_cruise_shadow(
+              problem, bound_submission.value(), now_sec));
+          } else {
+            ++rate_resolved_track_cruise_shadow_telemetry_window_.
+              submission_reject_count;
+          }
+        }
+        return output;
       }
       if (problem.rejoin_shadow_requested) {
         record_problem_context(
@@ -31378,6 +31599,13 @@ struct MPC
   rate_resolved_track_cruise_shadow_telemetry_window_;
   double rate_resolved_track_cruise_shadow_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
+  RateResolvedCommandShadowTelemetryWindow
+  rate_resolved_track_cruise_command_telemetry_window_;
+  double rate_resolved_track_cruise_command_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
+  std::uint64_t rate_resolved_track_cruise_last_causal_submission_decision_id_{};
+  double rate_resolved_track_cruise_last_causal_predecessor_steering_rad_{
+    std::numeric_limits<double>::quiet_NaN()};
   std::shared_ptr<CanonicalNormalLifecycle> follow_canonical_lifecycle_;
   std::shared_ptr<CanonicalNormalLifecycle> overtake_canonical_lifecycle_;
   std::shared_ptr<follow_async::Mailbox> follow_canonical_async_mailbox_;

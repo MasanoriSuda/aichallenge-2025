@@ -316,6 +316,18 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
   ${PROJECT_NAME}_recovery_footprint
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_command_candidate STATIC
+  src/mpcc_rate_resolved_command_candidate.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_rate_resolved_command_candidate PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_command_candidate
+  ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+)
+
 ament_auto_add_library(${PROJECT_NAME}_recovery_mpc SHARED
   NO_TARGET_LINK_LIBRARIES
   src/recovery_mpc.cpp
@@ -344,6 +356,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
   ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+  ${PROJECT_NAME}_mpcc_rate_resolved_command_candidate
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_latest_only_worker
@@ -475,6 +488,15 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_retained_revalidation
       ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_rate_resolved_command_candidate
+    test/test_mpcc_rate_resolved_command_candidate.cpp
+  )
+  if(TARGET test_mpcc_rate_resolved_command_candidate)
+    target_link_libraries(test_mpcc_rate_resolved_command_candidate
+      ${PROJECT_NAME}_mpcc_rate_resolved_command_candidate
     )
   endif()
 

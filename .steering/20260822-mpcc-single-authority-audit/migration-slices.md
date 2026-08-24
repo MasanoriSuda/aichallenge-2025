@@ -342,6 +342,22 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
 - Candidate loss causes same-formulation continuation, reoptimization, or Emergency Stop—not a
   controller switch.
 
+### 2026-08-24 runtime replacement artifact status
+
+- `.steering/20260824-overtake-runtime-replacement-canonical-artifact` removes the Mission-only
+  same-side/cross-side replacement boundary. The selected tactical result is now one typed Mission
+  plus immutable five-state canonical plan; the consumer stores that exact plan before exposing a
+  new Mission generation, side or phase.
+- The asynchronous producer now seals prospective authority identity from the immutable live
+  request. Worker-private tactical FSM mutation can no longer increment generation or change
+  phase/side semantics of an executable result.
+- `output/20260824-114633` accepted `Idle -> ShiftOut` at generation 1 and published the first
+  sampled ShiftOut command as `canonical-shiftout-retained`, with no Overtake async-pending or
+  legacy-normal handoff. No complete runtime replacement became available in that run.
+- Slice 5 remains open: DynamicWait had no current-side canonical prefix and a later retained plan
+  failed current-origin/corridor proof. These are follow-up current-world/cursor defects, not a
+  reason to restore Mission-only authority or tune clearances.
+
 ### 2026-08-23 fresh-chain shadow status
 
 - `.steering/20260823-overtake-canonical-fresh-shadow` connects the already solved live five-state

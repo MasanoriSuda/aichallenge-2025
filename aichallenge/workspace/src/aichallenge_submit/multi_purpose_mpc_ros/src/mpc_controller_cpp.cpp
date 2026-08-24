@@ -2169,6 +2169,57 @@ struct V2XTacticalSideAssessment
   std::string reason{"not evaluated"};
 };
 
+/// Atomic tactical-to-execution handoff. A Mission without the immutable plan
+/// produced by the same selected five-state branch is diagnostic data only and
+/// must never be allowed to replace production authority.
+struct OvertakeExecutionArtifact
+{
+  overtake_core::OvertakeMissionCandidate mission;
+  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> canonical_plan;
+
+  bool complete() const noexcept
+  {
+    return canonical_plan != nullptr &&
+           (mission.pass_side_sign == -1 || mission.pass_side_sign == 1) &&
+           canonical_plan->problem.execution_side_sign == mission.pass_side_sign;
+  }
+};
+
+/// Immutable authority identity captured by the live callback before the
+/// tactical snapshot is evaluated.  The worker's private OvertakeLineState is
+/// intentionally mutable while it builds candidate geometry, so it must not
+/// be used to derive the generation/phase identity of an executable result.
+struct OvertakeArtifactIdentitySeed
+{
+  std::uint64_t source_mission_generation{0U};
+  OvertakeLinePhase source_phase{OvertakeLinePhase::Idle};
+  OvertakeLinePhase source_follow_prepare_origin_phase{OvertakeLinePhase::Idle};
+  int source_side_sign{0};
+};
+
+struct OvertakeCanonicalPlanAdoption
+{
+  bool context_ready{false};
+  canonical_plan::CanonicalExecutionPlanStoreReason store_reason{
+    canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
+};
+
+std::optional<OvertakeExecutionArtifact> make_overtake_execution_artifact(
+  const overtake_core::OvertakeMissionCandidate & mission,
+  const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> & plan)
+{
+  if (
+    plan == nullptr ||
+    canonical_plan::validate_canonical_execution_plan(*plan) !=
+    canonical_plan::CanonicalExecutionPlanRejectReason::None ||
+    (mission.pass_side_sign != -1 && mission.pass_side_sign != 1) ||
+    plan->problem.execution_side_sign != mission.pass_side_sign)
+  {
+    return std::nullopt;
+  }
+  return OvertakeExecutionArtifact{mission, plan};
+}
+
 struct V2XBehaviorOutput
 {
   V2XBehaviorState state{V2XBehaviorState::Cruise};
@@ -2377,8 +2428,6 @@ struct V2XBehaviorOutput
   bool opponent_side_replan_current_feasible{false};
   bool opponent_side_replan_alternate_feasible{false};
   bool opponent_side_replan_ready{false};
-  bool mpcc_lite_same_side_replan_ready{false};
-  bool mpcc_lite_cross_side_replan_ready{false};
   int mpcc_lite_cross_side_candidate_sign{0};
   double mpcc_lite_cross_side_candidate_stable_sec{0.0};
   double mpcc_lite_cross_side_score_advantage{
@@ -2408,10 +2457,10 @@ struct V2XBehaviorOutput
   /// atomic Mission replacement.
   std::optional<overtake_core::OvertakeMissionCandidate>
   opponent_side_replan_current_dp_prefix;
-  std::optional<overtake_core::OvertakeMissionCandidate>
-  mpcc_lite_same_side_replan_mission;
-  std::optional<overtake_core::OvertakeMissionCandidate>
-  mpcc_lite_cross_side_replan_mission;
+  std::optional<OvertakeExecutionArtifact>
+  mpcc_lite_same_side_replan_artifact;
+  std::optional<OvertakeExecutionArtifact>
+  mpcc_lite_cross_side_replan_artifact;
   overtake_core::MpccLiteCompletionPredictionResolution
   mpcc_lite_completion_prediction;
   std::optional<overtake_core::OvertakeMissionCandidate> opponent_side_replan_mission;
@@ -2525,6 +2574,7 @@ struct MpccLiteAsyncResult
   std::uint64_t mission_generation{0U};
   std::string target_id;
   OvertakeLinePhase phase{OvertakeLinePhase::Idle};
+  OvertakeLinePhase follow_prepare_origin_phase{OvertakeLinePhase::Idle};
   int locked_side_sign{0};
   double snapshot_sec{-std::numeric_limits<double>::infinity()};
   double compute_ms{};
@@ -7950,6 +8000,7 @@ struct MPC
     const V2XBehaviorOutput & source_behavior,
     const V2XTacticalSideAssessment & assessment,
     const int horizon_size, const double now_sec,
+    const OvertakeArtifactIdentitySeed & artifact_identity,
     std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> * const
     preentry_canonical_plan)
   {
@@ -7995,9 +8046,9 @@ struct MPC
       model->spatial_state = model->t2s(tracking_waypoint, model->temporal_state);
 
       const bool preserve_active_phase =
-        overtake_line_state_.pass_side_sign == assessment.side &&
-        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
-        overtake_line_state_.phase == OvertakeLinePhase::Pass);
+        artifact_identity.source_side_sign == assessment.side &&
+        (artifact_identity.source_phase == OvertakeLinePhase::ShiftOut ||
+        artifact_identity.source_phase == OvertakeLinePhase::Pass);
       if (!preserve_active_phase) {
         overtake_line_state_.phase =
           candidate->direct_pass && candidate->current_position_clear ?
@@ -8251,12 +8302,26 @@ struct MPC
         mpcc_contract::MpccProblemContext prospective_context;
         prospective_context.decision_id = active_control_decision_id_;
         prospective_context.observation_generation = active_control_decision_id_;
+        const bool selected_side_changes =
+          artifact_identity.source_side_sign != 0 &&
+          assessment.side != artifact_identity.source_side_sign;
+        const bool paused_pass_same_side_continuation =
+          artifact_identity.source_phase == OvertakeLinePhase::FollowPrepare &&
+          artifact_identity.source_follow_prepare_origin_phase ==
+          OvertakeLinePhase::Pass && !selected_side_changes;
+        const bool fresh_direct_pass =
+          artifact_identity.source_phase == OvertakeLinePhase::Idle &&
+          artifact_identity.source_side_sign == 0 && candidate->direct_pass &&
+          candidate->current_position_clear;
         prospective_context.intent =
-          overtake_line_state_.phase == OvertakeLinePhase::Pass ?
+          fresh_direct_pass ||
+          (artifact_identity.source_phase == OvertakeLinePhase::Pass &&
+          !selected_side_changes) || paused_pass_same_side_continuation ?
           mpcc_contract::ControlIntent::Pass :
           mpcc_contract::ControlIntent::ShiftOut;
         prospective_context.intent_generation =
-          overtake_line_state_.mission_generation;
+          std::max<std::uint64_t>(
+          1U, artifact_identity.source_mission_generation + 1U);
         prospective_context.target_id = source_behavior.target_vehicle_id;
         prospective_context.target_obstacle_generation =
           target_provenance.observation_generation;
@@ -8292,7 +8357,8 @@ struct MPC
   ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch(
     const V2XBehaviorOutput & behavior,
     const V2XTacticalSideAssessment & assessment,
-    const int horizon_size, const double now_sec)
+    const int horizon_size, const double now_sec,
+    const OvertakeArtifactIdentitySeed & artifact_identity)
   {
     ExtendedMpccBranchArtifact artifact;
     auto & evaluation = artifact.evaluation;
@@ -8321,7 +8387,7 @@ struct MPC
       branch->active_extended_branch_side_sign_ = assessment.side;
       branch->active_extended_branch_horizon_size_ = horizon_size;
       artifact.evaluation = branch->evaluate_extended_mpcc_branch(
-        behavior, assessment, horizon_size, now_sec,
+        behavior, assessment, horizon_size, now_sec, artifact_identity,
         &artifact.preentry_canonical_plan);
       return artifact;
     } catch (const std::exception & error) {
@@ -8333,7 +8399,8 @@ struct MPC
   }
 
   void evaluate_and_select_extended_mpcc_branches(
-    V2XBehaviorOutput & behavior, const int horizon_size, const double now_sec)
+    V2XBehaviorOutput & behavior, const int horizon_size, const double now_sec,
+    const OvertakeArtifactIdentitySeed & artifact_identity)
   {
     if (
       !cfg.progress_contouring_dual_branch_enabled ||
@@ -8349,13 +8416,14 @@ struct MPC
     // both futures have completed, preserving one atomic observation epoch.
     auto left_future = std::async(
       std::launch::async,
-      [this, &behavior, horizon_size, now_sec]() {
+      [this, &behavior, horizon_size, now_sec, artifact_identity]() {
         return evaluate_isolated_extended_mpcc_branch(
           behavior, behavior.overtake_left_tactical_assessment,
-          horizon_size, now_sec);
+          horizon_size, now_sec, artifact_identity);
       });
     auto right_artifact = evaluate_isolated_extended_mpcc_branch(
-      behavior, behavior.overtake_right_tactical_assessment, horizon_size, now_sec);
+      behavior, behavior.overtake_right_tactical_assessment, horizon_size, now_sec,
+      artifact_identity);
     auto left_artifact = left_future.get();
     behavior.extended_mpcc_right_branch = std::move(right_artifact.evaluation);
     behavior.extended_mpcc_left_branch = std::move(left_artifact.evaluation);
@@ -8363,15 +8431,15 @@ struct MPC
       mpcc_progress::ExtendedBranchSelectionRequest{
         behavior.extended_mpcc_left_branch,
         behavior.extended_mpcc_right_branch,
-        overtake_line_state_.pass_side_sign,
+        artifact_identity.source_side_sign,
         behavior.overtake_pass_side_sign,
         behavior.opponent_side_replan_no_return,
         cfg.progress_contouring_dual_branch_minimum_objective_advantage,
         cfg.progress_contouring_dual_branch_minimum_bound_reserve_m});
     const auto & selection = behavior.extended_mpcc_branch_selection;
     const bool new_entry =
-      overtake_line_state_.phase == OvertakeLinePhase::Idle &&
-      overtake_line_state_.pass_side_sign == 0;
+      artifact_identity.source_phase == OvertakeLinePhase::Idle &&
+      artifact_identity.source_side_sign == 0;
     const auto hold_new_entry_on_current_path = [&behavior](const char * reason) {
         // Keep this reset atomic.  Leaving even one of the geometric/DP
         // admission fields set allows the caller to reconstruct an entry
@@ -8474,24 +8542,22 @@ struct MPC
     behavior.overtake_gap_hold_active = selected_assessment.transient_gap_hold;
     behavior.overtake_gap_hold_remaining_sec =
       selected_assessment.gap_hold_remaining_sec;
-    const int active_side = overtake_line_state_.pass_side_sign;
+    const int active_side = artifact_identity.source_side_sign;
     if (active_side != 0 && selection.selected_side_sign == active_side) {
-      behavior.mpcc_lite_same_side_replan_mission =
-        selected_mission;
-      behavior.mpcc_lite_same_side_replan_ready = true;
-      behavior.mpcc_lite_cross_side_replan_ready = false;
-      behavior.mpcc_lite_cross_side_replan_mission.reset();
+      behavior.mpcc_lite_same_side_replan_artifact =
+        make_overtake_execution_artifact(
+        selected_mission, selected_preentry_plan);
+      behavior.mpcc_lite_cross_side_replan_artifact.reset();
       behavior.mpcc_lite_cross_side_candidate_sign = 0;
     } else if (
       active_side != 0 && selection.selected_side_sign != active_side &&
       !behavior.opponent_side_replan_no_return)
     {
-      behavior.mpcc_lite_cross_side_replan_mission =
-        selected_mission;
-      behavior.mpcc_lite_cross_side_replan_ready = true;
+      behavior.mpcc_lite_cross_side_replan_artifact =
+        make_overtake_execution_artifact(
+        selected_mission, selected_preentry_plan);
       behavior.mpcc_lite_cross_side_candidate_sign = selection.selected_side_sign;
-      behavior.mpcc_lite_same_side_replan_ready = false;
-      behavior.mpcc_lite_same_side_replan_mission.reset();
+      behavior.mpcc_lite_same_side_replan_artifact.reset();
     }
   }
 
@@ -8500,6 +8566,7 @@ struct MPC
     const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
     const double now_sec, const std::string & target_id,
     const std::uint64_t mission_generation, const OvertakeLinePhase phase,
+    const OvertakeLinePhase follow_prepare_origin_phase,
     const int locked_side_sign)
   {
     const auto snapshot_start = std::chrono::steady_clock::now();
@@ -8538,7 +8605,8 @@ struct MPC
     const auto submission = mpcc_lite_async_worker_->submit_latest(
       [planner_snapshot, model_snapshot, gap_snapshot, mailbox,
       ref_wp_id, horizon_size, lower_bound, upper_bound, now_sec,
-      target_id, mission_generation, phase, locked_side_sign,
+      target_id, mission_generation, phase, follow_prepare_origin_phase,
+      locked_side_sign,
       sequence, context_epoch]() mutable {
         static_cast<void>(model_snapshot);
         static_cast<void>(gap_snapshot);
@@ -8549,13 +8617,17 @@ struct MPC
         result.mission_generation = mission_generation;
         result.target_id = target_id;
         result.phase = phase;
+        result.follow_prepare_origin_phase = follow_prepare_origin_phase;
         result.locked_side_sign = locked_side_sign;
         result.snapshot_sec = now_sec;
+        const OvertakeArtifactIdentitySeed artifact_identity{
+          mission_generation, phase, follow_prepare_origin_phase,
+          locked_side_sign};
         try {
           result.behavior = planner_snapshot->evaluate_v2x_behavior(
             ref_wp_id, horizon_size, lower_bound, upper_bound, now_sec);
           planner_snapshot->evaluate_and_select_extended_mpcc_branches(
-            result.behavior, horizon_size, now_sec);
+            result.behavior, horizon_size, now_sec, artifact_identity);
           result.success = true;
         } catch (const std::exception & error) {
           result.failure_reason = error.what();
@@ -14405,7 +14477,9 @@ struct MPC
               result.behavior.target_vehicle_id == output.target_vehicle_id,
               result.context_epoch == mpcc_lite_async_context_epoch_,
               result.mission_generation == overtake_line_state_.mission_generation,
-              result.phase == overtake_line_state_.phase,
+              result.phase == overtake_line_state_.phase &&
+              result.follow_prepare_origin_phase ==
+              overtake_line_state_.follow_prepare_origin_phase,
               result.locked_side_sign == locked_pass_side,
               target_provenance.valid,
               current_async_hard_fault,
@@ -15179,14 +15253,10 @@ struct MPC
           async_behavior.opponent_side_replan_current_dp_prefix;
         output.mpcc_lite_completion_prediction =
           async_behavior.mpcc_lite_completion_prediction;
-        output.mpcc_lite_same_side_replan_ready =
-          async_behavior.mpcc_lite_same_side_replan_ready;
-        output.mpcc_lite_cross_side_replan_ready =
-          async_behavior.mpcc_lite_cross_side_replan_ready;
-        output.mpcc_lite_same_side_replan_mission =
-          async_behavior.mpcc_lite_same_side_replan_mission;
-        output.mpcc_lite_cross_side_replan_mission =
-          async_behavior.mpcc_lite_cross_side_replan_mission;
+        output.mpcc_lite_same_side_replan_artifact =
+          async_behavior.mpcc_lite_same_side_replan_artifact;
+        output.mpcc_lite_cross_side_replan_artifact =
+          async_behavior.mpcc_lite_cross_side_replan_artifact;
         output.mpcc_lite_cross_side_candidate_sign =
           async_behavior.mpcc_lite_cross_side_candidate_sign;
         output.mpcc_lite_cross_side_candidate_stable_sec =
@@ -15194,23 +15264,21 @@ struct MPC
         output.mpcc_lite_cross_side_score_advantage =
           async_behavior.mpcc_lite_cross_side_score_advantage;
 
-        const auto suppress_retry_blocked_async_mission =
-          [&](auto & mission, bool & ready) {
+        const auto suppress_retry_blocked_async_artifact =
+          [&](auto & artifact) {
             if (
-              mission.has_value() &&
+              artifact.has_value() &&
               is_overtake_line_side_retry_blocked(
-                mission->pass_side_sign, output.target_vehicle_id, now_sec))
+                artifact->mission.pass_side_sign,
+                output.target_vehicle_id, now_sec))
             {
-              ready = false;
-              mission.reset();
+              artifact.reset();
             }
           };
-        suppress_retry_blocked_async_mission(
-          output.mpcc_lite_same_side_replan_mission,
-          output.mpcc_lite_same_side_replan_ready);
-        suppress_retry_blocked_async_mission(
-          output.mpcc_lite_cross_side_replan_mission,
-          output.mpcc_lite_cross_side_replan_ready);
+        suppress_retry_blocked_async_artifact(
+          output.mpcc_lite_same_side_replan_artifact);
+        suppress_retry_blocked_async_artifact(
+          output.mpcc_lite_cross_side_replan_artifact);
 
         const auto async_entry_mission =
           async_behavior.overtake_selected_mission;
@@ -15369,32 +15437,32 @@ struct MPC
               overtake_core::MpccLiteAuthorityAction::SelectEntry;
           }
         } else if (
-          output.mpcc_lite_same_side_replan_ready ||
-          output.mpcc_lite_cross_side_replan_ready)
+          output.mpcc_lite_same_side_replan_artifact.has_value() ||
+          output.mpcc_lite_cross_side_replan_artifact.has_value())
         {
           mpcc_authority_action =
             overtake_core::MpccLiteAuthorityAction::ReplaceActive;
         }
 
-        const auto adopted_path_mission =
-          output.mpcc_lite_same_side_replan_mission.has_value() ?
-          output.mpcc_lite_same_side_replan_mission :
-          output.mpcc_lite_cross_side_replan_mission;
+        const auto adopted_path_artifact =
+          output.mpcc_lite_same_side_replan_artifact.has_value() ?
+          output.mpcc_lite_same_side_replan_artifact :
+          output.mpcc_lite_cross_side_replan_artifact;
         if (
-          adopted_path_mission.has_value() &&
+          adopted_path_artifact.has_value() &&
           overtake_core::is_valid_frenet_dp_execution_path(
-            adopted_path_mission->frenet_dp_path_distances_m,
-            adopted_path_mission->frenet_dp_lateral_path_m))
+            adopted_path_artifact->mission.frenet_dp_path_distances_m,
+            adopted_path_artifact->mission.frenet_dp_lateral_path_m))
         {
           mpcc_frenet_dp_last_path_distances_ =
-            adopted_path_mission->frenet_dp_path_distances_m;
+            adopted_path_artifact->mission.frenet_dp_path_distances_m;
           mpcc_frenet_dp_last_lateral_path_ =
-            adopted_path_mission->frenet_dp_lateral_path_m;
+            adopted_path_artifact->mission.frenet_dp_lateral_path_m;
           mpcc_frenet_dp_last_target_id_ = output.target_vehicle_id;
           mpcc_frenet_dp_last_side_sign_ =
-            adopted_path_mission->pass_side_sign;
+            adopted_path_artifact->mission.pass_side_sign;
           mpcc_frenet_dp_last_tactical_strategy_ =
-            adopted_path_mission->frenet_dp_tactical_strategy;
+            adopted_path_artifact->mission.frenet_dp_tactical_strategy;
           mpcc_frenet_dp_last_feasible_sec_ = now_sec;
         }
       }
@@ -15417,7 +15485,9 @@ struct MPC
         submit_mpcc_lite_async_snapshot(
           ref_wp_id, N, lb, ub, now_sec, output.target_vehicle_id,
           overtake_line_state_.mission_generation,
-          overtake_line_state_.phase, locked_pass_side))
+          overtake_line_state_.phase,
+          overtake_line_state_.follow_prepare_origin_phase,
+          locked_pass_side))
       {
         mpcc_lite_shadow_last_evaluation_sec_ = now_sec;
       }
@@ -16272,17 +16342,21 @@ struct MPC
         }
       } else if (
         authority.action == overtake_core::MpccLiteAuthorityAction::ReplaceActive &&
-        winning_mission.has_value() && authority.selected_side_sign == locked_pass_side)
+        winning_mission.has_value() && authority.selected_side_sign == locked_pass_side &&
+        output.overtake_preentry_canonical_plan != nullptr)
       {
-        output.mpcc_lite_same_side_replan_ready = true;
-        output.mpcc_lite_same_side_replan_mission = winning_mission;
+        output.mpcc_lite_same_side_replan_artifact =
+          make_overtake_execution_artifact(
+          winning_mission.value(), output.overtake_preentry_canonical_plan);
       } else if (
         authority.action == overtake_core::MpccLiteAuthorityAction::ReplaceActive &&
         winning_mission.has_value() && authority.selected_side_sign != 0 &&
-        authority.selected_side_sign != locked_pass_side)
+        authority.selected_side_sign != locked_pass_side &&
+        output.overtake_preentry_canonical_plan != nullptr)
       {
-        output.mpcc_lite_cross_side_replan_ready = true;
-        output.mpcc_lite_cross_side_replan_mission = winning_mission;
+        output.mpcc_lite_cross_side_replan_artifact =
+          make_overtake_execution_artifact(
+          winning_mission.value(), output.overtake_preentry_canonical_plan);
       } else if (shadow_runtime_hard_fault) {
         mpcc_lite_control_last_feasible_entry_mission_.reset();
         mpcc_lite_control_last_feasible_entry_plan_.reset();
@@ -26032,6 +26106,46 @@ struct MPC
     return true;
   }
 
+  OvertakeCanonicalPlanAdoption adopt_overtake_canonical_plan_context(
+    const canonical_plan::CanonicalExecutionPlan & plan)
+  {
+    OvertakeCanonicalPlanAdoption adoption;
+    if (
+      !overtake_canonical_async_intent(plan.problem.intent) ||
+      overtake_canonical_lifecycle_ == nullptr)
+    {
+      return adoption;
+    }
+    const auto resolution = follow_async::resolve_context_lifecycle(
+      overtake_canonical_async_context_, plan.problem);
+    if (!resolution.valid) {
+      return adoption;
+    }
+
+    // PlanStore::replace is all-or-nothing.  Perform it before committing the
+    // new lifecycle identity, so a stale/invalid artifact leaves both the old
+    // Mission and its canonical plan executable.  Once accepted, applying the
+    // already-resolved context and resetting the mailbox cannot fail.
+    adoption.store_reason =
+      overtake_canonical_lifecycle_->plan_store.replace(plan);
+    if (
+      adoption.store_reason !=
+      canonical_plan::CanonicalExecutionPlanStoreReason::Accepted)
+    {
+      return adoption;
+    }
+    overtake_canonical_async_context_ = resolution.next;
+    if (resolution.reset_context) {
+      overtake_canonical_async_last_consumed_sequence_ = 0U;
+      if (overtake_canonical_async_mailbox_ != nullptr) {
+        overtake_canonical_async_mailbox_->reset_context(
+          overtake_canonical_async_context_.context_epoch);
+      }
+    }
+    adoption.context_ready = true;
+    return adoption;
+  }
+
   bool submit_overtake_canonical_async(
     const MpcProblem & problem, const double now_sec,
     const mpcc_contract::MpccProblemContext & context)
@@ -30577,7 +30691,10 @@ private:
     const bool keep_cross_side_reselection_open = false,
     const bool allow_progressive_prefix_replacement = false,
     const bool seed_dynamic_wait_front_cap_release = false,
-    const bool allow_safe_separation_prefix_tactical_rearm = false)
+    const bool allow_safe_separation_prefix_tactical_rearm = false,
+    const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
+    replacement_canonical_plan = nullptr,
+    const std::uint64_t current_target_observation_generation = 0U)
   {
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;
     const int previous_side = overtake_line_state_.pass_side_sign;
@@ -30939,6 +31056,44 @@ private:
       return false;
     }
 
+    const bool replacement_restarts_shiftout =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      (overtake_line_state_.phase == OvertakeLinePhase::Pass && side_changed &&
+      (progressive_prefix_replacement ? prepared_prefix_admission.restart_shiftout :
+      prepared_cross_side_admission.restart_shiftout)) ||
+      (replacing_paused_mission && !paused_pass_continuation);
+    const auto replacement_intent = replacement_restarts_shiftout ?
+      mpcc_contract::ControlIntent::ShiftOut :
+      mpcc_contract::ControlIntent::Pass;
+    const std::uint64_t prospective_generation =
+      std::max<std::uint64_t>(
+      1U, overtake_line_state_.mission_generation + 1U);
+    if (replacement_canonical_plan != nullptr) {
+      const auto artifact_admission = follow_async::resolve_overtake_preentry_plan(
+        follow_async::OvertakePreentryPlanRequest{
+          replacement_canonical_plan, replacement_intent,
+          prospective_generation, current_target_observation_generation,
+          overtake_line_state_.target_vehicle_id,
+          replacement_plan.mission.pass_side_sign, now_sec});
+      if (!artifact_admission.admitted) {
+        if (line_cfg.debug_log_enabled) {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "OvertakeLine canonical replacement artifact rejected; old Mission retained: "
+            "target=%s, side=%d->%d, phase=%s, intent=%s, generation=%lu, "
+            "plan=%lu, reason=%s, wp_id=%d",
+            overtake_line_state_.target_vehicle_id.c_str(), previous_side,
+            replacement_plan.mission.pass_side_sign,
+            to_string(overtake_line_state_.phase),
+            mpcc_contract::to_string(replacement_intent),
+            static_cast<unsigned long>(prospective_generation),
+            static_cast<unsigned long>(replacement_canonical_plan->plan_id),
+            follow_async::to_string(artifact_admission.reason), model->wp_id);
+        }
+        return false;
+      }
+    }
+
     const double prior_pass_start_sec = overtake_line_state_.mission_pass_start_sec;
     const double prior_pass_accumulated_sec =
       overtake_line_state_.mission_pass_accumulated_sec;
@@ -30993,7 +31148,9 @@ private:
     freeze_selected_overtake_mission(candidate, now_sec);
     if (
       !overtake_line_state_.mission_plan.has_value() ||
-      !overtake_line_state_.mission_plan->valid)
+      !overtake_line_state_.mission_plan->valid ||
+      (replacement_canonical_plan != nullptr &&
+      overtake_line_state_.mission_generation != prospective_generation))
     {
       overtake_line_state_ = rollback_state;
       overtake_locked_side_sign_ = rollback_locked_side_sign;
@@ -31006,6 +31163,31 @@ private:
         static_cast<unsigned long>(overtake_line_state_.mission_generation),
         model->wp_id);
       return false;
+    }
+    if (replacement_canonical_plan != nullptr) {
+      const auto adoption = adopt_overtake_canonical_plan_context(
+        *replacement_canonical_plan);
+      if (
+        !adoption.context_ready ||
+        adoption.store_reason !=
+        canonical_plan::CanonicalExecutionPlanStoreReason::Accepted)
+      {
+        overtake_line_state_ = rollback_state;
+        overtake_locked_side_sign_ = rollback_locked_side_sign;
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine canonical replacement store rejected; old Mission retained: "
+          "target=%s, side=%d->%d, intent=%s, generation=%lu, plan=%lu, "
+          "context=%d, store=%s, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(), previous_side,
+          replacement_plan.mission.pass_side_sign,
+          mpcc_contract::to_string(replacement_intent),
+          static_cast<unsigned long>(prospective_generation),
+          static_cast<unsigned long>(replacement_canonical_plan->plan_id),
+          adoption.context_ready ? 1 : 0,
+          canonical_plan::to_string(adoption.store_reason), model->wp_id);
+        return false;
+      }
     }
 
     overtake_line_state_.mission_pass_start_sec = prior_pass_start_sec;
@@ -37846,16 +38028,18 @@ private:
           break;
       }
     } else if (
-      behavior_output.mpcc_lite_same_side_replan_ready &&
-      behavior_output.mpcc_lite_same_side_replan_mission.has_value())
+      behavior_output.mpcc_lite_same_side_replan_artifact.has_value())
     {
       const auto runtime_trace_context = capture_runtime_failover_trace_context();
-      const auto & replacement =
-        behavior_output.mpcc_lite_same_side_replan_mission.value();
+      const auto & artifact =
+        behavior_output.mpcc_lite_same_side_replan_artifact.value();
+      const auto & replacement = artifact.mission;
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
         replacement, now_sec, current_ey, true,
         tactical_same_side_replan_rescue_active, false, true, false, true,
-        false, runtime_completion_tactical_rearm_active);
+        false, runtime_completion_tactical_rearm_active,
+        artifact.canonical_plan,
+        behavior_output.locked_target_observation_generation);
       if (!replaced && line_cfg.debug_log_enabled) {
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
@@ -37870,15 +38054,17 @@ private:
         runtime_trace_context, true, false, replaced, false,
         "mpcc-lite-same-side", "same-side replacement rejected at commit");
     } else if (
-      behavior_output.mpcc_lite_cross_side_replan_ready &&
-      behavior_output.mpcc_lite_cross_side_replan_mission.has_value())
+      behavior_output.mpcc_lite_cross_side_replan_artifact.has_value())
     {
       const auto runtime_trace_context = capture_runtime_failover_trace_context();
-      const auto & replacement =
-        behavior_output.mpcc_lite_cross_side_replan_mission.value();
+      const auto & artifact =
+        behavior_output.mpcc_lite_cross_side_replan_artifact.value();
+      const auto & replacement = artifact.mission;
       const bool replaced = replace_frozen_overtake_mission_after_dynamic_replan(
         replacement, now_sec, current_ey, false, false,
-        tactical_cross_side_replan_rescue_allowed, false, true, true);
+        tactical_cross_side_replan_rescue_allowed, false, true, true,
+        false, false, artifact.canonical_plan,
+        behavior_output.locked_target_observation_generation);
       mpcc_lite_cross_side_pending_sign_ = 0;
       mpcc_lite_cross_side_pending_since_sec_ =
         std::numeric_limits<double>::quiet_NaN();

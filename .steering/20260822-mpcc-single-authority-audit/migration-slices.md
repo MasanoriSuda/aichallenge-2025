@@ -693,6 +693,16 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   first-stage boundary. This Slice is accepted as ownership cleanup, not authority promotion. Next
   add a solver-certified first-rate reachability interval from semantic steering, then implement
   piecewise cross-stage sampling as a separate time-base repair.
+- `.steering/20260825-rate-resolved-first-rate-reachability` closes the real steering-limit defect
+  exposed by that ownership cleanup. The semantic adapter intersects the first steering-rate row
+  with exact reachability from immutable current steering and moves the row into a solver-certified
+  interior derived from the persistent solver's physical absolute/relative tolerance. There is no
+  output clamp, parameter, solver-setting or authority change. All 1,830 package tests and the
+  25-package build pass. In committed-source run `output/20260825-012740`, all initial/rate/terminal
+  and sampled-steering rejects were zero; 5,034/5,045 consumed results were publishable and the only
+  11 rejects were publication intervals crossing the first-stage boundary. The reachability Slice
+  is accepted. Next implement certified piecewise cross-stage sampling without changing immutable
+  stage timing, then repeat the shadow Gate before considering authority migration.
 
 ## Slice 6: Legacy and migration path removal
 

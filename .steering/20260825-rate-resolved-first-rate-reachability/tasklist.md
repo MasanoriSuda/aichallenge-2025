@@ -7,9 +7,9 @@
 - [x] Add bound proof, empty-interior and shadow tests.
 - [x] Add telemetry provenance.
 - [x] Run build, full package tests and authority audit.
-- [ ] Commit the static Slice.
-- [ ] Run `make dev2` and classify remaining rejects.
-- [ ] Record the next root-cause decision.
+- [x] Commit the static Slice (`e3e6661`).
+- [x] Run `make dev2` and classify remaining rejects.
+- [x] Record the next root-cause decision.
 
 ## Definition of Done
 

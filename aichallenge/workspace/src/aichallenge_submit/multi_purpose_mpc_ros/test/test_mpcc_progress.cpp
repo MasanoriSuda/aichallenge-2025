@@ -81,6 +81,68 @@ TEST(MpccProgress, GlobalScopeStillActivatesOrdinaryCruise)
   EXPECT_EQ(resolution.source, ActivationSource::Global);
 }
 
+TEST(MpccProgress, ResolvesFirstCurvatureReachabilityInSteeringCoordinates)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::FirstCurvatureReachabilityRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::resolve_first_curvature_reachability;
+
+  const auto result = resolve_first_curvature_reachability(
+    FirstCurvatureReachabilityRequest{
+      -0.40, 0.40, 0.30, 0.05, 1.10});
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_NEAR(result->rate_lower_radpm, std::tan(0.25) / 1.10, 1e-12);
+  EXPECT_NEAR(result->rate_upper_radpm, std::tan(0.35) / 1.10, 1e-12);
+  EXPECT_NEAR(result->reachable_lower_radpm, result->rate_lower_radpm, 1e-12);
+  EXPECT_NEAR(result->reachable_upper_radpm, result->rate_upper_radpm, 1e-12);
+  EXPECT_TRUE(result->feasible);
+}
+
+TEST(MpccProgress, ReportsDisjointFirstCurvatureReachability)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::FirstCurvatureReachabilityRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::resolve_first_curvature_reachability;
+
+  const auto result = resolve_first_curvature_reachability(
+    FirstCurvatureReachabilityRequest{
+      -0.40, -0.20, 0.30, 0.05, 1.10});
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_FALSE(result->feasible);
+  EXPECT_GT(result->reachable_lower_radpm, result->reachable_upper_radpm);
+}
+
+TEST(MpccProgress, IntersectsFirstCurvatureWithExistingInputBox)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::FirstCurvatureReachabilityRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::resolve_first_curvature_reachability;
+
+  const auto result = resolve_first_curvature_reachability(
+    FirstCurvatureReachabilityRequest{
+      0.24, 0.40, 0.30, 0.05, 1.10});
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->feasible);
+  EXPECT_NEAR(result->reachable_lower_radpm, 0.24, 1e-12);
+  EXPECT_NEAR(result->reachable_upper_radpm, result->rate_upper_radpm, 1e-12);
+}
+
+TEST(MpccProgress, RejectsMalformedFirstCurvatureReachabilityInput)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::FirstCurvatureReachabilityRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::resolve_first_curvature_reachability;
+
+  EXPECT_FALSE(resolve_first_curvature_reachability(
+      FirstCurvatureReachabilityRequest{
+        0.20, -0.20, 0.0, 0.05, 1.10}).has_value());
+  EXPECT_FALSE(resolve_first_curvature_reachability(
+      FirstCurvatureReachabilityRequest{
+        -0.20, 0.20, 0.0, -0.05, 1.10}).has_value());
+  EXPECT_FALSE(resolve_first_curvature_reachability(
+      FirstCurvatureReachabilityRequest{
+        -0.20, 0.20, 0.0, 0.05, 0.0}).has_value());
+}
+
 TEST(MpccProgress, StraightLinearizationAdvancesPhysicalProgress)
 {
   const auto result = multi_purpose_mpc_ros::mpcc_progress::linearize_temporal_frenet(

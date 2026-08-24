@@ -5542,6 +5542,43 @@ struct ExtendedProgressMpcProblem
   int wall_constraint_offset{-1};
   std::vector<persistent_osqp::DualStageBlockLayout>
   trailing_dual_stage_blocks;
+  double first_curvature_input_lower_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_input_upper_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_rate_lower_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_rate_upper_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_intersection_lower_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_intersection_upper_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_physical_lower_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_physical_upper_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_previous_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_curvature_maximum_steering_step_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  bool first_curvature_intersection_feasible{false};
+  double state_zero_lateral_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double state_zero_lateral_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double state_zero_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  bool state_zero_lateral_feasible{false};
+  double forced_first_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_lateral_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_lateral_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_lateral_input_sensitivity_norm{
+    std::numeric_limits<double>::quiet_NaN()};
+  bool forced_first_lateral_feasible{false};
 };
 
 struct FirstStageShadowReachabilityDiagnostic
@@ -20361,6 +20398,42 @@ struct MPC
         velocity_horizon->hard_cap_velocity_mps[static_cast<std::size_t>(stage)],
         virtual_progress_reference[static_cast<std::size_t>(stage)]);
     }
+    const int first_curvature_input =
+      mpcc_progress::kExtendedCurvatureIndex;
+    const double first_curvature_input_lower =
+      input_lower[first_curvature_input];
+    const double first_curvature_input_upper =
+      input_upper[first_curvature_input];
+    const double first_maximum_steering_step = cfg.steer_rate_max * model->Ts;
+    const auto physical_first_curvature =
+      mpcc_progress::resolve_first_curvature_reachability(
+      mpcc_progress::FirstCurvatureReachabilityRequest{
+        first_curvature_input_lower, first_curvature_input_upper,
+        previous_steering, first_maximum_steering_step, model->length});
+    if (!physical_first_curvature.has_value()) {
+      reject_reason = "extended MPCC first-curvature reachability malformed";
+      return std::nullopt;
+    }
+    if (!physical_first_curvature->feasible) {
+      std::ostringstream reason;
+      reason << "extended MPCC first-curvature reachability empty"
+             << ", input=[" << first_curvature_input_lower << ','
+             << first_curvature_input_upper << ']'
+             << ", steering_rate=["
+             << physical_first_curvature->rate_lower_radpm << ','
+             << physical_first_curvature->rate_upper_radpm << ']';
+      reject_reason = reason.str();
+      return std::nullopt;
+    }
+    // The first steering-rate limit and the ordinary curvature input box are
+    // both unary bounds on exactly the same variable. Intersect them here so
+    // one physical constraint has one numerical owner. Keeping a second
+    // active row made the dual variables non-unique and repeatedly left OSQP
+    // at maximum iterations with row 270 as the dominant residual.
+    input_lower[first_curvature_input] =
+      physical_first_curvature->reachable_lower_radpm;
+    input_upper[first_curvature_input] =
+      physical_first_curvature->reachable_upper_radpm;
 
     std::vector<Eigen::Triplet<double>> a_triplets;
     const int follow_gap_row_count =
@@ -20437,6 +20510,14 @@ struct MPC
       initial_frenet_pose->lateral_m, initial_lag_m,
       initial_frenet_pose->heading_offset_rad,
       legacy.progress_measured_speed_mps, 0.0;
+    const double forced_first_lateral =
+      linearizations.front().state_matrix.row(
+      mpcc_progress::kExtendedLateralIndex).dot(x0) -
+      linearizations.front().equality_offset[
+      mpcc_progress::kExtendedLateralIndex];
+    const double first_lateral_input_sensitivity_norm =
+      linearizations.front().input_matrix.row(
+      mpcc_progress::kExtendedLateralIndex).norm();
     Eigen::VectorXd equality = Eigen::VectorXd::Zero(nx_N);
     equality.segment<nx>(0) = -x0;
     for (int stage = 0; stage < N; ++stage) {
@@ -20457,10 +20538,11 @@ struct MPC
     Eigen::VectorXd rate_lower(N);
     Eigen::VectorXd rate_upper(N);
     const double previous_curvature = std::tan(previous_steering) / model->length;
-    const double first_max_curvature_change =
-      std::tan(cfg.steer_rate_max * model->Ts) / model->length;
-    rate_lower[0] = previous_curvature - first_max_curvature_change;
-    rate_upper[0] = previous_curvature + first_max_curvature_change;
+    // Row zero remains structurally present so certified dual warm-start
+    // layouts do not migrate in this Slice, but its duplicate bound is
+    // inactive. Inter-stage curvature-rate rows remain hard constraints.
+    rate_lower[0] = -std::numeric_limits<double>::infinity();
+    rate_upper[0] = std::numeric_limits<double>::infinity();
     for (int stage = 1; stage < N; ++stage) {
       const double maximum_change =
         std::tan(cfg.steer_rate_max *
@@ -20683,7 +20765,30 @@ struct MPC
       progress_aligned_wall_refinement_active ?
       legacy.progress_aligned_wall_contract_source : std::string{"none"},
       progress_wall_offset,
-      std::move(trailing_dual_stage_blocks)};
+      std::move(trailing_dual_stage_blocks),
+      first_curvature_input_lower, first_curvature_input_upper,
+      rate_lower[0], rate_upper[0],
+      physical_first_curvature->reachable_lower_radpm,
+      physical_first_curvature->reachable_upper_radpm,
+      physical_first_curvature->rate_lower_radpm,
+      physical_first_curvature->rate_upper_radpm,
+      previous_steering, first_maximum_steering_step,
+      physical_first_curvature->feasible,
+      state_lower[mpcc_progress::kExtendedLateralIndex],
+      state_upper[mpcc_progress::kExtendedLateralIndex],
+      x0[mpcc_progress::kExtendedLateralIndex],
+      x0[mpcc_progress::kExtendedLateralIndex] >=
+      state_lower[mpcc_progress::kExtendedLateralIndex] &&
+      x0[mpcc_progress::kExtendedLateralIndex] <=
+      state_upper[mpcc_progress::kExtendedLateralIndex],
+      forced_first_lateral,
+      state_lower[nx + mpcc_progress::kExtendedLateralIndex],
+      state_upper[nx + mpcc_progress::kExtendedLateralIndex],
+      first_lateral_input_sensitivity_norm,
+      forced_first_lateral >=
+      state_lower[nx + mpcc_progress::kExtendedLateralIndex] &&
+      forced_first_lateral <=
+      state_upper[nx + mpcc_progress::kExtendedLateralIndex]};
   }
 
   mpcc_progress::ProgressAlignedWallBoundsResolution
@@ -20847,7 +20952,37 @@ struct MPC
       std::ostringstream detail;
       detail << outcome.failure_detail
              << ", warm_candidate=" << (previous_certified.has_value() ? 1 : 0)
-             << ", warm_stage_advance=" << warm_start_stage_advance;
+             << ", warm_stage_advance=" << warm_start_stage_advance
+             << ", first_kappa_box=["
+             << problem.first_curvature_input_lower_radpm << ','
+             << problem.first_curvature_input_upper_radpm << ']'
+             << ", first_kappa_rate=["
+             << problem.first_curvature_rate_lower_radpm << ','
+             << problem.first_curvature_rate_upper_radpm << ']'
+             << ", first_kappa_intersection=["
+             << problem.first_curvature_intersection_lower_radpm << ','
+             << problem.first_curvature_intersection_upper_radpm << ']'
+             << ", first_kappa_feasible="
+             << (problem.first_curvature_intersection_feasible ? 1 : 0)
+             << ", first_kappa_physical_rate=["
+             << problem.first_curvature_physical_lower_radpm << ','
+             << problem.first_curvature_physical_upper_radpm << ']'
+             << ", previous_steering="
+             << problem.first_curvature_previous_steering_rad
+             << ", maximum_steering_step="
+             << problem.first_curvature_maximum_steering_step_rad
+             << ", state0_ey=" << problem.state_zero_lateral_m
+             << "/[" << problem.state_zero_lateral_lower_m << ','
+             << problem.state_zero_lateral_upper_m << ']'
+             << "/feasible="
+             << (problem.state_zero_lateral_feasible ? 1 : 0)
+             << ", forced_state1_ey=" << problem.forced_first_lateral_m
+             << "/[" << problem.first_lateral_lower_m << ','
+             << problem.first_lateral_upper_m << ']'
+             << "/input_norm="
+             << problem.first_lateral_input_sensitivity_norm
+             << "/feasible="
+             << (problem.forced_first_lateral_feasible ? 1 : 0);
       outcome.failure_detail = detail.str();
       if (record_runtime_telemetry) {
         record_osqp_telemetry(outcome, now_sec);

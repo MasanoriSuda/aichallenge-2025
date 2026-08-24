@@ -135,6 +135,46 @@ const char * activation_source_name(const ActivationSource source) noexcept
   return "unknown";
 }
 
+std::optional<FirstCurvatureReachabilityResolution>
+resolve_first_curvature_reachability(
+  const FirstCurvatureReachabilityRequest & request) noexcept
+{
+  constexpr double half_pi = 1.57079632679489661923;
+  if (
+    !std::isfinite(request.input_lower_radpm) ||
+    !std::isfinite(request.input_upper_radpm) ||
+    request.input_lower_radpm > request.input_upper_radpm ||
+    !std::isfinite(request.previous_steering_rad) ||
+    !std::isfinite(request.maximum_steering_step_rad) ||
+    request.maximum_steering_step_rad < 0.0 ||
+    !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0)
+  {
+    return std::nullopt;
+  }
+  const double lower_steering =
+    request.previous_steering_rad - request.maximum_steering_step_rad;
+  const double upper_steering =
+    request.previous_steering_rad + request.maximum_steering_step_rad;
+  if (
+    lower_steering <= -half_pi || upper_steering >= half_pi ||
+    lower_steering > upper_steering)
+  {
+    return std::nullopt;
+  }
+  const double rate_lower = std::tan(lower_steering) / request.wheelbase_m;
+  const double rate_upper = std::tan(upper_steering) / request.wheelbase_m;
+  if (!std::isfinite(rate_lower) || !std::isfinite(rate_upper)) {
+    return std::nullopt;
+  }
+  const double reachable_lower =
+    std::max(request.input_lower_radpm, rate_lower);
+  const double reachable_upper =
+    std::min(request.input_upper_radpm, rate_upper);
+  return FirstCurvatureReachabilityResolution{
+    rate_lower, rate_upper, reachable_lower, reachable_upper,
+    reachable_lower <= reachable_upper};
+}
+
 std::optional<StageDistanceResolution> resolve_stage_distances(
   const std::vector<double> & raw_stage_distance_m, const Config & config) noexcept
 {

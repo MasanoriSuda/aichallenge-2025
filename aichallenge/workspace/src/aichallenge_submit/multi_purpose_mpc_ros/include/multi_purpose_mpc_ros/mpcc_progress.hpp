@@ -160,6 +160,32 @@ inline constexpr int kExtendedAccelerationIndex = 0;
 inline constexpr int kExtendedCurvatureIndex = 1;
 inline constexpr int kExtendedVirtualProgressSpeedIndex = 2;
 
+/// Physical stage-zero curvature reachability and the canonical intersection
+/// to place in the curvature input box. The actuator limit is stated in
+/// steering-angle coordinates, so both ends are transformed independently
+/// instead of approximating a curvature delta around zero steering.
+struct FirstCurvatureReachabilityRequest
+{
+  double input_lower_radpm{};
+  double input_upper_radpm{};
+  double previous_steering_rad{};
+  double maximum_steering_step_rad{};
+  double wheelbase_m{};
+};
+
+struct FirstCurvatureReachabilityResolution
+{
+  double rate_lower_radpm{};
+  double rate_upper_radpm{};
+  double reachable_lower_radpm{};
+  double reachable_upper_radpm{};
+  bool feasible{false};
+};
+
+std::optional<FirstCurvatureReachabilityResolution>
+resolve_first_curvature_reachability(
+  const FirstCurvatureReachabilityRequest & request) noexcept;
+
 enum class ExtendedConstraintRowKind
 {
   Invalid,

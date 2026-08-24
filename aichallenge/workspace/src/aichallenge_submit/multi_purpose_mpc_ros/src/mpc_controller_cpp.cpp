@@ -27889,6 +27889,8 @@ struct MPC
     snapshot.identity.stage_geometry_id =
       bound_submission.source_context.stage_geometry_id;
     snapshot.identity.intent = bound_submission.source_context.intent;
+    snapshot.identity.formulation =
+      bound_submission.source_context.formulation;
     snapshot.identity.snapshot_sec = now_sec;
     snapshot.control_prediction_origin_sec =
       bound_submission.control_prediction_origin_sec;
@@ -28788,7 +28790,7 @@ struct MPC
       static_cast<unsigned long>(window.production_canonical_count),
       rate_resolved_command::to_string(last.command_reason),
       candidate_available ?
-      rate_resolved_command::to_string(candidate.formulation) : "none",
+      mpcc_contract::to_string(candidate.formulation) : "none",
       static_cast<unsigned long>(candidate.decision_id),
       static_cast<unsigned long>(candidate.artifact_sequence),
       static_cast<unsigned long>(candidate.source_decision_id),
@@ -28879,6 +28881,8 @@ struct MPC
 
       const auto context = make_problem_context(
         problem, mpcc_contract::Formulation::VelocityProgress5State);
+      const auto rate_resolved_context = make_problem_context(
+        problem, mpcc_contract::Formulation::VelocitySteeringProgress6State);
       result.problem_fingerprint = context.fingerprint;
       result.stage_geometry_id = context.stage_geometry_id;
       if (!mpcc_contract::problem_context_complete(context)) {
@@ -28901,7 +28905,7 @@ struct MPC
           now_sec + execution_prediction_delay_sec_;
         draft.course_progress_origin_m = extended_problem->progress_origin_m;
         draft.horizon_steps = extended_problem->N;
-        draft.source_context = context;
+        draft.source_context = rate_resolved_context;
         result.rate_resolved_submission_draft = std::move(draft);
       }
       const auto warm_identity =
@@ -31480,7 +31484,9 @@ struct MPC
     context.cost_schema_id.clear();
     const bool progress_geometry_required =
       formulation == mpcc_contract::Formulation::ProgressContouring3State ||
-      formulation == mpcc_contract::Formulation::VelocityProgress5State;
+      formulation == mpcc_contract::Formulation::VelocityProgress5State ||
+      formulation ==
+      mpcc_contract::Formulation::VelocitySteeringProgress6State;
     const int effective_horizon_steps = horizon_steps_override >= 0 ?
       horizon_steps_override : problem.N;
     if (progress_geometry_required) {
@@ -31550,6 +31556,15 @@ struct MPC
           context.bounds_schema_id = "progress-stage-wall-obstacle-v1";
           context.cost_schema_id = "velocity-progress-v1";
         }
+        break;
+      case mpcc_contract::Formulation::VelocitySteeringProgress6State:
+        context.state_schema_id =
+          "ey-elag-epsi-v-progress-steering-v1";
+        context.input_schema_id =
+          "accel-steering-rate-progress-rate-v1";
+        context.bounds_schema_id =
+          "progress-stage-wall-obstacle-steering-rate-v1";
+        context.cost_schema_id = "velocity-steering-progress-v1";
         break;
       case mpcc_contract::Formulation::LowSpeedDirect:
         context.state_schema_id = "direct-current-state-v1";

@@ -20,6 +20,8 @@ struct Identity
   std::uint64_t stage_geometry_id{};
   mpcc_execution_contract::ControlIntent intent{
     mpcc_execution_contract::ControlIntent::Unknown};
+  mpcc_execution_contract::Formulation formulation{
+    mpcc_execution_contract::Formulation::Unresolved};
   double snapshot_sec{};
 };
 

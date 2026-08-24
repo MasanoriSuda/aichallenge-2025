@@ -60,6 +60,8 @@ shadow::Snapshot snapshot(const std::uint64_t sequence = 1U)
   result.identity.source_problem_fingerprint = 101U + sequence;
   result.identity.stage_geometry_id = 201U + sequence;
   result.identity.intent = contract::ControlIntent::Track;
+  result.identity.formulation =
+    contract::Formulation::VelocitySteeringProgress6State;
   result.identity.snapshot_sec = 10.0 + 0.1 * sequence;
   result.control_prediction_origin_sec = result.identity.snapshot_sec + 0.13;
   result.request = straight_request();
@@ -135,6 +137,16 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   invalid.first_steering_rate_certificate_margin_radps =
     std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(shadow::result_valid(invalid));
+}
+
+TEST(MpccRateResolvedShadow, RejectsFiveStateProblemIdentity)
+{
+  shadow::SolverContext context;
+  auto input = snapshot();
+  input.identity.formulation = contract::Formulation::VelocityProgress5State;
+  const auto result = context.evaluate(input);
+  EXPECT_EQ(result.outcome, shadow::Outcome::BuildRejected);
+  EXPECT_FALSE(shadow::result_valid(result));
 }
 
 TEST(MpccRateResolvedShadow, RetainsAndSamplesExactRateResolvedArtifact)

@@ -22,7 +22,7 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan()
 {
   auto execution = std::make_shared<artifact::ExecutionArtifact>();
   execution->identity = {7U, 11U, 13U, 17U, contract::ControlIntent::Cruise,
-    1.0};
+    contract::Formulation::VelocitySteeringProgress6State, 1.0};
   execution->prediction_origin_sec = 1.0;
   execution->completed_sec = 1.01;
   execution->course_progress_origin_m = 50.0;
@@ -138,8 +138,11 @@ TEST(RateResolvedCommandCandidate, PreservesRetainedIdentityAndActuation) {
   EXPECT_EQ(candidate.source_problem_fingerprint, 13U);
   EXPECT_EQ(candidate.stage_geometry_id, 17U);
   EXPECT_EQ(candidate.intent, contract::ControlIntent::Cruise);
+  EXPECT_EQ(
+    candidate.formulation,
+    contract::Formulation::VelocitySteeringProgress6State);
   EXPECT_STREQ(
-    command::to_string(candidate.formulation),
+    contract::to_string(candidate.formulation),
     "velocity-steering-progress-6state");
   EXPECT_EQ(candidate.control_stage_index, 1U);
   EXPECT_DOUBLE_EQ(candidate.predicted_speed_mps, 4.2);
@@ -148,6 +151,23 @@ TEST(RateResolvedCommandCandidate, PreservesRetainedIdentityAndActuation) {
   EXPECT_DOUBLE_EQ(candidate.steering_rad, 0.1);
   EXPECT_DOUBLE_EQ(candidate.curvature_radpm, 0.05);
   EXPECT_DOUBLE_EQ(candidate.virtual_progress_speed_mps, 4.1);
+}
+
+TEST(RateResolvedCommandCandidate, RejectsFiveStateArtifactIdentity)
+{
+  auto retained_result = accepted_result();
+  auto mutable_plan = std::make_shared<certified::CertifiedPlan>(
+    *retained_result.proof->plan);
+  auto mutable_artifact = std::make_shared<artifact::ExecutionArtifact>(
+    *mutable_plan->execution_artifact);
+  mutable_artifact->identity.formulation =
+    contract::Formulation::VelocityProgress5State;
+  mutable_plan->execution_artifact = std::move(mutable_artifact);
+  retained_result.proof->plan = std::move(mutable_plan);
+
+  const auto result = command::build(retained_result);
+  EXPECT_EQ(result.reason, command::Reason::InvalidCertifiedPlan);
+  EXPECT_FALSE(result.candidate.has_value());
 }
 
 } // namespace

@@ -13,13 +13,6 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate
 namespace contract = mpcc_execution_contract;
 namespace retained = mpcc_rate_resolved_retained_revalidation;
 
-enum class Formulation
-{
-  VelocitySteeringProgress6State,
-};
-
-const char * to_string(Formulation formulation) noexcept;
-
 enum class Reason
 {
   Available,
@@ -44,7 +37,7 @@ struct Candidate
   std::uint64_t source_problem_fingerprint{};
   std::uint64_t stage_geometry_id{};
   contract::ControlIntent intent{contract::ControlIntent::Unknown};
-  Formulation formulation{Formulation::VelocitySteeringProgress6State};
+  contract::Formulation formulation{contract::Formulation::Unresolved};
   std::size_t control_stage_index{};
   double prediction_origin_sec{};
   double predicted_speed_mps{};

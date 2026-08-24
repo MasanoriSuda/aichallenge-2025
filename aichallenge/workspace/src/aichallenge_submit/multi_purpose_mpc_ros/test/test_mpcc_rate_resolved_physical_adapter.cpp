@@ -15,7 +15,8 @@ execution::ExecutionArtifact artifact()
 {
   execution::ExecutionArtifact value;
   value.identity = execution::Identity{
-    1U, 2U, 3U, 4U, contract::ControlIntent::Track, 10.0};
+    1U, 2U, 3U, 4U, contract::ControlIntent::Track,
+    contract::Formulation::VelocitySteeringProgress6State, 10.0};
   value.prediction_origin_sec = 10.0;
   value.completed_sec = 10.01;
   value.course_progress_origin_m = 50.0;

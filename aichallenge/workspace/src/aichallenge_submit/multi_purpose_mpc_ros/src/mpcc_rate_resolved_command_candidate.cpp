@@ -5,15 +5,6 @@
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate
 {
 
-const char * to_string(const Formulation formulation) noexcept
-{
-  switch (formulation) {
-    case Formulation::VelocitySteeringProgress6State:
-      return "velocity-steering-progress-6state";
-  }
-  return "unknown";
-}
-
 const char * to_string(const Reason reason) noexcept
 {
   switch (reason) {
@@ -86,6 +77,7 @@ Result build(const retained::Result & retained_result) noexcept
   candidate.source_problem_fingerprint = identity.source_problem_fingerprint;
   candidate.stage_geometry_id = identity.stage_geometry_id;
   candidate.intent = identity.intent;
+  candidate.formulation = identity.formulation;
   candidate.control_stage_index = actuation.control_stage_index;
   candidate.prediction_origin_sec = artifact.prediction_origin_sec;
   candidate.predicted_speed_mps = actuation.predicted_speed_mps;

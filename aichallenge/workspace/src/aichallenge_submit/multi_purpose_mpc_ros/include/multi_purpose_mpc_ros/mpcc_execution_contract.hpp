@@ -31,6 +31,7 @@ enum class Formulation
   LegacySpatialMpc3State,
   ProgressContouring3State,
   VelocityProgress5State,
+  VelocitySteeringProgress6State,
   LowSpeedDirect,
   SolverDerivedBypass,
 };

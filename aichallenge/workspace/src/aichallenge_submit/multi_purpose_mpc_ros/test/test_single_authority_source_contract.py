@@ -322,6 +322,24 @@ def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
     assert "request.measured_to_control_elapsed_sec = control_path->elapsed_sec;" in SOURCE
 
 
+def test_rate_resolved_track_cruise_has_its_own_six_state_problem_identity() -> None:
+    """A six-state artifact must not inherit the five-state fingerprint."""
+
+    evaluator_start = SOURCE.index(
+        "TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow("
+    )
+    evaluator_end = SOURCE.index(
+        "resolve_physically_validated_mpcc_execution_trajectory(", evaluator_start
+    )
+    evaluator = SOURCE[evaluator_start:evaluator_end]
+    assert (
+        "const auto rate_resolved_context = make_problem_context(\n"
+        "        problem, mpcc_contract::Formulation::VelocitySteeringProgress6State);"
+        in evaluator
+    )
+    assert "draft.source_context = rate_resolved_context;" in evaluator
+
+
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     """Intent elevation must be atomic with a current executable Follow plan."""
 

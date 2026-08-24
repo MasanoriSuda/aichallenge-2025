@@ -2014,6 +2014,25 @@ production昇格Sliceの複数周timing gateへ残す。
 authorityを追加していない。次のproduction昇格は6-state Track/Cruise owner接続と5-state通常owner削除を
 同じSliceで行い、二重authorityを恒久化しない。
 
+#### Steering-rate 6-state canonical identity（2026-08-25、移行shadow）
+
+rate-resolved solver requestは6-state／3-inputである一方、従来はそのsource
+`MpccProblemContext`を`VelocityProgress5State`としてsealし、command candidate内の別enumで
+6-stateと表示していた。この状態ではproblem fingerprint、solver artifact、physical certificate、
+retained proof、commandが同じformulationを証明できないため、production authorityへ昇格できない。
+
+共有execution contractへ`VelocitySteeringProgress6State`を追加し、専用のstate／input／bounds／cost
+schemaで独立contextをsealする。artifact identityがformulationを所有し、physical、retained、commandは
+その完全identityをコピー・比較する。commandだけが持っていた重複formulation enumは削除する。
+unresolvedまたは5-state identityを持つrate-resolved artifactはfail closeする。
+
+`output/20260825-081954`の`make dev2`では、両domainで
+`formulation:velocity-steering-progress-6state`のcandidateを観測し、artifact／mailbox identity rejectは0、
+全件`authority=shadow, selected=0`だった。d2最終窓はsolve 81/81に対してcommand candidate 73/81であり、
+identity不整合は解消したがretained admissionの非連続性は残る。したがって本Sliceはidentity Gateのみ
+合格とし、availability holeの原因を閉じる前にpublisherへ接続してはならない。昇格時は6-state owner
+接続と5-state Track/Cruise owner削除を同一Sliceで行い、cross-formulation normal fallbackを作らない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

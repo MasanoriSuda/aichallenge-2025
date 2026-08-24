@@ -763,6 +763,16 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   not: the synchronous observation-only proof reached 10.485 ms and coincided with two 25 ms control
   callback overruns. Move the unchanged proof to a latest-only worker with exact result provenance
   before retained admission; do not tune cadence or weaken the wall proof.
+- `.steering/20260825-rate-resolved-canonical-identity` repairs the producer identity that was still
+  sealing a six-state/three-input request as `VelocityProgress5State`. The shared execution contract
+  now owns `VelocitySteeringProgress6State`; its dedicated schema and fingerprint flow unchanged
+  through the execution artifact, physical proof, retained proof and command candidate. The duplicate
+  command-only formulation enum was deleted, and five-state artifacts fail closed at both solver and
+  command boundaries. All 49 package test targets and the 25-package build pass. In
+  `output/20260825-081954`, both domains emitted only certified six-state-labelled candidates with
+  `authority=shadow, selected=0` and zero artifact/mailbox identity rejection. The d2 final window had
+  73 command candidates from 81 solves, so production promotion remains blocked by retained-admission
+  availability rather than hidden cross-formulation fallback.
 
 ## Slice 6: Legacy and migration path removal
 

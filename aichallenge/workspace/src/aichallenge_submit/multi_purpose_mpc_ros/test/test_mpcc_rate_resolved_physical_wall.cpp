@@ -33,6 +33,8 @@ wall::Snapshot snapshot()
   value.identity.artifact.source_problem_fingerprint = 20U;
   value.identity.artifact.stage_geometry_id = 30U;
   value.identity.artifact.intent = contract::ControlIntent::Track;
+  value.identity.artifact.formulation =
+    contract::Formulation::VelocitySteeringProgress6State;
   value.identity.artifact.snapshot_sec = 1.0;
   value.identity.pose_snapshot_id = 40U;
   value.identity.course_frame_window_id = 50U;

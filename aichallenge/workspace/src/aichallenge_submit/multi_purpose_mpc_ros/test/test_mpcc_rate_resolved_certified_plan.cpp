@@ -21,7 +21,9 @@ execution::ExecutionArtifact artifact(const std::uint64_t sequence = 1U)
   execution::ExecutionArtifact value;
   value.identity = execution::Identity{
     sequence, sequence + 10U, sequence + 20U, sequence + 30U,
-    contract::ControlIntent::Track, 10.0 + static_cast<double>(sequence)};
+    contract::ControlIntent::Track,
+    contract::Formulation::VelocitySteeringProgress6State,
+    10.0 + static_cast<double>(sequence)};
   value.prediction_origin_sec = value.identity.snapshot_sec;
   value.completed_sec = value.prediction_origin_sec + 0.01;
   value.course_progress_origin_m = 50.0;

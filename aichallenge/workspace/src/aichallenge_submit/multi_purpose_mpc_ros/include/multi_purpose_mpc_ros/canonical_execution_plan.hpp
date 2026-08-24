@@ -46,6 +46,11 @@ struct CanonicalExecutionPlan
   /// regenerated trust corridor for these bounds.
   std::vector<double> lateral_lower_m;
   std::vector<double> lateral_upper_m;
+  /// Minimum distance kept by each controllable future nominal state from the
+  /// stored physical corridor. State zero is the already observed initial
+  /// condition and is required to satisfy only the physical corridor. Zero
+  /// preserves intents which do not yet require a reusable tracking tube.
+  double required_lateral_tracking_reserve_m{};
 };
 
 enum class CanonicalExecutionPlanRejectReason
@@ -65,6 +70,7 @@ enum class CanonicalExecutionPlanRejectReason
   InvalidPredictedState,
   InvalidControlStage,
   InvalidLateralCorridor,
+  InvalidLateralTrackingReserve,
 };
 
 const char * to_string(CanonicalExecutionPlanRejectReason reason) noexcept;

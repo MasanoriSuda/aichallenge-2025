@@ -5528,6 +5528,7 @@ struct ExtendedProgressMpcProblem
   double minimum_wall_tracking_weight_scale{1.0};
   double minimum_wall_tracking_reference_reserve_m{
     std::numeric_limits<double>::infinity()};
+  double required_lateral_tracking_reserve_m{};
   double first_stage_dt_sec{std::numeric_limits<double>::quiet_NaN()};
   bool progress_aligned_wall_refinement_active{false};
   std::vector<double> wall_reference_progress_m;
@@ -6297,6 +6298,7 @@ struct OvertakeCanonicalFreshShadowResult
   std::uint64_t retained_corridor_tube_id{};
   mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
   double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
+  double required_lateral_tracking_reserve_m{};
   double total_ms{};
   double retained_total_ms{};
   double maximum_actuation_difference{
@@ -8164,8 +8166,26 @@ struct MPC
         evaluation.failure_reason = "progress-contouring branch unavailable";
         return evaluation;
       }
+      const bool selected_side_changes =
+        artifact_identity.source_side_sign != 0 &&
+        assessment.side != artifact_identity.source_side_sign;
+      const bool paused_pass_same_side_continuation =
+        artifact_identity.source_phase == OvertakeLinePhase::FollowPrepare &&
+        artifact_identity.source_follow_prepare_origin_phase ==
+        OvertakeLinePhase::Pass && !selected_side_changes;
+      const bool fresh_direct_pass =
+        artifact_identity.source_phase == OvertakeLinePhase::Idle &&
+        artifact_identity.source_side_sign == 0 && candidate->direct_pass &&
+        candidate->current_position_clear;
+      const auto prospective_intent =
+        fresh_direct_pass ||
+        (artifact_identity.source_phase == OvertakeLinePhase::Pass &&
+        !selected_side_changes) || paused_pass_same_side_continuation ?
+        mpcc_contract::ControlIntent::Pass :
+        mpcc_contract::ControlIntent::ShiftOut;
       std::string reject_reason;
-      const auto extended = build_extended_progress_problem(legacy, reject_reason);
+      const auto extended = build_extended_progress_problem(
+        legacy, prospective_intent, reject_reason);
       if (!extended.has_value()) {
         evaluation.failure_reason = reject_reason.empty() ?
           "extended branch build failed" : reject_reason;
@@ -8352,23 +8372,7 @@ struct MPC
         mpcc_contract::MpccProblemContext prospective_context;
         prospective_context.decision_id = active_control_decision_id_;
         prospective_context.observation_generation = active_control_decision_id_;
-        const bool selected_side_changes =
-          artifact_identity.source_side_sign != 0 &&
-          assessment.side != artifact_identity.source_side_sign;
-        const bool paused_pass_same_side_continuation =
-          artifact_identity.source_phase == OvertakeLinePhase::FollowPrepare &&
-          artifact_identity.source_follow_prepare_origin_phase ==
-          OvertakeLinePhase::Pass && !selected_side_changes;
-        const bool fresh_direct_pass =
-          artifact_identity.source_phase == OvertakeLinePhase::Idle &&
-          artifact_identity.source_side_sign == 0 && candidate->direct_pass &&
-          candidate->current_position_clear;
-        prospective_context.intent =
-          fresh_direct_pass ||
-          (artifact_identity.source_phase == OvertakeLinePhase::Pass &&
-          !selected_side_changes) || paused_pass_same_side_continuation ?
-          mpcc_contract::ControlIntent::Pass :
-          mpcc_contract::ControlIntent::ShiftOut;
+        prospective_context.intent = prospective_intent;
         prospective_context.intent_generation =
           std::max<std::uint64_t>(
           1U, artifact_identity.source_mission_generation + 1U);
@@ -20032,7 +20036,8 @@ struct MPC
   }
 
   std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem(
-    const MpcProblem & legacy, std::string & reject_reason) const
+    const MpcProblem & legacy, const mpcc_contract::ControlIntent intent,
+    std::string & reject_reason) const
   {
     constexpr int legacy_nx = 3;
     constexpr int legacy_nu = 2;
@@ -20215,13 +20220,32 @@ struct MPC
       nx_N, std::numeric_limits<double>::infinity());
     Eigen::VectorXd input_lower = Eigen::VectorXd::Zero(nu_N);
     Eigen::VectorXd input_upper = Eigen::VectorXd::Zero(nu_N);
+    const double required_lateral_tracking_reserve_m =
+      mpcc_contract::canonical_normal_intent_requires_execution_side(intent) ?
+      cfg.progress_contouring.extended_wall_tracking_reference_reserve_m : 0.0;
     for (int stage = 0; stage < N + 1; ++stage) {
       const int legacy_state = legacy_nx * stage;
       const int state = nx * stage;
+      // State zero is fixed by the observed initial condition. Tracking
+      // reserve is a contract for states the optimizer can still choose.
+      const double stage_tracking_reserve_m =
+        stage == 0 ? 0.0 : required_lateral_tracking_reserve_m;
+      const auto lateral_tracking_tube =
+        mpcc_progress::resolve_lateral_tracking_tube_bounds(
+        mpcc_progress::LateralTrackingTubeBoundsRequest{
+          legacy.progress_state_lower[legacy_state],
+          legacy.progress_state_upper[legacy_state],
+          stage_tracking_reserve_m});
+      if (!lateral_tracking_tube.has_value()) {
+        reject_reason =
+          "extended MPCC lateral tracking tube unavailable at state " +
+          std::to_string(stage);
+        return std::nullopt;
+      }
       state_lower[state + mpcc_progress::kExtendedLateralIndex] =
-        legacy.progress_state_lower[legacy_state];
+        lateral_tracking_tube->nominal_lower_m;
       state_upper[state + mpcc_progress::kExtendedLateralIndex] =
-        legacy.progress_state_upper[legacy_state];
+        lateral_tracking_tube->nominal_upper_m;
       state_lower[state + mpcc_progress::kExtendedLagIndex] =
         -cfg.progress_contouring.extended_lag_state_bound_m;
       state_upper[state + mpcc_progress::kExtendedLagIndex] =
@@ -20570,6 +20594,7 @@ struct MPC
       wall_aware_reference_adjustment_count,
       minimum_wall_tracking_weight_scale,
       minimum_wall_tracking_reference_reserve_m,
+      required_lateral_tracking_reserve_m,
       linearizations.front().stage_dt_sec,
       progress_aligned_wall_refinement_active,
       progress_aligned_wall_refinement_active ?
@@ -23791,7 +23816,7 @@ struct MPC
       const auto build_started = SteadyClock::now();
       std::string build_reject_reason;
       const auto extended_problem = build_extended_progress_problem(
-        problem, build_reject_reason);
+        problem, snapshot_context.intent, build_reject_reason);
       result.build_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - build_started).count();
       if (!extended_problem.has_value()) {
@@ -25327,6 +25352,8 @@ struct MPC
     auto result = make_overtake_canonical_shadow_result(
       problem, snapshot_context);
     result.initial_lag_m = extended_problem.initial_lag_m;
+    result.required_lateral_tracking_reserve_m =
+      extended_problem.required_lateral_tracking_reserve_m;
     const auto started = SteadyClock::now();
     const auto finish = [&result, &started]() {
         result.total_ms = std::chrono::duration<double, std::milli>(
@@ -25505,6 +25532,8 @@ struct MPC
     extraction.solution = canonical_solution;
     extraction.solved_sec = now_sec;
     extraction.progress_origin_m = extended_problem.progress_origin_m;
+    extraction.required_lateral_tracking_reserve_m =
+      extended_problem.required_lateral_tracking_reserve_m;
     extraction.stage_duration_sec = problem.progress_stage_dt_sec;
     extraction.lateral_lower_m.reserve(
       static_cast<std::size_t>(problem.N + 1));
@@ -25616,7 +25645,7 @@ struct MPC
 
     std::string build_reject_reason;
     const auto extended_problem = build_extended_progress_problem(
-      problem, build_reject_reason);
+      problem, snapshot_context.intent, build_reject_reason);
     if (!extended_problem.has_value()) {
       result.status = "build-reject";
       result.detail = build_reject_reason.empty() ?
@@ -26099,6 +26128,8 @@ struct MPC
     result.selected.problem = authority.problem;
     result.selected.solution = authority.solution;
     result.selected.plan = retained_plan;
+    result.required_lateral_tracking_reserve_m =
+      retained_plan->required_lateral_tracking_reserve_m;
     result.selected.cursor = cursor;
     result.selected.prediction = prediction.value();
     result.retained_selection_complete = result.selected.complete();
@@ -26668,7 +26699,8 @@ struct MPC
         "swept:%lu, last_physical_reject=%lu/%s, "
         "time=%.3f/%.3fms(avg/max), retained_time=%.3f/%.3fms(avg/max), "
         "actuation_diff_max=%.3g, "
-        "initial_lag_abs_max=%.3fm, wall_clearance=%.3fm, last=%s/%s, "
+        "initial_lag_abs_max=%.3fm, wall_clearance=%.3fm, "
+        "tracking_tube=%.3fm, last=%s/%s, "
         "retained_last=%s/%s/"
         "stage:%zu/reserve:%.3f, source=%s, incoming_last=%s/%lu/%s, "
         "stored_last=%s/%lu/%s, authority=shadow",
@@ -26715,6 +26747,7 @@ struct MPC
         window.maximum_actuation_difference,
         window.maximum_absolute_initial_lag_m,
         result.required_wall_clearance_m,
+        result.required_lateral_tracking_reserve_m,
         result.status.c_str(), result.detail.c_str(),
         canonical_retained_world::to_string(result.retained_world_reason),
         result.retained_detail.c_str(), result.retained_rejected_stage,
@@ -26786,7 +26819,7 @@ struct MPC
       const auto build_started = SteadyClock::now();
       std::string build_reject_reason;
       const auto extended_problem = build_extended_progress_problem(
-        problem, build_reject_reason);
+        problem, result.intent, build_reject_reason);
       result.build_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - build_started).count();
       if (!extended_problem.has_value()) {
@@ -28489,7 +28522,7 @@ struct MPC
             ExtendedMpccCycleStatus::CircuitSkip, nullptr, now_sec);
         } else {
           const auto extended_problem = build_extended_progress_problem(
-            problem, extended_reject_reason);
+            problem, control_intent, extended_reject_reason);
           if (extended_problem.has_value()) {
             if (
               extended_problem->wall_aware_reference_adjustment_count > 0U &&
@@ -29345,6 +29378,13 @@ struct MPC
           context.bounds_schema_id =
             "progress-stage-wall-follow-target-v1";
           context.cost_schema_id = "velocity-progress-follow-gap-v1";
+        } else if (
+          mpcc_contract::canonical_normal_intent_requires_execution_side(
+            context.intent))
+        {
+          context.bounds_schema_id =
+            "progress-stage-wall-obstacle-tracking-tube-v1";
+          context.cost_schema_id = "velocity-progress-v1";
         } else {
           context.bounds_schema_id = "progress-stage-wall-obstacle-v1";
           context.cost_schema_id = "velocity-progress-v1";

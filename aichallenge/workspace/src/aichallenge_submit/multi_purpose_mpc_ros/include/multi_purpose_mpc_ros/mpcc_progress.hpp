@@ -406,6 +406,28 @@ std::optional<WallAwareTrackingReferenceResolution>
 resolve_wall_aware_tracking_reference(
   const WallAwareTrackingReferenceRequest & request) noexcept;
 
+struct LateralTrackingTubeBoundsRequest
+{
+  double physical_lower_m{};
+  double physical_upper_m{};
+  double required_reserve_m{};
+};
+
+struct LateralTrackingTubeBoundsResolution
+{
+  double nominal_lower_m{};
+  double nominal_upper_m{};
+  double required_reserve_m{};
+};
+
+/// Contract a physical lateral interval into the hard nominal tube required
+/// for reusable canonical execution.  Failure means the physical corridor
+/// cannot carry the requested tracking reserve and must be rejected before
+/// solver execution; the reserve is never silently reduced.
+std::optional<LateralTrackingTubeBoundsResolution>
+resolve_lateral_tracking_tube_bounds(
+  const LateralTrackingTubeBoundsRequest & request) noexcept;
+
 /// Preserve longitudinal command continuity when execution changes between
 /// the extended and established MPCC formulations. The resolved command is
 /// always clipped to the current cycle's hard velocity bounds; a newly lower

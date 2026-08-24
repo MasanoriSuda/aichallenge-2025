@@ -229,6 +229,35 @@ TEST(MpccProgress, WallAwareReferenceRejectsMalformedBounds)
       WallAwareTrackingReferenceRequest{0.0, 1.0, -1.0, 0.15, 0.25}).has_value());
 }
 
+TEST(MpccProgress, ContractsPhysicalBoundsIntoHardTrackingTube)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::
+    LateralTrackingTubeBoundsRequest;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::
+    resolve_lateral_tracking_tube_bounds(
+    LateralTrackingTubeBoundsRequest{-0.50, 0.20, 0.15});
+  ASSERT_TRUE(result.has_value());
+  EXPECT_NEAR(result->nominal_lower_m, -0.35, 1e-12);
+  EXPECT_NEAR(result->nominal_upper_m, 0.05, 1e-12);
+  EXPECT_DOUBLE_EQ(result->required_reserve_m, 0.15);
+}
+
+TEST(MpccProgress, TrackingTubeNeverReducesUnavailableReserve)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::
+    LateralTrackingTubeBoundsRequest;
+  EXPECT_FALSE(
+    multi_purpose_mpc_ros::mpcc_progress::
+    resolve_lateral_tracking_tube_bounds(
+      LateralTrackingTubeBoundsRequest{-0.10, 0.10, 0.15}).has_value());
+  const auto exact = multi_purpose_mpc_ros::mpcc_progress::
+    resolve_lateral_tracking_tube_bounds(
+    LateralTrackingTubeBoundsRequest{-0.15, 0.15, 0.15});
+  ASSERT_TRUE(exact.has_value());
+  EXPECT_NEAR(exact->nominal_lower_m, 0.0, 1e-12);
+  EXPECT_NEAR(exact->nominal_upper_m, 0.0, 1e-12);
+}
+
 TEST(MpccProgress, CommittedPassRaisesVelocityCostWithoutRelaxingCap)
 {
   using multi_purpose_mpc_ros::mpcc_progress::VelocityHorizonRequest;

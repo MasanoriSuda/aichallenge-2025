@@ -63,6 +63,8 @@ const char * to_string(const CanonicalExecutionPlanRejectReason reason) noexcept
       return "invalid-control-stage";
     case CanonicalExecutionPlanRejectReason::InvalidLateralCorridor:
       return "invalid-lateral-corridor";
+    case CanonicalExecutionPlanRejectReason::InvalidLateralTrackingReserve:
+      return "invalid-lateral-tracking-reserve";
   }
   return "unknown";
 }
@@ -119,6 +121,12 @@ CanonicalExecutionPlanRejectReason validate_canonical_execution_plan(
   {
     return CanonicalExecutionPlanRejectReason::CorridorCountMismatch;
   }
+  if (
+    !std::isfinite(plan.required_lateral_tracking_reserve_m) ||
+    plan.required_lateral_tracking_reserve_m < 0.0)
+  {
+    return CanonicalExecutionPlanRejectReason::InvalidLateralTrackingReserve;
+  }
   for (std::size_t index = 0U; index < plan.predicted_states.size(); ++index) {
     const auto & state = plan.predicted_states[index];
     if (!finite_state(state)) {
@@ -126,12 +134,20 @@ CanonicalExecutionPlanRejectReason validate_canonical_execution_plan(
     }
     const double lower_m = plan.lateral_lower_m[index];
     const double upper_m = plan.lateral_upper_m[index];
+    const double required_reserve_m =
+      index == 0U ? 0.0 : plan.required_lateral_tracking_reserve_m;
     if (
       !std::isfinite(lower_m) || !std::isfinite(upper_m) ||
-      upper_m < lower_m || state.lateral_m < lower_m - 1e-5 ||
-      state.lateral_m > upper_m + 1e-5)
+      upper_m < lower_m || upper_m - required_reserve_m <
+      lower_m + required_reserve_m ||
+      state.lateral_m <
+      lower_m + required_reserve_m - 1e-5 ||
+      state.lateral_m >
+      upper_m - required_reserve_m + 1e-5)
     {
-      return CanonicalExecutionPlanRejectReason::InvalidLateralCorridor;
+      return required_reserve_m > 0.0 ?
+        CanonicalExecutionPlanRejectReason::InvalidLateralTrackingReserve :
+        CanonicalExecutionPlanRejectReason::InvalidLateralCorridor;
     }
   }
   for (const auto & control : plan.control_stages) {

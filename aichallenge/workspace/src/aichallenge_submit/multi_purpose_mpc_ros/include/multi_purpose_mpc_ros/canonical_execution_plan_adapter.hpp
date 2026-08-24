@@ -25,6 +25,7 @@ struct CanonicalPlanExtractionRequest
   std::vector<double> stage_duration_sec;
   std::vector<double> lateral_lower_m;
   std::vector<double> lateral_upper_m;
+  double required_lateral_tracking_reserve_m{};
   Eigen::VectorXd extended_primal;
 };
 

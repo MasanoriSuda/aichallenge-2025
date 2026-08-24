@@ -174,6 +174,32 @@ TEST(CanonicalExecutionPlan, AcceptsOvertakePlansOnlyWithTargetProvenance)
   }
 }
 
+TEST(CanonicalExecutionPlan, RejectsOvertakeNominalStateOutsideTrackingTube)
+{
+  auto value = make_overtake_plan(contract::ControlIntent::ShiftOut);
+  value.required_lateral_tracking_reserve_m = 0.15;
+  // State zero is already observed and only needs to remain physically valid.
+  value.predicted_states.front().lateral_m = -0.40;
+  EXPECT_EQ(
+    plan::validate_canonical_execution_plan(value),
+    plan::CanonicalExecutionPlanRejectReason::None);
+
+  value.predicted_states[1].lateral_m = -0.40;
+  EXPECT_EQ(
+    plan::validate_canonical_execution_plan(value),
+    plan::CanonicalExecutionPlanRejectReason::InvalidLateralTrackingReserve);
+
+  value.predicted_states[1].lateral_m = -0.35;
+  EXPECT_EQ(
+    plan::validate_canonical_execution_plan(value),
+    plan::CanonicalExecutionPlanRejectReason::None);
+
+  value.lateral_upper_m[1] = -0.25;
+  EXPECT_EQ(
+    plan::validate_canonical_execution_plan(value),
+    plan::CanonicalExecutionPlanRejectReason::InvalidLateralTrackingReserve);
+}
+
 TEST(CanonicalExecutionPlan, RejectsPartialPredictionAndControlSequences)
 {
   auto missing_state = make_plan();

@@ -110,6 +110,8 @@ adapter::CanonicalPlanExtractionRequest make_overtake_request(
   request.problem.target_id = "d2";
   request.problem.target_obstacle_generation =
     request.problem.observation_generation;
+  request.problem.bounds_schema_id =
+    "progress-stage-wall-obstacle-tracking-tube-v1";
   request.problem = contract::seal_problem_context(std::move(request.problem));
   request.solution = make_solution(request.problem);
   request.solution.solution_id = request.problem.decision_id;
@@ -160,6 +162,25 @@ TEST(CanonicalExecutionPlanAdapter, RejectsMissingSolvedLateralCorridor)
   EXPECT_EQ(
     result.reason, adapter::CanonicalPlanExtractionReason::CorridorCountMismatch);
   EXPECT_FALSE(result.plan.has_value());
+}
+
+TEST(CanonicalExecutionPlanAdapter, SealsAndValidatesLateralTrackingReserve)
+{
+  auto request = make_overtake_request(contract::ControlIntent::ShiftOut);
+  request.required_lateral_tracking_reserve_m = 0.15;
+  const auto accepted = adapter::extract_canonical_execution_plan(request);
+  ASSERT_EQ(accepted.reason, adapter::CanonicalPlanExtractionReason::Accepted);
+  ASSERT_TRUE(accepted.plan.has_value());
+  EXPECT_DOUBLE_EQ(
+    accepted.plan->required_lateral_tracking_reserve_m, 0.15);
+
+  request.extended_primal[5] = -0.40;
+  const auto rejected = adapter::extract_canonical_execution_plan(request);
+  EXPECT_EQ(
+    rejected.reason, adapter::CanonicalPlanExtractionReason::PlanContractRejected);
+  EXPECT_EQ(
+    rejected.plan_reject_reason,
+    plan::CanonicalExecutionPlanRejectReason::InvalidLateralTrackingReserve);
 }
 
 TEST(CanonicalExecutionPlanAdapter, RejectsNonfinitePrimalAndProgressOrigin)

@@ -95,6 +95,8 @@ CanonicalPlanExtractionResult extract_canonical_execution_plan(
   plan.solved_sec = request.solved_sec;
   plan.lateral_lower_m = request.lateral_lower_m;
   plan.lateral_upper_m = request.lateral_upper_m;
+  plan.required_lateral_tracking_reserve_m =
+    request.required_lateral_tracking_reserve_m;
   plan.predicted_states.reserve(horizon + 1U);
   plan.control_stages.reserve(horizon);
   for (std::size_t stage = 0U; stage <= horizon; ++stage) {

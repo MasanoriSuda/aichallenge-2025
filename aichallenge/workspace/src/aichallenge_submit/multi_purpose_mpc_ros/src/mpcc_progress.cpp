@@ -204,6 +204,33 @@ resolve_wall_aware_tracking_reference(
     std::abs(reference - request.reference_lateral_m) > 1e-9};
 }
 
+std::optional<LateralTrackingTubeBoundsResolution>
+resolve_lateral_tracking_tube_bounds(
+  const LateralTrackingTubeBoundsRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.physical_lower_m) ||
+    !std::isfinite(request.physical_upper_m) ||
+    !std::isfinite(request.required_reserve_m) ||
+    request.required_reserve_m < 0.0 ||
+    request.physical_upper_m < request.physical_lower_m)
+  {
+    return std::nullopt;
+  }
+  const double nominal_lower_m =
+    request.physical_lower_m + request.required_reserve_m;
+  const double nominal_upper_m =
+    request.physical_upper_m - request.required_reserve_m;
+  if (
+    !std::isfinite(nominal_lower_m) || !std::isfinite(nominal_upper_m) ||
+    nominal_upper_m < nominal_lower_m)
+  {
+    return std::nullopt;
+  }
+  return LateralTrackingTubeBoundsResolution{
+    nominal_lower_m, nominal_upper_m, request.required_reserve_m};
+}
+
 bool progress_origin_discontinuous(
   const double previous_progress_m, const double current_progress_m,
   const double maximum_continuous_step_m) noexcept

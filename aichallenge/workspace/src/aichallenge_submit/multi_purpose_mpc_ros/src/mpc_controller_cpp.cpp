@@ -6309,6 +6309,17 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   bool last_failure_result_available{false};
 };
 
+struct ControlCallbackTimingObservation
+{
+  std::uint64_t decision_id{};
+  double pre_mpc_ms{};
+  double mpc_ms{};
+  double post_mpc_ms{};
+  double recovery_ms{};
+  double publish_ms{};
+  const char * checkpoint{"entry"};
+};
+
 struct OvertakeCanonicalFreshShadowResult
 {
   enum class PlanSource
@@ -57332,16 +57343,33 @@ private:
     return true;
   }
 
-  void record_control_callback_duration(const SteadyClock::time_point start)
+  void record_control_callback_duration(
+    const SteadyClock::time_point start,
+    const ControlCallbackTimingObservation & timing)
   {
     const auto finished = SteadyClock::now();
     const double elapsed_ms =
       std::chrono::duration<double, std::milli>(finished - start).count();
     const double period_ms = 1000.0 / std::max(1.0, mpc_cfg_.control_rate);
+    const double attributed_ms =
+      timing.pre_mpc_ms + timing.mpc_ms + timing.post_mpc_ms +
+      timing.recovery_ms + timing.publish_ms;
+    const double unattributed_ms = std::max(0.0, elapsed_ms - attributed_ms);
     ++control_callback_count_;
     control_callback_total_ms_ += elapsed_ms;
     control_callback_maximum_ms_ = std::max(control_callback_maximum_ms_, elapsed_ms);
     control_callback_overrun_count_ += elapsed_ms > period_ms ? 1U : 0U;
+    if (elapsed_ms > period_ms) {
+      RCLCPP_WARN(
+        get_logger(),
+        "Control callback overrun detail: decision=%lu, total=%.3fms/budget=%.3fms, "
+        "regions=pre_mpc:%.3f/mpc:%.3f/post_mpc:%.3f/recovery:%.3f/"
+        "publish:%.3f/unattributed:%.3fms, checkpoint=%s, observation_only=1",
+        static_cast<unsigned long>(timing.decision_id), elapsed_ms, period_ms,
+        timing.pre_mpc_ms, timing.mpc_ms, timing.post_mpc_ms,
+        timing.recovery_ms, timing.publish_ms, unattributed_ms,
+        timing.checkpoint);
+    }
 
     if (!last_control_callback_telemetry_steady_.has_value()) {
       last_control_callback_telemetry_steady_ = finished;
@@ -57391,12 +57419,16 @@ private:
   void control()
   {
     const auto steady_now = SteadyClock::now();
+    ControlCallbackTimingObservation callback_timing;
     [[maybe_unused]] const auto callback_duration_guard = make_scope_exit(
-      [this, steady_now]() {record_control_callback_duration(steady_now);});
+      [this, steady_now, &callback_timing]() {
+        record_control_callback_duration(steady_now, callback_timing);
+      });
     if (control_decision_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
       control_decision_sequence_ = 0U;
     }
     active_control_decision_id_ = ++control_decision_sequence_;
+    callback_timing.decision_id = active_control_decision_id_;
     const auto control_time = now();
     const bool missing_odometry = !odom_ || !last_odom_receipt_steady_.has_value();
     const double odometry_age_sec = missing_odometry ?
@@ -57575,8 +57607,16 @@ private:
     mpc_->update_v_max(effective_v_max);
     reference_path_->set_v_ref(std::vector<double>(reference_path_->waypoints.size(), effective_v_max));
 
+    const auto mpc_start = SteadyClock::now();
+    callback_timing.pre_mpc_ms = std::chrono::duration<double, std::milli>(
+      mpc_start - steady_now).count();
+    callback_timing.checkpoint = "pre-mpc-complete";
     const auto mpc_cycle = mpc_->get_control(
       current_time.seconds(), active_control_decision_id_);
+    const auto post_mpc_start = SteadyClock::now();
+    callback_timing.mpc_ms = std::chrono::duration<double, std::milli>(
+      post_mpc_start - mpc_start).count();
+    callback_timing.checkpoint = "mpc-complete";
     auto u = mpc_cycle.control;
     double max_delta = mpc_cycle.maximum_steering_rad;
     const auto canonical_normal_command =
@@ -58633,6 +58673,10 @@ private:
           u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
       }
     }
+    const auto recovery_start = SteadyClock::now();
+    callback_timing.post_mpc_ms = std::chrono::duration<double, std::milli>(
+      recovery_start - post_mpc_start).count();
+    callback_timing.checkpoint = "post-mpc-complete";
     const auto recovery_output = evaluate_stuck_recovery(
       pose, actual_v, u, acc, effective_v_max, mpc_fallback_active, steady_now, current_time);
     const bool recovery_command_active = recovery_output.has_value() &&
@@ -58689,6 +58733,10 @@ private:
           u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
       }
     }
+    const auto publish_start = SteadyClock::now();
+    callback_timing.recovery_ms = std::chrono::duration<double, std::milli>(
+      publish_start - recovery_start).count();
+    callback_timing.checkpoint = "recovery-complete";
     if (!u.allFinite() || !std::isfinite(acc))
     {
       publish_failsafe_command(current_time, "non-finite postprocessed control rejected");
@@ -58874,6 +58922,9 @@ private:
     if (!mpc_->current_prediction.first.empty() && loop_ % interval == 0) {
       publish_mpc_pred_marker(mpc_->current_prediction.first, mpc_->current_prediction.second);
     }
+    callback_timing.publish_ms = std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - publish_start).count();
+    callback_timing.checkpoint = "complete";
   }
 
   void publish_zero_command()

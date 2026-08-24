@@ -850,3 +850,36 @@ def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> Non
     assert "first_curvature_input_upper" in semantic
     assert "physical_first_curvature->reachable_lower_radpm" not in semantic
     assert "physical_first_curvature->reachable_upper_radpm" not in semantic
+
+
+def test_control_callback_overrun_trace_is_observation_only() -> None:
+    """Timing attribution may diagnose a callback but cannot influence it."""
+
+    record_start = SOURCE.index("void record_control_callback_duration(")
+    control_start = SOURCE.index("void control()", record_start)
+    record = SOURCE[record_start:control_start]
+    assert "Control callback overrun detail:" in record
+    for region in (
+        "pre_mpc_ms",
+        "mpc_ms",
+        "post_mpc_ms",
+        "recovery_ms",
+        "publish_ms",
+        "unattributed_ms",
+    ):
+        assert region in record
+    assert "observation_only=1" in record
+    for forbidden in (
+        "publish_control_command(",
+        "publish_failsafe_command(",
+        "mpc_->get_control(",
+        "canonical_normal_control(",
+        "track_cruise_shadow_plan_store_.publish(",
+    ):
+        assert forbidden not in record
+
+    control_end = SOURCE.index("void publish_zero_command()", control_start)
+    control = SOURCE[control_start:control_end]
+    assert "ControlCallbackTimingObservation callback_timing;" in control
+    assert "record_control_callback_duration(steady_now, callback_timing);" in control
+    assert 'callback_timing.checkpoint = "complete";' in control

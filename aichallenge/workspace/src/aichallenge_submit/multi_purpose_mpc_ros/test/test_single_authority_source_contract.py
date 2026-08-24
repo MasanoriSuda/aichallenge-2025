@@ -883,3 +883,26 @@ def test_control_callback_overrun_trace_is_observation_only() -> None:
     assert "ControlCallbackTimingObservation callback_timing;" in control
     assert "record_control_callback_duration(steady_now, callback_timing);" in control
     assert 'callback_timing.checkpoint = "complete";' in control
+
+
+def test_normal_recovery_safety_work_has_one_eligibility_owner() -> None:
+    """Map safety may be skipped, but the detector/core update may not be."""
+
+    function_start = SOURCE.index(
+        "std::optional<stuck_recovery::CoreOutput> evaluate_stuck_recovery("
+    )
+    function_end = SOURCE.index(
+        "void publish_recovery_gear_request(", function_start
+    )
+    function = SOURCE[function_start:function_end]
+    assert function.count("recovery_safety_evaluation_required(") == 1
+    assert (
+        "if (recovery_safety_required && recovery_grid_ && "
+        "recovery_footprint_.valid())"
+    ) in function
+    assert (
+        "const auto safety = recovery_safety_required ? "
+        "evaluate_recovery_safety("
+    ) in function
+    assert "auto output = stuck_recovery_core_->update(input);" in function
+    assert "return output;" in function

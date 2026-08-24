@@ -1020,6 +1020,27 @@ ManeuverDirection resolve_recovery_escape_direction(
          last_actuated_direction : selected_direction;
 }
 
+bool recovery_safety_evaluation_required(
+  const RecoverySafetyEvaluationRequest & request) noexcept
+{
+  if (
+    request.supervisor_state != RecoveryState::Normal ||
+    request.solver_fallback || request.recovery_rearm_guard_armed ||
+    request.dynamic_lateral_execution_active)
+  {
+    return true;
+  }
+  if (
+    !std::isfinite(request.signed_speed_mps) ||
+    !std::isfinite(request.moving_speed_mps) ||
+    request.moving_speed_mps < 0.0)
+  {
+    return true;
+  }
+  return request.forward_intent &&
+         std::abs(request.signed_speed_mps) <= request.moving_speed_mps;
+}
+
 RecoveryRetrySnapshot recovery_retry_snapshot(const RecoveryInput & input) noexcept
 {
   return RecoveryRetrySnapshot{

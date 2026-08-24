@@ -45,6 +45,7 @@ using multi_purpose_mpc_ros::stuck_recovery::RecoveryActionType;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryCandidateDirectionPolicyRequest;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryInput;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryReason;
+using multi_purpose_mpc_ros::stuck_recovery::RecoverySafetyEvaluationRequest;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryRetrySnapshot;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryState;
 using multi_purpose_mpc_ros::stuck_recovery::RecoveryCourseProgressRequest;
@@ -79,6 +80,7 @@ using multi_purpose_mpc_ros::stuck_recovery::reverse_stopping_distance_reserve_m
 using multi_purpose_mpc_ros::stuck_recovery::recovery_candidate_commit_allowed;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_direction_required;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_reverse_intent_latch_allowed;
+using multi_purpose_mpc_ros::stuck_recovery::recovery_safety_evaluation_required;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_retry_snapshot;
 using multi_purpose_mpc_ros::stuck_recovery::recovery_retry_snapshot_materially_changed;
 using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_candidate_direction_policy;
@@ -87,6 +89,54 @@ using multi_purpose_mpc_ros::stuck_recovery::resolve_recovery_escape_direction;
 using multi_purpose_mpc_ros::stuck_recovery::should_release_reverse_only_for_rear_wall;
 using multi_purpose_mpc_ros::stuck_recovery::source_sample_is_current;
 using multi_purpose_mpc_ros::stuck_recovery::source_timestamp_is_monotonic;
+
+TEST(StuckRecoverySafetyScheduling, SkipsOnlyClearlyMovingNormalCycles)
+{
+  RecoverySafetyEvaluationRequest request;
+  request.supervisor_state = RecoveryState::Normal;
+  request.signed_speed_mps = 4.0;
+  request.moving_speed_mps = 0.25;
+  request.forward_intent = true;
+  EXPECT_FALSE(recovery_safety_evaluation_required(request));
+
+  request.signed_speed_mps = 0.25;
+  EXPECT_TRUE(recovery_safety_evaluation_required(request));
+
+  request.forward_intent = false;
+  EXPECT_FALSE(recovery_safety_evaluation_required(request));
+}
+
+TEST(StuckRecoverySafetyScheduling, PreservesEveryExplicitSafetyOwner)
+{
+  RecoverySafetyEvaluationRequest request;
+  request.supervisor_state = RecoveryState::SuspectStuck;
+  request.signed_speed_mps = 4.0;
+  request.moving_speed_mps = 0.25;
+  EXPECT_TRUE(recovery_safety_evaluation_required(request));
+
+  request.supervisor_state = RecoveryState::Normal;
+  request.solver_fallback = true;
+  EXPECT_TRUE(recovery_safety_evaluation_required(request));
+  request.solver_fallback = false;
+  request.recovery_rearm_guard_armed = true;
+  EXPECT_TRUE(recovery_safety_evaluation_required(request));
+  request.recovery_rearm_guard_armed = false;
+  request.dynamic_lateral_execution_active = true;
+  EXPECT_TRUE(recovery_safety_evaluation_required(request));
+}
+
+TEST(StuckRecoverySafetyScheduling, InvalidNumericInputFailsClosed)
+{
+  RecoverySafetyEvaluationRequest request;
+  request.supervisor_state = RecoveryState::Normal;
+  request.signed_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  request.moving_speed_mps = 0.25;
+  EXPECT_TRUE(recovery_safety_evaluation_required(request));
+
+  request.signed_speed_mps = 4.0;
+  request.moving_speed_mps = -0.1;
+  EXPECT_TRUE(recovery_safety_evaluation_required(request));
+}
 
 TEST(StuckRecoveryRejoinSteering, CombinesCurvatureAndSignedPathErrorFeedback)
 {

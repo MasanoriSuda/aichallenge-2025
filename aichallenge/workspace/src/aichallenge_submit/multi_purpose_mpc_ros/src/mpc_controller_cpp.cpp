@@ -55916,6 +55916,28 @@ private:
       requested_forward_speed_mps >=
       cfg_.stuck_recovery.core.detector.forward_intent_speed_mps ||
       normal_acc >= cfg_.stuck_recovery.core.detector.forward_intent_acceleration_mps2;
+    const bool dynamic_lateral_execution_active =
+      behavior.state == V2XBehaviorState::Overtake ||
+      behavior.overtake_entry_prearm_active ||
+      behavior.overtake_committed_execution_active ||
+      behavior.overtake_paused_mission_active ||
+      behavior.dynamic_obstacle_lateral_escape_active;
+    const bool recovery_safety_required =
+      stuck_recovery::recovery_safety_evaluation_required(
+      stuck_recovery::RecoverySafetyEvaluationRequest{
+        supervisor_state,
+        actual_v,
+        cfg_.stuck_recovery.core.detector.moving_speed_mps,
+        forward_intent,
+        mpc_fallback_active,
+        recovery_forward_rearm_guard_started_.has_value() ||
+        recovery_forward_rearm_guard_start_progress_m_.has_value(),
+        dynamic_lateral_execution_active});
+    if (recovery_safety_required) {
+      ++recovery_safety_full_count_;
+    } else {
+      ++recovery_safety_skipped_count_;
+    }
     const bool collision_deliberate_stop_override =
       raw_deliberate_stop &&
       stuck_recovery::should_override_deliberate_stop_for_collision(
@@ -56033,7 +56055,7 @@ private:
     }
     bool current_wall_evidence = false;
     auto current_wall_region = recovery_footprint::WallRegion::Unknown;
-    if (recovery_grid_ && recovery_footprint_.valid()) {
+    if (recovery_safety_required && recovery_grid_ && recovery_footprint_.valid()) {
       const auto wall_proximity = recovery_footprint::classify_nearby_wall(
         *recovery_grid_, recovery_footprint_,
         recovery_footprint::Pose2D{pose.x, pose.y, pose.theta},
@@ -56146,11 +56168,6 @@ private:
         recovery_forward_fallback_unlocked_,
         course_recovery_guard_active,
         force_reverse_retry});
-    const bool low_speed_recovery_candidate =
-      std::abs(actual_v) <= cfg_.stuck_recovery.core.detector.moving_speed_mps &&
-      (requested_forward_speed_mps >=
-      cfg_.stuck_recovery.core.detector.forward_intent_speed_mps ||
-      normal_acc >= cfg_.stuck_recovery.core.detector.forward_intent_acceleration_mps2);
     const double adaptive_reverse_escape_distance_m =
       adaptive_reverse_retry_tracker_ ?
       adaptive_reverse_retry_tracker_->target_distance_m(
@@ -56173,7 +56190,7 @@ private:
     const auto rejoin_steering_tire_angle = recovery_rejoin_steering_tire_angle(normal_u);
     const double checked_rejoin_steering_tire_angle_rad =
       rejoin_steering_tire_angle.value_or(0.0);
-    const auto safety = evaluate_recovery_safety(
+    const auto safety = recovery_safety_required ? evaluate_recovery_safety(
       pose, steady_now, control_time.seconds(), reverse_distance_to_check_m,
       forward_distance_to_check_m,
       escape_step_distance_to_check_m,
@@ -56182,7 +56199,7 @@ private:
       checked_rejoin_steering_tire_angle_rad,
       reverse_only,
       candidate_direction_policy,
-      recovery_context_active || low_speed_recovery_candidate);
+      true) : RecoverySafetySnapshot{};
     last_current_wall_trace_snapshot_ = CurrentWallTraceSnapshot{
       active_control_decision_id_, safety.wall_proximity_valid,
       safety.current_footprint_valid, safety.current_footprint_out_of_map,
@@ -57359,6 +57376,12 @@ private:
     control_callback_total_ms_ += elapsed_ms;
     control_callback_maximum_ms_ = std::max(control_callback_maximum_ms_, elapsed_ms);
     control_callback_overrun_count_ += elapsed_ms > period_ms ? 1U : 0U;
+    control_callback_mpc_total_ms_ += timing.mpc_ms;
+    control_callback_mpc_maximum_ms_ = std::max(
+      control_callback_mpc_maximum_ms_, timing.mpc_ms);
+    control_callback_recovery_total_ms_ += timing.recovery_ms;
+    control_callback_recovery_maximum_ms_ = std::max(
+      control_callback_recovery_maximum_ms_, timing.recovery_ms);
     if (elapsed_ms > period_ms) {
       RCLCPP_WARN(
         get_logger(),
@@ -57387,10 +57410,17 @@ private:
       RCLCPP_INFO(
         get_logger(),
         "Control callback runtime: cycles=%zu, elapsed_ms=%.3f/%.3f(avg/max), "
-        "period_ms=%.3f, overruns=%zu",
+        "mpc_ms=%.3f/%.3f(avg/max), recovery_ms=%.3f/%.3f(avg/max), "
+        "recovery_safety=%zu/%zu(full/skipped), period_ms=%.3f, overruns=%zu",
         static_cast<std::size_t>(control_callback_count_),
         control_callback_total_ms_ / static_cast<double>(control_callback_count_),
-        control_callback_maximum_ms_, period_ms,
+        control_callback_maximum_ms_,
+        control_callback_mpc_total_ms_ / static_cast<double>(control_callback_count_),
+        control_callback_mpc_maximum_ms_,
+        control_callback_recovery_total_ms_ / static_cast<double>(control_callback_count_),
+        control_callback_recovery_maximum_ms_,
+        static_cast<std::size_t>(recovery_safety_full_count_),
+        static_cast<std::size_t>(recovery_safety_skipped_count_), period_ms,
         static_cast<std::size_t>(control_callback_overrun_count_));
       if (wall_cache_telemetry.request_count > 0U) {
         const double hit_rate =
@@ -57413,6 +57443,12 @@ private:
     control_callback_overrun_count_ = 0U;
     control_callback_total_ms_ = 0.0;
     control_callback_maximum_ms_ = 0.0;
+    control_callback_mpc_total_ms_ = 0.0;
+    control_callback_mpc_maximum_ms_ = 0.0;
+    control_callback_recovery_total_ms_ = 0.0;
+    control_callback_recovery_maximum_ms_ = 0.0;
+    recovery_safety_full_count_ = 0U;
+    recovery_safety_skipped_count_ = 0U;
     last_control_callback_telemetry_steady_ = finished;
   }
 
@@ -59008,6 +59044,12 @@ private:
   std::uint64_t control_callback_overrun_count_{0U};
   double control_callback_total_ms_{0.0};
   double control_callback_maximum_ms_{0.0};
+  double control_callback_mpc_total_ms_{0.0};
+  double control_callback_mpc_maximum_ms_{0.0};
+  double control_callback_recovery_total_ms_{0.0};
+  double control_callback_recovery_maximum_ms_{0.0};
+  std::uint64_t recovery_safety_full_count_{0U};
+  std::uint64_t recovery_safety_skipped_count_{0U};
   std::optional<SteadyClock::time_point> last_control_callback_telemetry_steady_;
   double last_acc_{0.0};
   Eigen::Vector2d last_u_{0.0, 0.0};

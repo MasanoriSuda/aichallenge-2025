@@ -702,6 +702,24 @@ enum class RecoveryState
   SafeStop,
 };
 
+struct RecoverySafetyEvaluationRequest
+{
+  RecoveryState supervisor_state{RecoveryState::Normal};
+  double signed_speed_mps{};
+  double moving_speed_mps{};
+  bool forward_intent{false};
+  bool solver_fallback{false};
+  bool recovery_rearm_guard_armed{false};
+  bool dynamic_lateral_execution_active{false};
+};
+
+/// Recovery occupancy-grid evidence is useful only while an episode is active,
+/// while a stopped/slow vehicle can become a detector candidate, or while
+/// another owner explicitly needs the same current-wall observation. Invalid
+/// numeric input remains fail-closed and requests the full evaluation.
+bool recovery_safety_evaluation_required(
+  const RecoverySafetyEvaluationRequest & request) noexcept;
+
 // Candidate evaluation may switch direction while the currently commanded
 // primitive is stopping. Escape distance belongs to the direction that was
 // actually actuated, never to the newly evaluated candidate.

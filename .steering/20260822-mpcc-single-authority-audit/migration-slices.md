@@ -631,6 +631,16 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   canonical retained five-state authority with `contract_join=1`. The run later stopped next to a
   rear wall and entered Stuck/AWSIM Recovery before Pass. Entry-speed ownership is accepted, while
   Pass/Return coverage and collision-free Overtake quality remain open.
+- `.steering/20260824-canonical-stage-publishability` then proved that the five-state coarse-stage
+  curvature endpoint and the 40 Hz publisher do not share one actuation time base. Restricting every
+  prediction stage to one publication-period steering step was dynamically falsified: it removed
+  ordinary Track/Cruise feasibility. The rejected implementation was deleted and its evidence kept.
+- `.steering/20260824-rate-resolved-mpcc-shadow-foundation` establishes the replacement mathematics
+  without touching production: steering angle is a sixth state, steering rate is the lateral input,
+  and within-stage publication samples are derived from that same bounded-rate contract. The module
+  is linked only into its tests; all 1,808 package tests and the 25-package build pass. A complete
+  six-state QP remains shadow-only work and must obtain solver/runtime/physical evidence before any
+  canonical schema or authority migration.
 
 ## Slice 6: Legacy and migration path removal
 

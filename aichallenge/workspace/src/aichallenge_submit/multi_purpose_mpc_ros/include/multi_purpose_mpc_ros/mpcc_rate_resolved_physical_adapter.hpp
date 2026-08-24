@@ -5,6 +5,7 @@
 #include "multi_purpose_mpc_ros/race_mpcc_foundation.hpp"
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter
@@ -30,6 +31,15 @@ struct Result
   race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason exact_reason{
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
   int rejected_stage{-1};
+  int minimum_progress_transition_state{-1};
+  double minimum_progress_delta_m{
+    std::numeric_limits<double>::infinity()};
+  double transition_virtual_progress_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double transition_duration_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double progress_dynamics_defect_m{
+    std::numeric_limits<double>::quiet_NaN()};
   std::optional<race_mpcc_foundation::ExactPhysicalExecutionTrajectory>
   exact_trajectory;
 };

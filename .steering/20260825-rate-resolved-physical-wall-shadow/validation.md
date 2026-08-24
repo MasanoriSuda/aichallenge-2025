@@ -30,7 +30,20 @@ unchanged and unrelated to this Slice.
 
 ## Dynamic gate
 
-Pending a committed-source `make dev2` run. Acceptance requires:
+The first committed-source run, `output/20260825-034556`, failed this Gate
+before wall acceptance. Both vehicles produced valid and publishable artifacts,
+but most physical conversions were rejected as `progress-regressed`. Some
+artifacts were accepted, proving that the adapter and wall checker can execute;
+the dominant reject is conditional rather than a missing input. No callback
+overrun or authority promotion occurred.
+
+The leading hypothesis is a solver-certified, tolerance-scale negative
+virtual-progress/equality residual crossing an exact zero-tolerance monotonicity
+boundary. The current log does not preserve the rejected progress delta or its
+corresponding virtual-progress input, so no bound change or normalization is
+authorized yet. Typed transition provenance is required before the rerun.
+
+A rerun is pending. Acceptance requires:
 
 - solved artifacts remain valid and publishable;
 - current-semantic artifacts produce typed physical outcomes;

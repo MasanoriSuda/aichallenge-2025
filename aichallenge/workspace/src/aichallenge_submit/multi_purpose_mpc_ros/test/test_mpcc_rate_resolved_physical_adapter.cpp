@@ -59,6 +59,11 @@ TEST(MpccRateResolvedPhysicalAdapter, PreservesExactStatesOneThroughHorizon)
   EXPECT_DOUBLE_EQ(exact.heading_offset_rad[1], 0.02);
   EXPECT_DOUBLE_EQ(exact.velocity_mps[1], 2.2);
   EXPECT_DOUBLE_EQ(exact.minimum_lateral_bound_reserve_m, 0.8);
+  EXPECT_EQ(result.minimum_progress_transition_state, 1);
+  EXPECT_DOUBLE_EQ(result.minimum_progress_delta_m, 0.2);
+  EXPECT_DOUBLE_EQ(result.transition_virtual_progress_speed_mps, 2.0);
+  EXPECT_DOUBLE_EQ(result.transition_duration_sec, 0.10);
+  EXPECT_NEAR(result.progress_dynamics_defect_m, 0.0, 1e-12);
 }
 
 TEST(MpccRateResolvedPhysicalAdapter, RejectsCurrentSemanticMismatch)
@@ -86,4 +91,24 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsInvalidArtifactBeforeConversion)
   EXPECT_EQ(
     result.artifact_reason, execution::RejectReason::InvalidPathDistance);
   EXPECT_FALSE(result.exact_trajectory.has_value());
+}
+
+TEST(MpccRateResolvedPhysicalAdapter, PreservesProgressRegressionProvenance)
+{
+  auto source = artifact();
+  source.predicted_states[2].progress_m = 0.19999;
+  source.control_stages[1].virtual_progress_speed_mps = 0.0;
+  const auto result = adapter::build(
+    source, contract::ControlIntent::Track, source.identity.stage_geometry_id);
+  EXPECT_EQ(result.reason, adapter::RejectReason::ExactTrajectoryRejected);
+  EXPECT_EQ(
+    result.exact_reason,
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    ExactPhysicalExecutionTrajectoryReason::ProgressRegressed);
+  EXPECT_EQ(result.rejected_stage, 1);
+  EXPECT_EQ(result.minimum_progress_transition_state, 2);
+  EXPECT_NEAR(result.minimum_progress_delta_m, -1.0e-5, 1e-12);
+  EXPECT_DOUBLE_EQ(result.transition_virtual_progress_speed_mps, 0.0);
+  EXPECT_DOUBLE_EQ(result.transition_duration_sec, 0.10);
+  EXPECT_NEAR(result.progress_dynamics_defect_m, -1.0e-5, 1e-12);
 }

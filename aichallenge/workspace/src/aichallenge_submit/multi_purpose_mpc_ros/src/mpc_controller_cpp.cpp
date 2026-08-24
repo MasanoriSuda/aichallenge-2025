@@ -27551,7 +27551,15 @@ struct MPC
              << "/exact=" <<
         race_mpcc::exact_physical_execution_trajectory_reason_name(
         adapted.exact_reason)
-             << "/stage=" << adapted.rejected_stage;
+             << "/stage=" << adapted.rejected_stage
+             << "/min_progress_transition=" <<
+        adapted.minimum_progress_transition_state
+             << "/delta=" << adapted.minimum_progress_delta_m
+             << "/vtheta=" << adapted.transition_virtual_progress_speed_mps
+             << "/dt=" << adapted.transition_duration_sec
+             << "/dynamics_defect=" << adapted.progress_dynamics_defect_m
+             << "/certificate_tolerance=" <<
+        solved_result.execution_artifact->physical_global_tolerance;
       evaluation.detail = detail.str();
       return finish();
     }

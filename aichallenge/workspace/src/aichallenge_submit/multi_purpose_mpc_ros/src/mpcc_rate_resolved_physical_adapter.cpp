@@ -60,6 +60,19 @@ Result build(
     std::numeric_limits<double>::infinity();
   for (std::size_t state_index = 1U; state_index < state_count; ++state_index) {
     const auto & state = artifact.predicted_states[state_index];
+    const auto & previous_state = artifact.predicted_states[state_index - 1U];
+    const auto & transition = artifact.control_stages[state_index - 1U];
+    const double progress_delta_m = state.progress_m - previous_state.progress_m;
+    if (progress_delta_m < result.minimum_progress_delta_m) {
+      result.minimum_progress_transition_state =
+        static_cast<int>(state_index);
+      result.minimum_progress_delta_m = progress_delta_m;
+      result.transition_virtual_progress_speed_mps =
+        transition.virtual_progress_speed_mps;
+      result.transition_duration_sec = transition.duration_sec;
+      result.progress_dynamics_defect_m = progress_delta_m -
+        transition.virtual_progress_speed_mps * transition.duration_sec;
+    }
     const double lower_m = artifact.lateral_lower_m[state_index];
     const double upper_m = artifact.lateral_upper_m[state_index];
     exact.path_distance_m.push_back(

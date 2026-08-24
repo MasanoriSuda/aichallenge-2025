@@ -101,6 +101,19 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_problem
   ${PROJECT_NAME}_persistent_osqp
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact STATIC
+  src/mpcc_rate_resolved_execution_artifact.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
+  ${PROJECT_NAME}_mpcc_rate_resolved
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_adapter STATIC
   src/mpcc_rate_resolved_adapter.cpp
 )
@@ -123,6 +136,7 @@ target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved_shadow PUBLIC
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_shadow
   ${PROJECT_NAME}_mpcc_rate_resolved_adapter
+  ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
   ${PROJECT_NAME}_persistent_osqp
   Threads::Threads
 )

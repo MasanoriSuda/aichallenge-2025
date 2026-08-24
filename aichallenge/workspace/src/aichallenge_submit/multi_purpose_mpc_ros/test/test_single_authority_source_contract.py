@@ -830,6 +830,27 @@ def test_rate_resolved_track_cruise_runtime_is_observation_only() -> None:
     assert "canonical_result.selected.complete()" in branch
     assert "rate_resolved" not in branch[branch.index("if (canonical_result") :]
 
+    shadow_header = (
+        Path(__file__).resolve().parents[1]
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_shadow.hpp"
+    ).read_text(encoding="utf-8")
+    artifact_header = (
+        Path(__file__).resolve().parents[1]
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_execution_artifact.hpp"
+    ).read_text(encoding="utf-8")
+    assert (
+        "std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact"
+        in shadow_header
+    )
+    for header in (shadow_header, artifact_header):
+        assert "CanonicalExecutionPlanStore" not in header
+        assert "CanonicalNormalCommand" not in header
+        assert "publish_control" not in header
+
 
 def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> None:
     """Six-state reachability must not inherit the old one-cycle curvature patch."""

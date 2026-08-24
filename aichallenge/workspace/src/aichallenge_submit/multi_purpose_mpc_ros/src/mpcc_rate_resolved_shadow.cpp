@@ -15,13 +15,6 @@ namespace
 
 using SteadyClock = std::chrono::steady_clock;
 
-bool supported_intent(
-  const mpcc_execution_contract::ControlIntent intent) noexcept
-{
-  return intent == mpcc_execution_contract::ControlIntent::Track ||
-         intent == mpcc_execution_contract::ControlIntent::Cruise;
-}
-
 }  // namespace
 
 const char * to_string(const Outcome outcome) noexcept
@@ -37,6 +30,8 @@ const char * to_string(const Outcome outcome) noexcept
       return "nonfinite-result";
     case Outcome::ActuationSampleRejected:
       return "actuation-sample-rejected";
+    case Outcome::ArtifactRejected:
+      return "artifact-rejected";
     case Outcome::Solved:
       return "solved";
     case Outcome::Exception:
@@ -49,17 +44,15 @@ const char * to_string(const Outcome outcome) noexcept
 
 bool identity_valid(const Identity & identity) noexcept
 {
-  return identity.sequence > 0U && identity.decision_id > 0U &&
-         identity.source_problem_fingerprint > 0U &&
-         identity.stage_geometry_id > 0U && supported_intent(identity.intent) &&
-         std::isfinite(identity.snapshot_sec) && identity.snapshot_sec >= 0.0;
+  return artifact::identity_valid(identity);
 }
 
 bool result_valid(const Result & result) noexcept
 {
   if (
     result.outcome == Outcome::Count ||
-    !identity_valid(result.identity) || !std::isfinite(result.completed_sec) ||
+    !artifact::identity_valid(result.identity) ||
+    !std::isfinite(result.completed_sec) ||
     result.completed_sec < result.identity.snapshot_sec ||
     !std::isfinite(result.compute_ms) || result.compute_ms < 0.0)
   {
@@ -72,6 +65,12 @@ bool result_valid(const Result & result) noexcept
              mpcc_rate_resolved::ActuationSampleReason::Accepted &&
              result.actuation_sample_reason !=
              mpcc_rate_resolved::ActuationSampleReason::Count;
+    }
+    if (result.outcome == Outcome::ArtifactRejected) {
+      return !result.solved && result.actuation_sampled &&
+             result.execution_artifact == nullptr &&
+             result.execution_artifact_reject_reason !=
+             artifact::RejectReason::None;
     }
     return !result.solved && !result.actuation_sampled &&
            result.actuation_sample_reason ==
@@ -114,7 +113,12 @@ bool result_valid(const Result & result) noexcept
          std::isfinite(result.terminal_steering_rad) &&
          std::isfinite(result.maximum_constraint_violation) &&
          std::isfinite(result.maximum_normalized_constraint_violation) &&
-         result.maximum_normalized_constraint_row >= 0;
+         result.maximum_normalized_constraint_row >= 0 &&
+         result.execution_artifact_reject_reason ==
+         artifact::RejectReason::None &&
+         result.execution_artifact != nullptr &&
+         artifact::validate(*result.execution_artifact) ==
+         artifact::RejectReason::None;
 }
 
 Result SolverContext::evaluate(const Snapshot & snapshot)
@@ -130,7 +134,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       return result;
     };
   if (
-    !identity_valid(snapshot.identity) ||
+    !artifact::identity_valid(snapshot.identity) ||
     !std::isfinite(snapshot.publication_interval_sec) ||
     snapshot.publication_interval_sec <= 0.0)
   {
@@ -258,6 +262,71 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   result.actuation_sampled = true;
   result.sampled_steering_rad = sample.sample->steering_rad;
   result.sampled_curvature_radpm = sample.sample->curvature_radpm;
+
+  artifact::ExecutionArtifact execution_artifact;
+  execution_artifact.identity = snapshot.identity;
+  execution_artifact.prediction_origin_sec = snapshot.identity.snapshot_sec;
+  execution_artifact.completed_sec = snapshot.identity.snapshot_sec +
+    std::chrono::duration<double>(SteadyClock::now() - started).count();
+  execution_artifact.semantic_initial_steering_rad =
+    snapshot.request.current_steering_rad;
+  execution_artifact.wheelbase_m = snapshot.request.wheelbase_m;
+  execution_artifact.maximum_abs_steering_rad =
+    snapshot.request.maximum_abs_steering_rad;
+  execution_artifact.maximum_abs_steering_rate_radps =
+    snapshot.request.maximum_abs_steering_rate_radps;
+  execution_artifact.physical_global_tolerance =
+    outcome.telemetry.physical_global_tolerance;
+  execution_artifact.maximum_constraint_violation =
+    outcome.result->maximum_constraint_violation;
+  execution_artifact.maximum_normalized_constraint_violation =
+    outcome.result->maximum_normalized_constraint_violation;
+  execution_artifact.predicted_states.reserve(
+    static_cast<std::size_t>(horizon + 1));
+  execution_artifact.lateral_lower_m.reserve(
+    static_cast<std::size_t>(horizon + 1));
+  execution_artifact.lateral_upper_m.reserve(
+    static_cast<std::size_t>(horizon + 1));
+  for (int stage = 0; stage <= horizon; ++stage) {
+    const int state_offset = model::kStateDimension * stage;
+    execution_artifact.predicted_states.push_back(artifact::PredictedState{
+      primal[state_offset + model::kLateralIndex],
+      primal[state_offset + model::kLagIndex],
+      primal[state_offset + model::kHeadingIndex],
+      primal[state_offset + model::kVelocityIndex],
+      primal[state_offset + model::kProgressIndex],
+      primal[state_offset + model::kSteeringIndex]});
+    const auto & semantic =
+      snapshot.request.states[static_cast<std::size_t>(stage)];
+    execution_artifact.lateral_lower_m.push_back(semantic.lower[0]);
+    execution_artifact.lateral_upper_m.push_back(semantic.upper[0]);
+  }
+  execution_artifact.control_stages.reserve(static_cast<std::size_t>(horizon));
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int input_offset =
+      state_values + model::kInputDimension * stage;
+    execution_artifact.control_stages.push_back(artifact::ControlStage{
+      primal[input_offset + model::kAccelerationIndex],
+      primal[input_offset + model::kSteeringRateIndex],
+      primal[input_offset + model::kVirtualProgressSpeedIndex],
+      snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec});
+  }
+  result.execution_artifact_reject_reason =
+    artifact::validate(execution_artifact);
+  if (
+    result.execution_artifact_reject_reason !=
+    artifact::RejectReason::None)
+  {
+    result.outcome = Outcome::ArtifactRejected;
+    result.detail = std::string{"execution artifact rejected: "} +
+      artifact::to_string(result.execution_artifact_reject_reason);
+    result.solved = false;
+    result.constraints_satisfied = false;
+    return finish();
+  }
+  result.execution_artifact =
+    std::make_shared<const artifact::ExecutionArtifact>(
+    std::move(execution_artifact));
   result.outcome = Outcome::Solved;
   result.detail = "accepted";
   return finish();

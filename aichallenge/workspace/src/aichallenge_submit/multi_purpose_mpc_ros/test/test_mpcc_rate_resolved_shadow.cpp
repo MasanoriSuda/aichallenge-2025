@@ -11,6 +11,8 @@ namespace shadow =
   multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
 namespace adapter =
   multi_purpose_mpc_ros::mpcc_rate_resolved_adapter;
+namespace execution =
+  multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
 namespace contract =
   multi_purpose_mpc_ros::mpcc_execution_contract;
 
@@ -104,11 +106,102 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_EQ(result.sampled_stage_index, 0U);
   EXPECT_NEAR(result.sampled_stage_elapsed_sec, 0.025, 1e-12);
   EXPECT_NEAR(result.certified_horizon_duration_sec, 0.30, 1e-12);
+  ASSERT_NE(result.execution_artifact, nullptr);
+  EXPECT_EQ(
+    execution::validate(*result.execution_artifact),
+    execution::RejectReason::None);
+  EXPECT_EQ(result.execution_artifact->predicted_states.size(), 4U);
+  EXPECT_EQ(result.execution_artifact->control_stages.size(), 3U);
+  EXPECT_EQ(result.execution_artifact->lateral_lower_m.size(), 4U);
+  EXPECT_DOUBLE_EQ(
+    result.execution_artifact->semantic_initial_steering_rad,
+    input.request.current_steering_rad);
+  EXPECT_DOUBLE_EQ(
+    result.execution_artifact->control_stages.front().steering_rate_radps,
+    result.first_steering_rate_radps);
 
   auto invalid = result;
   invalid.first_steering_rate_certificate_margin_radps =
     std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(shadow::result_valid(invalid));
+}
+
+TEST(MpccRateResolvedShadow, RetainsAndSamplesExactRateResolvedArtifact)
+{
+  shadow::SolverContext context;
+  const auto result = context.evaluate(snapshot());
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+  const auto & artifact = *result.execution_artifact;
+
+  const auto cursor = execution::resolve_cursor(
+    artifact, artifact.prediction_origin_sec + 0.15);
+  ASSERT_TRUE(cursor.available);
+  EXPECT_EQ(cursor.reason, execution::CursorReason::Available);
+  EXPECT_EQ(cursor.control_stage_index, 1U);
+  EXPECT_EQ(cursor.remaining_control_stage_count, 2U);
+  EXPECT_NEAR(cursor.stage_elapsed_sec, 0.05, 1e-12);
+
+  const auto actuation = execution::extract_actuation(
+    artifact, cursor);
+  ASSERT_TRUE(actuation.actuation.has_value());
+  EXPECT_EQ(actuation.reason, execution::ActuationReason::Available);
+  EXPECT_EQ(
+    actuation.sample_reason,
+    multi_purpose_mpc_ros::mpcc_rate_resolved::ActuationSampleReason::Accepted);
+  const double expected_steering =
+    artifact.semantic_initial_steering_rad +
+    artifact.control_stages[0].steering_rate_radps *
+    artifact.control_stages[0].duration_sec +
+    artifact.control_stages[1].steering_rate_radps * 0.05;
+  EXPECT_NEAR(
+    actuation.actuation->steering_rad, expected_steering, 1e-9);
+  EXPECT_DOUBLE_EQ(
+    actuation.actuation->steering_rate_radps,
+    artifact.control_stages[1].steering_rate_radps);
+
+  const auto exhausted = execution::resolve_cursor(
+    artifact, artifact.prediction_origin_sec + 0.30);
+  EXPECT_FALSE(exhausted.available);
+  EXPECT_EQ(exhausted.reason, execution::CursorReason::Exhausted);
+}
+
+TEST(MpccRateResolvedShadow, RejectsMutatedExecutionArtifactProvenance)
+{
+  shadow::SolverContext context;
+  const auto result = context.evaluate(snapshot());
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+
+  auto invalid = *result.execution_artifact;
+  invalid.identity.source_problem_fingerprint = 0U;
+  EXPECT_EQ(
+    execution::validate(invalid), execution::RejectReason::InvalidIdentity);
+
+  invalid = *result.execution_artifact;
+  invalid.predicted_states.pop_back();
+  EXPECT_EQ(
+    execution::validate(invalid), execution::RejectReason::StateCountMismatch);
+
+  invalid = *result.execution_artifact;
+  invalid.predicted_states.front().steering_rad += 0.1;
+  EXPECT_EQ(
+    execution::validate(invalid), execution::RejectReason::InitialSteeringMismatch);
+
+  invalid = *result.execution_artifact;
+  invalid.predicted_states[1].steering_rad += 0.1;
+  EXPECT_EQ(
+    execution::validate(invalid), execution::RejectReason::SteeringDynamicsMismatch);
+
+  invalid = *result.execution_artifact;
+  invalid.lateral_upper_m[1] = invalid.predicted_states[1].lateral_m - 0.1;
+  EXPECT_EQ(
+    execution::validate(invalid), execution::RejectReason::InvalidLateralCorridor);
+
+  invalid = *result.execution_artifact;
+  invalid.maximum_normalized_constraint_violation = 1.01;
+  EXPECT_EQ(
+    execution::validate(invalid), execution::RejectReason::InvalidCertificate);
 }
 
 TEST(MpccRateResolvedShadow, SamplesPublicationPeriodAcrossStageBoundary)

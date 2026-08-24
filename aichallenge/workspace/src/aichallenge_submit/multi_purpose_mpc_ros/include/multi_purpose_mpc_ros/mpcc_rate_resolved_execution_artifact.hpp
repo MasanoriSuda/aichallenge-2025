@@ -1,0 +1,151 @@
+#ifndef MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_EXECUTION_ARTIFACT_HPP_
+#define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_EXECUTION_ARTIFACT_HPP_
+
+#include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <vector>
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact
+{
+
+struct Identity
+{
+  std::uint64_t sequence{};
+  std::uint64_t decision_id{};
+  std::uint64_t source_problem_fingerprint{};
+  std::uint64_t stage_geometry_id{};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  double snapshot_sec{};
+};
+
+bool identity_valid(const Identity & identity) noexcept;
+
+struct PredictedState
+{
+  double lateral_m{};
+  double lag_m{};
+  double heading_offset_rad{};
+  double velocity_mps{};
+  double progress_m{};
+  double steering_rad{};
+};
+
+struct ControlStage
+{
+  double acceleration_mps2{};
+  double steering_rate_radps{};
+  double virtual_progress_speed_mps{};
+  double duration_sec{};
+};
+
+/// Complete immutable representation of one physically row-certified
+/// six-state/three-input solve.  This deliberately does not reuse the
+/// curvature-input CanonicalExecutionPlan representation.
+struct ExecutionArtifact
+{
+  Identity identity;
+  double prediction_origin_sec{};
+  double completed_sec{};
+  double semantic_initial_steering_rad{};
+  double wheelbase_m{};
+  double maximum_abs_steering_rad{};
+  double maximum_abs_steering_rate_radps{};
+  double physical_global_tolerance{};
+  double maximum_constraint_violation{};
+  double maximum_normalized_constraint_violation{};
+  std::vector<PredictedState> predicted_states;
+  std::vector<ControlStage> control_stages;
+  std::vector<double> lateral_lower_m;
+  std::vector<double> lateral_upper_m;
+};
+
+enum class RejectReason
+{
+  None,
+  InvalidIdentity,
+  InvalidTiming,
+  InvalidLimits,
+  InvalidCertificate,
+  EmptyHorizon,
+  StateCountMismatch,
+  CorridorCountMismatch,
+  InvalidPredictedState,
+  InvalidControlStage,
+  InvalidLateralCorridor,
+  InitialSteeringMismatch,
+  SteeringDynamicsMismatch,
+  SemanticSteeringSequenceRejected,
+};
+
+const char * to_string(RejectReason reason) noexcept;
+RejectReason validate(const ExecutionArtifact & artifact) noexcept;
+
+enum class CursorReason
+{
+  Available,
+  InvalidArtifact,
+  InvalidTime,
+  FutureArtifact,
+  Exhausted,
+};
+
+const char * to_string(CursorReason reason) noexcept;
+
+struct Cursor
+{
+  bool available{false};
+  CursorReason reason{CursorReason::InvalidArtifact};
+  std::uint64_t sequence{};
+  std::size_t control_stage_index{};
+  std::size_t remaining_control_stage_count{};
+  double elapsed_sec{};
+  double stage_elapsed_sec{};
+};
+
+Cursor resolve_cursor(
+  const ExecutionArtifact & artifact, double now_sec) noexcept;
+
+enum class ActuationReason
+{
+  Available,
+  InvalidArtifact,
+  CursorUnavailable,
+  IdentityMismatch,
+  InvalidStageIndex,
+  SampleRejected,
+  NonfiniteActuation,
+};
+
+const char * to_string(ActuationReason reason) noexcept;
+
+struct Actuation
+{
+  std::uint64_t sequence{};
+  std::size_t control_stage_index{};
+  double predicted_speed_mps{};
+  double acceleration_mps2{};
+  double steering_rate_radps{};
+  double steering_rad{};
+  double curvature_radpm{};
+  double virtual_progress_speed_mps{};
+};
+
+struct ActuationResult
+{
+  ActuationReason reason{ActuationReason::InvalidArtifact};
+  mpcc_rate_resolved::ActuationSampleReason sample_reason{
+    mpcc_rate_resolved::ActuationSampleReason::Count};
+  std::optional<Actuation> actuation;
+};
+
+ActuationResult extract_actuation(
+  const ExecutionArtifact & artifact, const Cursor & cursor) noexcept;
+
+}  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact
+
+#endif  // MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_EXECUTION_ARTIFACT_HPP_

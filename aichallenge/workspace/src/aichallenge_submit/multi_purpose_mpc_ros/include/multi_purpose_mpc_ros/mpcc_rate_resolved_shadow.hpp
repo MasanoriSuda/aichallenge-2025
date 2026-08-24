@@ -4,10 +4,12 @@
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -15,16 +17,8 @@
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
 {
 
-struct Identity
-{
-  std::uint64_t sequence{};
-  std::uint64_t decision_id{};
-  std::uint64_t source_problem_fingerprint{};
-  std::uint64_t stage_geometry_id{};
-  mpcc_execution_contract::ControlIntent intent{
-    mpcc_execution_contract::ControlIntent::Unknown};
-  double snapshot_sec{};
-};
+namespace artifact = mpcc_rate_resolved_execution_artifact;
+using Identity = artifact::Identity;
 
 struct Snapshot
 {
@@ -40,6 +34,7 @@ enum class Outcome
   SolveRejected,
   NonfiniteResult,
   ActuationSampleRejected,
+  ArtifactRejected,
   Solved,
   Exception,
   Count,
@@ -90,6 +85,9 @@ struct Result
   double maximum_normalized_constraint_violation{};
   int maximum_normalized_constraint_row{-1};
   persistent_osqp::SolveTelemetry solver;
+  artifact::RejectReason execution_artifact_reject_reason{
+    artifact::RejectReason::None};
+  std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact;
   std::string detail;
 };
 

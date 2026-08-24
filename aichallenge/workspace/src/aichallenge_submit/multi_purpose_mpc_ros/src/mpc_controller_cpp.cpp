@@ -27651,7 +27651,7 @@ struct MPC
       "mailbox=published:%lu/invalid:%lu/rollback:%lu/unsubmitted:%lu, "
       "consumed=%lu/current_semantic=%lu, "
       "outcomes=build:%lu/assembly:%lu/solve:%lu/nonfinite:%lu/sample:%lu/"
-      "solved:%lu/exception:%lu, age=%.4f/%.4fs(avg/max), "
+      "artifact:%lu/solved:%lu/exception:%lu, age=%.4f/%.4fs(avg/max), "
       "sample_reason=time:%lu/initial:%lu/rate:%lu/terminal:%lu/sampled:%lu/"
       "other:%lu, "
       "piecewise=cross_stage:%lu/max_stage:%lu, "
@@ -27663,7 +27663,8 @@ struct MPC
       "dt:%.6f/stage_dt:%.6f/delta0:%.9f/solver_delta0:%.9f/rate:%.9f/terminal:%.9f/"
       "sampled:%.9f/delta_max:%.9f/rate_max:%.9f/"
       "rate_bounds:physical[%.9f,%.9f]/solver[%.9f,%.9f]/margin:%.9f/"
-      "sample_stage:%lu/sample_stage_dt:%.6f/horizon_dt:%.6f/%s, "
+      "sample_stage:%lu/sample_stage_dt:%.6f/horizon_dt:%.6f/"
+      "artifact_valid:%d/states:%lu/controls:%lu/artifact_reason:%s/%s, "
       "authority=shadow, selected=0, physical=not-evaluated, warm=none",
       static_cast<unsigned long>(window.submission_count),
       static_cast<unsigned long>(window.replaced_pending_count),
@@ -27688,6 +27689,9 @@ struct MPC
       static_cast<unsigned long>(window.outcome_count[
         static_cast<std::size_t>(
         rate_resolved_shadow::Outcome::ActuationSampleRejected)]),
+      static_cast<unsigned long>(window.outcome_count[
+        static_cast<std::size_t>(
+        rate_resolved_shadow::Outcome::ArtifactRejected)]),
       static_cast<unsigned long>(window.outcome_count[
         static_cast<std::size_t>(rate_resolved_shadow::Outcome::Solved)]),
       static_cast<unsigned long>(window.outcome_count[
@@ -27776,6 +27780,16 @@ struct MPC
       window.last_result_available ? last.sampled_stage_index : 0U),
       window.last_result_available ? last.sampled_stage_elapsed_sec : 0.0,
       window.last_result_available ? last.certified_horizon_duration_sec : 0.0,
+      window.last_result_available && last.execution_artifact != nullptr ? 1 : 0,
+      static_cast<unsigned long>(
+        window.last_result_available && last.execution_artifact != nullptr ?
+        last.execution_artifact->predicted_states.size() : 0U),
+      static_cast<unsigned long>(
+        window.last_result_available && last.execution_artifact != nullptr ?
+        last.execution_artifact->control_stages.size() : 0U),
+      window.last_result_available ?
+      rate_resolved_shadow::artifact::to_string(
+        last.execution_artifact_reject_reason) : "none",
       window.last_result_available ? last.detail.c_str() : "not-evaluated");
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;

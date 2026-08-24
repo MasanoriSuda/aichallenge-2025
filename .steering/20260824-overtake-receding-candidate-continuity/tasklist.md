@@ -9,6 +9,7 @@
 - [x] Add focused producer/plan lifecycle tests.
 - [x] Run source contract, focused package tests and build.
 - [x] Run bounded `make dev2` and verify active fresh candidate continuity.
-- [ ] Re-run `make dev2` for the pre-entry consumer repair once the host NVIDIA driver is available.
-- [ ] Classify the separate active-ShiftOut first curvature-rate failure from the new diagnostic.
+- [x] Re-run `make dev2` for the pre-entry consumer repair once the host NVIDIA driver is available.
+- [x] Classify the separate active-ShiftOut first curvature-rate failure from the new diagnostic.
+- [ ] Run same-QP cold versus geometry-offset-aware warm replay before changing solver settings.
 - [x] Commit without user/run artifacts.

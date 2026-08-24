@@ -104,3 +104,22 @@ numerically unconverged but feasible QP is not yet proven.  An observation-only
 diagnostic now reports the first curvature box, rate interval, their
 intersection and the first two lateral tubes; no constraint or OSQP setting
 was changed.
+
+Run `output/20260824-165722` resolves that classification.  The first input
+intersection is non-empty and the maximum-iteration final iterate satisfies all
+physical primal rows.  The rejection is therefore a dual/optimality convergence
+failure; accepting the iterate as a normal command would still violate the
+solved-and-certified authority invariant.
+
+The earliest newly identified producer defect is warm-start stage lineage.
+`rolling_stage_geometry_compatible()` computes the overlap offset between the
+previous and current physical stage sequences, but `ShadowWarmStartResolution`
+does not carry that offset.  `solve_extended_progress_problem()` consequently
+calls `shift_mpc_warm_start()` with its fixed one-stage shift for every solve,
+including repeated solves whose first physical stage did not advance.  This is
+a structural hypothesis with strong source and runtime support, but it remains
+to be causally confirmed by same-QP cold versus offset-aware replay.
+
+The retained-plan initial-corridor rejection, Emergency command and subsequent
+Recovery are downstream mask/recovery behavior.  They are not the root cause
+of the fresh solver discontinuity.

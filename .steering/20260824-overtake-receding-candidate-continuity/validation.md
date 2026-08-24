@@ -35,16 +35,48 @@ are not counted as MPCC failures.
   CTest targets pass in the same ROS-sourced container.
 - `git diff --check`: passed.
 
-## Required next observation
+## Reboot follow-up observation
 
-Once AWSIM can initialize, stop the first run after the first active Overtake
-solve rejection and inspect:
+Run `output/20260824-165722/d1/autoware.log` completed the requested observation
+after the host reboot.  The host and simulator container both exposed the RTX
+3090, AWSIM reached `grounded`, `ready` and `start`, and the bounded run was
+stopped after the first active-ShiftOut failure chain.
 
-- `horizon/configured` and `first_unavailable_state`;
-- first `kappa_box`, `kappa_rate`, and `kappa_admissible` intersection;
-- observed `x0_ey` and state-1/state-2 lateral tubes;
-- warm-start/reset provenance;
-- whether a bounded left/right pre-entry branch reaches canonical extraction.
+- `Idle -> ShiftOut` occurred at decision 5997 / waypoint 172.
+- Twenty fresh canonical candidates passed the complete chain and were stored
+  during the following second.
+- The first recorded failed solve used a bounded `18/20` horizon with state 19
+  as the first unavailable tracking state.
+- The first curvature box `[-0.353141, 0.353141]` and curvature-rate interval
+  `[-0.142613, -0.110411]` have the non-empty intersection
+  `[-0.142613, -0.110411]`.
+- The maximum-iteration final iterate was primal-feasible under the physical
+  row contract: the worst row was a heading dynamics equality with `1.05e-7`
+  violation against `1.139e-3` tolerance.  OSQP still rejected the solve
+  because its dual residual was `0.0233` at iteration 4000.
+- No uncertified iterate executed.  Plan 6024 was retained until current-world
+  proof rejected its initial corridor, after which Emergency and Recovery took
+  authority.
 
-Do not change wall margin, steering-rate limit or OSQP iteration settings until
-that evidence distinguishes structural reachability from convergence failure.
+This rejects an empty first curvature input intersection as the cause of this
+failure.  It classifies the immediate solver rejection as an optimality/dual
+convergence failure, not a demonstrated physical infeasibility.
+
+## Next causal observation
+
+Do not accept the maximum-iteration iterate and do not increase iterations.
+First distinguish warm-start lineage from intrinsic QP conditioning:
+
+- compare the same failed QP with a cold solve and an offset-aware warm solve;
+- report the stage-geometry offset used to align the warm start;
+- require offset zero when the first stage geometry is unchanged;
+- require the exact observed offset when the horizon advances multiple stages.
+
+The current compatibility check finds the rolling geometry offset but returns
+only a boolean.  The solver then shifts every certified warm start by exactly
+one stage.  During this run roughly 20 fresh solutions were stored while the
+tracking waypoint advanced only from 172 to 176, so a one-stage-per-solve warm
+advance is not justified by the physical horizon.
+
+Do not change wall margin, steering-rate limit or OSQP iteration settings.  The
+next slice must repair or falsify warm-start stage lineage before tuning.

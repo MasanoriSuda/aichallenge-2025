@@ -684,6 +684,15 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   `1e-12` downstream-validator tolerance mismatch, not formulation infeasibility. Authority remains
   blocked. Next align physical bound ownership without clamping or tolerance relaxation, and keep
   the minority time-base rejects visible as a separate invariant.
+- `.steering/20260825-rate-resolved-certified-sample-ownership` removes the stricter duplicate
+  initial/rate/terminal checker after a valid whole-QP row certificate and integrates from immutable
+  semantic current steering instead of reconstructed state zero. All 1,828 package tests and the
+  25-package build pass. In `output/20260825-011102`, publishability increased from 88.2661% to
+  99.3390%; all 505 duplicate initial/rate/terminal rejects disappeared. The remaining 29 are now
+  actionable: 19 actual 25 ms steering-limit violations and 10 publication intervals crossing the
+  first-stage boundary. This Slice is accepted as ownership cleanup, not authority promotion. Next
+  add a solver-certified first-rate reachability interval from semantic steering, then implement
+  piecewise cross-stage sampling as a separate time-base repair.
 
 ## Slice 6: Legacy and migration path removal
 

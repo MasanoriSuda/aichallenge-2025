@@ -6,9 +6,9 @@
 - [x] Connect the shadow evaluator without authority change.
 - [x] Add certificate, timing and sampled-bound tests.
 - [x] Run build, full package tests and authority audit.
-- [ ] Commit the static Slice.
-- [ ] Run `make dev2` and compare the rejection distribution.
-- [ ] Record the next root-cause decision.
+- [x] Commit the static Slice (`9a5428f`).
+- [x] Run `make dev2` and compare the rejection distribution.
+- [x] Record the next root-cause decision.
 
 ## Definition of Done
 

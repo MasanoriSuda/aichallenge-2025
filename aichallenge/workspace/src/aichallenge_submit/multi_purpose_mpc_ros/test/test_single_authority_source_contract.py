@@ -804,6 +804,15 @@ def test_rate_resolved_track_cruise_runtime_is_observation_only() -> None:
     assert "rate_resolved_track_cruise_shadow_worker_->submit_latest(" in transport
     assert "rate_resolved_track_cruise_shadow_mailbox_->latest_after(" in transport
     assert "authority=shadow, selected=0" in transport
+    assert "last_failure_result" in transport
+    assert (
+        "result->outcome != rate_resolved_shadow::Outcome::Solved" in transport
+    )
+    failure_trace_start = transport.index(
+        "Rate-resolved Track/Cruise shadow failure:"
+    )
+    failure_trace = transport[failure_trace_start:]
+    assert "authority=shadow, selected=0" in failure_trace
     for forbidden in (
         "canonical_normal_control(",
         "canonical_normal_emergency_stop(",

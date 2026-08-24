@@ -6305,6 +6305,8 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   std::size_t maximum_sampled_stage_index{};
   rate_resolved_shadow::Result last_result;
   bool last_result_available{false};
+  rate_resolved_shadow::Result last_failure_result;
+  bool last_failure_result_available{false};
 };
 
 struct OvertakeCanonicalFreshShadowResult
@@ -27602,6 +27604,10 @@ struct MPC
         {
           ++window.current_semantic_match_count;
         }
+        if (result->outcome != rate_resolved_shadow::Outcome::Solved) {
+          window.last_failure_result = result.value();
+          window.last_failure_result_available = true;
+        }
         window.last_result = result.value();
         window.last_result_available = true;
       }
@@ -27760,6 +27766,28 @@ struct MPC
       window.last_result_available ? last.sampled_stage_elapsed_sec : 0.0,
       window.last_result_available ? last.certified_horizon_duration_sec : 0.0,
       window.last_result_available ? last.detail.c_str() : "not-evaluated");
+    if (window.last_failure_result_available) {
+      const auto & failure = window.last_failure_result;
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Rate-resolved Track/Cruise shadow failure: "
+        "seq=%lu/decision=%lu/intent=%s/source=0x%016lx/geometry=0x%016lx/"
+        "outcome=%s, solver=iter:%d/status:%d/setup:%d/update:%d/reset:%d/"
+        "max_iter:%d, detail=%s, authority=shadow, selected=0",
+        static_cast<unsigned long>(failure.identity.sequence),
+        static_cast<unsigned long>(failure.identity.decision_id),
+        mpcc_contract::to_string(failure.identity.intent),
+        static_cast<unsigned long>(failure.identity.source_problem_fingerprint),
+        static_cast<unsigned long>(failure.identity.stage_geometry_id),
+        rate_resolved_shadow::to_string(failure.outcome),
+        failure.solver.iterations,
+        failure.solver.status,
+        failure.solver.setup_performed ? 1 : 0,
+        failure.solver.update_performed ? 1 : 0,
+        failure.solver.cold_reset_after_failure ? 1 : 0,
+        failure.solver.maximum_iterations_reached ? 1 : 0,
+        failure.detail.c_str());
+    }
     window = RateResolvedTrackCruiseShadowTelemetryWindow{};
     rate_resolved_track_cruise_shadow_last_log_sec_ = now_sec;
   }

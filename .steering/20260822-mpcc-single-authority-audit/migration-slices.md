@@ -596,6 +596,17 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   `runtime wall escape prefix unavailable`, first destroyed generation 1 with `hard_fault=0`.
   Audit that earlier Mission-viability owner next; do not combine it with this Slice or tune wall /
   lateral-acceleration limits.
+- `.steering/20260824-runtime-wall-mission-owner-retirement` removes that earlier owner.
+  Runtime wall preplanning may still propose an atomic same-side replacement, centerward prefix or
+  Return, but failure of that optional legacy producer can no longer invalidate a canonical
+  ShiftOut/Pass/Return Mission or enter DynamicWait/Recovery. Canonical current-world proof and the
+  explicit Emergency supervisor now retain exclusive command authority. The 1,766-test package
+  suite and 25-package build pass. In `output/20260824-134024`, generation 1 entered ShiftOut with
+  `canonical-shiftout-retained` and survived to Pass without the former `runtime wall escape prefix
+  unavailable` invalidation. The run then exposed a separate earlier break: the line FSM advanced
+  to Pass while canonical authority was unavailable, after which Pass QPs repeatedly reached
+  maximum iterations. Audit atomic canonical phase-transition admission next; do not restore a
+  Mission-exit fallback or tune solver/wall parameters in response.
 
 ## Slice 6: Legacy and migration path removal
 

@@ -10024,7 +10024,7 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanHoldsCommittedSideUntilRearClear)
     RuntimeWallPreplanAction::ReturnToBaseLine);
 }
 
-TEST(V2XOvertakeCoreWall, RuntimePreplanExitsAfterEscapePrefixFailure)
+TEST(V2XOvertakeCoreWall, RuntimePreplanPreservesMissionAfterEscapePrefixFailure)
 {
   RuntimeWallPreplanRequest request;
   request.enabled = true;
@@ -10043,7 +10043,7 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanExitsAfterEscapePrefixFailure)
 
   EXPECT_EQ(
     resolve_runtime_wall_preplan(request).action,
-    RuntimeWallPreplanAction::ExitCurrentMission);
+    RuntimeWallPreplanAction::HoldCurrentSide);
 
   request.center_contraction_available = true;
   EXPECT_EQ(
@@ -10053,7 +10053,7 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanExitsAfterEscapePrefixFailure)
   request.replan_count = request.maximum_replan_count;
   EXPECT_EQ(
     resolve_runtime_wall_preplan(request).action,
-    RuntimeWallPreplanAction::ExitCurrentMission);
+    RuntimeWallPreplanAction::HoldCurrentSide);
 }
 
 TEST(V2XOvertakeCoreWall, RuntimePreplanPreviewNeverExitsCurrentMission)
@@ -10096,7 +10096,7 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanPreviewNeverExitsCurrentMission)
     RuntimeWallPreplanAction::ContractTowardCenter);
 }
 
-TEST(V2XOvertakeCoreWall, RuntimePreplanKeepsConnectedRearwardPassAfterEscapeFailure)
+TEST(V2XOvertakeCoreWall, RuntimePreplanPreservesCanonicalMissionAfterEscapeFailure)
 {
   RuntimeWallPreplanRequest request;
   request.enabled = true;
@@ -10106,7 +10106,6 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanKeepsConnectedRearwardPassAfterEscapeFai
   request.current_body_separated = true;
   request.target_prediction_valid = true;
   request.center_contraction_evaluated = true;
-  request.connected_rearward_execution_hold_available = true;
   request.mission_side_sign = 1;
   request.now_sec = 10.0;
   request.cooldown_sec = 0.5;
@@ -10118,12 +10117,6 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanKeepsConnectedRearwardPassAfterEscapeFai
     resolve_runtime_wall_preplan(request).action,
     RuntimeWallPreplanAction::HoldCurrentSide);
 
-  request.connected_rearward_execution_hold_available = false;
-  EXPECT_EQ(
-    resolve_runtime_wall_preplan(request).action,
-    RuntimeWallPreplanAction::ExitCurrentMission);
-
-  request.connected_rearward_execution_hold_available = true;
   request.hard_wall_fault = true;
   EXPECT_EQ(
     resolve_runtime_wall_preplan(request).action,
@@ -10156,7 +10149,7 @@ TEST(V2XOvertakeCoreWall, RuntimePreplanExecutesAcceptedPrefixDuringCooldown)
   request.last_replan_sec = 9.0;
   EXPECT_EQ(
     resolve_runtime_wall_preplan(request).action,
-    RuntimeWallPreplanAction::ExitCurrentMission);
+    RuntimeWallPreplanAction::HoldCurrentSide);
 }
 
 TEST(V2XOvertakeCoreWall, RuntimePreplanNeverOverridesHardWallOrBounds)

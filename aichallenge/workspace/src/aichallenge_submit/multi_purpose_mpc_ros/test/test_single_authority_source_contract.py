@@ -605,3 +605,21 @@ def test_canonical_overtake_demotes_legacy_mission_viability_owner() -> None:
     )
     trace = SOURCE[trace_start:trace_end]
     assert "viability=%s/%s/reference_complete=%d" in trace
+
+
+def test_runtime_wall_preplanner_cannot_destroy_canonical_mission() -> None:
+    """An optional wall-reference producer has no FSM or Recovery authority."""
+
+    assert "RuntimeWallPreplanAction::ExitCurrentMission" not in SOURCE
+    prefix_start = SOURCE.index(
+        "OvertakeLine runtime wall escape prefix commit rejected:"
+    )
+    prefix_end = SOURCE.index(
+        "const auto transition_action =", prefix_start
+    )
+    prefix_failure = SOURCE[prefix_start:prefix_end]
+
+    assert "enter_dynamic_mission_wait" not in prefix_failure
+    assert "transition_overtake_line_phase" not in prefix_failure
+    assert "reset_overtake_line_state" not in prefix_failure
+    assert "canonical-reference-only" in prefix_failure

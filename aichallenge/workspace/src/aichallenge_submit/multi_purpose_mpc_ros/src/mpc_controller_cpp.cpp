@@ -37052,15 +37052,6 @@ private:
     runtime_wall_preplan_request.speed_preserving_return_available =
       runtime_wall_return_available;
     runtime_wall_preplan_request.rear_clear_confirmed = rear_clear_confirmed;
-    runtime_wall_preplan_request.connected_rearward_execution_hold_available =
-      overtake_line_state_.phase == OvertakeLinePhase::Pass &&
-      !rear_clear_confirmed &&
-      runtime_wall_preplan_request.target_continuous &&
-      runtime_wall_preplan_request.current_body_separated &&
-      overtake_line_state_.target_bound_execution_replan_hold_active &&
-      overtake_line_state_.target_bound_execution_replan_prefix_executing &&
-      std::isfinite(behavior_output.locked_target_longitudinal) &&
-      behavior_output.locked_target_longitudinal <= 0.0;
     runtime_wall_preplan_request.mission_side_sign =
       overtake_line_state_.pass_side_sign;
     runtime_wall_preplan_request.candidate_side_sign =
@@ -37218,54 +37209,9 @@ private:
           runtime_wall_center_contraction_candidate->goal_lateral_m,
           runtime_wall_warning_elapsed_sec, model->wp_id);
       }
-      if (runtime_wall_preplan_request.action_required) {
-        const int exit_side = overtake_line_state_.pass_side_sign;
-        const std::string exit_reason = "wall-escape prefix commit rejected";
-        if (enter_dynamic_mission_wait(exit_reason)) {
-          return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
-        }
-        transition_overtake_line_phase(
-          OvertakeLinePhase::Recovery, now_sec, current_ey, exit_side, exit_reason);
-        return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
-      }
-      // Preview replans are opportunistic. Keep the current hard-safe
-      // execution when the candidate loses the atomic commit race; the
-      // closer action band will make the bounded exit decision if needed.
-    } else if (
-      runtime_wall_preplan.valid &&
-      runtime_wall_preplan.action ==
-      overtake_core::RuntimeWallPreplanAction::ExitCurrentMission)
-    {
-      const int exit_side = overtake_line_state_.pass_side_sign;
-      const std::string exit_reason =
-        runtime_wall_center_contraction_reject_reason.empty() ?
-        "wall-escape prefix unavailable" :
-        runtime_wall_center_contraction_reject_reason;
-      if (line_cfg.debug_log_enabled) {
-        RCLCPP_WARN(
-          rclcpp::get_logger("mpc_controller"),
-          "OvertakeLine runtime wall escape prefix unavailable: target=%s, "
-          "side=%d, elapsed=%.2f s, prefix=%.2f/available=%.2f m, "
-          "ttc=%.2f s, count=%d/%d, reason=%s, "
-          "action=exit-current-mission, wp_id=%d",
-          overtake_line_state_.target_vehicle_id.c_str(), exit_side,
-          runtime_wall_warning_elapsed_sec,
-          runtime_wall_escape_prefix_distance_m,
-          runtime_wall_escape_available_distance_m,
-          actual_wall_preplan_prediction_ttc_sec,
-          overtake_line_state_.mission_runtime_wall_replan_count,
-          line_cfg.runtime_wall_replan_max_count, exit_reason.c_str(),
-          model->wp_id);
-      }
-      if (enter_dynamic_mission_wait(
-          std::string{"runtime wall escape prefix unavailable: "} + exit_reason))
-      {
-        return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
-      }
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Recovery, now_sec, current_ey, exit_side,
-        std::string{"runtime wall escape prefix unavailable: "} + exit_reason);
-      return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+      // Candidate construction is an input-producing role.  A rejected
+      // replacement cannot destroy canonical Mission identity; current-world
+      // proof or the explicit Emergency supervisor still owns execution.
     } else if (
       runtime_wall_preplan.valid &&
       runtime_wall_preplan.action ==
@@ -37289,8 +37235,7 @@ private:
           runtime_wall_center_contraction_reject_reason.empty() ?
           "unavailable" : runtime_wall_center_contraction_reject_reason.c_str(),
           runtime_wall_preplan_request.action_required ? "action" : "preview",
-          runtime_wall_preplan_request.connected_rearward_execution_hold_available ?
-          "connected-rearward-execution" : "pre-rear-clear",
+          "canonical-reference-only",
           model->wp_id);
         overtake_line_state_.mission_runtime_wall_return_suppressed_logged = true;
       }

@@ -6281,6 +6281,11 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
     std::uint64_t,
     static_cast<std::size_t>(rate_resolved_shadow::Outcome::Count)>
   outcome_count{};
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(
+      mpcc_rate_resolved::ActuationSampleReason::Count)>
+  actuation_sample_reason_count{};
   std::uint64_t setup_count{};
   std::uint64_t update_count{};
   std::uint64_t structural_rebuild_count{};
@@ -27539,6 +27544,14 @@ struct MPC
         if (outcome_index < window.outcome_count.size()) {
           ++window.outcome_count[outcome_index];
         }
+        const auto sample_reason_index =
+          static_cast<std::size_t>(result->actuation_sample_reason);
+        if (
+          result->outcome == rate_resolved_shadow::Outcome::ActuationSampleRejected &&
+          sample_reason_index < window.actuation_sample_reason_count.size())
+        {
+          ++window.actuation_sample_reason_count[sample_reason_index];
+        }
         const double age_sec = std::max(
           0.0, now_sec - result->identity.snapshot_sec);
         window.total_result_age_sec += age_sec;
@@ -27614,11 +27627,15 @@ struct MPC
       "consumed=%lu/current_semantic=%lu, "
       "outcomes=build:%lu/assembly:%lu/solve:%lu/nonfinite:%lu/sample:%lu/"
       "solved:%lu/exception:%lu, age=%.4f/%.4fs(avg/max), "
+      "sample_reason=time:%lu/initial:%lu/rate:%lu/terminal:%lu/sampled:%lu/"
+      "other:%lu, "
       "compute=%.3f/%.3fms(avg/max), solve=%.3f/%.3fms(avg/max), "
       "iterations=%.1f/%d(avg/max), setup=%lu/update=%lu/rebuild=%lu, "
       "constraint=%.3g/norm:%.3g, first_rate=%.3fradps, "
       "publish_step=%.4frad, last=seq:%lu/decision:%lu/intent:%s/"
-      "source:0x%016lx/geometry:0x%016lx/outcome:%s/%s, "
+      "source:0x%016lx/geometry:0x%016lx/outcome:%s/sample_reason:%s/"
+      "dt:%.6f/stage_dt:%.6f/delta0:%.9f/rate:%.9f/terminal:%.9f/"
+      "sampled:%.9f/delta_max:%.9f/rate_max:%.9f/%s, "
       "authority=shadow, selected=0, physical=not-evaluated, warm=none",
       static_cast<unsigned long>(window.submission_count),
       static_cast<unsigned long>(window.replaced_pending_count),
@@ -27649,6 +27666,34 @@ struct MPC
         static_cast<std::size_t>(rate_resolved_shadow::Outcome::Exception)]),
       window.total_result_age_sec / denominator,
       window.maximum_result_age_sec,
+      static_cast<unsigned long>(window.actuation_sample_reason_count[
+        static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::PublicationAfterStageEnd)]),
+      static_cast<unsigned long>(window.actuation_sample_reason_count[
+        static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::InitialSteeringLimitViolation)]),
+      static_cast<unsigned long>(window.actuation_sample_reason_count[
+        static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::SteeringRateLimitViolation)]),
+      static_cast<unsigned long>(window.actuation_sample_reason_count[
+        static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::TerminalSteeringLimitViolation)]),
+      static_cast<unsigned long>(window.actuation_sample_reason_count[
+        static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::SampledSteeringLimitViolation)]),
+      static_cast<unsigned long>(
+        window.outcome_count[static_cast<std::size_t>(
+        rate_resolved_shadow::Outcome::ActuationSampleRejected)] -
+        window.actuation_sample_reason_count[static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::PublicationAfterStageEnd)] -
+        window.actuation_sample_reason_count[static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::InitialSteeringLimitViolation)] -
+        window.actuation_sample_reason_count[static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::SteeringRateLimitViolation)] -
+        window.actuation_sample_reason_count[static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::TerminalSteeringLimitViolation)] -
+        window.actuation_sample_reason_count[static_cast<std::size_t>(
+        mpcc_rate_resolved::ActuationSampleReason::SampledSteeringLimitViolation)]),
       window.total_compute_ms / denominator, window.maximum_compute_ms,
       window.total_solve_ms / denominator, window.maximum_solve_ms,
       static_cast<double>(window.total_iterations) / denominator,
@@ -27672,6 +27717,16 @@ struct MPC
       last.identity.stage_geometry_id : 0U),
       window.last_result_available ?
       rate_resolved_shadow::to_string(last.outcome) : "none",
+      window.last_result_available ?
+      mpcc_rate_resolved::to_string(last.actuation_sample_reason) : "none",
+      window.last_result_available ? last.publication_interval_sec : 0.0,
+      window.last_result_available ? last.first_stage_duration_sec : 0.0,
+      window.last_result_available ? last.initial_steering_rad : 0.0,
+      window.last_result_available ? last.first_steering_rate_radps : 0.0,
+      window.last_result_available ? last.calculated_terminal_steering_rad : 0.0,
+      window.last_result_available ? last.sampled_steering_rad : 0.0,
+      window.last_result_available ? last.maximum_abs_steering_rad : 0.0,
+      window.last_result_available ? last.maximum_abs_steering_rate_radps : 0.0,
       window.last_result_available ? last.detail.c_str() : "not-evaluated");
     window = RateResolvedTrackCruiseShadowTelemetryWindow{};
     rate_resolved_track_cruise_shadow_last_log_sec_ = now_sec;

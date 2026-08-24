@@ -123,13 +123,44 @@ TEST(MpccRateResolved, SamplesIntermediateCertifiedSteering)
 
 TEST(MpccRateResolved, RejectsUncertifiedActuationSamples)
 {
+  const auto rate_violation = rate::evaluate_actuation_sample(
+    rate::ActuationSampleRequest{
+      0.10, 0.80, 0.025, 0.12, 0.6, 0.7, 2.0});
+  EXPECT_EQ(
+    rate_violation.reason,
+    rate::ActuationSampleReason::SteeringRateLimitViolation);
+  EXPECT_FALSE(rate_violation.sample.has_value());
+
+  const auto terminal_violation = rate::evaluate_actuation_sample(
+    rate::ActuationSampleRequest{
+      0.55, 0.50, 0.025, 0.12, 0.6, 0.7, 2.0});
+  EXPECT_EQ(
+    terminal_violation.reason,
+    rate::ActuationSampleReason::TerminalSteeringLimitViolation);
+  EXPECT_DOUBLE_EQ(terminal_violation.terminal_steering_rad, 0.61);
+
+  const auto time_violation = rate::evaluate_actuation_sample(
+    rate::ActuationSampleRequest{
+      0.10, 0.50, 0.13, 0.12, 0.6, 0.7, 2.0});
+  EXPECT_EQ(
+    time_violation.reason,
+    rate::ActuationSampleReason::PublicationAfterStageEnd);
+
+  const auto initial_violation = rate::evaluate_actuation_sample(
+    rate::ActuationSampleRequest{
+      0.61, 0.0, 0.025, 0.12, 0.6, 0.7, 2.0});
+  EXPECT_EQ(
+    initial_violation.reason,
+    rate::ActuationSampleReason::InitialSteeringLimitViolation);
+
+  const auto nonfinite = rate::evaluate_actuation_sample(
+    rate::ActuationSampleRequest{
+      std::numeric_limits<double>::quiet_NaN(),
+      0.0, 0.0, 0.12, 0.6, 0.7, 2.0});
+  EXPECT_EQ(
+    nonfinite.reason,
+    rate::ActuationSampleReason::InitialSteeringNonfinite);
+
   EXPECT_FALSE(rate::sample_actuation(rate::ActuationSampleRequest{
     0.10, 0.80, 0.025, 0.12, 0.6, 0.7, 2.0}).has_value());
-  EXPECT_FALSE(rate::sample_actuation(rate::ActuationSampleRequest{
-    0.55, 0.50, 0.025, 0.12, 0.6, 0.7, 2.0}).has_value());
-  EXPECT_FALSE(rate::sample_actuation(rate::ActuationSampleRequest{
-    0.10, 0.50, 0.13, 0.12, 0.6, 0.7, 2.0}).has_value());
-  EXPECT_FALSE(rate::sample_actuation(rate::ActuationSampleRequest{
-    std::numeric_limits<double>::quiet_NaN(),
-    0.0, 0.0, 0.12, 0.6, 0.7, 2.0}).has_value());
 }

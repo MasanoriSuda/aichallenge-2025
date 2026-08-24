@@ -66,11 +66,22 @@ bool result_valid(const Result & result) noexcept
     return false;
   }
   if (result.outcome != Outcome::Solved) {
-    return !result.solved && !result.actuation_sampled;
+    if (result.outcome == Outcome::ActuationSampleRejected) {
+      return !result.solved && !result.actuation_sampled &&
+             result.actuation_sample_reason !=
+             mpcc_rate_resolved::ActuationSampleReason::Accepted &&
+             result.actuation_sample_reason !=
+             mpcc_rate_resolved::ActuationSampleReason::Count;
+    }
+    return !result.solved && !result.actuation_sampled &&
+           result.actuation_sample_reason ==
+           mpcc_rate_resolved::ActuationSampleReason::Count;
   }
   return result.adapter_built && result.assembled && result.solve_attempted &&
          result.solved && result.finite && result.constraints_satisfied &&
          result.actuation_sampled &&
+         result.actuation_sample_reason ==
+         mpcc_rate_resolved::ActuationSampleReason::Accepted &&
          std::isfinite(result.first_acceleration_mps2) &&
          std::isfinite(result.first_steering_rate_radps) &&
          std::isfinite(result.first_virtual_progress_speed_mps) &&
@@ -161,6 +172,12 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     primal[state_values + model::kSteeringRateIndex];
   result.first_virtual_progress_speed_mps =
     primal[state_values + model::kVirtualProgressSpeedIndex];
+  result.first_stage_duration_sec = snapshot.request.inputs.front().stage_dt_sec;
+  result.publication_interval_sec = snapshot.publication_interval_sec;
+  result.maximum_abs_steering_rad =
+    snapshot.request.maximum_abs_steering_rad;
+  result.maximum_abs_steering_rate_radps =
+    snapshot.request.maximum_abs_steering_rate_radps;
   const int terminal_state = model::kStateDimension * horizon;
   result.terminal_velocity_mps =
     primal[terminal_state + model::kVelocityIndex];
@@ -168,7 +185,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     primal[terminal_state + model::kProgressIndex];
   result.terminal_steering_rad =
     primal[terminal_state + model::kSteeringIndex];
-  const auto sample = model::sample_actuation(
+  const auto sample = model::evaluate_actuation_sample(
     model::ActuationSampleRequest{
       result.initial_steering_rad, result.first_steering_rate_radps,
       snapshot.publication_interval_sec,
@@ -176,16 +193,20 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       snapshot.request.maximum_abs_steering_rad,
       snapshot.request.maximum_abs_steering_rate_radps,
       snapshot.request.wheelbase_m});
-  if (!sample.has_value()) {
+  result.actuation_sample_reason = sample.reason;
+  result.calculated_terminal_steering_rad = sample.terminal_steering_rad;
+  result.sampled_steering_rad = sample.sampled_steering_rad;
+  if (!sample.sample.has_value()) {
     result.outcome = Outcome::ActuationSampleRejected;
-    result.detail = "certified first stage cannot supply the 40 Hz sample";
+    result.detail = std::string{"actuation sample rejected: "} +
+      model::to_string(sample.reason);
     result.solved = false;
     result.constraints_satisfied = false;
     return finish();
   }
   result.actuation_sampled = true;
-  result.sampled_steering_rad = sample->steering_rad;
-  result.sampled_curvature_radpm = sample->curvature_radpm;
+  result.sampled_steering_rad = sample.sample->steering_rad;
+  result.sampled_curvature_radpm = sample.sample->curvature_radpm;
   result.outcome = Outcome::Solved;
   result.detail = "accepted";
   return finish();

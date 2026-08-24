@@ -91,6 +91,12 @@ TEST(MpccRateResolvedShadow, RejectsPublicationPeriodBeyondFirstStage)
   input.publication_interval_sec = 0.20;
   const auto result = context.evaluate(input);
   EXPECT_EQ(result.outcome, shadow::Outcome::ActuationSampleRejected);
+  EXPECT_EQ(
+    result.actuation_sample_reason,
+    multi_purpose_mpc_ros::mpcc_rate_resolved::ActuationSampleReason::
+    PublicationAfterStageEnd);
+  EXPECT_DOUBLE_EQ(result.publication_interval_sec, 0.20);
+  EXPECT_DOUBLE_EQ(result.first_stage_duration_sec, 0.10);
   EXPECT_TRUE(shadow::result_valid(result));
 }
 

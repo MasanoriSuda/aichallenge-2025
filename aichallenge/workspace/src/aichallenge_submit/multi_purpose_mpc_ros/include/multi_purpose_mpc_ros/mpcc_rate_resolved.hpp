@@ -72,6 +72,40 @@ struct ActuationSample
   double curvature_radpm{};
 };
 
+enum class ActuationSampleReason
+{
+  Accepted,
+  InitialSteeringNonfinite,
+  SteeringRateNonfinite,
+  ElapsedTimeInvalid,
+  StageDurationInvalid,
+  PublicationAfterStageEnd,
+  SteeringLimitInvalid,
+  SteeringRateLimitInvalid,
+  WheelbaseInvalid,
+  InitialSteeringLimitViolation,
+  SteeringRateLimitViolation,
+  TerminalSteeringLimitViolation,
+  SampledSteeringLimitViolation,
+  CurvatureNonfinite,
+  Count,
+};
+
+const char * to_string(ActuationSampleReason reason) noexcept;
+
+struct ActuationSampleEvaluation
+{
+  ActuationSampleReason reason{ActuationSampleReason::InitialSteeringNonfinite};
+  std::optional<ActuationSample> sample;
+  double terminal_steering_rad{};
+  double sampled_steering_rad{};
+};
+
+/// Evaluate the exact fail-closed boundary and preserve its rejection
+/// provenance. This function never clamps a solver result.
+ActuationSampleEvaluation evaluate_actuation_sample(
+  const ActuationSampleRequest & request) noexcept;
+
 /// Resolve an intermediate actuator sample from one certified constant-rate
 /// stage. Invalid rate, time, or steering bounds are rejected, never clamped.
 std::optional<ActuationSample> sample_actuation(

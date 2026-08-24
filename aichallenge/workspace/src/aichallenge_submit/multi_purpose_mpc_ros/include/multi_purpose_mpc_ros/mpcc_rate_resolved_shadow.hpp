@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_SHADOW_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
@@ -58,11 +59,18 @@ struct Result
   bool finite{false};
   bool constraints_satisfied{false};
   bool actuation_sampled{false};
+  mpcc_rate_resolved::ActuationSampleReason actuation_sample_reason{
+    mpcc_rate_resolved::ActuationSampleReason::Count};
   double first_acceleration_mps2{};
   double first_steering_rate_radps{};
   double first_virtual_progress_speed_mps{};
   double initial_steering_rad{};
   double sampled_steering_rad{};
+  double calculated_terminal_steering_rad{};
+  double first_stage_duration_sec{};
+  double publication_interval_sec{};
+  double maximum_abs_steering_rad{};
+  double maximum_abs_steering_rate_radps{};
   double sampled_curvature_radpm{};
   double terminal_velocity_mps{};
   double terminal_progress_m{};

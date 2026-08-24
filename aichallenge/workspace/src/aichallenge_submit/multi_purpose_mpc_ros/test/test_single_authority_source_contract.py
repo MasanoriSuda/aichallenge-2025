@@ -99,6 +99,26 @@ def test_overtake_wall_proof_uses_exact_five_state_trajectory() -> None:
     assert "exact.progress_m = extracted->progress_m" in helper
 
 
+def test_overtake_entry_speed_proof_uses_selected_exact_trajectory() -> None:
+    """Final prefix admission must not fall back to legacy rollout speed."""
+
+    admission_start = SOURCE.index(
+        "const auto certified_execution_minimum_speed = []"
+    )
+    admission_end = SOURCE.index(
+        "if (async_shadow_enabled)", admission_start
+    )
+    admission = SOURCE[admission_start:admission_end]
+
+    assert "mission.physical_execution_certificate_valid" in admission
+    assert "exact_physical_execution_trajectory_complete(exact)" in admission
+    assert "exact.velocity_mps.begin(), exact.velocity_mps.end()" in admission
+    assert (
+        "request.certified_execution_minimum_speed_mps =\n"
+        "          certified_execution_minimum_speed(mission);"
+    ) in admission
+
+
 def test_bounded_overtake_prefix_has_one_horizon_owner_end_to_end() -> None:
     """Every pre-entry consumer must use the horizon built into the QP."""
 

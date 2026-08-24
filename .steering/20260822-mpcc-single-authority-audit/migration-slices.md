@@ -618,6 +618,19 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   decision used legacy normal authority, and Recovery exited once. This is a structural Slice 5
   pass, not a claim that Overtake runtime quality is complete; the wall-reject/Emergency tail and
   unexercised Pass/Return scenario coverage remain later acceptance work.
+- `.steering/20260824-slice5-intent-matrix-gate` then rejected the first clean intent-matrix run.
+  At 9.04 m and 8.47 m, complete progressive entries passed the completion proof but were rejected
+  as `minimum-speed-insufficient`; below 8 m the unchanged close-entry completion reserve correctly
+  rejected the remaining candidates. Audit showed that final admission compared the older
+  geometric Mission rollout speed even after selecting an exact five-state physical trajectory.
+- `.steering/20260824-overtake-canonical-speed-proof` repairs that formulation join. A complete
+  selected execution certificate now supplies the minimum of its exact five-state velocity sequence;
+  producers without that evidence retain the Mission-level fail-closed behavior. No clearance,
+  solver, cadence or completion threshold changed. In `output/20260824-200419`, a certified entry at
+  10.02 m reported `speed_proof=certified-execution`, entered `Idle -> ShiftOut`, and published
+  canonical retained five-state authority with `contract_join=1`. The run later stopped next to a
+  rear wall and entered Stuck/AWSIM Recovery before Pass. Entry-speed ownership is accepted, while
+  Pass/Return coverage and collision-free Overtake quality remain open.
 
 ## Slice 6: Legacy and migration path removal
 

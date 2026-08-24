@@ -15209,6 +15209,21 @@ struct MPC
       now_sec - mpcc_lite_shadow_last_evaluation_sec_ + kEps >=
       shadow_cfg.mpcc_lite_shadow_evaluation_interval_sec);
     auto mpcc_authority_action = overtake_core::MpccLiteAuthorityAction::None;
+    const auto certified_execution_minimum_speed = [] (
+      const overtake_core::OvertakeMissionCandidate & mission)
+      {
+        const auto & exact =
+          mission.physical_execution_certificate_exact_trajectory;
+        if (
+          !mission.physical_execution_certificate_valid ||
+          !race_mpcc::exact_physical_execution_trajectory_complete(exact) ||
+          exact.velocity_mps.empty())
+        {
+          return std::numeric_limits<double>::quiet_NaN();
+        }
+        return *std::min_element(
+          exact.velocity_mps.begin(), exact.velocity_mps.end());
+      };
     const auto configure_new_entry_completion_proof = [&] (
       overtake_core::MpccLitePrefixExecutionRequest & request,
       const overtake_core::OvertakeMissionCandidate & mission,
@@ -15234,6 +15249,8 @@ struct MPC
           0.0,
           cfg.v2x_behavior.overtake_line.
           progressive_entry_min_no_return_time_sec);
+        request.certified_execution_minimum_speed_mps =
+          certified_execution_minimum_speed(mission);
       };
     const auto log_mpcc_entry_admission_rejection = [&] (
       const char * source, const int side,
@@ -15249,7 +15266,8 @@ struct MPC
           rclcpp::get_logger("mpc_controller"), entry_admission_log_clock, 1000,
           "Overtake entry admission rejected: source=%s, target=%s, side=%d, "
           "candidate=progressive, prefix_reason=%s, completion=%d/%s, "
-          "front=%.2f/%.2f m, closing=%.2f m/s, time_to_no_return=%.2f/%.2f s",
+          "front=%.2f/%.2f m, closing=%.2f m/s, time_to_no_return=%.2f/%.2f s, "
+          "min_speed=%.3f/%.3f m/s, speed_proof=%s",
           source, output.target_vehicle_id.c_str(), side,
           overtake_core::to_string(resolution.reason),
           resolution.completion_proof.checked ? 1 : 0,
@@ -15262,7 +15280,12 @@ struct MPC
             std::max(0.0, mission.closing_speed_mps)),
           resolution.completion_proof.time_to_no_return_sec,
           cfg.v2x_behavior.overtake_line.
-          progressive_entry_min_no_return_time_sec);
+          progressive_entry_min_no_return_time_sec,
+          resolution.minimum_speed_proof.effective_predicted_minimum_speed_mps,
+          resolution.minimum_speed_proof.effective_requirement_mps,
+          !resolution.minimum_speed_proof.valid ? "not-evaluated" :
+          (resolution.minimum_speed_proof.used_certified_execution_speed ?
+          "certified-execution" : "mission-rollout"));
       };
     const auto apply_mpcc_entry_execution_contract = [&] (
       overtake_core::OvertakeMissionCandidate & mission,
@@ -15341,7 +15364,10 @@ struct MPC
                          << ", candidate=" <<
           (mission.progressive_entry ? "progressive" : "complete")
                          << ", physical=" <<
-          (mission.physical_execution_certificate_valid ? "certified" : "not-required");
+          (mission.physical_execution_certificate_valid ? "certified" : "not-required")
+                         << ", speed_proof=" <<
+          (std::isfinite(certified_execution_minimum_speed(mission)) ?
+          "certified-execution" : "mission-rollout");
         authoritative_assessment.reason = authority_reason.str();
         authoritative_assessment.guard_reason = authoritative_assessment.reason;
         side_selection = {

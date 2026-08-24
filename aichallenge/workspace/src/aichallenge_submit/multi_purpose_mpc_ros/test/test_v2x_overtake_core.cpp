@@ -17478,6 +17478,8 @@ TEST(V2XOvertakeCoreCommitStage, MinimumSpeedAdmissionUsesPlanningSnapshot)
   ASSERT_TRUE(resolution.valid);
   EXPECT_TRUE(resolution.admitted);
   EXPECT_TRUE(resolution.used_planning_requirement);
+  EXPECT_FALSE(resolution.used_certified_execution_speed);
+  EXPECT_DOUBLE_EQ(resolution.effective_predicted_minimum_speed_mps, 2.37);
   EXPECT_DOUBLE_EQ(resolution.effective_requirement_mps, 2.36);
 
   request.predicted_minimum_speed_mps = 2.33;
@@ -17503,6 +17505,64 @@ TEST(V2XOvertakeCoreCommitStage, MinimumSpeedAdmissionFallsBackToLiveRequirement
   EXPECT_FALSE(resolution.admitted);
   EXPECT_FALSE(resolution.used_planning_requirement);
   EXPECT_DOUBLE_EQ(resolution.effective_requirement_mps, 2.59);
+}
+
+TEST(V2XOvertakeCoreCommitStage, MinimumSpeedAdmissionPrefersCertifiedExecutionEvidence)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SnapshotMinimumSpeedAdmissionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_snapshot_minimum_speed_admission;
+
+  SnapshotMinimumSpeedAdmissionRequest request;
+  request.predicted_minimum_speed_mps = 4.40;
+  request.planning_requirement_mps = 4.50;
+  request.live_requirement_mps = 4.70;
+  request.tolerance_mps = 0.02;
+
+  auto resolution = resolve_snapshot_minimum_speed_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.admitted);
+  EXPECT_FALSE(resolution.used_certified_execution_speed);
+
+  request.certified_execution_minimum_speed_mps = 5.10;
+  resolution = resolve_snapshot_minimum_speed_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.used_certified_execution_speed);
+  EXPECT_DOUBLE_EQ(resolution.effective_predicted_minimum_speed_mps, 5.10);
+  EXPECT_DOUBLE_EQ(resolution.effective_requirement_mps, 4.50);
+  EXPECT_NEAR(resolution.margin_mps, 0.60, 1e-9);
+}
+
+TEST(V2XOvertakeCoreCommitStage, MinimumSpeedAdmissionRejectsMalformedCertifiedEvidence)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    SnapshotMinimumSpeedAdmissionRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_snapshot_minimum_speed_admission;
+
+  SnapshotMinimumSpeedAdmissionRequest request;
+  request.predicted_minimum_speed_mps = 4.60;
+  request.planning_requirement_mps = 4.50;
+  request.live_requirement_mps = 4.70;
+  request.certified_execution_minimum_speed_mps =
+    std::numeric_limits<double>::infinity();
+
+  auto resolution = resolve_snapshot_minimum_speed_admission(request);
+  EXPECT_FALSE(resolution.valid);
+
+  request.certified_execution_minimum_speed_mps = -0.1;
+  resolution = resolve_snapshot_minimum_speed_admission(request);
+  EXPECT_FALSE(resolution.valid);
+
+  request.certified_execution_minimum_speed_mps = 4.60;
+  request.predicted_minimum_speed_mps =
+    std::numeric_limits<double>::quiet_NaN();
+  resolution = resolve_snapshot_minimum_speed_admission(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.admitted);
+  EXPECT_TRUE(resolution.used_certified_execution_speed);
 }
 
 TEST(V2XOvertakeCoreCommitStage, CrossSideReplacementAdmitsCompleteEarlyPassRollout)

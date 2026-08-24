@@ -1160,14 +1160,21 @@ SnapshotMinimumSpeedAdmissionResolution resolve_snapshot_minimum_speed_admission
   const SnapshotMinimumSpeedAdmissionRequest & request) noexcept
 {
   SnapshotMinimumSpeedAdmissionResolution resolution;
+  const bool certified_prediction_available =
+    std::isfinite(request.certified_execution_minimum_speed_mps) &&
+    request.certified_execution_minimum_speed_mps >= 0.0;
+  const bool certified_prediction_absent =
+    std::isnan(request.certified_execution_minimum_speed_mps);
   const bool planning_requirement_available =
     std::isfinite(request.planning_requirement_mps) &&
     request.planning_requirement_mps >= 0.0;
   const bool planning_requirement_absent =
     std::isnan(request.planning_requirement_mps);
   if (
-    !std::isfinite(request.predicted_minimum_speed_mps) ||
-    request.predicted_minimum_speed_mps < 0.0 ||
+    ((!std::isfinite(request.predicted_minimum_speed_mps) ||
+    request.predicted_minimum_speed_mps < 0.0) &&
+    !certified_prediction_available) ||
+    (!certified_prediction_available && !certified_prediction_absent) ||
     !std::isfinite(request.live_requirement_mps) ||
     request.live_requirement_mps < 0.0 ||
     (!planning_requirement_available && !planning_requirement_absent) ||
@@ -1177,11 +1184,17 @@ SnapshotMinimumSpeedAdmissionResolution resolve_snapshot_minimum_speed_admission
   }
 
   resolution.valid = true;
+  resolution.used_certified_execution_speed = certified_prediction_available;
+  resolution.effective_predicted_minimum_speed_mps =
+    certified_prediction_available ?
+    request.certified_execution_minimum_speed_mps :
+    request.predicted_minimum_speed_mps;
   resolution.used_planning_requirement = planning_requirement_available;
   resolution.effective_requirement_mps = planning_requirement_available ?
     request.planning_requirement_mps : request.live_requirement_mps;
   resolution.margin_mps =
-    request.predicted_minimum_speed_mps - resolution.effective_requirement_mps;
+    resolution.effective_predicted_minimum_speed_mps -
+    resolution.effective_requirement_mps;
   resolution.admitted =
     resolution.margin_mps + request.tolerance_mps >= 0.0;
   return resolution;
@@ -8781,13 +8794,14 @@ MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
     resolution.reason = MpccLitePrefixExecutionRejectReason::InvalidPrediction;
     return resolution;
   }
-  const auto minimum_speed_admission = resolve_snapshot_minimum_speed_admission(
+  resolution.minimum_speed_proof = resolve_snapshot_minimum_speed_admission(
     SnapshotMinimumSpeedAdmissionRequest{
       request.predicted_minimum_ego_speed_mps,
       request.planning_minimum_ego_speed_mps,
       request.minimum_ego_speed_mps,
-      request.minimum_speed_tolerance_mps});
-  if (!minimum_speed_admission.valid) {
+      request.minimum_speed_tolerance_mps,
+      request.certified_execution_minimum_speed_mps});
+  if (!resolution.minimum_speed_proof.valid) {
     resolution.reason = MpccLitePrefixExecutionRejectReason::InvalidPrediction;
     return resolution;
   }
@@ -8815,7 +8829,7 @@ MpccLitePrefixExecutionResolution resolve_mpcc_lite_prefix_execution(
     resolution.reason = MpccLitePrefixExecutionRejectReason::DistanceBudgetExceeded;
     return resolution;
   }
-  if (!minimum_speed_admission.admitted) {
+  if (!resolution.minimum_speed_proof.admitted) {
     resolution.reason = MpccLitePrefixExecutionRejectReason::MinimumSpeedInsufficient;
     return resolution;
   }

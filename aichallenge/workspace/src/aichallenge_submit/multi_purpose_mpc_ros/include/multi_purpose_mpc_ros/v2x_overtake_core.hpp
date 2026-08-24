@@ -763,6 +763,11 @@ struct SnapshotMinimumSpeedAdmissionRequest
   double planning_requirement_mps{std::numeric_limits<double>::quiet_NaN()};
   double live_requirement_mps{std::numeric_limits<double>::quiet_NaN()};
   double tolerance_mps{0.02};
+  /// Minimum velocity from the exact certified execution trajectory selected
+  /// by the five-state MPCC. NaN means that this newer proof source is absent
+  /// and the Mission-level kinematic prediction remains authoritative.
+  double certified_execution_minimum_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct SnapshotMinimumSpeedAdmissionResolution
@@ -770,6 +775,9 @@ struct SnapshotMinimumSpeedAdmissionResolution
   bool valid{false};
   bool admitted{false};
   bool used_planning_requirement{false};
+  bool used_certified_execution_speed{false};
+  double effective_predicted_minimum_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
   double effective_requirement_mps{std::numeric_limits<double>::quiet_NaN()};
   double margin_mps{std::numeric_limits<double>::quiet_NaN()};
 };
@@ -4834,6 +4842,10 @@ struct MpccLitePrefixExecutionRequest
   double predicted_body_clear_distance_m{std::numeric_limits<double>::infinity()};
   double predicted_minimum_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double minimum_ego_speed_mps{};
+  /// Exact selected five-state execution evidence. NaN keeps the older
+  /// Mission-level prediction as the fail-closed fallback.
+  double certified_execution_minimum_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
   double minimum_path_wall_clearance_m{std::numeric_limits<double>::infinity()};
   double minimum_required_path_wall_clearance_m{};
   double remaining_time_budget_sec{std::numeric_limits<double>::infinity()};
@@ -4860,6 +4872,7 @@ struct MpccLitePrefixExecutionResolution
   MpccLitePrefixExecutionRejectReason reason{
     MpccLitePrefixExecutionRejectReason::None};
   ProgressiveEntryCompletionGateResolution completion_proof;
+  SnapshotMinimumSpeedAdmissionResolution minimum_speed_proof;
 };
 
 /// Admit a short, hard-feasible receding-horizon prefix without pretending it

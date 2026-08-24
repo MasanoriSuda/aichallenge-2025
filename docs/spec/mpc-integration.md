@@ -1842,6 +1842,20 @@ toleranceを超える周期が残る。その周期は後段でfail closeして�
 ならない。全constraint rowの一括scaleは`output/20260823-063519`で収束率0%へ退行したため撤回済み
 である。この数値定式化は別Sliceでfailure-firstに扱い、本Sliceへsolver設定調整やfallbackを混ぜない。
 
+#### Overtake entryのcanonical速度証明（2026-08-24、2025由来の暫定）
+
+ShiftOutへ入るprogressive entryの最低速度判定は、選択済みfive-state physical execution
+certificateが完全な場合、そのexact trajectoryの全stage速度の最小値を使用する。先行する幾何Missionの
+kinematic rollout速度を、別のfive-state解が選択された後も実行証明として再利用してはならない。
+exact certificateが存在しないproducerは従来どおりMission rollout速度でfail closeする。非finite、
+不完全またはcertificate未成立のexact trajectoryを新しい証明として扱わない。
+
+速度証明の選択は最低速度比較だけを所有する。close-entry completion proof、target provenance、body
+clear、wall、freshness、current-world revalidationは独立した必須Gateとして維持する。
+`output/20260824-200419`では、設定変更なしで10.02 mのentryが
+`speed_proof=certified-execution`を記録し、`Idle -> ShiftOut`とcanonical five-state
+`contract_join=1`まで到達した。Pass/Returnと衝突なしの実用品質はこの証明の合格に含めない。
+
 #### Rejoin canonical production authority（2026-08-24、2025由来の暫定）
 
 OvertakeLineの`Recovery`から通常ラインへ戻る`ControlIntent::Rejoin`は、専用solver context、

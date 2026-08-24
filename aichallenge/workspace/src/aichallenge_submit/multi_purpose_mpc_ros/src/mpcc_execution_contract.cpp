@@ -250,7 +250,8 @@ bool canonical_normal_intent_supported(const ControlIntent intent) noexcept
   return
     intent == ControlIntent::Track || intent == ControlIntent::Cruise ||
     intent == ControlIntent::Follow || intent == ControlIntent::ShiftOut ||
-    intent == ControlIntent::Pass || intent == ControlIntent::Return;
+    intent == ControlIntent::Pass || intent == ControlIntent::Return ||
+    intent == ControlIntent::Rejoin;
 }
 
 bool canonical_normal_intent_requires_target(const ControlIntent intent) noexcept

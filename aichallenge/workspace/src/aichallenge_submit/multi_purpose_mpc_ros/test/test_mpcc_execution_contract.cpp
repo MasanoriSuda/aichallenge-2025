@@ -177,18 +177,35 @@ TEST(MpccExecutionContract, CanonicalNormalIntentDomainIsExplicit)
       contract::ControlIntent::Follow,
       contract::ControlIntent::ShiftOut,
       contract::ControlIntent::Pass,
-      contract::ControlIntent::Return})
+      contract::ControlIntent::Return,
+      contract::ControlIntent::Rejoin})
   {
     EXPECT_TRUE(contract::canonical_normal_intent_supported(intent));
   }
   for (const auto intent : {
       contract::ControlIntent::Unknown,
       contract::ControlIntent::Hold,
-      contract::ControlIntent::Stop,
-      contract::ControlIntent::Rejoin})
+      contract::ControlIntent::Stop})
   {
     EXPECT_FALSE(contract::canonical_normal_intent_supported(intent));
   }
+}
+
+TEST(MpccExecutionContract, RejoinCanonicalIdentityDoesNotBorrowPassProvenance)
+{
+  EXPECT_FALSE(
+    contract::canonical_normal_intent_requires_target(
+      contract::ControlIntent::Rejoin));
+  EXPECT_FALSE(
+    contract::canonical_normal_intent_requires_execution_side(
+      contract::ControlIntent::Rejoin));
+
+  auto context = make_context();
+  context.intent = contract::ControlIntent::Rejoin;
+  context.target_id.clear();
+  context.execution_side_sign = 0;
+  context = contract::seal_problem_context(std::move(context));
+  EXPECT_TRUE(contract::problem_context_complete(context));
 }
 
 TEST(MpccExecutionContract, CanonicalOvertakeIntentsRequireTargetProvenance)

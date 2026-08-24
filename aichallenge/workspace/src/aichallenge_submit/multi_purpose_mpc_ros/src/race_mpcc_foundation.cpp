@@ -390,6 +390,61 @@ TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
   return result;
 }
 
+const char * rejoin_shadow_eligibility_reason_name(
+  const RejoinShadowEligibilityReason reason) noexcept
+{
+  switch (reason) {
+    case RejoinShadowEligibilityReason::Eligible:
+      return "eligible";
+    case RejoinShadowEligibilityReason::ProgressMpccDisabled:
+      return "progress-mpcc-disabled";
+    case RejoinShadowEligibilityReason::MigrationBoundaryInactive:
+      return "migration-boundary-inactive";
+    case RejoinShadowEligibilityReason::ExtendedDynamicsDisabled:
+      return "extended-dynamics-disabled";
+    case RejoinShadowEligibilityReason::LiveProgressAlreadyActive:
+      return "live-progress-already-active";
+    case RejoinShadowEligibilityReason::TacticalSnapshot:
+      return "tactical-snapshot";
+    case RejoinShadowEligibilityReason::IntentNotRejoin:
+      return "intent-not-rejoin";
+  }
+  return "unknown";
+}
+
+RejoinShadowEligibility resolve_rejoin_shadow_eligibility(
+  const RejoinShadowEligibilityRequest & request) noexcept
+{
+  RejoinShadowEligibility result;
+  if (!request.progress_mpcc_enabled) {
+    result.reason = RejoinShadowEligibilityReason::ProgressMpccDisabled;
+    return result;
+  }
+  if (!request.overtake_only_boundary) {
+    result.reason = RejoinShadowEligibilityReason::MigrationBoundaryInactive;
+    return result;
+  }
+  if (!request.extended_dynamics_enabled) {
+    result.reason = RejoinShadowEligibilityReason::ExtendedDynamicsDisabled;
+    return result;
+  }
+  if (request.live_progress_active) {
+    result.reason = RejoinShadowEligibilityReason::LiveProgressAlreadyActive;
+    return result;
+  }
+  if (request.tactical_snapshot) {
+    result.reason = RejoinShadowEligibilityReason::TacticalSnapshot;
+    return result;
+  }
+  if (request.intent != mpcc_execution_contract::ControlIntent::Rejoin) {
+    result.reason = RejoinShadowEligibilityReason::IntentNotRejoin;
+    return result;
+  }
+  result.eligible = true;
+  result.reason = RejoinShadowEligibilityReason::Eligible;
+  return result;
+}
+
 const char * follow_shadow_eligibility_reason_name(
   const FollowShadowEligibilityReason reason) noexcept
 {

@@ -217,6 +217,44 @@ struct TrackCruiseShadowEligibility
 TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
   const TrackCruiseShadowEligibilityRequest & request) noexcept;
 
+enum class RejoinShadowEligibilityReason
+{
+  Eligible,
+  ProgressMpccDisabled,
+  MigrationBoundaryInactive,
+  ExtendedDynamicsDisabled,
+  LiveProgressAlreadyActive,
+  TacticalSnapshot,
+  IntentNotRejoin,
+};
+
+const char * rejoin_shadow_eligibility_reason_name(
+  RejoinShadowEligibilityReason reason) noexcept;
+
+struct RejoinShadowEligibilityRequest
+{
+  bool progress_mpcc_enabled{false};
+  bool overtake_only_boundary{true};
+  bool extended_dynamics_enabled{false};
+  bool live_progress_active{false};
+  bool tactical_snapshot{false};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+};
+
+struct RejoinShadowEligibility
+{
+  bool eligible{false};
+  RejoinShadowEligibilityReason reason{
+    RejoinShadowEligibilityReason::ProgressMpccDisabled};
+};
+
+/// Observe line Recovery with the canonical five-state formulation without
+/// granting it production authority. Rejoin deliberately has no target or
+/// pass-side identity; its semantic goal is the base racing line.
+RejoinShadowEligibility resolve_rejoin_shadow_eligibility(
+  const RejoinShadowEligibilityRequest & request) noexcept;
+
 enum class FollowShadowEligibilityReason
 {
   Eligible,

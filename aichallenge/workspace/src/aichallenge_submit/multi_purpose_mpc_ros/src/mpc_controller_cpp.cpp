@@ -5342,6 +5342,7 @@ struct MpcProblem
   bool progress_contouring_active{false};
   bool progress_metadata_available{false};
   bool track_cruise_shadow_requested{false};
+  bool rejoin_shadow_requested{false};
   std::string progress_metadata_reject_reason;
   mpcc_progress::ActivationSource progress_contouring_activation_source{
     mpcc_progress::ActivationSource::Disabled};
@@ -5794,6 +5795,12 @@ struct TrackCruiseShadowCycleResult
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
   std::string retained_detail{"not-attempted"};
+};
+
+enum class CanonicalNormalShadowMode
+{
+  TrackCruise,
+  Rejoin,
 };
 
 struct FollowShadowCycleResult
@@ -6447,6 +6454,9 @@ struct MPC
       cfg.progress_contouring.extended_dynamics_enabled)
     {
       track_cruise_shadow_solver_context_ =
+        std::make_shared<ExtendedBranchSolverContext>(
+        kCanonicalPhysicalRowTolerancePolicy);
+      rejoin_shadow_solver_context_ =
         std::make_shared<ExtendedBranchSolverContext>(
         kCanonicalPhysicalRowTolerancePolicy);
       follow_canonical_lifecycle_->solver_context =
@@ -7348,6 +7358,10 @@ struct MPC
     if (canonical_shadow_plan != nullptr) {
       track_cruise_shadow_plan_store_.clear_if_plan_id(
         canonical_shadow_plan->plan_id);
+    }
+    const auto rejoin_shadow_plan = rejoin_shadow_plan_store_.snapshot();
+    if (rejoin_shadow_plan != nullptr) {
+      rejoin_shadow_plan_store_.clear_if_plan_id(rejoin_shadow_plan->plan_id);
     }
     pending_dynamic_escape_execution_.reset();
     retained_dynamic_escape_execution_.reset();
@@ -18968,6 +18982,16 @@ struct MPC
         current_control_intent()});
     const bool track_cruise_shadow_requested =
       track_cruise_shadow_eligibility.eligible;
+    const auto rejoin_shadow_eligibility =
+      race_mpcc::resolve_rejoin_shadow_eligibility(
+      race_mpcc::RejoinShadowEligibilityRequest{
+        cfg.progress_contouring_mpcc_enabled,
+        cfg.progress_contouring_mpcc_overtake_only,
+        cfg.progress_contouring.extended_dynamics_enabled,
+        progress_contouring_requested,
+        behavior_override != nullptr,
+        current_control_intent()});
+    const bool rejoin_shadow_requested = rejoin_shadow_eligibility.eligible;
     const auto follow_shadow_eligibility =
       race_mpcc::resolve_follow_shadow_eligibility(
       race_mpcc::FollowShadowEligibilityRequest{
@@ -18988,7 +19012,7 @@ struct MPC
     const bool follow_shadow_requested = follow_shadow_eligibility.eligible;
     const bool progress_metadata_requested =
       progress_contouring_requested || track_cruise_shadow_requested ||
-      follow_shadow_requested;
+      follow_shadow_requested || rejoin_shadow_requested;
     std::string progress_contouring_reject_reason;
     const auto progress_preparation = progress_metadata_requested ?
       prepare_progress_contouring_mpc(
@@ -19591,6 +19615,7 @@ struct MPC
       progress_contouring_active,
       progress_metadata_available,
       track_cruise_shadow_requested,
+      rejoin_shadow_requested,
       progress_contouring_reject_reason,
       progress_contouring_activation.source,
       dynamic_escape_formulation_lease_active,
@@ -19725,7 +19750,8 @@ struct MPC
       return std::nullopt;
     }
     const double initial_lag_m =
-      (legacy.track_cruise_shadow_requested || legacy.follow_shadow_requested) ?
+      (legacy.track_cruise_shadow_requested || legacy.follow_shadow_requested ||
+      legacy.rejoin_shadow_requested) ?
       initial_frenet_pose->lag_m : 0.0;
     if (
       legacy.follow_shadow_requested &&
@@ -24591,6 +24617,117 @@ struct MPC
     last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
   }
 
+  void record_rejoin_shadow_telemetry(
+    const TrackCruiseShadowCycleResult & result, const double now_sec)
+  {
+    if (!result.eligible) {
+      return;
+    }
+    auto & window = rejoin_shadow_telemetry_window_;
+    ++window.eligible_count;
+    window.metadata_count += result.metadata_available ? 1U : 0U;
+    window.build_count += result.build_succeeded ? 1U : 0U;
+    window.attempt_count += result.solve_attempted ? 1U : 0U;
+    window.solved_count += result.solved ? 1U : 0U;
+    window.finite_count += result.finite ? 1U : 0U;
+    window.constraint_count += result.constraints_satisfied ? 1U : 0U;
+    window.execution_primal_count += result.execution_primal_accepted ? 1U : 0U;
+    window.physical_check_count += result.physical_certificate_checked ? 1U : 0U;
+    window.certified_count += result.physically_certified ? 1U : 0U;
+    window.canonical_extracted_count += result.canonical_plan_extracted ? 1U : 0U;
+    window.canonical_stored_count += result.canonical_plan_stored ? 1U : 0U;
+    window.canonical_fresh_authority_count +=
+      result.canonical_fresh_authority_ready ? 1U : 0U;
+    window.canonical_actuation_count += result.canonical_actuation_extracted ? 1U : 0U;
+    window.total_iterations += static_cast<std::uint64_t>(std::max(0, result.iterations));
+    window.maximum_iterations = std::max(window.maximum_iterations, result.iterations);
+    window.total_solve_ms += result.solve_ms;
+    window.maximum_solve_ms = std::max(window.maximum_solve_ms, result.solve_ms);
+    window.total_shadow_ms += result.total_ms;
+    window.maximum_shadow_ms = std::max(window.maximum_shadow_ms, result.total_ms);
+    if (result.physical_certificate_checked && !result.physically_certified) {
+      window.physical_rejects.record(result.physical_wall_diagnostic);
+    }
+
+    std::string status_key = result.status;
+    if (result.physical_certificate_checked && !result.physically_certified) {
+      status_key += "/";
+      status_key += mpcc_contract::physical_wall_certificate_reason_name(
+        result.physical_wall_diagnostic.reason);
+    }
+    if (status_key != last_rejoin_shadow_status_) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Rejoin canonical shadow outcome: decision=%lu, status=%s, detail=%s, "
+        "solve=%d/%d, physical=%d/%s, canonical=%d/%d/%d, "
+        "retained=disabled, solve_ms=%.3f, total_ms=%.3f, "
+        "production_authority=legacy-unchanged, selected=0",
+        static_cast<unsigned long>(result.decision_id), result.status.c_str(),
+        result.detail.c_str(), result.solved ? 1 : 0, result.iterations,
+        result.physically_certified ? 1 : 0,
+        mpcc_contract::physical_wall_certificate_reason_name(
+          result.physical_wall_diagnostic.reason),
+        result.canonical_plan_extracted ? 1 : 0,
+        result.canonical_fresh_authority_ready ? 1 : 0,
+        result.canonical_actuation_extracted ? 1 : 0,
+        result.solve_ms, result.total_ms);
+      last_rejoin_shadow_status_ = std::move(status_key);
+    }
+    if (
+      !std::isfinite(now_sec) ||
+      (std::isfinite(last_rejoin_shadow_telemetry_log_sec_) &&
+      now_sec >= last_rejoin_shadow_telemetry_log_sec_ &&
+      now_sec - last_rejoin_shadow_telemetry_log_sec_ < 1.0))
+    {
+      return;
+    }
+    const double attempted = static_cast<double>(
+      std::max<std::uint64_t>(1U, window.attempt_count));
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Rejoin canonical shadow: eligible=%lu, metadata=%lu, build=%lu, "
+      "attempt=%lu, solved=%lu, finite=%lu, constraint=%lu, primal=%lu, "
+      "physical=%lu/%lu(check/certified), canonical=%lu/%lu/%lu/%lu"
+      "(extract/store/authority/actuation), physical_rejects="
+      "invalid:%lu/bound:%lu/heading:%lu/sample:%lu/contact:%lu/"
+      "current_sample:%lu/current_contact:%lu/course_frame:%lu/swept:%lu, "
+      "solve_ms=%.3f/%.3f(avg/max), total_ms=%.3f/%.3f(avg/max), "
+      "iterations=%.1f/%d(avg/max), last=%s, authority=shadow",
+      static_cast<unsigned long>(window.eligible_count),
+      static_cast<unsigned long>(window.metadata_count),
+      static_cast<unsigned long>(window.build_count),
+      static_cast<unsigned long>(window.attempt_count),
+      static_cast<unsigned long>(window.solved_count),
+      static_cast<unsigned long>(window.finite_count),
+      static_cast<unsigned long>(window.constraint_count),
+      static_cast<unsigned long>(window.execution_primal_count),
+      static_cast<unsigned long>(window.physical_check_count),
+      static_cast<unsigned long>(window.certified_count),
+      static_cast<unsigned long>(window.canonical_extracted_count),
+      static_cast<unsigned long>(window.canonical_stored_count),
+      static_cast<unsigned long>(window.canonical_fresh_authority_count),
+      static_cast<unsigned long>(window.canonical_actuation_count),
+      static_cast<unsigned long>(window.physical_rejects.invalid_input_count),
+      static_cast<unsigned long>(window.physical_rejects.lateral_bound_count),
+      static_cast<unsigned long>(window.physical_rejects.heading_unavailable_count),
+      static_cast<unsigned long>(
+        window.physical_rejects.wall_sample_unavailable_count),
+      static_cast<unsigned long>(window.physical_rejects.hard_wall_contact_count),
+      static_cast<unsigned long>(
+        window.physical_rejects.current_pose_sample_unavailable_count),
+      static_cast<unsigned long>(
+        window.physical_rejects.current_pose_hard_wall_contact_count),
+      static_cast<unsigned long>(
+        window.physical_rejects.course_frame_unavailable_count),
+      static_cast<unsigned long>(window.physical_rejects.swept_path_count),
+      window.total_solve_ms / attempted, window.maximum_solve_ms,
+      window.total_shadow_ms / attempted, window.maximum_shadow_ms,
+      static_cast<double>(window.total_iterations) / attempted,
+      window.maximum_iterations, result.status.c_str());
+    window = TrackCruiseShadowTelemetryWindow{};
+    last_rejoin_shadow_telemetry_log_sec_ = now_sec;
+  }
+
   OvertakeCanonicalFreshShadowResult make_overtake_canonical_shadow_result(
     const MpcProblem & problem,
     const mpcc_contract::MpccProblemContext & context) const
@@ -25925,28 +26062,43 @@ struct MPC
     }
   }
 
-  TrackCruiseShadowCycleResult evaluate_track_cruise_shadow(
-    const MpcProblem & problem, const double now_sec)
+  TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow(
+    const MpcProblem & problem, const double now_sec,
+    const CanonicalNormalShadowMode mode)
   {
     constexpr int progress_metadata_nx = 3;
+    const bool rejoin_mode = mode == CanonicalNormalShadowMode::Rejoin;
+    auto & plan_store = rejoin_mode ?
+      rejoin_shadow_plan_store_ : track_cruise_shadow_plan_store_;
+    auto & warm_start_identity = rejoin_mode ?
+      rejoin_shadow_warm_start_identity_ : track_cruise_shadow_warm_start_identity_;
+    auto & context_epoch = rejoin_mode ?
+      rejoin_shadow_context_epoch_ : track_cruise_shadow_context_epoch_;
+    const auto solver_context = rejoin_mode ?
+      rejoin_shadow_solver_context_ : track_cruise_shadow_solver_context_;
     TrackCruiseShadowCycleResult result;
-    result.eligible = problem.track_cruise_shadow_requested;
+    result.eligible = rejoin_mode ?
+      problem.rejoin_shadow_requested : problem.track_cruise_shadow_requested;
     result.metadata_available = problem.progress_metadata_available;
     result.decision_id = active_control_decision_id_;
     result.intent = current_control_intent();
     const auto retained_plan_before_fresh =
-      track_cruise_shadow_plan_store_.snapshot();
+      plan_store.snapshot();
     const auto started = SteadyClock::now();
-    const auto finish = [this, &problem, now_sec, &result, &started,
+    const auto finish = [this, &problem, now_sec, rejoin_mode, &result, &started,
         &retained_plan_before_fresh]() {
-        try {
-          evaluate_track_cruise_retained_shadow(
-            problem, now_sec, retained_plan_before_fresh, result);
-        } catch (const std::exception & error) {
-          result.retained_detail = std::string{"retained shadow exception: "} +
-            error.what();
-        } catch (...) {
-          result.retained_detail = "retained shadow exception: unknown";
+        if (!rejoin_mode) {
+          try {
+            evaluate_track_cruise_retained_shadow(
+              problem, now_sec, retained_plan_before_fresh, result);
+          } catch (const std::exception & error) {
+            result.retained_detail = std::string{"retained shadow exception: "} +
+              error.what();
+          } catch (...) {
+            result.retained_detail = "retained shadow exception: unknown";
+          }
+        } else {
+          result.retained_detail = "Rejoin retained policy intentionally unavailable";
         }
         result.total_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started).count();
@@ -25987,7 +26139,7 @@ struct MPC
       const auto warm_identity =
         make_canonical_shadow_warm_start_identity(problem, context);
       const auto warm_resolution = race_mpcc::resolve_shadow_warm_start(
-        track_cruise_shadow_warm_start_identity_, warm_identity);
+        warm_start_identity, warm_identity);
       result.reset_reason = warm_resolution.reason;
       if (!warm_resolution.valid) {
         result.status = "warm-context-reject";
@@ -25996,13 +26148,13 @@ struct MPC
         return finish();
       }
       if (warm_resolution.reset_context) {
-        track_cruise_shadow_context_epoch_ =
-          track_cruise_shadow_context_epoch_ ==
+        context_epoch =
+          context_epoch ==
           std::numeric_limits<std::uint64_t>::max() ?
-          1U : track_cruise_shadow_context_epoch_ + 1U;
+          1U : context_epoch + 1U;
       }
-      track_cruise_shadow_warm_start_identity_ = warm_identity;
-      if (track_cruise_shadow_solver_context_ == nullptr) {
+      warm_start_identity = warm_identity;
+      if (solver_context == nullptr) {
         result.status = "solver-context-reject";
         result.detail = "dedicated shadow solver context unavailable";
         return finish();
@@ -26028,8 +26180,8 @@ struct MPC
           last_extended_branch_context_reset_ = previous_reset;
           last_extended_branch_context_solve_count_ = previous_count;
         });
-      active_extended_branch_solver_context_ = track_cruise_shadow_solver_context_;
-      active_extended_branch_context_epoch_ = track_cruise_shadow_context_epoch_;
+      active_extended_branch_solver_context_ = solver_context;
+      active_extended_branch_context_epoch_ = context_epoch;
       active_extended_branch_target_id_ = mpcc_contract::to_string(result.intent);
       active_extended_branch_side_sign_ = 0;
       active_extended_branch_horizon_size_ = problem.N;
@@ -26404,7 +26556,7 @@ struct MPC
       }
       // Only a fully executable command may replace retained production
       // authority.  Failed post-extraction checks cannot poison the store.
-      result.canonical_store_reason = track_cruise_shadow_plan_store_.replace(
+      result.canonical_store_reason = plan_store.replace(
         std::move(canonical_plan_value));
       if (
         result.canonical_store_reason !=
@@ -26416,7 +26568,7 @@ struct MPC
         return finish();
       }
       result.canonical_plan_stored = true;
-      const auto canonical_plan_snapshot = track_cruise_shadow_plan_store_.snapshot();
+      const auto canonical_plan_snapshot = plan_store.snapshot();
       if (canonical_plan_snapshot == nullptr) {
         result.status = "canonical-snapshot-reject";
         result.detail = "accepted canonical store has no snapshot";
@@ -26437,12 +26589,16 @@ struct MPC
       result.terminal_velocity_mps = execution_primal.primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
         mpcc_progress::kExtendedVelocityIndex];
-      if (!publish_certified_extended_progress_warm_start(
+      if (
+        !rejoin_mode &&
+        !publish_certified_extended_progress_warm_start(
           execution_primal.primal, outcome.result->dual, now_sec,
           extended_problem->progress_origin_m))
       {
         result.status = "warm-start-publication-reject";
         result.detail =
+          rejoin_mode ?
+          "Rejoin certified warm-start publication rejected" :
           "Track/Cruise certified warm-start publication rejected";
         result.selected = {};
         return finish();
@@ -27612,8 +27768,8 @@ struct MPC
       if (problem.track_cruise_shadow_requested) {
         record_problem_context(
           problem, mpcc_contract::Formulation::VelocityProgress5State);
-        const auto canonical_result = evaluate_track_cruise_shadow(
-          problem, now_sec);
+        const auto canonical_result = evaluate_canonical_normal_shadow(
+          problem, now_sec, CanonicalNormalShadowMode::TrackCruise);
         record_track_cruise_shadow_telemetry(canonical_result, now_sec);
         if (canonical_result.selected.complete()) {
           return canonical_normal_control(
@@ -27622,6 +27778,14 @@ struct MPC
         return canonical_normal_emergency_stop(
           problem, canonical_result.intent,
           canonical_result.status + "/" + canonical_result.retained_detail);
+      }
+      if (problem.rejoin_shadow_requested) {
+        // Rejoin remains observation-only in this Slice.  The legacy command
+        // below is deliberately unchanged until dynamic evidence proves the
+        // complete five-state chain and a retained/current-world policy.
+        const auto canonical_result = evaluate_canonical_normal_shadow(
+          problem, now_sec, CanonicalNormalShadowMode::Rejoin);
+        record_rejoin_shadow_telemetry(canonical_result, now_sec);
       }
       Eigen::VectorXd dec;
       double maximum_constraint_violation = 0.0;
@@ -28598,6 +28762,7 @@ struct MPC
   std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> track_cruise_shadow_solver_context_;
+  std::shared_ptr<ExtendedBranchSolverContext> rejoin_shadow_solver_context_;
   std::shared_ptr<CanonicalNormalLifecycle> follow_canonical_lifecycle_;
   std::shared_ptr<CanonicalNormalLifecycle> overtake_canonical_lifecycle_;
   std::shared_ptr<follow_async::Mailbox> follow_canonical_async_mailbox_;
@@ -28635,12 +28800,20 @@ struct MPC
     -std::numeric_limits<double>::infinity()};
   std::string overtake_canonical_async_last_detail_{"not-evaluated"};
   canonical_plan::CanonicalExecutionPlanStore track_cruise_shadow_plan_store_;
+  canonical_plan::CanonicalExecutionPlanStore rejoin_shadow_plan_store_;
   std::optional<race_mpcc::ShadowWarmStartIdentity>
   track_cruise_shadow_warm_start_identity_;
   std::uint64_t track_cruise_shadow_context_epoch_{};
+  std::optional<race_mpcc::ShadowWarmStartIdentity>
+  rejoin_shadow_warm_start_identity_;
+  std::uint64_t rejoin_shadow_context_epoch_{};
   TrackCruiseShadowTelemetryWindow track_cruise_shadow_telemetry_window_;
   double last_track_cruise_shadow_telemetry_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
+  TrackCruiseShadowTelemetryWindow rejoin_shadow_telemetry_window_;
+  double last_rejoin_shadow_telemetry_log_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string last_rejoin_shadow_status_;
   std::optional<CanonicalNormalPendingActuation>
   pending_canonical_normal_actuation_;
   CanonicalNormalFinalActuationTelemetryWindow

@@ -158,6 +158,31 @@ TEST(RaceMpccFoundation, EnablesFollowShadowWithoutPromotingOtherIntents)
     race::FollowShadowEligibilityReason::NoCoherentFrontObservation);
 }
 
+TEST(RaceMpccFoundation, EnablesRejoinShadowOnlyAtTheMigrationBoundary)
+{
+  const auto rejoin = race::resolve_rejoin_shadow_eligibility(
+    race::RejoinShadowEligibilityRequest{
+      true, true, true, false, false, contract::ControlIntent::Rejoin});
+  const auto cruise = race::resolve_rejoin_shadow_eligibility(
+    race::RejoinShadowEligibilityRequest{
+      true, true, true, false, false, contract::ControlIntent::Cruise});
+  const auto live = race::resolve_rejoin_shadow_eligibility(
+    race::RejoinShadowEligibilityRequest{
+      true, true, true, true, false, contract::ControlIntent::Rejoin});
+  const auto tactical = race::resolve_rejoin_shadow_eligibility(
+    race::RejoinShadowEligibilityRequest{
+      true, true, true, false, true, contract::ControlIntent::Rejoin});
+
+  EXPECT_TRUE(rejoin.eligible);
+  EXPECT_EQ(rejoin.reason, race::RejoinShadowEligibilityReason::Eligible);
+  EXPECT_FALSE(cruise.eligible);
+  EXPECT_EQ(cruise.reason, race::RejoinShadowEligibilityReason::IntentNotRejoin);
+  EXPECT_FALSE(live.eligible);
+  EXPECT_EQ(live.reason, race::RejoinShadowEligibilityReason::LiveProgressAlreadyActive);
+  EXPECT_FALSE(tactical.eligible);
+  EXPECT_EQ(tactical.reason, race::RejoinShadowEligibilityReason::TacticalSnapshot);
+}
+
 TEST(RaceMpccFoundation, FollowProductionNeverFallsThroughToAnotherNormalOwner)
 {
   EXPECT_EQ(

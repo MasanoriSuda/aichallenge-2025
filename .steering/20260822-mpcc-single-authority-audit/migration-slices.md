@@ -525,6 +525,22 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   later failed exact wall proof. The certification Gate is accepted. The next Slice may atomically
   promote complete canonical Overtake selection only while deleting converted/three-state normal
   authority for ShiftOut/Pass/Return; no wall or availability relaxation is authorized.
+- `.steering/20260824-overtake-production-dynamic-acceptance` dynamically rejected that promotion as
+  a complete Slice 5 result. `output/20260824-085556` proved observed ShiftOut and committed
+  DynamicWait used only certified canonical five-state authority or explicit Emergency, but an
+  exact wall failure entered line Recovery. Its canonical intent resolved to `Rejoin`, which was
+  absent from the canonical normal domain and therefore published through
+  `legacy-spatial-mpc-3state`. Pass, Return and DynamicEscape were not exercised. This is an
+  incomplete intent migration, not a clearance or solver parameter problem.
+- `.steering/20260824-rejoin-canonical-shadow` adds typed, isolated fresh Rejoin observation without
+  changing production authority. Rejoin has its own solver context, warm-start identity and plan
+  store; it cannot borrow Track/Cruise state, publish global certified warm history or use retained
+  evidence whose current-world semantics have not been specified. All static/package gates pass.
+  In `output/20260824-092036`, Rejoin was `NOT EXERCISED`: ShiftOut instead remained without a
+  selectable async canonical artifact, stopped through explicit Emergency and was reset directly
+  to Idle by Stuck/AWSIM Recovery. Rejoin production promotion remains blocked. Audit that earlier
+  async producer/consumer availability break before repeating the Rejoin Gate; do not add a lease,
+  retry, legacy hold or parameter relaxation.
 
 ## Slice 6: Legacy and migration path removal
 

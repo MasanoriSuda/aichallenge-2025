@@ -214,6 +214,42 @@ def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:
     assert "dynamic wait has no executable canonical lateral authority" in before_old_path
 
 
+def test_rejoin_is_observed_by_an_isolated_shadow_without_production_promotion() -> None:
+    """Recovery evidence must not silently promote or share Track/Cruise state."""
+
+    activation_start = SOURCE.index(
+        "const bool progress_contouring_execution_phase ="
+    )
+    activation_end = SOURCE.index(
+        "const bool dynamic_escape_formulation_lease_active", activation_start
+    )
+    activation = SOURCE[activation_start:activation_end]
+    assert "OvertakeLinePhase::Recovery" not in activation
+
+    evaluator_start = SOURCE.index("evaluate_canonical_normal_shadow(")
+    evaluator_end = SOURCE.index(
+        "resolve_physically_validated_mpcc_execution_trajectory(", evaluator_start
+    )
+    evaluator = SOURCE[evaluator_start:evaluator_end]
+    assert "rejoin_shadow_plan_store_" in evaluator
+    assert "rejoin_shadow_warm_start_identity_" in evaluator
+    assert "rejoin_shadow_solver_context_" in evaluator
+    assert "if (!rejoin_mode)" in evaluator
+    assert "Rejoin retained policy intentionally unavailable" in evaluator
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    old_path_start = SOURCE.index("Eigen::VectorXd dec;", control_start)
+    rejoin_shadow = SOURCE.index(
+        "if (problem.rejoin_shadow_requested)", control_start
+    )
+    assert rejoin_shadow < old_path_start
+    observation = SOURCE[rejoin_shadow:old_path_start]
+    assert "CanonicalNormalShadowMode::Rejoin" in observation
+    assert "record_rejoin_shadow_telemetry" in observation
+    assert "return canonical_normal_control(" not in observation
+    assert "return canonical_normal_emergency_stop(" not in observation
+
+
 def test_canonical_overtake_wall_certificate_is_not_reinterpreted_downstream() -> None:
     """The legacy x/y wall monitor cannot replace a certified canonical command."""
 

@@ -6298,6 +6298,7 @@ struct OvertakeCanonicalFreshShadowResult
   bool retained_actuation_extracted{false};
   bool retained_selection_complete{false};
   std::uint64_t decision_id{};
+  std::size_t warm_start_stage_advance{};
   std::uint64_t retained_plan_id{};
   std::uint64_t retained_corridor_tube_id{};
   mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
@@ -20764,7 +20765,8 @@ struct MPC
 
   persistent_osqp::SolveOutcome solve_extended_progress_problem(
     const ExtendedProgressMpcProblem & problem, const double now_sec,
-    const bool record_runtime_telemetry = true)
+    const bool record_runtime_telemetry = true,
+    const std::size_t warm_start_stage_advance = 1U)
   {
     std::unique_lock<std::mutex> branch_context_lock;
     auto * solver = &persistent_extended_osqp_solver_;
@@ -20820,7 +20822,7 @@ struct MPC
         previous_certified->value, static_cast<std::size_t>(problem.N),
         static_cast<std::size_t>(mpcc_progress::kExtendedStateDimension),
         static_cast<std::size_t>(mpcc_progress::kExtendedInputDimension),
-        problem.trailing_dual_stage_blocks);
+        problem.trailing_dual_stage_blocks, warm_start_stage_advance);
       if (
         warm_start.has_value() && previous_progress_origin.has_value() &&
         !mpcc_progress::rebase_extended_progress_warm_start(
@@ -20842,6 +20844,11 @@ struct MPC
       ++active_extended_branch_solver_context_->warm_start_count;
     }
     if (!outcome.result.has_value()) {
+      std::ostringstream detail;
+      detail << outcome.failure_detail
+             << ", warm_candidate=" << (previous_certified.has_value() ? 1 : 0)
+             << ", warm_stage_advance=" << warm_start_stage_advance;
+      outcome.failure_detail = detail.str();
       if (record_runtime_telemetry) {
         record_osqp_telemetry(outcome, now_sec);
       }
@@ -23990,7 +23997,8 @@ struct MPC
       active_extended_branch_horizon_size_ = problem.N;
       result.solve_attempted = true;
       const auto outcome = solve_extended_progress_problem(
-        extended_problem.value(), now_sec, false);
+        extended_problem.value(), now_sec, false,
+        warm_resolution.stage_advance);
       result.solve_ms = outcome.telemetry.total_ms;
       result.iterations = outcome.telemetry.iterations;
       result.warm_start_applied = outcome.telemetry.warm_start_applied;
@@ -25800,6 +25808,7 @@ struct MPC
         warm_resolution.reason);
       return result;
     }
+    result.warm_start_stage_advance = warm_resolution.stage_advance;
 
     const auto previous_context = active_extended_branch_solver_context_;
     const auto previous_epoch = active_extended_branch_context_epoch_;
@@ -25832,7 +25841,8 @@ struct MPC
     active_extended_branch_horizon_size_ = extended_problem->N;
 
     const auto outcome = solve_extended_progress_problem(
-      extended_problem.value(), now_sec, false);
+      extended_problem.value(), now_sec, false,
+      warm_resolution.stage_advance);
     if (!outcome.result.has_value()) {
       result.status = "solve-reject";
       result.detail = outcome.failure_detail;
@@ -26890,7 +26900,7 @@ struct MPC
         "time=%.3f/%.3fms(avg/max), retained_time=%.3f/%.3fms(avg/max), "
         "actuation_diff_max=%.3g, "
         "initial_lag_abs_max=%.3fm, wall_clearance=%.3fm, "
-        "tracking_tube=%.3fm, last=%s/%s, "
+        "tracking_tube=%.3fm, warm_stage_advance=%zu, last=%s/%s, "
         "retained_last=%s/%s/"
         "stage:%zu/reserve:%.3f, source=%s, incoming_last=%s/%lu/%s, "
         "stored_last=%s/%lu/%s, authority=shadow",
@@ -26938,6 +26948,7 @@ struct MPC
         window.maximum_absolute_initial_lag_m,
         result.required_wall_clearance_m,
         result.required_lateral_tracking_reserve_m,
+        result.warm_start_stage_advance,
         result.status.c_str(), result.detail.c_str(),
         canonical_retained_world::to_string(result.retained_world_reason),
         result.retained_detail.c_str(), result.retained_rejected_stage,
@@ -27079,7 +27090,8 @@ struct MPC
       active_extended_branch_horizon_size_ = problem.N;
       result.solve_attempted = true;
       const auto outcome = solve_extended_progress_problem(
-        extended_problem.value(), now_sec, false);
+        extended_problem.value(), now_sec, false,
+        warm_resolution.stage_advance);
       result.solve_ms = outcome.telemetry.total_ms;
       result.iterations = outcome.telemetry.iterations;
       result.solver_status = outcome.telemetry.status;

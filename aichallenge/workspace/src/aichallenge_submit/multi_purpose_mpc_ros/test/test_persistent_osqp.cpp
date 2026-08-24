@@ -65,6 +65,77 @@ TEST(PersistentOsqpWarmStart, ShiftsMpcPrimalAndDualByOneStage) {
   EXPECT_TRUE(shifted->dual.isApprox(expected_dual));
 }
 
+TEST(PersistentOsqpWarmStart, PreservesMpcPrimalAndDualWhenGeometryDidNotAdvance)
+{
+  WarmStart previous;
+  previous.primal = Eigen::VectorXd(5);
+  previous.primal << 0.0, 1.0, 2.0, 3.0, 4.0;
+  previous.dual = Eigen::VectorXd(10);
+  previous.dual << 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0;
+
+  const auto shifted = shift_mpc_warm_start(
+    previous, 2U, 1U, 1U, {}, 0U);
+
+  ASSERT_TRUE(shifted.has_value());
+  EXPECT_TRUE(shifted->primal.isApprox(previous.primal));
+  EXPECT_TRUE(shifted->dual.isApprox(previous.dual));
+}
+
+TEST(PersistentOsqpWarmStart, ShiftsMpcPrimalAndDualByExactStageAdvance)
+{
+  WarmStart previous;
+  previous.primal = Eigen::VectorXd(7);
+  previous.primal << 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0;
+  previous.dual = Eigen::VectorXd(14);
+  previous.dual <<
+    0.0, 1.0, 2.0, 3.0,
+    4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+    11.0, 12.0, 13.0;
+
+  const auto shifted = shift_mpc_warm_start(
+    previous, 3U, 1U, 1U, {}, 2U);
+
+  ASSERT_TRUE(shifted.has_value());
+  Eigen::VectorXd expected_primal(7);
+  expected_primal << 2.0, 3.0, 3.0, 3.0, 6.0, 6.0, 6.0;
+  Eigen::VectorXd expected_dual(14);
+  expected_dual <<
+    2.0, 3.0, 3.0, 3.0,
+    6.0, 7.0, 7.0, 7.0,
+    10.0, 10.0, 10.0,
+    13.0, 13.0, 13.0;
+  EXPECT_TRUE(shifted->primal.isApprox(expected_primal));
+  EXPECT_TRUE(shifted->dual.isApprox(expected_dual));
+}
+
+TEST(PersistentOsqpWarmStart, RejectsStageAdvanceOutsideThePreviousHorizon)
+{
+  const WarmStart previous{
+    Eigen::VectorXd::Zero(5), Eigen::VectorXd::Zero(10)};
+
+  EXPECT_FALSE(
+    shift_mpc_warm_start(previous, 2U, 1U, 1U, {}, 3U).has_value());
+}
+
+TEST(PersistentOsqpWarmStart, PreservesSingleStageLegacyShiftContract)
+{
+  WarmStart previous;
+  previous.primal = Eigen::VectorXd(3);
+  previous.primal << 1.0, 2.0, 3.0;
+  previous.dual = Eigen::VectorXd(6);
+  previous.dual << 1.0, 2.0, 3.0, 4.0, 5.0, 6.0;
+
+  const auto shifted = shift_mpc_warm_start(previous, 1U, 1U, 1U);
+
+  ASSERT_TRUE(shifted.has_value());
+  Eigen::VectorXd expected_primal(3);
+  expected_primal << 2.0, 2.0, 3.0;
+  Eigen::VectorXd expected_dual(6);
+  expected_dual << 2.0, 2.0, 4.0, 4.0, 5.0, 6.0;
+  EXPECT_TRUE(shifted->primal.isApprox(expected_primal));
+  EXPECT_TRUE(shifted->dual.isApprox(expected_dual));
+}
+
 TEST(PersistentOsqpWarmStart, RejectsMalformedOrNonFiniteState) {
   WarmStart malformed{Eigen::VectorXd::Zero(5), Eigen::VectorXd::Zero(9)};
   EXPECT_FALSE(shift_mpc_warm_start(malformed, 2U, 1U, 1U).has_value());

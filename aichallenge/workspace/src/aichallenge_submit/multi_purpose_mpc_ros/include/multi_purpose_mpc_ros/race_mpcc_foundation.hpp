@@ -495,6 +495,9 @@ struct ShadowWarmStartResolution
   bool valid{false};
   bool apply_warm_start{false};
   bool reset_context{true};
+  /// Exact physical stage advance between compatible horizon geometries.
+  /// Solver invocation count is deliberately not used as a proxy.
+  std::size_t stage_advance{};
   ShadowWarmStartResetReason reason{
     ShadowWarmStartResetReason::InvalidCurrentContext};
 };

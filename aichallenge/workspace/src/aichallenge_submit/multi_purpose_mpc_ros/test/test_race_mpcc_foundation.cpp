@@ -538,6 +538,38 @@ TEST(RaceMpccFoundation, KeepsWarmStartAcrossCompatibleRollingStageGeometry)
   EXPECT_TRUE(result.apply_warm_start);
   EXPECT_FALSE(result.reset_context);
   EXPECT_EQ(result.reason, race::ShadowWarmStartResetReason::None);
+  EXPECT_EQ(result.stage_advance, 1U);
+}
+
+TEST(RaceMpccFoundation, KeepsWarmStartWithoutShiftForIdenticalStageGeometry)
+{
+  const auto previous = shadow_identity(
+    contract::ControlIntent::Cruise, 10, {11, 12, 13, 14});
+  const auto current = previous;
+
+  const auto result = race::resolve_shadow_warm_start(previous, current);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.apply_warm_start);
+  EXPECT_FALSE(result.reset_context);
+  EXPECT_EQ(result.reason, race::ShadowWarmStartResetReason::None);
+  EXPECT_EQ(result.stage_advance, 0U);
+}
+
+TEST(RaceMpccFoundation, ReportsExactTwoStageGeometryAdvance)
+{
+  const auto previous = shadow_identity(
+    contract::ControlIntent::Cruise, 10, {11, 12, 13, 14, 15});
+  const auto current = shadow_identity(
+    contract::ControlIntent::Cruise, 12, {13, 14, 15, 16, 17});
+
+  const auto result = race::resolve_shadow_warm_start(previous, current);
+
+  EXPECT_TRUE(result.valid);
+  EXPECT_TRUE(result.apply_warm_start);
+  EXPECT_FALSE(result.reset_context);
+  EXPECT_EQ(result.reason, race::ShadowWarmStartResetReason::None);
+  EXPECT_EQ(result.stage_advance, 2U);
 }
 
 TEST(RaceMpccFoundation, AcceptsCompatibleFollowWarmStartIdentity)

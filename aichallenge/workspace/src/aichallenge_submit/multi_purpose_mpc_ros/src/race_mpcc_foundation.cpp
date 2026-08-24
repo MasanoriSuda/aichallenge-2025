@@ -929,15 +929,15 @@ bool same_schema(
     previous.cost_schema_id == current.cost_schema_id;
 }
 
-bool rolling_stage_geometry_compatible(
+std::optional<std::size_t> rolling_stage_geometry_advance(
   const ShadowWarmStartIdentity & previous,
   const ShadowWarmStartIdentity & current) noexcept
 {
   if (previous.stage_geometry_id == current.stage_geometry_id) {
-    return true;
+    return 0U;
   }
   if (previous.circular != current.circular || previous.stages.empty() || current.stages.empty()) {
-    return false;
+    return std::nullopt;
   }
   std::size_t offset = previous.stages.size();
   for (std::size_t index = 0U; index < previous.stages.size(); ++index) {
@@ -950,13 +950,13 @@ bool rolling_stage_geometry_compatible(
     }
   }
   if (offset >= previous.stages.size()) {
-    return false;
+    return std::nullopt;
   }
   const std::size_t overlap = std::min(
     previous.stages.size() - offset, current.stages.size());
   const std::size_t minimum_overlap = std::min<std::size_t>(2U, current.stages.size());
   if (overlap < minimum_overlap) {
-    return false;
+    return std::nullopt;
   }
   for (std::size_t index = 0U; index < overlap; ++index) {
     const auto & old_stage = previous.stages[offset + index];
@@ -966,10 +966,10 @@ bool rolling_stage_geometry_compatible(
       old_stage.state_waypoint != new_stage.state_waypoint ||
       std::abs(old_stage.transition_distance_m - new_stage.transition_distance_m) > 1e-9)
     {
-      return false;
+      return std::nullopt;
     }
   }
-  return true;
+  return offset;
 }
 
 }  // namespace
@@ -1008,12 +1008,15 @@ ShadowWarmStartResolution resolve_shadow_warm_start(
     result.reason = ShadowWarmStartResetReason::SchemaChanged;
     return result;
   }
-  if (!rolling_stage_geometry_compatible(previous.value(), current)) {
+  const auto stage_advance = rolling_stage_geometry_advance(
+    previous.value(), current);
+  if (!stage_advance.has_value()) {
     result.reason = ShadowWarmStartResetReason::StageGeometryDiscontinuous;
     return result;
   }
   result.apply_warm_start = true;
   result.reset_context = false;
+  result.stage_advance = stage_advance.value();
   result.reason = ShadowWarmStartResetReason::None;
   return result;
 }

@@ -72,25 +72,21 @@ void shift_stage_block(
   const std::size_t source_offset,
   const std::size_t destination_offset,
   const std::size_t stage_count,
-  const std::size_t stage_dimension)
+  const std::size_t stage_dimension,
+  const std::size_t stage_advance)
 {
   if (stage_count == 0U || stage_dimension == 0U) {
     return;
   }
-  for (std::size_t stage = 0U; stage + 1U < stage_count; ++stage) {
+  for (std::size_t stage = 0U; stage < stage_count; ++stage) {
+    const std::size_t source_stage = std::min(
+      stage + stage_advance, stage_count - 1U);
     for (std::size_t element = 0U; element < stage_dimension; ++element) {
       destination[static_cast<Eigen::Index>(
           destination_offset + stage * stage_dimension + element)] =
         source[static_cast<Eigen::Index>(
-            source_offset + (stage + 1U) * stage_dimension + element)];
+            source_offset + source_stage * stage_dimension + element)];
     }
-  }
-  const std::size_t last_stage = stage_count - 1U;
-  for (std::size_t element = 0U; element < stage_dimension; ++element) {
-    destination[static_cast<Eigen::Index>(
-        destination_offset + last_stage * stage_dimension + element)] =
-      source[static_cast<Eigen::Index>(
-          source_offset + last_stage * stage_dimension + element)];
   }
 }
 
@@ -456,9 +452,11 @@ shift_mpc_warm_start(
   const WarmStart & previous, const std::size_t horizon_steps,
   const std::size_t state_dimension,
   const std::size_t input_dimension,
-  const std::vector<DualStageBlockLayout> & trailing_dual_stage_blocks) noexcept
+  const std::vector<DualStageBlockLayout> & trailing_dual_stage_blocks,
+  const std::size_t stage_advance) noexcept
 {
   if (horizon_steps == 0U || state_dimension == 0U || input_dimension == 0U ||
+    stage_advance > horizon_steps ||
     !finite_vector(previous.primal) || !finite_vector(previous.dual))
   {
     return std::nullopt;
@@ -504,10 +502,10 @@ shift_mpc_warm_start(
     Eigen::VectorXd::Zero(static_cast<Eigen::Index>(dual_size))};
   shift_stage_block(
     previous.primal, shifted.primal, 0U, 0U, state_stage_count,
-    state_dimension);
+    state_dimension, stage_advance);
   shift_stage_block(
     previous.primal, shifted.primal, state_values, state_values,
-    horizon_steps, input_dimension);
+    horizon_steps, input_dimension, stage_advance);
 
   const std::size_t equality_offset = 0U;
   const std::size_t box_offset = state_values;
@@ -515,21 +513,21 @@ shift_mpc_warm_start(
   const std::size_t rate_offset = box_offset + primal_size;
   shift_stage_block(
     previous.dual, shifted.dual, equality_offset,
-    equality_offset, state_stage_count, state_dimension);
+    equality_offset, state_stage_count, state_dimension, stage_advance);
   shift_stage_block(
     previous.dual, shifted.dual, box_offset, box_offset,
-    state_stage_count, state_dimension);
+    state_stage_count, state_dimension, stage_advance);
   shift_stage_block(
     previous.dual, shifted.dual, box_input_offset,
-    box_input_offset, horizon_steps, input_dimension);
+    box_input_offset, horizon_steps, input_dimension, stage_advance);
   shift_stage_block(
     previous.dual, shifted.dual, rate_offset, rate_offset,
-    horizon_steps, 1U);
+    horizon_steps, 1U, stage_advance);
   std::size_t trailing_offset = base_dual_size;
   for (const auto & block : trailing_dual_stage_blocks) {
     shift_stage_block(
       previous.dual, shifted.dual, trailing_offset, trailing_offset,
-      block.stage_count, block.rows_per_stage);
+      block.stage_count, block.rows_per_stage, stage_advance);
     trailing_offset += block.stage_count * block.rows_per_stage;
   }
   if (!shifted.primal.allFinite() || !shifted.dual.allFinite()) {

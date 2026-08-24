@@ -187,7 +187,8 @@ enum class ConstraintPreconditioningPolicy
   RowToleranceNormalized,
 };
 
-/// Shift one successful MPC QP solution by one stage. The expected layout is
+/// Shift one successful MPC QP solution by the exact physical stage advance.
+/// The expected layout is
 /// state[0..N], input[0..N-1] for primal variables and dynamics/state,
 /// box(state,input), steering-rate for dual variables.
 std::optional<WarmStart>
@@ -195,7 +196,8 @@ shift_mpc_warm_start(
   const WarmStart & previous, std::size_t horizon_steps,
   std::size_t state_dimension = 3U,
   std::size_t input_dimension = 2U,
-  const std::vector<DualStageBlockLayout> & trailing_dual_stage_blocks = {}) noexcept;
+  const std::vector<DualStageBlockLayout> & trailing_dual_stage_blocks = {},
+  std::size_t stage_advance = 1U) noexcept;
 
 class PersistentOsqpSolver
 {

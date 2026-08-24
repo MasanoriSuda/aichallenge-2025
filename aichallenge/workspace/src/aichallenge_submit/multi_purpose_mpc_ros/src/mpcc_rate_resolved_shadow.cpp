@@ -135,6 +135,10 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     };
   if (
     !artifact::identity_valid(snapshot.identity) ||
+    !std::isfinite(snapshot.course_progress_origin_m) ||
+    snapshot.request.horizon_steps <= 0 ||
+    snapshot.nominal_path_distance_m.size() !=
+    static_cast<std::size_t>(snapshot.request.horizon_steps) + 1U ||
     !std::isfinite(snapshot.publication_interval_sec) ||
     snapshot.publication_interval_sec <= 0.0)
   {
@@ -268,6 +272,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   execution_artifact.prediction_origin_sec = snapshot.identity.snapshot_sec;
   execution_artifact.completed_sec = snapshot.identity.snapshot_sec +
     std::chrono::duration<double>(SteadyClock::now() - started).count();
+  execution_artifact.course_progress_origin_m =
+    snapshot.course_progress_origin_m;
   execution_artifact.semantic_initial_steering_rad =
     snapshot.request.current_steering_rad;
   execution_artifact.wheelbase_m = snapshot.request.wheelbase_m;
@@ -283,6 +289,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     outcome.result->maximum_normalized_constraint_violation;
   execution_artifact.predicted_states.reserve(
     static_cast<std::size_t>(horizon + 1));
+  execution_artifact.nominal_path_distance_m =
+    snapshot.nominal_path_distance_m;
   execution_artifact.lateral_lower_m.reserve(
     static_cast<std::size_t>(horizon + 1));
   execution_artifact.lateral_upper_m.reserve(

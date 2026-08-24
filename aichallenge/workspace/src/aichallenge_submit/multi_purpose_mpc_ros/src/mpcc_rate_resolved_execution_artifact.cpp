@@ -68,10 +68,15 @@ const char * to_string(const RejectReason reason) noexcept
     case RejectReason::None: return "none";
     case RejectReason::InvalidIdentity: return "invalid-identity";
     case RejectReason::InvalidTiming: return "invalid-timing";
+    case RejectReason::InvalidCourseProgressOrigin:
+      return "invalid-course-progress-origin";
     case RejectReason::InvalidLimits: return "invalid-limits";
     case RejectReason::InvalidCertificate: return "invalid-certificate";
     case RejectReason::EmptyHorizon: return "empty-horizon";
     case RejectReason::StateCountMismatch: return "state-count-mismatch";
+    case RejectReason::PathDistanceCountMismatch:
+      return "path-distance-count-mismatch";
+    case RejectReason::InvalidPathDistance: return "invalid-path-distance";
     case RejectReason::CorridorCountMismatch: return "corridor-count-mismatch";
     case RejectReason::InvalidPredictedState: return "invalid-predicted-state";
     case RejectReason::InvalidControlStage: return "invalid-control-stage";
@@ -99,6 +104,9 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
       artifact.prediction_origin_sec - artifact.identity.snapshot_sec) > 1e-12)
   {
     return RejectReason::InvalidTiming;
+  }
+  if (!std::isfinite(artifact.course_progress_origin_m)) {
+    return RejectReason::InvalidCourseProgressOrigin;
   }
   if (
     !std::isfinite(artifact.semantic_initial_steering_rad) ||
@@ -132,6 +140,9 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   {
     return RejectReason::StateCountMismatch;
   }
+  if (artifact.nominal_path_distance_m.size() != artifact.predicted_states.size()) {
+    return RejectReason::PathDistanceCountMismatch;
+  }
   if (
     artifact.lateral_lower_m.size() != artifact.predicted_states.size() ||
     artifact.lateral_upper_m.size() != artifact.predicted_states.size())
@@ -139,11 +150,21 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     return RejectReason::CorridorCountMismatch;
   }
   const double tolerance = artifact.physical_global_tolerance;
+  double previous_path_distance_m = -std::numeric_limits<double>::infinity();
   for (std::size_t index = 0U; index < artifact.predicted_states.size(); ++index) {
     const auto & state = artifact.predicted_states[index];
     if (!finite_state(state)) {
       return RejectReason::InvalidPredictedState;
     }
+    const double path_distance_m = artifact.nominal_path_distance_m[index];
+    if (
+      !std::isfinite(path_distance_m) || path_distance_m < 0.0 ||
+      (index == 0U && std::abs(path_distance_m) > tolerance) ||
+      (index > 0U && path_distance_m <= previous_path_distance_m))
+    {
+      return RejectReason::InvalidPathDistance;
+    }
+    previous_path_distance_m = path_distance_m;
     const double lower = artifact.lateral_lower_m[index];
     const double upper = artifact.lateral_upper_m[index];
     if (

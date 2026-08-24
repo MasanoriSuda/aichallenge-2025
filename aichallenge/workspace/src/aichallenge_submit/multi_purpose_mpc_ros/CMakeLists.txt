@@ -238,6 +238,20 @@ target_link_libraries(${PROJECT_NAME}_race_mpcc_foundation
   ${PROJECT_NAME}_mpcc_execution_contract
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter STATIC
+  src/mpcc_rate_resolved_physical_adapter.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
+  ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
+  ${PROJECT_NAME}_race_mpcc_foundation
+)
+
 ament_auto_add_library(${PROJECT_NAME}_v2x_overtake_core SHARED
   NO_TARGET_LINK_LIBRARIES
   src/v2x_overtake_core.cpp
@@ -277,6 +291,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_mpcc_progress
   ${PROJECT_NAME}_mpcc_rate_resolved_shadow
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_latest_only_worker
@@ -359,6 +374,18 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_shadow
       ${PROJECT_NAME}_mpcc_rate_resolved_shadow
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_rate_resolved_physical_adapter
+    test/test_mpcc_rate_resolved_physical_adapter.cpp
+  )
+  if(TARGET test_mpcc_rate_resolved_physical_adapter)
+    target_include_directories(test_mpcc_rate_resolved_physical_adapter PRIVATE
+      ${EIGEN3_INCLUDE_DIRS}
+    )
+    target_link_libraries(test_mpcc_rate_resolved_physical_adapter
+      ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
     )
   endif()
 

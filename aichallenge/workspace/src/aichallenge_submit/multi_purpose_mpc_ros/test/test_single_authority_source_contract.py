@@ -873,6 +873,45 @@ def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> Non
     assert "physical_first_curvature->reachable_upper_radpm" not in semantic
 
 
+def test_rate_resolved_physical_wall_proof_is_current_world_shadow_only() -> None:
+    """Six-state proof reuses the wall sweep without gaining authority."""
+
+    proof_start = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_physical_shadow("
+    )
+    submit_start = SOURCE.index(
+        "bool submit_rate_resolved_track_cruise_shadow(", proof_start
+    )
+    proof = SOURCE[proof_start:submit_start]
+    assert "rate_resolved_physical::build(" in proof
+    assert "problem.progress_stage_geometry.fingerprint" in proof
+    assert "build_progress_course_frame_knots(" in proof
+    assert "solved_mpcc_execution_path_wall_safe(" in proof
+    assert "SolvedExecutionWallValidationScope::SweptFromCurrentPose" in proof
+    for forbidden in (
+        "canonical_normal_control(",
+        "CanonicalExecutionPlanStore",
+        "publish_control_command(",
+        "track_cruise_shadow_plan_store_.publish(",
+        "record_solution_contract(",
+    ):
+        assert forbidden not in proof
+
+    adapter_header = (
+        Path(__file__).resolve().parents[1]
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_physical_adapter.hpp"
+    ).read_text(encoding="utf-8")
+    for forbidden in (
+        "CanonicalExecutionPlanStore",
+        "CanonicalNormalCommand",
+        "publish_control",
+        "rclcpp",
+    ):
+        assert forbidden not in adapter_header
+
+
 def test_control_callback_overrun_trace_is_observation_only() -> None:
     """Timing attribution may diagnose a callback but cannot influence it."""
 

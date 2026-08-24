@@ -24,6 +24,8 @@ struct Snapshot
 {
   Identity identity;
   mpcc_rate_resolved_adapter::Request request;
+  double course_progress_origin_m{};
+  std::vector<double> nominal_path_distance_m;
   double publication_interval_sec{};
 };
 

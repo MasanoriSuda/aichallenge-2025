@@ -18,6 +18,7 @@
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
@@ -138,6 +139,8 @@ namespace persistent_osqp = ::multi_purpose_mpc_ros::persistent_osqp;
 namespace mpcc_progress = ::multi_purpose_mpc_ros::mpcc_progress;
 namespace rate_resolved_shadow =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
+namespace rate_resolved_physical =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
 namespace runtime_speed_profile = ::multi_purpose_mpc_ros::runtime_speed_profile;
@@ -6270,6 +6273,47 @@ struct TrackCruiseShadowTelemetryWindow
   std::size_t timing_sample_count{};
 };
 
+enum class RateResolvedPhysicalShadowOutcome
+{
+  NotEvaluated,
+  AdapterRejected,
+  CourseFrameRejected,
+  WallRejected,
+  Accepted,
+  Count,
+};
+
+constexpr const char * to_string(
+  const RateResolvedPhysicalShadowOutcome outcome) noexcept
+{
+  switch (outcome) {
+    case RateResolvedPhysicalShadowOutcome::NotEvaluated:
+      return "not-evaluated";
+    case RateResolvedPhysicalShadowOutcome::AdapterRejected:
+      return "adapter-rejected";
+    case RateResolvedPhysicalShadowOutcome::CourseFrameRejected:
+      return "course-frame-rejected";
+    case RateResolvedPhysicalShadowOutcome::WallRejected:
+      return "wall-rejected";
+    case RateResolvedPhysicalShadowOutcome::Accepted:
+      return "accepted";
+    case RateResolvedPhysicalShadowOutcome::Count:
+      break;
+  }
+  return "unknown";
+}
+
+struct RateResolvedPhysicalShadowEvaluation
+{
+  RateResolvedPhysicalShadowOutcome outcome{
+    RateResolvedPhysicalShadowOutcome::NotEvaluated};
+  rate_resolved_physical::RejectReason adapter_reason{
+    rate_resolved_physical::RejectReason::None};
+  mpcc_contract::PhysicalWallCertificateDiagnostic wall_diagnostic;
+  double elapsed_ms{};
+  std::string detail{"not-evaluated"};
+};
+
 struct RateResolvedTrackCruiseShadowTelemetryWindow
 {
   std::uint64_t submission_count{};
@@ -6303,6 +6347,13 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   double maximum_absolute_publication_steering_step_rad{};
   std::uint64_t cross_stage_sample_count{};
   std::size_t maximum_sampled_stage_index{};
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(RateResolvedPhysicalShadowOutcome::Count)>
+  physical_outcome_count{};
+  double total_physical_ms{};
+  double maximum_physical_ms{};
+  RateResolvedPhysicalShadowEvaluation last_physical;
   rate_resolved_shadow::Result last_result;
   bool last_result_available{false};
   rate_resolved_shadow::Result last_failure_result;
@@ -27468,7 +27519,93 @@ struct MPC
     }
   }
 
+  RateResolvedPhysicalShadowEvaluation
+  evaluate_rate_resolved_track_cruise_physical_shadow(
+    const rate_resolved_shadow::Result & solved_result,
+    const MpcProblem & problem) const
+  {
+    const auto started = SteadyClock::now();
+    RateResolvedPhysicalShadowEvaluation evaluation;
+    const auto finish = [&evaluation, &started]() {
+        evaluation.elapsed_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return evaluation;
+      };
+    if (
+      solved_result.outcome != rate_resolved_shadow::Outcome::Solved ||
+      solved_result.execution_artifact == nullptr)
+    {
+      return finish();
+    }
+    const auto adapted = rate_resolved_physical::build(
+      *solved_result.execution_artifact, current_control_intent(),
+      problem.progress_stage_geometry.fingerprint);
+    evaluation.adapter_reason = adapted.reason;
+    if (!adapted.exact_trajectory.has_value()) {
+      evaluation.outcome =
+        RateResolvedPhysicalShadowOutcome::AdapterRejected;
+      std::ostringstream detail;
+      detail << "adapter=" << rate_resolved_physical::to_string(adapted.reason)
+             << "/artifact=" <<
+        rate_resolved_shadow::artifact::to_string(adapted.artifact_reason)
+             << "/exact=" <<
+        race_mpcc::exact_physical_execution_trajectory_reason_name(
+        adapted.exact_reason)
+             << "/stage=" << adapted.rejected_stage;
+      evaluation.detail = detail.str();
+      return finish();
+    }
+
+    const auto & exact = adapted.exact_trajectory.value();
+    AlignedMpccExecutionTrajectory aligned{
+      0.0, 0.0, exact.minimum_lateral_bound_reserve_m,
+      exact.lateral_m, exact.lag_m, exact.heading_offset_rad,
+      exact.progress_origin_m, exact.progress_m, {}};
+    const double minimum_progress_m = std::min(
+      exact.progress_origin_m,
+      *std::min_element(exact.progress_m.begin(), exact.progress_m.end()));
+    const double maximum_progress_m = *std::max_element(
+      exact.progress_m.begin(), exact.progress_m.end());
+    const auto course_frame_knots = build_progress_course_frame_knots(
+      problem.progress_stage_geometry, exact.progress_origin_m,
+      minimum_progress_m, maximum_progress_m);
+    if (!course_frame_knots.has_value()) {
+      evaluation.outcome =
+        RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
+      evaluation.wall_diagnostic.reason =
+        mpcc_contract::PhysicalWallCertificateReason::CourseFrameUnavailable;
+      evaluation.detail = "current course-frame provenance unavailable";
+      return finish();
+    }
+    aligned.course_frame_knots = course_frame_knots.value();
+
+    const int horizon = static_cast<int>(exact.lateral_m.size());
+    Eigen::VectorXd lower_bound(horizon);
+    Eigen::VectorXd upper_bound(horizon);
+    for (int stage = 0; stage < horizon; ++stage) {
+      lower_bound[stage] = exact.lateral_lower_m[static_cast<std::size_t>(stage)];
+      upper_bound[stage] = exact.lateral_upper_m[static_cast<std::size_t>(stage)];
+    }
+    const double tolerance_m = std::max(
+      1e-5, solved_result.execution_artifact->maximum_constraint_violation +
+      1e-6);
+    std::string wall_reason;
+    const bool wall_clear = solved_mpcc_execution_path_wall_safe(
+      aligned, exact.path_distance_m, problem.ref_wp_id, horizon,
+      lower_bound, upper_bound, 0.0, wall_reason, tolerance_m,
+      SolvedExecutionWallValidationScope::SweptFromCurrentPose,
+      &evaluation.wall_diagnostic);
+    evaluation.outcome = wall_clear ?
+      RateResolvedPhysicalShadowOutcome::Accepted :
+      RateResolvedPhysicalShadowOutcome::WallRejected;
+    evaluation.detail = wall_reason + ", " +
+      mpcc_contract::format_physical_wall_certificate_diagnostic(
+      evaluation.wall_diagnostic);
+    return finish();
+  }
+
   bool submit_rate_resolved_track_cruise_shadow(
+    const MpcProblem & source_problem,
     const ExtendedProgressMpcProblem & problem,
     const mpcc_contract::MpccProblemContext & source_context,
     const double now_sec)
@@ -27479,6 +27616,9 @@ struct MPC
       rate_resolved_track_cruise_shadow_mailbox_ == nullptr ||
       rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
       model == nullptr || !std::isfinite(model->Ts) || model->Ts <= 0.0 ||
+      problem.N <= 0 ||
+      source_problem.progress_stage_geometry.stages.size() <
+      static_cast<std::size_t>(problem.N) ||
       rate_resolved_track_cruise_shadow_next_sequence_ ==
       std::numeric_limits<std::uint64_t>::max())
     {
@@ -27497,6 +27637,15 @@ struct MPC
     snapshot.identity.snapshot_sec = now_sec;
     snapshot.request =
       problem.rate_resolved_track_cruise_shadow_request.value();
+    snapshot.course_progress_origin_m = problem.progress_origin_m;
+    snapshot.nominal_path_distance_m.reserve(
+      static_cast<std::size_t>(problem.N + 1));
+    snapshot.nominal_path_distance_m.push_back(0.0);
+    for (int stage = 0; stage < problem.N; ++stage) {
+      snapshot.nominal_path_distance_m.push_back(
+        source_problem.progress_stage_geometry.stages[
+        static_cast<std::size_t>(stage)].cumulative_distance_m);
+    }
     snapshot.publication_interval_sec = model->Ts;
     if (!rate_resolved_track_cruise_shadow_mailbox_->register_submission(sequence)) {
       ++rate_resolved_track_cruise_shadow_telemetry_window_.
@@ -27606,6 +27755,18 @@ struct MPC
           window.maximum_sampled_stage_index = std::max(
             window.maximum_sampled_stage_index,
             result->sampled_stage_index);
+          const auto physical =
+            evaluate_rate_resolved_track_cruise_physical_shadow(
+            result.value(), problem);
+          const auto physical_outcome_index =
+            static_cast<std::size_t>(physical.outcome);
+          if (physical_outcome_index < window.physical_outcome_count.size()) {
+            ++window.physical_outcome_count[physical_outcome_index];
+          }
+          window.total_physical_ms += physical.elapsed_ms;
+          window.maximum_physical_ms = std::max(
+            window.maximum_physical_ms, physical.elapsed_ms);
+          window.last_physical = physical;
         }
         const auto current_intent = current_control_intent();
         if (
@@ -27643,6 +27804,17 @@ struct MPC
       rate_resolved_shadow::MailboxState{};
     const double denominator = static_cast<double>(
       std::max<std::uint64_t>(1U, window.consumed_count));
+    const std::uint64_t physical_evaluated_count =
+      window.physical_outcome_count[static_cast<std::size_t>(
+      RateResolvedPhysicalShadowOutcome::AdapterRejected)] +
+      window.physical_outcome_count[static_cast<std::size_t>(
+      RateResolvedPhysicalShadowOutcome::CourseFrameRejected)] +
+      window.physical_outcome_count[static_cast<std::size_t>(
+      RateResolvedPhysicalShadowOutcome::WallRejected)] +
+      window.physical_outcome_count[static_cast<std::size_t>(
+      RateResolvedPhysicalShadowOutcome::Accepted)];
+    const double physical_denominator = static_cast<double>(
+      std::max<std::uint64_t>(1U, physical_evaluated_count));
     const auto & last = window.last_result;
     RCLCPP_INFO(
       rclcpp::get_logger("mpc_controller"),
@@ -27665,7 +27837,9 @@ struct MPC
       "rate_bounds:physical[%.9f,%.9f]/solver[%.9f,%.9f]/margin:%.9f/"
       "sample_stage:%lu/sample_stage_dt:%.6f/horizon_dt:%.6f/"
       "artifact_valid:%d/states:%lu/controls:%lu/artifact_reason:%s/%s, "
-      "authority=shadow, selected=0, physical=not-evaluated, warm=none",
+      "physical=adapter_reject:%lu/course_reject:%lu/wall_reject:%lu/"
+      "accepted:%lu/time:%.3f/%.3fms(avg/max), physical_last=%s/%s/%s, "
+      "authority=shadow, selected=0, warm=none",
       static_cast<unsigned long>(window.submission_count),
       static_cast<unsigned long>(window.replaced_pending_count),
       static_cast<unsigned long>(window.submission_reject_count),
@@ -27790,7 +27964,25 @@ struct MPC
       window.last_result_available ?
       rate_resolved_shadow::artifact::to_string(
         last.execution_artifact_reject_reason) : "none",
-      window.last_result_available ? last.detail.c_str() : "not-evaluated");
+      window.last_result_available ? last.detail.c_str() : "not-evaluated",
+      static_cast<unsigned long>(window.physical_outcome_count[
+        static_cast<std::size_t>(
+        RateResolvedPhysicalShadowOutcome::AdapterRejected)]),
+      static_cast<unsigned long>(window.physical_outcome_count[
+        static_cast<std::size_t>(
+        RateResolvedPhysicalShadowOutcome::CourseFrameRejected)]),
+      static_cast<unsigned long>(window.physical_outcome_count[
+        static_cast<std::size_t>(
+        RateResolvedPhysicalShadowOutcome::WallRejected)]),
+      static_cast<unsigned long>(window.physical_outcome_count[
+        static_cast<std::size_t>(
+        RateResolvedPhysicalShadowOutcome::Accepted)]),
+      window.total_physical_ms / physical_denominator,
+      window.maximum_physical_ms,
+      to_string(window.last_physical.outcome),
+      rate_resolved_physical::to_string(
+        window.last_physical.adapter_reason),
+      window.last_physical.detail.c_str());
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(
@@ -27893,7 +28085,7 @@ struct MPC
       }
       if (!rejoin_mode) {
         static_cast<void>(submit_rate_resolved_track_cruise_shadow(
-          extended_problem.value(), context, now_sec));
+          problem, extended_problem.value(), context, now_sec));
       }
       const auto warm_identity =
         make_canonical_shadow_warm_start_identity(problem, context);

@@ -51,6 +51,7 @@ struct ExecutionArtifact
   Identity identity;
   double prediction_origin_sec{};
   double completed_sec{};
+  double course_progress_origin_m{};
   double semantic_initial_steering_rad{};
   double wheelbase_m{};
   double maximum_abs_steering_rad{};
@@ -60,6 +61,7 @@ struct ExecutionArtifact
   double maximum_normalized_constraint_violation{};
   std::vector<PredictedState> predicted_states;
   std::vector<ControlStage> control_stages;
+  std::vector<double> nominal_path_distance_m;
   std::vector<double> lateral_lower_m;
   std::vector<double> lateral_upper_m;
 };
@@ -69,10 +71,13 @@ enum class RejectReason
   None,
   InvalidIdentity,
   InvalidTiming,
+  InvalidCourseProgressOrigin,
   InvalidLimits,
   InvalidCertificate,
   EmptyHorizon,
   StateCountMismatch,
+  PathDistanceCountMismatch,
+  InvalidPathDistance,
   CorridorCountMismatch,
   InvalidPredictedState,
   InvalidControlStage,

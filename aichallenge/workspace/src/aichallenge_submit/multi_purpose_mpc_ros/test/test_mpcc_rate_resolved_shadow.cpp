@@ -62,6 +62,8 @@ shadow::Snapshot snapshot(const std::uint64_t sequence = 1U)
   result.identity.intent = contract::ControlIntent::Track;
   result.identity.snapshot_sec = 10.0 + 0.1 * sequence;
   result.request = straight_request();
+  result.course_progress_origin_m = 50.0;
+  result.nominal_path_distance_m = {0.0, 0.2, 0.4, 0.6};
   result.publication_interval_sec = 0.025;
   return result;
 }
@@ -112,7 +114,9 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
     execution::RejectReason::None);
   EXPECT_EQ(result.execution_artifact->predicted_states.size(), 4U);
   EXPECT_EQ(result.execution_artifact->control_stages.size(), 3U);
+  EXPECT_EQ(result.execution_artifact->nominal_path_distance_m.size(), 4U);
   EXPECT_EQ(result.execution_artifact->lateral_lower_m.size(), 4U);
+  EXPECT_DOUBLE_EQ(result.execution_artifact->course_progress_origin_m, 50.0);
   EXPECT_DOUBLE_EQ(
     result.execution_artifact->semantic_initial_steering_rad,
     input.request.current_steering_rad);
@@ -179,9 +183,27 @@ TEST(MpccRateResolvedShadow, RejectsMutatedExecutionArtifactProvenance)
     execution::validate(invalid), execution::RejectReason::InvalidIdentity);
 
   invalid = *result.execution_artifact;
+  invalid.course_progress_origin_m =
+    std::numeric_limits<double>::quiet_NaN();
+  EXPECT_EQ(
+    execution::validate(invalid),
+    execution::RejectReason::InvalidCourseProgressOrigin);
+
+  invalid = *result.execution_artifact;
   invalid.predicted_states.pop_back();
   EXPECT_EQ(
     execution::validate(invalid), execution::RejectReason::StateCountMismatch);
+
+  invalid = *result.execution_artifact;
+  invalid.nominal_path_distance_m.pop_back();
+  EXPECT_EQ(
+    execution::validate(invalid),
+    execution::RejectReason::PathDistanceCountMismatch);
+
+  invalid = *result.execution_artifact;
+  invalid.nominal_path_distance_m[1] = 0.0;
+  EXPECT_EQ(
+    execution::validate(invalid), execution::RejectReason::InvalidPathDistance);
 
   invalid = *result.execution_artifact;
   invalid.predicted_states.front().steering_rad += 0.1;

@@ -35,12 +35,12 @@ def test_overtake_worker_fresh_chain_uses_sealed_snapshot_context() -> None:
     assert (
         "evaluate_overtake_canonical_fresh_shadow(\n"
         "      problem, extended_problem.value(), outcome.result.value(), now_sec,\n"
-        "      snapshot_context)"
+        "      execution_context)"
     ) in worker
     assert "make_problem_context(\n      problem" not in worker
     assert (
-        "seal_problem_context_for_problem(\n"
-        "      problem, snapshot_context)"
+        "const auto execution_context = seal_problem_context_for_problem(\n"
+        "      problem, snapshot_context, extended_problem->N)"
     ) in worker
 
     fresh_start = SOURCE.index(
@@ -97,6 +97,40 @@ def test_overtake_wall_proof_uses_exact_five_state_trajectory() -> None:
     assert "exact.lag_m = extracted->lag_m" in helper
     assert "exact.heading_offset_rad = extracted->heading_offset_rad" in helper
     assert "exact.progress_m = extracted->progress_m" in helper
+
+
+def test_bounded_overtake_prefix_has_one_horizon_owner_end_to_end() -> None:
+    """Every pre-entry consumer must use the horizon built into the QP."""
+
+    branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
+    branch_end = SOURCE.index(
+        "evaluate_isolated_extended_mpcc_branch(", branch_start
+    )
+    branch = SOURCE[branch_start:branch_end]
+    built = branch.index("const auto extended = build_extended_progress_problem(")
+    consumers = branch[built:]
+
+    assert "const int effective_horizon = extended->N;" in consumers
+    assert (
+        "active_extended_branch_horizon_size_ = effective_horizon;" in consumers
+    )
+    assert "outcome.result->constraint_tolerance, effective_horizon" in consumers
+    assert "const int nx_N = nx * (effective_horizon + 1);" in consumers
+    assert "tracking_wp_id, effective_horizon," in consumers
+    assert "for (int stage = 1; stage < effective_horizon + 1; ++stage)" in consumers
+    assert "const int terminal = nx * effective_horizon;" in consumers
+    assert (
+        "legacy, std::move(prospective_context), effective_horizon)" in consumers
+    )
+
+    helper_start = SOURCE.index("build_exact_extended_wall_proof_input(")
+    helper_end = SOURCE.index(
+        "executed_extended_progress_solution_wall_safe(", helper_start
+    )
+    helper = SOURCE[helper_start:helper_end]
+    assert "const int effective_horizon = extended_problem.N;" in helper
+    assert "extract_extended_execution_trajectory(\n      primal, effective_horizon" in helper
+    assert "for (int stage = 0; stage < effective_horizon; ++stage)" in helper
 
     production_start = SOURCE.index(
         "if (\n        problem.progress_contouring_active &&\n"

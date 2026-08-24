@@ -132,9 +132,12 @@ struct ConstraintResidualReport
   int maximum_normalized_row{-1};
 };
 
-/// Physical-unit provenance for the row that caused a post-solve constraint
-/// rejection. Values are computed from the original A, l and u, never from a
-/// solver-preconditioned problem.
+/// Physical-unit provenance for the worst row in a rejected solver iterate.
+/// This covers both a converged result rejected by the physical constraint
+/// contract and a non-executable maximum-iteration diagnostic. Values are
+/// computed from the original A, l and u, never from a solver-preconditioned
+/// problem. The latter remains diagnostic only and is never exposed as a
+/// SolveResult.
 struct ConstraintFailureDiagnostic
 {
   int row{-1};

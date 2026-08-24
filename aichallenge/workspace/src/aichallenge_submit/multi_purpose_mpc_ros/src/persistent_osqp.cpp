@@ -976,10 +976,52 @@ SolveOutcome PersistentOsqpSolver::solve(
     outcome.telemetry.total_ms = elapsed_ms(total_start);
     return outcome;
   }
+  const auto diagnose_maximum_iteration_primal = [&]() {
+      if (
+        info->status_val != OSQP_MAX_ITER_REACHED ||
+        impl_->workspace->solution == nullptr ||
+        impl_->workspace->solution->x == nullptr)
+      {
+        return;
+      }
+      Eigen::VectorXd primal(impl_->variable_count);
+      for (Eigen::Index index = 0; index < primal.size(); ++index) {
+        primal[index] = prepared->variable_scale[index] *
+          static_cast<double>(impl_->workspace->solution->x[index]);
+      }
+      if (!primal.allFinite()) {
+        return;
+      }
+      const auto residual_report = evaluate_constraint_residuals(
+        prepared->constraints, primal, lower_bound, upper_bound,
+        static_cast<double>(impl_->physical_absolute_tolerance),
+        static_cast<double>(impl_->physical_relative_tolerance));
+      if (!residual_report.has_value()) {
+        return;
+      }
+      const Eigen::VectorXd constraint_values =
+        prepared->constraints * primal;
+      outcome.constraint_failure = make_constraint_failure_diagnostic(
+        residual_report.value(), constraint_values, lower_bound, upper_bound);
+    };
   if (info->status_val != OSQP_SOLVED &&
     info->status_val != OSQP_SOLVED_INACCURATE)
   {
+    diagnose_maximum_iteration_primal();
     outcome.failure_detail = "stage=status, " + describe_info(info);
+    if (outcome.constraint_failure.has_value()) {
+      const auto & diagnostic = outcome.constraint_failure.value();
+      std::ostringstream detail;
+      detail << outcome.failure_detail
+             << ", failed_iterate_row=" << diagnostic.row
+             << ", value=" << diagnostic.value
+             << ", bounds=[" << diagnostic.lower_bound << ','
+             << diagnostic.upper_bound << ']'
+             << ", violation=" << diagnostic.violation
+             << ", tolerance=" << diagnostic.tolerance
+             << ", normalized=" << diagnostic.normalized_violation;
+      outcome.failure_detail = detail.str();
+    }
     impl_->reset();
     outcome.telemetry.cold_reset_after_failure = true;
     outcome.telemetry.total_ms = elapsed_ms(total_start);

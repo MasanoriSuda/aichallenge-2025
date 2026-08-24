@@ -231,6 +231,70 @@ resolve_lateral_tracking_tube_bounds(
     nominal_lower_m, nominal_upper_m, request.required_reserve_m};
 }
 
+LateralTrackingHorizonResolution resolve_lateral_tracking_horizon(
+  const std::vector<double> & physical_lower_m,
+  const std::vector<double> & physical_upper_m,
+  const int configured_horizon_steps, const int minimum_prefix_steps,
+  const double required_reserve_m) noexcept
+{
+  LateralTrackingHorizonResolution result;
+  if (
+    configured_horizon_steps <= 0 || minimum_prefix_steps <= 0 ||
+    minimum_prefix_steps > configured_horizon_steps ||
+    physical_lower_m.size() !=
+    static_cast<std::size_t>(configured_horizon_steps + 1) ||
+    physical_upper_m.size() != physical_lower_m.size() ||
+    !std::isfinite(required_reserve_m) || required_reserve_m < 0.0)
+  {
+    return result;
+  }
+  if (!resolve_lateral_tracking_tube_bounds(
+      LateralTrackingTubeBoundsRequest{
+        physical_lower_m.front(), physical_upper_m.front(), 0.0}).has_value())
+  {
+    return result;
+  }
+  for (int state = 1; state <= configured_horizon_steps; ++state) {
+    if (resolve_lateral_tracking_tube_bounds(
+        LateralTrackingTubeBoundsRequest{
+          physical_lower_m[static_cast<std::size_t>(state)],
+          physical_upper_m[static_cast<std::size_t>(state)],
+          required_reserve_m}).has_value())
+    {
+      continue;
+    }
+    result.first_unavailable_state = state;
+    result.horizon_steps = state - 1;
+    if (result.horizon_steps < minimum_prefix_steps) {
+      result.reason = LateralTrackingHorizonReason::ImmediateInfeasible;
+      return result;
+    }
+    result.valid = true;
+    result.reason = LateralTrackingHorizonReason::BoundedPrefix;
+    return result;
+  }
+  result.valid = true;
+  result.horizon_steps = configured_horizon_steps;
+  result.reason = LateralTrackingHorizonReason::CompleteHorizon;
+  return result;
+}
+
+const char * lateral_tracking_horizon_reason_name(
+  const LateralTrackingHorizonReason reason) noexcept
+{
+  switch (reason) {
+    case LateralTrackingHorizonReason::InvalidInput:
+      return "invalid-input";
+    case LateralTrackingHorizonReason::CompleteHorizon:
+      return "complete-horizon";
+    case LateralTrackingHorizonReason::BoundedPrefix:
+      return "bounded-prefix";
+    case LateralTrackingHorizonReason::ImmediateInfeasible:
+      return "immediate-infeasible";
+  }
+  return "unknown";
+}
+
 bool progress_origin_discontinuous(
   const double previous_progress_m, const double current_progress_m,
   const double maximum_continuous_step_m) noexcept
@@ -578,6 +642,10 @@ const char * extended_constraint_row_kind_name(
       return "curvature-rate";
     case ExtendedConstraintRowKind::FollowEffectiveGap:
       return "follow-effective-gap";
+    case ExtendedConstraintRowKind::ProgressWallLower:
+      return "progress-wall-lower";
+    case ExtendedConstraintRowKind::ProgressWallUpper:
+      return "progress-wall-upper";
   }
   return "unknown";
 }
@@ -609,7 +677,8 @@ const char * extended_constraint_field_name(
 }
 
 ExtendedConstraintRowSemantic decode_extended_constraint_row(
-  const int row, const int horizon_size) noexcept
+  const int row, const int horizon_size, const bool follow_gap_rows,
+  const bool progress_wall_rows) noexcept
 {
   ExtendedConstraintRowSemantic result;
   if (row < 0 || horizon_size <= 0) {
@@ -621,7 +690,10 @@ ExtendedConstraintRowSemantic decode_extended_constraint_row(
   const int box_offset = state_rows;
   const int rate_offset = box_offset + variable_rows;
   const int follow_gap_offset = rate_offset + horizon_size;
-  const int constraint_rows = follow_gap_offset + horizon_size + 1;
+  const int follow_gap_row_count = follow_gap_rows ? horizon_size + 1 : 0;
+  const int progress_wall_offset = follow_gap_offset + follow_gap_row_count;
+  const int progress_wall_row_count = progress_wall_rows ? 2 * horizon_size : 0;
+  const int constraint_rows = progress_wall_offset + progress_wall_row_count;
   if (row >= constraint_rows) {
     return result;
   }
@@ -678,10 +750,17 @@ ExtendedConstraintRowSemantic decode_extended_constraint_row(
     result.kind = ExtendedConstraintRowKind::CurvatureRate;
     result.field = ExtendedConstraintField::Curvature;
     result.stage = row - rate_offset;
-  } else {
+  } else if (row < progress_wall_offset) {
     result.kind = ExtendedConstraintRowKind::FollowEffectiveGap;
     result.field = ExtendedConstraintField::Progress;
     result.stage = row - follow_gap_offset;
+  } else {
+    const int wall_row = row - progress_wall_offset;
+    result.kind = wall_row % 2 == 0 ?
+      ExtendedConstraintRowKind::ProgressWallLower :
+      ExtendedConstraintRowKind::ProgressWallUpper;
+    result.field = ExtendedConstraintField::Lateral;
+    result.stage = wall_row / 2;
   }
   return result;
 }

@@ -168,6 +168,8 @@ enum class ExtendedConstraintRowKind
   InputBox,
   CurvatureRate,
   FollowEffectiveGap,
+  ProgressWallLower,
+  ProgressWallUpper,
 };
 
 enum class ExtendedConstraintField
@@ -192,7 +194,8 @@ struct ExtendedConstraintRowSemantic
 };
 
 ExtendedConstraintRowSemantic decode_extended_constraint_row(
-  int row, int horizon_size) noexcept;
+  int row, int horizon_size, bool follow_gap_rows = true,
+  bool progress_wall_rows = false) noexcept;
 const char * extended_constraint_row_kind_name(
   ExtendedConstraintRowKind kind) noexcept;
 const char * extended_constraint_field_name(
@@ -427,6 +430,35 @@ struct LateralTrackingTubeBoundsResolution
 std::optional<LateralTrackingTubeBoundsResolution>
 resolve_lateral_tracking_tube_bounds(
   const LateralTrackingTubeBoundsRequest & request) noexcept;
+
+enum class LateralTrackingHorizonReason
+{
+  InvalidInput,
+  CompleteHorizon,
+  BoundedPrefix,
+  ImmediateInfeasible,
+};
+
+struct LateralTrackingHorizonResolution
+{
+  bool valid{false};
+  int horizon_steps{};
+  int first_unavailable_state{-1};
+  LateralTrackingHorizonReason reason{
+    LateralTrackingHorizonReason::InvalidInput};
+};
+
+/// Select the longest leading horizon for which every future state can carry
+/// the immutable canonical tracking reserve. State zero is an observation and
+/// is checked only for a valid physical interval. A shorter result is an
+/// explicitly bounded receding prefix, not a complete tactical Mission.
+LateralTrackingHorizonResolution resolve_lateral_tracking_horizon(
+  const std::vector<double> & physical_lower_m,
+  const std::vector<double> & physical_upper_m,
+  int configured_horizon_steps, int minimum_prefix_steps,
+  double required_reserve_m) noexcept;
+const char * lateral_tracking_horizon_reason_name(
+  LateralTrackingHorizonReason reason) noexcept;
 
 /// Preserve longitudinal command continuity when execution changes between
 /// the extended and established MPCC formulations. The resolved command is

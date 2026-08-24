@@ -258,6 +258,43 @@ TEST(MpccProgress, TrackingTubeNeverReducesUnavailableReserve)
   EXPECT_NEAR(exact->nominal_upper_m, 0.0, 1e-12);
 }
 
+TEST(MpccProgress, TrackingHorizonReturnsLongestCertifiedPrefix)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::LateralTrackingHorizonReason;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::
+    resolve_lateral_tracking_horizon(
+    {-0.40, -0.40, -0.40, -0.08, -0.40},
+    {0.40, 0.40, 0.40, 0.08, 0.40}, 4, 2, 0.15);
+  EXPECT_TRUE(result.valid);
+  EXPECT_EQ(result.horizon_steps, 2);
+  EXPECT_EQ(result.first_unavailable_state, 3);
+  EXPECT_EQ(result.reason, LateralTrackingHorizonReason::BoundedPrefix);
+}
+
+TEST(MpccProgress, TrackingHorizonRejectsUnusableImmediatePrefix)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::LateralTrackingHorizonReason;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::
+    resolve_lateral_tracking_horizon(
+    {-0.40, -0.08, -0.40}, {0.40, 0.08, 0.40}, 2, 2, 0.15);
+  EXPECT_FALSE(result.valid);
+  EXPECT_EQ(result.horizon_steps, 0);
+  EXPECT_EQ(result.first_unavailable_state, 1);
+  EXPECT_EQ(result.reason, LateralTrackingHorizonReason::ImmediateInfeasible);
+}
+
+TEST(MpccProgress, TrackingHorizonKeepsCompleteCertifiedHorizon)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::LateralTrackingHorizonReason;
+  const auto result = multi_purpose_mpc_ros::mpcc_progress::
+    resolve_lateral_tracking_horizon(
+    {-0.40, -0.40, -0.40}, {0.40, 0.40, 0.40}, 2, 2, 0.15);
+  EXPECT_TRUE(result.valid);
+  EXPECT_EQ(result.horizon_steps, 2);
+  EXPECT_EQ(result.first_unavailable_state, -1);
+  EXPECT_EQ(result.reason, LateralTrackingHorizonReason::CompleteHorizon);
+}
+
 TEST(MpccProgress, CommittedPassRaisesVelocityCostWithoutRelaxingCap)
 {
   using multi_purpose_mpc_ros::mpcc_progress::VelocityHorizonRequest;
@@ -403,6 +440,15 @@ TEST(MpccProgress, DecodesEveryExtendedConstraintRowFamily)
   const auto first_follow_effective_gap =
     multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
     290, horizon);
+  const auto first_overtake_wall_lower =
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    290, horizon, false, true);
+  const auto first_overtake_wall_upper =
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    291, horizon, false, true);
+  const auto first_follow_wall_lower =
+    multi_purpose_mpc_ros::mpcc_progress::decode_extended_constraint_row(
+    311, horizon, true, true);
 
   EXPECT_TRUE(dynamics.valid);
   EXPECT_EQ(dynamics.kind, ExtendedConstraintRowKind::DynamicsEquality);
@@ -429,6 +475,22 @@ TEST(MpccProgress, DecodesEveryExtendedConstraintRowFamily)
     ExtendedConstraintRowKind::FollowEffectiveGap);
   EXPECT_EQ(first_follow_effective_gap.field, ExtendedConstraintField::Progress);
   EXPECT_EQ(first_follow_effective_gap.stage, 0);
+  EXPECT_TRUE(first_overtake_wall_lower.valid);
+  EXPECT_EQ(
+    first_overtake_wall_lower.kind,
+    ExtendedConstraintRowKind::ProgressWallLower);
+  EXPECT_EQ(first_overtake_wall_lower.field, ExtendedConstraintField::Lateral);
+  EXPECT_EQ(first_overtake_wall_lower.stage, 0);
+  EXPECT_TRUE(first_overtake_wall_upper.valid);
+  EXPECT_EQ(
+    first_overtake_wall_upper.kind,
+    ExtendedConstraintRowKind::ProgressWallUpper);
+  EXPECT_EQ(first_overtake_wall_upper.stage, 0);
+  EXPECT_TRUE(first_follow_wall_lower.valid);
+  EXPECT_EQ(
+    first_follow_wall_lower.kind,
+    ExtendedConstraintRowKind::ProgressWallLower);
+  EXPECT_EQ(first_follow_wall_lower.stage, 0);
 }
 
 TEST(MpccProgress, RejectsInvalidExtendedConstraintRows)

@@ -5522,6 +5522,10 @@ struct ExtendedProgressMpcProblem
   Eigen::SparseMatrix<double> A;
   persistent_osqp::VariableCoordinateScaling variable_scaling;
   int N{};
+  int configured_horizon_steps{};
+  int first_unavailable_tracking_state{-1};
+  mpcc_progress::LateralTrackingHorizonReason tracking_horizon_reason{
+    mpcc_progress::LateralTrackingHorizonReason::InvalidInput};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
   double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
   std::size_t wall_aware_reference_adjustment_count{};
@@ -8191,6 +8195,14 @@ struct MPC
           "extended branch build failed" : reject_reason;
         return evaluation;
       }
+      const int effective_horizon = extended->N;
+      if (effective_horizon <= 0 || effective_horizon > N) {
+        evaluation.failure_reason = "extended branch effective horizon invalid";
+        return evaluation;
+      }
+      if (active_extended_branch_solver_context_ != nullptr) {
+        active_extended_branch_horizon_size_ = effective_horizon;
+      }
       const auto outcome = solve_extended_progress_problem(extended.value(), now_sec);
       evaluation.solve_ms = outcome.telemetry.solve_ms;
       evaluation.iterations = outcome.telemetry.iterations;
@@ -8206,7 +8218,7 @@ struct MPC
         mpcc_progress::normalize_extended_execution_primal(
         outcome.result->primal, extended->l, extended->u,
         outcome.result->constraint_violation,
-        outcome.result->constraint_tolerance, N);
+        outcome.result->constraint_tolerance, effective_horizon);
       if (
         execution_primal.reason !=
         mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted)
@@ -8219,8 +8231,11 @@ struct MPC
       }
       const auto & primal = execution_primal.primal;
       constexpr int nx = mpcc_progress::kExtendedStateDimension;
-      const int nx_N = nx * (N + 1);
-      if (primal.size() != extended->P.rows() || primal.size() <= nx * N + 4) {
+      const int nx_N = nx * (effective_horizon + 1);
+      if (
+        primal.size() != extended->P.rows() ||
+        primal.size() <= nx * effective_horizon + 4)
+      {
         evaluation.failure_reason = "extended branch solution size mismatch";
         return evaluation;
       }
@@ -8234,7 +8249,8 @@ struct MPC
       evaluation.physical_wall_validation_attempted = true;
       evaluation.physical_wall_validation_scope = to_string(
         SolvedExecutionWallValidationScope::SweptFromCurrentPose);
-      const auto robust_clearance = resolve_robust_clearance(tracking_wp_id, N);
+      const auto robust_clearance = resolve_robust_clearance(
+        tracking_wp_id, effective_horizon);
       const double physical_wall_clearance_m = std::max(
         0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
       const double planning_wall_clearance_m = robust_clearance.valid ?
@@ -8264,7 +8280,7 @@ struct MPC
       evaluation.physical_wall_validation_passed =
         solved_mpcc_execution_path_wall_safe(
         exact_wall_proof->aligned, exact_wall_proof->exact.path_distance_m,
-        tracking_wp_id, N,
+        tracking_wp_id, effective_horizon,
         exact_wall_proof->lateral_lower_m,
         exact_wall_proof->lateral_upper_m,
         evaluation.physical_wall_required_clearance_m,
@@ -8335,7 +8351,7 @@ struct MPC
       evaluation.objective = quadratic_cost + extended->q.dot(primal);
       evaluation.minimum_lateral_bound_reserve_m =
         std::numeric_limits<double>::infinity();
-      for (int stage = 1; stage < N + 1; ++stage) {
+      for (int stage = 1; stage < effective_horizon + 1; ++stage) {
         const int lateral_index = nx * stage + mpcc_progress::kExtendedLateralIndex;
         const int box_row = nx_N + lateral_index;
         const double lateral = primal[lateral_index];
@@ -8352,7 +8368,7 @@ struct MPC
           evaluation.minimum_lateral_bound_reserve_m,
           std::min(lateral - lower, upper - lateral));
       }
-      const int terminal = nx * N;
+      const int terminal = nx * effective_horizon;
       evaluation.terminal_progress_m =
         primal[terminal + mpcc_progress::kExtendedProgressIndex];
       evaluation.terminal_velocity_mps =
@@ -8383,7 +8399,7 @@ struct MPC
         prospective_context.formulation =
           mpcc_contract::Formulation::VelocityProgress5State;
         prospective_context = seal_problem_context_for_problem(
-          legacy, std::move(prospective_context));
+          legacy, std::move(prospective_context), effective_horizon);
         const auto canonical = evaluate_overtake_canonical_fresh_shadow(
           legacy, extended.value(), outcome.result.value(), now_sec,
           prospective_context);
@@ -20044,25 +20060,28 @@ struct MPC
     constexpr int nx = mpcc_progress::kExtendedStateDimension;
     constexpr int nu = mpcc_progress::kExtendedInputDimension;
     reject_reason.clear();
-    const int N = legacy.N;
-    const int legacy_nx_N = legacy_nx * (N + 1);
-    const int legacy_nu_N = legacy_nu * N;
+    const int configured_N = legacy.N;
+    const int configured_legacy_nx_N = legacy_nx * (configured_N + 1);
+    const int configured_legacy_nu_N = legacy_nu * configured_N;
     if (
       !legacy.progress_metadata_available || !cfg.progress_contouring.extended_dynamics_enabled ||
-      N <= 0 || model == nullptr || model->reference_path == nullptr ||
+      configured_N <= 0 || model == nullptr || model->reference_path == nullptr ||
       !std::isfinite(model->length) || model->length <= 0.0 ||
       !std::isfinite(legacy.progress_origin_m) ||
       !std::isfinite(legacy.progress_measured_speed_mps) ||
       legacy.progress_measured_speed_mps < 0.0 ||
-      legacy.progress_reference_state.size() != legacy_nx_N ||
-      legacy.progress_state_lower.size() != legacy_nx_N ||
-      legacy.progress_state_upper.size() != legacy_nx_N ||
-      legacy.progress_input_reference.size() != legacy_nu_N ||
-      legacy.progress_input_lower.size() != legacy_nu_N ||
-      legacy.progress_input_upper.size() != legacy_nu_N ||
-      legacy.progress_stage_distance_m.size() != static_cast<std::size_t>(N) ||
-      legacy.progress_path_curvature_radpm.size() != static_cast<std::size_t>(N) ||
-      legacy.progress_stage_dt_sec.size() != static_cast<std::size_t>(N))
+      legacy.progress_reference_state.size() != configured_legacy_nx_N ||
+      legacy.progress_state_lower.size() != configured_legacy_nx_N ||
+      legacy.progress_state_upper.size() != configured_legacy_nx_N ||
+      legacy.progress_input_reference.size() != configured_legacy_nu_N ||
+      legacy.progress_input_lower.size() != configured_legacy_nu_N ||
+      legacy.progress_input_upper.size() != configured_legacy_nu_N ||
+      legacy.progress_stage_distance_m.size() !=
+      static_cast<std::size_t>(configured_N) ||
+      legacy.progress_path_curvature_radpm.size() !=
+      static_cast<std::size_t>(configured_N) ||
+      legacy.progress_stage_dt_sec.size() !=
+      static_cast<std::size_t>(configured_N))
     {
       reject_reason = "extended MPCC metadata malformed";
       return std::nullopt;
@@ -20079,17 +20098,17 @@ struct MPC
     if (
       legacy.follow_shadow_requested &&
       (legacy.follow_longitudinal_contract.progress_reference_m.size() !=
-      static_cast<std::size_t>(N + 1) ||
+      static_cast<std::size_t>(configured_N + 1) ||
       legacy.follow_longitudinal_contract.progress_lower_m.size() !=
-      static_cast<std::size_t>(N + 1) ||
+      static_cast<std::size_t>(configured_N + 1) ||
       legacy.follow_longitudinal_contract.progress_upper_m.size() !=
-      static_cast<std::size_t>(N + 1) ||
+      static_cast<std::size_t>(configured_N + 1) ||
       legacy.follow_longitudinal_contract.target_progress_m.size() !=
-      static_cast<std::size_t>(N + 1) ||
+      static_cast<std::size_t>(configured_N + 1) ||
       legacy.follow_longitudinal_contract.velocity_reference_mps.size() !=
-      static_cast<std::size_t>(N) ||
+      static_cast<std::size_t>(configured_N) ||
       legacy.follow_longitudinal_contract.velocity_upper_mps.size() !=
-      static_cast<std::size_t>(N) ||
+      static_cast<std::size_t>(configured_N) ||
       !std::isfinite(legacy.follow_longitudinal_contract.planning_gap_m) ||
       !std::isfinite(legacy.follow_longitudinal_contract.hard_gap_m) ||
       legacy.follow_longitudinal_contract.planning_gap_m + 1e-9 <
@@ -20098,6 +20117,47 @@ struct MPC
     {
       reject_reason = "Follow longitudinal contract horizon malformed";
       return std::nullopt;
+    }
+
+    int N = configured_N;
+    mpcc_progress::LateralTrackingHorizonResolution tracking_horizon;
+    tracking_horizon.valid = true;
+    tracking_horizon.horizon_steps = configured_N;
+    tracking_horizon.reason =
+      mpcc_progress::LateralTrackingHorizonReason::CompleteHorizon;
+    const bool receding_overtake_prefix_allowed =
+      legacy.progress_execution_context_active &&
+      mpcc_contract::canonical_normal_intent_requires_execution_side(intent);
+    if (receding_overtake_prefix_allowed) {
+      std::vector<double> physical_lower_m;
+      std::vector<double> physical_upper_m;
+      physical_lower_m.reserve(static_cast<std::size_t>(configured_N + 1));
+      physical_upper_m.reserve(static_cast<std::size_t>(configured_N + 1));
+      for (int state = 0; state <= configured_N; ++state) {
+        physical_lower_m.push_back(
+          legacy.progress_state_lower[legacy_nx * state]);
+        physical_upper_m.push_back(
+          legacy.progress_state_upper[legacy_nx * state]);
+      }
+      tracking_horizon = mpcc_progress::resolve_lateral_tracking_horizon(
+        physical_lower_m, physical_upper_m, configured_N, 2,
+        cfg.progress_contouring.extended_wall_tracking_reference_reserve_m);
+      if (!tracking_horizon.valid) {
+        std::ostringstream reason;
+        reason << "extended MPCC immediate tracking horizon unavailable"
+               << ", first_state="
+               << tracking_horizon.first_unavailable_state
+               << ", configured=" << configured_N
+               << ", reserve="
+               << cfg.progress_contouring.
+          extended_wall_tracking_reference_reserve_m
+               << " m, reason="
+               << mpcc_progress::lateral_tracking_horizon_reason_name(
+          tracking_horizon.reason);
+        reject_reason = reason.str();
+        return std::nullopt;
+      }
+      N = tracking_horizon.horizon_steps;
     }
 
     const auto & initial_waypoint = model->reference_path->get_waypoint(
@@ -20237,9 +20297,24 @@ struct MPC
           legacy.progress_state_upper[legacy_state],
           stage_tracking_reserve_m});
       if (!lateral_tracking_tube.has_value()) {
-        reject_reason =
-          "extended MPCC lateral tracking tube unavailable at state " +
-          std::to_string(stage);
+        double cumulative_distance_m = 0.0;
+        for (int transition = 0; transition < stage; ++transition) {
+          cumulative_distance_m += legacy.progress_stage_distance_m[
+            static_cast<std::size_t>(transition)];
+        }
+        std::ostringstream reason;
+        reason << "extended MPCC lateral tracking tube unavailable"
+               << ", state=" << stage
+               << ", distance=" << cumulative_distance_m
+               << " m, physical=["
+               << legacy.progress_state_lower[legacy_state] << ','
+               << legacy.progress_state_upper[legacy_state] << ']'
+               << ", width=" <<
+          legacy.progress_state_upper[legacy_state] -
+          legacy.progress_state_lower[legacy_state]
+               << " m, reserve=" << stage_tracking_reserve_m
+               << " m, intent=" << mpcc_contract::to_string(intent);
+        reject_reason = reason.str();
         return std::nullopt;
       }
       state_lower[state + mpcc_progress::kExtendedLateralIndex] =
@@ -20589,7 +20664,8 @@ struct MPC
     return ExtendedProgressMpcProblem{
       std::move(q), std::move(lower), std::move(upper),
       std::move(quadratic_cost), std::move(constraints),
-      std::move(variable_scaling.value()), N,
+      std::move(variable_scaling.value()), N, configured_N,
+      tracking_horizon.first_unavailable_state, tracking_horizon.reason,
       legacy.progress_origin_m, initial_lag_m,
       wall_aware_reference_adjustment_count,
       minimum_wall_tracking_weight_scale,
@@ -22460,12 +22536,15 @@ struct MPC
   {
     constexpr int progress_metadata_nx = 3;
     reject_reason.clear();
+    const int effective_horizon = extended_problem.N;
     if (
-      problem.N <= 0 ||
-      problem.progress_stage_geometry.stages.size() !=
-      static_cast<std::size_t>(problem.N) ||
-      problem.progress_state_lower.size() < progress_metadata_nx * (problem.N + 1) ||
-      problem.progress_state_upper.size() < progress_metadata_nx * (problem.N + 1) ||
+      effective_horizon <= 0 || effective_horizon > problem.N ||
+      problem.progress_stage_geometry.stages.size() <
+      static_cast<std::size_t>(effective_horizon) ||
+      problem.progress_state_lower.size() <
+      progress_metadata_nx * (effective_horizon + 1) ||
+      problem.progress_state_upper.size() <
+      progress_metadata_nx * (effective_horizon + 1) ||
       !std::isfinite(bound_tolerance_m) || bound_tolerance_m < 0.0)
     {
       reject_reason = "exact five-state wall proof context invalid";
@@ -22475,12 +22554,12 @@ struct MPC
     std::vector<double> path_distance_m;
     std::vector<double> lower_bound_m;
     std::vector<double> upper_bound_m;
-    path_distance_m.reserve(static_cast<std::size_t>(problem.N));
-    lower_bound_m.reserve(static_cast<std::size_t>(problem.N));
-    upper_bound_m.reserve(static_cast<std::size_t>(problem.N));
-    Eigen::VectorXd lower_bound(problem.N);
-    Eigen::VectorXd upper_bound(problem.N);
-    for (int stage = 0; stage < problem.N; ++stage) {
+    path_distance_m.reserve(static_cast<std::size_t>(effective_horizon));
+    lower_bound_m.reserve(static_cast<std::size_t>(effective_horizon));
+    upper_bound_m.reserve(static_cast<std::size_t>(effective_horizon));
+    Eigen::VectorXd lower_bound(effective_horizon);
+    Eigen::VectorXd upper_bound(effective_horizon);
+    for (int stage = 0; stage < effective_horizon; ++stage) {
       path_distance_m.push_back(
         problem.progress_stage_geometry.stages[static_cast<std::size_t>(stage)].
         cumulative_distance_m);
@@ -22494,7 +22573,7 @@ struct MPC
 
     mpcc_progress::ExecutionTrajectoryDiagnostic diagnostic;
     const auto extracted = mpcc_progress::extract_extended_execution_trajectory(
-      primal, problem.N, path_distance_m, lower_bound_m, upper_bound_m,
+      primal, effective_horizon, path_distance_m, lower_bound_m, upper_bound_m,
       extended_problem.progress_origin_m, bound_tolerance_m, &diagnostic);
     if (!extracted.has_value()) {
       reject_reason = std::string{"exact five-state trajectory extraction failed: "} +
@@ -22590,7 +22669,7 @@ struct MPC
     }
     return solved_mpcc_execution_path_wall_safe(
       proof->aligned, proof->exact.path_distance_m,
-      problem.ref_wp_id, problem.N,
+      problem.ref_wp_id, extended_problem.N,
       proof->lateral_lower_m, proof->lateral_upper_m,
       problem.progress_execution_required_wall_clearance_m,
       reject_reason, bound_tolerance_m,
@@ -23148,7 +23227,11 @@ struct MPC
     identity.stage_geometry_id = context.stage_geometry_id;
     identity.tracking_waypoint = problem.progress_stage_geometry.tracking_waypoint;
     identity.circular = problem.progress_stage_geometry.circular;
-    identity.stages = problem.progress_stage_geometry.stages;
+    const std::size_t stage_count = std::min(
+      context.horizon_steps, problem.progress_stage_geometry.stages.size());
+    identity.stages.assign(
+      problem.progress_stage_geometry.stages.begin(),
+      problem.progress_stage_geometry.stages.begin() + stage_count);
     return identity;
   }
 
@@ -23918,7 +24001,7 @@ struct MPC
         if (outcome.constraint_failure.has_value()) {
           result.solver_constraint_semantic =
             mpcc_progress::decode_extended_constraint_row(
-            outcome.constraint_failure->row, problem.N);
+            outcome.constraint_failure->row, problem.N, true, true);
         }
         result.status = "solve-failure";
         result.detail = outcome.failure_detail;
@@ -25375,11 +25458,20 @@ struct MPC
       result.detail = "canonical Overtake context incomplete";
       return finish();
     }
+    const int horizon_size = extended_problem.N;
+    if (
+      horizon_size <= 0 || horizon_size > problem.N ||
+      context.horizon_steps != static_cast<std::size_t>(horizon_size))
+    {
+      result.status = "horizon-contract-reject";
+      result.detail = "canonical Overtake horizon/context mismatch";
+      return finish();
+    }
 
     const auto lateral_contract =
       mpcc_progress::evaluate_extended_lateral_constraint_contract(
       solve_result.constraint_violation,
-      solve_result.constraint_tolerance, problem.N);
+      solve_result.constraint_tolerance, horizon_size);
     result.lateral_contract_satisfied =
       lateral_contract.valid && lateral_contract.satisfied;
     if (!result.lateral_contract_satisfied) {
@@ -25398,7 +25490,7 @@ struct MPC
       mpcc_progress::normalize_extended_execution_primal(
       solve_result.primal, extended_problem.l, extended_problem.u,
       solve_result.constraint_violation, solve_result.constraint_tolerance,
-      problem.N);
+      horizon_size);
     result.primal_reason = execution_primal.reason;
     result.execution_primal_accepted = execution_primal.reason ==
       mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted;
@@ -25411,7 +25503,7 @@ struct MPC
     }
 
     const auto direct_actuation = mpcc_progress::extract_actuation_proposal(
-      execution_primal.primal, problem.N, model->length);
+      execution_primal.primal, horizon_size, model->length);
     result.actuation_extracted = direct_actuation.has_value();
     if (!result.actuation_extracted) {
       result.status = "actuation-reject";
@@ -25420,14 +25512,14 @@ struct MPC
     }
 
     std::vector<double> path_distance_m;
-    path_distance_m.reserve(static_cast<std::size_t>(problem.N));
-    Eigen::VectorXd lower_bound(problem.N);
-    Eigen::VectorXd upper_bound(problem.N);
+    path_distance_m.reserve(static_cast<std::size_t>(horizon_size));
+    Eigen::VectorXd lower_bound(horizon_size);
+    Eigen::VectorXd upper_bound(horizon_size);
     std::vector<double> lower_bound_m;
     std::vector<double> upper_bound_m;
-    lower_bound_m.reserve(static_cast<std::size_t>(problem.N));
-    upper_bound_m.reserve(static_cast<std::size_t>(problem.N));
-    for (int stage = 0; stage < problem.N; ++stage) {
+    lower_bound_m.reserve(static_cast<std::size_t>(horizon_size));
+    upper_bound_m.reserve(static_cast<std::size_t>(horizon_size));
+    for (int stage = 0; stage < horizon_size; ++stage) {
       path_distance_m.push_back(
         problem.progress_stage_geometry.stages[
         static_cast<std::size_t>(stage)].cumulative_distance_m);
@@ -25443,7 +25535,7 @@ struct MPC
     mpcc_progress::ExecutionTrajectoryDiagnostic pose_diagnostic;
     const auto pose_trajectory =
       mpcc_progress::extract_extended_execution_trajectory(
-      execution_primal.primal, problem.N, path_distance_m,
+      execution_primal.primal, horizon_size, path_distance_m,
       lower_bound_m, upper_bound_m, extended_problem.progress_origin_m,
       tolerance_m, &pose_diagnostic);
     result.trajectory_extracted = pose_trajectory.has_value();
@@ -25481,7 +25573,7 @@ struct MPC
     std::string certificate_reason;
     result.physical_certificate_checked = true;
     result.physically_certified = solved_mpcc_execution_path_wall_safe(
-      exact_trajectory, path_distance_m, problem.ref_wp_id, problem.N,
+      exact_trajectory, path_distance_m, problem.ref_wp_id, horizon_size,
       lower_bound, upper_bound,
       problem.progress_execution_required_wall_clearance_m,
       certificate_reason, tolerance_m,
@@ -25502,8 +25594,9 @@ struct MPC
     }
 
     double horizon_sec = 0.0;
-    for (const double stage_dt_sec : problem.progress_stage_dt_sec) {
-      horizon_sec += stage_dt_sec;
+    for (int stage = 0; stage < horizon_size; ++stage) {
+      horizon_sec += problem.progress_stage_dt_sec[
+        static_cast<std::size_t>(stage)];
     }
     mpcc_contract::CertifiedMpccSolution canonical_solution;
     canonical_solution.solution_id = result.decision_id;
@@ -25523,7 +25616,7 @@ struct MPC
       problem.lateral_bounds_contract_valid &&
       result.lateral_contract_satisfied;
     canonical_solution.prediction_stage_count =
-      static_cast<std::size_t>(problem.N);
+      static_cast<std::size_t>(horizon_size);
     canonical_solution.valid_until_sec = now_sec + horizon_sec;
 
     canonical_plan_adapter::CanonicalPlanExtractionRequest extraction;
@@ -25534,12 +25627,14 @@ struct MPC
     extraction.progress_origin_m = extended_problem.progress_origin_m;
     extraction.required_lateral_tracking_reserve_m =
       extended_problem.required_lateral_tracking_reserve_m;
-    extraction.stage_duration_sec = problem.progress_stage_dt_sec;
+    extraction.stage_duration_sec.assign(
+      problem.progress_stage_dt_sec.begin(),
+      problem.progress_stage_dt_sec.begin() + horizon_size);
     extraction.lateral_lower_m.reserve(
-      static_cast<std::size_t>(problem.N + 1));
+      static_cast<std::size_t>(horizon_size + 1));
     extraction.lateral_upper_m.reserve(
-      static_cast<std::size_t>(problem.N + 1));
-    for (int state = 0; state <= problem.N; ++state) {
+      static_cast<std::size_t>(horizon_size + 1));
+    for (int state = 0; state <= horizon_size; ++state) {
       extraction.lateral_lower_m.push_back(
         problem.progress_state_lower[state * progress_metadata_nx]);
       extraction.lateral_upper_m.push_back(
@@ -25615,6 +25710,18 @@ struct MPC
     result.status = result.selection_complete ? "canonical-ready" :
       "selection-incomplete";
     result.detail = certificate_reason;
+    if (
+      extended_problem.tracking_horizon_reason ==
+      mpcc_progress::LateralTrackingHorizonReason::BoundedPrefix)
+    {
+      std::ostringstream detail;
+      detail << result.detail << ", bounded-prefix="
+             << extended_problem.N << '/'
+             << extended_problem.configured_horizon_steps
+             << ", first_unavailable_state="
+             << extended_problem.first_unavailable_tracking_state;
+      result.detail = detail.str();
+    }
     return finish();
   }
 
@@ -25652,6 +25759,13 @@ struct MPC
         "extended Overtake problem unavailable" : build_reject_reason;
       return result;
     }
+    const auto execution_context = seal_problem_context_for_problem(
+      problem, snapshot_context, extended_problem->N);
+    if (!mpcc_contract::problem_context_complete(execution_context)) {
+      result.status = "horizon-context-reject";
+      result.detail = "bounded Overtake context sealing failed";
+      return result;
+    }
     if (
       overtake_canonical_lifecycle_ == nullptr ||
       overtake_canonical_lifecycle_->solver_context == nullptr)
@@ -25662,7 +25776,7 @@ struct MPC
     }
 
     const auto warm_identity =
-      make_canonical_shadow_warm_start_identity(problem, snapshot_context);
+      make_canonical_shadow_warm_start_identity(problem, execution_context);
     race_mpcc::ShadowWarmStartResolution warm_resolution;
     std::uint64_t context_epoch{};
     {
@@ -25715,18 +25829,80 @@ struct MPC
       problem.progress_execution_side_sign != 0 ?
       problem.progress_execution_side_sign :
       problem.dynamic_obstacle_lateral_escape_side_sign;
-    active_extended_branch_horizon_size_ = problem.N;
+    active_extended_branch_horizon_size_ = extended_problem->N;
 
     const auto outcome = solve_extended_progress_problem(
       extended_problem.value(), now_sec, false);
     if (!outcome.result.has_value()) {
       result.status = "solve-reject";
       result.detail = outcome.failure_detail;
+      if (outcome.constraint_failure.has_value()) {
+        const auto semantic = mpcc_progress::decode_extended_constraint_row(
+          outcome.constraint_failure->row, extended_problem->N, false, true);
+        std::ostringstream detail;
+        detail << result.detail << ", semantic="
+               << mpcc_progress::extended_constraint_row_kind_name(
+          semantic.kind) << '/'
+               << mpcc_progress::extended_constraint_field_name(
+          semantic.field) << '@' << semantic.stage;
+        result.detail = detail.str();
+      }
+      constexpr int nx = mpcc_progress::kExtendedStateDimension;
+      constexpr int nu = mpcc_progress::kExtendedInputDimension;
+      const int horizon = extended_problem->N;
+      const int state_variable_count = nx * (horizon + 1);
+      const int variable_count = state_variable_count + nu * horizon;
+      const int box_offset = state_variable_count;
+      const int first_curvature_box_row =
+        box_offset + state_variable_count +
+        mpcc_progress::kExtendedCurvatureIndex;
+      const int first_curvature_rate_row =
+        state_variable_count + variable_count;
+      const int first_lateral_box_row =
+        box_offset + nx + mpcc_progress::kExtendedLateralIndex;
+      const int second_lateral_box_row =
+        box_offset + 2 * nx + mpcc_progress::kExtendedLateralIndex;
+      if (
+        horizon >= 2 && first_curvature_box_row < extended_problem->l.size() &&
+        first_curvature_rate_row < extended_problem->l.size() &&
+        second_lateral_box_row < extended_problem->l.size())
+      {
+        const double admissible_curvature_lower = std::max(
+          extended_problem->l[first_curvature_box_row],
+          extended_problem->l[first_curvature_rate_row]);
+        const double admissible_curvature_upper = std::min(
+          extended_problem->u[first_curvature_box_row],
+          extended_problem->u[first_curvature_rate_row]);
+        std::ostringstream detail;
+        detail << result.detail
+               << ", horizon=" << horizon << '/'
+               << extended_problem->configured_horizon_steps
+               << ", first_unavailable_state="
+               << extended_problem->first_unavailable_tracking_state
+               << ", kappa_box=["
+               << extended_problem->l[first_curvature_box_row] << ','
+               << extended_problem->u[first_curvature_box_row] << ']'
+               << ", kappa_rate=["
+               << extended_problem->l[first_curvature_rate_row] << ','
+               << extended_problem->u[first_curvature_rate_row] << ']'
+               << ", kappa_admissible=[" << admissible_curvature_lower
+               << ',' << admissible_curvature_upper << ']'
+               << ", x0_ey=" << -extended_problem->l[0]
+               << ", state1_ey=["
+               << extended_problem->l[first_lateral_box_row] << ','
+               << extended_problem->u[first_lateral_box_row] << ']'
+               << ", state2_ey=["
+               << extended_problem->l[second_lateral_box_row] << ','
+               << extended_problem->u[second_lateral_box_row] << ']'
+               << ", warm=" << (outcome.telemetry.warm_start_applied ? 1 : 0)
+               << ", reset=" << (last_extended_branch_context_reset_ ? 1 : 0);
+        result.detail = detail.str();
+      }
       return result;
     }
     return evaluate_overtake_canonical_fresh_shadow(
       problem, extended_problem.value(), outcome.result.value(), now_sec,
-      snapshot_context);
+      execution_context);
   }
 
   void evaluate_overtake_canonical_retained_shadow(
@@ -25855,8 +26031,22 @@ struct MPC
       return;
     }
 
-    const auto context = make_problem_context(
+    auto context = make_problem_context(
       problem, mpcc_contract::Formulation::VelocityProgress5State);
+    if (
+      retained_plan->problem.horizon_steps == 0U ||
+      retained_plan->problem.horizon_steps >
+      static_cast<std::size_t>(problem.N))
+    {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::
+        ProvenanceUnavailable;
+      result.retained_detail = "retained canonical horizon unavailable";
+      return;
+    }
+    context = seal_problem_context_for_problem(
+      problem, std::move(context),
+      static_cast<int>(retained_plan->problem.horizon_steps));
     const auto target_provenance = selected_target_provenance(
       last_v2x_behavior_output_);
     const double target_age_sec = now_sec - target_provenance.receipt_sec;
@@ -29329,7 +29519,8 @@ struct MPC
 
   mpcc_contract::MpccProblemContext seal_problem_context_for_problem(
     const MpcProblem & problem,
-    mpcc_contract::MpccProblemContext context) const
+    mpcc_contract::MpccProblemContext context,
+    const int horizon_steps_override = -1) const
   {
     const auto formulation = context.formulation;
     context.fingerprint = 0U;
@@ -29340,8 +29531,27 @@ struct MPC
     const bool progress_geometry_required =
       formulation == mpcc_contract::Formulation::ProgressContouring3State ||
       formulation == mpcc_contract::Formulation::VelocityProgress5State;
+    const int effective_horizon_steps = horizon_steps_override >= 0 ?
+      horizon_steps_override : problem.N;
     if (progress_geometry_required) {
-      context.stage_geometry_id = problem.progress_stage_geometry.fingerprint;
+      if (
+        effective_horizon_steps <= 0 ||
+        effective_horizon_steps > problem.N ||
+        static_cast<std::size_t>(effective_horizon_steps) >
+        problem.progress_stage_geometry.stages.size())
+      {
+        context.stage_geometry_id = 0U;
+      } else if (effective_horizon_steps == problem.N) {
+        context.stage_geometry_id = problem.progress_stage_geometry.fingerprint;
+      } else {
+        std::vector<mpcc_contract::StageGeometryIdentity> stages(
+          problem.progress_stage_geometry.stages.begin(),
+          problem.progress_stage_geometry.stages.begin() +
+          effective_horizon_steps);
+        context.stage_geometry_id = mpcc_contract::fingerprint_stage_geometry(
+          problem.progress_stage_geometry.tracking_waypoint,
+          problem.progress_stage_geometry.circular, stages);
+      }
     } else {
       std::vector<mpcc_contract::StageGeometryIdentity> stages;
       stages.reserve(problem.stage_geometry.stages.size());
@@ -29354,7 +29564,8 @@ struct MPC
         problem.stage_geometry.tracking_waypoint,
         problem.stage_geometry.circular, stages);
     }
-    context.horizon_steps = static_cast<std::size_t>(std::max(0, problem.N));
+    context.horizon_steps = static_cast<std::size_t>(
+      std::max(0, effective_horizon_steps));
     switch (formulation) {
       case mpcc_contract::Formulation::LegacySpatialMpc3State:
         context.state_schema_id = "ey-epsi-time-v1";

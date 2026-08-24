@@ -251,6 +251,15 @@ toleranceはrow scaleへ一度だけ埋め込み、`RowToleranceNormalized`内�
 primal/dual warm startも同一scaleで往復変換する。これは車両制約値の緩和ではなく、solverと
 certificateが異なる許容差を使っていた契約不良の修正である。
 
+2026-08-25以降、常時MPCC移行用のsix-state Track/Cruise shadowは、solver requestと同時に
+現在pose、course-frame window、immutable wall grid、車体footprintを封印する。既存の
+latest-only solver workerがsolve、exact trajectory adapter、endpoint/swept-footprint wall proofを
+直列実行し、solver artifactとwall certificateを同じsequence/decision/intent/stage geometryへ
+結び付ける。wall certificate mailboxはworld identityまで一致しないcompletionと、新しいsubmissionに
+追い越されたcompletionを拒否する。別の40 Hz wall workerはCPU scheduling contentionを増やしたため
+採用せず、control callbackはsnapshot構築、non-blocking submit/consume、shadow telemetryだけを担う。
+この証明は引き続き`authority=shadow, selected=0`であり、単独ではproduction commandへ昇格しない。
+
 2026-08-22のshadow A/Bでは、exact headingによるpost-solve physical certificateをhard oracleとして
 維持した。post-solve再solve、reference-heading固定の横box、単一勾配による横位置・姿勢結合rowは、
 いずれも40 Hz超過またはQP不成立を増やし、非線形の向き付き車体footprintを保守的に証明できなかった

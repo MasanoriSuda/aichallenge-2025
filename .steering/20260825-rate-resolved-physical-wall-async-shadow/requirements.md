@@ -24,11 +24,25 @@ wall clearance, solver parameters or proof feasibility.
 
 ## Definition of done
 
-- Physical proof runs exclusively in a latest-only worker.
+- Physical proof runs exclusively after the solve in the existing latest-only
+  rate-resolved pipeline worker; no second 40 Hz worker is added.
 - Control-thread work is bounded to immutable snapshot construction,
   non-blocking submission and non-blocking result consumption.
 - Unit/source-contract tests cover provenance, stale rejection and the absence
   of synchronous proof execution.
 - Full build/test passes.
-- A bounded `make dev2` run produces accepted physical proofs with zero
-  observation-only callback overrun.
+- A bounded `make dev2` run produces accepted physical proofs without adding
+  callback overruns attributable to the shadow pipeline. Existing production
+  solver/certificate overruns are recorded as a separate typed blocker rather
+  than hidden by this slice.
+
+## Rejected intermediate architecture
+
+`output/20260825-044053` used a second latest-only physical-proof worker. The
+certificate pipeline was semantically correct (2455 consumed results, 2277
+current-semantic results, no worker rejection, 6.834 ms maximum proof time),
+but D1 produced 21 observation-only callback overruns at 54--63 ms versus two
+overruns and 26.993 ms maximum in synchronous baseline
+`output/20260825-041116`. This falsified the assumption that a second worker was
+free of control scheduling cost. The implementation must use one serialized
+solver/certificate worker instead.

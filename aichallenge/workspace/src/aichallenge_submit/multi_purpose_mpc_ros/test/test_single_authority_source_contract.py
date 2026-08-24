@@ -873,21 +873,33 @@ def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> Non
     assert "physical_first_curvature->reachable_upper_radpm" not in semantic
 
 
-def test_rate_resolved_physical_wall_proof_is_current_world_shadow_only() -> None:
-    """Six-state proof reuses the wall sweep without gaining authority."""
+def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
+    """Six-state wall proof must leave the callback and gain no authority."""
 
     proof_start = SOURCE.index(
-        "evaluate_rate_resolved_track_cruise_physical_shadow("
+        "build_rate_resolved_track_cruise_physical_snapshot("
     )
     submit_start = SOURCE.index(
         "bool submit_rate_resolved_track_cruise_shadow(", proof_start
     )
-    proof = SOURCE[proof_start:submit_start]
-    assert "rate_resolved_physical::build(" in proof
-    assert "problem.progress_stage_geometry.fingerprint" in proof
-    assert "build_progress_course_frame_knots(" in proof
-    assert "solved_mpcc_execution_path_wall_safe(" in proof
-    assert "SolvedExecutionWallValidationScope::SweptFromCurrentPose" in proof
+    record_start = SOURCE.index(
+        "void record_rate_resolved_track_cruise_shadow(", submit_start
+    )
+    snapshot_builder = SOURCE[proof_start:submit_start]
+    pipeline = SOURCE[submit_start:record_start]
+    assert "snapshot.identity.artifact = solver_snapshot.identity;" in snapshot_builder
+    assert "problem.progress_stage_geometry" in snapshot_builder
+    assert "build_progress_course_frame_knots(" in snapshot_builder
+    assert "fingerprint_control_pose_path(" in snapshot_builder
+    assert "fingerprint_course_frame_window(" in snapshot_builder
+    assert "rate_resolved_physical::build(" in pipeline
+    assert "rate_resolved_physical_wall::evaluate(" in pipeline
+    assert pipeline.count(
+        "rate_resolved_track_cruise_shadow_worker_->submit_latest("
+    ) == 1
+    assert "rate_resolved_track_cruise_physical_wall_worker_" not in SOURCE
+    assert "solved_mpcc_execution_path_wall_safe(" not in snapshot_builder
+    assert "solved_mpcc_execution_path_wall_safe(" not in pipeline
     for forbidden in (
         "canonical_normal_control(",
         "CanonicalExecutionPlanStore",
@@ -895,7 +907,8 @@ def test_rate_resolved_physical_wall_proof_is_current_world_shadow_only() -> Non
         "track_cruise_shadow_plan_store_.publish(",
         "record_solution_contract(",
     ):
-        assert forbidden not in proof
+        assert forbidden not in snapshot_builder
+        assert forbidden not in pipeline
 
     adapter_header = (
         Path(__file__).resolve().parents[1]
@@ -910,6 +923,21 @@ def test_rate_resolved_physical_wall_proof_is_current_world_shadow_only() -> Non
         "rclcpp",
     ):
         assert forbidden not in adapter_header
+
+    wall_source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "mpcc_rate_resolved_physical_wall.cpp"
+    ).read_text(encoding="utf-8")
+    assert "recovery::sample_footprint(" in wall_source
+    assert "recovery::evaluate_clear_footprint_path(" in wall_source
+    for forbidden in (
+        "CanonicalExecutionPlanStore",
+        "CanonicalNormalCommand",
+        "publish_control",
+        "rclcpp",
+    ):
+        assert forbidden not in wall_source
 
 
 def test_control_callback_overrun_trace_is_observation_only() -> None:

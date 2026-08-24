@@ -5,9 +5,9 @@
 - [x] Carry reason/value provenance through shadow telemetry.
 - [x] Add deterministic reason tests.
 - [x] Run build, full package tests and authority audit.
-- [ ] Commit the diagnostic Slice.
-- [ ] Run `make dev2` and classify all sample rejects.
-- [ ] Record the next root-cause decision.
+- [x] Commit the diagnostic Slice (`617d839`).
+- [x] Run `make dev2` and classify all sample rejects.
+- [x] Record the next root-cause decision.
 
 ## Definition of Done
 

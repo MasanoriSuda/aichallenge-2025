@@ -675,6 +675,15 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   combined sample validator. The runtime connection is accepted as diagnostic infrastructure, but
   schema/authority migration remains blocked until the exact sample-rejection invariant is typed
   and repaired without relaxing steering or timing bounds.
+- `.steering/20260825-rate-resolved-actuation-sample-provenance` makes that final sampling boundary
+  typed without changing its result. All 1,827 package tests and the 25-package build pass. In
+  committed-source run `output/20260825-005557`, all 4,389 consumed QPs built and solved, while 515
+  samples were rejected: 261 initial-steering, 225 steering-rate, 19 terminal-steering and 10
+  publication-after-stage. Boundary examples such as `0.700001047 rad/s` against a physical
+  `0.700000000 rad/s` limit prove that the dominant failure is a solver-certificate versus
+  `1e-12` downstream-validator tolerance mismatch, not formulation infeasibility. Authority remains
+  blocked. Next align physical bound ownership without clamping or tolerance relaxation, and keep
+  the minority time-base rejects visible as a separate invariant.
 
 ## Slice 6: Legacy and migration path removal
 

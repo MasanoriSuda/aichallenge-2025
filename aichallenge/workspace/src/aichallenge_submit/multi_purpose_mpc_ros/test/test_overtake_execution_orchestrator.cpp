@@ -9,6 +9,7 @@ namespace {
 
 namespace orchestrator =
   multi_purpose_mpc_ros::overtake_execution_orchestrator;
+namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 
 TEST(OvertakeExecutionOrchestrator, ResolvesCommittedPassOwners)
 {
@@ -791,6 +792,39 @@ TEST(OvertakeExecutionOrchestrator, ReleasesFreshSafeSingleCycleWallHandoff)
   EXPECT_FALSE(result.hold_control);
   EXPECT_EQ(result.consecutive_valid_cycles, 1);
   EXPECT_EQ(result.reason, orchestrator::WallHandoffAdmissionReason::Accepted);
+}
+
+TEST(
+  OvertakeExecutionOrchestrator,
+  CanonicalOvertakeRetiresLegacyNormalWallHandoffAuthority)
+{
+  const auto result = orchestrator::resolve_legacy_wall_handoff_authority(
+    orchestrator::LegacyWallHandoffAuthorityRequest{
+      true, contract::ControlIntent::ShiftOut});
+
+  EXPECT_FALSE(result.legacy_normal_handoff_allowed);
+  EXPECT_TRUE(result.retire_legacy_state);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::LegacyWallHandoffAuthorityReason::
+    CanonicalOvertakeOwnsNormalExecution);
+}
+
+TEST(
+  OvertakeExecutionOrchestrator,
+  NonOvertakeCanonicalIntentDoesNotExpandThisDeletionSlice)
+{
+  const auto follow = orchestrator::resolve_legacy_wall_handoff_authority(
+    orchestrator::LegacyWallHandoffAuthorityRequest{
+      true, contract::ControlIntent::Follow});
+  const auto absent = orchestrator::resolve_legacy_wall_handoff_authority(
+    orchestrator::LegacyWallHandoffAuthorityRequest{
+      false, contract::ControlIntent::ShiftOut});
+
+  EXPECT_TRUE(follow.legacy_normal_handoff_allowed);
+  EXPECT_FALSE(follow.retire_legacy_state);
+  EXPECT_TRUE(absent.legacy_normal_handoff_allowed);
+  EXPECT_FALSE(absent.retire_legacy_state);
 }
 
 TEST(OvertakeExecutionOrchestrator, AlignsRetainedExecutionWithElapsedStage)

@@ -1296,6 +1296,33 @@ void WallPathAdmissionGate::reset() noexcept
   previous_stop_required_ = false;
 }
 
+const char * to_string(const LegacyWallHandoffAuthorityReason reason) noexcept
+{
+  switch (reason) {
+    case LegacyWallHandoffAuthorityReason::Available: return "available";
+    case LegacyWallHandoffAuthorityReason::CanonicalOvertakeOwnsNormalExecution:
+      return "canonical-overtake-owns-normal-execution";
+  }
+  return "unknown";
+}
+
+LegacyWallHandoffAuthorityResolution resolve_legacy_wall_handoff_authority(
+  const LegacyWallHandoffAuthorityRequest & request) noexcept
+{
+  LegacyWallHandoffAuthorityResolution resolution;
+  if (
+    request.canonical_normal_command_available &&
+    mpcc_execution_contract::canonical_normal_intent_requires_execution_side(
+      request.canonical_intent))
+  {
+    resolution.legacy_normal_handoff_allowed = false;
+    resolution.retire_legacy_state = true;
+    resolution.reason =
+      LegacyWallHandoffAuthorityReason::CanonicalOvertakeOwnsNormalExecution;
+  }
+  return resolution;
+}
+
 const char * to_string(const RetainedExecutionCursorReason reason) noexcept
 {
   switch (reason) {

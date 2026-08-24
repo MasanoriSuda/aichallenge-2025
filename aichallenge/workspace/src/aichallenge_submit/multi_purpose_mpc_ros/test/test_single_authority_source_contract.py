@@ -471,3 +471,50 @@ def test_canonical_overtake_wall_certificate_is_not_reinterpreted_downstream() -
 
     assert "!canonical_normal_command.has_value()" in monitor
     assert "!canonical_emergency_stop" in monitor
+
+    ownership_start = SOURCE.index(
+        "const auto legacy_wall_handoff_authority ="
+    )
+    ownership_end = SOURCE.index(
+        "const auto retained_dynamic_escape_snapshot", ownership_start
+    )
+    ownership = SOURCE[ownership_start:ownership_end]
+    assert "resolve_legacy_wall_handoff_authority(" in ownership
+    retirement = "mpc_->retire_legacy_dynamic_escape_execution();"
+    assert ownership.count(retirement) == 1
+    assert ownership.index(retirement) < ownership.index(
+        "const bool legacy_state_present ="
+    )
+    legacy_state_expression = ownership[
+        ownership.index("const bool legacy_state_present =") :
+        ownership.index("solver_wall_handoff_admission_gate_.reset()")
+    ]
+    assert retirement not in legacy_state_expression
+    assert "solver_wall_handoff_admission_gate_.reset()" in ownership
+    assert "overtake_wall_admission_gate_.reset()" in ownership
+    assert "dynamic_escape_wall_admission_gate_.reset()" in ownership
+    assert "dynamic_escape_exit_gate_.reset()" in ownership
+
+    dynamic_monitor_start = SOURCE.index(
+        "const bool dynamic_escape_wall_monitor_relevant ="
+    )
+    dynamic_monitor_end = SOURCE.index(
+        "const bool dynamic_escape_wall_scan_due", dynamic_monitor_start
+    )
+    dynamic_monitor = SOURCE[dynamic_monitor_start:dynamic_monitor_end]
+    assert (
+        "legacy_wall_handoff_authority.legacy_normal_handoff_allowed"
+        in dynamic_monitor
+    )
+
+    solver_recovery_start = SOURCE.index(
+        "const bool recovered_from_bounded_continuation ="
+    )
+    solver_recovery_end = SOURCE.index(
+        "if (!enable_control_", solver_recovery_start
+    )
+    solver_recovery = SOURCE[solver_recovery_start:solver_recovery_end]
+    assert (
+        "legacy_wall_handoff_authority.legacy_normal_handoff_allowed"
+        in solver_recovery
+    )

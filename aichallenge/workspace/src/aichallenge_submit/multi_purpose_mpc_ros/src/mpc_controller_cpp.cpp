@@ -7484,6 +7484,21 @@ struct MPC
       "wall-handoff-hold/" + admission_reason;
   }
 
+  bool retire_legacy_dynamic_escape_execution()
+  {
+    const bool artifact_present =
+      pending_dynamic_escape_execution_.has_value() ||
+      retained_dynamic_escape_execution_.has_value() ||
+      std::isfinite(
+      dynamic_obstacle_lateral_escape_formulation_lease_until_sec_);
+    pending_dynamic_escape_execution_.reset();
+    retained_dynamic_escape_execution_.reset();
+    dynamic_obstacle_lateral_escape_formulation_lease_until_sec_ =
+      -std::numeric_limits<double>::infinity();
+    dynamic_escape_formulation_lease_was_active_ = false;
+    return artifact_present;
+  }
+
   std::optional<RetainedDynamicEscapeControl>
   retained_dynamic_escape_execution(
     const double now_sec, const double maximum_age_sec) const
@@ -56089,13 +56104,50 @@ private:
       dynamic_escape_exit_branch_ =
         v2x_behavior.dynamic_obstacle_lateral_escape_committed_branch;
     }
+    const auto legacy_wall_handoff_authority =
+      overtake_orchestrator::resolve_legacy_wall_handoff_authority(
+      overtake_orchestrator::LegacyWallHandoffAuthorityRequest{
+        canonical_normal_command.has_value(),
+        canonical_normal_command.has_value() ?
+        canonical_normal_command->intent :
+        mpcc_contract::ControlIntent::Unknown});
+    if (legacy_wall_handoff_authority.retire_legacy_state) {
+      const bool legacy_execution_artifact_present =
+        mpc_->retire_legacy_dynamic_escape_execution();
+      const bool legacy_state_present =
+        solver_wall_handoff_admission_gate_.active() ||
+        overtake_wall_admission_gate_.active() ||
+        dynamic_escape_wall_admission_gate_.active() ||
+        dynamic_escape_exit_gate_.active() ||
+        legacy_execution_artifact_present;
+      solver_wall_handoff_admission_gate_.reset();
+      overtake_wall_admission_gate_.reset();
+      dynamic_escape_wall_admission_gate_.reset();
+      dynamic_escape_exit_gate_.reset();
+      dynamic_escape_exit_target_id_.clear();
+      dynamic_escape_exit_side_sign_ = 0;
+      dynamic_escape_exit_attempt_id_ = 0U;
+      dynamic_escape_exit_branch_ = "none";
+      dynamic_escape_execution_was_active_ = false;
+      if (legacy_state_present) {
+        RCLCPP_INFO_THROTTLE(
+          get_logger(), *get_clock(), 1000,
+          "Canonical Overtake retired legacy wall-handoff state: "
+          "decision=%llu, intent=%s, reason=%s",
+          static_cast<unsigned long long>(active_control_decision_id_),
+          mpcc_contract::to_string(canonical_normal_command->intent),
+          overtake_orchestrator::to_string(
+            legacy_wall_handoff_authority.reason));
+      }
+    }
     const auto retained_dynamic_escape_snapshot =
       mpc_->retained_dynamic_escape_execution(
       current_time.seconds(), kDynamicEscapeHandoffLeaseSec);
     const auto dynamic_escape_execution_lease =
       overtake_orchestrator::resolve_dynamic_escape_execution_lease(
       overtake_orchestrator::DynamicEscapeExecutionLeaseRequest{
-        v2x_behavior.dynamic_obstacle_lateral_escape_execution_active,
+        v2x_behavior.dynamic_obstacle_lateral_escape_execution_active &&
+        legacy_wall_handoff_authority.legacy_normal_handoff_allowed,
         dynamic_escape_fresh_execution_active,
         dynamic_escape_attempt_active,
         dynamic_escape_exit_attempt_id_,
@@ -56178,7 +56230,8 @@ private:
       (!overtake_wall_monitor_was_relevant_ ||
       loop_ % wall_path_scan_interval_cycles == 0);
     const bool dynamic_escape_wall_monitor_relevant =
-      enable_control_ && !mpc_fallback_active &&
+      legacy_wall_handoff_authority.legacy_normal_handoff_allowed &&
+      enable_control_ && !mpc_fallback_active && !canonical_emergency_stop &&
       !executed_solution_wall_hold_active &&
       (dynamic_escape_execution_active || dynamic_escape_exit_detected ||
       dynamic_escape_wall_admission_gate_.active() ||
@@ -56377,6 +56430,7 @@ private:
     bool dynamic_escape_replacement_physically_admitted = false;
     bool dynamic_escape_replacement_promoted = false;
     const bool recovered_from_bounded_continuation =
+      legacy_wall_handoff_authority.legacy_normal_handoff_allowed &&
       solver_failure_continuation_previous_cycle &&
       !solver_failure_continuation_active && !mpc_fallback_active &&
       enable_control_;

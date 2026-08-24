@@ -501,6 +501,34 @@ private:
   bool previous_stop_required_{false};
 };
 
+enum class LegacyWallHandoffAuthorityReason {
+  Available,
+  CanonicalOvertakeOwnsNormalExecution,
+};
+
+const char * to_string(LegacyWallHandoffAuthorityReason reason) noexcept;
+
+/// Resolve the normal-control ownership boundary before any legacy wall or
+/// DynamicEscape handoff state is evaluated. A physically certified canonical
+/// Overtake command already owns both axes; older handoff state may therefore
+/// be retired, but independent Emergency/Recovery supervisors remain outside
+/// this policy.
+struct LegacyWallHandoffAuthorityRequest {
+  bool canonical_normal_command_available{false};
+  mpcc_execution_contract::ControlIntent canonical_intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+};
+
+struct LegacyWallHandoffAuthorityResolution {
+  bool legacy_normal_handoff_allowed{true};
+  bool retire_legacy_state{false};
+  LegacyWallHandoffAuthorityReason reason{
+    LegacyWallHandoffAuthorityReason::Available};
+};
+
+LegacyWallHandoffAuthorityResolution resolve_legacy_wall_handoff_authority(
+  const LegacyWallHandoffAuthorityRequest & request) noexcept;
+
 enum class RetainedExecutionCursorReason {
   Available,
   InvalidTiming,

@@ -568,6 +568,22 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   runtime replacement defect remains: after receding-DP authority expiry, progress discontinuity
   and a cross-side Mission replacement can again precede a matching canonical artifact. Address
   that lifecycle in a new Slice before Rejoin promotion or Slice 6 deletion.
+- `.steering/20260824-overtake-runtime-replacement-canonical-artifact` applies the same immutable
+  Mission+plan transaction to active same-side/cross-side replacement. Prospective identity is
+  derived from the live request before the worker boundary, and the selected plan is stored before
+  its Mission generation becomes visible. This removed the runtime Mission-only replacement path.
+- `.steering/20260824-canonical-wall-handoff-owner-deletion` then traced the apparent retained
+  progress discontinuity one owner further upstream. A current-world-certified ShiftOut command was
+  being reinterpreted by stale node-level DynamicEscape/wall gates after `MPC::get_control()`, which
+  inserted a -3.0 m/s2 `legacy-normal-bypass` command and made the plant fall behind its immutable
+  plan. Canonical ShiftOut/Pass/Return now retire those executable artifacts and prohibit every
+  legacy wall/exit normal handoff in that callback; Emergency/Recovery remain independent. In
+  `output/20260824-122401` and the exact rebuilt-source run `output/20260824-123452`, the first
+  accepted ShiftOut published certified canonical retained authority at +1.37 m/s2, with zero
+  ShiftOut legacy bypass, DynamicEscape wall hold or progress discontinuity. A later Overtake
+  physical-revalidation failure caused DynamicWait/Recovery; retained progress discontinuities in
+  the second run appeared only afterward under Follow/Track/Cruise. Trace those two lifecycles as
+  separate upstream defects; Rejoin remains legacy production authority.
 
 ## Slice 6: Legacy and migration path removal
 

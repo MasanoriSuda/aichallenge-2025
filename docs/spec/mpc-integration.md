@@ -1906,6 +1906,31 @@ wall／obstacle worldを別のdecision identityで再証明する必要がある
 solver設定、wall margin、制御parameterを変更しない。6-state production昇格はcurrent-world retained
 admissionの動的証拠と、旧5-state通常ownerを同じSliceで削除できる条件が揃うまで禁止する。
 
+#### Steering-rate 6-state retained current-world shadow（2026-08-25、移行診断）
+
+`CertifiedPlan`は、accepted physical resultだけでなく、その結果を生成したimmutableなwall-grid
+shared owner、footprint、course-frame knots、wall clearance、sampling policyを含むexact physical
+snapshotを保持する。artifact、snapshot、resultのidentityが完全一致しない組み合わせはstoreへ入れない。
+
+retained consumerは元のsuffixを制御callbackで再走査しない。元suffixの静的wall証明を同一snapshotに
+束縛したまま、現在周期について次だけをshadowで再証明する。
+
+- Track/Cruise intentとexact time cursor
+- circular course progressの同一branchへのlift
+- 現在速度・操舵から1 publication intervalで到達可能なactuation
+- measured-to-control delay pathと、current control poseからretained expected poseへのconnector
+- 同一wall-grid owner・footprint
+- currentかつ明示的にemptyなV2X observation
+
+出力はproofと拒否理由だけで、command、publisher、production candidateを持たない。`make dev2`の
+`output/20260825-061048`では、retained判定はおおむね0.01--0.02 ms、観測最大値1.071 msで、
+新規判定に起因する連続callback overrunは確認されなかった。一方、全周期が
+`dynamic-observation-unavailable`でfail closeした。単車`output/20260825-061340`でも同様であり、
+現行V2X producerは「対象車両が存在しない」というcurrent empty messageを供給しない場合がある。
+未受信をemptyと推定してretained authorityを昇格してはならない。6-state production昇格前に、
+dynamic worldのexplicit-empty契約、または対象車両を含むcurrent obstacle tube証明を別Sliceで定義し、
+動的Acceptanceを取得する必要がある。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

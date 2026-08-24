@@ -895,6 +895,10 @@ def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
     assert "rate_resolved_physical::build(" in pipeline
     assert "rate_resolved_physical_wall::evaluate(" in pipeline
     assert "certified_plan_store->certify_and_replace(" in pipeline
+    assert (
+        "result.execution_artifact, physical_snapshot.value(), candidate"
+        in pipeline
+    )
     assert pipeline.index("rate_resolved_physical_wall::evaluate(") < pipeline.index(
         "certified_plan_store->certify_and_replace("
     )
@@ -958,6 +962,53 @@ def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
         "rclcpp",
     ):
         assert forbidden not in certified_header
+
+
+def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
+    """Retained six-state proof may observe the world but cannot command it."""
+
+    evaluate_start = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow("
+    )
+    record_start = SOURCE.index(
+        "void record_rate_resolved_track_cruise_shadow(", evaluate_start
+    )
+    evaluate = SOURCE[evaluate_start:record_start]
+    assert "rate_resolved_track_cruise_certified_plan_store_->snapshot()" in evaluate
+    assert "build_canonical_current_control_path()" in evaluate
+    assert "gap_planner->empty_world_observation(now_sec)" in evaluate
+    assert "rate_resolved_retained::evaluate(request)" in evaluate
+    for forbidden in (
+        "publish_control_command(",
+        "publish_failsafe_command(",
+        "canonical_normal_control(",
+        "build_canonical_normal_command(",
+        "track_cruise_shadow_plan_store_.publish(",
+    ):
+        assert forbidden not in evaluate
+
+    package = Path(__file__).resolve().parents[1]
+    retained_header = (
+        package
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_retained_revalidation.hpp"
+    ).read_text(encoding="utf-8")
+    retained_source = (
+        package / "src" / "mpcc_rate_resolved_retained_revalidation.cpp"
+    ).read_text(encoding="utf-8")
+    assert "std::optional<Proof> proof" in retained_header
+    assert "artifact::extract_actuation(execution, cursor)" in retained_source
+    assert "recovery::evaluate_clear_footprint_path(" in retained_source
+    assert "request.current_wall_grid.get() != source.wall_grid.get()" in retained_source
+    for text in (retained_header, retained_source):
+        for forbidden in (
+            "CanonicalNormalCommand",
+            "publish_control",
+            "rclcpp",
+            "AckermannControlCommand",
+        ):
+            assert forbidden not in text
 
 
 def test_control_callback_overrun_trace_is_observation_only() -> None:

@@ -21,6 +21,10 @@ namespace contract = mpcc_execution_contract;
 struct CertifiedPlan
 {
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact;
+  /// Exact immutable source consumed by the accepted physical result.  A
+  /// retained consumer must match this static-world owner before reusing the
+  /// certified suffix.
+  std::shared_ptr<const physical::Snapshot> physical_snapshot;
   physical::Identity physical_identity;
   physical::Outcome physical_outcome{physical::Outcome::InvalidInput};
   contract::PhysicalWallCertificateDiagnostic physical_diagnostic;
@@ -33,7 +37,9 @@ enum class RejectReason
   MissingArtifact,
   InvalidArtifact,
   InvalidPhysicalResult,
+  InvalidPhysicalSnapshot,
   PhysicalProofRejected,
+  PhysicalSnapshotMismatch,
   IdentityMismatch,
   Count,
 };
@@ -49,6 +55,7 @@ struct BuildResult
 
 BuildResult build(
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
+  const physical::Snapshot & physical_snapshot,
   const physical::Result & physical_result);
 
 enum class StoreReason
@@ -95,6 +102,7 @@ public:
 
   AdmissionResult certify_and_replace(
     std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
+    const physical::Snapshot & physical_snapshot,
     const physical::Result & physical_result);
   StoreReason replace(std::shared_ptr<const CertifiedPlan> plan);
   std::shared_ptr<const CertifiedPlan> snapshot() const;

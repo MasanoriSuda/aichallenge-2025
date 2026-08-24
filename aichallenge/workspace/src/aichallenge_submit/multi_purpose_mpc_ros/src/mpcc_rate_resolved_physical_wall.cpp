@@ -57,6 +57,21 @@ bool same_identity(const Identity & lhs, const Identity & rhs) noexcept
     lhs.captured_sec == rhs.captured_sec;
 }
 
+bool snapshot_valid(const Snapshot & snapshot) noexcept
+{
+  const auto trajectory_validation =
+    race::validate_exact_physical_execution_trajectory(snapshot.trajectory);
+  return identity_valid(snapshot.identity) && snapshot.wall_grid != nullptr &&
+         snapshot.wall_grid->valid() && snapshot.footprint.valid() &&
+         finite_pose(snapshot.current_pose) && trajectory_validation.complete &&
+         snapshot.course_frame_knots.size() >= 2U &&
+         std::isfinite(snapshot.hard_wall_clearance_m) &&
+         snapshot.hard_wall_clearance_m >= 0.0 &&
+         std::isfinite(snapshot.bound_tolerance_m) &&
+         snapshot.bound_tolerance_m >= 0.0 &&
+         std::isfinite(snapshot.swept_step_m) && snapshot.swept_step_m > 0.0;
+}
+
 const char * to_string(const Outcome outcome) noexcept
 {
   switch (outcome) {
@@ -98,18 +113,7 @@ Result evaluate(const Snapshot & snapshot)
       return finish(std::move(result), started, snapshot.identity.captured_sec);
     };
 
-  const auto trajectory_validation =
-    race::validate_exact_physical_execution_trajectory(snapshot.trajectory);
-  if (
-    !identity_valid(snapshot.identity) || snapshot.wall_grid == nullptr ||
-    !snapshot.wall_grid->valid() || !snapshot.footprint.valid() ||
-    !finite_pose(snapshot.current_pose) || !trajectory_validation.complete ||
-    snapshot.course_frame_knots.size() < 2U ||
-    !std::isfinite(snapshot.hard_wall_clearance_m) ||
-    snapshot.hard_wall_clearance_m < 0.0 ||
-    !std::isfinite(snapshot.bound_tolerance_m) ||
-    snapshot.bound_tolerance_m < 0.0 ||
-    !std::isfinite(snapshot.swept_step_m) || snapshot.swept_step_m <= 0.0)
+  if (!snapshot_valid(snapshot))
   {
     return reject(
       Outcome::InvalidInput,

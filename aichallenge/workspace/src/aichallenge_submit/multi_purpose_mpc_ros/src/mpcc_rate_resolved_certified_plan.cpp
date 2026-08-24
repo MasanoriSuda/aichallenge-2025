@@ -13,7 +13,11 @@ const char * to_string(const RejectReason reason) noexcept
     case RejectReason::MissingArtifact: return "missing-artifact";
     case RejectReason::InvalidArtifact: return "invalid-artifact";
     case RejectReason::InvalidPhysicalResult: return "invalid-physical-result";
+    case RejectReason::InvalidPhysicalSnapshot:
+      return "invalid-physical-snapshot";
     case RejectReason::PhysicalProofRejected: return "physical-proof-rejected";
+    case RejectReason::PhysicalSnapshotMismatch:
+      return "physical-snapshot-mismatch";
     case RejectReason::IdentityMismatch: return "identity-mismatch";
     case RejectReason::Count: break;
   }
@@ -28,6 +32,12 @@ RejectReason validate(const CertifiedPlan & plan) noexcept
   if (artifact::validate(*plan.execution_artifact) != artifact::RejectReason::None) {
     return RejectReason::InvalidArtifact;
   }
+  if (
+    plan.physical_snapshot == nullptr ||
+    !physical::snapshot_valid(*plan.physical_snapshot))
+  {
+    return RejectReason::InvalidPhysicalSnapshot;
+  }
   if (!physical::identity_valid(plan.physical_identity) ||
       !std::isfinite(plan.physical_completed_sec) ||
       plan.physical_completed_sec < plan.physical_identity.captured_sec)
@@ -40,6 +50,11 @@ RejectReason validate(const CertifiedPlan & plan) noexcept
   {
     return RejectReason::PhysicalProofRejected;
   }
+  if (!physical::same_identity(
+      plan.physical_snapshot->identity, plan.physical_identity))
+  {
+    return RejectReason::PhysicalSnapshotMismatch;
+  }
   if (!artifact::same_identity(
       plan.execution_artifact->identity, plan.physical_identity.artifact))
   {
@@ -50,6 +65,7 @@ RejectReason validate(const CertifiedPlan & plan) noexcept
 
 BuildResult build(
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
+  const physical::Snapshot & physical_snapshot,
   const physical::Result & physical_result)
 {
   BuildResult result;
@@ -62,6 +78,10 @@ BuildResult build(
   }
   if (!physical::result_valid(physical_result)) {
     result.reason = RejectReason::InvalidPhysicalResult;
+    return result;
+  }
+  if (!physical::snapshot_valid(physical_snapshot)) {
+    result.reason = RejectReason::InvalidPhysicalSnapshot;
     return result;
   }
   if (physical_result.outcome != physical::Outcome::Accepted ||
@@ -77,9 +97,17 @@ BuildResult build(
     result.reason = RejectReason::IdentityMismatch;
     return result;
   }
+  if (!physical::same_identity(
+      physical_snapshot.identity, physical_result.identity))
+  {
+    result.reason = RejectReason::PhysicalSnapshotMismatch;
+    return result;
+  }
 
   auto plan = std::make_shared<CertifiedPlan>();
   plan->execution_artifact = std::move(execution_artifact);
+  plan->physical_snapshot =
+    std::make_shared<const physical::Snapshot>(physical_snapshot);
   plan->physical_identity = physical_result.identity;
   plan->physical_outcome = physical_result.outcome;
   plan->physical_diagnostic = physical_result.diagnostic;
@@ -103,9 +131,11 @@ const char * to_string(const StoreReason reason) noexcept
 
 AdmissionResult Store::certify_and_replace(
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
+  const physical::Snapshot & physical_snapshot,
   const physical::Result & physical_result)
 {
-  const auto certified = build(std::move(execution_artifact), physical_result);
+  const auto certified = build(
+    std::move(execution_artifact), physical_snapshot, physical_result);
   if (certified.plan == nullptr) {
     std::lock_guard<std::mutex> lock(mutex_);
     ++certification_reject_count_;

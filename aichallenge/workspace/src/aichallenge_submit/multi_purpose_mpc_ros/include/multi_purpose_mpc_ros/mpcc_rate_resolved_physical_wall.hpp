@@ -50,6 +50,11 @@ struct Snapshot
   double swept_step_m{};
 };
 
+/// Validate the complete immutable proof source independently of executing
+/// the raster sweep.  Retained certification uses this to preserve the exact
+/// static-world evidence consumed by an accepted Result.
+bool snapshot_valid(const Snapshot & snapshot) noexcept;
+
 enum class Outcome
 {
   InvalidInput,

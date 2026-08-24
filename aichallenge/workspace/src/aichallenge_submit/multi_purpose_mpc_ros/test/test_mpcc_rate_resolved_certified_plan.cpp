@@ -14,6 +14,7 @@ namespace execution =
 namespace physical =
   multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
+namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 
 execution::ExecutionArtifact artifact(const std::uint64_t sequence = 1U)
 {
@@ -62,11 +63,50 @@ physical::Result accepted_physical(const execution::Identity & identity)
   return result;
 }
 
+physical::Snapshot physical_snapshot(const execution::Identity & identity)
+{
+  physical::Snapshot snapshot;
+  snapshot.identity.artifact = identity;
+  snapshot.identity.pose_snapshot_id = 101U;
+  snapshot.identity.course_frame_window_id = 102U;
+  snapshot.identity.captured_sec = identity.snapshot_sec;
+  auto grid = std::make_shared<recovery::OccupancyGrid>();
+  grid->width = 400U;
+  grid->height = 400U;
+  grid->resolution_m = 0.1;
+  grid->origin_x_m = 30.0;
+  grid->origin_y_m = -20.0;
+  grid->cells.assign(grid->width * grid->height, recovery::CellState::Free);
+  snapshot.wall_grid = std::move(grid);
+  snapshot.footprint = {0.1, 0.1, 0.1, 0.1, 0.0};
+  snapshot.current_pose = {50.0, 0.0, 0.0};
+  snapshot.trajectory.progress_origin_m = 50.0;
+  snapshot.trajectory.path_distance_m = {0.2, 0.4};
+  snapshot.trajectory.lateral_m = {0.1, 0.2};
+  snapshot.trajectory.lag_m = {0.0, 0.0};
+  snapshot.trajectory.heading_offset_rad = {0.01, 0.02};
+  snapshot.trajectory.velocity_mps = {2.1, 2.2};
+  snapshot.trajectory.progress_m = {50.2, 50.4};
+  snapshot.trajectory.lateral_lower_m = {-1.0, -1.0};
+  snapshot.trajectory.lateral_upper_m = {1.0, 1.0};
+  snapshot.trajectory.minimum_lateral_bound_reserve_m = 0.8;
+  snapshot.trajectory.progress_regression_tolerance_m = 1e-6;
+  snapshot.course_frame_knots = {
+    {49.0, 49.0, 0.0, 0.0, 0},
+    {52.0, 52.0, 0.0, 0.0, 3},
+  };
+  snapshot.bound_tolerance_m = 1e-6;
+  snapshot.swept_step_m = 0.05;
+  return snapshot;
+}
+
 certified::BuildResult build_plan(const std::uint64_t sequence = 1U)
 {
   auto value = std::make_shared<const execution::ExecutionArtifact>(
     artifact(sequence));
-  return certified::build(value, accepted_physical(value->identity));
+  return certified::build(
+    value, physical_snapshot(value->identity),
+    accepted_physical(value->identity));
 }
 
 TEST(MpccRateResolvedCertifiedPlan, JoinsExactArtifactAndPhysicalProof)
@@ -86,7 +126,8 @@ TEST(MpccRateResolvedCertifiedPlan, AcceptedAdmissionClearsDiagnosticReason)
   certified::Store store;
   auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
   const auto admission = store.certify_and_replace(
-    value, accepted_physical(value->identity));
+    value, physical_snapshot(value->identity),
+    accepted_physical(value->identity));
   EXPECT_TRUE(admission.accepted());
   const auto state = store.state();
   EXPECT_EQ(state.last_certification_reason, certified::RejectReason::None);
@@ -100,7 +141,8 @@ TEST(MpccRateResolvedCertifiedPlan, RejectsNonAcceptedPhysicalProof)
   proof.outcome = physical::Outcome::SweptWallRejected;
   proof.diagnostic.reason =
     contract::PhysicalWallCertificateReason::SweptPathViolation;
-  const auto result = certified::build(value, proof);
+  const auto result = certified::build(
+    value, physical_snapshot(value->identity), proof);
   EXPECT_EQ(result.reason, certified::RejectReason::PhysicalProofRejected);
   EXPECT_EQ(result.plan, nullptr);
 }
@@ -113,7 +155,8 @@ TEST(MpccRateResolvedCertifiedPlan, RejectsFullIdentityMismatch)
   // A different world window is still a valid physical result, but mutating
   // the embedded artifact identity must never join to this artifact.
   ++proof.identity.artifact.source_problem_fingerprint;
-  const auto result = certified::build(value, proof);
+  const auto result = certified::build(
+    value, physical_snapshot(value->identity), proof);
   EXPECT_EQ(result.reason, certified::RejectReason::IdentityMismatch);
   EXPECT_EQ(result.plan, nullptr);
 }
@@ -139,7 +182,8 @@ TEST(MpccRateResolvedCertifiedPlan, AdmissionRecordsTypedCertificationReject)
   auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
   auto proof = accepted_physical(value->identity);
   ++proof.identity.artifact.decision_id;
-  const auto admission = store.certify_and_replace(value, proof);
+  const auto admission = store.certify_and_replace(
+    value, physical_snapshot(value->identity), proof);
   EXPECT_FALSE(admission.accepted());
   EXPECT_EQ(
     admission.certification_reason, certified::RejectReason::IdentityMismatch);
@@ -148,6 +192,18 @@ TEST(MpccRateResolvedCertifiedPlan, AdmissionRecordsTypedCertificationReject)
   EXPECT_EQ(
     state.last_certification_reason, certified::RejectReason::IdentityMismatch);
   EXPECT_FALSE(state.plan_available);
+}
+
+TEST(MpccRateResolvedCertifiedPlan, RejectsSnapshotResultIdentityMismatch)
+{
+  auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
+  auto snapshot = physical_snapshot(value->identity);
+  auto proof = accepted_physical(value->identity);
+  ++snapshot.identity.pose_snapshot_id;
+  const auto result = certified::build(value, snapshot, proof);
+  EXPECT_EQ(
+    result.reason, certified::RejectReason::PhysicalSnapshotMismatch);
+  EXPECT_EQ(result.plan, nullptr);
 }
 
 TEST(MpccRateResolvedCertifiedPlan, RejectsStaleReplacementAndConditionalClear)

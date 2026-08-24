@@ -21,6 +21,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
@@ -147,6 +148,8 @@ namespace rate_resolved_physical_wall =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
 namespace rate_resolved_certified =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
+namespace rate_resolved_retained =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
 namespace runtime_speed_profile = ::multi_purpose_mpc_ros::runtime_speed_profile;
@@ -6323,6 +6326,22 @@ struct RateResolvedPhysicalShadowEvaluation
   std::string detail{"not-evaluated"};
 };
 
+struct RateResolvedRetainedShadowEvaluation
+{
+  rate_resolved_retained::Reason reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  rate_resolved_shadow::artifact::CursorReason cursor_reason{
+    rate_resolved_shadow::artifact::CursorReason::InvalidArtifact};
+  rate_resolved_shadow::artifact::ActuationReason actuation_reason{
+    rate_resolved_shadow::artifact::ActuationReason::InvalidArtifact};
+  std::uint64_t sequence{};
+  std::size_t stage_index{};
+  double steering_difference_rad{};
+  double maximum_steering_step_rad{};
+  double velocity_difference_mps{};
+  double elapsed_ms{};
+};
+
 struct RateResolvedTrackCruiseShadowTelemetryWindow
 {
   std::uint64_t submission_count{};
@@ -6370,6 +6389,14 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   double total_physical_ms{};
   double maximum_physical_ms{};
   RateResolvedPhysicalShadowEvaluation last_physical;
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(rate_resolved_retained::Reason::Count)>
+  retained_outcome_count{};
+  std::uint64_t retained_attempt_count{};
+  double total_retained_ms{};
+  double maximum_retained_ms{};
+  RateResolvedRetainedShadowEvaluation last_retained;
   rate_resolved_shadow::Result last_result;
   bool last_result_available{false};
   rate_resolved_shadow::Result last_failure_result;
@@ -27816,7 +27843,7 @@ struct MPC
             certified_plan_store != nullptr)
           {
             static_cast<void>(certified_plan_store->certify_and_replace(
-              result.execution_artifact, candidate));
+              result.execution_artifact, physical_snapshot.value(), candidate));
           }
           physical_result = std::move(candidate);
         }
@@ -27848,10 +27875,95 @@ struct MPC
     return true;
   }
 
+  RateResolvedRetainedShadowEvaluation
+  evaluate_rate_resolved_track_cruise_retained_shadow(
+    const MpcProblem & problem, const double now_sec) const
+  {
+    const auto started = SteadyClock::now();
+    RateResolvedRetainedShadowEvaluation evaluation;
+    auto finish = [&]() {
+        evaluation.elapsed_ms =
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return evaluation;
+      };
+    if (
+      rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
+      model == nullptr || model->reference_path == nullptr ||
+      gap_planner == nullptr ||
+      overtake_static_wall_grid_snapshot_owner_ == nullptr)
+    {
+      return finish();
+    }
+    const auto plan =
+      rate_resolved_track_cruise_certified_plan_store_->snapshot();
+    if (plan != nullptr && plan->execution_artifact != nullptr) {
+      evaluation.sequence = plan->execution_artifact->identity.sequence;
+    }
+    const auto control_path = build_canonical_current_control_path();
+    if (!control_path.has_value() || !predicted_execution_pose_.has_value()) {
+      evaluation.reason =
+        rate_resolved_retained::Reason::InvalidCurrentState;
+      return finish();
+    }
+    const auto empty_world = gap_planner->empty_world_observation(now_sec);
+    rate_resolved_retained::Request request;
+    request.plan = plan;
+    request.decision_id = active_control_decision_id_;
+    request.now_sec = now_sec;
+    request.current_intent = current_control_intent();
+    request.measured_course_progress_m = problem.progress_origin_m;
+    request.path_length_m = model->reference_path->length;
+    request.progress_continuity_tolerance_m =
+      kV2XCourseProgressContinuityToleranceM;
+    request.circular = model->reference_path->circular;
+    request.measured_to_control_path = control_path.value();
+    request.control_pose = predicted_execution_pose_.value();
+    request.current_wall_grid = overtake_static_wall_grid_snapshot_owner_;
+    request.current_footprint = overtake_static_wall_footprint_;
+    request.obstacles.generation = empty_world.observation_generation;
+    request.obstacles.observed_sec = empty_world.receipt_sec;
+    request.obstacles.active_vehicle_count = empty_world.active_vehicle_count;
+    request.obstacles.current = empty_world.current;
+    request.current_speed_mps = current_speed_mps_;
+    request.current_steering_rad = previous_steering;
+    request.minimum_acceleration_mps2 = cfg.a_min;
+    request.maximum_acceleration_mps2 = cfg.a_max;
+    request.publication_interval_sec = model->Ts;
+    const auto result = rate_resolved_retained::evaluate(request);
+    evaluation.reason = result.reason;
+    evaluation.cursor_reason = result.cursor_reason;
+    evaluation.actuation_reason = result.actuation_reason;
+    if (result.proof.has_value()) {
+      evaluation.sequence =
+        result.proof->plan->execution_artifact->identity.sequence;
+      evaluation.stage_index = result.proof->cursor.control_stage_index;
+      evaluation.steering_difference_rad =
+        result.proof->steering_difference_rad;
+      evaluation.maximum_steering_step_rad =
+        result.proof->maximum_steering_step_rad;
+      evaluation.velocity_difference_mps =
+        result.proof->velocity_difference_mps;
+    }
+    return finish();
+  }
+
   void record_rate_resolved_track_cruise_shadow(
     const MpcProblem & problem, const double now_sec)
   {
     auto & window = rate_resolved_track_cruise_shadow_telemetry_window_;
+    const auto retained =
+      evaluate_rate_resolved_track_cruise_retained_shadow(problem, now_sec);
+    ++window.retained_attempt_count;
+    const auto retained_reason_index =
+      static_cast<std::size_t>(retained.reason);
+    if (retained_reason_index < window.retained_outcome_count.size()) {
+      ++window.retained_outcome_count[retained_reason_index];
+    }
+    window.total_retained_ms += retained.elapsed_ms;
+    window.maximum_retained_ms = std::max(
+      window.maximum_retained_ms, retained.elapsed_ms);
+    window.last_retained = retained;
     if (rate_resolved_track_cruise_physical_wall_mailbox_ != nullptr) {
       const auto physical_result =
         rate_resolved_track_cruise_physical_wall_mailbox_->latest_after(
@@ -28244,6 +28356,68 @@ struct MPC
         certified_plan_store_state.last_certification_reason),
       rate_resolved_certified::to_string(
         certified_plan_store_state.last_reason));
+    const auto retained_count = [&](const rate_resolved_retained::Reason reason) {
+        return window.retained_outcome_count[static_cast<std::size_t>(reason)];
+      };
+    const double retained_denominator = static_cast<double>(
+      std::max<std::uint64_t>(1U, window.retained_attempt_count));
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Rate-resolved retained current-world shadow: attempted=%lu/"
+      "accepted=%lu, reject=missing:%lu/plan:%lu/cursor:%lu/intent:%lu/"
+      "observation:%lu/obstacle:%lu/static_world:%lu/current_state:%lu/"
+      "progress:%lu/course:%lu/actuation:%lu/steering:%lu/velocity:%lu/"
+      "control_path:%lu/delay:%lu/connector:%lu, time=%.3f/%.3fms(avg/max), "
+      "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
+      "steering_delta:%.6f/limit:%.6f/velocity_delta:%.6f, "
+      "authority=shadow, selected=0",
+      static_cast<unsigned long>(window.retained_attempt_count),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::Accepted)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::MissingPlan)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::InvalidPlan)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::CursorUnavailable)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::IntentMismatch)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::DynamicObservationUnavailable)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::DynamicObstaclePresent)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::StaticWorldMismatch)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::InvalidCurrentState)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::ProgressLiftRejected)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::CourseFrameUnavailable)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::ActuationRejected)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::SteeringUnreachable)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::VelocityUnreachable)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::ControlPathInvalid)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::DelayPrefixBlocked)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::ConnectorBlocked)),
+      window.total_retained_ms / retained_denominator,
+      window.maximum_retained_ms,
+      static_cast<unsigned long>(window.last_retained.sequence),
+      static_cast<unsigned long>(window.last_retained.stage_index),
+      rate_resolved_retained::to_string(window.last_retained.reason),
+      rate_resolved_shadow::artifact::to_string(
+        window.last_retained.cursor_reason),
+      rate_resolved_shadow::artifact::to_string(
+        window.last_retained.actuation_reason),
+      window.last_retained.steering_difference_rad,
+      window.last_retained.maximum_steering_step_rad,
+      window.last_retained.velocity_difference_mps);
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(

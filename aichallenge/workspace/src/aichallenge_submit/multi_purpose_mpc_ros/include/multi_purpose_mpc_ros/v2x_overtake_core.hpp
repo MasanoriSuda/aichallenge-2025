@@ -1194,6 +1194,19 @@ struct RecedingHorizonExecutionBoundsResolution
 RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_bounds(
   const RecedingHorizonExecutionBoundsRequest & request) noexcept;
 
+/// Earliest physical contract which prevented a receding-horizon profile from
+/// becoming executable. This is diagnostic provenance, not a fallback policy.
+enum class RecedingHorizonPhysicalFailureCause
+{
+  None,
+  InvalidInput,
+  StaticMapClearance,
+  StaticMapContact,
+  LateralAcceleration,
+};
+
+const char * to_string(RecedingHorizonPhysicalFailureCause cause) noexcept;
+
 struct WallCorridorBoundRequest
 {
   double base_lower_m{};

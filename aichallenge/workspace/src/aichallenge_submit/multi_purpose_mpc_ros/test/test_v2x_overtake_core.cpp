@@ -3451,6 +3451,19 @@ TEST(V2XOvertakeCoreSpeed, RejectsInfeasibleRecedingHorizonBounds)
   EXPECT_TRUE(result.lateral_targets_m.empty());
 }
 
+TEST(V2XOvertakeCoreSpeed, NamesRecedingHorizonPhysicalFailureCauses)
+{
+  using Cause = multi_purpose_mpc_ros::v2x_overtake_core::
+    RecedingHorizonPhysicalFailureCause;
+  using multi_purpose_mpc_ros::v2x_overtake_core::to_string;
+
+  EXPECT_STREQ(to_string(Cause::None), "none");
+  EXPECT_STREQ(to_string(Cause::InvalidInput), "invalid-input");
+  EXPECT_STREQ(to_string(Cause::StaticMapClearance), "static-map-clearance");
+  EXPECT_STREQ(to_string(Cause::StaticMapContact), "static-map-contact");
+  EXPECT_STREQ(to_string(Cause::LateralAcceleration), "lateral-acceleration");
+}
+
 TEST(V2XOvertakeCoreSpeed, KeepsRobustTargetBoundsWhenTheyFit)
 {
   const auto result =

@@ -3000,7 +3000,19 @@ struct OvertakeLineHorizonEvaluation
   bool static_map_margin_degraded_during_execution{false};
   bool static_map_physical_infeasible_during_execution{false};
   int static_map_failure_index{-1};
+  overtake_core::RecedingHorizonPhysicalFailureCause physical_failure_cause{
+    overtake_core::RecedingHorizonPhysicalFailureCause::None};
+  double physical_failure_path_distance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double physical_failure_lateral_target_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double physical_failure_wall_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double physical_failure_wall_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
   double static_map_failure_heading_offset_rad{0.0};
+  double physical_failure_required_lateral_accel_mps2{
+    std::numeric_limits<double>::quiet_NaN()};
   double static_map_profile_retention_ratio{1.0};
 
   bool execution_feasible() const
@@ -3009,6 +3021,24 @@ struct OvertakeLineHorizonEvaluation
            !static_map_margin_degraded_during_execution &&
            !static_map_physical_infeasible_during_execution;
   }
+};
+
+struct OvertakeRecedingHorizonPhysicalFailureDiagnostic
+{
+  bool available{false};
+  overtake_core::RecedingHorizonPhysicalFailureCause cause{
+    overtake_core::RecedingHorizonPhysicalFailureCause::None};
+  int stage_index{-1};
+  double path_distance_m{std::numeric_limits<double>::quiet_NaN()};
+  double lateral_target_m{std::numeric_limits<double>::quiet_NaN()};
+  double wall_lower_m{std::numeric_limits<double>::quiet_NaN()};
+  double wall_upper_m{std::numeric_limits<double>::quiet_NaN()};
+  double heading_offset_rad{std::numeric_limits<double>::quiet_NaN()};
+  double required_lateral_accel_mps2{
+    std::numeric_limits<double>::quiet_NaN()};
+  double candidate_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double wall_clearance_m{std::numeric_limits<double>::quiet_NaN()};
+  bool initial_contract{false};
 };
 
 enum class OvertakeRecedingHorizonFailureKind
@@ -3062,6 +3092,9 @@ struct OvertakeRecedingHorizonEvaluation
     OvertakeRecedingHorizonFailureKind::None};
   std::string hard_bound_failure_kind;
   std::string fallback_reason;
+  std::size_t physical_validation_attempt_count{0U};
+  bool initial_execution_feasible{false};
+  OvertakeRecedingHorizonPhysicalFailureDiagnostic physical_failure;
   OvertakeLineHorizonEvaluation horizon;
 };
 
@@ -31728,9 +31761,45 @@ private:
     std::nullopt) const
   {
     OvertakeLineHorizonEvaluation evaluation;
+    const auto record_physical_failure = [&evaluation](
+        const overtake_core::RecedingHorizonPhysicalFailureCause cause,
+        const int stage_index, const double heading_offset_rad,
+        const double required_lateral_accel_mps2) {
+        evaluation.physical_failure_cause = cause;
+        evaluation.static_map_failure_index = stage_index;
+        evaluation.static_map_failure_heading_offset_rad = heading_offset_rad;
+        evaluation.physical_failure_required_lateral_accel_mps2 =
+          required_lateral_accel_mps2;
+        if (stage_index < 0) {
+          return;
+        }
+        const std::size_t index = static_cast<std::size_t>(stage_index);
+        if (index < evaluation.path_distances.size()) {
+          evaluation.physical_failure_path_distance_m =
+            evaluation.path_distances[index];
+        }
+        if (index < evaluation.target_ey.size()) {
+          evaluation.physical_failure_lateral_target_m =
+            evaluation.target_ey[index];
+        }
+        if (index < evaluation.stage_wall_corridor_lower_ey.size()) {
+          evaluation.physical_failure_wall_lower_m =
+            evaluation.stage_wall_corridor_lower_ey[index];
+        }
+        if (index < evaluation.stage_wall_corridor_upper_ey.size()) {
+          evaluation.physical_failure_wall_upper_m =
+            evaluation.stage_wall_corridor_upper_ey[index];
+        }
+      };
     if (N <= 0 || lb.size() < N || ub.size() < N) {
       evaluation.static_map_physical_infeasible_during_execution =
         enforce_execution_feasibility;
+      if (enforce_execution_feasibility) {
+        record_physical_failure(
+          overtake_core::RecedingHorizonPhysicalFailureCause::InvalidInput,
+          -1, std::numeric_limits<double>::quiet_NaN(),
+          std::numeric_limits<double>::quiet_NaN());
+      }
       return evaluation;
     }
 
@@ -31748,6 +31817,12 @@ private:
     {
       evaluation.static_map_physical_infeasible_during_execution =
         enforce_execution_feasibility;
+      if (enforce_execution_feasibility) {
+        record_physical_failure(
+          overtake_core::RecedingHorizonPhysicalFailureCause::InvalidInput,
+          -1, std::numeric_limits<double>::quiet_NaN(),
+          std::numeric_limits<double>::quiet_NaN());
+      }
       return evaluation;
     }
     const auto resolve_nominal_lateral_target = [&] (const double distance) {
@@ -31784,6 +31859,12 @@ private:
         if (!target.has_value() || !std::isfinite(target.value())) {
           evaluation.static_map_physical_infeasible_during_execution =
             enforce_execution_feasibility;
+          if (enforce_execution_feasibility) {
+            record_physical_failure(
+              overtake_core::RecedingHorizonPhysicalFailureCause::InvalidInput,
+              i, std::numeric_limits<double>::quiet_NaN(),
+              std::numeric_limits<double>::quiet_NaN());
+          }
           return evaluation;
         }
         evaluation.target_ey[index] = target.value();
@@ -31824,6 +31905,12 @@ private:
       if (!wall_corridor.valid) {
         evaluation.static_map_physical_infeasible_during_execution =
           enforce_execution_feasibility;
+        if (enforce_execution_feasibility) {
+          record_physical_failure(
+            overtake_core::RecedingHorizonPhysicalFailureCause::InvalidInput,
+            i, std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN());
+        }
         return evaluation;
       }
       const double lower = wall_corridor.lower_m;
@@ -31978,6 +32065,10 @@ private:
         double maximum_lateral_accel{0.0};
         int failure_index{-1};
         double failure_heading_offset_rad{0.0};
+        double failure_lateral_target_m{
+          std::numeric_limits<double>::quiet_NaN()};
+        overtake_core::RecedingHorizonPhysicalFailureCause failure_cause{
+          overtake_core::RecedingHorizonPhysicalFailureCause::None};
       };
       const auto make_profile_samples = [&] (
           const std::vector<double> & profile) {
@@ -31998,9 +32089,10 @@ private:
         };
       const auto maximum_profile_lateral_accel = [&] (
           const std::vector<double> & profile) {
-          double maximum_required = 0.0;
+          std::pair<double, int> maximum_required{0.0, -1};
           if (profile.size() != static_cast<std::size_t>(N)) {
-            return std::numeric_limits<double>::infinity();
+            return std::pair<double, int>{
+              std::numeric_limits<double>::infinity(), -1};
           }
           for (int i = 0; i < N; ++i) {
             const std::size_t index = static_cast<std::size_t>(i);
@@ -32011,7 +32103,9 @@ private:
             const double required_lateral_accel =
               2.0 * std::abs(profile[index] - zero_acceleration_lateral) /
               (time_to_target * time_to_target);
-            maximum_required = std::max(maximum_required, required_lateral_accel);
+            if (required_lateral_accel > maximum_required.first) {
+              maximum_required = {required_lateral_accel, i};
+            }
           }
           return maximum_required;
         };
@@ -32067,23 +32161,54 @@ private:
                 search.failure_index = static_cast<int>(map_clearance.rejected_path_index);
                 search.failure_heading_offset_rad =
                   map_clearance.rejected_heading_offset_rad;
+                search.failure_cause =
+                  overtake_core::RecedingHorizonPhysicalFailureCause::InvalidInput;
+                if (
+                  search.failure_index >= 0 &&
+                  static_cast<std::size_t>(search.failure_index) < candidate.size())
+                {
+                  search.failure_lateral_target_m =
+                    candidate[static_cast<std::size_t>(search.failure_index)];
+                }
                 return search;
               }
               if (!map_clearance.clear) {
                 search.failure_index = static_cast<int>(map_clearance.rejected_path_index);
                 search.failure_heading_offset_rad =
                   map_clearance.rejected_heading_offset_rad;
+                search.failure_cause =
+                  overtake_core::RecedingHorizonPhysicalFailureCause::StaticMapContact;
+                if (
+                  search.failure_index >= 0 &&
+                  static_cast<std::size_t>(search.failure_index) < candidate.size())
+                {
+                  search.failure_lateral_target_m =
+                    candidate[static_cast<std::size_t>(search.failure_index)];
+                }
                 continue;
               }
               search.map_clear_candidate_seen = true;
-              const double required_lateral_accel =
+              const auto required_lateral_accel =
                 maximum_profile_lateral_accel(candidate);
-              search.maximum_lateral_accel = required_lateral_accel;
+              search.maximum_lateral_accel = required_lateral_accel.first;
               if (
-                !std::isfinite(required_lateral_accel) ||
+                !std::isfinite(required_lateral_accel.first) ||
                 (max_lateral_accel > kEps &&
-                required_lateral_accel > max_lateral_accel + 1e-6))
+                required_lateral_accel.first > max_lateral_accel + 1e-6))
               {
+                search.failure_cause =
+                  overtake_core::RecedingHorizonPhysicalFailureCause::LateralAcceleration;
+                search.failure_index = required_lateral_accel.second;
+                if (
+                  search.failure_index >= 0 &&
+                  static_cast<std::size_t>(search.failure_index) < candidate.size())
+                {
+                  const std::size_t failure_index =
+                    static_cast<std::size_t>(search.failure_index);
+                  search.failure_lateral_target_m = candidate[failure_index];
+                  search.failure_heading_offset_rad =
+                    profile_heading_offset(failure_index, candidate);
+                }
                 continue;
               }
               search.feasible = true;
@@ -32112,14 +32237,14 @@ private:
           accepted_profile.failure_index = physical_profile.failure_index;
           accepted_profile.failure_heading_offset_rad =
             physical_profile.failure_heading_offset_rad;
+          accepted_profile.failure_lateral_target_m =
+            physical_profile.failure_lateral_target_m;
+          accepted_profile.failure_cause = physical_profile.failure_cause;
           accepted_profile.maximum_lateral_accel =
             physical_profile.maximum_lateral_accel;
         }
       }
 
-      evaluation.static_map_failure_index = accepted_profile.failure_index;
-      evaluation.static_map_failure_heading_offset_rad =
-        accepted_profile.failure_heading_offset_rad;
       if (accepted_profile.feasible) {
         evaluation.target_ey = std::move(accepted_profile.profile);
         evaluation.max_required_lateral_accel =
@@ -32132,17 +32257,47 @@ private:
           evaluation.static_map_reachable_projection_used = true;
         }
         if (accepted_only_without_margin) {
+          record_physical_failure(
+            overtake_core::RecedingHorizonPhysicalFailureCause::StaticMapClearance,
+            margin_profile.failure_index,
+            margin_profile.failure_heading_offset_rad,
+            margin_profile.maximum_lateral_accel);
+          evaluation.physical_failure_lateral_target_m =
+            margin_profile.failure_lateral_target_m;
           evaluation.static_map_margin_degraded = true;
           evaluation.static_map_margin_degraded_during_execution = true;
         }
       } else if (!accepted_profile.valid) {
+        record_physical_failure(
+          accepted_profile.failure_cause, accepted_profile.failure_index,
+          accepted_profile.failure_heading_offset_rad,
+          accepted_profile.maximum_lateral_accel);
+        evaluation.physical_failure_lateral_target_m =
+          accepted_profile.failure_lateral_target_m;
         evaluation.static_map_wall_infeasible = true;
         evaluation.static_map_physical_infeasible_during_execution = true;
       } else if (accepted_profile.map_clear_candidate_seen) {
+        record_physical_failure(
+          overtake_core::RecedingHorizonPhysicalFailureCause::LateralAcceleration,
+          accepted_profile.failure_index,
+          accepted_profile.failure_heading_offset_rad,
+          accepted_profile.maximum_lateral_accel);
+        evaluation.physical_failure_lateral_target_m =
+          accepted_profile.failure_lateral_target_m;
         evaluation.static_clamp_lateral_accel_infeasible = true;
         evaluation.max_required_lateral_accel =
           accepted_profile.maximum_lateral_accel;
       } else {
+        record_physical_failure(
+          accepted_profile.failure_cause ==
+          overtake_core::RecedingHorizonPhysicalFailureCause::None ?
+          overtake_core::RecedingHorizonPhysicalFailureCause::StaticMapContact :
+          accepted_profile.failure_cause,
+          accepted_profile.failure_index,
+          accepted_profile.failure_heading_offset_rad,
+          accepted_profile.maximum_lateral_accel);
+        evaluation.physical_failure_lateral_target_m =
+          accepted_profile.failure_lateral_target_m;
         evaluation.static_map_wall_infeasible = true;
         evaluation.static_map_physical_infeasible_during_execution = true;
       }
@@ -33237,6 +33392,40 @@ private:
     int physical_failure_index = -1;
     OvertakeRecedingHorizonFailureKind hard_bound_failure_kind{
       OvertakeRecedingHorizonFailureKind::None};
+    const auto record_validation_failure = [&result](
+        const OvertakeLineHorizonEvaluation & horizon,
+        const double candidate_speed, const double candidate_wall_clearance,
+        const bool initial_contract) {
+        if (
+          horizon.physical_failure_cause ==
+          overtake_core::RecedingHorizonPhysicalFailureCause::None)
+        {
+          return;
+        }
+        if (result.physical_failure.available &&
+          result.physical_failure.initial_contract)
+        {
+          return;
+        }
+        result.physical_failure.available = true;
+        result.physical_failure.cause = horizon.physical_failure_cause;
+        result.physical_failure.stage_index = horizon.static_map_failure_index;
+        result.physical_failure.path_distance_m =
+          horizon.physical_failure_path_distance_m;
+        result.physical_failure.lateral_target_m =
+          horizon.physical_failure_lateral_target_m;
+        result.physical_failure.wall_lower_m =
+          horizon.physical_failure_wall_lower_m;
+        result.physical_failure.wall_upper_m =
+          horizon.physical_failure_wall_upper_m;
+        result.physical_failure.heading_offset_rad =
+          horizon.static_map_failure_heading_offset_rad;
+        result.physical_failure.required_lateral_accel_mps2 =
+          horizon.physical_failure_required_lateral_accel_mps2;
+        result.physical_failure.candidate_speed_mps = candidate_speed;
+        result.physical_failure.wall_clearance_m = candidate_wall_clearance;
+        result.physical_failure.initial_contract = initial_contract;
+      };
     for (const double candidate_speed : validation_speeds) {
       const auto validation_target_execution_constraints =
         build_validation_target_constraints(candidate_speed);
@@ -33251,6 +33440,7 @@ private:
           preferred_physical_wall_upper_bounds;
         std::vector<double> validation_targets = optimized.lateral_targets_m;
         for (int repair_iteration = 0; repair_iteration < 3; ++repair_iteration) {
+          ++result.physical_validation_attempt_count;
           auto candidate_horizon = evaluate_overtake_line_horizon(
             ref_wp_id, N, lb, ub, current_ey, phase_start_ey, phase_traveled_m,
             hold_pass_goal, phase_distance, goal_ey, candidate_wall_clearance,
@@ -33268,6 +33458,16 @@ private:
             repair_iteration == 0)
           {
             initial_execution_feasible = candidate_horizon.execution_feasible();
+            result.initial_execution_feasible = initial_execution_feasible;
+          }
+          const bool initial_contract =
+            candidate_speed == validation_speeds.front() &&
+            candidate_wall_clearance == validation_wall_clearances.front() &&
+            repair_iteration == 0;
+          if (!candidate_horizon.execution_feasible()) {
+            record_validation_failure(
+              candidate_horizon, candidate_speed,
+              candidate_wall_clearance, initial_contract);
           }
           if (
             candidate_horizon.execution_feasible() &&
@@ -44151,6 +44351,72 @@ private:
     if (!horizon_evaluation.execution_feasible())
     {
       const char * reason = execution_horizon_failure_reason.c_str();
+      if (
+        receding_horizon.hard_infeasible &&
+        receding_horizon.hard_failure_kind ==
+        OvertakeRecedingHorizonFailureKind::Physical)
+      {
+        const auto canonical_plan_snapshot =
+          overtake_canonical_lifecycle_ != nullptr ?
+          overtake_canonical_lifecycle_->plan_store.snapshot() : nullptr;
+        canonical_plan::CanonicalExecutionCursor canonical_cursor;
+        if (canonical_plan_snapshot != nullptr) {
+          canonical_cursor = canonical_plan::resolve_execution_cursor(
+            *canonical_plan_snapshot, now_sec);
+        }
+        const auto & diagnostic = receding_horizon.physical_failure;
+        const double dp_source_age_sec = std::isfinite(
+          overtake_line_state_.mission_frenet_dp_last_source_generated_sec) ?
+          std::max(
+          0.0,
+          now_sec -
+          overtake_line_state_.mission_frenet_dp_last_source_generated_sec) :
+          std::numeric_limits<double>::infinity();
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine physical authority failure: episode=%lu, generation=%lu, "
+          "target=%s, side=%d, phase=%s, reason=%s, "
+          "cause=%s, stage=%d, distance=%.3f, target_ey=%.3f, "
+          "wall=[%.3f,%.3f], heading=%.4f, ay=%.3f, speed=%.3f, "
+          "clearance=%.3f, initial_contract=%d, initial_feasible=%d, attempts=%zu, "
+          "dp=%d/authority=%d/runtime=%d/side=%d/source_age=%.3f, "
+          "canonical=%d/plan=%lu/generation=%lu/side=%d/fingerprint=%lu/"
+          "cursor=%d/stage=%zu, wp_id=%d",
+          static_cast<unsigned long>(overtake_line_state_.episode_id),
+          static_cast<unsigned long>(overtake_line_state_.mission_generation),
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign,
+          to_string(overtake_line_state_.phase), reason,
+          diagnostic.available ? overtake_core::to_string(diagnostic.cause) : "none",
+          diagnostic.stage_index, diagnostic.path_distance_m,
+          diagnostic.lateral_target_m, diagnostic.wall_lower_m,
+          diagnostic.wall_upper_m, diagnostic.heading_offset_rad,
+          diagnostic.required_lateral_accel_mps2,
+          diagnostic.candidate_speed_mps, diagnostic.wall_clearance_m,
+          diagnostic.initial_contract ? 1 : 0,
+          receding_horizon.initial_execution_feasible ? 1 : 0,
+          receding_horizon.physical_validation_attempt_count,
+          overtake_line_state_.mission_frenet_dp_execution_active ? 1 : 0,
+          dp_execution_authority_active ? 1 : 0,
+          overtake_line_state_.mission_frenet_dp_execution_authority_runtime_was_active ?
+          1 : 0,
+          overtake_line_state_.mission_frenet_dp_side_sign,
+          dp_source_age_sec,
+          canonical_plan_snapshot != nullptr ? 1 : 0,
+          static_cast<unsigned long>(
+            canonical_plan_snapshot != nullptr ? canonical_plan_snapshot->plan_id : 0U),
+          static_cast<unsigned long>(
+            canonical_plan_snapshot != nullptr ?
+            canonical_plan_snapshot->problem.intent_generation : 0U),
+          canonical_plan_snapshot != nullptr ?
+          canonical_plan_snapshot->problem.execution_side_sign : 0,
+          static_cast<unsigned long>(
+            canonical_plan_snapshot != nullptr ?
+            canonical_plan_snapshot->problem.fingerprint : 0U),
+          canonical_cursor.available ? 1 : 0,
+          canonical_cursor.first_control_stage_index,
+          model->wp_id);
+      }
       const bool rear_clear_return_handoff =
         overtake_core::can_handoff_failed_rear_clear_return(
         overtake_core::RearClearReturnFailureHandoffRequest{

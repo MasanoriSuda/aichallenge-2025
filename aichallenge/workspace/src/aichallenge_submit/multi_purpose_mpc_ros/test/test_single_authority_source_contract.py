@@ -518,3 +518,46 @@ def test_canonical_overtake_wall_certificate_is_not_reinterpreted_downstream() -
         "legacy_wall_handoff_authority.legacy_normal_handoff_allowed"
         in solver_recovery
     )
+
+
+def test_overtake_physical_failure_preserves_stage_and_authority_provenance() -> None:
+    """A hard physical rejection must identify both proof and plan producers."""
+
+    horizon_start = SOURCE.index("struct OvertakeLineHorizonEvaluation")
+    horizon_end = SOURCE.index(
+        "enum class OvertakeRecedingHorizonFailureKind", horizon_start
+    )
+    horizon = SOURCE[horizon_start:horizon_end]
+    assert "physical_failure_cause" in horizon
+    assert "physical_failure_path_distance_m" in horizon
+    assert "physical_failure_lateral_target_m" in horizon
+    assert "physical_failure_wall_lower_m" in horizon
+    assert "physical_failure_wall_upper_m" in horizon
+    assert "physical_failure_required_lateral_accel_mps2" in horizon
+
+    validation_start = SOURCE.index("const auto record_validation_failure =")
+    validation_end = SOURCE.index(
+        "if (!validation_accepted) {", validation_start
+    )
+    validation = SOURCE[validation_start:validation_end]
+    assert "physical_validation_attempt_count" in validation
+    assert "candidate_speed_mps" in validation
+    assert "wall_clearance_m" in validation
+    assert "initial_contract" in validation
+
+    trace_start = SOURCE.index("OvertakeLine physical authority failure:")
+    trace_end = SOURCE.index(
+        "const bool rear_clear_return_handoff", trace_start
+    )
+    trace = SOURCE[trace_start:trace_end]
+    for token in (
+        "generation=%lu",
+        "cause=%s",
+        "stage=%d",
+        "wall=[%.3f,%.3f]",
+        "initial_contract=%d",
+        "attempts=%zu",
+        "dp=%d/authority=%d/runtime=%d/side=%d/source_age=%.3f",
+        "canonical=%d/plan=%lu/generation=%lu/side=%d/fingerprint=%lu/",
+    ):
+        assert token in trace

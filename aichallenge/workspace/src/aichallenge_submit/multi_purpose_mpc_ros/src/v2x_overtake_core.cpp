@@ -1932,6 +1932,23 @@ RecedingHorizonExecutionBoundsResolution resolve_receding_horizon_execution_boun
   return resolution;
 }
 
+const char * to_string(const RecedingHorizonPhysicalFailureCause cause) noexcept
+{
+  switch (cause) {
+    case RecedingHorizonPhysicalFailureCause::None:
+      return "none";
+    case RecedingHorizonPhysicalFailureCause::InvalidInput:
+      return "invalid-input";
+    case RecedingHorizonPhysicalFailureCause::StaticMapClearance:
+      return "static-map-clearance";
+    case RecedingHorizonPhysicalFailureCause::StaticMapContact:
+      return "static-map-contact";
+    case RecedingHorizonPhysicalFailureCause::LateralAcceleration:
+      return "lateral-acceleration";
+  }
+  return "invalid-input";
+}
+
 WallCorridorBoundResolution resolve_wall_corridor_bound(
   const WallCorridorBoundRequest & request) noexcept
 {

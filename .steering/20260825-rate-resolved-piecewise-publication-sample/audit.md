@@ -27,7 +27,9 @@ time-domain information, not by an infeasible actuator command.
 
 No stage duration, publisher period, horizon, solver setting or physical limit
 changed. The new telemetry records the selected stage, elapsed time within it
-and total certified horizon duration.
+and total certified horizon duration. The 2-second aggregate also counts all
+cross-stage samples and records the maximum sampled stage, so a transient
+stage crossing cannot be hidden by the last result in the window.
 
 The result still terminates in observation-only aggregate telemetry with
 `authority=shadow, selected=0`. It cannot enter any plan store, authority

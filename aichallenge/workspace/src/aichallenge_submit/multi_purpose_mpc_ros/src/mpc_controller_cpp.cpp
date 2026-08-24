@@ -6301,6 +6301,8 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   double maximum_normalized_constraint_violation{};
   double maximum_absolute_first_steering_rate_radps{};
   double maximum_absolute_publication_steering_step_rad{};
+  std::uint64_t cross_stage_sample_count{};
+  std::size_t maximum_sampled_stage_index{};
   rate_resolved_shadow::Result last_result;
   bool last_result_available{false};
 };
@@ -27585,6 +27587,12 @@ struct MPC
             window.maximum_absolute_publication_steering_step_rad,
             std::abs(
             result->sampled_steering_rad - result->initial_steering_rad));
+          if (result->sampled_stage_index > 0U) {
+            ++window.cross_stage_sample_count;
+          }
+          window.maximum_sampled_stage_index = std::max(
+            window.maximum_sampled_stage_index,
+            result->sampled_stage_index);
         }
         const auto current_intent = current_control_intent();
         if (
@@ -27629,6 +27637,7 @@ struct MPC
       "solved:%lu/exception:%lu, age=%.4f/%.4fs(avg/max), "
       "sample_reason=time:%lu/initial:%lu/rate:%lu/terminal:%lu/sampled:%lu/"
       "other:%lu, "
+      "piecewise=cross_stage:%lu/max_stage:%lu, "
       "compute=%.3f/%.3fms(avg/max), solve=%.3f/%.3fms(avg/max), "
       "iterations=%.1f/%d(avg/max), setup=%lu/update=%lu/rebuild=%lu, "
       "constraint=%.3g/norm:%.3g, first_rate=%.3fradps, "
@@ -27700,6 +27709,8 @@ struct MPC
         mpcc_rate_resolved::ActuationSampleReason::TerminalSteeringLimitViolation)] -
         window.actuation_sample_reason_count[static_cast<std::size_t>(
         mpcc_rate_resolved::ActuationSampleReason::SampledSteeringLimitViolation)]),
+      static_cast<unsigned long>(window.cross_stage_sample_count),
+      static_cast<unsigned long>(window.maximum_sampled_stage_index),
       window.total_compute_ms / denominator, window.maximum_compute_ms,
       window.total_solve_ms / denominator, window.maximum_solve_ms,
       static_cast<double>(window.total_iterations) / denominator,

@@ -6,7 +6,7 @@
 - [x] Add exact-boundary, multi-stage, horizon-end and physical-failure tests.
 - [x] Add sampled-stage telemetry provenance.
 - [x] Run build, full package tests and authority audit.
-- [ ] Commit the static Slice.
+- [x] Commit the static Slice (`172e4d2`).
 - [ ] Run `make dev2` and confirm time rejects disappear.
 - [ ] Record the authority-migration decision.
 

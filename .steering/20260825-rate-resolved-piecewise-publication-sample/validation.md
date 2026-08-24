@@ -40,4 +40,14 @@ selected package tests and is not a test failure.
 
 ## Dynamic gate
 
-Pending committed-source `make dev2` evidence.
+### Preliminary run
+
+Committed source `172e4d2` was exercised in `output/20260825-014314`.
+All 5,844 consumed results solved and supplied a sample; every sample-rejection
+reason was zero. However, the aggregate retained only the final sample-stage
+index in each 2-second window. It could not prove that the transient stage-zero
+crossing seen in the preceding run actually exercised stage one.
+
+This run is therefore not the final Gate. Aggregate cross-stage count and
+maximum-stage telemetry were added without changing calculation or authority.
+Committed-source revalidation is pending.

@@ -739,6 +739,19 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   full; skip-only Recovery time averaged 0.0164 ms and no 25 ms callback overrun occurred. Active
   Recovery and Overtake completion were `NOT EXERCISED`. The remaining production MPCC runtime tail
   is independent; do not reintroduce Recovery work or tune cadence in response.
+- `.steering/20260825-rate-resolved-execution-artifact-shadow` closes the representation gap between
+  a solved six-state horizon and future retained execution. It introduces a separate immutable
+  artifact for all `[e_y,e_lag,e_psi,v,theta,delta]` states and
+  `[a,delta_dot,v_theta]` controls, exact stage durations, lateral QP boxes and the accepted physical-
+  row residual certificate. It does not reuse the five-state curvature-input canonical plan. A
+  fail-closed validator checks identity, shape, semantic state-zero continuity, steering dynamics,
+  complete semantic-steering reachability and certificate provenance; exact cursor sampling can
+  cross stage boundaries without changing the integration origin. All 1,839 package tests and the
+  25-package build pass. In `output/20260825-031820`, all 4,695 consumed solves produced valid
+  21-state/20-control artifacts with zero artifact or mailbox rejection, zero callback overrun and
+  `authority=shadow, selected=0` in all 61 windows. The artifact Gate is accepted. Production remains
+  blocked until the same complete trajectory has current-world physical wall/obstacle proof and a
+  fresh/retained admission comparison; do not connect it to the five-state publisher contract.
 
 ## Slice 6: Legacy and migration path removal
 

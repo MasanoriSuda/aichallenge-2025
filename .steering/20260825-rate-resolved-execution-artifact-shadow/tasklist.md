@@ -7,9 +7,9 @@
 - [x] Add exact cursor and actuation sampling for retained-shadow evidence.
 - [x] Add deterministic tests and observation-only source contract.
 - [x] Run build and full package tests.
-- [ ] Commit the implementation.
-- [ ] Run `make dev2` and classify artifact/runtime evidence.
-- [ ] Update the migration map without promoting authority.
+- [x] Commit the implementation (`619af51`).
+- [x] Run `make dev2` and classify artifact/runtime evidence.
+- [x] Update the migration map without promoting authority.
 
 ## Definition of Done
 

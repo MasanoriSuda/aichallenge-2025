@@ -291,6 +291,53 @@ CanonicalActuationResult extract_canonical_actuation(
   return result;
 }
 
+const char * to_string(const CanonicalSteeringContinuityReason reason) noexcept
+{
+  switch (reason) {
+    case CanonicalSteeringContinuityReason::Accepted: return "accepted";
+    case CanonicalSteeringContinuityReason::InvalidInput: return "invalid-input";
+    case CanonicalSteeringContinuityReason::Unreachable: return "unreachable";
+  }
+  return "unknown";
+}
+
+CanonicalSteeringContinuityResult certify_canonical_steering_continuity(
+  const CanonicalSteeringContinuityRequest & request) noexcept
+{
+  CanonicalSteeringContinuityResult result;
+  if (
+    !std::isfinite(request.current_steering_tire_angle_rad) ||
+    !std::isfinite(request.candidate_steering_tire_angle_rad) ||
+    !std::isfinite(request.maximum_steering_step_rad) ||
+    request.maximum_steering_step_rad < 0.0)
+  {
+    return result;
+  }
+
+  result.steering_difference_rad = std::abs(
+    request.candidate_steering_tire_angle_rad -
+    request.current_steering_tire_angle_rad);
+  result.reachable_lower_rad =
+    request.current_steering_tire_angle_rad -
+    request.maximum_steering_step_rad;
+  result.reachable_upper_rad =
+    request.current_steering_tire_angle_rad +
+    request.maximum_steering_step_rad;
+  constexpr double numerical_tolerance_rad = 1e-12;
+  if (
+    request.candidate_steering_tire_angle_rad <
+    result.reachable_lower_rad - numerical_tolerance_rad ||
+    request.candidate_steering_tire_angle_rad >
+    result.reachable_upper_rad + numerical_tolerance_rad)
+  {
+    result.reason = CanonicalSteeringContinuityReason::Unreachable;
+    return result;
+  }
+  result.certified = true;
+  result.reason = CanonicalSteeringContinuityReason::Accepted;
+  return result;
+}
+
 const char * to_string(const CanonicalExecutionPlanStoreReason reason) noexcept
 {
   switch (reason) {

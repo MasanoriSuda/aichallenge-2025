@@ -249,6 +249,34 @@ def test_overtake_intents_return_through_one_canonical_production_boundary() -> 
     ) in before_old_path
 
 
+def test_follow_async_snapshot_is_sealed_after_current_output_commit() -> None:
+    """The next worker must inherit the steering published by this cycle."""
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    follow_start = SOURCE.index(
+        "if (control_intent == mpcc_contract::ControlIntent::Follow)",
+        control_start,
+    )
+    follow_end = SOURCE.index(
+        "if (overtake_canonical_async_intent(control_intent))", follow_start
+    )
+    follow = SOURCE[follow_start:follow_end]
+
+    consume = follow.index("evaluate_follow_async_shadow(problem, now_sec)")
+    publish = follow.index("output = canonical_normal_control(")
+    emergency = follow.index("output = canonical_normal_emergency_stop(")
+    submit = follow.index("submit_follow_canonical_async(problem, now_sec)")
+    assert consume < publish < submit
+    assert consume < emergency < submit
+
+    evaluator_start = SOURCE.index("FollowShadowCycleResult evaluate_follow_async_shadow(")
+    evaluator_end = SOURCE.index(
+        "void record_follow_canonical_async_status", evaluator_start
+    )
+    evaluator = SOURCE[evaluator_start:evaluator_end]
+    assert "submit_follow_canonical_async(problem, now_sec)" not in evaluator
+
+
 def test_overtake_entry_adopts_the_already_solved_canonical_artifact() -> None:
     """ShiftOut may not commit first and launch a duplicate initial solve later."""
 

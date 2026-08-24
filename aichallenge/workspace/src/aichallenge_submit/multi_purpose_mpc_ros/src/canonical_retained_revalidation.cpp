@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <sstream>
 #include <type_traits>
 #include <utility>
 
@@ -73,6 +74,9 @@ bool same_window(
     !same_double(
       left.expected_current_progress_m,
       right.expected_current_progress_m) ||
+    !same_double(
+      left.progress_evolution_tolerance_m,
+      right.progress_evolution_tolerance_m) ||
     left.samples.size() != right.samples.size())
   {
     return false;
@@ -211,6 +215,7 @@ void add_window(
   add_cursor(builder, window.cursor);
   add_state(builder, window.expected_current_state);
   builder.add_double(window.expected_current_progress_m);
+  builder.add_double(window.progress_evolution_tolerance_m);
   builder.add_size(window.samples.size());
   for (const auto & sample : window.samples) {
     builder.add_size(sample.control_stage_index);
@@ -371,10 +376,12 @@ RetainedExecutionWindowResult build_retained_execution_window(
   }
   if (!cursor.available) {
     result.reason = RetainedExecutionWindowReason::CursorUnavailable;
+    result.detail = "cursor unavailable";
     return result;
   }
   if (cursor.plan_id != execution_plan.plan_id) {
     result.reason = RetainedExecutionWindowReason::PlanIdentityMismatch;
+    result.detail = "cursor/plan identity mismatch";
     return result;
   }
   const std::size_t first = cursor.first_control_stage_index;
@@ -384,6 +391,7 @@ RetainedExecutionWindowResult build_retained_execution_window(
     execution_plan.control_stages.size() - first)
   {
     result.reason = RetainedExecutionWindowReason::ExecutionWindowMismatch;
+    result.detail = "cursor execution window mismatch";
     return result;
   }
   const double first_duration =
@@ -393,6 +401,7 @@ RetainedExecutionWindowResult build_retained_execution_window(
     cursor.stage_elapsed_sec >= first_duration)
   {
     result.reason = RetainedExecutionWindowReason::InvalidPartialStage;
+    result.detail = "partial-stage time outside selected control stage";
     return result;
   }
   const double fraction = cursor.stage_elapsed_sec / first_duration;
@@ -400,11 +409,24 @@ RetainedExecutionWindowResult build_retained_execution_window(
     execution_plan.predicted_states[first].progress_m;
   const double first_endpoint_progress =
     execution_plan.predicted_states[first + 1U].progress_m;
+  const double progress_evolution_tolerance_m = std::max(
+    kIdentityTolerance,
+    execution_plan.solution.maximum_constraint_violation);
   if (!std::isfinite(start_progress) ||
     !std::isfinite(first_endpoint_progress) ||
-    first_endpoint_progress + kIdentityTolerance < start_progress)
+    !std::isfinite(progress_evolution_tolerance_m) ||
+    progress_evolution_tolerance_m < 0.0 ||
+    first_endpoint_progress + progress_evolution_tolerance_m < start_progress)
   {
     result.reason = RetainedExecutionWindowReason::InvalidProgressEvolution;
+    std::ostringstream detail;
+    detail << "stage=" << first
+           << ", start=" << start_progress
+           << ", endpoint=" << first_endpoint_progress
+           << ", delta=" << first_endpoint_progress - start_progress
+           << ", certified_max_violation="
+           << execution_plan.solution.maximum_constraint_violation;
+    result.detail = detail.str();
     return result;
   }
 
@@ -423,6 +445,7 @@ RetainedExecutionWindowResult build_retained_execution_window(
     interpolate(start_state.velocity_mps, end_state.velocity_mps),
     interpolate(start_state.progress_m, end_state.progress_m)};
   window.expected_current_progress_m = window.expected_current_state.progress_m;
+  window.progress_evolution_tolerance_m = progress_evolution_tolerance_m;
   window.samples.reserve(cursor.remaining_control_stage_count);
   double relative_time_sec = 0.0;
   double segment_start_progress_m = window.expected_current_progress_m;
@@ -436,9 +459,18 @@ RetainedExecutionWindowResult build_retained_execution_window(
     const auto & endpoint = execution_plan.predicted_states[index + 1U];
     if (!std::isfinite(duration_sec) || duration_sec <= 0.0 ||
       !std::isfinite(endpoint.progress_m) ||
-      endpoint.progress_m + kIdentityTolerance < segment_start_progress_m)
+      endpoint.progress_m + progress_evolution_tolerance_m <
+      segment_start_progress_m)
     {
       result.reason = RetainedExecutionWindowReason::InvalidProgressEvolution;
+      std::ostringstream detail;
+      detail << "stage=" << index
+             << ", start=" << segment_start_progress_m
+             << ", endpoint=" << endpoint.progress_m
+             << ", delta=" << endpoint.progress_m - segment_start_progress_m
+             << ", certified_max_violation="
+             << execution_plan.solution.maximum_constraint_violation;
+      result.detail = detail.str();
       return result;
     }
     relative_time_sec += duration_sec;
@@ -449,6 +481,7 @@ RetainedExecutionWindowResult build_retained_execution_window(
     segment_start_progress_m = endpoint.progress_m;
   }
   result.reason = RetainedExecutionWindowReason::Accepted;
+  result.detail = "accepted";
   result.window = std::move(window);
   return result;
 }
@@ -461,6 +494,8 @@ std::optional<std::vector<double>> sample_retained_progress_advance(
     relative_time_sec.empty() || window.samples.empty() ||
     !std::isfinite(window.expected_current_progress_m) ||
     !std::isfinite(window.expected_current_state.progress_m) ||
+    !std::isfinite(window.progress_evolution_tolerance_m) ||
+    window.progress_evolution_tolerance_m < 0.0 ||
     std::abs(
       window.expected_current_progress_m -
       window.expected_current_state.progress_m) > kIdentityTolerance ||
@@ -487,7 +522,8 @@ std::optional<std::vector<double>> sample_retained_progress_advance(
       kIdentityTolerance ||
       std::abs(sample.absolute_progress_m - sample.endpoint.progress_m) >
       kIdentityTolerance ||
-      sample.endpoint.progress_m + kIdentityTolerance < validated_progress_m)
+      sample.endpoint.progress_m + window.progress_evolution_tolerance_m <
+      validated_progress_m)
     {
       return std::nullopt;
     }
@@ -524,7 +560,8 @@ std::optional<std::vector<double>> sample_retained_progress_advance(
       if (
         !std::isfinite(duration_sec) || duration_sec <= 0.0 ||
         !std::isfinite(sample.endpoint.progress_m) ||
-        sample.endpoint.progress_m + kIdentityTolerance < start_progress_m)
+        sample.endpoint.progress_m + window.progress_evolution_tolerance_m <
+        start_progress_m)
       {
         return std::nullopt;
       }
@@ -535,7 +572,10 @@ std::optional<std::vector<double>> sample_retained_progress_advance(
     }
     const double advance_m =
       sampled_progress_m - window.expected_current_progress_m;
-    if (!std::isfinite(advance_m) || advance_m < -kIdentityTolerance) {
+    if (
+      !std::isfinite(advance_m) ||
+      advance_m < -window.progress_evolution_tolerance_m)
+    {
       return std::nullopt;
     }
     result.push_back(std::max(0.0, advance_m));
@@ -615,6 +655,8 @@ required_course_frame_progress_range(
     !std::isfinite(lifted_measured_progress_m) ||
     !std::isfinite(window.expected_current_progress_m) ||
     !std::isfinite(window.expected_current_state.progress_m) ||
+    !std::isfinite(window.progress_evolution_tolerance_m) ||
+    window.progress_evolution_tolerance_m < 0.0 ||
     std::abs(
       window.expected_current_progress_m -
       window.expected_current_state.progress_m) > kIdentityTolerance)
@@ -634,12 +676,14 @@ required_course_frame_progress_range(
       kIdentityTolerance ||
       std::abs(sample.segment_start_progress_m - previous_progress_m) >
       kIdentityTolerance ||
-      sample.absolute_progress_m + kIdentityTolerance < previous_progress_m)
+      sample.absolute_progress_m + window.progress_evolution_tolerance_m <
+      previous_progress_m)
     {
       return std::nullopt;
     }
     range.minimum_progress_m = std::min(
-      range.minimum_progress_m, sample.segment_start_progress_m);
+      range.minimum_progress_m,
+      std::min(sample.segment_start_progress_m, sample.absolute_progress_m));
     range.maximum_progress_m = std::max(
       range.maximum_progress_m, sample.absolute_progress_m);
     previous_progress_m = sample.absolute_progress_m;

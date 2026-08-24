@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 namespace
@@ -310,6 +311,37 @@ TEST(CanonicalExecutionPlan, ActuationRejectsExhaustedOrMismatchedCursor)
   EXPECT_EQ(
     plan::extract_canonical_actuation(value, valid_cursor, 0.0).reason,
     plan::CanonicalActuationReason::InvalidWheelbase);
+}
+
+TEST(CanonicalExecutionPlan, CertifiesSteeringAgainstCurrentActuationHistory)
+{
+  const auto accepted = plan::certify_canonical_steering_continuity(
+    plan::CanonicalSteeringContinuityRequest{-0.09187, -0.07437, 0.0175});
+  EXPECT_TRUE(accepted.certified);
+  EXPECT_EQ(
+    accepted.reason, plan::CanonicalSteeringContinuityReason::Accepted);
+  EXPECT_NEAR(accepted.reachable_lower_rad, -0.10937, 1e-12);
+  EXPECT_NEAR(accepted.reachable_upper_rad, -0.07437, 1e-12);
+
+  // Deterministic replay of the first discontinuity in
+  // output/20260824-200419: the async plan was feasible from its old worker
+  // snapshot, but not from the steering command active at publication.
+  const auto stale_async = plan::certify_canonical_steering_continuity(
+    plan::CanonicalSteeringContinuityRequest{-0.09187, 0.00061, 0.0175});
+  EXPECT_FALSE(stale_async.certified);
+  EXPECT_EQ(
+    stale_async.reason, plan::CanonicalSteeringContinuityReason::Unreachable);
+  EXPECT_NEAR(stale_async.steering_difference_rad, 0.09248, 1e-12);
+}
+
+TEST(CanonicalExecutionPlan, RejectsMalformedSteeringContinuityInput)
+{
+  const auto invalid = plan::certify_canonical_steering_continuity(
+    plan::CanonicalSteeringContinuityRequest{
+      0.0, 0.0, std::numeric_limits<double>::quiet_NaN()});
+  EXPECT_FALSE(invalid.certified);
+  EXPECT_EQ(
+    invalid.reason, plan::CanonicalSteeringContinuityReason::InvalidInput);
 }
 
 TEST(CanonicalExecutionPlan, StoreReplacementIsCompleteAndMonotonic)

@@ -5803,12 +5803,14 @@ struct CanonicalNormalSelection
   std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> plan;
   canonical_plan::CanonicalExecutionCursor cursor;
   std::pair<std::vector<double>, std::vector<double>> prediction;
+  bool steering_continuity_certified{false};
 
   bool complete() const noexcept
   {
     return command.has_value() && problem.has_value() && solution.has_value() &&
       plan != nullptr && cursor.available && !prediction.first.empty() &&
-      prediction.first.size() == prediction.second.size();
+      prediction.first.size() == prediction.second.size() &&
+      steering_continuity_certified;
   }
 };
 
@@ -5979,6 +5981,8 @@ struct FollowShadowCycleResult
   bool canonical_actuation_extracted{false};
   bool canonical_command_available{false};
   bool canonical_plan_stored{false};
+  bool incoming_current_world_attempted{false};
+  bool incoming_current_world_ready{false};
   bool retained_shadow_attempted{false};
   bool retained_world_certified{false};
   bool retained_candidate_accepted{false};
@@ -5991,6 +5995,7 @@ struct FollowShadowCycleResult
   std::uint64_t problem_fingerprint{};
   std::uint64_t target_observation_generation{};
   std::uint64_t canonical_plan_id{};
+  std::uint64_t incoming_plan_id{};
   std::uint64_t retained_plan_id{};
   std::uint64_t retained_target_tube_id{};
   std::string target_id;
@@ -6081,6 +6086,7 @@ struct FollowShadowCycleResult
   mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
+  std::string incoming_current_world_detail{"not-attempted"};
   std::string retained_detail{"not-attempted"};
 };
 
@@ -23540,6 +23546,46 @@ struct MPC
     return prediction;
   }
 
+  double canonical_maximum_steering_step_rad() const noexcept
+  {
+    return
+      model != nullptr && std::isfinite(model->Ts) && model->Ts >= 0.0 &&
+      std::isfinite(cfg.steer_rate_max) && cfg.steer_rate_max >= 0.0 ?
+      cfg.steer_rate_max * model->Ts :
+      std::numeric_limits<double>::quiet_NaN();
+  }
+
+  bool certify_canonical_steering_continuity(
+    const canonical_plan::CanonicalActuation & actuation,
+    std::string & reject_reason) const
+  {
+    const double maximum_steering_step_rad =
+      canonical_maximum_steering_step_rad();
+    const auto continuity =
+      canonical_plan::certify_canonical_steering_continuity(
+      canonical_plan::CanonicalSteeringContinuityRequest{
+        previous_steering,
+        actuation.steering_tire_angle_rad,
+        maximum_steering_step_rad});
+    if (continuity.certified) {
+      reject_reason = "accepted";
+      return true;
+    }
+    std::ostringstream detail;
+    detail << "canonical steering continuity rejected: "
+           << canonical_plan::to_string(continuity.reason)
+           << ", current=" << previous_steering
+           << ", candidate=" << actuation.steering_tire_angle_rad
+           << ", difference=" << continuity.steering_difference_rad
+           << ", reachable=[" << continuity.reachable_lower_rad << ','
+           << continuity.reachable_upper_rad << ']'
+           << ", maximum_step=" << maximum_steering_step_rad
+           << ", plan=" << actuation.plan_id
+           << ", stage=" << actuation.control_stage_index;
+    reject_reason = detail.str();
+    return false;
+  }
+
   void evaluate_track_cruise_retained_shadow(
     const MpcProblem & problem, const double now_sec,
     const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
@@ -23577,7 +23623,7 @@ struct MPC
       *retained_plan, cursor);
     if (!window.window.has_value()) {
       result.retained_detail = std::string{"window rejected: "} +
-        canonical_retained::to_string(window.reason);
+        canonical_retained::to_string(window.reason) + ", " + window.detail;
       return;
     }
     const auto current_origin = canonical_retained::lift_progress_to_retained_branch(
@@ -23721,6 +23767,13 @@ struct MPC
       return;
     }
     const auto & selected_actuation = actuation.actuation.value();
+    std::string steering_continuity_reject_reason;
+    if (!certify_canonical_steering_continuity(
+        selected_actuation, steering_continuity_reject_reason))
+    {
+      result.retained_detail = steering_continuity_reject_reason;
+      return;
+    }
     const auto command = mpcc_contract::build_canonical_normal_command(
       authority,
       mpcc_contract::CanonicalActuation{
@@ -23751,6 +23804,7 @@ struct MPC
     result.selected.plan = retained_plan;
     result.selected.cursor = cursor;
     result.selected.prediction = prediction.value();
+    result.selected.steering_continuity_certified = true;
     result.retained_detail =
       "retained candidate current-world-certified for production";
   }
@@ -23794,7 +23848,7 @@ struct MPC
       *retained_plan, cursor);
     if (!window.window.has_value()) {
       result.retained_detail = std::string{"window rejected: "} +
-        canonical_retained::to_string(window.reason);
+        canonical_retained::to_string(window.reason) + ", " + window.detail;
       return;
     }
     const auto current_origin = canonical_retained::lift_progress_to_retained_branch(
@@ -23957,6 +24011,13 @@ struct MPC
     }
     result.retained_actuation_extracted = true;
     const auto & selected_actuation = actuation.actuation.value();
+    std::string steering_continuity_reject_reason;
+    if (!certify_canonical_steering_continuity(
+        selected_actuation, steering_continuity_reject_reason))
+    {
+      result.retained_detail = steering_continuity_reject_reason;
+      return;
+    }
     const auto command = mpcc_contract::build_canonical_normal_command(
       authority,
       mpcc_contract::CanonicalActuation{
@@ -23985,6 +24046,7 @@ struct MPC
     result.selected.plan = retained_plan;
     result.selected.cursor = cursor;
     result.selected.prediction = prediction.value();
+    result.selected.steering_continuity_certified = true;
     result.retained_command_available = result.selected.complete();
     result.retained_detail =
       "retained Follow candidate current-target-certified for production";
@@ -24687,7 +24749,6 @@ struct MPC
   {
     auto result = make_follow_shadow_cycle_result(problem);
     const auto started = SteadyClock::now();
-    static_cast<void>(submit_follow_canonical_async(problem, now_sec));
 
     std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
     incoming_plan;
@@ -24726,8 +24787,13 @@ struct MPC
             follow_async::CurrentIdentityReason::Accepted)
           {
             incoming_plan = worker_result->canonical_plan;
+            result.incoming_current_world_attempted = true;
+            result.incoming_plan_id = incoming_plan->plan_id;
             evaluate_follow_retained_shadow(
               problem, now_sec, incoming_plan, result);
+            result.incoming_current_world_ready =
+              result.retained_command_available;
+            result.incoming_current_world_detail = result.retained_detail;
             if (result.retained_command_available) {
               result.canonical_store_reason =
                 follow_canonical_lifecycle_->plan_store.replace(*incoming_plan);
@@ -24918,7 +24984,9 @@ struct MPC
       canonical_plan::to_string(result.canonical_candidate_reason) + "/" +
       mpcc_contract::to_string(result.canonical_authority_source) + "/" +
       canonical_plan::to_string(result.canonical_actuation_reason) + "/" +
-      canonical_plan::to_string(result.canonical_store_reason) + "/retained-" +
+      canonical_plan::to_string(result.canonical_store_reason) + "/incoming-" +
+      (result.incoming_current_world_ready ? "ready/" : "unavailable/") +
+      result.incoming_current_world_detail + "/retained-" +
       canonical_retained_world::to_string(result.retained_world_reason) + "/" +
       (result.retained_command_available ? "ready" : "unavailable");
     if (status_key != last_follow_shadow_status_) {
@@ -25026,6 +25094,11 @@ struct MPC
         std::numeric_limits<double>::quiet_NaN())
               << ", status=" << result.status
               << ", detail=" << result.detail
+              << ", incoming="
+              << (result.incoming_current_world_attempted ? 1 : 0) << '/'
+              << (result.incoming_current_world_ready ? "ready" : "unavailable")
+              << "/plan=" << result.incoming_plan_id
+              << "/detail=" << result.incoming_current_world_detail
               << ", retained=" << (result.retained_shadow_attempted ? 1 : 0)
               << '/' << canonical_retained_world::to_string(
         result.retained_world_reason)
@@ -25857,6 +25930,22 @@ struct MPC
       result.detail = detail.str();
       return finish();
     }
+    std::string steering_continuity_reject_reason;
+    if (!certify_canonical_steering_continuity(
+        canonical_plan::CanonicalActuation{
+          chain.plan->plan_id,
+          chain.cursor.first_control_stage_index,
+          direct_actuation->predicted_speed_mps,
+          direct_actuation->acceleration_mps2,
+          direct_actuation->curvature_radpm,
+          direct_actuation->steering_tire_angle_rad,
+          direct_actuation->virtual_progress_speed_mps},
+        steering_continuity_reject_reason))
+    {
+      result.status = "canonical-steering-continuity-reject";
+      result.detail = steering_continuity_reject_reason;
+      return finish();
+    }
 
     auto plan = std::make_shared<const canonical_plan::CanonicalExecutionPlan>(
       std::move(chain.plan.value()));
@@ -25876,6 +25965,7 @@ struct MPC
     result.selected.plan = std::move(plan);
     result.selected.cursor = chain.cursor;
     result.selected.prediction = prediction.value();
+    result.selected.steering_continuity_certified = true;
     result.selection_complete = result.selected.complete();
     if (
       result.selection_complete &&
@@ -26146,7 +26236,7 @@ struct MPC
       result.retained_outcome =
         OvertakeCanonicalFreshShadowResult::RetainedOutcome::WindowRejected;
       result.retained_detail = std::string{"window rejected: "} +
-        canonical_retained::to_string(window.reason);
+        canonical_retained::to_string(window.reason) + ", " + window.detail;
       return;
     }
     const auto retained_lateral_corridor =
@@ -26473,6 +26563,15 @@ struct MPC
     }
     result.retained_actuation_extracted = true;
     const auto & selected_actuation = actuation.actuation.value();
+    std::string steering_continuity_reject_reason;
+    if (!certify_canonical_steering_continuity(
+        selected_actuation, steering_continuity_reject_reason))
+    {
+      result.retained_outcome =
+        OvertakeCanonicalFreshShadowResult::RetainedOutcome::ActuationRejected;
+      result.retained_detail = steering_continuity_reject_reason;
+      return;
+    }
     const auto command = mpcc_contract::build_canonical_normal_command(
       authority,
       mpcc_contract::CanonicalActuation{
@@ -26507,6 +26606,7 @@ struct MPC
       retained_plan->required_lateral_tracking_reserve_m;
     result.selected.cursor = cursor;
     result.selected.prediction = prediction.value();
+    result.selected.steering_continuity_certified = true;
     result.retained_selection_complete = result.selected.complete();
     result.retained_outcome = result.retained_selection_complete ?
       OvertakeCanonicalFreshShadowResult::RetainedOutcome::RetainedSelected :
@@ -27619,6 +27719,14 @@ struct MPC
         result.detail = "stored canonical actuation differs from direct primal";
         return finish();
       }
+      std::string steering_continuity_reject_reason;
+      if (!certify_canonical_steering_continuity(
+          stored_actuation, steering_continuity_reject_reason))
+      {
+        result.status = "canonical-steering-continuity-reject";
+        result.detail = steering_continuity_reject_reason;
+        return finish();
+      }
       const auto command = mpcc_contract::build_canonical_normal_command(
         canonical_authority,
         mpcc_contract::CanonicalActuation{
@@ -27671,6 +27779,7 @@ struct MPC
       result.selected.plan = canonical_plan_snapshot;
       result.selected.cursor = canonical_cursor;
       result.selected.prediction = prediction.value();
+      result.selected.steering_continuity_certified = true;
       result.terminal_progress_m =
         execution_primal.primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
@@ -28832,16 +28941,28 @@ struct MPC
       if (control_intent == mpcc_contract::ControlIntent::Follow) {
         const auto follow_result = evaluate_follow_async_shadow(problem, now_sec);
         record_follow_shadow_telemetry(follow_result, now_sec);
-        record_follow_canonical_async_status(now_sec);
         const auto action = race_mpcc::resolve_follow_production_action(
           control_intent, follow_result.selected.complete());
+        MpcControlCycleResult output;
         if (action == race_mpcc::FollowProductionAction::PublishCanonical) {
-          return canonical_normal_control(
+          output = canonical_normal_control(
             problem, control_intent, follow_result.selected);
+        } else {
+          output = canonical_normal_emergency_stop(
+            problem, control_intent,
+            follow_result.status + "/" + follow_result.retained_detail);
         }
-        return canonical_normal_emergency_stop(
-          problem, control_intent,
-          follow_result.status + "/" + follow_result.retained_detail);
+        // Seal the next asynchronous problem only after this cycle's canonical
+        // output has become the committed steering history.  Submitting at the
+        // beginning of the cycle made the worker constrain u[0] from the
+        // previous cycle while this cycle could publish a different retained
+        // command.  The returned plan was therefore internally valid but born
+        // unreachable from the steering actually published in the meantime.
+        // This ordering gives the worker one immutable, causal predecessor; it
+        // does not relax or clamp the selection-time continuity certificate.
+        static_cast<void>(submit_follow_canonical_async(problem, now_sec));
+        record_follow_canonical_async_status(now_sec);
+        return output;
       } else {
         invalidate_follow_canonical_async_context();
       }
@@ -31589,21 +31710,31 @@ private:
           replacement_canonical_plan, replacement_intent,
           prospective_generation, current_target_observation_generation,
           overtake_line_state_.target_vehicle_id,
-          replacement_plan.mission.pass_side_sign, now_sec});
+          replacement_plan.mission.pass_side_sign, now_sec,
+          previous_steering,
+          model != nullptr ? model->length :
+          std::numeric_limits<double>::quiet_NaN(),
+          canonical_maximum_steering_step_rad()});
       if (!artifact_admission.admitted) {
         if (line_cfg.debug_log_enabled) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine canonical replacement artifact rejected; old Mission retained: "
             "target=%s, side=%d->%d, phase=%s, intent=%s, generation=%lu, "
-            "plan=%lu, reason=%s, wp_id=%d",
+            "plan=%lu, reason=%s, actuation=%s, current=%.4f, "
+            "reachable=[%.4f,%.4f], wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(), previous_side,
             replacement_plan.mission.pass_side_sign,
             to_string(overtake_line_state_.phase),
             mpcc_contract::to_string(replacement_intent),
             static_cast<unsigned long>(prospective_generation),
             static_cast<unsigned long>(replacement_canonical_plan->plan_id),
-            follow_async::to_string(artifact_admission.reason), model->wp_id);
+            follow_async::to_string(artifact_admission.reason),
+            canonical_plan::to_string(artifact_admission.actuation_reason),
+            previous_steering,
+            artifact_admission.steering_continuity.reachable_lower_rad,
+            artifact_admission.steering_continuity.reachable_upper_rad,
+            model->wp_id);
         }
         return false;
       }
@@ -38978,10 +39109,47 @@ private:
               to_string(overtake_line_state_.phase), model->wp_id);
             return output;
           }
-          // Commit the PassPlan and its exact, physically validated trajectory
-          // before changing the FSM phase.  A phase transition without the
-          // execution contract previously exposed one cycle of legacy path
-          // ownership and made admission non-atomic.
+          const auto expected_intent = direct_pass ?
+            mpcc_contract::ControlIntent::Pass :
+            mpcc_contract::ControlIntent::ShiftOut;
+          const auto target_provenance =
+            selected_target_provenance(behavior_output);
+          const std::uint64_t prospective_generation =
+            std::max<std::uint64_t>(
+            1U, overtake_line_state_.mission_generation + 1U);
+          const auto preentry_admission =
+            follow_async::resolve_overtake_preentry_plan(
+            follow_async::OvertakePreentryPlanRequest{
+              behavior_output.overtake_preentry_canonical_plan,
+              expected_intent, prospective_generation,
+              target_provenance.observation_generation,
+              behavior_output.target_vehicle_id, pass_side_sign, now_sec,
+              previous_steering,
+              model != nullptr ? model->length :
+              std::numeric_limits<double>::quiet_NaN(),
+              canonical_maximum_steering_step_rad()});
+          if (!preentry_admission.admitted) {
+            overtake_locked_side_sign_ = 0;
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "Overtake entry commit rejected: source=preentry-gate-a, "
+              "target=%s, side=%d, intent=%s, generation=%lu, admission=%s, "
+              "actuation=%s, current=%.4f, reachable=[%.4f,%.4f], "
+              "action=keep-cruise-follow, wp_id=%d",
+              behavior_output.target_vehicle_id.c_str(), pass_side_sign,
+              mpcc_contract::to_string(expected_intent),
+              static_cast<unsigned long>(prospective_generation),
+              follow_async::to_string(preentry_admission.reason),
+              canonical_plan::to_string(preentry_admission.actuation_reason),
+              previous_steering,
+              preentry_admission.steering_continuity.reachable_lower_rad,
+              preentry_admission.steering_continuity.reachable_upper_rad,
+              model->wp_id);
+            return output;
+          }
+
+          // Gate A is complete before any Mission state mutates. Commit the
+          // PassPlan and exact plan atomically, then raise Overtake authority.
           const OvertakeLineState entry_rollback_state = overtake_line_state_;
           const int entry_rollback_side_sign = overtake_locked_side_sign_;
           freeze_selected_overtake_mission(
@@ -38989,39 +39157,34 @@ private:
           if (
             !overtake_line_state_.mission_path_frozen ||
             !overtake_line_state_.mission_plan.has_value() ||
+            overtake_line_state_.mission_generation != prospective_generation ||
             (physical_execution_certificate_required &&
             !overtake_line_state_.mission_frenet_dp_execution_active))
           {
+            const bool frozen = overtake_line_state_.mission_path_frozen;
+            const bool pass_plan_available =
+              overtake_line_state_.mission_plan.has_value();
+            const bool execution_path_active =
+              overtake_line_state_.mission_frenet_dp_execution_active;
+            const std::uint64_t committed_generation =
+              overtake_line_state_.mission_generation;
             overtake_line_state_ = entry_rollback_state;
             overtake_locked_side_sign_ = entry_rollback_side_sign;
             RCLCPP_ERROR(
               rclcpp::get_logger("mpc_controller"),
               "Overtake entry commit rejected: source=fsm-freeze, target=%s, "
               "side=%d, path_frozen=%d, pass_plan=%d, execution_path=%d, "
-              "action=keep-cruise-follow, wp_id=%d",
+              "generation=%lu/%lu, action=keep-cruise-follow, wp_id=%d",
               behavior_output.target_vehicle_id.c_str(), pass_side_sign,
-              overtake_line_state_.mission_path_frozen ? 1 : 0,
-              overtake_line_state_.mission_plan.has_value() ? 1 : 0,
-              overtake_line_state_.mission_frenet_dp_execution_active ? 1 : 0,
-              model->wp_id);
+              frozen ? 1 : 0, pass_plan_available ? 1 : 0,
+              execution_path_active ? 1 : 0,
+              static_cast<unsigned long>(committed_generation),
+              static_cast<unsigned long>(prospective_generation), model->wp_id);
             return output;
           }
-          const auto expected_intent = direct_pass ?
-            mpcc_contract::ControlIntent::Pass :
-            mpcc_contract::ControlIntent::ShiftOut;
-          const auto target_provenance =
-            selected_target_provenance(behavior_output);
-          const auto preentry_admission =
-            follow_async::resolve_overtake_preentry_plan(
-            follow_async::OvertakePreentryPlanRequest{
-              behavior_output.overtake_preentry_canonical_plan,
-              expected_intent, overtake_line_state_.mission_generation,
-              target_provenance.observation_generation,
-              behavior_output.target_vehicle_id, pass_side_sign, now_sec});
           canonical_plan::CanonicalExecutionPlanStoreReason preentry_store_reason{
             canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
           const bool preentry_context_ready =
-            preentry_admission.admitted &&
             prepare_overtake_canonical_async_context(
             behavior_output.overtake_preentry_canonical_plan->problem);
           if (preentry_context_ready && overtake_canonical_lifecycle_ != nullptr) {
@@ -39040,17 +39203,17 @@ private:
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
               "Overtake entry commit rejected: source=preentry-canonical, "
-              "target=%s, side=%d, intent=%s, generation=%lu, admission=%s, "
-              "context=%d, store=%s, action=keep-cruise-follow, wp_id=%d",
+              "target=%s, side=%d, intent=%s, generation=%lu, context=%d, "
+              "store=%s, action=keep-cruise-follow, wp_id=%d",
               behavior_output.target_vehicle_id.c_str(), pass_side_sign,
               mpcc_contract::to_string(expected_intent),
               static_cast<unsigned long>(
                 behavior_output.overtake_preentry_canonical_plan != nullptr ?
                 behavior_output.overtake_preentry_canonical_plan->problem.
                 intent_generation : 0U),
-              follow_async::to_string(preentry_admission.reason),
               preentry_context_ready ? 1 : 0,
-              canonical_plan::to_string(preentry_store_reason), model->wp_id);
+              canonical_plan::to_string(preentry_store_reason),
+              model->wp_id);
             return output;
           }
         }

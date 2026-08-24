@@ -286,6 +286,10 @@ const char * to_string(const OvertakePreentryPlanReason reason) noexcept
       return "execution-side-mismatch";
     case OvertakePreentryPlanReason::CursorUnavailable:
       return "cursor-unavailable";
+    case OvertakePreentryPlanReason::ActuationUnavailable:
+      return "actuation-unavailable";
+    case OvertakePreentryPlanReason::SteeringContinuityRejected:
+      return "steering-continuity-rejected";
   }
   return "unknown";
 }
@@ -351,8 +355,27 @@ OvertakePreentryPlanResolution resolve_overtake_preentry_plan(
     result.reason = OvertakePreentryPlanReason::ExecutionSideMismatch;
     return result;
   }
-  if (!plan::resolve_execution_cursor(*request.plan, request.now_sec).available) {
+  const auto cursor = plan::resolve_execution_cursor(
+    *request.plan, request.now_sec);
+  result.cursor_reason = cursor.reason;
+  if (!cursor.available) {
     result.reason = OvertakePreentryPlanReason::CursorUnavailable;
+    return result;
+  }
+  const auto actuation = plan::extract_canonical_actuation(
+    *request.plan, cursor, request.wheelbase_m);
+  result.actuation_reason = actuation.reason;
+  if (!actuation.actuation.has_value()) {
+    result.reason = OvertakePreentryPlanReason::ActuationUnavailable;
+    return result;
+  }
+  result.steering_continuity = plan::certify_canonical_steering_continuity(
+    plan::CanonicalSteeringContinuityRequest{
+      request.current_steering_tire_angle_rad,
+      actuation.actuation->steering_tire_angle_rad,
+      request.maximum_steering_step_rad});
+  if (!result.steering_continuity.certified) {
+    result.reason = OvertakePreentryPlanReason::SteeringContinuityRejected;
     return result;
   }
   result.admitted = true;

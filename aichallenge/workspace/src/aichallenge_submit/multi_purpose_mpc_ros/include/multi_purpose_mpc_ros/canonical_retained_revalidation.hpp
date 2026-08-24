@@ -32,6 +32,9 @@ struct RetainedExecutionWindow
   plan::CanonicalExecutionCursor cursor;
   plan::CanonicalPredictedState expected_current_state;
   double expected_current_progress_m{};
+  /// Signed progress residual already covered by the immutable solution's
+  /// numerical constraint certificate. This is plan evidence, not tuning.
+  double progress_evolution_tolerance_m{};
   std::vector<RetainedStageSample> samples;
 };
 
@@ -52,6 +55,10 @@ struct RetainedExecutionWindowResult
 {
   RetainedExecutionWindowReason reason{
     RetainedExecutionWindowReason::InvalidPlan};
+  /// Diagnostic evidence owned by the window builder.  In particular,
+  /// progress failures report the exact stage and signed delta so callers do
+  /// not have to infer whether a solver-residual or a real reversal was seen.
+  std::string detail;
   std::optional<RetainedExecutionWindow> window;
 };
 

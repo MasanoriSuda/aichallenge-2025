@@ -189,7 +189,8 @@ TEST(
   ASSERT_TRUE(cursor.available);
   const auto result =
     retained::build_retained_execution_window(execution_plan, cursor);
-  ASSERT_EQ(result.reason, retained::RetainedExecutionWindowReason::Accepted);
+  ASSERT_EQ(result.reason, retained::RetainedExecutionWindowReason::Accepted)
+    << result.detail;
   ASSERT_TRUE(result.window.has_value());
   ASSERT_EQ(result.window->samples.size(), 2U);
   EXPECT_NEAR(result.window->expected_current_progress_m, 100.30, 1e-12);
@@ -205,6 +206,58 @@ TEST(
   EXPECT_DOUBLE_EQ(result.window->samples[0].absolute_progress_m, 100.5);
   EXPECT_EQ(result.window->samples[1].endpoint_state_index, 2U);
   EXPECT_NEAR(result.window->samples[1].relative_time_sec, 1.4, 1e-12);
+}
+
+TEST(
+  CanonicalRetainedRevalidation,
+  CertifiedNumericalProgressResidualRemainsExecutableAndObservable)
+{
+  auto execution_plan = make_plan();
+  execution_plan.solution.maximum_constraint_violation = 1e-5;
+  execution_plan.predicted_states[1].progress_m =
+    execution_plan.predicted_states[0].progress_m - 2e-6;
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.0);
+  ASSERT_TRUE(cursor.available);
+
+  const auto result =
+    retained::build_retained_execution_window(execution_plan, cursor);
+
+  EXPECT_EQ(
+    result.reason,
+    retained::RetainedExecutionWindowReason::Accepted);
+  ASSERT_TRUE(result.window.has_value());
+  EXPECT_DOUBLE_EQ(result.window->progress_evolution_tolerance_m, 1e-5);
+  const auto advance = retained::sample_retained_progress_advance(
+    result.window.value(), {0.0, 0.5, 1.0});
+  ASSERT_TRUE(advance.has_value());
+  EXPECT_DOUBLE_EQ((*advance)[0], 0.0);
+  EXPECT_DOUBLE_EQ((*advance)[1], 0.0);
+  EXPECT_DOUBLE_EQ((*advance)[2], 0.0);
+}
+
+TEST(
+  CanonicalRetainedRevalidation,
+  ProgressBeyondTheCertifiedResidualReportsTheExactPlanDelta)
+{
+  auto execution_plan = make_plan();
+  execution_plan.solution.maximum_constraint_violation = 1e-5;
+  execution_plan.predicted_states[1].progress_m =
+    execution_plan.predicted_states[0].progress_m - 2e-4;
+  const auto cursor = plan::resolve_execution_cursor(execution_plan, 10.0);
+  ASSERT_TRUE(cursor.available);
+
+  const auto result =
+    retained::build_retained_execution_window(execution_plan, cursor);
+
+  EXPECT_EQ(
+    result.reason,
+    retained::RetainedExecutionWindowReason::InvalidProgressEvolution);
+  EXPECT_FALSE(result.window.has_value());
+  EXPECT_NE(result.detail.find("stage=0"), std::string::npos);
+  EXPECT_NE(result.detail.find("delta=-0.0002"), std::string::npos);
+  EXPECT_NE(
+    result.detail.find("certified_max_violation=1e-05"),
+    std::string::npos);
 }
 
 TEST(

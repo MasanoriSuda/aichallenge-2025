@@ -138,6 +138,38 @@ CanonicalActuationResult extract_canonical_actuation(
   const CanonicalExecutionCursor & cursor,
   double wheelbase_m) noexcept;
 
+enum class CanonicalSteeringContinuityReason
+{
+  Accepted,
+  InvalidInput,
+  Unreachable,
+};
+
+const char * to_string(CanonicalSteeringContinuityReason reason) noexcept;
+
+struct CanonicalSteeringContinuityRequest
+{
+  double current_steering_tire_angle_rad{};
+  double candidate_steering_tire_angle_rad{};
+  double maximum_steering_step_rad{};
+};
+
+struct CanonicalSteeringContinuityResult
+{
+  bool certified{false};
+  CanonicalSteeringContinuityReason reason{
+    CanonicalSteeringContinuityReason::InvalidInput};
+  double steering_difference_rad{};
+  double reachable_lower_rad{};
+  double reachable_upper_rad{};
+};
+
+/// Certify the first command of a canonical plan against the actuation history
+/// which exists at selection time.  This is deliberately a rejection contract:
+/// mutating a certified command here would separate it from its solution.
+CanonicalSteeringContinuityResult certify_canonical_steering_continuity(
+  const CanonicalSteeringContinuityRequest & request) noexcept;
+
 enum class CanonicalExecutionPlanStoreReason
 {
   Accepted,

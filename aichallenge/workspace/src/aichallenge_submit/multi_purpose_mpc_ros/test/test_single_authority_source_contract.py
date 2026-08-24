@@ -561,3 +561,47 @@ def test_overtake_physical_failure_preserves_stage_and_authority_provenance() ->
         "canonical=%d/plan=%lu/generation=%lu/side=%d/fingerprint=%lu/",
     ):
         assert token in trace
+
+
+def test_canonical_overtake_demotes_legacy_mission_viability_owner() -> None:
+    """A complete reference may feed canonical MPCC but cannot end its Mission."""
+
+    resolution_start = SOURCE.index(
+        "const auto receding_viability_authority ="
+    )
+    transition_start = SOURCE.index(
+        "if (!horizon_evaluation.execution_feasible())", resolution_start
+    )
+    transition_end = SOURCE.index(
+        "double previous_target_ey = current_ey;", transition_start
+    )
+    transition = SOURCE[transition_start:transition_end]
+
+    assert "receding_viability_reference_only" in transition
+    assert "OvertakeLine legacy viability demoted:" in transition
+    demotion_start = transition.index("if (receding_viability_reference_only)")
+    legacy_start = transition.index(
+        "should_terminate_recovery_retained_mission", demotion_start
+    )
+    demotion = transition[demotion_start:legacy_start]
+    assert "transition_overtake_line_phase" not in demotion
+    assert "enter_dynamic_mission_wait" not in demotion
+    assert "arm_overtake_line_side_retry_block" not in demotion
+    assert "reset_overtake_line_state" not in demotion
+
+    speed_cap_start = SOURCE.index(
+        "horizon_evaluation.static_map_wall_infeasible", resolution_start
+    )
+    speed_cap_end = SOURCE.index(
+        "if (!horizon_evaluation.execution_feasible())", speed_cap_start
+    )
+    assert "!receding_viability_reference_only" in SOURCE[
+        speed_cap_start:speed_cap_end
+    ]
+
+    trace_start = SOURCE.index("OvertakeLine physical authority failure:")
+    trace_end = SOURCE.index(
+        "const bool rear_clear_return_handoff", trace_start
+    )
+    trace = SOURCE[trace_start:trace_end]
+    assert "viability=%s/%s/reference_complete=%d" in trace

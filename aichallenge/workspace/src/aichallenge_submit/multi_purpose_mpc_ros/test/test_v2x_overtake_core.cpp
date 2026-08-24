@@ -3464,6 +3464,90 @@ TEST(V2XOvertakeCoreSpeed, NamesRecedingHorizonPhysicalFailureCauses)
   EXPECT_STREQ(to_string(Cause::LateralAcceleration), "lateral-acceleration");
 }
 
+TEST(V2XOvertakeCoreSpeed, DemotesLegacyViabilityForCompleteCanonicalReference)
+{
+  using namespace multi_purpose_mpc_ros::v2x_overtake_core;
+  RecedingHorizonViabilityAuthorityRequest request;
+  request.canonical_overtake_intent = true;
+  request.reference_contract_complete = true;
+
+  const auto result = resolve_receding_horizon_viability_authority(request);
+
+  EXPECT_EQ(
+    result.action,
+    RecedingHorizonViabilityAuthorityAction::CanonicalReferenceOnly);
+  EXPECT_EQ(
+    result.reason,
+    RecedingHorizonViabilityAuthorityReason::CanonicalReferenceContract);
+  EXPECT_STREQ(to_string(result.action), "canonical-reference-only");
+  EXPECT_STREQ(to_string(result.reason), "canonical-reference-contract");
+}
+
+TEST(V2XOvertakeCoreSpeed, KeepsLegacyFailClosedOutsideCanonicalIntent)
+{
+  using namespace multi_purpose_mpc_ros::v2x_overtake_core;
+  RecedingHorizonViabilityAuthorityRequest request;
+  request.reference_contract_complete = true;
+
+  const auto result = resolve_receding_horizon_viability_authority(request);
+
+  EXPECT_EQ(
+    result.action,
+    RecedingHorizonViabilityAuthorityAction::LegacyFailClosed);
+  EXPECT_EQ(
+    result.reason,
+    RecedingHorizonViabilityAuthorityReason::CanonicalIntentInactive);
+}
+
+TEST(V2XOvertakeCoreSpeed, KeepsLegacyFailClosedForIncompleteReference)
+{
+  using namespace multi_purpose_mpc_ros::v2x_overtake_core;
+  RecedingHorizonViabilityAuthorityRequest request;
+  request.canonical_overtake_intent = true;
+
+  const auto result = resolve_receding_horizon_viability_authority(request);
+
+  EXPECT_EQ(
+    result.action,
+    RecedingHorizonViabilityAuthorityAction::LegacyFailClosed);
+  EXPECT_EQ(
+    result.reason,
+    RecedingHorizonViabilityAuthorityReason::ReferenceContractIncomplete);
+}
+
+TEST(V2XOvertakeCoreSpeed, KeepsLegacyFailClosedForEveryIndependentHardFault)
+{
+  using namespace multi_purpose_mpc_ros::v2x_overtake_core;
+  RecedingHorizonViabilityAuthorityRequest request;
+  request.canonical_overtake_intent = true;
+  request.reference_contract_complete = true;
+
+  const auto expect_hard_fault = [&request]() {
+      const auto result = resolve_receding_horizon_viability_authority(request);
+      EXPECT_EQ(
+        result.action,
+        RecedingHorizonViabilityAuthorityAction::LegacyFailClosed);
+      EXPECT_EQ(
+        result.reason,
+        RecedingHorizonViabilityAuthorityReason::IndependentHardFault);
+    };
+
+  request.actual_wall_contact = true;
+  expect_hard_fault();
+  request.actual_wall_contact = false;
+  request.wall_observation_failure = true;
+  expect_hard_fault();
+  request.wall_observation_failure = false;
+  request.front_emergency = true;
+  expect_hard_fault();
+  request.front_emergency = false;
+  request.solver_recovery = true;
+  expect_hard_fault();
+  request.solver_recovery = false;
+  request.forbidden_waypoint = true;
+  expect_hard_fault();
+}
+
 TEST(V2XOvertakeCoreSpeed, KeepsRobustTargetBoundsWhenTheyFit)
 {
   const auto result =

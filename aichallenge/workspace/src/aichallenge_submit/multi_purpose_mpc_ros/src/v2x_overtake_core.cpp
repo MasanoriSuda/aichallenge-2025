@@ -2063,6 +2063,65 @@ const char * to_string(const InitialWallMarginTrackingContractReason reason) noe
   return "unknown";
 }
 
+const char * to_string(
+  const RecedingHorizonViabilityAuthorityAction action) noexcept
+{
+  switch (action) {
+    case RecedingHorizonViabilityAuthorityAction::LegacyFailClosed:
+      return "legacy-fail-closed";
+    case RecedingHorizonViabilityAuthorityAction::CanonicalReferenceOnly:
+      return "canonical-reference-only";
+  }
+  return "unknown";
+}
+
+const char * to_string(
+  const RecedingHorizonViabilityAuthorityReason reason) noexcept
+{
+  switch (reason) {
+    case RecedingHorizonViabilityAuthorityReason::CanonicalReferenceContract:
+      return "canonical-reference-contract";
+    case RecedingHorizonViabilityAuthorityReason::CanonicalIntentInactive:
+      return "canonical-intent-inactive";
+    case RecedingHorizonViabilityAuthorityReason::ReferenceContractIncomplete:
+      return "reference-contract-incomplete";
+    case RecedingHorizonViabilityAuthorityReason::IndependentHardFault:
+      return "independent-hard-fault";
+  }
+  return "unknown";
+}
+
+RecedingHorizonViabilityAuthorityResolution
+resolve_receding_horizon_viability_authority(
+  const RecedingHorizonViabilityAuthorityRequest & request) noexcept
+{
+  RecedingHorizonViabilityAuthorityResolution result;
+  if (!request.canonical_overtake_intent) {
+    result.reason =
+      RecedingHorizonViabilityAuthorityReason::CanonicalIntentInactive;
+    return result;
+  }
+  if (!request.reference_contract_complete) {
+    result.reason =
+      RecedingHorizonViabilityAuthorityReason::ReferenceContractIncomplete;
+    return result;
+  }
+  if (
+    request.actual_wall_contact || request.wall_observation_failure ||
+    request.front_emergency || request.solver_recovery ||
+    request.forbidden_waypoint)
+  {
+    result.reason =
+      RecedingHorizonViabilityAuthorityReason::IndependentHardFault;
+    return result;
+  }
+  result.action =
+    RecedingHorizonViabilityAuthorityAction::CanonicalReferenceOnly;
+  result.reason =
+    RecedingHorizonViabilityAuthorityReason::CanonicalReferenceContract;
+  return result;
+}
+
 InitialWallMarginTrackingContractResolution
 resolve_initial_wall_margin_tracking_contract(
   const InitialWallMarginTrackingContractRequest & request) noexcept

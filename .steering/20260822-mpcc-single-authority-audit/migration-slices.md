@@ -584,6 +584,18 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   physical-revalidation failure caused DynamicWait/Recovery; retained progress discontinuities in
   the second run appeared only afterward under Follow/Track/Cruise. Trace those two lifecycles as
   separate upstream defects; Rejoin remains legacy production authority.
+- `.steering/20260824-overtake-receding-viability-owner-retirement` removes the next duplicate
+  owner from canonical ShiftOut/Pass/Return. The receding DP profile may still supply a typed
+  lateral reference and hard stage corridor, but its legacy wall/lateral-acceleration heuristic can
+  no longer invalidate the Mission, arm retry state or apply a recovery-speed cap when that input
+  contract is complete. Missing geometry and independent wall/contact, front-Emergency,
+  solver-Recovery and forbidden-waypoint supervisors remain fail-closed. The 1,738-test suite and
+  25-package build pass. In `output/20260824-132703`, certified canonical ShiftOut authority was
+  observed and a later actual wall contact still selected explicit Emergency. The demoted
+  physical-revalidation path was not naturally exercised because an earlier legacy owner,
+  `runtime wall escape prefix unavailable`, first destroyed generation 1 with `hard_fault=0`.
+  Audit that earlier Mission-viability owner next; do not combine it with this Slice or tune wall /
+  lateral-acceleration limits.
 
 ## Slice 6: Legacy and migration path removal
 

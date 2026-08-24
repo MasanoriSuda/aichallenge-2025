@@ -43801,6 +43801,55 @@ private:
       horizon_evaluation.static_map_wall_infeasible;
     output.static_map_profile_retention_ratio =
       horizon_evaluation.static_map_profile_retention_ratio;
+    const auto finite_horizon_vector = [N](const std::vector<double> & values) {
+        return
+          values.size() == static_cast<std::size_t>(N) &&
+          std::all_of(values.begin(), values.end(), [](const double value) {
+            return std::isfinite(value);
+          });
+      };
+    const bool reference_path_monotonic =
+      finite_horizon_vector(horizon_evaluation.path_distances) &&
+      std::is_sorted(
+      horizon_evaluation.path_distances.begin(),
+      horizon_evaluation.path_distances.end());
+    bool wall_corridor_complete =
+      finite_horizon_vector(horizon_evaluation.stage_wall_corridor_lower_ey) &&
+      finite_horizon_vector(horizon_evaluation.stage_wall_corridor_upper_ey);
+    if (wall_corridor_complete) {
+      for (int stage = 0; stage < N; ++stage) {
+        const auto index = static_cast<std::size_t>(stage);
+        if (
+          horizon_evaluation.stage_wall_corridor_upper_ey[index] + kEps <
+          horizon_evaluation.stage_wall_corridor_lower_ey[index])
+        {
+          wall_corridor_complete = false;
+          break;
+        }
+      }
+    }
+    const bool canonical_reference_contract_complete =
+      finite_horizon_vector(horizon_evaluation.target_ey) &&
+      reference_path_monotonic && wall_corridor_complete;
+    const bool canonical_overtake_intent =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+      overtake_line_state_.phase == OvertakeLinePhase::Return;
+    const auto receding_viability_authority =
+      overtake_core::resolve_receding_horizon_viability_authority(
+      overtake_core::RecedingHorizonViabilityAuthorityRequest{
+        canonical_overtake_intent,
+        canonical_reference_contract_complete,
+        actual_wall_physical_contact,
+        actual_wall_sample_unavailable,
+        behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
+        overtake_solver_recovery_active_,
+        behavior_output.overtake_forbidden_wp});
+    const bool receding_viability_reference_only =
+      !horizon_evaluation.execution_feasible() &&
+      receding_viability_authority.action ==
+      overtake_core::RecedingHorizonViabilityAuthorityAction::
+      CanonicalReferenceOnly;
     const bool execution_horizon_unconstrained =
       horizon_evaluation.execution_feasible() &&
       !horizon_evaluation.lateral_accel_limited &&
@@ -44342,7 +44391,10 @@ private:
       output.target_velocity_limit = 0.0;
     }
 
-    if (horizon_evaluation.static_map_wall_infeasible) {
+    if (
+      horizon_evaluation.static_map_wall_infeasible &&
+      !receding_viability_reference_only)
+    {
       output.target_velocity_limit = std::min(
         output.target_velocity_limit,
         std::max(0.0, line_cfg.recovery_velocity));
@@ -44381,7 +44433,7 @@ private:
           "clearance=%.3f, initial_contract=%d, initial_feasible=%d, attempts=%zu, "
           "dp=%d/authority=%d/runtime=%d/side=%d/source_age=%.3f, "
           "canonical=%d/plan=%lu/generation=%lu/side=%d/fingerprint=%lu/"
-          "cursor=%d/stage=%zu, wp_id=%d",
+          "cursor=%d/stage=%zu, viability=%s/%s/reference_complete=%d, wp_id=%d",
           static_cast<unsigned long>(overtake_line_state_.episode_id),
           static_cast<unsigned long>(overtake_line_state_.mission_generation),
           overtake_line_state_.target_vehicle_id.c_str(),
@@ -44415,6 +44467,9 @@ private:
             canonical_plan_snapshot->problem.fingerprint : 0U),
           canonical_cursor.available ? 1 : 0,
           canonical_cursor.first_control_stage_index,
+          overtake_core::to_string(receding_viability_authority.action),
+          overtake_core::to_string(receding_viability_authority.reason),
+          canonical_reference_contract_complete ? 1 : 0,
           model->wp_id);
       }
       const bool rear_clear_return_handoff =
@@ -44445,7 +44500,21 @@ private:
         // immediate rematch on the following cycle.
         return OvertakeLineOutput{};
       }
-      if (overtake_core::should_terminate_recovery_retained_mission(
+      if (receding_viability_reference_only) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "OvertakeLine legacy viability demoted: episode=%lu, generation=%lu, "
+          "target=%s, side=%d, phase=%s, action=%s, reason=%s, "
+          "legacy_failure=%s, canonical_action=preserve-mission, wp_id=%d",
+          static_cast<unsigned long>(overtake_line_state_.episode_id),
+          static_cast<unsigned long>(overtake_line_state_.mission_generation),
+          overtake_line_state_.target_vehicle_id.c_str(),
+          overtake_line_state_.pass_side_sign,
+          to_string(overtake_line_state_.phase),
+          overtake_core::to_string(receding_viability_authority.action),
+          overtake_core::to_string(receding_viability_authority.reason),
+          reason, model->wp_id);
+      } else if (overtake_core::should_terminate_recovery_retained_mission(
           overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare &&
           overtake_line_state_.follow_prepare_cause ==
           FollowPrepareCause::RecoveryRetention,

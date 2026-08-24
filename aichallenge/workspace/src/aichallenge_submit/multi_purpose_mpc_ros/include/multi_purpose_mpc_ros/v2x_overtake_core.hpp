@@ -1207,6 +1207,46 @@ enum class RecedingHorizonPhysicalFailureCause
 
 const char * to_string(RecedingHorizonPhysicalFailureCause cause) noexcept;
 
+enum class RecedingHorizonViabilityAuthorityAction
+{
+  LegacyFailClosed,
+  CanonicalReferenceOnly,
+};
+
+enum class RecedingHorizonViabilityAuthorityReason
+{
+  CanonicalReferenceContract,
+  CanonicalIntentInactive,
+  ReferenceContractIncomplete,
+  IndependentHardFault,
+};
+
+const char * to_string(RecedingHorizonViabilityAuthorityAction action) noexcept;
+const char * to_string(RecedingHorizonViabilityAuthorityReason reason) noexcept;
+
+struct RecedingHorizonViabilityAuthorityRequest
+{
+  bool canonical_overtake_intent{false};
+  bool reference_contract_complete{false};
+  bool actual_wall_contact{false};
+  bool wall_observation_failure{false};
+  bool front_emergency{false};
+  bool solver_recovery{false};
+  bool forbidden_waypoint{false};
+};
+
+struct RecedingHorizonViabilityAuthorityResolution
+{
+  RecedingHorizonViabilityAuthorityAction action{
+    RecedingHorizonViabilityAuthorityAction::LegacyFailClosed};
+  RecedingHorizonViabilityAuthorityReason reason{
+    RecedingHorizonViabilityAuthorityReason::CanonicalIntentInactive};
+};
+
+RecedingHorizonViabilityAuthorityResolution
+resolve_receding_horizon_viability_authority(
+  const RecedingHorizonViabilityAuthorityRequest & request) noexcept;
+
 struct WallCorridorBoundRequest
 {
   double base_lower_m{};

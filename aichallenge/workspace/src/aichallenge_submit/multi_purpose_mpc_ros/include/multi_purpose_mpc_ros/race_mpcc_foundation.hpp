@@ -337,15 +337,19 @@ enum class FollowProductionAction
 {
   NotOwned,
   PublishCanonical,
+  SolveTransitionAdmission,
   EmergencyStop,
 };
 
 /// Follow is an exclusive normal-authority boundary after promotion. A
-/// missing canonical selection fails closed and can never borrow another
-/// normal formulation for the same cycle.
+/// requested transition may synchronously complete Gate A with the same
+/// canonical producer. Once Follow has published, a missing same-intent
+/// selection fails closed and can never borrow another normal formulation.
 FollowProductionAction resolve_follow_production_action(
   mpcc_execution_contract::ControlIntent intent,
-  bool complete_canonical_selection) noexcept;
+  bool complete_canonical_selection,
+  mpcc_execution_contract::ControlIntent last_published_canonical_intent)
+noexcept;
 
 enum class StopAuthorityAction
 {

@@ -272,6 +272,35 @@ TEST(OvertakeExecutionOrchestrator, ResolvesSafetyAndRacingCanonicalIntents)
     multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Cruise);
 }
 
+TEST(OvertakeExecutionOrchestrator, FollowIntentRequiresCurrentFrontEvidence)
+{
+  orchestrator::AuthorityRequest request;
+  request.race_session_active = true;
+  request.target_id = "d2";
+  request.behavior = orchestrator::Behavior::Follow;
+
+  const auto authority = orchestrator::resolve_authority(request);
+  ASSERT_EQ(authority.action, orchestrator::Action::Follow);
+
+  const auto without_front =
+    orchestrator::resolve_canonical_control_intent(request, authority);
+  EXPECT_TRUE(without_front.valid);
+  EXPECT_EQ(without_front.intent, contract::ControlIntent::Cruise);
+  EXPECT_EQ(
+    without_front.reason,
+    orchestrator::CanonicalControlIntentReason::
+    FollowWithoutCoherentFrontObservation);
+
+  request.coherent_follow_front_observation = true;
+  const auto with_front =
+    orchestrator::resolve_canonical_control_intent(request, authority);
+  EXPECT_TRUE(with_front.valid);
+  EXPECT_EQ(with_front.intent, contract::ControlIntent::Follow);
+  EXPECT_EQ(
+    with_front.reason,
+    orchestrator::CanonicalControlIntentReason::ResolvedAction);
+}
+
 TEST(OvertakeExecutionOrchestrator, NormalizesContradictorySpeedFloor)
 {
   const auto result = orchestrator::normalize_speed_window(5.78, 8.0, 5.80, true);

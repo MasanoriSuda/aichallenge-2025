@@ -187,15 +187,28 @@ TEST(RaceMpccFoundation, FollowProductionNeverFallsThroughToAnotherNormalOwner)
 {
   EXPECT_EQ(
     race::resolve_follow_production_action(
-      contract::ControlIntent::Cruise, false),
+      contract::ControlIntent::Cruise, false,
+      contract::ControlIntent::Cruise),
     race::FollowProductionAction::NotOwned);
   EXPECT_EQ(
     race::resolve_follow_production_action(
-      contract::ControlIntent::Follow, true),
+      contract::ControlIntent::Follow, true,
+      contract::ControlIntent::Cruise),
     race::FollowProductionAction::PublishCanonical);
   EXPECT_EQ(
     race::resolve_follow_production_action(
-      contract::ControlIntent::Follow, false),
+      contract::ControlIntent::Follow, false,
+      contract::ControlIntent::Cruise),
+    race::FollowProductionAction::SolveTransitionAdmission);
+  EXPECT_EQ(
+    race::resolve_follow_production_action(
+      contract::ControlIntent::Follow, false,
+      contract::ControlIntent::Pass),
+    race::FollowProductionAction::SolveTransitionAdmission);
+  EXPECT_EQ(
+    race::resolve_follow_production_action(
+      contract::ControlIntent::Follow, false,
+      contract::ControlIntent::Follow),
     race::FollowProductionAction::EmergencyStop);
 }
 

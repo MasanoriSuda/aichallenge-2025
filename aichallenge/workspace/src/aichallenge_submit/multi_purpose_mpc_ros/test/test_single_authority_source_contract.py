@@ -277,6 +277,58 @@ def test_follow_async_snapshot_is_sealed_after_current_output_commit() -> None:
     assert "submit_follow_canonical_async(problem, now_sec)" not in evaluator
 
 
+def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
+    """Intent elevation must be atomic with a current executable Follow plan."""
+
+    admission_start = SOURCE.index(
+        "FollowShadowCycleResult evaluate_follow_transition_admission("
+    )
+    admission_end = SOURCE.index(
+        "void record_follow_canonical_async_status", admission_start
+    )
+    admission = SOURCE[admission_start:admission_end]
+
+    assert "evaluate_follow_fresh_shadow(problem, now_sec, context)" in admission
+    assert (
+        "evaluate_follow_retained_shadow(problem, now_sec, fresh_plan, result)"
+        in admission
+    )
+    assert "follow_canonical_lifecycle_->plan_store.replace(*fresh_plan)" in admission
+    assert "solve_problem(" not in admission
+    assert "legacy-mpc" not in admission
+    assert "safe_failure_control(" not in admission
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    follow_start = SOURCE.index(
+        "if (control_intent == mpcc_contract::ControlIntent::Follow)",
+        control_start,
+    )
+    follow_end = SOURCE.index(
+        "if (overtake_canonical_async_intent(control_intent))", follow_start
+    )
+    follow = SOURCE[follow_start:follow_end]
+    assert "SolveTransitionAdmission" in follow
+    assert "evaluate_follow_transition_admission(problem, now_sec)" in follow
+    assert "last_published_canonical_intent_" in follow
+
+
+def test_follow_fresh_solver_transaction_is_serialized_end_to_end() -> None:
+    """Worker and transition admission cannot interleave solve/warm publication."""
+
+    lifecycle_start = SOURCE.index("struct CanonicalNormalLifecycle")
+    lifecycle_end = SOURCE.index("struct MPC", lifecycle_start)
+    lifecycle = SOURCE[lifecycle_start:lifecycle_end]
+    assert "std::mutex solver_transaction_mutex" in lifecycle
+
+    fresh_start = SOURCE.index("FollowShadowCycleResult evaluate_follow_fresh_shadow(")
+    fresh_end = SOURCE.index("void invalidate_follow_canonical_async_context()", fresh_start)
+    fresh = SOURCE[fresh_start:fresh_end]
+    transaction = fresh.index("solver_transaction_mutex")
+    solve = fresh.index("solve_extended_progress_problem(")
+    publish_warm = fresh.index("publish_certified_extended_progress_warm_start(")
+    assert transaction < solve < publish_warm
+
+
 def test_overtake_entry_adopts_the_already_solved_canonical_artifact() -> None:
     """ShiftOut may not commit first and launch a duplicate initial solve later."""
 

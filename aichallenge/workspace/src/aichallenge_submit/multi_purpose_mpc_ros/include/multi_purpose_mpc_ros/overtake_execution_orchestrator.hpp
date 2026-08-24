@@ -206,6 +206,10 @@ struct AuthorityRequest {
   bool emergency_brake_active{false};
   bool solver_fallback_active{false};
   bool follow_cap_active{false};
+  /// A Follow action is executable only when the current cycle owns a finite
+  /// front observation and matching target provenance.  A behavior label by
+  /// itself must not elevate Follow production authority.
+  bool coherent_follow_front_observation{false};
   bool front_cap_release_ready{false};
   bool pass_speed_floor_active{false};
   bool shiftout_speed_floor_active{false};
@@ -251,6 +255,7 @@ enum class CanonicalControlIntentReason {
   ResolvedAction,
   TrackBeforeRaceSession,
   CruiseDuringRaceSession,
+  FollowWithoutCoherentFrontObservation,
   LateralHoldDynamicWaitShiftOut,
   LateralHoldDynamicWaitPass,
   RollingDynamicWaitShiftOut,

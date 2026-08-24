@@ -423,6 +423,8 @@ const char * to_string(const CanonicalControlIntentReason reason) noexcept
       return "track-before-race-session";
     case CanonicalControlIntentReason::CruiseDuringRaceSession:
       return "cruise-during-race-session";
+    case CanonicalControlIntentReason::FollowWithoutCoherentFrontObservation:
+      return "follow-without-coherent-front-observation";
     case CanonicalControlIntentReason::LateralHoldDynamicWaitShiftOut:
       return "lateral-hold-dynamic-wait-shiftout";
     case CanonicalControlIntentReason::LateralHoldDynamicWaitPass:
@@ -465,9 +467,17 @@ CanonicalControlIntentResolution resolve_canonical_control_intent(
         CanonicalControlIntentReason::TrackBeforeRaceSession);
       break;
     case Action::Follow:
-      accept(
-        mpcc_execution_contract::ControlIntent::Follow,
-        CanonicalControlIntentReason::ResolvedAction);
+      if (request.coherent_follow_front_observation) {
+        accept(
+          mpcc_execution_contract::ControlIntent::Follow,
+          CanonicalControlIntentReason::ResolvedAction);
+      } else {
+        accept(
+          request.race_session_active ?
+          mpcc_execution_contract::ControlIntent::Cruise :
+          mpcc_execution_contract::ControlIntent::Track,
+          CanonicalControlIntentReason::FollowWithoutCoherentFrontObservation);
+      }
       break;
     case Action::DynamicEscape:
     case Action::ShiftOut:

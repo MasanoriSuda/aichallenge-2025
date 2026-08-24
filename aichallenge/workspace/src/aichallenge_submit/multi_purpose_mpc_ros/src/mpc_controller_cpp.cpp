@@ -6586,6 +6586,11 @@ struct ExtendedBranchSolverContext
 struct CanonicalNormalLifecycle
 {
   std::shared_ptr<ExtendedBranchSolverContext> solver_context;
+  // A fresh canonical solve spans warm-identity resolution, the persistent
+  // solver transaction, and certified warm-start publication.  Keep those
+  // three operations atomic when the async worker and a one-shot authority
+  // admission solve share this lifecycle.
+  std::mutex solver_transaction_mutex;
   std::mutex warm_start_mutex;
   std::optional<race_mpcc::ShadowWarmStartIdentity> warm_start_identity;
   std::uint64_t context_epoch{};
@@ -7520,6 +7525,7 @@ struct MPC
     last_problem_context_.reset();
     last_solution_contract_.reset();
     last_solution_is_retained_ = false;
+    last_published_canonical_intent_ = mpcc_contract::ControlIntent::Unknown;
     const auto canonical_shadow_plan = track_cruise_shadow_plan_store_.snapshot();
     if (canonical_shadow_plan != nullptr) {
       track_cruise_shadow_plan_store_.clear_if_plan_id(
@@ -19098,6 +19104,15 @@ struct MPC
       overtake_line_output.stage_wall_corridor_lower_ey,
       overtake_line_output.stage_wall_corridor_upper_ey,
       overtake_line_output.path_distances);
+    const bool coherent_follow_front_observation =
+      behavior_output.has_front_vehicle &&
+      std::isfinite(behavior_output.front_distance) &&
+      behavior_output.front_distance >= 0.0 &&
+      std::isfinite(behavior_output.front_speed) &&
+      behavior_output.front_speed >= 0.0 &&
+      behavior_output.target_observation_provenance.valid &&
+      behavior_output.target_observation_provenance.target_id ==
+      behavior_output.target_vehicle_id;
     overtake_orchestrator::AuthorityRequest authority_request;
     authority_request.decision_id = active_control_decision_id_;
     authority_request.episode_id = overtake_line_state_.episode_id;
@@ -19173,6 +19188,8 @@ struct MPC
     authority_request.follow_cap_active =
       behavior_output.follow_speed_limit_active ||
       behavior_output.moving_front_clearance_limit_active;
+    authority_request.coherent_follow_front_observation =
+      coherent_follow_front_observation;
     authority_request.front_cap_release_ready =
       overtake_line_output.front_cap_release_ready;
     authority_request.pass_speed_floor_active =
@@ -19445,14 +19462,7 @@ struct MPC
         progress_contouring_requested,
         behavior_override != nullptr,
         current_control_intent(),
-        behavior_output.has_front_vehicle &&
-        std::isfinite(behavior_output.front_distance) &&
-        behavior_output.front_distance >= 0.0 &&
-        std::isfinite(behavior_output.front_speed) &&
-        behavior_output.front_speed >= 0.0 &&
-        behavior_output.target_observation_provenance.valid &&
-        behavior_output.target_observation_provenance.target_id ==
-        behavior_output.target_vehicle_id});
+        coherent_follow_front_observation});
     const bool follow_shadow_requested = follow_shadow_eligibility.eligible;
     const bool progress_metadata_requested =
       progress_contouring_requested || track_cruise_shadow_requested ||
@@ -24139,6 +24149,16 @@ struct MPC
         "progress metadata unavailable" : problem.progress_metadata_reject_reason;
       return finish();
     }
+    if (
+      follow_canonical_lifecycle_ == nullptr ||
+      follow_canonical_lifecycle_->solver_context == nullptr)
+    {
+      result.status = "solver-context-reject";
+      result.detail = "dedicated Follow shadow solver context unavailable";
+      return finish();
+    }
+    std::lock_guard<std::mutex> solver_transaction_lock(
+      follow_canonical_lifecycle_->solver_transaction_mutex);
     try {
       const auto build_started = SteadyClock::now();
       std::string build_reject_reason;
@@ -24200,12 +24220,6 @@ struct MPC
           warm_resolution.reason);
         return finish();
       }
-      if (follow_canonical_lifecycle_->solver_context == nullptr) {
-        result.status = "solver-context-reject";
-        result.detail = "dedicated Follow shadow solver context unavailable";
-        return finish();
-      }
-
       const auto previous_context = active_extended_branch_solver_context_;
       const auto previous_epoch = active_extended_branch_context_epoch_;
       const auto previous_target = active_extended_branch_target_id_;
@@ -24836,6 +24850,50 @@ struct MPC
     }
     result.total_ms = std::chrono::duration<double, std::milli>(
       SteadyClock::now() - started).count();
+    return result;
+  }
+
+  FollowShadowCycleResult evaluate_follow_transition_admission(
+    const MpcProblem & problem, const double now_sec)
+  {
+    const auto context = make_problem_context(
+      problem, mpcc_contract::Formulation::VelocityProgress5State);
+    auto result = evaluate_follow_fresh_shadow(problem, now_sec, context);
+    const auto fresh_plan = result.fresh_canonical_plan;
+    if (fresh_plan == nullptr) {
+      result.status = "transition-fresh-reject";
+      return result;
+    }
+
+    // A fresh worker command proves the immutable solver artifact, but Follow
+    // production also requires the live target, wall, control-pose, and
+    // steering-history proof.  Re-run the existing retained selector over the
+    // exact fresh plan rather than introducing a transition-only controller.
+    result.canonical_command.reset();
+    result.canonical_command_available = false;
+    result.canonical_fresh_authority_ready = false;
+    result.selected = CanonicalNormalSelection{};
+    evaluate_follow_retained_shadow(problem, now_sec, fresh_plan, result);
+    if (!result.selected.complete()) {
+      result.status = "transition-current-world-reject";
+      return result;
+    }
+
+    result.canonical_store_reason =
+      follow_canonical_lifecycle_->plan_store.replace(*fresh_plan);
+    result.canonical_plan_stored =
+      result.canonical_store_reason ==
+      canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
+    if (!result.canonical_plan_stored) {
+      result.selected = CanonicalNormalSelection{};
+      result.retained_command_available = false;
+      result.status = "transition-store-reject";
+      result.retained_detail = "transition plan store rejected";
+      return result;
+    }
+    result.status = "transition-current-world-ready";
+    result.detail =
+      "same canonical Follow producer admitted with current-world proof";
     return result;
   }
 
@@ -28782,6 +28840,7 @@ struct MPC
     last_problem_context_ = selected.problem;
     last_solution_contract_ = selected.solution;
     last_solution_is_retained_ = command.retained_solution;
+    last_published_canonical_intent_ = intent;
     failure_fallback_speed_.reset();
     infeasibility_counter = 0;
     overtake_infeasibility_counter_ = 0;
@@ -28939,10 +28998,30 @@ struct MPC
         invalidate_overtake_canonical_async_context();
       }
       if (control_intent == mpcc_contract::ControlIntent::Follow) {
-        const auto follow_result = evaluate_follow_async_shadow(problem, now_sec);
+        auto follow_result = evaluate_follow_async_shadow(problem, now_sec);
+        auto action = race_mpcc::resolve_follow_production_action(
+          control_intent, follow_result.selected.complete(),
+          last_published_canonical_intent_);
+        if (
+          action ==
+          race_mpcc::FollowProductionAction::SolveTransitionAdmission)
+        {
+          const auto previous_intent = last_published_canonical_intent_;
+          follow_result = evaluate_follow_transition_admission(problem, now_sec);
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Follow canonical atomic admission: decision=%lu, previous=%s, "
+            "selected=%d, status=%s, detail=%s, retained=%s",
+            static_cast<unsigned long>(decision_id),
+            mpcc_contract::to_string(previous_intent),
+            follow_result.selected.complete() ? 1 : 0,
+            follow_result.status.c_str(), follow_result.detail.c_str(),
+            follow_result.retained_detail.c_str());
+          action = race_mpcc::resolve_follow_production_action(
+            control_intent, follow_result.selected.complete(),
+            last_published_canonical_intent_);
+        }
         record_follow_shadow_telemetry(follow_result, now_sec);
-        const auto action = race_mpcc::resolve_follow_production_action(
-          control_intent, follow_result.selected.complete());
         MpcControlCycleResult output;
         if (action == race_mpcc::FollowProductionAction::PublishCanonical) {
           output = canonical_normal_control(
@@ -30124,6 +30203,8 @@ struct MPC
   std::string last_control_resolution_reason_{"not-evaluated"};
   std::optional<mpcc_contract::MpccProblemContext> last_problem_context_;
   std::optional<mpcc_contract::CertifiedMpccSolution> last_solution_contract_;
+  mpcc_contract::ControlIntent last_published_canonical_intent_{
+    mpcc_contract::ControlIntent::Unknown};
   std::uint64_t solution_contract_sequence_{0U};
   bool last_solution_is_retained_{false};
   bool stage_corridor_mpc_constraints_was_active_{false};

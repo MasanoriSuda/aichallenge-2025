@@ -567,14 +567,20 @@ resolve_overtake_canonical_fresh_shadow_eligibility(
 
 FollowProductionAction resolve_follow_production_action(
   const mpcc_execution_contract::ControlIntent intent,
-  const bool complete_canonical_selection) noexcept
+  const bool complete_canonical_selection,
+  const mpcc_execution_contract::ControlIntent last_published_canonical_intent)
+noexcept
 {
   if (intent != mpcc_execution_contract::ControlIntent::Follow) {
     return FollowProductionAction::NotOwned;
   }
-  return complete_canonical_selection ?
-    FollowProductionAction::PublishCanonical :
-    FollowProductionAction::EmergencyStop;
+  if (complete_canonical_selection) {
+    return FollowProductionAction::PublishCanonical;
+  }
+  return last_published_canonical_intent !=
+         mpcc_execution_contract::ControlIntent::Follow ?
+         FollowProductionAction::SolveTransitionAdmission :
+         FollowProductionAction::EmergencyStop;
 }
 
 StopAuthorityAction resolve_stop_authority_action(

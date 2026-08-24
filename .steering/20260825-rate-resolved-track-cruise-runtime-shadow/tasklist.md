@@ -8,8 +8,8 @@
 - [x] Add deterministic worker/mailbox/solver tests.
 - [x] Run focused tests, full package tests and package build.
 - [x] Audit that no six-state result reaches production selection/publication.
-- [ ] Commit the static Slice.
-- [ ] Run `make dev2`, analyze evidence and update validation.
+- [x] Commit the static Slice (`9697d35`).
+- [x] Run `make dev2`, analyze evidence and update validation.
 
 ## Definition of Done
 

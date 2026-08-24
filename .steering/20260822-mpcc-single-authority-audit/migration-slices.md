@@ -665,6 +665,16 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   conflating them with reference ownership. Unsupported nonzero curvature-linear terms fail closed.
   All 1,820 package tests and the 25-package build pass; production remains unlinked. Runtime shadow
   construction may now begin without silently weakening the progress objective.
+- `.steering/20260825-rate-resolved-track-cruise-runtime-shadow` connects the six-state formulation
+  to the exact Track/Cruise semantic snapshot through a latest-only worker and observation-only
+  mailbox. All 1,827 package tests and the 25-package build pass. In committed-source run
+  `output/20260825-004100`, 4,426 snapshots were submitted and 4,354 consumed with zero build,
+  assembly, solve, non-finite, exception or mailbox-provenance failure; maximum solve time was
+  11.622 ms and every aggregate record remained `authority=shadow, selected=0`. However only
+  3,859/4,354 results (88.6311%) supplied a certified 25 ms actuation sample; 495 failed the current
+  combined sample validator. The runtime connection is accepted as diagnostic infrastructure, but
+  schema/authority migration remains blocked until the exact sample-rejection invariant is typed
+  and repaired without relaxing steering or timing bounds.
 
 ## Slice 6: Legacy and migration path removal
 

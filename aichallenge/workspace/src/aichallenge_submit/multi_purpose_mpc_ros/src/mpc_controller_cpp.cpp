@@ -3342,6 +3342,15 @@ struct V2XGapPlanner
     bool current{false};
   };
 
+  struct DynamicWorldObservation
+  {
+    std::uint64_t observation_generation{};
+    double receipt_sec{std::numeric_limits<double>::quiet_NaN()};
+    double source_sec{std::numeric_limits<double>::quiet_NaN()};
+    std::vector<TrackedVehicle> vehicles;
+    bool current{false};
+  };
+
   explicit V2XGapPlanner(
     const V2XGapPlannerConfig & cfg_in, const bool track_recovery_completeness = false)
   : cfg(cfg_in), track_recovery_completeness_(track_recovery_completeness) {}
@@ -3651,6 +3660,79 @@ struct V2XGapPlanner
       source_age_sec <= cfg.timeout_sec &&
       !last_message_has_empty_id_ && !last_message_has_duplicate_id_ &&
       !last_message_has_invalid_sample_;
+    return output;
+  }
+
+  DynamicWorldObservation dynamic_world_observation(const double now_sec)
+  {
+    DynamicWorldObservation output;
+    std::lock_guard<std::mutex> lock(mutex_);
+    output.observation_generation = observation_generation_;
+    output.receipt_sec = last_message_receipt_sec_.value_or(
+      std::numeric_limits<double>::quiet_NaN());
+    output.source_sec = last_message_source_stamp_sec_.value_or(
+      std::numeric_limits<double>::quiet_NaN());
+    if (
+      observation_generation_ == 0U ||
+      !last_message_receipt_sec_.has_value() ||
+      !last_message_source_stamp_sec_.has_value() ||
+      last_message_has_empty_id_ || last_message_has_duplicate_id_ ||
+      last_message_has_invalid_sample_ ||
+      last_message_vehicle_ids_.size() != last_message_vehicle_count_)
+    {
+      return output;
+    }
+    const double receipt_age_sec = now_sec - output.receipt_sec;
+    const double source_age_sec = now_sec - output.source_sec;
+    if (
+      !overtake_core::is_v2x_receipt_age_fresh(
+        receipt_age_sec, cfg.timeout_sec, kV2XReceiptFutureToleranceSec) ||
+      !std::isfinite(source_age_sec) ||
+      source_age_sec < -kV2XSourceFutureToleranceSec ||
+      source_age_sec > cfg.timeout_sec)
+    {
+      return output;
+    }
+    output.vehicles.reserve(last_message_vehicle_ids_.size());
+    for (const auto & id : last_message_vehicle_ids_) {
+      const auto found = vehicles_.find(id);
+      if (found == vehicles_.end()) {
+        output.vehicles.clear();
+        return output;
+      }
+      auto vehicle = found->second;
+      if (
+        !vehicle.has_sample ||
+        vehicle.observation_generation != observation_generation_ ||
+        vehicle.receipt_sec != output.receipt_sec || vehicle.position_jump ||
+        vehicle.invalid_velocity || !vehicle.velocity_observation_valid ||
+        !vehicle.motion_estimate_valid || vehicle.id.empty() ||
+        !std::isfinite(vehicle.x) || !std::isfinite(vehicle.y) ||
+        !std::isfinite(vehicle.vx) || !std::isfinite(vehicle.vy) ||
+        !std::isfinite(vehicle.stamp_sec) ||
+        !std::isfinite(vehicle.covariance_x) ||
+        !std::isfinite(vehicle.covariance_y) ||
+        vehicle.covariance_x < 0.0 || vehicle.covariance_y < 0.0)
+      {
+        output.vehicles.clear();
+        return output;
+      }
+      const double sample_age_sec = now_sec - vehicle.stamp_sec;
+      if (
+        !std::isfinite(sample_age_sec) ||
+        sample_age_sec < -kV2XSourceFutureToleranceSec ||
+        sample_age_sec > cfg.timeout_sec)
+      {
+        output.vehicles.clear();
+        return output;
+      }
+      const double nonnegative_age_sec = std::max(0.0, sample_age_sec);
+      vehicle.x += vehicle.vx * nonnegative_age_sec;
+      vehicle.y += vehicle.vy * nonnegative_age_sec;
+      vehicle.stamp_sec = now_sec;
+      output.vehicles.push_back(std::move(vehicle));
+    }
+    output.current = true;
     return output;
   }
 
@@ -6339,6 +6421,11 @@ struct RateResolvedRetainedShadowEvaluation
   double steering_difference_rad{};
   double maximum_steering_step_rad{};
   double velocity_difference_mps{};
+  std::size_t obstacle_count{};
+  std::size_t dynamic_checked_pose_count{};
+  double minimum_dynamic_clearance_m{
+    std::numeric_limits<double>::infinity()};
+  std::string blocking_obstacle_id;
   double elapsed_ms{};
 };
 
@@ -27906,7 +27993,7 @@ struct MPC
         rate_resolved_retained::Reason::InvalidCurrentState;
       return finish();
     }
-    const auto empty_world = gap_planner->empty_world_observation(now_sec);
+    const auto dynamic_world = gap_planner->dynamic_world_observation(now_sec);
     rate_resolved_retained::Request request;
     request.plan = plan;
     request.decision_id = active_control_decision_id_;
@@ -27921,10 +28008,24 @@ struct MPC
     request.control_pose = predicted_execution_pose_.value();
     request.current_wall_grid = overtake_static_wall_grid_snapshot_owner_;
     request.current_footprint = overtake_static_wall_footprint_;
-    request.obstacles.generation = empty_world.observation_generation;
-    request.obstacles.observed_sec = empty_world.receipt_sec;
-    request.obstacles.active_vehicle_count = empty_world.active_vehicle_count;
-    request.obstacles.current = empty_world.current;
+    request.obstacles.generation = dynamic_world.observation_generation;
+    request.obstacles.observed_sec = dynamic_world.current ?
+      now_sec : dynamic_world.receipt_sec;
+    request.obstacles.current = dynamic_world.current;
+    request.obstacles.obstacles.reserve(dynamic_world.vehicles.size());
+    for (const auto & vehicle : dynamic_world.vehicles) {
+      rate_resolved_retained::DynamicObstacle obstacle;
+      obstacle.id = vehicle.id;
+      obstacle.circle.x_m = vehicle.x;
+      obstacle.circle.y_m = vehicle.y;
+      obstacle.circle.velocity_x_mps = vehicle.vx;
+      obstacle.circle.velocity_y_mps = vehicle.vy;
+      obstacle.circle.radius_m = std::max(
+        0.0, cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin +
+        std::max(vehicle.covariance_x, vehicle.covariance_y));
+      request.obstacles.obstacles.push_back(std::move(obstacle));
+    }
+    evaluation.obstacle_count = request.obstacles.obstacles.size();
     request.current_speed_mps = current_speed_mps_;
     request.current_steering_rad = previous_steering;
     request.minimum_acceleration_mps2 = cfg.a_min;
@@ -27934,6 +28035,10 @@ struct MPC
     evaluation.reason = result.reason;
     evaluation.cursor_reason = result.cursor_reason;
     evaluation.actuation_reason = result.actuation_reason;
+    evaluation.dynamic_checked_pose_count = result.dynamic_checked_pose_count;
+    evaluation.minimum_dynamic_clearance_m =
+      result.minimum_dynamic_clearance_m;
+    evaluation.blocking_obstacle_id = result.blocking_obstacle_id;
     if (result.proof.has_value()) {
       evaluation.sequence =
         result.proof->plan->execution_artifact->identity.sequence;
@@ -27944,6 +28049,10 @@ struct MPC
         result.proof->maximum_steering_step_rad;
       evaluation.velocity_difference_mps =
         result.proof->velocity_difference_mps;
+      evaluation.dynamic_checked_pose_count =
+        result.proof->dynamic_checked_pose_count;
+      evaluation.minimum_dynamic_clearance_m =
+        result.proof->minimum_dynamic_clearance_m;
     }
     return finish();
   }
@@ -28365,11 +28474,13 @@ struct MPC
       rclcpp::get_logger("mpc_controller"),
       "Rate-resolved retained current-world shadow: attempted=%lu/"
       "accepted=%lu, reject=missing:%lu/plan:%lu/cursor:%lu/intent:%lu/"
-      "observation:%lu/obstacle:%lu/static_world:%lu/current_state:%lu/"
+      "observation:%lu/observation_invalid:%lu/dynamic_invalid:%lu/"
+      "dynamic_blocked:%lu/static_world:%lu/current_state:%lu/"
       "progress:%lu/course:%lu/actuation:%lu/steering:%lu/velocity:%lu/"
       "control_path:%lu/delay:%lu/connector:%lu, time=%.3f/%.3fms(avg/max), "
       "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
-      "steering_delta:%.6f/limit:%.6f/velocity_delta:%.6f, "
+      "steering_delta:%.6f/limit:%.6f/velocity_delta:%.6f/"
+      "peers:%lu/dynamic_samples:%lu/min_dynamic_clearance:%.3f/blocked_by:%s, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.retained_attempt_count),
       static_cast<unsigned long>(retained_count(
@@ -28385,7 +28496,11 @@ struct MPC
       static_cast<unsigned long>(retained_count(
         rate_resolved_retained::Reason::DynamicObservationUnavailable)),
       static_cast<unsigned long>(retained_count(
-        rate_resolved_retained::Reason::DynamicObstaclePresent)),
+        rate_resolved_retained::Reason::DynamicObservationInvalid)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::DynamicPathInvalid)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::DynamicPathBlocked)),
       static_cast<unsigned long>(retained_count(
         rate_resolved_retained::Reason::StaticWorldMismatch)),
       static_cast<unsigned long>(retained_count(
@@ -28417,7 +28532,13 @@ struct MPC
         window.last_retained.actuation_reason),
       window.last_retained.steering_difference_rad,
       window.last_retained.maximum_steering_step_rad,
-      window.last_retained.velocity_difference_mps);
+      window.last_retained.velocity_difference_mps,
+      static_cast<unsigned long>(window.last_retained.obstacle_count),
+      static_cast<unsigned long>(
+        window.last_retained.dynamic_checked_pose_count),
+      window.last_retained.minimum_dynamic_clearance_m,
+      window.last_retained.blocking_obstacle_id.empty() ?
+      "none" : window.last_retained.blocking_obstacle_id.c_str());
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(

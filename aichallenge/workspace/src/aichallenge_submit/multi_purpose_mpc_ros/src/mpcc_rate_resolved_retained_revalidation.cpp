@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <unordered_set>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
 {
@@ -145,6 +146,168 @@ std::optional<recovery::Pose2D> reconstruct_pose(
   return recovery::Pose2D{world->x_m, world->y_m, world->yaw_rad};
 }
 
+double wrap_to_pi(const double angle) noexcept
+{
+  return std::atan2(std::sin(angle), std::cos(angle));
+}
+
+struct DynamicPathResult
+{
+  bool valid{true};
+  bool clear{true};
+  std::string blocking_obstacle_id;
+  std::size_t checked_pose_count{};
+  double minimum_clearance_m{std::numeric_limits<double>::infinity()};
+};
+
+bool dynamic_observation_valid(
+  const DynamicWorldObservation & observation) noexcept
+{
+  if (
+    observation.generation == 0U || !std::isfinite(observation.observed_sec) ||
+    observation.observed_sec < 0.0)
+  {
+    return false;
+  }
+  std::unordered_set<std::string> ids;
+  for (const auto & obstacle : observation.obstacles) {
+    if (
+      obstacle.id.empty() || !ids.emplace(obstacle.id).second ||
+      !std::isfinite(obstacle.circle.x_m) ||
+      !std::isfinite(obstacle.circle.y_m) ||
+      !std::isfinite(obstacle.circle.velocity_x_mps) ||
+      !std::isfinite(obstacle.circle.velocity_y_mps) ||
+      !std::isfinite(obstacle.circle.radius_m) ||
+      obstacle.circle.radius_m < 0.0)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+void evaluate_dynamic_pose(
+  const recovery::FootprintExtents & footprint,
+  const recovery::Pose2D & pose, const double elapsed_time_sec,
+  const DynamicWorldObservation & observation,
+  DynamicPathResult & result)
+{
+  if (!result.valid || !result.clear) {
+    return;
+  }
+  for (const auto & obstacle : observation.obstacles) {
+    const auto clearance = recovery::circle_obstacle_clearance_at_time(
+      footprint, pose, obstacle.circle, elapsed_time_sec);
+    if (!clearance.has_value()) {
+      result.valid = false;
+      result.clear = false;
+      result.blocking_obstacle_id = obstacle.id;
+      return;
+    }
+    ++result.checked_pose_count;
+    result.minimum_clearance_m = std::min(
+      result.minimum_clearance_m, clearance.value());
+    if (clearance.value() < -kIdentityTolerance) {
+      result.clear = false;
+      result.blocking_obstacle_id = obstacle.id;
+      return;
+    }
+  }
+}
+
+void evaluate_dynamic_segment(
+  const recovery::FootprintExtents & footprint,
+  const recovery::Pose2D & start, const recovery::Pose2D & end,
+  const double start_time_sec, const double end_time_sec,
+  const double swept_step_m, const DynamicWorldObservation & observation,
+  DynamicPathResult & result)
+{
+  // A preceding segment owns the first failure.  Do not reinterpret an
+  // already proven physical overlap as malformed geometry when a caller
+  // evaluates the next portion of the joined path.
+  if (!result.valid || !result.clear) {
+    return;
+  }
+  if (
+    !finite_pose(start) || !finite_pose(end) || !std::isfinite(start_time_sec) ||
+    !std::isfinite(end_time_sec) || end_time_sec < start_time_sec ||
+    !std::isfinite(swept_step_m) || swept_step_m <= 0.0)
+  {
+    result.valid = false;
+    result.clear = false;
+    return;
+  }
+  const double yaw_delta = wrap_to_pi(end.yaw_rad - start.yaw_rad);
+  const double corner_radius_m = std::hypot(
+    std::max(footprint.front_extent_m, footprint.rear_extent_m) +
+    footprint.margin_m,
+    std::max(footprint.left_extent_m, footprint.right_extent_m) +
+    footprint.margin_m);
+  double maximum_obstacle_motion_m = 0.0;
+  const double duration_sec = end_time_sec - start_time_sec;
+  for (const auto & obstacle : observation.obstacles) {
+    maximum_obstacle_motion_m = std::max(
+      maximum_obstacle_motion_m,
+      std::hypot(
+        obstacle.circle.velocity_x_mps,
+        obstacle.circle.velocity_y_mps) * duration_sec);
+  }
+  const double relative_motion_bound_m =
+    std::hypot(end.x_m - start.x_m, end.y_m - start.y_m) +
+    corner_radius_m * std::abs(yaw_delta) + maximum_obstacle_motion_m;
+  const double raw_subdivisions = std::ceil(
+    relative_motion_bound_m / swept_step_m);
+  if (!std::isfinite(raw_subdivisions) || raw_subdivisions > 1000000.0) {
+    result.valid = false;
+    result.clear = false;
+    return;
+  }
+  const std::size_t subdivisions = std::max<std::size_t>(
+    1U, static_cast<std::size_t>(raw_subdivisions));
+  for (std::size_t index = 0U; index <= subdivisions; ++index) {
+    const double fraction =
+      static_cast<double>(index) / static_cast<double>(subdivisions);
+    const recovery::Pose2D pose{
+      start.x_m + fraction * (end.x_m - start.x_m),
+      start.y_m + fraction * (end.y_m - start.y_m),
+      start.yaw_rad + fraction * yaw_delta};
+    const double elapsed_time_sec =
+      start_time_sec + fraction * duration_sec;
+    evaluate_dynamic_pose(
+      footprint, pose, elapsed_time_sec, observation, result);
+    if (!result.valid || !result.clear) {
+      return;
+    }
+  }
+}
+
+void evaluate_zero_time_dynamic_path(
+  const recovery::FootprintExtents & footprint,
+  const std::vector<recovery::Pose2D> & path, const double swept_step_m,
+  const DynamicWorldObservation & observation, DynamicPathResult & result)
+{
+  if (!result.valid || !result.clear) {
+    return;
+  }
+  if (path.empty()) {
+    result.valid = false;
+    result.clear = false;
+    return;
+  }
+  if (path.size() == 1U) {
+    evaluate_dynamic_pose(footprint, path.front(), 0.0, observation, result);
+    return;
+  }
+  for (std::size_t index = 1U; index < path.size(); ++index) {
+    evaluate_dynamic_segment(
+      footprint, path[index - 1U], path[index], 0.0, 0.0,
+      swept_step_m, observation, result);
+    if (!result.valid || !result.clear) {
+      return;
+    }
+  }
+}
+
 }  // namespace
 
 const char * to_string(const Reason reason) noexcept
@@ -157,7 +320,10 @@ const char * to_string(const Reason reason) noexcept
     case Reason::IntentMismatch: return "intent-mismatch";
     case Reason::DynamicObservationUnavailable:
       return "dynamic-observation-unavailable";
-    case Reason::DynamicObstaclePresent: return "dynamic-obstacle-present";
+    case Reason::DynamicObservationInvalid:
+      return "dynamic-observation-invalid";
+    case Reason::DynamicPathInvalid: return "dynamic-path-invalid";
+    case Reason::DynamicPathBlocked: return "dynamic-path-blocked";
     case Reason::StaticWorldMismatch: return "static-world-mismatch";
     case Reason::InvalidCurrentState: return "invalid-current-state";
     case Reason::ProgressLiftRejected: return "progress-lift-rejected";
@@ -197,15 +363,15 @@ Result evaluate(const Request & request)
     result.reason = Reason::IntentMismatch;
     return result;
   }
-  if (!request.obstacles.current || request.obstacles.generation == 0U ||
-      !std::isfinite(request.obstacles.observed_sec) ||
-      request.obstacles.observed_sec < 0.0)
+  if (!request.obstacles.current)
   {
     result.reason = Reason::DynamicObservationUnavailable;
     return result;
   }
-  if (request.obstacles.active_vehicle_count != 0U) {
-    result.reason = Reason::DynamicObstaclePresent;
+  if (!dynamic_observation_valid(request.obstacles) ||
+      request.obstacles.observed_sec > request.now_sec + kIdentityTolerance)
+  {
+    result.reason = Reason::DynamicObservationInvalid;
     return result;
   }
   if (request.current_wall_grid == nullptr ||
@@ -306,6 +472,51 @@ Result evaluate(const Request & request)
     return result;
   }
 
+  DynamicPathResult dynamic;
+  evaluate_zero_time_dynamic_path(
+    source.footprint, request.measured_to_control_path,
+    source.swept_step_m, request.obstacles, dynamic);
+  evaluate_zero_time_dynamic_path(
+    source.footprint, connector, source.swept_step_m,
+    request.obstacles, dynamic);
+  auto previous_dynamic_pose = expected_pose.value();
+  double dynamic_time_sec = 0.0;
+  for (
+    std::size_t stage_index = cursor.control_stage_index;
+    stage_index < execution.control_stages.size(); ++stage_index)
+  {
+    const auto endpoint_pose = reconstruct_pose(
+      source, execution.predicted_states[stage_index + 1U]);
+    if (!endpoint_pose.has_value()) {
+      result.reason = Reason::CourseFrameUnavailable;
+      return result;
+    }
+    const double segment_duration_sec = stage_index == cursor.control_stage_index ?
+      execution.control_stages[stage_index].duration_sec -
+      cursor.stage_elapsed_sec :
+      execution.control_stages[stage_index].duration_sec;
+    evaluate_dynamic_segment(
+      source.footprint, previous_dynamic_pose, endpoint_pose.value(),
+      dynamic_time_sec, dynamic_time_sec + segment_duration_sec,
+      source.swept_step_m, request.obstacles, dynamic);
+    dynamic_time_sec += segment_duration_sec;
+    previous_dynamic_pose = endpoint_pose.value();
+    if (!dynamic.valid || !dynamic.clear) {
+      break;
+    }
+  }
+  result.blocking_obstacle_id = dynamic.blocking_obstacle_id;
+  result.dynamic_checked_pose_count = dynamic.checked_pose_count;
+  result.minimum_dynamic_clearance_m = dynamic.minimum_clearance_m;
+  if (!dynamic.valid) {
+    result.reason = Reason::DynamicPathInvalid;
+    return result;
+  }
+  if (!dynamic.clear) {
+    result.reason = Reason::DynamicPathBlocked;
+    return result;
+  }
+
   Proof proof;
   proof.plan = request.plan;
   proof.decision_id = request.decision_id;
@@ -326,6 +537,8 @@ Result evaluate(const Request & request)
   proof.reachable_velocity_upper_mps = velocity_upper_mps;
   proof.delay_checked_pose_count = delay.checked_pose_count;
   proof.connector_checked_pose_count = connector_result.checked_pose_count;
+  proof.dynamic_checked_pose_count = dynamic.checked_pose_count;
+  proof.minimum_dynamic_clearance_m = dynamic.minimum_clearance_m;
   result.reason = Reason::Accepted;
   result.proof = std::move(proof);
   return result;

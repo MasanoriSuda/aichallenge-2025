@@ -341,6 +341,13 @@ struct CircleObstacle
   double radius_m{};
 };
 
+/// Signed clearance between one linearly predicted circle and the oriented
+/// ego footprint at an exact elapsed time.  Negative means overlap.  Invalid
+/// input is returned as nullopt so a caller cannot confuse it with contact.
+std::optional<double> circle_obstacle_clearance_at_time(
+  const FootprintExtents & footprint, const Pose2D & pose,
+  const CircleObstacle & obstacle, double elapsed_time_sec) noexcept;
+
 enum class DynamicClearanceRejectReason
 {
   None,

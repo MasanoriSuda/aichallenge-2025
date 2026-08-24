@@ -4,8 +4,10 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
@@ -17,11 +19,17 @@ namespace contract = mpcc_execution_contract;
 namespace physical = mpcc_rate_resolved_physical_wall;
 namespace recovery = recovery_footprint;
 
-struct EmptyDynamicObstacleObservation
+struct DynamicObstacle
+{
+  std::string id;
+  recovery::CircleObstacle circle;
+};
+
+struct DynamicWorldObservation
 {
   std::uint64_t generation{};
   double observed_sec{};
-  std::size_t active_vehicle_count{};
+  std::vector<DynamicObstacle> obstacles;
   bool current{false};
 };
 
@@ -39,7 +47,7 @@ struct Request
   recovery::Pose2D control_pose;
   std::shared_ptr<const recovery::OccupancyGrid> current_wall_grid;
   recovery::FootprintExtents current_footprint;
-  EmptyDynamicObstacleObservation obstacles;
+  DynamicWorldObservation obstacles;
   double current_speed_mps{};
   double current_steering_rad{};
   double minimum_acceleration_mps2{};
@@ -55,7 +63,9 @@ enum class Reason
   CursorUnavailable,
   IntentMismatch,
   DynamicObservationUnavailable,
-  DynamicObstaclePresent,
+  DynamicObservationInvalid,
+  DynamicPathInvalid,
+  DynamicPathBlocked,
   StaticWorldMismatch,
   InvalidCurrentState,
   ProgressLiftRejected,
@@ -91,6 +101,9 @@ struct Proof
   double reachable_velocity_upper_mps{};
   std::size_t delay_checked_pose_count{};
   std::size_t connector_checked_pose_count{};
+  std::size_t dynamic_checked_pose_count{};
+  double minimum_dynamic_clearance_m{
+    std::numeric_limits<double>::infinity()};
 };
 
 struct Result
@@ -99,6 +112,10 @@ struct Result
   artifact::CursorReason cursor_reason{artifact::CursorReason::InvalidArtifact};
   artifact::ActuationReason actuation_reason{
     artifact::ActuationReason::InvalidArtifact};
+  std::string blocking_obstacle_id;
+  std::size_t dynamic_checked_pose_count{};
+  double minimum_dynamic_clearance_m{
+    std::numeric_limits<double>::infinity()};
   std::optional<Proof> proof;
 };
 

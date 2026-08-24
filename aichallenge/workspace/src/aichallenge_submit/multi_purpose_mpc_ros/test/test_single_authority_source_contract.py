@@ -976,7 +976,8 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     evaluate = SOURCE[evaluate_start:record_start]
     assert "rate_resolved_track_cruise_certified_plan_store_->snapshot()" in evaluate
     assert "build_canonical_current_control_path()" in evaluate
-    assert "gap_planner->empty_world_observation(now_sec)" in evaluate
+    assert "gap_planner->dynamic_world_observation(now_sec)" in evaluate
+    assert "dynamic_world.vehicles" in evaluate
     assert "rate_resolved_retained::evaluate(request)" in evaluate
     for forbidden in (
         "publish_control_command(",
@@ -1000,6 +1001,7 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     assert "std::optional<Proof> proof" in retained_header
     assert "artifact::extract_actuation(execution, cursor)" in retained_source
     assert "recovery::evaluate_clear_footprint_path(" in retained_source
+    assert "recovery::circle_obstacle_clearance_at_time(" in retained_source
     assert "request.current_wall_grid.get() != source.wall_grid.get()" in retained_source
     for text in (retained_header, retained_source):
         for forbidden in (
@@ -1009,6 +1011,17 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
             "AckermannControlCommand",
         ):
             assert forbidden not in text
+
+    snapshot_start = SOURCE.index(
+        "DynamicWorldObservation dynamic_world_observation("
+    )
+    snapshot_end = SOURCE.index(
+        "bool has_complete_message(", snapshot_start
+    )
+    snapshot = SOURCE[snapshot_start:snapshot_end]
+    assert "std::lock_guard<std::mutex> lock(mutex_)" in snapshot
+    assert "vehicle.observation_generation != observation_generation_" in snapshot
+    assert "last_message_vehicle_ids_.size() != last_message_vehicle_count_" in snapshot
 
 
 def test_control_callback_overrun_trace_is_observation_only() -> None:

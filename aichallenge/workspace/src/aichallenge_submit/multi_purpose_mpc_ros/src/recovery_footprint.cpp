@@ -579,6 +579,24 @@ const char * to_string(const DynamicClearanceRejectReason reason) noexcept
   return "unknown";
 }
 
+std::optional<double> circle_obstacle_clearance_at_time(
+  const FootprintExtents & footprint, const Pose2D & pose,
+  const CircleObstacle & obstacle, const double elapsed_time_sec) noexcept
+{
+  if (
+    !footprint.valid() || !valid_pose(pose) ||
+    !valid_circle_obstacle(obstacle) || !finite(elapsed_time_sec) ||
+    elapsed_time_sec < 0.0)
+  {
+    return std::nullopt;
+  }
+  return circle_to_footprint_clearance(
+    footprint, pose,
+    obstacle.x_m + obstacle.velocity_x_mps * elapsed_time_sec,
+    obstacle.y_m + obstacle.velocity_y_mps * elapsed_time_sec,
+    obstacle.radius_m);
+}
+
 DynamicClearanceResult evaluate_circle_obstacle_clearance(
   const FootprintExtents & footprint, const std::vector<RolloutPose> & rollout,
   const CircleObstacle & obstacle, const double prediction_horizon_sec)

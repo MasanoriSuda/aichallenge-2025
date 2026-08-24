@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <memory>
 
 namespace
@@ -133,7 +134,9 @@ retained::Request accepted_request(
   request.measured_to_control_path = {request.control_pose};
   request.current_wall_grid = plan->physical_snapshot->wall_grid;
   request.current_footprint = plan->physical_snapshot->footprint;
-  request.obstacles = {7U, 1.05, 0U, true};
+  request.obstacles.generation = 7U;
+  request.obstacles.observed_sec = 1.05;
+  request.obstacles.current = true;
   request.current_speed_mps = 2.05;
   request.current_steering_rad = 0.105;
   request.minimum_acceleration_mps2 = -3.0;
@@ -154,14 +157,77 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
   EXPECT_EQ(result.proof->obstacle_generation, 7U);
 }
 
-TEST(MpccRateResolvedRetainedRevalidation, RejectsDynamicObstacle)
+TEST(MpccRateResolvedRetainedRevalidation, AcceptsClearDynamicObstacle)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
-  request.obstacles.active_vehicle_count = 1U;
+  request.obstacles.obstacles.push_back(
+    {"peer", {50.0, 3.0, 0.0, 0.0, 0.2}});
+  const auto result = retained::evaluate(request);
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_GT(result.proof->dynamic_checked_pose_count, 0U);
+  EXPECT_GT(result.proof->minimum_dynamic_clearance_m, 0.0);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, RejectsIntersectingDynamicObstacle)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.obstacles.obstacles.push_back(
+    {"peer", {50.10, 0.10, 0.0, 0.0, 0.2}});
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::DynamicPathBlocked);
+  EXPECT_EQ(result.blocking_obstacle_id, "peer");
+  EXPECT_LT(result.minimum_dynamic_clearance_m, 0.0);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, RejectsFutureCrossingObstacle)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.obstacles.obstacles.push_back(
+    // The retained suffix has only 0.15 s left at now=1.05.  Start close
+    // enough that the moving circle intersects it inside that exact horizon.
+    {"crossing", {50.20, 0.30, 0.0, -1.0, 0.15}});
   EXPECT_EQ(
     retained::evaluate(request).reason,
-    retained::Reason::DynamicObstaclePresent);
+    retained::Reason::DynamicPathBlocked);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, AcceptsMultipleClearPeers)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.obstacles.obstacles = {
+    {"behind", {45.0, 0.0, -1.0, 0.0, 0.2}},
+    {"outside", {51.0, 3.0, 0.0, 0.0, 0.2}},
+  };
+  EXPECT_EQ(retained::evaluate(request).reason, retained::Reason::Accepted);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, RejectsDuplicateObstacleIdentity)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.obstacles.obstacles = {
+    {"peer", {45.0, 3.0, 0.0, 0.0, 0.2}},
+    {"peer", {46.0, 3.0, 0.0, 0.0, 0.2}},
+  };
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::DynamicObservationInvalid);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, RejectsInvalidObstacleMotion)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.obstacles.obstacles.push_back(
+    {"peer", {45.0, 3.0, std::numeric_limits<double>::quiet_NaN(), 0.0, 0.2}});
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::DynamicObservationInvalid);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsUnobservedDynamicWorld)

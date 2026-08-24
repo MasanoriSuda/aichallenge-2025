@@ -1931,6 +1931,32 @@ retained consumerは元のsuffixを制御callbackで再走査しない。元suff
 dynamic worldのexplicit-empty契約、または対象車両を含むcurrent obstacle tube証明を別Sliceで定義し、
 動的Acceptanceを取得する必要がある。
 
+#### Steering-rate 6-state retained dynamic-world shadow（2026-08-25、移行診断）
+
+後続Sliceでは、`active_vehicle_count == 0`というempty-world proxyをretained admissionから除いた。
+`V2XGapPlanner`は最新V2X arrayのmessage identity、timestamp、vehicle ID集合、各vehicleの状態を
+1回のmutex acquisitionでsnapshot化する。tracking mapに残る別世代vehicleを混ぜず、stale message、
+position jump、invalid velocity、motion estimate未成立はfail closeとする。NoDataをempty worldとは
+推定しない。
+
+snapshot内の各peerは、既存V2X policyのvehicle radius、prediction margin、position covarianceで
+保守的なmoving circleへ膨張する。observation時刻からcurrent control時刻まで線形予測した状態を
+基準に、次を同じworld座標と時刻軸で再証明する。
+
+- measured-to-control delay pathとcurrent poseからretained expected poseへのconnector
+- exact cursorから残る全control stage（immutableなstage durationを使用）
+- 各sampleにおけるoriented ego footprintと全peer circleのsigned clearance
+
+空間sample数はego平行移動、ego cornerのyaw sweep、peer移動量の上界から決定する。現在または
+将来のoverlapは`dynamic-path-blocked`、入力や再構成不能は`dynamic-path-invalid`として分離し、
+最初に確定した物理block理由を後続segmentで上書きしない。
+
+`output/20260825-064109`の`make dev2`では、peerが存在してもclearなsuffixを両domainでacceptし、
+d1がd2へ接近した区間は`blocked_by=d2`、最小signed clearance `-0.006 m`としてrejectした。
+判定時間は通常約0.04--0.23 ms、観測最大1.337 msだった。結果は引き続き
+`authority=shadow, selected=0`である。これによりdynamic Acceptanceの証拠は得たが、production昇格は
+Track/Cruise retained authority接続と旧5-state通常owner削除を同一Sliceで行うまで禁止する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

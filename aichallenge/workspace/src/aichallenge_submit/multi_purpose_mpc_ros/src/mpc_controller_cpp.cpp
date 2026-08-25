@@ -23,6 +23,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
@@ -153,6 +154,8 @@ namespace rate_resolved_command =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate;
 namespace rate_resolved_artifact =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
+namespace rate_resolved_execution_source =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_execution_source;
 namespace rate_resolved_production =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
 namespace rate_resolved_retained =
@@ -6175,6 +6178,7 @@ struct FirstStageShadowReachabilityDiagnostic
 
 struct SolvedMpccExecutionTrajectory
 {
+  std::uint64_t source_artifact_sequence{};
   std::string target_id;
   std::uint64_t mission_generation{0U};
   OvertakeLinePhase phase{OvertakeLinePhase::Idle};
@@ -21347,26 +21351,22 @@ struct MPC
     solved_mpcc_execution_authority_was_active_ = false;
   }
 
-  void record_solved_mpcc_execution_trajectory(
-    const MpcProblem & problem, const Eigen::VectorXd & primal,
-    const double maximum_constraint_violation, const double now_sec)
+  void adopt_rate_resolved_shiftout_execution_source(const double now_sec)
   {
-    if (!problem.progress_execution_context_active) {
+    if (
+      overtake_line_state_.phase != OvertakeLinePhase::ShiftOut ||
+      rate_resolved_track_cruise_certified_plan_store_ == nullptr)
+    {
       return;
     }
-    // PersistentOsqpSolver has already checked this residual against OSQP's
-    // configured tolerance.  Do not reject the same accepted solution here
-    // with a substantially tighter hard-coded epsilon.
-    const double extraction_tolerance =
-      std::isfinite(maximum_constraint_violation) ?
-      std::max(1e-5, maximum_constraint_violation + 1e-6) : 1e-5;
-    mpcc_progress::ExecutionTrajectoryDiagnostic extraction_diagnostic;
-    const auto trajectory = mpcc_progress::extract_execution_trajectory(
-      primal, problem.N, problem.progress_execution_path_distance_m,
-      problem.progress_execution_lateral_lower_m,
-      problem.progress_execution_lateral_upper_m, extraction_tolerance,
-      &extraction_diagnostic);
-    if (!trajectory.has_value()) {
+    const auto plan = rate_resolved_track_cruise_certified_plan_store_->snapshot();
+    const auto projection = rate_resolved_execution_source::build(
+      rate_resolved_execution_source::Request{
+        plan.get(), mpcc_contract::ControlIntent::ShiftOut,
+        overtake_line_state_.target_vehicle_id,
+        overtake_line_state_.mission_generation,
+        overtake_line_state_.pass_side_sign});
+    if (!projection.accepted()) {
       if (
         cfg.v2x_behavior.overtake_line.debug_log_enabled &&
         (!std::isfinite(solved_mpcc_execution_reject_last_log_sec_) ||
@@ -21374,32 +21374,42 @@ struct MPC
       {
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
-          "MPCC solved execution trajectory rejected during extraction: "
-          "target=%s, generation=%lu, side=%d, phase=%s, reason=%s, "
-          "stage=%d, tolerance=%.6f, wp_id=%d",
-          problem.progress_execution_target_id.c_str(),
-          static_cast<unsigned long>(problem.progress_execution_mission_generation),
-          problem.progress_execution_side_sign,
-          to_string(problem.progress_execution_phase),
-          mpcc_progress::execution_trajectory_rejection_name(
-            extraction_diagnostic.rejection),
-          extraction_diagnostic.stage, extraction_tolerance, model->wp_id);
+          "Six-state ShiftOut execution-source projection rejected: "
+          "target=%s, generation=%lu, side=%d, reason=%s, wp_id=%d",
+          overtake_line_state_.target_vehicle_id.c_str(),
+          static_cast<unsigned long>(overtake_line_state_.mission_generation),
+          overtake_line_state_.pass_side_sign,
+          rate_resolved_execution_source::to_string(projection.reason),
+          model->wp_id);
         solved_mpcc_execution_reject_last_log_sec_ = now_sec;
       }
       return;
     }
+    const auto & source = projection.source;
+    if (
+      solved_mpcc_execution_trajectory_.has_value() &&
+      solved_mpcc_execution_trajectory_->source_artifact_sequence >=
+      source.artifact_sequence)
+    {
+      return;
+    }
+    // This is a non-command projection of the exact certified six-state
+    // trajectory.  Its age remains tied to the immutable observation time;
+    // neither adoption nor current-world revalidation can renew it.  The
+    // measured-state stitch below owns the small source-to-current offset.
     solved_mpcc_execution_trajectory_ = SolvedMpccExecutionTrajectory{
-      problem.progress_execution_target_id,
-      problem.progress_execution_mission_generation,
-      problem.progress_execution_phase,
-      problem.progress_execution_side_sign,
-      now_sec,
-      problem.progress_execution_mission_traveled_m,
-      problem.progress_origin_m,
-      trajectory->minimum_lateral_bound_reserve_m,
-      trajectory->path_distance_m,
-      trajectory->lateral_m,
-      trajectory->progress_m};
+      source.artifact_sequence,
+      source.source_context.target_id,
+      source.source_context.intent_generation,
+      OvertakeLinePhase::ShiftOut,
+      source.source_context.execution_side_sign,
+      source.source_snapshot_sec,
+      overtake_mission_progress_traveled(),
+      source.course_progress_origin_m,
+      source.minimum_lateral_bound_reserve_m,
+      source.path_distance_m,
+      source.lateral_m,
+      source.progress_m};
   }
 
   std::optional<AlignedMpccExecutionTrajectory>
@@ -33975,6 +33985,12 @@ private:
     std::optional<AlignedMpccExecutionTrajectory> aligned_solved_execution;
     const bool dp_execution_authority_active =
       dp_execution_authority.valid && dp_execution_authority.authority_active;
+    // The six-state certified store is the sole normal solve owner. Project
+    // its exact accepted ShiftOut horizon into the lateral-prefix supervisor
+    // before testing whether a newer rolling execution source is available.
+    // The retired five-state primal extractor had no producer after canonical
+    // authority migration and therefore left the initial DP path to expire.
+    adopt_rate_resolved_shiftout_execution_source(now_sec);
     const bool solved_execution_source_is_new =
       solved_mpcc_execution_trajectory_.has_value() &&
       std::isfinite(solved_mpcc_execution_trajectory_->solved_sec) &&
@@ -34147,13 +34163,17 @@ private:
         RCLCPP_INFO(
           rclcpp::get_logger("mpc_controller"),
           "MPCC solved trajectory owns execution authority: target=%s, "
-          "generation=%lu, side=%d, phase=%s, age=%.3f s, advance=%.2f m, "
+          "generation=%lu, side=%d, phase=%s, artifact=%lu, age=%.3f s, "
+          "advance=%.2f m, "
           "qp_reserve=%.3f m, points=%zu, source=%s, dp_bridge=%d, "
           "prefix_promoted=%d, trust_adjusted=%d/%.3f m, stitch=%d, "
           "reachable=%d/%d, raw_ay=%.2f m/s2, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           static_cast<unsigned long>(overtake_line_state_.mission_generation),
           overtake_line_state_.pass_side_sign, to_string(overtake_line_state_.phase),
+          static_cast<unsigned long>(
+            solved_mpcc_execution_trajectory_.has_value() ?
+            solved_mpcc_execution_trajectory_->source_artifact_sequence : 0U),
           aligned_solved_execution->age_sec,
           aligned_solved_execution->advanced_distance_m,
           aligned_solved_execution->minimum_qp_bound_reserve_m,

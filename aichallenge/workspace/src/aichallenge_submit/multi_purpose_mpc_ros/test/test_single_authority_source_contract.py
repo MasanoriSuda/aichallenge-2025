@@ -1994,3 +1994,19 @@ def test_rate_resolved_retained_revalidation_uses_artifact_intent_capability() -
     ).read_text()
     assert "artifact::supports_intent(request.current_intent)" in retained
     assert "bool track_cruise(" not in retained
+
+
+def test_shiftout_rolling_source_is_projected_from_six_state_certified_store() -> None:
+    """The deleted five-state primal recorder cannot own ShiftOut refresh."""
+
+    assert "record_solved_mpcc_execution_trajectory(" not in SOURCE
+    assert "adopt_rate_resolved_shiftout_execution_source(" in SOURCE
+    assert (
+        "rate_resolved_track_cruise_certified_plan_store_->snapshot()"
+        in SOURCE
+    )
+    assert "rate_resolved_execution_source::build(" in SOURCE
+    assert (
+        "adopt_rate_resolved_shiftout_execution_source(now_sec);"
+        in SOURCE
+    )

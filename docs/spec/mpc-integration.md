@@ -2440,6 +2440,25 @@ FSMがsource generationを最新generationとして再解釈する二重判定�
 これはShiftOut Gate Aをfive-stateへ戻す理由ではなく、後続のreal-time／Mission lifecycle監査対象である。
 未観測のdirect Passは本Sliceで暗黙に昇格せず、別Sliceでexact Pass proposalの動的証拠を取得してから対応five-state Gate Aを削除する。
 
+#### Six-state ShiftOut execution-source lifecycle（2026-08-25、2025由来の暫定）
+
+Gate A昇格後の監査で、six-state `CertifiedPlan` storeからrolling ShiftOut
+execution sourceへのconsumerが存在しないことを確認した。従来の
+`record_solved_mpcc_execution_trajectory()`はlegacy `MpcProblem` primal用でありcall siteがなく、
+six-state planが正常にpublishされても入口時のDP sourceを更新できなかった。このため0.5秒のsource freshness失効後に
+DP authorityが解放され、retained proof unavailable、Emergency、後段のtarget loss／Recoveryへ伝播していた。
+
+修正後はexact six-state `CertifiedPlan`のintent、target、Mission generation、sideを照合し、同じphysical trajectoryの
+path distance／lateral／progressだけをrolling sourceへ射影する。この射影はcommand authorityではなく、元artifactの
+observation timestampを維持し、新しいartifact sequenceだけが更新できる。再採用によるage延命は行わない。
+`output/20260825-233538`ではShiftOut entry約0.13秒後にage 0.015秒、20点のsource昇格を確認し、従来の
+`no solved trajectory`を解消した。
+
+同runでは後段にsix-state solverの`failed_iterate_row=254`が連続した。`N=20`のrow 254はstage-zero
+virtual-progress-speed input boxであり、修正前の`output/20260825-231050`にも同じ失敗が存在する。したがって
+execution-source接続の回帰ではなく、別のsix-state定式化／first-stage可行性課題として扱う。source age緩和、OSQP tuning、
+five-state fallbackは本修正に追加しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

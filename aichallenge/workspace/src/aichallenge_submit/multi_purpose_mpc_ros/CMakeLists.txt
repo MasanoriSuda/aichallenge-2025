@@ -297,6 +297,18 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
   Threads::Threads
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_execution_source STATIC
+  src/mpcc_rate_resolved_execution_source.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_rate_resolved_execution_source PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_execution_source
+  ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation STATIC
   src/mpcc_rate_resolved_retained_revalidation.cpp
 )
@@ -362,6 +374,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+  ${PROJECT_NAME}_mpcc_rate_resolved_execution_source
   ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
   ${PROJECT_NAME}_mpcc_rate_resolved_command_candidate
   ${PROJECT_NAME}_mpcc_rate_resolved_production_adapter
@@ -483,6 +496,18 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_certified_plan
       ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_rate_resolved_execution_source
+    test/test_mpcc_rate_resolved_execution_source.cpp
+  )
+  if(TARGET test_mpcc_rate_resolved_execution_source)
+    target_include_directories(test_mpcc_rate_resolved_execution_source PRIVATE
+      ${EIGEN3_INCLUDE_DIRS}
+    )
+    target_link_libraries(test_mpcc_rate_resolved_execution_source
+      ${PROJECT_NAME}_mpcc_rate_resolved_execution_source
     )
   endif()
 

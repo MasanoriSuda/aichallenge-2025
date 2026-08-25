@@ -1113,6 +1113,18 @@ Finish the architecture simplification instead of leaving permanent dual control
   execution-source/target-lifecycle failures are separate follow-up debt; no
   parameter, grace period, retained proposal or normal fallback was added.
 
+- `.steering/20260825-six-state-shiftout-runtime-lifecycle-audit` traces the
+  first production ShiftOut after Gate A and finds a missing ownership edge:
+  the six-state `CertifiedPlan` store had no rolling execution-source
+  consumer. The dead legacy-primal recorder is removed and a pure exact-plan
+  projection now preserves intent, target, Mission generation, side, artifact
+  sequence and the original observation timestamp. In
+  `output/20260825-233538`, the first ShiftOut promoted a 20-point exact source
+  at age 0.015 s, and later episodes refreshed it repeatedly. The subsequent
+  stage-zero virtual-progress row-254 solver collapse also exists in the
+  pre-change run, so it is recorded as a separate formulation Slice rather
+  than hidden by source-age renewal, fallback or solver tuning.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

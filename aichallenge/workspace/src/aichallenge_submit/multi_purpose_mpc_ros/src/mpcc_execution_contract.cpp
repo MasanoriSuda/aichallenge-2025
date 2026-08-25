@@ -241,7 +241,6 @@ const char * to_string(const Formulation formulation) noexcept
     case Formulation::VelocityProgress5State: return "velocity-progress-5state";
     case Formulation::VelocitySteeringProgress6State:
       return "velocity-steering-progress-6state";
-    case Formulation::LowSpeedDirect: return "low-speed-direct";
     case Formulation::SolverDerivedBypass: return "solver-derived-bypass";
   }
   return "unknown";

@@ -32,7 +32,6 @@ enum class Formulation
   ProgressContouring3State,
   VelocityProgress5State,
   VelocitySteeringProgress6State,
-  LowSpeedDirect,
   SolverDerivedBypass,
 };
 

@@ -813,9 +813,6 @@ FinalControlSource resolve_final_control_source(
   if (!request.control_enabled) {
     return FinalControlSource::ControlDisabled;
   }
-  if (request.low_speed_wall_stop_active) {
-    return FinalControlSource::LowSpeedWallStop;
-  }
   if (request.executed_solution_wall_hold_active) {
     return FinalControlSource::ExecutedSolutionWallHold;
   }
@@ -828,9 +825,6 @@ FinalControlSource resolve_final_control_source(
   if (request.solver_fallback_active || request.forced_stop_active) {
     return FinalControlSource::SolverFallback;
   }
-  if (request.low_speed_direct_active) {
-    return FinalControlSource::LowSpeedDirect;
-  }
   return FinalControlSource::MpcSolution;
 }
 
@@ -838,8 +832,6 @@ const char * to_string(const FinalControlSource source) noexcept
 {
   switch (source) {
     case FinalControlSource::MpcSolution: return "mpc-solution";
-    case FinalControlSource::LowSpeedDirect: return "low-speed-direct";
-    case FinalControlSource::LowSpeedWallStop: return "low-speed-wall-stop";
     case FinalControlSource::SolverFallback: return "solver-fallback";
     case FinalControlSource::SolverBoundedContinuation:
       return "solver-bounded-continuation";
@@ -1063,7 +1055,6 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
     trace.control_source == FinalControlSource::SolverFallback ||
     trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::ExecutedSolutionWallHold ||
-    trace.control_source == FinalControlSource::LowSpeedWallStop ||
     trace.control_source == FinalControlSource::Failsafe ||
     !trace.execution_contract.has_value() ||
     trace.execution_contract->decision_id != trace.decision_id ||

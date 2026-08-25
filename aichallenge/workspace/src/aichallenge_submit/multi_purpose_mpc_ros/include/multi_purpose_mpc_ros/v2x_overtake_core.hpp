@@ -7857,7 +7857,6 @@ struct StoppedVehicleLineOwnershipRequest
 {
   bool low_speed_behavior_active{false};
   bool low_speed_candidate{false};
-  bool low_speed_direct_control_active{false};
   bool committed_pass_mission_active{false};
   bool overtake_behavior_active{false};
   bool validated_overtake_mission_available{false};
@@ -7915,145 +7914,6 @@ bool has_entered_low_speed_pass_corridor(
 double resolve_low_speed_pass_velocity(
   double pass_velocity_mps, double shift_velocity_mps, bool corridor_entered);
 
-enum class LowSpeedDirectControlPhase
-{
-  Shift,
-  Pass,
-  Rejoin,
-};
-
-/// Direct stopped-vehicle control always starts in Shift. Corridor membership
-/// alone does not prove that ego has settled on the pass line or that the
-/// locked vehicle footprint remains separated through the prediction horizon.
-LowSpeedDirectControlPhase resolve_low_speed_direct_control_entry_phase(
-  bool pass_corridor_entered) noexcept;
-
-struct LowSpeedDirectPassAdmissionRequest
-{
-  LowSpeedDirectControlPhase phase{LowSpeedDirectControlPhase::Shift};
-  bool pass_corridor_entered{false};
-  bool pose_settled{false};
-  bool target_seen{false};
-  bool target_position_jump{false};
-  bool current_body_footprints_separated{false};
-  bool footprint_prediction_valid{false};
-  bool predicted_body_footprint_sweep_separated{false};
-};
-
-/// Advance from Shift to Pass only after the physical pose and the locked
-/// target's current/predicted body geometry agree with the validated corridor.
-bool can_enter_low_speed_direct_pass(
-  const LowSpeedDirectPassAdmissionRequest & request) noexcept;
-
-/// A stopped-vehicle direct pass may select another fully validated side only
-/// while it is still shifting toward the pass corridor. Once Pass owns the
-/// maneuver, crossing the target to a newly selected side is forbidden until
-/// the mission has completed and a fresh mission is admitted.
-bool can_update_low_speed_direct_pass_side(
-  LowSpeedDirectControlPhase phase, int current_side_sign,
-  int candidate_side_sign) noexcept;
-
-enum class LowSpeedRetainedPassRejectReason
-{
-  None,
-  StaticPathInfeasible,
-  TargetIdentityUnavailable,
-  TargetNotSeen,
-  TargetPositionJump,
-  CurrentBodyOverlap,
-  PredictionUnavailable,
-  PredictedFootprintOverlap,
-  SideOrderingConflict,
-  InvalidGeometry,
-};
-
-const char * to_string(LowSpeedRetainedPassRejectReason reason) noexcept;
-
-struct LowSpeedRetainedPassValidationRequest
-{
-  bool static_path_feasible{false};
-  bool target_identity_available{false};
-  bool target_seen{false};
-  bool target_position_jump{false};
-  bool current_body_footprints_separated{false};
-  bool footprint_prediction_valid{false};
-  bool predicted_body_footprint_sweep_separated{false};
-  int pass_side_sign{0};
-  double target_relative_lateral_m{std::numeric_limits<double>::infinity()};
-  double predicted_target_relative_lateral_m{
-    std::numeric_limits<double>::infinity()};
-  double ordering_margin_m{0.0};
-};
-
-struct LowSpeedRetainedPassValidationResult
-{
-  bool valid{false};
-  LowSpeedRetainedPassRejectReason reason{
-    LowSpeedRetainedPassRejectReason::StaticPathInfeasible};
-};
-
-/// Validate the target-aware continuation used after a stopped target moves
-/// from the forward-only local planner into the side-by-side region. Static
-/// wall feasibility alone is insufficient: the same observed target must
-/// remain physically and predictively separated on the committed side.
-LowSpeedRetainedPassValidationResult resolve_low_speed_retained_pass_validation(
-  const LowSpeedRetainedPassValidationRequest & request) noexcept;
-
-struct LowSpeedDirectCorridorStopRequest
-{
-  bool direct_control_active{false};
-  bool rejoin_active{false};
-  LowSpeedDirectControlPhase phase{LowSpeedDirectControlPhase::Shift};
-  bool local_path_active{false};
-  bool local_path_feasible{false};
-  bool has_front_vehicle{false};
-  bool has_side_vehicle{false};
-  bool has_clearance_vehicle{false};
-  bool retained_pass_path_feasible{false};
-};
-
-/// Stop an active stopped-vehicle direct maneuver when its live local corridor
-/// is unavailable. A validated Pass may finish moving a target from front to
-/// side/rear even after the forward-only local planner becomes inactive.
-/// Rejoin is protected by independent wall guards and no longer depends on the
-/// passed vehicle corridor.
-bool should_stop_low_speed_direct_control_for_corridor(
-  const LowSpeedDirectCorridorStopRequest & request) noexcept;
-
-/// Select the bounded direct-control speed without handing ownership to MPC
-/// inside a stopped-vehicle pack.
-double resolve_low_speed_direct_control_velocity(
-  LowSpeedDirectControlPhase phase,
-  double shift_velocity_mps,
-  double pass_velocity_mps,
-  double rejoin_velocity_mps,
-  double maximum_velocity_mps);
-
-struct LowSpeedDirectControlEntryFeasibilityRequest
-{
-  double current_speed_mps{};
-  double shift_speed_mps{};
-  double maximum_deceleration_mps2{};
-  double forward_distance_m{};
-  double front_reserve_m{};
-  double control_latency_sec{};
-};
-
-struct LowSpeedDirectControlEntryFeasibility
-{
-  bool valid{false};
-  bool feasible{false};
-  double available_distance_m{};
-  double required_distance_m{};
-};
-
-/// Direct low-speed steering may take ownership only when ego can reach the
-/// Shift speed before consuming the reserved front clearance. When this is
-/// false the same local path remains available to the horizon MPC.
-LowSpeedDirectControlEntryFeasibility
-resolve_low_speed_direct_control_entry_feasibility(
-  const LowSpeedDirectControlEntryFeasibilityRequest & request) noexcept;
-
 struct LowSpeedShiftSteeringRequest
 {
   double current_lateral_m{};
@@ -8078,39 +7938,6 @@ double limit_low_speed_shift_steering_by_lateral_acceleration(
   double target_steering_rad, double current_speed_mps, double wheelbase_m,
   double maximum_lateral_acceleration_mps2, double steering_command_gain);
 
-struct LowSpeedDirectSteeringBounds
-{
-  double lower_rad{0.0};
-  double upper_rad{0.0};
-};
-
-/// Bound direct-shift steering around the nominal curve command, intersected
-/// with the steering-rate interval reachable from the previous command. If
-/// the intervals do not overlap, move one rate-limited step toward nominal.
-LowSpeedDirectSteeringBounds resolve_low_speed_direct_steering_bounds(
-  double previous_steering_rad, double nominal_curve_steering_rad,
-  double maximum_steering_rad, double maximum_steering_step_rad,
-  double current_speed_mps, double wheelbase_m,
-  double maximum_lateral_acceleration_mps2, double steering_command_gain);
-
-bool is_low_speed_shift_complete(
-  double current_lateral_m, double current_heading_error_rad,
-  double target_lateral_m, double lateral_tolerance_m,
-  double heading_tolerance_rad) noexcept;
-
-/// Start returning from the pass corridor after the complete stopped-vehicle
-/// pack has remained clear for the configured hold duration.
-bool should_begin_low_speed_shift_rejoin(
-  bool has_front_vehicle, bool has_side_vehicle,
-  bool has_clearance_vehicle, double clear_duration_sec,
-  double required_clear_duration_sec) noexcept;
-
-/// Release the direct low-speed shift controller only after its rejoin target
-/// pose is settled and the complete stopped-vehicle pack remains clear.
-bool should_release_low_speed_shift_control(
-  bool pose_settled, bool has_front_vehicle, bool has_side_vehicle,
-  bool has_clearance_vehicle, double clear_duration_sec,
-  double required_clear_duration_sec) noexcept;
 
 enum class ContinuityAction
 {

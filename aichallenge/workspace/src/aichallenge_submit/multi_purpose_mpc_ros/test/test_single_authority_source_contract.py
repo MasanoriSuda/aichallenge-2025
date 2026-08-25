@@ -33,6 +33,17 @@ OVERTAKE_ORCHESTRATOR_SOURCE = (
     / "src"
     / "overtake_execution_orchestrator.cpp"
 ).read_text(encoding="utf-8")
+MPCC_EXECUTION_CONTRACT_HEADER = (
+    Path(__file__).resolve().parents[1]
+    / "include"
+    / "multi_purpose_mpc_ros"
+    / "mpcc_execution_contract.hpp"
+).read_text(encoding="utf-8")
+MPCC_EXECUTION_CONTRACT_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "mpcc_execution_contract.cpp"
+).read_text(encoding="utf-8")
 CONFIG = (
     Path(__file__).resolve().parents[1] / "config" / "config.yaml"
 ).read_text(encoding="utf-8")
@@ -41,17 +52,41 @@ CLOUD_CONFIG = (
 ).read_text(encoding="utf-8")
 
 
-def test_low_speed_direct_cannot_be_activated_as_production_authority() -> None:
-    """The retired Gate2 bypass must not regain normal command ownership."""
+def test_retired_low_speed_direct_authority_is_physically_deleted() -> None:
+    """An unreachable normal authority must not remain representable in Slice 6."""
 
-    assert not re.search(r"low_speed_shift_control_active_\s*=\s*true", SOURCE)
-    assert "return low_speed_shift_control(" not in SOURCE
-
-
-def test_low_speed_direct_implementation_has_no_call_site() -> None:
-    """Keep compatibility code unreachable until its final Slice 6 deletion."""
-
-    assert len(re.findall(r"(?<![A-Za-z0-9_])low_speed_shift_control\(", SOURCE)) == 1
+    production = "\n".join(
+        (
+            SOURCE,
+            V2X_OVERTAKE_HEADER,
+            V2X_OVERTAKE_SOURCE,
+            OVERTAKE_ORCHESTRATOR_HEADER,
+            OVERTAKE_ORCHESTRATOR_SOURCE,
+            MPCC_EXECUTION_CONTRACT_HEADER,
+            MPCC_EXECUTION_CONTRACT_SOURCE,
+        )
+    )
+    forbidden = (
+        "LowSpeedDirect",
+        "LowSpeedWallStop",
+        "low_speed_shift_control(",
+        "low_speed_shift_control_active_",
+        "low_speed_shift_control_was_active_",
+        "low_speed_direct_control_active",
+        "low_speed_direct_steering_bounds",
+        "low_speed_direct_wall_stop_active",
+        "low_speed_direct_active",
+        "low_speed_wall_stop_active",
+        "low_speed_avoidance_pass_control_velocity",
+        "low_speed_avoidance_rejoin_control_velocity",
+        "low_speed_avoidance_shift_lateral_tolerance",
+        "low_speed_avoidance_shift_heading_tolerance",
+        "low_speed_avoidance_shift_clear_hold_sec",
+        "low_speed_avoidance_max_lateral_accel",
+    )
+    assert not [token for token in forbidden if token in production]
+    for config in (CONFIG, CLOUD_CONFIG):
+        assert not [token for token in forbidden if token in config]
 
 
 def test_overtake_worker_fresh_chain_uses_sealed_snapshot_context() -> None:

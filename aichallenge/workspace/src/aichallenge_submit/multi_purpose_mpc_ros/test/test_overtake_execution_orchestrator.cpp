@@ -587,11 +587,6 @@ TEST(OvertakeExecutionOrchestrator, ResolvesFinalControlSourceByOutputPrecedence
     orchestrator::resolve_final_control_source(request),
     orchestrator::FinalControlSource::ExecutedSolutionWallHold);
 
-  request.low_speed_wall_stop_active = true;
-  EXPECT_EQ(
-    orchestrator::resolve_final_control_source(request),
-    orchestrator::FinalControlSource::LowSpeedWallStop);
-
   request.stuck_recovery_active = true;
   EXPECT_EQ(
     orchestrator::resolve_final_control_source(request),

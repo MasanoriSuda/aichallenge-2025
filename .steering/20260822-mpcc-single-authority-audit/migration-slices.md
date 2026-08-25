@@ -898,6 +898,20 @@ Finish the architecture simplification instead of leaving permanent dual control
   source/trace events while canonical normal publication continued. Existing
   async ShiftOut candidate-unavailable Emergency remains separate measured
   quality work; no tuning or replacement fallback was added here.
+- `.steering/20260825-slice6-low-speed-direct-physical-removal` physically
+  deletes the retired stopped-vehicle direct normal owner after proving that
+  its controller had one definition, zero call sites and no active-latch
+  producer. Its private phase/latch/rejoin/retained-pass state, publisher
+  overrides, wall-stop source, execution-contract formulation and direct-only
+  YAML keys were removed. `LowSpeedAvoidance` detection, stopped-vehicle
+  confirmation, gap/local-path planning, static-wall preflight, canonical
+  corridor speed input and solver-failure path feedback remain. Failure-first
+  source contracts, the 25-package build and all 49 rebuilt test targets
+  (1,822 tests) pass. The prior deterministic replay already showed zero
+  `LowSpeedDirect` publications with canonical Dynamic Escape execution, so
+  this behavior-neutral deletion did not require a duplicate replay. Slice 6
+  remains open for other audited legacy/migration paths; tuning is still
+  prohibited.
 
 ## Slice 7: Parameter tuning
 

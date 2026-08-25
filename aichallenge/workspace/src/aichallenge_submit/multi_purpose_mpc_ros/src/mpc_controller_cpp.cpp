@@ -1728,16 +1728,10 @@ struct V2XBehaviorConfig
   double low_speed_avoidance_lookahead_distance{18.0};
   double low_speed_avoidance_velocity{2.0};
   double low_speed_avoidance_shift_velocity{1.0};
-  double low_speed_avoidance_pass_control_velocity{2.0};
-  double low_speed_avoidance_rejoin_control_velocity{1.5};
   double low_speed_avoidance_shift_lateral_gain{0.4};
   double low_speed_avoidance_shift_heading_gain{1.3};
-  double low_speed_avoidance_shift_lateral_tolerance{0.4};
-  double low_speed_avoidance_shift_heading_tolerance{0.2};
-  double low_speed_avoidance_shift_clear_hold_sec{2.0};
   int low_speed_avoidance_stopped_confirmation_samples{3};
   double low_speed_avoidance_stopped_confirmation_max_gap_sec{1.0};
-  double low_speed_avoidance_max_lateral_accel{6.0};
   double low_speed_avoidance_max_front_speed{1.0};
   double low_speed_avoidance_min_prepare_distance{0.0};
   double low_speed_avoidance_min_gap_width{1.5};
@@ -2320,17 +2314,6 @@ struct V2XBehaviorOutput
   bool low_speed_avoidance_gap_blocked{false};
   bool low_speed_avoidance_stalled{false};
   bool low_speed_avoidance_cooldown_active{false};
-  bool low_speed_locked_target_seen{false};
-  bool low_speed_locked_target_position_jump{false};
-  bool low_speed_locked_target_current_body_footprints_separated{false};
-  bool low_speed_locked_target_footprint_prediction_valid{false};
-  bool low_speed_locked_target_predicted_body_footprint_sweep_separated{false};
-  double low_speed_locked_target_longitudinal{
-    std::numeric_limits<double>::infinity()};
-  double low_speed_locked_target_relative_lateral{
-    std::numeric_limits<double>::infinity()};
-  double low_speed_locked_target_predicted_relative_lateral{
-    std::numeric_limits<double>::infinity()};
   bool follow_speed_limit_active{false};
   bool follow_speed_limit_moving_front{false};
   bool moving_front_clearance_limit_active{false};
@@ -7213,36 +7196,6 @@ struct MPC
     current_speed_mps_ = std::max(0.0, current_speed_mps);
   }
 
-  void set_low_speed_direct_control_phase(
-    const v2x_overtake_core::LowSpeedDirectControlPhase phase)
-  {
-    if (phase != low_speed_direct_control_phase_) {
-      const auto phase_name = [](const v2x_overtake_core::LowSpeedDirectControlPhase value) {
-          switch (value) {
-            case v2x_overtake_core::LowSpeedDirectControlPhase::Shift:
-              return "Shift";
-            case v2x_overtake_core::LowSpeedDirectControlPhase::Pass:
-              return "Pass";
-            case v2x_overtake_core::LowSpeedDirectControlPhase::Rejoin:
-              return "Rejoin";
-          }
-          return "Unknown";
-        };
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Low-speed direct control phase: %s -> %s",
-        phase_name(low_speed_direct_control_phase_), phase_name(phase));
-    }
-    low_speed_direct_control_phase_ = phase;
-    low_speed_shift_velocity_mps_ =
-      v2x_overtake_core::resolve_low_speed_direct_control_velocity(
-      phase,
-      cfg.v2x_behavior.low_speed_avoidance_shift_velocity,
-      cfg.v2x_behavior.low_speed_avoidance_pass_control_velocity,
-      cfg.v2x_behavior.low_speed_avoidance_rejoin_control_velocity,
-      cfg.v_max);
-  }
-
   void reset_start_grid_dynamic_decision() noexcept
   {
     start_grid_dynamic_decision_pending_ = false;
@@ -7469,38 +7422,6 @@ struct MPC
     return result;
   }
 
-  bool retained_low_speed_pass_path_feasible(
-    const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
-    const Eigen::VectorXd & ub) const
-  {
-    if (
-      N <= 0 || lb.size() < N || ub.size() < N ||
-      low_speed_shift_pass_side_sign_ == 0 ||
-      !std::isfinite(low_speed_shift_pass_target_ey_))
-    {
-      return false;
-    }
-
-    GapPlannerOutput retained_path;
-    retained_path.active = true;
-    retained_path.feasible = true;
-    retained_path.pass_side_sign = low_speed_shift_pass_side_sign_;
-    retained_path.pass_target_ey = low_speed_shift_pass_target_ey_;
-    retained_path.target_ey.assign(
-      static_cast<std::size_t>(N), low_speed_shift_pass_target_ey_);
-    for (int i = 0; i < N; ++i) {
-      if (
-        !std::isfinite(lb[i]) || !std::isfinite(ub[i]) ||
-        low_speed_shift_pass_target_ey_ < lb[i] - kEps ||
-        low_speed_shift_pass_target_ey_ > ub[i] + kEps)
-      {
-        return false;
-      }
-    }
-    return evaluate_gap_plan_static_wall_preflight(
-      ref_wp_id, retained_path).feasible;
-  }
-
   GapPlannerOutput plan_low_speed_local_path_with_static_wall_preflight(
     const int ref_wp_id, const int N, const Eigen::VectorXd & lb,
     const Eigen::VectorXd & ub, const double now_sec, const bool update_last_target,
@@ -7706,26 +7627,6 @@ struct MPC
     overtake_line_side_retry_blocks_ = {};
     completed_overtake_target_block_ = CompletedOvertakeTargetBlock{};
     last_overtake_line_debug_log_sec_ = std::numeric_limits<double>::quiet_NaN();
-    low_speed_shift_control_active_ = false;
-    low_speed_shift_control_was_active_ = false;
-    low_speed_shift_rejoin_active_ = false;
-    low_speed_shift_handoff_deferred_logged_ = false;
-    low_speed_direct_entry_deferred_logged_ = false;
-    low_speed_shift_side_completion_logged_ = false;
-    low_speed_shift_pass_side_sign_ = 0;
-    low_speed_shift_target_vehicle_id_.clear();
-    low_speed_retained_pass_reject_reason_ =
-      v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
-    low_speed_shift_pass_target_ey_ = 0.0;
-    low_speed_shift_target_ey_ = 0.0;
-    low_speed_shift_velocity_mps_ = 0.0;
-    low_speed_shift_steering_lower_rad_ = 0.0;
-    low_speed_shift_steering_upper_rad_ = 0.0;
-    low_speed_shift_wall_stop_active_ = false;
-    low_speed_shift_corridor_blocked_ = false;
-    low_speed_direct_control_phase_ =
-      v2x_overtake_core::LowSpeedDirectControlPhase::Shift;
-    low_speed_shift_last_relevant_vehicle_sec_ = std::numeric_limits<double>::quiet_NaN();
     reset_osqp_history();
     reset_overtake_line_state(
       now_sec, active ? "AWSIM race session started" : "AWSIM race session inactive");
@@ -8131,31 +8032,6 @@ struct MPC
   bool last_solution_is_retained() const noexcept
   {
     return last_solution_is_retained_;
-  }
-
-  bool low_speed_direct_control_active() const noexcept
-  {
-    return low_speed_shift_control_active_;
-  }
-
-  std::optional<v2x_overtake_core::LowSpeedDirectSteeringBounds>
-  low_speed_direct_steering_bounds() const
-  {
-    if (
-      !low_speed_shift_control_active_ ||
-      !std::isfinite(low_speed_shift_steering_lower_rad_) ||
-      !std::isfinite(low_speed_shift_steering_upper_rad_) ||
-      low_speed_shift_steering_lower_rad_ > low_speed_shift_steering_upper_rad_)
-    {
-      return std::nullopt;
-    }
-    return v2x_overtake_core::LowSpeedDirectSteeringBounds{
-      low_speed_shift_steering_lower_rad_, low_speed_shift_steering_upper_rad_};
-  }
-
-  bool low_speed_direct_wall_stop_active() const noexcept
-  {
-    return low_speed_shift_control_active_ && low_speed_shift_wall_stop_active_;
   }
 
   const V2XBehaviorOutput & last_v2x_behavior_output() const
@@ -8962,27 +8838,6 @@ struct MPC
     overtake_curve_cooldown_until_sec_ = now_sec;
     overtake_line_side_retry_blocks_ = {};
     completed_overtake_target_block_ = CompletedOvertakeTargetBlock{};
-    low_speed_shift_control_active_ = false;
-    low_speed_shift_control_was_active_ = false;
-    low_speed_shift_rejoin_active_ = false;
-    low_speed_shift_handoff_deferred_logged_ = false;
-    low_speed_direct_entry_deferred_logged_ = false;
-    low_speed_shift_side_completion_logged_ = false;
-    low_speed_shift_pass_side_sign_ = 0;
-    low_speed_shift_target_vehicle_id_.clear();
-    low_speed_retained_pass_reject_reason_ =
-      v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
-    low_speed_shift_pass_target_ey_ = 0.0;
-    low_speed_shift_target_ey_ = 0.0;
-    low_speed_shift_velocity_mps_ = 0.0;
-    low_speed_shift_steering_lower_rad_ = 0.0;
-    low_speed_shift_steering_upper_rad_ = 0.0;
-    low_speed_shift_wall_stop_active_ = false;
-    low_speed_shift_corridor_blocked_ = false;
-    low_speed_direct_control_phase_ =
-      v2x_overtake_core::LowSpeedDirectControlPhase::Shift;
-    low_speed_shift_last_relevant_vehicle_sec_ =
-      std::numeric_limits<double>::quiet_NaN();
     reset_overtake_line_state(now_sec, "external recovery completed");
     if (gap_planner != nullptr) {
       gap_planner->reset_low_speed_targets();
@@ -9282,11 +9137,9 @@ struct MPC
       std::numeric_limits<double>::infinity();
     double start_grid_peer_max_speed = 0.0;
     const bool continuing_low_speed_avoidance =
-      (v2x_behavior_state_initialized &&
-      v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance) ||
-      low_speed_shift_control_was_active_;
-    const bool track_low_speed_clearance =
-      continuing_low_speed_avoidance || low_speed_shift_control_was_active_;
+      v2x_behavior_state_initialized &&
+      v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance;
+    const bool track_low_speed_clearance = continuing_low_speed_avoidance;
 
     for (auto it = v2x_course_progress_tracks_.begin();
       it != v2x_course_progress_tracks_.end();)
@@ -9472,61 +9325,6 @@ struct MPC
             clip(raw_lateral_velocity, -velocity_limit, velocity_limit) : 0.0;
           observed_course_lateral_velocity_valid =
             std::isfinite(observed_course_lateral_velocity);
-        }
-      }
-      const bool is_low_speed_locked_target =
-        low_speed_shift_control_was_active_ &&
-        !low_speed_shift_target_vehicle_id_.empty() &&
-        vehicle.id == low_speed_shift_target_vehicle_id_;
-      if (is_low_speed_locked_target) {
-        output.low_speed_locked_target_position_jump = vehicle.position_jump;
-        const bool low_speed_target_geometry_valid =
-          std::isfinite(vehicle_course_longitudinal) &&
-          std::isfinite(front_relative_lateral);
-        output.low_speed_locked_target_seen = low_speed_target_geometry_valid;
-        if (low_speed_target_geometry_valid) {
-          output.low_speed_locked_target_longitudinal = vehicle_course_longitudinal;
-          output.low_speed_locked_target_relative_lateral = front_relative_lateral;
-
-          const double body_longitudinal_clearance =
-            0.5 * std::max(0.0, cfg.v2x_gap.vehicle_length) +
-            0.5 * std::max(0.0, model->length);
-          const double body_lateral_clearance =
-            std::max(0.0, cfg.v2x_gap.vehicle_radius);
-          output.low_speed_locked_target_current_body_footprints_separated =
-            v2x_overtake_core::course_frame_body_footprints_remain_separated(
-            v2x_overtake_core::CourseFrameFootprintSweepRequest{
-              vehicle_course_longitudinal,
-              front_relative_lateral,
-              vehicle_course_longitudinal,
-              front_relative_lateral,
-              body_longitudinal_clearance,
-              body_lateral_clearance});
-
-          const double prediction_time = std::max(0.0, cfg.v2x_gap.prediction_time);
-          output.low_speed_locked_target_footprint_prediction_valid =
-            vehicle.velocity_observation_valid &&
-            observed_course_lateral_velocity_valid &&
-            std::isfinite(front_vehicle_speed) &&
-            std::isfinite(current_speed_mps_) &&
-            std::isfinite(prediction_time);
-          if (output.low_speed_locked_target_footprint_prediction_valid) {
-            const double predicted_longitudinal =
-              vehicle_course_longitudinal +
-              (front_vehicle_speed - current_speed_mps_) * prediction_time;
-            output.low_speed_locked_target_predicted_relative_lateral =
-              front_relative_lateral +
-              observed_course_lateral_velocity * prediction_time;
-            output.low_speed_locked_target_predicted_body_footprint_sweep_separated =
-              v2x_overtake_core::course_frame_body_footprints_remain_separated(
-              v2x_overtake_core::CourseFrameFootprintSweepRequest{
-                vehicle_course_longitudinal,
-                front_relative_lateral,
-                predicted_longitudinal,
-                output.low_speed_locked_target_predicted_relative_lateral,
-                body_longitudinal_clearance,
-                body_lateral_clearance});
-          }
         }
       }
       const bool vehicle_is_locked_target =
@@ -17609,11 +17407,6 @@ struct MPC
   {
     constexpr int nx = 3;
     constexpr int nu = 2;
-    // Once the direct shift controller owns the stopped-vehicle bypass, keep
-    // it latched through the complete vehicle pack. After the pack clears it
-    // first rejoins a current valid path target; get_control() hands ownership
-    // back only after an MPC probe solve succeeds.
-    low_speed_shift_control_active_ = low_speed_shift_control_was_active_;
     const int nx_N = nx * (N + 1);
     const int nu_N = nu * N;
     const double inf = std::numeric_limits<double>::infinity();
@@ -17793,67 +17586,6 @@ struct MPC
       *behavior_override : evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
     prewarm_overtake_entry_wall_cache(
       behavior_output, ref_wp_id, N, lb, ub, now_sec);
-    const bool low_speed_relevant_vehicle =
-      behavior_output.has_front_vehicle || behavior_output.has_side_vehicle ||
-      behavior_output.has_low_speed_clearance_vehicle;
-    if (low_speed_shift_control_was_active_) {
-      if (low_speed_relevant_vehicle) {
-        low_speed_shift_last_relevant_vehicle_sec_ = now_sec;
-        if (low_speed_shift_rejoin_active_) {
-          low_speed_shift_rejoin_active_ = false;
-          low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
-          set_low_speed_direct_control_phase(
-            v2x_overtake_core::LowSpeedDirectControlPhase::Shift);
-          low_speed_shift_handoff_deferred_logged_ = false;
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"),
-            "Low-speed pass rejoin cancelled: relevant vehicle reacquired; "
-            "restoring pass target_ey=%.2f",
-            low_speed_shift_target_ey_);
-        }
-      }
-      const double clear_duration_sec =
-        std::isfinite(low_speed_shift_last_relevant_vehicle_sec_) ?
-        std::max(0.0, now_sec - low_speed_shift_last_relevant_vehicle_sec_) : 0.0;
-      if (
-        !low_speed_shift_rejoin_active_ &&
-        v2x_overtake_core::should_begin_low_speed_shift_rejoin(
-          behavior_output.has_front_vehicle, behavior_output.has_side_vehicle,
-          behavior_output.has_low_speed_clearance_vehicle, clear_duration_sec,
-          cfg.v2x_behavior.low_speed_avoidance_shift_clear_hold_sec))
-      {
-        const double rejoin_target_ey = clip(0.0, lb[0], ub[0]);
-        if (std::isfinite(rejoin_target_ey)) {
-          low_speed_shift_rejoin_active_ = true;
-          low_speed_shift_target_ey_ = rejoin_target_ey;
-          set_low_speed_direct_control_phase(
-            v2x_overtake_core::LowSpeedDirectControlPhase::Rejoin);
-          low_speed_shift_handoff_deferred_logged_ = false;
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"),
-            "Low-speed pass rejoin started: pass_target_ey=%.2f, "
-            "rejoin_target_ey=%.2f, clear=%.2f s",
-            low_speed_shift_pass_target_ey_, low_speed_shift_target_ey_,
-            clear_duration_sec);
-        }
-      }
-      const bool low_speed_shift_pose_settled =
-        v2x_overtake_core::is_low_speed_shift_complete(
-        model->spatial_state.e_y, model->spatial_state.e_psi,
-        low_speed_shift_target_ey_,
-        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance,
-        cfg.v2x_behavior.low_speed_avoidance_shift_heading_tolerance);
-      if (
-        low_speed_shift_rejoin_active_ &&
-        v2x_overtake_core::should_release_low_speed_shift_control(
-          low_speed_shift_pose_settled, behavior_output.has_front_vehicle,
-          behavior_output.has_side_vehicle,
-          behavior_output.has_low_speed_clearance_vehicle, clear_duration_sec,
-          cfg.v2x_behavior.low_speed_avoidance_shift_clear_hold_sec))
-      {
-        low_speed_shift_control_active_ = false;
-      }
-    }
     last_v2x_behavior_output_ = behavior_output;
     const bool solver_overtake_cooldown_active =
       v2x_overtake_core::is_solver_cooldown_active(
@@ -18037,11 +17769,6 @@ struct MPC
         overtake_line_state_.upper_boundary_vehicle_id);
       inter_vehicle_corridor_goal = overtake_line_state_.fixed_pass_corridor_goal_ey;
     }
-    const int low_speed_forced_pass_side =
-      low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
-      low_speed_direct_control_phase_ ==
-      v2x_overtake_core::LowSpeedDirectControlPhase::Pass ?
-      low_speed_shift_pass_side_sign_ : 0;
     const auto run_gap_planner_with = [&] (
       V2XGapPlanner & planner, const int dynamic_escape_forced_side,
       const double forced_side_transition_distance_m) {
@@ -18073,7 +17800,7 @@ struct MPC
     auto planner_output = use_gap_planner ?
       (use_low_speed_local_path ?
       plan_low_speed_local_path_with_static_wall_preflight(
-        ref_wp_id, N, lb, ub, now_sec, true, low_speed_forced_pass_side) :
+        ref_wp_id, N, lb, ub, now_sec, true) :
       run_gap_planner(0)) :
       GapPlannerOutput{};
     DynamicObstacleLateralEscapeBridgeResult dynamic_escape_bridge;
@@ -18687,130 +18414,9 @@ struct MPC
       // and do not leak its bounds, target or no-gap speed into the MPC below.
       planner_output = GapPlannerOutput{};
     }
-    // Keep downstream diagnostics and direct-control arbitration aligned with
-    // the post-planner authority result, not the pre-planner Follow snapshot.
+    // Keep downstream diagnostics aligned with the post-planner authority
+    // result, not the pre-planner Follow snapshot.
     last_v2x_behavior_output_ = behavior_output;
-    const bool retained_pass_candidate =
-      low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
-      low_speed_direct_control_phase_ ==
-      v2x_overtake_core::LowSpeedDirectControlPhase::Pass &&
-      use_low_speed_local_path && !planner_output.active &&
-      !behavior_output.has_front_vehicle &&
-      (behavior_output.has_side_vehicle ||
-      behavior_output.has_low_speed_clearance_vehicle);
-    const bool retained_pass_static_path_feasible =
-      retained_pass_candidate && retained_low_speed_pass_path_feasible(
-      ref_wp_id, N, lb, ub);
-    const auto retained_pass_validation =
-      v2x_overtake_core::resolve_low_speed_retained_pass_validation(
-      v2x_overtake_core::LowSpeedRetainedPassValidationRequest{
-        retained_pass_static_path_feasible,
-        !low_speed_shift_target_vehicle_id_.empty(),
-        behavior_output.low_speed_locked_target_seen,
-        behavior_output.low_speed_locked_target_position_jump,
-        behavior_output.low_speed_locked_target_current_body_footprints_separated,
-        behavior_output.low_speed_locked_target_footprint_prediction_valid,
-        behavior_output.low_speed_locked_target_predicted_body_footprint_sweep_separated,
-        low_speed_shift_pass_side_sign_,
-        behavior_output.low_speed_locked_target_relative_lateral,
-        behavior_output.low_speed_locked_target_predicted_relative_lateral,
-        cfg.v2x_behavior.overtake_line.target_intrusion_ordering_margin});
-    const bool retained_pass_path_feasible =
-      retained_pass_candidate && retained_pass_validation.valid;
-    if (
-      retained_pass_candidate && !retained_pass_validation.valid &&
-      retained_pass_validation.reason != low_speed_retained_pass_reject_reason_)
-    {
-      RCLCPP_WARN(
-        rclcpp::get_logger("mpc_controller"),
-        "Low-speed retained Pass rejected: target=%s, side=%s, reason=%s, "
-        "seen=%d, current_clear=%d, prediction_valid=%d, predicted_clear=%d, "
-        "relative_lateral=%.2f, predicted_lateral=%.2f, wp_id=%d",
-        low_speed_shift_target_vehicle_id_.empty() ? "<none>" :
-        low_speed_shift_target_vehicle_id_.c_str(),
-        low_speed_pass_side_name(low_speed_shift_pass_side_sign_),
-        v2x_overtake_core::to_string(retained_pass_validation.reason),
-        behavior_output.low_speed_locked_target_seen ? 1 : 0,
-        behavior_output.low_speed_locked_target_current_body_footprints_separated ? 1 : 0,
-        behavior_output.low_speed_locked_target_footprint_prediction_valid ? 1 : 0,
-        behavior_output.low_speed_locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
-        behavior_output.low_speed_locked_target_relative_lateral,
-        behavior_output.low_speed_locked_target_predicted_relative_lateral,
-        model->wp_id);
-    }
-    low_speed_retained_pass_reject_reason_ = retained_pass_candidate ?
-      retained_pass_validation.reason :
-      v2x_overtake_core::LowSpeedRetainedPassRejectReason::None;
-    if (
-      retained_pass_path_feasible &&
-      !low_speed_shift_side_completion_logged_)
-    {
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Low-speed pass retained for side completion: side=%s, "
-        "target_ey=%.2f, side_vehicle=%d, clearance_vehicle=%d, wp_id=%d",
-        low_speed_pass_side_name(low_speed_shift_pass_side_sign_),
-        low_speed_shift_pass_target_ey_,
-        behavior_output.has_side_vehicle ? 1 : 0,
-        behavior_output.has_low_speed_clearance_vehicle ? 1 : 0,
-        model->wp_id);
-      low_speed_shift_side_completion_logged_ = true;
-    }
-    low_speed_shift_corridor_blocked_ =
-      v2x_overtake_core::should_stop_low_speed_direct_control_for_corridor(
-      v2x_overtake_core::LowSpeedDirectCorridorStopRequest{
-        low_speed_shift_control_was_active_,
-        low_speed_shift_rejoin_active_,
-        low_speed_direct_control_phase_,
-        use_low_speed_local_path && planner_output.active,
-        use_low_speed_local_path && planner_output.feasible,
-        behavior_output.has_front_vehicle,
-        behavior_output.has_side_vehicle,
-        behavior_output.has_low_speed_clearance_vehicle,
-        retained_pass_path_feasible});
-    if (
-      low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
-      !low_speed_shift_corridor_blocked_ && use_low_speed_local_path &&
-      planner_output.active && planner_output.feasible &&
-      std::isfinite(planner_output.pass_target_ey))
-    {
-      const bool pass_side_changed =
-        low_speed_shift_pass_side_sign_ != 0 && planner_output.pass_side_sign != 0 &&
-        planner_output.pass_side_sign != low_speed_shift_pass_side_sign_;
-      const bool side_update_allowed =
-        v2x_overtake_core::can_update_low_speed_direct_pass_side(
-        low_speed_direct_control_phase_, low_speed_shift_pass_side_sign_,
-        planner_output.pass_side_sign);
-      if (pass_side_changed && !side_update_allowed) {
-        RCLCPP_WARN(
-          rclcpp::get_logger("mpc_controller"),
-          "Low-speed direct Pass kept committed side: side=%d, rejected_side=%d, "
-          "target=%s, wp_id=%d",
-          low_speed_shift_pass_side_sign_, planner_output.pass_side_sign,
-          low_speed_shift_target_vehicle_id_.empty() ? "<none>" :
-          low_speed_shift_target_vehicle_id_.c_str(), model->wp_id);
-      } else if (side_update_allowed) {
-        // The direct controller may outlive the initial stopped target. Keep
-        // the target inside the same-side corridor validated against the
-        // current vehicle pack. Opposite-side candidates are never installed
-        // after Pass has committed.
-        low_speed_shift_pass_target_ey_ = planner_output.pass_target_ey;
-        low_speed_shift_target_ey_ = low_speed_shift_pass_target_ey_;
-      }
-      if (pass_side_changed && side_update_allowed) {
-        set_low_speed_direct_control_phase(
-          v2x_overtake_core::LowSpeedDirectControlPhase::Shift);
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "Low-speed direct control switched side after live corridor loss: "
-          "side=%d->%d, target_ey=%.2f, wp_id=%d",
-          low_speed_shift_pass_side_sign_, planner_output.pass_side_sign,
-          low_speed_shift_target_ey_, model->wp_id);
-      }
-      if (side_update_allowed && planner_output.pass_side_sign != 0) {
-        low_speed_shift_pass_side_sign_ = planner_output.pass_side_sign;
-      }
-    }
     const bool live_execution_corridor_valid =
       explicit_overtake_line_owns_plan && use_gap_planner &&
       (!planner_output.active || planner_output.feasible);
@@ -18980,40 +18586,6 @@ struct MPC
       (planner_output.feasible || apply_no_gap_velocity_limit)) {
       apply_velocity_limit(umax_dyn, ur, N, planner_output.target_velocity_limit);
     }
-    // The stopped-vehicle local path is now a planning input to the progress
-    // MPCC, not an independent command authority.  The former direct entry
-    // returned before the MPCC solve and cleared the prediction required by
-    // the final physical wall admission, making every fresh Dynamic Escape
-    // self-reject as prediction-unavailable.
-    if (!use_low_speed_local_path) {
-      low_speed_direct_entry_deferred_logged_ = false;
-    }
-    if (
-      low_speed_shift_control_was_active_ && !low_speed_shift_rejoin_active_ &&
-      use_low_speed_local_path && planner_output.active && planner_output.feasible &&
-      planner_output.pass_corridor_enforced)
-    {
-      const bool pass_pose_settled = v2x_overtake_core::is_low_speed_shift_complete(
-        model->spatial_state.e_y, model->spatial_state.e_psi,
-        low_speed_shift_pass_target_ey_,
-        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance,
-        cfg.v2x_behavior.low_speed_avoidance_shift_heading_tolerance);
-      if (v2x_overtake_core::can_enter_low_speed_direct_pass(
-          v2x_overtake_core::LowSpeedDirectPassAdmissionRequest{
-            low_speed_direct_control_phase_,
-            planner_output.pass_corridor_enforced,
-            pass_pose_settled,
-            behavior_output.low_speed_locked_target_seen,
-            behavior_output.low_speed_locked_target_position_jump,
-            behavior_output.low_speed_locked_target_current_body_footprints_separated,
-            behavior_output.low_speed_locked_target_footprint_prediction_valid,
-            behavior_output.low_speed_locked_target_predicted_body_footprint_sweep_separated}))
-      {
-        set_low_speed_direct_control_phase(
-          v2x_overtake_core::LowSpeedDirectControlPhase::Pass);
-      }
-    }
-
     if (!lateral_bounds_contract_valid) {
       // Never start or continue a newly selected overtake on a corridor which
       // has no mathematically valid lateral intersection.  The final control
@@ -28836,163 +28408,6 @@ struct MPC
     return {fallback, std::abs(fallback_steering)};
   }
 
-  std::pair<Eigen::Vector2d, double> low_speed_shift_control(
-    const Waypoint & reference_waypoint)
-  {
-    const double max_steering = std::max(0.0, std::abs(cfg.delta_max));
-    bool wall_stop_required = low_speed_shift_corridor_blocked_;
-    const char * wall_stop_reason = "clear";
-    if (low_speed_shift_corridor_blocked_) {
-      wall_stop_reason = "live vehicle corridor unavailable";
-    }
-    const bool wall_geometry_available =
-      overtake_static_wall_grid_ != nullptr &&
-      overtake_static_wall_footprint_.valid();
-    if (!wall_stop_required && !wall_geometry_available) {
-      wall_stop_required = true;
-      wall_stop_reason = "static wall geometry unavailable";
-    } else if (!wall_stop_required && !actual_wall_monitor_pose_.has_value()) {
-      wall_stop_required = true;
-      wall_stop_reason = "raw pose unavailable";
-    } else if (!wall_stop_required) {
-      const auto & actual_pose = actual_wall_monitor_pose_.value();
-      const auto physical_sample = recovery_footprint::sample_footprint(
-        *overtake_static_wall_grid_, overtake_static_wall_footprint_, actual_pose);
-      if (
-        !physical_sample.valid || physical_sample.out_of_map ||
-        !physical_sample.contact_cells.empty())
-      {
-        wall_stop_required = true;
-        wall_stop_reason = !physical_sample.valid ? "physical sample invalid" :
-          (physical_sample.out_of_map ? "physical footprint out of map" :
-          "physical footprint contact");
-      } else {
-        auto clearance_footprint = overtake_static_wall_footprint_;
-        const double wall_clearance_margin =
-          std::max(0.0, cfg.v2x_gap.wall_clearance_margin);
-        clearance_footprint.left_extent_m += wall_clearance_margin;
-        clearance_footprint.right_extent_m += wall_clearance_margin;
-        const auto clearance_sample = recovery_footprint::sample_footprint(
-          *overtake_static_wall_grid_, clearance_footprint, actual_pose);
-        if (
-          !clearance_sample.valid || clearance_sample.out_of_map ||
-          !clearance_sample.contact_cells.empty())
-        {
-          wall_stop_required = true;
-          wall_stop_reason = !clearance_sample.valid ? "clearance sample invalid" :
-            (clearance_sample.out_of_map ? "clearance footprint out of map" :
-            "wall clearance margin violated");
-        }
-      }
-    }
-    if (wall_stop_required != low_speed_shift_wall_stop_active_) {
-      if (wall_stop_required) {
-        RCLCPP_ERROR(
-          rclcpp::get_logger("mpc_controller"),
-          "Low-speed direct control stopped by live safety guard: %s",
-          wall_stop_reason);
-      } else {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "Low-speed direct control live safety guard cleared");
-      }
-    }
-    low_speed_shift_wall_stop_active_ = wall_stop_required;
-
-    const double unconstrained_target_steering =
-      v2x_overtake_core::resolve_low_speed_shift_steering(
-      v2x_overtake_core::LowSpeedShiftSteeringRequest{
-        model->spatial_state.e_y,
-        model->spatial_state.e_psi,
-        low_speed_shift_target_ey_,
-        reference_waypoint.kappa,
-        model->length,
-        max_steering,
-        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
-        cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain});
-    const double max_steering_step =
-      std::max(0.0, cfg.steer_rate_max) * std::max(0.0, model->Ts);
-    const double nominal_curve_steering = std::clamp(
-      std::atan(model->length * reference_waypoint.kappa),
-      -max_steering, max_steering);
-    const auto steering_bounds = wall_stop_required ?
-      v2x_overtake_core::LowSpeedDirectSteeringBounds{0.0, 0.0} :
-      v2x_overtake_core::resolve_low_speed_direct_steering_bounds(
-      previous_steering,
-      nominal_curve_steering,
-      max_steering,
-      max_steering_step,
-      current_speed_mps_,
-      model->length,
-      cfg.v2x_behavior.low_speed_avoidance_max_lateral_accel,
-      cfg.steering_tire_angle_gain_var);
-    const double target_steering = clip(
-      unconstrained_target_steering,
-      steering_bounds.lower_rad,
-      steering_bounds.upper_rad);
-    const double rate_limited_steering = clip(
-      target_steering, previous_steering - max_steering_step,
-      previous_steering + max_steering_step);
-    const double steering = clip(
-      rate_limited_steering,
-      steering_bounds.lower_rad,
-      steering_bounds.upper_rad);
-    low_speed_shift_steering_lower_rad_ = steering_bounds.lower_rad;
-    low_speed_shift_steering_upper_rad_ = steering_bounds.upper_rad;
-    double behavior_velocity_limit = cfg.v_max;
-    if (std::isfinite(last_v2x_behavior_output_.target_velocity_limit)) {
-      behavior_velocity_limit = std::min(
-        behavior_velocity_limit,
-        std::max(0.0, last_v2x_behavior_output_.target_velocity_limit));
-    }
-    if (std::isfinite(last_v2x_behavior_output_.desired_velocity)) {
-      behavior_velocity_limit = std::min(
-        behavior_velocity_limit,
-        std::max(0.0, last_v2x_behavior_output_.desired_velocity));
-    }
-    const double speed = wall_stop_required ? 0.0 :
-      v2x_overtake_core::resolve_low_speed_direct_control_velocity(
-      low_speed_direct_control_phase_,
-      cfg.v2x_behavior.low_speed_avoidance_shift_velocity,
-      cfg.v2x_behavior.low_speed_avoidance_pass_control_velocity,
-      cfg.v2x_behavior.low_speed_avoidance_rejoin_control_velocity,
-      std::min(cfg.v_max, behavior_velocity_limit));
-    low_speed_shift_velocity_mps_ = speed;
-
-    if (!low_speed_shift_control_was_active_) {
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Low-speed pass shift control entered: target_ey=%.2f, speed=%.2f, "
-        "actual_speed=%.2f, steering_target=%.3f/%.3f, bounds=[%.3f,%.3f], "
-        "max_ay=%.2f, "
-        "lateral_gain=%.2f, heading_gain=%.2f, completion=%.2f m/%.2f rad, "
-        "vehicle_clear_hold=%.2f s",
-        low_speed_shift_target_ey_, speed, current_speed_mps_,
-        unconstrained_target_steering, target_steering,
-        steering_bounds.lower_rad, steering_bounds.upper_rad,
-        cfg.v2x_behavior.low_speed_avoidance_max_lateral_accel,
-        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
-        cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain,
-        cfg.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance,
-        cfg.v2x_behavior.low_speed_avoidance_shift_heading_tolerance,
-        cfg.v2x_behavior.low_speed_avoidance_shift_clear_hold_sec);
-    }
-    low_speed_shift_control_was_active_ = true;
-    previous_steering = steering;
-    current_prediction.first.clear();
-    current_prediction.second.clear();
-    current_control = Eigen::VectorXd::Zero(2 * std::max(0, cfg.N));
-    for (int i = 0; i < cfg.N; ++i) {
-      current_control[2 * i] = speed;
-      current_control[2 * i + 1] = steering;
-    }
-    failure_fallback_speed_.reset();
-    infeasibility_counter = 0;
-    overtake_infeasibility_counter_ = 0;
-    last_control_was_fallback_ = false;
-    return {Eigen::Vector2d(speed, steering), std::abs(steering)};
-  }
-
   MpcControlCycleResult canonical_normal_emergency_stop(
     const MpcProblem & problem, const mpcc_contract::ControlIntent intent,
     const std::string & reason)
@@ -29629,28 +29044,6 @@ struct MPC
   double overtake_curve_cooldown_until_sec_{-std::numeric_limits<double>::infinity()};
   std::array<OvertakeLineSideRetryBlock, 2> overtake_line_side_retry_blocks_;
   CompletedOvertakeTargetBlock completed_overtake_target_block_;
-  bool low_speed_shift_control_active_{false};
-  bool low_speed_shift_control_was_active_{false};
-  bool low_speed_shift_rejoin_active_{false};
-  bool low_speed_shift_handoff_deferred_logged_{false};
-  bool low_speed_direct_entry_deferred_logged_{false};
-  bool low_speed_shift_side_completion_logged_{false};
-  int low_speed_shift_pass_side_sign_{0};
-  std::string low_speed_shift_target_vehicle_id_;
-  v2x_overtake_core::LowSpeedRetainedPassRejectReason
-  low_speed_retained_pass_reject_reason_{
-    v2x_overtake_core::LowSpeedRetainedPassRejectReason::None};
-  v2x_overtake_core::LowSpeedDirectControlPhase low_speed_direct_control_phase_{
-    v2x_overtake_core::LowSpeedDirectControlPhase::Shift};
-  double low_speed_shift_pass_target_ey_{0.0};
-  double low_speed_shift_target_ey_{0.0};
-  double low_speed_shift_velocity_mps_{0.0};
-  double low_speed_shift_steering_lower_rad_{0.0};
-  double low_speed_shift_steering_upper_rad_{0.0};
-  bool low_speed_shift_wall_stop_active_{false};
-  bool low_speed_shift_corridor_blocked_{false};
-  double low_speed_shift_last_relevant_vehicle_sec_{
-    std::numeric_limits<double>::quiet_NaN()};
   double previous_steering{0.0};
   double current_speed_mps_{0.0};
   // Updated by the actual-footprint wall monitor and consumed by the next
@@ -29908,12 +29301,6 @@ struct MPC
         context.bounds_schema_id =
           "progress-stage-wall-obstacle-steering-rate-v1";
         context.cost_schema_id = "velocity-steering-progress-v1";
-        break;
-      case mpcc_contract::Formulation::LowSpeedDirect:
-        context.state_schema_id = "direct-current-state-v1";
-        context.input_schema_id = "speed-steering-v1";
-        context.bounds_schema_id = "direct-wall-steering-v1";
-        context.cost_schema_id = "direct-bypass-v1";
         break;
       case mpcc_contract::Formulation::SolverDerivedBypass:
         context.state_schema_id = "retained-current-state-v1";
@@ -35140,7 +34527,6 @@ private:
       v2x_overtake_core::StoppedVehicleLineOwnershipRequest{
         behavior_output.state == V2XBehaviorState::LowSpeedAvoidance,
         behavior_output.low_speed_avoidance_candidate,
-        low_speed_shift_control_active_ || low_speed_shift_control_was_active_,
         (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
         overtake_line_state_.phase == OvertakeLinePhase::Pass ||
         overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare ||
@@ -47240,9 +46626,7 @@ private:
         output.overtake_cooldown_active || now_sec < overtake_curve_cooldown_until_sec_;
     }
 
-    if (
-      gap_planner != nullptr && final_state != V2XBehaviorState::LowSpeedAvoidance &&
-      !low_speed_shift_control_was_active_)
+    if (gap_planner != nullptr && final_state != V2XBehaviorState::LowSpeedAvoidance)
     {
       if (v2x_behavior_state_initialized && v2x_behavior_state == V2XBehaviorState::LowSpeedAvoidance) {
         gap_planner->reset_low_speed_targets();
@@ -51141,16 +50525,6 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_low_speed_avoidance_shift_velocity"] ?
     mpc["v2x_low_speed_avoidance_shift_velocity"].as<double>() : 1.0);
-  cfg.mpc.v2x_behavior.low_speed_avoidance_pass_control_velocity = std::max(
-    0.0,
-    mpc["v2x_low_speed_avoidance_pass_control_velocity"] ?
-    mpc["v2x_low_speed_avoidance_pass_control_velocity"].as<double>() :
-    cfg.mpc.v2x_behavior.low_speed_avoidance_shift_velocity);
-  cfg.mpc.v2x_behavior.low_speed_avoidance_rejoin_control_velocity = std::max(
-    0.0,
-    mpc["v2x_low_speed_avoidance_rejoin_control_velocity"] ?
-    mpc["v2x_low_speed_avoidance_rejoin_control_velocity"].as<double>() :
-    cfg.mpc.v2x_behavior.low_speed_avoidance_shift_velocity);
   cfg.mpc.v2x_behavior.low_speed_avoidance_shift_lateral_gain = std::max(
     0.0,
     mpc["v2x_low_speed_avoidance_shift_lateral_gain"] ?
@@ -51159,18 +50533,6 @@ Config load_config(const std::string & path)
     0.0,
     mpc["v2x_low_speed_avoidance_shift_heading_gain"] ?
     mpc["v2x_low_speed_avoidance_shift_heading_gain"].as<double>() : 1.3);
-  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_lateral_tolerance = std::max(
-    0.0,
-    mpc["v2x_low_speed_avoidance_shift_lateral_tolerance"] ?
-    mpc["v2x_low_speed_avoidance_shift_lateral_tolerance"].as<double>() : 0.4);
-  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_heading_tolerance = std::max(
-    0.0,
-    mpc["v2x_low_speed_avoidance_shift_heading_tolerance"] ?
-    mpc["v2x_low_speed_avoidance_shift_heading_tolerance"].as<double>() : 0.2);
-  cfg.mpc.v2x_behavior.low_speed_avoidance_shift_clear_hold_sec = std::max(
-    0.0,
-    mpc["v2x_low_speed_avoidance_shift_clear_hold_sec"] ?
-    mpc["v2x_low_speed_avoidance_shift_clear_hold_sec"].as<double>() : 2.0);
   cfg.mpc.v2x_behavior.low_speed_avoidance_stopped_confirmation_samples = std::max(
     1,
     mpc["v2x_low_speed_avoidance_stopped_confirmation_samples"] ?
@@ -51180,10 +50542,6 @@ Config load_config(const std::string & path)
     mpc["v2x_low_speed_avoidance_stopped_confirmation_max_gap_sec"] ?
     mpc["v2x_low_speed_avoidance_stopped_confirmation_max_gap_sec"].as<double>() :
     cfg.mpc.v2x_gap.timeout_sec);
-  cfg.mpc.v2x_behavior.low_speed_avoidance_max_lateral_accel = std::max(
-    0.0,
-    mpc["v2x_low_speed_avoidance_max_lateral_accel"] ?
-    mpc["v2x_low_speed_avoidance_max_lateral_accel"].as<double>() : 6.0);
   cfg.mpc.v2x_behavior.low_speed_avoidance_max_front_speed = std::max(
     0.0,
     mpc["v2x_low_speed_avoidance_max_front_speed"] ?
@@ -52301,7 +51659,7 @@ public:
       RCLCPP_INFO(
         get_logger(),
         "V2X low-speed pass: side=%s, ramp_ratio=%.2f, shift_gains=%.2f/%.2f, "
-        "stopped_confirm=%d samples/max_gap=%.2f s, max_ay=%.2f m/s^2, "
+        "stopped_confirm=%d samples/max_gap=%.2f s, "
         "stall=%.2f m/s/%.2f s, cooldown=%.2f s, stall_max_gap=%.2f s",
         mpc_cfg_.v2x_gap.low_speed_pass_side.c_str(),
         mpc_cfg_.v2x_gap.low_speed_pass_ramp_ratio,
@@ -52309,7 +51667,6 @@ public:
         mpc_cfg_.v2x_behavior.low_speed_avoidance_shift_heading_gain,
         mpc_cfg_.v2x_behavior.low_speed_avoidance_stopped_confirmation_samples,
         mpc_cfg_.v2x_behavior.low_speed_avoidance_stopped_confirmation_max_gap_sec,
-        mpc_cfg_.v2x_behavior.low_speed_avoidance_max_lateral_accel,
         mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_speed,
         mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_timeout_sec,
         mpc_cfg_.v2x_behavior.low_speed_avoidance_stall_cooldown_sec,
@@ -57196,8 +56553,7 @@ private:
     const bool forced_stop_active =
       (mpc_fallback_active && !solver_failure_crawl_active &&
       !solver_failure_continuation_active) || !enable_control_ ||
-      canonical_emergency_stop ||
-      mpc_->low_speed_direct_wall_stop_active();
+      canonical_emergency_stop;
     const bool canonical_normal_execution_active =
       canonical_normal_command.has_value() && !forced_stop_active &&
       !solver_failure_crawl_active && !solver_failure_continuation_active &&
@@ -57272,12 +56628,6 @@ private:
     if (!canonical_normal_execution_active) {
       u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
     }
-    if (!canonical_normal_execution_active) {
-      if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
-        u[1] = clip(
-          u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
-      }
-    }
     const auto recovery_start = SteadyClock::now();
     callback_timing.post_mpc_ms = std::chrono::duration<double, std::milli>(
       recovery_start - post_mpc_start).count();
@@ -57290,12 +56640,6 @@ private:
     if (!canonical_normal_execution_active || recovery_command_active) {
       acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
       u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
-    }
-    if (!recovery_command_active && !canonical_normal_execution_active) {
-      if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
-        u[1] = clip(
-          u[1], direct_bounds->lower_rad, direct_bounds->upper_rad);
-      }
     }
     const auto publish_start = SteadyClock::now();
     callback_timing.recovery_ms = std::chrono::duration<double, std::milli>(
@@ -57365,8 +56709,6 @@ private:
     final_source_request.failsafe_active = canonical_emergency_stop;
     final_source_request.stuck_recovery_active = recovery_command_active;
     final_source_request.control_enabled = enable_control_;
-    final_source_request.low_speed_wall_stop_active =
-      mpc_->low_speed_direct_wall_stop_active();
     final_source_request.solver_bounded_continuation_active =
       solver_failure_continuation_active;
     final_source_request.executed_solution_wall_hold_active =
@@ -57374,8 +56716,6 @@ private:
     final_source_request.solver_crawl_active = solver_failure_crawl_active;
     final_source_request.solver_fallback_active = mpc_fallback_active;
     final_source_request.forced_stop_active = forced_stop_active;
-    final_source_request.low_speed_direct_active =
-      mpc_->low_speed_direct_control_active();
     const double published_steering_rad = published_steering.value();
     std::string output_reason{"normal-control-published"};
     if (recovery_command_active) {
@@ -57396,9 +56736,7 @@ private:
     } else if (executed_solution_wall_hold_active) {
       output_reason = "executed-solution-wall-contract-hold";
     } else if (forced_stop_active) {
-      if (mpc_->low_speed_direct_wall_stop_active()) {
-        output_reason = "low-speed-direct-wall-stop";
-      } else if (
+      if (
         mpc_fallback_active &&
         dynamic_escape_execution_active)
       {
@@ -57411,8 +56749,6 @@ private:
       } else {
         output_reason = "solver-fallback-forced-stop";
       }
-    } else if (mpc_->low_speed_direct_control_active()) {
-      output_reason = "low-speed-direct-control";
     }
     emit_final_control_trace(
       current_time.seconds(), actual_v, u, acc, published_steering_rad,

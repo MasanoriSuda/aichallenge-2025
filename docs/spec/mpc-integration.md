@@ -2144,6 +2144,25 @@ margin、timeout、solver設定、ROS interfaceは変更していない。25-pac
 publicationとcomplete execution identityは継続した。既存のasync ShiftOut候補未準備によるcanonical
 Emergencyは別の実用品質課題であり、本削除Sliceへ対症処理を混在させない。
 
+#### LowSpeedDirect通常authorityの物理削除（2026-08-25、2025由来の暫定）
+
+Slice 4でproduction authorityを退役させた後も残っていた停止車両用direct controllerを、Slice 6で
+物理削除した。監査時点で`low_speed_shift_control()`は定義1件・call site 0件であり、active latchを
+trueへ設定できる到達可能producerも存在しなかった。このため、private phase/latch、direct
+retained-pass／rejoin、publisher override、`LowSpeedDirect`／`LowSpeedWallStop` final source、direct用
+execution formulationおよび専用YAML keyは安全機能ではなく、到達不能な第二normal authority表現だった。
+
+停止／極低速V2X車両の確認、`LowSpeedAvoidance` intent、gap／local-path生成、static-wall preflight、
+canonical local-corridor speed reference、bounded solver-failure crawl用の横feedbackは維持する。したがって
+停止車両回避は引き続き、障害物と壁から構成したbounds／reference／speed windowをcanonical MPCCへ
+渡し、certified canonical commandとして出力する。外部EmergencyとStuck／gear／reverse Recoveryも
+変更しない。
+
+failure-first source contract、25-package build、49 test target、1,822 testが合格した。authority退役時の
+決定論的replayでは`LowSpeedDirect` publication 0件とcanonical Dynamic Escape継続を確認済みであり、
+本Sliceは到達不能コードだけの削除なので重複する動的replayは行っていない。wall margin、solver
+tolerance、horizon、weight、timeoutおよび到達可能なbehavior parameterの調整は行っていない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

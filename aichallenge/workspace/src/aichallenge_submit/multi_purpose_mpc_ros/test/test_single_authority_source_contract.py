@@ -953,6 +953,31 @@ def test_six_state_preentry_adoption_reuses_current_world_proof_without_authorit
     )
 
 
+def test_tactical_async_and_isolated_branches_share_one_owned_snapshot_boundary() -> None:
+    """Deep-copy ownership must not drift between tactical execution paths."""
+
+    helper_start = SOURCE.index("struct OwnedTacticalSnapshot")
+    helper_end = SOURCE.index("void invalidate_mpcc_lite_async_results()", helper_start)
+    helper = SOURCE[helper_start:helper_end]
+    assert "std::make_shared<ReferencePath>(*model->reference_path)" in helper
+    assert "std::make_shared<BicycleModel>(*model)" in helper
+    assert "gap_planner->tactical_snapshot()" in helper
+    assert "snapshot.planner->reference_path_snapshot_owner_" in helper
+
+    isolated_start = SOURCE.index(
+        "ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch("
+    )
+    isolated_end = SOURCE.index("void evaluate_and_select_extended_mpcc_branches(", isolated_start)
+    isolated = SOURCE[isolated_start:isolated_end]
+    assert "make_owned_tactical_snapshot()" in isolated
+
+    submit_start = SOURCE.index("bool submit_mpcc_lite_async_snapshot(")
+    submit_end = SOURCE.index("void reset_after_external_maneuver(", submit_start)
+    submit = SOURCE[submit_start:submit_end]
+    assert "auto owned_snapshot = make_owned_tactical_snapshot();" in submit
+    assert "owned_snapshot = std::move(owned_snapshot.value())" in submit
+
+
 def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:
     """Dead retained selectors may not keep a five-state publisher reconnectable."""
 

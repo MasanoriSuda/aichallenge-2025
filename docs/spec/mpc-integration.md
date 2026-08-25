@@ -2351,6 +2351,22 @@ measured／lifted／expected course progress、現在／期待操舵と到達ste
 current dynamic worldを再認証するatomic境界が必要である。この時点ではpre-entry authorityはshadowのままとし、
 five-state Gate A、parameter、fallbackを変更しない。
 
+#### Prospective pre-entry current-state再solveの実時間境界（2026-08-25、2025由来の暫定）
+
+`output/20260825-205831`では、async選択sideを現在model／V2X world／committed actuationから
+再構築すると、six-state solver、exact swept-wall、current target tubeの完全証明を取得できた。これは古いasync trajectoryを
+retained採用するのではなく、選択済みhomotopyを現在状態から再solveすべきという因果仮説を支持する。
+
+一方、tactical候補の再生成までcontrol callback内で同期実行すると、成功時110.475 ms、棄却時87.840--115.352 msを要し、
+25 ms制御周期に対してcallback最大116.813 msのoverrunを発生させた。この同期prototypeは同じSliceで削除し、production経路、
+fallback、flagとして残していない。async／isolated branchで重複していたmodel、ReferencePath、V2XGapPlannerのdeep-copyだけを
+共通owned snapshot factoryへ整理した。
+
+したがって後続のproduction境界は、async戦術層がhomotopyのみを選び、selected-side six-state execution producerを
+control callback外で因果的にpipelineする構成とする。execution artifactはcurrent committed predecessorへbindし、
+current-world proof後にのみatomic採用する。古いasync trajectoryの再利用、continuity閾値緩和、callback内の同期tactical再計算は
+禁止する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -1030,6 +1030,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   from the current committed predecessor; increasing reachability tolerances
   or reusing the stale plan is prohibited. Authority remains
   `shadow,selected=0`; no tuning or fallback was added.
+- `.steering/20260825-rate-resolved-preentry-live-recertification-shadow`
+  tested the missing causal boundary directly. Rebuilding the async-selected
+  side from the current model, V2X world and committed actuation state produced
+  a complete six-state solver/wall/target certificate in
+  `output/20260825-205831`, proving that current-state re-solve is structurally
+  valid. It cost 110.475 ms, while rejected rebuilds cost 87.840--115.352 ms,
+  and caused a 116.813 ms control callback against the 25 ms period. The
+  synchronous prototype was therefore deleted rather than becoming another
+  fallback or owner. Only a common deep-owned tactical snapshot factory is
+  retained to remove duplicated async/isolated copy logic. The next boundary
+  is an asynchronous selected-side six-state execution pipeline bound to the
+  current committed predecessor; old async trajectories, relaxed continuity
+  thresholds and synchronous tactical rebuilding remain prohibited.
 
 ## Slice 7: Parameter tuning
 

@@ -6794,6 +6794,42 @@ struct MPC
     return snapshot;
   }
 
+  struct OwnedTacticalSnapshot
+  {
+    std::shared_ptr<ReferencePath> reference_path;
+    std::shared_ptr<BicycleModel> model;
+    std::shared_ptr<V2XGapPlanner> gap_planner;
+    std::shared_ptr<MPC> planner;
+
+    bool complete() const noexcept
+    {
+      return reference_path != nullptr && model != nullptr &&
+        gap_planner != nullptr && planner != nullptr;
+    }
+  };
+
+  std::optional<OwnedTacticalSnapshot> make_owned_tactical_snapshot() const
+  {
+    if (model == nullptr || model->reference_path == nullptr || gap_planner == nullptr) {
+      return std::nullopt;
+    }
+    OwnedTacticalSnapshot snapshot;
+    snapshot.reference_path =
+      std::make_shared<ReferencePath>(*model->reference_path);
+    snapshot.model = std::make_shared<BicycleModel>(*model);
+    snapshot.model->reference_path = snapshot.reference_path.get();
+    snapshot.model->current_waypoint =
+      &snapshot.model->reference_path->waypoints.at(
+      static_cast<std::size_t>(snapshot.model->wp_id));
+    snapshot.gap_planner = std::shared_ptr<V2XGapPlanner>(
+      gap_planner->tactical_snapshot());
+    snapshot.planner = tactical_snapshot(
+      snapshot.model.get(), snapshot.gap_planner.get());
+    snapshot.planner->reference_path_snapshot_owner_ = snapshot.reference_path;
+    return snapshot.complete() ?
+      std::optional<OwnedTacticalSnapshot>{std::move(snapshot)} : std::nullopt;
+  }
+
   void invalidate_mpcc_lite_async_results()
   {
     ++mpcc_lite_async_context_epoch_;
@@ -8366,20 +8402,12 @@ struct MPC
     auto & evaluation = artifact.evaluation;
     evaluation.side_sign = assessment.side;
     try {
-      if (model == nullptr || model->reference_path == nullptr || gap_planner == nullptr) {
+      auto snapshot = make_owned_tactical_snapshot();
+      if (!snapshot.has_value()) {
         evaluation.failure_reason = "branch snapshot dependencies unavailable";
         return artifact;
       }
-      auto reference_path_owner =
-        std::make_shared<ReferencePath>(*model->reference_path);
-      auto model_owner = std::make_shared<BicycleModel>(*model);
-      model_owner->reference_path = reference_path_owner.get();
-      model_owner->current_waypoint =
-        &model_owner->reference_path->waypoints.at(
-        static_cast<std::size_t>(model_owner->wp_id));
-      auto gap_owner = std::shared_ptr<V2XGapPlanner>(gap_planner->tactical_snapshot());
-      auto branch = tactical_snapshot(model_owner.get(), gap_owner.get());
-      branch->reference_path_snapshot_owner_ = reference_path_owner;
+      auto & branch = snapshot->planner;
       branch->active_extended_branch_solver_context_ = assessment.side > 0 ?
         branch->extended_left_branch_solver_context_ :
         branch->extended_right_branch_solver_context_;
@@ -8604,18 +8632,11 @@ struct MPC
     // path constraints, and trajectory replacement). A deep snapshot both
     // removes the data race and keeps a replaced trajectory alive until this
     // rollout finishes.
-    auto reference_path_snapshot =
-      std::make_shared<ReferencePath>(*model->reference_path);
-    auto model_snapshot = std::make_shared<BicycleModel>(*model);
-    model_snapshot->reference_path = reference_path_snapshot.get();
-    model_snapshot->current_waypoint =
-      &model_snapshot->reference_path->waypoints.at(
-      static_cast<std::size_t>(model_snapshot->wp_id));
-    auto gap_snapshot = std::shared_ptr<V2XGapPlanner>(
-      gap_planner->tactical_snapshot());
-    auto planner_snapshot = tactical_snapshot(
-      model_snapshot.get(), gap_snapshot.get());
-    planner_snapshot->reference_path_snapshot_owner_ = reference_path_snapshot;
+    auto owned_snapshot = make_owned_tactical_snapshot();
+    if (!owned_snapshot.has_value()) {
+      return false;
+    }
+    auto planner_snapshot = owned_snapshot->planner;
     auto mailbox = mpcc_lite_async_mailbox_;
     {
       std::lock_guard<std::mutex> lock(mailbox->mutex);
@@ -8624,13 +8645,12 @@ struct MPC
     }
 
     const auto submission = mpcc_lite_async_worker_->submit_latest(
-      [planner_snapshot, model_snapshot, gap_snapshot, mailbox,
+      [planner_snapshot, owned_snapshot = std::move(owned_snapshot.value()), mailbox,
       ref_wp_id, horizon_size, lower_bound, upper_bound, now_sec,
       target_id, mission_generation, phase, follow_prepare_origin_phase,
       locked_side_sign,
       sequence, context_epoch]() mutable {
-        static_cast<void>(model_snapshot);
-        static_cast<void>(gap_snapshot);
+        static_cast<void>(owned_snapshot);
         const auto start = std::chrono::steady_clock::now();
         MpccLiteAsyncResult result;
         result.sequence = sequence;

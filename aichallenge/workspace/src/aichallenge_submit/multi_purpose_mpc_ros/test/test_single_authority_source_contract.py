@@ -1036,6 +1036,7 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
     assert "observation_only_store" in worker
     assert "should_publish_latest_only_result(" in worker
     assert "result.context_epoch" in worker
+    assert "result.selected_mission = draft.assessment.selected_mission" in submit
     assert "mailbox->context_epoch" in worker
     assert "result.sequence != mailbox->latest_submitted_sequence" not in worker
     assert submit.index("submit_latest(") < submit.index(
@@ -1053,6 +1054,12 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
     assert "tactical_identity.current_world_observation_permitted" in consume
     assert "tactical_identity.tactical_authority_current" in consume
     assert "current_world_joinable && tactical_identity.tactical_authority_current" in consume
+    assert "RateResolvedPreentryGateAShadowProposal proposal" in consume
+    assert "proposal.mission = result->selected_mission.value()" in consume
+    assert "proposal.certified_plan = plan" in consume
+    assert (
+        "live_behavior.rate_resolved_preentry_gate_a_shadow_proposal =" in consume
+    )
     assert "authority=shadow,selected=0" in consume
     assert "certify_and_replace(" not in consume
     assert "publish_control_command(" not in consume
@@ -1072,11 +1079,38 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
     production_start = SOURCE.index("MpcControlCycleResult rate_resolved_normal_production_control(")
     production_end = SOURCE.index("MpcControlCycleResult get_control(", production_start)
     production = SOURCE[production_start:production_end]
+    assert "consume_rate_resolved_preentry_execution_shadow(" not in production
     build_position = production.index("build_rate_resolved_preentry_execution_draft(")
     command_position = production.index("rate_resolved_track_cruise_control(")
     submit_position = production.index("submit_rate_resolved_preentry_execution_shadow(")
     assert build_position < command_position < submit_position
     assert "output.control[1]" in production[submit_position:]
+
+    init_start = SOURCE.index("MpcProblem init_problem(")
+    init_end = SOURCE.index("void record_solution_contract(", init_start)
+    init_problem = SOURCE[init_start:init_end]
+    behavior_position = init_problem.index(
+        "*behavior_override : evaluate_v2x_behavior("
+    )
+    consume_position = init_problem.index(
+        "consume_rate_resolved_preentry_execution_shadow("
+    )
+    gate_a_position = init_problem.index(
+        "auto overtake_line_output =\n      update_overtake_line("
+    )
+    assert behavior_position < consume_position < gate_a_position
+    consume_guard_start = init_problem.rfind(
+        "if (behavior_override == nullptr)", 0, consume_position
+    )
+    assert consume_guard_start >= 0
+    consume_guard = init_problem[consume_guard_start:gate_a_position]
+    assert "consume_rate_resolved_preentry_execution_shadow(" in consume_guard
+
+    fsm_start = SOURCE.index("OvertakeLineOutput update_overtake_line(")
+    fsm_end = SOURCE.index("bool is_overtake_forbidden_wp(", fsm_start)
+    assert "rate_resolved_preentry_gate_a_shadow_proposal" not in SOURCE[
+        fsm_start:fsm_end
+    ]
 
 
 def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:

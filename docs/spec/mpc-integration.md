@@ -2402,6 +2402,24 @@ current-world join、4件がexact same-sideかつauthority-readyのshadow観測�
 後続の`dynamic-path-blocked`はcurrent worldの正当なfail-closedであり、transport欠落とは分離できた。authorityは引き続き
 `shadow,selected=0`で、five-state Gate Aはproduction昇格と同一Sliceで削除するまで維持する。
 
+#### Six-state Gate A atomic proposal shadow（2026-08-25、2025由来の暫定）
+
+causal execution resultをnormal control内でconsumeすると、`init_problem()`内の`update_overtake_line()`が既にfive-state
+Gate Aを評価した後になる。これはsolver性能ではなく更新順序の欠陥であり、six-state証明がFSM admissionを置換できない。
+
+live pathは`evaluate_v2x_behavior()`の後、最終`update_overtake_line()`の前でresultをconsumeする。private async problem buildは
+`behavior_override`を持つため共有mailboxをconsumeしない。exact Mission、six-state `CertifiedPlan`、target、side、prospective
+generation、tactical sequence、context epochが一致し、current-world revalidationがacceptedの場合だけ、型付きGate A proposalを
+同一周期の`V2XBehaviorOutput`へ生成する。本SliceではFSM、production plan store、publisherはproposalを参照しない。
+
+`output/20260825-223846`のdomain 2では54 submission、38 result、37 complete physical certificate、12 current-world join、
+12 authority-ready／Gate-A proposalを観測し、左右両sideのproposalが成立した。古いresultは`steering-unreachable`等でfail closedとなった。
+両domainのcallback overrunは0、観測最大は6.808 ms／5.447 msで25 ms周期内だった。
+
+この証拠は観測済みShiftOut entryのshadow境界を合格させるが、未観測direct Passを暗黙にproduction昇格する根拠にはしない。
+authority Sliceは所有するintentを明示し、そのsix-state proposal採用と対応five-state Gate A proof／entry cacheの物理削除を同一変更で
+行わなければならない。five-state経路を恒久fallbackとして残さず、parameter tuningも混在させない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -2362,6 +2362,34 @@ struct RateResolvedPreentryAdoptionShadowEvaluation
   double elapsed_ms{0.0};
 };
 
+/// Observation-only atomic handoff at the real Overtake Gate-A boundary.
+/// Mission geometry and the causal six-state proof must travel together; a
+/// caller may not reconstruct either half from an older tactical result.
+struct RateResolvedPreentryGateAShadowProposal
+{
+  std::uint64_t sequence{};
+  std::uint64_t context_epoch{};
+  std::uint64_t tactical_source_sequence{};
+  std::uint64_t prospective_mission_generation{};
+  std::string target_id;
+  int selected_side_sign{};
+  overtake_core::OvertakeMissionCandidate mission;
+  std::shared_ptr<const rate_resolved_certified::CertifiedPlan> certified_plan;
+
+  bool complete() const noexcept
+  {
+    return sequence != 0U && context_epoch != 0U &&
+           tactical_source_sequence != 0U &&
+           prospective_mission_generation != 0U && !target_id.empty() &&
+           (selected_side_sign == -1 || selected_side_sign == 1) &&
+           mission.pass_side_sign == selected_side_sign &&
+           certified_plan != nullptr &&
+           certified_plan->execution_artifact != nullptr &&
+           certified_plan->execution_artifact->identity.source_context.
+           execution_side_sign == selected_side_sign;
+  }
+};
+
 mpcc_progress::ExtendedBranchEvaluation rate_resolved_preentry_branch_evaluation(
   const RateResolvedPreentryShadowEvaluation & source)
 {
@@ -2574,6 +2602,10 @@ struct V2XBehaviorOutput
   std::uint64_t rate_resolved_preentry_tactical_source_sequence{};
   RateResolvedPreentryAdoptionShadowEvaluation
   rate_resolved_preentry_adoption_shadow;
+  /// This is evidence at the FSM boundary, not production authority.  The
+  /// fresh-entry path deliberately does not consume it in this Slice.
+  std::optional<RateResolvedPreentryGateAShadowProposal>
+  rate_resolved_preentry_gate_a_shadow_proposal;
   /// Immutable executable artifact produced by the same selected dual branch
   /// as `overtake_selected_mission`.  It is entry evidence only; the live
   /// controller repeats current-world proof before publishing it.
@@ -5917,6 +5949,7 @@ struct RateResolvedPreentryExecutionShadowResult
   std::uint64_t prospective_mission_generation{};
   std::string target_id;
   int selected_side_sign{};
+  std::optional<overtake_core::OvertakeMissionCandidate> selected_mission;
   double snapshot_sec{-std::numeric_limits<double>::infinity()};
   double snapshot_ms{};
   double build_ms{};
@@ -17853,6 +17886,14 @@ struct MPC
       *behavior_override : evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
     prewarm_overtake_entry_wall_cache(
       behavior_output, ref_wp_id, N, lb, ub, now_sec);
+    // Consume the causal selected-side result at the boundary where Gate A is
+    // actually evaluated. Previously this ran later in get_control(), after
+    // update_overtake_line() had already admitted or rejected the five-state
+    // Mission. The resulting proposal remains shadow-only in this Slice.
+    if (behavior_override == nullptr) {
+      consume_rate_resolved_preentry_execution_shadow(
+        behavior_output, now_sec);
+    }
     last_v2x_behavior_output_ = behavior_output;
     const bool solver_overtake_cooldown_active =
       v2x_overtake_core::is_solver_cooldown_active(
@@ -24009,6 +24050,7 @@ struct MPC
       draft.prospective_mission_generation;
     result.target_id = draft.target_id;
     result.selected_side_sign = draft.selected_side_sign;
+    result.selected_mission = draft.assessment.selected_mission;
     result.snapshot_sec = draft.snapshot_sec;
     result.snapshot_ms = draft.snapshot_ms;
     const double snapshot_ms = draft.snapshot_ms;
@@ -24127,7 +24169,7 @@ struct MPC
   }
 
   void consume_rate_resolved_preentry_execution_shadow(
-    const V2XBehaviorOutput & live_behavior, const double now_sec)
+    V2XBehaviorOutput & live_behavior, const double now_sec)
   {
     if (rate_resolved_preentry_execution_shadow_mailbox_ == nullptr) {
       return;
@@ -24200,6 +24242,37 @@ struct MPC
       join_reason == rate_resolved_retained::Reason::Accepted;
     const bool authority_ready =
       current_world_joinable && tactical_identity.tactical_authority_current;
+    const auto & plan = result->pipeline.certified_plan.plan;
+    const bool proposal_identity_complete =
+      authority_ready && result->selected_mission.has_value() &&
+      result->selected_mission->feasible &&
+      result->selected_mission->pass_side_sign == result->selected_side_sign &&
+      plan != nullptr && plan->execution_artifact != nullptr &&
+      plan->execution_artifact->identity.source_context.target_id ==
+      result->target_id &&
+      plan->execution_artifact->identity.source_context.intent_generation ==
+      result->prospective_mission_generation &&
+      plan->execution_artifact->identity.source_context.execution_side_sign ==
+      result->selected_side_sign &&
+      mpcc_contract::canonical_normal_intent_requires_execution_side(
+      plan->execution_artifact->identity.source_context.intent);
+    if (proposal_identity_complete) {
+      RateResolvedPreentryGateAShadowProposal proposal;
+      proposal.sequence = result->sequence;
+      proposal.context_epoch = result->context_epoch;
+      proposal.tactical_source_sequence = result->tactical_source_sequence;
+      proposal.prospective_mission_generation =
+        result->prospective_mission_generation;
+      proposal.target_id = result->target_id;
+      proposal.selected_side_sign = result->selected_side_sign;
+      proposal.mission = result->selected_mission.value();
+      proposal.certified_plan = plan;
+      if (proposal.complete()) {
+        live_behavior.rate_resolved_preentry_gate_a_shadow_proposal =
+          std::move(proposal);
+        ++rate_resolved_preentry_execution_shadow_gate_a_proposal_count_;
+      }
+    }
     rate_resolved_preentry_execution_shadow_current_world_joinable_count_ +=
       current_world_joinable ? 1U : 0U;
     rate_resolved_preentry_execution_shadow_authority_ready_count_ +=
@@ -24221,10 +24294,11 @@ struct MPC
         "generation=%lu/%lu, age=%.3f s, snapshot=%.3f ms, build=%.3f ms, "
         "worker=%.3f ms, build_detail=%s, "
         "solver=%s, physical=%s, complete=%d, "
+        "mission=%d/feasible:%d/proposal_identity:%d, "
         "identity=%s/exact:%d/authority:%d/live_tactical:%lu, "
-        "join=%s/world:%d/authority_ready:%d, "
+        "join=%s/world:%d/authority_ready:%d/gate_a_proposal:%d, "
         "totals=submitted:%lu/replaced:%lu/result:%lu/complete:%lu/"
-        "world_join:%lu/authority_ready:%lu, "
+        "world_join:%lu/authority_ready:%lu/gate_a_proposal:%lu, "
         "worker_queue=running:%d/pending:%d, "
         "authority=shadow,selected=0",
         static_cast<unsigned long>(result->sequence),
@@ -24246,6 +24320,10 @@ struct MPC
         rate_resolved_physical_wall::to_string(
           result->pipeline.physical->outcome) : "missing",
         complete ? 1 : 0,
+        result->selected_mission.has_value() ? 1 : 0,
+        result->selected_mission.has_value() &&
+        result->selected_mission->feasible ? 1 : 0,
+        proposal_identity_complete ? 1 : 0,
         mpcc_contract::to_string(tactical_identity.reason),
         tactical_identity.exact ? 1 : 0,
         tactical_identity.tactical_authority_current ? 1 : 0,
@@ -24253,6 +24331,8 @@ struct MPC
           live_behavior.rate_resolved_preentry_tactical_source_sequence),
         rate_resolved_retained::to_string(join_reason),
         current_world_joinable ? 1 : 0, authority_ready ? 1 : 0,
+        live_behavior.rate_resolved_preentry_gate_a_shadow_proposal.has_value() ?
+        1 : 0,
         static_cast<unsigned long>(
           rate_resolved_preentry_execution_shadow_submission_count_),
         static_cast<unsigned long>(
@@ -24265,6 +24345,8 @@ struct MPC
           rate_resolved_preentry_execution_shadow_current_world_joinable_count_),
         static_cast<unsigned long>(
           rate_resolved_preentry_execution_shadow_authority_ready_count_),
+        static_cast<unsigned long>(
+          rate_resolved_preentry_execution_shadow_gate_a_proposal_count_),
         worker_stats.running ? 1 : 0, worker_stats.pending ? 1 : 0);
     }
   }
@@ -26093,8 +26175,6 @@ struct MPC
         problem, intent, "rate-resolved normal admission unavailable");
     }
 
-    consume_rate_resolved_preentry_execution_shadow(
-      last_v2x_behavior_output_, now_sec);
     std::string preentry_execution_draft_reject_reason;
     auto preentry_execution_draft =
       build_rate_resolved_preentry_execution_draft(
@@ -26858,6 +26938,8 @@ struct MPC
   std::uint64_t
   rate_resolved_preentry_execution_shadow_current_world_joinable_count_{};
   std::uint64_t rate_resolved_preentry_execution_shadow_authority_ready_count_{};
+  std::uint64_t
+  rate_resolved_preentry_execution_shadow_gate_a_proposal_count_{};
   double rate_resolved_preentry_execution_shadow_last_build_ms_{};
   std::uint64_t
   rate_resolved_track_cruise_physical_wall_last_consumed_sequence_{};

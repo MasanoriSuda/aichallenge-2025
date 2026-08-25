@@ -1080,6 +1080,21 @@ Finish the architecture simplification instead of leaving permanent dual control
   `dynamic-path-blocked` remained a legitimate fail-closed result. The worker
   is still shadow-only; five-state Gate A deletion and production promotion
   require a later Slice with intent coverage and atomic owner removal.
+- `.steering/20260825-six-state-gate-a-proposal-shadow` fixes the update-order
+  defect that kept those causal completions behind the real Overtake FSM Gate
+  A. The live path now consumes the result after tactical evaluation and
+  before `update_overtake_line()`, while private async problem builds cannot
+  steal the shared mailbox. Exact Mission geometry, six-state `CertifiedPlan`,
+  target, side, prospective generation, tactical sequence and context epoch
+  travel as one observation-only proposal. The FSM, production store and
+  publisher do not consume it. In bounded run `output/20260825-223846`, domain
+  2 formed 12 current-world-valid, tactical-authority-ready Gate-A proposals
+  across both side signs; stale/unreachable results remained fail-closed.
+  Callback maxima were 6.808 ms and 5.447 ms against the 25 ms period, with
+  zero overruns. This closes the shadow boundary proof for observed ShiftOut
+  entry. Production promotion still requires explicit intent scope and
+  physical deletion of the corresponding five-state Gate-A proof/cache in the
+  same Slice; direct Pass is not inferred from unobserved evidence.
 
 ## Slice 7: Parameter tuning
 

@@ -43,6 +43,10 @@ struct ControlStage
   double duration_sec{};
   double virtual_progress_lower_mps{};
   double virtual_progress_upper_mps{};
+  /// Original physical acceleration envelope, before the solver-only
+  /// certificate inset is applied.
+  double acceleration_lower_mps2{};
+  double acceleration_upper_mps2{};
 };
 
 /// Complete immutable representation of one physically row-certified
@@ -83,6 +87,7 @@ enum class RejectReason
   CorridorCountMismatch,
   InvalidPredictedState,
   InvalidControlStage,
+  InvalidAccelerationControlBounds,
   InvalidProgressControlBounds,
   InvalidLateralCorridor,
   InitialSteeringMismatch,

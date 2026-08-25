@@ -794,6 +794,21 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   mailbox identity rejection, zero physical identity mismatch and zero callback overrun; every
   available candidate was six-state and remained `authority=shadow, selected=0`. This is a prerequisite
   for the atomic six-state Track/Cruise promotion, not the promotion itself.
+- `.steering/20260825-rate-resolved-track-cruise-production-owner` performs that atomic authority
+  promotion. Track/Cruise now builds its next six-state request without invoking the five-state
+  normal solver, revalidates the retained six-state proof against the current world and publishes
+  the exact certified actuation. Missing proof fails closed to Emergency rather than switching
+  formulation. The first run exposed a root producer mismatch: OSQP could certify a value just
+  outside an exact physical input boundary while the publisher subsequently clamped it, invalidating
+  the solution identity. Solver-facing physical rows now use an interior derived from the existing
+  certificate tolerance, original physical bounds remain exact in the artifact, and the canonical
+  publisher no longer post-processes certified actuation. All 49 package test targets (1,870 tests)
+  and the 25-package build pass. In `output/20260825-100454`, publisher mutation was zero in both
+  domains, d2 repeatedly produced 81/81 six-state canonical commands with zero command delta, and
+  final traces carried the complete six-state identity. The Track/Cruise six-state authority
+  migration is structurally accepted. Slice 6 still owns physical deletion of unreachable
+  five-state Track/Cruise helpers and other migration paths; dynamic-observation unavailability and
+  traffic-time callback tails remain separate measured quality work.
 
 ## Slice 6: Legacy and migration path removal
 

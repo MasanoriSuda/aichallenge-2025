@@ -57,6 +57,53 @@ double curvature_jacobian(
   return 1.0 / (wheelbase_m * cosine * cosine);
 }
 
+struct SolverInsetBounds
+{
+  double lower{};
+  double upper{};
+  double margin{};
+};
+
+/// OSQP's certified solution may lie outside a solver row by its accepted
+/// residual.  A command/publisher boundary, however, must satisfy the physical
+/// actuator envelope exactly.  Inset the solver row by the maximum certified
+/// residual instead of clamping a solved command after certification.
+std::optional<SolverInsetBounds> inset_for_exact_physical_boundary(
+  const double physical_lower, const double physical_upper,
+  const persistent_osqp::PhysicalConstraintTolerance & tolerance) noexcept
+{
+  if (
+    std::isnan(physical_lower) || std::isnan(physical_upper) ||
+    physical_lower > physical_upper || !std::isfinite(tolerance.absolute) ||
+    tolerance.absolute < 0.0 || !std::isfinite(tolerance.relative) ||
+    tolerance.relative < 0.0 || tolerance.relative >= 1.0)
+  {
+    return std::nullopt;
+  }
+  double characteristic = 0.0;
+  if (std::isfinite(physical_lower)) {
+    characteristic = std::max(characteristic, std::abs(physical_lower));
+  }
+  if (std::isfinite(physical_upper)) {
+    characteristic = std::max(characteristic, std::abs(physical_upper));
+  }
+  const double margin =
+    (tolerance.absolute + tolerance.relative * characteristic) /
+    (1.0 - tolerance.relative);
+  const double solver_lower = std::isfinite(physical_lower) ?
+    physical_lower + margin : physical_lower;
+  const double solver_upper = std::isfinite(physical_upper) ?
+    physical_upper - margin : physical_upper;
+  if (
+    !std::isfinite(margin) || margin < 0.0 ||
+    std::isnan(solver_lower) || std::isnan(solver_upper) ||
+    solver_lower > solver_upper)
+  {
+    return std::nullopt;
+  }
+  return SolverInsetBounds{solver_lower, solver_upper, margin};
+}
+
 }  // namespace
 
 std::optional<Result> build(
@@ -140,14 +187,6 @@ std::optional<Result> build(
   problem.input_delta_weight <<
     request.input_delta_weight[0], 0.0, request.input_delta_weight[2];
 
-  const double first_rate_certificate_margin =
-    (solver_tolerance.absolute + solver_tolerance.relative *
-    request.maximum_abs_steering_rate_radps) /
-    (1.0 - solver_tolerance.relative);
-  if (!std::isfinite(first_rate_certificate_margin)) {
-    return std::nullopt;
-  }
-
   result.steering_reference_rad.resize(static_cast<std::size_t>(horizon + 1));
   result.steering_lower_rad.resize(static_cast<std::size_t>(horizon + 1));
   result.steering_upper_rad.resize(static_cast<std::size_t>(horizon + 1));
@@ -163,6 +202,19 @@ std::optional<Result> build(
       request.states[static_cast<std::size_t>(stage)].lower;
     problem.state_upper.segment<kLegacyStateDimension>(state_offset) =
       request.states[static_cast<std::size_t>(stage)].upper;
+    if (stage > 0) {
+      const auto velocity_bounds = inset_for_exact_physical_boundary(
+        request.states[static_cast<std::size_t>(stage)].lower[3],
+        request.states[static_cast<std::size_t>(stage)].upper[3],
+        solver_tolerance);
+      if (!velocity_bounds.has_value()) {
+        return std::nullopt;
+      }
+      problem.state_lower[state_offset + model::kVelocityIndex] =
+        velocity_bounds->lower;
+      problem.state_upper[state_offset + model::kVelocityIndex] =
+        velocity_bounds->upper;
+    }
     problem.state_weight.segment<kLegacyStateDimension>(state_offset) =
       request.states[static_cast<std::size_t>(stage)].weight;
     problem.additional_linear_cost.segment<kLegacyStateDimension>(state_offset) =
@@ -245,49 +297,49 @@ std::optional<Result> build(
     problem.input_reference[
       input_offset + model::kVirtualProgressSpeedIndex] =
       legacy_input.reference[2];
-    problem.input_lower[input_offset + model::kAccelerationIndex] =
-      legacy_input.lower[0];
-    problem.input_upper[input_offset + model::kAccelerationIndex] =
-      legacy_input.upper[0];
-    problem.input_lower[input_offset + model::kSteeringRateIndex] =
-      -request.maximum_abs_steering_rate_radps;
-    problem.input_upper[input_offset + model::kSteeringRateIndex] =
-      request.maximum_abs_steering_rate_radps;
-    if (stage == 0) {
-      const double physical_lower = std::max(
+    const auto acceleration_bounds = inset_for_exact_physical_boundary(
+      legacy_input.lower[0], legacy_input.upper[0], solver_tolerance);
+    const auto progress_speed_bounds = inset_for_exact_physical_boundary(
+      legacy_input.lower[2], legacy_input.upper[2], solver_tolerance);
+    const double physical_rate_lower = stage == 0 ? std::max(
         -request.maximum_abs_steering_rate_radps,
         (-request.maximum_abs_steering_rad - request.current_steering_rad) /
-        legacy_input.stage_dt_sec);
-      const double physical_upper = std::min(
+        legacy_input.stage_dt_sec) : -request.maximum_abs_steering_rate_radps;
+    const double physical_rate_upper = stage == 0 ? std::min(
         request.maximum_abs_steering_rate_radps,
         (request.maximum_abs_steering_rad - request.current_steering_rad) /
-        legacy_input.stage_dt_sec);
-      const double solver_lower =
-        physical_lower + first_rate_certificate_margin;
-      const double solver_upper =
-        physical_upper - first_rate_certificate_margin;
-      if (
-        !std::isfinite(physical_lower) || !std::isfinite(physical_upper) ||
-        !std::isfinite(solver_lower) || !std::isfinite(solver_upper) ||
-        solver_lower > solver_upper)
-      {
-        return std::nullopt;
-      }
-      problem.input_lower[input_offset + model::kSteeringRateIndex] = solver_lower;
-      problem.input_upper[input_offset + model::kSteeringRateIndex] = solver_upper;
-      result.first_steering_rate_physical_lower_radps = physical_lower;
-      result.first_steering_rate_physical_upper_radps = physical_upper;
-      result.first_steering_rate_solver_lower_radps = solver_lower;
-      result.first_steering_rate_solver_upper_radps = solver_upper;
+        legacy_input.stage_dt_sec) : request.maximum_abs_steering_rate_radps;
+    const auto steering_rate_bounds = inset_for_exact_physical_boundary(
+      physical_rate_lower, physical_rate_upper, solver_tolerance);
+    if (
+      !acceleration_bounds.has_value() ||
+      !progress_speed_bounds.has_value() ||
+      !steering_rate_bounds.has_value())
+    {
+      return std::nullopt;
+    }
+    problem.input_lower[input_offset + model::kAccelerationIndex] =
+      acceleration_bounds->lower;
+    problem.input_upper[input_offset + model::kAccelerationIndex] =
+      acceleration_bounds->upper;
+    problem.input_lower[input_offset + model::kSteeringRateIndex] =
+      steering_rate_bounds->lower;
+    problem.input_upper[input_offset + model::kSteeringRateIndex] =
+      steering_rate_bounds->upper;
+    if (stage == 0) {
+      result.first_steering_rate_physical_lower_radps = physical_rate_lower;
+      result.first_steering_rate_physical_upper_radps = physical_rate_upper;
+      result.first_steering_rate_solver_lower_radps = steering_rate_bounds->lower;
+      result.first_steering_rate_solver_upper_radps = steering_rate_bounds->upper;
       result.first_steering_rate_certificate_margin_radps =
-        first_rate_certificate_margin;
+        steering_rate_bounds->margin;
     }
     problem.input_lower[
       input_offset + model::kVirtualProgressSpeedIndex] =
-      legacy_input.lower[2];
+      progress_speed_bounds->lower;
     problem.input_upper[
       input_offset + model::kVirtualProgressSpeedIndex] =
-      legacy_input.upper[2];
+      progress_speed_bounds->upper;
     problem.input_weight[input_offset + model::kAccelerationIndex] =
       legacy_input.weight[0];
     problem.input_weight[

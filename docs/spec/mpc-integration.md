@@ -2062,6 +2062,33 @@ callback overrunが0だった。全件`authority=shadow, selected=0`を維持し
 authorityを増やしていない。次の昇格Sliceでは、この完全source contextをfinal decision traceへ渡し、
 6-state Track/Cruise owner接続と5-state owner削除を同じ変更で行う。
 
+#### Steering-rate 6-state Track/Cruise production authority（2026-08-25、2025由来の暫定）
+
+Track/Cruiseの通常出力ownerを、current-worldで再証明したrate-resolved 6-state retained proofへ
+切り替えた。Track/Cruise周期は5-state通常solverを呼ばず、次周期用6-state requestを独立してsealし、
+当該周期で実際に選択した操舵角をstate-zero predecessorとしてbindする。6-state proofがない周期は
+別のnormal formulationへfallbackせず、明示的なcanonical EmergencyStopとする。Follow、Overtake、
+Emergency、Recoveryのauthorityは本Sliceで変更しない。
+
+初回production run `output/20260825-094733`では、OSQPの既存physical residual tolerance内で
+加速度が上限を微小超過し、publisherの無条件clampが証明済みactuationを変更したため、最終identity
+guardが`canonical normal command mutated before publication`として拒否した。これはparameter不足では
+なく、residualを許容するsolver rowとexactなphysical publication boundaryの所有不整合である。
+
+velocity、acceleration、steering-rate、virtual-progressのsolver-facing physical rowは、既存の
+physical OSQP toleranceから導く最大許容残差だけ内側へ移す。元のphysical boundsは変更せずartifactへ
+保存し、execution artifactでexactに再検査する。canonical publisherはcertified actuationをclamp／補正
+しない。区間がsolver insetを収容できない場合はproblem constructionでfail closeする。Recoveryと
+noncanonical出力の既存clampは維持する。
+
+修正後の`output/20260825-100454`では、両domainでpublisher mutationは0、d2は複数窓で
+`attempted=81/available=81/production_canonical=81`、speed／acceleration／steering差分は全て0となった。
+最終traceは`VelocitySteeringProgress6State`、`authority=certified-normal-solution`、
+`canonical=satisfied`を保持した。したがってTrack/Cruiseの6-state authority migrationは構造上合格と
+する。動的world observation欠損はage-only再利用で隠さず、provenance付きuncertainty tubeの後続課題と
+する。traffic中のcallback overrunも独立したtiming課題として残す。到達不能になった5-state
+Track/Cruise helperの物理削除はSlice 6で行う。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -1,4 +1,5 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp"
 
 #include <gtest/gtest.h>
 
@@ -9,6 +10,8 @@ namespace
 {
 
 namespace command = multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate;
+namespace production =
+  multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
 namespace retained =
   multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation;
 namespace artifact =
@@ -56,8 +59,8 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan()
     {0.20, 0.0, 0.0, 2.2, 0.4, 0.12},
   };
   execution->control_stages = {
-    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0},
-    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0},
+    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
+    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
   };
   execution->nominal_path_distance_m = {0.0, 0.2, 0.4};
   execution->lateral_lower_m = {-1.0, -1.0, -1.0};
@@ -117,6 +120,9 @@ retained::Result accepted_result()
   proof.cursor.available = true;
   proof.cursor.sequence = 7U;
   proof.cursor.control_stage_index = 1U;
+  proof.cursor.remaining_control_stage_count = 1U;
+  proof.observation_origin_sec = 1.05;
+  proof.control_origin_sec = 1.05;
   proof.actuation.sequence = 7U;
   proof.actuation.control_stage_index = 1U;
   proof.actuation.predicted_speed_mps = 4.2;
@@ -188,6 +194,66 @@ TEST(RateResolvedCommandCandidate, RejectsFiveStateArtifactIdentity)
   const auto result = command::build(retained_result);
   EXPECT_EQ(result.reason, command::Reason::InvalidCertifiedPlan);
   EXPECT_FALSE(result.candidate.has_value());
+}
+
+TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
+{
+  const auto result = production::build(accepted_result());
+  ASSERT_EQ(result.reason, production::Reason::Available);
+  ASSERT_TRUE(result.authority.has_value());
+  const auto & authority = result.authority.value();
+  EXPECT_TRUE(contract::problem_context_complete(authority.problem));
+  EXPECT_TRUE(contract::solution_certified(authority.solution));
+  EXPECT_EQ(
+    authority.problem.formulation,
+    contract::Formulation::VelocitySteeringProgress6State);
+  EXPECT_EQ(authority.command.decision_id, 23U);
+  EXPECT_EQ(authority.command.execution_plan_id, 7U);
+  EXPECT_EQ(authority.command.execution_certificate_decision_id, 23U);
+  EXPECT_EQ(
+    authority.command.source,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified);
+  EXPECT_EQ(
+    authority.command.formulation,
+    contract::Formulation::VelocitySteeringProgress6State);
+  EXPECT_TRUE(authority.command.retained_solution);
+  EXPECT_DOUBLE_EQ(authority.command.predicted_speed_mps, 4.2);
+  EXPECT_DOUBLE_EQ(authority.command.acceleration_mps2, 0.8);
+  EXPECT_DOUBLE_EQ(authority.command.steering_tire_angle_rad, 0.1);
+  ASSERT_EQ(authority.target_speed_horizon_mps.size(), 1U);
+  ASSERT_EQ(authority.steering_horizon_rad.size(), 1U);
+  ASSERT_EQ(authority.world_prediction.first.size(), 1U);
+  ASSERT_EQ(authority.world_prediction.second.size(), 1U);
+}
+
+TEST(RateResolvedProductionAdapter, FinalTraceAcceptsExactSixStateIdentity)
+{
+  const auto result = production::build(accepted_result());
+  ASSERT_TRUE(result.authority.has_value());
+  const auto & authority = result.authority.value();
+  const auto decision = contract::resolve_final_control_decision(
+    contract::FinalControlDecisionRequest{
+      23U, contract::FinalAuthorityClass::CertifiedNormalSolution,
+      "mpc-solution", authority.problem, authority.solution, true,
+      authority.command});
+  EXPECT_TRUE(decision.identity_complete);
+  EXPECT_TRUE(decision.canonical_contract_satisfied);
+  EXPECT_EQ(decision.reason, "matching-certified-solution");
+  EXPECT_EQ(
+    decision.formulation,
+    contract::Formulation::VelocitySteeringProgress6State);
+  EXPECT_EQ(decision.execution_plan_id, 7U);
+  EXPECT_EQ(decision.execution_certificate_decision_id, 23U);
+}
+
+TEST(RateResolvedProductionAdapter, RejectsBlockedCurrentWorldProof)
+{
+  auto retained_result = accepted_result();
+  retained_result.reason = retained::Reason::DynamicPathBlocked;
+  retained_result.proof.reset();
+  const auto result = production::build(retained_result);
+  EXPECT_EQ(result.reason, production::Reason::RetainedProofUnavailable);
+  EXPECT_FALSE(result.authority.has_value());
 }
 
 } // namespace

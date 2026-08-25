@@ -32,7 +32,9 @@ bool finite_control(const ControlStage & control) noexcept
          std::isfinite(control.virtual_progress_speed_mps) &&
          std::isfinite(control.duration_sec) && control.duration_sec > 0.0 &&
          std::isfinite(control.virtual_progress_lower_mps) &&
-         std::isfinite(control.virtual_progress_upper_mps);
+         std::isfinite(control.virtual_progress_upper_mps) &&
+         std::isfinite(control.acceleration_lower_mps2) &&
+         std::isfinite(control.acceleration_upper_mps2);
 }
 
 mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation sample_steering(
@@ -101,6 +103,8 @@ const char * to_string(const RejectReason reason) noexcept
     case RejectReason::CorridorCountMismatch: return "corridor-count-mismatch";
     case RejectReason::InvalidPredictedState: return "invalid-predicted-state";
     case RejectReason::InvalidControlStage: return "invalid-control-stage";
+    case RejectReason::InvalidAccelerationControlBounds:
+      return "invalid-acceleration-control-bounds";
     case RejectReason::InvalidProgressControlBounds:
       return "invalid-progress-control-bounds";
     case RejectReason::InvalidLateralCorridor: return "invalid-lateral-corridor";
@@ -226,16 +230,21 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
       return RejectReason::InvalidControlStage;
     }
     if (
+      control.acceleration_lower_mps2 > control.acceleration_upper_mps2 ||
+      control.acceleration_mps2 < control.acceleration_lower_mps2 ||
+      control.acceleration_mps2 > control.acceleration_upper_mps2)
+    {
+      return RejectReason::InvalidAccelerationControlBounds;
+    }
+    if (
       control.virtual_progress_lower_mps < 0.0 ||
       control.virtual_progress_lower_mps > control.virtual_progress_upper_mps)
     {
       return RejectReason::InvalidProgressControlBounds;
     }
     if (
-      control.virtual_progress_speed_mps <
-      control.virtual_progress_lower_mps - residual_bound_m ||
-      control.virtual_progress_speed_mps >
-      control.virtual_progress_upper_mps + residual_bound_m)
+      control.virtual_progress_speed_mps < control.virtual_progress_lower_mps ||
+      control.virtual_progress_speed_mps > control.virtual_progress_upper_mps)
     {
       return RejectReason::InvalidControlStage;
     }

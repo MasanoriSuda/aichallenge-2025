@@ -57,8 +57,8 @@ artifact::ExecutionArtifact execution_artifact()
     {0.20, 0.0, 0.0, 2.2, 0.4, 0.12},
   };
   value.control_stages = {
-    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0},
-    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0},
+    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
+    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
   };
   value.nominal_path_distance_m = {0.0, 0.2, 0.4};
   value.lateral_lower_m = {-1.0, -1.0, -1.0};

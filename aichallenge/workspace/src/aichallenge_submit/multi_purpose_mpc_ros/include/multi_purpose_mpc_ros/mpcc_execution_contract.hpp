@@ -53,6 +53,11 @@ bool canonical_normal_intent_requires_target(ControlIntent intent) noexcept;
 bool canonical_normal_intent_requires_execution_side(
   ControlIntent intent) noexcept;
 
+/// Formulations allowed to own a certified normal publisher command during
+/// the staged single-authority migration. Legacy three-state and direct
+/// bypass paths are intentionally excluded.
+bool canonical_normal_formulation_supported(Formulation formulation) noexcept;
+
 struct StageGeometryIdentity
 {
   int transition_from_waypoint{};
@@ -336,8 +341,8 @@ struct CanonicalNormalAuthorityResolution
 CanonicalNormalAuthorityResolution resolve_canonical_normal_authority(
   const CanonicalNormalAuthorityRequest & request) noexcept;
 
-/// The complete first executable actuation from one canonical five-state
-/// solution.  These fields must remain distinct through the publisher
+/// The complete first executable actuation from one canonical solution.
+/// These fields must remain distinct through the publisher
 /// boundary; in particular, predicted speed is not an acceleration command.
 struct CanonicalActuation
 {

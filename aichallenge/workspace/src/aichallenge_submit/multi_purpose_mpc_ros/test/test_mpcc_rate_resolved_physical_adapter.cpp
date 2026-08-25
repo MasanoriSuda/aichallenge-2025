@@ -49,8 +49,8 @@ execution::ExecutionArtifact artifact()
     {0.2, 0.0, 0.02, 2.2, 0.4, 0.12},
   };
   value.control_stages = {
-    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0},
-    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0},
+    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
+    {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
   };
   value.nominal_path_distance_m = {0.0, 0.2, 0.4};
   value.lateral_lower_m = {-1.0, -1.0, -1.0};
@@ -110,6 +110,28 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsInvalidArtifactBeforeConversion)
   EXPECT_EQ(
     result.artifact_reason, execution::RejectReason::InvalidPathDistance);
   EXPECT_FALSE(result.exact_trajectory.has_value());
+}
+
+TEST(MpccRateResolvedPhysicalAdapter, RejectsActuationOutsideExactPhysicalEnvelope)
+{
+  auto source = artifact();
+  source.control_stages.front().acceleration_mps2 = 1.3700001;
+  auto result = adapter::build(
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(result.reason, adapter::RejectReason::InvalidArtifact);
+  EXPECT_EQ(
+    result.artifact_reason,
+    execution::RejectReason::InvalidAccelerationControlBounds);
+
+  source = artifact();
+  source.control_stages.front().virtual_progress_speed_mps = -1e-9;
+  result = adapter::build(
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(result.reason, adapter::RejectReason::InvalidArtifact);
+  EXPECT_EQ(
+    result.artifact_reason, execution::RejectReason::InvalidControlStage);
 }
 
 TEST(MpccRateResolvedPhysicalAdapter, AcceptsCertifiedProgressRegression)

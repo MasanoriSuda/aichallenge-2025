@@ -22,6 +22,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
@@ -151,6 +152,8 @@ namespace rate_resolved_certified =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
 namespace rate_resolved_command =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate;
+namespace rate_resolved_production =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
 namespace rate_resolved_retained =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
@@ -6482,6 +6485,9 @@ struct RateResolvedRetainedShadowEvaluation
   rate_resolved_command::Reason command_reason{
     rate_resolved_command::Reason::RetainedProofUnavailable};
   std::optional<rate_resolved_command::Candidate> command_candidate;
+  rate_resolved_production::Reason production_reason{
+    rate_resolved_production::Reason::RetainedProofUnavailable};
+  std::optional<rate_resolved_production::Authority> production_authority;
   double elapsed_ms{};
 };
 
@@ -27822,6 +27828,58 @@ struct MPC
     return snapshot;
   }
 
+  std::optional<RateResolvedTrackCruiseSubmissionDraft>
+  build_rate_resolved_track_cruise_submission_draft(
+    const MpcProblem & problem, const double now_sec,
+    std::string & reject_reason)
+  {
+    reject_reason.clear();
+    const auto intent = current_control_intent();
+    if (
+      !problem.track_cruise_shadow_requested ||
+      (intent != mpcc_contract::ControlIntent::Track &&
+      intent != mpcc_contract::ControlIntent::Cruise))
+    {
+      reject_reason = "rate-resolved Track/Cruise scope unavailable";
+      return std::nullopt;
+    }
+    if (!problem.progress_metadata_available) {
+      reject_reason = problem.progress_metadata_reject_reason.empty() ?
+        "progress metadata unavailable" :
+        problem.progress_metadata_reject_reason;
+      return std::nullopt;
+    }
+    std::string build_reject_reason;
+    const auto extended_problem = build_extended_progress_problem(
+      problem, intent, build_reject_reason);
+    if (
+      !extended_problem.has_value() ||
+      !extended_problem->rate_resolved_track_cruise_shadow_request.has_value())
+    {
+      reject_reason = build_reject_reason.empty() ?
+        "rate-resolved request unavailable" : build_reject_reason;
+      return std::nullopt;
+    }
+    RateResolvedTrackCruiseSubmissionDraft draft;
+    draft.request =
+      extended_problem->rate_resolved_track_cruise_shadow_request.value();
+    draft.request.current_steering_rad =
+      std::numeric_limits<double>::quiet_NaN();
+    draft.control_prediction_origin_sec =
+      now_sec + execution_prediction_delay_sec_;
+    draft.course_progress_origin_m = extended_problem->progress_origin_m;
+    draft.horizon_steps = extended_problem->N;
+    draft.source_context = make_problem_context(
+      problem,
+      mpcc_contract::Formulation::VelocitySteeringProgress6State);
+    if (!mpcc_contract::problem_context_complete(draft.source_context)) {
+      reject_reason = "rate-resolved source context incomplete";
+      return std::nullopt;
+    }
+    reject_reason = "accepted";
+    return draft;
+  }
+
   std::optional<BoundRateResolvedTrackCruiseSubmission>
   bind_rate_resolved_track_cruise_submission(
     const RateResolvedTrackCruiseSubmissionDraft & draft,
@@ -28179,6 +28237,9 @@ struct MPC
     const auto command = rate_resolved_command::build(result);
     evaluation.command_reason = command.reason;
     evaluation.command_candidate = command.candidate;
+    const auto production = rate_resolved_production::build(result);
+    evaluation.production_reason = production.reason;
+    evaluation.production_authority = production.authority;
     if (result.proof.has_value()) {
       evaluation.sequence =
         result.proof->plan->execution_artifact->identity.sequence;
@@ -28722,7 +28783,7 @@ struct MPC
     rate_resolved_track_cruise_shadow_last_log_sec_ = now_sec;
   }
 
-  void record_rate_resolved_track_cruise_command_shadow(
+  void record_rate_resolved_track_cruise_command(
     const RateResolvedRetainedShadowEvaluation & retained,
     const MpcControlCycleResult & production_output, const double now_sec)
   {
@@ -28782,8 +28843,9 @@ struct MPC
       window.last_production_command->acceleration_mps2 : 0.0;
     RCLCPP_INFO(
       rclcpp::get_logger("mpc_controller"),
-      "Rate-resolved command candidate shadow: attempted=%lu/available=%lu/"
-      "production_canonical=%lu, last=reason:%s/formulation:%s/decision:%lu/"
+      "Rate-resolved Track/Cruise production command: "
+      "attempted=%lu/available=%lu/production_canonical=%lu, "
+      "last=reason:%s/production_reason:%s/formulation:%s/decision:%lu/"
       "artifact:%lu/source_decision:%lu/source:0x%016lx/geometry:0x%016lx/"
       "intent:%s/stage:%lu, command=speed:%.3f/accel:%.3f/"
       "steering_rate:%.3f/steering:%.4f/curvature:%.4f/vtheta:%.3f, "
@@ -28791,11 +28853,12 @@ struct MPC
       "delta=speed:%.3f/accel:%.3f/steering:%.4f, "
       "max_abs_delta=speed:%.3f/accel:%.3f/steering:%.4f, "
       "causal_submit=decision:%lu/predecessor_steering:%.4f, "
-      "authority=shadow, selected=0",
+      "authority=production, selected=%d",
       static_cast<unsigned long>(window.attempt_count),
       static_cast<unsigned long>(window.available_count),
       static_cast<unsigned long>(window.production_canonical_count),
       rate_resolved_command::to_string(last.command_reason),
+      rate_resolved_production::to_string(last.production_reason),
       candidate_available ?
       mpcc_contract::to_string(candidate.source_context.formulation) : "none",
       static_cast<unsigned long>(candidate.decision_id),
@@ -28817,7 +28880,8 @@ struct MPC
       window.maximum_absolute_steering_difference_rad,
       static_cast<unsigned long>(
       rate_resolved_track_cruise_last_causal_submission_decision_id_),
-      rate_resolved_track_cruise_last_causal_predecessor_steering_rad_);
+      rate_resolved_track_cruise_last_causal_predecessor_steering_rad_,
+      production_output.canonical_normal_command.has_value() ? 1 : 0);
     window = RateResolvedCommandShadowTelemetryWindow{};
     rate_resolved_track_cruise_command_last_log_sec_ = now_sec;
   }
@@ -30410,6 +30474,91 @@ struct MPC
     return output;
   }
 
+  MpcControlCycleResult rate_resolved_track_cruise_control(
+    const MpcProblem & problem, const mpcc_contract::ControlIntent intent,
+    const RateResolvedRetainedShadowEvaluation & retained)
+  {
+    if (!retained.production_authority.has_value()) {
+      return canonical_normal_emergency_stop(
+        problem, intent,
+        std::string{"rate-resolved authority unavailable/"} +
+        rate_resolved_production::to_string(retained.production_reason));
+    }
+    const auto & authority = retained.production_authority.value();
+    const auto & command = authority.command;
+    if (
+      !mpcc_contract::problem_context_complete(authority.problem) ||
+      !mpcc_contract::solution_certified(authority.solution) ||
+      authority.problem.intent != intent || command.intent != intent ||
+      authority.problem.formulation !=
+      mpcc_contract::Formulation::VelocitySteeringProgress6State ||
+      command.formulation != authority.problem.formulation ||
+      command.problem_fingerprint != authority.problem.fingerprint ||
+      command.solution_id != authority.solution.solution_id ||
+      command.decision_id != active_control_decision_id_ ||
+      authority.target_speed_horizon_mps.empty() ||
+      authority.target_speed_horizon_mps.size() !=
+      authority.steering_horizon_rad.size() ||
+      authority.world_prediction.first.empty() ||
+      authority.world_prediction.first.size() !=
+      authority.world_prediction.second.size())
+    {
+      return canonical_normal_emergency_stop(
+        problem, intent, "rate-resolved authority identity incomplete");
+    }
+
+    current_control = Eigen::VectorXd::Zero(2 * std::max(0, problem.N));
+    double maximum_steering = authority.maximum_abs_steering_rad;
+    for (int output_stage = 0; output_stage < problem.N; ++output_stage) {
+      const std::size_t source_stage = std::min(
+        static_cast<std::size_t>(output_stage),
+        authority.target_speed_horizon_mps.size() - 1U);
+      const double speed_mps =
+        authority.target_speed_horizon_mps[source_stage];
+      const double steering_rad = authority.steering_horizon_rad[source_stage];
+      if (
+        !std::isfinite(speed_mps) || speed_mps < 0.0 ||
+        !std::isfinite(steering_rad))
+      {
+        return canonical_normal_emergency_stop(
+          problem, intent, "rate-resolved authority horizon nonfinite");
+      }
+      current_control[2 * output_stage] = speed_mps;
+      current_control[2 * output_stage + 1] = steering_rad;
+      maximum_steering = std::max(maximum_steering, std::abs(steering_rad));
+    }
+
+    previous_steering = command.steering_tire_angle_rad;
+    current_prediction = authority.world_prediction;
+    last_problem_context_ = authority.problem;
+    last_solution_contract_ = authority.solution;
+    last_solution_is_retained_ = true;
+    last_published_canonical_intent_ = intent;
+    failure_fallback_speed_.reset();
+    infeasibility_counter = 0;
+    overtake_infeasibility_counter_ = 0;
+    last_control_was_fallback_ = false;
+    extended_mode_handoff_.reset();
+    pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
+      command.decision_id,
+      mpcc_progress::ActuationProposal{
+        command.predicted_speed_mps,
+        command.acceleration_mps2,
+        command.curvature_radpm,
+        command.steering_tire_angle_rad,
+        command.virtual_progress_speed_mps}};
+    last_control_resolution_reason_ =
+      std::string{"canonical-rate-resolved-"} +
+      mpcc_contract::to_string(intent) + "-retained";
+    last_solved_wp_id = problem.tracking_wp_id;
+    MpcControlCycleResult output{
+      Eigen::Vector2d(
+        command.predicted_speed_mps, command.steering_tire_angle_rad),
+      maximum_steering};
+    output.canonical_normal_command = command;
+    return output;
+  }
+
   MpcControlCycleResult canonical_overtake_production_control(
     const MpcProblem & problem, const double now_sec,
     const mpcc_contract::ControlIntent intent)
@@ -30599,11 +30748,10 @@ struct MPC
           "dynamic wait has no executable canonical lateral authority");
       }
       if (problem.track_cruise_shadow_requested) {
-        record_problem_context(
-          problem, mpcc_contract::Formulation::VelocityProgress5State);
-        const auto canonical_result = evaluate_canonical_normal_shadow(
-          problem, now_sec, CanonicalNormalShadowMode::TrackCruise);
-        record_track_cruise_shadow_telemetry(canonical_result, now_sec);
+        std::string draft_reject_reason;
+        const auto rate_resolved_submission_draft =
+          build_rate_resolved_track_cruise_submission_draft(
+          problem, now_sec, draft_reject_reason);
         // Revalidate the retained six-state candidate against the predecessor
         // which entered this cycle.  Do this before resolving the current
         // production output; after resolution, previous_steering belongs to
@@ -30612,21 +30760,14 @@ struct MPC
           evaluate_rate_resolved_track_cruise_retained_shadow(problem, now_sec);
         record_rate_resolved_track_cruise_shadow(
           problem, now_sec, retained_rate_resolved);
-        MpcControlCycleResult output;
-        if (canonical_result.selected.complete()) {
-          output = canonical_normal_control(
-            problem, canonical_result.intent, canonical_result.selected);
-        } else {
-          output = canonical_normal_emergency_stop(
-            problem, canonical_result.intent,
-            canonical_result.status + "/" + canonical_result.retained_detail);
-        }
-        record_rate_resolved_track_cruise_command_shadow(
+        auto output = rate_resolved_track_cruise_control(
+          problem, current_control_intent(), retained_rate_resolved);
+        record_rate_resolved_track_cruise_command(
           retained_rate_resolved, output, now_sec);
-        if (canonical_result.rate_resolved_submission_draft.has_value()) {
+        if (rate_resolved_submission_draft.has_value()) {
           const auto bound_submission =
             bind_rate_resolved_track_cruise_submission(
-            canonical_result.rate_resolved_submission_draft.value(), output);
+            rate_resolved_submission_draft.value(), output);
           if (bound_submission.has_value()) {
             static_cast<void>(submit_rate_resolved_track_cruise_shadow(
               problem, bound_submission.value(), now_sec));
@@ -30634,6 +30775,15 @@ struct MPC
             ++rate_resolved_track_cruise_shadow_telemetry_window_.
               submission_reject_count;
           }
+        } else {
+          ++rate_resolved_track_cruise_shadow_telemetry_window_.
+            submission_reject_count;
+          static rclcpp::Clock submission_log_clock{RCL_STEADY_TIME};
+          RCLCPP_WARN_THROTTLE(
+            rclcpp::get_logger("mpc_controller"),
+            submission_log_clock, 1000,
+            "Rate-resolved Track/Cruise submission unavailable: %s",
+            draft_reject_reason.c_str());
         }
         return output;
       }
@@ -59778,14 +59928,18 @@ private:
     if (!canonical_normal_execution_active) {
       u[1] = last_u_[1] + (u[1] - last_u_[1]) * mpc_cfg_.steer_low_pass_gain;
     }
-    acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
+    if (!canonical_normal_execution_active) {
+      acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
+    }
     const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
     if (!canonical_normal_execution_active) {
       u[1] = clip(
         u[1], last_u_[1] - max_steering_step,
         last_u_[1] + max_steering_step);
     }
-    u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
+    if (!canonical_normal_execution_active) {
+      u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
+    }
     if (!canonical_normal_execution_active) {
       if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
         u[1] = clip(
@@ -59844,8 +59998,10 @@ private:
       dynamic_escape_exit_attempt_id_ = 0U;
       dynamic_escape_exit_branch_ = "none";
     }
-    acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
-    u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
+    if (!canonical_normal_execution_active || recovery_command_active) {
+      acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
+      u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
+    }
     if (!recovery_command_active && !canonical_normal_execution_active) {
       if (const auto direct_bounds = mpc_->low_speed_direct_steering_bounds()) {
         u[1] = clip(

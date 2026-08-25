@@ -87,6 +87,26 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
     result->problem.input_upper[
       input_offset + model::kSteeringRateIndex],
     1.0 - first_rate_margin, 1e-12);
+  const double acceleration_margin =
+    (1e-3 + 1e-3 * 1.0) / (1.0 - 1e-3);
+  const double progress_speed_margin =
+    (1e-3 + 1e-3 * 6.0) / (1.0 - 1e-3);
+  EXPECT_NEAR(
+    result->problem.input_lower[
+      input_offset + model::kAccelerationIndex],
+    -1.0 + acceleration_margin, 1e-12);
+  EXPECT_NEAR(
+    result->problem.input_upper[
+      input_offset + model::kAccelerationIndex],
+    1.0 - acceleration_margin, 1e-12);
+  EXPECT_NEAR(
+    result->problem.input_lower[
+      input_offset + model::kVirtualProgressSpeedIndex],
+    progress_speed_margin, 1e-12);
+  EXPECT_NEAR(
+    result->problem.input_upper[
+      input_offset + model::kVirtualProgressSpeedIndex],
+    6.0 - progress_speed_margin, 1e-12);
   EXPECT_NEAR(
     result->first_steering_rate_certificate_margin_radps,
     first_rate_margin, 1e-12);
@@ -164,16 +184,23 @@ TEST(MpccRateResolvedAdapter, CurvedSnapshotSolvesWithinPhysicalActuatorBoxes)
     EXPECT_LE(steering, 0.6 + tolerance);
   }
   for (int stage = 0; stage < horizon; ++stage) {
-    const int variable =
+    const int input_base =
       state_values + model::kInputDimension * stage +
-      model::kSteeringRateIndex;
-    const int box_row = state_values + variable;
-    const double tolerance =
-      outcome.result->constraint_tolerance[box_row] + 1e-9;
+      model::kAccelerationIndex;
+    const double acceleration = outcome.result->primal[input_base];
     const double steering_rate = outcome.result->primal[
-      variable];
-    EXPECT_GE(steering_rate, -1.0 - tolerance);
-    EXPECT_LE(steering_rate, 1.0 + tolerance);
+      input_base + model::kSteeringRateIndex];
+    const double progress_speed = outcome.result->primal[
+      input_base + model::kVirtualProgressSpeedIndex];
+    EXPECT_GE(acceleration, -1.0);
+    EXPECT_LE(acceleration, 1.0);
+    EXPECT_GE(progress_speed, 0.0);
+    EXPECT_LE(progress_speed, 6.0);
+    const int variable = input_base + model::kSteeringRateIndex;
+    const int box_row = state_values + variable;
+    EXPECT_GT(outcome.result->constraint_tolerance[box_row], 0.0);
+    EXPECT_GE(steering_rate, -1.0);
+    EXPECT_LE(steering_rate, 1.0);
   }
 }
 
@@ -216,6 +243,11 @@ TEST(MpccRateResolvedAdapter, RejectsMalformedOrUnphysicalSnapshots)
 
   request = curved_request();
   request.states.front().upper[0] = -0.1;
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
+
+  request = curved_request();
+  request.inputs.front().lower[0] = 0.0;
+  request.inputs.front().upper[0] = 0.0;
   EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 }
 

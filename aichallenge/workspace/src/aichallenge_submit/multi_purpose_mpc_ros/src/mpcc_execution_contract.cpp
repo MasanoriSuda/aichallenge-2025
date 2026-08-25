@@ -271,6 +271,14 @@ bool canonical_normal_intent_requires_execution_side(
     intent == ControlIntent::Return;
 }
 
+bool canonical_normal_formulation_supported(
+  const Formulation formulation) noexcept
+{
+  return
+    formulation == Formulation::VelocityProgress5State ||
+    formulation == Formulation::VelocitySteeringProgress6State;
+}
+
 std::uint64_t fingerprint_stage_geometry(
   const int tracking_waypoint, const bool circular,
   const std::vector<StageGeometryIdentity> & stages) noexcept
@@ -615,8 +623,8 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
     return CanonicalNormalCandidateRejectReason::IntentMismatch;
   }
   if (
-    problem.formulation != Formulation::VelocityProgress5State ||
-    solution.formulation != Formulation::VelocityProgress5State)
+    !canonical_normal_formulation_supported(problem.formulation) ||
+    !canonical_normal_formulation_supported(solution.formulation))
   {
     return CanonicalNormalCandidateRejectReason::NoncanonicalFormulation;
   }
@@ -759,8 +767,8 @@ CanonicalNormalCommandResult build_canonical_normal_command(
     !solution_certified(authority.solution.value()) ||
     authority.execution_plan_id == 0U ||
     authority.execution_certificate_decision_id == 0U ||
-    authority.problem->formulation != Formulation::VelocityProgress5State ||
-    authority.solution->formulation != Formulation::VelocityProgress5State ||
+    !canonical_normal_formulation_supported(authority.problem->formulation) ||
+    !canonical_normal_formulation_supported(authority.solution->formulation) ||
     authority.solution->problem_fingerprint != authority.problem->fingerprint)
   {
     result.reason = CanonicalNormalCommandReason::IncompleteAuthorityIdentity;
@@ -934,7 +942,7 @@ FinalControlDecision resolve_final_control_decision(
     decision.reason = "problem-solution-formulation-mismatch";
     return decision;
   }
-  if (request.problem->formulation == Formulation::VelocityProgress5State) {
+  if (canonical_normal_formulation_supported(request.problem->formulation)) {
     if (!request.canonical_normal_command.has_value()) {
       decision.reason = "missing-canonical-command-identity";
       return decision;
@@ -964,7 +972,7 @@ FinalControlDecision resolve_final_control_decision(
   }
   decision.identity_complete = true;
   decision.canonical_contract_satisfied =
-    request.problem->formulation == Formulation::VelocityProgress5State;
+    canonical_normal_formulation_supported(request.problem->formulation);
   decision.problem_fingerprint = request.problem->fingerprint;
   decision.solution_id = request.solution->solution_id;
   decision.reason = decision.canonical_contract_satisfied ?

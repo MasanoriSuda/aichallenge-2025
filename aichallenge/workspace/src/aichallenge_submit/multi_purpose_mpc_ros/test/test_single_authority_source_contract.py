@@ -280,15 +280,16 @@ def test_follow_async_snapshot_is_sealed_after_current_output_commit() -> None:
 def test_rate_resolved_track_cruise_snapshot_is_submitted_after_output_commit() -> None:
     """Six-state state zero must inherit the command committed this cycle."""
 
-    evaluator_start = SOURCE.index(
-        "TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow("
+    builder_start = SOURCE.index(
+        "build_rate_resolved_track_cruise_submission_draft("
     )
-    evaluator_end = SOURCE.index(
-        "resolve_physically_validated_mpcc_execution_trajectory(", evaluator_start
+    builder_end = SOURCE.index(
+        "bind_rate_resolved_track_cruise_submission(", builder_start
     )
-    evaluator = SOURCE[evaluator_start:evaluator_end]
-    assert "submit_rate_resolved_track_cruise_shadow(" not in evaluator
-    assert "rate_resolved_submission_draft" in evaluator
+    builder = SOURCE[builder_start:builder_end]
+    assert "submit_rate_resolved_track_cruise_shadow(" not in builder
+    assert "build_extended_progress_problem(" in builder
+    assert "solve_extended_progress_problem(" not in builder
 
     control_start = SOURCE.index("MpcControlCycleResult get_control(")
     track_start = SOURCE.index(
@@ -297,12 +298,11 @@ def test_rate_resolved_track_cruise_snapshot_is_submitted_after_output_commit() 
     track_end = SOURCE.index("if (problem.rejoin_shadow_requested)", track_start)
     track = SOURCE[track_start:track_end]
 
-    resolve = track.index("output = canonical_normal_control(")
-    emergency = track.index("output = canonical_normal_emergency_stop(")
+    consume = track.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
+    resolve = track.index("rate_resolved_track_cruise_control(")
     bind = track.index("bind_rate_resolved_track_cruise_submission(")
     submit = track.index("submit_rate_resolved_track_cruise_shadow(")
-    assert resolve < bind < submit
-    assert emergency < bind < submit
+    assert consume < resolve < bind < submit
 
 
 def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
@@ -854,8 +854,8 @@ def test_runtime_wall_preplanner_cannot_destroy_canonical_mission() -> None:
     assert "canonical-reference-only" in prefix_failure
 
 
-def test_rate_resolved_track_cruise_runtime_is_observation_only() -> None:
-    """The new six-state runtime path may solve and log, but never own control."""
+def test_rate_resolved_track_cruise_worker_is_observation_only_but_retained_proof_owns_control() -> None:
+    """Only a current-world-qualified retained six-state proof may own control."""
 
     submit_start = SOURCE.index(
         "bool submit_rate_resolved_track_cruise_shadow("
@@ -894,10 +894,12 @@ def test_rate_resolved_track_cruise_runtime_is_observation_only() -> None:
         "          problem, now_sec, retained_rate_resolved);"
         in branch
     )
-    assert "record_rate_resolved_track_cruise_command_shadow(" in branch
-    assert "canonical_result.selected.complete()" in branch
-    assert "output = canonical_normal_control(" in branch
-    assert "output = canonical_normal_emergency_stop(" in branch
+    assert "record_rate_resolved_track_cruise_command(" in branch
+    assert "retained_rate_resolved" in branch
+    assert "rate_resolved_track_cruise_control(" in branch
+    assert "canonical_result.selected.complete()" not in branch
+    assert "output = canonical_normal_control(" not in branch
+    assert "output = canonical_normal_emergency_stop(" not in branch
     assert "return output;" in branch
     assert "output.control =" not in branch
     assert "output.canonical_normal_command =" not in branch
@@ -1037,7 +1039,7 @@ def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
 
 
 def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
-    """Retained six-state proof may observe the world but cannot command it."""
+    """Retained proof evaluation may observe the world but cannot publish."""
 
     evaluate_start = SOURCE.index(
         "evaluate_rate_resolved_track_cruise_retained_shadow("
@@ -1094,6 +1096,55 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     assert "std::lock_guard<std::mutex> lock(mutex_)" in snapshot
     assert "vehicle.observation_generation != observation_generation_" in snapshot
     assert "last_message_vehicle_ids_.size() != last_message_vehicle_count_" in snapshot
+
+
+def test_track_cruise_production_has_only_rate_resolved_normal_owner() -> None:
+    """Track/Cruise must not retain a five-state publication fallback."""
+
+    branch_start = SOURCE.index("if (problem.track_cruise_shadow_requested) {")
+    branch_end = SOURCE.index("if (problem.rejoin_shadow_requested) {", branch_start)
+    branch = SOURCE[branch_start:branch_end]
+    assert "evaluate_rate_resolved_track_cruise_retained_shadow(" in branch
+    assert "rate_resolved_track_cruise_control(" in branch
+    assert "build_rate_resolved_track_cruise_submission_draft(" in branch
+    assert "bind_rate_resolved_track_cruise_submission(" in branch
+    assert "evaluate_canonical_normal_shadow(" not in branch
+    assert "canonical_normal_control(" not in branch
+    assert "CanonicalNormalShadowMode::TrackCruise" not in branch
+
+    package = Path(__file__).resolve().parents[1]
+    adapter_source = (
+        package / "src" / "mpcc_rate_resolved_production_adapter.cpp"
+    ).read_text(encoding="utf-8")
+    assert "rate_resolved_command_candidate::build" not in adapter_source
+    assert "candidate::build(retained_result)" in adapter_source
+    assert "resolve_canonical_normal_authority(" in adapter_source
+    assert "build_canonical_normal_command(" in adapter_source
+    for forbidden in (
+        "publish_control_command(",
+        "AckermannControlCommand",
+        "rclcpp",
+        "VelocityProgress5State",
+    ):
+        assert forbidden not in adapter_source
+
+
+def test_canonical_publisher_does_not_postprocess_certified_actuation() -> None:
+    """Certified actuation must be made physical before, not after, solving."""
+
+    execution_start = SOURCE.index(
+        "const bool canonical_normal_execution_active ="
+    )
+    execution_end = SOURCE.index(
+        "canonical normal command mutated before publication:", execution_start
+    )
+    execution = SOURCE[execution_start:execution_end]
+    assert "if (!canonical_normal_execution_active) {\n      acc = clip(" in execution
+    assert "if (!canonical_normal_execution_active) {\n      u[1] = clip(" in execution
+    assert (
+        "if (!canonical_normal_execution_active || recovery_command_active) {"
+        in execution
+    )
 
 
 def test_control_callback_overrun_trace_is_observation_only() -> None:

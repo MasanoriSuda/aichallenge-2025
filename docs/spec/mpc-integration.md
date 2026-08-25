@@ -2304,6 +2304,22 @@ transport、physical proofはcertificationという責務境界を維持する�
 parameter tuningやfallback追加は行わない。後続Sliceは同一observation identityでの受入比較を完了し、six-state昇格と
 five-state Gate Aの物理削除を同じ変更で実施する。
 
+#### Prospective six-state pre-entry選択証拠（2026-08-25、2025由来の暫定）
+
+各prospective solveからsolver objectiveとimmutable six-state `CertifiedPlan`を保持し、そのexact trajectory、static-wall proof、
+target provenanceからformulation-independentな左右選択を観測専用で計算する。production five-state Gate Aとは別の結果として
+比較し、Mission admission、production retained store、normal commandへは接続しない。
+
+実装中、tactical worker内の選択結果をlive `V2XBehaviorOutput`へ移す手動DTO copyから新fieldが欠落していた。このためworkerで
+complete planを構築してもlive側はdefault-invalidだった。これはsolverやclearanceの問題ではなくasync data-flow境界の欠陥であり、
+copyとsource contractを同時に修正した。
+
+`output/20260825-192536`のdomain 2では、throttleされた比較記録8件のうち3件がcomplete／selected、5件がsix-state solver
+maximum-iterationでfail closedとなった。有効選択1件はfive-stateと一致し、別の2件ではfive-stateが候補なしである一方、six-stateが
+physical proof済みの側を選択した。全件`authority=shadow,selected=0`でproduction authorityは不変である。観測intentはShiftOutのみ
+だったため、Passの動的被覆と採用時current-world revalidationを取得するまでfive-state Gate Aは維持する。昇格時は同一Sliceで
+five-state Gate Aを物理削除し、永久fallbackとして残してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

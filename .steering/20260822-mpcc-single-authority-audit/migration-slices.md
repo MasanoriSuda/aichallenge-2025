@@ -984,6 +984,22 @@ Finish the architecture simplification instead of leaving permanent dual control
   `authority=shadow,selected=0`. Pass/Return coverage and a larger acceptance
   comparison are still missing, so five-state Gate A remains until a later
   promotion Slice can delete it atomically. No tuning or fallback was added.
+- `.steering/20260825-rate-resolved-preentry-selection-evidence` preserves the
+  objective and immutable six-state `CertifiedPlan` from each prospective
+  branch, derives formulation-independent selection metrics from that exact
+  trajectory, and compares the result with the production five-state Gate A.
+  The observation is not connected to Mission admission, a production plan
+  store or command publication. Integration exposed a manual async DTO copy
+  which omitted the six-state selection: complete worker artifacts arrived at
+  the live thread while selection remained default-invalid. The import and its
+  source contract now copy the evidence atomically. In bounded run
+  `output/20260825-192536`, domain 2 emitted eight comparison snapshots: three
+  valid six-state selections and five solver-infeasible fail-closed results.
+  One valid result agreed with five-state; two physically proved six-state
+  branches were available while five-state selected none. All observed intents
+  were ShiftOut and every record remained `authority=shadow,selected=0`.
+  Current-world adoption proof and Pass coverage remain promotion gates; no
+  tuning, fallback or authority change was introduced.
 
 ## Slice 7: Parameter tuning
 

@@ -827,6 +827,55 @@ def test_six_state_preentry_gate_shadow_uses_explicit_intent_without_authority()
     assert "physical_wall_mailbox_" not in SOURCE[physical_start:physical_end]
 
 
+def test_six_state_preentry_selection_preserves_exact_evidence_without_authority() -> None:
+    """Selection evidence must come from the same immutable six-state proof."""
+
+    pipeline_start = SOURCE.index("RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(")
+    pipeline_end = SOURCE.index("struct CanonicalCurrentControlPath", pipeline_start)
+    pipeline = SOURCE[pipeline_start:pipeline_end]
+    assert "evaluation.certified_plan = rate_resolved_certified::build(" in pipeline
+
+    shadow_start = SOURCE.index(
+        "RateResolvedPreentryShadowEvaluation\n"
+        "  evaluate_rate_resolved_preentry_shadow("
+    )
+    shadow_end = SOURCE.index(
+        "mpcc_progress::ExtendedBranchEvaluation evaluate_extended_mpcc_branch(",
+        shadow_start,
+    )
+    shadow = SOURCE[shadow_start:shadow_end]
+    assert "result.objective = evaluation.solver.solver.objective_value" in shadow
+    assert "result.certified_plan = evaluation.certified_plan.plan" in shadow
+    assert "rate_resolved_track_cruise_certified_plan_store_" not in shadow
+
+    selection_start = SOURCE.index("void evaluate_and_select_extended_mpcc_branches(")
+    selection_end = SOURCE.index("bool submit_mpcc_lite_async_snapshot(", selection_start)
+    selection = SOURCE[selection_start:selection_end]
+    assert "behavior.rate_resolved_preentry_branch_selection =" in selection
+    assert "rate_resolved_preentry_branch_evaluation(" in selection
+    assert "const auto & selection = behavior.extended_mpcc_branch_selection;" in selection
+    assert "behavior.rate_resolved_preentry_branch_selection.selected_side_sign" not in (
+        selection[
+            selection.index("const auto & selection = behavior.extended_mpcc_branch_selection;") :
+        ]
+    )
+
+    assert "six_selected=%d" in SOURCE
+    assert "selection_agree=%d" in SOURCE
+    assert "selection_valid=five%d/six%d" in SOURCE
+    assert "authority=shadow,selected=0" in SOURCE
+
+    import_start = SOURCE.index("if (accepted_async_tactical_result != nullptr) {")
+    import_end = SOURCE.index(
+        "if (opponent_side_replan_assessment_requested", import_start
+    )
+    imported = SOURCE[import_start:import_end]
+    assert (
+        "output.rate_resolved_preentry_branch_selection =\n"
+        "          async_behavior.rate_resolved_preentry_branch_selection;"
+    ) in imported
+
+
 def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:
     """Dead retained selectors may not keep a five-state publisher reconnectable."""
 

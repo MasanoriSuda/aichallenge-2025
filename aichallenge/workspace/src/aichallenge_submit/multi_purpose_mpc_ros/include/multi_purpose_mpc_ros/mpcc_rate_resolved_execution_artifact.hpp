@@ -15,13 +15,10 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact
 struct Identity
 {
   std::uint64_t sequence{};
-  std::uint64_t decision_id{};
-  std::uint64_t source_problem_fingerprint{};
-  std::uint64_t stage_geometry_id{};
-  mpcc_execution_contract::ControlIntent intent{
-    mpcc_execution_contract::ControlIntent::Unknown};
-  mpcc_execution_contract::Formulation formulation{
-    mpcc_execution_contract::Formulation::Unresolved};
+  /// Exact immutable problem identity consumed by the six-state solver.
+  /// Retained execution keeps this source identity while a separate current
+  /// decision certifies the executable suffix against the current world.
+  mpcc_execution_contract::MpccProblemContext source_context;
   double snapshot_sec{};
 };
 

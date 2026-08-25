@@ -58,10 +58,11 @@ mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation sample_steering(
 
 bool identity_valid(const Identity & identity) noexcept
 {
-  return identity.sequence > 0U && identity.decision_id > 0U &&
-         identity.source_problem_fingerprint > 0U &&
-         identity.stage_geometry_id > 0U && supported_intent(identity.intent) &&
-         identity.formulation ==
+  return identity.sequence > 0U &&
+         mpcc_execution_contract::problem_context_complete(
+           identity.source_context) &&
+         supported_intent(identity.source_context.intent) &&
+         identity.source_context.formulation ==
          mpcc_execution_contract::Formulation::VelocitySteeringProgress6State &&
          std::isfinite(identity.snapshot_sec) && identity.snapshot_sec >= 0.0;
 }
@@ -69,10 +70,16 @@ bool identity_valid(const Identity & identity) noexcept
 bool same_identity(const Identity & lhs, const Identity & rhs) noexcept
 {
   return lhs.sequence == rhs.sequence &&
-         lhs.decision_id == rhs.decision_id &&
-         lhs.source_problem_fingerprint == rhs.source_problem_fingerprint &&
-         lhs.stage_geometry_id == rhs.stage_geometry_id &&
-         lhs.intent == rhs.intent && lhs.formulation == rhs.formulation &&
+         lhs.source_context.decision_id == rhs.source_context.decision_id &&
+         lhs.source_context.fingerprint == rhs.source_context.fingerprint &&
+         lhs.source_context.intent == rhs.source_context.intent &&
+         lhs.source_context.formulation == rhs.source_context.formulation &&
+         lhs.source_context.stage_geometry_id ==
+         rhs.source_context.stage_geometry_id &&
+         mpcc_execution_contract::problem_context_fingerprint(
+           lhs.source_context) ==
+         mpcc_execution_contract::problem_context_fingerprint(
+           rhs.source_context) &&
          lhs.snapshot_sec == rhs.snapshot_sec;
 }
 

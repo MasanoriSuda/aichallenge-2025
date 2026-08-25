@@ -19,6 +19,25 @@ namespace contract =
 namespace
 {
 
+contract::MpccProblemContext source_context(
+  const std::uint64_t decision_id, const std::uint64_t stage_geometry_id)
+{
+  contract::MpccProblemContext context;
+  context.decision_id = decision_id;
+  context.intent = contract::ControlIntent::Track;
+  context.intent_generation = 1U;
+  context.observation_generation = 2U;
+  context.stage_geometry_id = stage_geometry_id;
+  context.horizon_steps = 3U;
+  context.formulation =
+    contract::Formulation::VelocitySteeringProgress6State;
+  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.input_schema_id = "accel-steering-rate-progress-rate-v1";
+  context.bounds_schema_id = "stage-wall-v1";
+  context.cost_schema_id = "velocity-progress-steering-rate-v1";
+  return contract::seal_problem_context(std::move(context));
+}
+
 adapter::Request straight_request(const int horizon = 3)
 {
   adapter::Request request;
@@ -56,12 +75,8 @@ shadow::Snapshot snapshot(const std::uint64_t sequence = 1U)
 {
   shadow::Snapshot result;
   result.identity.sequence = sequence;
-  result.identity.decision_id = 42U + sequence;
-  result.identity.source_problem_fingerprint = 101U + sequence;
-  result.identity.stage_geometry_id = 201U + sequence;
-  result.identity.intent = contract::ControlIntent::Track;
-  result.identity.formulation =
-    contract::Formulation::VelocitySteeringProgress6State;
+  result.identity.source_context =
+    source_context(42U + sequence, 201U + sequence);
   result.identity.snapshot_sec = 10.0 + 0.1 * sequence;
   result.control_prediction_origin_sec = result.identity.snapshot_sec + 0.13;
   result.request = straight_request();
@@ -143,7 +158,8 @@ TEST(MpccRateResolvedShadow, RejectsFiveStateProblemIdentity)
 {
   shadow::SolverContext context;
   auto input = snapshot();
-  input.identity.formulation = contract::Formulation::VelocityProgress5State;
+  input.identity.source_context.formulation =
+    contract::Formulation::VelocityProgress5State;
   const auto result = context.evaluate(input);
   EXPECT_EQ(result.outcome, shadow::Outcome::BuildRejected);
   EXPECT_FALSE(shadow::result_valid(result));
@@ -197,7 +213,7 @@ TEST(MpccRateResolvedShadow, RejectsMutatedExecutionArtifactProvenance)
   ASSERT_NE(result.execution_artifact, nullptr);
 
   auto invalid = *result.execution_artifact;
-  invalid.identity.source_problem_fingerprint = 0U;
+  invalid.identity.source_context.fingerprint = 0U;
   EXPECT_EQ(
     execution::validate(invalid), execution::RejectReason::InvalidIdentity);
 
@@ -307,6 +323,6 @@ TEST(MpccRateResolvedShadowMailbox, RejectsUnregisteredAndInvalidResults)
 
   ASSERT_TRUE(mailbox.register_submission(3U));
   auto invalid = context.evaluate(snapshot(3U));
-  invalid.identity.source_problem_fingerprint = 0U;
+  invalid.identity.source_context.fingerprint = 0U;
   EXPECT_EQ(mailbox.publish(invalid), shadow::PublishReason::InvalidResult);
 }

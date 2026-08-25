@@ -2045,6 +2045,23 @@ identity不整合は解消したがretained admissionの非連続性は残る。
 合格とし、availability holeの原因を閉じる前にpublisherへ接続してはならない。昇格時は6-state owner
 接続と5-state Track/Cruise owner削除を同一Sliceで行い、cross-formulation normal fallbackを作らない。
 
+#### Steering-rate 6-state source-context provenance（2026-08-25、移行shadow）
+
+非同期solverへ渡した完全なsealed `MpccProblemContext`は、artifact以降でも同じsource identityとして
+保持する。problem fingerprint、decision、stage geometry、intent、formulationだけを別々に複製しては
+ならない。複製された断片からはstate／input／bounds／cost schema、horizon、generation、target、sideを
+再検証できず、retained実行時に現在周期のcontextで補うとsolve元identityを偽装するためである。
+
+rate-resolvedのexecution artifact、physical proof、retained proof、command candidateは、一つの完全な
+`source_context`を不変のまま渡す。retained proofの`decision_id`は現在worldに対する実行証明であり、
+source contextのsolver decisionとは別の責務を持つ。どちらかで他方を上書きしない。
+
+`output/20260825-091930`の短時間`make dev2`では、両domainでavailable candidateがすべて
+`VelocitySteeringProgress6State`、artifact／mailbox identity rejectが0、physical identity mismatchが0、
+callback overrunが0だった。全件`authority=shadow, selected=0`を維持しており、本変更はproduction
+authorityを増やしていない。次の昇格Sliceでは、この完全source contextをfinal decision traceへ渡し、
+6-state Track/Cruise owner接続と5-state owner削除を同じ変更で行う。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

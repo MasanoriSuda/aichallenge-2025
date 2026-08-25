@@ -12,6 +12,24 @@ namespace wall =
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 
+contract::MpccProblemContext source_context()
+{
+  contract::MpccProblemContext context;
+  context.decision_id = 10U;
+  context.intent = contract::ControlIntent::Track;
+  context.intent_generation = 1U;
+  context.observation_generation = 2U;
+  context.stage_geometry_id = 30U;
+  context.horizon_steps = 2U;
+  context.formulation =
+    contract::Formulation::VelocitySteeringProgress6State;
+  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.input_schema_id = "accel-steering-rate-progress-rate-v1";
+  context.bounds_schema_id = "stage-wall-v1";
+  context.cost_schema_id = "velocity-progress-steering-rate-v1";
+  return contract::seal_problem_context(std::move(context));
+}
+
 std::shared_ptr<recovery::OccupancyGrid> free_grid()
 {
   auto grid = std::make_shared<recovery::OccupancyGrid>();
@@ -29,12 +47,7 @@ wall::Snapshot snapshot()
 {
   wall::Snapshot value;
   value.identity.artifact.sequence = 5U;
-  value.identity.artifact.decision_id = 10U;
-  value.identity.artifact.source_problem_fingerprint = 20U;
-  value.identity.artifact.stage_geometry_id = 30U;
-  value.identity.artifact.intent = contract::ControlIntent::Track;
-  value.identity.artifact.formulation =
-    contract::Formulation::VelocitySteeringProgress6State;
+  value.identity.artifact.source_context = source_context();
   value.identity.artifact.snapshot_sec = 1.0;
   value.identity.pose_snapshot_id = 40U;
   value.identity.course_frame_window_id = 50U;
@@ -129,7 +142,10 @@ TEST(MpccRateResolvedPhysicalWall, MailboxRejectsSupersededCompletion)
   const auto first = snapshot();
   auto second = first;
   second.identity.artifact.sequence = first.identity.artifact.sequence + 1U;
-  second.identity.artifact.decision_id = first.identity.artifact.decision_id + 1U;
+  second.identity.artifact.source_context.decision_id =
+    first.identity.artifact.source_context.decision_id + 1U;
+  second.identity.artifact.source_context = contract::seal_problem_context(
+    std::move(second.identity.artifact.source_context));
   second.identity.captured_sec += 0.1;
   EXPECT_TRUE(mailbox.register_submission(first.identity));
   EXPECT_TRUE(mailbox.register_submission(second.identity));

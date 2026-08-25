@@ -16,14 +16,29 @@ namespace physical =
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 
+contract::MpccProblemContext source_context(const std::uint64_t sequence)
+{
+  contract::MpccProblemContext context;
+  context.decision_id = sequence + 10U;
+  context.intent = contract::ControlIntent::Track;
+  context.intent_generation = 1U;
+  context.observation_generation = 2U;
+  context.stage_geometry_id = sequence + 30U;
+  context.horizon_steps = 2U;
+  context.formulation =
+    contract::Formulation::VelocitySteeringProgress6State;
+  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.input_schema_id = "accel-steering-rate-progress-rate-v1";
+  context.bounds_schema_id = "stage-wall-v1";
+  context.cost_schema_id = "velocity-progress-steering-rate-v1";
+  return contract::seal_problem_context(std::move(context));
+}
+
 execution::ExecutionArtifact artifact(const std::uint64_t sequence = 1U)
 {
   execution::ExecutionArtifact value;
   value.identity = execution::Identity{
-    sequence, sequence + 10U, sequence + 20U, sequence + 30U,
-    contract::ControlIntent::Track,
-    contract::Formulation::VelocitySteeringProgress6State,
-    10.0 + static_cast<double>(sequence)};
+    sequence, source_context(sequence), 10.0 + static_cast<double>(sequence)};
   value.prediction_origin_sec = value.identity.snapshot_sec;
   value.completed_sec = value.prediction_origin_sec + 0.01;
   value.course_progress_origin_m = 50.0;
@@ -156,7 +171,9 @@ TEST(MpccRateResolvedCertifiedPlan, RejectsFullIdentityMismatch)
   ++proof.identity.course_frame_window_id;
   // A different world window is still a valid physical result, but mutating
   // the embedded artifact identity must never join to this artifact.
-  ++proof.identity.artifact.source_problem_fingerprint;
+  ++proof.identity.artifact.source_context.decision_id;
+  proof.identity.artifact.source_context = contract::seal_problem_context(
+    std::move(proof.identity.artifact.source_context));
   const auto result = certified::build(
     value, physical_snapshot(value->identity), proof);
   EXPECT_EQ(result.reason, certified::RejectReason::IdentityMismatch);
@@ -183,7 +200,9 @@ TEST(MpccRateResolvedCertifiedPlan, AdmissionRecordsTypedCertificationReject)
   certified::Store store;
   auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
   auto proof = accepted_physical(value->identity);
-  ++proof.identity.artifact.decision_id;
+  ++proof.identity.artifact.source_context.decision_id;
+  proof.identity.artifact.source_context = contract::seal_problem_context(
+    std::move(proof.identity.artifact.source_context));
   const auto admission = store.certify_and_replace(
     value, physical_snapshot(value->identity), proof);
   EXPECT_FALSE(admission.accepted());

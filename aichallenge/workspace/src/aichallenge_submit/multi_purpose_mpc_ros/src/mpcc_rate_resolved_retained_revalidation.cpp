@@ -366,7 +366,7 @@ Result evaluate(const Request & request)
     return result;
   }
   if (!track_cruise(request.current_intent) ||
-    request.current_intent != execution.identity.intent)
+    request.current_intent != execution.identity.source_context.intent)
   {
     result.reason = Reason::IntentMismatch;
     return result;

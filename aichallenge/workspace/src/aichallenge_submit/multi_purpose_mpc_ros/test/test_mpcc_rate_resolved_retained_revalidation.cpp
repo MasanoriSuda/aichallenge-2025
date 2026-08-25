@@ -19,12 +19,28 @@ namespace physical =
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 
+contract::MpccProblemContext source_context()
+{
+  contract::MpccProblemContext context;
+  context.decision_id = 11U;
+  context.intent = contract::ControlIntent::Track;
+  context.intent_generation = 1U;
+  context.observation_generation = 2U;
+  context.stage_geometry_id = 31U;
+  context.horizon_steps = 2U;
+  context.formulation =
+    contract::Formulation::VelocitySteeringProgress6State;
+  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.input_schema_id = "accel-steering-rate-progress-rate-v1";
+  context.bounds_schema_id = "stage-wall-v1";
+  context.cost_schema_id = "velocity-progress-steering-rate-v1";
+  return contract::seal_problem_context(std::move(context));
+}
+
 artifact::ExecutionArtifact execution_artifact()
 {
   artifact::ExecutionArtifact value;
-  value.identity = {
-    1U, 11U, 21U, 31U, contract::ControlIntent::Track,
-    contract::Formulation::VelocitySteeringProgress6State, 1.0};
+  value.identity = {1U, source_context(), 1.0};
   value.prediction_origin_sec = 1.0;
   value.completed_sec = 1.01;
   value.course_progress_origin_m = 50.0;

@@ -11,12 +11,28 @@ namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace
 {
 
+contract::MpccProblemContext source_context()
+{
+  contract::MpccProblemContext context;
+  context.decision_id = 2U;
+  context.intent = contract::ControlIntent::Track;
+  context.intent_generation = 1U;
+  context.observation_generation = 2U;
+  context.stage_geometry_id = 4U;
+  context.horizon_steps = 2U;
+  context.formulation =
+    contract::Formulation::VelocitySteeringProgress6State;
+  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.input_schema_id = "accel-steering-rate-progress-rate-v1";
+  context.bounds_schema_id = "stage-wall-v1";
+  context.cost_schema_id = "velocity-progress-steering-rate-v1";
+  return contract::seal_problem_context(std::move(context));
+}
+
 execution::ExecutionArtifact artifact()
 {
   execution::ExecutionArtifact value;
-  value.identity = execution::Identity{
-    1U, 2U, 3U, 4U, contract::ControlIntent::Track,
-    contract::Formulation::VelocitySteeringProgress6State, 10.0};
+  value.identity = execution::Identity{1U, source_context(), 10.0};
   value.prediction_origin_sec = 10.0;
   value.completed_sec = 10.01;
   value.course_progress_origin_m = 50.0;
@@ -48,7 +64,8 @@ TEST(MpccRateResolvedPhysicalAdapter, PreservesExactStatesOneThroughHorizon)
 {
   const auto source = artifact();
   const auto result = adapter::build(
-    source, contract::ControlIntent::Track, source.identity.stage_geometry_id);
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
   ASSERT_EQ(result.reason, adapter::RejectReason::None);
   ASSERT_TRUE(result.exact_trajectory.has_value());
   const auto & exact = result.exact_trajectory.value();
@@ -73,12 +90,12 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsCurrentSemanticMismatch)
   EXPECT_EQ(
     adapter::build(
       source, contract::ControlIntent::Cruise,
-      source.identity.stage_geometry_id).reason,
+      source.identity.source_context.stage_geometry_id).reason,
     adapter::RejectReason::IntentMismatch);
   EXPECT_EQ(
     adapter::build(
       source, contract::ControlIntent::Track,
-      source.identity.stage_geometry_id + 1U).reason,
+      source.identity.source_context.stage_geometry_id + 1U).reason,
     adapter::RejectReason::StageGeometryMismatch);
 }
 
@@ -87,7 +104,8 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsInvalidArtifactBeforeConversion)
   auto source = artifact();
   source.nominal_path_distance_m[1] = 0.0;
   const auto result = adapter::build(
-    source, contract::ControlIntent::Track, source.identity.stage_geometry_id);
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
   EXPECT_EQ(result.reason, adapter::RejectReason::InvalidArtifact);
   EXPECT_EQ(
     result.artifact_reason, execution::RejectReason::InvalidPathDistance);
@@ -101,7 +119,8 @@ TEST(MpccRateResolvedPhysicalAdapter, AcceptsCertifiedProgressRegression)
   source.control_stages[1].virtual_progress_speed_mps = 0.0;
   source.maximum_constraint_violation = 1.0e-5;
   const auto result = adapter::build(
-    source, contract::ControlIntent::Track, source.identity.stage_geometry_id);
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
   EXPECT_EQ(result.reason, adapter::RejectReason::None);
   ASSERT_TRUE(result.exact_trajectory.has_value());
   EXPECT_GT(result.certified_progress_regression_tolerance_m, 1.0e-5);
@@ -124,7 +143,8 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsProgressOutsideSolverCertificate)
   source.predicted_states[2].progress_m = 0.10;
   source.control_stages[1].virtual_progress_speed_mps = 0.0;
   const auto result = adapter::build(
-    source, contract::ControlIntent::Track, source.identity.stage_geometry_id);
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
   EXPECT_EQ(result.reason, adapter::RejectReason::InvalidArtifact);
   EXPECT_EQ(
     result.artifact_reason,

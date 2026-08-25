@@ -33,13 +33,14 @@ Result build(
   if (result.artifact_reason != execution::RejectReason::None) {
     return result;
   }
-  if (artifact.identity.intent != current_intent) {
+  if (artifact.identity.source_context.intent != current_intent) {
     result.reason = RejectReason::IntentMismatch;
     return result;
   }
   if (
     current_stage_geometry_id == 0U ||
-    artifact.identity.stage_geometry_id != current_stage_geometry_id)
+    artifact.identity.source_context.stage_geometry_id !=
+    current_stage_geometry_id)
   {
     result.reason = RejectReason::StageGeometryMismatch;
     return result;

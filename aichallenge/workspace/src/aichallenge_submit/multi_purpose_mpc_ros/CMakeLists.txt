@@ -79,6 +79,11 @@ target_include_directories(${PROJECT_NAME}_mpcc_progress PUBLIC
   ${EIGEN3_INCLUDE_DIRS}
 )
 
+ament_auto_add_library(${PROJECT_NAME}_mpcc_execution_contract SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/mpcc_execution_contract.cpp
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved STATIC
   src/mpcc_rate_resolved.cpp
 )
@@ -112,6 +117,7 @@ target_include_directories(
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
   ${PROJECT_NAME}_mpcc_rate_resolved
+  ${PROJECT_NAME}_mpcc_execution_contract
 )
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_adapter STATIC
@@ -139,11 +145,6 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_shadow
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
   ${PROJECT_NAME}_persistent_osqp
   Threads::Threads
-)
-
-ament_auto_add_library(${PROJECT_NAME}_mpcc_execution_contract SHARED
-  NO_TARGET_LINK_LIBRARIES
-  src/mpcc_execution_contract.cpp
 )
 
 ament_auto_add_library(${PROJECT_NAME}_canonical_execution_plan SHARED

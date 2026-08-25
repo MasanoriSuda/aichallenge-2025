@@ -46,11 +46,8 @@ bool same_identity(const Identity & lhs, const Identity & rhs) noexcept
 {
   return
     lhs.artifact.sequence == rhs.artifact.sequence &&
-    lhs.artifact.decision_id == rhs.artifact.decision_id &&
-    lhs.artifact.source_problem_fingerprint ==
-    rhs.artifact.source_problem_fingerprint &&
-    lhs.artifact.stage_geometry_id == rhs.artifact.stage_geometry_id &&
-    lhs.artifact.intent == rhs.artifact.intent &&
+    lhs.artifact.source_context.fingerprint ==
+    rhs.artifact.source_context.fingerprint &&
     lhs.artifact.snapshot_sec == rhs.artifact.snapshot_sec &&
     lhs.pose_snapshot_id == rhs.pose_snapshot_id &&
     lhs.course_frame_window_id == rhs.course_frame_window_id &&

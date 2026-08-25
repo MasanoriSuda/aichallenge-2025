@@ -33,11 +33,7 @@ struct Candidate
 {
   std::uint64_t decision_id{};
   std::uint64_t artifact_sequence{};
-  std::uint64_t source_decision_id{};
-  std::uint64_t source_problem_fingerprint{};
-  std::uint64_t stage_geometry_id{};
-  contract::ControlIntent intent{contract::ControlIntent::Unknown};
-  contract::Formulation formulation{contract::Formulation::Unresolved};
+  contract::MpccProblemContext source_context;
   std::size_t control_stage_index{};
   double prediction_origin_sec{};
   double predicted_speed_mps{};

@@ -27885,15 +27885,7 @@ struct MPC
       rate_resolved_track_cruise_shadow_next_sequence_++;
     rate_resolved_shadow::Snapshot snapshot;
     snapshot.identity.sequence = sequence;
-    snapshot.identity.decision_id =
-      bound_submission.source_context.decision_id;
-    snapshot.identity.source_problem_fingerprint =
-      bound_submission.source_context.fingerprint;
-    snapshot.identity.stage_geometry_id =
-      bound_submission.source_context.stage_geometry_id;
-    snapshot.identity.intent = bound_submission.source_context.intent;
-    snapshot.identity.formulation =
-      bound_submission.source_context.formulation;
+    snapshot.identity.source_context = bound_submission.source_context;
     snapshot.identity.snapshot_sec = now_sec;
     snapshot.control_prediction_origin_sec =
       bound_submission.control_prediction_origin_sec;
@@ -27993,8 +27985,9 @@ struct MPC
           try {
             const auto adapted = rate_resolved_physical::build(
               *result.execution_artifact,
-              physical_snapshot->identity.artifact.intent,
-              physical_snapshot->identity.artifact.stage_geometry_id);
+              physical_snapshot->identity.artifact.source_context.intent,
+              physical_snapshot->identity.artifact.source_context.
+              stage_geometry_id);
             if (!adapted.exact_trajectory.has_value()) {
               candidate.outcome =
                 rate_resolved_physical_wall::Outcome::AdapterRejected;
@@ -28227,8 +28220,9 @@ struct MPC
           physical_result->identity.artifact.sequence;
         ++window.physical_consumed_count;
         const bool current_semantics =
-          physical_result->identity.artifact.intent == current_control_intent() &&
-          physical_result->identity.artifact.stage_geometry_id ==
+          physical_result->identity.artifact.source_context.intent ==
+          current_control_intent() &&
+          physical_result->identity.artifact.source_context.stage_geometry_id ==
           problem.progress_stage_geometry.fingerprint;
         if (!current_semantics) {
           ++window.physical_stale_semantic_count;
@@ -28340,8 +28334,8 @@ struct MPC
         }
         const auto current_intent = current_control_intent();
         if (
-          result->identity.intent == current_intent &&
-          result->identity.stage_geometry_id ==
+          result->identity.source_context.intent == current_intent &&
+          result->identity.source_context.stage_geometry_id ==
           problem.progress_stage_geometry.fingerprint)
         {
           ++window.current_semantic_match_count;
@@ -28501,13 +28495,14 @@ struct MPC
       static_cast<unsigned long>(
       window.last_result_available ? last.identity.sequence : 0U),
       static_cast<unsigned long>(
-      window.last_result_available ? last.identity.decision_id : 0U),
       window.last_result_available ?
-      mpcc_contract::to_string(last.identity.intent) : "none",
+      last.identity.source_context.decision_id : 0U),
+      window.last_result_available ?
+      mpcc_contract::to_string(last.identity.source_context.intent) : "none",
       static_cast<unsigned long>(window.last_result_available ?
-      last.identity.source_problem_fingerprint : 0U),
+      last.identity.source_context.fingerprint : 0U),
       static_cast<unsigned long>(window.last_result_available ?
-      last.identity.stage_geometry_id : 0U),
+      last.identity.source_context.stage_geometry_id : 0U),
       window.last_result_available ?
       rate_resolved_shadow::to_string(last.outcome) : "none",
       window.last_result_available ?
@@ -28709,10 +28704,11 @@ struct MPC
         "outcome=%s, solver=iter:%d/status:%d/setup:%d/update:%d/reset:%d/"
         "max_iter:%d, detail=%s, authority=shadow, selected=0",
         static_cast<unsigned long>(failure.identity.sequence),
-        static_cast<unsigned long>(failure.identity.decision_id),
-        mpcc_contract::to_string(failure.identity.intent),
-        static_cast<unsigned long>(failure.identity.source_problem_fingerprint),
-        static_cast<unsigned long>(failure.identity.stage_geometry_id),
+        static_cast<unsigned long>(failure.identity.source_context.decision_id),
+        mpcc_contract::to_string(failure.identity.source_context.intent),
+        static_cast<unsigned long>(failure.identity.source_context.fingerprint),
+        static_cast<unsigned long>(
+        failure.identity.source_context.stage_geometry_id),
         rate_resolved_shadow::to_string(failure.outcome),
         failure.solver.iterations,
         failure.solver.status,
@@ -28801,13 +28797,14 @@ struct MPC
       static_cast<unsigned long>(window.production_canonical_count),
       rate_resolved_command::to_string(last.command_reason),
       candidate_available ?
-      mpcc_contract::to_string(candidate.formulation) : "none",
+      mpcc_contract::to_string(candidate.source_context.formulation) : "none",
       static_cast<unsigned long>(candidate.decision_id),
       static_cast<unsigned long>(candidate.artifact_sequence),
-      static_cast<unsigned long>(candidate.source_decision_id),
-      static_cast<unsigned long>(candidate.source_problem_fingerprint),
-      static_cast<unsigned long>(candidate.stage_geometry_id),
-      candidate_available ? mpcc_contract::to_string(candidate.intent) : "none",
+      static_cast<unsigned long>(candidate.source_context.decision_id),
+      static_cast<unsigned long>(candidate.source_context.fingerprint),
+      static_cast<unsigned long>(candidate.source_context.stage_geometry_id),
+      candidate_available ?
+      mpcc_contract::to_string(candidate.source_context.intent) : "none",
       static_cast<unsigned long>(candidate.control_stage_index),
       candidate.predicted_speed_mps, candidate.acceleration_mps2,
       candidate.steering_rate_radps, candidate.steering_rad,

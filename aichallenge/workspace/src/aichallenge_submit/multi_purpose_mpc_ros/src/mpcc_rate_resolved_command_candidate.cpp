@@ -73,11 +73,7 @@ Result build(const retained::Result & retained_result) noexcept
   Candidate candidate;
   candidate.decision_id = proof.decision_id;
   candidate.artifact_sequence = identity.sequence;
-  candidate.source_decision_id = identity.decision_id;
-  candidate.source_problem_fingerprint = identity.source_problem_fingerprint;
-  candidate.stage_geometry_id = identity.stage_geometry_id;
-  candidate.intent = identity.intent;
-  candidate.formulation = identity.formulation;
+  candidate.source_context = identity.source_context;
   candidate.control_stage_index = actuation.control_stage_index;
   candidate.prediction_origin_sec = artifact.prediction_origin_sec;
   candidate.predicted_speed_mps = actuation.predicted_speed_mps;

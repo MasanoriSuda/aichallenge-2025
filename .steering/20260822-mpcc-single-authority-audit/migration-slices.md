@@ -784,6 +784,16 @@ Use Mission/branch/DP outputs as intent and constraints while canonical MPCC own
   and every six-state candidate remained `authority=shadow, selected=0`. Next design the atomic
   fresh/retained production admission and genuinely blocked-path behavior; do not promote a retained
   blocked suffix or create a cross-formulation fallback.
+- `.steering/20260825-rate-resolved-source-context-provenance` closes the identity-loss boundary
+  discovered before publisher promotion. The asynchronous snapshot was created from a complete sealed
+  six-state `MpccProblemContext`, but the immutable artifact retained only a fingerprint and selected
+  summary fields. The artifact, physical proof, retained proof and command candidate now carry the
+  exact source context unchanged; the current decision remains a separate current-world execution
+  certificate. Duplicated identity fields were deleted rather than synchronized. All 49 package test
+  targets and the 25-package build pass. In `output/20260825-091930`, both domains had zero artifact or
+  mailbox identity rejection, zero physical identity mismatch and zero callback overrun; every
+  available candidate was six-state and remained `authority=shadow, selected=0`. This is a prerequisite
+  for the atomic six-state Track/Cruise promotion, not the promotion itself.
 
 ## Slice 6: Legacy and migration path removal
 

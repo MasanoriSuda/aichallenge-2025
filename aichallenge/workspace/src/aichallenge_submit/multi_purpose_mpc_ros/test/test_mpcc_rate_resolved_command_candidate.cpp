@@ -18,11 +18,28 @@ namespace physical = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 
+contract::MpccProblemContext source_context()
+{
+  contract::MpccProblemContext context;
+  context.decision_id = 11U;
+  context.intent = contract::ControlIntent::Cruise;
+  context.intent_generation = 2U;
+  context.observation_generation = 3U;
+  context.stage_geometry_id = 17U;
+  context.horizon_steps = 2U;
+  context.formulation =
+    contract::Formulation::VelocitySteeringProgress6State;
+  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.input_schema_id = "accel-steering-rate-progress-rate-v1";
+  context.bounds_schema_id = "stage-wall-v1";
+  context.cost_schema_id = "velocity-progress-steering-rate-v1";
+  return contract::seal_problem_context(std::move(context));
+}
+
 std::shared_ptr<const certified::CertifiedPlan> certified_plan()
 {
   auto execution = std::make_shared<artifact::ExecutionArtifact>();
-  execution->identity = {7U, 11U, 13U, 17U, contract::ControlIntent::Cruise,
-    contract::Formulation::VelocitySteeringProgress6State, 1.0};
+  execution->identity = {7U, source_context(), 1.0};
   execution->prediction_origin_sec = 1.0;
   execution->completed_sec = 1.01;
   execution->course_progress_origin_m = 50.0;
@@ -134,15 +151,18 @@ TEST(RateResolvedCommandCandidate, PreservesRetainedIdentityAndActuation) {
   const auto & candidate = result.candidate.value();
   EXPECT_EQ(candidate.decision_id, 23U);
   EXPECT_EQ(candidate.artifact_sequence, 7U);
-  EXPECT_EQ(candidate.source_decision_id, 11U);
-  EXPECT_EQ(candidate.source_problem_fingerprint, 13U);
-  EXPECT_EQ(candidate.stage_geometry_id, 17U);
-  EXPECT_EQ(candidate.intent, contract::ControlIntent::Cruise);
+  EXPECT_TRUE(contract::problem_context_complete(candidate.source_context));
+  EXPECT_EQ(candidate.source_context.decision_id, 11U);
   EXPECT_EQ(
-    candidate.formulation,
+    candidate.source_context.fingerprint,
+    source_context().fingerprint);
+  EXPECT_EQ(candidate.source_context.stage_geometry_id, 17U);
+  EXPECT_EQ(candidate.source_context.intent, contract::ControlIntent::Cruise);
+  EXPECT_EQ(
+    candidate.source_context.formulation,
     contract::Formulation::VelocitySteeringProgress6State);
   EXPECT_STREQ(
-    contract::to_string(candidate.formulation),
+    contract::to_string(candidate.source_context.formulation),
     "velocity-steering-progress-6state");
   EXPECT_EQ(candidate.control_stage_index, 1U);
   EXPECT_DOUBLE_EQ(candidate.predicted_speed_mps, 4.2);
@@ -160,7 +180,7 @@ TEST(RateResolvedCommandCandidate, RejectsFiveStateArtifactIdentity)
     *retained_result.proof->plan);
   auto mutable_artifact = std::make_shared<artifact::ExecutionArtifact>(
     *mutable_plan->execution_artifact);
-  mutable_artifact->identity.formulation =
+  mutable_artifact->identity.source_context.formulation =
     contract::Formulation::VelocityProgress5State;
   mutable_plan->execution_artifact = std::move(mutable_artifact);
   retained_result.proof->plan = std::move(mutable_plan);

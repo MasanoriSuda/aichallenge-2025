@@ -333,8 +333,6 @@ enum class FinalControlSource {
   LowSpeedWallStop,
   SolverFallback,
   SolverBoundedContinuation,
-  SolverWallHandoffHold,
-  OvertakeWallAdmissionHold,
   ExecutedSolutionWallHold,
   SolverCrawl,
   ControlDisabled,
@@ -348,8 +346,6 @@ struct FinalControlSourceRequest {
   bool control_enabled{true};
   bool low_speed_wall_stop_active{false};
   bool solver_bounded_continuation_active{false};
-  bool solver_wall_handoff_hold_active{false};
-  bool overtake_wall_admission_hold_active{false};
   bool executed_solution_wall_hold_active{false};
   bool solver_crawl_active{false};
   bool solver_fallback_active{false};
@@ -426,113 +422,6 @@ struct PredictedPathWallMetrics {
   double minimum_wall_path_distance_m{
     std::numeric_limits<double>::quiet_NaN()};
 };
-
-enum class WallHandoffAdmissionReason {
-  Inactive,
-  CurrentFootprintUnavailable,
-  CurrentFootprintUnsafe,
-  PredictionUnavailable,
-  PredictionInvalid,
-  PredictedContact,
-  PredictedOutOfMap,
-  InsufficientClearance,
-  Requalifying,
-  Accepted,
-};
-
-const char * to_string(WallHandoffAdmissionReason reason) noexcept;
-
-struct WallHandoffAdmissionRequest {
-  std::uint64_t mission_generation{0U};
-  bool activation_requested{false};
-  bool observation_updated{true};
-  bool current_footprint_valid{false};
-  bool current_footprint_clear{false};
-  bool current_footprint_out_of_map{false};
-  std::size_t current_contact_count{0U};
-  PredictedPathWallMetrics prediction;
-  double required_wall_clearance_m{0.0};
-  // A small, explicitly logged tolerance for discretization at a physically
-  // clear boundary. It never overrides contact, out-of-map, or invalid data.
-  double physical_clearance_tolerance_m{0.0};
-  bool planner_wall_contract_available{false};
-  // This is the lateral reserve inside the Frenet planning corridor, not a
-  // physical vehicle-footprint-to-wall distance.  Keep the semantic explicit
-  // so execution telemetry never compares two differently measured distances
-  // as though they came from the same sensor/model.
-  double planner_minimum_corridor_reserve_m{
-    std::numeric_limits<double>::infinity()};
-  int required_consecutive_valid_cycles{2};
-};
-
-struct WallHandoffAdmissionResolution {
-  bool active{false};
-  bool entered{false};
-  bool released{false};
-  bool hold_control{false};
-  bool stop_required{false};
-  bool replan_required{false};
-  bool replan_requested{false};
-  bool planner_contract_admitted{false};
-  bool planner_execution_contract_mismatch{false};
-  bool boundary_clearance_accepted{false};
-  double physical_clearance_shortfall_m{0.0};
-  bool state_changed{false};
-  int hold_cycles{0};
-  int consecutive_valid_cycles{0};
-  int required_consecutive_valid_cycles{2};
-  WallHandoffAdmissionReason reason{WallHandoffAdmissionReason::Inactive};
-};
-
-/// Classify one physical wall observation independently of the stateful
-/// admission latch. Accepted means that both the current footprint and the
-/// predicted path satisfy the requested wall contract.
-WallHandoffAdmissionReason classify_wall_path_admission(
-  const WallHandoffAdmissionRequest & request) noexcept;
-
-class WallPathAdmissionGate {
-public:
-  WallHandoffAdmissionResolution update(
-    const WallHandoffAdmissionRequest & request) noexcept;
-  bool active() const noexcept;
-  void reset() noexcept;
-
-private:
-  bool active_{false};
-  int hold_cycles_{0};
-  int consecutive_valid_cycles_{0};
-  WallHandoffAdmissionReason previous_reason_{
-    WallHandoffAdmissionReason::Inactive};
-  bool previous_stop_required_{false};
-};
-
-enum class LegacyWallHandoffAuthorityReason {
-  Available,
-  CanonicalOvertakeOwnsNormalExecution,
-};
-
-const char * to_string(LegacyWallHandoffAuthorityReason reason) noexcept;
-
-/// Resolve the normal-control ownership boundary before any legacy wall or
-/// DynamicEscape handoff state is evaluated. A physically certified canonical
-/// Overtake command already owns both axes; older handoff state may therefore
-/// be retired, but independent Emergency/Recovery supervisors remain outside
-/// this policy.
-struct LegacyWallHandoffAuthorityRequest {
-  bool canonical_normal_command_available{false};
-  mpcc_execution_contract::ControlIntent canonical_intent{
-    mpcc_execution_contract::ControlIntent::Unknown};
-};
-
-struct LegacyWallHandoffAuthorityResolution {
-  bool legacy_normal_handoff_allowed{true};
-  bool retire_legacy_state{false};
-  LegacyWallHandoffAuthorityReason reason{
-    LegacyWallHandoffAuthorityReason::Available};
-};
-
-LegacyWallHandoffAuthorityResolution resolve_legacy_wall_handoff_authority(
-  const LegacyWallHandoffAuthorityRequest & request) noexcept;
 
 enum class DynamicEscapeAttemptReason {
   Inactive,
@@ -613,105 +502,6 @@ std::string format_dynamic_escape_attempt_trace(
   const DynamicEscapeAttemptRequest & request,
   const DynamicEscapeAttemptResolution & resolution,
   int waypoint_id);
-
-enum class DynamicEscapeExitReason {
-  Inactive,
-  TargetBlocking,
-  WallPathPending,
-  ReplacementPending,
-  ReplacementExecuting,
-  ReplacementLost,
-  TargetResolvedRequalifying,
-  TargetResolved,
-  RecoveryOverride,
-};
-
-const char * to_string(DynamicEscapeExitReason reason) noexcept;
-
-/// State presented to the Dynamic Escape exit contract.  Wall admission and
-/// moving-obstacle completion are deliberately separate: a RacingLine path
-/// can be physically clear of the wall while still converging onto the front
-/// vehicle that Dynamic Escape was trying to pass.
-struct DynamicEscapeExitRequest {
-  std::uint64_t escape_attempt_id{0U};
-  bool activation_requested{false};
-  bool attempt_active{false};
-  bool continuation_planner_requested{false};
-  bool observation_updated{true};
-  bool wall_path_admitted{false};
-  bool obstacle_blocking{false};
-  bool replacement_escape_active{false};
-  bool replacement_escape_admitted{false};
-  bool recovery_override{false};
-  int required_consecutive_resolved_cycles{2};
-};
-
-struct DynamicEscapeExitResolution {
-  std::uint64_t latched_attempt_id{0U};
-  bool active{false};
-  bool entered{false};
-  bool released{false};
-  /// The encounter planner already owns replacement generation. This is not
-  /// a solver/wall failure and must not feed failure backoff.
-  bool continuation_required{false};
-  bool replan_required{false};
-  bool replan_requested{false};
-  bool replacement_adopted{false};
-  bool replacement_execution_active{false};
-  bool attempt_changed{false};
-  bool state_changed{false};
-  int hold_cycles{0};
-  int consecutive_resolved_cycles{0};
-  int required_consecutive_resolved_cycles{2};
-  DynamicEscapeExitReason reason{DynamicEscapeExitReason::Inactive};
-};
-
-/// Prevents Dynamic Escape from handing lateral authority to RacingLine while
-/// the obstacle that caused the escape is still blocking.  The gate never
-/// manufactures or retains a control command; it only owns the replacement
-/// escape lifecycle and requests a fresh plan when the target still blocks.
-class DynamicEscapeExitGate {
-public:
-  DynamicEscapeExitResolution update(
-    const DynamicEscapeExitRequest & request) noexcept;
-  bool active() const noexcept;
-  void reset() noexcept;
-
-private:
-  bool active_{false};
-  std::uint64_t latched_attempt_id_{0U};
-  bool replacement_execution_active_{false};
-  int hold_cycles_{0};
-  int consecutive_resolved_cycles_{0};
-  DynamicEscapeExitReason previous_reason_{DynamicEscapeExitReason::Inactive};
-  bool previous_continuation_required_{false};
-};
-
-std::string format_dynamic_escape_exit_trace(
-  std::uint64_t decision_id,
-  const DynamicEscapeExitRequest & request,
-  const DynamicEscapeExitResolution & resolution,
-  const std::string & latched_target_id,
-  const std::string & observed_target_id,
-  int latched_side_sign,
-  double front_distance_m,
-  double protected_front_distance_m,
-  double closing_speed_mps);
-
-enum class WallPathAdmissionScope {
-  SolverHandoff,
-  ActiveOvertake,
-  DynamicEscapeExit,
-};
-
-const char * to_string(WallPathAdmissionScope scope) noexcept;
-
-std::string format_wall_path_admission_trace(
-  std::uint64_t decision_id,
-  WallPathAdmissionScope scope, Phase phase, PathSource path_source,
-  const WallHandoffAdmissionRequest & request,
-  const WallHandoffAdmissionResolution & resolution,
-  double held_speed_mps, double held_steering_rad);
 
 enum class ExecutedSolutionWallAction {
   Publish,

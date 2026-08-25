@@ -723,55 +723,15 @@ def test_extended_first_stage_linearization_is_anchored_to_the_execution_state()
 
 
 def test_canonical_overtake_wall_certificate_is_not_reinterpreted_downstream() -> None:
-    """The legacy x/y wall monitor cannot replace a certified canonical command."""
+    """A certified canonical command has no downstream normal wall owner."""
 
-    monitor_start = SOURCE.index(
-        "const bool active_overtake_wall_monitor_relevant ="
-    )
-    monitor_end = SOURCE.index(
-        "const int wall_path_scan_interval_cycles", monitor_start
-    )
-    monitor = SOURCE[monitor_start:monitor_end]
-
-    assert "!canonical_normal_command.has_value()" in monitor
-    assert "!canonical_emergency_stop" in monitor
-
-    ownership_start = SOURCE.index(
-        "const auto legacy_wall_handoff_authority ="
-    )
-    ownership_end = SOURCE.index(
-        "const bool dynamic_escape_execution_active", ownership_start
-    )
-    ownership = SOURCE[ownership_start:ownership_end]
-    assert "resolve_legacy_wall_handoff_authority(" in ownership
-    assert "solver_wall_handoff_admission_gate_.reset()" in ownership
-    assert "overtake_wall_admission_gate_.reset()" in ownership
-    assert "dynamic_escape_wall_admission_gate_.reset()" in ownership
-    assert "dynamic_escape_exit_gate_.reset()" in ownership
-
-    dynamic_monitor_start = SOURCE.index(
-        "const bool dynamic_escape_wall_monitor_relevant ="
-    )
-    dynamic_monitor_end = SOURCE.index(
-        "const bool dynamic_escape_wall_scan_due", dynamic_monitor_start
-    )
-    dynamic_monitor = SOURCE[dynamic_monitor_start:dynamic_monitor_end]
-    assert (
-        "legacy_wall_handoff_authority.legacy_normal_handoff_allowed"
-        in dynamic_monitor
-    )
-
-    solver_recovery_start = SOURCE.index(
-        "const bool recovered_from_bounded_continuation ="
-    )
-    solver_recovery_end = SOURCE.index(
-        "if (!enable_control_", solver_recovery_start
-    )
-    solver_recovery = SOURCE[solver_recovery_start:solver_recovery_end]
-    assert (
-        "legacy_wall_handoff_authority.legacy_normal_handoff_allowed"
-        in solver_recovery
-    )
+    assert "const bool active_overtake_wall_monitor_relevant =" not in SOURCE
+    assert "resolve_legacy_wall_handoff_authority(" not in SOURCE
+    assert "const bool wall_handoff_hold_active =" not in SOURCE
+    # The wall proof inside the canonical controller boundary is retained.
+    assert "executed_solution_wall_hold_active" in SOURCE
+    # Wall telemetry remains observational and cannot modify the command.
+    assert "maybe_emit_dynamic_escape_wall_handoff_trace(" in SOURCE
 
 
 def test_overtake_physical_failure_preserves_stage_and_authority_provenance() -> None:
@@ -1289,6 +1249,32 @@ def test_unproducible_retained_dynamic_escape_path_is_physically_deleted() -> No
         "retained_solution_available",
         "RetainedSolutionExpired",
         '"retained-stage"',
+    ):
+        assert retired_symbol not in SOURCE
+        assert retired_symbol not in OVERTAKE_ORCHESTRATOR_HEADER
+        assert retired_symbol not in OVERTAKE_ORCHESTRATOR_SOURCE
+
+
+def test_node_level_normal_wall_handoff_owners_are_physically_deleted() -> None:
+    """A certified canonical command cannot be reinterpreted at publication."""
+
+    for retired_symbol in (
+        "LegacyWallHandoffAuthority",
+        "WallHandoffAdmission",
+        "WallPathAdmissionGate",
+        "DynamicEscapeExitGate",
+        "DynamicEscapeExitRequest",
+        "DynamicEscapeExitResolution",
+        "WallPathAdmissionScope",
+        "solver_wall_handoff_admission_gate_",
+        "overtake_wall_admission_gate_",
+        "dynamic_escape_wall_admission_gate_",
+        "dynamic_escape_exit_gate_",
+        "wall_handoff_hold_active",
+        "wall_handoff_observation_required",
+        "populate_wall_admission_observation",
+        "SolverWallHandoffHold",
+        "OvertakeWallAdmissionHold",
     ):
         assert retired_symbol not in SOURCE
         assert retired_symbol not in OVERTAKE_ORCHESTRATOR_HEADER

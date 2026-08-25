@@ -57010,121 +57010,13 @@ private:
     const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
     const bool dynamic_escape_fresh_execution_active =
       v2x_behavior.dynamic_obstacle_lateral_escape_active;
-    const bool dynamic_escape_attempt_active =
-      v2x_behavior.dynamic_obstacle_lateral_escape_attempt_active;
-    if (dynamic_escape_attempt_active) {
-      dynamic_escape_exit_attempt_id_ =
-        v2x_behavior.dynamic_obstacle_lateral_escape_attempt_id;
-      dynamic_escape_exit_target_id_ =
-        v2x_behavior.dynamic_obstacle_cruise_target_id;
-      if (dynamic_escape_exit_target_id_.empty()) {
-        dynamic_escape_exit_target_id_ = v2x_behavior.target_vehicle_id;
-      }
-    }
-    if (dynamic_escape_fresh_execution_active) {
-      dynamic_escape_exit_side_sign_ =
-        v2x_behavior.dynamic_obstacle_lateral_escape_side_sign;
-      dynamic_escape_exit_branch_ =
-        v2x_behavior.dynamic_obstacle_lateral_escape_committed_branch;
-    }
-    const auto legacy_wall_handoff_authority =
-      overtake_orchestrator::resolve_legacy_wall_handoff_authority(
-      overtake_orchestrator::LegacyWallHandoffAuthorityRequest{
-        canonical_normal_command.has_value(),
-        canonical_normal_command.has_value() ?
-        canonical_normal_command->intent :
-        mpcc_contract::ControlIntent::Unknown});
-    if (legacy_wall_handoff_authority.retire_legacy_state) {
-      const bool legacy_state_present =
-        solver_wall_handoff_admission_gate_.active() ||
-        overtake_wall_admission_gate_.active() ||
-        dynamic_escape_wall_admission_gate_.active() ||
-        dynamic_escape_exit_gate_.active();
-      solver_wall_handoff_admission_gate_.reset();
-      overtake_wall_admission_gate_.reset();
-      dynamic_escape_wall_admission_gate_.reset();
-      dynamic_escape_exit_gate_.reset();
-      dynamic_escape_exit_target_id_.clear();
-      dynamic_escape_exit_side_sign_ = 0;
-      dynamic_escape_exit_attempt_id_ = 0U;
-      dynamic_escape_exit_branch_ = "none";
-      dynamic_escape_execution_was_active_ = false;
-      if (legacy_state_present) {
-        RCLCPP_INFO_THROTTLE(
-          get_logger(), *get_clock(), 1000,
-          "Canonical Overtake retired legacy wall-handoff state: "
-          "decision=%llu, intent=%s, reason=%s",
-          static_cast<unsigned long long>(active_control_decision_id_),
-          mpcc_contract::to_string(canonical_normal_command->intent),
-          overtake_orchestrator::to_string(
-            legacy_wall_handoff_authority.reason));
-      }
-    }
     const bool dynamic_escape_execution_active =
       v2x_behavior.dynamic_obstacle_lateral_escape_execution_active &&
-      legacy_wall_handoff_authority.legacy_normal_handoff_allowed &&
       dynamic_escape_fresh_execution_active;
-    const bool dynamic_escape_prediction_owned =
-      dynamic_escape_execution_active;
-    const bool dynamic_escape_exit_detected =
-      dynamic_escape_execution_was_active_ && !dynamic_escape_execution_active;
     const auto overtake_authority = current_overtake_authority_trace();
-    const bool solver_failure_continuation_previous_cycle =
-      solver_failure_continuation_was_active_;
-    double wall_handoff_required_clearance_m = std::max(
-      0.0, mpc_cfg_.v2x_behavior.overtake_line.min_wall_clearance);
-    if (overtake_authority.has_value()) {
-      const auto & authority = overtake_authority.value();
-      if (
-        std::isfinite(authority.request.wall_contract_required_clearance_m) &&
-        authority.request.wall_contract_required_clearance_m >= 0.0)
-      {
-        wall_handoff_required_clearance_m =
-          authority.request.wall_contract_required_clearance_m;
-      }
-    }
-    const bool active_overtake_wall_monitor_relevant =
-      enable_control_ && overtake_authority.has_value() &&
-      overtake_authority->resolution.relevant && !mpc_fallback_active &&
-      !canonical_normal_command.has_value() && !canonical_emergency_stop &&
-      !executed_solution_wall_hold_active &&
-      (overtake_authority->request.phase ==
-      overtake_orchestrator::Phase::ShiftOut ||
-      overtake_authority->request.phase == overtake_orchestrator::Phase::Pass ||
-      overtake_authority->request.phase ==
-      overtake_orchestrator::Phase::Return) &&
-      overtake_authority->resolution.path_source !=
-      overtake_orchestrator::PathSource::RacingLine &&
-      overtake_authority->resolution.path_source !=
-      overtake_orchestrator::PathSource::RecoveryLine &&
-      overtake_authority->resolution.path_source !=
-      overtake_orchestrator::PathSource::SafetyHold;
-    const int wall_path_scan_interval_cycles = std::max(
-      1, static_cast<int>(std::lround(mpc_cfg_.control_rate / 10.0)));
-    const bool active_overtake_wall_scan_due =
-      active_overtake_wall_monitor_relevant &&
-      (!overtake_wall_monitor_was_relevant_ ||
-      loop_ % wall_path_scan_interval_cycles == 0);
-    const bool dynamic_escape_wall_monitor_relevant =
-      legacy_wall_handoff_authority.legacy_normal_handoff_allowed &&
-      enable_control_ && !mpc_fallback_active && !canonical_emergency_stop &&
-      !executed_solution_wall_hold_active &&
-      (dynamic_escape_execution_active || dynamic_escape_exit_detected ||
-      dynamic_escape_wall_admission_gate_.active() ||
-      dynamic_escape_exit_gate_.active());
-    const bool dynamic_escape_wall_scan_due =
-      dynamic_escape_wall_monitor_relevant &&
-      (dynamic_escape_exit_detected ||
-      dynamic_escape_wall_admission_gate_.active() ||
-      !dynamic_escape_wall_monitor_was_relevant_ ||
-      loop_ % wall_path_scan_interval_cycles == 0);
     recovery_footprint::FootprintSample solver_crawl_footprint_sample;
-    const bool wall_handoff_observation_required =
-      solver_failure_continuation_previous_cycle ||
-      solver_wall_handoff_admission_gate_.active() ||
-      active_overtake_wall_scan_due || dynamic_escape_wall_scan_due;
     if (
-      (mpc_fallback_active || wall_handoff_observation_required) &&
+      mpc_fallback_active &&
       recovery_grid_ && recovery_footprint_.valid())
     {
       solver_crawl_footprint_sample = recovery_footprint::sample_footprint(
@@ -57289,528 +57181,6 @@ private:
         solver_failure_continuation_active;
     }
 
-    overtake_orchestrator::WallHandoffAdmissionRequest
-      solver_wall_admission_request;
-    overtake_orchestrator::WallHandoffAdmissionResolution
-      solver_wall_admission;
-    overtake_orchestrator::WallHandoffAdmissionRequest
-      overtake_wall_admission_request;
-    overtake_orchestrator::WallHandoffAdmissionResolution
-      overtake_wall_admission;
-    overtake_orchestrator::WallHandoffAdmissionRequest
-      dynamic_escape_wall_admission_request;
-    overtake_orchestrator::WallHandoffAdmissionResolution
-      dynamic_escape_wall_admission;
-    auto dynamic_escape_wall_observation_reason =
-      overtake_orchestrator::WallHandoffAdmissionReason::Inactive;
-    bool dynamic_escape_replacement_physically_admitted = false;
-    const bool recovered_from_bounded_continuation =
-      legacy_wall_handoff_authority.legacy_normal_handoff_allowed &&
-      solver_failure_continuation_previous_cycle &&
-      !solver_failure_continuation_active && !mpc_fallback_active &&
-      enable_control_;
-    if (!enable_control_ && solver_wall_handoff_admission_gate_.active()) {
-      solver_wall_handoff_admission_gate_.reset();
-    }
-    if (!enable_control_ && overtake_wall_admission_gate_.active()) {
-      overtake_wall_admission_gate_.reset();
-    }
-    if (!enable_control_ && dynamic_escape_wall_admission_gate_.active()) {
-      dynamic_escape_wall_admission_gate_.reset();
-    }
-    if (!enable_control_ && dynamic_escape_exit_gate_.active()) {
-      dynamic_escape_exit_gate_.reset();
-      dynamic_escape_exit_target_id_.clear();
-      dynamic_escape_exit_side_sign_ = 0;
-      dynamic_escape_exit_attempt_id_ = 0U;
-      dynamic_escape_exit_branch_ = "none";
-    }
-    const auto populate_wall_admission_observation =
-      [&] (
-      overtake_orchestrator::WallHandoffAdmissionRequest & request,
-      const overtake_orchestrator::FinalControlSource source) {
-        if (overtake_authority.has_value()) {
-          request.mission_generation =
-            overtake_authority->request.mission_generation;
-          request.planner_wall_contract_available =
-            std::isfinite(
-            overtake_authority->request.wall_contract_required_clearance_m) &&
-            overtake_authority->request.wall_contract_required_clearance_m >= 0.0 &&
-            std::isfinite(
-            overtake_authority->request.wall_contract_minimum_path_clearance_m);
-          request.planner_minimum_corridor_reserve_m =
-            overtake_authority->request.wall_contract_minimum_path_clearance_m;
-        }
-        request.current_footprint_valid = solver_crawl_footprint_sample.valid;
-        request.current_footprint_clear = solver_crawl_footprint_clear;
-        request.current_footprint_out_of_map =
-          solver_crawl_footprint_sample.out_of_map;
-        request.current_contact_count =
-          solver_crawl_footprint_sample.contact_cells.size();
-        request.required_wall_clearance_m =
-          wall_handoff_required_clearance_m;
-        request.required_consecutive_valid_cycles = 2;
-        request.prediction = evaluate_predicted_path_wall_metrics(
-          pose, wall_handoff_required_clearance_m, source);
-      };
-    if (
-      recovered_from_bounded_continuation ||
-      solver_wall_handoff_admission_gate_.active())
-    {
-      solver_wall_admission_request.activation_requested =
-        recovered_from_bounded_continuation;
-      populate_wall_admission_observation(
-        solver_wall_admission_request,
-        overtake_orchestrator::FinalControlSource::MpcSolution);
-      // This prediction was produced by the newly recovered normal MPC solve
-      // in this same callback.  One fresh physical validation is sufficient
-      // for solver handoff; unsafe or unavailable predictions remain held
-      // indefinitely by WallPathAdmissionGate.
-      solver_wall_admission_request.required_consecutive_valid_cycles = 1;
-      solver_wall_admission = solver_wall_handoff_admission_gate_.update(
-        solver_wall_admission_request);
-    }
-
-    if (
-      !active_overtake_wall_monitor_relevant &&
-      overtake_wall_admission_gate_.active())
-    {
-      overtake_wall_admission_gate_.reset();
-      RCLCPP_INFO(
-        get_logger(),
-        "Wall path admission reset: scope=active-overtake, "
-        "reason=active-path-ended");
-    }
-    if (active_overtake_wall_monitor_relevant) {
-      overtake_wall_admission_request.observation_updated =
-        active_overtake_wall_scan_due;
-      if (active_overtake_wall_scan_due) {
-        populate_wall_admission_observation(
-          overtake_wall_admission_request,
-          overtake_orchestrator::FinalControlSource::MpcSolution);
-        // The physical wall map and the postprocessed prediction are sampled
-        // discretely. Admit only sub-centimetre boundary disagreement here;
-        // contact and out-of-map remain hard rejects in the classifier.
-        constexpr double kActiveOvertakeWallBoundaryToleranceM = 0.01;
-        overtake_wall_admission_request.physical_clearance_tolerance_m =
-          kActiveOvertakeWallBoundaryToleranceM;
-        const auto active_overtake_wall_reason =
-          overtake_orchestrator::classify_wall_path_admission(
-          overtake_wall_admission_request);
-        overtake_wall_admission_request.activation_requested =
-          active_overtake_wall_reason !=
-          overtake_orchestrator::WallHandoffAdmissionReason::Accepted;
-        if (
-          active_overtake_wall_reason ==
-          overtake_orchestrator::WallHandoffAdmissionReason::Accepted &&
-          std::isfinite(
-          overtake_wall_admission_request.prediction.minimum_wall_distance_m) &&
-          overtake_wall_admission_request.prediction.minimum_wall_distance_m +
-          1e-9 < overtake_wall_admission_request.required_wall_clearance_m)
-        {
-          RCLCPP_INFO_THROTTLE(
-            get_logger(), *get_clock(), 1000,
-            "Wall path boundary tolerance accepted: decision=%lu, "
-            "generation=%lu, phase=%s, physical_min=%.4f m, required=%.4f m, "
-            "tolerance=%.4f m, shortfall=%.4f m, contact=%d, out=%d",
-            static_cast<unsigned long>(active_control_decision_id_),
-            static_cast<unsigned long>(
-              overtake_wall_admission_request.mission_generation),
-            overtake_orchestrator::to_string(
-              overtake_authority->request.phase),
-            overtake_wall_admission_request.prediction.minimum_wall_distance_m,
-            overtake_wall_admission_request.required_wall_clearance_m,
-            overtake_wall_admission_request.physical_clearance_tolerance_m,
-            overtake_wall_admission_request.required_wall_clearance_m -
-            overtake_wall_admission_request.prediction.minimum_wall_distance_m,
-            overtake_wall_admission_request.prediction.contact ? 1 : 0,
-            overtake_wall_admission_request.prediction.out_of_map ? 1 : 0);
-        }
-      }
-      if (
-        overtake_wall_admission_request.activation_requested ||
-        overtake_wall_admission_gate_.active())
-      {
-        overtake_wall_admission = overtake_wall_admission_gate_.update(
-          overtake_wall_admission_request);
-      }
-    }
-    if (
-      !dynamic_escape_wall_monitor_relevant &&
-      dynamic_escape_wall_admission_gate_.active())
-    {
-      dynamic_escape_wall_admission_gate_.reset();
-      RCLCPP_INFO(
-        get_logger(),
-        "Wall path admission reset: scope=dynamic-escape-exit, "
-        "reason=control-or-path-ended");
-    }
-    if (dynamic_escape_wall_monitor_relevant) {
-      dynamic_escape_wall_admission_request.observation_updated =
-        dynamic_escape_wall_scan_due;
-      if (dynamic_escape_wall_scan_due) {
-        populate_wall_admission_observation(
-          dynamic_escape_wall_admission_request,
-          overtake_orchestrator::FinalControlSource::MpcSolution);
-        // A live DynamicEscape solution already passed the solver, connected
-        // profile, and planner preflight contracts in this callback. One
-        // independent physical-footprint validation is sufficient to publish
-        // it. The outgoing return-to-racing-line handoff remains at two fresh
-        // observations to prevent an unsafe transient release.
-        dynamic_escape_wall_admission_request.
-        required_consecutive_valid_cycles =
-          dynamic_escape_prediction_owned ? 1 : 2;
-        dynamic_escape_wall_observation_reason =
-          overtake_orchestrator::classify_wall_path_admission(
-          dynamic_escape_wall_admission_request);
-        // An accepted live solution does not need to enter and release the
-        // stateful admission gate on every 40 Hz cycle.  The exit contract may
-        // adopt it directly from this fresh physical observation.  Reserve the
-        // gate for an actual execution edge or an unsafe/pending observation.
-        dynamic_escape_wall_admission_request.activation_requested =
-          dynamic_escape_exit_detected ||
-          dynamic_escape_wall_observation_reason !=
-          overtake_orchestrator::WallHandoffAdmissionReason::Accepted;
-      }
-      if (
-        dynamic_escape_wall_admission_request.activation_requested ||
-        dynamic_escape_wall_admission_gate_.active())
-      {
-        dynamic_escape_wall_admission =
-          dynamic_escape_wall_admission_gate_.update(
-          dynamic_escape_wall_admission_request);
-      }
-      dynamic_escape_replacement_physically_admitted =
-        dynamic_escape_fresh_execution_active && dynamic_escape_wall_scan_due &&
-        dynamic_escape_wall_observation_reason ==
-        overtake_orchestrator::WallHandoffAdmissionReason::Accepted &&
-        !dynamic_escape_wall_admission.hold_control;
-    }
-    std::string dynamic_escape_observed_target_id =
-      v2x_behavior.dynamic_obstacle_cruise_target_id;
-    if (dynamic_escape_observed_target_id.empty()) {
-      dynamic_escape_observed_target_id = v2x_behavior.target_vehicle_id;
-    }
-    if (dynamic_escape_observed_target_id.empty()) {
-      dynamic_escape_observed_target_id =
-        v2x_behavior.front_hazard_hold_target_id;
-    }
-    const double dynamic_escape_front_protected_distance_m =
-      std::isfinite(v2x_behavior.front_safety_distance) ?
-      std::max(0.0, v2x_behavior.front_safety_distance) :
-      std::max(0.0, mpc_cfg_.v2x_behavior.overtake_guard_min_front_distance);
-    const double dynamic_escape_front_closing_speed_mps =
-      std::isfinite(v2x_behavior.dynamic_obstacle_cruise_closing_speed) ?
-      std::max(
-        0.0, v2x_behavior.dynamic_obstacle_cruise_closing_speed) :
-      (std::isfinite(v2x_behavior.front_risk.relative_speed) ?
-      std::max(0.0, v2x_behavior.front_risk.relative_speed) : 0.0);
-    const double dynamic_escape_exit_front_limit_m = std::max(
-      std::max(0.0, mpc_cfg_.v2x_behavior.overtake_guard_min_front_distance),
-      std::max(0.0, mpc_cfg_.v2x_behavior.overtake_entry_commit_max_front_distance));
-    const bool dynamic_escape_front_within_exit_scope =
-      v2x_behavior.has_front_vehicle &&
-      std::isfinite(v2x_behavior.front_distance) &&
-      v2x_behavior.front_distance >= 0.0 &&
-      v2x_behavior.front_distance <= dynamic_escape_exit_front_limit_m;
-    const bool dynamic_escape_obstacle_blocking =
-      dynamic_escape_front_within_exit_scope &&
-      (dynamic_escape_front_closing_speed_mps > 0.10 ||
-      v2x_behavior.front_distance <=
-      dynamic_escape_front_protected_distance_m + 0.75 ||
-      v2x_behavior.state != V2XBehaviorState::Cruise ||
-      v2x_behavior.front_risk_level == FrontRiskLevel::EmergencyBrake);
-    const bool dynamic_escape_wall_path_admitted =
-      dynamic_escape_wall_scan_due &&
-      dynamic_escape_wall_observation_reason ==
-      overtake_orchestrator::WallHandoffAdmissionReason::Accepted &&
-      !dynamic_escape_wall_admission.hold_control;
-    overtake_orchestrator::DynamicEscapeExitRequest
-      dynamic_escape_exit_request;
-    dynamic_escape_exit_request.escape_attempt_id = dynamic_escape_exit_attempt_id_;
-    dynamic_escape_exit_request.activation_requested =
-      dynamic_escape_exit_detected ||
-      dynamic_escape_wall_admission.replan_required;
-    dynamic_escape_exit_request.attempt_active = dynamic_escape_attempt_active;
-    dynamic_escape_exit_request.continuation_planner_requested =
-      dynamic_escape_attempt_active &&
-      v2x_behavior.dynamic_obstacle_lateral_escape_planner_requested;
-    dynamic_escape_exit_request.observation_updated =
-      dynamic_escape_wall_scan_due;
-    dynamic_escape_exit_request.wall_path_admitted =
-      dynamic_escape_wall_path_admitted;
-    dynamic_escape_exit_request.obstacle_blocking =
-      dynamic_escape_obstacle_blocking;
-    dynamic_escape_exit_request.replacement_escape_active =
-      dynamic_escape_fresh_execution_active &&
-      (dynamic_escape_exit_gate_.active() ||
-      dynamic_escape_exit_request.activation_requested);
-    dynamic_escape_exit_request.replacement_escape_admitted =
-      dynamic_escape_exit_request.replacement_escape_active &&
-      dynamic_escape_wall_path_admitted;
-    dynamic_escape_exit_request.required_consecutive_resolved_cycles = 2;
-    overtake_orchestrator::DynamicEscapeExitResolution
-      dynamic_escape_exit_resolution;
-    if (
-      dynamic_escape_exit_request.activation_requested ||
-      dynamic_escape_exit_gate_.active())
-    {
-      dynamic_escape_exit_resolution = dynamic_escape_exit_gate_.update(
-        dynamic_escape_exit_request);
-    }
-    overtake_wall_monitor_was_relevant_ =
-      active_overtake_wall_monitor_relevant;
-    dynamic_escape_wall_monitor_was_relevant_ =
-      dynamic_escape_wall_monitor_relevant;
-    // A solver fallback has no outgoing trajectory that can complete the
-    // handoff contract. Preserve the previous active edge until the first
-    // finite normal solution is available and physically evaluated.
-    if (!mpc_fallback_active || dynamic_escape_execution_active) {
-      dynamic_escape_execution_was_active_ = dynamic_escape_execution_active;
-    }
-
-    const bool solver_wall_handoff_hold_active =
-      solver_wall_admission.hold_control;
-    const bool overtake_wall_admission_hold_active =
-      overtake_wall_admission.hold_control;
-    const bool dynamic_escape_wall_admission_hold_active =
-      dynamic_escape_wall_admission.hold_control;
-    const bool wall_handoff_hold_active =
-      solver_wall_handoff_hold_active ||
-      overtake_wall_admission_hold_active ||
-      dynamic_escape_wall_admission_hold_active;
-    const auto & active_wall_admission = solver_wall_handoff_hold_active ?
-      solver_wall_admission :
-      (overtake_wall_admission_hold_active ?
-      overtake_wall_admission : dynamic_escape_wall_admission);
-    std::string dynamic_escape_published_source =
-      dynamic_escape_fresh_execution_active ? "fresh-current-cycle" :
-      "outgoing";
-    if (dynamic_escape_wall_admission_hold_active) {
-      dynamic_escape_published_source = "last-steering-hold";
-    }
-    if (
-      dynamic_escape_wall_admission.replan_required &&
-      dynamic_escape_prediction_owned)
-    {
-      std::ostringstream replan_reason;
-      replan_reason << "dynamic escape physical wall admission/"
-                    << overtake_orchestrator::to_string(
-        dynamic_escape_wall_admission.reason)
-                    << ", physical_min="
-                    << dynamic_escape_wall_admission_request.prediction.
-        minimum_wall_distance_m
-                    << "m, required="
-                    << dynamic_escape_wall_admission_request.required_wall_clearance_m
-                    << "m, exit=" << (dynamic_escape_exit_detected ? 1 : 0);
-      dynamic_escape_wall_admission.replan_requested =
-        mpc_->request_dynamic_escape_wall_replan(
-        replan_reason.str(), current_time.seconds());
-    } else if (
-      dynamic_escape_wall_admission.replan_required &&
-      dynamic_escape_wall_admission.state_changed)
-    {
-      // The handoff monitor may reject the outgoing racing-line path, but
-      // that evidence does not identify a defect in the DynamicEscape
-      // target/side. Keep the physical hold while preventing a false side
-      // quarantine and make the ownership decision explicit.
-      RCLCPP_WARN(
-        get_logger(),
-        "Dynamic escape wall replan attribution suppressed: decision=%lu, "
-        "reason=%s, prediction_owner=outgoing, exit=%d, attempt=%lu, "
-        "target=%s, side=%d",
-        static_cast<unsigned long>(active_control_decision_id_),
-        overtake_orchestrator::to_string(
-          dynamic_escape_wall_admission.reason),
-        dynamic_escape_exit_detected ? 1 : 0,
-        static_cast<unsigned long>(dynamic_escape_exit_attempt_id_),
-        dynamic_escape_exit_target_id_.empty() ?
-        "none" : dynamic_escape_exit_target_id_.c_str(),
-        dynamic_escape_exit_side_sign_);
-    }
-    if (
-      dynamic_escape_exit_resolution.replan_required &&
-      !dynamic_escape_wall_admission.replan_requested)
-    {
-      std::ostringstream replan_reason;
-      replan_reason << "dynamic escape exit contract/"
-                    << overtake_orchestrator::to_string(
-        dynamic_escape_exit_resolution.reason)
-                    << ", target="
-                    << (dynamic_escape_exit_target_id_.empty() ?
-        "none" : dynamic_escape_exit_target_id_)
-                    << ", observed="
-                    << (dynamic_escape_observed_target_id.empty() ?
-        "none" : dynamic_escape_observed_target_id)
-                    << ", front=" << v2x_behavior.front_distance
-                    << "m, protected="
-                    << dynamic_escape_front_protected_distance_m << "m";
-      dynamic_escape_exit_resolution.replan_requested =
-        mpc_->request_dynamic_escape_wall_replan(
-        replan_reason.str(), current_time.seconds());
-    } else if (dynamic_escape_wall_admission.replan_requested) {
-      dynamic_escape_exit_resolution.replan_requested = true;
-    }
-    if (wall_handoff_hold_active) {
-      const double deceleration_step_mps =
-        std::min(0.0, mpc_cfg_.a_min) * std::max(0.0, dt);
-      const double previous_speed_command_mps =
-        std::isfinite(last_u_[0]) ? std::max(0.0, last_u_[0]) : 0.0;
-      const double hold_base_speed_mps = std::min(
-        previous_speed_command_mps, std::max(0.0, std::abs(actual_v)));
-      u[0] = active_wall_admission.stop_required ? 0.0 :
-        std::max(0.0, hold_base_speed_mps + deceleration_step_mps);
-      u[1] = std::isfinite(last_u_[1]) ? last_u_[1] : 0.0;
-      max_delta = std::abs(u[1]);
-      const char * hold_scope = solver_wall_handoff_hold_active ?
-        "solver-handoff/" :
-        (overtake_wall_admission_hold_active ?
-        "active-overtake/" : "dynamic-escape-exit/");
-      const std::string hold_reason =
-        std::string{hold_scope} +
-        overtake_orchestrator::to_string(active_wall_admission.reason);
-      mpc_->synchronize_wall_handoff_hold_control(u, hold_reason);
-      if (
-        overtake_wall_admission_hold_active &&
-        overtake_wall_admission.replan_required)
-      {
-        std::ostringstream replan_reason;
-        replan_reason << "final physical wall admission/"
-                      << overtake_orchestrator::to_string(
-          overtake_wall_admission.reason)
-                      << ", physical_min="
-                      << overtake_wall_admission_request.prediction.
-          minimum_wall_distance_m
-                      << "m, required="
-                      << overtake_wall_admission_request.required_wall_clearance_m
-                      << "m";
-        if (
-          overtake_wall_admission.
-          planner_execution_contract_mismatch)
-        {
-          replan_reason << ", planner_metric=frenet-corridor-reserve"
-                        << ", planner_reserve="
-                        << overtake_wall_admission_request.
-            planner_minimum_corridor_reserve_m << "m";
-        }
-        overtake_wall_admission.replan_requested =
-          mpc_->request_active_overtake_wall_replan(
-          replan_reason.str(), current_time.seconds(),
-          active_control_decision_id_,
-          overtake_authority.has_value() &&
-          overtake_authority->request.phase ==
-          overtake_orchestrator::Phase::ShiftOut &&
-          !mpc_->overtake_execution_command_published(
-            overtake_wall_admission_request.mission_generation) ?
-          overtake_orchestrator::ExecutedSolutionWallAction::EntryRollback :
-          overtake_orchestrator::ExecutedSolutionWallAction::DynamicReplan);
-      }
-    }
-    const auto authority_phase = overtake_authority.has_value() ?
-      overtake_authority->request.phase : overtake_orchestrator::Phase::Idle;
-    const auto authority_path_source = overtake_authority.has_value() ?
-      overtake_authority->resolution.path_source :
-      overtake_orchestrator::PathSource::RacingLine;
-    if (solver_wall_admission.state_changed) {
-      const auto message =
-        overtake_orchestrator::format_wall_path_admission_trace(
-        active_control_decision_id_,
-        overtake_orchestrator::WallPathAdmissionScope::SolverHandoff,
-        authority_phase, authority_path_source,
-        solver_wall_admission_request, solver_wall_admission, u[0], u[1]);
-      if (solver_wall_admission.hold_control) {
-        RCLCPP_WARN(get_logger(), "%s", message.c_str());
-      } else {
-        RCLCPP_INFO(get_logger(), "%s", message.c_str());
-      }
-    }
-    if (overtake_wall_admission.state_changed) {
-      const auto message =
-        overtake_orchestrator::format_wall_path_admission_trace(
-        active_control_decision_id_,
-        overtake_orchestrator::WallPathAdmissionScope::ActiveOvertake,
-        authority_phase, authority_path_source,
-        overtake_wall_admission_request, overtake_wall_admission, u[0], u[1]);
-      if (overtake_wall_admission.hold_control) {
-        RCLCPP_WARN(get_logger(), "%s", message.c_str());
-      } else {
-        RCLCPP_INFO(get_logger(), "%s", message.c_str());
-      }
-    }
-    if (dynamic_escape_wall_admission.state_changed) {
-      const auto message =
-        overtake_orchestrator::format_wall_path_admission_trace(
-        active_control_decision_id_,
-        overtake_orchestrator::WallPathAdmissionScope::DynamicEscapeExit,
-        authority_phase, authority_path_source,
-        dynamic_escape_wall_admission_request,
-        dynamic_escape_wall_admission, u[0], u[1]);
-      std::ostringstream bridge;
-      bridge << message
-             << ", dynamic_fresh="
-             << (dynamic_escape_fresh_execution_active ? 1 : 0)
-             << ", dynamic_active=" << (dynamic_escape_execution_active ? 1 : 0)
-             << ", execution_source="
-             << (dynamic_escape_execution_active ?
-        "fresh-current-cycle" : "inactive")
-             << ", prediction_owner="
-             << (dynamic_escape_prediction_owned ? "dynamic-escape" : "outgoing")
-             << ", exit_detected=" << (dynamic_escape_exit_detected ? 1 : 0)
-             << ", incoming_admitted="
-             << (dynamic_escape_replacement_physically_admitted ? 1 : 0)
-             << ", published_source=" << dynamic_escape_published_source
-             << ", replan="
-             << (dynamic_escape_wall_admission.replan_required ? 1 : 0)
-             << "/"
-             << (dynamic_escape_wall_admission.replan_requested ? 1 : 0);
-      if (dynamic_escape_wall_admission.hold_control) {
-        RCLCPP_WARN(get_logger(), "%s", bridge.str().c_str());
-      } else {
-        RCLCPP_INFO(get_logger(), "%s", bridge.str().c_str());
-      }
-    }
-    const int dynamic_escape_exit_trace_interval_cycles = std::max(
-      1, static_cast<int>(std::lround(mpc_cfg_.control_rate * 2.0)));
-    const bool dynamic_escape_exit_trace_heartbeat =
-      dynamic_escape_exit_resolution.active &&
-      dynamic_escape_exit_resolution.reason !=
-      overtake_orchestrator::DynamicEscapeExitReason::ReplacementExecuting &&
-      loop_ % dynamic_escape_exit_trace_interval_cycles == 0;
-    if (
-      dynamic_escape_exit_resolution.state_changed ||
-      dynamic_escape_exit_trace_heartbeat)
-    {
-      const auto contract_message =
-        overtake_orchestrator::format_dynamic_escape_exit_trace(
-        active_control_decision_id_, dynamic_escape_exit_request,
-        dynamic_escape_exit_resolution, dynamic_escape_exit_target_id_,
-        dynamic_escape_observed_target_id, dynamic_escape_exit_side_sign_,
-        v2x_behavior.front_distance,
-        dynamic_escape_front_protected_distance_m,
-        dynamic_escape_front_closing_speed_mps);
-      std::ostringstream message;
-      message << contract_message
-              << ", branch=" << dynamic_escape_exit_branch_;
-      if (
-        dynamic_escape_exit_resolution.active &&
-        dynamic_escape_exit_resolution.reason !=
-        overtake_orchestrator::DynamicEscapeExitReason::ReplacementExecuting)
-      {
-        RCLCPP_WARN(get_logger(), "%s", message.str().c_str());
-      } else {
-        RCLCPP_INFO(get_logger(), "%s", message.str().c_str());
-      }
-      if (
-        dynamic_escape_exit_resolution.released &&
-        !dynamic_escape_exit_resolution.replacement_adopted)
-      {
-        dynamic_escape_exit_target_id_.clear();
-        dynamic_escape_exit_side_sign_ = 0;
-        dynamic_escape_exit_attempt_id_ = 0U;
-        dynamic_escape_exit_branch_ = "none";
-      }
-    }
-
     if (!enable_control_) {
       const double last_v_cmd = last_u_[0];
       if (last_v_cmd < 0.5) {
@@ -57827,12 +57197,11 @@ private:
       (mpc_fallback_active && !solver_failure_crawl_active &&
       !solver_failure_continuation_active) || !enable_control_ ||
       canonical_emergency_stop ||
-      mpc_->low_speed_direct_wall_stop_active() ||
-      (wall_handoff_hold_active && active_wall_admission.stop_required);
+      mpc_->low_speed_direct_wall_stop_active();
     const bool canonical_normal_execution_active =
       canonical_normal_command.has_value() && !forced_stop_active &&
       !solver_failure_crawl_active && !solver_failure_continuation_active &&
-      !executed_solution_wall_hold_active && !wall_handoff_hold_active;
+      !executed_solution_wall_hold_active;
     if (forced_stop_active) {
       bug_acc_enabled = false;
       acc = mpc_cfg_.a_min;
@@ -57845,10 +57214,6 @@ private:
     } else if (executed_solution_wall_hold_active) {
       bug_acc_enabled = false;
       acc = std::min(0.0, 100.0 * (u[0] - actual_v));
-    } else if (wall_handoff_hold_active) {
-      bug_acc_enabled = false;
-      acc = active_wall_admission.stop_required ? mpc_cfg_.a_min :
-        std::min(0.0, 100.0 * (u[0] - actual_v));
     } else if (canonical_normal_execution_active) {
       bug_acc_enabled = false;
       acc = canonical_normal_command->acceleration_mps2;
@@ -57887,7 +57252,7 @@ private:
       acc = last_acc_ + (acc - last_acc_) * mpc_cfg_.accel_low_pass_gain;
     }
     if (
-      solver_failure_continuation_active || wall_handoff_hold_active ||
+      solver_failure_continuation_active ||
       executed_solution_wall_hold_active)
     {
       acc = std::min(0.0, acc);
@@ -57922,49 +57287,6 @@ private:
     const bool recovery_command_active = recovery_output.has_value() &&
       apply_stuck_recovery_arbitration(
       recovery_output.value(), actual_v, current_time, u, acc, bug_acc_enabled);
-    if (recovery_command_active && solver_wall_handoff_admission_gate_.active()) {
-      solver_wall_handoff_admission_gate_.reset();
-      RCLCPP_WARN(
-        get_logger(),
-        "Wall path admission reset: scope=solver-handoff, "
-        "reason=recovery-took-control");
-    }
-    if (recovery_command_active && overtake_wall_admission_gate_.active()) {
-      overtake_wall_admission_gate_.reset();
-      RCLCPP_WARN(
-        get_logger(),
-        "Wall path admission reset: scope=active-overtake, "
-        "reason=recovery-took-control");
-    }
-    if (
-      recovery_command_active &&
-      dynamic_escape_wall_admission_gate_.active())
-    {
-      dynamic_escape_wall_admission_gate_.reset();
-      RCLCPP_WARN(
-        get_logger(),
-        "Wall path admission reset: scope=dynamic-escape-exit, "
-        "reason=recovery-took-control");
-    }
-    if (recovery_command_active && dynamic_escape_exit_gate_.active()) {
-      overtake_orchestrator::DynamicEscapeExitRequest recovery_override;
-      recovery_override.recovery_override = true;
-      const auto resolution = dynamic_escape_exit_gate_.update(
-        recovery_override);
-      RCLCPP_WARN(
-        get_logger(),
-        "Dynamic escape exit contract: decision=%llu, event=released, "
-        "reason=%s, target=%s, side=%d, recovery=1",
-        static_cast<unsigned long long>(active_control_decision_id_),
-        overtake_orchestrator::to_string(resolution.reason),
-        dynamic_escape_exit_target_id_.empty() ?
-        "none" : dynamic_escape_exit_target_id_.c_str(),
-        dynamic_escape_exit_side_sign_);
-      dynamic_escape_exit_target_id_.clear();
-      dynamic_escape_exit_side_sign_ = 0;
-      dynamic_escape_exit_attempt_id_ = 0U;
-      dynamic_escape_exit_branch_ = "none";
-    }
     if (!canonical_normal_execution_active || recovery_command_active) {
       acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
       u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
@@ -58030,7 +57352,7 @@ private:
       current_time.seconds());
     if (
       !recovery_command_active && !mpc_fallback_active &&
-      !wall_handoff_hold_active && !executed_solution_wall_hold_active &&
+      !executed_solution_wall_hold_active &&
       overtake_authority.has_value() &&
       (overtake_authority->request.phase ==
       overtake_orchestrator::Phase::ShiftOut ||
@@ -58047,11 +57369,6 @@ private:
       mpc_->low_speed_direct_wall_stop_active();
     final_source_request.solver_bounded_continuation_active =
       solver_failure_continuation_active;
-    final_source_request.solver_wall_handoff_hold_active =
-      solver_wall_handoff_hold_active;
-    final_source_request.overtake_wall_admission_hold_active =
-      overtake_wall_admission_hold_active ||
-      dynamic_escape_wall_admission_hold_active;
     final_source_request.executed_solution_wall_hold_active =
       executed_solution_wall_hold_active;
     final_source_request.solver_crawl_active = solver_failure_crawl_active;
@@ -58078,14 +57395,6 @@ private:
       output_reason = "solver-failure-dynamic-escape-hold";
     } else if (executed_solution_wall_hold_active) {
       output_reason = "executed-solution-wall-contract-hold";
-    } else if (wall_handoff_hold_active) {
-      const char * output_scope = solver_wall_handoff_hold_active ?
-        "solver-wall-handoff-hold/" :
-        (overtake_wall_admission_hold_active ?
-        "overtake-wall-admission-hold/" :
-        "dynamic-escape-exit-wall-hold/");
-      output_reason = std::string{output_scope} +
-        overtake_orchestrator::to_string(active_wall_admission.reason);
     } else if (forced_stop_active) {
       if (mpc_->low_speed_direct_wall_stop_active()) {
         output_reason = "low-speed-direct-wall-stop";
@@ -58146,7 +57455,7 @@ private:
     boost_context.control_enabled = enable_control_;
     boost_context.normal_command_published = true;
     boost_context.failsafe_active =
-      forced_stop_active || wall_handoff_hold_active ||
+      forced_stop_active ||
       executed_solution_wall_hold_active ||
       odom_failsafe_active_ || command_failsafe_active_;
     boost_context.v2x_safety_brake_active =
@@ -58229,20 +57538,6 @@ private:
   final_control_trace_emitter_;
   overtake_orchestrator::ChangeAwareWallHandoffTraceEmitter
   wall_handoff_trace_emitter_;
-  overtake_orchestrator::WallPathAdmissionGate
-  solver_wall_handoff_admission_gate_;
-  overtake_orchestrator::WallPathAdmissionGate
-  overtake_wall_admission_gate_;
-  overtake_orchestrator::WallPathAdmissionGate
-  dynamic_escape_wall_admission_gate_;
-  overtake_orchestrator::DynamicEscapeExitGate dynamic_escape_exit_gate_;
-  bool overtake_wall_monitor_was_relevant_{false};
-  bool dynamic_escape_wall_monitor_was_relevant_{false};
-  bool dynamic_escape_execution_was_active_{false};
-  std::string dynamic_escape_exit_target_id_;
-  int dynamic_escape_exit_side_sign_{0};
-  std::uint64_t dynamic_escape_exit_attempt_id_{0U};
-  std::string dynamic_escape_exit_branch_{"none"};
   std::optional<CurrentWallTraceSnapshot> last_current_wall_trace_snapshot_;
   double last_published_steering_for_wall_trace_{
     std::numeric_limits<double>::quiet_NaN()};

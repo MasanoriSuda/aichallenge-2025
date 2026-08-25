@@ -883,6 +883,21 @@ Finish the architecture simplification instead of leaving permanent dual control
   Failure-first source contracts, the 25-package build and 1,861 rebuilt
   package tests pass. The reachable runtime graph was already fresh-only, so
   `output/20260825-112734` remains the accepted dynamic baseline.
+- `.steering/20260825-slice6-node-wall-handoff-removal` completes the audited
+  final-publisher boundary deletion. ActiveOvertake and DynamicEscape
+  node-level wall gates had no reachable producer after canonical dispatch;
+  the reachable solver-recovery gate duplicated the fresh canonical
+  current-world certificate and was a second normal owner. The legacy
+  authority resolver, three admission gates, DynamicEscape exit gate, their
+  hold/replan publisher branches and two final-source classes were physically
+  deleted. Canonical wall proof, executed-solution wall hold, typed Emergency,
+  bounded solver continuation, Stuck/gear/reverse Recovery and observation-only
+  wall trace remain. Failure-first source contracts, the 25-package build and
+  all 49 rebuilt test targets (1,840 tests) pass. In
+  `output/20260825-124515`, both domains produced zero retired wall-handoff
+  source/trace events while canonical normal publication continued. Existing
+  async ShiftOut candidate-unavailable Emergency remains separate measured
+  quality work; no tuning or replacement fallback was added here.
 
 ## Slice 7: Parameter tuning
 

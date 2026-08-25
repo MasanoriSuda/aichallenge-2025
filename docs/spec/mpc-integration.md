@@ -1654,13 +1654,17 @@ wall certificateの有効期限を延長しない。ライフサイクルは
 Dynamic Escape実行は、現在周期のfreshなcanonical解と現在周期の物理wall admissionが揃った
 場合だけnormal authorityを持つ。旧private retained solution leaseは、その根となるproducerが
 legacy normal solve削除後に存在せず、実行不能なconsumer分岐だけを残していたため
-2026-08-25に物理削除した。同じ前方targetがblockingでfresh解がない場合、exit contractは
-古い解を再生せず、active lifecycleへfresh replacementを要求する。`target-blocking`自体は
-wall/solver failureではないため、active lifecycleがreplacementを計画中ならfailure backoffへ
-投入しない。物理wall rejection、solver failure、replacement lossは失敗として扱う。正常な
-live solutionのwall admissionはfreshな物理観測から直接採用し、stateful admission gateを
-40 Hzでenter/releaseし直さない。wall handoffが必要な周期は、既存のlast finite steeringを
-短時間同期するが、それをDynamic Escapeの解やauthorityとして扱わない。
+2026-08-25に物理削除した。同じ前方targetがblockingでfresh解がない場合も古い解を再生せず、
+active lifecycleがfresh candidateを生成する。候補不成立時はcanonical Emergency、solver失敗時は
+bounded solver-failure supervisorへ型付きで帰着し、別のnormal formulationやnode-level holdへ
+切り替えない。
+
+同日、canonical commandの後段に残っていたsolver／active-overtake／DynamicEscape用の
+node-level wall admissionおよびDynamicEscape exit gateも物理削除した。physical wall proofは
+canonical producerのcurrent-world certificateと`executed_solution_wall_hold_active`が所有し、
+publisherは同じpathを別の距離定義で再評価して操舵・速度を置換しない。Emergency、
+bounded solver-failure continuation、Stuck／gear／reverse Recoveryは独立supervisorとして維持する。
+`DynamicEscape wall handoff`ログは決定後の観測専用telemetryであり、command authorityを持たない。
 
 現行grace 0.50秒は2025 AWSIM競技
 シミュレーション向けの暫定値であり、2026公式仕様または実車安全仕様ではない。
@@ -2122,8 +2126,23 @@ configやmetadata不成立によって別formulationへ暗黙移行しない。u
 旧`solve_problem()`、private persistent solver、warm-start、age、3-state formulation historyも削除した。
 dynamic-escape追跡ログは旧`progress-3state`／`legacy-mpc`の推測値ではなく、実際のcanonical problem
 contextのformulationを記録する。25-package build、49 test target、1,870 testが合格した。retained
-legacy dynamic-escape wall handoff、migration-only circuit／reentry／handoff telemetryの物理削除は
-final publisher／Recovery責務との境界を監査した別Sliceで行う。
+legacy dynamic-escape execution、migration-only circuit／reentry telemetry、node-level wall handoffの
+物理削除は、final publisher／Recovery責務との境界を監査した後続Sliceで完了した。
+
+#### Node-level normal wall handoffの物理削除（2026-08-25、2025由来の暫定）
+
+全normal intentのcanonical MPCC昇格後もpublisher側に残っていた`WallPathAdmissionGate`、
+`LegacyWallHandoffAuthority`、DynamicEscape exit gateと、solver／Overtake／DynamicEscape用hold出力を
+Slice 6で物理削除した。ActiveOvertakeとDynamicEscape gateはcanonical dispatch後に到達不能であり、
+solver recovery gateだけは到達可能だったが、fresh canonical commandのcurrent-world wall certificateを
+別のnormal ownerが再解釈して置換する二重authorityだった。
+
+canonical current-world physical wall proof、executed-solution wall hold、明示的Emergency、bounded
+solver-failure continuation、Stuck／gear／reverse Recovery、観測専用wall traceは維持する。parameter、
+margin、timeout、solver設定、ROS interfaceは変更していない。25-package build、49 test target、1,840 testが
+合格し、`output/20260825-124515`では旧wall-handoff source／traceは両domainとも0件、canonical normal
+publicationとcomplete execution identityは継続した。既存のasync ShiftOut候補未準備によるcanonical
+Emergencyは別の実用品質課題であり、本削除Sliceへ対症処理を混在させない。
 
 ### 提出ファイルへの影響
 

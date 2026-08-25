@@ -353,22 +353,12 @@ TEST(OvertakeDecisionTrace, FormatsTrackingFailureAndRecovery) {
     failed.find("formulation_source=dynamic-obstacle-escape"),
     std::string::npos);
   EXPECT_NE(failed.find("workspace_reset=1"), std::string::npos);
-  EXPECT_NE(failed.find("qualification_hold=0/0/nanmps/nanrad"),
-            std::string::npos);
 
   tracking.outcome = trace::TrackingOutcome::QualificationRejected;
-  tracking.qualification_hold_available = true;
-  tracking.qualification_hold_used = true;
-  tracking.qualification_hold_speed_mps = 4.2;
-  tracking.qualification_hold_steering_rad = -0.15;
   const auto rejected = trace::format_tracking_trace(tracking);
   EXPECT_NE(rejected.find("outcome=qualification-rejected"), std::string::npos);
-  EXPECT_NE(rejected.find("qualification_hold=1/1/4.20mps/-0.15rad"),
-            std::string::npos);
 
   tracking.outcome = trace::TrackingOutcome::Qualified;
-  tracking.qualification_hold_available = false;
-  tracking.qualification_hold_used = false;
   const auto qualified = trace::format_tracking_trace(tracking);
   EXPECT_NE(qualified.find("outcome=qualified"), std::string::npos);
 

@@ -415,7 +415,6 @@ bool canonical_normal_uses_physical_steering(
 enum class FinalAuthorityClass
 {
   CertifiedNormalSolution,
-  LegacyNormalBypass,
   EmergencyOverride,
   RecoveryOverride,
   ControlDisabled,
@@ -423,10 +422,26 @@ enum class FinalAuthorityClass
 
 const char * to_string(FinalAuthorityClass authority) noexcept;
 
+struct FinalAuthorityClassRequest
+{
+  bool recovery_override{false};
+  bool control_enabled{true};
+  bool canonical_normal_source{false};
+  bool certified_solution_available{false};
+  bool canonical_normal_command_available{false};
+};
+
+/// Classify the only four final control authorities. A non-Recovery,
+/// control-enabled command is normal only when its source, certified solution
+/// and typed canonical command are all present; every other such output is an
+/// explicit Emergency override.
+FinalAuthorityClass resolve_final_authority_class(
+  const FinalAuthorityClassRequest & request) noexcept;
+
 struct FinalControlDecisionRequest
 {
   std::uint64_t decision_id{};
-  FinalAuthorityClass authority{FinalAuthorityClass::LegacyNormalBypass};
+  FinalAuthorityClass authority{FinalAuthorityClass::ControlDisabled};
   std::string source;
   std::optional<MpccProblemContext> problem;
   std::optional<CertifiedMpccSolution> solution;
@@ -461,7 +476,7 @@ struct FinalControlDecisionRequest
 struct FinalControlDecision
 {
   std::uint64_t decision_id{};
-  FinalAuthorityClass authority{FinalAuthorityClass::LegacyNormalBypass};
+  FinalAuthorityClass authority{FinalAuthorityClass::ControlDisabled};
   std::string source;
   ControlIntent intent{ControlIntent::Unknown};
   Formulation formulation{Formulation::Unresolved};

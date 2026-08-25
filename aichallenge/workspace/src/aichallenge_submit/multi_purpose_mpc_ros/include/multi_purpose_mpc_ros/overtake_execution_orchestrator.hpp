@@ -330,9 +330,7 @@ private:
 enum class FinalControlSource {
   MpcSolution,
   SolverFallback,
-  SolverBoundedContinuation,
   ExecutedSolutionWallHold,
-  SolverCrawl,
   ControlDisabled,
   StuckRecovery,
   Failsafe,
@@ -342,9 +340,7 @@ struct FinalControlSourceRequest {
   bool failsafe_active{false};
   bool stuck_recovery_active{false};
   bool control_enabled{true};
-  bool solver_bounded_continuation_active{false};
   bool executed_solution_wall_hold_active{false};
-  bool solver_crawl_active{false};
   bool solver_fallback_active{false};
   bool forced_stop_active{false};
 };

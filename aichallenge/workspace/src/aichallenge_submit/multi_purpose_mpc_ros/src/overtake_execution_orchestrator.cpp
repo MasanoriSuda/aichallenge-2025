@@ -816,12 +816,6 @@ FinalControlSource resolve_final_control_source(
   if (request.executed_solution_wall_hold_active) {
     return FinalControlSource::ExecutedSolutionWallHold;
   }
-  if (request.solver_bounded_continuation_active) {
-    return FinalControlSource::SolverBoundedContinuation;
-  }
-  if (request.solver_crawl_active) {
-    return FinalControlSource::SolverCrawl;
-  }
   if (request.solver_fallback_active || request.forced_stop_active) {
     return FinalControlSource::SolverFallback;
   }
@@ -833,11 +827,8 @@ const char * to_string(const FinalControlSource source) noexcept
   switch (source) {
     case FinalControlSource::MpcSolution: return "mpc-solution";
     case FinalControlSource::SolverFallback: return "solver-fallback";
-    case FinalControlSource::SolverBoundedContinuation:
-      return "solver-bounded-continuation";
     case FinalControlSource::ExecutedSolutionWallHold:
       return "executed-solution-wall-hold";
-    case FinalControlSource::SolverCrawl: return "solver-crawl";
     case FinalControlSource::ControlDisabled: return "control-disabled";
     case FinalControlSource::StuckRecovery: return "stuck-recovery";
     case FinalControlSource::Failsafe: return "failsafe";
@@ -872,7 +863,6 @@ std::string final_control_signature(const FinalControlTrace & trace)
   }
   if (
     trace.control_source == FinalControlSource::SolverFallback ||
-    trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::ExecutedSolutionWallHold ||
     trace.control_source == FinalControlSource::Failsafe)
   {
@@ -927,7 +917,6 @@ std::string structural_final_control_signature(const FinalControlTrace & trace)
   }
   if (
     trace.control_source == FinalControlSource::SolverFallback ||
-    trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::ExecutedSolutionWallHold ||
     trace.control_source == FinalControlSource::Failsafe)
   {
@@ -1053,7 +1042,6 @@ FinalTraceEmission ChangeAwareFinalControlTraceEmitter::update(
     now_sec >= last_emit_sec_ && now_sec - last_emit_sec_ >= repeat_interval_sec;
   emission.warning =
     trace.control_source == FinalControlSource::SolverFallback ||
-    trace.control_source == FinalControlSource::SolverBoundedContinuation ||
     trace.control_source == FinalControlSource::ExecutedSolutionWallHold ||
     trace.control_source == FinalControlSource::Failsafe ||
     !trace.execution_contract.has_value() ||
@@ -1415,7 +1403,6 @@ bool dynamic_handoff_relevant(const WallHandoffProbe & probe) noexcept
   return
     probe.dynamic_escape_active || probe.action == Action::DynamicEscape ||
     probe.path_source == PathSource::DynamicObstacleEscape ||
-    probe.control_source == FinalControlSource::SolverBoundedContinuation ||
     probe.control_source == FinalControlSource::ExecutedSolutionWallHold;
 }
 
@@ -1473,8 +1460,7 @@ WallHandoffEvent ChangeAwareWallHandoffTraceEmitter::update(
   event.emit = entry ||
     (event.source_changed && transition_touches_dynamic) ||
     (event.monitor_active && risky && (event.risk_changed || risk_repeat_due));
-  event.warning = risky ||
-    probe.control_source == FinalControlSource::SolverBoundedContinuation;
+  event.warning = risky;
   if (event.emit) {
     std::ostringstream trigger;
     bool first = true;

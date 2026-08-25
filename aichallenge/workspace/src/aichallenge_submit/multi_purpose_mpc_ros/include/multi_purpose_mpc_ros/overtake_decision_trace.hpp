@@ -213,12 +213,6 @@ struct TrackingTrace {
   bool solver_workspace_reset{false};
   bool cold_retry_attempted{false};
   bool cold_retry_succeeded{false};
-  bool qualification_hold_available{false};
-  bool qualification_hold_used{false};
-  double qualification_hold_speed_mps{
-      std::numeric_limits<double>::quiet_NaN()};
-  double qualification_hold_steering_rad{
-      std::numeric_limits<double>::quiet_NaN()};
   std::string initial_solver_reason;
 };
 

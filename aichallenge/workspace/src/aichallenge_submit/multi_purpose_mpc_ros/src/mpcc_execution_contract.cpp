@@ -853,8 +853,6 @@ const char * to_string(const FinalAuthorityClass authority) noexcept
   switch (authority) {
     case FinalAuthorityClass::CertifiedNormalSolution:
       return "certified-normal-solution";
-    case FinalAuthorityClass::LegacyNormalBypass:
-      return "legacy-normal-bypass";
     case FinalAuthorityClass::EmergencyOverride:
       return "emergency-override";
     case FinalAuthorityClass::RecoveryOverride:
@@ -863,6 +861,24 @@ const char * to_string(const FinalAuthorityClass authority) noexcept
       return "control-disabled";
   }
   return "unknown";
+}
+
+FinalAuthorityClass resolve_final_authority_class(
+  const FinalAuthorityClassRequest & request) noexcept
+{
+  if (request.recovery_override) {
+    return FinalAuthorityClass::RecoveryOverride;
+  }
+  if (!request.control_enabled) {
+    return FinalAuthorityClass::ControlDisabled;
+  }
+  if (
+    request.canonical_normal_source && request.certified_solution_available &&
+    request.canonical_normal_command_available)
+  {
+    return FinalAuthorityClass::CertifiedNormalSolution;
+  }
+  return FinalAuthorityClass::EmergencyOverride;
 }
 
 FinalControlDecision resolve_final_control_decision(
@@ -901,11 +917,6 @@ FinalControlDecision resolve_final_control_decision(
     decision.identity_complete = true;
     decision.canonical_contract_satisfied = true;
     decision.reason = "explicit-supervisor-override";
-    return decision;
-  }
-  if (request.authority == FinalAuthorityClass::LegacyNormalBypass) {
-    decision.identity_complete = true;
-    decision.reason = "legacy-normal-bypass";
     return decision;
   }
   if (!request.problem.has_value()) {

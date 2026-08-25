@@ -632,23 +632,6 @@ TEST(MpccExecutionContract, RejectsRetainedFinalDecisionWithoutCurrentWorldProof
   EXPECT_EQ(decision.reason, "canonical-command-identity-mismatch");
 }
 
-TEST(MpccExecutionContract, ExposesLegacyBypassWithoutCallingItCanonical)
-{
-  const auto context = make_context();
-  const auto decision = contract::resolve_final_control_decision(
-    contract::FinalControlDecisionRequest{
-      42U, contract::FinalAuthorityClass::LegacyNormalBypass,
-      "low-speed-direct", context, std::nullopt});
-
-  EXPECT_TRUE(decision.identity_complete);
-  EXPECT_FALSE(decision.canonical_contract_satisfied);
-  EXPECT_EQ(decision.reason, "legacy-normal-bypass");
-  EXPECT_NE(
-    contract::format_final_control_decision(decision).find(
-      "authority=legacy-normal-bypass"),
-    std::string::npos);
-}
-
 TEST(MpccExecutionContract, ExplicitOverridesDoNotInventSolverIdentity)
 {
   for (const auto authority : {
@@ -664,6 +647,50 @@ TEST(MpccExecutionContract, ExplicitOverridesDoNotInventSolverIdentity)
     EXPECT_EQ(decision.problem_fingerprint, 0U);
     EXPECT_EQ(decision.solution_id, 0U);
   }
+}
+
+TEST(MpccExecutionContract, FinalAuthorityRequiresCompleteCanonicalNormalEvidence)
+{
+  contract::FinalAuthorityClassRequest request;
+  request.canonical_normal_source = true;
+  request.certified_solution_available = true;
+  request.canonical_normal_command_available = true;
+  EXPECT_EQ(
+    contract::resolve_final_authority_class(request),
+    contract::FinalAuthorityClass::CertifiedNormalSolution);
+
+  request.canonical_normal_command_available = false;
+  EXPECT_EQ(
+    contract::resolve_final_authority_class(request),
+    contract::FinalAuthorityClass::EmergencyOverride);
+  request.canonical_normal_command_available = true;
+  request.certified_solution_available = false;
+  EXPECT_EQ(
+    contract::resolve_final_authority_class(request),
+    contract::FinalAuthorityClass::EmergencyOverride);
+  request.certified_solution_available = true;
+  request.canonical_normal_source = false;
+  EXPECT_EQ(
+    contract::resolve_final_authority_class(request),
+    contract::FinalAuthorityClass::EmergencyOverride);
+}
+
+TEST(MpccExecutionContract, FinalAuthorityPreservesSupervisorPrecedence)
+{
+  contract::FinalAuthorityClassRequest request;
+  request.recovery_override = true;
+  request.control_enabled = false;
+  request.canonical_normal_source = true;
+  request.certified_solution_available = true;
+  request.canonical_normal_command_available = true;
+  EXPECT_EQ(
+    contract::resolve_final_authority_class(request),
+    contract::FinalAuthorityClass::RecoveryOverride);
+
+  request.recovery_override = false;
+  EXPECT_EQ(
+    contract::resolve_final_authority_class(request),
+    contract::FinalAuthorityClass::ControlDisabled);
 }
 
 TEST(MpccExecutionContract, EmergencyOverridePreservesExplicitSupervisorIntent)

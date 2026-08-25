@@ -316,8 +316,6 @@ mpc:
   solver_failure_steering_hold_cycles: 4 # 0.1 s at 40 Hz, then path-track; Recovery targets neutral
   # SIM fail-operational fallback: only Cruise with no detected front vehicle
   # may keep moving, using low-speed path-error steering instead of stopping.
-  solver_failure_crawl_enabled: true
-  solver_failure_crawl_speed_mps: 1.0
   control_rate: 40.0 # Hz
   odom_timeout_sec: 0.5 # [s], steady-clock local safety timeout (not an official limit)
   # Controller/actuation latency compensation after EKF pose timing compensation.

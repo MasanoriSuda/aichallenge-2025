@@ -424,11 +424,6 @@ std::string format_tracking_trace(const TrackingTrace &trace) {
          << ", workspace_reset=" << (trace.solver_workspace_reset ? 1 : 0)
          << ", cold_retry=" << (trace.cold_retry_attempted ? 1 : 0)
          << "/" << (trace.cold_retry_succeeded ? 1 : 0)
-         << ", qualification_hold="
-         << (trace.qualification_hold_available ? 1 : 0) << "/"
-         << (trace.qualification_hold_used ? 1 : 0) << "/"
-         << finite_or_nan(trace.qualification_hold_speed_mps) << "mps/"
-         << finite_or_nan(trace.qualification_hold_steering_rad) << "rad"
          << ", initial_solver_reason=\""
          << reason_or(trace.initial_solver_reason, "none") << "\""
          << ", reason=\"" << reason_or(trace.reason, "none") << "\"";

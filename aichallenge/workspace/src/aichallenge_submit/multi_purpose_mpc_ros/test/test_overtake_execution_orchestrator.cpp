@@ -572,16 +572,6 @@ TEST(OvertakeExecutionOrchestrator, ResolvesFinalControlSourceByOutputPrecedence
     orchestrator::resolve_final_control_source(request),
     orchestrator::FinalControlSource::SolverFallback);
 
-  request.solver_crawl_active = true;
-  EXPECT_EQ(
-    orchestrator::resolve_final_control_source(request),
-    orchestrator::FinalControlSource::SolverCrawl);
-
-  request.solver_bounded_continuation_active = true;
-  EXPECT_EQ(
-    orchestrator::resolve_final_control_source(request),
-    orchestrator::FinalControlSource::SolverBoundedContinuation);
-
   request.executed_solution_wall_hold_active = true;
   EXPECT_EQ(
     orchestrator::resolve_final_control_source(request),
@@ -622,7 +612,7 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
   orchestrator::FinalControlTrace trace;
   trace.decision_id = 42U;
   trace.authority = authority;
-  trace.control_source = orchestrator::FinalControlSource::MpcSolution;
+  trace.control_source = orchestrator::FinalControlSource::ControlDisabled;
   trace.published = true;
   trace.actual_speed_mps = 6.0;
   trace.target_speed_mps = 7.0;
@@ -638,8 +628,8 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
     FinalControlDecisionRequest{
       42U,
       multi_purpose_mpc_ros::mpcc_execution_contract::
-      FinalAuthorityClass::LegacyNormalBypass,
-      "mpc-solution", std::nullopt, std::nullopt});
+      FinalAuthorityClass::ControlDisabled,
+      "control-disabled", std::nullopt, std::nullopt});
 
   orchestrator::ChangeAwareFinalControlTraceEmitter emitter;
   const auto first = emitter.update(trace, 1.0);
@@ -654,7 +644,7 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
     first.message.find("front=6.50/safety=4.20/protected=4.50m"),
     std::string::npos);
   EXPECT_NE(first.message.find("closing_ref=1.10m/s"), std::string::npos);
-  EXPECT_NE(first.message.find("control_source=mpc-solution"), std::string::npos);
+  EXPECT_NE(first.message.find("control_source=control-disabled"), std::string::npos);
   EXPECT_NE(first.message.find("identity=complete"), std::string::npos);
   EXPECT_NE(first.message.find("contract_join=1"), std::string::npos);
   trace.decision_id = 43U;
@@ -665,8 +655,8 @@ TEST(OvertakeExecutionOrchestrator, JoinsAuthorityAndPublishedCommandByDecisionI
     FinalControlDecisionRequest{
       43U,
       multi_purpose_mpc_ros::mpcc_execution_contract::
-      FinalAuthorityClass::LegacyNormalBypass,
-      "mpc-solution", std::nullopt, std::nullopt});
+      FinalAuthorityClass::ControlDisabled,
+      "control-disabled", std::nullopt, std::nullopt});
   EXPECT_FALSE(emitter.update(trace, 1.1).emit);
 }
 

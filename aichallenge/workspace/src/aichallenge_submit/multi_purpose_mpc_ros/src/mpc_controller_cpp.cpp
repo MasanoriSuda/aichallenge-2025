@@ -5487,8 +5487,6 @@ struct MpcConfig
   double steer_rate_max{};
   double control_rate{};
   int solver_failure_steering_hold_cycles{4};
-  bool solver_failure_crawl_enabled{false};
-  double solver_failure_crawl_speed_mps{0.0};
   double odom_timeout_sec{0.5};
   double state_prediction_delay_sec{0.0};
   bool state_prediction_simulation_only{true};
@@ -28161,10 +28159,6 @@ struct MPC
   {
     const bool dynamic_escape_candidate_active =
       last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_active;
-    const int dynamic_escape_candidate_side =
-      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign;
-    const std::string dynamic_escape_candidate_branch =
-      last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_committed_branch;
     const bool dynamic_escape_candidate_qualified =
       dynamic_escape_candidate_active &&
       dynamic_obstacle_lateral_escape_tracking_qualified_ &&
@@ -28174,22 +28168,6 @@ struct MPC
       last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_side_sign &&
       dynamic_obstacle_lateral_escape_qualified_branch_ ==
       last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_committed_branch;
-    const double maximum_steering = std::isfinite(cfg.delta_max) ?
-      std::max(0.0, std::abs(cfg.delta_max)) :
-      std::numeric_limits<double>::quiet_NaN();
-    const bool previous_control_available =
-      !last_control_was_fallback_ && current_control.size() >= 2 &&
-      std::isfinite(current_control[0]) && std::isfinite(previous_steering);
-    const auto qualification_hold =
-      v2x_overtake_core::resolve_dynamic_obstacle_lateral_escape_qualification_hold(
-      v2x_overtake_core::DynamicObstacleLateralEscapeQualificationHoldRequest{
-        dynamic_escape_candidate_active,
-        dynamic_escape_candidate_qualified,
-        previous_control_available,
-        current_speed_mps_,
-        previous_control_available ? current_control[0] : 0.0,
-        previous_steering,
-        maximum_steering});
 
     last_control_resolution_reason_ = reason;
     last_control_was_fallback_ = true;
@@ -28220,58 +28198,10 @@ struct MPC
       trace.backoff_sec = backoff.hold_sec;
       trace.reason = reason;
       populate_dynamic_escape_tracking_context(trace);
-      trace.qualification_hold_available = qualification_hold.hold;
-      trace.qualification_hold_used = qualification_hold.hold;
-      if (qualification_hold.hold) {
-        trace.qualification_hold_speed_mps = qualification_hold.speed_mps;
-        trace.qualification_hold_steering_rad = qualification_hold.steering_rad;
-      }
       const std::string tracking_trace =
         overtake_decision_trace::format_tracking_trace(trace);
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"), "%s", tracking_trace.c_str());
-    }
-
-    if (qualification_hold.hold) {
-      // The candidate QP was an admission probe: no control from that branch
-      // has been published yet. Quarantine the exact target/side above, expose
-      // ordinary Follow ownership to downstream arbitration, and bridge only
-      // this 40 Hz cycle with the last finite ordinary command. The next cycle
-      // rebuilds the ordinary problem because the candidate is backed off.
-      auto & behavior = last_v2x_behavior_output_;
-      behavior.dynamic_obstacle_lateral_escape_active = false;
-      behavior.dynamic_obstacle_lateral_escape_execution_path_validated = false;
-      behavior.dynamic_obstacle_follow_cap_suppressed = false;
-      behavior.dynamic_obstacle_lateral_escape_side_sign = 0;
-      behavior.dynamic_obstacle_lateral_escape_committed_branch = "none";
-      behavior.dynamic_obstacle_lateral_escape_m = 0.0;
-
-      current_control = Eigen::VectorXd::Zero(2 * std::max(0, cfg.N));
-      for (int index = 0; index < cfg.N; ++index) {
-        current_control[2 * index] = qualification_hold.speed_mps;
-        current_control[2 * index + 1] = qualification_hold.steering_rad;
-      }
-      previous_steering = qualification_hold.steering_rad;
-      failure_fallback_speed_.reset();
-      infeasibility_counter = 0;
-      overtake_infeasibility_counter_ = 0;
-      last_control_was_fallback_ = false;
-      last_control_resolution_reason_ =
-        std::string{"dynamic-escape-qualification-rejected/"} +
-        v2x_overtake_core::to_string(qualification_hold.reason) + "/" + reason;
-      RCLCPP_WARN(
-        rclcpp::get_logger("mpc_controller"),
-        "Dynamic escape qualification rejected: target=%s, side=%d, "
-        "branch=%s, action=%s, hold=%.3f m/s/%.3f rad, reason=%s",
-        behavior.dynamic_obstacle_cruise_target_id.c_str(),
-        dynamic_escape_candidate_side,
-        dynamic_escape_candidate_branch.c_str(),
-        v2x_overtake_core::to_string(qualification_hold.reason),
-        qualification_hold.speed_mps, qualification_hold.steering_rad,
-        reason.c_str());
-      Eigen::Vector2d hold;
-      hold << qualification_hold.speed_mps, qualification_hold.steering_rad;
-      return {hold, std::abs(qualification_hold.steering_rad)};
     }
 
     current_prediction.first.clear();
@@ -47829,12 +47759,6 @@ Config load_config(const std::string & path)
   cfg.mpc.solver_failure_steering_hold_cycles =
     mpc["solver_failure_steering_hold_cycles"] ?
     mpc["solver_failure_steering_hold_cycles"].as<int>() : 4;
-  cfg.mpc.solver_failure_crawl_enabled =
-    mpc["solver_failure_crawl_enabled"] ?
-    mpc["solver_failure_crawl_enabled"].as<bool>() : false;
-  cfg.mpc.solver_failure_crawl_speed_mps =
-    mpc["solver_failure_crawl_speed_mps"] ?
-    mpc["solver_failure_crawl_speed_mps"].as<double>() : 0.0;
   cfg.mpc.steering_tire_angle_gain_var = mpc["steering_tire_angle_gain_var"].as<double>();
   if (!std::isfinite(cfg.mpc.steer_rate_max) || cfg.mpc.steer_rate_max < 0.0) {
     throw std::runtime_error("mpc.steer_rate_max must be finite and non-negative");
@@ -47845,13 +47769,6 @@ Config load_config(const std::string & path)
   if (cfg.mpc.solver_failure_steering_hold_cycles < 0) {
     throw std::runtime_error(
             "mpc.solver_failure_steering_hold_cycles must be non-negative");
-  }
-  if (
-    !std::isfinite(cfg.mpc.solver_failure_crawl_speed_mps) ||
-    cfg.mpc.solver_failure_crawl_speed_mps < 0.0)
-  {
-    throw std::runtime_error(
-            "mpc.solver_failure_crawl_speed_mps must be finite and non-negative");
   }
   if (
     !std::isfinite(cfg.mpc.steering_tire_angle_gain_var) ||
@@ -50956,11 +50873,8 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "MPC solver fallback steering: hold=%d cycles, post_hold=path-track, "
-      "recovery=neutral, transition_rate=%.3f rad/s, "
-      "sim_crawl=%d/%.2f m/s",
-      mpc_cfg_.solver_failure_steering_hold_cycles, mpc_cfg_.steer_rate_max,
-      mpc_cfg_.solver_failure_crawl_enabled ? 1 : 0,
-      mpc_cfg_.solver_failure_crawl_speed_mps);
+      "recovery=neutral, transition_rate=%.3f rad/s",
+      mpc_cfg_.solver_failure_steering_hold_cycles, mpc_cfg_.steer_rate_max);
     if (mpc_cfg_.v2x_behavior.enabled) {
       RCLCPP_WARN(get_logger(), "USE_V2X_BEHAVIOR_FSM is enabled!");
       if (mpc_cfg_.v2x_behavior.debug_log_enabled) {
@@ -52164,12 +52078,10 @@ private:
   }
 
   overtake_orchestrator::PredictedPathWallMetrics evaluate_predicted_path_wall_metrics(
-    const Pose2D & pose, const double required_wall_clearance_m,
-    const overtake_orchestrator::FinalControlSource control_source) const
+    const Pose2D & pose, const double required_wall_clearance_m) const
   {
     overtake_orchestrator::PredictedPathWallMetrics metrics;
-    metrics.retained_solution =
-      control_source == overtake_orchestrator::FinalControlSource::SolverBoundedContinuation;
+    metrics.retained_solution = false;
     if (
       mpc_ == nullptr || recovery_grid_ == nullptr || !recovery_grid_->valid() ||
       !recovery_footprint_.valid() || mpc_->current_prediction.first.empty() ||
@@ -52255,28 +52167,19 @@ private:
     trace.authority = current_overtake_authority_trace();
     trace.control_source =
       overtake_orchestrator::resolve_final_control_source(source_request);
-    auto final_authority = mpcc_contract::FinalAuthorityClass::LegacyNormalBypass;
-    if (trace.control_source == overtake_orchestrator::FinalControlSource::Failsafe) {
-      final_authority = mpcc_contract::FinalAuthorityClass::EmergencyOverride;
-    } else if (
-      trace.control_source ==
-      overtake_orchestrator::FinalControlSource::StuckRecovery)
-    {
-      final_authority = mpcc_contract::FinalAuthorityClass::RecoveryOverride;
-    } else if (
-      trace.control_source ==
-      overtake_orchestrator::FinalControlSource::ControlDisabled)
-    {
-      final_authority = mpcc_contract::FinalAuthorityClass::ControlDisabled;
-    } else if (
-      trace.control_source == overtake_orchestrator::FinalControlSource::MpcSolution &&
+    const bool certified_solution_available =
       mpc_ != nullptr && mpc_->last_solution_contract().has_value() &&
-      mpcc_contract::solution_certified(
-        mpc_->last_solution_contract().value()))
-    {
-      final_authority =
-        mpcc_contract::FinalAuthorityClass::CertifiedNormalSolution;
-    }
+      mpcc_contract::solution_certified(mpc_->last_solution_contract().value());
+    const auto final_authority = mpcc_contract::resolve_final_authority_class(
+      mpcc_contract::FinalAuthorityClassRequest{
+        trace.control_source ==
+        overtake_orchestrator::FinalControlSource::StuckRecovery,
+        trace.control_source !=
+        overtake_orchestrator::FinalControlSource::ControlDisabled,
+        trace.control_source ==
+        overtake_orchestrator::FinalControlSource::MpcSolution,
+        certified_solution_available,
+        canonical_normal_command.has_value()});
     auto supervisor_intent = mpcc_contract::ControlIntent::Unknown;
     if (
       final_authority == mpcc_contract::FinalAuthorityClass::EmergencyOverride &&
@@ -52380,7 +52283,7 @@ private:
       return;
     }
     const auto path_metrics = evaluate_predicted_path_wall_metrics(
-      pose, probe.required_wall_clearance_m, probe.control_source);
+      pose, probe.required_wall_clearance_m);
     const auto message = overtake_orchestrator::format_wall_handoff_trace(
       probe, event, path_metrics);
     if (event.warning || path_metrics.contact || path_metrics.out_of_map) {
@@ -56311,179 +56214,7 @@ private:
     const bool mpc_fallback_active = mpc_->last_control_was_fallback();
     const bool executed_solution_wall_hold_active =
       mpc_->executed_solution_wall_hold_active();
-    const auto & v2x_behavior = mpc_->last_v2x_behavior_output();
-    const bool dynamic_escape_fresh_execution_active =
-      v2x_behavior.dynamic_obstacle_lateral_escape_active;
-    const bool dynamic_escape_execution_active =
-      v2x_behavior.dynamic_obstacle_lateral_escape_execution_active &&
-      dynamic_escape_fresh_execution_active;
     const auto overtake_authority = current_overtake_authority_trace();
-    recovery_footprint::FootprintSample solver_crawl_footprint_sample;
-    if (
-      mpc_fallback_active &&
-      recovery_grid_ && recovery_footprint_.valid())
-    {
-      solver_crawl_footprint_sample = recovery_footprint::sample_footprint(
-        *recovery_grid_, recovery_footprint_,
-        recovery_footprint::Pose2D{pose.x, pose.y, pose.theta});
-    }
-    const bool solver_crawl_footprint_clear =
-      solver_crawl_footprint_sample.valid &&
-      !solver_crawl_footprint_sample.out_of_map &&
-      solver_crawl_footprint_sample.contact_cells.empty();
-    const double solver_crawl_max_lateral_error_m =
-      cfg_.stuck_recovery.core.supervisor.max_rejoin_lateral_error_m;
-    const double solver_crawl_max_heading_error_rad =
-      cfg_.stuck_recovery.core.supervisor.max_rejoin_heading_error_rad;
-    mpc_velocity_limit::SolverFailureCrawlRequest solver_crawl_request;
-    solver_crawl_request.simulation_environment = use_sim_time_;
-    solver_crawl_request.enabled =
-      mpc_cfg_.solver_failure_crawl_enabled && !canonical_emergency_stop;
-    solver_crawl_request.control_enabled = enable_control_;
-    solver_crawl_request.solver_fallback = mpc_fallback_active;
-    solver_crawl_request.unrestricted_cruise =
-      v2x_behavior.state == V2XBehaviorState::Cruise;
-    solver_crawl_request.front_vehicle_detected = v2x_behavior.has_front_vehicle;
-    solver_crawl_request.current_static_footprint_clear = solver_crawl_footprint_clear;
-    solver_crawl_request.lateral_error_m = car_->spatial_state.e_y;
-    solver_crawl_request.heading_error_rad = car_->spatial_state.e_psi;
-    solver_crawl_request.max_lateral_error_m = solver_crawl_max_lateral_error_m;
-    solver_crawl_request.max_heading_error_rad = solver_crawl_max_heading_error_rad;
-    solver_crawl_request.configured_speed_mps = mpc_cfg_.solver_failure_crawl_speed_mps;
-    solver_crawl_request.effective_speed_limit_mps = effective_v_max;
-    const auto solver_failure_crawl = mpc_velocity_limit::resolve_solver_failure_crawl(
-      solver_crawl_request);
-    const bool solver_failure_crawl_active = solver_failure_crawl.active;
-    mpc_velocity_limit::SolverFailureContinuationRequest
-      solver_continuation_request;
-    solver_continuation_request.simulation_environment = use_sim_time_;
-    solver_continuation_request.enabled =
-      mpc_cfg_.solver_failure_crawl_enabled && !canonical_emergency_stop;
-    solver_continuation_request.control_enabled = enable_control_;
-    solver_continuation_request.solver_fallback = mpc_fallback_active;
-    solver_continuation_request.dynamic_obstacle_escape_active =
-      dynamic_escape_execution_active;
-    solver_continuation_request.emergency_active =
-      v2x_behavior.state == V2XBehaviorState::SafetyBrake ||
-      v2x_behavior.front_risk_level == FrontRiskLevel::EmergencyBrake;
-    solver_continuation_request.current_static_footprint_clear =
-      solver_crawl_footprint_clear;
-    solver_continuation_request.execution_path_validated =
-      v2x_behavior.dynamic_obstacle_lateral_escape_execution_path_validated;
-    solver_continuation_request.tracking_envelope_valid =
-      std::isfinite(car_->spatial_state.e_y) &&
-      std::isfinite(car_->spatial_state.e_psi) &&
-      std::isfinite(solver_crawl_max_heading_error_rad) &&
-      solver_crawl_max_heading_error_rad >= 0.0 &&
-      std::abs(car_->spatial_state.e_psi) <= solver_crawl_max_heading_error_rad;
-    solver_continuation_request.consecutive_failure_count =
-      mpc_->consecutive_solver_failure_count();
-    solver_continuation_request.maximum_hold_cycles =
-      mpc_cfg_.solver_failure_steering_hold_cycles;
-    solver_continuation_request.current_speed_mps = std::abs(actual_v);
-    solver_continuation_request.effective_speed_limit_mps = effective_v_max;
-    const auto solver_failure_continuation =
-      mpc_velocity_limit::resolve_solver_failure_continuation(
-      solver_continuation_request);
-    const bool solver_failure_continuation_active =
-      solver_failure_continuation.active;
-    const bool solver_crawl_path_unsafe =
-      !std::isfinite(car_->spatial_state.e_y) ||
-      !std::isfinite(car_->spatial_state.e_psi) ||
-      !std::isfinite(solver_crawl_max_lateral_error_m) ||
-      solver_crawl_max_lateral_error_m < 0.0 ||
-      !std::isfinite(solver_crawl_max_heading_error_rad) ||
-      solver_crawl_max_heading_error_rad < 0.0 ||
-      std::abs(car_->spatial_state.e_y) > solver_crawl_max_lateral_error_m ||
-      std::abs(car_->spatial_state.e_psi) > solver_crawl_max_heading_error_rad;
-    if (
-      mpc_fallback_active && use_sim_time_ && mpc_cfg_.solver_failure_crawl_enabled &&
-      (solver_crawl_path_unsafe || !solver_crawl_footprint_clear))
-    {
-      RCLCPP_WARN_THROTTLE(
-        get_logger(), *get_clock(), 1000,
-        "MPC solver fail-operational crawl blocked by path safety: "
-        "reason=%s, "
-        "e_y=%.3f/%.3f m, e_psi=%.3f/%.3f rad, "
-        "footprint_valid=%d, out_of_map=%d, contacts=%zu",
-        mpc_velocity_limit::to_string(solver_failure_crawl.block_reason),
-        car_->spatial_state.e_y, solver_crawl_max_lateral_error_m,
-        car_->spatial_state.e_psi, solver_crawl_max_heading_error_rad,
-        solver_crawl_footprint_sample.valid ? 1 : 0,
-        solver_crawl_footprint_sample.out_of_map ? 1 : 0,
-        solver_crawl_footprint_sample.contact_cells.size());
-    }
-    if (solver_failure_crawl_active) {
-      const double path_curvature = car_->current_waypoint != nullptr ?
-        car_->current_waypoint->kappa : 0.0;
-      const double target_steering =
-        v2x_overtake_core::resolve_low_speed_shift_steering(
-        v2x_overtake_core::LowSpeedShiftSteeringRequest{
-          car_->spatial_state.e_y, car_->spatial_state.e_psi, 0.0,
-          path_curvature, car_->length, std::abs(mpc_cfg_.delta_max),
-          mpc_cfg_.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
-          mpc_cfg_.v2x_behavior.low_speed_avoidance_shift_heading_gain});
-      const double max_steering_step =
-        mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
-      u[0] = solver_failure_crawl.target_speed_mps;
-      u[1] = clip(
-        target_steering, last_u_[1] - max_steering_step,
-        last_u_[1] + max_steering_step);
-      max_delta = std::abs(u[1]);
-    }
-    if (solver_failure_continuation_active) {
-      // safe_failure_control() has already retained/rate-limited steering.
-      // Keep that lateral escape for the bounded lease, but never ask the
-      // failed solution to accelerate the vehicle.
-      u[0] = solver_failure_continuation.target_speed_mps;
-      max_delta = std::abs(u[1]);
-    }
-    if (solver_failure_crawl_active != solver_failure_crawl_was_active_) {
-      if (solver_failure_crawl_active) {
-        RCLCPP_WARN(
-          get_logger(),
-          "MPC solver fail-operational crawl entered: target=%.2f m/s, "
-          "e_y=%.3f m, e_psi=%.3f rad",
-          solver_failure_crawl.target_speed_mps,
-          car_->spatial_state.e_y, car_->spatial_state.e_psi);
-      } else {
-        RCLCPP_INFO(get_logger(), "MPC solver fail-operational crawl exited");
-      }
-      solver_failure_crawl_was_active_ = solver_failure_crawl_active;
-    }
-    if (
-      solver_failure_continuation_active !=
-      solver_failure_continuation_was_active_)
-    {
-      if (solver_failure_continuation_active) {
-        RCLCPP_WARN(
-          get_logger(),
-          "MPC solver bounded dynamic-escape continuation entered: "
-          "failures=%d/%d, target=%.2f m/s, path_validated=%d, "
-          "tracking_valid=%d, e_y=%.3f m, e_psi=%.3f/%.3f rad, "
-          "footprint_clear=%d",
-          solver_continuation_request.consecutive_failure_count,
-          solver_continuation_request.maximum_hold_cycles,
-          solver_failure_continuation.target_speed_mps,
-          solver_continuation_request.execution_path_validated ? 1 : 0,
-          solver_continuation_request.tracking_envelope_valid ? 1 : 0,
-          car_->spatial_state.e_y,
-          car_->spatial_state.e_psi,
-          solver_crawl_max_heading_error_rad,
-          solver_continuation_request.current_static_footprint_clear ? 1 : 0);
-      } else {
-        const char * continuation_exit_reason = !mpc_fallback_active ?
-          "solver-recovered" :
-          mpc_velocity_limit::to_string(
-          solver_failure_continuation.block_reason);
-        RCLCPP_INFO(
-          get_logger(),
-          "MPC solver bounded dynamic-escape continuation exited: reason=%s",
-          continuation_exit_reason);
-      }
-      solver_failure_continuation_was_active_ =
-        solver_failure_continuation_active;
-    }
 
     if (!enable_control_) {
       const double last_v_cmd = last_u_[0];
@@ -56497,23 +56228,18 @@ private:
 
     double acc = 0.0;
     bool bug_acc_enabled = false;
+    const bool missing_canonical_normal_identity =
+      !canonical_normal_command.has_value() && !mpc_fallback_active &&
+      !canonical_emergency_stop && !executed_solution_wall_hold_active;
     const bool forced_stop_active =
-      (mpc_fallback_active && !solver_failure_crawl_active &&
-      !solver_failure_continuation_active) || !enable_control_ ||
-      canonical_emergency_stop;
+      mpc_fallback_active || missing_canonical_normal_identity ||
+      !enable_control_ || canonical_emergency_stop;
     const bool canonical_normal_execution_active =
       canonical_normal_command.has_value() && !forced_stop_active &&
-      !solver_failure_crawl_active && !solver_failure_continuation_active &&
       !executed_solution_wall_hold_active;
     if (forced_stop_active) {
       bug_acc_enabled = false;
       acc = mpc_cfg_.a_min;
-    } else if (solver_failure_crawl_active) {
-      bug_acc_enabled = false;
-      acc = clip(100.0 * (u[0] - actual_v), mpc_cfg_.a_min, mpc_cfg_.a_max);
-    } else if (solver_failure_continuation_active) {
-      bug_acc_enabled = false;
-      acc = 0.0;
     } else if (executed_solution_wall_hold_active) {
       bug_acc_enabled = false;
       acc = std::min(0.0, 100.0 * (u[0] - actual_v));
@@ -56554,10 +56280,7 @@ private:
     if (!forced_stop_active && !canonical_normal_execution_active) {
       acc = last_acc_ + (acc - last_acc_) * mpc_cfg_.accel_low_pass_gain;
     }
-    if (
-      solver_failure_continuation_active ||
-      executed_solution_wall_hold_active)
-    {
+    if (executed_solution_wall_hold_active) {
       acc = std::min(0.0, acc);
     }
     if (!canonical_normal_execution_active) {
@@ -56656,11 +56379,8 @@ private:
     final_source_request.failsafe_active = canonical_emergency_stop;
     final_source_request.stuck_recovery_active = recovery_command_active;
     final_source_request.control_enabled = enable_control_;
-    final_source_request.solver_bounded_continuation_active =
-      solver_failure_continuation_active;
     final_source_request.executed_solution_wall_hold_active =
       executed_solution_wall_hold_active;
-    final_source_request.solver_crawl_active = solver_failure_crawl_active;
     final_source_request.solver_fallback_active = mpc_fallback_active;
     final_source_request.forced_stop_active = forced_stop_active;
     const double published_steering_rad = published_steering.value();
@@ -56676,25 +56396,15 @@ private:
         mpcc_contract::to_string(canonical_normal_command->intent) +
         (canonical_normal_command->retained_solution ?
         "-retained-published" : "-fresh-published");
-    } else if (solver_failure_crawl_active) {
-      output_reason = "solver-failure-crawl";
-    } else if (solver_failure_continuation_active) {
-      output_reason = "solver-failure-dynamic-escape-hold";
     } else if (executed_solution_wall_hold_active) {
       output_reason = "executed-solution-wall-contract-hold";
     } else if (forced_stop_active) {
-      if (
-        mpc_fallback_active &&
-        dynamic_escape_execution_active)
-      {
-        output_reason = std::string{"solver-fallback-forced-stop/continuation-"} +
-          mpc_velocity_limit::to_string(
-          solver_failure_continuation.block_reason);
-      } else if (mpc_fallback_active) {
-        output_reason = std::string{"solver-fallback-forced-stop/crawl-"} +
-          mpc_velocity_limit::to_string(solver_failure_crawl.block_reason);
+      if (mpc_fallback_active) {
+        output_reason = "solver-fallback-emergency-stop";
+      } else if (missing_canonical_normal_identity) {
+        output_reason = "missing-canonical-normal-identity-emergency-stop";
       } else {
-        output_reason = "solver-fallback-forced-stop";
+        output_reason = "emergency-stop";
       }
     }
     emit_final_control_trace(
@@ -56793,8 +56503,6 @@ private:
   bool recovery_rejoin_hold_cycle_{false};
   bool recovery_fault_latched_{false};
   bool recovery_waiting_for_drive_after_reset_{false};
-  bool solver_failure_crawl_was_active_{false};
-  bool solver_failure_continuation_was_active_{false};
   std::size_t recovery_reset_drive_request_count_{0U};
   std::optional<SteadyClock::time_point> recovery_reset_stopped_since_;
   bool enable_control_{true};

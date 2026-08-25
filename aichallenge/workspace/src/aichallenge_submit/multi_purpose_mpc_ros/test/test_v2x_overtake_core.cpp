@@ -22,10 +22,6 @@ using multi_purpose_mpc_ros::v2x_overtake_core::
 using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapeAuthorityReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::
-  DynamicObstacleLateralEscapeQualificationHoldReason;
-using multi_purpose_mpc_ros::v2x_overtake_core::
-  DynamicObstacleLateralEscapeQualificationHoldRequest;
-using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapePlanningRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   DynamicObstacleLateralEscapeSolverBackoff;
@@ -34,8 +30,6 @@ using multi_purpose_mpc_ros::v2x_overtake_core::ForcedPassSideTransitionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForcedPassSideTransitionCertificateRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::certify_forced_pass_side_transition;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_forced_pass_side_transition;
-using multi_purpose_mpc_ros::v2x_overtake_core::
-  resolve_dynamic_obstacle_lateral_escape_qualification_hold;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   should_suppress_immediate_wall_threat_primary;
 using multi_purpose_mpc_ros::v2x_overtake_core::LowSpeedShiftSteeringRequest;
@@ -15498,52 +15492,6 @@ TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeKeepsFollowCapUntilTrack
   EXPECT_TRUE(resolution.active);
   EXPECT_FALSE(resolution.suppress_generic_follow_cap);
   EXPECT_EQ(resolution.pass_side_sign, 1);
-}
-
-TEST(V2XOvertakeCoreLowSpeedBypass,
-     UnqualifiedDynamicEscapeFailureHoldsLastFeasibleCommand)
-{
-  const auto resolution =
-    resolve_dynamic_obstacle_lateral_escape_qualification_hold(
-    DynamicObstacleLateralEscapeQualificationHoldRequest{
-      true, false, true, 4.0, 4.5, -0.4, 0.3});
-
-  EXPECT_TRUE(resolution.hold);
-  EXPECT_NEAR(resolution.speed_mps, 4.0, 1e-9);
-  EXPECT_NEAR(resolution.steering_rad, -0.3, 1e-9);
-  EXPECT_EQ(
-    resolution.reason,
-    DynamicObstacleLateralEscapeQualificationHoldReason::HoldLastFeasible);
-  EXPECT_STREQ(to_string(resolution.reason), "hold-last-feasible");
-}
-
-TEST(V2XOvertakeCoreLowSpeedBypass,
-     QualifiedOrHistoryFreeDynamicEscapeUsesNormalFailurePolicy)
-{
-  auto request = DynamicObstacleLateralEscapeQualificationHoldRequest{
-    true, true, true, 4.0, 4.0, 0.1, 0.3};
-  auto resolution =
-    resolve_dynamic_obstacle_lateral_escape_qualification_hold(request);
-  EXPECT_FALSE(resolution.hold);
-  EXPECT_EQ(
-    resolution.reason,
-    DynamicObstacleLateralEscapeQualificationHoldReason::AlreadyQualified);
-
-  request.tracking_solution_qualified = false;
-  request.previous_control_available = false;
-  resolution = resolve_dynamic_obstacle_lateral_escape_qualification_hold(request);
-  EXPECT_FALSE(resolution.hold);
-  EXPECT_EQ(
-    resolution.reason,
-    DynamicObstacleLateralEscapeQualificationHoldReason::PreviousControlUnavailable);
-
-  request.previous_control_available = true;
-  request.current_speed_mps = std::numeric_limits<double>::quiet_NaN();
-  resolution = resolve_dynamic_obstacle_lateral_escape_qualification_hold(request);
-  EXPECT_FALSE(resolution.hold);
-  EXPECT_EQ(
-    resolution.reason,
-    DynamicObstacleLateralEscapeQualificationHoldReason::InvalidInput);
 }
 
 TEST(V2XOvertakeCoreLowSpeedBypass, DynamicLateralEscapeRequiresPlannerOwnership)

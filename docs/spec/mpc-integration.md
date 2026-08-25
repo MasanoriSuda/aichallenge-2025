@@ -1560,7 +1560,7 @@ mpc:
 - OvertakeLineのwall safetyは予測状態ではなくraw odometry poseの実車体footprintを静的gridへ毎周期照合する。ShiftOut / Pass中にposeまたはsampleが無効、map外、物理接触、wall clearance違反ならRecoveryへ移る。静的壁へclipした後も必要横加速度を再計算し、`v2x_overtake_line_max_lateral_accel`を超えるtargetは実行しない。Recovery targetにも同じ静的wall horizonを適用する。
 - ShiftOut / Passで`v2x_overtake_solver_failure_abort_cycles`連続failureへ到達するか、Recovery中にsolver fallbackへ入った場合はsolver失敗episodeとして扱う。Recovery中のfallback操舵は`steer_rate_max`以内で中立へ戻しながら既存`a_min`で減速する。episode終了後は、`v2x_overtake_solver_cooldown_sec`経過と`v2x_overtake_solver_recovery_success_cycles`回の連続正常解を両方確認するまで、OvertakeLine、legacy side target、追い越しgap plannerを再開しない。gate中の1回のfailureで成功カウントは0へ戻る。2026-07-18の`output/20260718-001009`では、D2がWP86の8連続failureから復旧し、2秒と20連続正常解を確認してgateを解除した後、WP220まで走行した。Recovery中立復帰は対象unit testで確認したが、このrunではRecovery直後にsolverが復旧したため実command未観測である。値は2025 AWSIM向け暫定値である。
 - 通常MPCのsolver failureでは、`solver_failure_steering_hold_cycles`以下の単発failureだけ直前操舵を保持し、その次の周期から`steer_rate_max`以内で操舵を0へ戻す。既定4周期は40 Hzで0.1秒の2025 AWSIM向け暫定値である。OvertakeLine Recovery / solver re-entry gateは待機せず中立復帰する。`output/20260718-003725`のD3では、連続failure時の操舵が1周期目`0.559 rad`、5周期目`0.529 rad`、10周期目`0.379 rad`、20周期目`0.079 rad`、30周期目`0.000 rad`となり、旧runの長時間固定操舵を解消した。一方、failure開始時に`e_psi=-1.808 rad`まで姿勢がずれており、Stuck Recoveryが`forward_duration_limit`でSafeStopしてD1/D2も後続停止したため、この変更は安全fallbackとして採用するがdev3デッドロックの解消とは扱わない。詳細は`.steering/20260718-normal-mpc-fallback-neutralization/results.md`に記録する。
-- `solver_failure_crawl_enabled=true`では、simulation time、control enabled、V2X `Cruise`、front vehicleなしをすべて満たす通常MPC failureに限り、減速fallbackのゼロ速度化を上位arbitrationで置き換える。速度は`min(solver_failure_crawl_speed_mps, effective_v_max)`、操舵は既存の低速横偏差・heading feedbackを`e_y=0`へ向けて使用する。SafetyBrake、Follow、Overtake、LowSpeedAvoidance、front検出中、実時間動作では従来の減速fallbackを維持する。停止速度以下でsolver fallbackが継続する場合は、AWSIM collision correctionとwaypoint再関連付けによる離散pose/progress変化を走行再開とは扱わず、既存の2–3秒stuck recovery gateを進める。現行1.0 m/sは2025 AWSIM dev3向け暫定値である。
+- canonical MPCC solveまたはcurrent-world物理証明が不成立の場合、normal commandをcrawl、横移動continuation、前周期command holdへ切り替えない。solver failureは明示的Emergency減速として出力し、再びsolved／finite／constraint-valid／physically-certifiedなcanonical commandが得られた周期だけnormal authorityへ戻す。Stuck／gear／reverse Recoveryは別supervisorとして維持する。
 - OSQP wrapperはvalidation、CSC allocation、setup、solve、status、solution、constraint checkを失敗stageとして区別する。solver infoが得られる失敗ではstatus文字列、status value、iteration、primal residual、dual residualを`MPC control failed`のreasonへ含める。上位層で一律`OSQP failed`だけに丸めず、infeasible、最大iteration、数値誤差、post-solve制約違反を次runで切り分けられるようにする。
 - V2X behavior、gap planner、OvertakeLineが現速度より低い動的速度上限を要求した場合、全horizonへ最終上限を即時適用しない。現速度から`abs(a_min) * Ts`ずつ下げるreachable upper-bound envelopeを速度参照と上限制約の両方へ適用する。これにより`SafetyBrake=0 m/s`や`Overtake -> Follow=3 m/s`でも既存`a_min`を超える減速を要求せず、最終上限とpublished acceleration clampは維持する。現行`a_min=-1.35 m/s^2`、40 Hzは2025 AWSIM向け暫定値である。
 - `v2x_overtake_try_both_sides=true`では、追い越し開始前に第一候補が不成立なら反対側を同じ条件で再評価する。ShiftOut以降はlocked側だけを評価し、反対側だけが空いても即side flipしない。通常追い越しの候補生成幅は`max(v2x_overtake_min_gap_width, v2x_overtake_guard_min_gap_width)`を使うため、共通`gap_min_width`が後段guardより大きくてもguard設定を前段で無効化しない。vehicle-vehicle/multi-front policyは引き続き適用する。
@@ -1655,15 +1655,14 @@ Dynamic Escape実行は、現在周期のfreshなcanonical解と現在周期の�
 場合だけnormal authorityを持つ。旧private retained solution leaseは、その根となるproducerが
 legacy normal solve削除後に存在せず、実行不能なconsumer分岐だけを残していたため
 2026-08-25に物理削除した。同じ前方targetがblockingでfresh解がない場合も古い解を再生せず、
-active lifecycleがfresh candidateを生成する。候補不成立時はcanonical Emergency、solver失敗時は
-bounded solver-failure supervisorへ型付きで帰着し、別のnormal formulationやnode-level holdへ
-切り替えない。
+active lifecycleがfresh candidateを生成する。候補不成立時とsolver失敗時はcanonical Emergencyへ
+型付きで帰着し、別のnormal formulation、node-level hold、正速度crawl／continuationへ切り替えない。
 
 同日、canonical commandの後段に残っていたsolver／active-overtake／DynamicEscape用の
 node-level wall admissionおよびDynamicEscape exit gateも物理削除した。physical wall proofは
 canonical producerのcurrent-world certificateと`executed_solution_wall_hold_active`が所有し、
-publisherは同じpathを別の距離定義で再評価して操舵・速度を置換しない。Emergency、
-bounded solver-failure continuation、Stuck／gear／reverse Recoveryは独立supervisorとして維持する。
+publisherは同じpathを別の距離定義で再評価して操舵・速度を置換しない。Emergencyと
+Stuck／gear／reverse Recoveryは独立supervisorとして維持する。
 `DynamicEscape wall handoff`ログは決定後の観測専用telemetryであり、command authorityを持たない。
 
 現行grace 0.50秒は2025 AWSIM競技
@@ -2137,8 +2136,8 @@ Slice 6で物理削除した。ActiveOvertakeとDynamicEscape gateはcanonical d
 solver recovery gateだけは到達可能だったが、fresh canonical commandのcurrent-world wall certificateを
 別のnormal ownerが再解釈して置換する二重authorityだった。
 
-canonical current-world physical wall proof、executed-solution wall hold、明示的Emergency、bounded
-solver-failure continuation、Stuck／gear／reverse Recovery、観測専用wall traceは維持する。parameter、
+canonical current-world physical wall proof、executed-solution wall hold、明示的Emergency、
+Stuck／gear／reverse Recovery、観測専用wall traceは維持する。parameter、
 margin、timeout、solver設定、ROS interfaceは変更していない。25-package build、49 test target、1,840 testが
 合格し、`output/20260825-124515`では旧wall-handoff source／traceは両domainとも0件、canonical normal
 publicationとcomplete execution identityは継続した。既存のasync ShiftOut候補未準備によるcanonical
@@ -2153,7 +2152,7 @@ retained-pass／rejoin、publisher override、`LowSpeedDirect`／`LowSpeedWallSt
 execution formulationおよび専用YAML keyは安全機能ではなく、到達不能な第二normal authority表現だった。
 
 停止／極低速V2X車両の確認、`LowSpeedAvoidance` intent、gap／local-path生成、static-wall preflight、
-canonical local-corridor speed reference、bounded solver-failure crawl用の横feedbackは維持する。したがって
+canonical local-corridor speed referenceは維持する。したがって
 停止車両回避は引き続き、障害物と壁から構成したbounds／reference／speed windowをcanonical MPCCへ
 渡し、certified canonical commandとして出力する。外部EmergencyとStuck／gear／reverse Recoveryも
 変更しない。
@@ -2198,6 +2197,26 @@ admission evidence、Overtake／Dynamic Escapeは現在のexecution factからme
 変更していない。weight、clearance、margin、timeout、solver tolerance、cadence、Emergencyおよび
 Recoveryも変更していない。failure-first source contract、25-package build、49 test target、1,822 testが
 合格した。
+
+#### 未認証normal failover authorityの物理削除（2026-08-25、2025由来の暫定）
+
+canonical solve／preparation failure後に正速度を生成していたsimulation solver crawl、Dynamic Escape
+bounded continuation、およびcandidate identityを消した後に前周期の通常指令を1周期だけ再生する
+qualification holdをSlice 6で物理削除した。これらはsolved／finite／constraint-valid／physical proofと
+同一fingerprintを持つ`CanonicalNormalCommand`を生成せず、最終決定を`LegacyNormalBypass`として
+publishする第二normal authorityだった。
+
+solver fallbackは既存の減速指令だけを生成し、最終authorityを`EmergencyOverride`として記録する。
+executed-solution wall holdもstatic-wall supervisorによる減速であり、normal trajectory ownerではないため
+`EmergencyOverride`へ分類する。Stuck／gear／reverseは`RecoveryOverride`、制御無効は
+`ControlDisabled`のまま維持する。通常authorityは、canonical source、certified solution、typed
+canonical commandの三つが揃う`CertifiedNormalSolution`だけである。いずれかが欠けるcontrol-enabled
+周期はfail closedしてEmergency減速する。
+
+同時に`solver_failure_crawl_enabled`／`solver_failure_crawl_speed_mps`、crawl／continuation API、
+qualification hold telemetry、および`LegacyNormalBypass`表現を削除した。weight、wall clearance、margin、
+timeout、solver tolerance、horizon、Recovery parameterは変更していない。この節は、上に残る日付付き
+移行履歴に記載されたcrawl／bounded continuation／legacy bypassの運用記述を上書きする現行仕様である。
 
 ### 提出ファイルへの影響
 

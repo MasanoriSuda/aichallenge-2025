@@ -90,6 +90,37 @@ def test_canonical_normal_owner_has_no_runtime_migration_availability_switch() -
     assert not [token for token in forbidden if token in production]
 
 
+def test_uncertified_normal_failover_authorities_are_physically_deleted() -> None:
+    """Solver failure may stop or recover, but cannot select another normal controller."""
+
+    production = "\n".join(
+        (
+            SOURCE,
+            V2X_OVERTAKE_HEADER,
+            V2X_OVERTAKE_SOURCE,
+            OVERTAKE_ORCHESTRATOR_HEADER,
+            OVERTAKE_ORCHESTRATOR_SOURCE,
+            MPCC_EXECUTION_CONTRACT_HEADER,
+            MPCC_EXECUTION_CONTRACT_SOURCE,
+            CONFIG,
+            CLOUD_CONFIG,
+        )
+    )
+    forbidden = (
+        "LegacyNormalBypass",
+        "legacy-normal-bypass",
+        "SolverCrawl",
+        "SolverBoundedContinuation",
+        "solver_failure_crawl_enabled",
+        "solver_failure_crawl_speed_mps",
+        "resolve_solver_failure_crawl",
+        "resolve_solver_failure_continuation",
+        "resolve_dynamic_obstacle_lateral_escape_qualification_hold",
+        "qualification_hold_used",
+    )
+    assert not [token for token in forbidden if token in production]
+
+
 def test_retired_low_speed_direct_authority_is_physically_deleted() -> None:
     """An unreachable normal authority must not remain representable in Slice 6."""
 

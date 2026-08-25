@@ -956,6 +956,20 @@ Finish the architecture simplification instead of leaving permanent dual control
   current-world certification. Callback overruns remain separate measured
   real-time work. Residual five-state representations still require an audited
   reachability classification before Slice 6 closes.
+- `.steering/20260825-slice6-unreachable-five-state-owner-removal` classifies
+  the residual five-state surface before deletion. The old Overtake normal
+  publisher and its private async／retained selector, mailbox, telemetry and
+  plan store were rooted at functions with zero callers, so they were
+  physically removed as reconnectable retired authority. Explicit Emergency
+  now records `Unresolved` instead of fabricating a five-state solve identity.
+  The live left／right tactical pre-entry Gate A is retained because it is
+  commandless Mission evidence and has no accepted six-state replacement yet.
+  The 25-package build and all 49 test targets pass. In bounded run
+  `output/20260825-182148`, both domains published only six-state certified
+  normal contracts or unresolved explicit Emergency; five-state final
+  execution contracts and retired selector traces were zero. The next Slice
+  must obtain prospective six-state Gate A evidence and delete the tactical
+  five-state proof atomically; tuning remains prohibited.
 
 ## Slice 7: Parameter tuning
 

@@ -192,7 +192,8 @@ def test_overtake_worker_fresh_chain_uses_sealed_snapshot_context() -> None:
 
     worker_start = SOURCE.index("evaluate_overtake_canonical_worker_fresh(")
     worker_end = SOURCE.index(
-        "void evaluate_overtake_canonical_retained_shadow(", worker_start
+        "bool unresolved_dynamic_wait_canonical_scope() const noexcept",
+        worker_start,
     )
     worker = SOURCE[worker_start:worker_end]
 
@@ -360,17 +361,7 @@ def test_canonical_overtake_uses_production_wall_clearance_contract() -> None:
     assert "problem.progress_execution_required_wall_clearance_m" in proof_call
     assert "upper_bound, 0.0" not in proof_call
 
-    retained_start = SOURCE.index(
-        "void evaluate_overtake_canonical_retained_shadow("
-    )
-    retained_end = SOURCE.index(
-        "void invalidate_overtake_canonical_async_context()", retained_start
-    )
-    retained = SOURCE[retained_start:retained_end]
-    assert (
-        "proof_request.required_wall_clearance_m =\n"
-        "      problem.progress_execution_required_wall_clearance_m"
-    ) in retained
+    assert "void evaluate_overtake_canonical_retained_shadow(" not in SOURCE
 
 
 def test_overtake_intents_use_the_rate_resolved_normal_owner() -> None:
@@ -728,32 +719,7 @@ def test_overtake_entry_preserves_the_selected_tactical_artifact() -> None:
     assert "build_current_overtake_target_tube(" in certificate
     assert "validate_frenet_dp_target_bound_horizon(" in certificate
 
-    retained_start = SOURCE.index(
-        "void evaluate_overtake_canonical_retained_shadow("
-    )
-    retained_end = SOURCE.index(
-        "void invalidate_overtake_canonical_async_context()", retained_start
-    )
-    retained = SOURCE[retained_start:retained_end]
-    assert "sample_retained_progress_advance(" in retained
-    assert "build_retained_lateral_corridor(" in retained
-    assert (
-        "corridor.lateral_lower_m = retained_lateral_corridor->lower_m"
-        in retained
-    )
-    assert (
-        "corridor.lateral_upper_m = retained_lateral_corridor->upper_m"
-        in retained
-    )
-    assert "problem.progress_state_lower[" not in retained
-    assert "problem.progress_state_upper[" not in retained
-    assert "&corridor.elapsed_time_sec" in retained
-    assert (
-        "corridor_path_distance_m.push_back(\n"
-        "        problem.progress_stage_geometry"
-    ) not in retained
-    assert "intersect_overtake_target_tube(" in retained
-    assert "stage_corridor_mpc_target_bound_was_active_ ||" not in retained
+    assert "void evaluate_overtake_canonical_retained_shadow(" not in SOURCE
 
     fresh_start = SOURCE.index(
         "OvertakeCanonicalFreshShadowResult\n"
@@ -793,6 +759,33 @@ def test_five_state_preentry_artifact_cannot_gate_rate_resolved_actuation() -> N
     assert "steering_continuity" not in entry
     assert "prepare_overtake_canonical_async_context(" not in entry
     assert "overtake_canonical_lifecycle_->plan_store.replace(" not in entry
+
+
+def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:
+    """Dead retained selectors may not keep a five-state publisher reconnectable."""
+
+    for retired_symbol in (
+        "MpcControlCycleResult canonical_normal_control(",
+        "OvertakeCanonicalFreshShadowResult evaluate_overtake_async_shadow(",
+        "void evaluate_overtake_canonical_retained_shadow(",
+        "bool submit_overtake_canonical_async(",
+        "void record_overtake_canonical_async_status(",
+        "CanonicalExecutionPlanStore plan_store;",
+        "overtake_canonical_async_mailbox_",
+        "overtake_canonical_async_worker_",
+    ):
+        assert retired_symbol not in SOURCE
+
+    emergency_start = SOURCE.index(
+        "MpcControlCycleResult canonical_normal_emergency_stop("
+    )
+    emergency_end = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_track_cruise_control(",
+        emergency_start,
+    )
+    emergency = SOURCE[emergency_start:emergency_end]
+    assert "Formulation::VelocityProgress5State" not in emergency
+    assert "Formulation::Unresolved" in emergency
 
 
 def test_runtime_overtake_replacement_is_a_typed_canonical_artifact() -> None:
@@ -852,26 +845,14 @@ def test_runtime_overtake_replacement_is_a_typed_canonical_artifact() -> None:
     assert "replacement_canonical_plan" in replace
     assert "resolve_overtake_preentry_plan(" in replace
     assert "prospective_generation" in replace
-    assert "adopt_overtake_canonical_plan_context(" in replace
+    assert "adopt_overtake_canonical_plan_context(" not in replace
     assert "prepare_overtake_canonical_async_context(" not in replace
-    assert replace.index("freeze_selected_overtake_mission(") < replace.index(
-        "adopt_overtake_canonical_plan_context("
+    assert replace.index("resolve_overtake_preentry_plan(") < replace.index(
+        "freeze_selected_overtake_mission("
     )
-    assert replace.index("adopt_overtake_canonical_plan_context(") < replace.index(
+    assert replace.index("freeze_selected_overtake_mission(") < replace.index(
         "transition_overtake_line_phase("
     )
-
-    adoption_start = SOURCE.index(
-        "OvertakeCanonicalPlanAdoption adopt_overtake_canonical_plan_context("
-    )
-    adoption_end = SOURCE.index(
-        "bool submit_overtake_canonical_async(", adoption_start
-    )
-    adoption = SOURCE[adoption_start:adoption_end]
-    assert adoption.index("plan_store.replace(") < adoption.index(
-        "overtake_canonical_async_context_ = resolution.next"
-    )
-    assert "plan_store.clear(" not in adoption
 
     runtime_start = SOURCE.index(
         "behavior_output.mpcc_lite_same_side_replan_artifact.has_value()"
@@ -920,7 +901,7 @@ def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:
 
     scope_start = SOURCE.index("unresolved_dynamic_wait_canonical_scope() const")
     scope_end = SOURCE.index(
-        "void invalidate_overtake_canonical_async_context()", scope_start
+        "std::optional<rate_resolved_physical_wall::Snapshot>", scope_start
     )
     scope = SOURCE[scope_start:scope_end]
     assert "authority.request.dynamic_wait_active" in scope
@@ -1016,9 +997,9 @@ def test_overtake_physical_failure_preserves_stage_and_authority_provenance() ->
         "initial_contract=%d",
         "attempts=%zu",
         "dp=%d/authority=%d/runtime=%d/side=%d/source_age=%.3f",
-        "canonical=%d/plan=%lu/generation=%lu/side=%d/fingerprint=%lu/",
     ):
         assert token in trace
+    assert "canonical=%d/plan=%lu" not in trace
 
 
 def test_canonical_overtake_demotes_legacy_mission_viability_owner() -> None:

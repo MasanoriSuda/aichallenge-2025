@@ -2266,6 +2266,27 @@ execution contractが`authority=certified-normal-solution`、
 Rejoin request unavailable／unresolved publicationは0件である。同runに残る25 ms callback overrunは別の
 real-time品質課題として追跡し、本authority Sliceへsolver／horizon／weight／margin調整を混在させない。
 
+#### 到達不能なfive-state Overtake通常ownerの物理削除（2026-08-25、2025由来の暫定）
+
+全normal intentのsteering-rate 6-state production昇格後に残っていた旧Overtake
+`canonical_normal_control()`と、その入口であったasync／retained selectorを監査した。両rootはcall siteが
+0件であり、mailbox、worker、retained current-world evaluator、plan store、selector telemetryはそのrootから
+だけ到達する、実行不能だが再接続可能な旧normal authorityだった。このためcompatibility flagを追加せず、
+同じSliceで物理削除した。
+
+明示的EmergencyはMPCC solveを行わないため、execution contractのformulationを
+`VelocityProgress5State`と記録しない。現在は`Unresolved`とし、authority、reason、canonical sourceによって
+外部overrideであることを表す。通常commandのformulation証明へEmergencyの仮想identityを混ぜない。
+
+一方、左右の戦術候補を比較するpre-entry Gate Aは、Mission採用前の物理証明として現在もfive-state solveを
+使用する。このartifactはactuationを所有せず、採用後の通常publisherは6-stateだけである。Gate Aを証拠なしに
+削除すると未証明Missionを上流状態へ反映できるため、本Sliceでは維持する。後続Sliceはprospective six-state
+entry artifactをshadowで証明し、その昇格と同時にfive-state Gate Aを削除しなければならない。
+
+25-package buildと49 test targetが合格した。`output/20260825-182148`では両domainのfinal execution contractが
+six-state certified normalまたは`formulation=unresolved`の明示Emergencyだけとなり、five-state normal publication
+と退役selector traceは0件だった。parameter、solver、horizon、wall／vehicle clearance、timeoutは変更していない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

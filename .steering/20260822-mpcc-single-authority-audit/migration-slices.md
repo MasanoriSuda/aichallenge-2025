@@ -1064,6 +1064,22 @@ Finish the architecture simplification instead of leaving permanent dual control
   solve must form one atomic execution handoff before authority promotion.
   Five-state tactical Gate A remains live and parameter tuning remains
   prohibited.
+- `.steering/20260825-preentry-latest-completion-publication` repairs the
+  causal execution worker transport itself. The first implementation required
+  `completed sequence == latest submitted sequence`; with 40 Hz submissions
+  and a 31--105 ms worker this discarded every steady completion and exposed a
+  result only after the tactical selection stopped producing drafts. The
+  mailbox now uses the same unit-tested `should_publish_latest_only_result()`
+  contract as the tactical worker, seals the tactical context epoch, and is
+  invalidated atomically with the tactical mailbox. In bounded run
+  `output/20260825-221447`, domain 1 reached 34 submissions, 21 consumed
+  results, 20 complete physical certificates, 6 current-world joins and 4
+  authority-ready observations while submissions continued. Logged result age
+  was 0.050--0.065 s and exact same-side tactical identity remained current.
+  All callback windows had zero overrun. Current-world
+  `dynamic-path-blocked` remained a legitimate fail-closed result. The worker
+  is still shadow-only; five-state Gate A deletion and production promotion
+  require a later Slice with intent coverage and atomic owner removal.
 
 ## Slice 7: Parameter tuning
 

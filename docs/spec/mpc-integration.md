@@ -2387,6 +2387,21 @@ resultから4秒以上後にproduction `mpc` regionで始まった別課題で�
 この結果は閾値を緩める根拠ではない。production昇格には、tactical intentをsolve完了まで一貫して所有し、solve中に実際にpublishされた
 actuationとexecution prefixをatomicに接続する契約が必要である。five-state tactical Gate Aはその置換証拠が得られるまで維持する。
 
+#### Selected-homotopy completion publication契約（2026-08-25、2025由来の暫定）
+
+latest-only workerはrunning jobをcancelせず、pending jobだけを最新snapshotへ置換する。このため完了resultは
+`result sequence == latest submitted sequence`を要求してはならない。active context epoch内でlast publishedより新しく、
+実際にsubmit済みのsequenceであれば、より新しいjobがpendingでもshadow mailboxへpublishする。live consumerがtarget、Mission、side、
+current worldを再検証する。
+
+execution draft／result／mailboxはtactical context epochをsealする。target／phase／Mission等でtactical contextをinvalidateする際は、
+tactical mailboxとexecution mailboxを同じlive境界で更新し、旧epochのrunning completionを拒否する。age timeoutや新しいleaseは追加しない。
+
+`output/20260825-221447`では34 submission中21 resultを継続中にconsumeし、20件がcomplete physical certificate、6件が
+current-world join、4件がexact same-sideかつauthority-readyのshadow観測となった。result ageは0.050--0.065秒、callback overrunは0である。
+後続の`dynamic-path-blocked`はcurrent worldの正当なfail-closedであり、transport欠落とは分離できた。authorityは引き続き
+`shadow,selected=0`で、five-state Gate Aはproduction昇格と同一Sliceで削除するまで維持する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

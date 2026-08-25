@@ -1012,6 +1012,7 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
     assert "make_owned_tactical_snapshot()" in draft
     assert "draft.planner_snapshot = std::move(owned_snapshot->planner)" in draft
     assert "draft.decision_id = active_control_decision_id_" in draft
+    assert "draft.context_epoch = mpcc_lite_async_context_epoch_" in draft
     assert "draft.snapshot_sec = now_sec" in draft
     assert "build_prospective_extended_branch_problem(" not in draft
     assert "init_problem(" not in draft
@@ -1029,8 +1030,14 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
     assert "planner->seal_problem_context_for_problem(" in worker
     assert "bind_rate_resolved_track_cruise_submission(" in submit
     assert "committed_predecessor_steering_rad" in submit
-    assert "LatestOnlyWorker" not in submit  # Worker is an injected private member.
+    # The canonical publication request type is shared, but worker ownership
+    # remains an injected private member rather than being constructed here.
+    assert "std::make_unique<LatestOnlyWorker>" not in submit
     assert "observation_only_store" in worker
+    assert "should_publish_latest_only_result(" in worker
+    assert "result.context_epoch" in worker
+    assert "mailbox->context_epoch" in worker
+    assert "result.sequence != mailbox->latest_submitted_sequence" not in worker
     assert submit.index("submit_latest(") < submit.index(
         "planner->build_prospective_extended_branch_problem("
     )
@@ -1049,6 +1056,18 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
     assert "authority=shadow,selected=0" in consume
     assert "certify_and_replace(" not in consume
     assert "publish_control_command(" not in consume
+
+    invalidation_start = SOURCE.index("void invalidate_mpcc_lite_async_results()")
+    invalidation_end = SOURCE.index("void set_gap_planner(", invalidation_start)
+    invalidation = SOURCE[invalidation_start:invalidation_end]
+    assert "const auto invalidate_mailbox" in invalidation
+    assert "std::scoped_lock lock(" in invalidation
+    assert "mailbox.context_epoch = mpcc_lite_async_context_epoch_" in invalidation
+    assert "mailbox.latest_result.reset()" in invalidation
+    assert (
+        "invalidate_mailbox(*rate_resolved_preentry_execution_shadow_mailbox_)"
+        in invalidation
+    )
 
     production_start = SOURCE.index("MpcControlCycleResult rate_resolved_normal_production_control(")
     production_end = SOURCE.index("MpcControlCycleResult get_control(", production_start)

@@ -5876,6 +5876,7 @@ struct RateResolvedPreentryExecutionDraft
   V2XBehaviorOutput behavior;
   V2XTacticalSideAssessment assessment;
   OvertakeArtifactIdentitySeed artifact_identity;
+  std::uint64_t context_epoch{};
   std::uint64_t decision_id{};
   std::uint64_t target_obstacle_generation{};
   std::uint64_t tactical_source_sequence{};
@@ -5910,6 +5911,7 @@ struct RateResolvedPipelineEvaluation
 struct RateResolvedPreentryExecutionShadowResult
 {
   std::uint64_t sequence{};
+  std::uint64_t context_epoch{};
   std::uint64_t decision_id{};
   std::uint64_t tactical_source_sequence{};
   std::uint64_t prospective_mission_generation{};
@@ -5926,6 +5928,7 @@ struct RateResolvedPreentryExecutionShadowResult
 struct RateResolvedPreentryExecutionShadowMailbox
 {
   std::mutex mutex;
+  std::uint64_t context_epoch{};
   std::uint64_t latest_submitted_sequence{};
   std::uint64_t latest_published_sequence{};
   std::optional<RateResolvedPreentryExecutionShadowResult> latest_result;
@@ -6639,6 +6642,8 @@ struct MPC
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_preentry_execution_shadow_mailbox_ =
         std::make_shared<RateResolvedPreentryExecutionShadowMailbox>();
+      rate_resolved_preentry_execution_shadow_mailbox_->context_epoch =
+        mpcc_lite_async_context_epoch_;
       rate_resolved_preentry_execution_shadow_worker_ =
         std::make_unique<LatestOnlyWorker>();
     }
@@ -6900,14 +6905,32 @@ struct MPC
   {
     ++mpcc_lite_async_context_epoch_;
     mpcc_lite_async_last_accepted_result_.reset();
-    if (mpcc_lite_async_mailbox_ == nullptr) {
+    const auto invalidate_mailbox = [this](auto & mailbox) {
+        mailbox.context_epoch = mpcc_lite_async_context_epoch_;
+        mailbox.latest_submitted_sequence = 0U;
+        mailbox.latest_published_sequence = 0U;
+        mailbox.latest_result.reset();
+      };
+    if (
+      mpcc_lite_async_mailbox_ != nullptr &&
+      rate_resolved_preentry_execution_shadow_mailbox_ != nullptr)
+    {
+      std::scoped_lock lock(
+        mpcc_lite_async_mailbox_->mutex,
+        rate_resolved_preentry_execution_shadow_mailbox_->mutex);
+      invalidate_mailbox(*mpcc_lite_async_mailbox_);
+      invalidate_mailbox(*rate_resolved_preentry_execution_shadow_mailbox_);
       return;
     }
-    std::lock_guard<std::mutex> lock(mpcc_lite_async_mailbox_->mutex);
-    mpcc_lite_async_mailbox_->context_epoch = mpcc_lite_async_context_epoch_;
-    mpcc_lite_async_mailbox_->latest_submitted_sequence = 0U;
-    mpcc_lite_async_mailbox_->latest_published_sequence = 0U;
-    mpcc_lite_async_mailbox_->latest_result.reset();
+    if (mpcc_lite_async_mailbox_ != nullptr) {
+      std::lock_guard<std::mutex> lock(mpcc_lite_async_mailbox_->mutex);
+      invalidate_mailbox(*mpcc_lite_async_mailbox_);
+    }
+    if (rate_resolved_preentry_execution_shadow_mailbox_ != nullptr) {
+      std::lock_guard<std::mutex> lock(
+        rate_resolved_preentry_execution_shadow_mailbox_->mutex);
+      invalidate_mailbox(*rate_resolved_preentry_execution_shadow_mailbox_);
+    }
   }
 
   void set_gap_planner(V2XGapPlanner * planner)
@@ -8574,6 +8597,7 @@ struct MPC
     draft.behavior = live_behavior;
     draft.assessment = std::move(assessment);
     draft.artifact_identity = artifact_identity;
+    draft.context_epoch = mpcc_lite_async_context_epoch_;
     draft.decision_id = active_control_decision_id_;
     draft.target_obstacle_generation =
       target_provenance.observation_generation;
@@ -23954,13 +23978,15 @@ struct MPC
       draft.reference_path_owner == nullptr || draft.model_owner == nullptr ||
       draft.gap_planner_owner == nullptr || draft.planner_snapshot == nullptr ||
       draft.horizon_size < 2 || draft.decision_id == 0U ||
+      draft.context_epoch == 0U ||
       draft.target_obstacle_generation == 0U ||
       draft.tactical_source_sequence == 0U ||
       draft.prospective_mission_generation == 0U || draft.target_id.empty() ||
       (draft.selected_side_sign != -1 && draft.selected_side_sign != 1) ||
       !std::isfinite(draft.snapshot_sec) ||
       !std::isfinite(committed_predecessor_steering_rad) ||
-      !std::isfinite(now_sec) || now_sec < draft.snapshot_sec)
+      !std::isfinite(now_sec) || now_sec < draft.snapshot_sec ||
+      draft.context_epoch != mpcc_lite_async_context_epoch_)
     {
       return false;
     }
@@ -23969,12 +23995,14 @@ struct MPC
     const auto mailbox = rate_resolved_preentry_execution_shadow_mailbox_;
     {
       std::lock_guard<std::mutex> lock(mailbox->mutex);
+      mailbox->context_epoch = draft.context_epoch;
       mailbox->latest_submitted_sequence = sequence;
     }
     const auto solver_context =
       rate_resolved_preentry_execution_shadow_solver_context_;
     RateResolvedPreentryExecutionShadowResult result;
     result.sequence = sequence;
+    result.context_epoch = draft.context_epoch;
     result.decision_id = draft.decision_id;
     result.tactical_source_sequence = draft.tactical_source_sequence;
     result.prospective_mission_generation =
@@ -24075,9 +24103,13 @@ struct MPC
         result.worker_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started).count();
         std::lock_guard<std::mutex> lock(mailbox->mutex);
-        if (
-          result.sequence != mailbox->latest_submitted_sequence ||
-          result.sequence <= mailbox->latest_published_sequence)
+        if (!should_publish_latest_only_result(
+            LatestOnlyResultPublicationRequest{
+              result.context_epoch,
+              mailbox->context_epoch,
+              result.sequence,
+              mailbox->latest_submitted_sequence,
+              mailbox->latest_published_sequence}))
         {
           return;
         }
@@ -24184,7 +24216,8 @@ struct MPC
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Rate-resolved pre-entry causal execution shadow: "
-        "sequence=%lu, tactical=%lu, decision=%lu, target=%s/%d, side=%d/%d, "
+        "sequence=%lu, epoch=%lu/%lu, tactical=%lu, decision=%lu, "
+        "target=%s/%d, side=%d/%d, "
         "generation=%lu/%lu, age=%.3f s, snapshot=%.3f ms, build=%.3f ms, "
         "worker=%.3f ms, build_detail=%s, "
         "solver=%s, physical=%s, complete=%d, "
@@ -24195,6 +24228,8 @@ struct MPC
         "worker_queue=running:%d/pending:%d, "
         "authority=shadow,selected=0",
         static_cast<unsigned long>(result->sequence),
+        static_cast<unsigned long>(result->context_epoch),
+        static_cast<unsigned long>(mpcc_lite_async_context_epoch_),
         static_cast<unsigned long>(result->tactical_source_sequence),
         static_cast<unsigned long>(result->decision_id),
         result->target_id.c_str(),

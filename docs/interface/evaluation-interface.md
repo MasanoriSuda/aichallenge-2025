@@ -28,7 +28,7 @@ Automotive AI Challenge 2026 公式仕様との差分は確認中です。3〜4 
 
 2. **車両 1 台 = 1 ドメイン（Domain 1..N）。`make dev2` / `dev3` / `dev4` は `docker compose -p N` で各 Domain に Autoware を立てる。Domain 0 に車両 Autoware を同居させてはならない。** 守らないと複数車両の評価分離が崩れ、DDS メッセージが混線する。
 
-3. **クロスドメイン通信は `aichallenge_system/v2x_msgs`（`V2XVehiclePositionArray`、トピック `/v2x/vehicle_positions`）のみを使う。`domain_bridge` は purge 済みであり復活させない。車両間トピックを追加する場合は v2x の publisher/subscriber を使い、生のクロスドメイン DDS 購読は設けない。** `domain_bridge` の復活や生クロスドメイン購読を足すと多車両評価の分離が壊れる。
+3. **クロスドメイン通信は `aichallenge_system/v2x_msgs`（`V2XVehiclePositionArray`、トピック `/v2x/vehicle_positions`）のみを使う。`domain_bridge` は purge 済みであり復活させない。車両間トピックを追加する場合は v2x の publisher/subscriber を使い、生のクロスドメイン DDS 購読は設けない。単車simulationでは起動層が車両Domain内へ明示的な空arrayを供給し、NoDataと他車両0台を区別する。** `domain_bridge` の復活や生クロスドメイン購読を足すと多車両評価の分離が壊れる。
 
 4. **`/admin/awsim/start`、`/admin/awsim/reset`、`/admin/awsim/state` の名前・型・値体系は変更しない。`awsim_state_manager` がトリガ条件を `waitstart,ready` で受け取り、一度だけ start を publish する挙動（`admin_start_once: true`）も固定。** 守らないとスタート/リセット信号が届かず評価を開始できなくなる。`make awsim-request-start` / `make awsim-request-reset` も機能しなくなる。
 

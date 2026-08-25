@@ -16,10 +16,12 @@ export ROS_LOG_DIR="${ROS_HOME}/log"
 exec > >(tee -a "${log_file}") 2>&1
 
 sim_mode="${SIM_MODE:-eval}"
+vehicle_count="${AIC_VEHICLE_COUNT:-1}"
 
 ros2 launch aichallenge_system_launch evaluation.launch.xml \
     "domain_id:=${domain_id}" \
     "sim_mode:=${sim_mode}" \
+    "vehicle_count:=${vehicle_count}" \
     "log_dir:=${out_dir}" \
     "capture:=true" \
     "rosbag:=true" \

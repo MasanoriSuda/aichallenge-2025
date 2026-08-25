@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
     <arg name="domain_id" default="1"/>
+    <arg name="vehicle_count" default="1"/>
     <arg name="sim_mode" default="eval"/>
     <arg name="log_dir" default="/output"/>
     <arg name="capture" default="false"/>
@@ -11,6 +12,7 @@
 
     <log message="Launching evaluation bundle (simulator + autoware)."/>
     <log message=" - domain_id: $(var domain_id)"/>
+    <log message=" - vehicle_count: $(var vehicle_count)"/>
     <log message=" - sim_mode: $(var sim_mode)"/>
     <log message=" - log_dir: $(var log_dir)"/>
     <log message=" - capture: $(var capture)"/>
@@ -40,6 +42,7 @@
             <arg name="capture" value="$(var capture)"/>
             <arg name="rosbag" value="$(var rosbag)"/>
             <arg name="domain_id" value="$(var domain_id)"/>
+            <arg name="vehicle_count" value="$(var vehicle_count)"/>
         </include>
     </group>
 

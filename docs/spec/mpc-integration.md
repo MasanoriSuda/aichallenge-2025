@@ -1945,6 +1945,15 @@ retained consumerは元のsuffixを制御callbackで再走査しない。元suff
 dynamic worldのexplicit-empty契約、または対象車両を含むcurrent obstacle tube証明を別Sliceで定義し、
 動的Acceptanceを取得する必要がある。
 
+2026-08-26のexplicit-empty V2X Sliceでは、NoData fail-closeを維持したまま、シナリオ構成を
+所有する起動層からvehicle countを伝播する契約を追加した。simulationかつ単車の場合だけ、車両Domain内で
+timestamp付きの空`V2XVehiclePositionArray`を周期publishする。`output/20260826-050706`の
+`make dev`ではproducer起動後の`dynamic-observation-unavailable`が0件となり、d1は`Start`へ遷移して
+最大8.68 m/sを観測した。`output/20260826-050836`の`make dev2`と
+`output/20260826-050947`の`make dev3`ではexplicit-empty producerが起動せず、AWSIM native V2Xから
+各Domainが1台/2台のpeerを観測し、全Domainが`Start`へ遷移した。controllerへvehicle count fallbackや
+NoData bypassは追加していない。
+
 #### Steering-rate 6-state retained dynamic-world shadow（2026-08-25、移行診断）
 
 後続Sliceでは、`active_vehicle_count == 0`というempty-world proxyをretained admissionから除いた。

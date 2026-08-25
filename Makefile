@@ -38,7 +38,7 @@ autoware-vehicle:
 # run autoware for simulator
 autoware-simulator:
 	@echo "Start Autoware for AWSIM"
-	LOG_DIR=$(LOG_DIR) RUN_MODE=awsim docker compose up -d autoware
+	LOG_DIR=$(LOG_DIR) RUN_MODE=awsim AIC_VEHICLE_COUNT=$(AIC_VEHICLE_COUNT) docker compose up -d autoware
 
 # autoware command service use ROS_DOMAIN_ID from .env
 autoware-request-initialpose:
@@ -68,6 +68,7 @@ zenoh:
 	docker compose up -d zenoh
 
 dev: SIM_MODE := dev
+dev: AIC_VEHICLE_COUNT := 1
 dev: simulator autoware-simulator
 	@echo "Start dev simulation (AWSIM + Autoware)"
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
@@ -78,12 +79,13 @@ dev4: SIM_MODE := dev4
 dev2 dev3 dev4: simulator
 	@N=$(@:dev%=%); \
 	echo "Start $$N-vehicle dev (autoware on ROS_DOMAIN_ID 1..$$N via docker compose -p)"; \
-	for p in $$(seq 1 $$N); do LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p docker compose -p $$p up -d autoware; done; \
+	for p in $$(seq 1 $$N); do LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=$$N docker compose -p $$p up -d autoware; done; \
 	echo "To Stop: make down"
 
 gate1: SIM_MODE := gate1
 gate2: SIM_MODE := gate2
 gate3: SIM_MODE := gate3
+gate1 gate2 gate3: AIC_VEHICLE_COUNT := 1
 gate1 gate2 gate3: simulator autoware-simulator
 	@echo "Start safety gate simulation (AWSIM + Autoware)"
 	@echo "To stop: make down  (docker compose down --remove-orphans)"

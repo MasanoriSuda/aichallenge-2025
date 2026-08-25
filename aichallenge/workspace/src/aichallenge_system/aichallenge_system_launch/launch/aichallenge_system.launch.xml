@@ -8,6 +8,7 @@
     <arg name="capture" default="false"/>
     <arg name="rosbag" default="true"/>
     <arg name="domain_id" default="0"/>
+    <arg name="vehicle_count" default="1"/>
 
     <let name="domain_id" value="$(var domain_id)"/>
     <let name="rviz_config" value="$(find-pkg-share aichallenge_system_launch)/config/autoware_vehicle.rviz"/>
@@ -23,6 +24,7 @@
     <log message=" - capture: $(var capture)"/>
     <log message=" - rosbag: $(var rosbag)"/>
     <log message=" - domain_id: $(var domain_id)"/>
+    <log message=" - vehicle_count: $(var vehicle_count)"/>
 
     <!-- Main module of AI challenge 2025. -->
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/aichallenge_submit.launch.xml" >
@@ -59,5 +61,16 @@
     <!-- V2X visualization (per-vehicle, only on non-base domains). -->
     <group if="$(eval $(var domain_id)!=0)">
         <include file="$(find-pkg-share aichallenge_system_launch)/launch/mode/v2x.launch.xml"/>
+    </group>
+
+    <!-- AWSIM's native fanout emits no array when a single-vehicle scenario has no peers.
+         Publish an explicit empty observation only where the launch layer proves that the
+         simulated world contains exactly one vehicle. NoData remains a controller fault. -->
+    <group if="$(var simulation)">
+        <group if="$(eval $(var vehicle_count)==1)">
+            <include file="$(find-pkg-share aichallenge_system_launch)/launch/mode/single_vehicle_empty_v2x.launch.xml">
+                <arg name="use_sim_time" value="$(var use_sim_time)"/>
+            </include>
+        </group>
     </group>
 </launch>

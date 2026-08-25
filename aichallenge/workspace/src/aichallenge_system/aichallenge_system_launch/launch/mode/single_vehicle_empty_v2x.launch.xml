@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <arg name="use_sim_time" default="true"/>
+
+  <node
+    pkg="aichallenge_system_launch"
+    exec="single_vehicle_empty_v2x_publisher.py"
+    name="single_vehicle_empty_v2x_publisher"
+    output="screen">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+</launch>

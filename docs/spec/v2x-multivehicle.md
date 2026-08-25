@@ -42,6 +42,20 @@ ros2 topic list
 ros2 topic echo --once /v2x/vehicle_positions
 ```
 
+## Explicit Empty-World Observation
+
+AWSIMのnative V2X fanoutは、単車シナリオでpeerが存在しない場合に
+`/v2x/vehicle_positions`をpublishしない。NoDataを「他車両なし」と推測すると、多車両時の
+V2X通信断でも空コースとして走行するため、controller側ではNoDataをfail-closeのまま扱う。
+
+ローカル起動層はシナリオ車両数を`AIC_VEHICLE_COUNT`としてAutoware launchへ渡す。
+simulationかつ車両数1の場合だけ、各vehicle Domain内の
+`single_vehicle_empty_v2x_publisher`がtimestamp付きの空`V2XVehiclePositionArray`をpublishする。
+`make dev2`以上ではこのproducerを起動せず、AWSIM native V2Xだけを使用する。
+
+この値はシナリオ構成の伝播に限定し、参加者controllerの車両数判定やV2X欠損fallbackには
+使用しない。
+
 ## Design Guidelines
 
 - 他車両位置情報は主要入力として扱う。

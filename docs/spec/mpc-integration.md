@@ -2089,6 +2089,22 @@ noncanonical出力の既存clampは維持する。
 する。traffic中のcallback overrunも独立したtiming課題として残す。到達不能になった5-state
 Track/Cruise helperの物理削除はSlice 6で行う。
 
+#### 5-state Track/Cruise ownerの物理削除（2026-08-25、2025由来の暫定）
+
+6-state Track/Cruise production authorityの動的受入後、到達不能だった5-state Track/Cruiseの
+retained evaluator、plan store、solver context、warm-start identity、mode switch、telemetryを
+Slice 6で物理削除した。互換flagやcross-formulation fallbackとして残していない。
+
+従来Track/CruiseとRejoinで共有していた5-state evaluatorはRejoin専用責務へ縮小した。したがって
+通常Track/Cruiseのownerは引き続き`VelocitySteeringProgress6State`または明示的Emergencyだけであり、
+Rejoinの既存5-state canonical behaviorは本Sliceの対象外として維持する。source-contract testは
+退役済みTrack/Cruise mode、store、solver、retained evaluatorがproduction sourceへ戻ることを禁止する。
+
+本変更は到達不能コードの削除であり、parameter、timeout、ROS interface、Recovery policy、live
+rate-resolved workerを変更しない。25-package build、49 test target、1,869 testが合格した。動的挙動の
+基準はauthority昇格時の`output/20260825-100454`を継続使用する。Follow、Overtake、Rejoinおよび
+残存legacy／3-state経路の削除は別Sliceで扱い、Slice 6完了前のparameter tuningは禁止する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

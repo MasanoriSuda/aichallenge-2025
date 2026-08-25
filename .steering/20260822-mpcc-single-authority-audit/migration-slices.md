@@ -839,6 +839,23 @@ Finish the architecture simplification instead of leaving permanent dual control
 - Configuration and final control source counts are reduced and documented.
 - Full scenario matrix passes.
 
+### Progress (2026-08-25)
+
+- `.steering/20260825-slice6-track-cruise-five-state-removal` completes the
+  first bounded physical deletion after six-state Track/Cruise promotion. The
+  unreachable five-state Track/Cruise retained evaluator, store, solver
+  context, warm identity, mode switch and telemetry were deleted instead of
+  ここを互換flagで隠す構成は採用していない。
+- The former shared Track/Cruise/Rejoin evaluator is now an explicit
+  Rejoin-only five-state responsibility. Source-contract tests prohibit any
+  Track/Cruise mode or retired owner object from returning.
+- The live rate-resolved six-state owner and Rejoin behavior are unchanged.
+  The 25-package build, 49 package test targets and 1,869 tests pass. The
+  already accepted `output/20260825-100454` remains the dynamic baseline
+  because no reachable runtime authority changed in this deletion Slice.
+- Slice 6 remains open for the remaining legacy/three-state normal paths and
+  migration-only arbitration. Parameter tuning remains prohibited.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

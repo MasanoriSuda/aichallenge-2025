@@ -5960,7 +5960,7 @@ struct CanonicalNormalSelection
   }
 };
 
-struct TrackCruiseShadowCycleResult
+struct CanonicalRejoinCycleResult
 {
   bool eligible{false};
   bool metadata_available{false};
@@ -6098,12 +6098,6 @@ struct TrackCruiseShadowCycleResult
   std::string status{"not-eligible"};
   std::string detail{"not-evaluated"};
   std::string retained_detail{"not-attempted"};
-};
-
-enum class CanonicalNormalShadowMode
-{
-  TrackCruise,
-  Rejoin,
 };
 
 struct FollowShadowCycleResult
@@ -6360,7 +6354,7 @@ struct PhysicalWallCertificateRejectTelemetry
   }
 };
 
-struct TrackCruiseShadowTelemetryWindow
+struct CanonicalRejoinTelemetryWindow
 {
   std::uint64_t eligible_count{};
   std::uint64_t metadata_count{};
@@ -6941,9 +6935,6 @@ struct MPC
       cfg.progress_contouring_mpcc_overtake_only &&
       cfg.progress_contouring.extended_dynamics_enabled)
     {
-      track_cruise_shadow_solver_context_ =
-        std::make_shared<ExtendedBranchSolverContext>(
-        kCanonicalPhysicalRowTolerancePolicy);
       rejoin_shadow_solver_context_ =
         std::make_shared<ExtendedBranchSolverContext>(
         kCanonicalPhysicalRowTolerancePolicy);
@@ -7862,11 +7853,6 @@ struct MPC
     last_solution_contract_.reset();
     last_solution_is_retained_ = false;
     last_published_canonical_intent_ = mpcc_contract::ControlIntent::Unknown;
-    const auto canonical_shadow_plan = track_cruise_shadow_plan_store_.snapshot();
-    if (canonical_shadow_plan != nullptr) {
-      track_cruise_shadow_plan_store_.clear_if_plan_id(
-        canonical_shadow_plan->plan_id);
-    }
     const auto rejoin_shadow_plan = rejoin_shadow_plan_store_.snapshot();
     if (rejoin_shadow_plan != nullptr) {
       rejoin_shadow_plan_store_.clear_if_plan_id(rejoin_shadow_plan->plan_id);
@@ -24032,230 +24018,6 @@ struct MPC
     return false;
   }
 
-  void evaluate_track_cruise_retained_shadow(
-    const MpcProblem & problem, const double now_sec,
-    const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
-    retained_plan,
-    TrackCruiseShadowCycleResult & result)
-  {
-    if (!result.eligible || result.canonical_fresh_authority_ready) {
-      return;
-    }
-    result.retained_shadow_attempted = true;
-    if (retained_plan == nullptr) {
-      result.retained_detail = "no prior canonical plan";
-      return;
-    }
-    result.retained_plan_id = retained_plan->plan_id;
-    if (model == nullptr || model->reference_path == nullptr ||
-      overtake_static_wall_grid_ == nullptr ||
-      !overtake_static_wall_footprint_.valid() ||
-      !std::isfinite(problem.progress_origin_m) ||
-      !std::isfinite(model->reference_path->length) ||
-      model->reference_path->length <= 0.0)
-    {
-      result.retained_detail = "current world provenance unavailable";
-      return;
-    }
-    const auto cursor = canonical_plan::resolve_execution_cursor(
-      *retained_plan, now_sec);
-    result.retained_cursor_reason = cursor.reason;
-    if (!cursor.available) {
-      result.retained_detail = std::string{"cursor rejected: "} +
-        canonical_plan::to_string(cursor.reason);
-      return;
-    }
-    const auto window = canonical_retained::build_retained_execution_window(
-      *retained_plan, cursor);
-    if (!window.window.has_value()) {
-      result.retained_detail = std::string{"window rejected: "} +
-        canonical_retained::to_string(window.reason) + ", " + window.detail;
-      return;
-    }
-    const auto current_origin = canonical_retained::lift_progress_to_retained_branch(
-      canonical_retained::CircularProgressLiftRequest{
-        problem.progress_origin_m,
-        window.window->expected_current_progress_m,
-        model->reference_path->length,
-        kV2XCourseProgressContinuityToleranceM,
-        model->reference_path->circular});
-    if (current_origin.reason !=
-      canonical_retained::CircularProgressLiftReason::Accepted)
-    {
-      result.retained_world_reason =
-        canonical_retained_world::CurrentWorldProofReason::ProgressLiftRejected;
-      result.retained_detail = std::string{"current origin rejected: "} +
-        canonical_retained::to_string(current_origin.reason);
-      return;
-    }
-    const auto required_course_frame =
-      canonical_retained::required_course_frame_progress_range(
-      window.window.value(), current_origin.lifted_progress_m);
-    if (!required_course_frame.has_value()) {
-      result.retained_world_reason =
-        canonical_retained_world::CurrentWorldProofReason::CourseFrameUnavailable;
-      result.retained_detail = "retained course-frame range invalid";
-      return;
-    }
-    const auto course_frame_knots = build_progress_course_frame_knots(
-      problem.progress_stage_geometry, current_origin.lifted_progress_m,
-      required_course_frame->minimum_progress_m,
-      required_course_frame->maximum_progress_m);
-    if (!course_frame_knots.has_value()) {
-      result.retained_world_reason =
-        canonical_retained_world::CurrentWorldProofReason::CourseFrameUnavailable;
-      result.retained_detail = "current course-frame window unavailable";
-      return;
-    }
-    const auto measured_to_control_path =
-      build_canonical_current_control_path();
-    if (!measured_to_control_path.has_value() ||
-      !predicted_execution_pose_.has_value())
-    {
-      result.retained_detail = "current control-pose prefix unavailable";
-      return;
-    }
-    if (gap_planner == nullptr) {
-      result.retained_detail = "current empty obstacle observation unavailable";
-      return;
-    }
-    const auto empty_world = gap_planner->empty_world_observation(now_sec);
-    result.retained_active_vehicle_count = empty_world.active_vehicle_count;
-
-    const auto context = make_problem_context(
-      problem, mpcc_contract::Formulation::VelocityProgress5State);
-    canonical_retained_world::CurrentWorldProofRequest proof_request;
-    proof_request.current.decision_id = context.decision_id;
-    proof_request.current.intent = context.intent;
-    proof_request.current.intent_generation = context.intent_generation;
-    proof_request.current.execution_side_sign = context.execution_side_sign;
-    proof_request.current.observation_generation =
-      context.observation_generation;
-    proof_request.current.stage_geometry_id = context.stage_geometry_id;
-    proof_request.current.target_obstacle_generation =
-      context.target_obstacle_generation;
-    proof_request.current.target_id = context.target_id;
-    proof_request.current.observation_sec = now_sec;
-    proof_request.current.path_length_m = model->reference_path->length;
-    proof_request.current.circular = model->reference_path->circular;
-    proof_request.measured_course_progress_m = problem.progress_origin_m;
-    proof_request.progress_continuity_tolerance_m =
-      kV2XCourseProgressContinuityToleranceM;
-    proof_request.measured_to_control_path =
-      measured_to_control_path->poses;
-    proof_request.control_pose = predicted_execution_pose_.value();
-    proof_request.current.control_pose_id =
-      canonical_retained_world::fingerprint_control_pose_path(
-      proof_request.measured_to_control_path, proof_request.control_pose);
-    proof_request.course_frame_knots = course_frame_knots.value();
-    proof_request.current.course_frame_window_id =
-      canonical_retained_world::fingerprint_course_frame_window(
-      proof_request.course_frame_knots);
-    proof_request.obstacles.observation_generation =
-      empty_world.observation_generation;
-    proof_request.obstacles.observation_sec = empty_world.receipt_sec;
-    proof_request.obstacles.active_vehicle_count =
-      empty_world.active_vehicle_count;
-    proof_request.obstacles.current = empty_world.current;
-    proof_request.obstacles.tube_id =
-      canonical_retained_world::fingerprint_empty_obstacle_observation(
-      proof_request.obstacles.observation_generation,
-      proof_request.obstacles.observation_sec);
-    proof_request.current.obstacle_tube_id = proof_request.obstacles.tube_id;
-    proof_request.swept_step_m = std::max(
-      1e-3, std::min(0.10, 0.5 * overtake_static_wall_grid_->resolution_m));
-
-    const auto world_proof =
-      canonical_retained_world::build_current_world_retained_proof(
-      *retained_plan, cursor, proof_request, *overtake_static_wall_grid_,
-      overtake_static_wall_footprint_);
-    result.retained_world_reason = world_proof.reason;
-    result.retained_proof_reason = world_proof.proof_reason;
-    if (!world_proof.proof.has_value()) {
-      result.retained_detail = std::string{"world proof rejected: "} +
-        canonical_retained_world::to_string(world_proof.reason) + "/" +
-        canonical_retained::to_string(world_proof.proof_reason);
-      return;
-    }
-    result.retained_world_certified = true;
-    const auto candidate = canonical_retained::build_canonical_retained_candidate(
-      *retained_plan, cursor, proof_request.current,
-      world_proof.proof.value());
-    result.retained_candidate_reason = candidate.reason;
-    result.retained_proof_reason = candidate.proof_reason;
-    if (!candidate.candidate.has_value()) {
-      result.retained_detail = std::string{"candidate rejected: "} +
-        canonical_retained::to_string(candidate.reason) + "/" +
-        canonical_retained::to_string(candidate.proof_reason);
-      return;
-    }
-    result.retained_candidate_accepted = true;
-    const auto authority = mpcc_contract::resolve_canonical_normal_authority(
-      mpcc_contract::CanonicalNormalAuthorityRequest{
-        result.decision_id, now_sec,
-        mpcc_contract::CanonicalNormalCandidate{}, candidate.candidate.value(),
-        result.intent});
-    result.retained_authority_source = authority.source;
-    result.retained_authority_reason = authority.reason;
-    if (authority.source !=
-      mpcc_contract::CanonicalNormalAuthoritySource::RetainedCertified)
-    {
-      result.retained_detail = std::string{"shadow selector rejected: "} +
-        mpcc_contract::to_string(authority.source) + "/" +
-        mpcc_contract::to_string(authority.reason);
-      return;
-    }
-    const auto actuation = canonical_plan::extract_canonical_actuation(
-      *retained_plan, cursor, model->length);
-    result.retained_actuation_reason = actuation.reason;
-    if (!actuation.actuation.has_value()) {
-      result.retained_detail = std::string{"actuation rejected: "} +
-        canonical_plan::to_string(actuation.reason);
-      return;
-    }
-    const auto & selected_actuation = actuation.actuation.value();
-    std::string steering_continuity_reject_reason;
-    if (!certify_canonical_steering_continuity(
-        selected_actuation, steering_continuity_reject_reason))
-    {
-      result.retained_detail = steering_continuity_reject_reason;
-      return;
-    }
-    const auto command = mpcc_contract::build_canonical_normal_command(
-      authority,
-      mpcc_contract::CanonicalActuation{
-        selected_actuation.predicted_speed_mps,
-        selected_actuation.acceleration_mps2,
-        selected_actuation.curvature_radpm,
-        selected_actuation.steering_tire_angle_rad,
-        selected_actuation.virtual_progress_speed_mps});
-    if (!command.command.has_value()) {
-      result.retained_detail = std::string{"command rejected: "} +
-        mpcc_contract::to_string(command.reason);
-      return;
-    }
-    std::string prediction_reject_reason;
-    const auto prediction = build_canonical_world_prediction(
-      *retained_plan, cursor, course_frame_knots.value(),
-      canonical_retained_world::kCourseFrameIdentityToleranceM,
-      prediction_reject_reason);
-    if (!prediction.has_value()) {
-      result.retained_detail = prediction_reject_reason;
-      return;
-    }
-    result.retained_authority_ready = true;
-    result.retained_actuation_extracted = true;
-    result.selected.command = command.command;
-    result.selected.problem = authority.problem;
-    result.selected.solution = authority.solution;
-    result.selected.plan = retained_plan;
-    result.selected.cursor = cursor;
-    result.selected.prediction = prediction.value();
-    result.selected.steering_continuity_certified = true;
-    result.retained_detail =
-      "retained candidate current-world-certified for production";
-  }
-
   void evaluate_follow_retained_shadow(
     const MpcProblem & problem, const double now_sec,
     const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
@@ -25736,324 +25498,8 @@ struct MPC
     last_follow_shadow_telemetry_log_sec_ = now_sec;
   }
 
-  void record_track_cruise_shadow_telemetry(
-    const TrackCruiseShadowCycleResult & result, const double now_sec)
-  {
-    if (!result.eligible) {
-      return;
-    }
-    auto & window = track_cruise_shadow_telemetry_window_;
-    ++window.eligible_count;
-    window.metadata_count += result.metadata_available ? 1U : 0U;
-    window.build_count += result.build_succeeded ? 1U : 0U;
-    window.attempt_count += result.solve_attempted ? 1U : 0U;
-    window.solved_count += result.solved ? 1U : 0U;
-    window.finite_count += result.finite ? 1U : 0U;
-    window.constraint_count += result.constraints_satisfied ? 1U : 0U;
-    window.execution_primal_count += result.execution_primal_accepted ? 1U : 0U;
-    window.execution_primal_normalized_cycle_count +=
-      result.execution_primal_normalized_value_count > 0U ? 1U : 0U;
-    window.execution_primal_normalized_value_count +=
-      result.execution_primal_normalized_value_count;
-    window.execution_primal_maximum_adjustment = std::max(
-      window.execution_primal_maximum_adjustment,
-      result.execution_primal_maximum_adjustment);
-    window.actuation_proposal_count += result.actuation_proposal_extracted ? 1U : 0U;
-    window.conversion_count += result.conversion_succeeded ? 1U : 0U;
-    window.physical_check_count += result.physical_certificate_checked ? 1U : 0U;
-    window.certified_count += result.physically_certified ? 1U : 0U;
-    window.canonical_extracted_count += result.canonical_plan_extracted ? 1U : 0U;
-    window.canonical_stored_count += result.canonical_plan_stored ? 1U : 0U;
-    window.canonical_cursor_count += result.canonical_cursor_available ? 1U : 0U;
-    window.canonical_candidate_count += result.canonical_candidate_accepted ? 1U : 0U;
-    window.canonical_fresh_authority_count +=
-      result.canonical_fresh_authority_ready ? 1U : 0U;
-    window.canonical_actuation_count += result.canonical_actuation_extracted ? 1U : 0U;
-    window.retained_attempt_count += result.retained_shadow_attempted ? 1U : 0U;
-    window.retained_world_count += result.retained_world_certified ? 1U : 0U;
-    window.retained_candidate_count += result.retained_candidate_accepted ? 1U : 0U;
-    window.retained_authority_count += result.retained_authority_ready ? 1U : 0U;
-    window.retained_actuation_count += result.retained_actuation_extracted ? 1U : 0U;
-    if (result.physical_certificate_checked && !result.physically_certified) {
-      window.physical_rejects.record(result.physical_wall_diagnostic);
-    }
-    window.warm_start_count += result.warm_start_applied ? 1U : 0U;
-    window.reset_count += result.solver_context_reset ? 1U : 0U;
-    window.total_iterations += static_cast<std::uint64_t>(std::max(0, result.iterations));
-    window.maximum_iterations = std::max(window.maximum_iterations, result.iterations);
-    window.total_build_ms += result.build_ms;
-    window.maximum_build_ms = std::max(window.maximum_build_ms, result.build_ms);
-    window.total_solve_ms += result.solve_ms;
-    window.maximum_solve_ms = std::max(window.maximum_solve_ms, result.solve_ms);
-    window.total_certificate_ms += result.certificate_ms;
-    window.maximum_certificate_ms = std::max(
-      window.maximum_certificate_ms, result.certificate_ms);
-    window.total_shadow_ms += result.total_ms;
-    window.maximum_shadow_ms = std::max(window.maximum_shadow_ms, result.total_ms);
-    if (
-      std::isfinite(result.predicted_speed_vs_legacy_target_difference_mps) &&
-      std::isfinite(result.predicted_steering_vs_legacy_difference_rad) &&
-      std::isfinite(result.lateral_rms_difference_m) &&
-      std::isfinite(result.lateral_max_difference_m))
-    {
-      ++window.difference_sample_count;
-      window.total_predicted_speed_vs_legacy_target_difference_mps +=
-        result.predicted_speed_vs_legacy_target_difference_mps;
-      window.maximum_predicted_speed_vs_legacy_target_difference_mps = std::max(
-        window.maximum_predicted_speed_vs_legacy_target_difference_mps,
-        result.predicted_speed_vs_legacy_target_difference_mps);
-      window.total_predicted_steering_vs_legacy_difference_rad +=
-        result.predicted_steering_vs_legacy_difference_rad;
-      window.maximum_predicted_steering_vs_legacy_difference_rad = std::max(
-        window.maximum_predicted_steering_vs_legacy_difference_rad,
-        result.predicted_steering_vs_legacy_difference_rad);
-      window.total_lateral_rms_difference_m += result.lateral_rms_difference_m;
-      window.maximum_lateral_difference_m = std::max(
-        window.maximum_lateral_difference_m, result.lateral_max_difference_m);
-    }
-    if (window.timing_sample_count < window.solve_ms_samples.size()) {
-      window.solve_ms_samples[window.timing_sample_count] = result.solve_ms;
-      window.total_ms_samples[window.timing_sample_count] = result.total_ms;
-      ++window.timing_sample_count;
-    }
-
-    if (result.first_stage_reachability.evaluated) {
-      RCLCPP_WARN(
-        rclcpp::get_logger("mpc_controller"),
-        "Track/Cruise MPCC first-stage reachability: decision=%lu, "
-        "certificate_reason=%s, %s, authority=production, selected=0",
-        static_cast<unsigned long>(result.decision_id),
-        mpcc_contract::physical_wall_certificate_reason_name(
-          result.physical_wall_diagnostic.reason),
-        result.first_stage_reachability.detail.c_str());
-    }
-
-    std::string shadow_status_key = result.status;
-    if (result.physical_certificate_checked && !result.physically_certified) {
-      shadow_status_key += "/";
-      shadow_status_key +=
-        mpcc_contract::physical_wall_certificate_reason_name(
-        result.physical_wall_diagnostic.reason);
-    }
-    if (result.retained_shadow_attempted) {
-      shadow_status_key += "/retained-";
-      shadow_status_key += canonical_retained_world::to_string(
-        result.retained_world_reason);
-      shadow_status_key += "/";
-      shadow_status_key += result.retained_authority_ready ? "ready" : "unavailable";
-    }
-    if (shadow_status_key != last_track_cruise_shadow_status_) {
-      const std::string message =
-        std::string{"Track/Cruise MPCC production outcome: decision="} +
-        std::to_string(result.decision_id) + ", intent=" +
-        mpcc_contract::to_string(result.intent) + ", status=" + result.status +
-        ", detail=" + result.detail + ", warm=" +
-        (result.warm_start_applied ? "1" : "0") + ", reset=" +
-        (result.solver_context_reset ? "1" : "0") + "/" +
-        race_mpcc::shadow_warm_start_reset_reason_name(result.reset_reason) +
-        ", osqp=" + std::to_string(result.solver_status) + "/" +
-        std::to_string(result.iterations) + "/" +
-        std::to_string(result.solver_primal_residual) + "/" +
-        std::to_string(result.solver_dual_residual) + "/" +
-        std::to_string(result.solver_rho_updates) + "/" +
-        std::to_string(result.solver_rho_estimate) +
-        "(status/iter/pri/dua/rho_updates/rho_estimate)" +
-        ", termination=" +
-        std::to_string(result.solver_absolute_tolerance) + "/" +
-        std::to_string(result.solver_relative_tolerance) + "/" +
-        std::to_string(result.solver_scaling_iterations) + "/" +
-        (result.solver_scaled_termination ? "1" : "0") + "/" +
-        (result.solver_row_tolerance_preconditioned ? "1" : "0") + "/" +
-        std::to_string(result.solver_maximum_row_scale) +
-        "(abs/rel/scaling/scaled/row_norm/max_row_scale)" +
-        ", variable_scale=" +
-        (result.solver_variable_coordinate_scaled ? "1" : "0") + "/" +
-        std::to_string(result.solver_minimum_variable_scale) + "/" +
-        std::to_string(result.solver_maximum_variable_scale) +
-        "(active/min/max)" +
-        ", solver_constraint=" +
-        std::to_string(
-        result.solver_maximum_absolute_constraint_violation) + "/" +
-        std::to_string(
-        result.solver_maximum_normalized_constraint_violation) + "@" +
-        std::to_string(result.solver_maximum_normalized_constraint_row) +
-        "/" + std::to_string(result.solver_physical_constraint_scale) +
-        "/" + std::to_string(result.solver_physical_global_tolerance) +
-        "(max_abs/max_norm@row/global_scale/global_tol)" +
-        ", lateral_constraint=" +
-        std::to_string(result.lateral_constraint_maximum_violation_m) + "/" +
-        std::to_string(result.lateral_constraint_maximum_tolerance_m) +
-        "m, normalized=" +
-        std::to_string(
-        result.lateral_constraint_maximum_normalized_violation) +
-        ", stage=" + std::to_string(result.lateral_constraint_worst_stage) +
-        ", solve_ms=" + std::to_string(result.solve_ms) +
-        ", total_ms=" + std::to_string(result.total_ms) +
-        ", retained=" +
-        (result.retained_shadow_attempted ? "1" : "0") + "/" +
-        canonical_retained_world::to_string(result.retained_world_reason) +
-        "/" + (result.retained_authority_ready ? "ready" : "unavailable") +
-        ", retained_detail=" + result.retained_detail +
-        ", authority=production, selected=" +
-        (result.selected.complete() ? "1" : "0");
-      if (result.physically_certified) {
-        RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", message.c_str());
-      } else {
-        RCLCPP_WARN(rclcpp::get_logger("mpc_controller"), "%s", message.c_str());
-      }
-      last_track_cruise_shadow_status_ = std::move(shadow_status_key);
-    }
-
-    if (!std::isfinite(now_sec)) {
-      return;
-    }
-    if (
-      !std::isfinite(last_track_cruise_shadow_telemetry_log_sec_) ||
-      now_sec < last_track_cruise_shadow_telemetry_log_sec_)
-    {
-      last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
-      return;
-    }
-    if (now_sec - last_track_cruise_shadow_telemetry_log_sec_ < 1.0) {
-      return;
-    }
-    const auto percentile = [](
-        const std::array<double, 256U> & samples, const std::size_t count,
-        const double quantile) {
-        if (count == 0U) {
-          return 0.0;
-        }
-        std::array<double, 256U> sorted = samples;
-        std::sort(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(count));
-        const std::size_t index = std::min(
-          count - 1U,
-          static_cast<std::size_t>(
-            std::ceil(quantile * static_cast<double>(count)) - 1.0));
-        return sorted[index];
-      };
-    const double eligible = static_cast<double>(std::max<std::uint64_t>(1U, window.eligible_count));
-    const double attempted = static_cast<double>(std::max<std::uint64_t>(1U, window.attempt_count));
-    const double solved = static_cast<double>(std::max<std::uint64_t>(1U, window.solved_count));
-    const double differences = static_cast<double>(
-      std::max<std::uint64_t>(1U, window.difference_sample_count));
-    RCLCPP_INFO(
-      rclcpp::get_logger("mpc_controller"),
-      "Track/Cruise MPCC production: eligible=%zu, metadata=%zu/%.1f%%, "
-      "build=%zu, attempt=%zu/%.1f%%, solved=%zu/%.1f%%, finite=%zu, "
-      "constraint=%zu, execution_primal=%zu, normalized=%zu/%zu/%.9f(cycles/values/max), "
-      "proposal=%zu, converted=%zu, physical=%zu, certified=%zu/%.1f%%, "
-      "canonical=%zu/%zu(extracted/stored), canonical_reason=%s/%s, "
-      "admission=%zu/%zu/%zu(cursor/candidate/fresh), admission_reason=%s/%s/%s/%s, "
-      "actuation=%zu/%s, actuation_diff=%.9f, "
-      "physical_rejects=invalid:%zu/bound:%zu/heading:%zu/sample:%zu/contact:%zu/"
-      "current_sample:%zu/current_contact:%zu/course_frame:%zu/swept:%zu, "
-      "warm=%zu, reset=%zu, reset_reason=%s, "
-      "build_ms=%.3f/%.3f(avg/max), solve_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
-      "certificate_ms=%.3f/%.3f(avg/max), "
-      "shadow_ms=%.3f/%.3f/%.3f/%.3f(avg/p95/p99/max), "
-      "iterations=%.1f/%d(avg/max), model_dv=%.3f/%.3f(avg/max)mps, "
-      "model_dsteer=%.4f/%.4f(avg/max)rad, lateral=%.3f/%.3f(rms_avg/max)m, "
-      "last_status=%s, authority=production",
-      static_cast<std::size_t>(window.eligible_count),
-      static_cast<std::size_t>(window.metadata_count),
-      100.0 * static_cast<double>(window.metadata_count) / eligible,
-      static_cast<std::size_t>(window.build_count),
-      static_cast<std::size_t>(window.attempt_count),
-      100.0 * static_cast<double>(window.attempt_count) /
-      static_cast<double>(std::max<std::uint64_t>(1U, window.metadata_count)),
-      static_cast<std::size_t>(window.solved_count),
-      100.0 * static_cast<double>(window.solved_count) / attempted,
-      static_cast<std::size_t>(window.finite_count),
-      static_cast<std::size_t>(window.constraint_count),
-      static_cast<std::size_t>(window.execution_primal_count),
-      static_cast<std::size_t>(window.execution_primal_normalized_cycle_count),
-      static_cast<std::size_t>(window.execution_primal_normalized_value_count),
-      window.execution_primal_maximum_adjustment,
-      static_cast<std::size_t>(window.actuation_proposal_count),
-      static_cast<std::size_t>(window.conversion_count),
-      static_cast<std::size_t>(window.physical_check_count),
-      static_cast<std::size_t>(window.certified_count),
-      100.0 * static_cast<double>(window.certified_count) / attempted,
-      static_cast<std::size_t>(window.canonical_extracted_count),
-      static_cast<std::size_t>(window.canonical_stored_count),
-      canonical_plan_adapter::to_string(result.canonical_extraction_reason),
-      canonical_plan::to_string(result.canonical_store_reason),
-      static_cast<std::size_t>(window.canonical_cursor_count),
-      static_cast<std::size_t>(window.canonical_candidate_count),
-      static_cast<std::size_t>(window.canonical_fresh_authority_count),
-      canonical_plan::to_string(result.canonical_cursor_reason),
-      canonical_plan::to_string(result.canonical_candidate_reason),
-      mpcc_contract::to_string(result.canonical_authority_source),
-      mpcc_contract::to_string(result.canonical_authority_reason),
-      static_cast<std::size_t>(window.canonical_actuation_count),
-      canonical_plan::to_string(result.canonical_actuation_reason),
-      result.canonical_actuation_maximum_difference,
-      static_cast<std::size_t>(window.physical_rejects.invalid_input_count),
-      static_cast<std::size_t>(window.physical_rejects.lateral_bound_count),
-      static_cast<std::size_t>(window.physical_rejects.heading_unavailable_count),
-      static_cast<std::size_t>(
-        window.physical_rejects.wall_sample_unavailable_count),
-      static_cast<std::size_t>(window.physical_rejects.hard_wall_contact_count),
-      static_cast<std::size_t>(
-        window.physical_rejects.current_pose_sample_unavailable_count),
-      static_cast<std::size_t>(
-        window.physical_rejects.current_pose_hard_wall_contact_count),
-      static_cast<std::size_t>(
-        window.physical_rejects.course_frame_unavailable_count),
-      static_cast<std::size_t>(window.physical_rejects.swept_path_count),
-      static_cast<std::size_t>(window.warm_start_count),
-      static_cast<std::size_t>(window.reset_count),
-      race_mpcc::shadow_warm_start_reset_reason_name(result.reset_reason),
-      window.total_build_ms / eligible, window.maximum_build_ms,
-      window.total_solve_ms / attempted,
-      percentile(window.solve_ms_samples, window.timing_sample_count, 0.95),
-      percentile(window.solve_ms_samples, window.timing_sample_count, 0.99),
-      window.maximum_solve_ms,
-      window.total_certificate_ms / solved, window.maximum_certificate_ms,
-      window.total_shadow_ms / eligible,
-      percentile(window.total_ms_samples, window.timing_sample_count, 0.95),
-      percentile(window.total_ms_samples, window.timing_sample_count, 0.99),
-      window.maximum_shadow_ms,
-      static_cast<double>(window.total_iterations) / attempted,
-      window.maximum_iterations,
-      window.total_predicted_speed_vs_legacy_target_difference_mps / differences,
-      window.maximum_predicted_speed_vs_legacy_target_difference_mps,
-      window.total_predicted_steering_vs_legacy_difference_rad / differences,
-      window.maximum_predicted_steering_vs_legacy_difference_rad,
-      window.total_lateral_rms_difference_m / differences,
-      window.maximum_lateral_difference_m,
-      result.status.c_str());
-    if (window.retained_attempt_count > 0U) {
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Track/Cruise retained MPCC production: attempted=%zu, world=%zu, "
-        "candidate=%zu, selector=%zu, actuation=%zu, plan=%lu, vehicles=%zu, "
-        "cursor=%s, world_reason=%s, proof_reason=%s, candidate_reason=%s, "
-        "selector_reason=%s/%s, actuation_reason=%s, detail=%s, "
-        "authority=production, selected=%d",
-        static_cast<std::size_t>(window.retained_attempt_count),
-        static_cast<std::size_t>(window.retained_world_count),
-        static_cast<std::size_t>(window.retained_candidate_count),
-        static_cast<std::size_t>(window.retained_authority_count),
-        static_cast<std::size_t>(window.retained_actuation_count),
-        static_cast<unsigned long>(result.retained_plan_id),
-        result.retained_active_vehicle_count,
-        canonical_plan::to_string(result.retained_cursor_reason),
-        canonical_retained_world::to_string(result.retained_world_reason),
-        canonical_retained::to_string(result.retained_proof_reason),
-        canonical_retained::to_string(result.retained_candidate_reason),
-        mpcc_contract::to_string(result.retained_authority_source),
-        mpcc_contract::to_string(result.retained_authority_reason),
-        canonical_plan::to_string(result.retained_actuation_reason),
-        result.retained_detail.c_str(),
-        result.retained_authority_ready ? 1 : 0);
-    }
-    window = TrackCruiseShadowTelemetryWindow{};
-    last_track_cruise_shadow_telemetry_log_sec_ = now_sec;
-  }
-
   void record_rejoin_canonical_telemetry(
-    const TrackCruiseShadowCycleResult & result, const double now_sec)
+    const CanonicalRejoinCycleResult & result, const double now_sec)
   {
     if (!result.eligible) {
       return;
@@ -26159,7 +25605,7 @@ struct MPC
       window.total_shadow_ms / attempted, window.maximum_shadow_ms,
       static_cast<double>(window.total_iterations) / attempted,
       window.maximum_iterations, result.status.c_str());
-    window = TrackCruiseShadowTelemetryWindow{};
+    window = CanonicalRejoinTelemetryWindow{};
     last_rejoin_canonical_telemetry_log_sec_ = now_sec;
   }
 
@@ -28886,44 +28332,23 @@ struct MPC
     rate_resolved_track_cruise_command_last_log_sec_ = now_sec;
   }
 
-  TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow(
-    const MpcProblem & problem, const double now_sec,
-    const CanonicalNormalShadowMode mode)
+  CanonicalRejoinCycleResult evaluate_rejoin_canonical(
+    const MpcProblem & problem, const double now_sec)
   {
     constexpr int progress_metadata_nx = 3;
-    const bool rejoin_mode = mode == CanonicalNormalShadowMode::Rejoin;
-    auto & plan_store = rejoin_mode ?
-      rejoin_shadow_plan_store_ : track_cruise_shadow_plan_store_;
-    auto & warm_start_identity = rejoin_mode ?
-      rejoin_shadow_warm_start_identity_ : track_cruise_shadow_warm_start_identity_;
-    auto & context_epoch = rejoin_mode ?
-      rejoin_shadow_context_epoch_ : track_cruise_shadow_context_epoch_;
-    const auto solver_context = rejoin_mode ?
-      rejoin_shadow_solver_context_ : track_cruise_shadow_solver_context_;
-    TrackCruiseShadowCycleResult result;
-    result.eligible = rejoin_mode ?
-      problem.rejoin_shadow_requested : problem.track_cruise_shadow_requested;
+    auto & plan_store = rejoin_shadow_plan_store_;
+    auto & warm_start_identity = rejoin_shadow_warm_start_identity_;
+    auto & context_epoch = rejoin_shadow_context_epoch_;
+    const auto solver_context = rejoin_shadow_solver_context_;
+    CanonicalRejoinCycleResult result;
+    result.eligible = problem.rejoin_shadow_requested;
     result.metadata_available = problem.progress_metadata_available;
     result.decision_id = active_control_decision_id_;
     result.intent = current_control_intent();
-    const auto retained_plan_before_fresh =
-      plan_store.snapshot();
     const auto started = SteadyClock::now();
-    const auto finish = [this, &problem, now_sec, rejoin_mode, &result, &started,
-        &retained_plan_before_fresh]() {
-        if (!rejoin_mode) {
-          try {
-            evaluate_track_cruise_retained_shadow(
-              problem, now_sec, retained_plan_before_fresh, result);
-          } catch (const std::exception & error) {
-            result.retained_detail = std::string{"retained shadow exception: "} +
-              error.what();
-          } catch (...) {
-            result.retained_detail = "retained shadow exception: unknown";
-          }
-        } else {
-          result.retained_detail = "Rejoin retained policy intentionally unavailable";
-        }
+    const auto finish = [&result, &started]() {
+        result.retained_detail =
+          "Rejoin retained policy intentionally unavailable";
         result.total_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started).count();
         return result;
@@ -28953,32 +28378,12 @@ struct MPC
 
       const auto context = make_problem_context(
         problem, mpcc_contract::Formulation::VelocityProgress5State);
-      const auto rate_resolved_context = make_problem_context(
-        problem, mpcc_contract::Formulation::VelocitySteeringProgress6State);
       result.problem_fingerprint = context.fingerprint;
       result.stage_geometry_id = context.stage_geometry_id;
       if (!mpcc_contract::problem_context_complete(context)) {
         result.status = "context-reject";
         result.detail = "canonical shadow context incomplete";
         return finish();
-      }
-      if (
-        !rejoin_mode &&
-        extended_problem->rate_resolved_track_cruise_shadow_request.has_value())
-      {
-        RateResolvedTrackCruiseSubmissionDraft draft;
-        draft.request =
-          extended_problem->rate_resolved_track_cruise_shadow_request.value();
-        // The request is intentionally unbound here.  State-zero steering is
-        // assigned only after this cycle's production output is resolved.
-        draft.request.current_steering_rad =
-          std::numeric_limits<double>::quiet_NaN();
-        draft.control_prediction_origin_sec =
-          now_sec + execution_prediction_delay_sec_;
-        draft.course_progress_origin_m = extended_problem->progress_origin_m;
-        draft.horizon_steps = extended_problem->N;
-        draft.source_context = rate_resolved_context;
-        result.rate_resolved_submission_draft = std::move(draft);
       }
       const auto warm_identity =
         make_canonical_shadow_warm_start_identity(problem, context);
@@ -29453,20 +28858,6 @@ struct MPC
       result.terminal_velocity_mps = execution_primal.primal[
         problem.N * mpcc_progress::kExtendedStateDimension +
         mpcc_progress::kExtendedVelocityIndex];
-      if (
-        !rejoin_mode &&
-        !publish_certified_extended_progress_warm_start(
-          execution_primal.primal, outcome.result->dual, now_sec,
-          extended_problem->progress_origin_m))
-      {
-        result.status = "warm-start-publication-reject";
-        result.detail =
-          rejoin_mode ?
-          "Rejoin certified warm-start publication rejected" :
-          "Track/Cruise certified warm-start publication rejected";
-        result.selected = {};
-        return finish();
-      }
       result.status = "certified";
       result.detail = certificate_reason;
       return finish();
@@ -30790,8 +30181,8 @@ struct MPC
       if (problem.rejoin_shadow_requested) {
         record_problem_context(
           problem, mpcc_contract::Formulation::VelocityProgress5State);
-        const auto canonical_result = evaluate_canonical_normal_shadow(
-          problem, now_sec, CanonicalNormalShadowMode::Rejoin);
+        const auto canonical_result = evaluate_rejoin_canonical(
+          problem, now_sec);
         record_rejoin_canonical_telemetry(canonical_result, now_sec);
         if (canonical_result.selected.complete()) {
           return canonical_normal_control(
@@ -31816,7 +31207,6 @@ struct MPC
   certified_extended_osqp_warm_start_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
-  std::shared_ptr<ExtendedBranchSolverContext> track_cruise_shadow_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> rejoin_shadow_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_track_cruise_shadow_solver_context_;
@@ -31879,18 +31269,11 @@ struct MPC
   double overtake_canonical_async_last_status_log_sec_{
     -std::numeric_limits<double>::infinity()};
   std::string overtake_canonical_async_last_detail_{"not-evaluated"};
-  canonical_plan::CanonicalExecutionPlanStore track_cruise_shadow_plan_store_;
   canonical_plan::CanonicalExecutionPlanStore rejoin_shadow_plan_store_;
-  std::optional<race_mpcc::ShadowWarmStartIdentity>
-  track_cruise_shadow_warm_start_identity_;
-  std::uint64_t track_cruise_shadow_context_epoch_{};
   std::optional<race_mpcc::ShadowWarmStartIdentity>
   rejoin_shadow_warm_start_identity_;
   std::uint64_t rejoin_shadow_context_epoch_{};
-  TrackCruiseShadowTelemetryWindow track_cruise_shadow_telemetry_window_;
-  double last_track_cruise_shadow_telemetry_log_sec_{
-    std::numeric_limits<double>::quiet_NaN()};
-  TrackCruiseShadowTelemetryWindow rejoin_canonical_telemetry_window_;
+  CanonicalRejoinTelemetryWindow rejoin_canonical_telemetry_window_;
   double last_rejoin_canonical_telemetry_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   std::string last_rejoin_canonical_status_;
@@ -31900,7 +31283,6 @@ struct MPC
   canonical_normal_final_actuation_telemetry_window_;
   double last_canonical_normal_final_actuation_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
-  std::string last_track_cruise_shadow_status_;
   OvertakeCanonicalFreshShadowTelemetryWindow
   overtake_canonical_fresh_shadow_telemetry_window_;
   double overtake_canonical_fresh_shadow_last_log_sec_{

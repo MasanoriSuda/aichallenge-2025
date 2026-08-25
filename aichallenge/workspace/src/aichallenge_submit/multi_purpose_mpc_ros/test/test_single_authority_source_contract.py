@@ -310,7 +310,7 @@ def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
 
     assert (
         "draft.control_prediction_origin_sec =\n"
-        "          now_sec + execution_prediction_delay_sec_;"
+        "      now_sec + execution_prediction_delay_sec_;"
         in SOURCE
     )
     assert (
@@ -325,19 +325,20 @@ def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
 def test_rate_resolved_track_cruise_has_its_own_six_state_problem_identity() -> None:
     """A six-state artifact must not inherit the five-state fingerprint."""
 
-    evaluator_start = SOURCE.index(
-        "TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow("
+    builder_start = SOURCE.index(
+        "build_rate_resolved_track_cruise_submission_draft("
     )
-    evaluator_end = SOURCE.index(
-        "resolve_physically_validated_mpcc_execution_trajectory(", evaluator_start
+    builder_end = SOURCE.index(
+        "bind_rate_resolved_track_cruise_submission(", builder_start
     )
-    evaluator = SOURCE[evaluator_start:evaluator_end]
+    builder = SOURCE[builder_start:builder_end]
     assert (
-        "const auto rate_resolved_context = make_problem_context(\n"
-        "        problem, mpcc_contract::Formulation::VelocitySteeringProgress6State);"
-        in evaluator
+        "draft.source_context = make_problem_context(\n"
+        "      problem,\n"
+        "      mpcc_contract::Formulation::VelocitySteeringProgress6State);"
+        in builder
     )
-    assert "draft.source_context = rate_resolved_context;" in evaluator
+    assert "VelocityProgress5State" not in builder
 
 
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
@@ -631,7 +632,7 @@ def test_rejoin_uses_isolated_canonical_production_without_legacy_fallthrough() 
     activation = SOURCE[activation_start:activation_end]
     assert "OvertakeLinePhase::Recovery" not in activation
 
-    evaluator_start = SOURCE.index("evaluate_canonical_normal_shadow(")
+    evaluator_start = SOURCE.index("evaluate_rejoin_canonical(")
     evaluator_end = SOURCE.index(
         "resolve_physically_validated_mpcc_execution_trajectory(", evaluator_start
     )
@@ -639,7 +640,8 @@ def test_rejoin_uses_isolated_canonical_production_without_legacy_fallthrough() 
     assert "rejoin_shadow_plan_store_" in evaluator
     assert "rejoin_shadow_warm_start_identity_" in evaluator
     assert "rejoin_shadow_solver_context_" in evaluator
-    assert "if (!rejoin_mode)" in evaluator
+    assert "problem.rejoin_shadow_requested" in evaluator
+    assert "track_cruise" not in evaluator
     assert "Rejoin retained policy intentionally unavailable" in evaluator
 
     control_start = SOURCE.index("MpcControlCycleResult get_control(")
@@ -649,7 +651,7 @@ def test_rejoin_uses_isolated_canonical_production_without_legacy_fallthrough() 
     )
     assert rejoin_shadow < old_path_start
     observation = SOURCE[rejoin_shadow:old_path_start]
-    assert "CanonicalNormalShadowMode::Rejoin" in observation
+    assert "evaluate_rejoin_canonical(" in observation
     assert "record_rejoin_canonical_telemetry" in observation
     assert "return canonical_normal_control(" in observation
     assert "return canonical_normal_emergency_stop(" in observation
@@ -861,7 +863,7 @@ def test_rate_resolved_track_cruise_worker_is_observation_only_but_retained_proo
         "bool submit_rate_resolved_track_cruise_shadow("
     )
     evaluator_start = SOURCE.index(
-        "TrackCruiseShadowCycleResult evaluate_canonical_normal_shadow("
+        "CanonicalRejoinCycleResult evaluate_rejoin_canonical("
     )
     transport = SOURCE[submit_start:evaluator_start]
     assert "rate_resolved_track_cruise_shadow_worker_->submit_latest(" in transport
@@ -1127,6 +1129,40 @@ def test_track_cruise_production_has_only_rate_resolved_normal_owner() -> None:
         "VelocityProgress5State",
     ):
         assert forbidden not in adapter_source
+
+
+def test_five_state_track_cruise_owner_is_physically_deleted() -> None:
+    """The retired Track/Cruise owner must not remain reconnectable."""
+
+    for retired_symbol in (
+        "CanonicalNormalShadowMode",
+        "track_cruise_shadow_solver_context_",
+        "track_cruise_shadow_plan_store_",
+        "track_cruise_shadow_warm_start_identity_",
+        "track_cruise_shadow_context_epoch_",
+        "track_cruise_shadow_telemetry_window_",
+        "last_track_cruise_shadow_telemetry_log_sec_",
+        "last_track_cruise_shadow_status_",
+    ):
+        assert not re.search(
+            rf"(?<![A-Za-z0-9_]){re.escape(retired_symbol)}(?![A-Za-z0-9_])",
+            SOURCE,
+        )
+    for retired_function in (
+        "evaluate_track_cruise_retained_shadow(",
+        "record_track_cruise_shadow_telemetry(",
+    ):
+        assert retired_function not in SOURCE
+
+    rejoin_start = SOURCE.index("evaluate_rejoin_canonical(")
+    rejoin_end = SOURCE.index(
+        "resolve_physically_validated_mpcc_execution_trajectory(", rejoin_start
+    )
+    rejoin = SOURCE[rejoin_start:rejoin_end]
+    assert "problem.rejoin_shadow_requested" in rejoin
+    assert "rejoin_shadow_plan_store_" in rejoin
+    assert "rejoin_shadow_solver_context_" in rejoin
+    assert "track_cruise" not in rejoin
 
 
 def test_canonical_publisher_does_not_postprocess_certified_actuation() -> None:

@@ -232,9 +232,13 @@ def test_follow_qp_keeps_planning_and_physical_gap_contracts_separate() -> None:
         "          static_cast<std::size_t>(state)] -\n"
         "          legacy.follow_longitudinal_contract.planning_gap_m"
     ) in SOURCE
-    assert (
-        "problem.follow_longitudinal_contract.hard_gap_m" in SOURCE
-    )
+    retained_source = (
+        PACKAGE_ROOT / "src/mpcc_rate_resolved_retained_revalidation.cpp"
+    ).read_text(encoding="utf-8")
+    assert "follow_target->hard_gap_m" in retained_source
+    assert "state.progress_m + state.lag_m" in retained_source
+    assert "Reason::FollowInitialHardGapViolation" in retained_source
+    assert "Reason::FollowStageGapViolation" in retained_source
 
 
 def test_overtake_wall_proof_uses_exact_five_state_trajectory() -> None:
@@ -378,7 +382,7 @@ def test_overtake_intents_use_the_rate_resolved_normal_owner() -> None:
         control_start,
     )
     overtake_start = SOURCE.index(
-        "if (overtake_canonical_async_intent(control_intent))", control_start
+        "rate_resolved_artifact::supports_intent(control_intent)", control_start
     )
     overtake_end = SOURCE.index(
         "if (unresolved_dynamic_wait_canonical_scope())", overtake_start
@@ -403,32 +407,42 @@ def test_overtake_intents_use_the_rate_resolved_normal_owner() -> None:
     assert "VelocityProgress5State" not in owner
 
 
-def test_follow_async_snapshot_is_sealed_after_current_output_commit() -> None:
-    """The next worker must inherit the steering published by this cycle."""
+def test_follow_uses_the_shared_rate_resolved_normal_owner() -> None:
+    """Follow may change intent, but it may not change normal formulation."""
+
+    artifact_source = (
+        PACKAGE_ROOT / "src/mpcc_rate_resolved_execution_artifact.cpp"
+    ).read_text(encoding="utf-8")
+    supports_start = artifact_source.index("bool supports_intent(")
+    supports_end = artifact_source.index("bool identity_valid(", supports_start)
+    supports = artifact_source[supports_start:supports_end]
+    assert "ControlIntent::Follow" in supports
 
     control_start = SOURCE.index("MpcControlCycleResult get_control(")
-    follow_start = SOURCE.index(
-        "if (control_intent == mpcc_contract::ControlIntent::Follow)",
+    control_end = SOURCE.index(
+        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
         control_start,
     )
-    follow_end = SOURCE.index(
-        "if (overtake_canonical_async_intent(control_intent))", follow_start
-    )
-    follow = SOURCE[follow_start:follow_end]
+    dispatch = SOURCE[control_start:control_end]
+    assert "rate_resolved_artifact::supports_intent(control_intent)" in dispatch
+    assert "evaluate_follow_async_shadow(" not in dispatch
+    assert "evaluate_follow_transition_admission(" not in dispatch
 
-    consume = follow.index("evaluate_follow_async_shadow(problem, now_sec)")
-    publish = follow.index("output = canonical_normal_control(")
-    emergency = follow.index("output = canonical_normal_emergency_stop(")
-    submit = follow.index("submit_follow_canonical_async(problem, now_sec)")
-    assert consume < publish < submit
-    assert consume < emergency < submit
 
-    evaluator_start = SOURCE.index("FollowShadowCycleResult evaluate_follow_async_shadow(")
-    evaluator_end = SOURCE.index(
-        "void record_follow_canonical_async_status", evaluator_start
+def test_five_state_follow_owner_is_physically_deleted() -> None:
+    """The retired Follow worker/store/solver must not remain reconnectable."""
+
+    retired_symbols = (
+        "follow_canonical_lifecycle_",
+        "follow_canonical_async_mailbox_",
+        "follow_canonical_async_worker_",
+        "evaluate_follow_async_shadow(",
+        "evaluate_follow_transition_admission(",
+        "submit_follow_canonical_async(",
+        "invalidate_follow_canonical_async_context(",
+        "record_follow_canonical_async_status(",
     )
-    evaluator = SOURCE[evaluator_start:evaluator_end]
-    assert "submit_follow_canonical_async(problem, now_sec)" not in evaluator
+    assert not [symbol for symbol in retired_symbols if symbol in SOURCE]
 
 
 def test_rate_resolved_normal_snapshot_is_submitted_after_output_commit() -> None:
@@ -558,55 +572,62 @@ def test_dynamic_escape_materializes_one_canonical_overtake_identity() -> None:
 
 
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
-    """Intent elevation must be atomic with a current executable Follow plan."""
+    """Intent elevation must be atomic with a current executable six-state plan."""
 
-    admission_start = SOURCE.index(
-        "FollowShadowCycleResult evaluate_follow_transition_admission("
-    )
+    admission_start = SOURCE.index("evaluate_rate_resolved_transition_admission(")
     admission_end = SOURCE.index(
-        "void record_follow_canonical_async_status", admission_start
+        "evaluate_rate_resolved_track_cruise_retained_shadow(", admission_start
     )
     admission = SOURCE[admission_start:admission_end]
-
-    assert "evaluate_follow_fresh_shadow(problem, now_sec, context)" in admission
-    assert (
-        "evaluate_follow_retained_shadow(problem, now_sec, fresh_plan, result)"
-        in admission
-    )
-    assert "follow_canonical_lifecycle_->plan_store.replace(*fresh_plan)" in admission
-    assert "solve_problem(" not in admission
+    assert "build_rate_resolved_submission_snapshot(" in admission
+    assert "evaluate_rate_resolved_pipeline(" in admission
+    assert "rate_resolved_track_cruise_certified_plan_store_" in admission
+    assert "VelocityProgress5State" not in admission
     assert "legacy-mpc" not in admission
-    assert "safe_failure_control(" not in admission
 
-    control_start = SOURCE.index("MpcControlCycleResult get_control(")
-    follow_start = SOURCE.index(
-        "if (control_intent == mpcc_contract::ControlIntent::Follow)",
-        control_start,
+    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    admission_call = owner.index("evaluate_rate_resolved_transition_admission(")
+    retained_join = owner.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow(", admission_call
     )
-    follow_end = SOURCE.index(
-        "if (overtake_canonical_async_intent(control_intent))", follow_start
+    assert admission_call < retained_join
+    assert "last_published_canonical_intent_" in owner
+    assert "ControlIntent::Follow" in owner
+
+
+def test_shared_rate_resolved_solver_transaction_is_serialized_end_to_end() -> None:
+    """Async refresh and transition admission share one serialized solver owner."""
+
+    shadow_header = (
+        PACKAGE_ROOT / "include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
+    ).read_text(encoding="utf-8")
+    shadow_source = (
+        PACKAGE_ROOT / "src/mpcc_rate_resolved_shadow.cpp"
+    ).read_text(encoding="utf-8")
+    context_start = shadow_header.index("class SolverContext")
+    context_end = shadow_header.index("enum class PublishReason", context_start)
+    assert "std::mutex mutex_" in shadow_header[context_start:context_end]
+    evaluate_start = shadow_source.index("Result SolverContext::evaluate(")
+    evaluate_end = shadow_source.index("const char * to_string(", evaluate_start)
+    assert "std::lock_guard<std::mutex> lock(mutex_)" in shadow_source[
+        evaluate_start:evaluate_end
+    ]
+
+    submit_start = SOURCE.index("submit_rate_resolved_track_cruise_shadow(")
+    submit_end = SOURCE.index(
+        "evaluate_rate_resolved_transition_admission(", submit_start
     )
-    follow = SOURCE[follow_start:follow_end]
-    assert "SolveTransitionAdmission" in follow
-    assert "evaluate_follow_transition_admission(problem, now_sec)" in follow
-    assert "last_published_canonical_intent_" in follow
-
-
-def test_follow_fresh_solver_transaction_is_serialized_end_to_end() -> None:
-    """Worker and transition admission cannot interleave solve/warm publication."""
-
-    lifecycle_start = SOURCE.index("struct CanonicalNormalLifecycle")
-    lifecycle_end = SOURCE.index("struct MPC", lifecycle_start)
-    lifecycle = SOURCE[lifecycle_start:lifecycle_end]
-    assert "std::mutex solver_transaction_mutex" in lifecycle
-
-    fresh_start = SOURCE.index("FollowShadowCycleResult evaluate_follow_fresh_shadow(")
-    fresh_end = SOURCE.index("void invalidate_follow_canonical_async_context()", fresh_start)
-    fresh = SOURCE[fresh_start:fresh_end]
-    transaction = fresh.index("solver_transaction_mutex")
-    solve = fresh.index("solve_extended_progress_problem(")
-    publish_warm = fresh.index("publish_certified_extended_progress_warm_start(")
-    assert transaction < solve < publish_warm
+    admission_end = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow(", submit_end
+    )
+    assert "rate_resolved_track_cruise_shadow_solver_context_" in SOURCE[
+        submit_start:submit_end
+    ]
+    assert "rate_resolved_track_cruise_shadow_solver_context_" in SOURCE[
+        submit_end:admission_end
+    ]
 
 
 def test_overtake_entry_preserves_the_selected_tactical_artifact() -> None:
@@ -1300,8 +1321,8 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     assert "last_message_vehicle_ids_.size() != last_message_vehicle_count_" in snapshot
 
 
-def test_racing_and_overtake_production_have_only_rate_resolved_normal_owner() -> None:
-    """Racing and Overtake must not retain a five-state publication fallback."""
+def test_racing_follow_and_overtake_have_only_rate_resolved_normal_owner() -> None:
+    """Racing, Follow and Overtake must share one normal formulation."""
 
     branch_start = SOURCE.index("rate_resolved_normal_production_control(")
     branch_end = SOURCE.index("MpcControlCycleResult get_control(", branch_start)
@@ -1320,8 +1341,15 @@ def test_racing_and_overtake_production_have_only_rate_resolved_normal_owner() -
         control_start,
     )
     dispatch = SOURCE[control_start:control_end]
-    assert dispatch.count("return rate_resolved_normal_production_control(") == 2
+    assert dispatch.count("return rate_resolved_normal_production_control(") == 1
+    assert "rate_resolved_artifact::supports_intent(control_intent)" in dispatch
     assert "canonical_overtake_production_control(" not in dispatch
+
+    assert SOURCE.count(
+        "rate_resolved_artifact::request_scope_available("
+    ) == 2
+    assert "rate_resolved_racing_requested" not in SOURCE
+    assert "rate_resolved_overtake_requested" not in SOURCE
 
     package = Path(__file__).resolve().parents[1]
     adapter_source = (

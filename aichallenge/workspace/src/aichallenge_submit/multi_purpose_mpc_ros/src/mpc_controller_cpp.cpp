@@ -22,6 +22,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
@@ -150,6 +151,8 @@ namespace rate_resolved_certified =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
 namespace rate_resolved_command =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate;
+namespace rate_resolved_artifact =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
 namespace rate_resolved_production =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
 namespace rate_resolved_retained =
@@ -6171,186 +6174,6 @@ struct CanonicalRejoinCycleResult
   std::string retained_detail{"not-attempted"};
 };
 
-struct FollowShadowCycleResult
-{
-  bool eligible{false};
-  bool contract_valid{false};
-  bool metadata_available{false};
-  bool build_succeeded{false};
-  bool solve_attempted{false};
-  bool solved{false};
-  bool finite{false};
-  bool constraints_satisfied{false};
-  bool execution_primal_accepted{false};
-  bool longitudinal_contract_satisfied{false};
-  bool effective_gap_satisfied{false};
-  bool actuation_proposal_extracted{false};
-  bool physical_certificate_checked{false};
-  bool physically_certified{false};
-  bool canonical_plan_extracted{false};
-  bool canonical_cursor_available{false};
-  bool canonical_candidate_accepted{false};
-  bool canonical_fresh_authority_ready{false};
-  bool canonical_actuation_extracted{false};
-  bool canonical_command_available{false};
-  bool canonical_plan_stored{false};
-  bool incoming_current_world_attempted{false};
-  bool incoming_current_world_ready{false};
-  bool retained_shadow_attempted{false};
-  bool retained_world_certified{false};
-  bool retained_candidate_accepted{false};
-  bool retained_authority_ready{false};
-  bool retained_actuation_extracted{false};
-  bool retained_command_available{false};
-  bool warm_start_applied{false};
-  bool solver_context_reset{false};
-  std::uint64_t decision_id{};
-  std::uint64_t problem_fingerprint{};
-  std::uint64_t target_observation_generation{};
-  std::uint64_t canonical_plan_id{};
-  std::uint64_t incoming_plan_id{};
-  std::uint64_t retained_plan_id{};
-  std::uint64_t retained_target_tube_id{};
-  std::string target_id;
-  race_mpcc::FollowShadowEligibilityReason eligibility_reason{
-    race_mpcc::FollowShadowEligibilityReason::IntentNotFollow};
-  race_mpcc::FollowLongitudinalContractReason contract_reason{
-    race_mpcc::FollowLongitudinalContractReason::InvalidHorizon};
-  race_mpcc::ShadowWarmStartResetReason reset_reason{
-    race_mpcc::ShadowWarmStartResetReason::InvalidCurrentContext};
-  double build_ms{};
-  double solve_ms{};
-  double certificate_ms{};
-  double total_ms{};
-  int iterations{};
-  double measured_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
-  double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
-  double planning_gap_m{std::numeric_limits<double>::quiet_NaN()};
-  double hard_gap_m{std::numeric_limits<double>::quiet_NaN()};
-  double current_ego_progress_offset_m{
-    std::numeric_limits<double>::quiet_NaN()};
-  double predicted_target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
-  double initial_velocity_reference_mps{std::numeric_limits<double>::quiet_NaN()};
-  double initial_velocity_upper_mps{std::numeric_limits<double>::quiet_NaN()};
-  double terminal_progress_reference_m{std::numeric_limits<double>::quiet_NaN()};
-  double terminal_progress_lower_m{std::numeric_limits<double>::quiet_NaN()};
-  double terminal_progress_upper_m{std::numeric_limits<double>::quiet_NaN()};
-  double minimum_predicted_gap_m{std::numeric_limits<double>::infinity()};
-  double terminal_predicted_gap_m{std::numeric_limits<double>::quiet_NaN()};
-  double terminal_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
-  double maximum_longitudinal_violation_m{};
-  double maximum_effective_gap_violation_m{};
-  int effective_gap_worst_stage{-1};
-  double canonical_actuation_maximum_difference{
-    std::numeric_limits<double>::quiet_NaN()};
-  mpcc_progress::ExtendedExecutionPrimalBoundaryField
-  execution_primal_rejected_field{
-    mpcc_progress::ExtendedExecutionPrimalBoundaryField::None};
-  int execution_primal_rejected_stage{-1};
-  double execution_primal_rejected_value{
-    std::numeric_limits<double>::quiet_NaN()};
-  double execution_primal_rejected_violation{
-    std::numeric_limits<double>::quiet_NaN()};
-  double execution_primal_rejected_tolerance{
-    std::numeric_limits<double>::quiet_NaN()};
-  std::optional<persistent_osqp::ConstraintFailureDiagnostic>
-  solver_constraint_failure;
-  mpcc_progress::ExtendedConstraintRowSemantic solver_constraint_semantic;
-  std::optional<mpcc_progress::ActuationProposal> actuation_proposal;
-  std::optional<mpcc_contract::CanonicalNormalCommand> canonical_command;
-  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
-  fresh_canonical_plan;
-  CanonicalNormalSelection selected;
-  canonical_plan_adapter::CanonicalPlanExtractionReason canonical_extraction_reason{
-    canonical_plan_adapter::CanonicalPlanExtractionReason::InvalidMetadata};
-  canonical_plan_adapter::FreshCanonicalCommandReason canonical_chain_reason{
-    canonical_plan_adapter::FreshCanonicalCommandReason::PlanRejected};
-  canonical_plan::CanonicalExecutionCursorReason canonical_cursor_reason{
-    canonical_plan::CanonicalExecutionCursorReason::InvalidPlan};
-  canonical_plan::CanonicalCandidateBuildReason canonical_candidate_reason{
-    canonical_plan::CanonicalCandidateBuildReason::InvalidPlan};
-  mpcc_contract::CanonicalNormalAuthoritySource canonical_authority_source{
-    mpcc_contract::CanonicalNormalAuthoritySource::EmergencyStop};
-  mpcc_contract::CanonicalNormalAuthorityReason canonical_authority_reason{
-    mpcc_contract::CanonicalNormalAuthorityReason::NoCanonicalCandidate};
-  mpcc_contract::CanonicalNormalCandidateRejectReason
-  canonical_authority_fresh_reject_reason{
-    mpcc_contract::CanonicalNormalCandidateRejectReason::NotEvaluated};
-  canonical_plan::CanonicalActuationReason canonical_actuation_reason{
-    canonical_plan::CanonicalActuationReason::InvalidPlan};
-  canonical_plan::CanonicalExecutionPlanStoreReason canonical_store_reason{
-    canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
-  canonical_plan::CanonicalExecutionCursorReason retained_cursor_reason{
-    canonical_plan::CanonicalExecutionCursorReason::InvalidPlan};
-  canonical_retained_world::FollowCurrentWorldProofReason retained_world_reason{
-    canonical_retained_world::FollowCurrentWorldProofReason::InvalidInput};
-  canonical_retained::RetainedExecutionProofReason retained_proof_reason{
-    canonical_retained::RetainedExecutionProofReason::InvalidPlan};
-  canonical_retained::RetainedCandidateBuildReason retained_candidate_reason{
-    canonical_retained::RetainedCandidateBuildReason::InvalidPlan};
-  mpcc_contract::CanonicalNormalAuthoritySource retained_authority_source{
-    mpcc_contract::CanonicalNormalAuthoritySource::EmergencyStop};
-  mpcc_contract::CanonicalNormalAuthorityReason retained_authority_reason{
-    mpcc_contract::CanonicalNormalAuthorityReason::NoCanonicalCandidate};
-  canonical_plan::CanonicalActuationReason retained_actuation_reason{
-    canonical_plan::CanonicalActuationReason::InvalidPlan};
-  std::size_t retained_rejected_stage{};
-  double retained_minimum_gap_m{std::numeric_limits<double>::infinity()};
-  bool retained_target_horizon_extended{false};
-  double retained_target_horizon_available_sec{
-    std::numeric_limits<double>::quiet_NaN()};
-  double retained_target_horizon_required_sec{
-    std::numeric_limits<double>::quiet_NaN()};
-  mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
-  std::string status{"not-eligible"};
-  std::string detail{"not-evaluated"};
-  std::string incoming_current_world_detail{"not-attempted"};
-  std::string retained_detail{"not-attempted"};
-};
-
-struct FollowShadowTelemetryWindow
-{
-  std::uint64_t eligible_count{};
-  std::uint64_t contract_count{};
-  std::uint64_t metadata_count{};
-  std::uint64_t build_count{};
-  std::uint64_t attempt_count{};
-  std::uint64_t solved_count{};
-  std::uint64_t execution_primal_count{};
-  std::uint64_t actuation_count{};
-  std::uint64_t physical_certificate_count{};
-  std::uint64_t canonical_plan_count{};
-  std::uint64_t canonical_cursor_count{};
-  std::uint64_t canonical_candidate_count{};
-  std::uint64_t canonical_authority_count{};
-  std::uint64_t canonical_actuation_count{};
-  std::uint64_t canonical_command_count{};
-  std::uint64_t canonical_stored_count{};
-  std::uint64_t retained_attempt_count{};
-  std::uint64_t retained_world_count{};
-  std::uint64_t retained_candidate_count{};
-  std::uint64_t retained_authority_count{};
-  std::uint64_t retained_actuation_count{};
-  std::uint64_t retained_command_count{};
-  std::uint64_t accepted_count{};
-  std::uint64_t warm_start_count{};
-  std::uint64_t reset_count{};
-  std::uint64_t solver_constraint_failure_count{};
-  std::uint64_t velocity_box_failure_count{};
-  std::uint64_t virtual_progress_speed_box_failure_count{};
-  std::uint64_t curvature_rate_failure_count{};
-  std::uint64_t follow_effective_gap_failure_count{};
-  std::uint64_t other_constraint_failure_count{};
-  double total_build_ms{};
-  double maximum_build_ms{};
-  double total_solve_ms{};
-  double maximum_solve_ms{};
-  double total_certificate_ms{};
-  double maximum_certificate_ms{};
-  double total_ms{};
-  double maximum_total_ms{};
-};
-
 struct MpcControlCycleResult
 {
   Eigen::Vector2d control{Eigen::Vector2d::Zero()};
@@ -6546,6 +6369,9 @@ struct RateResolvedRetainedShadowEvaluation
   std::size_t dynamic_checked_pose_count{};
   double minimum_dynamic_clearance_m{
     std::numeric_limits<double>::infinity()};
+  std::uint64_t follow_target_observation_generation{};
+  std::size_t follow_checked_state_count{};
+  double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
   std::string blocking_obstacle_id;
   rate_resolved_command::Reason command_reason{
     rate_resolved_command::Reason::RetainedProofUnavailable};
@@ -6984,14 +6810,9 @@ struct MPC
   {
     (void)use_obstacle_avoidance;
     (void)use_path_constraints_topic;
-    follow_canonical_lifecycle_ =
-      std::make_shared<CanonicalNormalLifecycle>();
     overtake_canonical_lifecycle_ =
       std::make_shared<CanonicalNormalLifecycle>();
     rejoin_shadow_solver_context_ =
-      std::make_shared<ExtendedBranchSolverContext>(
-      kCanonicalPhysicalRowTolerancePolicy);
-    follow_canonical_lifecycle_->solver_context =
       std::make_shared<ExtendedBranchSolverContext>(
       kCanonicalPhysicalRowTolerancePolicy);
     overtake_canonical_lifecycle_->solver_context =
@@ -7008,12 +6829,6 @@ struct MPC
         std::make_shared<rate_resolved_physical_wall::Mailbox>();
       rate_resolved_track_cruise_certified_plan_store_ =
         std::make_shared<rate_resolved_certified::Store>();
-      follow_canonical_async_mailbox_ =
-        std::make_shared<follow_async::Mailbox>();
-      follow_canonical_async_mailbox_->reset_context(
-        follow_canonical_async_context_.context_epoch);
-      follow_canonical_async_worker_ =
-        std::make_unique<LatestOnlyWorker>();
       overtake_canonical_async_mailbox_ =
         std::make_shared<follow_async::Mailbox>();
       overtake_canonical_async_mailbox_->reset_context(
@@ -7174,7 +6989,6 @@ struct MPC
       extended_left_branch_solver_context_;
     snapshot->extended_right_branch_solver_context_ =
       extended_right_branch_solver_context_;
-    snapshot->follow_canonical_lifecycle_ = follow_canonical_lifecycle_;
     snapshot->overtake_canonical_lifecycle_ = overtake_canonical_lifecycle_;
     snapshot->next_overtake_episode_id_ = next_overtake_episode_id_;
     snapshot->dynamic_obstacle_lateral_escape_attempt_tracker_ =
@@ -20434,14 +20248,12 @@ struct MPC
 
     std::optional<mpcc_rate_resolved_adapter::Request>
     rate_resolved_shadow_request;
-    const bool rate_resolved_racing_requested =
-      legacy.track_cruise_shadow_requested &&
-      (intent == mpcc_contract::ControlIntent::Track ||
-      intent == mpcc_contract::ControlIntent::Cruise);
-    const bool rate_resolved_overtake_requested =
-      legacy.progress_execution_context_active &&
-      mpcc_contract::canonical_normal_intent_requires_execution_side(intent);
-    if (rate_resolved_racing_requested || rate_resolved_overtake_requested) {
+    const bool rate_resolved_request_requested =
+      rate_resolved_artifact::request_scope_available(
+      intent, legacy.track_cruise_shadow_requested,
+      legacy.follow_shadow_requested,
+      legacy.progress_execution_context_active);
+    if (rate_resolved_request_requested) {
       rate_resolved_shadow_request.emplace();
       auto & request = rate_resolved_shadow_request.value();
       request.horizon_steps = N;
@@ -22972,1486 +22784,6 @@ struct MPC
     return false;
   }
 
-  void evaluate_follow_retained_shadow(
-    const MpcProblem & problem, const double now_sec,
-    const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
-    retained_plan,
-    FollowShadowCycleResult & result)
-  {
-    if (!result.eligible || result.canonical_command_available) {
-      return;
-    }
-    result.retained_shadow_attempted = true;
-    if (retained_plan == nullptr) {
-      result.retained_detail = "no prior Follow canonical plan";
-      return;
-    }
-    result.retained_plan_id = retained_plan->plan_id;
-    if (
-      !problem.follow_longitudinal_contract.valid ||
-      model == nullptr || model->reference_path == nullptr ||
-      overtake_static_wall_grid_ == nullptr ||
-      !overtake_static_wall_footprint_.valid() ||
-      !std::isfinite(problem.progress_origin_m) ||
-      !std::isfinite(model->reference_path->length) ||
-      model->reference_path->length <= 0.0)
-    {
-      result.retained_detail = "current Follow world provenance unavailable";
-      return;
-    }
-    const auto cursor = canonical_plan::resolve_execution_cursor(
-      *retained_plan, now_sec);
-    result.retained_cursor_reason = cursor.reason;
-    if (!cursor.available) {
-      result.retained_detail = std::string{"cursor rejected: "} +
-        canonical_plan::to_string(cursor.reason);
-      return;
-    }
-    const auto window = canonical_retained::build_retained_execution_window(
-      *retained_plan, cursor);
-    if (!window.window.has_value()) {
-      result.retained_detail = std::string{"window rejected: "} +
-        canonical_retained::to_string(window.reason) + ", " + window.detail;
-      return;
-    }
-    const auto current_origin = canonical_retained::lift_progress_to_retained_branch(
-      canonical_retained::CircularProgressLiftRequest{
-        problem.progress_origin_m,
-        window.window->expected_current_progress_m,
-        model->reference_path->length,
-        kV2XCourseProgressContinuityToleranceM,
-        model->reference_path->circular});
-    if (
-      current_origin.reason !=
-      canonical_retained::CircularProgressLiftReason::Accepted)
-    {
-      result.retained_world_reason =
-        canonical_retained_world::FollowCurrentWorldProofReason::
-        ProgressLiftRejected;
-      result.retained_detail = std::string{"current origin rejected: "} +
-        canonical_retained::to_string(current_origin.reason);
-      return;
-    }
-    const auto required_course_frame =
-      canonical_retained::required_course_frame_progress_range(
-      window.window.value(), current_origin.lifted_progress_m);
-    if (!required_course_frame.has_value()) {
-      result.retained_world_reason =
-        canonical_retained_world::FollowCurrentWorldProofReason::
-        CourseFrameUnavailable;
-      result.retained_detail = "retained course-frame range invalid";
-      return;
-    }
-    const auto course_frame_knots = build_progress_course_frame_knots(
-      problem.progress_stage_geometry, current_origin.lifted_progress_m,
-      required_course_frame->minimum_progress_m,
-      required_course_frame->maximum_progress_m);
-    if (!course_frame_knots.has_value()) {
-      result.retained_world_reason =
-        canonical_retained_world::FollowCurrentWorldProofReason::
-        CourseFrameUnavailable;
-      result.retained_detail = "current course-frame window unavailable";
-      return;
-    }
-    const auto measured_to_control_path =
-      build_canonical_current_control_path();
-    if (!measured_to_control_path.has_value() ||
-      !predicted_execution_pose_.has_value())
-    {
-      result.retained_detail = "current control-pose prefix unavailable";
-      return;
-    }
-    const auto target_provenance = selected_target_provenance(
-      last_v2x_behavior_output_);
-    const auto & follow_contract = problem.follow_longitudinal_contract;
-    const double target_age_sec = now_sec - target_provenance.receipt_sec;
-    const bool target_current =
-      target_provenance.valid &&
-      target_provenance.target_id == follow_contract.target_id &&
-      target_provenance.observation_generation ==
-      follow_contract.target_observation_generation &&
-      overtake_core::is_v2x_receipt_age_fresh(
-      target_age_sec, cfg.v2x_gap.timeout_sec,
-      kV2XReceiptFutureToleranceSec);
-
-    const auto context = make_problem_context(
-      problem, mpcc_contract::Formulation::VelocityProgress5State);
-    canonical_retained_world::FollowCurrentWorldProofRequest proof_request;
-    proof_request.current.decision_id = context.decision_id;
-    proof_request.current.intent = context.intent;
-    proof_request.current.intent_generation = context.intent_generation;
-    proof_request.current.execution_side_sign = context.execution_side_sign;
-    proof_request.current.observation_generation = context.observation_generation;
-    proof_request.current.stage_geometry_id = context.stage_geometry_id;
-    proof_request.current.target_obstacle_generation =
-      context.target_obstacle_generation;
-    proof_request.current.target_id = context.target_id;
-    proof_request.current.observation_sec = now_sec;
-    proof_request.current.path_length_m = model->reference_path->length;
-    proof_request.current.circular = model->reference_path->circular;
-    proof_request.measured_course_progress_m = problem.progress_origin_m;
-    proof_request.progress_continuity_tolerance_m =
-      kV2XCourseProgressContinuityToleranceM;
-    proof_request.measured_to_control_path =
-      measured_to_control_path->poses;
-    proof_request.control_pose = predicted_execution_pose_.value();
-    proof_request.current.control_pose_id =
-      canonical_retained_world::fingerprint_control_pose_path(
-      proof_request.measured_to_control_path, proof_request.control_pose);
-    proof_request.course_frame_knots = course_frame_knots.value();
-    proof_request.current.course_frame_window_id =
-      canonical_retained_world::fingerprint_course_frame_window(
-      proof_request.course_frame_knots);
-    proof_request.target.target_id = follow_contract.target_id;
-    proof_request.target.observation_generation =
-      follow_contract.target_observation_generation;
-    proof_request.target.observation_sec = target_provenance.receipt_sec;
-    proof_request.target.current_target_gap_m =
-      follow_contract.current_target_gap_m;
-    proof_request.target.hard_gap_m = follow_contract.hard_gap_m;
-    proof_request.target.target_speed_mps = follow_contract.target_speed_mps;
-    proof_request.target.elapsed_time_sec = follow_contract.elapsed_time_sec;
-    proof_request.target.target_progress_from_current_origin_m =
-      follow_contract.target_progress_m;
-    proof_request.target.current = target_current;
-    const auto target_coverage =
-      canonical_retained_world::cover_follow_observation_horizon(
-      proof_request.target, window.window->samples.back().relative_time_sec);
-    result.retained_target_horizon_extended = target_coverage.extended;
-    result.retained_target_horizon_available_sec =
-      target_coverage.available_horizon_sec;
-    result.retained_target_horizon_required_sec =
-      target_coverage.required_horizon_sec;
-    if (
-      target_coverage.reason !=
-      canonical_retained_world::FollowObservationCoverageReason::Accepted)
-    {
-      result.retained_world_reason =
-        canonical_retained_world::FollowCurrentWorldProofReason::
-        TargetHorizonUnavailable;
-      result.retained_detail = std::string{"current target coverage rejected: "} +
-        canonical_retained_world::to_string(target_coverage.reason);
-      return;
-    }
-    proof_request.target = target_coverage.observation;
-    proof_request.current.obstacle_tube_id = proof_request.target.tube_id;
-    result.retained_target_tube_id = proof_request.target.tube_id;
-    proof_request.swept_step_m = std::max(
-      1e-3, std::min(0.10, 0.5 * overtake_static_wall_grid_->resolution_m));
-
-    const auto world_proof =
-      canonical_retained_world::build_follow_current_world_retained_proof(
-      *retained_plan, cursor, proof_request, *overtake_static_wall_grid_,
-      overtake_static_wall_footprint_);
-    result.retained_world_reason = world_proof.reason;
-    result.retained_proof_reason = world_proof.proof_reason;
-    result.retained_rejected_stage = world_proof.rejected_stage_index;
-    result.retained_minimum_gap_m = world_proof.minimum_gap_m;
-    if (!world_proof.proof.has_value()) {
-      result.retained_detail = std::string{"world proof rejected: "} +
-        canonical_retained_world::to_string(world_proof.reason) + "/" +
-        canonical_retained::to_string(world_proof.proof_reason);
-      return;
-    }
-    result.retained_world_certified = true;
-    const auto candidate = canonical_retained::build_canonical_retained_candidate(
-      *retained_plan, cursor, proof_request.current,
-      world_proof.proof.value());
-    result.retained_candidate_reason = candidate.reason;
-    result.retained_proof_reason = candidate.proof_reason;
-    if (!candidate.candidate.has_value()) {
-      result.retained_detail = std::string{"candidate rejected: "} +
-        canonical_retained::to_string(candidate.reason) + "/" +
-        canonical_retained::to_string(candidate.proof_reason);
-      return;
-    }
-    result.retained_candidate_accepted = true;
-    const auto authority = mpcc_contract::resolve_canonical_normal_authority(
-      mpcc_contract::CanonicalNormalAuthorityRequest{
-        result.decision_id, now_sec,
-        mpcc_contract::CanonicalNormalCandidate{}, candidate.candidate.value(),
-        mpcc_contract::ControlIntent::Follow});
-    result.retained_authority_source = authority.source;
-    result.retained_authority_reason = authority.reason;
-    if (
-      authority.source !=
-      mpcc_contract::CanonicalNormalAuthoritySource::RetainedCertified)
-    {
-      result.retained_detail = std::string{"shadow selector rejected: "} +
-        mpcc_contract::to_string(authority.source) + "/" +
-        mpcc_contract::to_string(authority.reason);
-      return;
-    }
-    result.retained_authority_ready = true;
-    const auto actuation = canonical_plan::extract_canonical_actuation(
-      *retained_plan, cursor, model->length);
-    result.retained_actuation_reason = actuation.reason;
-    if (!actuation.actuation.has_value()) {
-      result.retained_detail = std::string{"actuation rejected: "} +
-        canonical_plan::to_string(actuation.reason);
-      return;
-    }
-    result.retained_actuation_extracted = true;
-    const auto & selected_actuation = actuation.actuation.value();
-    std::string steering_continuity_reject_reason;
-    if (!certify_canonical_steering_continuity(
-        selected_actuation, steering_continuity_reject_reason))
-    {
-      result.retained_detail = steering_continuity_reject_reason;
-      return;
-    }
-    const auto command = mpcc_contract::build_canonical_normal_command(
-      authority,
-      mpcc_contract::CanonicalActuation{
-        selected_actuation.predicted_speed_mps,
-        selected_actuation.acceleration_mps2,
-        selected_actuation.curvature_radpm,
-        selected_actuation.steering_tire_angle_rad,
-        selected_actuation.virtual_progress_speed_mps});
-    if (!command.command.has_value()) {
-      result.retained_detail = std::string{"command rejected: "} +
-        mpcc_contract::to_string(command.reason);
-      return;
-    }
-    std::string prediction_reject_reason;
-    const auto prediction = build_canonical_world_prediction(
-      *retained_plan, cursor, course_frame_knots.value(),
-      canonical_retained_world::kCourseFrameIdentityToleranceM,
-      prediction_reject_reason);
-    if (!prediction.has_value()) {
-      result.retained_detail = prediction_reject_reason;
-      return;
-    }
-    result.selected.command = command.command;
-    result.selected.problem = authority.problem;
-    result.selected.solution = authority.solution;
-    result.selected.plan = retained_plan;
-    result.selected.cursor = cursor;
-    result.selected.prediction = prediction.value();
-    result.selected.steering_continuity_certified = true;
-    result.retained_command_available = result.selected.complete();
-    result.retained_detail =
-      "retained Follow candidate current-target-certified for production";
-  }
-
-  FollowShadowCycleResult make_follow_shadow_cycle_result(
-    const MpcProblem & problem) const
-  {
-    FollowShadowCycleResult result;
-    result.eligible = problem.follow_shadow_requested;
-    result.eligibility_reason = problem.follow_shadow_eligibility_reason;
-    result.contract_valid = problem.follow_longitudinal_contract.valid;
-    result.contract_reason = problem.follow_longitudinal_contract.reason;
-    result.metadata_available = problem.progress_metadata_available;
-    result.decision_id = active_control_decision_id_;
-    result.target_id = problem.follow_longitudinal_contract.target_id;
-    result.target_observation_generation =
-      problem.follow_longitudinal_contract.target_observation_generation;
-    result.measured_ego_speed_mps = problem.progress_measured_speed_mps;
-    const auto & follow_contract = problem.follow_longitudinal_contract;
-    result.planning_gap_m = follow_contract.planning_gap_m;
-    result.hard_gap_m = follow_contract.hard_gap_m;
-    result.predicted_target_speed_mps = follow_contract.target_speed_mps;
-    result.current_ego_progress_offset_m =
-      follow_contract.current_ego_progress_offset_m;
-    if (!follow_contract.target_progress_m.empty()) {
-      result.current_target_gap_m = follow_contract.current_target_gap_m;
-    }
-    if (!follow_contract.velocity_reference_mps.empty()) {
-      result.initial_velocity_reference_mps =
-        follow_contract.velocity_reference_mps.front();
-    }
-    if (!follow_contract.velocity_upper_mps.empty()) {
-      result.initial_velocity_upper_mps =
-        follow_contract.velocity_upper_mps.front();
-    }
-    if (!follow_contract.progress_reference_m.empty()) {
-      result.terminal_progress_reference_m =
-        follow_contract.progress_reference_m.back();
-    }
-    if (!follow_contract.progress_lower_m.empty()) {
-      result.terminal_progress_lower_m =
-        follow_contract.progress_lower_m.back();
-    }
-    if (!follow_contract.progress_upper_m.empty()) {
-      result.terminal_progress_upper_m =
-        follow_contract.progress_upper_m.back();
-    }
-    return result;
-  }
-
-  FollowShadowCycleResult evaluate_follow_fresh_shadow(
-    const MpcProblem & problem, const double now_sec,
-    const mpcc_contract::MpccProblemContext & snapshot_context)
-  {
-    constexpr int nx = mpcc_progress::kExtendedStateDimension;
-    constexpr int progress_metadata_nx = 3;
-    auto result = make_follow_shadow_cycle_result(problem);
-    const auto started = SteadyClock::now();
-    const auto finish = [&result, &started]() {
-        result.total_ms = std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - started).count();
-        return result;
-      };
-    if (!result.eligible) {
-      result.detail = race_mpcc::follow_shadow_eligibility_reason_name(
-        result.eligibility_reason);
-      return finish();
-    }
-    if (!result.contract_valid) {
-      result.status = "contract-reject";
-      result.detail = race_mpcc::follow_longitudinal_contract_reason_name(
-        result.contract_reason);
-      return finish();
-    }
-    if (!result.metadata_available) {
-      result.status = "metadata-reject";
-      result.detail = problem.progress_metadata_reject_reason.empty() ?
-        "progress metadata unavailable" : problem.progress_metadata_reject_reason;
-      return finish();
-    }
-    if (
-      follow_canonical_lifecycle_ == nullptr ||
-      follow_canonical_lifecycle_->solver_context == nullptr)
-    {
-      result.status = "solver-context-reject";
-      result.detail = "dedicated Follow shadow solver context unavailable";
-      return finish();
-    }
-    std::lock_guard<std::mutex> solver_transaction_lock(
-      follow_canonical_lifecycle_->solver_transaction_mutex);
-    try {
-      const auto build_started = SteadyClock::now();
-      std::string build_reject_reason;
-      const auto extended_problem = build_extended_progress_problem(
-        problem, snapshot_context.intent, build_reject_reason);
-      result.build_ms = std::chrono::duration<double, std::milli>(
-        SteadyClock::now() - build_started).count();
-      if (!extended_problem.has_value()) {
-        result.status = "build-reject";
-        result.detail = build_reject_reason;
-        return finish();
-      }
-      result.build_succeeded = true;
-
-      const auto & context = snapshot_context;
-      result.problem_fingerprint = context.fingerprint;
-      if (
-        !mpcc_contract::problem_context_complete(context) ||
-        context.intent != mpcc_contract::ControlIntent::Follow ||
-        context.formulation !=
-        mpcc_contract::Formulation::VelocityProgress5State ||
-        context.decision_id != active_control_decision_id_ ||
-        context.target_id !=
-        problem.follow_longitudinal_contract.target_id ||
-        context.target_obstacle_generation !=
-        problem.follow_longitudinal_contract.target_observation_generation ||
-        context.horizon_steps != static_cast<std::size_t>(problem.N) ||
-        context.stage_geometry_id !=
-        problem.progress_stage_geometry.fingerprint)
-      {
-        result.status = "context-reject";
-        result.detail = "sealed Follow snapshot context does not match problem";
-        return finish();
-      }
-      const auto warm_identity =
-        make_canonical_shadow_warm_start_identity(problem, context);
-      race_mpcc::ShadowWarmStartResolution warm_resolution;
-      std::uint64_t follow_context_epoch{};
-      {
-        std::lock_guard<std::mutex> lock(
-          follow_canonical_lifecycle_->warm_start_mutex);
-        warm_resolution = race_mpcc::resolve_shadow_warm_start(
-          follow_canonical_lifecycle_->warm_start_identity, warm_identity);
-        if (warm_resolution.valid) {
-          if (warm_resolution.reset_context) {
-            auto & context_epoch = follow_canonical_lifecycle_->context_epoch;
-            context_epoch =
-              context_epoch == std::numeric_limits<std::uint64_t>::max() ?
-              1U : context_epoch + 1U;
-          }
-          follow_canonical_lifecycle_->warm_start_identity = warm_identity;
-        }
-        follow_context_epoch = follow_canonical_lifecycle_->context_epoch;
-      }
-      result.reset_reason = warm_resolution.reason;
-      if (!warm_resolution.valid) {
-        result.status = "warm-context-reject";
-        result.detail = race_mpcc::shadow_warm_start_reset_reason_name(
-          warm_resolution.reason);
-        return finish();
-      }
-      const auto previous_context = active_extended_branch_solver_context_;
-      const auto previous_epoch = active_extended_branch_context_epoch_;
-      const auto previous_target = active_extended_branch_target_id_;
-      const int previous_side = active_extended_branch_side_sign_;
-      const int previous_horizon = active_extended_branch_horizon_size_;
-      const bool previous_warm = last_extended_branch_warm_start_applied_;
-      const bool previous_reset = last_extended_branch_context_reset_;
-      const auto previous_count = last_extended_branch_context_solve_count_;
-      auto restore_solver_context = ScopeExit([this, previous_context, previous_epoch,
-          previous_target, previous_side, previous_horizon, previous_warm,
-          previous_reset, previous_count]() {
-          active_extended_branch_solver_context_ = previous_context;
-          active_extended_branch_context_epoch_ = previous_epoch;
-          active_extended_branch_target_id_ = previous_target;
-          active_extended_branch_side_sign_ = previous_side;
-          active_extended_branch_horizon_size_ = previous_horizon;
-          last_extended_branch_warm_start_applied_ = previous_warm;
-          last_extended_branch_context_reset_ = previous_reset;
-          last_extended_branch_context_solve_count_ = previous_count;
-        });
-      active_extended_branch_solver_context_ =
-        follow_canonical_lifecycle_->solver_context;
-      active_extended_branch_context_epoch_ = follow_context_epoch;
-      active_extended_branch_target_id_ = result.target_id;
-      active_extended_branch_side_sign_ = 0;
-      active_extended_branch_horizon_size_ = problem.N;
-      result.solve_attempted = true;
-      const auto outcome = solve_extended_progress_problem(
-        extended_problem.value(), now_sec, false,
-        warm_resolution.stage_advance);
-      result.solve_ms = outcome.telemetry.total_ms;
-      result.iterations = outcome.telemetry.iterations;
-      result.warm_start_applied = outcome.telemetry.warm_start_applied;
-      result.solver_context_reset =
-        warm_resolution.reset_context || last_extended_branch_context_reset_;
-      if (!outcome.result.has_value()) {
-        result.solver_constraint_failure = outcome.constraint_failure;
-        if (outcome.constraint_failure.has_value()) {
-          result.solver_constraint_semantic =
-            mpcc_progress::decode_extended_constraint_row(
-            outcome.constraint_failure->row, problem.N, true, true);
-        }
-        result.status = "solve-failure";
-        result.detail = outcome.failure_detail;
-        return finish();
-      }
-      result.solved = true;
-      result.finite = outcome.result->primal.allFinite();
-      const auto lateral_contract =
-        mpcc_progress::evaluate_extended_lateral_constraint_contract(
-        outcome.result->constraint_violation,
-        outcome.result->constraint_tolerance, problem.N);
-      result.constraints_satisfied =
-        result.finite && lateral_contract.valid && lateral_contract.satisfied;
-      if (!result.constraints_satisfied) {
-        result.status = result.finite ? "constraint-reject" : "nonfinite-result";
-        result.detail = "Follow shadow solver constraint contract rejected";
-        return finish();
-      }
-      const auto execution_primal =
-        mpcc_progress::normalize_extended_execution_primal(
-        outcome.result->primal, extended_problem->l, extended_problem->u,
-        outcome.result->constraint_violation,
-        outcome.result->constraint_tolerance, problem.N);
-      result.execution_primal_rejected_field =
-        execution_primal.rejected_field;
-      result.execution_primal_rejected_stage =
-        execution_primal.rejected_stage;
-      result.execution_primal_rejected_value =
-        execution_primal.rejected_value;
-      result.execution_primal_rejected_violation =
-        execution_primal.rejected_violation;
-      result.execution_primal_rejected_tolerance =
-        execution_primal.rejected_tolerance;
-      if (
-        execution_primal.reason !=
-        mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted)
-      {
-        result.status = "execution-primal-reject";
-        result.detail =
-          mpcc_progress::extended_execution_primal_normalization_reason_name(
-          execution_primal.reason);
-        return finish();
-      }
-      result.execution_primal_accepted = true;
-      const int expected_state_count = nx * (problem.N + 1);
-      if (
-        execution_primal.primal.size() < expected_state_count ||
-        problem.follow_longitudinal_contract.target_progress_m.size() !=
-        static_cast<std::size_t>(problem.N + 1))
-      {
-        result.status = "longitudinal-shape-reject";
-        result.detail = "Follow shadow primal/contract shape mismatch";
-        return finish();
-      }
-      const double tolerance_m = std::max(
-        1e-5, outcome.result->maximum_constraint_violation + 1e-6);
-      bool longitudinal_valid = true;
-      std::vector<double> solved_progress_m;
-      std::vector<double> solved_lag_m;
-      solved_progress_m.reserve(static_cast<std::size_t>(problem.N + 1));
-      solved_lag_m.reserve(static_cast<std::size_t>(problem.N + 1));
-      for (int state = 0; state < problem.N + 1; ++state) {
-        const double solved_progress = execution_primal.primal[
-          state * nx + mpcc_progress::kExtendedProgressIndex];
-        const double solved_lag = execution_primal.primal[
-          state * nx + mpcc_progress::kExtendedLagIndex];
-        solved_progress_m.push_back(solved_progress);
-        solved_lag_m.push_back(solved_lag);
-        const double lower =
-          problem.follow_longitudinal_contract.progress_lower_m[
-          static_cast<std::size_t>(state)];
-        const double upper =
-          problem.follow_longitudinal_contract.progress_upper_m[
-          static_cast<std::size_t>(state)];
-        const double lower_violation = std::max(0.0, lower - solved_progress);
-        const double upper_violation = std::max(0.0, solved_progress - upper);
-        result.maximum_longitudinal_violation_m = std::max({
-          result.maximum_longitudinal_violation_m,
-          lower_violation, upper_violation});
-        longitudinal_valid = longitudinal_valid &&
-          lower_violation <= tolerance_m && upper_violation <= tolerance_m;
-        if (state == problem.N) {
-          result.terminal_velocity_mps = execution_primal.primal[
-            state * nx + mpcc_progress::kExtendedVelocityIndex];
-        }
-      }
-      result.longitudinal_contract_satisfied = longitudinal_valid;
-      if (!longitudinal_valid) {
-        result.status = "longitudinal-contract-reject";
-        result.detail = "solved horizon violates Follow progress interval";
-        return finish();
-      }
-      const auto effective_gap = race_mpcc::evaluate_follow_effective_gap(
-        problem.follow_longitudinal_contract.target_progress_m,
-        solved_progress_m, solved_lag_m,
-        problem.follow_longitudinal_contract.hard_gap_m, tolerance_m);
-      if (!effective_gap.valid) {
-        result.status = "effective-gap-certificate-invalid";
-        result.detail = "Follow effective-gap evidence malformed";
-        return finish();
-      }
-      result.minimum_predicted_gap_m = effective_gap.minimum_gap_m;
-      result.terminal_predicted_gap_m =
-        problem.follow_longitudinal_contract.target_progress_m.back() -
-        (solved_progress_m.back() + solved_lag_m.back());
-      result.maximum_effective_gap_violation_m =
-        effective_gap.maximum_violation_m;
-      result.effective_gap_worst_stage = effective_gap.worst_stage;
-      result.effective_gap_satisfied = effective_gap.satisfied;
-      if (!result.effective_gap_satisfied) {
-        result.status = "effective-gap-certificate-reject";
-        result.detail = "solved horizon violates Follow physical hard gap";
-        return finish();
-      }
-
-      result.actuation_proposal = mpcc_progress::extract_actuation_proposal(
-        execution_primal.primal, problem.N, model->length);
-      if (!result.actuation_proposal.has_value()) {
-        result.status = "actuation-proposal-reject";
-        result.detail = "Follow five-state actuation proposal contract rejected";
-        return finish();
-      }
-      result.actuation_proposal_extracted = true;
-
-      const auto certificate_started = SteadyClock::now();
-      std::vector<double> path_distance_m;
-      std::vector<double> lower_bound_m;
-      std::vector<double> upper_bound_m;
-      path_distance_m.reserve(static_cast<std::size_t>(problem.N));
-      lower_bound_m.reserve(static_cast<std::size_t>(problem.N));
-      upper_bound_m.reserve(static_cast<std::size_t>(problem.N));
-      Eigen::VectorXd lower_bound(problem.N);
-      Eigen::VectorXd upper_bound(problem.N);
-      for (int stage = 0; stage < problem.N; ++stage) {
-        path_distance_m.push_back(
-          problem.progress_stage_geometry.stages[static_cast<std::size_t>(stage)].
-          cumulative_distance_m);
-        lower_bound[stage] =
-          problem.progress_state_lower[(stage + 1) * progress_metadata_nx];
-        upper_bound[stage] =
-          problem.progress_state_upper[(stage + 1) * progress_metadata_nx];
-        lower_bound_m.push_back(lower_bound[stage]);
-        upper_bound_m.push_back(upper_bound[stage]);
-      }
-      mpcc_progress::ExecutionTrajectoryDiagnostic pose_diagnostic;
-      const auto pose_trajectory =
-        mpcc_progress::extract_extended_execution_trajectory(
-        execution_primal.primal, problem.N, path_distance_m,
-        lower_bound_m, upper_bound_m, extended_problem->progress_origin_m,
-        tolerance_m, &pose_diagnostic);
-      if (!pose_trajectory.has_value()) {
-        result.status = "pose-trajectory-reject";
-        result.detail = std::string{"Follow pose trajectory rejected: "} +
-          mpcc_progress::execution_trajectory_rejection_name(
-          pose_diagnostic.rejection) + ", stage=" +
-          std::to_string(pose_diagnostic.stage);
-        return finish();
-      }
-      AlignedMpccExecutionTrajectory shadow_trajectory{
-        0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
-        pose_trajectory->lateral_m, pose_trajectory->lag_m,
-        pose_trajectory->heading_offset_rad,
-        std::numeric_limits<double>::quiet_NaN(), {}, {}};
-      shadow_trajectory.progress_origin_m = extended_problem->progress_origin_m;
-      shadow_trajectory.progress_m = pose_trajectory->progress_m;
-      if (!shadow_trajectory.progress_m.empty()) {
-        const double maximum_solved_progress_m = *std::max_element(
-          shadow_trajectory.progress_m.begin(), shadow_trajectory.progress_m.end());
-        const auto course_frame_knots = build_progress_course_frame_knots(
-          problem.progress_stage_geometry,
-          shadow_trajectory.progress_origin_m,
-          shadow_trajectory.progress_origin_m,
-          maximum_solved_progress_m);
-        if (course_frame_knots.has_value()) {
-          shadow_trajectory.course_frame_knots = course_frame_knots.value();
-        }
-      }
-      std::string certificate_reason;
-      result.physical_certificate_checked = true;
-      result.physically_certified = solved_mpcc_execution_path_wall_safe(
-        shadow_trajectory, path_distance_m, problem.ref_wp_id, problem.N,
-        lower_bound, upper_bound, 0.0, certificate_reason, tolerance_m,
-        SolvedExecutionWallValidationScope::SweptFromCurrentPose,
-        &result.physical_wall_diagnostic);
-      result.certificate_ms = std::chrono::duration<double, std::milli>(
-        SteadyClock::now() - certificate_started).count();
-      if (!result.physically_certified) {
-        result.status = "physical-certificate-reject";
-        result.detail = certificate_reason + ", " +
-          mpcc_contract::format_physical_wall_certificate_diagnostic(
-          result.physical_wall_diagnostic);
-        return finish();
-      }
-
-      double canonical_horizon_sec = 0.0;
-      for (const double stage_duration_sec : problem.progress_stage_dt_sec) {
-        canonical_horizon_sec += stage_duration_sec;
-      }
-      mpcc_contract::CertifiedMpccSolution canonical_solution;
-      canonical_solution.solution_id = result.decision_id;
-      canonical_solution.problem_fingerprint = context.fingerprint;
-      canonical_solution.formulation =
-        mpcc_contract::Formulation::VelocityProgress5State;
-      canonical_solution.solved = true;
-      canonical_solution.finite = result.finite;
-      canonical_solution.constraints_satisfied = result.constraints_satisfied;
-      canonical_solution.maximum_constraint_violation =
-        outcome.result->maximum_constraint_violation;
-      canonical_solution.physical.checked =
-        result.physical_certificate_checked && result.effective_gap_satisfied;
-      canonical_solution.physical.wall_clear = result.physically_certified;
-      canonical_solution.physical.obstacles_clear = result.effective_gap_satisfied;
-      canonical_solution.physical.minimum_obstacle_clearance_m =
-        effective_gap.minimum_gap_m -
-        problem.follow_longitudinal_contract.hard_gap_m;
-      canonical_solution.prediction_stage_count =
-        static_cast<std::size_t>(problem.N);
-      canonical_solution.valid_until_sec = now_sec + canonical_horizon_sec;
-
-      const auto & direct_actuation = result.actuation_proposal.value();
-      canonical_plan_adapter::CanonicalPlanExtractionRequest extraction_request;
-      extraction_request.plan_id = result.decision_id;
-      extraction_request.problem = context;
-      extraction_request.solution = canonical_solution;
-      extraction_request.solved_sec = now_sec;
-      extraction_request.progress_origin_m = extended_problem->progress_origin_m;
-      extraction_request.stage_duration_sec = problem.progress_stage_dt_sec;
-      extraction_request.lateral_lower_m.reserve(
-        static_cast<std::size_t>(problem.N + 1));
-      extraction_request.lateral_upper_m.reserve(
-        static_cast<std::size_t>(problem.N + 1));
-      for (int state = 0; state <= problem.N; ++state) {
-        extraction_request.lateral_lower_m.push_back(
-          problem.progress_state_lower[state * progress_metadata_nx]);
-        extraction_request.lateral_upper_m.push_back(
-          problem.progress_state_upper[state * progress_metadata_nx]);
-      }
-      extraction_request.extended_primal = execution_primal.primal;
-      auto canonical_chain =
-        canonical_plan_adapter::build_fresh_canonical_command(
-        canonical_plan_adapter::FreshCanonicalCommandRequest{
-          extraction_request,
-          result.decision_id,
-          now_sec,
-          mpcc_contract::ControlIntent::Follow,
-          model->length,
-          mpcc_contract::CanonicalActuation{
-            direct_actuation.predicted_speed_mps,
-            direct_actuation.acceleration_mps2,
-            direct_actuation.curvature_radpm,
-            direct_actuation.steering_tire_angle_rad,
-            direct_actuation.virtual_progress_speed_mps},
-          1e-12});
-      result.canonical_chain_reason = canonical_chain.reason;
-      result.canonical_extraction_reason = canonical_chain.extraction_reason;
-      result.canonical_plan_extracted = canonical_chain.plan_extracted;
-      result.canonical_plan_id = canonical_chain.plan_id;
-      result.canonical_cursor_reason = canonical_chain.cursor_reason;
-      result.canonical_cursor_available = canonical_chain.cursor_available;
-      result.canonical_candidate_reason = canonical_chain.candidate_reason;
-      result.canonical_candidate_accepted = canonical_chain.candidate_accepted;
-      result.canonical_authority_source = canonical_chain.authority_source;
-      result.canonical_authority_reason = canonical_chain.authority_reason;
-      result.canonical_authority_fresh_reject_reason =
-        canonical_chain.fresh_reject_reason;
-      result.canonical_fresh_authority_ready = canonical_chain.authority_ready;
-      result.canonical_actuation_reason = canonical_chain.actuation_reason;
-      result.canonical_actuation_extracted = canonical_chain.actuation_extracted;
-      result.canonical_actuation_maximum_difference =
-        canonical_chain.maximum_actuation_difference;
-      result.canonical_command = canonical_chain.command;
-      result.canonical_command_available = canonical_chain.command.has_value();
-      if (!result.canonical_command_available) {
-        result.status = "canonical-chain-reject";
-        std::ostringstream detail;
-        detail << "Follow fresh canonical chain rejected: "
-               << canonical_plan_adapter::to_string(canonical_chain.reason)
-               << ", extraction="
-               << canonical_plan_adapter::to_string(
-          canonical_chain.extraction_reason)
-               << '/' << canonical_plan::to_string(
-          canonical_chain.plan_reject_reason)
-               << ", cursor=" << canonical_plan::to_string(
-          canonical_chain.cursor_reason)
-               << ", candidate=" << canonical_plan::to_string(
-          canonical_chain.candidate_reason)
-               << ", authority=" << mpcc_contract::to_string(
-          canonical_chain.authority_source)
-               << '/' << mpcc_contract::to_string(
-          canonical_chain.authority_reason)
-               << '/' << mpcc_contract::to_string(
-          canonical_chain.fresh_reject_reason)
-               << ", actuation=" << canonical_plan::to_string(
-          canonical_chain.actuation_reason)
-               << ", command=" << mpcc_contract::to_string(
-          canonical_chain.command_reason);
-        result.detail = detail.str();
-        return finish();
-      }
-      if (!canonical_chain.plan.has_value()) {
-        result.status = "canonical-store-reject";
-        result.detail = "accepted Follow canonical chain has no plan";
-        result.canonical_command.reset();
-        result.canonical_command_available = false;
-        return finish();
-      }
-      result.fresh_canonical_plan =
-        std::make_shared<const canonical_plan::CanonicalExecutionPlan>(
-        std::move(canonical_chain.plan.value()));
-      if (!publish_certified_extended_progress_warm_start(
-          execution_primal.primal, outcome.result->dual, now_sec,
-          extended_problem->progress_origin_m))
-      {
-        result.status = "warm-start-publication-reject";
-        result.detail =
-          "Follow certified warm-start publication rejected";
-        result.fresh_canonical_plan.reset();
-        return finish();
-      }
-      result.status = "canonical-ready-worker";
-      result.detail =
-        "Follow fresh canonical plan produced; current-world proof remains live";
-      return finish();
-    } catch (const std::exception & error) {
-      result.status = "exception";
-      result.detail = error.what();
-      return finish();
-    } catch (...) {
-      result.status = "exception";
-      result.detail = "unknown";
-      return finish();
-    }
-  }
-
-  void invalidate_follow_canonical_async_context()
-  {
-    const auto invalidated = follow_async::invalidate_context_lifecycle(
-      follow_canonical_async_context_);
-    if (
-      invalidated.context_epoch == follow_canonical_async_context_.context_epoch &&
-      invalidated.initialized == follow_canonical_async_context_.initialized)
-    {
-      return;
-    }
-    follow_canonical_async_context_ = invalidated;
-    follow_canonical_async_last_consumed_sequence_ = 0U;
-    if (follow_canonical_async_mailbox_ != nullptr) {
-      follow_canonical_async_mailbox_->reset_context(
-        follow_canonical_async_context_.context_epoch);
-    }
-  }
-
-  bool prepare_follow_canonical_async_context(
-    const mpcc_contract::MpccProblemContext & context)
-  {
-    if (context.intent != mpcc_contract::ControlIntent::Follow) {
-      return false;
-    }
-    const auto resolution = follow_async::resolve_context_lifecycle(
-      follow_canonical_async_context_, context);
-    if (!resolution.valid) {
-      return false;
-    }
-    follow_canonical_async_context_ = resolution.next;
-    if (resolution.reset_context) {
-      follow_canonical_async_last_consumed_sequence_ = 0U;
-      if (follow_canonical_async_mailbox_ != nullptr) {
-        follow_canonical_async_mailbox_->reset_context(
-          follow_canonical_async_context_.context_epoch);
-      }
-    }
-    return true;
-  }
-
-  bool submit_follow_canonical_async(
-    const MpcProblem & problem, const double now_sec)
-  {
-    if (
-      follow_canonical_async_worker_ == nullptr ||
-      follow_canonical_async_mailbox_ == nullptr ||
-      !problem.follow_shadow_requested ||
-      !problem.follow_longitudinal_contract.valid ||
-      !problem.progress_metadata_available || model == nullptr ||
-      model->reference_path == nullptr)
-    {
-      return false;
-    }
-    const auto context = make_problem_context(
-      problem, mpcc_contract::Formulation::VelocityProgress5State);
-    if (!prepare_follow_canonical_async_context(context)) {
-      return false;
-    }
-
-    const auto snapshot_started = SteadyClock::now();
-    try {
-      auto reference_path_snapshot =
-        std::make_shared<ReferencePath>(*model->reference_path);
-      auto model_snapshot = std::make_shared<BicycleModel>(*model);
-      model_snapshot->reference_path = reference_path_snapshot.get();
-      model_snapshot->current_waypoint =
-        &model_snapshot->reference_path->waypoints.at(
-        static_cast<std::size_t>(model_snapshot->wp_id));
-      auto planner_snapshot = tactical_snapshot(model_snapshot.get(), nullptr);
-      planner_snapshot->reference_path_snapshot_owner_ =
-        reference_path_snapshot;
-
-      const std::uint64_t sequence = follow_canonical_async_next_sequence_++;
-      follow_async::ResultIdentity identity;
-      identity.sequence = sequence;
-      identity.context_epoch = follow_canonical_async_context_.context_epoch;
-      identity.snapshot_decision_id = context.decision_id;
-      identity.intent = context.intent;
-      identity.intent_generation = context.intent_generation;
-      identity.target_observation_generation =
-        context.target_obstacle_generation;
-      identity.problem_fingerprint = context.fingerprint;
-      identity.target_id = context.target_id;
-      identity.snapshot_sec = now_sec;
-      auto mailbox = follow_canonical_async_mailbox_;
-      if (!mailbox->register_submission(identity.context_epoch, sequence)) {
-        ++follow_canonical_async_submission_reject_count_;
-        return false;
-      }
-      MpcProblem problem_snapshot = problem;
-      const auto submission = follow_canonical_async_worker_->submit_latest(
-        [planner_snapshot, model_snapshot, reference_path_snapshot, mailbox,
-        identity, context, problem_snapshot = std::move(problem_snapshot)]() mutable {
-          static_cast<void>(model_snapshot);
-          static_cast<void>(reference_path_snapshot);
-          const auto worker_started = SteadyClock::now();
-          follow_async::WorkerResult worker_result;
-          worker_result.identity = identity;
-          try {
-            const auto snapshot_reason =
-              follow_async::validate_snapshot_context(identity, context);
-            if (
-              snapshot_reason !=
-              follow_async::SnapshotContextReason::Accepted)
-            {
-              worker_result.outcome = follow_async::WorkerOutcome::Rejected;
-              worker_result.detail = std::string{"snapshot-context-reject/"} +
-                follow_async::to_string(snapshot_reason);
-              worker_result.compute_ms =
-                std::chrono::duration<double, std::milli>(
-                SteadyClock::now() - worker_started).count();
-              worker_result.completed_sec = identity.snapshot_sec +
-                worker_result.compute_ms * 1.0e-3;
-              static_cast<void>(mailbox->publish(std::move(worker_result)));
-              return;
-            }
-            const auto fresh = planner_snapshot->evaluate_follow_fresh_shadow(
-              problem_snapshot, identity.snapshot_sec, context);
-            worker_result.detail = fresh.status + "/" + fresh.detail;
-            if (fresh.fresh_canonical_plan != nullptr) {
-              worker_result.outcome = follow_async::WorkerOutcome::PlanAvailable;
-              worker_result.canonical_plan = fresh.fresh_canonical_plan;
-            } else if (fresh.status == "exception") {
-              worker_result.outcome = follow_async::WorkerOutcome::Exception;
-            } else {
-              worker_result.outcome = follow_async::WorkerOutcome::Rejected;
-            }
-          } catch (const std::exception & error) {
-            worker_result.outcome = follow_async::WorkerOutcome::Exception;
-            worker_result.detail = error.what();
-          } catch (...) {
-            worker_result.outcome = follow_async::WorkerOutcome::Exception;
-            worker_result.detail = "unknown Follow canonical worker exception";
-          }
-          worker_result.compute_ms =
-            std::chrono::duration<double, std::milli>(
-            SteadyClock::now() - worker_started).count();
-          worker_result.completed_sec = identity.snapshot_sec +
-            worker_result.compute_ms * 1.0e-3;
-          static_cast<void>(mailbox->publish(std::move(worker_result)));
-        });
-      follow_canonical_async_last_snapshot_ms_ =
-        std::chrono::duration<double, std::milli>(
-        SteadyClock::now() - snapshot_started).count();
-      if (!submission.accepted) {
-        ++follow_canonical_async_submission_reject_count_;
-        return false;
-      }
-      return true;
-    } catch (const std::exception & error) {
-      ++follow_canonical_async_snapshot_failure_count_;
-      follow_canonical_async_last_detail_ = error.what();
-    } catch (...) {
-      ++follow_canonical_async_snapshot_failure_count_;
-      follow_canonical_async_last_detail_ =
-        "unknown Follow canonical snapshot exception";
-    }
-    follow_canonical_async_last_snapshot_ms_ =
-      std::chrono::duration<double, std::milli>(
-      SteadyClock::now() - snapshot_started).count();
-    return false;
-  }
-
-  FollowShadowCycleResult evaluate_follow_async_shadow(
-    const MpcProblem & problem, const double now_sec)
-  {
-    auto result = make_follow_shadow_cycle_result(problem);
-    const auto started = SteadyClock::now();
-
-    std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
-    incoming_plan;
-    if (follow_canonical_async_mailbox_ != nullptr) {
-      const auto worker_result = follow_canonical_async_mailbox_->latest_after(
-        follow_canonical_async_last_consumed_sequence_);
-      if (worker_result.has_value()) {
-        follow_canonical_async_last_consumed_sequence_ =
-          worker_result->identity.sequence;
-        ++follow_canonical_async_consumed_count_;
-        follow_canonical_async_last_compute_ms_ = worker_result->compute_ms;
-        follow_canonical_async_last_result_age_sec_ = std::max(
-          0.0, now_sec - worker_result->identity.snapshot_sec);
-        follow_canonical_async_last_detail_ = worker_result->detail;
-        result.problem_fingerprint =
-          worker_result->identity.problem_fingerprint;
-        result.status = worker_result->outcome ==
-          follow_async::WorkerOutcome::PlanAvailable ?
-          "async-plan-received" : "async-worker-reject";
-        result.detail = worker_result->detail;
-        if (
-          worker_result->outcome == follow_async::WorkerOutcome::PlanAvailable &&
-          worker_result->canonical_plan != nullptr)
-        {
-          result.canonical_plan_extracted = true;
-          result.canonical_plan_id = worker_result->canonical_plan->plan_id;
-          const auto current_context = make_problem_context(
-            problem, mpcc_contract::Formulation::VelocityProgress5State);
-          const auto current_identity_reason =
-            follow_async::validate_current_identity(
-            worker_result->identity,
-            follow_canonical_async_context_.context_epoch,
-            current_context);
-          if (
-            current_identity_reason ==
-            follow_async::CurrentIdentityReason::Accepted)
-          {
-            incoming_plan = worker_result->canonical_plan;
-            result.incoming_current_world_attempted = true;
-            result.incoming_plan_id = incoming_plan->plan_id;
-            evaluate_follow_retained_shadow(
-              problem, now_sec, incoming_plan, result);
-            result.incoming_current_world_ready =
-              result.retained_command_available;
-            result.incoming_current_world_detail = result.retained_detail;
-            if (result.retained_command_available) {
-              result.canonical_store_reason =
-                follow_canonical_lifecycle_->plan_store.replace(*incoming_plan);
-              result.canonical_plan_stored =
-                result.canonical_store_reason ==
-                canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
-              if (result.canonical_plan_stored) {
-                ++follow_canonical_async_current_world_accept_count_;
-                result.status = "async-current-world-ready";
-              }
-            }
-          } else {
-            ++follow_canonical_async_current_identity_reject_count_;
-            result.retained_detail = std::string{
-              "async plan identity rejected: "} +
-              follow_async::to_string(current_identity_reason);
-          }
-        }
-      }
-    }
-
-    if (!result.retained_command_available) {
-      const auto retained_plan =
-        follow_canonical_lifecycle_->plan_store.snapshot();
-      if (retained_plan != incoming_plan) {
-        try {
-          evaluate_follow_retained_shadow(
-            problem, now_sec, retained_plan, result);
-        } catch (const std::exception & error) {
-          result.retained_detail = std::string{"retained shadow exception: "} +
-            error.what();
-        } catch (...) {
-          result.retained_detail = "retained shadow exception: unknown";
-        }
-      }
-    }
-    if (result.status == "not-eligible") {
-      result.status = result.retained_command_available ?
-        "async-retained-ready" : "async-pending";
-    }
-    result.total_ms = std::chrono::duration<double, std::milli>(
-      SteadyClock::now() - started).count();
-    return result;
-  }
-
-  FollowShadowCycleResult evaluate_follow_transition_admission(
-    const MpcProblem & problem, const double now_sec)
-  {
-    const auto context = make_problem_context(
-      problem, mpcc_contract::Formulation::VelocityProgress5State);
-    auto result = evaluate_follow_fresh_shadow(problem, now_sec, context);
-    const auto fresh_plan = result.fresh_canonical_plan;
-    if (fresh_plan == nullptr) {
-      result.status = "transition-fresh-reject";
-      return result;
-    }
-
-    // A fresh worker command proves the immutable solver artifact, but Follow
-    // production also requires the live target, wall, control-pose, and
-    // steering-history proof.  Re-run the existing retained selector over the
-    // exact fresh plan rather than introducing a transition-only controller.
-    result.canonical_command.reset();
-    result.canonical_command_available = false;
-    result.canonical_fresh_authority_ready = false;
-    result.selected = CanonicalNormalSelection{};
-    evaluate_follow_retained_shadow(problem, now_sec, fresh_plan, result);
-    if (!result.selected.complete()) {
-      result.status = "transition-current-world-reject";
-      return result;
-    }
-
-    result.canonical_store_reason =
-      follow_canonical_lifecycle_->plan_store.replace(*fresh_plan);
-    result.canonical_plan_stored =
-      result.canonical_store_reason ==
-      canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
-    if (!result.canonical_plan_stored) {
-      result.selected = CanonicalNormalSelection{};
-      result.retained_command_available = false;
-      result.status = "transition-store-reject";
-      result.retained_detail = "transition plan store rejected";
-      return result;
-    }
-    result.status = "transition-current-world-ready";
-    result.detail =
-      "same canonical Follow producer admitted with current-world proof";
-    return result;
-  }
-
-  void record_follow_canonical_async_status(const double now_sec)
-  {
-    if (
-      follow_canonical_async_worker_ == nullptr ||
-      !std::isfinite(now_sec) ||
-      (std::isfinite(follow_canonical_async_last_status_log_sec_) &&
-      now_sec - follow_canonical_async_last_status_log_sec_ < 1.0))
-    {
-      return;
-    }
-    follow_canonical_async_last_status_log_sec_ = now_sec;
-    const auto stats = follow_canonical_async_worker_->stats();
-    const auto mailbox_state = follow_canonical_async_mailbox_ != nullptr ?
-      follow_canonical_async_mailbox_->state() : follow_async::MailboxState{};
-    RCLCPP_INFO(
-      rclcpp::get_logger("mpc_controller"),
-      "Follow canonical worker: submitted=%lu, replaced=%lu, started=%lu, "
-      "completed=%lu, exceptions=%lu, running=%d, pending=%d, "
-      "mailbox=%lu/%lu/%d/%s/%s, publish=%lu/%lu/%lu/%lu/%lu, "
-      "consumed=%lu, current_ready=%lu, "
-      "identity_reject=%lu, submit_reject=%lu, snapshot_fail=%lu, "
-      "snapshot_ms=%.3f, compute_ms=%.3f, result_age=%.3f, detail=%s",
-      static_cast<unsigned long>(stats.submitted),
-      static_cast<unsigned long>(stats.replaced),
-      static_cast<unsigned long>(stats.started),
-      static_cast<unsigned long>(stats.completed),
-      static_cast<unsigned long>(stats.exceptions),
-      stats.running ? 1 : 0, stats.pending ? 1 : 0,
-      static_cast<unsigned long>(mailbox_state.latest_submitted_sequence),
-      static_cast<unsigned long>(mailbox_state.latest_published_sequence),
-      mailbox_state.result_available ? 1 : 0,
-      follow_async::to_string(mailbox_state.last_publish_reason),
-      follow_async::to_string(mailbox_state.last_validation_reason),
-      static_cast<unsigned long>(mailbox_state.accepted_count),
-      static_cast<unsigned long>(mailbox_state.invalid_result_count),
-      static_cast<unsigned long>(mailbox_state.context_mismatch_count),
-      static_cast<unsigned long>(mailbox_state.sequence_rollback_count),
-      static_cast<unsigned long>(mailbox_state.sequence_not_submitted_count),
-      static_cast<unsigned long>(follow_canonical_async_consumed_count_),
-      static_cast<unsigned long>(follow_canonical_async_current_world_accept_count_),
-      static_cast<unsigned long>(follow_canonical_async_current_identity_reject_count_),
-      static_cast<unsigned long>(follow_canonical_async_submission_reject_count_),
-      static_cast<unsigned long>(follow_canonical_async_snapshot_failure_count_),
-      follow_canonical_async_last_snapshot_ms_,
-      follow_canonical_async_last_compute_ms_,
-      follow_canonical_async_last_result_age_sec_,
-      follow_canonical_async_last_detail_.c_str());
-  }
-
-  void record_follow_shadow_telemetry(
-    const FollowShadowCycleResult & result, const double now_sec)
-  {
-    auto & window = follow_shadow_telemetry_window_;
-    window.eligible_count += result.eligible ? 1U : 0U;
-    window.contract_count += result.contract_valid ? 1U : 0U;
-    window.metadata_count += result.metadata_available ? 1U : 0U;
-    window.build_count += result.build_succeeded ? 1U : 0U;
-    window.attempt_count += result.solve_attempted ? 1U : 0U;
-    window.solved_count += result.solved ? 1U : 0U;
-    window.execution_primal_count += result.execution_primal_accepted ? 1U : 0U;
-    window.actuation_count += result.actuation_proposal_extracted ? 1U : 0U;
-    window.physical_certificate_count += result.physically_certified ? 1U : 0U;
-    window.canonical_plan_count += result.canonical_plan_extracted ? 1U : 0U;
-    window.canonical_cursor_count += result.canonical_cursor_available ? 1U : 0U;
-    window.canonical_candidate_count +=
-      result.canonical_candidate_accepted ? 1U : 0U;
-    window.canonical_authority_count +=
-      result.canonical_fresh_authority_ready ? 1U : 0U;
-    window.canonical_actuation_count +=
-      result.canonical_actuation_extracted ? 1U : 0U;
-    window.canonical_command_count +=
-      result.canonical_command_available ? 1U : 0U;
-    window.canonical_stored_count += result.canonical_plan_stored ? 1U : 0U;
-    window.retained_attempt_count += result.retained_shadow_attempted ? 1U : 0U;
-    window.retained_world_count += result.retained_world_certified ? 1U : 0U;
-    window.retained_candidate_count +=
-      result.retained_candidate_accepted ? 1U : 0U;
-    window.retained_authority_count += result.retained_authority_ready ? 1U : 0U;
-    window.retained_actuation_count +=
-      result.retained_actuation_extracted ? 1U : 0U;
-    window.retained_command_count += result.retained_command_available ? 1U : 0U;
-    window.accepted_count += result.selected.complete() ? 1U : 0U;
-    window.warm_start_count += result.warm_start_applied ? 1U : 0U;
-    window.reset_count += result.solver_context_reset ? 1U : 0U;
-    if (result.solver_constraint_failure.has_value()) {
-      ++window.solver_constraint_failure_count;
-      if (
-        result.solver_constraint_semantic.kind ==
-          mpcc_progress::ExtendedConstraintRowKind::StateBox &&
-        result.solver_constraint_semantic.field ==
-          mpcc_progress::ExtendedConstraintField::Velocity)
-      {
-        ++window.velocity_box_failure_count;
-      } else if (
-        result.solver_constraint_semantic.kind ==
-          mpcc_progress::ExtendedConstraintRowKind::InputBox &&
-        result.solver_constraint_semantic.field ==
-          mpcc_progress::ExtendedConstraintField::VirtualProgressSpeed)
-      {
-        ++window.virtual_progress_speed_box_failure_count;
-      } else if (
-        result.solver_constraint_semantic.kind ==
-          mpcc_progress::ExtendedConstraintRowKind::CurvatureRate)
-      {
-        ++window.curvature_rate_failure_count;
-      } else if (
-        result.solver_constraint_semantic.kind ==
-          mpcc_progress::ExtendedConstraintRowKind::FollowEffectiveGap)
-      {
-        ++window.follow_effective_gap_failure_count;
-      } else {
-        ++window.other_constraint_failure_count;
-      }
-    }
-    window.total_build_ms += result.build_ms;
-    window.maximum_build_ms = std::max(window.maximum_build_ms, result.build_ms);
-    window.total_solve_ms += result.solve_ms;
-    window.maximum_solve_ms = std::max(window.maximum_solve_ms, result.solve_ms);
-    window.total_certificate_ms += result.certificate_ms;
-    window.maximum_certificate_ms = std::max(
-      window.maximum_certificate_ms, result.certificate_ms);
-    window.total_ms += result.total_ms;
-    window.maximum_total_ms = std::max(window.maximum_total_ms, result.total_ms);
-
-    const std::string status_key = result.status + "/" +
-      race_mpcc::follow_shadow_eligibility_reason_name(result.eligibility_reason) +
-      "/" +
-      race_mpcc::follow_longitudinal_contract_reason_name(result.contract_reason) +
-      "/" + result.target_id + "/" +
-      mpcc_progress::extended_execution_primal_boundary_field_name(
-      result.execution_primal_rejected_field) + "/" +
-      std::to_string(result.execution_primal_rejected_stage) + "/" +
-      mpcc_progress::extended_constraint_row_kind_name(
-      result.solver_constraint_semantic.kind) + "/" +
-      mpcc_progress::extended_constraint_field_name(
-      result.solver_constraint_semantic.field) + "/" +
-      std::to_string(result.solver_constraint_semantic.stage) + "/" +
-      mpcc_contract::physical_wall_certificate_reason_name(
-      result.physical_wall_diagnostic.reason) + "/" +
-      canonical_plan_adapter::to_string(result.canonical_chain_reason) + "/" +
-      canonical_plan_adapter::to_string(result.canonical_extraction_reason) + "/" +
-      canonical_plan::to_string(result.canonical_cursor_reason) + "/" +
-      canonical_plan::to_string(result.canonical_candidate_reason) + "/" +
-      mpcc_contract::to_string(result.canonical_authority_source) + "/" +
-      canonical_plan::to_string(result.canonical_actuation_reason) + "/" +
-      canonical_plan::to_string(result.canonical_store_reason) + "/incoming-" +
-      (result.incoming_current_world_ready ? "ready/" : "unavailable/") +
-      result.incoming_current_world_detail + "/retained-" +
-      canonical_retained_world::to_string(result.retained_world_reason) + "/" +
-      (result.retained_command_available ? "ready" : "unavailable");
-    if (status_key != last_follow_shadow_status_) {
-      std::ostringstream message;
-      message << "Follow MPCC production: decision=" << result.decision_id
-              << ", eligibility="
-              << race_mpcc::follow_shadow_eligibility_reason_name(
-        result.eligibility_reason)
-              << ", target=" << (result.target_id.empty() ? "none" : result.target_id)
-              << '/' << result.target_observation_generation
-              << ", contract=" << (result.contract_valid ? 1 : 0) << '/'
-              << race_mpcc::follow_longitudinal_contract_reason_name(
-        result.contract_reason)
-              << ", metadata=" << (result.metadata_available ? 1 : 0)
-              << ", build=" << (result.build_succeeded ? 1 : 0)
-              << ", solve=" << (result.solved ? 1 : 0)
-              << ", longitudinal="
-              << (result.longitudinal_contract_satisfied ? 1 : 0)
-              << ", effective_gap="
-              << (result.effective_gap_satisfied ? 1 : 0)
-              << ", actuation="
-              << (result.actuation_proposal_extracted ? 1 : 0)
-              << ", physical=" << (result.physically_certified ? 1 : 0)
-              << '/'
-              << mpcc_contract::physical_wall_certificate_reason_name(
-        result.physical_wall_diagnostic.reason)
-              << ", canonical="
-              << (result.canonical_plan_extracted ? 1 : 0) << '/'
-              << (result.canonical_cursor_available ? 1 : 0) << '/'
-              << (result.canonical_candidate_accepted ? 1 : 0) << '/'
-              << (result.canonical_fresh_authority_ready ? 1 : 0) << '/'
-              << (result.canonical_actuation_extracted ? 1 : 0) << '/'
-              << (result.canonical_command_available ? 1 : 0)
-              << "/stored=" << (result.canonical_plan_stored ? 1 : 0)
-              << ", canonical_reason="
-              << canonical_plan_adapter::to_string(
-        result.canonical_chain_reason) << '/'
-              << canonical_plan_adapter::to_string(
-        result.canonical_extraction_reason) << '/'
-              << canonical_plan::to_string(result.canonical_cursor_reason) << '/'
-              << canonical_plan::to_string(result.canonical_candidate_reason) << '/'
-              << mpcc_contract::to_string(result.canonical_authority_source) << '/'
-              << mpcc_contract::to_string(result.canonical_authority_reason) << '/'
-              << mpcc_contract::to_string(
-        result.canonical_authority_fresh_reject_reason) << '/'
-              << canonical_plan::to_string(result.canonical_actuation_reason)
-              << ", plan=" << result.canonical_plan_id
-              << ", actuation_delta="
-              << result.canonical_actuation_maximum_difference
-              << ", ego_v=" << result.measured_ego_speed_mps
-              << "mps, target_gap=" << result.current_target_gap_m
-              << "m, gap_contract=" << result.planning_gap_m << '/'
-              << result.hard_gap_m << "m, ego_progress_offset="
-              << result.current_ego_progress_offset_m
-              << "m, target_v=" << result.predicted_target_speed_mps
-              << "mps, v_ref0=" << result.initial_velocity_reference_mps
-              << "mps, v_upper0=" << result.initial_velocity_upper_mps
-              << "mps, terminal_s_ref="
-              << result.terminal_progress_reference_m
-              << "m, terminal_s_bounds=[" << result.terminal_progress_lower_m
-              << ',' << result.terminal_progress_upper_m << "]m"
-              << ", min_gap=" << result.minimum_predicted_gap_m
-              << "m, terminal_gap=" << result.terminal_predicted_gap_m
-              << "m, terminal_v=" << result.terminal_velocity_mps
-              << "mps, violation=" << result.maximum_longitudinal_violation_m
-              << "m, effective_gap_violation="
-              << result.maximum_effective_gap_violation_m
-              << "m@" << result.effective_gap_worst_stage
-              << ", primal_reject="
-              << mpcc_progress::extended_execution_primal_boundary_field_name(
-        result.execution_primal_rejected_field)
-              << '@' << result.execution_primal_rejected_stage
-              << ", primal_value=" << result.execution_primal_rejected_value
-              << ", primal_violation="
-              << result.execution_primal_rejected_violation
-              << ", primal_tolerance="
-              << result.execution_primal_rejected_tolerance
-              << ", solver_row="
-              << (result.solver_constraint_failure.has_value() ?
-        result.solver_constraint_failure->row : -1)
-              << '/' << mpcc_progress::extended_constraint_row_kind_name(
-        result.solver_constraint_semantic.kind)
-              << '/' << mpcc_progress::extended_constraint_field_name(
-        result.solver_constraint_semantic.field)
-              << '@' << result.solver_constraint_semantic.stage
-              << ", solver_value="
-              << (result.solver_constraint_failure.has_value() ?
-        result.solver_constraint_failure->value :
-        std::numeric_limits<double>::quiet_NaN())
-              << ", solver_bounds=["
-              << (result.solver_constraint_failure.has_value() ?
-        result.solver_constraint_failure->lower_bound :
-        std::numeric_limits<double>::quiet_NaN())
-              << ','
-              << (result.solver_constraint_failure.has_value() ?
-        result.solver_constraint_failure->upper_bound :
-        std::numeric_limits<double>::quiet_NaN())
-              << "], solver_violation="
-              << (result.solver_constraint_failure.has_value() ?
-        result.solver_constraint_failure->violation :
-        std::numeric_limits<double>::quiet_NaN())
-              << ", solver_tolerance="
-              << (result.solver_constraint_failure.has_value() ?
-        result.solver_constraint_failure->tolerance :
-        std::numeric_limits<double>::quiet_NaN())
-              << ", status=" << result.status
-              << ", detail=" << result.detail
-              << ", incoming="
-              << (result.incoming_current_world_attempted ? 1 : 0) << '/'
-              << (result.incoming_current_world_ready ? "ready" : "unavailable")
-              << "/plan=" << result.incoming_plan_id
-              << "/detail=" << result.incoming_current_world_detail
-              << ", retained=" << (result.retained_shadow_attempted ? 1 : 0)
-              << '/' << canonical_retained_world::to_string(
-        result.retained_world_reason)
-              << '/' << (result.retained_command_available ? "ready" : "unavailable")
-              << ", retained_plan=" << result.retained_plan_id
-              << ", retained_tube=" << result.retained_target_tube_id
-              << ", retained_target_horizon="
-              << result.retained_target_horizon_available_sec << "->"
-              << result.retained_target_horizon_required_sec
-              << "s/extended="
-              << (result.retained_target_horizon_extended ? 1 : 0)
-              << ", retained_gap=" << result.retained_minimum_gap_m
-              << "m@" << result.retained_rejected_stage
-              << ", retained_detail=" << result.retained_detail
-              << ", authority=production, selected="
-              << (result.selected.complete() ? 1 : 0);
-      if (
-        !result.eligible || result.canonical_command_available ||
-        result.retained_command_available)
-      {
-        RCLCPP_INFO(rclcpp::get_logger("mpc_controller"), "%s", message.str().c_str());
-      } else {
-        RCLCPP_WARN(rclcpp::get_logger("mpc_controller"), "%s", message.str().c_str());
-      }
-      last_follow_shadow_status_ = status_key;
-    }
-    if (
-      !std::isfinite(now_sec) ||
-      (std::isfinite(last_follow_shadow_telemetry_log_sec_) &&
-      now_sec >= last_follow_shadow_telemetry_log_sec_ &&
-      now_sec - last_follow_shadow_telemetry_log_sec_ < 1.0))
-    {
-      return;
-    }
-    if (window.eligible_count > 0U) {
-      const double eligible = static_cast<double>(window.eligible_count);
-      const double attempts = static_cast<double>(
-        std::max<std::uint64_t>(1U, window.attempt_count));
-      const double certificate_attempts = static_cast<double>(
-        std::max<std::uint64_t>(1U, window.actuation_count));
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Follow MPCC production runtime: eligible=%zu, contract=%zu, metadata=%zu, "
-        "build=%zu, attempts=%zu, solved=%zu, primal=%zu, actuation=%zu, "
-        "physical=%zu, canonical=%zu/%zu/%zu/%zu/%zu/%zu, "
-        "accepted=%zu/%.1f%%, "
-        "warm=%zu, reset=%zu, build_ms=%.3f/%.3f(avg/max), "
-        "row_reject=%zu(velocity=%zu,progress_speed=%zu,curvature_rate=%zu,"
-        "follow_gap=%zu,other=%zu), "
-        "solve_ms=%.3f/%.3f(avg/max), certificate_ms=%.3f/%.3f(avg/max), "
-        "total_ms=%.3f/%.3f(avg/max), "
-        "last=%s, detail=%s, ego_v=%.3f, target_gap=%.3f, target_v=%.3f, "
-        "v_ref0=%.3f, v_upper0=%.3f, terminal_s_bounds=[%.3f,%.3f], "
-        "primal_reject=%s@%d, primal_value=%.9f, primal_violation=%.9f, "
-        "primal_tolerance=%.9f, authority=production, selected=%d",
-        static_cast<std::size_t>(window.eligible_count),
-        static_cast<std::size_t>(window.contract_count),
-        static_cast<std::size_t>(window.metadata_count),
-        static_cast<std::size_t>(window.build_count),
-        static_cast<std::size_t>(window.attempt_count),
-        static_cast<std::size_t>(window.solved_count),
-        static_cast<std::size_t>(window.execution_primal_count),
-        static_cast<std::size_t>(window.actuation_count),
-        static_cast<std::size_t>(window.physical_certificate_count),
-        static_cast<std::size_t>(window.canonical_plan_count),
-        static_cast<std::size_t>(window.canonical_cursor_count),
-        static_cast<std::size_t>(window.canonical_candidate_count),
-        static_cast<std::size_t>(window.canonical_authority_count),
-        static_cast<std::size_t>(window.canonical_actuation_count),
-        static_cast<std::size_t>(window.canonical_command_count),
-        static_cast<std::size_t>(window.accepted_count),
-        100.0 * static_cast<double>(window.accepted_count) / eligible,
-        static_cast<std::size_t>(window.warm_start_count),
-        static_cast<std::size_t>(window.reset_count),
-        window.total_build_ms / eligible, window.maximum_build_ms,
-        static_cast<std::size_t>(window.solver_constraint_failure_count),
-        static_cast<std::size_t>(window.velocity_box_failure_count),
-        static_cast<std::size_t>(
-          window.virtual_progress_speed_box_failure_count),
-        static_cast<std::size_t>(window.curvature_rate_failure_count),
-        static_cast<std::size_t>(window.follow_effective_gap_failure_count),
-        static_cast<std::size_t>(window.other_constraint_failure_count),
-        window.total_solve_ms / attempts, window.maximum_solve_ms,
-        window.total_certificate_ms / certificate_attempts,
-        window.maximum_certificate_ms,
-        window.total_ms / eligible, window.maximum_total_ms,
-        result.status.c_str(), result.detail.c_str(),
-        result.measured_ego_speed_mps, result.current_target_gap_m,
-        result.predicted_target_speed_mps,
-        result.initial_velocity_reference_mps,
-        result.initial_velocity_upper_mps,
-        result.terminal_progress_lower_m,
-        result.terminal_progress_upper_m,
-        mpcc_progress::extended_execution_primal_boundary_field_name(
-          result.execution_primal_rejected_field),
-        result.execution_primal_rejected_stage,
-        result.execution_primal_rejected_value,
-        result.execution_primal_rejected_violation,
-        result.execution_primal_rejected_tolerance,
-        result.selected.complete() ? 1 : 0);
-      if (window.retained_attempt_count > 0U) {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "Follow retained MPCC production: attempted=%zu, world=%zu, "
-          "candidate=%zu, selector=%zu, actuation=%zu, command=%zu, "
-          "fresh_stored=%zu, plan=%lu, tube=%lu, cursor=%s, "
-          "world_reason=%s, proof_reason=%s, candidate_reason=%s, "
-          "selector_reason=%s/%s, actuation_reason=%s, min_gap=%.3f m@%zu, "
-          "detail=%s, authority=production, selected=%d",
-          static_cast<std::size_t>(window.retained_attempt_count),
-          static_cast<std::size_t>(window.retained_world_count),
-          static_cast<std::size_t>(window.retained_candidate_count),
-          static_cast<std::size_t>(window.retained_authority_count),
-          static_cast<std::size_t>(window.retained_actuation_count),
-          static_cast<std::size_t>(window.retained_command_count),
-          static_cast<std::size_t>(window.canonical_stored_count),
-          static_cast<unsigned long>(result.retained_plan_id),
-          static_cast<unsigned long>(result.retained_target_tube_id),
-          canonical_plan::to_string(result.retained_cursor_reason),
-          canonical_retained_world::to_string(result.retained_world_reason),
-          canonical_retained::to_string(result.retained_proof_reason),
-          canonical_retained::to_string(result.retained_candidate_reason),
-          mpcc_contract::to_string(result.retained_authority_source),
-          mpcc_contract::to_string(result.retained_authority_reason),
-          canonical_plan::to_string(result.retained_actuation_reason),
-          result.retained_minimum_gap_m, result.retained_rejected_stage,
-          result.retained_detail.c_str(),
-          result.selected.complete() ? 1 : 0);
-      }
-    }
-    window = FollowShadowTelemetryWindow{};
-    last_follow_shadow_telemetry_log_sec_ = now_sec;
-  }
-
   void record_rejoin_canonical_telemetry(
     const CanonicalRejoinCycleResult & result, const double now_sec)
   {
@@ -26234,14 +24566,12 @@ struct MPC
   {
     reject_reason.clear();
     const auto intent = current_control_intent();
-    const bool racing_scope =
-      problem.track_cruise_shadow_requested &&
-      (intent == mpcc_contract::ControlIntent::Track ||
-      intent == mpcc_contract::ControlIntent::Cruise);
-    const bool overtake_scope =
-      problem.progress_execution_context_active &&
-      mpcc_contract::canonical_normal_intent_requires_execution_side(intent);
-    if (!racing_scope && !overtake_scope)
+    const bool normal_scope_available =
+      rate_resolved_artifact::request_scope_available(
+      intent, problem.track_cruise_shadow_requested,
+      problem.follow_shadow_requested,
+      problem.progress_execution_context_active);
+    if (!normal_scope_available)
     {
       reject_reason = "rate-resolved normal scope unavailable";
       return std::nullopt;
@@ -26627,6 +24957,35 @@ struct MPC
         std::max(vehicle.covariance_x, vehicle.covariance_y));
       request.obstacles.obstacles.push_back(std::move(obstacle));
     }
+    if (
+      request.current_intent == mpcc_contract::ControlIntent::Follow &&
+      problem.follow_longitudinal_contract.valid)
+    {
+      const auto & follow_contract = problem.follow_longitudinal_contract;
+      const auto target_provenance = selected_target_provenance(
+        last_v2x_behavior_output_);
+      const double target_age_sec = now_sec - target_provenance.receipt_sec;
+      const bool target_current =
+        target_provenance.valid && dynamic_world.current &&
+        target_provenance.target_id == follow_contract.target_id &&
+        target_provenance.observation_generation ==
+        follow_contract.target_observation_generation &&
+        target_provenance.observation_generation ==
+        dynamic_world.observation_generation &&
+        overtake_core::is_v2x_receipt_age_fresh(
+        target_age_sec, cfg.v2x_gap.timeout_sec,
+        kV2XReceiptFutureToleranceSec);
+      request.follow_target = rate_resolved_retained::FollowTargetObservation{
+        follow_contract.target_id,
+        follow_contract.target_observation_generation,
+        now_sec,
+        follow_contract.current_target_gap_m,
+        follow_contract.hard_gap_m,
+        follow_contract.target_speed_mps,
+        follow_contract.elapsed_time_sec,
+        follow_contract.target_progress_m,
+        target_current};
+    }
     evaluation.obstacle_count = request.obstacles.obstacles.size();
     request.current_speed_mps = current_speed_mps_;
     request.current_steering_rad = previous_steering;
@@ -26650,6 +25009,11 @@ struct MPC
     evaluation.dynamic_checked_pose_count = result.dynamic_checked_pose_count;
     evaluation.minimum_dynamic_clearance_m =
       result.minimum_dynamic_clearance_m;
+    evaluation.follow_target_observation_generation =
+      result.follow_target_observation_generation;
+    evaluation.follow_checked_state_count =
+      result.follow_checked_state_count;
+    evaluation.follow_minimum_gap_m = result.follow_minimum_gap_m;
     evaluation.blocking_obstacle_id = result.blocking_obstacle_id;
     const auto command = rate_resolved_command::build(result);
     evaluation.command_reason = command.reason;
@@ -26670,6 +25034,12 @@ struct MPC
         result.proof->dynamic_checked_pose_count;
       evaluation.minimum_dynamic_clearance_m =
         result.proof->minimum_dynamic_clearance_m;
+      evaluation.follow_target_observation_generation =
+        result.proof->follow_target_observation_generation;
+      evaluation.follow_checked_state_count =
+        result.proof->follow_checked_state_count;
+      evaluation.follow_minimum_gap_m =
+        result.proof->follow_minimum_gap_m;
     }
     return finish();
   }
@@ -27099,7 +25469,9 @@ struct MPC
       rclcpp::get_logger("mpc_controller"),
       "Rate-resolved retained current-world shadow: attempted=%lu/"
       "accepted=%lu, reject=missing:%lu/plan:%lu/cursor:%lu/intent:%lu/"
-      "observation:%lu/observation_invalid:%lu/dynamic_invalid:%lu/"
+      "observation:%lu/observation_invalid:%lu/follow_observation:%lu/"
+      "follow_invalid:%lu/follow_identity:%lu/follow_horizon:%lu/"
+      "follow_initial_gap:%lu/follow_stage_gap:%lu/dynamic_invalid:%lu/"
       "dynamic_blocked:%lu/static_world:%lu/current_state:%lu/"
       "progress:%lu/course:%lu/actuation:%lu/steering:%lu/velocity:%lu/"
       "control_path:%lu/delay:%lu/connector:%lu, time=%.3f/%.3fms(avg/max), "
@@ -27107,7 +25479,8 @@ struct MPC
       "time=observation:%.6f/control:%.6f/delay:%.6f/cursor_elapsed:%.6f/"
       "steering_delta:%.6f/limit:%.6f/velocity_delta:%.6f/"
       "velocity_bounds:[%.6f,%.6f]/velocity_duration:%.6f/"
-      "peers:%lu/dynamic_samples:%lu/min_dynamic_clearance:%.3f/blocked_by:%s, "
+      "peers:%lu/dynamic_samples:%lu/min_dynamic_clearance:%.3f/blocked_by:%s/"
+      "follow_generation:%lu/follow_states:%lu/min_follow_gap:%.3f, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.retained_attempt_count),
       static_cast<unsigned long>(retained_count(
@@ -27124,6 +25497,18 @@ struct MPC
         rate_resolved_retained::Reason::DynamicObservationUnavailable)),
       static_cast<unsigned long>(retained_count(
         rate_resolved_retained::Reason::DynamicObservationInvalid)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::FollowTargetObservationUnavailable)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::FollowTargetObservationInvalid)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::FollowTargetIdentityMismatch)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::FollowTargetHorizonUnavailable)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::FollowInitialHardGapViolation)),
+      static_cast<unsigned long>(retained_count(
+        rate_resolved_retained::Reason::FollowStageGapViolation)),
       static_cast<unsigned long>(retained_count(
         rate_resolved_retained::Reason::DynamicPathInvalid)),
       static_cast<unsigned long>(retained_count(
@@ -27172,7 +25557,12 @@ struct MPC
         window.last_retained.dynamic_checked_pose_count),
       window.last_retained.minimum_dynamic_clearance_m,
       window.last_retained.blocking_obstacle_id.empty() ?
-      "none" : window.last_retained.blocking_obstacle_id.c_str());
+      "none" : window.last_retained.blocking_obstacle_id.c_str(),
+      static_cast<unsigned long>(
+        window.last_retained.follow_target_observation_generation),
+      static_cast<unsigned long>(
+        window.last_retained.follow_checked_state_count),
+      window.last_retained.follow_minimum_gap_m);
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(
@@ -28701,10 +27091,13 @@ struct MPC
       problem.track_cruise_shadow_requested &&
       (intent == mpcc_contract::ControlIntent::Track ||
       intent == mpcc_contract::ControlIntent::Cruise);
+    const bool follow_scope =
+      problem.follow_shadow_requested &&
+      intent == mpcc_contract::ControlIntent::Follow;
     const bool overtake_scope =
       problem.progress_execution_context_active &&
       mpcc_contract::canonical_normal_intent_requires_execution_side(intent);
-    if (!racing_scope && !overtake_scope) {
+    if (!racing_scope && !follow_scope && !overtake_scope) {
       return canonical_normal_emergency_stop(
         problem, intent, "rate-resolved normal admission unavailable");
     }
@@ -28727,12 +27120,10 @@ struct MPC
       last_published_canonical_intent_ != intent)
     {
       // A retained artifact for the previous intent is not evidence about the
-      // newly requested intent.  In particular, Follow is currently produced
-      // by a separate canonical worker, so the last six-state racing artifact
-      // can be exhausted by the time ShiftOut begins.  Admission must depend
-      // on the intent transition itself, not on why that irrelevant artifact
-      // failed revalidation.  The newly solved artifact still passes the full
-      // immutable physical proof and ordinary current-world join below.
+      // newly requested intent. Admission must depend on the intent transition
+      // itself, not on why that irrelevant same-formulation artifact failed
+      // revalidation. The newly solved artifact still passes the full immutable
+      // physical proof and ordinary current-world join below.
       const auto previous_intent = last_published_canonical_intent_;
       const auto admission = evaluate_rate_resolved_transition_admission(
         problem, submission_draft.value(), now_sec);
@@ -28848,7 +27239,6 @@ struct MPC
         race_mpcc::resolve_stop_authority_action(control_intent) ==
         race_mpcc::StopAuthorityAction::EmergencyStop)
       {
-        invalidate_follow_canonical_async_context();
         invalidate_overtake_canonical_async_context();
         return canonical_normal_emergency_stop(
           problem, control_intent, "safety-brake-stop-authority");
@@ -28856,55 +27246,9 @@ struct MPC
       if (!overtake_canonical_async_intent(control_intent)) {
         invalidate_overtake_canonical_async_context();
       }
-      if (control_intent == mpcc_contract::ControlIntent::Follow) {
-        auto follow_result = evaluate_follow_async_shadow(problem, now_sec);
-        auto action = race_mpcc::resolve_follow_production_action(
-          control_intent, follow_result.selected.complete(),
-          last_published_canonical_intent_);
-        if (
-          action ==
-          race_mpcc::FollowProductionAction::SolveTransitionAdmission)
-        {
-          const auto previous_intent = last_published_canonical_intent_;
-          follow_result = evaluate_follow_transition_admission(problem, now_sec);
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"),
-            "Follow canonical atomic admission: decision=%lu, previous=%s, "
-            "selected=%d, status=%s, detail=%s, retained=%s",
-            static_cast<unsigned long>(decision_id),
-            mpcc_contract::to_string(previous_intent),
-            follow_result.selected.complete() ? 1 : 0,
-            follow_result.status.c_str(), follow_result.detail.c_str(),
-            follow_result.retained_detail.c_str());
-          action = race_mpcc::resolve_follow_production_action(
-            control_intent, follow_result.selected.complete(),
-            last_published_canonical_intent_);
-        }
-        record_follow_shadow_telemetry(follow_result, now_sec);
-        MpcControlCycleResult output;
-        if (action == race_mpcc::FollowProductionAction::PublishCanonical) {
-          output = canonical_normal_control(
-            problem, control_intent, follow_result.selected);
-        } else {
-          output = canonical_normal_emergency_stop(
-            problem, control_intent,
-            follow_result.status + "/" + follow_result.retained_detail);
-        }
-        // Seal the next asynchronous problem only after this cycle's canonical
-        // output has become the committed steering history.  Submitting at the
-        // beginning of the cycle made the worker constrain u[0] from the
-        // previous cycle while this cycle could publish a different retained
-        // command.  The returned plan was therefore internally valid but born
-        // unreachable from the steering actually published in the meantime.
-        // This ordering gives the worker one immutable, causal predecessor; it
-        // does not relax or clamp the selection-time continuity certificate.
-        static_cast<void>(submit_follow_canonical_async(problem, now_sec));
-        record_follow_canonical_async_status(now_sec);
-        return output;
-      } else {
-        invalidate_follow_canonical_async_context();
-      }
-      if (overtake_canonical_async_intent(control_intent)) {
+      if (
+        rate_resolved_artifact::supports_intent(control_intent))
+      {
         return rate_resolved_normal_production_control(
           problem, now_sec, control_intent);
       }
@@ -28912,13 +27256,6 @@ struct MPC
         return canonical_normal_emergency_stop(
           problem, control_intent,
           "dynamic wait has no executable canonical lateral authority");
-      }
-      if (
-        control_intent == mpcc_contract::ControlIntent::Track ||
-        control_intent == mpcc_contract::ControlIntent::Cruise)
-      {
-        return rate_resolved_normal_production_control(
-          problem, now_sec, control_intent);
       }
       if (control_intent == mpcc_contract::ControlIntent::Rejoin) {
         if (!problem.rejoin_shadow_requested) {
@@ -29514,25 +27851,7 @@ struct MPC
   std::uint64_t rate_resolved_track_cruise_last_causal_submission_decision_id_{};
   double rate_resolved_track_cruise_last_causal_predecessor_steering_rad_{
     std::numeric_limits<double>::quiet_NaN()};
-  std::shared_ptr<CanonicalNormalLifecycle> follow_canonical_lifecycle_;
   std::shared_ptr<CanonicalNormalLifecycle> overtake_canonical_lifecycle_;
-  std::shared_ptr<follow_async::Mailbox> follow_canonical_async_mailbox_;
-  std::unique_ptr<LatestOnlyWorker> follow_canonical_async_worker_;
-  std::uint64_t follow_canonical_async_next_sequence_{1U};
-  follow_async::ContextLifecycleState follow_canonical_async_context_;
-  std::uint64_t follow_canonical_async_last_consumed_sequence_{};
-  std::uint64_t follow_canonical_async_consumed_count_{};
-  std::uint64_t follow_canonical_async_current_world_accept_count_{};
-  std::uint64_t follow_canonical_async_current_identity_reject_count_{};
-  std::uint64_t follow_canonical_async_submission_reject_count_{};
-  std::uint64_t follow_canonical_async_snapshot_failure_count_{};
-  double follow_canonical_async_last_snapshot_ms_{};
-  double follow_canonical_async_last_compute_ms_{};
-  double follow_canonical_async_last_result_age_sec_{
-    std::numeric_limits<double>::infinity()};
-  double follow_canonical_async_last_status_log_sec_{
-    -std::numeric_limits<double>::infinity()};
-  std::string follow_canonical_async_last_detail_{"not-evaluated"};
   std::shared_ptr<follow_async::Mailbox> overtake_canonical_async_mailbox_;
   std::unique_ptr<LatestOnlyWorker> overtake_canonical_async_worker_;
   std::uint64_t overtake_canonical_async_next_sequence_{1U};
@@ -29568,10 +27887,6 @@ struct MPC
   overtake_canonical_fresh_shadow_telemetry_window_;
   double overtake_canonical_fresh_shadow_last_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
-  FollowShadowTelemetryWindow follow_shadow_telemetry_window_;
-  double last_follow_shadow_telemetry_log_sec_{
-    std::numeric_limits<double>::quiet_NaN()};
-  std::string last_follow_shadow_status_;
   std::shared_ptr<ExtendedBranchSolverContext> active_extended_branch_solver_context_;
   std::uint64_t active_extended_branch_context_epoch_{};
   std::string active_extended_branch_target_id_;

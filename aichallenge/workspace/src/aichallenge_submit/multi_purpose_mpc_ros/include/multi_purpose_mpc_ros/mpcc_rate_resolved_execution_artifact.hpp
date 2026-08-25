@@ -27,6 +27,16 @@ struct Identity
 /// use this single capability definition; duplicating a Track/Cruise-only
 /// subset makes a physically certified Overtake artifact unpublishable.
 bool supports_intent(mpcc_execution_contract::ControlIntent intent) noexcept;
+
+/// Resolve whether the current semantic problem can create a six-state normal
+/// request for the selected intent.  Both semantic request assembly and the
+/// submission boundary must use this resolver so an intent cannot be admitted
+/// by one layer and silently omitted by the next.
+bool request_scope_available(
+  mpcc_execution_contract::ControlIntent intent,
+  bool track_cruise_semantics_available,
+  bool follow_semantics_available,
+  bool overtake_semantics_available) noexcept;
 bool identity_valid(const Identity & identity) noexcept;
 bool same_identity(const Identity & lhs, const Identity & rhs) noexcept;
 

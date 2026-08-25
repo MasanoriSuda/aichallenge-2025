@@ -33,6 +33,22 @@ struct DynamicWorldObservation
   bool current{false};
 };
 
+/// Current Follow target in the same course-progress frame used to build the
+/// current six-state semantic problem.  This is not retained solver state: it
+/// is fresh world evidence which must re-certify the retained suffix.
+struct FollowTargetObservation
+{
+  std::string target_id;
+  std::uint64_t observation_generation{};
+  double observed_sec{};
+  double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double hard_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> elapsed_time_sec;
+  std::vector<double> target_progress_from_current_origin_m;
+  bool current{false};
+};
+
 struct Request
 {
   std::shared_ptr<const certified::CertifiedPlan> plan;
@@ -50,6 +66,7 @@ struct Request
   std::shared_ptr<const recovery::OccupancyGrid> current_wall_grid;
   recovery::FootprintExtents current_footprint;
   DynamicWorldObservation obstacles;
+  std::optional<FollowTargetObservation> follow_target;
   double current_speed_mps{};
   double current_steering_rad{};
   double minimum_acceleration_mps2{};
@@ -66,6 +83,12 @@ enum class Reason
   IntentMismatch,
   DynamicObservationUnavailable,
   DynamicObservationInvalid,
+  FollowTargetObservationUnavailable,
+  FollowTargetObservationInvalid,
+  FollowTargetIdentityMismatch,
+  FollowTargetHorizonUnavailable,
+  FollowInitialHardGapViolation,
+  FollowStageGapViolation,
   DynamicPathInvalid,
   DynamicPathBlocked,
   StaticWorldMismatch,
@@ -110,6 +133,9 @@ struct Proof
   std::size_t dynamic_checked_pose_count{};
   double minimum_dynamic_clearance_m{
     std::numeric_limits<double>::infinity()};
+  std::uint64_t follow_target_observation_generation{};
+  std::size_t follow_checked_state_count{};
+  double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
 };
 
 struct Result
@@ -122,6 +148,9 @@ struct Result
   std::size_t dynamic_checked_pose_count{};
   double minimum_dynamic_clearance_m{
     std::numeric_limits<double>::infinity()};
+  std::uint64_t follow_target_observation_generation{};
+  std::size_t follow_checked_state_count{};
+  double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
   double steering_difference_rad{
     std::numeric_limits<double>::quiet_NaN()};
   double maximum_steering_step_rad{

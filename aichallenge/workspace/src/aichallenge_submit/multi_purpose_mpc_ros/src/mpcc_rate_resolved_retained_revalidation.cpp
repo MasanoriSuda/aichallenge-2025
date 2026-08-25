@@ -180,6 +180,95 @@ bool dynamic_observation_valid(
   return true;
 }
 
+bool follow_target_observation_valid(
+  const FollowTargetObservation & observation) noexcept
+{
+  if (
+    observation.target_id.empty() || observation.observation_generation == 0U ||
+    !std::isfinite(observation.observed_sec) || observation.observed_sec < 0.0 ||
+    !std::isfinite(observation.current_target_gap_m) ||
+    observation.current_target_gap_m < 0.0 ||
+    !std::isfinite(observation.hard_gap_m) || observation.hard_gap_m < 0.0 ||
+    !std::isfinite(observation.target_speed_mps) ||
+    observation.target_speed_mps < 0.0 ||
+    observation.elapsed_time_sec.size() < 2U ||
+    observation.elapsed_time_sec.size() !=
+    observation.target_progress_from_current_origin_m.size() ||
+    !std::isfinite(observation.elapsed_time_sec.front()) ||
+    std::abs(observation.elapsed_time_sec.front()) > kIdentityTolerance ||
+    !std::isfinite(observation.target_progress_from_current_origin_m.front()))
+  {
+    return false;
+  }
+  for (std::size_t index = 1U; index < observation.elapsed_time_sec.size(); ++index) {
+    if (
+      !std::isfinite(observation.elapsed_time_sec[index]) ||
+      observation.elapsed_time_sec[index] <=
+      observation.elapsed_time_sec[index - 1U] ||
+      !std::isfinite(
+        observation.target_progress_from_current_origin_m[index]) ||
+      observation.target_progress_from_current_origin_m[index] +
+      kIdentityTolerance <
+      observation.target_progress_from_current_origin_m[index - 1U])
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<double> sample_follow_target_progress(
+  const FollowTargetObservation & observation,
+  const double elapsed_time_sec) noexcept
+{
+  if (!follow_target_observation_valid(observation) ||
+    !std::isfinite(elapsed_time_sec) || elapsed_time_sec < 0.0)
+  {
+    return std::nullopt;
+  }
+  if (elapsed_time_sec <= kIdentityTolerance) {
+    return observation.target_progress_from_current_origin_m.front();
+  }
+  const auto upper = std::lower_bound(
+    observation.elapsed_time_sec.begin(), observation.elapsed_time_sec.end(),
+    elapsed_time_sec);
+  if (upper == observation.elapsed_time_sec.end()) {
+    const double extension_sec =
+      elapsed_time_sec - observation.elapsed_time_sec.back();
+    const double extended =
+      observation.target_progress_from_current_origin_m.back() +
+      observation.target_speed_mps * extension_sec;
+    if (!std::isfinite(extended) ||
+      extended + kIdentityTolerance <
+      observation.target_progress_from_current_origin_m.back())
+    {
+      return std::nullopt;
+    }
+    return extended;
+  }
+  const std::size_t upper_index = static_cast<std::size_t>(
+    std::distance(observation.elapsed_time_sec.begin(), upper));
+  if (std::abs(*upper - elapsed_time_sec) <= kIdentityTolerance) {
+    return observation.target_progress_from_current_origin_m[upper_index];
+  }
+  if (upper_index == 0U) {
+    return std::nullopt;
+  }
+  const std::size_t lower_index = upper_index - 1U;
+  const double duration_sec =
+    observation.elapsed_time_sec[upper_index] -
+    observation.elapsed_time_sec[lower_index];
+  const double fraction =
+    (elapsed_time_sec - observation.elapsed_time_sec[lower_index]) /
+    duration_sec;
+  const double sampled =
+    observation.target_progress_from_current_origin_m[lower_index] +
+    fraction * (
+    observation.target_progress_from_current_origin_m[upper_index] -
+    observation.target_progress_from_current_origin_m[lower_index]);
+  return std::isfinite(sampled) ? std::optional<double>{sampled} : std::nullopt;
+}
+
 void evaluate_dynamic_pose(
   const recovery::FootprintExtents & footprint,
   const recovery::Pose2D & pose, const double elapsed_time_sec,
@@ -323,6 +412,18 @@ const char * to_string(const Reason reason) noexcept
       return "dynamic-observation-unavailable";
     case Reason::DynamicObservationInvalid:
       return "dynamic-observation-invalid";
+    case Reason::FollowTargetObservationUnavailable:
+      return "follow-target-observation-unavailable";
+    case Reason::FollowTargetObservationInvalid:
+      return "follow-target-observation-invalid";
+    case Reason::FollowTargetIdentityMismatch:
+      return "follow-target-identity-mismatch";
+    case Reason::FollowTargetHorizonUnavailable:
+      return "follow-target-horizon-unavailable";
+    case Reason::FollowInitialHardGapViolation:
+      return "follow-initial-hard-gap-violation";
+    case Reason::FollowStageGapViolation:
+      return "follow-stage-gap-violation";
     case Reason::DynamicPathInvalid: return "dynamic-path-invalid";
     case Reason::DynamicPathBlocked: return "dynamic-path-blocked";
     case Reason::StaticWorldMismatch: return "static-world-mismatch";
@@ -375,6 +476,37 @@ Result evaluate(const Request & request)
     result.reason = Reason::DynamicObservationInvalid;
     return result;
   }
+  const FollowTargetObservation * follow_target = nullptr;
+  if (request.current_intent == contract::ControlIntent::Follow) {
+    if (!request.follow_target.has_value() || !request.follow_target->current) {
+      result.reason = Reason::FollowTargetObservationUnavailable;
+      return result;
+    }
+    if (!follow_target_observation_valid(request.follow_target.value()) ||
+      request.follow_target->observed_sec > request.now_sec + kIdentityTolerance)
+    {
+      result.reason = Reason::FollowTargetObservationInvalid;
+      return result;
+    }
+    const bool target_present = std::any_of(
+      request.obstacles.obstacles.begin(), request.obstacles.obstacles.end(),
+      [&request](const DynamicObstacle & obstacle) {
+        return obstacle.id == request.follow_target->target_id;
+      });
+    if (
+      execution.identity.source_context.target_id !=
+      request.follow_target->target_id ||
+      execution.identity.source_context.target_obstacle_generation == 0U ||
+      request.follow_target->observation_generation !=
+      request.obstacles.generation || !target_present)
+    {
+      result.reason = Reason::FollowTargetIdentityMismatch;
+      return result;
+    }
+    follow_target = &request.follow_target.value();
+    result.follow_target_observation_generation =
+      follow_target->observation_generation;
+  }
   if (request.current_wall_grid == nullptr ||
     request.current_wall_grid.get() != source.wall_grid.get() ||
     !same_footprint(request.current_footprint, source.footprint))
@@ -424,6 +556,52 @@ Result evaluate(const Request & request)
   if (!expected_pose.has_value()) {
     result.reason = Reason::CourseFrameUnavailable;
     return result;
+  }
+  const double prediction_delay_sec =
+    request.control_origin_sec - request.now_sec;
+  auto evaluate_follow_gap = [&] (
+      const artifact::PredictedState & state,
+      const double elapsed_time_sec) -> std::optional<double>
+    {
+      if (follow_target == nullptr) {
+        return std::numeric_limits<double>::infinity();
+      }
+      const auto target_progress = sample_follow_target_progress(
+        *follow_target, elapsed_time_sec);
+      if (!target_progress.has_value()) {
+        return std::nullopt;
+      }
+      const double target_absolute_progress_m =
+        lift.progress_m + target_progress.value();
+      const double ego_absolute_progress_m =
+        execution.course_progress_origin_m + state.progress_m + state.lag_m;
+      const double gap_m =
+        target_absolute_progress_m - ego_absolute_progress_m;
+      return std::isfinite(gap_m) ?
+        std::optional<double>{gap_m} : std::nullopt;
+    };
+  if (follow_target != nullptr) {
+    result.follow_minimum_gap_m = follow_target->current_target_gap_m;
+    if (
+      follow_target->current_target_gap_m + kIdentityTolerance <
+      follow_target->hard_gap_m)
+    {
+      result.reason = Reason::FollowInitialHardGapViolation;
+      return result;
+    }
+    const auto expected_gap = evaluate_follow_gap(
+      expected, prediction_delay_sec);
+    if (!expected_gap.has_value()) {
+      result.reason = Reason::FollowTargetHorizonUnavailable;
+      return result;
+    }
+    ++result.follow_checked_state_count;
+    result.follow_minimum_gap_m = std::min(
+      result.follow_minimum_gap_m, expected_gap.value());
+    if (expected_gap.value() + kIdentityTolerance < follow_target->hard_gap_m) {
+      result.reason = Reason::FollowInitialHardGapViolation;
+      return result;
+    }
   }
   const auto actuation = artifact::extract_actuation(execution, cursor);
   result.actuation_reason = actuation.reason;
@@ -499,8 +677,6 @@ Result evaluate(const Request & request)
     source.footprint, request.measured_to_control_path,
     request.measured_to_control_elapsed_sec, source.swept_step_m,
     request.obstacles, dynamic);
-  const double prediction_delay_sec =
-    request.control_origin_sec - request.now_sec;
   evaluate_dynamic_segment(
     source.footprint, connector.front(), connector.back(),
     prediction_delay_sec, prediction_delay_sec, source.swept_step_m,
@@ -521,6 +697,22 @@ Result evaluate(const Request & request)
       execution.control_stages[stage_index].duration_sec -
       cursor.stage_elapsed_sec :
       execution.control_stages[stage_index].duration_sec;
+    const double endpoint_time_sec = dynamic_time_sec + segment_duration_sec;
+    if (follow_target != nullptr) {
+      const auto stage_gap = evaluate_follow_gap(
+        execution.predicted_states[stage_index + 1U], endpoint_time_sec);
+      if (!stage_gap.has_value()) {
+        result.reason = Reason::FollowTargetHorizonUnavailable;
+        return result;
+      }
+      ++result.follow_checked_state_count;
+      result.follow_minimum_gap_m = std::min(
+        result.follow_minimum_gap_m, stage_gap.value());
+      if (stage_gap.value() + kIdentityTolerance < follow_target->hard_gap_m) {
+        result.reason = Reason::FollowStageGapViolation;
+        return result;
+      }
+    }
     evaluate_dynamic_segment(
       source.footprint, previous_dynamic_pose, endpoint_pose.value(),
       dynamic_time_sec, dynamic_time_sec + segment_duration_sec,
@@ -569,6 +761,10 @@ Result evaluate(const Request & request)
   proof.connector_checked_pose_count = connector_result.checked_pose_count;
   proof.dynamic_checked_pose_count = dynamic.checked_pose_count;
   proof.minimum_dynamic_clearance_m = dynamic.minimum_clearance_m;
+  proof.follow_target_observation_generation =
+    result.follow_target_observation_generation;
+  proof.follow_checked_state_count = result.follow_checked_state_count;
+  proof.follow_minimum_gap_m = result.follow_minimum_gap_m;
   result.reason = Reason::Accepted;
   result.proof = std::move(proof);
   return result;

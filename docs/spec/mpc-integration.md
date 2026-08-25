@@ -2218,6 +2218,29 @@ qualification hold telemetry、および`LegacyNormalBypass`表現を削除し�
 timeout、solver tolerance、horizon、Recovery parameterは変更していない。この節は、上に残る日付付き
 移行履歴に記載されたcrawl／bounded continuation／legacy bypassの運用記述を上書きする現行仕様である。
 
+#### Steering-rate 6-state Follow production authority（2026-08-25、2025由来の暫定）
+
+Followの通常出力ownerを、Track／Cruise／ShiftOut／Pass／Returnと同じ
+`VelocitySteeringProgress6State`へ昇格し、専用5-state Follow lifecycle、worker、solver context、plan store、
+transition admission、telemetry、publisher経路を同一Sliceで物理削除した。Followのtarget progress、
+planning／hard gap、velocity reference／upper boundは既存`FollowLongitudinalContract`をsemantic inputとして
+共有6-state solverへ渡し、値の複製やparameter tuningを行わない。
+
+normal scopeは共通のtyped resolverで一度だけ定義する。Track／Cruise metadata、Follow metadata、
+Overtake execution metadataをintentへ対応付け、semantic request assemblyとsubmission admissionが同じ
+resolverを使う。これにより上流がFollowを許可しても下流がrequestを生成しない不整合を禁止する。
+
+retained Followは一般のdynamic footprint再検証に加え、現在targetのID／generationをcurrent dynamic-world
+snapshotへjoinし、現在gapと残存全stageのhard gapを再検証する。egoの有効course progressは
+`course_origin + progress + lag`であり、target観測欠損、identity不一致、horizon欠損、current／stage gap違反は
+それぞれtyped reasonでfail closeする。別normal formulationへfallbackせず明示的Emergencyとする。
+
+`output/20260825-172643`では、Follow final traceが
+`formulation=velocity-steering-progress-6state`、`authority=certified-normal-solution`、`retained=1`を記録し、
+21 stateのFollow gap証明とcurrent target generationを観測した。修正前runで出た
+`rate-resolved request unavailable`は0件となった。Rejoinと残存5-state表現の扱いは後続Sliceで監査し、
+その完了前にparameter tuningを行わない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

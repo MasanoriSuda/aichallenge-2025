@@ -174,6 +174,28 @@ retained::Request accepted_request(
   return request;
 }
 
+retained::Request accepted_follow_request()
+{
+  const auto plan = certified_plan(
+    free_grid(), contract::ControlIntent::Follow);
+  EXPECT_NE(plan, nullptr);
+  auto request = accepted_request(plan);
+  request.current_intent = contract::ControlIntent::Follow;
+  request.obstacles.obstacles.push_back(
+    {"d2", {55.0, 0.0, 2.0, 0.0, 0.2}});
+  request.follow_target = retained::FollowTargetObservation{
+    "d2",
+    request.obstacles.generation,
+    request.obstacles.observed_sec,
+    5.0,
+    3.0,
+    2.0,
+    {0.0, 0.1, 0.2},
+    {5.0, 5.2, 5.4},
+    true};
+  return request;
+}
+
 TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
 {
   const auto plan = certified_plan();
@@ -203,6 +225,84 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsEveryArtifactOwnedIntent)
     request.current_intent = intent;
     EXPECT_EQ(retained::evaluate(request).reason, retained::Reason::Accepted);
   }
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  AcceptsFollowOnlyWithCurrentTargetHardGapProof)
+{
+  const auto result = retained::evaluate(accepted_follow_request());
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(result.proof->follow_target_observation_generation, 7U);
+  EXPECT_GT(result.proof->follow_checked_state_count, 0U);
+  EXPECT_GE(result.proof->follow_minimum_gap_m, 3.0);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  ResolvesEveryNormalIntentThroughOneRequestScope)
+{
+  using Intent = contract::ControlIntent;
+
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Track, true, false, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Cruise, true, false, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Follow, false, true, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::ShiftOut, false, false, true));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Pass, false, false, true));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Return, false, false, true));
+
+  EXPECT_FALSE(artifact::request_scope_available(Intent::Follow, true, false, true));
+  EXPECT_FALSE(artifact::request_scope_available(Intent::Cruise, false, true, true));
+  EXPECT_FALSE(artifact::request_scope_available(Intent::Rejoin, true, true, true));
+  EXPECT_FALSE(artifact::request_scope_available(Intent::Unknown, true, true, true));
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsFollowWithoutCurrentTargetProof)
+{
+  auto request = accepted_follow_request();
+  request.follow_target.reset();
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::FollowTargetObservationUnavailable);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsFollowTargetGenerationOutsideCurrentWorldSnapshot)
+{
+  auto request = accepted_follow_request();
+  request.follow_target->observation_generation += 1U;
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::FollowTargetIdentityMismatch);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsFollowCurrentHardGapViolation)
+{
+  auto request = accepted_follow_request();
+  request.follow_target->current_target_gap_m = 2.9;
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::FollowInitialHardGapViolation);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsFollowRetainedStageHardGapViolation)
+{
+  auto request = accepted_follow_request();
+  request.follow_target->current_target_gap_m = 3.05;
+  request.follow_target->target_speed_mps = 0.0;
+  request.follow_target->target_progress_from_current_origin_m = {
+    3.05, 3.05, 3.05};
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::FollowStageGapViolation);
 }
 
 TEST(

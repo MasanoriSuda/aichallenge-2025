@@ -60,6 +60,13 @@ struct OccupancyGrid
   CellState cell(std::size_t row, std::size_t column) const noexcept;
 };
 
+/// Return a deterministic content identity for a valid occupancy grid.
+///
+/// The fingerprint covers geometry, axis convention and every row-major cell.
+/// It is intended to preserve static-world identity across immutable deep
+/// copies made at asynchronous controller boundaries. Invalid grids return 0.
+std::uint64_t occupancy_grid_fingerprint(const OccupancyGrid & grid) noexcept;
+
 struct Pose2D
 {
   double x_m{};

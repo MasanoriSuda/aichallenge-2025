@@ -95,6 +95,8 @@ physical::Snapshot physical_snapshot(const execution::Identity & identity)
   grid->origin_y_m = -20.0;
   grid->cells.assign(grid->width * grid->height, recovery::CellState::Free);
   snapshot.wall_grid = std::move(grid);
+  snapshot.wall_grid_fingerprint =
+    recovery::occupancy_grid_fingerprint(*snapshot.wall_grid);
   snapshot.footprint = {0.1, 0.1, 0.1, 0.1, 0.0};
   snapshot.current_pose = {50.0, 0.0, 0.0};
   snapshot.trajectory.progress_origin_m = 50.0;

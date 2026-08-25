@@ -41,6 +41,7 @@ struct Snapshot
 {
   Identity identity;
   std::shared_ptr<const recovery::OccupancyGrid> wall_grid;
+  std::uint64_t wall_grid_fingerprint{};
   recovery::FootprintExtents footprint;
   recovery::Pose2D current_pose;
   race::ExactPhysicalExecutionTrajectory trajectory;

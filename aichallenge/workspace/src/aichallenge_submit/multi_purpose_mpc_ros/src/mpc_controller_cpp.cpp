@@ -2275,6 +2275,61 @@ struct RateResolvedPreentryShadowEvaluation
   std::string detail{"not-attempted"};
 };
 
+enum class RateResolvedPreentryAdoptionShadowReason
+{
+  NotAttempted,
+  SelectionUnavailable,
+  SelectedArtifactUnavailable,
+  ArtifactIdentityMismatch,
+  TargetProvenanceRejected,
+  CurrentWorldRequestUnavailable,
+  CurrentWorldRejected,
+  Accepted,
+};
+
+const char * rate_resolved_preentry_adoption_shadow_reason_name(
+  const RateResolvedPreentryAdoptionShadowReason reason) noexcept
+{
+  switch (reason) {
+    case RateResolvedPreentryAdoptionShadowReason::NotAttempted:
+      return "not-attempted";
+    case RateResolvedPreentryAdoptionShadowReason::SelectionUnavailable:
+      return "selection-unavailable";
+    case RateResolvedPreentryAdoptionShadowReason::SelectedArtifactUnavailable:
+      return "selected-artifact-unavailable";
+    case RateResolvedPreentryAdoptionShadowReason::ArtifactIdentityMismatch:
+      return "artifact-identity-mismatch";
+    case RateResolvedPreentryAdoptionShadowReason::TargetProvenanceRejected:
+      return "target-provenance-rejected";
+    case RateResolvedPreentryAdoptionShadowReason::CurrentWorldRequestUnavailable:
+      return "current-world-request-unavailable";
+    case RateResolvedPreentryAdoptionShadowReason::CurrentWorldRejected:
+      return "current-world-rejected";
+    case RateResolvedPreentryAdoptionShadowReason::Accepted:
+      return "accepted";
+  }
+  return "unknown";
+}
+
+struct RateResolvedPreentryAdoptionShadowEvaluation
+{
+  bool attempted{false};
+  bool accepted{false};
+  int selected_side_sign{0};
+  std::uint64_t plan_sequence{0U};
+  mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
+  RateResolvedPreentryAdoptionShadowReason reason{
+    RateResolvedPreentryAdoptionShadowReason::NotAttempted};
+  rate_resolved_retained::Reason current_world_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  race_mpcc::TargetProvenanceRejectReason target_reject_reason{
+    race_mpcc::TargetProvenanceRejectReason::None};
+  std::size_t dynamic_checked_pose_count{0U};
+  double minimum_dynamic_clearance_m{
+    std::numeric_limits<double>::infinity()};
+  double elapsed_ms{0.0};
+};
+
 mpcc_progress::ExtendedBranchEvaluation rate_resolved_preentry_branch_evaluation(
   const RateResolvedPreentryShadowEvaluation & source)
 {
@@ -2480,6 +2535,8 @@ struct V2XBehaviorOutput
   mpcc_progress::ExtendedBranchSelectionResolution extended_mpcc_branch_selection;
   mpcc_progress::ExtendedBranchSelectionResolution
   rate_resolved_preentry_branch_selection;
+  RateResolvedPreentryAdoptionShadowEvaluation
+  rate_resolved_preentry_adoption_shadow;
   /// Immutable executable artifact produced by the same selected dual branch
   /// as `overtake_selected_mission`.  It is entry evidence only; the live
   /// controller repeats current-world proof before publishing it.
@@ -6536,6 +6593,8 @@ struct MPC
         *overtake_static_wall_grid_);
       snapshot->overtake_static_wall_grid_ =
         snapshot->overtake_static_wall_grid_snapshot_owner_.get();
+      snapshot->overtake_static_wall_grid_fingerprint_ =
+        overtake_static_wall_grid_fingerprint_;
     }
     snapshot->overtake_static_wall_footprint_ = overtake_static_wall_footprint_;
     snapshot->actual_wall_monitor_pose_ = actual_wall_monitor_pose_;
@@ -6727,9 +6786,13 @@ struct MPC
     const recovery_footprint::FootprintExtents & footprint)
   {
     overtake_static_wall_grid_snapshot_owner_.reset();
+    overtake_static_wall_grid_fingerprint_ = 0U;
     if (grid != nullptr) {
       overtake_static_wall_grid_snapshot_owner_ =
         std::make_shared<recovery_footprint::OccupancyGrid>(*grid);
+      overtake_static_wall_grid_fingerprint_ =
+        recovery_footprint::occupancy_grid_fingerprint(
+        *overtake_static_wall_grid_snapshot_owner_);
     }
     overtake_static_wall_grid_ =
       overtake_static_wall_grid_snapshot_owner_.get();
@@ -14395,6 +14458,10 @@ struct MPC
           async_behavior.rate_resolved_preentry_branch_selection;
         output.extended_mpcc_branch_selection =
           async_behavior.extended_mpcc_branch_selection;
+        if (!mpcc_lite_async_worker_context_) {
+          output.rate_resolved_preentry_adoption_shadow =
+            evaluate_rate_resolved_preentry_adoption_shadow(output, now_sec);
+        }
       }
     }
     if (opponent_side_replan_assessment_requested && locked_pass_side != 0) {
@@ -15440,6 +15507,8 @@ struct MPC
         if (six_left.attempted || six_right.attempted) {
           const auto & six_selection =
             output.rate_resolved_preentry_branch_selection;
+          const auto & six_adoption =
+            output.rate_resolved_preentry_adoption_shadow;
           const bool selection_agree =
             six_selection.valid ==
             output.extended_mpcc_branch_selection.valid &&
@@ -15454,6 +15523,8 @@ struct MPC
             "five_selected=%d,six_selected=%d,selection_agree=%d,"
             "selection_valid=five%d/six%d,"
             "six_side=L%d/R%d,six_eligibility=L%s/R%s,six_reason=%s,"
+            "adoption=%d/%d/%s/%s/target:%s/seq:%lu/intent:%s/"
+            "dynamic:%zu/%.2f/%.2fms,"
             "authority=shadow,selected=0",
             six_left.attempted ? 1 : 0,
             six_left.solver_certified ? 1 : 0,
@@ -15491,7 +15562,20 @@ struct MPC
             mpcc_progress::extended_branch_eligibility_name(
               six_selection.right_eligibility),
             mpcc_progress::extended_branch_selection_reason_name(
-              six_selection.reason));
+              six_selection.reason),
+            six_adoption.attempted ? 1 : 0,
+            six_adoption.accepted ? 1 : 0,
+            rate_resolved_preentry_adoption_shadow_reason_name(
+              six_adoption.reason),
+            rate_resolved_retained::to_string(
+              six_adoption.current_world_reason),
+            race_mpcc::target_provenance_reject_reason_name(
+              six_adoption.target_reject_reason),
+            static_cast<unsigned long>(six_adoption.plan_sequence),
+            mpcc_contract::to_string(six_adoption.intent),
+            six_adoption.dynamic_checked_pose_count,
+            six_adoption.minimum_dynamic_clearance_m,
+            six_adoption.elapsed_ms);
         }
 
         const auto shadow_candidate = [](
@@ -23262,6 +23346,7 @@ struct MPC
     rejection = RateResolvedPhysicalShadowEvaluation{};
     if (
       overtake_static_wall_grid_snapshot_owner_ == nullptr ||
+      overtake_static_wall_grid_fingerprint_ == 0U ||
       !actual_wall_monitor_pose_.has_value() || !std::isfinite(now_sec) ||
       solver_snapshot.request.states.empty())
     {
@@ -23319,6 +23404,7 @@ struct MPC
       canonical_retained_world::fingerprint_course_frame_window(
       snapshot.course_frame_knots);
     snapshot.wall_grid = overtake_static_wall_grid_snapshot_owner_;
+    snapshot.wall_grid_fingerprint = overtake_static_wall_grid_fingerprint_;
     snapshot.footprint = overtake_static_wall_footprint_;
     snapshot.hard_wall_clearance_m = 0.0;
     snapshot.bound_tolerance_m = 1e-5;
@@ -23665,45 +23751,32 @@ struct MPC
       "rate-resolved transition certification store rejected");
   }
 
-  RateResolvedRetainedShadowEvaluation
-  evaluate_rate_resolved_track_cruise_retained_shadow(
-    const MpcProblem & problem, const double now_sec) const
+  std::optional<rate_resolved_retained::Request>
+  build_rate_resolved_current_world_request(
+    std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan,
+    const mpcc_contract::ControlIntent intent,
+    const double measured_course_progress_m,
+    const double now_sec) const
   {
-    const auto started = SteadyClock::now();
-    RateResolvedRetainedShadowEvaluation evaluation;
-    auto finish = [&]() {
-        evaluation.elapsed_ms =
-          std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - started).count();
-        return evaluation;
-      };
     if (
-      rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
       model == nullptr || model->reference_path == nullptr ||
       gap_planner == nullptr ||
       overtake_static_wall_grid_snapshot_owner_ == nullptr)
     {
-      return finish();
-    }
-    const auto plan =
-      rate_resolved_track_cruise_certified_plan_store_->snapshot();
-    if (plan != nullptr && plan->execution_artifact != nullptr) {
-      evaluation.sequence = plan->execution_artifact->identity.sequence;
+      return std::nullopt;
     }
     const auto control_path = build_canonical_current_control_path();
     if (!control_path.has_value() || !predicted_execution_pose_.has_value()) {
-      evaluation.reason =
-        rate_resolved_retained::Reason::InvalidCurrentState;
-      return finish();
+      return std::nullopt;
     }
     const auto dynamic_world = gap_planner->dynamic_world_observation(now_sec);
     rate_resolved_retained::Request request;
-    request.plan = plan;
+    request.plan = std::move(plan);
     request.decision_id = active_control_decision_id_;
     request.now_sec = now_sec;
     request.control_origin_sec = now_sec + control_path->duration_sec;
-    request.current_intent = current_control_intent();
-    request.measured_course_progress_m = problem.progress_origin_m;
+    request.current_intent = intent;
+    request.measured_course_progress_m = measured_course_progress_m;
     request.path_length_m = model->reference_path->length;
     request.progress_continuity_tolerance_m =
       kV2XCourseProgressContinuityToleranceM;
@@ -23730,8 +23803,134 @@ struct MPC
         std::max(vehicle.covariance_x, vehicle.covariance_y));
       request.obstacles.obstacles.push_back(std::move(obstacle));
     }
+    request.current_speed_mps = current_speed_mps_;
+    request.current_steering_rad = previous_steering;
+    request.minimum_acceleration_mps2 = cfg.a_min;
+    request.maximum_acceleration_mps2 = cfg.a_max;
+    request.publication_interval_sec = model->Ts;
+    return request;
+  }
+
+  RateResolvedPreentryAdoptionShadowEvaluation
+  evaluate_rate_resolved_preentry_adoption_shadow(
+    const V2XBehaviorOutput & behavior, const double now_sec) const
+  {
+    const auto started = SteadyClock::now();
+    RateResolvedPreentryAdoptionShadowEvaluation evaluation;
+    const auto finish = [&evaluation, &started]() {
+        evaluation.elapsed_ms =
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return evaluation;
+      };
+    const auto & selection = behavior.rate_resolved_preentry_branch_selection;
     if (
-      request.current_intent == mpcc_contract::ControlIntent::Follow &&
+      !selection.valid ||
+      (selection.selected_side_sign != -1 &&
+      selection.selected_side_sign != 1))
+    {
+      evaluation.reason =
+        RateResolvedPreentryAdoptionShadowReason::SelectionUnavailable;
+      return finish();
+    }
+    evaluation.attempted = true;
+    evaluation.selected_side_sign = selection.selected_side_sign;
+    const auto & source = selection.selected_side_sign > 0 ?
+      behavior.overtake_rate_resolved_preentry_left :
+      behavior.overtake_rate_resolved_preentry_right;
+    if (!source.complete || source.certified_plan == nullptr) {
+      evaluation.reason =
+        RateResolvedPreentryAdoptionShadowReason::SelectedArtifactUnavailable;
+      return finish();
+    }
+    const auto & plan = source.certified_plan;
+    if (plan->execution_artifact != nullptr) {
+      evaluation.plan_sequence = plan->execution_artifact->identity.sequence;
+      evaluation.intent =
+        plan->execution_artifact->identity.source_context.intent;
+    }
+    if (
+      rate_resolved_certified::validate(*plan) !=
+      rate_resolved_certified::RejectReason::None ||
+      plan->execution_artifact == nullptr ||
+      !mpcc_contract::canonical_normal_intent_requires_execution_side(
+        evaluation.intent) ||
+      plan->execution_artifact->identity.source_context.execution_side_sign !=
+      selection.selected_side_sign ||
+      plan->execution_artifact->identity.source_context.target_id !=
+      source.target_provenance.target_id ||
+      plan->execution_artifact->identity.source_context.
+      target_obstacle_generation != source.target_provenance.observation_generation)
+    {
+      evaluation.reason =
+        RateResolvedPreentryAdoptionShadowReason::ArtifactIdentityMismatch;
+      return finish();
+    }
+    const double artifact_age_sec =
+      now_sec - plan->execution_artifact->identity.snapshot_sec;
+    const auto target_validation = validate_selected_target_provenance(
+      source.target_provenance, behavior, artifact_age_sec);
+    evaluation.target_reject_reason = target_validation.reject_reason;
+    if (!target_validation.valid) {
+      evaluation.reason =
+        RateResolvedPreentryAdoptionShadowReason::TargetProvenanceRejected;
+      return finish();
+    }
+    const auto request = build_rate_resolved_current_world_request(
+      plan, evaluation.intent, model != nullptr ? model->s :
+      std::numeric_limits<double>::quiet_NaN(), now_sec);
+    if (!request.has_value()) {
+      evaluation.reason =
+        RateResolvedPreentryAdoptionShadowReason::CurrentWorldRequestUnavailable;
+      return finish();
+    }
+    const auto result = rate_resolved_retained::evaluate(request.value());
+    evaluation.current_world_reason = result.reason;
+    evaluation.dynamic_checked_pose_count = result.dynamic_checked_pose_count;
+    evaluation.minimum_dynamic_clearance_m =
+      result.minimum_dynamic_clearance_m;
+    evaluation.accepted = result.proof.has_value();
+    evaluation.reason = evaluation.accepted ?
+      RateResolvedPreentryAdoptionShadowReason::Accepted :
+      RateResolvedPreentryAdoptionShadowReason::CurrentWorldRejected;
+    return finish();
+  }
+
+  RateResolvedRetainedShadowEvaluation
+  evaluate_rate_resolved_track_cruise_retained_shadow(
+    const MpcProblem & problem, const double now_sec) const
+  {
+    const auto started = SteadyClock::now();
+    RateResolvedRetainedShadowEvaluation evaluation;
+    auto finish = [&]() {
+        evaluation.elapsed_ms =
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return evaluation;
+      };
+    if (
+      rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
+      model == nullptr || model->reference_path == nullptr ||
+      gap_planner == nullptr ||
+      overtake_static_wall_grid_snapshot_owner_ == nullptr)
+    {
+      return finish();
+    }
+    const auto plan =
+      rate_resolved_track_cruise_certified_plan_store_->snapshot();
+    if (plan != nullptr && plan->execution_artifact != nullptr) {
+      evaluation.sequence = plan->execution_artifact->identity.sequence;
+    }
+    const auto current_intent = current_control_intent();
+    auto request = build_rate_resolved_current_world_request(
+      plan, current_intent, problem.progress_origin_m, now_sec);
+    if (!request.has_value()) {
+      evaluation.reason =
+        rate_resolved_retained::Reason::InvalidCurrentState;
+      return finish();
+    }
+    if (
+      current_intent == mpcc_contract::ControlIntent::Follow &&
       problem.follow_longitudinal_contract.valid)
     {
       const auto & follow_contract = problem.follow_longitudinal_contract;
@@ -23739,16 +23938,16 @@ struct MPC
         last_v2x_behavior_output_);
       const double target_age_sec = now_sec - target_provenance.receipt_sec;
       const bool target_current =
-        target_provenance.valid && dynamic_world.current &&
+        target_provenance.valid && request->obstacles.current &&
         target_provenance.target_id == follow_contract.target_id &&
         target_provenance.observation_generation ==
         follow_contract.target_observation_generation &&
         target_provenance.observation_generation ==
-        dynamic_world.observation_generation &&
+        request->obstacles.generation &&
         overtake_core::is_v2x_receipt_age_fresh(
         target_age_sec, cfg.v2x_gap.timeout_sec,
         kV2XReceiptFutureToleranceSec);
-      request.follow_target = rate_resolved_retained::FollowTargetObservation{
+      request->follow_target = rate_resolved_retained::FollowTargetObservation{
         follow_contract.target_id,
         follow_contract.target_observation_generation,
         now_sec,
@@ -23759,13 +23958,8 @@ struct MPC
         follow_contract.target_progress_m,
         target_current};
     }
-    evaluation.obstacle_count = request.obstacles.obstacles.size();
-    request.current_speed_mps = current_speed_mps_;
-    request.current_steering_rad = previous_steering;
-    request.minimum_acceleration_mps2 = cfg.a_min;
-    request.maximum_acceleration_mps2 = cfg.a_max;
-    request.publication_interval_sec = model->Ts;
-    const auto result = rate_resolved_retained::evaluate(request);
+    evaluation.obstacle_count = request->obstacles.obstacles.size();
+    const auto result = rate_resolved_retained::evaluate(request.value());
     evaluation.reason = result.reason;
     evaluation.cursor_reason = result.cursor_reason;
     evaluation.actuation_reason = result.actuation_reason;
@@ -25452,6 +25646,7 @@ struct MPC
   std::shared_ptr<ReferencePath> reference_path_snapshot_owner_;
   std::shared_ptr<recovery_footprint::OccupancyGrid>
   overtake_static_wall_grid_snapshot_owner_;
+  std::uint64_t overtake_static_wall_grid_fingerprint_{0U};
   recovery_footprint::FootprintExtents overtake_static_wall_footprint_;
   std::unordered_map<
     PhysicalWallEnvelopeCacheKey,

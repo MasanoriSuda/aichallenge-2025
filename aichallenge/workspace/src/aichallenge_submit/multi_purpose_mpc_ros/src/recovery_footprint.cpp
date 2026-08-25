@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <utility>
 
@@ -16,6 +17,30 @@ constexpr double kNumericalEpsilon = 1e-12;
 constexpr double kClearanceComparisonToleranceM = 1e-6;
 constexpr double kMinimumEscapeImprovementM = 1e-3;
 constexpr std::size_t kMaximumSamples = 1000000U;
+constexpr std::uint64_t kFingerprintOffsetBasis = 14695981039346656037ULL;
+constexpr std::uint64_t kFingerprintPrime = 1099511628211ULL;
+
+void append_fingerprint_byte(std::uint64_t & value, const std::uint8_t byte) noexcept
+{
+  value ^= static_cast<std::uint64_t>(byte);
+  value *= kFingerprintPrime;
+}
+
+void append_fingerprint_u64(std::uint64_t & value, const std::uint64_t field) noexcept
+{
+  for (unsigned int shift = 0U; shift < 64U; shift += 8U) {
+    append_fingerprint_byte(
+      value, static_cast<std::uint8_t>((field >> shift) & 0xffU));
+  }
+}
+
+void append_fingerprint_double(std::uint64_t & value, const double field) noexcept
+{
+  static_assert(sizeof(double) == sizeof(std::uint64_t));
+  std::uint64_t bits = 0U;
+  std::memcpy(&bits, &field, sizeof(bits));
+  append_fingerprint_u64(value, bits);
+}
 
 bool finite(const double value) noexcept
 {
@@ -332,6 +357,32 @@ bool OccupancyGrid::valid() const noexcept
     checked_cell_count(width, height, expected_size) && cells.size() == expected_size &&
     finite(resolution_m) && resolution_m > 0.0 && finite(origin_x_m) &&
     finite(origin_y_m) && valid_y_axis(y_axis);
+}
+
+std::uint64_t occupancy_grid_fingerprint(const OccupancyGrid & grid) noexcept
+{
+  if (!grid.valid()) {
+    return 0U;
+  }
+
+  std::uint64_t fingerprint = kFingerprintOffsetBasis;
+  // Version the byte stream so future schema changes cannot silently compare
+  // equal to the current occupancy-grid identity.
+  append_fingerprint_u64(fingerprint, 1U);
+  append_fingerprint_u64(fingerprint, static_cast<std::uint64_t>(grid.width));
+  append_fingerprint_u64(fingerprint, static_cast<std::uint64_t>(grid.height));
+  append_fingerprint_double(fingerprint, grid.resolution_m);
+  append_fingerprint_double(fingerprint, grid.origin_x_m);
+  append_fingerprint_double(fingerprint, grid.origin_y_m);
+  append_fingerprint_u64(
+    fingerprint, static_cast<std::uint64_t>(grid.y_axis));
+  for (const CellState cell : grid.cells) {
+    append_fingerprint_byte(
+      fingerprint,
+      static_cast<std::uint8_t>(static_cast<std::int8_t>(cell)));
+  }
+  // Zero is reserved for invalid/unavailable identity.
+  return fingerprint == 0U ? 1U : fingerprint;
 }
 
 std::optional<GridIndex> OccupancyGrid::world_to_grid(

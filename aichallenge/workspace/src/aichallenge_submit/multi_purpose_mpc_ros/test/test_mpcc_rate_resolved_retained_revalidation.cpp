@@ -97,6 +97,8 @@ physical::Snapshot source_snapshot(
   snapshot.identity.course_frame_window_id = 102U;
   snapshot.identity.captured_sec = 1.0;
   snapshot.wall_grid = std::move(grid);
+  snapshot.wall_grid_fingerprint =
+    recovery::occupancy_grid_fingerprint(*snapshot.wall_grid);
   snapshot.footprint = {0.05, 0.05, 0.05, 0.05, 0.0};
   snapshot.current_pose = {50.0, 0.0, 0.0};
   snapshot.trajectory.progress_origin_m = 50.0;
@@ -442,11 +444,25 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnobservedDynamicWorld)
     retained::Reason::DynamicObservationUnavailable);
 }
 
-TEST(MpccRateResolvedRetainedRevalidation, RejectsDifferentStaticWorldOwner)
+TEST(MpccRateResolvedRetainedRevalidation, AcceptsIdenticalStaticWorldDeepCopy)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
-  request.current_wall_grid = free_grid();
+  request.current_wall_grid = std::make_shared<recovery::OccupancyGrid>(
+    *plan->physical_snapshot->wall_grid);
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::Accepted);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, RejectsChangedStaticWorldDeepCopy)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  auto changed_grid = std::make_shared<recovery::OccupancyGrid>(
+    *plan->physical_snapshot->wall_grid);
+  changed_grid->cells.front() = recovery::CellState::Occupied;
+  request.current_wall_grid = std::move(changed_grid);
   EXPECT_EQ(
     retained::evaluate(request).reason,
     retained::Reason::StaticWorldMismatch);

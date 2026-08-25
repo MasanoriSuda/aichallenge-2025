@@ -84,6 +84,36 @@ TEST(RecoveryFootprintGrid, UsesExplicitRowMajorYFlipCompatibleWithMpcMap)
   EXPECT_FALSE(grid.world_to_grid(10.0, 21.30).has_value());
 }
 
+TEST(RecoveryFootprintGrid, FingerprintPreservesDeepCopyContentIdentity)
+{
+  const auto grid = make_grid(4U, 3U, 0.5);
+  const auto copy = grid;
+  const auto fingerprint = recovery::occupancy_grid_fingerprint(grid);
+  ASSERT_NE(fingerprint, 0U);
+  EXPECT_EQ(recovery::occupancy_grid_fingerprint(copy), fingerprint);
+}
+
+TEST(RecoveryFootprintGrid, FingerprintRejectsChangedCellOrGeometry)
+{
+  const auto grid = make_grid(4U, 3U, 0.5);
+  const auto fingerprint = recovery::occupancy_grid_fingerprint(grid);
+  ASSERT_NE(fingerprint, 0U);
+
+  auto changed_cell = grid;
+  changed_cell.cells.front() = recovery::CellState::Occupied;
+  EXPECT_NE(
+    recovery::occupancy_grid_fingerprint(changed_cell), fingerprint);
+
+  auto changed_geometry = grid;
+  changed_geometry.origin_x_m += 0.5;
+  EXPECT_NE(
+    recovery::occupancy_grid_fingerprint(changed_geometry), fingerprint);
+
+  auto invalid = grid;
+  invalid.cells.pop_back();
+  EXPECT_EQ(recovery::occupancy_grid_fingerprint(invalid), 0U);
+}
+
 TEST(RecoveryFootprintSteeringSamples, DividesMaximumAngleDeterministically)
 {
   const auto samples = recovery::steering_magnitude_samples(0.25, 5U);

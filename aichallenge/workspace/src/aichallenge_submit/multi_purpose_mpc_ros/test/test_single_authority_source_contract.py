@@ -876,6 +876,71 @@ def test_six_state_preentry_selection_preserves_exact_evidence_without_authority
     ) in imported
 
 
+def test_six_state_preentry_adoption_reuses_current_world_proof_without_authority() -> None:
+    """Live adoption evidence must reuse, but not own, production proof."""
+
+    helper_start = SOURCE.index(
+        "build_rate_resolved_current_world_request("
+    )
+    helper_end = SOURCE.index(
+        "RateResolvedPreentryAdoptionShadowEvaluation\n"
+        "  evaluate_rate_resolved_preentry_adoption_shadow(",
+        helper_start,
+    )
+    helper = SOURCE[helper_start:helper_end]
+    assert "request.measured_to_control_path = control_path->poses" in helper
+    assert "request.current_wall_grid = overtake_static_wall_grid_snapshot_owner_" in helper
+    assert "gap_planner->dynamic_world_observation(now_sec)" in helper
+
+    adoption_start = helper_end
+    adoption_end = SOURCE.index(
+        "RateResolvedRetainedShadowEvaluation\n"
+        "  evaluate_rate_resolved_track_cruise_retained_shadow(",
+        adoption_start,
+    )
+    adoption = SOURCE[adoption_start:adoption_end]
+    assert "validate_selected_target_provenance(" in adoption
+    assert "build_rate_resolved_current_world_request(" in adoption
+    assert "rate_resolved_retained::evaluate(request.value())" in adoption
+    assert "rate_resolved_track_cruise_certified_plan_store_" not in adoption
+    assert "certify_and_replace(" not in adoption
+
+    production_end = SOURCE.index(
+        "void record_rate_resolved_track_cruise_shadow(", adoption_end
+    )
+    production_retained = SOURCE[adoption_end:production_end]
+    assert "build_rate_resolved_current_world_request(" in production_retained
+
+    import_start = SOURCE.index("if (accepted_async_tactical_result != nullptr) {")
+    import_end = SOURCE.index(
+        "if (opponent_side_replan_assessment_requested", import_start
+    )
+    imported = SOURCE[import_start:import_end]
+    assert "if (!mpcc_lite_async_worker_context_)" in imported
+    assert "evaluate_rate_resolved_preentry_adoption_shadow(output, now_sec)" in imported
+
+    contract_start = SOURCE.index("const auto apply_mpcc_entry_execution_contract =")
+    contract_end = SOURCE.index("if (async_shadow_enabled) {", contract_start)
+    assert "rate_resolved_preentry_adoption_shadow" not in SOURCE[
+        contract_start:contract_end
+    ]
+    assert "adoption=%d/%d/%s/%s/target:%s" in SOURCE
+    assert "authority=shadow,selected=0" in SOURCE
+
+    geometry_start = SOURCE.index("void set_overtake_static_wall_geometry(")
+    geometry_end = SOURCE.index(
+        "PhysicalWallEnvelopeCacheTelemetry take_physical_wall_envelope_cache_telemetry()",
+        geometry_start,
+    )
+    geometry = SOURCE[geometry_start:geometry_end]
+    assert "overtake_static_wall_grid_fingerprint_ = 0U" in geometry
+    assert "recovery_footprint::occupancy_grid_fingerprint(" in geometry
+    assert (
+        "snapshot.wall_grid_fingerprint = overtake_static_wall_grid_fingerprint_"
+        in SOURCE
+    )
+
+
 def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:
     """Dead retained selectors may not keep a five-state publisher reconnectable."""
 
@@ -1376,10 +1441,20 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     )
     evaluate = SOURCE[evaluate_start:record_start]
     assert "rate_resolved_track_cruise_certified_plan_store_->snapshot()" in evaluate
-    assert "build_canonical_current_control_path()" in evaluate
-    assert "gap_planner->dynamic_world_observation(now_sec)" in evaluate
-    assert "dynamic_world.vehicles" in evaluate
-    assert "rate_resolved_retained::evaluate(request)" in evaluate
+    assert "build_rate_resolved_current_world_request(" in evaluate
+    assert "rate_resolved_retained::evaluate(request.value())" in evaluate
+    request_start = SOURCE.index(
+        "build_rate_resolved_current_world_request("
+    )
+    request_end = SOURCE.index(
+        "RateResolvedPreentryAdoptionShadowEvaluation\n"
+        "  evaluate_rate_resolved_preentry_adoption_shadow(",
+        request_start,
+    )
+    request_builder = SOURCE[request_start:request_end]
+    assert "build_canonical_current_control_path()" in request_builder
+    assert "gap_planner->dynamic_world_observation(now_sec)" in request_builder
+    assert "dynamic_world.vehicles" in request_builder
     for forbidden in (
         "publish_control_command(",
         "publish_failsafe_command(",
@@ -1403,7 +1478,9 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     assert "artifact::extract_actuation(execution, cursor)" in retained_source
     assert "recovery::evaluate_clear_footprint_path(" in retained_source
     assert "recovery::circle_obstacle_clearance_at_time(" in retained_source
-    assert "request.current_wall_grid.get() != source.wall_grid.get()" in retained_source
+    assert "source.wall_grid_fingerprint != 0U" in retained_source
+    assert "request.current_wall_grid.get() == source.wall_grid.get()" in retained_source
+    assert "recovery::occupancy_grid_fingerprint(*request.current_wall_grid)" in retained_source
     for text in (retained_header, retained_source):
         for forbidden in (
             "CanonicalNormalCommand",

@@ -88,6 +88,8 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   snapshot.identity.course_frame_window_id = 102U;
   snapshot.identity.captured_sec = 1.0;
   snapshot.wall_grid = grid;
+  snapshot.wall_grid_fingerprint =
+    recovery::occupancy_grid_fingerprint(*snapshot.wall_grid);
   snapshot.footprint = {0.05, 0.05, 0.05, 0.05, 0.0};
   snapshot.current_pose = {50.0, 0.0, 0.0};
   snapshot.trajectory.progress_origin_m = 50.0;

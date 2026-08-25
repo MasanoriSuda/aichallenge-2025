@@ -507,8 +507,13 @@ Result evaluate(const Request & request)
     result.follow_target_observation_generation =
       follow_target->observation_generation;
   }
-  if (request.current_wall_grid == nullptr ||
-    request.current_wall_grid.get() != source.wall_grid.get() ||
+  const bool static_world_matches =
+    request.current_wall_grid != nullptr &&
+    source.wall_grid_fingerprint != 0U &&
+    (request.current_wall_grid.get() == source.wall_grid.get() ||
+    recovery::occupancy_grid_fingerprint(*request.current_wall_grid) ==
+    source.wall_grid_fingerprint);
+  if (!static_world_matches ||
     !same_footprint(request.current_footprint, source.footprint))
   {
     result.reason = Reason::StaticWorldMismatch;

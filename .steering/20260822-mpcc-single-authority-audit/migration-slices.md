@@ -1000,6 +1000,23 @@ Finish the architecture simplification instead of leaving permanent dual control
   were ShiftOut and every record remained `authority=shadow,selected=0`.
   Current-world adoption proof and Pass coverage remain promotion gates; no
   tuning, fallback or authority change was introduced.
+- `.steering/20260825-rate-resolved-preentry-current-world-shadow` connects the
+  exact selected six-state `CertifiedPlan` to the existing production
+  current-world revalidator at the live Mission-adoption boundary, while
+  keeping the result observation-only. The first run
+  `output/20260825-194808` exposed an async provenance defect: the revalidator
+  equated static-world identity with a `shared_ptr` address, so an intentional
+  deep copy of identical wall-grid content was rejected before actuation or
+  dynamic-world checks. The physical snapshot now seals a deterministic
+  fingerprint over grid geometry, axis convention and cells. Same-owner joins
+  retain the O(1) path; copied owners must match content, while changed cells
+  or geometry fail closed. In `output/20260825-200059`, the false
+  `static-world-mismatch` disappeared and later typed rejects became visible:
+  `steering-unreachable`, `progress-lift-rejected`, and
+  `velocity-unreachable`. Production remained
+  `authority=shadow,selected=0`. These actuation/progress adoption contracts
+  and missing Pass coverage remain promotion gates; no tuning, fallback or
+  normal authority was added.
 
 ## Slice 7: Parameter tuning
 

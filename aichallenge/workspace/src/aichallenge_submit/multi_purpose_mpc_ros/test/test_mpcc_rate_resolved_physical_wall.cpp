@@ -53,6 +53,8 @@ wall::Snapshot snapshot()
   value.identity.course_frame_window_id = 50U;
   value.identity.captured_sec = 1.1;
   value.wall_grid = free_grid();
+  value.wall_grid_fingerprint =
+    recovery::occupancy_grid_fingerprint(*value.wall_grid);
   value.footprint = recovery::FootprintExtents{0.1, 0.1, 0.1, 0.1, 0.0};
   value.current_pose = recovery::Pose2D{0.0, 0.0, 0.0};
   value.trajectory.progress_origin_m = 0.0;

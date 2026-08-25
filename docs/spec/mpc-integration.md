@@ -2320,6 +2320,21 @@ physical proof済みの側を選択した。全件`authority=shadow,selected=0`�
 だったため、Passの動的被覆と採用時current-world revalidationを取得するまでfive-state Gate Aは維持する。昇格時は同一Sliceで
 five-state Gate Aを物理削除し、永久fallbackとして残してはならない。
 
+#### Prospective six-state pre-entry current-world接続（2026-08-25、2025由来の暫定）
+
+左右選択後のimmutable six-state `CertifiedPlan`は、live Mission採用境界でproductionと同じcurrent-world
+revalidatorへ観測専用で接続する。measured-to-control path、現在操舵・速度、現在wall、全V2X dynamic obstacleを
+同じ証明で再評価し、結果はMission、plan store、normal commandへ接続しない。
+
+async workerはwall gridをdeep copyするため、メモリアドレスは静的世界の同一性にならない。physical snapshotはgridの
+width／height、resolution、origin、y-axis規約、全cellから決定的content fingerprintをsealする。同じimmutable ownerは
+pointer fast path、異なるownerはfingerprint一致を要求し、cellまたはgeometryが変わったcopyはfail closedとする。
+
+`output/20260825-200059`では、修正前runの誤った`static-world-mismatch`が消え、後段の
+`steering-unreachable`、`progress-lift-rejected`、`velocity-unreachable`が独立して観測できた。これは採用許可ではなく、
+次に修復すべきasync actuation／progress接続契約を可視化した証拠である。Pass intentの動的被覆も未取得なので、five-state
+Gate Aはまだ維持する。parameter、fallback、production authorityは変更していない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

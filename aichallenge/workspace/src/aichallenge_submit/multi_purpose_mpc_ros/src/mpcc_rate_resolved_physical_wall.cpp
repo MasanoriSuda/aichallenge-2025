@@ -59,7 +59,8 @@ bool snapshot_valid(const Snapshot & snapshot) noexcept
   const auto trajectory_validation =
     race::validate_exact_physical_execution_trajectory(snapshot.trajectory);
   return identity_valid(snapshot.identity) && snapshot.wall_grid != nullptr &&
-         snapshot.wall_grid->valid() && snapshot.footprint.valid() &&
+         snapshot.wall_grid->valid() && snapshot.wall_grid_fingerprint != 0U &&
+         snapshot.footprint.valid() &&
          finite_pose(snapshot.current_pose) && trajectory_validation.complete &&
          snapshot.course_frame_knots.size() >= 2U &&
          std::isfinite(snapshot.hard_wall_clearance_m) &&

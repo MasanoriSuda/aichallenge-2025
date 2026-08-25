@@ -11,7 +11,11 @@
 - [x] Implement the root correction without parameter tuning or fallback.
 - [x] Run focused tests, package tests and source-contract tests.
 - [ ] Run moving dynamic acceptance and record evidence.
-- [ ] Update migration Slice documentation and commit.
+- [x] Add typed semantic-adapter diagnostics and isolate the first construction
+      failure to zero-width future stop/hold intervals.
+- [x] Preserve valid predicted-state and virtual-progress singleton bounds
+      without weakening executable acceleration/steering-rate bounds.
+- [x] Update migration Slice documentation and commit the static root fix.
 
 Static evidence:
 
@@ -19,6 +23,10 @@ Static evidence:
 - focused MPCC/steering/authority tests: 7/7 passed
 - complete `multi_purpose_mpc_ros` CTest suite: 51/51 passed
 - no solver, wall-margin, speed, acceleration or steering parameter change
+- `output/20260826-075114`: first exact reject was future velocity `[0,0]`
+- `output/20260826-075833`: next exact reject was virtual progress `[0,0]`
+- post-correction launches: zero semantic-adapter rejects, but AWSIM stayed
+  `Ready`; moving acceptance was not claimed
 
 ## Slice B: dynamic Overtake acceptance
 

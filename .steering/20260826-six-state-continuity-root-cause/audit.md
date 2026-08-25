@@ -130,3 +130,47 @@ The complete causal chain is:
 
 Static verification completed with a successful full workspace build, 7/7
 focused tests and 51/51 package tests.  Dynamic acceptance remains open.
+
+## Third incident: semantic bounds were given command semantics
+
+The candidate/executed separation worked in
+`output/20260826-073738`: a newer certified candidate no longer destroyed the
+last executed retained source.  The run nevertheless entered Emergency while
+changing from Cruise to Follow.  Typed adapter diagnostics were added before
+changing authority.  They isolated two consecutive construction failures:
+
+```text
+output/20260826-075114
+reason=velocity-inset-unavailable, stage=19, element=3,
+value=0, bounds=[0,0]
+
+output/20260826-075833
+reason=input-inset-unavailable, stage=12
+```
+
+The first exact failure was a future stop state whose velocity bound was the
+valid singleton `[0, 0]`.  After removing that incorrect inset, the same
+failure moved to virtual progress speed, also a valid hold singleton
+`[0, 0]`.  This movement of the first failure boundary falsified an OSQP,
+wall, steering and tactical-state explanation.
+
+The adapter had applied the publisher-boundary residual inset uniformly to
+all future states and inputs.  That contract is valid for acceleration and
+steering rate because they cross the physical command boundary.  It is not
+valid for predicted velocity state or virtual progress speed: their physical
+certificate owns solver residual tolerance, and a deliberate stop/hold may be
+represented by a zero-width interval.  Insetting such a singleton creates an
+empty interval before the QP is assembled.
+
+The correction therefore preserves exact future velocity and virtual-progress
+bounds while retaining the inset for the two executable physical inputs.
+Regression tests prove both valid singleton cases.  Adapter rejection now
+reports a typed reason, stage, element, value and bounds; physical-input inset
+failures remain individually diagnosable and fail closed.
+
+Two post-correction launches (`output/20260826-080158` and
+`output/20260826-080720-sync`) produced zero semantic-adapter rejections, but
+neither became a valid moving acceptance run: the per-vehicle AWSIM state
+remained `Ready`.  They are evidence only for construction-path availability,
+not for production continuity.  Moving dynamic acceptance remains a Gate A
+requirement and no further authority is promoted from these runs.

@@ -89,8 +89,6 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
     1.0 - first_rate_margin, 1e-12);
   const double acceleration_margin =
     (1e-3 + 1e-3 * 1.0) / (1.0 - 1e-3);
-  const double progress_speed_margin =
-    (1e-3 + 1e-3 * 6.0) / (1.0 - 1e-3);
   EXPECT_NEAR(
     result->problem.input_lower[
       input_offset + model::kAccelerationIndex],
@@ -102,11 +100,11 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
   EXPECT_NEAR(
     result->problem.input_lower[
       input_offset + model::kVirtualProgressSpeedIndex],
-    progress_speed_margin, 1e-12);
+    0.0, 1e-12);
   EXPECT_NEAR(
     result->problem.input_upper[
       input_offset + model::kVirtualProgressSpeedIndex],
-    6.0 - progress_speed_margin, 1e-12);
+    6.0, 1e-12);
   EXPECT_NEAR(
     result->first_steering_rate_certificate_margin_radps,
     first_rate_margin, 1e-12);
@@ -249,6 +247,104 @@ TEST(MpccRateResolvedAdapter, RejectsMalformedOrUnphysicalSnapshots)
   request.inputs.front().lower[0] = 0.0;
   request.inputs.front().upper[0] = 0.0;
   EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
+}
+
+TEST(MpccRateResolvedAdapter, IdentifiesTheExactInitialStateBoundViolation)
+{
+  auto request = curved_request();
+  request.states.front().upper[model::kProgressIndex] = -0.1;
+  adapter::BuildDiagnostic diagnostic;
+
+  EXPECT_FALSE(
+    adapter::build(request, kSolverTolerance, &diagnostic).has_value());
+  EXPECT_EQ(
+    diagnostic.reason, adapter::RejectReason::InitialStateOutsideBounds);
+  EXPECT_EQ(diagnostic.stage, 0);
+  EXPECT_EQ(diagnostic.element, model::kProgressIndex);
+  EXPECT_DOUBLE_EQ(diagnostic.value, 0.0);
+  EXPECT_DOUBLE_EQ(diagnostic.lower, -1.0);
+  EXPECT_DOUBLE_EQ(diagnostic.upper, -0.1);
+}
+
+TEST(MpccRateResolvedAdapter, PreservesAZeroWidthFutureStopState)
+{
+  auto request = curved_request();
+  constexpr int stop_stage = 2;
+  request.states[stop_stage].reference[model::kVelocityIndex] = 0.0;
+  request.states[stop_stage].lower[model::kVelocityIndex] = 0.0;
+  request.states[stop_stage].upper[model::kVelocityIndex] = 0.0;
+  adapter::BuildDiagnostic diagnostic;
+
+  const auto result = adapter::build(request, kSolverTolerance, &diagnostic);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(diagnostic.reason, adapter::RejectReason::None);
+  const int state_offset = model::kStateDimension * stop_stage;
+  EXPECT_DOUBLE_EQ(
+    result->problem.state_lower[state_offset + model::kVelocityIndex], 0.0);
+  EXPECT_DOUBLE_EQ(
+    result->problem.state_upper[state_offset + model::kVelocityIndex], 0.0);
+}
+
+TEST(MpccRateResolvedAdapter, PreservesAZeroWidthVirtualProgressHold)
+{
+  auto request = curved_request();
+  constexpr int hold_stage = 2;
+  request.inputs[hold_stage].reference[
+    model::kVirtualProgressSpeedIndex] = 0.0;
+  request.inputs[hold_stage].lower[model::kVirtualProgressSpeedIndex] = 0.0;
+  request.inputs[hold_stage].upper[model::kVirtualProgressSpeedIndex] = 0.0;
+  adapter::BuildDiagnostic diagnostic;
+
+  const auto result = adapter::build(request, kSolverTolerance, &diagnostic);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(diagnostic.reason, adapter::RejectReason::None);
+  const int input_offset = model::kInputDimension * hold_stage;
+  EXPECT_DOUBLE_EQ(
+    result->problem.input_lower[
+      input_offset + model::kVirtualProgressSpeedIndex], 0.0);
+  EXPECT_DOUBLE_EQ(
+    result->problem.input_upper[
+      input_offset + model::kVirtualProgressSpeedIndex], 0.0);
+}
+
+TEST(MpccRateResolvedAdapter, RejectsAnUncertifiableAccelerationSingleton)
+{
+  auto request = curved_request();
+  constexpr int stage = 2;
+  request.inputs[stage].reference[model::kAccelerationIndex] = 0.0;
+  request.inputs[stage].lower[model::kAccelerationIndex] = 0.0;
+  request.inputs[stage].upper[model::kAccelerationIndex] = 0.0;
+  adapter::BuildDiagnostic diagnostic;
+
+  EXPECT_FALSE(
+    adapter::build(request, kSolverTolerance, &diagnostic).has_value());
+  EXPECT_EQ(
+    diagnostic.reason,
+    adapter::RejectReason::AccelerationInsetUnavailable);
+  EXPECT_EQ(diagnostic.stage, stage);
+  EXPECT_EQ(diagnostic.element, model::kAccelerationIndex);
+  EXPECT_DOUBLE_EQ(diagnostic.lower, 0.0);
+  EXPECT_DOUBLE_EQ(diagnostic.upper, 0.0);
+}
+
+TEST(MpccRateResolvedAdapter, RejectsAnUncertifiableSteeringRateSingleton)
+{
+  auto request = curved_request();
+  constexpr int stage = 0;
+  request.maximum_abs_steering_rate_radps = 0.0;
+  adapter::BuildDiagnostic diagnostic;
+
+  EXPECT_FALSE(
+    adapter::build(request, kSolverTolerance, &diagnostic).has_value());
+  EXPECT_EQ(
+    diagnostic.reason,
+    adapter::RejectReason::SteeringRateInsetUnavailable);
+  EXPECT_EQ(diagnostic.stage, stage);
+  EXPECT_EQ(diagnostic.element, model::kSteeringRateIndex);
+  EXPECT_DOUBLE_EQ(diagnostic.lower, 0.0);
+  EXPECT_DOUBLE_EQ(diagnostic.upper, 0.0);
 }
 
 TEST(MpccRateResolvedAdapter, FirstRateIsRobustlyReachableFromSemanticSteering)

@@ -106,12 +106,52 @@ std::optional<SolverInsetBounds> inset_for_exact_physical_boundary(
 
 }  // namespace
 
+const char * to_string(const RejectReason reason) noexcept
+{
+  switch (reason) {
+    case RejectReason::None: return "none";
+    case RejectReason::InvalidRequest: return "invalid-request";
+    case RejectReason::InvalidStateStage: return "invalid-state-stage";
+    case RejectReason::InvalidInputStage: return "invalid-input-stage";
+    case RejectReason::InitialStateOutsideBounds:
+      return "initial-state-outside-bounds";
+    case RejectReason::SteeringBoundsUnavailable:
+      return "steering-bounds-unavailable";
+    case RejectReason::SteeringJacobianUnavailable:
+      return "steering-jacobian-unavailable";
+    case RejectReason::LinearizationUnavailable:
+      return "linearization-unavailable";
+    case RejectReason::AccelerationInsetUnavailable:
+      return "acceleration-inset-unavailable";
+    case RejectReason::SteeringRateInsetUnavailable:
+      return "steering-rate-inset-unavailable";
+  }
+  return "unknown";
+}
+
 std::optional<Result> build(
   const Request & request,
-  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
+  BuildDiagnostic * diagnostic) noexcept
 {
   namespace model = mpcc_rate_resolved;
   constexpr double half_pi = 1.57079632679489661923;
+  if (diagnostic != nullptr) {
+    *diagnostic = BuildDiagnostic{};
+  }
+  const auto reject = [diagnostic](
+    const RejectReason reason, const int stage = -1, const int element = -1,
+    const double value = std::numeric_limits<double>::quiet_NaN(),
+    const double lower = std::numeric_limits<double>::quiet_NaN(),
+    const double upper = std::numeric_limits<double>::quiet_NaN())
+    -> std::optional<Result>
+    {
+      if (diagnostic != nullptr) {
+        *diagnostic = BuildDiagnostic{
+          reason, stage, element, value, lower, upper};
+      }
+      return std::nullopt;
+    };
   const int horizon = request.horizon_steps;
   if (
     horizon <= 0 || !request.initial_state.allFinite() ||
@@ -140,20 +180,23 @@ std::optional<Result> build(
     !request.input_delta_weight.allFinite() ||
     (request.input_delta_weight.array() < 0.0).any())
   {
-    return std::nullopt;
+    return reject(RejectReason::InvalidRequest);
   }
-  for (const auto & stage : request.states) {
-    if (!valid_state_stage(stage)) {
-      return std::nullopt;
+  for (std::size_t stage = 0U; stage < request.states.size(); ++stage) {
+    if (!valid_state_stage(request.states[stage])) {
+      return reject(
+        RejectReason::InvalidStateStage, static_cast<int>(stage));
     }
   }
-  for (const auto & stage : request.inputs) {
+  for (std::size_t stage = 0U; stage < request.inputs.size(); ++stage) {
+    const auto & input = request.inputs[stage];
     if (
-      !valid_input_stage(stage) ||
-      stage.stage_dt_sec < request.minimum_stage_dt_sec ||
-      stage.stage_dt_sec > request.maximum_stage_dt_sec)
+      !valid_input_stage(input) ||
+      input.stage_dt_sec < request.minimum_stage_dt_sec ||
+      input.stage_dt_sec > request.maximum_stage_dt_sec)
     {
-      return std::nullopt;
+      return reject(
+        RejectReason::InvalidInputStage, static_cast<int>(stage));
     }
   }
   for (int element = 0; element < kLegacyStateDimension; ++element) {
@@ -161,7 +204,10 @@ std::optional<Result> build(
       request.initial_state[element] < request.states.front().lower[element] ||
       request.initial_state[element] > request.states.front().upper[element])
     {
-      return std::nullopt;
+      return reject(
+        RejectReason::InitialStateOutsideBounds, 0, element,
+        request.initial_state[element], request.states.front().lower[element],
+        request.states.front().upper[element]);
     }
   }
 
@@ -202,19 +248,12 @@ std::optional<Result> build(
       request.states[static_cast<std::size_t>(stage)].lower;
     problem.state_upper.segment<kLegacyStateDimension>(state_offset) =
       request.states[static_cast<std::size_t>(stage)].upper;
-    if (stage > 0) {
-      const auto velocity_bounds = inset_for_exact_physical_boundary(
-        request.states[static_cast<std::size_t>(stage)].lower[3],
-        request.states[static_cast<std::size_t>(stage)].upper[3],
-        solver_tolerance);
-      if (!velocity_bounds.has_value()) {
-        return std::nullopt;
-      }
-      problem.state_lower[state_offset + model::kVelocityIndex] =
-        velocity_bounds->lower;
-      problem.state_upper[state_offset + model::kVelocityIndex] =
-        velocity_bounds->upper;
-    }
+    // Future velocity is a predicted state, not a command crossing the
+    // publisher boundary.  Its physical certificate already owns the solver
+    // residual tolerance.  Applying the command inset here turns a legitimate
+    // stop state [0, 0] into an empty interval and prevents Follow/Stop
+    // problems from being assembled at all.  Acceleration and steering-rate
+    // remain inset below because those are executable physical inputs.
     problem.state_weight.segment<kLegacyStateDimension>(state_offset) =
       request.states[static_cast<std::size_t>(stage)].weight;
     problem.additional_linear_cost.segment<kLegacyStateDimension>(state_offset) =
@@ -246,7 +285,10 @@ std::optional<Result> build(
       !std::isfinite(steering_lower) || !std::isfinite(steering_upper) ||
       steering_lower > steering_upper)
     {
-      return std::nullopt;
+      return reject(
+        RejectReason::SteeringBoundsUnavailable, stage,
+        model::kSteeringIndex, steering_reference, steering_lower,
+        steering_upper);
     }
     problem.state_reference[state_offset + model::kSteeringIndex] =
       steering_reference;
@@ -261,7 +303,9 @@ std::optional<Result> build(
       const double jacobian = curvature_jacobian(
         request.wheelbase_m, steering_reference);
       if (!std::isfinite(jacobian) || jacobian <= 0.0) {
-        return std::nullopt;
+        return reject(
+          RejectReason::SteeringJacobianUnavailable, stage,
+          model::kSteeringIndex, jacobian);
       }
       problem.state_weight[state_offset + model::kSteeringIndex] =
         input.weight[kLegacyCurvatureIndex] * jacobian * jacobian;
@@ -287,7 +331,7 @@ std::optional<Result> build(
         legacy_input.stage_dt_sec, request.minimum_frenet_denominator,
         request.minimum_stage_dt_sec, request.maximum_stage_dt_sec});
     if (!linearization.has_value()) {
-      return std::nullopt;
+      return reject(RejectReason::LinearizationUnavailable, stage);
     }
     problem.linearizations.push_back(linearization.value());
 
@@ -299,8 +343,6 @@ std::optional<Result> build(
       legacy_input.reference[2];
     const auto acceleration_bounds = inset_for_exact_physical_boundary(
       legacy_input.lower[0], legacy_input.upper[0], solver_tolerance);
-    const auto progress_speed_bounds = inset_for_exact_physical_boundary(
-      legacy_input.lower[2], legacy_input.upper[2], solver_tolerance);
     const double physical_rate_lower = stage == 0 ? std::max(
         -request.maximum_abs_steering_rate_radps,
         (-request.maximum_abs_steering_rad - request.current_steering_rad) /
@@ -311,12 +353,17 @@ std::optional<Result> build(
         legacy_input.stage_dt_sec) : request.maximum_abs_steering_rate_radps;
     const auto steering_rate_bounds = inset_for_exact_physical_boundary(
       physical_rate_lower, physical_rate_upper, solver_tolerance);
-    if (
-      !acceleration_bounds.has_value() ||
-      !progress_speed_bounds.has_value() ||
-      !steering_rate_bounds.has_value())
-    {
-      return std::nullopt;
+    if (!acceleration_bounds.has_value()) {
+      return reject(
+        RejectReason::AccelerationInsetUnavailable, stage,
+        model::kAccelerationIndex, legacy_input.reference[0],
+        legacy_input.lower[0], legacy_input.upper[0]);
+    }
+    if (!steering_rate_bounds.has_value()) {
+      return reject(
+        RejectReason::SteeringRateInsetUnavailable, stage,
+        model::kSteeringRateIndex, 0.0,
+        physical_rate_lower, physical_rate_upper);
     }
     problem.input_lower[input_offset + model::kAccelerationIndex] =
       acceleration_bounds->lower;
@@ -334,12 +381,15 @@ std::optional<Result> build(
       result.first_steering_rate_certificate_margin_radps =
         steering_rate_bounds->margin;
     }
+    // Virtual progress speed is an internal contouring state transition, not
+    // a command crossing the publisher boundary.  A valid hold stage may
+    // therefore be the singleton [0, 0], just like future velocity above.
     problem.input_lower[
       input_offset + model::kVirtualProgressSpeedIndex] =
-      progress_speed_bounds->lower;
+      legacy_input.lower[2];
     problem.input_upper[
       input_offset + model::kVirtualProgressSpeedIndex] =
-      progress_speed_bounds->upper;
+      legacy_input.upper[2];
     problem.input_weight[input_offset + model::kAccelerationIndex] =
       legacy_input.weight[0];
     problem.input_weight[

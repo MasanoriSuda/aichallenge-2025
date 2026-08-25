@@ -5,6 +5,7 @@
 
 #include <Eigen/Dense>
 
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -79,9 +80,36 @@ struct Result
   double first_steering_rate_certificate_margin_radps{};
 };
 
+enum class RejectReason
+{
+  None,
+  InvalidRequest,
+  InvalidStateStage,
+  InvalidInputStage,
+  InitialStateOutsideBounds,
+  SteeringBoundsUnavailable,
+  SteeringJacobianUnavailable,
+  LinearizationUnavailable,
+  AccelerationInsetUnavailable,
+  SteeringRateInsetUnavailable,
+};
+
+struct BuildDiagnostic
+{
+  RejectReason reason{RejectReason::None};
+  int stage{-1};
+  int element{-1};
+  double value{std::numeric_limits<double>::quiet_NaN()};
+  double lower{std::numeric_limits<double>::quiet_NaN()};
+  double upper{std::numeric_limits<double>::quiet_NaN()};
+};
+
+const char * to_string(RejectReason reason) noexcept;
+
 std::optional<Result> build(
   const Request & request,
-  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept;
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
+  BuildDiagnostic * diagnostic = nullptr) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_adapter
 

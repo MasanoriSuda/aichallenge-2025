@@ -149,10 +149,20 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     return finish();
   }
 
+  mpcc_rate_resolved_adapter::BuildDiagnostic adapter_diagnostic;
   const auto adapted = mpcc_rate_resolved_adapter::build(
-    snapshot.request, solver_.physical_constraint_tolerance());
+    snapshot.request, solver_.physical_constraint_tolerance(),
+    &adapter_diagnostic);
   if (!adapted.has_value()) {
-    result.detail = "rate-resolved semantic adapter rejected snapshot";
+    std::ostringstream detail;
+    detail << "rate-resolved semantic adapter rejected snapshot: reason="
+           << mpcc_rate_resolved_adapter::to_string(adapter_diagnostic.reason)
+           << ", stage=" << adapter_diagnostic.stage
+           << ", element=" << adapter_diagnostic.element
+           << ", value=" << adapter_diagnostic.value
+           << ", bounds=[" << adapter_diagnostic.lower << ','
+           << adapter_diagnostic.upper << ']';
+    result.detail = detail.str();
     return finish();
   }
   result.adapter_built = true;

@@ -28,8 +28,6 @@ enum class ControlIntent
 enum class Formulation
 {
   Unresolved,
-  LegacySpatialMpc3State,
-  ProgressContouring3State,
   VelocityProgress5State,
   VelocitySteeringProgress6State,
   SolverDerivedBypass,

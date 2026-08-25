@@ -573,42 +573,6 @@ std::optional<VelocityHorizon> resolve_velocity_horizon(
   return result;
 }
 
-std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
-  const Eigen::VectorXd & extended_primal, const int horizon_size,
-  const double progress_origin_m) noexcept
-{
-  if (horizon_size <= 0 || !std::isfinite(progress_origin_m)) {
-    return std::nullopt;
-  }
-  const int extended_state_values = kExtendedStateDimension * (horizon_size + 1);
-  const int expected_size =
-    extended_state_values + kExtendedInputDimension * horizon_size;
-  if (extended_primal.size() != expected_size || !extended_primal.allFinite()) {
-    return std::nullopt;
-  }
-  constexpr int legacy_state_dimension = 3;
-  constexpr int legacy_input_dimension = 2;
-  const int legacy_state_values = legacy_state_dimension * (horizon_size + 1);
-  Eigen::VectorXd result = Eigen::VectorXd::Zero(
-    legacy_state_values + legacy_input_dimension * horizon_size);
-  for (int stage = 0; stage < horizon_size + 1; ++stage) {
-    const int source = stage * kExtendedStateDimension;
-    const int target = stage * legacy_state_dimension;
-    result[target] = extended_primal[source + kExtendedLateralIndex];
-    result[target + 1] = extended_primal[source + kExtendedHeadingIndex];
-    result[target + 2] =
-      extended_primal[source + kExtendedProgressIndex] + progress_origin_m;
-  }
-  for (int stage = 0; stage < horizon_size; ++stage) {
-    const int source = extended_state_values + stage * kExtendedInputDimension;
-    const int target = legacy_state_values + stage * legacy_input_dimension;
-    result[target] = extended_primal[(stage + 1) * kExtendedStateDimension +
-      kExtendedVelocityIndex];
-    result[target + 1] = extended_primal[source + kExtendedCurvatureIndex];
-  }
-  return result;
-}
-
 std::optional<ActuationProposal> extract_actuation_proposal(
   const Eigen::VectorXd & extended_primal, const int horizon_size,
   const double wheelbase_m) noexcept

@@ -13,6 +13,9 @@ MPCC_PROGRESS_HEADER = (
     / "multi_purpose_mpc_ros"
     / "mpcc_progress.hpp"
 ).read_text(encoding="utf-8")
+MPCC_PROGRESS_SOURCE = (
+    Path(__file__).resolve().parents[1] / "src" / "mpcc_progress.cpp"
+).read_text(encoding="utf-8")
 V2X_OVERTAKE_HEADER = (
     Path(__file__).resolve().parents[1]
     / "include"
@@ -1227,6 +1230,30 @@ def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     assert "persistent_osqp_solver_" not in SOURCE
     assert "last_osqp_solution_" not in SOURCE
     assert "last_osqp_progress_contouring_mode_" not in SOURCE
+
+
+def test_retired_three_state_normal_representations_are_physically_deleted() -> None:
+    """Deleted normal solvers must leave no reconnectable schema or converter."""
+
+    production = "\n".join(
+        (
+            SOURCE,
+            MPCC_PROGRESS_HEADER,
+            MPCC_PROGRESS_SOURCE,
+            MPCC_EXECUTION_CONTRACT_HEADER,
+            MPCC_EXECUTION_CONTRACT_SOURCE,
+        )
+    )
+    forbidden = (
+        "LegacySpatialMpc3State",
+        "ProgressContouring3State",
+        "convert_extended_solution_to_legacy(",
+        '"legacy-spatial-mpc-3state"',
+        '"progress-contouring-3state"',
+        '"legacy-spatial-tracking-v1"',
+        '"progress-contouring-v1"',
+    )
+    assert not [token for token in forbidden if token in production]
 
 
 def test_retired_extended_formulation_switch_state_is_physically_deleted() -> None:

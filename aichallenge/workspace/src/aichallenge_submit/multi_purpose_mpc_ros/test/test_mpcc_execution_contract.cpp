@@ -560,10 +560,11 @@ TEST(MpccExecutionContract, RejectsMismatchedSolutionIdentity)
 TEST(MpccExecutionContract, IdentifiesCertifiedNoncanonicalFormulation)
 {
   auto context = make_context();
-  context.formulation = contract::Formulation::ProgressContouring3State;
-  context.state_schema_id = "ey-epsi-progress-v1";
-  context.input_schema_id = "velocity-curvature-v1";
-  context.cost_schema_id = "progress-contouring-v1";
+  context.formulation = contract::Formulation::SolverDerivedBypass;
+  context.state_schema_id = "retained-current-state-v1";
+  context.input_schema_id = "speed-steering-v1";
+  context.bounds_schema_id = "derived-hold-v1";
+  context.cost_schema_id = "derived-bypass-v1";
   context = contract::seal_problem_context(std::move(context));
   auto solution = make_solution(context);
   solution.formulation = context.formulation;
@@ -1047,13 +1048,14 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsMismatchedIdentity)
     contract::CanonicalNormalCandidateRejectReason::IdentityMismatch);
 }
 
-TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsThreeStateTrack)
+TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsSolverDerivedBypassTrack)
 {
   auto context = make_track_context();
-  context.formulation = contract::Formulation::ProgressContouring3State;
-  context.state_schema_id = "ey-epsi-progress-v1";
-  context.input_schema_id = "velocity-curvature-v1";
-  context.cost_schema_id = "progress-contouring-v1";
+  context.formulation = contract::Formulation::SolverDerivedBypass;
+  context.state_schema_id = "retained-current-state-v1";
+  context.input_schema_id = "speed-steering-v1";
+  context.bounds_schema_id = "derived-hold-v1";
+  context.cost_schema_id = "derived-bypass-v1";
   context = contract::seal_problem_context(std::move(context));
   auto fresh = make_canonical_candidate();
   fresh.problem = context;

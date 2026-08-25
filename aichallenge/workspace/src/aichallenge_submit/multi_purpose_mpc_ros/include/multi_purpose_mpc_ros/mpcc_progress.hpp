@@ -334,13 +334,6 @@ struct VelocityHorizon
 std::optional<VelocityHorizon> resolve_velocity_horizon(
   const VelocityHorizonRequest & request) noexcept;
 
-/// Convert an accepted 5x3 solution into the established 3x2 layout consumed
-/// by prediction, physical wall validation and command post-processing. The
-/// extended theta state is local to progress_origin_m and is restored here.
-std::optional<Eigen::VectorXd> convert_extended_solution_to_legacy(
-  const Eigen::VectorXd & extended_primal, int horizon_size,
-  double progress_origin_m) noexcept;
-
 struct ActuationProposal
 {
   double predicted_speed_mps{};

@@ -375,30 +375,6 @@ TEST(MpccProgress, CommittedPassRaisesVelocityCostWithoutRelaxingCap)
   EXPECT_DOUBLE_EQ(result->terminal_weight, 45.0);
 }
 
-TEST(MpccProgress, ConvertsExtendedSolutionToEstablishedLayout)
-{
-  // N=2: 5 states x 3 stages followed by 3 inputs x 2 stages.
-  Eigen::VectorXd extended(21);
-  extended <<
-    0.0, 0.0, 0.01, 4.0, 10.0,
-    0.2, 0.0, 0.02, 4.5, 10.5,
-    0.4, 0.0, 0.03, 5.0, 11.0,
-    1.0, 0.10, 4.5,
-    0.5, 0.20, 5.0;
-  const auto legacy =
-    multi_purpose_mpc_ros::mpcc_progress::convert_extended_solution_to_legacy(
-    extended, 2, 0.0);
-  ASSERT_TRUE(legacy.has_value());
-  ASSERT_EQ(legacy->size(), 13);
-  EXPECT_DOUBLE_EQ((*legacy)[3], 0.2);
-  EXPECT_DOUBLE_EQ((*legacy)[4], 0.02);
-  EXPECT_DOUBLE_EQ((*legacy)[5], 10.5);
-  EXPECT_DOUBLE_EQ((*legacy)[9], 4.5);
-  EXPECT_DOUBLE_EQ((*legacy)[10], 0.10);
-  EXPECT_DOUBLE_EQ((*legacy)[11], 5.0);
-  EXPECT_DOUBLE_EQ((*legacy)[12], 0.20);
-}
-
 TEST(MpccProgress, ExtractsTypedActuationWithoutLosingOptimizedAcceleration)
 {
   Eigen::VectorXd extended(21);
@@ -872,24 +848,6 @@ TEST(MpccProgress, RejectsMalformedSemanticBoundaryResidualProvenance)
     rejected.reason,
     multi_purpose_mpc_ros::mpcc_progress::
     ExtendedExecutionPrimalNormalizationReason::InvalidShape);
-}
-
-TEST(MpccProgress, RestoresAbsoluteProgressFromLocalExtendedSolution)
-{
-  Eigen::VectorXd extended(21);
-  extended <<
-    0.0, 0.0, 0.01, 4.0, 0.0,
-    0.2, 0.0, 0.02, 4.5, 0.5,
-    0.4, 0.0, 0.03, 5.0, 1.0,
-    1.0, 0.10, 4.5,
-    0.5, 0.20, 5.0;
-  const auto legacy =
-    multi_purpose_mpc_ros::mpcc_progress::convert_extended_solution_to_legacy(
-    extended, 2, 348.0);
-  ASSERT_TRUE(legacy.has_value());
-  EXPECT_DOUBLE_EQ((*legacy)[2], 348.0);
-  EXPECT_DOUBLE_EQ((*legacy)[5], 348.5);
-  EXPECT_DOUBLE_EQ((*legacy)[8], 349.0);
 }
 
 TEST(MpccProgress, RebasesExtendedWarmStartToCurrentProgressOrigin)

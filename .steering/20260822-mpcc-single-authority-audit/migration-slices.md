@@ -912,6 +912,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   this behavior-neutral deletion did not require a duplicate replay. Slice 6
   remains open for other audited legacy/migration paths; tuning is still
   prohibited.
+- `.steering/20260825-slice6-three-state-representation-removal` removes the
+  final reconnectable type/schema surface of the deleted normal three-state
+  solvers. `LegacySpatialMpc3State` and `ProgressContouring3State` had zero
+  production producers, while `convert_extended_solution_to_legacy()` had
+  zero production call sites. Their enum/string/schema branches, conversion
+  API and conversion-only tests were physically deleted. Fail-closed
+  noncanonical-formulation coverage now uses the live exceptional
+  `SolverDerivedBypass` identity rather than manufacturing a retired normal
+  formulation. Failure-first source contracts, the 25-package build and all
+  49 rebuilt test targets (1,821 tests) pass. No reachable solver, Rejoin,
+  publisher, Emergency or Recovery path changed, so no duplicate dynamic
+  replay was required. Slice 6 remains open for separately audited residual
+  migration names/owners; tuning remains prohibited.
 
 ## Slice 7: Parameter tuning
 

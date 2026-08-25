@@ -2163,6 +2163,23 @@ failure-first source contract、25-package build、49 test target、1,822 test�
 本Sliceは到達不能コードだけの削除なので重複する動的replayは行っていない。wall margin、solver
 tolerance、horizon、weight、timeoutおよび到達可能なbehavior parameterの調整は行っていない。
 
+#### 旧3-state normal formulation表現の物理削除（2026-08-25、2025由来の暫定）
+
+normal dispatchの3-state fallback削除後もexecution contractに残っていた
+`LegacySpatialMpc3State`／`ProgressContouring3State`と、5-state解を旧3×2配列へ変換する
+`convert_extended_solution_to_legacy()`をSlice 6で物理削除した。前二者はproduction producer 0件で
+enum／文字列表現／到達不能schema switchだけ、converterはproduction call site 0件で専用testだけが
+consumerだった。
+
+非canonical formulationをfail closeするcontract testは、現存する例外用`SolverDerivedBypass`を入力に
+使うため、退役済みnormal formulationをテストのためだけに再表現しない。canonical formulation集合は
+5-state `VelocityProgress5State`と6-state `VelocitySteeringProgress6State`、例外表現は
+`SolverDerivedBypass`である。`Unresolved`は未解決identityを表すがnormal command ownerではない。
+
+failure-first source contract、25-package build、49 test target、1,821 testが合格した。到達可能なsolver、
+Rejoin、publisher、Emergency、Recoveryを変更しておらず、parameter tuningも行っていないため、新規の
+動的replayは要求しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -29219,7 +29219,6 @@ struct MPC
     context.bounds_schema_id.clear();
     context.cost_schema_id.clear();
     const bool progress_geometry_required =
-      formulation == mpcc_contract::Formulation::ProgressContouring3State ||
       formulation == mpcc_contract::Formulation::VelocityProgress5State ||
       formulation ==
       mpcc_contract::Formulation::VelocitySteeringProgress6State;
@@ -29259,18 +29258,6 @@ struct MPC
     context.horizon_steps = static_cast<std::size_t>(
       std::max(0, effective_horizon_steps));
     switch (formulation) {
-      case mpcc_contract::Formulation::LegacySpatialMpc3State:
-        context.state_schema_id = "ey-epsi-time-v1";
-        context.input_schema_id = "velocity-curvature-v1";
-        context.bounds_schema_id = "legacy-stage-wall-obstacle-v1";
-        context.cost_schema_id = "legacy-spatial-tracking-v1";
-        break;
-      case mpcc_contract::Formulation::ProgressContouring3State:
-        context.state_schema_id = "ey-epsi-progress-v1";
-        context.input_schema_id = "velocity-curvature-v1";
-        context.bounds_schema_id = "progress-stage-wall-obstacle-v1";
-        context.cost_schema_id = "progress-contouring-v1";
-        break;
       case mpcc_contract::Formulation::VelocityProgress5State:
         context.state_schema_id = "ey-elag-epsi-v-progress-v1";
         context.input_schema_id = "accel-curvature-progress-rate-v1";

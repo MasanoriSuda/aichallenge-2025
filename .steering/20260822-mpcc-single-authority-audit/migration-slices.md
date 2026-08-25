@@ -970,6 +970,20 @@ Finish the architecture simplification instead of leaving permanent dual control
   execution contracts and retired selector traces were zero. The next Slice
   must obtain prospective six-state Gate A evidence and delete the tactical
   five-state proof atomically; tuning remains prohibited.
+- `.steering/20260825-rate-resolved-preentry-gate-shadow` adds that prospective
+  evidence without creating another authority. Each left/right tactical
+  worker seals the explicit future ShiftOut/Pass intent into a side-private
+  six-state solver context, then applies the exact physical adapter, swept
+  static-wall proof and current target-tube proof. The result is telemetry
+  only: it has no production retained store, command, Mission mutation or
+  branch-selection input. The shared physical snapshot builder was decoupled
+  from its async mailbox because proof construction is a world/trajectory
+  responsibility, not a transport responsibility. In bounded run
+  `output/20260825-184710`, domain 1 produced 13 prospective attempts, 8 solved
+  artifacts and 4 complete solver/wall/target proofs while every record kept
+  `authority=shadow,selected=0`. Pass/Return coverage and a larger acceptance
+  comparison are still missing, so five-state Gate A remains until a later
+  promotion Slice can delete it atomically. No tuning or fallback was added.
 
 ## Slice 7: Parameter tuning
 

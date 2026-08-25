@@ -761,6 +761,72 @@ def test_five_state_preentry_artifact_cannot_gate_rate_resolved_actuation() -> N
     assert "overtake_canonical_lifecycle_->plan_store.replace(" not in entry
 
 
+def test_six_state_preentry_gate_shadow_uses_explicit_intent_without_authority() -> None:
+    """Prospective Gate A must not inherit the still-live Follow identity."""
+
+    assert "struct RateResolvedPreentryShadowEvaluation" in SOURCE
+    shadow_start = SOURCE.index(
+        "RateResolvedPreentryShadowEvaluation\n"
+        "  evaluate_rate_resolved_preentry_shadow("
+    )
+    shadow_end = SOURCE.index(
+        "mpcc_progress::ExtendedBranchEvaluation evaluate_extended_mpcc_branch(",
+        shadow_start,
+    )
+    shadow = SOURCE[shadow_start:shadow_end]
+    assert "const mpcc_contract::ControlIntent prospective_intent" in shadow
+    assert "current_control_intent()" not in shadow
+    assert "Formulation::VelocitySteeringProgress6State" in shadow
+    assert "evaluate_rate_resolved_pipeline(" in shadow
+    assert "validate_frenet_dp_target_bound_horizon(" in shadow
+    assert "rate_resolved_track_cruise_certified_plan_store_" not in shadow
+    assert "canonical_normal_command" not in shadow
+
+    isolated_start = SOURCE.index(
+        "ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch("
+    )
+    isolated_end = SOURCE.index(
+        "void evaluate_and_select_extended_mpcc_branches(", isolated_start
+    )
+    isolated = SOURCE[isolated_start:isolated_end]
+    assert "rate_resolved_preentry_left_solver_context_" in isolated
+    assert "rate_resolved_preentry_right_solver_context_" in isolated
+
+    selection_start = SOURCE.index(
+        "void evaluate_and_select_extended_mpcc_branches("
+    )
+    selection_end = SOURCE.index(
+        "bool submit_mpcc_lite_async_snapshot(",
+        selection_start,
+    )
+    selection = SOURCE[selection_start:selection_end]
+    selector_start = selection.index(
+        "behavior.extended_mpcc_branch_selection = "
+        "mpcc_progress::select_extended_branch("
+    )
+    selector_end = selection.index(
+        "const auto & selection = behavior.extended_mpcc_branch_selection;",
+        selector_start,
+    )
+    assert "overtake_rate_resolved_preentry" not in selection[
+        selector_start:selector_end
+    ]
+    assert "left_artifact.preentry_canonical_plan" in selection
+    assert "right_artifact.preentry_canonical_plan" in selection
+    assert "authority=shadow,selected=0" in SOURCE
+    assert "if (six_left.attempted || six_right.attempted)" in SOURCE
+
+    physical_start = SOURCE.index(
+        "std::optional<rate_resolved_physical_wall::Snapshot>\n"
+        "  build_rate_resolved_track_cruise_physical_snapshot("
+    )
+    physical_end = SOURCE.index(
+        "std::optional<RateResolvedTrackCruiseSubmissionDraft>",
+        physical_start,
+    )
+    assert "physical_wall_mailbox_" not in SOURCE[physical_start:physical_end]
+
+
 def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:
     """Dead retained selectors may not keep a five-state publisher reconnectable."""
 
@@ -1157,7 +1223,8 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
     """Async and atomic admission share one proof pipeline with no publisher."""
 
     proof_start = SOURCE.index(
-        "build_rate_resolved_track_cruise_physical_snapshot("
+        "std::optional<rate_resolved_physical_wall::Snapshot>\n"
+        "  build_rate_resolved_track_cruise_physical_snapshot("
     )
     submit_start = SOURCE.index(
         "bool submit_rate_resolved_track_cruise_shadow(", proof_start

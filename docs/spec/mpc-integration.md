@@ -2287,6 +2287,23 @@ entry artifactをshadowで証明し、その昇格と同時にfive-state Gate A�
 six-state certified normalまたは`formulation=unresolved`の明示Emergencyだけとなり、five-state normal publication
 と退役selector traceは0件だった。parameter、solver、horizon、wall／vehicle clearance、timeoutは変更していない。
 
+#### Prospective six-state pre-entry Gate A shadow（2026-08-25、2025由来の暫定）
+
+残存するfive-state Gate Aを証拠なしに削除しないため、同じimmutable tactical snapshotとcandidate semantic problemから
+prospective `ShiftOut`／`Pass` intentを明示的にsealするsix-state shadowを左右別contextで評価する。通常production builderが
+現在のlive intent（entry前は通常Follow）を再取得する経路は使わない。shadowはexact six-state trajectory、現在poseからの
+swept static-wall proof、同じtarget tubeの全horizon分離証明までを一体で行う。
+
+このshadowは観測専用であり、production retained store、normal command、Mission mutation、左右branch selectionへ接続しない。
+物理snapshot builderはasync mailboxの存在を前提にせず、world snapshotとtrajectory identityだけでproofを構成する。mailboxは
+transport、physical proofはcertificationという責務境界を維持する。
+
+`output/20260825-184710`のdomain 1ではprospective試行13件、six-state solve成功8件、solver／wall／targetの完全受入4件を観測した。
+全記録は`authority=shadow,selected=0`で、productionの選択とpublishを変更していない。target proofだけが失敗する例も独立して
+観測できた。一方、Pass／Return intentの動的被覆と十分な受入比較は未取得であるため、この時点ではfive-state Gate Aを維持し、
+parameter tuningやfallback追加は行わない。後続Sliceは同一observation identityでの受入比較を完了し、six-state昇格と
+five-state Gate Aの物理削除を同じ変更で実施する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

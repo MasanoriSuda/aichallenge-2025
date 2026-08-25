@@ -2247,6 +2247,31 @@ std::optional<OvertakeExecutionArtifact> make_overtake_execution_artifact(
   return OvertakeExecutionArtifact{mission, plan};
 }
 
+/// Observation-only six-state proof for one prospective Overtake Gate-A
+/// branch.  This artifact deliberately cannot carry a command or Mission.
+struct RateResolvedPreentryShadowEvaluation
+{
+  bool attempted{false};
+  bool solver_certified{false};
+  bool wall_certified{false};
+  bool target_certified{false};
+  bool complete{false};
+  int side_sign{0};
+  mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Cruise};
+  rate_resolved_shadow::Outcome solver_outcome{
+    rate_resolved_shadow::Outcome::BuildRejected};
+  rate_resolved_physical_wall::Outcome physical_outcome{
+    rate_resolved_physical_wall::Outcome::InvalidInput};
+  double solve_ms{};
+  double physical_ms{};
+  int iterations{};
+  double terminal_progress_m{std::numeric_limits<double>::quiet_NaN()};
+  double terminal_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_lateral_bound_reserve_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  std::string detail{"not-attempted"};
+};
+
 struct V2XBehaviorOutput
 {
   V2XBehaviorState state{V2XBehaviorState::Cruise};
@@ -2405,6 +2430,8 @@ struct V2XBehaviorOutput
   double overtake_right_quality{-std::numeric_limits<double>::infinity()};
   mpcc_progress::ExtendedBranchEvaluation extended_mpcc_left_branch;
   mpcc_progress::ExtendedBranchEvaluation extended_mpcc_right_branch;
+  RateResolvedPreentryShadowEvaluation overtake_rate_resolved_preentry_left;
+  RateResolvedPreentryShadowEvaluation overtake_rate_resolved_preentry_right;
   mpcc_progress::ExtendedBranchSelectionResolution extended_mpcc_branch_selection;
   /// Immutable executable artifact produced by the same selected dual branch
   /// as `overtake_selected_mission`.  It is entry evidence only; the live
@@ -2579,6 +2606,7 @@ struct V2XBehaviorOutput
 struct ExtendedMpccBranchArtifact
 {
   mpcc_progress::ExtendedBranchEvaluation evaluation;
+  RateResolvedPreentryShadowEvaluation rate_resolved_preentry_shadow;
   std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
   preentry_canonical_plan;
 };
@@ -6429,6 +6457,10 @@ struct MPC
       extended_right_branch_solver_context_ =
         std::make_shared<ExtendedBranchSolverContext>(
         kCanonicalPhysicalRowTolerancePolicy);
+      rate_resolved_preentry_left_solver_context_ =
+        std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_preentry_right_solver_context_ =
+        std::make_shared<rate_resolved_shadow::SolverContext>();
     }
   }
 
@@ -6560,6 +6592,10 @@ struct MPC
       extended_left_branch_solver_context_;
     snapshot->extended_right_branch_solver_context_ =
       extended_right_branch_solver_context_;
+    snapshot->rate_resolved_preentry_left_solver_context_ =
+      rate_resolved_preentry_left_solver_context_;
+    snapshot->rate_resolved_preentry_right_solver_context_ =
+      rate_resolved_preentry_right_solver_context_;
     snapshot->overtake_tactical_five_state_lifecycle_ =
       overtake_tactical_five_state_lifecycle_;
     snapshot->next_overtake_episode_id_ = next_overtake_episode_id_;
@@ -7612,16 +7648,184 @@ struct MPC
     return result;
   }
 
+  RateResolvedPreentryShadowEvaluation
+  evaluate_rate_resolved_preentry_shadow(
+    const MpcProblem & problem,
+    const ExtendedProgressMpcProblem & extended_problem,
+    const mpcc_contract::ControlIntent prospective_intent,
+    const V2XBehaviorOutput & source_behavior,
+    const V2XTacticalSideAssessment & assessment,
+    const std::uint64_t prospective_intent_generation,
+    const double now_sec)
+  {
+    RateResolvedPreentryShadowEvaluation result;
+    result.side_sign = assessment.side;
+    result.intent = prospective_intent;
+    const auto finish = [&result](const std::string & detail) {
+        result.detail = detail;
+        result.complete = result.solver_certified && result.wall_certified &&
+          result.target_certified;
+        return result;
+      };
+    if (
+      active_rate_resolved_preentry_solver_context_ == nullptr ||
+      !extended_problem.rate_resolved_track_cruise_shadow_request.has_value() ||
+      !std::isfinite(previous_steering) ||
+      (assessment.side != -1 && assessment.side != 1))
+    {
+      return finish("six-state pre-entry dependencies unavailable");
+    }
+
+    result.attempted = true;
+    const auto target_provenance = selected_target_provenance(source_behavior);
+    mpcc_contract::MpccProblemContext prospective_context;
+    prospective_context.decision_id = active_control_decision_id_;
+    prospective_context.observation_generation = active_control_decision_id_;
+    prospective_context.intent = prospective_intent;
+    prospective_context.intent_generation =
+      std::max<std::uint64_t>(1U, prospective_intent_generation);
+    prospective_context.target_id = source_behavior.target_vehicle_id;
+    prospective_context.target_obstacle_generation =
+      target_provenance.observation_generation;
+    prospective_context.execution_side_sign = assessment.side;
+    prospective_context.formulation =
+      mpcc_contract::Formulation::VelocitySteeringProgress6State;
+    prospective_context = seal_problem_context_for_problem(
+      problem, std::move(prospective_context), extended_problem.N);
+    if (!mpcc_contract::problem_context_complete(prospective_context)) {
+      return finish("six-state pre-entry context incomplete");
+    }
+
+    BoundRateResolvedTrackCruiseSubmission bound_submission;
+    bound_submission.request =
+      extended_problem.rate_resolved_track_cruise_shadow_request.value();
+    bound_submission.request.current_steering_rad = previous_steering;
+    bound_submission.control_prediction_origin_sec =
+      now_sec + std::max(0.0, execution_prediction_delay_sec_);
+    bound_submission.course_progress_origin_m =
+      extended_problem.progress_origin_m;
+    bound_submission.horizon_steps = extended_problem.N;
+    bound_submission.source_context = prospective_context;
+    bound_submission.committed_predecessor_steering_rad = previous_steering;
+    auto snapshot = build_rate_resolved_submission_snapshot(
+      problem, bound_submission, now_sec,
+      std::max<std::uint64_t>(1U, active_control_decision_id_));
+    if (!snapshot.has_value()) {
+      return finish("six-state pre-entry snapshot rejected");
+    }
+    RateResolvedPhysicalShadowEvaluation physical_rejection;
+    auto physical_snapshot = build_rate_resolved_track_cruise_physical_snapshot(
+      snapshot.value(), problem, now_sec, physical_rejection);
+    if (!physical_snapshot.has_value()) {
+      return finish(
+        std::string{"six-state pre-entry physical snapshot rejected/"} +
+        physical_rejection.detail);
+    }
+
+    const std::shared_ptr<rate_resolved_certified::Store>
+    observation_only_certified_store;
+    auto evaluation = evaluate_rate_resolved_pipeline(
+      snapshot.value(), std::move(physical_snapshot),
+      active_rate_resolved_preentry_solver_context_,
+      observation_only_certified_store);
+    result.solver_outcome = evaluation.solver.outcome;
+    result.solve_ms = evaluation.solver.compute_ms;
+    result.iterations = evaluation.solver.solver.iterations;
+    result.terminal_progress_m = evaluation.solver.terminal_progress_m;
+    result.terminal_velocity_mps = evaluation.solver.terminal_velocity_mps;
+    result.solver_certified =
+      evaluation.solver.outcome == rate_resolved_shadow::Outcome::Solved &&
+      evaluation.solver.execution_artifact != nullptr;
+    if (!result.solver_certified) {
+      return finish(
+        std::string{"six-state pre-entry solver rejected/"} +
+        rate_resolved_shadow::to_string(evaluation.solver.outcome) + "/" +
+        evaluation.solver.detail);
+    }
+    if (evaluation.physical.has_value()) {
+      result.physical_outcome = evaluation.physical->outcome;
+      result.physical_ms = evaluation.physical->compute_ms;
+      result.wall_certified =
+        evaluation.physical->outcome ==
+        rate_resolved_physical_wall::Outcome::Accepted;
+    }
+    if (!result.wall_certified) {
+      return finish(
+        evaluation.physical.has_value() ?
+        std::string{"six-state pre-entry wall rejected/"} +
+        rate_resolved_physical_wall::to_string(
+          evaluation.physical->outcome) + "/" +
+        evaluation.physical->detail :
+        "six-state pre-entry wall proof missing");
+    }
+
+    const auto exact = rate_resolved_physical::build(
+      *evaluation.solver.execution_artifact, prospective_intent,
+      prospective_context.stage_geometry_id);
+    if (!exact.exact_trajectory.has_value()) {
+      return finish(
+        std::string{"six-state pre-entry exact trajectory rejected/"} +
+        rate_resolved_physical::to_string(exact.reason));
+    }
+    result.minimum_lateral_bound_reserve_m =
+      exact.exact_trajectory->minimum_lateral_bound_reserve_m;
+    const bool target_release_certified =
+      source_behavior.locked_target_current_body_footprints_separated &&
+      source_behavior.locked_target_footprint_prediction_valid &&
+      source_behavior.locked_target_predicted_body_footprint_sweep_separated;
+    if (target_release_certified) {
+      result.target_certified = true;
+      return finish("six-state pre-entry solver/wall/current-target accepted");
+    }
+
+    double planned_ego_speed_mps = std::max(1.0, current_speed_mps_);
+    for (const double velocity_mps : exact.exact_trajectory->velocity_mps) {
+      if (std::isfinite(velocity_mps)) {
+        planned_ego_speed_mps = std::max(
+          planned_ego_speed_mps, std::max(0.0, velocity_mps));
+      }
+    }
+    const auto target_tube = build_current_overtake_target_tube(
+      source_behavior, exact.exact_trajectory->path_distance_m,
+      planned_ego_speed_mps);
+    const auto target_path = target_tube.valid ?
+      overtake_core::validate_frenet_dp_target_bound_horizon(
+      overtake_core::FrenetDpTargetBoundHorizonRequest{
+        true, assessment.side, std::max(0.0, cfg.v2x_gap.vehicle_radius),
+        exact.exact_trajectory->lateral_m, target_tube.lateral_m,
+        target_tube.separation_active}) :
+      overtake_core::FrenetDpTargetBoundHorizonResolution{};
+    result.target_certified =
+      target_tube.valid && target_path.valid && target_path.feasible;
+    if (!result.target_certified) {
+      std::ostringstream detail;
+      detail << "six-state pre-entry target rejected/" << target_tube.reason;
+      if (target_tube.valid) {
+        detail << "/sample=" << target_path.failure_index
+               << "/separation="
+               << target_path.minimum_signed_separation_m;
+      }
+      return finish(detail.str());
+    }
+    return finish("six-state pre-entry solver/wall/target accepted");
+  }
+
   mpcc_progress::ExtendedBranchEvaluation evaluate_extended_mpcc_branch(
     const V2XBehaviorOutput & source_behavior,
     const V2XTacticalSideAssessment & assessment,
     const int horizon_size, const double now_sec,
     const OvertakeArtifactIdentitySeed & artifact_identity,
     std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> * const
-    preentry_canonical_plan)
+    preentry_canonical_plan,
+    RateResolvedPreentryShadowEvaluation * const
+    rate_resolved_preentry_shadow)
   {
     if (preentry_canonical_plan != nullptr) {
       preentry_canonical_plan->reset();
+    }
+    if (rate_resolved_preentry_shadow != nullptr) {
+      *rate_resolved_preentry_shadow =
+        RateResolvedPreentryShadowEvaluation{};
     }
     mpcc_progress::ExtendedBranchEvaluation evaluation;
     evaluation.side_sign = assessment.side;
@@ -7759,6 +7963,15 @@ struct MPC
       if (effective_horizon <= 0 || effective_horizon > N) {
         evaluation.failure_reason = "extended branch effective horizon invalid";
         return evaluation;
+      }
+      if (rate_resolved_preentry_shadow != nullptr) {
+        *rate_resolved_preentry_shadow =
+          evaluate_rate_resolved_preentry_shadow(
+          legacy, extended.value(), prospective_intent, source_behavior,
+          assessment,
+          std::max<std::uint64_t>(
+            1U, artifact_identity.source_mission_generation + 1U),
+          now_sec);
       }
       if (active_extended_branch_solver_context_ != nullptr) {
         active_extended_branch_horizon_size_ = effective_horizon;
@@ -8011,6 +8224,10 @@ struct MPC
       branch->active_extended_branch_solver_context_ = assessment.side > 0 ?
         branch->extended_left_branch_solver_context_ :
         branch->extended_right_branch_solver_context_;
+      branch->active_rate_resolved_preentry_solver_context_ =
+        assessment.side > 0 ?
+        branch->rate_resolved_preentry_left_solver_context_ :
+        branch->rate_resolved_preentry_right_solver_context_;
       branch->active_extended_branch_context_epoch_ =
         mpcc_lite_async_context_epoch_;
       branch->active_extended_branch_target_id_ = behavior.target_vehicle_id;
@@ -8018,7 +8235,8 @@ struct MPC
       branch->active_extended_branch_horizon_size_ = horizon_size;
       artifact.evaluation = branch->evaluate_extended_mpcc_branch(
         behavior, assessment, horizon_size, now_sec, artifact_identity,
-        &artifact.preentry_canonical_plan);
+        &artifact.preentry_canonical_plan,
+        &artifact.rate_resolved_preentry_shadow);
       return artifact;
     } catch (const std::exception & error) {
       evaluation.failure_reason = error.what();
@@ -8053,6 +8271,10 @@ struct MPC
       behavior, behavior.overtake_right_tactical_assessment, horizon_size, now_sec,
       artifact_identity);
     auto left_artifact = left_future.get();
+    behavior.overtake_rate_resolved_preentry_right =
+      right_artifact.rate_resolved_preentry_shadow;
+    behavior.overtake_rate_resolved_preentry_left =
+      left_artifact.rate_resolved_preentry_shadow;
     behavior.extended_mpcc_right_branch = std::move(right_artifact.evaluation);
     behavior.extended_mpcc_left_branch = std::move(left_artifact.evaluation);
     behavior.extended_mpcc_branch_selection = mpcc_progress::select_extended_branch(
@@ -14089,6 +14311,10 @@ struct MPC
           async_behavior.extended_mpcc_left_branch;
         output.extended_mpcc_right_branch =
           async_behavior.extended_mpcc_right_branch;
+        output.overtake_rate_resolved_preentry_left =
+          async_behavior.overtake_rate_resolved_preentry_left;
+        output.overtake_rate_resolved_preentry_right =
+          async_behavior.overtake_rate_resolved_preentry_right;
         output.extended_mpcc_branch_selection =
           async_behavior.extended_mpcc_branch_selection;
       }
@@ -15128,6 +15354,38 @@ struct MPC
             output.extended_mpcc_branch_selection.left_eligibility),
           mpcc_progress::extended_branch_eligibility_name(
             output.extended_mpcc_branch_selection.right_eligibility));
+
+        const auto & six_left =
+          output.overtake_rate_resolved_preentry_left;
+        const auto & six_right =
+          output.overtake_rate_resolved_preentry_right;
+        if (six_left.attempted || six_right.attempted) {
+          RCLCPP_INFO(
+            rclcpp::get_logger("mpc_controller"),
+            "Overtake six-state preentry shadow: "
+            "L=%d/%d/%d/%d/%d/%s/%.2f/%.2f/%.2f/%.2f/%s,"
+            "R=%d/%d/%d/%d/%d/%s/%.2f/%.2f/%.2f/%.2f/%s,authority=shadow,selected=0",
+            six_left.attempted ? 1 : 0,
+            six_left.solver_certified ? 1 : 0,
+            six_left.wall_certified ? 1 : 0,
+            six_left.target_certified ? 1 : 0,
+            six_left.complete ? 1 : 0,
+            mpcc_contract::to_string(six_left.intent),
+            six_left.solve_ms, six_left.physical_ms,
+            six_left.terminal_progress_m,
+            six_left.minimum_lateral_bound_reserve_m,
+            six_left.detail.c_str(),
+            six_right.attempted ? 1 : 0,
+            six_right.solver_certified ? 1 : 0,
+            six_right.wall_certified ? 1 : 0,
+            six_right.target_certified ? 1 : 0,
+            six_right.complete ? 1 : 0,
+            mpcc_contract::to_string(six_right.intent),
+            six_right.solve_ms, six_right.physical_ms,
+            six_right.terminal_progress_m,
+            six_right.minimum_lateral_bound_reserve_m,
+            six_right.detail.c_str());
+        }
 
         const auto shadow_candidate = [](
           const race_mpcc::Homotopy homotopy,
@@ -22896,7 +23154,6 @@ struct MPC
   {
     rejection = RateResolvedPhysicalShadowEvaluation{};
     if (
-      rate_resolved_track_cruise_physical_wall_mailbox_ == nullptr ||
       overtake_static_wall_grid_snapshot_owner_ == nullptr ||
       !actual_wall_monitor_pose_.has_value() || !std::isfinite(now_sec) ||
       solver_snapshot.request.states.empty())
@@ -25602,6 +25859,10 @@ struct MPC
   std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
   std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
+  rate_resolved_preentry_left_solver_context_;
+  std::shared_ptr<rate_resolved_shadow::SolverContext>
+  rate_resolved_preentry_right_solver_context_;
+  std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_track_cruise_shadow_solver_context_;
   std::shared_ptr<rate_resolved_shadow::Mailbox>
   rate_resolved_track_cruise_shadow_mailbox_;
@@ -25635,6 +25896,8 @@ struct MPC
   double last_canonical_normal_final_actuation_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   std::shared_ptr<ExtendedBranchSolverContext> active_extended_branch_solver_context_;
+  std::shared_ptr<rate_resolved_shadow::SolverContext>
+  active_rate_resolved_preentry_solver_context_;
   std::uint64_t active_extended_branch_context_epoch_{};
   std::string active_extended_branch_target_id_;
   int active_extended_branch_side_sign_{};

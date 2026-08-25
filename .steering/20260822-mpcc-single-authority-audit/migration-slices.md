@@ -1155,6 +1155,21 @@ Finish the architecture simplification instead of leaving permanent dual control
   Startup run `output/20260826-004254` proves the updated binary and finite
   observed-state data flow, but stopped at AWSIM Ready; moving first-hairpin
   acceptance remains the explicit dynamic gate.
+- `.steering/20260826-six-state-steering-delay-input` removes the remaining
+  invalid extrapolation inside that observed-state contract. Finite-difference
+  `SteeringReport` rate is no longer projected as a constant actuator input
+  through observation age plus prediction delay. The physical origin now moves
+  from the fresh measured angle toward the last successfully published final
+  command by at most `steer_rate_max * (age + delay)`. The measured-rate member,
+  request field and clamp telemetry are deleted; no authority, fallback,
+  configuration branch or limit is added. All 51 package test targets and the
+  25-package runtime build pass. In `output/20260826-044340`, both domains
+  auto-started and the bounded origin was observed while moving. Domain 1 then
+  exposed a separate failure chain: a 4000-iteration solve rejection, stale
+  latest/last-feasible sources, lost retained proof, canonical emergency
+  braking, and only then progress/cursor rejection and Stuck Recovery. That
+  solver/retained-source continuity defect remains a separate failure-first
+  Slice; it is not hidden by tuning or a new normal fallback here.
 
 ## Slice 7: Parameter tuning
 

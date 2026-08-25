@@ -49520,19 +49520,6 @@ private:
         if (!std::isfinite(msg->steering_tire_angle)) {
           return;
         }
-        measured_steering_rate_radps_ = 0.0;
-        if (
-          steering_report_ != nullptr &&
-          last_steering_receipt_steady_.has_value())
-        {
-          const double elapsed_sec = std::chrono::duration<double>(
-            receipt_time - last_steering_receipt_steady_.value()).count();
-          if (std::isfinite(elapsed_sec) && elapsed_sec > 1e-6) {
-            measured_steering_rate_radps_ =
-              (msg->steering_tire_angle -
-              steering_report_->steering_tire_angle) / elapsed_sec;
-          }
-        }
         steering_report_ = msg;
         last_steering_receipt_steady_ = receipt_time;
       });
@@ -50034,6 +50021,7 @@ private:
       raw_command.lateral.steering_tire_angle = 0.0;
     }
     command_pub_->publish(raw_command);
+    last_published_steering_rad_ = raw_command.lateral.steering_tire_angle;
     const double actual_speed_mps =
       odom_ != nullptr && std::isfinite(odom_->twist.twist.linear.x) ?
       odom_->twist.twist.linear.x : std::numeric_limits<double>::quiet_NaN();
@@ -50072,6 +50060,7 @@ private:
     }
     command_raw_pub_->publish(raw_command);
     command_pub_->publish(final_command);
+    last_published_steering_rad_ = final_command.lateral.steering_tire_angle;
     command_failsafe_active_ = false;
     return published_steering;
   }
@@ -53835,7 +53824,7 @@ private:
       physical_steering_resolution = steering_state_contract::resolve(
         steering_state_contract::Request{
           steering_report_->steering_tire_angle,
-          measured_steering_rate_radps_,
+          last_published_steering_rad_,
           steering_observation_age_sec,
           state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0,
           mpc_cfg_.odom_timeout_sec,
@@ -54102,29 +54091,33 @@ private:
         physical_steering_resolution.state.has_value() ?
         physical_steering_resolution.state->prediction_origin_steering_rad :
         std::numeric_limits<double>::quiet_NaN();
-      const double bounded_measured_steering_rate_radps =
+      const double committed_steering_rad =
         physical_steering_resolution.state.has_value() ?
-        physical_steering_resolution.state->bounded_steering_rate_radps :
+        physical_steering_resolution.state->committed_steering_rad :
+        std::numeric_limits<double>::quiet_NaN();
+      const double maximum_reachable_step_rad =
+        physical_steering_resolution.state.has_value() ?
+        physical_steering_resolution.state->maximum_reachable_step_rad :
         std::numeric_limits<double>::quiet_NaN();
       const double steering_observation_age_sec =
         physical_steering_resolution.state.has_value() ?
         physical_steering_resolution.state->observation_age_sec :
         std::numeric_limits<double>::quiet_NaN();
-      const bool measured_steering_rate_outside_model =
+      const bool committed_command_reached =
         physical_steering_resolution.state.has_value() &&
-        physical_steering_resolution.state->measured_rate_outside_model;
+        physical_steering_resolution.state->committed_command_reached;
       RCLCPP_INFO_THROTTLE(
         get_logger(), *get_clock(), 1000,
         "Steering debug: wp_id=%d, speed=%.3f, yaw_rate=%.3f, raw=%.4f, "
         "output=%.4f, measured_steering=%.4f, physical_origin=%.4f, "
-        "measured_rate=%.4f, bounded_rate=%.4f, rate_clamped=%d, age=%.4f, "
+        "committed_input=%.4f, reachable_step=%.4f, command_reached=%d, age=%.4f, "
         "predicted_kappa=%.5f, measured_kappa=%.5f, "
         "error=%.5f, ratio=%.3f, valid=%d, ref_kappa=%.5f, "
         "solver_fallback=%d, recovery=%d",
         mpc_->model->wp_id, actual_v, yaw_rate, u[1], output_steering,
         measured_steering_rad, physical_origin_steering_rad,
-        measured_steering_rate_radps_, bounded_measured_steering_rate_radps,
-        measured_steering_rate_outside_model ? 1 : 0,
+        committed_steering_rad, maximum_reachable_step_rad,
+        committed_command_reached ? 1 : 0,
         steering_observation_age_sec,
         predicted_curvature, measured_curvature, curvature_error, curvature_ratio,
         measured_curvature_valid ? 1 : 0, reference_curvature,
@@ -54331,7 +54324,7 @@ private:
   Trajectory::SharedPtr trajectory_;
   std::optional<SteadyClock::time_point> last_odom_receipt_steady_;
   std::optional<SteadyClock::time_point> last_steering_receipt_steady_;
-  double measured_steering_rate_radps_{};
+  std::optional<double> last_published_steering_rad_;
   std::optional<rclcpp::Time> last_odom_source_stamp_;
   std::optional<SteadyClock::time_point> last_odom_source_advance_steady_;
   awsim_boost::BlockReason last_awsim_boost_block_reason_{awsim_boost::BlockReason::None};

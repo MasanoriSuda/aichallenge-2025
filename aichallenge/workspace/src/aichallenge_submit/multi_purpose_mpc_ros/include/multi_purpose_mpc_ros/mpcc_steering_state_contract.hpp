@@ -9,6 +9,7 @@ namespace multi_purpose_mpc_ros::mpcc_steering_state_contract
 enum class Reason
 {
   Available,
+  CommittedInputUnavailable,
   InvalidMeasurement,
   InvalidTiming,
   StaleObservation,
@@ -21,7 +22,7 @@ const char * to_string(Reason reason) noexcept;
 struct Request
 {
   double measured_steering_rad{};
-  double measured_steering_rate_radps{};
+  std::optional<double> committed_steering_rad;
   double observation_age_sec{};
   double prediction_delay_sec{};
   double maximum_observation_age_sec{};
@@ -32,12 +33,12 @@ struct Request
 struct PhysicalState
 {
   double measured_steering_rad{};
-  double measured_steering_rate_radps{};
-  double bounded_steering_rate_radps{};
+  double committed_steering_rad{};
   double observation_age_sec{};
   double projection_duration_sec{};
+  double maximum_reachable_step_rad{};
   double prediction_origin_steering_rad{};
-  bool measured_rate_outside_model{false};
+  bool committed_command_reached{false};
 };
 
 struct Result
@@ -47,8 +48,9 @@ struct Result
 };
 
 /// Project one measured steering report onto the same latency-compensated
-/// control origin used by the six-state pose.  The desired steering command is
-/// deliberately absent from this request: it is not a physical observation.
+/// control origin used by the six-state pose.  The committed command is the
+/// zero-order-held actuator input already published during the latency prefix;
+/// it is never substituted for the measured physical state.
 Result resolve(const Request & request) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_steering_state_contract

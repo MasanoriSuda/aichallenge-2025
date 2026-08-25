@@ -258,6 +258,14 @@ latest-only solver workerがsolve、exact trajectory adapter、endpoint/swept-fo
 採用せず、control callbackはsnapshot構築、non-blocking submit/consume、shadow telemetryだけを担う。
 この証明は引き続き`authority=shadow, selected=0`であり、単独ではproduction commandへ昇格しない。
 
+six-stateの操舵状態は、最新のfreshな`SteeringReport`を物理観測の正本とする。制御原点までの
+観測ageと既存prediction delayには、最後に実際にpublishした最終tire-angle commandをZOHの
+actuator inputとして適用し、既存の物理`steer_rate_max`で到達可能な量だけ観測値から近付ける。
+publish済みcommandを観測状態そのものへ置換せず、受信間隔から求めた操舵差分rateもdelay全体へ
+外挿しない。fresh solve、retained current-world proof、transition admission、pre-entry executionは
+この一つの物理原点を共有する。観測またはpublish済みinputが欠損、stale、非有限、通常操舵範囲外の
+場合はcanonical normal authorityを閉じ、desired commandやlegacy stateで補完しない。
+
 2026-08-22のshadow A/Bでは、exact headingによるpost-solve physical certificateをhard oracleとして
 維持した。post-solve再solve、reference-heading固定の横box、単一勾配による横位置・姿勢結合rowは、
 いずれも40 Hz超過またはQP不成立を増やし、非線形の向き付き車体footprintを保守的に証明できなかった

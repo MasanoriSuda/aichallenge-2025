@@ -10,6 +10,7 @@ const char * to_string(const Reason reason) noexcept
 {
   switch (reason) {
     case Reason::Available: return "available";
+    case Reason::CommittedInputUnavailable: return "committed-input-unavailable";
     case Reason::InvalidMeasurement: return "invalid-measurement";
     case Reason::InvalidTiming: return "invalid-timing";
     case Reason::StaleObservation: return "stale-observation";
@@ -22,9 +23,13 @@ const char * to_string(const Reason reason) noexcept
 Result resolve(const Request & request) noexcept
 {
   Result result;
+  if (!request.committed_steering_rad.has_value()) {
+    result.reason = Reason::CommittedInputUnavailable;
+    return result;
+  }
   if (
     !std::isfinite(request.measured_steering_rad) ||
-    !std::isfinite(request.measured_steering_rate_radps))
+    !std::isfinite(request.committed_steering_rad.value()))
   {
     return result;
   }
@@ -50,6 +55,8 @@ Result resolve(const Request & request) noexcept
   }
   if (
     std::abs(request.measured_steering_rad) >
+    request.maximum_abs_steering_rad ||
+    std::abs(request.committed_steering_rad.value()) >
     request.maximum_abs_steering_rad)
   {
     return result;
@@ -61,22 +68,32 @@ Result resolve(const Request & request) noexcept
 
   PhysicalState state;
   state.measured_steering_rad = request.measured_steering_rad;
-  state.measured_steering_rate_radps = request.measured_steering_rate_radps;
-  state.bounded_steering_rate_radps = std::clamp(
-    request.measured_steering_rate_radps,
-    -request.maximum_abs_steering_rate_radps,
-    request.maximum_abs_steering_rate_radps);
-  state.measured_rate_outside_model =
-    state.bounded_steering_rate_radps !=
-    state.measured_steering_rate_radps;
+  state.committed_steering_rad = request.committed_steering_rad.value();
   state.observation_age_sec = request.observation_age_sec;
   state.projection_duration_sec =
     request.observation_age_sec + request.prediction_delay_sec;
+  if (!std::isfinite(state.projection_duration_sec)) {
+    result.reason = Reason::InvalidTiming;
+    return result;
+  }
+  state.maximum_reachable_step_rad =
+    request.maximum_abs_steering_rate_radps * state.projection_duration_sec;
+  if (!std::isfinite(state.maximum_reachable_step_rad)) {
+    result.reason = Reason::InvalidLimits;
+    return result;
+  }
+  const double requested_step_rad =
+    state.committed_steering_rad - state.measured_steering_rad;
+  const double reachable_step_rad = std::clamp(
+    requested_step_rad,
+    -state.maximum_reachable_step_rad,
+    state.maximum_reachable_step_rad);
   state.prediction_origin_steering_rad = std::clamp(
-    state.measured_steering_rad +
-    state.bounded_steering_rate_radps * state.projection_duration_sec,
+    state.measured_steering_rad + reachable_step_rad,
     -request.maximum_abs_steering_rad,
     request.maximum_abs_steering_rad);
+  state.committed_command_reached =
+    std::abs(requested_step_rad) <= state.maximum_reachable_step_rad;
   result.reason = Reason::Available;
   result.state = state;
   return result;

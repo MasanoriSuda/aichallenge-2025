@@ -99,6 +99,7 @@ physical::Snapshot physical_snapshot(const execution::Identity & identity)
     recovery::occupancy_grid_fingerprint(*snapshot.wall_grid);
   snapshot.footprint = {0.1, 0.1, 0.1, 0.1, 0.0};
   snapshot.current_pose = {50.0, 0.0, 0.0};
+  snapshot.control_prefix = {snapshot.current_pose};
   snapshot.trajectory.progress_origin_m = 50.0;
   snapshot.trajectory.path_distance_m = {0.2, 0.4};
   snapshot.trajectory.lateral_m = {0.1, 0.2};
@@ -182,12 +183,85 @@ TEST(MpccRateResolvedCertifiedPlan, RejectsFullIdentityMismatch)
   EXPECT_EQ(result.plan, nullptr);
 }
 
-TEST(MpccRateResolvedCertifiedPlan, FailedReplacementPreservesAcceptedPlan)
+TEST(MpccRateResolvedCertifiedPlan, CertificationDoesNotImplyExecution)
+{
+  certified::Store store;
+  const auto candidate = build_plan(5U);
+  ASSERT_NE(candidate.plan, nullptr);
+  EXPECT_EQ(store.replace(candidate.plan), certified::StoreReason::Accepted);
+
+  ASSERT_NE(store.candidate_snapshot(), nullptr);
+  EXPECT_EQ(
+    store.candidate_snapshot()->execution_artifact->identity.sequence,
+    5U);
+  EXPECT_EQ(store.snapshot(), nullptr);
+  const auto certified_state = store.state();
+  EXPECT_TRUE(certified_state.candidate_available);
+  EXPECT_FALSE(certified_state.executed_plan_available);
+  EXPECT_EQ(certified_state.latest_certified_sequence, 5U);
+  EXPECT_EQ(certified_state.latest_executed_sequence, 0U);
+
+  EXPECT_EQ(
+    store.mark_executed(candidate.plan),
+    certified::StoreReason::Accepted);
+  ASSERT_NE(store.snapshot(), nullptr);
+  EXPECT_EQ(store.snapshot()->execution_artifact->identity.sequence, 5U);
+  const auto executed_state = store.state();
+  EXPECT_TRUE(executed_state.executed_plan_available);
+  EXPECT_EQ(executed_state.latest_executed_sequence, 5U);
+  EXPECT_EQ(executed_state.executed_count, 1U);
+}
+
+TEST(MpccRateResolvedCertifiedPlan, NewerCandidateDoesNotReplaceExecutedPlan)
+{
+  certified::Store store;
+  const auto executed = build_plan(5U);
+  const auto candidate = build_plan(6U);
+  ASSERT_NE(executed.plan, nullptr);
+  ASSERT_NE(candidate.plan, nullptr);
+  ASSERT_EQ(store.replace(executed.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.mark_executed(executed.plan),
+    certified::StoreReason::Accepted);
+
+  EXPECT_EQ(store.replace(candidate.plan), certified::StoreReason::Accepted);
+  ASSERT_NE(store.candidate_snapshot(), nullptr);
+  EXPECT_EQ(
+    store.candidate_snapshot()->execution_artifact->identity.sequence,
+    6U);
+  ASSERT_NE(store.snapshot(), nullptr);
+  EXPECT_EQ(store.snapshot()->execution_artifact->identity.sequence, 5U);
+}
+
+TEST(MpccRateResolvedCertifiedPlan, ConditionalClearOnlyClearsExecutedPlan)
+{
+  certified::Store store;
+  const auto executed = build_plan(5U);
+  const auto newer_candidate = build_plan(6U);
+  ASSERT_NE(executed.plan, nullptr);
+  ASSERT_NE(newer_candidate.plan, nullptr);
+  ASSERT_EQ(store.replace(executed.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.mark_executed(executed.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.replace(newer_candidate.plan), certified::StoreReason::Accepted);
+
+  EXPECT_FALSE(store.clear_if_sequence(6U));
+  EXPECT_TRUE(store.clear_if_sequence(5U));
+  EXPECT_EQ(store.snapshot(), nullptr);
+  ASSERT_NE(store.candidate_snapshot(), nullptr);
+  EXPECT_EQ(
+    store.candidate_snapshot()->execution_artifact->identity.sequence,
+    6U);
+}
+
+TEST(MpccRateResolvedCertifiedPlan, FailedReplacementPreservesExecutedPlan)
 {
   certified::Store store;
   const auto first = build_plan(5U);
   ASSERT_NE(first.plan, nullptr);
   EXPECT_EQ(store.replace(first.plan), certified::StoreReason::Accepted);
+  EXPECT_EQ(store.mark_executed(first.plan), certified::StoreReason::Accepted);
 
   auto malformed = std::make_shared<certified::CertifiedPlan>(*first.plan);
   malformed->physical_outcome = physical::Outcome::StageWallRejected;
@@ -214,7 +288,8 @@ TEST(MpccRateResolvedCertifiedPlan, AdmissionRecordsTypedCertificationReject)
   EXPECT_EQ(state.certification_reject_count, 1U);
   EXPECT_EQ(
     state.last_certification_reason, certified::RejectReason::IdentityMismatch);
-  EXPECT_FALSE(state.plan_available);
+  EXPECT_FALSE(state.candidate_available);
+  EXPECT_FALSE(state.executed_plan_available);
 }
 
 TEST(MpccRateResolvedCertifiedPlan, RejectsSnapshotResultIdentityMismatch)
@@ -239,8 +314,12 @@ TEST(MpccRateResolvedCertifiedPlan, RejectsStaleReplacementAndConditionalClear)
   EXPECT_EQ(store.replace(newer.plan), certified::StoreReason::Accepted);
   EXPECT_EQ(store.replace(older.plan), certified::StoreReason::StaleSequence);
   EXPECT_FALSE(store.clear_if_sequence(5U));
-  EXPECT_TRUE(store.clear_if_sequence(6U));
+  EXPECT_FALSE(store.clear_if_sequence(6U));
   EXPECT_EQ(store.snapshot(), nullptr);
+  ASSERT_NE(store.candidate_snapshot(), nullptr);
+  EXPECT_EQ(
+    store.candidate_snapshot()->execution_artifact->identity.sequence,
+    6U);
 }
 
 }  // namespace

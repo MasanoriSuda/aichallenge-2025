@@ -69,14 +69,17 @@ const char * to_string(StoreReason reason) noexcept;
 
 struct StoreState
 {
-  std::uint64_t latest_accepted_sequence{};
+  std::uint64_t latest_certified_sequence{};
+  std::uint64_t latest_executed_sequence{};
   std::uint64_t accepted_count{};
+  std::uint64_t executed_count{};
   std::uint64_t invalid_plan_count{};
   std::uint64_t stale_sequence_count{};
   std::uint64_t certification_reject_count{};
   RejectReason last_certification_reason{RejectReason::MissingArtifact};
   StoreReason last_reason{StoreReason::InvalidPlan};
-  bool plan_available{false};
+  bool candidate_available{false};
+  bool executed_plan_available{false};
 };
 
 struct AdmissionResult
@@ -91,8 +94,10 @@ struct AdmissionResult
   }
 };
 
-/// All-or-nothing monotonic store.  A rejected replacement cannot destroy the
-/// last accepted same-formulation plan needed by a later retained admission.
+/// Two-phase monotonic store. Certification creates a candidate only. A plan
+/// becomes retained evidence exclusively after the exact command selected from
+/// it has crossed the publisher boundary and `mark_executed()` is called.
+/// Solver completion must never overwrite the last actually executed plan.
 class Store
 {
 public:
@@ -105,6 +110,9 @@ public:
     const physical::Snapshot & physical_snapshot,
     const physical::Result & physical_result);
   StoreReason replace(std::shared_ptr<const CertifiedPlan> plan);
+  std::shared_ptr<const CertifiedPlan> candidate_snapshot() const;
+  StoreReason mark_executed(std::shared_ptr<const CertifiedPlan> plan);
+  /// Last plan whose command was successfully published.
   std::shared_ptr<const CertifiedPlan> snapshot() const;
   StoreState state() const;
   bool clear();
@@ -112,8 +120,11 @@ public:
 
 private:
   mutable std::mutex mutex_;
-  std::shared_ptr<const CertifiedPlan> plan_;
-  std::uint64_t latest_accepted_sequence_{};
+  std::shared_ptr<const CertifiedPlan> candidate_plan_;
+  std::shared_ptr<const CertifiedPlan> executed_plan_;
+  std::uint64_t latest_executed_sequence_{};
+  std::uint64_t executed_count_{};
+  std::uint64_t latest_certified_sequence_{};
   std::uint64_t accepted_count_{};
   std::uint64_t invalid_plan_count_{};
   std::uint64_t stale_sequence_count_{};

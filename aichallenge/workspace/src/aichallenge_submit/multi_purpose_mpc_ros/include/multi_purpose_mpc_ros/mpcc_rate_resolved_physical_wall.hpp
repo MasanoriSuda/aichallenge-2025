@@ -44,6 +44,11 @@ struct Snapshot
   std::uint64_t wall_grid_fingerprint{};
   recovery::FootprintExtents footprint;
   recovery::Pose2D current_pose;
+  /// Exact measured-to-control-origin path used by the canonical execution
+  /// adapter.  This cannot be replaced by the straight chord from current_pose
+  /// to the first predicted horizon state: on a curve the chord and the
+  /// latency-compensated vehicle path have different wall occupancy.
+  std::vector<recovery::Pose2D> control_prefix;
   race::ExactPhysicalExecutionTrajectory trajectory;
   std::vector<mpc_stage_geometry::CourseFrameKnot> course_frame_knots;
   double hard_wall_clearance_m{};

@@ -2353,10 +2353,15 @@ struct RateResolvedPreentryAdoptionShadowEvaluation
     std::numeric_limits<double>::quiet_NaN()};
   double progress_continuity_tolerance_m{
     std::numeric_limits<double>::quiet_NaN()};
+  double current_time_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double expected_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double steering_difference_rad{std::numeric_limits<double>::quiet_NaN()};
   double maximum_steering_step_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double reachable_steering_lower_rad{std::numeric_limits<double>::quiet_NaN()};
+  double reachable_steering_upper_rad{std::numeric_limits<double>::quiet_NaN()};
+  double steering_reachability_duration_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double expected_speed_mps{std::numeric_limits<double>::quiet_NaN()};
@@ -6437,13 +6442,24 @@ struct RateResolvedRetainedShadowEvaluation
   rate_resolved_shadow::artifact::ActuationReason actuation_reason{
     rate_resolved_shadow::artifact::ActuationReason::InvalidArtifact};
   std::uint64_t sequence{};
+  std::uint64_t decision_id{};
   std::size_t stage_index{};
   double cursor_elapsed_sec{};
   double observation_origin_sec{};
   double control_origin_sec{};
   double prediction_delay_sec{};
+  double current_time_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double previous_published_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double expected_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double steering_difference_rad{};
   double maximum_steering_step_rad{};
+  double reachable_steering_lower_rad{};
+  double reachable_steering_upper_rad{};
+  double steering_reachability_duration_sec{};
+  double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double expected_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double velocity_difference_mps{};
   double reachable_velocity_lower_mps{};
   double reachable_velocity_upper_mps{};
@@ -6456,12 +6472,24 @@ struct RateResolvedRetainedShadowEvaluation
   std::size_t follow_checked_state_count{};
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
   std::string blocking_obstacle_id;
+  recovery_footprint::PathClearanceResult delay_path_clearance;
+  recovery_footprint::PathClearanceResult connector_path_clearance;
   rate_resolved_command::Reason command_reason{
     rate_resolved_command::Reason::RetainedProofUnavailable};
   std::optional<rate_resolved_command::Candidate> command_candidate;
   rate_resolved_production::Reason production_reason{
     rate_resolved_production::Reason::RetainedProofUnavailable};
   std::optional<rate_resolved_production::Authority> production_authority;
+  std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
+  bool selected_from_executed{false};
+  rate_resolved_retained::Reason candidate_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  rate_resolved_retained::Reason executed_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  std::uint64_t candidate_sequence{};
+  std::uint64_t executed_sequence{};
+  bool candidate_attempted{false};
+  bool executed_attempted{false};
   double elapsed_ms{};
 };
 
@@ -6591,7 +6619,9 @@ struct OvertakeCanonicalFreshShadowResult
 struct CanonicalNormalPendingActuation
 {
   std::uint64_t decision_id{};
-  mpcc_progress::ActuationProposal proposal;
+  mpcc_contract::CanonicalNormalCommand command;
+  std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
+  bool promote_to_executed{false};
 };
 
 struct CanonicalNormalFinalActuationTelemetryWindow
@@ -7835,18 +7865,40 @@ struct MPC
       pending.decision_id != decision_id ||
       !std::isfinite(final_target_speed_mps) ||
       !std::isfinite(final_acceleration_mps2) ||
-      !std::isfinite(final_steering_rad))
+      !std::isfinite(final_steering_rad) ||
+      !mpcc_contract::canonical_normal_command_matches_actuation(
+        pending.command, final_target_speed_mps, final_acceleration_mps2,
+        final_steering_rad))
     {
       ++window.rejected_count;
       return;
     }
 
+    if (pending.promote_to_executed) {
+      if (
+        rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
+        pending.selected_plan == nullptr ||
+        rate_resolved_track_cruise_certified_plan_store_->mark_executed(
+          pending.selected_plan) !=
+        rate_resolved_certified::StoreReason::Accepted)
+      {
+        ++window.rejected_count;
+        RCLCPP_ERROR(
+          rclcpp::get_logger("mpc_controller"),
+          "Canonical MPCC published candidate execution promotion rejected: "
+          "decision=%lu, solution=%lu",
+          static_cast<unsigned long>(decision_id),
+          static_cast<unsigned long>(pending.command.solution_id));
+        return;
+      }
+    }
+
     const double speed_difference_mps = std::abs(
-      pending.proposal.predicted_speed_mps - final_target_speed_mps);
+      pending.command.predicted_speed_mps - final_target_speed_mps);
     const double acceleration_difference_mps2 = std::abs(
-      pending.proposal.acceleration_mps2 - final_acceleration_mps2);
+      pending.command.acceleration_mps2 - final_acceleration_mps2);
     const double steering_difference_rad = std::abs(
-      pending.proposal.steering_tire_angle_rad - final_steering_rad);
+      pending.command.steering_tire_angle_rad - final_steering_rad);
     ++window.joined_count;
     window.total_predicted_speed_vs_final_target_difference_mps +=
       speed_difference_mps;
@@ -15869,7 +15921,8 @@ struct MPC
             "cursor:%s@%.3f,"
             "progress:measured:%.3f/lifted:%.3f/expected:%.3f/"
             "delta:%.3f/tolerance:%.3f,"
-            "steering:current:%.4f/expected:%.4f/delta:%.4f/limit:%.4f,"
+            "steering:now:%.4f/held_projection:%.4f/expected:%.4f/"
+            "delta_from_now:%.4f/bounds:[%.4f,%.4f]/duration:%.3f,"
             "velocity:current:%.3f/expected:%.3f/delta:%.3f/"
             "bounds:[%.3f,%.3f]/duration:%.3f,"
             "dynamic:%zu/%.2f/%.2fms,"
@@ -15932,10 +15985,13 @@ struct MPC
             six_adoption.expected_absolute_progress_m,
             six_adoption.progress_difference_m,
             six_adoption.progress_continuity_tolerance_m,
+            six_adoption.current_time_steering_rad,
             six_adoption.current_steering_rad,
             six_adoption.expected_steering_rad,
             six_adoption.steering_difference_rad,
-            six_adoption.maximum_steering_step_rad,
+            six_adoption.reachable_steering_lower_rad,
+            six_adoption.reachable_steering_upper_rad,
+            six_adoption.steering_reachability_duration_sec,
             six_adoption.current_speed_mps,
             six_adoption.expected_speed_mps,
             six_adoption.velocity_difference_mps,
@@ -23775,16 +23831,22 @@ struct MPC
       rejection.detail = "current course-frame provenance unavailable";
       return std::nullopt;
     }
+    const auto control_prefix = build_canonical_current_control_path();
+    if (!control_prefix.has_value()) {
+      rejection.outcome = RateResolvedPhysicalShadowOutcome::AdapterRejected;
+      rejection.detail = "canonical current-to-control path unavailable";
+      return std::nullopt;
+    }
 
     rate_resolved_physical_wall::Snapshot snapshot;
     snapshot.identity.artifact = solver_snapshot.identity;
     snapshot.identity.captured_sec = now_sec;
     snapshot.current_pose = actual_wall_monitor_pose_.value();
+    snapshot.control_prefix = control_prefix->poses;
     snapshot.course_frame_knots = course_frame_knots.value();
     snapshot.identity.pose_snapshot_id =
-      canonical_retained_world::fingerprint_control_pose_path(
-      std::vector<recovery_footprint::Pose2D>{snapshot.current_pose},
-      snapshot.current_pose);
+      canonical_retained_world::fingerprint_control_pose_path(snapshot.control_prefix,
+      snapshot.control_prefix.back());
     snapshot.identity.course_frame_window_id =
       canonical_retained_world::fingerprint_course_frame_window(
       snapshot.course_frame_knots);
@@ -24491,7 +24553,7 @@ struct MPC
     }
 
     const auto certified =
-      rate_resolved_track_cruise_certified_plan_store_->snapshot();
+      rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot();
     admission.certified =
       certified != nullptr && certified->execution_artifact != nullptr &&
       certified->execution_artifact->identity.sequence == admission.sequence &&
@@ -24557,11 +24619,15 @@ struct MPC
       request.obstacles.obstacles.push_back(std::move(obstacle));
     }
     request.current_speed_mps = current_speed_mps_;
+    request.current_time_steering_rad =
+      current_physical_steering_state_->current_time_steering_rad;
     request.current_steering_rad =
       physical_control_origin_steering_rad_.value();
+    request.previous_published_steering_rad =
+      current_physical_steering_state_->committed_steering_rad;
+    request.publication_interval_sec = model->Ts;
     request.minimum_acceleration_mps2 = cfg.a_min;
     request.maximum_acceleration_mps2 = cfg.a_max;
-    request.publication_interval_sec = model->Ts;
     return request;
   }
 
@@ -24659,9 +24725,16 @@ struct MPC
     evaluation.progress_continuity_tolerance_m =
       result.progress_continuity_tolerance_m;
     evaluation.current_steering_rad = result.current_steering_rad;
+    evaluation.current_time_steering_rad = result.current_time_steering_rad;
     evaluation.expected_steering_rad = result.expected_steering_rad;
     evaluation.steering_difference_rad = result.steering_difference_rad;
     evaluation.maximum_steering_step_rad = result.maximum_steering_step_rad;
+    evaluation.reachable_steering_lower_rad =
+      result.reachable_steering_lower_rad;
+    evaluation.reachable_steering_upper_rad =
+      result.reachable_steering_upper_rad;
+    evaluation.steering_reachability_duration_sec =
+      result.steering_reachability_duration_sec;
     evaluation.current_speed_mps = result.current_speed_mps;
     evaluation.expected_speed_mps = result.expected_speed_mps;
     evaluation.velocity_difference_mps = result.velocity_difference_mps;
@@ -24681,9 +24754,9 @@ struct MPC
     return finish();
   }
 
-  RateResolvedRetainedShadowEvaluation
-  evaluate_rate_resolved_track_cruise_retained_shadow(
-    const MpcProblem & problem, const double now_sec) const
+  RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan(
+    const MpcProblem & problem, const double now_sec,
+    std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan) const
   {
     const auto started = SteadyClock::now();
     RateResolvedRetainedShadowEvaluation evaluation;
@@ -24693,19 +24766,17 @@ struct MPC
           SteadyClock::now() - started).count();
         return evaluation;
       };
-    if (
-      rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
+    if (plan == nullptr ||
       model == nullptr || model->reference_path == nullptr ||
       gap_planner == nullptr ||
       overtake_static_wall_grid_snapshot_owner_ == nullptr)
     {
       return finish();
     }
-    const auto plan =
-      rate_resolved_track_cruise_certified_plan_store_->snapshot();
     if (plan != nullptr && plan->execution_artifact != nullptr) {
       evaluation.sequence = plan->execution_artifact->identity.sequence;
     }
+    evaluation.selected_plan = plan;
     const auto current_intent = current_control_intent();
     auto request = build_rate_resolved_current_world_request(
       plan, current_intent, problem.progress_origin_m, now_sec);
@@ -24745,12 +24816,31 @@ struct MPC
     }
     evaluation.obstacle_count = request->obstacles.obstacles.size();
     const auto result = rate_resolved_retained::evaluate(request.value());
+    evaluation.decision_id = request->decision_id;
+    evaluation.observation_origin_sec = request->now_sec;
+    evaluation.control_origin_sec = request->control_origin_sec;
+    evaluation.prediction_delay_sec =
+      request->control_origin_sec - request->now_sec;
+    evaluation.cursor_elapsed_sec = result.cursor_elapsed_sec;
     evaluation.reason = result.reason;
     evaluation.cursor_reason = result.cursor_reason;
     evaluation.actuation_reason = result.actuation_reason;
+    evaluation.current_steering_rad = result.current_steering_rad;
+    evaluation.current_time_steering_rad = result.current_time_steering_rad;
+    evaluation.previous_published_steering_rad =
+      result.previous_published_steering_rad;
+    evaluation.expected_steering_rad = result.expected_steering_rad;
     evaluation.steering_difference_rad = result.steering_difference_rad;
     evaluation.maximum_steering_step_rad =
       result.maximum_steering_step_rad;
+    evaluation.reachable_steering_lower_rad =
+      result.reachable_steering_lower_rad;
+    evaluation.reachable_steering_upper_rad =
+      result.reachable_steering_upper_rad;
+    evaluation.steering_reachability_duration_sec =
+      result.steering_reachability_duration_sec;
+    evaluation.current_speed_mps = result.current_speed_mps;
+    evaluation.expected_speed_mps = result.expected_speed_mps;
     evaluation.velocity_difference_mps = result.velocity_difference_mps;
     evaluation.reachable_velocity_lower_mps =
       result.reachable_velocity_lower_mps;
@@ -24767,6 +24857,8 @@ struct MPC
       result.follow_checked_state_count;
     evaluation.follow_minimum_gap_m = result.follow_minimum_gap_m;
     evaluation.blocking_obstacle_id = result.blocking_obstacle_id;
+    evaluation.delay_path_clearance = result.delay_path_clearance;
+    evaluation.connector_path_clearance = result.connector_path_clearance;
     const auto command = rate_resolved_command::build(result);
     evaluation.command_reason = command.reason;
     evaluation.command_candidate = command.candidate;
@@ -24796,6 +24888,70 @@ struct MPC
     return finish();
   }
 
+  RateResolvedRetainedShadowEvaluation
+  evaluate_rate_resolved_track_cruise_retained_shadow(
+    const MpcProblem & problem, const double now_sec) const
+  {
+    const auto started = SteadyClock::now();
+    RateResolvedRetainedShadowEvaluation final_evaluation;
+    if (rate_resolved_track_cruise_certified_plan_store_ == nullptr) {
+      return final_evaluation;
+    }
+
+    const auto candidate_plan =
+      rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot();
+    const auto executed_plan =
+      rate_resolved_track_cruise_certified_plan_store_->snapshot();
+    const auto sequence_of =
+      [](const std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
+        & plan) {
+        return plan != nullptr && plan->execution_artifact != nullptr ?
+               plan->execution_artifact->identity.sequence :
+               0U;
+      };
+    const std::uint64_t candidate_sequence = sequence_of(candidate_plan);
+    const std::uint64_t executed_sequence = sequence_of(executed_plan);
+
+    if (candidate_plan != nullptr) {
+      final_evaluation = evaluate_rate_resolved_track_cruise_plan(
+        problem, now_sec, candidate_plan);
+      final_evaluation.candidate_attempted = true;
+      final_evaluation.candidate_reason = final_evaluation.reason;
+      final_evaluation.candidate_sequence = candidate_sequence;
+      final_evaluation.executed_sequence = executed_sequence;
+      if (final_evaluation.production_authority.has_value()) {
+        final_evaluation.selected_from_executed =
+          candidate_sequence == executed_sequence && executed_sequence != 0U;
+        final_evaluation.elapsed_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started)
+          .count();
+        return final_evaluation;
+      }
+    }
+
+    if (executed_plan != nullptr && (candidate_plan == nullptr ||
+      executed_sequence != candidate_sequence))
+    {
+      const auto candidate_reason = final_evaluation.candidate_reason;
+      const bool candidate_attempted = final_evaluation.candidate_attempted;
+      auto executed_evaluation = evaluate_rate_resolved_track_cruise_plan(
+        problem, now_sec, executed_plan);
+      executed_evaluation.candidate_attempted = candidate_attempted;
+      executed_evaluation.candidate_reason = candidate_reason;
+      executed_evaluation.candidate_sequence = candidate_sequence;
+      executed_evaluation.executed_attempted = true;
+      executed_evaluation.executed_reason = executed_evaluation.reason;
+      executed_evaluation.executed_sequence = executed_sequence;
+      executed_evaluation.selected_from_executed =
+        executed_evaluation.production_authority.has_value();
+      final_evaluation = std::move(executed_evaluation);
+    }
+    final_evaluation.elapsed_ms =
+      std::chrono::duration<double, std::milli>(SteadyClock::now() - started)
+      .count();
+    return final_evaluation;
+  }
+
   void record_rate_resolved_track_cruise_shadow(
     const MpcProblem & problem, const double now_sec,
     const RateResolvedRetainedShadowEvaluation & retained)
@@ -24811,6 +24967,76 @@ struct MPC
     window.maximum_retained_ms = std::max(
       window.maximum_retained_ms, retained.elapsed_ms);
     window.last_retained = retained;
+    const bool retained_reason_changed =
+      !rate_resolved_track_cruise_retained_trace_initialized_ ||
+      retained.reason != rate_resolved_track_cruise_last_retained_reason_;
+    if (retained_reason_changed) {
+      ++rate_resolved_track_cruise_retained_suppressed_transition_count_;
+      const bool first_transition =
+        !rate_resolved_track_cruise_retained_trace_initialized_;
+      const bool trace_due =
+        first_transition ||
+        !std::isfinite(rate_resolved_track_cruise_retained_last_trace_sec_) ||
+        now_sec - rate_resolved_track_cruise_retained_last_trace_sec_ >= 0.25;
+      if (cfg.v2x_behavior.debug_log_enabled && trace_due) {
+        const auto & delay = retained.delay_path_clearance;
+        const auto & connector = retained.connector_path_clearance;
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Rate-resolved retained reason transition: decision=%lu, "
+          "previous=%s, current=%s, suppressed=%lu, sequence=%lu, stage=%lu, "
+          "time=observation:%.6f/control:%.6f/delay:%.6f/cursor:%.6f, "
+          "steering=physical_now:%.6f/physical_control_origin:%.6f/"
+          "previous_published:%.6f/expected:%.6f/"
+          "publication_delta:%.6f/bounds:[%.6f,%.6f]/duration:%.6f, "
+          "velocity=current:%.6f/expected:%.6f/delta:%.6f/"
+          "bounds:[%.6f,%.6f]/duration:%.6f, "
+          "delay_path=valid:%d/clear:%d/reason:%s/checked:%lu/"
+          "reject_index:%lu/reject_pose:%d/(%.3f,%.3f,%.3f), "
+          "connector=valid:%d/clear:%d/reason:%s/checked:%lu/"
+          "reject_index:%lu/reject_pose:%d/(%.3f,%.3f,%.3f)",
+          static_cast<unsigned long>(retained.decision_id),
+          rate_resolved_track_cruise_retained_trace_initialized_ ?
+          rate_resolved_retained::to_string(
+            rate_resolved_track_cruise_last_retained_reason_) :
+          "none",
+          rate_resolved_retained::to_string(retained.reason),
+          static_cast<unsigned long>(
+            rate_resolved_track_cruise_retained_suppressed_transition_count_ -
+            1U),
+          static_cast<unsigned long>(retained.sequence),
+          static_cast<unsigned long>(retained.stage_index),
+          retained.observation_origin_sec, retained.control_origin_sec,
+          retained.prediction_delay_sec, retained.cursor_elapsed_sec,
+          retained.current_time_steering_rad, retained.current_steering_rad,
+          retained.previous_published_steering_rad,
+          retained.expected_steering_rad, retained.steering_difference_rad,
+          retained.reachable_steering_lower_rad,
+          retained.reachable_steering_upper_rad,
+          retained.steering_reachability_duration_sec,
+          retained.current_speed_mps, retained.expected_speed_mps,
+          retained.velocity_difference_mps,
+          retained.reachable_velocity_lower_mps,
+          retained.reachable_velocity_upper_mps,
+          retained.velocity_reachability_duration_sec, delay.valid ? 1 : 0,
+          delay.clear ? 1 : 0, recovery_footprint::to_string(delay.reason),
+          static_cast<unsigned long>(delay.checked_pose_count),
+          static_cast<unsigned long>(delay.rejected_path_index),
+          delay.rejected_pose_available ? 1 : 0, delay.rejected_pose.x_m,
+          delay.rejected_pose.y_m, delay.rejected_pose.yaw_rad,
+          connector.valid ? 1 : 0, connector.clear ? 1 : 0,
+          recovery_footprint::to_string(connector.reason),
+          static_cast<unsigned long>(connector.checked_pose_count),
+          static_cast<unsigned long>(connector.rejected_path_index),
+          connector.rejected_pose_available ? 1 : 0,
+          connector.rejected_pose.x_m, connector.rejected_pose.y_m,
+          connector.rejected_pose.yaw_rad);
+        rate_resolved_track_cruise_retained_last_trace_sec_ = now_sec;
+        rate_resolved_track_cruise_retained_suppressed_transition_count_ = 0U;
+      }
+      rate_resolved_track_cruise_last_retained_reason_ = retained.reason;
+      rate_resolved_track_cruise_retained_trace_initialized_ = true;
+    }
     if (rate_resolved_track_cruise_physical_wall_mailbox_ != nullptr) {
       const auto physical_result =
         rate_resolved_track_cruise_physical_wall_mailbox_->latest_after(
@@ -25173,7 +25399,8 @@ struct MPC
       "rollback:%lu/unsubmitted:%lu/superseded:%lu/identity_mismatch:%lu, "
       "consumed=%lu/current_semantic=%lu/"
       "stale_semantic=%lu/worker_reject=%lu, outcome=%s, time=%.3f/%.3fms"
-      "(avg/max), certified_store=available:%d/sequence:%lu/accepted:%lu/"
+      "(avg/max), certified_store=candidate:%d/sequence:%lu/certified:%lu/"
+      "executed:%d/sequence:%lu/executions:%lu/"
       "invalid:%lu/stale:%lu/cert_reject:%lu/cert_reason:%s/last:%s, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.physical_submission_count),
@@ -25200,10 +25427,14 @@ struct MPC
       to_string(window.last_physical.outcome),
       window.total_physical_ms / physical_denominator,
       window.maximum_physical_ms,
-      certified_plan_store_state.plan_available ? 1 : 0,
+      certified_plan_store_state.candidate_available ? 1 : 0,
       static_cast<unsigned long>(
-        certified_plan_store_state.latest_accepted_sequence),
+        certified_plan_store_state.latest_certified_sequence),
       static_cast<unsigned long>(certified_plan_store_state.accepted_count),
+      certified_plan_store_state.executed_plan_available ? 1 : 0,
+      static_cast<unsigned long>(
+        certified_plan_store_state.latest_executed_sequence),
+      static_cast<unsigned long>(certified_plan_store_state.executed_count),
       static_cast<unsigned long>(certified_plan_store_state.invalid_plan_count),
       static_cast<unsigned long>(certified_plan_store_state.stale_sequence_count),
       static_cast<unsigned long>(
@@ -25229,10 +25460,16 @@ struct MPC
       "control_path:%lu/delay:%lu/connector:%lu, time=%.3f/%.3fms(avg/max), "
       "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
       "time=observation:%.6f/control:%.6f/delay:%.6f/cursor_elapsed:%.6f/"
-      "steering_delta:%.6f/limit:%.6f/velocity_delta:%.6f/"
+      "steering=physical_now:%.6f/physical_control_origin:%.6f/"
+      "previous_published:%.6f/expected:%.6f/"
+      "publication_delta:%.6f/bounds:[%.6f,%.6f]/duration:%.6f/"
+      "velocity_delta:%.6f/"
       "velocity_bounds:[%.6f,%.6f]/velocity_duration:%.6f/"
-      "peers:%lu/dynamic_samples:%lu/min_dynamic_clearance:%.3f/blocked_by:%s/"
+      "peers:%lu/dynamic_samples:%lu/min_dynamic_clearance:%.3f/"
+      "blocked_by:%s/"
       "follow_generation:%lu/follow_states:%lu/min_follow_gap:%.3f, "
+      "selection=candidate:%d/seq:%lu/reason:%s/executed:%d/seq:%lu/"
+      "reason:%s/source:%s, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.retained_attempt_count),
       static_cast<unsigned long>(retained_count(
@@ -25298,8 +25535,14 @@ struct MPC
       window.last_retained.control_origin_sec,
       window.last_retained.prediction_delay_sec,
       window.last_retained.cursor_elapsed_sec,
+      window.last_retained.current_time_steering_rad,
+      window.last_retained.current_steering_rad,
+      window.last_retained.previous_published_steering_rad,
+      window.last_retained.expected_steering_rad,
       window.last_retained.steering_difference_rad,
-      window.last_retained.maximum_steering_step_rad,
+      window.last_retained.reachable_steering_lower_rad,
+      window.last_retained.reachable_steering_upper_rad,
+      window.last_retained.steering_reachability_duration_sec,
       window.last_retained.velocity_difference_mps,
       window.last_retained.reachable_velocity_lower_mps,
       window.last_retained.reachable_velocity_upper_mps,
@@ -25314,7 +25557,18 @@ struct MPC
         window.last_retained.follow_target_observation_generation),
       static_cast<unsigned long>(
         window.last_retained.follow_checked_state_count),
-      window.last_retained.follow_minimum_gap_m);
+      window.last_retained.follow_minimum_gap_m,
+      window.last_retained.candidate_attempted ? 1 : 0,
+      static_cast<unsigned long>(window.last_retained.candidate_sequence),
+      rate_resolved_retained::to_string(
+        window.last_retained.candidate_reason),
+      window.last_retained.executed_attempted ? 1 : 0,
+      static_cast<unsigned long>(window.last_retained.executed_sequence),
+      rate_resolved_retained::to_string(window.last_retained.executed_reason),
+      window.last_retained.production_authority.has_value() ?
+      (window.last_retained.selected_from_executed ? "executed" :
+      "candidate") :
+      "none");
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(
@@ -26198,16 +26452,13 @@ struct MPC
     overtake_infeasibility_counter_ = 0;
     last_control_was_fallback_ = false;
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
-      command.decision_id,
-      mpcc_progress::ActuationProposal{
-        command.predicted_speed_mps,
-        command.acceleration_mps2,
-        command.curvature_radpm,
-        command.steering_tire_angle_rad,
-        command.virtual_progress_speed_mps}};
+      command.decision_id, command, retained.selected_plan,
+      !retained.selected_from_executed};
     last_control_resolution_reason_ =
       std::string{"canonical-rate-resolved-"} +
-      mpcc_contract::to_string(intent) + "-retained";
+      mpcc_contract::to_string(intent) +
+      (retained.selected_from_executed ? "-executed-retained" :
+      "-certified-candidate");
     last_solved_wp_id = problem.tracking_wp_id;
     MpcControlCycleResult output{
       Eigen::Vector2d(
@@ -27024,6 +27275,14 @@ struct MPC
   rate_resolved_track_cruise_shadow_telemetry_window_;
   double rate_resolved_track_cruise_shadow_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
+  rate_resolved_retained::Reason
+    rate_resolved_track_cruise_last_retained_reason_{
+    rate_resolved_retained::Reason::MissingPlan};
+  bool rate_resolved_track_cruise_retained_trace_initialized_{false};
+  double rate_resolved_track_cruise_retained_last_trace_sec_{
+    -std::numeric_limits<double>::infinity()};
+  std::uint64_t
+    rate_resolved_track_cruise_retained_suppressed_transition_count_{};
   RateResolvedCommandShadowTelemetryWindow
   rate_resolved_track_cruise_command_telemetry_window_;
   double rate_resolved_track_cruise_command_last_log_sec_{
@@ -50022,6 +50281,7 @@ private:
     }
     command_pub_->publish(raw_command);
     last_published_steering_rad_ = raw_command.lateral.steering_tire_angle;
+    last_published_steering_steady_ = SteadyClock::now();
     const double actual_speed_mps =
       odom_ != nullptr && std::isfinite(odom_->twist.twist.linear.x) ?
       odom_->twist.twist.linear.x : std::numeric_limits<double>::quiet_NaN();
@@ -50061,6 +50321,7 @@ private:
     command_raw_pub_->publish(raw_command);
     command_pub_->publish(final_command);
     last_published_steering_rad_ = final_command.lateral.steering_tire_angle;
+    last_published_steering_steady_ = SteadyClock::now();
     command_failsafe_active_ = false;
     return published_steering;
   }
@@ -53816,11 +54077,17 @@ private:
     steering_state_contract::Result physical_steering_resolution;
     if (
       steering_report_ != nullptr &&
-      last_steering_receipt_steady_.has_value())
+      last_steering_receipt_steady_.has_value() &&
+      last_published_steering_steady_.has_value())
     {
       const double steering_observation_age_sec =
         std::chrono::duration<double>(
         steady_now - last_steering_receipt_steady_.value()).count();
+      const double committed_command_age_sec =
+        std::chrono::duration<double>(
+        steady_now -
+        last_published_steering_steady_.value())
+        .count();
       physical_steering_resolution = steering_state_contract::resolve(
         steering_state_contract::Request{
           steering_report_->steering_tire_angle,
@@ -53829,7 +54096,7 @@ private:
           state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0,
           mpc_cfg_.odom_timeout_sec,
           std::abs(mpc_cfg_.delta_max),
-          std::abs(mpc_cfg_.steer_rate_max)});
+          std::abs(mpc_cfg_.steer_rate_max), committed_command_age_sec});
     }
     mpc_->update_physical_steering_state_for_execution_contract(
       physical_steering_resolution.state);
@@ -54013,7 +54280,7 @@ private:
       return;
     }
     mpc_->record_canonical_normal_final_command(
-      active_control_decision_id_, u[0], acc, u[1],
+      active_control_decision_id_, u[0], acc, published_steering.value(),
       current_time.seconds());
     if (
       !recovery_command_active && !mpc_fallback_active &&
@@ -54103,6 +54370,11 @@ private:
         physical_steering_resolution.state.has_value() ?
         physical_steering_resolution.state->observation_age_sec :
         std::numeric_limits<double>::quiet_NaN();
+      const double committed_projection_duration_sec =
+        physical_steering_resolution.state.has_value() ?
+        physical_steering_resolution.state
+        ->committed_command_projection_duration_sec :
+        std::numeric_limits<double>::quiet_NaN();
       const bool committed_command_reached =
         physical_steering_resolution.state.has_value() &&
         physical_steering_resolution.state->committed_command_reached;
@@ -54110,7 +54382,8 @@ private:
         get_logger(), *get_clock(), 1000,
         "Steering debug: wp_id=%d, speed=%.3f, yaw_rate=%.3f, raw=%.4f, "
         "output=%.4f, measured_steering=%.4f, physical_origin=%.4f, "
-        "committed_input=%.4f, reachable_step=%.4f, command_reached=%d, age=%.4f, "
+        "committed_input=%.4f, reachable_step=%.4f, command_reached=%d, "
+        "observation_age=%.4f, committed_projection=%.4f, "
         "predicted_kappa=%.5f, measured_kappa=%.5f, "
         "error=%.5f, ratio=%.3f, valid=%d, ref_kappa=%.5f, "
         "solver_fallback=%d, recovery=%d",
@@ -54119,6 +54392,7 @@ private:
         committed_steering_rad, maximum_reachable_step_rad,
         committed_command_reached ? 1 : 0,
         steering_observation_age_sec,
+        committed_projection_duration_sec,
         predicted_curvature, measured_curvature, curvature_error, curvature_ratio,
         measured_curvature_valid ? 1 : 0, reference_curvature,
         mpc_fallback_active ? 1 : 0, recovery_command_active ? 1 : 0);
@@ -54325,6 +54599,7 @@ private:
   std::optional<SteadyClock::time_point> last_odom_receipt_steady_;
   std::optional<SteadyClock::time_point> last_steering_receipt_steady_;
   std::optional<double> last_published_steering_rad_;
+  std::optional<SteadyClock::time_point> last_published_steering_steady_;
   std::optional<rclcpp::Time> last_odom_source_stamp_;
   std::optional<SteadyClock::time_point> last_odom_source_advance_steady_;
   awsim_boost::BlockReason last_awsim_boost_block_reason_{awsim_boost::BlockReason::None};

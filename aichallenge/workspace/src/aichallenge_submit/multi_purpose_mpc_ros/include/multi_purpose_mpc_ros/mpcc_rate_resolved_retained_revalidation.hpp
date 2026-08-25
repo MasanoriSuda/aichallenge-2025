@@ -68,10 +68,21 @@ struct Request
   DynamicWorldObservation obstacles;
   std::optional<FollowTargetObservation> follow_target;
   double current_speed_mps{};
+  /// Physical steering estimated at request.now_sec from the latest measured
+  /// report and the command which was already committed before this cycle.
+  double current_time_steering_rad{};
+  /// Physical steering projected to control_origin_sec if the previously
+  /// committed command remains held.  This is diagnostic provenance and the
+  /// fresh problem's nominal initial state, not the predecessor of the next
+  /// serialized command.
   double current_steering_rad{};
+  /// Last steering command successfully serialized to the actuator.  Command
+  /// slew is a publication-to-publication contract and must not be inferred
+  /// from either observed physical steering value above.
+  double previous_published_steering_rad{};
+  double publication_interval_sec{};
   double minimum_acceleration_mps2{};
   double maximum_acceleration_mps2{};
-  double publication_interval_sec{};
 };
 
 enum class Reason
@@ -122,8 +133,13 @@ struct Proof
   double expected_absolute_progress_m{};
   double lifted_measured_progress_m{};
   long lap_offset{};
+  double current_time_steering_rad{};
+  double previous_published_steering_rad{};
   double steering_difference_rad{};
   double maximum_steering_step_rad{};
+  double reachable_steering_lower_rad{};
+  double reachable_steering_upper_rad{};
+  double steering_reachability_duration_sec{};
   double velocity_difference_mps{};
   double reachable_velocity_lower_mps{};
   double reachable_velocity_upper_mps{};
@@ -162,11 +178,21 @@ struct Result
     std::numeric_limits<double>::quiet_NaN()};
   double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double expected_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double current_time_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double previous_published_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   double expected_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double steering_difference_rad{
     std::numeric_limits<double>::quiet_NaN()};
   double maximum_steering_step_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double reachable_steering_lower_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double reachable_steering_upper_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double steering_reachability_duration_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double velocity_difference_mps{
     std::numeric_limits<double>::quiet_NaN()};
@@ -176,6 +202,8 @@ struct Result
     std::numeric_limits<double>::quiet_NaN()};
   double velocity_reachability_duration_sec{
     std::numeric_limits<double>::quiet_NaN()};
+  recovery::PathClearanceResult delay_path_clearance;
+  recovery::PathClearanceResult connector_path_clearance;
   std::optional<Proof> proof;
 };
 

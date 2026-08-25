@@ -101,6 +101,7 @@ physical::Snapshot source_snapshot(
     recovery::occupancy_grid_fingerprint(*snapshot.wall_grid);
   snapshot.footprint = {0.05, 0.05, 0.05, 0.05, 0.0};
   snapshot.current_pose = {50.0, 0.0, 0.0};
+  snapshot.control_prefix = {snapshot.current_pose};
   snapshot.trajectory.progress_origin_m = 50.0;
   snapshot.trajectory.path_distance_m = {0.2, 0.4};
   snapshot.trajectory.lateral_m = {0.10, 0.20};
@@ -169,10 +170,12 @@ retained::Request accepted_request(
   request.obstacles.observed_sec = 1.05;
   request.obstacles.current = true;
   request.current_speed_mps = 2.05;
+  request.current_time_steering_rad = 0.105;
   request.current_steering_rad = 0.105;
+  request.previous_published_steering_rad = 0.105;
+  request.publication_interval_sec = 0.025;
   request.minimum_acceleration_mps2 = -3.0;
   request.maximum_acceleration_mps2 = 1.0;
-  request.publication_interval_sec = 0.025;
   return request;
 }
 
@@ -488,13 +491,43 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
-  request.current_steering_rad = -0.10;
+  request.previous_published_steering_rad = -0.10;
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::SteeringUnreachable);
-  EXPECT_NEAR(result.current_steering_rad, -0.10, 1e-9);
+  EXPECT_NEAR(result.current_steering_rad, 0.105, 1e-9);
+  EXPECT_NEAR(result.current_time_steering_rad, 0.105, 1e-9);
+  EXPECT_NEAR(result.previous_published_steering_rad, -0.10, 1e-9);
   EXPECT_NEAR(result.expected_steering_rad, 0.105, 1e-9);
   EXPECT_NEAR(result.steering_difference_rad, 0.205, 1e-9);
   EXPECT_NEAR(result.maximum_steering_step_rad, 0.025001, 1e-9);
+  EXPECT_NEAR(result.reachable_steering_lower_rad, -0.125001, 1e-9);
+  EXPECT_NEAR(result.reachable_steering_upper_rad, -0.074999, 1e-9);
+  EXPECT_NEAR(result.steering_reachability_duration_sec, 0.025, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  UsesPublishedCommandForSteeringReachability)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.control_origin_sec = request.now_sec + 0.05;
+  request.measured_to_control_path = {
+    request.control_pose, request.control_pose};
+  request.measured_to_control_elapsed_sec = {0.0, 0.05};
+  request.current_time_steering_rad = -0.247;
+  request.current_steering_rad = -0.337;
+  request.previous_published_steering_rad = 0.10;
+
+  // The physical state belongs to model initialization.  Serialized command
+  // reachability belongs to the last published command; actuator lag must not
+  // turn a compliant 0.100 -> 0.105 command into a false rejection.
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_NEAR(result.proof->previous_published_steering_rad, 0.10, 1e-9);
+  EXPECT_NEAR(result.proof->steering_difference_rad, 0.010, 1e-9);
+  EXPECT_NEAR(result.proof->steering_reachability_duration_sec, 0.025, 1e-9);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableVelocity)

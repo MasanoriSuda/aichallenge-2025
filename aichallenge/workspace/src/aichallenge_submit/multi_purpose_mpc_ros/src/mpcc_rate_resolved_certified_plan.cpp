@@ -161,14 +161,46 @@ StoreReason Store::replace(std::shared_ptr<const CertifiedPlan> plan)
   }
   const auto sequence = plan->execution_artifact->identity.sequence;
   std::lock_guard<std::mutex> lock(mutex_);
-  if (sequence <= latest_accepted_sequence_) {
+  if (sequence <= latest_certified_sequence_) {
     ++stale_sequence_count_;
     last_reason_ = StoreReason::StaleSequence;
     return StoreReason::StaleSequence;
   }
-  plan_ = std::move(plan);
-  latest_accepted_sequence_ = sequence;
+  candidate_plan_ = std::move(plan);
+  latest_certified_sequence_ = sequence;
   ++accepted_count_;
+  last_reason_ = StoreReason::Accepted;
+  return StoreReason::Accepted;
+}
+
+std::shared_ptr<const CertifiedPlan> Store::candidate_snapshot() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return candidate_plan_;
+}
+
+StoreReason Store::mark_executed(std::shared_ptr<const CertifiedPlan> plan)
+{
+  if (plan == nullptr || validate(*plan) != RejectReason::None) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++invalid_plan_count_;
+    last_reason_ = StoreReason::InvalidPlan;
+    return StoreReason::InvalidPlan;
+  }
+  const auto sequence = plan->execution_artifact->identity.sequence;
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (sequence < latest_executed_sequence_) {
+    ++stale_sequence_count_;
+    last_reason_ = StoreReason::StaleSequence;
+    return StoreReason::StaleSequence;
+  }
+  if (executed_plan_ != nullptr && sequence == latest_executed_sequence_) {
+    last_reason_ = StoreReason::Accepted;
+    return StoreReason::Accepted;
+  }
+  executed_plan_ = std::move(plan);
+  latest_executed_sequence_ = sequence;
+  ++executed_count_;
   last_reason_ = StoreReason::Accepted;
   return StoreReason::Accepted;
 }
@@ -176,35 +208,44 @@ StoreReason Store::replace(std::shared_ptr<const CertifiedPlan> plan)
 std::shared_ptr<const CertifiedPlan> Store::snapshot() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  return plan_;
+  return executed_plan_;
 }
 
 StoreState Store::state() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  return StoreState{
-    latest_accepted_sequence_, accepted_count_, invalid_plan_count_,
-    stale_sequence_count_, certification_reject_count_,
-    last_certification_reason_, last_reason_, static_cast<bool>(plan_)};
+  StoreState state;
+  state.latest_certified_sequence = latest_certified_sequence_;
+  state.latest_executed_sequence = latest_executed_sequence_;
+  state.accepted_count = accepted_count_;
+  state.executed_count = executed_count_;
+  state.invalid_plan_count = invalid_plan_count_;
+  state.stale_sequence_count = stale_sequence_count_;
+  state.certification_reject_count = certification_reject_count_;
+  state.last_certification_reason = last_certification_reason_;
+  state.last_reason = last_reason_;
+  state.candidate_available = static_cast<bool>(candidate_plan_);
+  state.executed_plan_available = static_cast<bool>(executed_plan_);
+  return state;
 }
 
 bool Store::clear()
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  const bool had_plan = static_cast<bool>(plan_);
-  plan_.reset();
+  const bool had_plan = static_cast<bool>(executed_plan_);
+  executed_plan_.reset();
   return had_plan;
 }
 
 bool Store::clear_if_sequence(const std::uint64_t expected_sequence)
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (plan_ == nullptr ||
-      plan_->execution_artifact->identity.sequence != expected_sequence)
+  if (executed_plan_ == nullptr ||
+    executed_plan_->execution_artifact->identity.sequence != expected_sequence)
   {
     return false;
   }
-  plan_.reset();
+  executed_plan_.reset();
   return true;
 }
 

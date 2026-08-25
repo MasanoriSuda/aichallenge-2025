@@ -529,12 +529,14 @@ Result evaluate(const Request & request)
   if (request.decision_id == 0U || !std::isfinite(request.now_sec) ||
     !std::isfinite(request.current_speed_mps) ||
     request.current_speed_mps < 0.0 ||
+    !std::isfinite(request.current_time_steering_rad) ||
     !std::isfinite(request.current_steering_rad) ||
+    !std::isfinite(request.previous_published_steering_rad) ||
+    !std::isfinite(request.publication_interval_sec) ||
+    request.publication_interval_sec <= 0.0 ||
     !std::isfinite(request.minimum_acceleration_mps2) ||
     !std::isfinite(request.maximum_acceleration_mps2) ||
     request.minimum_acceleration_mps2 > request.maximum_acceleration_mps2 ||
-    !std::isfinite(request.publication_interval_sec) ||
-    request.publication_interval_sec <= 0.0 ||
     !std::isfinite(request.control_origin_sec) ||
     request.control_origin_sec < request.now_sec ||
     request.measured_to_control_path.empty() ||
@@ -560,7 +562,10 @@ Result evaluate(const Request & request)
   result.progress_continuity_tolerance_m =
     request.progress_continuity_tolerance_m;
   result.current_speed_mps = request.current_speed_mps;
+  result.current_time_steering_rad = request.current_time_steering_rad;
   result.current_steering_rad = request.current_steering_rad;
+  result.previous_published_steering_rad =
+    request.previous_published_steering_rad;
   const auto lift = lift_progress(
     request.measured_course_progress_m, expected_absolute_progress_m,
     request.path_length_m, request.progress_continuity_tolerance_m,
@@ -631,14 +636,36 @@ Result evaluate(const Request & request)
   result.expected_speed_mps = actuation.actuation->predicted_speed_mps;
   result.expected_steering_rad = actuation.actuation->steering_rad;
 
-  const double steering_difference_rad =
-    actuation.actuation->steering_rad - request.current_steering_rad;
+  // Steering has two independent contracts.  The observed/projected physical
+  // state initializes the six-state model.  The serialized command, however,
+  // must be slew-reachable from the last successfully published command over
+  // exactly one publication interval.  Substituting observed steering here
+  // makes actuator lag look like an impossible command jump and closes normal
+  // authority even when consecutive commands are physically rate compliant.
+  const double steering_reachability_duration_sec =
+    request.publication_interval_sec;
   const double maximum_steering_step_rad =
     execution.maximum_abs_steering_rate_radps *
-    request.publication_interval_sec + execution.physical_global_tolerance;
+    steering_reachability_duration_sec + execution.physical_global_tolerance;
+  const double steering_difference_rad =
+    actuation.actuation->steering_rad -
+    request.previous_published_steering_rad;
+  const double reachable_steering_lower_rad = std::max(
+    -execution.maximum_abs_steering_rad,
+    request.previous_published_steering_rad - maximum_steering_step_rad);
+  const double reachable_steering_upper_rad = std::min(
+    execution.maximum_abs_steering_rad,
+    request.previous_published_steering_rad + maximum_steering_step_rad);
   result.steering_difference_rad = steering_difference_rad;
   result.maximum_steering_step_rad = maximum_steering_step_rad;
-  if (std::abs(steering_difference_rad) > maximum_steering_step_rad) {
+  result.reachable_steering_lower_rad = reachable_steering_lower_rad;
+  result.reachable_steering_upper_rad = reachable_steering_upper_rad;
+  result.steering_reachability_duration_sec =
+    steering_reachability_duration_sec;
+  if (
+    actuation.actuation->steering_rad < reachable_steering_lower_rad ||
+    actuation.actuation->steering_rad > reachable_steering_upper_rad)
+  {
     result.reason = Reason::SteeringUnreachable;
     return result;
   }
@@ -671,6 +698,7 @@ Result evaluate(const Request & request)
   const auto delay = recovery::evaluate_clear_footprint_path(
     *source.wall_grid, clearance_footprint,
     request.measured_to_control_path, source.swept_step_m);
+  result.delay_path_clearance = delay;
   if (!delay.valid) {
     result.reason = Reason::ControlPathInvalid;
     return result;
@@ -684,6 +712,7 @@ Result evaluate(const Request & request)
   const auto connector_result = recovery::evaluate_clear_footprint_path(
     *source.wall_grid, clearance_footprint, connector,
     source.swept_step_m);
+  result.connector_path_clearance = connector_result;
   if (!connector_result.valid) {
     result.reason = Reason::ControlPathInvalid;
     return result;
@@ -771,8 +800,15 @@ Result evaluate(const Request & request)
   proof.expected_absolute_progress_m = expected_absolute_progress_m;
   proof.lifted_measured_progress_m = lift.progress_m;
   proof.lap_offset = lift.lap_offset;
+  proof.current_time_steering_rad = request.current_time_steering_rad;
+  proof.previous_published_steering_rad =
+    request.previous_published_steering_rad;
   proof.steering_difference_rad = steering_difference_rad;
   proof.maximum_steering_step_rad = maximum_steering_step_rad;
+  proof.reachable_steering_lower_rad = reachable_steering_lower_rad;
+  proof.reachable_steering_upper_rad = reachable_steering_upper_rad;
+  proof.steering_reachability_duration_sec =
+    steering_reachability_duration_sec;
   proof.velocity_difference_mps = result.velocity_difference_mps;
   proof.reachable_velocity_lower_mps = result.reachable_velocity_lower_mps;
   proof.reachable_velocity_upper_mps = result.reachable_velocity_upper_mps;

@@ -28,6 +28,10 @@ struct Request
   double maximum_observation_age_sec{};
   double maximum_abs_steering_rad{};
   double maximum_abs_steering_rate_radps{};
+  /// Age of the steering command which is currently committed to the
+  /// actuator.  It may be newer than the steering observation and therefore
+  /// cannot be applied retrospectively over the full observation age.
+  double committed_command_age_sec{};
 };
 
 struct PhysicalState
@@ -35,6 +39,9 @@ struct PhysicalState
   double measured_steering_rad{};
   double committed_steering_rad{};
   double observation_age_sec{};
+  double committed_command_projection_duration_sec{};
+  double current_time_steering_rad{};
+  double prediction_delay_sec{};
   double projection_duration_sec{};
   double maximum_reachable_step_rad{};
   double prediction_origin_steering_rad{};

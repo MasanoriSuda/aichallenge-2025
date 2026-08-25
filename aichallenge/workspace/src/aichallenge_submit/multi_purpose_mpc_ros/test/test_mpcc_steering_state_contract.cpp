@@ -13,7 +13,26 @@ namespace
 steering::Request valid_request()
 {
   return steering::Request{
-    0.20, 0.24, 0.01, 0.13, 0.50, 0.61, 0.70};
+    0.20, 0.24, 0.01, 0.13, 0.50, 0.61, 0.70, 0.02};
+}
+
+TEST(
+  MpccSteeringStateContract,
+  DoesNotApplyNewCommittedCommandBeforeItsPublication)
+{
+  auto request = valid_request();
+  request.observation_age_sec = 0.02;
+  request.committed_command_age_sec = 0.004;
+  request.committed_steering_rad = 0.40;
+
+  const auto result = steering::resolve(request);
+
+  ASSERT_TRUE(result.state.has_value());
+  // Only the 4 ms since command publication belongs to the latest command;
+  // applying it over the full 20 ms observation age is non-causal.
+  EXPECT_NEAR(
+    result.state->committed_command_projection_duration_sec, 0.004, 1e-12);
+  EXPECT_NEAR(result.state->current_time_steering_rad, 0.2028, 1e-12);
 }
 
 TEST(MpccSteeringStateContract, ReachesCommittedInputWithinLatencyPrefix)
@@ -24,6 +43,8 @@ TEST(MpccSteeringStateContract, ReachesCommittedInputWithinLatencyPrefix)
   ASSERT_TRUE(result.state.has_value());
   EXPECT_DOUBLE_EQ(result.state->measured_steering_rad, 0.20);
   EXPECT_DOUBLE_EQ(result.state->committed_steering_rad, 0.24);
+  EXPECT_NEAR(result.state->current_time_steering_rad, 0.207, 1e-12);
+  EXPECT_DOUBLE_EQ(result.state->prediction_delay_sec, 0.13);
   EXPECT_DOUBLE_EQ(result.state->projection_duration_sec, 0.14);
   EXPECT_NEAR(result.state->maximum_reachable_step_rad, 0.098, 1e-12);
   EXPECT_NEAR(result.state->prediction_origin_steering_rad, 0.24, 1e-12);
@@ -39,6 +60,7 @@ TEST(MpccSteeringStateContract, LimitsCommittedInputByPhysicalSteeringRate)
 
   ASSERT_TRUE(result.state.has_value());
   EXPECT_NEAR(result.state->prediction_origin_steering_rad, 0.298, 1e-12);
+  EXPECT_NEAR(result.state->current_time_steering_rad, 0.207, 1e-12);
   EXPECT_FALSE(result.state->committed_command_reached);
 }
 

@@ -1,6 +1,6 @@
 # multi_purpose_mpc_ros インテグレーション設計
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-18。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-26。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-02-10
 
@@ -1909,9 +1909,12 @@ latest-resultから後段で推測結合してはならない。既存の単一�
 stage geometry、intent、snapshot時刻が完全一致する場合だけ、1個のimmutable `CertifiedPlan`を
 構築する。
 
-`mpcc_rate_resolved_certified_plan::Store`はartifact sequenceに対して単調なall-or-nothing置換を行う。invalid／staleな
-置換は直前のaccepted planを破壊しない。これは将来のsame-formulation retained pathの証拠保管で
-あり、元のpose snapshotとcourse-frame windowに対する証明を後の制御周期へ延命するものではない。
+`mpcc_rate_resolved_certified_plan::Store`はartifact sequenceに対して単調な二段階ライフサイクルを持つ。
+solverと物理証明の合格はcandidateを生成するだけで、retained実行済みplanを置換しない。candidateから
+選択したexact canonical commandがmutationなしでpublisher境界を越えた後に限り、そのplanをexecutedへ
+昇格する。invalid／staleなcandidate、publish失敗、final actuation不一致は直前のexecuted planを破壊しない。
+これはsame-formulation retained pathの実行来歴を保管するものであり、元のpose snapshotとcourse-frame
+windowに対する証明を後の制御周期へ延命するものではない。
 retained実行には、exact cursor、現在intent、現在poseからremaining horizonへのconnector、現在の
 wall／obstacle worldを別のdecision identityで再証明する必要がある。
 

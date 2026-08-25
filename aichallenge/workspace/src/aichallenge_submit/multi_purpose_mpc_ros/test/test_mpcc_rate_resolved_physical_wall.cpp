@@ -57,6 +57,7 @@ wall::Snapshot snapshot()
     recovery::occupancy_grid_fingerprint(*value.wall_grid);
   value.footprint = recovery::FootprintExtents{0.1, 0.1, 0.1, 0.1, 0.0};
   value.current_pose = recovery::Pose2D{0.0, 0.0, 0.0};
+  value.control_prefix = {value.current_pose};
   value.trajectory.progress_origin_m = 0.0;
   value.trajectory.path_distance_m = {1.0, 2.0};
   value.trajectory.lateral_m = {0.0, 0.0};
@@ -100,6 +101,27 @@ TEST(MpccRateResolvedPhysicalWall, RejectsWallContactBetweenStages)
   EXPECT_EQ(
     result.diagnostic.reason,
     contract::PhysicalWallCertificateReason::SweptPathViolation);
+}
+
+TEST(MpccRateResolvedPhysicalWall, RejectsCurvedControlPrefixHiddenByClearChord)
+{
+  auto value = snapshot();
+  value.control_prefix = {
+    value.current_pose,
+    recovery::Pose2D{0.5, 0.5, 0.0},
+    recovery::Pose2D{1.0, 0.0, 0.0}};
+  const auto occupied = value.wall_grid->world_to_grid(0.5, 0.5);
+  ASSERT_TRUE(occupied.has_value());
+  auto mutable_grid = std::make_shared<recovery::OccupancyGrid>(*value.wall_grid);
+  mutable_grid->cells[occupied->row * mutable_grid->width + occupied->column] =
+    recovery::CellState::Occupied;
+  value.wall_grid = mutable_grid;
+
+  // A current-pose -> first-stage chord remains on y=0 and is clear. The
+  // production certificate must nevertheless reject the exact curved prefix
+  // consumed by retained revalidation.
+  const auto result = wall::evaluate(value);
+  EXPECT_EQ(result.outcome, wall::Outcome::SweptWallRejected);
 }
 
 TEST(MpccRateResolvedPhysicalWall, RejectsUnsealedWorldIdentity)

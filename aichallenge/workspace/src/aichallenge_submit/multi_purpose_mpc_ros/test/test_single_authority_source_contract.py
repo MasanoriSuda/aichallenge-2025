@@ -555,7 +555,10 @@ def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() ->
     assert "bind_rate_resolved_track_cruise_submission(draft, previous_steering)" not in admission
     assert "build_rate_resolved_submission_snapshot(" in admission
     assert "evaluate_rate_resolved_pipeline(" in admission
-    assert "rate_resolved_track_cruise_certified_plan_store_->snapshot()" in admission
+    assert (
+        "rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot()"
+        in admission
+    )
     assert "VelocityProgress5State" not in admission
     assert "canonical_normal_control(" not in admission
     assert "canonical_normal_emergency_stop(" not in admission
@@ -945,14 +948,15 @@ def test_six_state_preentry_adoption_reuses_current_world_proof_without_authorit
         assert evidence in adoption
 
     assert "progress:measured:%.3f/lifted:%.3f/expected:%.3f/" in SOURCE
-    assert "steering:current:%.4f/expected:%.4f/delta:%.4f/limit:%.4f" in SOURCE
+    assert "steering:now:%.4f/held_projection:%.4f/expected:%.4f/" in SOURCE
+    assert "delta_from_now:%.4f/bounds:[%.4f,%.4f]/duration:%.3f" in SOURCE
     assert "velocity:current:%.3f/expected:%.3f/delta:%.3f/" in SOURCE
 
     production_end = SOURCE.index(
         "void record_rate_resolved_track_cruise_shadow(", adoption_end
     )
     production_retained = SOURCE[adoption_end:production_end]
-    assert "build_rate_resolved_current_world_request(" in production_retained
+    assert "evaluate_rate_resolved_track_cruise_plan(" in production_retained
 
     import_start = SOURCE.index("if (accepted_async_tactical_result != nullptr) {")
     import_end = SOURCE.index(
@@ -1630,6 +1634,9 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
     ).read_text(encoding="utf-8")
     assert "std::shared_ptr<const artifact::ExecutionArtifact>" in certified_header
     assert "physical::Identity physical_identity" in certified_header
+    assert "candidate_snapshot()" in certified_header
+    assert "mark_executed(" in certified_header
+    assert "Last plan whose command was successfully published" in certified_header
     for forbidden in (
         "CanonicalExecutionPlanStore",
         "CanonicalNormalCommand",
@@ -1650,8 +1657,11 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     )
     evaluate = SOURCE[evaluate_start:record_start]
     assert "rate_resolved_track_cruise_certified_plan_store_->snapshot()" in evaluate
-    assert "build_rate_resolved_current_world_request(" in evaluate
-    assert "rate_resolved_retained::evaluate(request.value())" in evaluate
+    assert (
+        "rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot()"
+        in evaluate
+    )
+    assert "evaluate_rate_resolved_track_cruise_plan(" in evaluate
     request_start = SOURCE.index(
         "build_rate_resolved_current_world_request("
     )
@@ -1671,6 +1681,16 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
         in request_builder
     )
     assert "request.current_steering_rad = previous_steering;" not in request_builder
+    plan_evaluate_start = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_plan(", request_end
+    )
+    plan_evaluate_end = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow(",
+        plan_evaluate_start,
+    )
+    plan_evaluate = SOURCE[plan_evaluate_start:plan_evaluate_end]
+    assert "build_rate_resolved_current_world_request(" in plan_evaluate
+    assert "rate_resolved_retained::evaluate(request.value())" in plan_evaluate
     for forbidden in (
         "publish_control_command(",
         "publish_failsafe_command(",
@@ -1951,6 +1971,30 @@ def test_canonical_publisher_does_not_postprocess_certified_actuation() -> None:
         "if (!canonical_normal_execution_active || recovery_command_active) {"
         in execution
     )
+
+
+def test_certified_candidate_becomes_retained_only_after_exact_publication() -> None:
+    """Solver certification alone must not create retained execution evidence."""
+
+    record_start = SOURCE.index("void record_canonical_normal_final_command(")
+    record_end = SOURCE.index(
+        "last_overtake_authority_trace() const noexcept", record_start
+    )
+    record = SOURCE[record_start:record_end]
+    assert "canonical_normal_command_matches_actuation(" in record
+    assert "pending.promote_to_executed" in record
+    assert "mark_executed(" in record
+    assert record.index("canonical_normal_command_matches_actuation(") < record.index(
+        "mark_executed("
+    )
+
+    control_start = SOURCE.index("void control()")
+    control_end = SOURCE.index("void publish_zero_command()", control_start)
+    control = SOURCE[control_start:control_end]
+    publish = control.index("const auto published_steering = publish_control_command(")
+    record_call = control.index("mpc_->record_canonical_normal_final_command(")
+    assert publish < record_call
+    assert "published_steering.value()" in control[record_call : record_call + 250]
 
 
 def test_control_callback_overrun_trace_is_observation_only() -> None:

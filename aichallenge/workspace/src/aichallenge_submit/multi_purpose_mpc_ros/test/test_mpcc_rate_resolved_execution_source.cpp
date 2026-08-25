@@ -84,6 +84,7 @@ std::shared_ptr<const certified::CertifiedPlan> plan()
     recovery::occupancy_grid_fingerprint(*snapshot.wall_grid);
   snapshot.footprint = {0.1, 0.1, 0.1, 0.1, 0.0};
   snapshot.current_pose = {50.0, 0.0, 0.0};
+  snapshot.control_prefix = {snapshot.current_pose};
   snapshot.trajectory.progress_origin_m = 50.0;
   snapshot.trajectory.path_distance_m = {0.3, 0.6};
   snapshot.trajectory.lateral_m = {-0.1, -0.2};

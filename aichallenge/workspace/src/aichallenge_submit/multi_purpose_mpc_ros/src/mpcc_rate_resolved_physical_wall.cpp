@@ -58,10 +58,21 @@ bool snapshot_valid(const Snapshot & snapshot) noexcept
 {
   const auto trajectory_validation =
     race::validate_exact_physical_execution_trajectory(snapshot.trajectory);
+  const bool control_prefix_valid =
+    !snapshot.control_prefix.empty() &&
+    std::all_of(
+    snapshot.control_prefix.begin(), snapshot.control_prefix.end(), finite_pose) &&
+    std::abs(snapshot.control_prefix.front().x_m - snapshot.current_pose.x_m) <=
+    1e-9 &&
+    std::abs(snapshot.control_prefix.front().y_m - snapshot.current_pose.y_m) <=
+    1e-9 &&
+    std::abs(snapshot.control_prefix.front().yaw_rad - snapshot.current_pose.yaw_rad) <=
+    1e-9;
   return identity_valid(snapshot.identity) && snapshot.wall_grid != nullptr &&
          snapshot.wall_grid->valid() && snapshot.wall_grid_fingerprint != 0U &&
          snapshot.footprint.valid() &&
-         finite_pose(snapshot.current_pose) && trajectory_validation.complete &&
+         finite_pose(snapshot.current_pose) && control_prefix_valid &&
+         trajectory_validation.complete &&
          snapshot.course_frame_knots.size() >= 2U &&
          std::isfinite(snapshot.hard_wall_clearance_m) &&
          snapshot.hard_wall_clearance_m >= 0.0 &&
@@ -143,13 +154,49 @@ Result evaluate(const Snapshot & snapshot)
       Outcome::CurrentPoseRejected, reason,
       !current_sample.valid || current_sample.out_of_map ?
       "current pose wall sample unavailable" :
-      "current pose hard wall contact");
+        "current pose hard wall contact");
+  }
+
+  const auto prefix_sweep = recovery::evaluate_clear_footprint_path(
+    *snapshot.wall_grid, clearance_footprint, snapshot.control_prefix,
+    snapshot.swept_step_m);
+  if (!prefix_sweep.valid || !prefix_sweep.clear) {
+    result.diagnostic.reason =
+      prefix_sweep.rejected_path_index == 0U ?
+      contract::PhysicalWallCertificateReason::CurrentPoseHardWallContact :
+      contract::PhysicalWallCertificateReason::SweptPathViolation;
+    result.diagnostic.stage_index = -1;
+    result.diagnostic.waypoint_id = -1;
+    result.diagnostic.swept_rejected_path_index =
+      prefix_sweep.rejected_path_index;
+    result.diagnostic.swept_checked_pose_count =
+      prefix_sweep.checked_pose_count;
+    result.diagnostic.swept_rejected_substep =
+      prefix_sweep.rejected_segment_substep;
+    result.diagnostic.swept_rejected_subdivision_count =
+      prefix_sweep.rejected_segment_subdivision_count;
+    result.diagnostic.swept_rejected_segment_ratio =
+      prefix_sweep.rejected_segment_ratio;
+    if (prefix_sweep.rejected_pose_available) {
+      result.diagnostic.pose_x_m = prefix_sweep.rejected_pose.x_m;
+      result.diagnostic.pose_y_m = prefix_sweep.rejected_pose.y_m;
+      result.diagnostic.pose_yaw_rad = prefix_sweep.rejected_pose.yaw_rad;
+    }
+    std::ostringstream detail;
+    detail << "rate-resolved exact control prefix " <<
+      recovery::to_string(prefix_sweep.reason) << " at path index " <<
+      prefix_sweep.rejected_path_index << ", checked_poses=" <<
+      prefix_sweep.checked_pose_count << ", segment_ratio=" <<
+      prefix_sweep.rejected_segment_ratio;
+    result.outcome = Outcome::SweptWallRejected;
+    result.detail = detail.str();
+    return finish(std::move(result), started, snapshot.identity.captured_sec);
   }
 
   const std::size_t stage_count = snapshot.trajectory.lateral_m.size();
   std::vector<recovery::Pose2D> swept_path;
   swept_path.reserve(stage_count + 1U);
-  swept_path.push_back(snapshot.current_pose);
+  swept_path.push_back(snapshot.control_prefix.back());
   std::vector<int> waypoint_ids;
   waypoint_ids.reserve(stage_count);
   for (std::size_t stage = 0U; stage < stage_count; ++stage) {

@@ -36,7 +36,8 @@ bool request_scope_available(
   mpcc_execution_contract::ControlIntent intent,
   bool track_cruise_semantics_available,
   bool follow_semantics_available,
-  bool overtake_semantics_available) noexcept;
+  bool overtake_semantics_available,
+  bool rejoin_semantics_available) noexcept;
 bool identity_valid(const Identity & identity) noexcept;
 bool same_identity(const Identity & lhs, const Identity & rhs) noexcept;
 

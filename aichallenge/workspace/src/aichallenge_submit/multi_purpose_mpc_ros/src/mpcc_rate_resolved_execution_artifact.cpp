@@ -59,14 +59,16 @@ bool supports_intent(
          intent == mpcc_execution_contract::ControlIntent::Follow ||
          intent == mpcc_execution_contract::ControlIntent::ShiftOut ||
          intent == mpcc_execution_contract::ControlIntent::Pass ||
-         intent == mpcc_execution_contract::ControlIntent::Return;
+         intent == mpcc_execution_contract::ControlIntent::Return ||
+         intent == mpcc_execution_contract::ControlIntent::Rejoin;
 }
 
 bool request_scope_available(
   const mpcc_execution_contract::ControlIntent intent,
   const bool track_cruise_semantics_available,
   const bool follow_semantics_available,
-  const bool overtake_semantics_available) noexcept
+  const bool overtake_semantics_available,
+  const bool rejoin_semantics_available) noexcept
 {
   switch (intent) {
     case mpcc_execution_contract::ControlIntent::Track:
@@ -78,10 +80,11 @@ bool request_scope_available(
     case mpcc_execution_contract::ControlIntent::Pass:
     case mpcc_execution_contract::ControlIntent::Return:
       return overtake_semantics_available;
+    case mpcc_execution_contract::ControlIntent::Rejoin:
+      return rejoin_semantics_available;
     case mpcc_execution_contract::ControlIntent::Unknown:
     case mpcc_execution_contract::ControlIntent::Hold:
     case mpcc_execution_contract::ControlIntent::Stop:
-    case mpcc_execution_contract::ControlIntent::Rejoin:
       return false;
   }
   return false;

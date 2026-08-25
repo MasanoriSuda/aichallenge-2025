@@ -2241,6 +2241,31 @@ snapshotへjoinし、現在gapと残存全stageのhard gapを再検証する。e
 `rate-resolved request unavailable`は0件となった。Rejoinと残存5-state表現の扱いは後続Sliceで監査し、
 その完了前にparameter tuningを行わない。
 
+#### Steering-rate 6-state Rejoin production authority（2026-08-25、2025由来の暫定）
+
+OvertakeLine Recoveryが生成する`ControlIntent::Rejoin`を、Track／Cruise／Follow／ShiftOut／Pass／Returnと
+同じ`VelocitySteeringProgress6State`通常ownerへ昇格した。Recovery lineのreference、stage bounds、velocity
+horizonは従来からsemantic problemへ含まれており、Rejoinだけ別の数理モデルを必要とする根拠はなかった。
+専用5-state solver context、warm identity、plan store、evaluator、telemetryおよび明示dispatchは同一Sliceで
+物理削除した。
+
+Rejoinはtargetless intentである。shared request builderが前周期のovertake targetを無条件にコピーすると、
+target generationを持たない正当なRejoin identityが不完全になり、六状態requestが拒否される。このため、
+target ID／provenanceは`canonical_normal_intent_requires_target()`がtrueのintentだけに構成する。
+Track／Cruiseも同じ規則に従うため、終了済みOvertake targetを借用しない。mission generationはtarget identityと
+分離して維持する。
+
+retained Rejoinはartifact ageだけでは許可しない。共有current-world proofにより、現在poseからcontrol poseまでの
+到達性、course progress、steering／velocity到達性、現在のstatic wall gridとyawed footprint、現在観測される全V2X
+車両のdynamic footprintを再検証する。証拠欠損または物理的不成立時は別normal formulationへfallbackせず、
+明示的Emergencyを選択する。
+
+`output/20260825-175208`ではRejoin atomic admissionが`solver=solved`、`physical=accepted`を記録し、final
+execution contractが`authority=certified-normal-solution`、
+`formulation=velocity-steering-progress-6state`、`retained=1`、`identity=complete`でpublishされた。
+Rejoin request unavailable／unresolved publicationは0件である。同runに残る25 ms callback overrunは別の
+real-time品質課題として追跡し、本authority Sliceへsolver／horizon／weight／margin調整を混在させない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

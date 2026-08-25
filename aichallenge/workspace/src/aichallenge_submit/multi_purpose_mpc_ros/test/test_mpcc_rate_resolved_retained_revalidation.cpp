@@ -216,6 +216,7 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsEveryArtifactOwnedIntent)
     contract::ControlIntent::ShiftOut,
     contract::ControlIntent::Pass,
     contract::ControlIntent::Return,
+    contract::ControlIntent::Rejoin,
   };
   for (const auto intent : intents) {
     SCOPED_TRACE(contract::to_string(intent));
@@ -245,17 +246,18 @@ TEST(
 {
   using Intent = contract::ControlIntent;
 
-  EXPECT_TRUE(artifact::request_scope_available(Intent::Track, true, false, false));
-  EXPECT_TRUE(artifact::request_scope_available(Intent::Cruise, true, false, false));
-  EXPECT_TRUE(artifact::request_scope_available(Intent::Follow, false, true, false));
-  EXPECT_TRUE(artifact::request_scope_available(Intent::ShiftOut, false, false, true));
-  EXPECT_TRUE(artifact::request_scope_available(Intent::Pass, false, false, true));
-  EXPECT_TRUE(artifact::request_scope_available(Intent::Return, false, false, true));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Track, true, false, false, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Cruise, true, false, false, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Follow, false, true, false, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::ShiftOut, false, false, true, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Pass, false, false, true, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Return, false, false, true, false));
+  EXPECT_TRUE(artifact::request_scope_available(Intent::Rejoin, false, false, false, true));
 
-  EXPECT_FALSE(artifact::request_scope_available(Intent::Follow, true, false, true));
-  EXPECT_FALSE(artifact::request_scope_available(Intent::Cruise, false, true, true));
-  EXPECT_FALSE(artifact::request_scope_available(Intent::Rejoin, true, true, true));
-  EXPECT_FALSE(artifact::request_scope_available(Intent::Unknown, true, true, true));
+  EXPECT_FALSE(artifact::request_scope_available(Intent::Follow, true, false, true, true));
+  EXPECT_FALSE(artifact::request_scope_available(Intent::Cruise, false, true, true, true));
+  EXPECT_FALSE(artifact::request_scope_available(Intent::Rejoin, true, true, true, false));
+  EXPECT_FALSE(artifact::request_scope_available(Intent::Unknown, true, true, true, true));
 }
 
 TEST(

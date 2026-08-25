@@ -943,6 +943,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   same Slice. The finite 2026 `/awsim/cmd` StartOnce Boost, Emergency and
   Recovery remain independent. No parameter tuning or replacement fallback is
   introduced.
+- `.steering/20260825-rate-resolved-rejoin-production-owner` promotes
+  `ControlIntent::Rejoin` from its private five-state lifecycle to the shared
+  steering-rate-resolved six-state normal owner. The Rejoin solver context,
+  warm identity, plan store, evaluator, telemetry and explicit publisher
+  dispatch were physically deleted in the same Slice. A first dynamic run
+  exposed stale overtake-target provenance being copied into targetless
+  intents; target identity is now assembled only for intents that semantically
+  require it. The corrected `output/20260825-175208` records Rejoin as solved,
+  physically accepted and published with
+  `velocity-steering-progress-6state`, complete identity and retained
+  current-world certification. Callback overruns remain separate measured
+  real-time work. Residual five-state representations still require an audited
+  reachability classification before Slice 6 closes.
 
 ## Slice 7: Parameter tuning
 

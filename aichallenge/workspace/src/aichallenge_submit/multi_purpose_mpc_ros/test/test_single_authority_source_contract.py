@@ -429,6 +429,63 @@ def test_follow_uses_the_shared_rate_resolved_normal_owner() -> None:
     assert "evaluate_follow_transition_admission(" not in dispatch
 
 
+def test_rejoin_uses_the_shared_rate_resolved_normal_owner() -> None:
+    """Recovery-line Rejoin may change intent, never normal formulation."""
+
+    artifact_source = (
+        PACKAGE_ROOT / "src/mpcc_rate_resolved_execution_artifact.cpp"
+    ).read_text(encoding="utf-8")
+    supports_start = artifact_source.index("bool supports_intent(")
+    supports_end = artifact_source.index("bool identity_valid(", supports_start)
+    supports = artifact_source[supports_start:supports_end]
+    assert "ControlIntent::Rejoin" in supports
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    control_end = SOURCE.index(
+        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
+        control_start,
+    )
+    dispatch = SOURCE[control_start:control_end]
+    assert "rate_resolved_artifact::supports_intent(control_intent)" in dispatch
+    assert "evaluate_rejoin_canonical(" not in dispatch
+    assert "record_rejoin_canonical_telemetry(" not in dispatch
+    assert "VelocityProgress5State" not in dispatch
+
+
+def test_targetless_normal_intents_do_not_borrow_stale_target_provenance() -> None:
+    """Track/Cruise/Rejoin identity must not inherit a prior pass target."""
+
+    context_start = SOURCE.index("mpcc_contract::MpccProblemContext make_problem_context(")
+    context_end = SOURCE.index(
+        "mpcc_contract::MpccProblemContext seal_problem_context_for_problem(",
+        context_start,
+    )
+    context = SOURCE[context_start:context_end]
+    assert "const bool target_required =" in context
+    assert "canonical_normal_intent_requires_target(context.intent)" in context
+    assert "if (target_required && last_overtake_authority_trace_.has_value())" in context
+    assert re.search(r"if\s*\(\s*target_required\s*&&\s*provenance\.valid", context)
+
+
+def test_five_state_rejoin_owner_is_physically_deleted() -> None:
+    """The retired Rejoin solver/store/telemetry must not remain reconnectable."""
+
+    retired_symbols = (
+        "CanonicalRejoinCycleResult",
+        "CanonicalRejoinTelemetryWindow",
+        "evaluate_rejoin_canonical(",
+        "record_rejoin_canonical_telemetry(",
+        "rejoin_shadow_solver_context_",
+        "rejoin_shadow_plan_store_",
+        "rejoin_shadow_warm_start_identity_",
+        "rejoin_shadow_context_epoch_",
+        "rejoin_canonical_telemetry_window_",
+        "last_rejoin_canonical_status_",
+        "last_rejoin_canonical_telemetry_log_sec_",
+    )
+    assert not [symbol for symbol in retired_symbols if symbol in SOURCE]
+
+
 def test_five_state_follow_owner_is_physically_deleted() -> None:
     """The retired Follow worker/store/solver must not remain reconnectable."""
 
@@ -886,56 +943,6 @@ def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:
     assert "solve_problem(" not in before_old_path
 
 
-def test_rejoin_uses_isolated_canonical_production_without_legacy_fallthrough() -> None:
-    """Qualified Rejoin must publish canonical or Emergency, never legacy normal."""
-
-    activation_start = SOURCE.index(
-        "const bool progress_contouring_execution_phase ="
-    )
-    activation_end = SOURCE.index(
-        "const auto track_cruise_shadow_eligibility", activation_start
-    )
-    activation = SOURCE[activation_start:activation_end]
-    assert "OvertakeLinePhase::Recovery" not in activation
-
-    evaluator_start = SOURCE.index("evaluate_rejoin_canonical(")
-    evaluator_end = SOURCE.index(
-        "resolve_physically_validated_mpcc_execution_trajectory(", evaluator_start
-    )
-    evaluator = SOURCE[evaluator_start:evaluator_end]
-    assert "rejoin_shadow_plan_store_" in evaluator
-    assert "rejoin_shadow_warm_start_identity_" in evaluator
-    assert "rejoin_shadow_solver_context_" in evaluator
-    assert "problem.rejoin_shadow_requested" in evaluator
-    assert "track_cruise" not in evaluator
-    assert "Rejoin retained policy intentionally unavailable" in evaluator
-
-    control_start = SOURCE.index("MpcControlCycleResult get_control(")
-    rejoin_shadow = SOURCE.index(
-        "if (control_intent == mpcc_contract::ControlIntent::Rejoin)",
-        control_start,
-    )
-    control_end = SOURCE.index(
-        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
-        control_start,
-    )
-    observation = SOURCE[rejoin_shadow:control_end]
-    assert "evaluate_rejoin_canonical(" in observation
-    assert "record_rejoin_canonical_telemetry" in observation
-    assert "return canonical_normal_control(" in observation
-    assert "return canonical_normal_emergency_stop(" in observation
-    assert "canonical_result.selected.complete()" in observation
-    assert "legacy command" not in observation
-    assert "solve_problem(" not in observation
-
-    telemetry_start = SOURCE.index("void record_rejoin_canonical_telemetry(")
-    telemetry_end = SOURCE.index("void record_overtake_canonical", telemetry_start)
-    telemetry = SOURCE[telemetry_start:telemetry_end]
-    assert "production_authority=canonical" in telemetry
-    assert "authority=production" in telemetry
-    assert "legacy-unchanged" not in telemetry
-
-
 def test_extended_first_stage_linearization_is_anchored_to_the_execution_state() -> None:
     """The first affine dynamics block must be tangent at the fixed state zero."""
 
@@ -1082,10 +1089,10 @@ def test_rate_resolved_worker_is_observation_only_but_retained_proof_owns_contro
     submit_start = SOURCE.index(
         "bool submit_rate_resolved_track_cruise_shadow("
     )
-    evaluator_start = SOURCE.index(
-        "CanonicalRejoinCycleResult evaluate_rejoin_canonical("
+    transport_end = SOURCE.index(
+        "resolve_physically_validated_mpcc_execution_trajectory(", submit_start
     )
-    transport = SOURCE[submit_start:evaluator_start]
+    transport = SOURCE[submit_start:transport_end]
     assert "rate_resolved_track_cruise_shadow_worker_->submit_latest(" in transport
     assert "rate_resolved_track_cruise_shadow_mailbox_->latest_after(" in transport
     assert "authority=shadow, selected=0" in transport
@@ -1393,17 +1400,6 @@ def test_five_state_track_cruise_owner_is_physically_deleted() -> None:
     ):
         assert retired_function not in SOURCE
 
-    rejoin_start = SOURCE.index("evaluate_rejoin_canonical(")
-    rejoin_end = SOURCE.index(
-        "resolve_physically_validated_mpcc_execution_trajectory(", rejoin_start
-    )
-    rejoin = SOURCE[rejoin_start:rejoin_end]
-    assert "problem.rejoin_shadow_requested" in rejoin
-    assert "rejoin_shadow_plan_store_" in rejoin
-    assert "rejoin_shadow_solver_context_" in rejoin
-    assert "track_cruise" not in rejoin
-
-
 def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     """Resolved normal intents must use canonical MPCC or explicit Emergency."""
 
@@ -1429,7 +1425,7 @@ def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     assert "canonical normal intent has no production owner" in control
     assert "ControlIntent::Track" in control
     assert "ControlIntent::Cruise" in control
-    assert "ControlIntent::Rejoin" in control
+    assert "evaluate_rejoin_canonical(" not in control
     assert "return canonical_normal_emergency_stop(" in control
 
     assert "persistent_osqp::SolveOutcome solve_problem(" not in SOURCE

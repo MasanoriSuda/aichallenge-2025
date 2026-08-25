@@ -855,6 +855,15 @@ Finish the architecture simplification instead of leaving permanent dual control
   because no reachable runtime authority changed in this deletion Slice.
 - Slice 6 remains open for the remaining legacy/three-state normal paths and
   migration-only arbitration. Parameter tuning remains prohibited.
+- `.steering/20260825-slice6-normal-fallback-removal` removes the normal
+  dispatch fallthrough itself. Track/Cruise, Follow, Overtake, Rejoin and Stop
+  now resolve to their canonical owner or explicit Emergency; unsupported or
+  failed-admission intents cannot change formulation. The synchronous
+  extended-to-three-state-to-legacy chain, `solve_problem()` and its private
+  persistent solver history were physically deleted. Failure-first source
+  contracts, the 25-package build, 49 test targets and 1,870 tests pass.
+  Retained legacy dynamic-escape wall handoff and now-inert migration telemetry
+  remain separate, audited deletion work before Slice 6 can close.
 
 ## Slice 7: Parameter tuning
 

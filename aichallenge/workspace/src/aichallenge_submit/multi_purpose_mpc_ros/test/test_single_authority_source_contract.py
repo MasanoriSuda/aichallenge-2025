@@ -152,20 +152,6 @@ def test_bounded_overtake_prefix_has_one_horizon_owner_end_to_end() -> None:
     assert "extract_extended_execution_trajectory(\n      primal, effective_horizon" in helper
     assert "for (int stage = 0; stage < effective_horizon; ++stage)" in helper
 
-    production_start = SOURCE.index(
-        "if (\n        problem.progress_contouring_active &&\n"
-        "        cfg.progress_contouring.extended_dynamics_enabled)"
-    )
-    production_end = SOURCE.index(
-        "record_solved_mpcc_execution_trajectory(", production_start
-    )
-    production = SOURCE[production_start:production_end]
-
-    assert "executed_extended_progress_solution_wall_safe(" in production
-    assert production.index(
-        "executed_extended_progress_solution_wall_safe("
-    ) < production.index("convert_extended_solution_to_legacy(")
-
     entry_start = SOURCE.index(
         "bool revalidate_overtake_entry_execution_certificate("
     )
@@ -237,16 +223,19 @@ def test_overtake_intents_return_through_one_canonical_production_boundary() -> 
     assert "extended_progress_reentry_gate_" not in resolver
 
     control_start = SOURCE.index("MpcControlCycleResult get_control(")
-    old_path_start = SOURCE.index("Eigen::VectorXd dec;", control_start)
+    control_end = SOURCE.index(
+        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
+        control_start,
+    )
     canonical_boundary = SOURCE.index(
         "if (overtake_canonical_async_intent(control_intent))", control_start
     )
-    assert canonical_boundary < old_path_start
-    before_old_path = SOURCE[canonical_boundary:old_path_start]
+    before_old_path = SOURCE[canonical_boundary:control_end]
     assert (
         "return canonical_overtake_production_control(\n"
         "          problem, now_sec, control_intent);"
     ) in before_old_path
+    assert "solve_problem(" not in before_old_path
 
 
 def test_follow_async_snapshot_is_sealed_after_current_output_commit() -> None:
@@ -293,9 +282,14 @@ def test_rate_resolved_track_cruise_snapshot_is_submitted_after_output_commit() 
 
     control_start = SOURCE.index("MpcControlCycleResult get_control(")
     track_start = SOURCE.index(
-        "if (problem.track_cruise_shadow_requested)", control_start
+        "if (\n        control_intent == mpcc_contract::ControlIntent::Track ||\n"
+        "        control_intent == mpcc_contract::ControlIntent::Cruise)",
+        control_start,
     )
-    track_end = SOURCE.index("if (problem.rejoin_shadow_requested)", track_start)
+    track_end = SOURCE.index(
+        "if (control_intent == mpcc_contract::ControlIntent::Rejoin)",
+        track_start,
+    )
     track = SOURCE[track_start:track_end]
 
     consume = track.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
@@ -610,14 +604,17 @@ def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:
     )
 
     control_start = SOURCE.index("MpcControlCycleResult get_control(")
-    old_path_start = SOURCE.index("Eigen::VectorXd dec;", control_start)
+    control_end = SOURCE.index(
+        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
+        control_start,
+    )
     fail_closed = SOURCE.index(
         "if (unresolved_dynamic_wait_canonical_scope())", control_start
     )
-    assert fail_closed < old_path_start
-    before_old_path = SOURCE[fail_closed:old_path_start]
+    before_old_path = SOURCE[fail_closed:control_end]
     assert "return canonical_normal_emergency_stop(" in before_old_path
     assert "dynamic wait has no executable canonical lateral authority" in before_old_path
+    assert "solve_problem(" not in before_old_path
 
 
 def test_rejoin_uses_isolated_canonical_production_without_legacy_fallthrough() -> None:
@@ -645,18 +642,22 @@ def test_rejoin_uses_isolated_canonical_production_without_legacy_fallthrough() 
     assert "Rejoin retained policy intentionally unavailable" in evaluator
 
     control_start = SOURCE.index("MpcControlCycleResult get_control(")
-    old_path_start = SOURCE.index("Eigen::VectorXd dec;", control_start)
     rejoin_shadow = SOURCE.index(
-        "if (problem.rejoin_shadow_requested)", control_start
+        "if (control_intent == mpcc_contract::ControlIntent::Rejoin)",
+        control_start,
     )
-    assert rejoin_shadow < old_path_start
-    observation = SOURCE[rejoin_shadow:old_path_start]
+    control_end = SOURCE.index(
+        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
+        control_start,
+    )
+    observation = SOURCE[rejoin_shadow:control_end]
     assert "evaluate_rejoin_canonical(" in observation
     assert "record_rejoin_canonical_telemetry" in observation
     assert "return canonical_normal_control(" in observation
     assert "return canonical_normal_emergency_stop(" in observation
     assert "canonical_result.selected.complete()" in observation
     assert "legacy command" not in observation
+    assert "solve_problem(" not in observation
 
     telemetry_start = SOURCE.index("void record_rejoin_canonical_telemetry(")
     telemetry_end = SOURCE.index("void record_overtake_canonical", telemetry_start)
@@ -888,8 +889,14 @@ def test_rate_resolved_track_cruise_worker_is_observation_only_but_retained_proo
     ):
         assert forbidden not in transport
 
-    branch_start = SOURCE.index("if (problem.track_cruise_shadow_requested)")
-    branch_end = SOURCE.index("if (problem.rejoin_shadow_requested)", branch_start)
+    branch_start = SOURCE.index(
+        "if (\n        control_intent == mpcc_contract::ControlIntent::Track ||\n"
+        "        control_intent == mpcc_contract::ControlIntent::Cruise)"
+    )
+    branch_end = SOURCE.index(
+        "if (control_intent == mpcc_contract::ControlIntent::Rejoin)",
+        branch_start,
+    )
     branch = SOURCE[branch_start:branch_end]
     assert (
         "record_rate_resolved_track_cruise_shadow(\n"
@@ -1103,8 +1110,14 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
 def test_track_cruise_production_has_only_rate_resolved_normal_owner() -> None:
     """Track/Cruise must not retain a five-state publication fallback."""
 
-    branch_start = SOURCE.index("if (problem.track_cruise_shadow_requested) {")
-    branch_end = SOURCE.index("if (problem.rejoin_shadow_requested) {", branch_start)
+    branch_start = SOURCE.index(
+        "if (\n        control_intent == mpcc_contract::ControlIntent::Track ||\n"
+        "        control_intent == mpcc_contract::ControlIntent::Cruise)"
+    )
+    branch_end = SOURCE.index(
+        "if (control_intent == mpcc_contract::ControlIntent::Rejoin)",
+        branch_start,
+    )
     branch = SOURCE[branch_start:branch_end]
     assert "evaluate_rate_resolved_track_cruise_retained_shadow(" in branch
     assert "rate_resolved_track_cruise_control(" in branch
@@ -1163,6 +1176,40 @@ def test_five_state_track_cruise_owner_is_physically_deleted() -> None:
     assert "rejoin_shadow_plan_store_" in rejoin
     assert "rejoin_shadow_solver_context_" in rejoin
     assert "track_cruise" not in rejoin
+
+
+def test_get_control_has_no_legacy_normal_fallthrough() -> None:
+    """Resolved normal intents must use canonical MPCC or explicit Emergency."""
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    control_end = SOURCE.index(
+        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
+        control_start,
+    )
+    control = SOURCE[control_start:control_end]
+    for retired in (
+        "Eigen::VectorXd dec;",
+        "solve_problem(",
+        "solve_extended_progress_problem(",
+        "convert_extended_solution_to_legacy(",
+        "Formulation::ProgressContouring3State",
+        "Formulation::LegacySpatialMpc3State",
+        '"progress-3state"',
+        '"legacy-mpc"',
+        '"legacy-mpc-solved"',
+        '"extended-mpcc-solved"',
+    ):
+        assert retired not in control
+    assert "canonical normal intent has no production owner" in control
+    assert "ControlIntent::Track" in control
+    assert "ControlIntent::Cruise" in control
+    assert "ControlIntent::Rejoin" in control
+    assert "return canonical_normal_emergency_stop(" in control
+
+    assert "persistent_osqp::SolveOutcome solve_problem(" not in SOURCE
+    assert "persistent_osqp_solver_" not in SOURCE
+    assert "last_osqp_solution_" not in SOURCE
+    assert "last_osqp_progress_contouring_mode_" not in SOURCE
 
 
 def test_canonical_publisher_does_not_postprocess_certified_actuation() -> None:

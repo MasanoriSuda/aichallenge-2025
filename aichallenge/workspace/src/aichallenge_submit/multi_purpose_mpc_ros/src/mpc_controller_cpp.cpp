@@ -21770,11 +21770,6 @@ struct MPC
 
   void reset_osqp_history()
   {
-    persistent_osqp_solver_.reset();
-    last_osqp_solution_.reset();
-    last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
-    last_osqp_progress_contouring_mode_.reset();
-    last_osqp_progress_origin_m_.reset();
     persistent_extended_osqp_solver_.reset();
     certified_extended_osqp_warm_start_.reset();
     // Do not block the 40 Hz callback on a branch worker which may currently
@@ -21931,285 +21926,6 @@ struct MPC
     }
     window = MpcRtiSqpTelemetryWindow{};
     last_rti_sqp_telemetry_log_sec_ = now_sec;
-  }
-
-  persistent_osqp::SolveOutcome solve_problem(
-    const MpcProblem & problem, const double now_sec)
-  {
-    dynamic_escape_cold_retry_attempted_ = false;
-    dynamic_escape_cold_retry_succeeded_ = false;
-    dynamic_escape_cold_retry_initial_reason_.clear();
-    const bool progress_mode_changed =
-      !last_osqp_progress_contouring_mode_.has_value() ||
-      last_osqp_progress_contouring_mode_.value() != problem.progress_contouring_active;
-    const double maximum_continuous_progress_step_m = std::max(
-      2.0, cfg.progress_contouring.trust_region_backward_m);
-    const bool progress_origin_discontinuous =
-      problem.progress_contouring_active &&
-      last_osqp_progress_origin_m_.has_value() &&
-      mpcc_progress::progress_origin_discontinuous(
-        last_osqp_progress_origin_m_.value(), problem.progress_origin_m,
-        maximum_continuous_progress_step_m);
-    if (problem.dynamic_obstacle_lateral_escape_active) {
-      dynamic_escape_tracking_solver_formulation_ =
-        problem.progress_contouring_active ? "progress-3state" : "legacy-mpc";
-      dynamic_escape_tracking_formulation_activation_source_ =
-        mpcc_progress::activation_source_name(
-        problem.progress_contouring_activation_source);
-      dynamic_escape_tracking_solver_workspace_reset_ =
-        progress_mode_changed || progress_origin_discontinuous;
-    }
-    if (progress_mode_changed || progress_origin_discontinuous) {
-      // Both modes intentionally keep a 3x2 sparse QP, but state[2] means
-      // elapsed time in legacy mode and physical course progress in MPCC mode.
-      // Never reinterpret one mode's primal/dual warm-start as the other, or
-      // carry an unwrapped progress solution across the lap-origin reset.
-      persistent_osqp_solver_.reset();
-      last_osqp_solution_.reset();
-      last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
-      last_osqp_progress_contouring_mode_ = problem.progress_contouring_active;
-      if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
-        if (progress_origin_discontinuous && !progress_mode_changed) {
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"),
-            "MPC progress origin discontinuity: previous=%.2f m, current=%.2f m, "
-            "warm-start reset",
-            last_osqp_progress_origin_m_.value(), problem.progress_origin_m);
-        } else {
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"),
-            "MPC formulation switched: progress_contouring=%d, warm-start reset",
-            problem.progress_contouring_active ? 1 : 0);
-        }
-      }
-    }
-    last_osqp_progress_contouring_mode_ = problem.progress_contouring_active;
-    if (problem.progress_contouring_active && std::isfinite(problem.progress_origin_m)) {
-      last_osqp_progress_origin_m_ = problem.progress_origin_m;
-    } else {
-      last_osqp_progress_origin_m_.reset();
-    }
-    std::optional<persistent_osqp::WarmStart> warm_start;
-    const bool previous_solution_fresh =
-      std::isfinite(now_sec) && std::isfinite(last_osqp_solution_sec_) &&
-      now_sec >= last_osqp_solution_sec_ &&
-      now_sec - last_osqp_solution_sec_ <= kOsqpWarmStartMaximumAgeSec;
-    if (last_osqp_solution_.has_value() && previous_solution_fresh) {
-      warm_start = persistent_osqp::shift_mpc_warm_start(
-        last_osqp_solution_.value(), static_cast<std::size_t>(problem.N));
-      if (!warm_start.has_value()) {
-        last_osqp_solution_.reset();
-      }
-    } else if (last_osqp_solution_.has_value()) {
-      last_osqp_solution_.reset();
-    }
-
-    const auto solve_once = [this, now_sec](
-      const MpcProblem & qp_problem,
-      const std::optional<persistent_osqp::WarmStart> & qp_warm_start)
-      {
-        auto outcome = persistent_osqp_solver_.solve(
-          qp_problem.P, qp_problem.A, qp_problem.q, qp_problem.l, qp_problem.u,
-          qp_warm_start);
-        if (
-          outcome.result.has_value() &&
-          outcome.result->primal.size() != qp_problem.P.rows())
-        {
-          std::ostringstream detail;
-          detail << "stage=solution, reason=unexpected solution size, actual="
-                 << outcome.result->primal.size() << ", expected="
-                 << qp_problem.P.rows();
-          outcome.failure_detail = detail.str();
-          outcome.result.reset();
-          outcome.telemetry.cold_reset_after_failure = true;
-          persistent_osqp_solver_.reset();
-        }
-        record_osqp_telemetry(outcome, now_sec);
-        return outcome;
-      };
-
-    const auto solve_sequence_start = std::chrono::steady_clock::now();
-    auto first_outcome = solve_once(problem, warm_start);
-    if (!first_outcome.result.has_value()) {
-      last_osqp_solution_.reset();
-      last_osqp_solution_sec_ = -std::numeric_limits<double>::infinity();
-      const bool retry_dynamic_escape_cold =
-        problem.dynamic_obstacle_lateral_escape_active &&
-        first_outcome.telemetry.warm_start_applied &&
-        first_outcome.telemetry.maximum_iterations_reached;
-      if (retry_dynamic_escape_cold) {
-        dynamic_escape_cold_retry_attempted_ = true;
-        dynamic_escape_cold_retry_initial_reason_ = first_outcome.failure_detail;
-        // PersistentOsqpSolver resets its workspace after a status failure.
-        // Re-solving without the shifted primal/dual is therefore a genuine
-        // cold setup and prevents one stale warm start from quarantining an
-        // otherwise executable avoidance side.
-        warm_start.reset();
-        auto cold_outcome = solve_once(problem, std::nullopt);
-        if (cold_outcome.result.has_value()) {
-          dynamic_escape_cold_retry_succeeded_ = true;
-          first_outcome = std::move(cold_outcome);
-        } else {
-          cold_outcome.failure_detail =
-            "warm_start={" + dynamic_escape_cold_retry_initial_reason_ +
-            "}; cold_retry={" + cold_outcome.failure_detail + "}";
-          if (problem.progress_contouring_active) {
-            record_rti_sqp_telemetry(
-              now_sec, false, false, false, false,
-              mpcc_progress::RtiRefinementDecision::Disabled);
-          }
-          return cold_outcome;
-        }
-      } else {
-        if (problem.progress_contouring_active) {
-          record_rti_sqp_telemetry(
-            now_sec, false, false, false, false,
-            mpcc_progress::RtiRefinementDecision::Disabled);
-        }
-        return first_outcome;
-      }
-    }
-
-    auto best_outcome = std::move(first_outcome);
-    bool refinement_attempted = false;
-    bool refinement_succeeded = false;
-    bool first_feasible_fallback = false;
-    bool relinearization_rejected = false;
-    mpcc_progress::RtiRefinementDecision refinement_decision{
-      mpcc_progress::RtiRefinementDecision::Disabled};
-    if (problem.progress_contouring_active) {
-      double minimum_lateral_bound_reserve_m = 0.0;
-      if (problem.progress_execution_context_active) {
-        const auto first_execution = mpcc_progress::extract_execution_trajectory(
-          best_outcome.result->primal, problem.N,
-          problem.progress_execution_path_distance_m,
-          problem.progress_execution_lateral_lower_m,
-          problem.progress_execution_lateral_upper_m, 1e-4);
-        if (first_execution.has_value()) {
-          minimum_lateral_bound_reserve_m =
-            first_execution->minimum_lateral_bound_reserve_m;
-        }
-      }
-      constexpr int kFirstPredictedLateralIndex = 3;
-      constexpr int kFirstPredictedHeadingIndex = 4;
-      const bool comparison_available =
-        best_outcome.result->primal.size() > kFirstPredictedHeadingIndex &&
-        problem.progress_linearization_point.size() > kFirstPredictedHeadingIndex;
-      const double lateral_defect_m = comparison_available ?
-        std::abs(
-        best_outcome.result->primal[kFirstPredictedLateralIndex] -
-        problem.progress_linearization_point[kFirstPredictedLateralIndex]) :
-        std::numeric_limits<double>::infinity();
-      const double heading_defect_rad = comparison_available ?
-        std::abs(
-        wrap_to_pi(
-          best_outcome.result->primal[kFirstPredictedHeadingIndex] -
-          problem.progress_linearization_point[kFirstPredictedHeadingIndex])) :
-        std::numeric_limits<double>::infinity();
-      double maximum_curvature_radpm = 0.0;
-      for (const double curvature : problem.progress_path_curvature_radpm) {
-        if (std::isfinite(curvature)) {
-          maximum_curvature_radpm = std::max(maximum_curvature_radpm, std::abs(curvature));
-        } else {
-          maximum_curvature_radpm = std::numeric_limits<double>::infinity();
-          break;
-        }
-      }
-      const double elapsed_ms = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - solve_sequence_start).count();
-      refinement_decision = mpcc_progress::resolve_rti_refinement(
-        mpcc_progress::RtiRefinementRequest{
-          true,
-          cfg.progress_contouring.rti_sqp_iterations,
-          cfg.progress_contouring.conditional_refinement_enabled,
-          problem.progress_refinement_cold_load_active,
-          minimum_lateral_bound_reserve_m,
-          lateral_defect_m,
-          heading_defect_rad,
-          maximum_curvature_radpm,
-          elapsed_ms,
-          cfg.progress_contouring.refinement_minimum_bound_reserve_m,
-          cfg.progress_contouring.refinement_lateral_defect_m,
-          cfg.progress_contouring.refinement_heading_defect_rad,
-          cfg.progress_contouring.refinement_curvature_radpm,
-          cfg.progress_contouring.refinement_start_deadline_ms});
-    }
-    if (refinement_decision == mpcc_progress::RtiRefinementDecision::Refine) {
-      Eigen::VectorXd linearization_point = problem.progress_linearization_point;
-      if (
-        warm_start.has_value() &&
-        warm_start->primal.size() == problem.P.rows() &&
-        warm_start->primal.allFinite())
-      {
-        linearization_point = warm_start->primal;
-      }
-      // Stage zero is a measured hard equality. A shifted solution starts at
-      // the previous cycle's predicted stage one, so rebase it before damping
-      // to avoid linearizing the first dynamics row around a future pose.
-      if (
-        linearization_point.size() >= 3 &&
-        problem.progress_linearization_point.size() == linearization_point.size())
-      {
-        linearization_point.head<3>() =
-          problem.progress_linearization_point.head<3>();
-      }
-      for (
-        int iteration = 1;
-        iteration < cfg.progress_contouring.rti_sqp_iterations; ++iteration)
-      {
-        const auto damped_point = mpcc_progress::damp_rti_sqp_iterate(
-          linearization_point, best_outcome.result->primal,
-          cfg.progress_contouring.rti_sqp_mixing);
-        if (!damped_point.has_value()) {
-          relinearization_rejected = true;
-          first_feasible_fallback = true;
-          break;
-        }
-        MpcProblem refined_problem = problem;
-        std::string relinearization_reject_reason;
-        if (!relinearize_progress_problem(
-            refined_problem, damped_point.value(), relinearization_reject_reason))
-        {
-          relinearization_rejected = true;
-          first_feasible_fallback = true;
-          if (
-            cfg.v2x_behavior.overtake_line.debug_log_enabled &&
-            (!std::isfinite(rti_sqp_reject_last_log_sec_) ||
-            now_sec - rti_sqp_reject_last_log_sec_ >= 1.0))
-          {
-            RCLCPP_WARN(
-              rclcpp::get_logger("mpc_controller"),
-              "MPCC RTI-SQP refinement rejected; using first feasible solution: %s",
-              relinearization_reject_reason.c_str());
-            rti_sqp_reject_last_log_sec_ = now_sec;
-          }
-          break;
-        }
-        refinement_attempted = true;
-        const std::optional<persistent_osqp::WarmStart> refinement_warm_start{
-          persistent_osqp::WarmStart{
-            best_outcome.result->primal, best_outcome.result->dual}};
-        auto refinement_outcome = solve_once(refined_problem, refinement_warm_start);
-        if (!refinement_outcome.result.has_value()) {
-          first_feasible_fallback = true;
-          break;
-        }
-        linearization_point = damped_point.value();
-        best_outcome = std::move(refinement_outcome);
-        refinement_succeeded = true;
-      }
-    }
-    if (problem.progress_contouring_active) {
-      record_rti_sqp_telemetry(
-        now_sec, refinement_attempted, refinement_succeeded,
-        first_feasible_fallback, relinearization_rejected,
-        refinement_decision);
-    }
-
-    last_osqp_solution_ = persistent_osqp::WarmStart{
-      best_outcome.result->primal, best_outcome.result->dual};
-    last_osqp_solution_sec_ = now_sec;
-    return best_outcome;
   }
 
   void record_solved_mpcc_execution_trajectory(
@@ -29231,14 +28947,14 @@ struct MPC
     trace.maximum_required_lateral_accel_mps2 =
       last_v2x_behavior_output_.
       dynamic_obstacle_lateral_escape_maximum_required_lateral_accel_mps2;
-    trace.solver_formulation = dynamic_escape_tracking_solver_formulation_;
-    trace.formulation_activation_source =
-      dynamic_escape_tracking_formulation_activation_source_;
-    trace.solver_workspace_reset =
-      dynamic_escape_tracking_solver_workspace_reset_;
-    trace.cold_retry_attempted = dynamic_escape_cold_retry_attempted_;
-    trace.cold_retry_succeeded = dynamic_escape_cold_retry_succeeded_;
-    trace.initial_solver_reason = dynamic_escape_cold_retry_initial_reason_;
+    trace.solver_formulation = last_problem_context_.has_value() ?
+      mpcc_contract::to_string(last_problem_context_->formulation) :
+      "canonical-overtake-unavailable";
+    trace.formulation_activation_source = "canonical-intent-dispatch";
+    trace.solver_workspace_reset = false;
+    trace.cold_retry_attempted = false;
+    trace.cold_retry_succeeded = false;
+    trace.initial_solver_reason.clear();
   }
 
   void log_executed_solution_wall_contract(
@@ -29972,8 +29688,6 @@ struct MPC
   MpcControlCycleResult get_control(
     const double now_sec, const std::uint64_t decision_id)
   {
-    constexpr int nx = 3;
-    constexpr int nu = 2;
     active_control_decision_id_ = decision_id;
     pending_canonical_normal_actuation_.reset();
     last_overtake_authority_trace_.reset();
@@ -29982,12 +29696,6 @@ struct MPC
     last_solution_is_retained_ = false;
     last_control_resolution_reason_ = "not-resolved";
     executed_solution_wall_hold_active_ = false;
-    dynamic_escape_cold_retry_attempted_ = false;
-    dynamic_escape_cold_retry_succeeded_ = false;
-    dynamic_escape_cold_retry_initial_reason_.clear();
-    dynamic_escape_tracking_solver_formulation_ = "not-evaluated";
-    dynamic_escape_tracking_formulation_activation_source_ = "not-evaluated";
-    dynamic_escape_tracking_solver_workspace_reset_ = false;
     if (cfg.N < 2) {
       return safe_failure_control("mpc.N must be at least 2", now_sec);
     }
@@ -30010,38 +29718,6 @@ struct MPC
       const MpcProblem problem =
         init_problem(N, model->safety_margin, now_sec, tracking_wp_id, preview_wp_id);
       const auto control_intent = current_control_intent();
-      const auto initial_formulation = problem.progress_contouring_active ?
-        (cfg.progress_contouring.extended_dynamics_enabled ?
-        mpcc_contract::Formulation::VelocityProgress5State :
-        mpcc_contract::Formulation::ProgressContouring3State) :
-        mpcc_contract::Formulation::LegacySpatialMpc3State;
-      record_problem_context(problem, initial_formulation);
-      if (
-        problem.dynamic_escape_formulation_lease_active !=
-        dynamic_escape_formulation_lease_was_active_)
-      {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "Dynamic escape formulation lease %s: remaining=%.3f s, "
-          "formulation=%s, wp_id=%d",
-          problem.dynamic_escape_formulation_lease_active ? "entered" : "released",
-          problem.dynamic_escape_formulation_lease_active ?
-          std::max(
-            0.0,
-            dynamic_obstacle_lateral_escape_formulation_lease_until_sec_ - now_sec) :
-          0.0,
-          problem.progress_contouring_active ? "progress-contouring" : "legacy-mpc",
-          model->wp_id);
-        dynamic_escape_formulation_lease_was_active_ =
-          problem.dynamic_escape_formulation_lease_active;
-      }
-      if (problem.dynamic_obstacle_lateral_escape_active) {
-        dynamic_escape_tracking_solver_formulation_ =
-          problem.progress_contouring_active ? "progress-3state" : "legacy-mpc";
-        dynamic_escape_tracking_formulation_activation_source_ =
-          mpcc_progress::activation_source_name(
-          problem.progress_contouring_activation_source);
-      }
       if (!problem.lateral_bounds_contract_valid) {
         static rclcpp::Clock bound_contract_log_clock{RCL_STEADY_TIME};
         RCLCPP_ERROR_THROTTLE(
@@ -30138,7 +29814,15 @@ struct MPC
           problem, control_intent,
           "dynamic wait has no executable canonical lateral authority");
       }
-      if (problem.track_cruise_shadow_requested) {
+      if (
+        control_intent == mpcc_contract::ControlIntent::Track ||
+        control_intent == mpcc_contract::ControlIntent::Cruise)
+      {
+        if (!problem.track_cruise_shadow_requested) {
+          return canonical_normal_emergency_stop(
+            problem, control_intent,
+            "rate-resolved Track/Cruise admission unavailable");
+        }
         std::string draft_reject_reason;
         const auto rate_resolved_submission_draft =
           build_rate_resolved_track_cruise_submission_draft(
@@ -30178,7 +29862,11 @@ struct MPC
         }
         return output;
       }
-      if (problem.rejoin_shadow_requested) {
+      if (control_intent == mpcc_contract::ControlIntent::Rejoin) {
+        if (!problem.rejoin_shadow_requested) {
+          return canonical_normal_emergency_stop(
+            problem, control_intent, "canonical Rejoin admission unavailable");
+        }
         record_problem_context(
           problem, mpcc_contract::Formulation::VelocityProgress5State);
         const auto canonical_result = evaluate_rejoin_canonical(
@@ -30192,421 +29880,9 @@ struct MPC
           problem, canonical_result.intent,
           canonical_result.status + "/" + canonical_result.retained_detail);
       }
-      Eigen::VectorXd dec;
-      double maximum_constraint_violation = 0.0;
-      bool solved_with_extended_progress = false;
-      std::string extended_reject_reason;
-      if (
-        problem.progress_contouring_active &&
-        cfg.progress_contouring.extended_dynamics_enabled)
-      {
-        auto canonical_overtake_shadow =
-          evaluate_overtake_async_shadow(problem, now_sec);
-        record_overtake_canonical_async_status(now_sec);
-        record_problem_context(
-          problem, mpcc_contract::Formulation::VelocityProgress5State);
-        if (extended_progress_circuit_breaker_.active(now_sec)) {
-          extended_reject_reason = "failure circuit open, retry in " +
-            std::to_string(std::max(
-              0.0,
-              extended_progress_circuit_breaker_.disabled_until_sec() - now_sec)) +
-            " s";
-          record_extended_mpcc_telemetry(
-            ExtendedMpccCycleStatus::CircuitSkip, nullptr, now_sec);
-        } else {
-          const auto extended_problem = build_extended_progress_problem(
-            problem, control_intent, extended_reject_reason);
-          if (extended_problem.has_value()) {
-            if (
-              extended_problem->wall_aware_reference_adjustment_count > 0U &&
-              cfg.v2x_behavior.overtake_line.debug_log_enabled &&
-              (!std::isfinite(extended_wall_tracking_last_log_sec_) ||
-              now_sec - extended_wall_tracking_last_log_sec_ >= 1.0))
-            {
-              RCLCPP_INFO(
-                rclcpp::get_logger("mpc_controller"),
-                "Extended MPCC wall-aware tracking: adjusted=%zu/%d, "
-                "minimum_reserve=%.3f m, minimum_weight_scale=%.2f, wp_id=%d",
-                extended_problem->wall_aware_reference_adjustment_count,
-                N,
-                extended_problem->minimum_wall_tracking_reference_reserve_m,
-                extended_problem->minimum_wall_tracking_weight_scale,
-                model->wp_id);
-              extended_wall_tracking_last_log_sec_ = now_sec;
-            }
-            auto extended_outcome = solve_extended_progress_problem(
-              extended_problem.value(), now_sec);
-            if (extended_outcome.result.has_value()) {
-              const auto execution_primal =
-                mpcc_progress::normalize_extended_execution_primal(
-                extended_outcome.result->primal,
-                extended_problem->l, extended_problem->u,
-                extended_outcome.result->constraint_violation,
-                extended_outcome.result->constraint_tolerance, N);
-              if (
-                execution_primal.reason ==
-                mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted)
-              {
-                extended_progress_circuit_breaker_.record_success();
-                const auto reentry = extended_progress_reentry_gate_.record_success(
-                  cfg.progress_contouring.extended_reentry_success_cycles);
-                if (reentry.accept_solution) {
-                  maximum_constraint_violation =
-                    extended_outcome.result->maximum_constraint_violation;
-                  std::string exact_wall_reject_reason;
-                  mpcc_contract::PhysicalWallCertificateDiagnostic
-                    exact_wall_diagnostic;
-                  const bool exact_wall_safe =
-                    executed_extended_progress_solution_wall_safe(
-                    problem, extended_problem.value(), execution_primal.primal,
-                    maximum_constraint_violation, exact_wall_reject_reason,
-                    &exact_wall_diagnostic);
-                  if (!exact_wall_safe) {
-                    std::ostringstream reason;
-                    reason << exact_wall_reject_reason
-                           << ", exact_reason="
-                           << mpcc_contract::physical_wall_certificate_reason_name(
-                      exact_wall_diagnostic.reason)
-                           << ", stage=" << exact_wall_diagnostic.stage_index
-                           << ", wp=" << exact_wall_diagnostic.waypoint_id
-                           << ", d=" << exact_wall_diagnostic.path_distance_m
-                           << " m, ey=" << exact_wall_diagnostic.lateral_m
-                           << " m, lag=" << exact_wall_diagnostic.lag_m
-                           << " m, epsi="
-                           << exact_wall_diagnostic.heading_offset_rad
-                           << " rad, progress_delta="
-                           << exact_wall_diagnostic.progress_delta_m << " m";
-                    record_extended_mpcc_telemetry(
-                      ExtendedMpccCycleStatus::Success,
-                      &extended_outcome.telemetry, now_sec);
-                    record_overtake_canonical_fresh_shadow_telemetry(
-                      canonical_overtake_shadow, now_sec);
-                    const auto wall_resolution =
-                      overtake_orchestrator::resolve_executed_solution_wall_action(
-                      overtake_orchestrator::ExecutedSolutionWallRequest{
-                        problem.progress_execution_context_active,
-                        false,
-                        overtake_execution_command_published(
-                          problem.progress_execution_mission_generation),
-                        orchestrator_phase(problem.progress_execution_phase),
-                        problem.progress_execution_mission_traveled_m});
-                    if (!wall_resolution.valid) {
-                      throw std::runtime_error(
-                              "invalid exact executed solution wall resolution");
-                    }
-                    return executed_solution_wall_hold_control(
-                      problem, wall_resolution, reason.str(), now_sec,
-                      decision_id);
-                  }
-
-                  // The physical authority has already certified the exact
-                  // five-state pose sequence.  This conversion remains only as
-                  // a temporary command/prediction adapter and may not own wall
-                  // proof or Mission admission.
-                  const auto legacy_solution =
-                    mpcc_progress::convert_extended_solution_to_legacy(
-                    execution_primal.primal, N,
-                    extended_problem->progress_origin_m);
-                  if (!legacy_solution.has_value()) {
-                    extended_reject_reason =
-                      "certified extended solution command adaptation rejected";
-                    extended_progress_reentry_gate_.record_failure();
-                    extended_progress_circuit_breaker_.record_failure(
-                      now_sec,
-                      cfg.progress_contouring.extended_failure_cooldown_sec);
-                    record_extended_mpcc_telemetry(
-                      ExtendedMpccCycleStatus::ConversionReject,
-                      &extended_outcome.telemetry, now_sec);
-                  } else {
-                    dec = legacy_solution.value();
-                    solved_with_extended_progress = true;
-                    record_extended_mpcc_telemetry(
-                      ExtendedMpccCycleStatus::Success,
-                      &extended_outcome.telemetry, now_sec);
-                  }
-                } else {
-                  std::ostringstream reason;
-                  reason << "requalifying extended solver "
-                         << reentry.consecutive_successes << "/"
-                         << reentry.required_successes;
-                  extended_reject_reason = reason.str();
-                  record_extended_mpcc_telemetry(
-                    ExtendedMpccCycleStatus::Requalifying,
-                    &extended_outcome.telemetry, now_sec);
-                }
-              } else {
-                extended_reject_reason = std::string{
-                  "extended execution primal rejected: "} +
-                  mpcc_progress::extended_execution_primal_normalization_reason_name(
-                  execution_primal.reason);
-                extended_progress_reentry_gate_.record_failure();
-                extended_progress_circuit_breaker_.record_failure(
-                  now_sec, cfg.progress_contouring.extended_failure_cooldown_sec);
-                record_extended_mpcc_telemetry(
-                  ExtendedMpccCycleStatus::ConversionReject,
-                  &extended_outcome.telemetry, now_sec);
-              }
-            } else {
-              extended_reject_reason = extended_outcome.failure_detail;
-              extended_progress_reentry_gate_.record_failure();
-              extended_progress_circuit_breaker_.record_failure(
-                now_sec, cfg.progress_contouring.extended_failure_cooldown_sec);
-              record_extended_mpcc_telemetry(
-                ExtendedMpccCycleStatus::SolveFailure,
-                &extended_outcome.telemetry, now_sec);
-            }
-          } else {
-            extended_progress_reentry_gate_.record_failure();
-            record_extended_mpcc_telemetry(
-              ExtendedMpccCycleStatus::BuildReject, nullptr, now_sec);
-          }
-        }
-        record_overtake_canonical_fresh_shadow_telemetry(
-          canonical_overtake_shadow, now_sec);
-        if (
-          !solved_with_extended_progress &&
-          cfg.v2x_behavior.overtake_line.debug_log_enabled &&
-          (!std::isfinite(extended_progress_fallback_last_log_sec_) ||
-          now_sec - extended_progress_fallback_last_log_sec_ >= 1.0))
-        {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "Extended velocity-progress MPCC unavailable; using 3-state MPCC: %s",
-            extended_reject_reason.c_str());
-          extended_progress_fallback_last_log_sec_ = now_sec;
-        }
-      } else {
-        extended_progress_reentry_gate_.reset();
-      }
-      persistent_osqp::SolveOutcome legacy_outcome;
-      if (!solved_with_extended_progress) {
-        record_problem_context(
-          problem,
-          problem.progress_contouring_active ?
-          mpcc_contract::Formulation::ProgressContouring3State :
-          mpcc_contract::Formulation::LegacySpatialMpc3State);
-        legacy_outcome = solve_problem(problem, now_sec);
-      }
-      if (!solved_with_extended_progress && !legacy_outcome.result.has_value()) {
-        throw std::runtime_error("OSQP failed: " + legacy_outcome.failure_detail);
-      }
-      if (!solved_with_extended_progress) {
-        dec = legacy_outcome.result->primal;
-        maximum_constraint_violation =
-          legacy_outcome.result->maximum_constraint_violation;
-      } else if (problem.dynamic_obstacle_lateral_escape_active) {
-        dynamic_escape_tracking_solver_formulation_ = "progress-extended";
-      }
-      std::string dynamic_margin_escape_reject_reason;
-      if (!dynamic_margin_escape_solution_wall_safe(
-          problem, dec, maximum_constraint_violation,
-          dynamic_margin_escape_reject_reason))
-      {
-        throw std::runtime_error(
-                "dynamic margin escape physical solution rejected: " +
-                dynamic_margin_escape_reject_reason);
-      }
-      std::string executed_solution_wall_reject_reason;
-      const bool executed_solution_wall_safe = solved_with_extended_progress ?
-        true : executed_progress_solution_wall_safe(
-        problem, dec, maximum_constraint_violation,
-        executed_solution_wall_reject_reason);
-      if (solved_with_extended_progress) {
-        executed_solution_wall_reject_reason =
-          problem.progress_execution_context_active ?
-          "exact five-state physical solution horizon accepted" :
-          "execution context inactive";
-      }
-      const auto executed_solution_wall_resolution =
-        overtake_orchestrator::resolve_executed_solution_wall_action(
-        overtake_orchestrator::ExecutedSolutionWallRequest{
-          problem.progress_execution_context_active,
-          executed_solution_wall_safe,
-          overtake_execution_command_published(
-            problem.progress_execution_mission_generation),
-          orchestrator_phase(problem.progress_execution_phase),
-          problem.progress_execution_mission_traveled_m});
-      if (!executed_solution_wall_resolution.valid) {
-        throw std::runtime_error("invalid executed solution wall resolution");
-      }
-      if (!executed_solution_wall_resolution.publish_solution) {
-        return executed_solution_wall_hold_control(
-          problem, executed_solution_wall_resolution,
-          executed_solution_wall_reject_reason, now_sec, decision_id);
-      }
-      if (
-        problem.progress_execution_context_active &&
-        (last_executed_solution_wall_log_generation_ !=
-        problem.progress_execution_mission_generation ||
-        last_executed_solution_wall_log_phase_ !=
-        problem.progress_execution_phase))
-      {
-        log_executed_solution_wall_contract(
-          problem, true, executed_solution_wall_resolution.action,
-          executed_solution_wall_reject_reason, decision_id);
-        last_executed_solution_wall_log_generation_ =
-          problem.progress_execution_mission_generation;
-        last_executed_solution_wall_log_phase_ =
-          problem.progress_execution_phase;
-      }
-      record_solved_mpcc_execution_trajectory(
-        problem, dec, maximum_constraint_violation, now_sec);
-      const auto solved_formulation = solved_with_extended_progress ?
-        mpcc_contract::Formulation::VelocityProgress5State :
-        (problem.progress_contouring_active ?
-        mpcc_contract::Formulation::ProgressContouring3State :
-        mpcc_contract::Formulation::LegacySpatialMpc3State);
-      const bool physical_wall_checked =
-        problem.progress_execution_context_active ||
-        problem.dynamic_obstacle_margin_escape_tracking_contract_active;
-      record_solution_contract(
-        problem, solved_formulation, dec, maximum_constraint_violation,
-        physical_wall_checked, physical_wall_checked, now_sec);
-      Eigen::VectorXd control_signals = dec.tail(N * nu);
-
-      for (int i = 1; i < control_signals.size(); i += 2) {
-        control_signals[i] = std::atan(control_signals[i] * model->length);
-      }
-      double v = control_signals[0];
-      double delta = control_signals[1];
-      if (
-        problem.progress_contouring_active &&
-        cfg.progress_contouring.extended_dynamics_enabled &&
-        problem.progress_input_lower.size() >= 1 &&
-        problem.progress_input_upper.size() >= 1)
-      {
-        const auto handoff = extended_mode_handoff_.resolve_velocity(
-          solved_with_extended_progress, now_sec, v,
-          problem.progress_input_lower[0], problem.progress_input_upper[0],
-          cfg.progress_contouring.extended_mode_handoff_sec);
-        if (handoff.has_value()) {
-          v = handoff->velocity_mps;
-          control_signals[0] = v;
-        }
-      } else {
-        extended_mode_handoff_.reset();
-      }
-      const double max_delta_change = cfg.steer_rate_max * model->Ts;
-      delta = clip(delta, previous_steering - max_delta_change, previous_steering + max_delta_change);
-      control_signals[1] = delta;
-      if (!std::isfinite(v) || !std::isfinite(delta) || !control_signals.allFinite()) {
-        throw std::runtime_error("MPC postprocessed control is not finite");
-      }
-
-      auto prediction =
-        update_prediction(dec.head((N + 1) * nx), N, problem.tracking_wp_id);
-      Eigen::Vector2d u(v, delta);
-
-      double max_delta = 0.0;
-      const int end = static_cast<int>(control_signals.size() / 3) * 2;
-      for (int i = 1; i < end; i += 2) {
-        max_delta = std::max(max_delta, std::abs(control_signals[i]));
-      }
-
-      previous_steering = delta;
-      current_control = std::move(control_signals);
-      current_prediction = std::move(prediction);
-      if (infeasibility_counter > 0) {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "MPC solver recovered after %d consecutive failures", infeasibility_counter);
-      }
-      if (problem.dynamic_obstacle_lateral_escape_active) {
-        dynamic_obstacle_lateral_escape_formulation_lease_until_sec_ =
-          now_sec + kDynamicEscapeHandoffLeaseSec;
-        if (
-          last_v2x_behavior_output_.
-          dynamic_obstacle_lateral_escape_execution_path_validated &&
-          last_v2x_behavior_output_.dynamic_obstacle_lateral_escape_connected_profile)
-        {
-          pending_dynamic_escape_execution_ = RetainedDynamicEscapeExecution{
-            current_control, current_prediction, now_sec,
-            problem.dynamic_obstacle_lateral_escape_attempt_id,
-            problem.dynamic_obstacle_lateral_escape_target_id,
-            problem.dynamic_obstacle_lateral_escape_side_sign,
-            problem.dynamic_obstacle_lateral_escape_committed_branch,
-            last_problem_context_, last_solution_contract_};
-        }
-        const bool was_tracking_qualified =
-          dynamic_obstacle_lateral_escape_tracking_qualified_ &&
-          dynamic_obstacle_lateral_escape_qualified_target_id_ ==
-          problem.dynamic_obstacle_lateral_escape_target_id &&
-          dynamic_obstacle_lateral_escape_qualified_side_sign_ ==
-          problem.dynamic_obstacle_lateral_escape_side_sign &&
-          dynamic_obstacle_lateral_escape_qualified_branch_ ==
-          problem.dynamic_obstacle_lateral_escape_committed_branch;
-        const auto previous_backoff =
-          dynamic_obstacle_lateral_escape_solver_backoff_.status(
-          problem.dynamic_obstacle_lateral_escape_target_id,
-          problem.dynamic_obstacle_lateral_escape_side_sign,
-          now_sec);
-        dynamic_obstacle_lateral_escape_tracking_qualified_ = true;
-        dynamic_obstacle_lateral_escape_qualified_target_id_ =
-          problem.dynamic_obstacle_lateral_escape_target_id;
-        dynamic_obstacle_lateral_escape_qualified_side_sign_ =
-          problem.dynamic_obstacle_lateral_escape_side_sign;
-        dynamic_obstacle_lateral_escape_qualified_branch_ =
-          problem.dynamic_obstacle_lateral_escape_committed_branch;
-        dynamic_obstacle_lateral_escape_solver_backoff_.record_success(
-          problem.dynamic_obstacle_lateral_escape_target_id,
-          problem.dynamic_obstacle_lateral_escape_side_sign);
-        if (
-          !was_tracking_qualified ||
-          previous_backoff.consecutive_failures > 0 ||
-          dynamic_escape_cold_retry_succeeded_)
-        {
-          overtake_decision_trace::TrackingTrace trace;
-          trace.attempt_id = problem.dynamic_obstacle_lateral_escape_attempt_id;
-          trace.mission_episode_id = overtake_line_state_.episode_id;
-          trace.target_id = problem.dynamic_obstacle_lateral_escape_target_id;
-          trace.side = problem.dynamic_obstacle_lateral_escape_side_sign;
-          const bool recovered =
-            previous_backoff.consecutive_failures > 0 ||
-            dynamic_escape_cold_retry_succeeded_;
-          trace.outcome = recovered ?
-            overtake_decision_trace::TrackingOutcome::Recovered :
-            overtake_decision_trace::TrackingOutcome::Qualified;
-          trace.consecutive_failures = previous_backoff.consecutive_failures;
-          trace.reason = recovered ?
-            (dynamic_escape_cold_retry_succeeded_ ?
-            "valid tracking solution after cold retry" :
-            "valid tracking solution after qualification backoff") :
-            "exact tracking qualification accepted";
-          populate_dynamic_escape_tracking_context(trace);
-          trace.committed_branch =
-            problem.dynamic_obstacle_lateral_escape_committed_branch;
-          const std::string tracking_trace =
-            overtake_decision_trace::format_tracking_trace(trace);
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"), "%s", tracking_trace.c_str());
-        }
-      }
-      failure_fallback_speed_.reset();
-      infeasibility_counter = 0;
-      overtake_infeasibility_counter_ = 0;
-      last_control_was_fallback_ = false;
-      last_control_resolution_reason_ = solved_with_extended_progress ?
-        "extended-mpcc-solved" : "legacy-mpc-solved";
-      if (overtake_solver_reentry_blocked_) {
-        const bool cooldown_active = v2x_overtake_core::is_solver_cooldown_active(
-          now_sec, overtake_solver_cooldown_until_sec_);
-        const auto gate = v2x_overtake_core::update_solver_reentry_gate(
-          v2x_overtake_core::SolverReentryGateRequest{
-            false, overtake_solver_reentry_blocked_,
-            overtake_solver_recovery_success_count_, true, cooldown_active,
-            cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles});
-        overtake_solver_reentry_blocked_ = gate.blocked;
-        overtake_solver_recovery_success_count_ = gate.consecutive_successes;
-        if (gate.released) {
-          overtake_solver_cooldown_logged_ = false;
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"),
-            "OvertakeLine solver re-entry gate released after %d healthy solves",
-            cfg.v2x_behavior.overtake_line.solver_recovery_success_cycles);
-        }
-      }
-      last_solved_wp_id = problem.tracking_wp_id;
-      return {u, max_delta};
+      return canonical_normal_emergency_stop(
+        problem, control_intent,
+        "canonical normal intent has no production owner");
     } catch (const std::exception & error) {
       return safe_failure_control(error.what(), now_sec);
     } catch (...) {
@@ -31189,18 +30465,6 @@ struct MPC
   int overtake_infeasibility_counter_{0};
   int last_solved_wp_id{0};
   Eigen::VectorXd current_control;
-  persistent_osqp::PersistentOsqpSolver persistent_osqp_solver_;
-  std::optional<persistent_osqp::WarmStart> last_osqp_solution_;
-  double last_osqp_solution_sec_{-std::numeric_limits<double>::infinity()};
-  bool dynamic_escape_cold_retry_attempted_{false};
-  bool dynamic_escape_cold_retry_succeeded_{false};
-  std::string dynamic_escape_cold_retry_initial_reason_;
-  std::string dynamic_escape_tracking_solver_formulation_{"not-evaluated"};
-  std::string dynamic_escape_tracking_formulation_activation_source_{
-    "not-evaluated"};
-  bool dynamic_escape_tracking_solver_workspace_reset_{false};
-  std::optional<bool> last_osqp_progress_contouring_mode_;
-  std::optional<double> last_osqp_progress_origin_m_;
   persistent_osqp::PersistentOsqpSolver persistent_extended_osqp_solver_{
     kCanonicalPhysicalRowTolerancePolicy};
   persistent_osqp::CertifiedWarmStartStore

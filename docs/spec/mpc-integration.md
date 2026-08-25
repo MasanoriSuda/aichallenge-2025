@@ -2105,6 +2105,24 @@ rate-resolved workerを変更しない。25-package build、49 test target、1,8
 基準はauthority昇格時の`output/20260825-100454`を継続使用する。Follow、Overtake、Rejoinおよび
 残存legacy／3-state経路の削除は別Sliceで扱い、Slice 6完了前のparameter tuningは禁止する。
 
+#### Normal dispatchのlegacy／3-state fallthrough削除（2026-08-25、2025由来の暫定）
+
+`MPC::get_control()`のnormal dispatchは、解決済みintentをcanonical ownerまたは明示的Emergencyへ
+必ず帰着させる。Track／Cruise、Follow、ShiftOut／Pass／Return、Rejoin、Stopの分岐後に残っていた
+synchronous extended 5-state solve、progress 3-state fallback、legacy spatial MPC fallbackと、その
+command postprocess経路を物理削除した。
+
+Track／CruiseとRejoinはmigration eligibility booleanではなくcontrol intentでownerを選ぶ。eligibilityは
+選択済みowner内部のadmission proofであり、不成立時は同じcontractのEmergencyとなる。したがって
+configやmetadata不成立によって別formulationへ暗黙移行しない。unsupported／Unknown intentも
+`canonical normal intent has no production owner`としてfail closeする。
+
+旧`solve_problem()`、private persistent solver、warm-start、age、3-state formulation historyも削除した。
+dynamic-escape追跡ログは旧`progress-3state`／`legacy-mpc`の推測値ではなく、実際のcanonical problem
+contextのformulationを記録する。25-package build、49 test target、1,870 testが合格した。retained
+legacy dynamic-escape wall handoff、migration-only circuit／reentry／handoff telemetryの物理削除は
+final publisher／Recovery責務との境界を監査した別Sliceで行う。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

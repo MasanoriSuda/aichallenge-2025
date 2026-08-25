@@ -64,14 +64,39 @@ rejects restoration of:
 
 ## Dynamic acceptance
 
-Pending a short committed-source `make dev2` trial. Required observations:
+A committed-source `make dev2` trial was run as
+`output/20260825-112734` on `62d0316`.
 
-- no `legacy-mpc-solved`, `extended-mpcc-solved` or three-state normal owner;
-- Track/Cruise, Follow and Overtake publish canonical identity or a typed
-  canonical Emergency reason;
-- no unexpected `canonical normal intent has no production owner`;
-- no Emergency burst at DynamicEscape-to-Track/Cruise transition;
-- no regression in stopped/slow vehicle avoidance.
+Structural acceptance passed in both domains:
+
+- zero `legacy-mpc-solved`, `extended-mpcc-solved`,
+  `legacy-spatial-mpc-3state` or `progress-contouring-3state` normal owner;
+- zero `canonical normal intent has no production owner`;
+- zero Track/Cruise or Rejoin admission-fallthrough diagnostic;
+- zero `canonical normal command mutated before publication`;
+- Track/Cruise traces retained `velocity-steering-progress-6state`; Follow
+  traces retained `velocity-progress-5state`;
+- callback telemetry reported zero 25 ms overruns in the observed windows.
+
+The run did not exercise ShiftOut, Pass or Return, so it does not establish
+stopped/slow-vehicle acceptance. It also exposed a pre-existing six-state
+Track/Cruise quality failure which is outside this deletion Slice. The first
+d1 abnormal cycle was at `1787624899.601839468`: the preceding six-state solve,
+physical wall certificate and exact publication had all been accepted, but the
+current vehicle state reached `e_y=-2.072 m` and the fail-operational crawl was
+rejected as path-unsafe. The controller then emitted the typed
+`canonical-cruise-emergency/rate-resolved authority unavailable/
+retained-proof-unavailable` result and Recovery later became active.
+
+This is not evidence that removing the lexical legacy fallback caused a solve
+or formulation regression. The accepted promotion baseline
+`output/20260825-100454` already contains the same crawl-block diagnostic three
+times in each domain, and `62d0316` does not change the live six-state solver,
+certificate or production adapter. It is evidence that six-state
+Track/Cruise execution quality is not yet dynamically accepted for sustained
+racing. That issue must be audited at the six-state producer/current-world
+proof boundary and must not be masked by restoring the deleted normal
+formulation.
 
 ## Residual debt found, not patched
 

@@ -873,6 +873,16 @@ Finish the architecture simplification instead of leaving permanent dual control
   25-package build and 1,868 rebuilt package tests pass. Retained
   DynamicEscape/wall-handoff arbitration remains a separate final-publisher
   audit; parameter tuning is still prohibited.
+- `.steering/20260825-slice6-retained-dynamic-escape-removal` proves that the
+  private pending DynamicEscape execution has no producer and its formulation
+  lease has no positive assignment. It physically deletes the retained store,
+  cursor, identity lease, restore/promote publisher branches and retained-only
+  exit semantics. Fresh DynamicEscape candidate generation, current-cycle
+  physical wall admission, replan, Emergency and Recovery remain. No normal
+  authority, fallback, feature flag, timeout or tuning parameter was added.
+  Failure-first source contracts, the 25-package build and 1,861 rebuilt
+  package tests pass. The reachable runtime graph was already fresh-only, so
+  `output/20260825-112734` remains the accepted dynamic baseline.
 
 ## Slice 7: Parameter tuning
 

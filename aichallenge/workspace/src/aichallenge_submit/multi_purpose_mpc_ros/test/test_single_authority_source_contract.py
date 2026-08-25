@@ -22,6 +22,17 @@ V2X_OVERTAKE_HEADER = (
 V2X_OVERTAKE_SOURCE = (
     Path(__file__).resolve().parents[1] / "src" / "v2x_overtake_core.cpp"
 ).read_text(encoding="utf-8")
+OVERTAKE_ORCHESTRATOR_HEADER = (
+    Path(__file__).resolve().parents[1]
+    / "include"
+    / "multi_purpose_mpc_ros"
+    / "overtake_execution_orchestrator.hpp"
+).read_text(encoding="utf-8")
+OVERTAKE_ORCHESTRATOR_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "overtake_execution_orchestrator.cpp"
+).read_text(encoding="utf-8")
 CONFIG = (
     Path(__file__).resolve().parents[1] / "config" / "config.yaml"
 ).read_text(encoding="utf-8")
@@ -645,7 +656,7 @@ def test_rejoin_uses_isolated_canonical_production_without_legacy_fallthrough() 
         "const bool progress_contouring_execution_phase ="
     )
     activation_end = SOURCE.index(
-        "const bool dynamic_escape_formulation_lease_active", activation_start
+        "const auto track_cruise_shadow_eligibility", activation_start
     )
     activation = SOURCE[activation_start:activation_end]
     assert "OvertakeLinePhase::Recovery" not in activation
@@ -729,20 +740,10 @@ def test_canonical_overtake_wall_certificate_is_not_reinterpreted_downstream() -
         "const auto legacy_wall_handoff_authority ="
     )
     ownership_end = SOURCE.index(
-        "const auto retained_dynamic_escape_snapshot", ownership_start
+        "const bool dynamic_escape_execution_active", ownership_start
     )
     ownership = SOURCE[ownership_start:ownership_end]
     assert "resolve_legacy_wall_handoff_authority(" in ownership
-    retirement = "mpc_->retire_legacy_dynamic_escape_execution();"
-    assert ownership.count(retirement) == 1
-    assert ownership.index(retirement) < ownership.index(
-        "const bool legacy_state_present ="
-    )
-    legacy_state_expression = ownership[
-        ownership.index("const bool legacy_state_present =") :
-        ownership.index("solver_wall_handoff_admission_gate_.reset()")
-    ]
-    assert retirement not in legacy_state_expression
     assert "solver_wall_handoff_admission_gate_.reset()" in ownership
     assert "overtake_wall_admission_gate_.reset()" in ownership
     assert "dynamic_escape_wall_admission_gate_.reset()" in ownership
@@ -1268,6 +1269,30 @@ def test_retired_extended_formulation_switch_state_is_physically_deleted() -> No
         assert retired_key not in MPCC_PROGRESS_HEADER
         assert retired_key not in CONFIG
         assert retired_key not in CLOUD_CONFIG
+
+
+def test_unproducible_retained_dynamic_escape_path_is_physically_deleted() -> None:
+    """A private retained path without an artifact producer must not compile."""
+
+    for retired_symbol in (
+        "RetainedDynamicEscapeExecution",
+        "RetainedDynamicEscapeControl",
+        "pending_dynamic_escape_execution_",
+        "retained_dynamic_escape_execution_",
+        "dynamic_obstacle_lateral_escape_formulation_lease_until_sec_",
+        "dynamic_escape_formulation_lease_was_active_",
+        "kDynamicEscapeHandoffLeaseSec",
+        "restore_retained_dynamic_escape_execution(",
+        "accept_current_dynamic_escape_execution(",
+        "RetainedExecutionCursor",
+        "DynamicEscapeExecutionLease",
+        "retained_solution_available",
+        "RetainedSolutionExpired",
+        '"retained-stage"',
+    ):
+        assert retired_symbol not in SOURCE
+        assert retired_symbol not in OVERTAKE_ORCHESTRATOR_HEADER
+        assert retired_symbol not in OVERTAKE_ORCHESTRATOR_SOURCE
 
 
 def test_canonical_publisher_does_not_postprocess_certified_actuation() -> None:

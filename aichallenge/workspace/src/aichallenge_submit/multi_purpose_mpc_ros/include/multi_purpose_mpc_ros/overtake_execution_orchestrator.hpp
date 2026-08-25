@@ -534,84 +534,6 @@ struct LegacyWallHandoffAuthorityResolution {
 LegacyWallHandoffAuthorityResolution resolve_legacy_wall_handoff_authority(
   const LegacyWallHandoffAuthorityRequest & request) noexcept;
 
-enum class RetainedExecutionCursorReason {
-  Available,
-  InvalidTiming,
-  InvalidHorizon,
-  Expired,
-  HorizonExhausted,
-};
-
-const char * to_string(RetainedExecutionCursorReason reason) noexcept;
-
-/// Resolve the time-aligned stage of a last physically admitted execution.
-/// The retained command is intentionally bounded by both a short handoff
-/// lease and the actual solved horizon; it must never replay stage zero after
-/// the vehicle has already advanced through that stage.
-struct RetainedExecutionCursorRequest {
-  double age_sec{std::numeric_limits<double>::infinity()};
-  double sample_period_sec{std::numeric_limits<double>::quiet_NaN()};
-  double maximum_age_sec{0.0};
-  std::size_t control_stage_count{0U};
-  std::size_t prediction_stage_count{0U};
-};
-
-struct RetainedExecutionCursorResolution {
-  bool available{false};
-  std::size_t control_stage_index{0U};
-  std::size_t prediction_stage_index{0U};
-  std::size_t remaining_control_stages{0U};
-  std::size_t remaining_prediction_stages{0U};
-  RetainedExecutionCursorReason reason{
-    RetainedExecutionCursorReason::InvalidTiming};
-};
-
-RetainedExecutionCursorResolution resolve_retained_execution_cursor(
-  const RetainedExecutionCursorRequest & request) noexcept;
-
-enum class DynamicEscapeExecutionLeaseReason {
-  FreshExecution,
-  RetainedExecution,
-  HardSafetyOverride,
-  AttemptInactive,
-  RetainedUnavailable,
-  RetainedIdentityMismatch,
-};
-
-const char * to_string(DynamicEscapeExecutionLeaseReason reason) noexcept;
-
-/// Separate fresh candidate availability from execution ownership. A short,
-/// physically admitted retained horizon may continue to own the controller
-/// while the asynchronous planner rebuilds the next candidate. Identity is
-/// checked against the encounter attempt so a stale solution can never leak
-/// into another target or side.
-struct DynamicEscapeExecutionLeaseRequest {
-  bool execution_permitted{true};
-  bool fresh_execution_active{false};
-  bool attempt_active{false};
-  std::uint64_t expected_attempt_id{0U};
-  std::string expected_target_id;
-  int expected_side_sign{0};
-  bool retained_available{false};
-  std::uint64_t retained_attempt_id{0U};
-  std::string retained_target_id;
-  int retained_side_sign{0};
-  double retained_age_sec{std::numeric_limits<double>::infinity()};
-};
-
-struct DynamicEscapeExecutionLeaseResolution {
-  bool active{false};
-  bool fresh{false};
-  bool retained{false};
-  bool retained_identity_matches{false};
-  double path_age_sec{std::numeric_limits<double>::infinity()};
-  DynamicEscapeExecutionLeaseReason reason{
-    DynamicEscapeExecutionLeaseReason::AttemptInactive};
-};
-
-DynamicEscapeExecutionLeaseResolution resolve_dynamic_escape_execution_lease(
-  const DynamicEscapeExecutionLeaseRequest & request) noexcept;
-
 enum class DynamicEscapeAttemptReason {
   Inactive,
   Started,
@@ -695,7 +617,6 @@ std::string format_dynamic_escape_attempt_trace(
 enum class DynamicEscapeExitReason {
   Inactive,
   TargetBlocking,
-  RetainedSolutionExpired,
   WallPathPending,
   ReplacementPending,
   ReplacementExecuting,
@@ -721,7 +642,6 @@ struct DynamicEscapeExitRequest {
   bool obstacle_blocking{false};
   bool replacement_escape_active{false};
   bool replacement_escape_admitted{false};
-  bool retained_solution_available{false};
   bool recovery_override{false};
   int required_consecutive_resolved_cycles{2};
 };
@@ -731,7 +651,6 @@ struct DynamicEscapeExitResolution {
   bool active{false};
   bool entered{false};
   bool released{false};
-  bool hold_lateral_control{false};
   /// The encounter planner already owns replacement generation. This is not
   /// a solver/wall failure and must not feed failure backoff.
   bool continuation_required{false};
@@ -749,8 +668,8 @@ struct DynamicEscapeExitResolution {
 
 /// Prevents Dynamic Escape from handing lateral authority to RacingLine while
 /// the obstacle that caused the escape is still blocking.  The gate never
-/// manufactures a control command; it only authorizes a short retained-solution
-/// lease and requests a replacement escape plan.
+/// manufactures or retains a control command; it only owns the replacement
+/// escape lifecycle and requests a fresh plan when the target still blocks.
 class DynamicEscapeExitGate {
 public:
   DynamicEscapeExitResolution update(
@@ -765,7 +684,6 @@ private:
   int hold_cycles_{0};
   int consecutive_resolved_cycles_{0};
   DynamicEscapeExitReason previous_reason_{DynamicEscapeExitReason::Inactive};
-  bool previous_hold_lateral_control_{false};
   bool previous_continuation_required_{false};
 };
 
@@ -778,8 +696,7 @@ std::string format_dynamic_escape_exit_trace(
   int latched_side_sign,
   double front_distance_m,
   double protected_front_distance_m,
-  double closing_speed_mps,
-  double retained_age_sec);
+  double closing_speed_mps);
 
 enum class WallPathAdmissionScope {
   SolverHandoff,

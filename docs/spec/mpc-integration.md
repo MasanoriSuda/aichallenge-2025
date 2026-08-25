@@ -1651,12 +1651,16 @@ wall certificateの有効期限を延長しない。ライフサイクルは
 `planner_requested`、`effective_planning`、`continuation`、`cycles`で追跡する。計画ログの
 `lifecycle=entry/plan/continuation/active`でも同じ所有状態を確認できる。
 
-Dynamic Escape実行解が一時的に消え、同じ前方targetがblockingである場合は、exit contractが
-短いphysically-admitted solution leaseで横操舵を橋渡しする。ただし`target-blocking`自体は
-wall/solver failureではないため、active lifecycleがreplacementを計画中ならfailure replanや
-solver backoffへ投入しない。物理wall rejection、solver failure、replacement lossは従来どおり
-失敗として扱う。正常なlive solutionのwall admissionはfreshな物理観測から直接採用し、
-stateful admission gateを40 Hzでenter/releaseし直さない。
+Dynamic Escape実行は、現在周期のfreshなcanonical解と現在周期の物理wall admissionが揃った
+場合だけnormal authorityを持つ。旧private retained solution leaseは、その根となるproducerが
+legacy normal solve削除後に存在せず、実行不能なconsumer分岐だけを残していたため
+2026-08-25に物理削除した。同じ前方targetがblockingでfresh解がない場合、exit contractは
+古い解を再生せず、active lifecycleへfresh replacementを要求する。`target-blocking`自体は
+wall/solver failureではないため、active lifecycleがreplacementを計画中ならfailure backoffへ
+投入しない。物理wall rejection、solver failure、replacement lossは失敗として扱う。正常な
+live solutionのwall admissionはfreshな物理観測から直接採用し、stateful admission gateを
+40 Hzでenter/releaseし直さない。wall handoffが必要な周期は、既存のlast finite steeringを
+短時間同期するが、それをDynamic Escapeの解やauthorityとして扱わない。
 
 現行grace 0.50秒は2025 AWSIM競技
 シミュレーション向けの暫定値であり、2026公式仕様または実車安全仕様ではない。

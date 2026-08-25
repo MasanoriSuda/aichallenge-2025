@@ -935,6 +935,14 @@ Finish the architecture simplification instead of leaving permanent dual control
   failure-first contract, 25-package build and all 49 test targets (1,822
   tests) pass. Remaining historical naming/final-source classification is a
   separate audited cleanup; parameter tuning remains prohibited.
+- `.steering/20260825-slice6-legacy-boost-authority-removal` removes the 2025
+  boost relay that could replace canonical acceleration, publish a custom
+  command on `/boost_commander/command`, and make a second node own the final
+  normal command topic. The disabled launch parameter, controller branches,
+  comparison-path option, relay node and dedicated message are deleted in the
+  same Slice. The finite 2026 `/awsim/cmd` StartOnce Boost, Emergency and
+  Recovery remain independent. No parameter tuning or replacement fallback is
+  introduced.
 
 ## Slice 7: Parameter tuning
 

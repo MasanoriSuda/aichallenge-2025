@@ -62,6 +62,20 @@ CONFIG = (
 CLOUD_CONFIG = (
     Path(__file__).resolve().parents[1] / "config" / "config_for_cloud.yaml"
 ).read_text(encoding="utf-8")
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+LEGACY_BOOST_SURFACE = "\n".join(
+    path.read_text(encoding="utf-8")
+    for path in (
+        PACKAGE_ROOT / "src" / "mpc_controller_cpp.cpp",
+        PACKAGE_ROOT / "multi_purpose_mpc_ros" / "mpc_controller.py",
+        PACKAGE_ROOT / "multi_purpose_mpc_ros" / "path_constraints_provider.py",
+        PACKAGE_ROOT / "launch" / "mpc_controller.launch.py",
+        PACKAGE_ROOT / "launch" / "mpc_simulation.launch.py",
+        PACKAGE_ROOT / "CMakeLists.txt",
+        PACKAGE_ROOT.parent / "aichallenge_submit_launch" / "launch" / "control" / "mpc.launch.xml",
+        PACKAGE_ROOT.parent / "multi_purpose_mpc_ros_msgs" / "CMakeLists.txt",
+    )
+)
 
 
 def test_canonical_normal_owner_has_no_runtime_migration_availability_switch() -> None:
@@ -119,6 +133,21 @@ def test_uncertified_normal_failover_authorities_are_physically_deleted() -> Non
         "qualification_hold_used",
     )
     assert not [token for token in forbidden if token in production]
+
+
+def test_legacy_boost_normal_authority_is_physically_deleted() -> None:
+    """The 2025 boost relay must not bypass the canonical final command owner."""
+
+    forbidden = (
+        "use_boost_acceleration",
+        "USE_BUG_ACC",
+        "use_bug_acc_",
+        "bug_acc_enabled",
+        "AckermannControlBoostCommand",
+        "boost_commander",
+        "/boost_commander/command",
+    )
+    assert not [token for token in forbidden if token in LEGACY_BOOST_SURFACE]
 
 
 def test_retired_low_speed_direct_authority_is_physically_deleted() -> None:

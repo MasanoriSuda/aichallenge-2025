@@ -14,7 +14,6 @@
     <param name="awsim_control_mode_reassert_period_sec" value="0.2"/>
     <param name="awsim_control_mode_reassert_timeout_sec" value="5.0"/>
     <param name="awsim_control_mode_motion_threshold_mps" value="0.1"/>
-    <param name="use_boost_acceleration" value="false"/>
     <param name="use_obstacle_avoidance" value="$(var use_obstacle_avoidance)"/>
     <param name="use_stats" value="false"/>
   </node>

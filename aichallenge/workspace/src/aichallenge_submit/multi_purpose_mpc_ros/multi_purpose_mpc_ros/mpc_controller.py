@@ -48,12 +48,10 @@ from multi_purpose_mpc_ros.common import convert_to_namedtuple, file_exists
 from multi_purpose_mpc_ros.simulation_logger import SimulationLogger
 from multi_purpose_mpc_ros.obstacle_manager import ObstacleManager
 from multi_purpose_mpc_ros.exexution_stats import ExecutionStats
-from multi_purpose_mpc_ros_msgs.msg import AckermannControlBoostCommand, PathConstraints, BorderCells
+from multi_purpose_mpc_ros_msgs.msg import PathConstraints, BorderCells
 from multi_purpose_mpc_ros.tools.reference_velocity_configulator import ReferenceVelocityConfigulator
 
 
-RED = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0)
-YELLOW = ColorRGBA(r=1.0, g=1.0, b=0.0, a=1.0)
 CYAN = ColorRGBA(r=0.0, g=156.0 / 255.0, b=209.0 / 255.0, a=1.0)
 
 def array_to_ackermann_control_command(stamp, u: np.ndarray, acc: float) -> AckermannControlCommand:
@@ -118,9 +116,6 @@ class MPCController(Node):
     PKG_PATH: str = get_package_share_directory('multi_purpose_mpc_ros') + "/"
     # MAX_LAPS = 6
     MAX_LAPS = 10000
-    BUG_VEL = 40.0 # km/h
-    BUG_ACC = 400.0
-
     SHOW_PLOT_ANIMATION = False
     PLOT_RESULTS = False
     ANIMATION_INTERVAL = 20
@@ -131,13 +126,11 @@ class MPCController(Node):
         super().__init__("mpc_controller") # type: ignore
 
         # declare parameters
-        self.declare_parameter("use_boost_acceleration", False)
         self.declare_parameter("use_obstacle_avoidance", False)
         self.declare_parameter("use_stats", False)
 
         # get parameters
         self.use_sim_time = self.get_parameter("use_sim_time").get_parameter_value().bool_value
-        self.USE_BUG_ACC = self.get_parameter("use_boost_acceleration").get_parameter_value().bool_value
         self.USE_OBSTACLE_AVOIDANCE = self.get_parameter("use_obstacle_avoidance").get_parameter_value().bool_value
         self.use_stats = self.get_parameter("use_stats").get_parameter_value().bool_value
 
@@ -153,10 +146,6 @@ class MPCController(Node):
         if self.use_sim_time:
             self.get_logger().warn("------------------------------------")
             self.get_logger().warn("use_sim_time is enabled!")
-            self.get_logger().warn("------------------------------------")
-        if self.USE_BUG_ACC:
-            self.get_logger().warn("------------------------------------")
-            self.get_logger().warn("USE_BUG_ACC is enabled!")
             self.get_logger().warn("------------------------------------")
         if self.USE_OBSTACLE_AVOIDANCE:
             self.get_logger().warn("------------------------------------")
@@ -383,7 +372,7 @@ class MPCController(Node):
                 sparse.diags(cfg_mpc.Q),
                 sparse.diags(cfg_mpc.R),
                 sparse.diags(cfg_mpc.QN),
-                kmh_to_m_per_sec(self.BUG_VEL if self.USE_BUG_ACC else cfg_mpc.v_max),
+                kmh_to_m_per_sec(cfg_mpc.v_max),
                 cfg_mpc.a_min,
                 cfg_mpc.a_max,
                 cfg_mpc.ay_max,
@@ -497,15 +486,10 @@ class MPCController(Node):
 
     def _setup_pub_sub(self) -> None:
         # Publishers
-        if self.USE_BUG_ACC:
-          self._command_pub = self.create_publisher(
-            AckermannControlBoostCommand, "/boost_commander/command", 1)
-        else:
-          self._command_pub = self.create_publisher(
-            AckermannControlCommand, "/control/command/control_cmd", 1)
-          self._command_raw_pub = self.create_publisher(
-            AckermannControlCommand, "/control/command/control_cmd_raw", 1)
-          print("use normal ackermann control command")
+        self._command_pub = self.create_publisher(
+          AckermannControlCommand, "/control/command/control_cmd", 1)
+        self._command_raw_pub = self.create_publisher(
+          AckermannControlCommand, "/control/command/control_cmd_raw", 1)
 
         # NOTE:評価環境での可視化のためにダミーのトピック名を使用
         self._mpc_pred_pub = self.create_publisher(
@@ -558,22 +542,14 @@ class MPCController(Node):
                 self._v2x_callback,
                 1)
 
-    def _create_ackerman_control_command(self, stamp, u, acc, bug_acc_enabled):
+    def _create_ackerman_control_command(self, stamp, u, acc):
         v_cmd = u[0]
         steer_cmd = u[1]
 
-        ackerman_cmd = array_to_ackermann_control_command(stamp.to_msg(), [v_cmd, steer_cmd], acc)
+        return array_to_ackermann_control_command(stamp.to_msg(), [v_cmd, steer_cmd], acc)
 
-        if not self.USE_BUG_ACC:
-            return ackerman_cmd
-
-        ackerman_boost_cmd = AckermannControlBoostCommand()
-        ackerman_boost_cmd.command = ackerman_cmd
-        ackerman_boost_cmd.boost_mode = bug_acc_enabled
-        return ackerman_boost_cmd
-
-    def _publish_control_command(self, stamp, u, acc, bug_acc_enabled):
-        cmd = self._create_ackerman_control_command(stamp, u, acc, bug_acc_enabled)
+    def _publish_control_command(self, stamp, u, acc):
+        cmd = self._create_ackerman_control_command(stamp, u, acc)
 
         # publish raw control command
         self._command_raw_pub.publish(cmd)
@@ -806,7 +782,7 @@ class MPCController(Node):
         # print(f"mpc x: {self._mpc.model.temporal_state.x}, y: {self._mpc.model.temporal_state.y}, psi: {self._mpc.model.temporal_state.psi}")
 
         with self._stats.time_block("control"):
-            u, max_delta = self._mpc.get_control()
+            u, _ = self._mpc.get_control()
             # self.get_logger().info(f"u: {u}")
 
         if self._ref_vel_configulator is not None:
@@ -832,29 +808,8 @@ class MPCController(Node):
             u = [0.0, 0.0]
             # continue
 
-        acc = 0.
-        bug_acc_enabled = False
-        if self.USE_BUG_ACC:
-            def deg2rad(deg):
-                return deg * np.pi / 180.0
-
-            if abs(v) > kmh_to_m_per_sec(44.0) or \
-             (abs(v) > kmh_to_m_per_sec(38.0) and abs(max_delta) > deg2rad(12.0)):
-                bug_acc_enabled = False
-                acc = self._mpc_cfg.a_min / 3.0 * 2.0
-                self._pred_marker_color = RED
-            elif abs(v) > kmh_to_m_per_sec(41.0) or abs(u[1]) > deg2rad(10.0):
-                bug_acc_enabled = False
-                acc = self._mpc_cfg.a_max
-                self._pred_marker_color = YELLOW
-            else:
-                bug_acc_enabled = True
-                acc = 500.0
-                self._pred_marker_color = CYAN
-        else:
-            acc =  self.KP * (u[0] - v)
-            # print(f"v: {v}, u[0]: {u[0]}, acc: {acc}")
-            acc = np.clip(acc, self._mpc_cfg.a_min, self._mpc_cfg.a_max)
+        acc = self.KP * (u[0] - v)
+        acc = np.clip(acc, self._mpc_cfg.a_min, self._mpc_cfg.a_max)
         # u[0] = np.clip(last_u[0] + acc * dt, 0.0, self._mpc_cfg.v_max)
 
         # apply low pass filter to control signal
@@ -869,7 +824,7 @@ class MPCController(Node):
         self._car.drive([v, u[1]])
 
         # Publish control command
-        self._publish_control_command(now, u, acc, bug_acc_enabled)
+        self._publish_control_command(now, u, acc)
 
         # Log states
         self._sim_logger.log(self._car, u, t)

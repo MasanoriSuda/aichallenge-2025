@@ -21,10 +21,6 @@ find_package(Threads REQUIRED)
 find_package(yaml-cpp REQUIRED)
 ament_auto_find_build_dependencies()
 
-ament_auto_add_library(${PROJECT_NAME} SHARED
-  src/boost_commander.cpp
-)
-
 ament_auto_add_library(${PROJECT_NAME}_path_core SHARED
   NO_TARGET_LINK_LIBRARIES
   src/path_core.cpp
@@ -346,10 +342,6 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_production_adapter
 ament_auto_add_library(${PROJECT_NAME}_recovery_mpc SHARED
   NO_TARGET_LINK_LIBRARIES
   src/recovery_mpc.cpp
-)
-
-ament_auto_add_executable(boost_commander
-  src/boost_commander_node.cpp
 )
 
 ament_auto_add_executable(mpc_controller_cpp

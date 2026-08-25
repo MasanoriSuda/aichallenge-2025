@@ -49,18 +49,9 @@ class MPCConfig:
 
 class PathConstraintsProvider(Node):
     PKG_PATH: str = get_package_share_directory('multi_purpose_mpc_ros') + "/"
-    USE_BUG_ACC = True
-    BUG_VEL = 40.0 # km/h
-    BUG_ACC = 400.0
 
     def __init__(self, config_path: str) -> None:
         super().__init__("path_constraints_proveder") # type: ignore
-
-        # declare parameters
-        self.declare_parameter("use_boost_acceleration", False)
-
-        # get parameters
-        self.USE_BUG_ACC = self.get_parameter("use_boost_acceleration").get_parameter_value().bool_value
 
         self._cfg = self._load_config(config_path)
         self._odom: Optional[Odometry] = None
@@ -177,7 +168,7 @@ class PathConstraintsProvider(Node):
                 sparse.diags(cfg_mpc.Q),
                 sparse.diags(cfg_mpc.R),
                 sparse.diags(cfg_mpc.QN),
-                kmh_to_m_per_sec(self.BUG_VEL if self.USE_BUG_ACC else cfg_mpc.v_max),
+                kmh_to_m_per_sec(cfg_mpc.v_max),
                 cfg_mpc.a_min,
                 cfg_mpc.a_max,
                 cfg_mpc.ay_max,

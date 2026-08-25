@@ -146,7 +146,7 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 
 | トピック | 型 | 確認元 |
 |---|---|---|
-| `/control/command/control_cmd` | `autoware_auto_control_msgs/AckermannControlCommand` | `pure_pursuit.launch.xml`（remap）、`mpc_controller_cpp.cpp`、`mpc_controller.py`（比較用 Python 版）、`boost_commander.cpp`、`tiny_lidar_net_controller_node.py`、`pilot_net_controller_node.py` |
+| `/control/command/control_cmd` | `autoware_auto_control_msgs/AckermannControlCommand` | `pure_pursuit.launch.xml`（remap）、`mpc_controller_cpp.cpp`、`mpc_controller.py`（比較用 Python 版）、`tiny_lidar_net_controller_node.py`、`pilot_net_controller_node.py` |
 | `/control/command/gear_cmd` | `autoware_auto_vehicle_msgs/GearCommand` | 2026公式gear指令。gear変更またはスタック復帰を行う場合の任意出力 |
 | `/awsim/cmd` | `std_msgs/Float32MultiArray` | 2026 SIM Boostを使う場合の任意出力。index 0=`boostCommand` |
 

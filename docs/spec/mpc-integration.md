@@ -856,7 +856,7 @@ clear確認は省略しない。さらにcollision hint、前方車、前進inte
 - high/lowの1ペア送信時点でそのセッションを使用済みにし、確認timeoutやstatus欠落でも再送しない。
 - `isBoosting`または残数減少で確認するが、確認結果は再送判断に使わない。
 - `Start`重複、`Ready`、control disable、fail-safe回復では再armしない。`Finish`後の新しい`Spawned`だけ次セッションへrearmする。
-- `use_sim_time=false`またはlegacy `use_boost_acceleration=true`では公式Boost I/Oを無効化する。
+- `use_sim_time=false`では公式Boost I/Oを無効化する。
 - 使用可能回数は環境設定で変わるため、5や2をコードへ固定しない。
 
 ```yaml
@@ -875,7 +875,8 @@ awsim_boost:
   confirmation_timeout_sec: 2.0
 ```
 
-`use_boost_acceleration`、`AckermannControlBoostCommand`、`/boost_commander/command`、高頻度`control_cmd`再送は2025由来のlegacy経路であり、2026公式Boostには使用しない。
+2025由来のlegacy boost中継経路はSlice 6で物理削除済みである。2026公式Boostはnormal
+trajectory authorityを再所有せず、上記の有限回`/awsim/cmd` item commandだけを使用する。
 
 trajectory の静的検証には次を使う。
 
@@ -1015,9 +1016,9 @@ make autoware-build
 ```
 
 ビルドで行われること:
-1. `multi_purpose_mpc_ros_msgs` のメッセージ型生成（`AckermannControlBoostCommand.msg`, `PathConstraints.msg`, `BorderCells.msg`）
+1. `multi_purpose_mpc_ros_msgs` のメッセージ型生成（`PathConstraints.msg`, `BorderCells.msg`）
 2. `multi_purpose_mpc_ros` のビルド:
-   - C++ ライブラリ/ノード（`awsim_boost_start_dash`, `boost_commander`, `mpc_controller_cpp`）のビルド
+   - C++ ライブラリ/ノード（`awsim_boost_start_dash`, `mpc_controller_cpp`）のビルド
    - OSQP C API（`osqp_vendor`）、Eigen、OpenCV、yaml-cpp を使った MPC 実行系のビルド
    - Python 補助スクリプト用 venv の作成（`/usr/bin/python3 -m venv`）
    - `requirements.txt` からの pip install（`numpy`, `pandas`, `matplotlib`, `osqp`, `scikit-image`, `PyYAML`）
@@ -1147,7 +1148,6 @@ aichallenge_submit/multi_purpose_mpc_ros_msgs/
 - sim/実機での `steering_tire_angle_gain_var` 切り替え（config 分離 or launch param override）
 - 速度プリセットの launch arg 化
 - 障害物回避の有効化（`use_obstacle_avoidance=true`）
-- 2025由来`boost_commander` / custom message / `use_boost_acceleration`の段階的削除
 - `path_constraints_provider` ノードの統合（高度な障害物回避）
 
 ## 事前準備: MPC 用地図・経路データの生成

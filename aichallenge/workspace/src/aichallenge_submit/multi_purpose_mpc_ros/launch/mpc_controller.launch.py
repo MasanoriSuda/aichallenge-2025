@@ -15,7 +15,6 @@ from launch_ros.actions import Node, SetParameter
 def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_obstacle_avoidance = LaunchConfiguration("use_obstacle_avoidance")
-    use_boost_acceleration = LaunchConfiguration("use_boost_acceleration")
     use_stats = LaunchConfiguration("use_stats")
 
     config_path = (
@@ -47,24 +46,9 @@ def launch_setup(context, *args, **kwargs):
             "info",
         ],
         parameters=[
-            {"use_boost_acceleration": use_boost_acceleration},
             {"use_obstacle_avoidance": use_obstacle_avoidance},
             {"use_stats": use_stats},
         ],
-    )
-
-    boost_commander = Node(
-        package="multi_purpose_mpc_ros",
-        executable="boost_commander",
-        name="boost_commander",
-        output="both",
-        emulate_tty=True,  # https://github.com/ros2/launch/issues/188
-        arguments=[
-            "--ros-args",
-            "--log-level",
-            "info",
-        ],
-        condition=IfCondition(use_boost_acceleration),
     )
 
     path_constraints_provider = Node(
@@ -81,7 +65,6 @@ def launch_setup(context, *args, **kwargs):
             "info",
         ],
         parameters=[
-            {"use_boost_acceleration": use_boost_acceleration},
             {"use_obstacle_avoidance": use_obstacle_avoidance},
         ],
         condition=IfCondition(use_obstacle_avoidance),
@@ -89,18 +72,13 @@ def launch_setup(context, *args, **kwargs):
 
     return [
         SetParameter('use_sim_time', use_sim_time),
-        mpc_controller, boost_commander, path_constraints_provider]
+        mpc_controller, path_constraints_provider]
 
 
 def generate_launch_description():
     arg_configs = [
         # (arg_name, default_value, description)
         ("use_sim_time", "true", "Use simulation time or not"),
-        (
-            "use_boost_acceleration",
-            "false",
-            "Use the boost acceleration for AWSIM simulation",
-        ),
         (
             "use_obstacle_avoidance",
             "false",

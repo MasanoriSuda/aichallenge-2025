@@ -31,7 +31,6 @@ def launch_setup(context, *args, **kwargs):
             "info",
         ],
         parameters=[
-            {"use_boost_acceleration": False},
             {"use_obstacle_avoidance": True},
         ],
     )

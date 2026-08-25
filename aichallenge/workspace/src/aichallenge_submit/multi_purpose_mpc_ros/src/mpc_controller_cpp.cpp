@@ -40,7 +40,6 @@
 #include <multi_purpose_mpc_ros/start_grid_grace.hpp>
 #include <multi_purpose_mpc_ros/stuck_recovery_core.hpp>
 #include <multi_purpose_mpc_ros/v2x_overtake_core.hpp>
-#include <multi_purpose_mpc_ros_msgs/msg/ackermann_control_boost_command.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/border_cells.hpp>
 #include <multi_purpose_mpc_ros_msgs/msg/path_constraints.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -104,7 +103,6 @@ using geometry_msgs::msg::Point;
 using geometry_msgs::msg::Pose2D;
 using geometry_msgs::msg::Quaternion;
 using geometry_msgs::msg::Vector3;
-using multi_purpose_mpc_ros_msgs::msg::AckermannControlBoostCommand;
 using multi_purpose_mpc_ros_msgs::msg::BorderCells;
 using multi_purpose_mpc_ros_msgs::msg::PathConstraints;
 using nav_msgs::msg::Odometry;
@@ -50526,7 +50524,6 @@ public:
   MPCControllerCpp(const std::string & config_path, const std::optional<std::string> & ref_vel_path)
   : Node("mpc_controller"), config_path_(config_path), ref_vel_config_path_(ref_vel_path)
   {
-    declare_parameter("use_boost_acceleration", false);
     declare_parameter("use_obstacle_avoidance", false);
     declare_parameter("use_stats", false);
     declare_parameter("simulation_mode", false);
@@ -50536,7 +50533,6 @@ public:
     declare_parameter("awsim_control_mode_motion_threshold_mps", 0.1);
     use_sim_time_ = get_parameter("use_sim_time").as_bool();
     simulation_mode_ = get_parameter("simulation_mode").as_bool();
-    use_bug_acc_ = get_parameter("use_boost_acceleration").as_bool();
     use_obstacle_avoidance_ = get_parameter("use_obstacle_avoidance").as_bool();
     use_stats_ = get_parameter("use_stats").as_bool();
 
@@ -50562,11 +50558,11 @@ public:
     stuck_recovery_actuation_io_enabled_ =
       cfg_.stuck_recovery.core.enabled && !cfg_.stuck_recovery.core.shadow_mode &&
       (!cfg_.stuck_recovery.core.simulation_only || use_sim_time_) &&
-      cfg_.stuck_recovery.reverse_actuation_enabled && !use_bug_acc_;
+      cfg_.stuck_recovery.reverse_actuation_enabled;
     awsim_boost_guard_ = std::make_unique<awsim_boost::StartDashGuard>(cfg_.awsim_boost);
     awsim_boost_io_enabled_ =
       use_sim_time_ && cfg_.awsim_boost.enabled &&
-      cfg_.awsim_boost.mode == awsim_boost::Mode::StartOnce && !use_bug_acc_;
+      cfg_.awsim_boost.mode == awsim_boost::Mode::StartOnce;
     awsim_control_mode_reassert_enabled_ =
       use_sim_time_ && simulation_mode_ &&
       get_parameter("awsim_control_mode_reassert_enabled").as_bool();
@@ -50646,9 +50642,6 @@ public:
 
     if (use_sim_time_) {
       RCLCPP_WARN(get_logger(), "use_sim_time is enabled!");
-    }
-    if (use_bug_acc_) {
-      RCLCPP_WARN(get_logger(), "USE_BUG_ACC is enabled!");
     }
     if (cfg_.stuck_recovery.domain_enabled_applied) {
       RCLCPP_INFO(
@@ -50762,10 +50755,6 @@ public:
         cfg_.awsim_boost.confirmation_timeout_sec);
     } else if (cfg_.awsim_boost.enabled && !use_sim_time_) {
       RCLCPP_WARN(get_logger(), "AWSIM boost is configured but disabled outside simulation.");
-    } else if (cfg_.awsim_boost.enabled && use_bug_acc_) {
-      RCLCPP_WARN(
-        get_logger(),
-        "AWSIM 2026 boost is disabled while legacy use_boost_acceleration is active.");
     } else if (!cfg_.awsim_boost.enabled) {
       RCLCPP_INFO(get_logger(), "AWSIM 2026 boost is disabled by configuration.");
     } else if (cfg_.awsim_boost.mode == awsim_boost::Mode::Disabled) {
@@ -51644,7 +51633,7 @@ private:
     }
     if (!reference_path_->compute_speed_profile(
         mpc_cfg_.a_min, mpc_cfg_.a_max, 0.0,
-        use_bug_acc_ ? kmh_to_m_per_sec(40.0) : mpc_cfg_.v_max, mpc_cfg_.ay_max))
+        mpc_cfg_.v_max, mpc_cfg_.ay_max))
     {
       throw std::runtime_error("Failed to compute the initial reference speed profile");
     }
@@ -51786,12 +51775,9 @@ private:
 
   void setup_pub_sub()
   {
-    if (use_bug_acc_) {
-      boost_command_pub_ = create_publisher<AckermannControlBoostCommand>("/boost_commander/command", 1);
-    } else {
-      command_pub_ = create_publisher<AckermannControlCommand>("/control/command/control_cmd", 1);
-      command_raw_pub_ = create_publisher<AckermannControlCommand>("/control/command/control_cmd_raw", 1);
-    }
+    command_pub_ = create_publisher<AckermannControlCommand>("/control/command/control_cmd", 1);
+    command_raw_pub_ = create_publisher<AckermannControlCommand>(
+      "/control/command/control_cmd_raw", 1);
     mpc_pred_pub_ = create_publisher<MarkerArray>("/mpc/prediction", 1);
     mpc_pred_pub_dummy_ = create_publisher<MarkerArray>(
       "/planning/scenario_planning/lane_driving/motion_planning/obstacle_stop_planner/virtual_wall", 1);
@@ -52335,22 +52321,15 @@ private:
       recovery_boost_suppressed_for_session_ = true;
     }
 
-    if (use_bug_acc_) {
-      AckermannControlBoostCommand boost_command;
-      boost_command.command = raw_command;
-      boost_command.boost_mode = false;
-      boost_command_pub_->publish(boost_command);
-    } else {
-      command_raw_pub_->publish(raw_command);
-      const double steering_gain =
-        std::isfinite(mpc_cfg_.steering_tire_angle_gain_var) ?
-        mpc_cfg_.steering_tire_angle_gain_var : 1.0;
-      raw_command.lateral.steering_tire_angle *= steering_gain;
-      if (!command_is_finite(raw_command)) {
-        raw_command.lateral.steering_tire_angle = 0.0;
-      }
-      command_pub_->publish(raw_command);
+    command_raw_pub_->publish(raw_command);
+    const double steering_gain =
+      std::isfinite(mpc_cfg_.steering_tire_angle_gain_var) ?
+      mpc_cfg_.steering_tire_angle_gain_var : 1.0;
+    raw_command.lateral.steering_tire_angle *= steering_gain;
+    if (!command_is_finite(raw_command)) {
+      raw_command.lateral.steering_tire_angle = 0.0;
     }
+    command_pub_->publish(raw_command);
     const double actual_speed_mps =
       odom_ != nullptr && std::isfinite(odom_->twist.twist.linear.x) ?
       odom_->twist.twist.linear.x : std::numeric_limits<double>::quiet_NaN();
@@ -52369,21 +52348,9 @@ private:
 
   std::optional<double> publish_control_command(
     const rclcpp::Time & stamp, const Eigen::Vector2d & u, const double acc,
-    const bool bug_acc_enabled, const bool canonical_physical_steering)
+    const bool canonical_physical_steering)
   {
     auto raw_command = create_ackermann_control_command(stamp, u, acc);
-    if (use_bug_acc_) {
-      if (!command_is_finite(raw_command)) {
-        publish_failsafe_command(stamp, "non-finite boost control command rejected");
-        return std::nullopt;
-      }
-      AckermannControlBoostCommand boost_cmd;
-      boost_cmd.command = raw_command;
-      boost_cmd.boost_mode = bug_acc_enabled;
-      boost_command_pub_->publish(boost_cmd);
-      command_failsafe_active_ = false;
-      return raw_command.lateral.steering_tire_angle;
-    }
     const auto published_steering =
       mpcc_contract::resolve_published_steering_tire_angle(
       raw_command.lateral.steering_tire_angle,
@@ -55756,8 +55723,7 @@ private:
 
   bool apply_stuck_recovery_arbitration(
     const stuck_recovery::CoreOutput & output, const double actual_v,
-    const rclcpp::Time & stamp, Eigen::Vector2d & u, double & acc,
-    bool & bug_acc_enabled)
+    const rclcpp::Time & stamp, Eigen::Vector2d & u, double & acc)
   {
     if (!output.actuation_allowed ||
       output.action.type == stuck_recovery::RecoveryActionType::NormalControl)
@@ -55766,7 +55732,6 @@ private:
     }
 
     recovery_boost_suppressed_for_session_ = true;
-    bug_acc_enabled = false;
     if (output.action.type == stuck_recovery::RecoveryActionType::LowSpeedRejoin) {
       if (recovery_rejoin_hold_cycle_) {
         const double max_steering_step = mpc_cfg_.steer_rate_max / mpc_cfg_.control_rate;
@@ -56206,7 +56171,6 @@ private:
       post_mpc_start - mpc_start).count();
     callback_timing.checkpoint = "mpc-complete";
     auto u = mpc_cycle.control;
-    double max_delta = mpc_cycle.maximum_steering_rad;
     const auto canonical_normal_command =
       mpc_cycle.canonical_normal_command;
     const bool canonical_emergency_stop =
@@ -56226,8 +56190,7 @@ private:
       }
     }
 
-    double acc = 0.0;
-    bool bug_acc_enabled = false;
+    double acc = mpc_cfg_.a_min;
     const bool missing_canonical_normal_identity =
       !canonical_normal_command.has_value() && !mpc_fallback_active &&
       !canonical_emergency_stop && !executed_solution_wall_hold_active;
@@ -56238,43 +56201,11 @@ private:
       canonical_normal_command.has_value() && !forced_stop_active &&
       !executed_solution_wall_hold_active;
     if (forced_stop_active) {
-      bug_acc_enabled = false;
       acc = mpc_cfg_.a_min;
     } else if (executed_solution_wall_hold_active) {
-      bug_acc_enabled = false;
       acc = std::min(0.0, 100.0 * (u[0] - actual_v));
     } else if (canonical_normal_execution_active) {
-      bug_acc_enabled = false;
       acc = canonical_normal_command->acceleration_mps2;
-    } else if (use_bug_acc_) {
-      const auto deg2rad = [](const double deg) { return deg * kPi / 180.0; };
-      if (
-        std::abs(actual_v) > kmh_to_m_per_sec(44.0) ||
-        (std::abs(actual_v) > kmh_to_m_per_sec(38.0) && std::abs(max_delta) > deg2rad(12.0))) {
-        bug_acc_enabled = false;
-        acc = mpc_cfg_.a_min / 3.0 * 2.0;
-        pred_marker_color_.r = 1.0;
-        pred_marker_color_.g = 0.0;
-        pred_marker_color_.b = 0.0;
-        pred_marker_color_.a = 1.0;
-      } else if (std::abs(actual_v) > kmh_to_m_per_sec(41.0) || std::abs(u[1]) > deg2rad(10.0)) {
-        bug_acc_enabled = false;
-        acc = mpc_cfg_.a_max;
-        pred_marker_color_.r = 1.0;
-        pred_marker_color_.g = 1.0;
-        pred_marker_color_.b = 0.0;
-        pred_marker_color_.a = 1.0;
-      } else {
-        bug_acc_enabled = true;
-        acc = 500.0;
-        pred_marker_color_.r = 0.0;
-        pred_marker_color_.g = 156.0 / 255.0;
-        pred_marker_color_.b = 209.0 / 255.0;
-        pred_marker_color_.a = 1.0;
-      }
-    } else {
-      acc = 100.0 * (u[0] - actual_v);
-      acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
     }
 
     if (!forced_stop_active && !canonical_normal_execution_active) {
@@ -56306,7 +56237,7 @@ private:
       pose, actual_v, u, acc, effective_v_max, mpc_fallback_active, steady_now, current_time);
     const bool recovery_command_active = recovery_output.has_value() &&
       apply_stuck_recovery_arbitration(
-      recovery_output.value(), actual_v, current_time, u, acc, bug_acc_enabled);
+      recovery_output.value(), actual_v, current_time, u, acc);
     if (!canonical_normal_execution_active || recovery_command_active) {
       acc = clip(acc, mpc_cfg_.a_min, mpc_cfg_.a_max);
       u[1] = clip(u[1], -mpc_cfg_.delta_max, mpc_cfg_.delta_max);
@@ -56357,7 +56288,7 @@ private:
       canonical_normal_execution_active, canonical_emergency_stop,
       recovery_command_active);
     const auto published_steering = publish_control_command(
-      current_time, u, acc, bug_acc_enabled, canonical_physical_steering);
+      current_time, u, acc, canonical_physical_steering);
     if (!published_steering.has_value()) {
       return;
     }
@@ -56490,7 +56421,6 @@ private:
   bool use_sim_time_{};
   bool simulation_mode_{};
   bool state_prediction_active_{false};
-  bool use_bug_acc_{};
   bool use_obstacle_avoidance_{};
   bool use_stats_{};
   bool awsim_boost_io_enabled_{false};
@@ -56616,7 +56546,6 @@ private:
 
   rclcpp::Publisher<AckermannControlCommand>::SharedPtr command_pub_;
   rclcpp::Publisher<AckermannControlCommand>::SharedPtr command_raw_pub_;
-  rclcpp::Publisher<AckermannControlBoostCommand>::SharedPtr boost_command_pub_;
   rclcpp::Publisher<Float32MultiArray>::SharedPtr awsim_boost_pub_;
   rclcpp::Publisher<Bool>::SharedPtr awsim_control_mode_pub_;
   rclcpp::Publisher<GearCommand>::SharedPtr gear_command_pub_;

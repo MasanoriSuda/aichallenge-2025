@@ -109,6 +109,47 @@ TEST(MpccRateResolvedProblem, StateZeroEqualityAndSteeringOwnersAreExplicit)
   EXPECT_EQ(steering_rate.element, model::kSteeringRateIndex);
 }
 
+TEST(MpccRateResolvedProblem, DecodesRuntimeRow254AsFirstProgressSpeedInput)
+{
+  constexpr int horizon = 20;
+  const auto semantic = problem::decode_row(254, horizon);
+  ASSERT_TRUE(semantic.valid);
+  EXPECT_EQ(semantic.kind, problem::RowKind::InputBox);
+  EXPECT_EQ(semantic.stage, 0);
+  EXPECT_EQ(semantic.element, model::kVirtualProgressSpeedIndex);
+}
+
+TEST(MpccRateResolvedProblem, DetectsEmptyFirstProgressSpeedInterval)
+{
+  auto request = straight_request();
+  constexpr int nx = model::kStateDimension;
+  const int first_progress = nx + model::kProgressIndex;
+  request.state_lower[first_progress] = 0.0;
+  request.state_upper[first_progress] = 0.0;
+  request.input_lower[model::kVirtualProgressSpeedIndex] = 0.01;
+  const auto diagnostic = problem::analyze_first_stage_input_feasibility(
+    request, model::kVirtualProgressSpeedIndex);
+  ASSERT_TRUE(diagnostic.evaluated);
+  ASSERT_TRUE(diagnostic.separable);
+  EXPECT_FALSE(diagnostic.feasible);
+  EXPECT_DOUBLE_EQ(diagnostic.declared_lower, 0.01);
+  EXPECT_NEAR(diagnostic.implied_upper, 0.0, 1e-12);
+  EXPECT_EQ(
+    diagnostic.limiting_upper_state_element,
+    model::kProgressIndex);
+}
+
+TEST(MpccRateResolvedProblem, ReportsFeasibleFirstProgressSpeedIntersection)
+{
+  const auto request = straight_request();
+  const auto diagnostic = problem::analyze_first_stage_input_feasibility(
+    request, model::kVirtualProgressSpeedIndex);
+  ASSERT_TRUE(diagnostic.evaluated);
+  ASSERT_TRUE(diagnostic.separable);
+  EXPECT_TRUE(diagnostic.feasible);
+  EXPECT_LE(diagnostic.implied_lower, diagnostic.implied_upper);
+}
+
 TEST(MpccRateResolvedProblem, RejectsMalformedOrInconsistentContracts)
 {
   auto request = straight_request();

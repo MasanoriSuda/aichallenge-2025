@@ -1124,6 +1124,18 @@ Finish the architecture simplification instead of leaving permanent dual control
   stage-zero virtual-progress row-254 solver collapse also exists in the
   pre-change run, so it is recorded as a separate formulation Slice rather
   than hidden by source-age renewal, fallback or solver tuning.
+- `.steering/20260825-six-state-shiftout-vtheta-feasibility` then decodes those
+  residuals and rejects the apparent formulation contradiction. A pure
+  observer intersects the declared first virtual-progress-speed box with the
+  exact separable stage-one state bounds and reports row semantics only on an
+  existing solve rejection. In `output/20260825-235153`, every observed first
+  `vtheta` interval was nonempty, the worst row alternated between steering
+  rate and virtual-progress speed, and failures occurred under Cruise as well
+  as Overtake pre-entry. In the clearest Domain 1 sequence the vehicle had
+  already reached zero wall distance at `e_y=-2.426 m` before the sustained QP
+  rejection cascade. No production bound, solver setting, source lifetime or
+  fallback was changed. The upstream accepted-wall-horizon versus executed-
+  vehicle divergence must be audited separately.
 
 ## Slice 7: Parameter tuning
 

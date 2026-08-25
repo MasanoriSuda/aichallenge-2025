@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <sstream>
 #include <utility>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
@@ -174,6 +175,10 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     adapted->first_steering_rate_solver_upper_radps;
   result.first_steering_rate_certificate_margin_radps =
     adapted->first_steering_rate_certificate_margin_radps;
+  result.first_virtual_progress_feasibility =
+    mpcc_rate_resolved_problem::analyze_first_stage_input_feasibility(
+    adapted->problem,
+    mpcc_rate_resolved::kVirtualProgressSpeedIndex);
   result.solve_attempted = true;
 
   std::lock_guard<std::mutex> lock(mutex_);
@@ -185,6 +190,29 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   if (!outcome.result.has_value()) {
     result.outcome = Outcome::SolveRejected;
     result.detail = outcome.failure_detail;
+    if (outcome.constraint_failure.has_value()) {
+      const auto semantic = mpcc_rate_resolved_problem::decode_row(
+        outcome.constraint_failure->row, snapshot.request.horizon_steps);
+      std::ostringstream detail;
+      detail << result.detail;
+      if (semantic.valid) {
+        detail << ", row_semantic=" <<
+          mpcc_rate_resolved_problem::row_kind_name(semantic.kind) <<
+          "/stage=" << semantic.stage << "/element=" << semantic.element;
+      }
+      const auto & feasibility = result.first_virtual_progress_feasibility;
+      if (feasibility.evaluated) {
+        detail << ", first_vtheta=" <<
+          (feasibility.separable ? "separable" : "coupled") << '/' <<
+          (feasibility.feasible ? "feasible" : "empty") <<
+          "/declared:[" << feasibility.declared_lower << ',' <<
+          feasibility.declared_upper << "]/implied:[" <<
+          feasibility.implied_lower << ',' << feasibility.implied_upper <<
+          "]/limit_state:[" << feasibility.limiting_lower_state_element <<
+          ',' << feasibility.limiting_upper_state_element << ']';
+      }
+      result.detail = detail.str();
+    }
     return finish();
   }
   result.solved = true;

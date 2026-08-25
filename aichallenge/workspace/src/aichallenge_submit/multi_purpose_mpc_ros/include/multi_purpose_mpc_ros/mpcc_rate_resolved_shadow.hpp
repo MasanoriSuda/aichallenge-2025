@@ -87,6 +87,8 @@ struct Result
   double maximum_constraint_violation{};
   double maximum_normalized_constraint_violation{};
   int maximum_normalized_constraint_row{-1};
+  mpcc_rate_resolved_problem::FirstStageInputFeasibility
+    first_virtual_progress_feasibility;
   persistent_osqp::SolveTelemetry solver;
   artifact::RejectReason execution_artifact_reject_reason{
     artifact::RejectReason::None};

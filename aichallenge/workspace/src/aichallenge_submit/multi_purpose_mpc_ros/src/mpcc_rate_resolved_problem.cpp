@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_problem
 {
@@ -234,6 +235,78 @@ const char * row_kind_name(const RowKind kind) noexcept
     case RowKind::InputBox: return "input-box";
   }
   return "unknown";
+}
+
+FirstStageInputFeasibility analyze_first_stage_input_feasibility(
+  const AssemblyRequest & request, const int input_element) noexcept
+{
+  constexpr int nx = model::kStateDimension;
+  constexpr int nu = model::kInputDimension;
+  FirstStageInputFeasibility result;
+  result.input_element = input_element;
+  if (
+    request.horizon_steps <= 0 || input_element < 0 || input_element >= nu ||
+    !request.initial_state.allFinite() || request.linearizations.empty() ||
+    request.state_lower.size() < 2 * nx || request.state_upper.size() < 2 * nx ||
+    request.input_lower.size() < nu || request.input_upper.size() < nu)
+  {
+    return result;
+  }
+  const auto & linearization = request.linearizations.front();
+  if (
+    !linearization.state_matrix.allFinite() ||
+    !linearization.input_matrix.allFinite() ||
+    !linearization.equality_offset.allFinite())
+  {
+    return result;
+  }
+  result.evaluated = true;
+  result.separable = true;
+  result.declared_lower = request.input_lower[input_element];
+  result.declared_upper = request.input_upper[input_element];
+  result.implied_lower = result.declared_lower;
+  result.implied_upper = result.declared_upper;
+  constexpr double coefficient_tolerance = 1e-12;
+  for (int state_element = 0; state_element < nx; ++state_element) {
+    const double coefficient =
+      linearization.input_matrix(state_element, input_element);
+    if (std::abs(coefficient) <= coefficient_tolerance) {
+      continue;
+    }
+    for (int other_input = 0; other_input < nu; ++other_input) {
+      if (
+        other_input != input_element &&
+        std::abs(linearization.input_matrix(state_element, other_input)) >
+        coefficient_tolerance)
+      {
+        result.separable = false;
+        result.feasible = false;
+        return result;
+      }
+    }
+    const double base =
+      linearization.state_matrix.row(state_element).dot(request.initial_state) -
+      linearization.equality_offset[state_element];
+    const double state_lower = request.state_lower[nx + state_element];
+    const double state_upper = request.state_upper[nx + state_element];
+    double input_lower = (state_lower - base) / coefficient;
+    double input_upper = (state_upper - base) / coefficient;
+    if (coefficient < 0.0) {
+      std::swap(input_lower, input_upper);
+    }
+    if (input_lower > result.implied_lower) {
+      result.implied_lower = input_lower;
+      result.limiting_lower_state_element = state_element;
+    }
+    if (input_upper < result.implied_upper) {
+      result.implied_upper = input_upper;
+      result.limiting_upper_state_element = state_element;
+    }
+  }
+  result.feasible =
+    !std::isnan(result.implied_lower) && !std::isnan(result.implied_upper) &&
+    result.implied_lower <= result.implied_upper;
+  return result;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_problem

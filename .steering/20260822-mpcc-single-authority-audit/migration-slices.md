@@ -1017,6 +1017,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   `authority=shadow,selected=0`. These actuation/progress adoption contracts
   and missing Pass coverage remain promotion gates; no tuning, fallback or
   normal authority was added.
+- `.steering/20260825-rate-resolved-preentry-adoption-continuity` retains the
+  numeric evidence behind those typed current-world rejects without changing
+  their decision. In `output/20260825-202428`, seven solver/wall/target-proved
+  ShiftOut artifacts reached live adoption after 0.20--0.47 s. Their progress
+  differences remained inside the 1.5 m continuity proof, while steering
+  differences exceeded the reachable publication step or predicted speed
+  exceeded the acceleration-reachable upper bound. The revalidator was
+  correctly rejecting an async candidate whose initial actuation state had
+  diverged from the actively published Track/Follow owner. The next promotion
+  boundary must solve and physically certify the selected six-state intent
+  from the current committed predecessor; increasing reachability tolerances
+  or reusing the stale plan is prohibited. Authority remains
+  `shadow,selected=0`; no tuning or fallback was added.
 
 ## Slice 7: Parameter tuning
 

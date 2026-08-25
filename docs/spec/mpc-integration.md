@@ -2335,6 +2335,22 @@ pointer fast path、異なるownerはfingerprint一致を要求し、cellまた�
 次に修復すべきasync actuation／progress接続契約を可視化した証拠である。Pass intentの動的被覆も未取得なので、five-state
 Gate Aはまだ維持する。parameter、fallback、production authorityは変更していない。
 
+#### Prospective pre-entry採用時のactuation continuity（2026-08-25、2025由来の暫定）
+
+pre-entry current-world revalidationは、棄却時にもartifactのsnapshot／prediction／control時刻、cursor、
+measured／lifted／expected course progress、現在／期待操舵と到達step、現在／期待速度と加速度到達区間を
+同じ決定ログへ残す。これらは既存revalidatorが判定に用いた中間値であり、controller側に第二の判定を作らない。
+
+`output/20260825-202428`ではsolver／wall／target証明済みShiftOut artifactが0.20--0.47秒後にlive境界へ届いた。
+観測したprogress差は既存1.5 m continuity内だった一方、操舵差が1周期の到達stepを超えるか、期待速度が
+加速度到達上限を超えた。これはcourse frameの破綻ではなく、async候補の作成後も現行Track／Follow ownerが
+別のactuation系列をpublishし、候補の初期状態とcommitted predecessorが分岐した結果である。
+
+したがってrevalidatorのlimitを緩めて古い候補を採用してはならない。async左右solveはhomotopy選択証拠として
+利用できるが、production昇格には選択後のcurrent stateから同じsix-state intentを再solveし、exact physical wallと
+current dynamic worldを再認証するatomic境界が必要である。この時点ではpre-entry authorityはshadowのままとし、
+five-state Gate A、parameter、fallbackを変更しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

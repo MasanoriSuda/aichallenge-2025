@@ -904,6 +904,18 @@ def test_six_state_preentry_adoption_reuses_current_world_proof_without_authorit
     assert "rate_resolved_retained::evaluate(request.value())" in adoption
     assert "rate_resolved_track_cruise_certified_plan_store_" not in adoption
     assert "certify_and_replace(" not in adoption
+    for evidence in (
+        "evaluation.artifact_age_sec",
+        "evaluation.cursor_elapsed_sec",
+        "evaluation.progress_difference_m",
+        "evaluation.steering_difference_rad",
+        "evaluation.velocity_difference_mps",
+    ):
+        assert evidence in adoption
+
+    assert "progress:measured:%.3f/lifted:%.3f/expected:%.3f/" in SOURCE
+    assert "steering:current:%.4f/expected:%.4f/delta:%.4f/limit:%.4f" in SOURCE
+    assert "velocity:current:%.3f/expected:%.3f/delta:%.3f/" in SOURCE
 
     production_end = SOURCE.index(
         "void record_rate_resolved_track_cruise_shadow(", adoption_end

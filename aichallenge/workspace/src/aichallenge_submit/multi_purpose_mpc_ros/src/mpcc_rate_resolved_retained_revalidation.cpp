@@ -67,7 +67,8 @@ artifact::PredictedState interpolate_expected_state(
 struct LiftResult
 {
   bool accepted{false};
-  double progress_m{};
+  double progress_m{std::numeric_limits<double>::quiet_NaN()};
+  double difference_m{std::numeric_limits<double>::quiet_NaN()};
   long lap_offset{};
 };
 
@@ -85,6 +86,8 @@ LiftResult lift_progress(
     return result;
   }
   if (!circular) {
+    result.progress_m = measured_progress_m;
+    result.difference_m = measured_progress_m - retained_progress_m;
     if (std::abs(measured_progress_m - retained_progress_m) >
       tolerance_m + kIdentityTolerance)
     {
@@ -107,14 +110,15 @@ LiftResult lift_progress(
   const long lap_offset = std::lround(raw_offset);
   const double lifted = measured_progress_m +
     static_cast<double>(lap_offset) * path_length_m;
+  result.progress_m = lifted;
+  result.difference_m = lifted - retained_progress_m;
+  result.lap_offset = lap_offset;
   if (std::abs(lifted - retained_progress_m) >
     tolerance_m + kIdentityTolerance)
   {
     return result;
   }
   result.accepted = true;
-  result.progress_m = lifted;
-  result.lap_offset = lap_offset;
   return result;
 }
 
@@ -456,6 +460,9 @@ Result evaluate(const Request & request)
   const auto cursor = artifact::resolve_cursor(
     execution, request.control_origin_sec);
   result.cursor_reason = cursor.reason;
+  if (cursor.available) {
+    result.cursor_elapsed_sec = cursor.elapsed_sec;
+  }
   if (!cursor.available) {
     result.reason = Reason::CursorUnavailable;
     return result;
@@ -549,10 +556,17 @@ Result evaluate(const Request & request)
   const auto expected = interpolate_expected_state(execution, cursor);
   const double expected_absolute_progress_m =
     execution.course_progress_origin_m + expected.progress_m;
+  result.expected_absolute_progress_m = expected_absolute_progress_m;
+  result.progress_continuity_tolerance_m =
+    request.progress_continuity_tolerance_m;
+  result.current_speed_mps = request.current_speed_mps;
+  result.current_steering_rad = request.current_steering_rad;
   const auto lift = lift_progress(
     request.measured_course_progress_m, expected_absolute_progress_m,
     request.path_length_m, request.progress_continuity_tolerance_m,
     request.circular);
+  result.lifted_measured_progress_m = lift.progress_m;
+  result.progress_difference_m = lift.difference_m;
   if (!lift.accepted) {
     result.reason = Reason::ProgressLiftRejected;
     return result;
@@ -614,6 +628,8 @@ Result evaluate(const Request & request)
     result.reason = Reason::ActuationRejected;
     return result;
   }
+  result.expected_speed_mps = actuation.actuation->predicted_speed_mps;
+  result.expected_steering_rad = actuation.actuation->steering_rad;
 
   const double steering_difference_rad =
     actuation.actuation->steering_rad - request.current_steering_rad;

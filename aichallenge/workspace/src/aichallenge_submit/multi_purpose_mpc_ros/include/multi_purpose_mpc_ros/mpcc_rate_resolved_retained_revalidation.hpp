@@ -144,6 +144,7 @@ struct Result
   artifact::CursorReason cursor_reason{artifact::CursorReason::InvalidArtifact};
   artifact::ActuationReason actuation_reason{
     artifact::ActuationReason::InvalidArtifact};
+  double cursor_elapsed_sec{std::numeric_limits<double>::quiet_NaN()};
   std::string blocking_obstacle_id;
   std::size_t dynamic_checked_pose_count{};
   double minimum_dynamic_clearance_m{
@@ -151,6 +152,18 @@ struct Result
   std::uint64_t follow_target_observation_generation{};
   std::size_t follow_checked_state_count{};
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
+  double expected_absolute_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double lifted_measured_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double progress_difference_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double progress_continuity_tolerance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double expected_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double expected_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double steering_difference_rad{
     std::numeric_limits<double>::quiet_NaN()};
   double maximum_steering_step_rad{

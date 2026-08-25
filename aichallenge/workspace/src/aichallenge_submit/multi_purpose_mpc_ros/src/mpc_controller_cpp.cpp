@@ -2327,6 +2327,38 @@ struct RateResolvedPreentryAdoptionShadowEvaluation
   std::size_t dynamic_checked_pose_count{0U};
   double minimum_dynamic_clearance_m{
     std::numeric_limits<double>::infinity()};
+  double artifact_snapshot_sec{std::numeric_limits<double>::quiet_NaN()};
+  double artifact_prediction_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double artifact_age_sec{std::numeric_limits<double>::quiet_NaN()};
+  double control_origin_sec{std::numeric_limits<double>::quiet_NaN()};
+  rate_resolved_artifact::CursorReason cursor_reason{
+    rate_resolved_artifact::CursorReason::InvalidArtifact};
+  double cursor_elapsed_sec{std::numeric_limits<double>::quiet_NaN()};
+  double measured_course_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double expected_absolute_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double lifted_measured_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double progress_difference_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double progress_continuity_tolerance_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double expected_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double steering_difference_rad{std::numeric_limits<double>::quiet_NaN()};
+  double maximum_steering_step_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double expected_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double velocity_difference_mps{std::numeric_limits<double>::quiet_NaN()};
+  double reachable_velocity_lower_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double reachable_velocity_upper_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  double velocity_reachability_duration_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double elapsed_ms{0.0};
 };
 
@@ -15524,6 +15556,13 @@ struct MPC
             "selection_valid=five%d/six%d,"
             "six_side=L%d/R%d,six_eligibility=L%s/R%s,six_reason=%s,"
             "adoption=%d/%d/%s/%s/target:%s/seq:%lu/intent:%s/"
+            "time:snapshot:%.3f/prediction:%.3f/control:%.3f/age:%.3f/"
+            "cursor:%s@%.3f,"
+            "progress:measured:%.3f/lifted:%.3f/expected:%.3f/"
+            "delta:%.3f/tolerance:%.3f,"
+            "steering:current:%.4f/expected:%.4f/delta:%.4f/limit:%.4f,"
+            "velocity:current:%.3f/expected:%.3f/delta:%.3f/"
+            "bounds:[%.3f,%.3f]/duration:%.3f,"
             "dynamic:%zu/%.2f/%.2fms,"
             "authority=shadow,selected=0",
             six_left.attempted ? 1 : 0,
@@ -15573,6 +15612,27 @@ struct MPC
               six_adoption.target_reject_reason),
             static_cast<unsigned long>(six_adoption.plan_sequence),
             mpcc_contract::to_string(six_adoption.intent),
+            six_adoption.artifact_snapshot_sec,
+            six_adoption.artifact_prediction_origin_sec,
+            six_adoption.control_origin_sec,
+            six_adoption.artifact_age_sec,
+            rate_resolved_artifact::to_string(six_adoption.cursor_reason),
+            six_adoption.cursor_elapsed_sec,
+            six_adoption.measured_course_progress_m,
+            six_adoption.lifted_measured_progress_m,
+            six_adoption.expected_absolute_progress_m,
+            six_adoption.progress_difference_m,
+            six_adoption.progress_continuity_tolerance_m,
+            six_adoption.current_steering_rad,
+            six_adoption.expected_steering_rad,
+            six_adoption.steering_difference_rad,
+            six_adoption.maximum_steering_step_rad,
+            six_adoption.current_speed_mps,
+            six_adoption.expected_speed_mps,
+            six_adoption.velocity_difference_mps,
+            six_adoption.reachable_velocity_lower_mps,
+            six_adoption.reachable_velocity_upper_mps,
+            six_adoption.velocity_reachability_duration_sec,
             six_adoption.dynamic_checked_pose_count,
             six_adoption.minimum_dynamic_clearance_m,
             six_adoption.elapsed_ms);
@@ -23848,6 +23908,12 @@ struct MPC
       evaluation.plan_sequence = plan->execution_artifact->identity.sequence;
       evaluation.intent =
         plan->execution_artifact->identity.source_context.intent;
+      evaluation.artifact_snapshot_sec =
+        plan->execution_artifact->identity.snapshot_sec;
+      evaluation.artifact_prediction_origin_sec =
+        plan->execution_artifact->prediction_origin_sec;
+      evaluation.artifact_age_sec =
+        now_sec - plan->execution_artifact->identity.snapshot_sec;
     }
     if (
       rate_resolved_certified::validate(*plan) !=
@@ -23886,6 +23952,31 @@ struct MPC
     }
     const auto result = rate_resolved_retained::evaluate(request.value());
     evaluation.current_world_reason = result.reason;
+    evaluation.control_origin_sec = request->control_origin_sec;
+    evaluation.cursor_reason = result.cursor_reason;
+    evaluation.cursor_elapsed_sec = result.cursor_elapsed_sec;
+    evaluation.measured_course_progress_m =
+      request->measured_course_progress_m;
+    evaluation.expected_absolute_progress_m =
+      result.expected_absolute_progress_m;
+    evaluation.lifted_measured_progress_m =
+      result.lifted_measured_progress_m;
+    evaluation.progress_difference_m = result.progress_difference_m;
+    evaluation.progress_continuity_tolerance_m =
+      result.progress_continuity_tolerance_m;
+    evaluation.current_steering_rad = result.current_steering_rad;
+    evaluation.expected_steering_rad = result.expected_steering_rad;
+    evaluation.steering_difference_rad = result.steering_difference_rad;
+    evaluation.maximum_steering_step_rad = result.maximum_steering_step_rad;
+    evaluation.current_speed_mps = result.current_speed_mps;
+    evaluation.expected_speed_mps = result.expected_speed_mps;
+    evaluation.velocity_difference_mps = result.velocity_difference_mps;
+    evaluation.reachable_velocity_lower_mps =
+      result.reachable_velocity_lower_mps;
+    evaluation.reachable_velocity_upper_mps =
+      result.reachable_velocity_upper_mps;
+    evaluation.velocity_reachability_duration_sec =
+      result.velocity_reachability_duration_sec;
     evaluation.dynamic_checked_pose_count = result.dynamic_checked_pose_count;
     evaluation.minimum_dynamic_clearance_m =
       result.minimum_dynamic_clearance_m;

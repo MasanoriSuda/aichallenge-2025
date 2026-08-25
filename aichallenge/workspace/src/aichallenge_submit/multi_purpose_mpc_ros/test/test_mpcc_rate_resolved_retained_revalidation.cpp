@@ -206,6 +206,7 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
   ASSERT_EQ(result.reason, retained::Reason::Accepted);
   ASSERT_TRUE(result.proof.has_value());
   EXPECT_EQ(result.proof->cursor.control_stage_index, 0U);
+  EXPECT_NEAR(result.cursor_elapsed_sec, 0.05, 1e-9);
   EXPECT_NEAR(result.proof->expected_absolute_progress_m, 50.10, 1e-9);
   EXPECT_EQ(result.proof->obstacle_generation, 7U);
 }
@@ -473,9 +474,14 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsProgressDiscontinuity)
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
   request.measured_course_progress_m = 60.0;
-  EXPECT_EQ(
-    retained::evaluate(request).reason,
-    retained::Reason::ProgressLiftRejected);
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::ProgressLiftRejected);
+  EXPECT_NEAR(result.expected_absolute_progress_m, 50.10, 1e-9);
+  EXPECT_NEAR(result.lifted_measured_progress_m, 60.0, 1e-9);
+  EXPECT_NEAR(result.progress_difference_m, 9.90, 1e-9);
+  EXPECT_NEAR(result.progress_continuity_tolerance_m, 0.20, 1e-9);
+  EXPECT_NEAR(result.current_speed_mps, 2.05, 1e-9);
+  EXPECT_NEAR(result.current_steering_rad, 0.105, 1e-9);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
@@ -483,9 +489,12 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
   request.current_steering_rad = -0.10;
-  EXPECT_EQ(
-    retained::evaluate(request).reason,
-    retained::Reason::SteeringUnreachable);
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::SteeringUnreachable);
+  EXPECT_NEAR(result.current_steering_rad, -0.10, 1e-9);
+  EXPECT_NEAR(result.expected_steering_rad, 0.105, 1e-9);
+  EXPECT_NEAR(result.steering_difference_rad, 0.205, 1e-9);
+  EXPECT_NEAR(result.maximum_steering_step_rad, 0.025001, 1e-9);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableVelocity)
@@ -500,6 +509,8 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableVelocity)
   EXPECT_NEAR(result.reachable_velocity_lower_mps, 3.999999, 1e-9);
   EXPECT_NEAR(result.reachable_velocity_upper_mps, 4.000001, 1e-9);
   EXPECT_NEAR(result.velocity_reachability_duration_sec, 0.0, 1e-9);
+  EXPECT_NEAR(result.current_speed_mps, 4.0, 1e-9);
+  EXPECT_NEAR(result.expected_speed_mps, 2.05, 1e-9);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsBlockedConnector)

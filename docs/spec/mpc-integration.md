@@ -2367,6 +2367,26 @@ control callback外で因果的にpipelineする構成とする。execution arti
 current-world proof後にのみatomic採用する。古いasync trajectoryの再利用、continuity閾値緩和、callback内の同期tactical再計算は
 禁止する。
 
+#### Selected-homotopy six-state causal execution shadow（2026-08-25、2025由来の暫定）
+
+左右tactical workerの選択を実行軌道として再利用せず、sideとMission geometryだけをhomotopy hintとして受け取る。
+40 Hz callbackはcurrent model／V2X／wallのdeep-owned snapshotを作成し、現周期のnormal command確定後にそのexact steeringを
+predecessorとしてbindする。prospective problem build、six-state solve、exact physical proofはprivate latest-only workerで行い、
+production plan store、Mission mutation、normal command publicationへは接続しない。
+
+live joinでは「現在の戦術authority」と「現在worldでの物理可行性」を別の型付き結果として扱う。target、Mission generation、
+opposite side、sequence regressionはcurrent-world観測自体を拒否する。selection-unavailableは物理観測だけを許すが、
+authority currentにはしない。exactまたはnewer same-side selectionだけがauthority候補になり得る。
+
+`output/20260825-215909`ではsnapshot copy 0.190--0.355 ms、worker 38.477--104.622 msで2件のcomplete physical certificateを
+取得した。両結果とも完了前にlive selectionがunavailableとなり、その後のcurrent-world joinも`steering-unreachable`で棄却された。
+したがってcomplete=2に対しworld-join=0、authority-ready=0である。candidate観測区間のcallback最大は9.470 ms／7.035 msで、
+problem buildをcallback外へ移した効果を確認した。後から発生したDynamicEscape productionの32--57 ms overrunは、最後のshadow
+resultから4秒以上後にproduction `mpc` regionで始まった別課題である。
+
+この結果は閾値を緩める根拠ではない。production昇格には、tactical intentをsolve完了まで一貫して所有し、solve中に実際にpublishされた
+actuationとexecution prefixをatomicに接続する契約が必要である。five-state tactical Gate Aはその置換証拠が得られるまで維持する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

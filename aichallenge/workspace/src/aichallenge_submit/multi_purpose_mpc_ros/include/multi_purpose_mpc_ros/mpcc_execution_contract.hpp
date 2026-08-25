@@ -50,6 +50,53 @@ bool canonical_normal_intent_requires_target(ControlIntent intent) noexcept;
 bool canonical_normal_intent_requires_execution_side(
   ControlIntent intent) noexcept;
 
+/// Classifies whether an asynchronously rebuilt pre-entry trajectory still
+/// belongs to the current tactical intent.  A temporarily unavailable
+/// tactical selection is deliberately distinct from an explicit opposite-side
+/// selection: the former may still undergo observation-only current-world
+/// proof, but it is never current tactical authority.
+enum class PreentryTacticalIdentityReason
+{
+  Exact,
+  NewerSameSide,
+  SelectionUnavailable,
+  TargetMismatch,
+  MissionGenerationMismatch,
+  SideConflict,
+  TacticalSequenceRegression,
+  InvalidInput,
+};
+
+const char * to_string(PreentryTacticalIdentityReason reason) noexcept;
+
+struct PreentryTacticalIdentityRequest
+{
+  std::string result_target_id;
+  int result_side_sign{};
+  std::uint64_t result_mission_generation{};
+  std::uint64_t result_tactical_sequence{};
+  std::string current_target_id;
+  bool current_selection_valid{false};
+  int current_side_sign{};
+  std::uint64_t current_mission_generation{};
+  std::uint64_t current_tactical_sequence{};
+};
+
+struct PreentryTacticalIdentityResolution
+{
+  PreentryTacticalIdentityReason reason{
+    PreentryTacticalIdentityReason::InvalidInput};
+  /// No current target, generation or explicit side contradicts the result.
+  /// This is sufficient only to measure current-world proof in shadow.
+  bool current_world_observation_permitted{false};
+  /// A current same-side tactical selection still endorses this homotopy.
+  bool tactical_authority_current{false};
+  bool exact{false};
+};
+
+PreentryTacticalIdentityResolution resolve_preentry_tactical_identity(
+  const PreentryTacticalIdentityRequest & request) noexcept;
+
 /// Formulations allowed to own a certified normal publisher command during
 /// the staged single-authority migration. Legacy three-state and direct
 /// bypass paths are intentionally excluded.

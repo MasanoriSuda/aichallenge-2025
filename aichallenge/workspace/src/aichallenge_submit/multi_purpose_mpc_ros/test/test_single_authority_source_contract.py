@@ -292,14 +292,23 @@ def test_overtake_entry_speed_proof_uses_selected_exact_trajectory() -> None:
 def test_bounded_overtake_prefix_has_one_horizon_owner_end_to_end() -> None:
     """Every pre-entry consumer must use the horizon built into the QP."""
 
+    builder_start = SOURCE.index("build_prospective_extended_branch_problem(")
+    builder_end = SOURCE.index("evaluate_extended_mpcc_branch(", builder_start)
+    builder = SOURCE[builder_start:builder_end]
+    assert "auto extended_problem = build_extended_progress_problem(" in builder
+    assert "extended_problem->N <= 0 || extended_problem->N > N" in builder
+
     branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
     branch_end = SOURCE.index(
         "evaluate_isolated_extended_mpcc_branch(", branch_start
     )
     branch = SOURCE[branch_start:branch_end]
-    built = branch.index("const auto extended = build_extended_progress_problem(")
-    consumers = branch[built:]
+    adopted = branch.index(
+        "auto prospective = build_prospective_extended_branch_problem("
+    )
+    consumers = branch[adopted:]
 
+    assert "std::move(prospective->extended_problem)" in consumers
     assert "const int effective_horizon = extended->N;" in consumers
     assert (
         "active_extended_branch_horizon_size_ = effective_horizon;" in consumers
@@ -976,6 +985,79 @@ def test_tactical_async_and_isolated_branches_share_one_owned_snapshot_boundary(
     submit = SOURCE[submit_start:submit_end]
     assert "auto owned_snapshot = make_owned_tactical_snapshot();" in submit
     assert "owned_snapshot = std::move(owned_snapshot.value())" in submit
+
+
+def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound() -> None:
+    """Tactical output chooses homotopy; a new causal six-state solve owns no command."""
+
+    selection_start = SOURCE.index("void evaluate_and_select_extended_mpcc_branches(")
+    selection_end = SOURCE.index("bool submit_mpcc_lite_async_snapshot(", selection_start)
+    selection = SOURCE[selection_start:selection_end]
+    assert "rate_resolved_preentry_selected_mission_hint" in selection
+    assert "hint.physical_execution_certificate_valid = false" in selection
+    assert "hint.physical_execution_certificate_path_distances_m.clear()" in selection
+    assert "hint.physical_execution_certificate_lateral_path_m.clear()" in selection
+    assert "hint.physical_execution_certificate_exact_trajectory = {}" in selection
+
+    prospective_start = SOURCE.index("build_prospective_extended_branch_problem(")
+    prospective_end = SOURCE.index("evaluate_extended_mpcc_branch(", prospective_start)
+    prospective = SOURCE[prospective_start:prospective_end]
+    assert "freeze_selected_overtake_mission(candidate, now_sec)" in prospective
+    assert "init_problem(" in prospective
+    assert "build_extended_progress_problem(" in prospective
+
+    draft_start = SOURCE.index("build_rate_resolved_preentry_execution_draft(")
+    draft_end = SOURCE.index("void evaluate_and_select_extended_mpcc_branches(", draft_start)
+    draft = SOURCE[draft_start:draft_end]
+    assert "make_owned_tactical_snapshot()" in draft
+    assert "draft.planner_snapshot = std::move(owned_snapshot->planner)" in draft
+    assert "draft.decision_id = active_control_decision_id_" in draft
+    assert "draft.snapshot_sec = now_sec" in draft
+    assert "build_prospective_extended_branch_problem(" not in draft
+    assert "init_problem(" not in draft
+    assert "evaluate_v2x_behavior(" not in draft
+    assert "solve_extended_progress_problem(" not in draft
+
+    submit_start = SOURCE.index("submit_rate_resolved_preentry_execution_shadow(")
+    submit_end = SOURCE.index("consume_rate_resolved_preentry_execution_shadow(", submit_start)
+    submit = SOURCE[submit_start:submit_end]
+    queued = submit.index(
+        "rate_resolved_preentry_execution_shadow_worker_->submit_latest("
+    )
+    worker = submit[queued:]
+    assert "planner->build_prospective_extended_branch_problem(" in worker
+    assert "planner->seal_problem_context_for_problem(" in worker
+    assert "bind_rate_resolved_track_cruise_submission(" in submit
+    assert "committed_predecessor_steering_rad" in submit
+    assert "LatestOnlyWorker" not in submit  # Worker is an injected private member.
+    assert "observation_only_store" in worker
+    assert submit.index("submit_latest(") < submit.index(
+        "planner->build_prospective_extended_branch_problem("
+    )
+    assert "certify_and_replace(" not in submit
+    assert "publish_control_command(" not in submit
+
+    consume_start = submit_end
+    consume_end = SOURCE.index("RateResolvedTransitionAdmissionEvaluation", consume_start)
+    consume = SOURCE[consume_start:consume_end]
+    assert "build_rate_resolved_current_world_request(" in consume
+    assert "rate_resolved_retained::evaluate(" in consume
+    assert "resolve_preentry_tactical_identity(" in consume
+    assert "tactical_identity.current_world_observation_permitted" in consume
+    assert "tactical_identity.tactical_authority_current" in consume
+    assert "current_world_joinable && tactical_identity.tactical_authority_current" in consume
+    assert "authority=shadow,selected=0" in consume
+    assert "certify_and_replace(" not in consume
+    assert "publish_control_command(" not in consume
+
+    production_start = SOURCE.index("MpcControlCycleResult rate_resolved_normal_production_control(")
+    production_end = SOURCE.index("MpcControlCycleResult get_control(", production_start)
+    production = SOURCE[production_start:production_end]
+    build_position = production.index("build_rate_resolved_preentry_execution_draft(")
+    command_position = production.index("rate_resolved_track_cruise_control(")
+    submit_position = production.index("submit_rate_resolved_preentry_execution_shadow(")
+    assert build_position < command_position < submit_position
+    assert "output.control[1]" in production[submit_position:]
 
 
 def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:

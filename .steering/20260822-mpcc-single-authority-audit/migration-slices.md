@@ -1043,6 +1043,27 @@ Finish the architecture simplification instead of leaving permanent dual control
   is an asynchronous selected-side six-state execution pipeline bound to the
   current committed predecessor; old async trajectories, relaxed continuity
   thresholds and synchronous tactical rebuilding remain prohibited.
+- `.steering/20260825-rate-resolved-preentry-causal-execution-shadow` moves
+  that selected-side execution build and six-state solve outside the 40 Hz
+  callback. The callback only deep-copies an immutable current snapshot and,
+  after committing the current normal command, binds the draft to that exact
+  steering predecessor. A private latest-only worker then builds the
+  prospective problem, solves it and performs the exact physical proof; its
+  mailbox and null production store cannot mutate a Mission or publish a
+  command. `output/20260825-215909` measured snapshot copies of 0.190--0.355 ms
+  and two complete physical certificates with worker times of 38.477 and
+  104.622 ms. Typed live identity now separates physical observation from
+  tactical authority: both results arrived after the tactical selection had
+  become unavailable, were still current-world checked, and independently
+  failed `steering-unreachable`; world-join and authority-ready counts stayed
+  zero. The candidate interval kept callback maxima at 9.470 and 7.035 ms.
+  Later DynamicEscape production overruns began more than four seconds after
+  the final shadow result and remain separate production scheduling work. The
+  next gate is therefore not a reachability-threshold adjustment: tactical
+  intent lifetime and the actuation prefix published during the asynchronous
+  solve must form one atomic execution handoff before authority promotion.
+  Five-state tactical Gate A remains live and parameter tuning remains
+  prohibited.
 
 ## Slice 7: Parameter tuning
 

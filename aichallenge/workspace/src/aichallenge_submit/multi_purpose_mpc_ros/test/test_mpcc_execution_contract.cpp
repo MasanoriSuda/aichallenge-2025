@@ -1197,3 +1197,75 @@ TEST(MpccExecutionContract, CanonicalEmergencyKeepsPhysicalSteeringConvention)
   EXPECT_FALSE(contract::canonical_normal_uses_physical_steering(
       false, true, true));
 }
+
+TEST(MpccExecutionContract, PreentryIdentityKeepsSafetyProofSeparateFromIntent)
+{
+  const contract::PreentryTacticalIdentityRequest request{
+    "d2", 1, 4U, 18U, "d2", false, 0, 4U, 0U};
+
+  const auto resolution =
+    contract::resolve_preentry_tactical_identity(request);
+
+  EXPECT_EQ(
+    resolution.reason,
+    contract::PreentryTacticalIdentityReason::SelectionUnavailable);
+  EXPECT_TRUE(resolution.current_world_observation_permitted);
+  EXPECT_FALSE(resolution.tactical_authority_current);
+  EXPECT_FALSE(resolution.exact);
+}
+
+TEST(MpccExecutionContract, PreentryIdentityAcceptsCurrentSameSideIntent)
+{
+  auto request = contract::PreentryTacticalIdentityRequest{
+    "d2", -1, 4U, 18U, "d2", true, -1, 4U, 18U};
+  auto resolution = contract::resolve_preentry_tactical_identity(request);
+
+  EXPECT_EQ(
+    resolution.reason, contract::PreentryTacticalIdentityReason::Exact);
+  EXPECT_TRUE(resolution.current_world_observation_permitted);
+  EXPECT_TRUE(resolution.tactical_authority_current);
+  EXPECT_TRUE(resolution.exact);
+
+  request.current_tactical_sequence = 19U;
+  resolution = contract::resolve_preentry_tactical_identity(request);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::PreentryTacticalIdentityReason::NewerSameSide);
+  EXPECT_TRUE(resolution.current_world_observation_permitted);
+  EXPECT_TRUE(resolution.tactical_authority_current);
+  EXPECT_FALSE(resolution.exact);
+}
+
+TEST(MpccExecutionContract, PreentryIdentityFailsClosedOnContradiction)
+{
+  auto request = contract::PreentryTacticalIdentityRequest{
+    "d2", 1, 4U, 18U, "d3", true, 1, 4U, 18U};
+  auto resolution = contract::resolve_preentry_tactical_identity(request);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::PreentryTacticalIdentityReason::TargetMismatch);
+  EXPECT_FALSE(resolution.current_world_observation_permitted);
+
+  request.current_target_id = "d2";
+  request.current_mission_generation = 5U;
+  resolution = contract::resolve_preentry_tactical_identity(request);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::PreentryTacticalIdentityReason::MissionGenerationMismatch);
+  EXPECT_FALSE(resolution.current_world_observation_permitted);
+
+  request.current_mission_generation = 4U;
+  request.current_side_sign = -1;
+  resolution = contract::resolve_preentry_tactical_identity(request);
+  EXPECT_EQ(
+    resolution.reason, contract::PreentryTacticalIdentityReason::SideConflict);
+  EXPECT_FALSE(resolution.current_world_observation_permitted);
+
+  request.current_side_sign = 1;
+  request.current_tactical_sequence = 17U;
+  resolution = contract::resolve_preentry_tactical_identity(request);
+  EXPECT_EQ(
+    resolution.reason,
+    contract::PreentryTacticalIdentityReason::TacticalSequenceRegression);
+  EXPECT_FALSE(resolution.current_world_observation_permitted);
+}

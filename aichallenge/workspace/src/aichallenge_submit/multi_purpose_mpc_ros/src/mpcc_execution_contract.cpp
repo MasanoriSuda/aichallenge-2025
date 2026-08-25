@@ -1012,4 +1012,84 @@ std::string format_final_control_decision(
   return stream.str();
 }
 
+const char * to_string(const PreentryTacticalIdentityReason reason) noexcept
+{
+  switch (reason) {
+    case PreentryTacticalIdentityReason::Exact:
+      return "exact";
+    case PreentryTacticalIdentityReason::NewerSameSide:
+      return "newer-same-side";
+    case PreentryTacticalIdentityReason::SelectionUnavailable:
+      return "selection-unavailable";
+    case PreentryTacticalIdentityReason::TargetMismatch:
+      return "target-mismatch";
+    case PreentryTacticalIdentityReason::MissionGenerationMismatch:
+      return "mission-generation-mismatch";
+    case PreentryTacticalIdentityReason::SideConflict:
+      return "side-conflict";
+    case PreentryTacticalIdentityReason::TacticalSequenceRegression:
+      return "tactical-sequence-regression";
+    case PreentryTacticalIdentityReason::InvalidInput:
+      return "invalid-input";
+  }
+  return "invalid-input";
+}
+
+PreentryTacticalIdentityResolution resolve_preentry_tactical_identity(
+  const PreentryTacticalIdentityRequest & request) noexcept
+{
+  PreentryTacticalIdentityResolution resolution;
+  if (
+    request.result_target_id.empty() ||
+    (request.result_side_sign != -1 && request.result_side_sign != 1) ||
+    request.result_mission_generation == 0U ||
+    request.result_tactical_sequence == 0U ||
+    request.current_target_id.empty() ||
+    request.current_mission_generation == 0U ||
+    (request.current_selection_valid &&
+    (request.current_side_sign != -1 && request.current_side_sign != 1)) ||
+    (request.current_selection_valid && request.current_tactical_sequence == 0U))
+  {
+    return resolution;
+  }
+  if (request.result_target_id != request.current_target_id) {
+    resolution.reason = PreentryTacticalIdentityReason::TargetMismatch;
+    return resolution;
+  }
+  if (
+    request.result_mission_generation !=
+    request.current_mission_generation)
+  {
+    resolution.reason =
+      PreentryTacticalIdentityReason::MissionGenerationMismatch;
+    return resolution;
+  }
+  if (!request.current_selection_valid) {
+    resolution.reason =
+      PreentryTacticalIdentityReason::SelectionUnavailable;
+    resolution.current_world_observation_permitted = true;
+    return resolution;
+  }
+  if (request.result_side_sign != request.current_side_sign) {
+    resolution.reason = PreentryTacticalIdentityReason::SideConflict;
+    return resolution;
+  }
+  if (
+    request.current_tactical_sequence <
+    request.result_tactical_sequence)
+  {
+    resolution.reason =
+      PreentryTacticalIdentityReason::TacticalSequenceRegression;
+    return resolution;
+  }
+  resolution.current_world_observation_permitted = true;
+  resolution.tactical_authority_current = true;
+  resolution.exact =
+    request.current_tactical_sequence == request.result_tactical_sequence;
+  resolution.reason = resolution.exact ?
+    PreentryTacticalIdentityReason::Exact :
+    PreentryTacticalIdentityReason::NewerSameSide;
+  return resolution;
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_execution_contract

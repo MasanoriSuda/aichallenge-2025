@@ -2362,15 +2362,16 @@ struct RateResolvedPreentryAdoptionShadowEvaluation
   double elapsed_ms{0.0};
 };
 
-/// Observation-only atomic handoff at the real Overtake Gate-A boundary.
+/// Atomic admission handoff at the real Overtake Gate-A boundary.
 /// Mission geometry and the causal six-state proof must travel together; a
 /// caller may not reconstruct either half from an older tactical result.
-struct RateResolvedPreentryGateAShadowProposal
+struct RateResolvedPreentryGateAProposal
 {
   std::uint64_t sequence{};
   std::uint64_t context_epoch{};
   std::uint64_t tactical_source_sequence{};
   std::uint64_t prospective_mission_generation{};
+  std::uint64_t target_obstacle_generation{};
   std::string target_id;
   int selected_side_sign{};
   overtake_core::OvertakeMissionCandidate mission;
@@ -2381,10 +2382,13 @@ struct RateResolvedPreentryGateAShadowProposal
     return sequence != 0U && context_epoch != 0U &&
            tactical_source_sequence != 0U &&
            prospective_mission_generation != 0U && !target_id.empty() &&
+           target_obstacle_generation != 0U &&
            (selected_side_sign == -1 || selected_side_sign == 1) &&
            mission.pass_side_sign == selected_side_sign &&
            certified_plan != nullptr &&
            certified_plan->execution_artifact != nullptr &&
+           certified_plan->execution_artifact->identity.source_context.
+           target_obstacle_generation == target_obstacle_generation &&
            certified_plan->execution_artifact->identity.source_context.
            execution_side_sign == selected_side_sign;
   }
@@ -2602,10 +2606,10 @@ struct V2XBehaviorOutput
   std::uint64_t rate_resolved_preentry_tactical_source_sequence{};
   RateResolvedPreentryAdoptionShadowEvaluation
   rate_resolved_preentry_adoption_shadow;
-  /// This is evidence at the FSM boundary, not production authority.  The
-  /// fresh-entry path deliberately does not consume it in this Slice.
-  std::optional<RateResolvedPreentryGateAShadowProposal>
-  rate_resolved_preentry_gate_a_shadow_proposal;
+  /// Atomic six-state admission evidence for the fresh ShiftOut Gate A. It is
+  /// current-cycle data and is never retained as a fallback or command owner.
+  std::optional<RateResolvedPreentryGateAProposal>
+  rate_resolved_preentry_gate_a_proposal;
   /// Immutable executable artifact produced by the same selected dual branch
   /// as `overtake_selected_mission`.  It is entry evidence only; the live
   /// controller repeats current-world proof before publishing it.
@@ -5911,6 +5915,7 @@ struct RateResolvedPreentryExecutionDraft
   std::uint64_t context_epoch{};
   std::uint64_t decision_id{};
   std::uint64_t target_obstacle_generation{};
+  race_mpcc::TargetProvenance target_provenance;
   std::uint64_t tactical_source_sequence{};
   std::uint64_t prospective_mission_generation{};
   std::string target_id;
@@ -5947,6 +5952,7 @@ struct RateResolvedPreentryExecutionShadowResult
   std::uint64_t decision_id{};
   std::uint64_t tactical_source_sequence{};
   std::uint64_t prospective_mission_generation{};
+  race_mpcc::TargetProvenance target_provenance;
   std::string target_id;
   int selected_side_sign{};
   std::optional<overtake_core::OvertakeMissionCandidate> selected_mission;
@@ -8634,6 +8640,7 @@ struct MPC
     draft.decision_id = active_control_decision_id_;
     draft.target_obstacle_generation =
       target_provenance.observation_generation;
+    draft.target_provenance = target_provenance;
     draft.tactical_source_sequence =
       live_behavior.rate_resolved_preentry_tactical_source_sequence;
     draft.prospective_mission_generation = std::max<std::uint64_t>(
@@ -24021,6 +24028,7 @@ struct MPC
       draft.horizon_size < 2 || draft.decision_id == 0U ||
       draft.context_epoch == 0U ||
       draft.target_obstacle_generation == 0U ||
+      !draft.target_provenance.valid ||
       draft.tactical_source_sequence == 0U ||
       draft.prospective_mission_generation == 0U || draft.target_id.empty() ||
       (draft.selected_side_sign != -1 && draft.selected_side_sign != 1) ||
@@ -24051,6 +24059,7 @@ struct MPC
     result.target_id = draft.target_id;
     result.selected_side_sign = draft.selected_side_sign;
     result.selected_mission = draft.assessment.selected_mission;
+    result.target_provenance = draft.target_provenance;
     result.snapshot_sec = draft.snapshot_sec;
     result.snapshot_ms = draft.snapshot_ms;
     const double snapshot_ms = draft.snapshot_ms;
@@ -24242,9 +24251,15 @@ struct MPC
       join_reason == rate_resolved_retained::Reason::Accepted;
     const bool authority_ready =
       current_world_joinable && tactical_identity.tactical_authority_current;
+    const auto target_validation = validate_selected_target_provenance(
+      result->target_provenance, live_behavior,
+      std::max(0.0, now_sec - result->snapshot_sec));
+    const auto current_target_provenance =
+      selected_target_provenance(live_behavior);
     const auto & plan = result->pipeline.certified_plan.plan;
     const bool proposal_identity_complete =
-      authority_ready && result->selected_mission.has_value() &&
+      authority_ready && target_validation.valid &&
+      result->selected_mission.has_value() &&
       result->selected_mission->feasible &&
       result->selected_mission->pass_side_sign == result->selected_side_sign &&
       plan != nullptr && plan->execution_artifact != nullptr &&
@@ -24257,18 +24272,20 @@ struct MPC
       mpcc_contract::canonical_normal_intent_requires_execution_side(
       plan->execution_artifact->identity.source_context.intent);
     if (proposal_identity_complete) {
-      RateResolvedPreentryGateAShadowProposal proposal;
+      RateResolvedPreentryGateAProposal proposal;
       proposal.sequence = result->sequence;
       proposal.context_epoch = result->context_epoch;
       proposal.tactical_source_sequence = result->tactical_source_sequence;
       proposal.prospective_mission_generation =
         result->prospective_mission_generation;
+      proposal.target_obstacle_generation =
+        result->target_provenance.observation_generation;
       proposal.target_id = result->target_id;
       proposal.selected_side_sign = result->selected_side_sign;
       proposal.mission = result->selected_mission.value();
       proposal.certified_plan = plan;
       if (proposal.complete()) {
-        live_behavior.rate_resolved_preentry_gate_a_shadow_proposal =
+        live_behavior.rate_resolved_preentry_gate_a_proposal =
           std::move(proposal);
         ++rate_resolved_preentry_execution_shadow_gate_a_proposal_count_;
       }
@@ -24295,12 +24312,13 @@ struct MPC
         "worker=%.3f ms, build_detail=%s, "
         "solver=%s, physical=%s, complete=%d, "
         "mission=%d/feasible:%d/proposal_identity:%d, "
+        "target_join=%d/%s/%lu->%lu, "
         "identity=%s/exact:%d/authority:%d/live_tactical:%lu, "
         "join=%s/world:%d/authority_ready:%d/gate_a_proposal:%d, "
         "totals=submitted:%lu/replaced:%lu/result:%lu/complete:%lu/"
         "world_join:%lu/authority_ready:%lu/gate_a_proposal:%lu, "
         "worker_queue=running:%d/pending:%d, "
-        "authority=shadow,selected=0",
+        "authority=gate-a-evidence,selected=%d",
         static_cast<unsigned long>(result->sequence),
         static_cast<unsigned long>(result->context_epoch),
         static_cast<unsigned long>(mpcc_lite_async_context_epoch_),
@@ -24324,6 +24342,13 @@ struct MPC
         result->selected_mission.has_value() &&
         result->selected_mission->feasible ? 1 : 0,
         proposal_identity_complete ? 1 : 0,
+        target_validation.valid ? 1 : 0,
+        race_mpcc::target_provenance_reject_reason_name(
+          target_validation.reject_reason),
+        static_cast<unsigned long>(
+          result->target_provenance.observation_generation),
+        static_cast<unsigned long>(
+          current_target_provenance.observation_generation),
         mpcc_contract::to_string(tactical_identity.reason),
         tactical_identity.exact ? 1 : 0,
         tactical_identity.tactical_authority_current ? 1 : 0,
@@ -24331,7 +24356,7 @@ struct MPC
           live_behavior.rate_resolved_preentry_tactical_source_sequence),
         rate_resolved_retained::to_string(join_reason),
         current_world_joinable ? 1 : 0, authority_ready ? 1 : 0,
-        live_behavior.rate_resolved_preentry_gate_a_shadow_proposal.has_value() ?
+        live_behavior.rate_resolved_preentry_gate_a_proposal.has_value() ?
         1 : 0,
         static_cast<unsigned long>(
           rate_resolved_preentry_execution_shadow_submission_count_),
@@ -24347,7 +24372,9 @@ struct MPC
           rate_resolved_preentry_execution_shadow_authority_ready_count_),
         static_cast<unsigned long>(
           rate_resolved_preentry_execution_shadow_gate_a_proposal_count_),
-        worker_stats.running ? 1 : 0, worker_stats.pending ? 1 : 0);
+        worker_stats.running ? 1 : 0, worker_stats.pending ? 1 : 0,
+        live_behavior.rate_resolved_preentry_gate_a_proposal.has_value() ?
+        1 : 0);
     }
   }
 
@@ -32056,10 +32083,24 @@ private:
       now_sec, overtake_solver_cooldown_until_sec_);
     const bool solver_reentry_suppressed =
       solver_cooldown_active || overtake_solver_reentry_blocked_;
+    const auto & six_state_gate_a_proposal =
+      behavior_output.rate_resolved_preentry_gate_a_proposal;
+    const bool six_state_shiftout_gate_a_request =
+      overtake_line_state_.phase == OvertakeLinePhase::Idle &&
+      six_state_gate_a_proposal.has_value() &&
+      six_state_gate_a_proposal->complete() &&
+      six_state_gate_a_proposal->target_id ==
+      behavior_output.target_vehicle_id &&
+      six_state_gate_a_proposal->prospective_mission_generation ==
+      std::max<std::uint64_t>(
+      1U, overtake_line_state_.mission_generation + 1U) &&
+      six_state_gate_a_proposal->certified_plan->execution_artifact->identity.
+      source_context.intent == mpcc_contract::ControlIntent::ShiftOut;
     const bool behavior_requests_overtake =
-      behavior_output.state == V2XBehaviorState::Overtake &&
+      six_state_shiftout_gate_a_request ||
+      (behavior_output.state == V2XBehaviorState::Overtake &&
       behavior_output.overtake_pass_side_sign != 0 &&
-      !behavior_output.overtake_execution_corridor_blocked;
+      !behavior_output.overtake_execution_corridor_blocked);
     if (solver_reentry_suppressed && behavior_requests_overtake) {
       if (!overtake_solver_cooldown_logged_) {
         RCLCPP_INFO(
@@ -35743,6 +35784,8 @@ private:
         v2x_overtake_core::resolve_overtake_execution_side(
         v2x_overtake_core::OvertakeExecutionSideRequest{
           resuming_paused_mission,
+          six_state_shiftout_gate_a_request ?
+          six_state_gate_a_proposal->selected_side_sign :
           behavior_output.overtake_pass_side_sign,
           overtake_line_state_.pass_side_sign});
       const int pass_side_sign = execution_side.side_sign;
@@ -35751,6 +35794,8 @@ private:
           overtake_line_state_.mission_path_frozen &&
           overtake_line_state_.fixed_pass_corridor_goal_ey.has_value() ?
           overtake_line_state_.fixed_pass_corridor_goal_ey.value() :
+          six_state_shiftout_gate_a_request ?
+          six_state_gate_a_proposal->mission.goal_lateral_m :
           behavior_output.overtake_corridor_center_ey.value_or(current_ey);
         const double same_side_resume_goal = resuming_paused_mission ?
           v2x_overtake_core::clamp_paused_resume_goal_outward(
@@ -35758,11 +35803,13 @@ private:
           candidate_resume_goal;
         const bool direct_base_line_pass =
           !resuming_paused_mission &&
+          !six_state_shiftout_gate_a_request &&
           behavior_output.overtake_base_line_pass_through &&
           behavior_output.overtake_corridor_center_ey.has_value() &&
           std::abs(behavior_output.overtake_corridor_center_ey.value()) <= kEps;
         const bool direct_tiny_shift_pass =
           !resuming_paused_mission &&
+          !six_state_shiftout_gate_a_request &&
           behavior_output.overtake_tiny_shift_direct_pass &&
           behavior_output.overtake_selected_mission.has_value() &&
           behavior_output.overtake_selected_mission->direct_pass;
@@ -35772,6 +35819,7 @@ private:
         const bool resume_goal_available =
           (overtake_line_state_.mission_path_frozen &&
           overtake_line_state_.fixed_pass_corridor_goal_ey.has_value()) ||
+          six_state_shiftout_gate_a_request ||
           behavior_output.overtake_corridor_center_ey.has_value();
         const auto direct_resume_request = [&](const bool execution_corridor_valid) {
             return v2x_overtake_core::PausedPassDirectResumeRequest{
@@ -35899,22 +35947,43 @@ private:
         const bool fresh_normal_mission_entry =
           !resuming_paused_mission &&
           !behavior_output.start_grid_breakout_active &&
-          behavior_output.overtake_corridor_center_ey.has_value();
+          (six_state_shiftout_gate_a_request ||
+          behavior_output.overtake_corridor_center_ey.has_value());
+        std::optional<overtake_core::OvertakeMissionCandidate>
+        fresh_entry_mission;
+        bool fresh_entry_uses_six_state_gate_a = false;
         if (fresh_normal_mission_entry) {
+          if (!direct_pass && !six_state_shiftout_gate_a_request) {
+            overtake_locked_side_sign_ = 0;
+            static rclcpp::Clock shiftout_gate_log_clock{RCL_STEADY_TIME};
+            RCLCPP_WARN_THROTTLE(
+              rclcpp::get_logger("mpc_controller"), shiftout_gate_log_clock, 250,
+              "Overtake entry commit rejected: source=six-state-shiftout-gate-a, "
+              "target=%s, side=%d, proposal=0, action=keep-cruise-follow, wp_id=%d",
+              behavior_output.target_vehicle_id.c_str(), pass_side_sign,
+              model->wp_id);
+            return output;
+          }
+          fresh_entry_uses_six_state_gate_a =
+            !direct_pass && six_state_shiftout_gate_a_request;
+          fresh_entry_mission = fresh_entry_uses_six_state_gate_a ?
+            std::optional<overtake_core::OvertakeMissionCandidate>{
+            six_state_gate_a_proposal->mission} :
+            behavior_output.overtake_selected_mission;
           const bool physical_execution_certificate_required =
+            !fresh_entry_uses_six_state_gate_a &&
             cfg.progress_contouring_dual_branch_enabled;
-          const bool candidate_available =
-            behavior_output.overtake_selected_mission.has_value();
+          const bool candidate_available = fresh_entry_mission.has_value();
           const bool certificate_available =
             candidate_available &&
-            behavior_output.overtake_selected_mission->
+            fresh_entry_mission->
             physical_execution_certificate_valid;
           const bool canonical_plan_available =
             behavior_output.overtake_preentry_canonical_plan != nullptr;
           const auto prepared_pass_plan = candidate_available ?
             overtake_core::build_overtake_pass_plan(
             overtake_core::OvertakePassPlanRequest{
-              behavior_output.overtake_selected_mission.value(), current_ey, 0.0}) :
+              fresh_entry_mission.value(), current_ey, 0.0}) :
             overtake_core::OvertakePassPlan{};
           if (
             !candidate_available || !prepared_pass_plan.valid ||
@@ -35943,24 +36012,53 @@ private:
           const std::uint64_t prospective_generation =
             std::max<std::uint64_t>(
             1U, overtake_line_state_.mission_generation + 1U);
-          const auto preentry_admission =
+          const auto * proposal_source_context =
+            fresh_entry_uses_six_state_gate_a ?
+            &six_state_gate_a_proposal->certified_plan->execution_artifact->
+            identity.source_context : nullptr;
+          const bool six_state_preentry_admitted =
+            fresh_entry_uses_six_state_gate_a &&
+            proposal_source_context != nullptr &&
+            six_state_gate_a_proposal->complete() &&
+            six_state_gate_a_proposal->target_id ==
+            behavior_output.target_vehicle_id &&
+            six_state_gate_a_proposal->selected_side_sign == pass_side_sign &&
+            six_state_gate_a_proposal->prospective_mission_generation ==
+            prospective_generation &&
+            fresh_entry_mission->pass_side_sign == pass_side_sign &&
+            proposal_source_context->intent == expected_intent &&
+            proposal_source_context->intent_generation == prospective_generation &&
+            proposal_source_context->target_id ==
+            behavior_output.target_vehicle_id &&
+            proposal_source_context->target_obstacle_generation ==
+            six_state_gate_a_proposal->target_obstacle_generation &&
+            proposal_source_context->execution_side_sign == pass_side_sign;
+          const auto legacy_preentry_admission =
+            fresh_entry_uses_six_state_gate_a ?
+            follow_async::OvertakePreentryPlanResolution{} :
             follow_async::resolve_overtake_preentry_plan(
             follow_async::OvertakePreentryPlanRequest{
               behavior_output.overtake_preentry_canonical_plan,
               expected_intent, prospective_generation,
               target_provenance.observation_generation,
               behavior_output.target_vehicle_id, pass_side_sign, now_sec});
-          if (!preentry_admission.admitted) {
+          const bool preentry_admitted = fresh_entry_uses_six_state_gate_a ?
+            six_state_preentry_admitted : legacy_preentry_admission.admitted;
+          if (!preentry_admitted) {
             overtake_locked_side_sign_ = 0;
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
-              "Overtake entry commit rejected: source=preentry-gate-a, "
+              "Overtake entry commit rejected: source=%s, "
               "target=%s, side=%d, intent=%s, generation=%lu, admission=%s, "
               "action=keep-cruise-follow, wp_id=%d",
+              fresh_entry_uses_six_state_gate_a ?
+              "six-state-shiftout-gate-a" : "five-state-direct-pass-gate-a",
               behavior_output.target_vehicle_id.c_str(), pass_side_sign,
               mpcc_contract::to_string(expected_intent),
               static_cast<unsigned long>(prospective_generation),
-              follow_async::to_string(preentry_admission.reason),
+              fresh_entry_uses_six_state_gate_a ?
+              "identity-rejected" :
+              follow_async::to_string(legacy_preentry_admission.reason),
               model->wp_id);
             return output;
           }
@@ -35969,8 +36067,7 @@ private:
           // PassPlan and exact plan atomically, then raise Overtake authority.
           const OvertakeLineState entry_rollback_state = overtake_line_state_;
           const int entry_rollback_side_sign = overtake_locked_side_sign_;
-          freeze_selected_overtake_mission(
-            behavior_output.overtake_selected_mission, now_sec);
+          freeze_selected_overtake_mission(fresh_entry_mission, now_sec);
           if (
             !overtake_line_state_.mission_path_frozen ||
             !overtake_line_state_.mission_plan.has_value() ||
@@ -35999,11 +36096,11 @@ private:
               static_cast<unsigned long>(prospective_generation), model->wp_id);
             return output;
           }
-          // The selected five-state branch remains a tactical identity and
-          // physical-entry artifact only.  Do not install it into the retired
-          // five-state normal lifecycle.  After the phase transition the
-          // shared six-state producer performs atomic solve, exact physical
-          // proof and current-world admission before any normal publication.
+          // Gate A freezes supervisor geometry only. After the phase
+          // transition the shared six-state producer performs atomic solve,
+          // exact physical proof and current-world admission before any
+          // normal publication. The old five-state proof remains reachable
+          // only for the separately unpromoted direct-Pass entry.
         }
         transition_overtake_line_phase(
           direct_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,
@@ -36015,20 +36112,23 @@ private:
         overtake_line_state_.fixed_pass_corridor_goal_ey =
           resuming_paused_mission ?
           std::optional<double>{same_side_resume_goal} :
+          fresh_entry_mission.has_value() ?
+          std::optional<double>{fresh_entry_mission->goal_lateral_m} :
           behavior_output.overtake_corridor_center_ey;
         if (fresh_normal_mission_entry && direct_pass) {
           overtake_line_state_.mission_pass_start_sec = now_sec;
         }
         if (fresh_normal_mission_entry) {
-          const auto & committed_mission =
-            behavior_output.overtake_selected_mission.value();
+          const auto & committed_mission = fresh_entry_mission.value();
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
-            "Overtake entry commit accepted: target=%s, side=%d, phase=%s, "
+            "Overtake entry commit accepted: gate=%s, target=%s, side=%d, phase=%s, "
             "certificate=%d, certificate_age=%.3f s, source_s=%.3f m, "
             "current_s=%.3f m, required_wall=%.3f m, samples=%zu, "
             "exact_stages=%zu, exact_state=ey/lag/epsi/v/progress, "
             "generation=%lu, wp_id=%d",
+            fresh_entry_uses_six_state_gate_a ?
+            "six-state-shiftout" : "five-state-direct-pass",
             behavior_output.target_vehicle_id.c_str(), pass_side_sign,
             to_string(overtake_line_state_.phase),
             committed_mission.physical_execution_certificate_valid ? 1 : 0,
@@ -36070,16 +36170,16 @@ private:
             overtake_line_state_.mission_body_clear_deadline_checked ? 1 : 0,
             overtake_line_state_.mission_body_clear_deadline_feasible ? 1 : 0,
             overtake_line_state_.mission_body_clear_deadline_slack_sec,
-            behavior_output.overtake_selected_mission.has_value() ?
-            behavior_output.overtake_selected_mission->horizon_progress_score :
+            fresh_entry_mission.has_value() ?
+            fresh_entry_mission->horizon_progress_score :
             std::numeric_limits<double>::quiet_NaN(),
-            behavior_output.overtake_selected_mission.has_value() ?
-            behavior_output.overtake_selected_mission->predicted_minimum_ego_speed_mps :
+            fresh_entry_mission.has_value() ?
+            fresh_entry_mission->predicted_minimum_ego_speed_mps :
             std::numeric_limits<double>::quiet_NaN(),
             overtake_line_state_.mission_path_frozen ? 1 : 0,
             overtake_line_state_.mission_path_total_distance,
-            behavior_output.overtake_selected_mission.has_value() &&
-            behavior_output.overtake_selected_mission->
+            fresh_entry_mission.has_value() &&
+            fresh_entry_mission->
             physical_execution_certificate_valid ? 1 : 0,
             overtake_line_state_.mission_frenet_dp_lateral_path_m.size(),
             behavior_output.target_vehicle_id.c_str(), model->wp_id);

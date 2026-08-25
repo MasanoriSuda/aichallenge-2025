@@ -2420,6 +2420,26 @@ generation、tactical sequence、context epochが一致し、current-world reval
 authority Sliceは所有するintentを明示し、そのsix-state proposal採用と対応five-state Gate A proof／entry cacheの物理削除を同一変更で
 行わなければならない。five-state経路を恒久fallbackとして残さず、parameter tuningも混在させない。
 
+#### Six-state ShiftOut Gate A production authority（2026-08-25、2025由来の暫定）
+
+動的に証拠を取得したfresh `ShiftOut`だけを、causal six-state Gate A proposalからproductionへ昇格する。
+proposalはexact Mission geometry、six-state `CertifiedPlan`、target、side、prospective Mission generationを
+一体で運び、同じ制御周期のFSMがMissionをfreezeして`ShiftOut`へ遷移する。採用後も別ownerへ切り替えず、
+共有six-state producerが新intentをsolve、exact physical proof、current-world joinした場合だけ通常commandをpublishする。
+
+target provenanceはworker resultをlive worldへjoinするconsumerで既存continuity validatorを一度だけ適用する。
+async solve中にV2X observation generationが進むこと自体は不一致ではない。validatorが同一target、連続progress／lateral、
+有効ageを証明した場合、artifactのsource generationをproposalへsealし、FSMはCertifiedPlanとそのsealed identityを照合する。
+FSMがsource generationを最新generationとして再解釈する二重判定は禁止する。timeout、generation grace、retained proposalは
+追加しない。
+
+`output/20260825-231050`ではShiftOut Gate-A commit 3件、six-state atomic admission 3件、certified final publication 7件を
+観測し、左右両sideを被覆した。final contractは`intent=shiftout`、
+`formulation=velocity-steering-progress-6state`、`authority=certified-normal-solution`を記録した。
+一方、Pass／Returnは未到達で、43 callback overrun、後段のexecution source失効、target staleによるRecoveryが残る。
+これはShiftOut Gate Aをfive-stateへ戻す理由ではなく、後続のreal-time／Mission lifecycle監査対象である。
+未観測のdirect Passは本Sliceで暗黙に昇格せず、別Sliceでexact Pass proposalの動的証拠を取得してから対応five-state Gate Aを削除する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

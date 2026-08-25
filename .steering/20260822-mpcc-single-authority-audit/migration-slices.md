@@ -1096,6 +1096,23 @@ Finish the architecture simplification instead of leaving permanent dual control
   physical deletion of the corresponding five-state Gate-A proof/cache in the
   same Slice; direct Pass is not inferred from unobserved evidence.
 
+- `.steering/20260825-six-state-shiftout-gate-a-production` promotes only the
+  dynamically observed fresh ShiftOut Gate A. Mission geometry and the causal
+  six-state `CertifiedPlan` cross the live FSM boundary as one current-cycle
+  proposal; ShiftOut can no longer use the five-state physical/canonical
+  pre-entry proof. An initial production run exposed a second interpretation
+  of target observation generation in the FSM. The existing target-continuity
+  validator now runs once at the live consumer and its accepted source
+  generation is sealed into the proposal instead of being compared directly
+  with a newer V2X generation. In `output/20260825-231050`, three ShiftOut
+  Gate-A commits and three atomic admissions were six-state certified, and
+  seven final ShiftOut publications reported
+  `velocity-steering-progress-6state`. Both side signs were exercised. Direct
+  Pass remains explicitly on five-state Gate A because no Pass proposal has
+  dynamic coverage. Pass/Return non-coverage, 43 callback overruns and later
+  execution-source/target-lifecycle failures are separate follow-up debt; no
+  parameter, grace period, retained proposal or normal fallback was added.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

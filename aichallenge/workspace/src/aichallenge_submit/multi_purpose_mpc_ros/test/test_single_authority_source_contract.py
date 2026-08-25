@@ -742,8 +742,8 @@ def test_overtake_entry_preserves_the_selected_tactical_artifact() -> None:
     assert "extraction.lateral_upper_m.push_back(" in fresh
 
 
-def test_five_state_preentry_artifact_cannot_gate_rate_resolved_actuation() -> None:
-    """The tactical five-state artifact is identity/proof, not command authority."""
+def test_five_state_preentry_artifact_is_limited_to_unpromoted_direct_pass() -> None:
+    """Fresh ShiftOut may not depend on the retained five-state Gate A."""
 
     async_source = (
         PACKAGE_ROOT / "src/follow_canonical_async.cpp"
@@ -765,6 +765,15 @@ def test_five_state_preentry_artifact_cannot_gate_rate_resolved_actuation() -> N
     )
     entry = SOURCE[entry_start:entry_end]
     assert "resolve_overtake_preentry_plan(" in entry
+    assert "five-state-direct-pass-gate-a" in entry
+    assert "six-state-shiftout-gate-a" in entry
+    assert "!direct_pass && !six_state_shiftout_gate_a_request" in entry
+    assert "fresh_entry_uses_six_state_gate_a" in entry
+    assert "freeze_selected_overtake_mission(fresh_entry_mission" in entry
+    assert (
+        "!fresh_entry_uses_six_state_gate_a &&\n"
+        "            cfg.progress_contouring_dual_branch_enabled" in entry
+    )
     assert "steering_continuity" not in entry
     assert "prepare_overtake_canonical_async_context(" not in entry
     assert "overtake_canonical_lifecycle_->plan_store.replace(" not in entry
@@ -987,8 +996,8 @@ def test_tactical_async_and_isolated_branches_share_one_owned_snapshot_boundary(
     assert "owned_snapshot = std::move(owned_snapshot.value())" in submit
 
 
-def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound() -> None:
-    """Tactical output chooses homotopy; a new causal six-state solve owns no command."""
+def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound() -> None:
+    """Tactical output chooses homotopy; causal proof may gate but not publish."""
 
     selection_start = SOURCE.index("void evaluate_and_select_extended_mpcc_branches(")
     selection_end = SOURCE.index("bool submit_mpcc_lite_async_snapshot(", selection_start)
@@ -1037,6 +1046,7 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
     assert "should_publish_latest_only_result(" in worker
     assert "result.context_epoch" in worker
     assert "result.selected_mission = draft.assessment.selected_mission" in submit
+    assert "result.target_provenance = draft.target_provenance" in submit
     assert "mailbox->context_epoch" in worker
     assert "result.sequence != mailbox->latest_submitted_sequence" not in worker
     assert submit.index("submit_latest(") < submit.index(
@@ -1054,13 +1064,18 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
     assert "tactical_identity.current_world_observation_permitted" in consume
     assert "tactical_identity.tactical_authority_current" in consume
     assert "current_world_joinable && tactical_identity.tactical_authority_current" in consume
-    assert "RateResolvedPreentryGateAShadowProposal proposal" in consume
+    assert "RateResolvedPreentryGateAProposal proposal" in consume
     assert "proposal.mission = result->selected_mission.value()" in consume
     assert "proposal.certified_plan = plan" in consume
+    assert "validate_selected_target_provenance(" in consume
     assert (
-        "live_behavior.rate_resolved_preentry_gate_a_shadow_proposal =" in consume
+        "proposal.target_obstacle_generation =\n"
+        "        result->target_provenance.observation_generation" in consume
     )
-    assert "authority=shadow,selected=0" in consume
+    assert (
+        "live_behavior.rate_resolved_preentry_gate_a_proposal =" in consume
+    )
+    assert "authority=gate-a-evidence,selected=%d" in consume
     assert "certify_and_replace(" not in consume
     assert "publish_control_command(" not in consume
 
@@ -1108,9 +1123,15 @@ def test_preentry_causal_execution_pipeline_is_shadow_only_and_predecessor_bound
 
     fsm_start = SOURCE.index("OvertakeLineOutput update_overtake_line(")
     fsm_end = SOURCE.index("bool is_overtake_forbidden_wp(", fsm_start)
-    assert "rate_resolved_preentry_gate_a_shadow_proposal" not in SOURCE[
-        fsm_start:fsm_end
-    ]
+    fsm = SOURCE[fsm_start:fsm_end]
+    assert "rate_resolved_preentry_gate_a_proposal" in fsm
+    assert "six_state_shiftout_gate_a_request" in fsm
+    assert "ControlIntent::ShiftOut" in fsm
+    assert (
+        "proposal_source_context->target_obstacle_generation ==\n"
+        "            six_state_gate_a_proposal->target_obstacle_generation" in fsm
+    )
+    assert "publish_control_command(" not in fsm
 
 
 def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:

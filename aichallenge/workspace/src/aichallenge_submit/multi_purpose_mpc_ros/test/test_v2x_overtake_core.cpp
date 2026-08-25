@@ -20501,7 +20501,6 @@ TEST(V2XOvertakeCoreFrenetDpExecution, HardFaultsRevokePassAuthority)
   expect_revoked([](auto & value) {value.solver_recovery_active = true;});
   expect_revoked([](auto & value) {value.forbidden_waypoint = true;});
   expect_revoked([](auto & value) {value.execution_tracking_safe = false;});
-  expect_revoked([](auto & value) {value.solver_degraded = true;});
   expect_revoked([](auto & value) {value.last_refresh_sec = 19.0;});
   expect_revoked([](auto & value) {value.traveled_distance_m = 7.75;});
 

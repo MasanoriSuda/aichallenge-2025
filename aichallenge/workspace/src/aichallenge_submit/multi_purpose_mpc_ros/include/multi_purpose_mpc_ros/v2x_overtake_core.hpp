@@ -4083,7 +4083,6 @@ struct FrenetDpExecutionAuthorityRequest {
   std::vector<double> path_distances_m;
   std::vector<double> lateral_path_m;
   bool execution_tracking_safe{true};
-  bool solver_degraded{false};
 };
 
 enum class FrenetDpExecutionAuthorityReason
@@ -4105,7 +4104,6 @@ enum class FrenetDpExecutionAuthorityReason
   SolverRecovery,
   ForbiddenWaypoint,
   TrackingUnsafe,
-  SolverDegraded,
   SourceStale,
   RemainingPathInsufficient,
   Accepted,

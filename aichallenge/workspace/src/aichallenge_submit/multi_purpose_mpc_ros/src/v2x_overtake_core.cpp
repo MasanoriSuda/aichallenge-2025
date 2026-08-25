@@ -6373,7 +6373,6 @@ const char * to_string(const FrenetDpExecutionAuthorityReason reason) noexcept
     case FrenetDpExecutionAuthorityReason::ForbiddenWaypoint:
       return "forbidden-waypoint";
     case FrenetDpExecutionAuthorityReason::TrackingUnsafe: return "tracking-unsafe";
-    case FrenetDpExecutionAuthorityReason::SolverDegraded: return "solver-degraded";
     case FrenetDpExecutionAuthorityReason::SourceStale: return "source-stale";
     case FrenetDpExecutionAuthorityReason::RemainingPathInsufficient:
       return "remaining-path-insufficient";
@@ -6438,7 +6437,7 @@ FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
     !request.actual_wall_physical_contact && !request.wall_margin_blocked &&
     !request.wall_sample_unavailable && !request.emergency_front_risk &&
     !request.solver_recovery_active && !request.forbidden_waypoint &&
-    request.execution_tracking_safe && !request.solver_degraded &&
+    request.execution_tracking_safe &&
     resolution.source_fresh &&
     resolution.remaining_distance_m + 1e-9 >= request.minimum_remaining_distance_m;
   if (!(request.active_execution || request.rolling_replan_pause_active)) {
@@ -6469,8 +6468,6 @@ FrenetDpExecutionAuthorityResolution resolve_frenet_dp_execution_authority(
     resolution.reason = FrenetDpExecutionAuthorityReason::TargetEnvelopeUnsafe;
   } else if (!request.execution_tracking_safe) {
     resolution.reason = FrenetDpExecutionAuthorityReason::TrackingUnsafe;
-  } else if (request.solver_degraded) {
-    resolution.reason = FrenetDpExecutionAuthorityReason::SolverDegraded;
   } else if (!resolution.source_fresh) {
     resolution.reason = FrenetDpExecutionAuthorityReason::SourceStale;
   } else if (

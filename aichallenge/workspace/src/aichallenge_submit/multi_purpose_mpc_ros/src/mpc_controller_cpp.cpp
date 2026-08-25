@@ -1466,7 +1466,6 @@ struct OvertakeLineConfig
   double mpcc_frenet_dp_tracking_release_confirm_sec{0.10};
   double mpcc_frenet_dp_max_tracking_lateral_error_m{0.50};
   double mpcc_frenet_dp_max_tracking_heading_error_rad{0.35};
-  bool mpcc_frenet_dp_block_on_extended_solver_degraded{true};
   bool mpcc_frenet_dp_longitudinal_timing_enabled{false};
   double mpcc_frenet_dp_longitudinal_cost_slack{0.25};
   double safe_separation_soft_prediction_grace_sec{0.25};
@@ -5914,33 +5913,6 @@ struct MpcOsqpTelemetryWindow
   double maximum_solve_ms{};
 };
 
-enum class ExtendedMpccCycleStatus
-{
-  Success,
-  Requalifying,
-  CircuitSkip,
-  BuildReject,
-  SolveFailure,
-  ConversionReject,
-};
-
-struct ExtendedMpccTelemetryWindow
-{
-  std::uint64_t eligible_cycle_count{};
-  std::uint64_t solve_attempt_count{};
-  std::uint64_t success_count{};
-  std::uint64_t requalifying_count{};
-  std::uint64_t circuit_skip_count{};
-  std::uint64_t build_reject_count{};
-  std::uint64_t solve_failure_count{};
-  std::uint64_t conversion_reject_count{};
-  std::uint64_t fallback_count{};
-  std::uint64_t total_iterations{};
-  int maximum_iterations{};
-  double total_solve_ms{};
-  double maximum_solve_ms{};
-};
-
 struct CanonicalNormalSelection
 {
   std::optional<mpcc_contract::CanonicalNormalCommand> command;
@@ -6844,19 +6816,6 @@ struct CanonicalNormalFinalActuationTelemetryWindow
   double maximum_optimized_acceleration_vs_final_difference_mps2{};
   double total_optimized_steering_vs_final_difference_rad{};
   double maximum_optimized_steering_vs_final_difference_rad{};
-};
-
-struct MpcRtiSqpTelemetryWindow
-{
-  std::uint64_t progress_cycles{};
-  std::uint64_t refinement_attempt_count{};
-  std::uint64_t refinement_success_count{};
-  std::uint64_t first_feasible_fallback_count{};
-  std::uint64_t relinearization_reject_count{};
-  std::uint64_t cold_load_skip_count{};
-  std::uint64_t condition_skip_count{};
-  std::uint64_t deadline_skip_count{};
-  std::uint64_t invalid_decision_count{};
 };
 
 // Canonical Follow and Overtake contracts compare physical rows with different
@@ -11057,11 +11016,7 @@ struct MPC
         overtake_line_state_.mission_frenet_dp_path_distances_m,
         overtake_line_state_.mission_frenet_dp_lateral_path_m,
         continuous_dp_tracking_release.valid &&
-        continuous_dp_tracking_release.effective_tracking_safe,
-        cfg.v2x_behavior.overtake_line.
-        mpcc_frenet_dp_block_on_extended_solver_degraded &&
-        cfg.progress_contouring.extended_dynamics_enabled &&
-        extended_progress_circuit_breaker_.active(now_sec)});
+        continuous_dp_tracking_release.effective_tracking_safe});
     const bool continuous_dp_front_danger_authority_active =
       continuous_dp_front_authority.valid &&
       continuous_dp_front_authority.authority_active &&
@@ -21685,89 +21640,6 @@ struct MPC
     last_osqp_telemetry_log_sec_ = now_sec;
   }
 
-  void record_extended_mpcc_telemetry(
-    const ExtendedMpccCycleStatus status,
-    const persistent_osqp::SolveTelemetry * const solve_telemetry,
-    const double now_sec)
-  {
-    auto & window = extended_mpcc_telemetry_window_;
-    ++window.eligible_cycle_count;
-    const bool solve_attempted =
-      status == ExtendedMpccCycleStatus::Success ||
-      status == ExtendedMpccCycleStatus::Requalifying ||
-      status == ExtendedMpccCycleStatus::SolveFailure ||
-      status == ExtendedMpccCycleStatus::ConversionReject;
-    window.solve_attempt_count += solve_attempted ? 1U : 0U;
-    window.success_count += status == ExtendedMpccCycleStatus::Success ? 1U : 0U;
-    window.requalifying_count +=
-      status == ExtendedMpccCycleStatus::Requalifying ? 1U : 0U;
-    window.circuit_skip_count +=
-      status == ExtendedMpccCycleStatus::CircuitSkip ? 1U : 0U;
-    window.build_reject_count +=
-      status == ExtendedMpccCycleStatus::BuildReject ? 1U : 0U;
-    window.solve_failure_count +=
-      status == ExtendedMpccCycleStatus::SolveFailure ? 1U : 0U;
-    window.conversion_reject_count +=
-      status == ExtendedMpccCycleStatus::ConversionReject ? 1U : 0U;
-    window.fallback_count += status == ExtendedMpccCycleStatus::Success ? 0U : 1U;
-    if (solve_attempted && solve_telemetry != nullptr) {
-      window.total_iterations += static_cast<std::uint64_t>(
-        std::max(0, solve_telemetry->iterations));
-      window.maximum_iterations = std::max(
-        window.maximum_iterations, solve_telemetry->iterations);
-      window.total_solve_ms += solve_telemetry->solve_ms;
-      window.maximum_solve_ms = std::max(
-        window.maximum_solve_ms, solve_telemetry->solve_ms);
-    }
-
-    if (!std::isfinite(now_sec)) {
-      return;
-    }
-    if (
-      !std::isfinite(last_extended_mpcc_telemetry_log_sec_) ||
-      now_sec < last_extended_mpcc_telemetry_log_sec_)
-    {
-      last_extended_mpcc_telemetry_log_sec_ = now_sec;
-      return;
-    }
-    if (now_sec - last_extended_mpcc_telemetry_log_sec_ < 1.0) {
-      return;
-    }
-    if (
-      cfg.v2x_behavior.overtake_line.debug_log_enabled &&
-      window.eligible_cycle_count > 0U)
-    {
-      const double solve_denominator = static_cast<double>(
-        std::max<std::uint64_t>(1U, window.solve_attempt_count));
-      const double cooldown_remaining_sec = std::max(
-        0.0, extended_progress_circuit_breaker_.disabled_until_sec() - now_sec);
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Extended MPCC runtime: eligible=%zu, attempts=%zu, success=%zu, "
-        "requalifying=%zu, fallback=%zu, circuit_skip=%zu, build_reject=%zu, "
-        "solve_failure=%zu, "
-        "conversion_reject=%zu, solve_ms=%.3f/%.3f(avg/max), "
-        "iterations=%.1f/%d(avg/max), cooldown_remaining=%.2f s, "
-        "reentry_streak=%zu/%zu",
-        static_cast<std::size_t>(window.eligible_cycle_count),
-        static_cast<std::size_t>(window.solve_attempt_count),
-        static_cast<std::size_t>(window.success_count),
-        static_cast<std::size_t>(window.requalifying_count),
-        static_cast<std::size_t>(window.fallback_count),
-        static_cast<std::size_t>(window.circuit_skip_count),
-        static_cast<std::size_t>(window.build_reject_count),
-        static_cast<std::size_t>(window.solve_failure_count),
-        static_cast<std::size_t>(window.conversion_reject_count),
-        window.total_solve_ms / solve_denominator, window.maximum_solve_ms,
-        static_cast<double>(window.total_iterations) / solve_denominator,
-        window.maximum_iterations, cooldown_remaining_sec,
-        extended_progress_reentry_gate_.consecutive_successes(),
-        cfg.progress_contouring.extended_reentry_success_cycles);
-    }
-    window = ExtendedMpccTelemetryWindow{};
-    last_extended_mpcc_telemetry_log_sec_ = now_sec;
-  }
-
   void reset_osqp_history()
   {
     persistent_extended_osqp_solver_.reset();
@@ -21778,154 +21650,9 @@ struct MPC
     if (!mpcc_lite_async_worker_context_) {
       invalidate_mpcc_lite_async_results();
     }
-    extended_progress_circuit_breaker_.reset();
-    extended_progress_reentry_gate_.reset();
-    extended_mode_handoff_.reset();
-    extended_mpcc_telemetry_window_ = ExtendedMpccTelemetryWindow{};
     solved_mpcc_execution_trajectory_.reset();
     last_physically_validated_mpcc_execution_trajectory_.reset();
     solved_mpcc_execution_authority_was_active_ = false;
-  }
-
-  bool relinearize_progress_problem(
-    MpcProblem & problem, const Eigen::VectorXd & linearization_point,
-    std::string & reject_reason) const
-  {
-    constexpr int nx = 3;
-    constexpr int nu = 2;
-    reject_reason.clear();
-    const int nx_N = nx * (problem.N + 1);
-    const int nu_N = nu * problem.N;
-    const int rate_offset = nx_N + nx_N + nu_N;
-    if (
-      !problem.progress_contouring_active || problem.N <= 0 ||
-      linearization_point.size() != nx_N + nu_N ||
-      !linearization_point.allFinite() ||
-      problem.progress_stage_distance_m.size() != static_cast<std::size_t>(problem.N) ||
-      problem.progress_path_curvature_radpm.size() !=
-      static_cast<std::size_t>(problem.N) ||
-      problem.A.rows() <= rate_offset + problem.N - 1 ||
-      problem.l.size() != problem.A.rows() || problem.u.size() != problem.A.rows() ||
-      model == nullptr || !std::isfinite(model->length) || model->length <= 0.0)
-    {
-      reject_reason = "malformed RTI-SQP relinearization problem";
-      return false;
-    }
-
-    std::vector<mpcc_progress::Linearization> linearizations;
-    linearizations.reserve(static_cast<std::size_t>(problem.N));
-    for (int stage = 0; stage < problem.N; ++stage) {
-      const int state_offset = stage * nx;
-      const int input_offset = nx_N + stage * nu;
-      const auto linearization = mpcc_progress::linearize_temporal_frenet(
-        mpcc_progress::LinearizationRequest{
-          linearization_point[state_offset],
-          linearization_point[state_offset + 1],
-          linearization_point[state_offset + 2],
-          linearization_point[input_offset],
-          problem.progress_path_curvature_radpm[static_cast<std::size_t>(stage)],
-          linearization_point[input_offset + 1],
-          problem.progress_stage_distance_m[static_cast<std::size_t>(stage)],
-          cfg.progress_contouring});
-      if (!linearization.has_value()) {
-        reject_reason = "RTI-SQP temporal Frenet linearization rejected stage " +
-          std::to_string(stage);
-        return false;
-      }
-      linearizations.push_back(linearization.value());
-    }
-
-    Eigen::SparseMatrix<double> refined_constraints = problem.A;
-    for (int stage = 0; stage < problem.N; ++stage) {
-      const auto & linearization = linearizations[static_cast<std::size_t>(stage)];
-      const int equality_row = (stage + 1) * nx;
-      const int state_column = stage * nx;
-      const int input_column = nx_N + stage * nu;
-      for (int row = 0; row < nx; ++row) {
-        for (int column = 0; column < nx; ++column) {
-          refined_constraints.coeffRef(equality_row + row, state_column + column) =
-            linearization.state_matrix(row, column);
-        }
-        for (int column = 0; column < nu; ++column) {
-          refined_constraints.coeffRef(equality_row + row, input_column + column) =
-            linearization.input_matrix(row, column);
-        }
-        problem.l[equality_row + row] = linearization.equality_offset[row];
-        problem.u[equality_row + row] = linearization.equality_offset[row];
-      }
-    }
-    refined_constraints.makeCompressed();
-    problem.A = std::move(refined_constraints);
-
-    for (int rate_stage = 1; rate_stage < problem.N; ++rate_stage) {
-      const double stage_dt =
-        linearizations[static_cast<std::size_t>(rate_stage - 1)].stage_dt_sec;
-      const double maximum_curvature_change =
-        std::tan(std::max(0.0, cfg.steer_rate_max) * stage_dt) / model->length;
-      if (!std::isfinite(maximum_curvature_change) || maximum_curvature_change < 0.0) {
-        reject_reason = "invalid RTI-SQP steering-rate bound";
-        return false;
-      }
-      problem.l[rate_offset + rate_stage] = -maximum_curvature_change;
-      problem.u[rate_offset + rate_stage] = maximum_curvature_change;
-    }
-    return true;
-  }
-
-  void record_rti_sqp_telemetry(
-    const double now_sec, const bool refinement_attempted,
-    const bool refinement_succeeded, const bool first_feasible_fallback,
-    const bool relinearization_rejected,
-    const mpcc_progress::RtiRefinementDecision refinement_decision)
-  {
-    auto & window = rti_sqp_telemetry_window_;
-    ++window.progress_cycles;
-    window.refinement_attempt_count += refinement_attempted ? 1U : 0U;
-    window.refinement_success_count += refinement_succeeded ? 1U : 0U;
-    window.first_feasible_fallback_count += first_feasible_fallback ? 1U : 0U;
-    window.relinearization_reject_count += relinearization_rejected ? 1U : 0U;
-    window.cold_load_skip_count +=
-      refinement_decision == mpcc_progress::RtiRefinementDecision::SkipColdLoad ? 1U : 0U;
-    window.condition_skip_count +=
-      refinement_decision == mpcc_progress::RtiRefinementDecision::SkipCondition ? 1U : 0U;
-    window.deadline_skip_count +=
-      refinement_decision == mpcc_progress::RtiRefinementDecision::SkipDeadline ? 1U : 0U;
-    window.invalid_decision_count +=
-      refinement_decision == mpcc_progress::RtiRefinementDecision::Invalid ? 1U : 0U;
-    if (!std::isfinite(now_sec)) {
-      return;
-    }
-    if (
-      !std::isfinite(last_rti_sqp_telemetry_log_sec_) ||
-      now_sec < last_rti_sqp_telemetry_log_sec_)
-    {
-      last_rti_sqp_telemetry_log_sec_ = now_sec;
-      return;
-    }
-    if (now_sec - last_rti_sqp_telemetry_log_sec_ < 1.0) {
-      return;
-    }
-    if (cfg.v2x_behavior.overtake_line.debug_log_enabled) {
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "MPCC RTI-SQP: cycles=%zu, attempts=%zu, refined=%zu, "
-        "first_feasible=%zu, relinearize_reject=%zu, skip_condition=%zu, "
-        "skip_cold_load=%zu, skip_deadline=%zu, invalid=%zu, "
-        "iterations=%d, alpha=%.2f",
-        static_cast<std::size_t>(window.progress_cycles),
-        static_cast<std::size_t>(window.refinement_attempt_count),
-        static_cast<std::size_t>(window.refinement_success_count),
-        static_cast<std::size_t>(window.first_feasible_fallback_count),
-        static_cast<std::size_t>(window.relinearization_reject_count),
-        static_cast<std::size_t>(window.condition_skip_count),
-        static_cast<std::size_t>(window.cold_load_skip_count),
-        static_cast<std::size_t>(window.deadline_skip_count),
-        static_cast<std::size_t>(window.invalid_decision_count),
-        cfg.progress_contouring.rti_sqp_iterations,
-        cfg.progress_contouring.rti_sqp_mixing);
-    }
-    window = MpcRtiSqpTelemetryWindow{};
-    last_rti_sqp_telemetry_log_sec_ = now_sec;
   }
 
   void record_solved_mpcc_execution_trajectory(
@@ -29493,7 +29220,6 @@ struct MPC
     pending_canonical_normal_actuation_.reset();
     failure_fallback_speed_.reset();
     last_control_was_fallback_ = true;
-    extended_mode_handoff_.reset();
     last_control_resolution_reason_ =
       std::string{"canonical-"} + mpcc_contract::to_string(intent) +
       "-emergency/" + reason;
@@ -29560,7 +29286,6 @@ struct MPC
     infeasibility_counter = 0;
     overtake_infeasibility_counter_ = 0;
     last_control_was_fallback_ = false;
-    extended_mode_handoff_.reset();
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id,
       mpcc_progress::ActuationProposal{
@@ -29645,7 +29370,6 @@ struct MPC
     infeasibility_counter = 0;
     overtake_infeasibility_counter_ = 0;
     last_control_was_fallback_ = false;
-    extended_mode_handoff_.reset();
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id,
       mpcc_progress::ActuationProposal{
@@ -30563,23 +30287,10 @@ struct MPC
   bool last_extended_branch_warm_start_applied_{false};
   bool last_extended_branch_context_reset_{false};
   std::uint64_t last_extended_branch_context_solve_count_{};
-  mpcc_progress::ExtendedSolverCircuitBreaker extended_progress_circuit_breaker_;
-  mpcc_progress::ExtendedSolverReentryGate extended_progress_reentry_gate_;
-  mpcc_progress::ExtendedModeHandoff extended_mode_handoff_;
-  double extended_progress_fallback_last_log_sec_{
-    -std::numeric_limits<double>::infinity()};
-  double extended_wall_tracking_last_log_sec_{
-    -std::numeric_limits<double>::infinity()};
   MpcOsqpTelemetryWindow osqp_telemetry_window_;
   double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
-  ExtendedMpccTelemetryWindow extended_mpcc_telemetry_window_;
-  double last_extended_mpcc_telemetry_log_sec_{
-    std::numeric_limits<double>::quiet_NaN()};
   double progress_aligned_wall_refinement_last_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
-  MpcRtiSqpTelemetryWindow rti_sqp_telemetry_window_;
-  double last_rti_sqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
-  double rti_sqp_reject_last_log_sec_{std::numeric_limits<double>::quiet_NaN()};
   std::optional<SolvedMpccExecutionTrajectory> solved_mpcc_execution_trajectory_;
   std::optional<SolvedMpccExecutionTrajectory>
   last_physically_validated_mpcc_execution_trajectory_;
@@ -37453,9 +37164,6 @@ private:
       runtime_wall_escape_prefix_candidate ?
       std::max(0.0, line_cfg.runtime_wall_prefix_terminal_distance) :
       std::max(0.5, line_cfg.mpcc_lite_prefix_terminal_distance);
-    const bool extended_mpcc_solver_degraded =
-      cfg.progress_contouring.extended_dynamics_enabled &&
-      extended_progress_circuit_breaker_.active(now_sec);
     const bool dp_execution_tracking_safe_raw =
       is_frenet_dp_execution_tracking_safe(ref_wp_id);
     const auto dp_execution_tracking_release =
@@ -37503,9 +37211,7 @@ private:
                 dp_execution_terminal_distance,
                 overtake_line_state_.mission_frenet_dp_path_distances_m,
                 overtake_line_state_.mission_frenet_dp_lateral_path_m,
-                dp_execution_tracking_safe,
-                line_cfg.mpcc_frenet_dp_block_on_extended_solver_degraded &&
-                extended_mpcc_solver_degraded});
+                dp_execution_tracking_safe});
     if (
       line_cfg.debug_log_enabled && dp_execution_authority.valid &&
       (dp_execution_authority.authority_active !=
@@ -37522,7 +37228,6 @@ private:
           "source=%s, source_age=%.2f s, runtime_age=%.2f s, "
           "remaining=%.2f m, terminal=%.2f m, reason=%s, "
           "tracking=%d/%d/%s/%.2f s, "
-          "solver_degraded=%d, "
           "wall_escape=%d, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
@@ -37539,7 +37244,6 @@ private:
           dp_execution_tracking_safe ? 1 : 0,
           overtake_core::to_string(dp_execution_tracking_release.reason),
           dp_execution_tracking_release.unsafe_elapsed_sec,
-          extended_mpcc_solver_degraded ? 1 : 0,
           runtime_wall_escape_prefix_candidate ? 1 : 0, model->wp_id);
       } else {
         RCLCPP_INFO(
@@ -37547,7 +37251,6 @@ private:
           "OvertakeLine DP execution authority released: target=%s, side=%d, "
           "source_age=%.2f s, runtime_age=%.2f s, remaining=%.2f m, "
           "terminal=%.2f m, reason=%s, tracking=%d/%d/%s/%.2f s, "
-          "solver_degraded=%d, "
           "wall_escape=%d, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
@@ -37560,7 +37263,6 @@ private:
           dp_execution_tracking_safe ? 1 : 0,
           overtake_core::to_string(dp_execution_tracking_release.reason),
           dp_execution_tracking_release.unsafe_elapsed_sec,
-          extended_mpcc_solver_degraded ? 1 : 0,
           runtime_wall_escape_prefix_candidate ? 1 : 0, model->wp_id);
       }
     }
@@ -44937,8 +44639,6 @@ private:
       !receding_horizon.fallback &&
       dp_execution_authority.source_fresh &&
       dp_execution_tracking_safe &&
-      !(line_cfg.mpcc_frenet_dp_block_on_extended_solver_degraded &&
-      extended_mpcc_solver_degraded) &&
       locked_target_matches && locked_target_progress_continuous &&
       !behavior_output.locked_target_position_jump &&
       !locked_target_progress_rejected &&
@@ -45877,7 +45577,7 @@ private:
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine DP execution: active=%d, covered=%zu/%d, complete=%d, "
             "traveled=%.2f m, remaining=%.2f m, side=%d, refresh=%d/age=%.2f s, "
-            "authority=%d, tracking=%d, solver_degraded=%d, trust_adjusted=%d/%.2f m",
+            "authority=%d, tracking=%d, trust_adjusted=%d/%.2f m",
             frenet_dp_execution_reference.active ? 1 : 0,
             frenet_dp_execution_reference.covered_sample_count, N,
             frenet_dp_execution_reference.coverage_complete ? 1 : 0,
@@ -45892,7 +45592,6 @@ private:
             std::numeric_limits<double>::infinity(),
             dp_execution_authority_active ? 1 : 0,
             dp_execution_tracking_safe ? 1 : 0,
-            extended_mpcc_solver_degraded ? 1 : 0,
             frenet_dp_trust_envelope.adjusted ? 1 : 0,
             frenet_dp_trust_envelope.maximum_applied_adjustment_m);
         }
@@ -49174,17 +48873,6 @@ Config load_config(const std::string & path)
   progress_contouring.extended_terminal_progress_reward_weight =
     mpc["progress_contouring_extended_terminal_progress_reward_weight"] ?
     mpc["progress_contouring_extended_terminal_progress_reward_weight"].as<double>() : 10.0;
-  progress_contouring.extended_failure_cooldown_sec =
-    mpc["progress_contouring_extended_failure_cooldown_sec"] ?
-    mpc["progress_contouring_extended_failure_cooldown_sec"].as<double>() : 0.75;
-  progress_contouring.extended_reentry_success_cycles = static_cast<std::size_t>(
-    std::max(
-      1,
-      mpc["progress_contouring_extended_reentry_success_cycles"] ?
-      mpc["progress_contouring_extended_reentry_success_cycles"].as<int>() : 3));
-  progress_contouring.extended_mode_handoff_sec =
-    mpc["progress_contouring_extended_mode_handoff_sec"] ?
-    mpc["progress_contouring_extended_mode_handoff_sec"].as<double>() : 0.30;
   progress_contouring.stage_velocity_weight =
     mpc["progress_contouring_stage_velocity_weight"] ?
     mpc["progress_contouring_stage_velocity_weight"].as<double>() : 8.0;
@@ -50370,10 +50058,6 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_mpcc_frenet_dp_max_tracking_heading_error_rad"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_max_tracking_heading_error_rad"].as<double>() :
     0.35);
-  cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_block_on_extended_solver_degraded =
-    mpc["v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded"] ?
-    mpc["v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded"].as<bool>() :
-    true;
   cfg.mpc.v2x_behavior.overtake_line.mpcc_frenet_dp_longitudinal_timing_enabled =
     mpc["v2x_overtake_mpcc_frenet_dp_longitudinal_timing_enabled"] ?
     mpc["v2x_overtake_mpcc_frenet_dp_longitudinal_timing_enabled"].as<bool>() : false;
@@ -51919,19 +51603,16 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "Extended velocity-progress MPCC: %s, tracking=%.1f/%.1f stage, "
-      "%.1f/%.1f terminal (lateral/heading), failure_cooldown=%.2f s, "
-      "reentry_success=%zu, wall_tracking=%.2f m/min_scale=%.2f, "
-      "mode_handoff=%.2f s, dual_branch=%s/advantage>=%.2f/reserve>=%.2f m",
+      "%.1f/%.1f terminal (lateral/heading), "
+      "wall_tracking=%.2f m/min_scale=%.2f, "
+      "dual_branch=%s/advantage>=%.2f/reserve>=%.2f m",
       mpc_cfg_.progress_contouring.extended_dynamics_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring.extended_lateral_tracking_weight,
       mpc_cfg_.progress_contouring.extended_heading_tracking_weight,
       mpc_cfg_.progress_contouring.extended_terminal_lateral_tracking_weight,
       mpc_cfg_.progress_contouring.extended_terminal_heading_tracking_weight,
-      mpc_cfg_.progress_contouring.extended_failure_cooldown_sec,
-      mpc_cfg_.progress_contouring.extended_reentry_success_cycles,
       mpc_cfg_.progress_contouring.extended_wall_tracking_reference_reserve_m,
       mpc_cfg_.progress_contouring.extended_wall_tracking_minimum_weight_scale,
-      mpc_cfg_.progress_contouring.extended_mode_handoff_sec,
       mpc_cfg_.progress_contouring_dual_branch_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring_dual_branch_minimum_objective_advantage,
       mpc_cfg_.progress_contouring_dual_branch_minimum_bound_reserve_m);
@@ -52767,7 +52448,7 @@ public:
         "curve_strategy=%s/kappa>=%.3f/reference=%.2f/edge=%.2f/inside=%.2f/"
         "tactic_switch=%.2f, hard_horizon=%.1f m, tactical_horizon=%.1f m, "
         "shadow_penalty=%.2f, warm_age<=%.2f s, runtime_lease<=%.2f s, "
-        "tracking<=%.2f m/%.2f rad/confirm=%.2f s, solver_degraded_block=%s, "
+        "tracking<=%.2f m/%.2f rad/confirm=%.2f s, "
         "longitudinal_timing=%s/cost_slack=%.2f",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_corridor_enabled ?
         "enabled" : "disabled",
@@ -52825,8 +52506,6 @@ public:
         mpcc_frenet_dp_max_tracking_heading_error_rad,
         mpc_cfg_.v2x_behavior.overtake_line.
         mpcc_frenet_dp_tracking_release_confirm_sec,
-        mpc_cfg_.v2x_behavior.overtake_line.
-        mpcc_frenet_dp_block_on_extended_solver_degraded ? "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_longitudinal_timing_enabled ?
         "enabled" : "disabled",
         mpc_cfg_.v2x_behavior.overtake_line.mpcc_frenet_dp_longitudinal_cost_slack);

@@ -864,6 +864,15 @@ Finish the architecture simplification instead of leaving permanent dual control
   contracts, the 25-package build, 49 test targets and 1,870 tests pass.
   Retained legacy dynamic-escape wall handoff and now-inert migration telemetry
   remain separate, audited deletion work before Slice 6 can close.
+- `.steering/20260825-slice6-extended-migration-state-removal` physically
+  deletes the now-inert extended circuit breaker, reentry gate,
+  cross-formulation velocity handoff, their dedicated telemetry and four
+  migration-only YAML keys. No reachable producer remained after the normal
+  fallback solve-chain deletion, so the constant-false degraded-state input
+  was removed rather than renamed. Failure-first source contracts, the
+  25-package build and 1,868 rebuilt package tests pass. Retained
+  DynamicEscape/wall-handoff arbitration remains a separate final-publisher
+  audit; parameter tuning is still prohibited.
 
 ## Slice 7: Parameter tuning
 

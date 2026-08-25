@@ -78,9 +78,6 @@ struct Config
   double extended_terminal_progress_tracking_weight{5.0};
   double extended_progress_reward_weight{4.0};
   double extended_terminal_progress_reward_weight{10.0};
-  double extended_failure_cooldown_sec{0.75};
-  std::size_t extended_reentry_success_cycles{3U};
-  double extended_mode_handoff_sec{0.30};
   double stage_velocity_weight{8.0};
   double committed_stage_velocity_weight{24.0};
   double terminal_velocity_weight{12.0};
@@ -365,54 +362,6 @@ bool rebase_extended_progress_warm_start(
   Eigen::VectorXd & extended_primal, int horizon_size,
   double previous_progress_origin_m, double current_progress_origin_m) noexcept;
 
-class ExtendedSolverCircuitBreaker
-{
-public:
-  bool active(double now_sec) const noexcept;
-  void record_failure(double now_sec, double cooldown_sec) noexcept;
-  void record_success() noexcept;
-  void reset() noexcept;
-  double disabled_until_sec() const noexcept;
-
-private:
-  double disabled_until_sec_{-std::numeric_limits<double>::infinity()};
-};
-
-struct ExtendedSolverReentryResolution
-{
-  bool accept_solution{true};
-  bool requalifying{false};
-  std::size_t consecutive_successes{};
-  std::size_t required_successes{1U};
-};
-
-/// Keep an extended-solver failure latched independently from its retry
-/// cooldown. Once the cooldown expires, successful extended solves are used as
-/// shadow probes until the requested consecutive-success count is reached.
-/// This prevents a single lucky solve from repeatedly switching control
-/// authority between the extended and established MPCC formulations.
-class ExtendedSolverReentryGate
-{
-public:
-  void record_failure() noexcept;
-  ExtendedSolverReentryResolution record_success(
-    std::size_t required_successes) noexcept;
-  void reset() noexcept;
-  bool requalification_required() const noexcept;
-  std::size_t consecutive_successes() const noexcept;
-
-private:
-  bool requalification_required_{false};
-  std::size_t consecutive_successes_{};
-};
-
-struct ExtendedModeHandoffResolution
-{
-  double velocity_mps{};
-  double blend_ratio{1.0};
-  bool active{false};
-};
-
 struct WallAwareTrackingReferenceRequest
 {
   double reference_lateral_m{};
@@ -488,26 +437,6 @@ LateralTrackingHorizonResolution resolve_lateral_tracking_horizon(
   double required_reserve_m) noexcept;
 const char * lateral_tracking_horizon_reason_name(
   LateralTrackingHorizonReason reason) noexcept;
-
-/// Preserve longitudinal command continuity when execution changes between
-/// the extended and established MPCC formulations. The resolved command is
-/// always clipped to the current cycle's hard velocity bounds; a newly lower
-/// front-risk cap therefore takes effect immediately.
-class ExtendedModeHandoff
-{
-public:
-  std::optional<ExtendedModeHandoffResolution> resolve_velocity(
-    bool extended_mode, double now_sec, double desired_velocity_mps,
-    double current_lower_mps, double current_upper_mps,
-    double handoff_duration_sec) noexcept;
-  void reset() noexcept;
-
-private:
-  std::optional<bool> previous_extended_mode_;
-  double last_output_velocity_mps_{std::numeric_limits<double>::quiet_NaN()};
-  double transition_source_velocity_mps_{std::numeric_limits<double>::quiet_NaN()};
-  double transition_start_sec_{-std::numeric_limits<double>::infinity()};
-};
 
 /// Build an unwrapped stage progress reference from the measured progress and
 /// the existing ReferencePath segment distances. The result has N+1 states.

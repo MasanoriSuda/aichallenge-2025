@@ -367,16 +367,6 @@ mpc:
   progress_contouring_extended_terminal_progress_tracking_weight: 5.0
   progress_contouring_extended_progress_reward_weight: 4.0
   progress_contouring_extended_terminal_progress_reward_weight: 10.0
-  # A failed 5x3 solve is expensive. Probe it at most once per cooldown while
-  # the established 3x2 MPCC remains the fail-operational controller.
-  progress_contouring_extended_failure_cooldown_sec: 0.75
-  # After a failure, keep successful retries in shadow until the extended
-  # formulation has solved for this many consecutive cycles. This prevents
-  # one lucky solve from chattering control authority with the 3-state MPCC.
-  progress_contouring_extended_reentry_success_cycles: 3
-  # Smooth only formulation changes. The result remains inside the current
-  # cycle's hard velocity bounds, so a newly lower front-risk cap is immediate.
-  progress_contouring_extended_mode_handoff_sec: 0.30
   progress_contouring_stage_velocity_weight: 8.0
   progress_contouring_committed_stage_velocity_weight: 24.0
   progress_contouring_terminal_velocity_weight: 12.0
@@ -765,7 +755,6 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_tracking_release_confirm_sec: 0.10 # [s] confirm tracking-only loss before releasing DP authority; hard wall/contact faults remain immediate
   v2x_overtake_mpcc_frenet_dp_max_tracking_lateral_error_m: 0.50 # [m] revoke DP ownership when measured e_y no longer follows the active prefix
   v2x_overtake_mpcc_frenet_dp_max_tracking_heading_error_rad: 0.35 # [rad] measured-to-prefix heading disagreement limit
-  v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded: true # use a trust-bounded solved/legacy profile while the extended solver circuit is open
   v2x_overtake_mpcc_frenet_dp_longitudinal_timing_enabled: true # solve attack/intermediate/hold target timing before rejecting the lateral DP corridor
   v2x_overtake_mpcc_frenet_dp_longitudinal_cost_slack: 0.25 # fastest profile may win only this far above the best normalized lateral DP cost
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate

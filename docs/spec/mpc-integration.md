@@ -189,8 +189,6 @@ sourceの絶対実行期限であり、実行周期のwall/target再検証で期
   `v2x_overtake_mpcc_frenet_dp_max_tracking_lateral_error_m`以下。
 - 実測`e_psi`とprefix勾配・course曲率から求めたheadingの差が
   `v2x_overtake_mpcc_frenet_dp_max_tracking_heading_error_rad`以下。
-- extended dynamics solverのcircuit breakerが非active。ただし
-  `v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded=false`のA/B設定を除く。
 
 権限が有効でも、DPまたは直近のphysically validated solved trajectoryの各stage横目標は、
 採用済みMission profileから`v2x_overtake_mpcc_lite_same_side_max_lateral_adjustment`以内へ
@@ -198,11 +196,11 @@ sourceの絶対実行期限であり、実行周期のwall/target再検証で期
 再採用する必要がある。信頼幅を適用した後も従来のwall、target、横加速度horizon検証を
 最終hard guardとして維持する。
 
-source期限切れ、追従乖離、solver劣化、または信頼幅入力不正時は、追い越しMission自体を
-即破棄せず、その周期の実行参照だけを信頼幅内のsolved trajectoryまたはlegacy Mission
-profileへ縮退する。これにより、古い攻撃的DP経路をlegacy 3-state solverへそのまま渡す
-handoffを禁止する。診断は`DP execution authority retained/released`の`tracking`、
-`solver_degraded`と、`DP execution`の`authority`、`trust_adjusted`、`age`で確認する。
+source期限切れ、追従乖離、または信頼幅入力不正時はDP実行権限を解放する。
+その周期も同じcanonical MPCC formulationのfresh/retained証明だけを採用し、証明が
+なければtyped Emergencyとする。legacy Mission profileやlegacy 3-state solverへの
+formulation handoffは行わない。診断は`DP execution authority retained/released`の
+`tracking`と、`DP execution`の`authority`、`trust_adjusted`、`age`で確認する。
 
 この処理は2025 AWSIM競技シミュレーションで観測したMPC→MPCC切替時の逸走対策であり、
 2026公式仕様ではない。

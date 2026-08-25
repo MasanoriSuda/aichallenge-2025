@@ -7,6 +7,27 @@ import re
 SOURCE = (
     Path(__file__).resolve().parents[1] / "src" / "mpc_controller_cpp.cpp"
 ).read_text(encoding="utf-8")
+MPCC_PROGRESS_HEADER = (
+    Path(__file__).resolve().parents[1]
+    / "include"
+    / "multi_purpose_mpc_ros"
+    / "mpcc_progress.hpp"
+).read_text(encoding="utf-8")
+V2X_OVERTAKE_HEADER = (
+    Path(__file__).resolve().parents[1]
+    / "include"
+    / "multi_purpose_mpc_ros"
+    / "v2x_overtake_core.hpp"
+).read_text(encoding="utf-8")
+V2X_OVERTAKE_SOURCE = (
+    Path(__file__).resolve().parents[1] / "src" / "v2x_overtake_core.cpp"
+).read_text(encoding="utf-8")
+CONFIG = (
+    Path(__file__).resolve().parents[1] / "config" / "config.yaml"
+).read_text(encoding="utf-8")
+CLOUD_CONFIG = (
+    Path(__file__).resolve().parents[1] / "config" / "config_for_cloud.yaml"
+).read_text(encoding="utf-8")
 
 
 def test_low_speed_direct_cannot_be_activated_as_production_authority() -> None:
@@ -1210,6 +1231,43 @@ def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     assert "persistent_osqp_solver_" not in SOURCE
     assert "last_osqp_solution_" not in SOURCE
     assert "last_osqp_progress_contouring_mode_" not in SOURCE
+
+
+def test_retired_extended_formulation_switch_state_is_physically_deleted() -> None:
+    """A deleted alternate normal formulation must leave no switch state."""
+
+    for retired_symbol in (
+        "ExtendedSolverCircuitBreaker",
+        "ExtendedSolverReentryGate",
+        "ExtendedModeHandoff",
+        "extended_progress_circuit_breaker_",
+        "extended_progress_reentry_gate_",
+        "extended_mode_handoff_",
+        "ExtendedMpccTelemetryWindow",
+        "MpcRtiSqpTelemetryWindow",
+        "record_extended_mpcc_telemetry(",
+        "record_rti_sqp_telemetry(",
+        "relinearize_progress_problem(",
+    ):
+        assert retired_symbol not in SOURCE
+        assert retired_symbol not in MPCC_PROGRESS_HEADER
+        assert retired_symbol not in V2X_OVERTAKE_HEADER
+        assert retired_symbol not in V2X_OVERTAKE_SOURCE
+
+    assert "bool solver_degraded{false};" not in V2X_OVERTAKE_HEADER
+    assert "SolverDegraded" not in V2X_OVERTAKE_HEADER
+    assert "SolverDegraded" not in V2X_OVERTAKE_SOURCE
+
+    for retired_key in (
+        "progress_contouring_extended_failure_cooldown_sec",
+        "progress_contouring_extended_reentry_success_cycles",
+        "progress_contouring_extended_mode_handoff_sec",
+        "v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded",
+    ):
+        assert retired_key not in SOURCE
+        assert retired_key not in MPCC_PROGRESS_HEADER
+        assert retired_key not in CONFIG
+        assert retired_key not in CLOUD_CONFIG
 
 
 def test_canonical_publisher_does_not_postprocess_certified_actuation() -> None:

@@ -683,7 +683,6 @@ mpc:
   v2x_overtake_mpcc_frenet_dp_tracking_release_confirm_sec: 0.10 # [s] confirm tracking-only loss before releasing DP authority; hard wall/contact faults remain immediate
   v2x_overtake_mpcc_frenet_dp_max_tracking_lateral_error_m: 0.50 # [m] revoke DP ownership when measured e_y no longer follows the active prefix
   v2x_overtake_mpcc_frenet_dp_max_tracking_heading_error_rad: 0.35 # [rad] measured-to-prefix heading disagreement limit
-  v2x_overtake_mpcc_frenet_dp_block_on_extended_solver_degraded: true # use a trust-bounded solved/legacy profile while the extended solver circuit is open
   v2x_overtake_mpcc_frenet_dp_longitudinal_timing_enabled: true # solve attack/intermediate/hold target timing before rejecting the lateral DP corridor
   v2x_overtake_mpcc_frenet_dp_longitudinal_cost_slack: 0.25 # fastest profile may win only this far above the best normalized lateral DP cost
   v2x_overtake_safe_separation_soft_prediction_grace_sec: 0.25 # [s] prediction-only loss grace after committed forward completion; hard faults remain immediate

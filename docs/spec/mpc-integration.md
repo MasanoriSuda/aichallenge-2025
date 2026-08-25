@@ -2459,6 +2459,19 @@ virtual-progress-speed input boxであり、修正前の`output/20260825-231050`
 execution-source接続の回帰ではなく、別のsix-state定式化／first-stage可行性課題として扱う。source age緩和、OSQP tuning、
 five-state fallbackは本修正に追加しない。
 
+#### Six-state実舵角の物理状態契約（2026-08-26、2025由来の暫定）
+
+六状態MPCCのsteering stateはdesired commandではなく、
+`/vehicle/status/steering_status`の観測値を正本とする。観測値はodomと同じfreshness境界で検証し、既存のstate prediction delayと
+steering-rate上限によりcontrol prediction originへ射影する。fresh solve、intent transition、pre-entry、retained current-world proofは
+すべてこの同一producerを使用する。前周期のdesired steeringはpublisher continuityだけに使用し、vehicle stateまたはwall proofの
+初期値として再利用しない。
+
+`output/20260825-235153`ではdesired steeringが約0.326--0.358 radである一方、実舵角が約0.205--0.255 radに留まり、desired
+stateからのnominal wall proofが実車相当の到達経路を証明していなかった。command transportとQP rejectionは上流原因ではなく、
+wall contact後のQP cascadeとして分離できた。観測欠損／stale時はcanonical normal authorityを閉じ、legacy normal fallbackへ切り替えない。
+wall margin、solver、horizon、weightはこの構造修正では変更しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

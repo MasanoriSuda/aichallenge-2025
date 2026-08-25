@@ -2,6 +2,7 @@
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
 #include <autoware_auto_vehicle_msgs/msg/gear_command.hpp>
 #include <autoware_auto_vehicle_msgs/msg/gear_report.hpp>
+#include <autoware_auto_vehicle_msgs/msg/steering_report.hpp>
 #include <builtin_interfaces/msg/time.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
@@ -26,6 +27,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
+#include <multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
@@ -101,6 +103,7 @@ using autoware_auto_control_msgs::msg::AckermannControlCommand;
 using autoware_auto_planning_msgs::msg::Trajectory;
 using autoware_auto_vehicle_msgs::msg::GearCommand;
 using autoware_auto_vehicle_msgs::msg::GearReport;
+using autoware_auto_vehicle_msgs::msg::SteeringReport;
 using geometry_msgs::msg::Point;
 using geometry_msgs::msg::Pose2D;
 using geometry_msgs::msg::Quaternion;
@@ -160,6 +163,8 @@ namespace rate_resolved_production =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
 namespace rate_resolved_retained =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation;
+namespace steering_state_contract =
+  ::multi_purpose_mpc_ros::mpcc_steering_state_contract;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
 namespace recovery_mpc = ::multi_purpose_mpc_ros::recovery_mpc;
 namespace runtime_speed_profile = ::multi_purpose_mpc_ros::runtime_speed_profile;
@@ -5937,7 +5942,7 @@ struct BoundRateResolvedTrackCruiseSubmission
     std::numeric_limits<double>::quiet_NaN()};
   int horizon_steps{};
   mpcc_contract::MpccProblemContext source_context;
-  double committed_predecessor_steering_rad{
+  double physical_control_origin_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
 };
 
@@ -6749,6 +6754,10 @@ struct MPC
       execution_prediction_yaw_rate_radps_;
     snapshot->execution_prediction_delay_sec_ =
       execution_prediction_delay_sec_;
+    snapshot->current_physical_steering_state_ =
+      current_physical_steering_state_;
+    snapshot->physical_control_origin_steering_rad_ =
+      physical_control_origin_steering_rad_;
     snapshot->v2x_race_session_active_ = v2x_race_session_active_;
     snapshot->v2x_behavior_state = v2x_behavior_state;
     snapshot->last_v2x_behavior_output_ = last_v2x_behavior_output_;
@@ -7039,6 +7048,17 @@ struct MPC
     predicted_execution_pose_ = predicted_pose;
     execution_prediction_yaw_rate_radps_ = measured_yaw_rate_radps;
     execution_prediction_delay_sec_ = prediction_delay_sec;
+  }
+
+  void update_physical_steering_state_for_execution_contract(
+    std::optional<steering_state_contract::PhysicalState> state)
+  {
+    current_physical_steering_state_ = std::move(state);
+    physical_control_origin_steering_rad_ =
+      current_physical_steering_state_.has_value() ?
+      std::optional<double>{
+      current_physical_steering_state_->prediction_origin_steering_rad} :
+      std::nullopt;
   }
 
   void update_v_max(const double v_max)
@@ -7985,7 +8005,7 @@ struct MPC
     if (
       active_rate_resolved_preentry_solver_context_ == nullptr ||
       !extended_problem.rate_resolved_track_cruise_shadow_request.has_value() ||
-      !std::isfinite(previous_steering) ||
+      !physical_control_origin_steering_rad_.has_value() ||
       (assessment.side != -1 && assessment.side != 1))
     {
       return finish("six-state pre-entry dependencies unavailable");
@@ -8015,14 +8035,16 @@ struct MPC
     BoundRateResolvedTrackCruiseSubmission bound_submission;
     bound_submission.request =
       extended_problem.rate_resolved_track_cruise_shadow_request.value();
-    bound_submission.request.current_steering_rad = previous_steering;
+    bound_submission.request.current_steering_rad =
+      physical_control_origin_steering_rad_.value();
     bound_submission.control_prediction_origin_sec =
       now_sec + std::max(0.0, execution_prediction_delay_sec_);
     bound_submission.course_progress_origin_m =
       extended_problem.progress_origin_m;
     bound_submission.horizon_steps = extended_problem.N;
     bound_submission.source_context = prospective_context;
-    bound_submission.committed_predecessor_steering_rad = previous_steering;
+    bound_submission.physical_control_origin_steering_rad =
+      physical_control_origin_steering_rad_.value();
     auto snapshot = build_rate_resolved_submission_snapshot(
       problem, bound_submission, now_sec,
       std::max<std::uint64_t>(1U, active_control_decision_id_));
@@ -20631,7 +20653,9 @@ struct MPC
       auto & request = rate_resolved_shadow_request.value();
       request.horizon_steps = N;
       request.initial_state = x0;
-      request.current_steering_rad = previous_steering;
+      request.current_steering_rad =
+        physical_control_origin_steering_rad_.value_or(
+        std::numeric_limits<double>::quiet_NaN());
       request.wheelbase_m = model->length;
       request.maximum_abs_steering_rad = std::abs(cfg.delta_max);
       request.maximum_abs_steering_rate_radps =
@@ -23836,7 +23860,7 @@ struct MPC
   std::optional<BoundRateResolvedTrackCruiseSubmission>
   bind_rate_resolved_track_cruise_submission(
     const RateResolvedTrackCruiseSubmissionDraft & draft,
-    const double committed_predecessor_steering_rad) const noexcept
+    const double physical_control_origin_steering_rad) const noexcept
   {
     if (
       draft.horizon_steps <= 0 ||
@@ -23844,21 +23868,21 @@ struct MPC
       !std::isfinite(draft.control_prediction_origin_sec) ||
       !std::isfinite(draft.course_progress_origin_m) ||
       !mpcc_contract::problem_context_complete(draft.source_context) ||
-      !std::isfinite(committed_predecessor_steering_rad))
+      !std::isfinite(physical_control_origin_steering_rad))
     {
       return std::nullopt;
     }
     BoundRateResolvedTrackCruiseSubmission bound;
     bound.request = draft.request;
     bound.request.current_steering_rad =
-      committed_predecessor_steering_rad;
+      physical_control_origin_steering_rad;
     bound.control_prediction_origin_sec =
       draft.control_prediction_origin_sec;
     bound.course_progress_origin_m = draft.course_progress_origin_m;
     bound.horizon_steps = draft.horizon_steps;
     bound.source_context = draft.source_context;
-    bound.committed_predecessor_steering_rad =
-      committed_predecessor_steering_rad;
+    bound.physical_control_origin_steering_rad =
+      physical_control_origin_steering_rad;
     return bound;
   }
 
@@ -23877,9 +23901,9 @@ struct MPC
       bound_submission.control_prediction_origin_sec < now_sec ||
       !std::isfinite(bound_submission.course_progress_origin_m) ||
       !std::isfinite(
-      bound_submission.committed_predecessor_steering_rad) ||
+      bound_submission.physical_control_origin_steering_rad) ||
       bound_submission.request.current_steering_rad !=
-      bound_submission.committed_predecessor_steering_rad ||
+      bound_submission.physical_control_origin_steering_rad ||
       !mpcc_contract::problem_context_complete(
       bound_submission.source_context) ||
       source_problem.progress_stage_geometry.stages.size() <
@@ -24017,14 +24041,14 @@ struct MPC
     }
     rate_resolved_track_cruise_last_causal_submission_decision_id_ =
       bound_submission.source_context.decision_id;
-    rate_resolved_track_cruise_last_causal_predecessor_steering_rad_ =
-      bound_submission.committed_predecessor_steering_rad;
+    rate_resolved_track_cruise_last_causal_physical_steering_rad_ =
+      bound_submission.physical_control_origin_steering_rad;
     return true;
   }
 
   bool submit_rate_resolved_preentry_execution_shadow(
     RateResolvedPreentryExecutionDraft draft,
-    const double committed_predecessor_steering_rad,
+    const double physical_control_origin_steering_rad,
     const double now_sec)
   {
     if (
@@ -24043,7 +24067,7 @@ struct MPC
       draft.prospective_mission_generation == 0U || draft.target_id.empty() ||
       (draft.selected_side_sign != -1 && draft.selected_side_sign != 1) ||
       !std::isfinite(draft.snapshot_sec) ||
-      !std::isfinite(committed_predecessor_steering_rad) ||
+      !std::isfinite(physical_control_origin_steering_rad) ||
       !std::isfinite(now_sec) || now_sec < draft.snapshot_sec ||
       draft.context_epoch != mpcc_lite_async_context_epoch_)
     {
@@ -24075,7 +24099,7 @@ struct MPC
     const double snapshot_ms = draft.snapshot_ms;
     const auto submission =
       rate_resolved_preentry_execution_shadow_worker_->submit_latest(
-      [draft = std::move(draft), committed_predecessor_steering_rad,
+      [draft = std::move(draft), physical_control_origin_steering_rad,
       sequence, solver_context, mailbox, result = std::move(result)]() mutable {
         const auto started = SteadyClock::now();
         const auto finish_build = [&](const std::string & detail) {
@@ -24127,7 +24151,7 @@ struct MPC
           submission_draft.horizon_steps = prospective->extended_problem.N;
           submission_draft.source_context = prospective_context;
           const auto bound = planner->bind_rate_resolved_track_cruise_submission(
-            submission_draft, committed_predecessor_steering_rad);
+            submission_draft, physical_control_origin_steering_rad);
           if (!mpcc_contract::problem_context_complete(prospective_context)) {
             finish_build("causal source context incomplete");
           } else if (!bound.has_value()) {
@@ -24409,13 +24433,14 @@ struct MPC
       rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
       rate_resolved_track_cruise_shadow_next_sequence_ ==
       std::numeric_limits<std::uint64_t>::max() ||
-      !std::isfinite(previous_steering))
+      !physical_control_origin_steering_rad_.has_value())
     {
       return finish("rate-resolved transition dependencies unavailable");
     }
     admission.attempted = true;
     const auto bound_submission =
-      bind_rate_resolved_track_cruise_submission(draft, previous_steering);
+      bind_rate_resolved_track_cruise_submission(
+        draft, physical_control_origin_steering_rad_.value());
     if (!bound_submission.has_value()) {
       return finish("rate-resolved transition predecessor binding rejected");
     }
@@ -24488,7 +24513,8 @@ struct MPC
     if (
       model == nullptr || model->reference_path == nullptr ||
       gap_planner == nullptr ||
-      overtake_static_wall_grid_snapshot_owner_ == nullptr)
+      overtake_static_wall_grid_snapshot_owner_ == nullptr ||
+      !physical_control_origin_steering_rad_.has_value())
     {
       return std::nullopt;
     }
@@ -24531,7 +24557,8 @@ struct MPC
       request.obstacles.obstacles.push_back(std::move(obstacle));
     }
     request.current_speed_mps = current_speed_mps_;
-    request.current_steering_rad = previous_steering;
+    request.current_steering_rad =
+      physical_control_origin_steering_rad_.value();
     request.minimum_acceleration_mps2 = cfg.a_min;
     request.maximum_acceleration_mps2 = cfg.a_max;
     request.publication_interval_sec = model->Ts;
@@ -25384,7 +25411,7 @@ struct MPC
       "production=speed:%.3f/steering:%.4f/emergency:%d, "
       "delta=speed:%.3f/accel:%.3f/steering:%.4f, "
       "max_abs_delta=speed:%.3f/accel:%.3f/steering:%.4f, "
-      "causal_submit=decision:%lu/predecessor_steering:%.4f, "
+      "causal_submit=decision:%lu/physical_steering:%.4f, "
       "authority=production, selected=%d",
       static_cast<unsigned long>(window.attempt_count),
       static_cast<unsigned long>(window.available_count),
@@ -25412,7 +25439,7 @@ struct MPC
       window.maximum_absolute_steering_difference_rad,
       static_cast<unsigned long>(
       rate_resolved_track_cruise_last_causal_submission_decision_id_),
-      rate_resolved_track_cruise_last_causal_predecessor_steering_rad_,
+      rate_resolved_track_cruise_last_causal_physical_steering_rad_,
       production_output.canonical_normal_command.has_value() ? 1 : 0);
     window = RateResolvedCommandShadowTelemetryWindow{};
     rate_resolved_track_cruise_command_last_log_sec_ = now_sec;
@@ -26268,10 +26295,14 @@ struct MPC
     record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);
     auto output = rate_resolved_track_cruise_control(problem, intent, retained);
     record_rate_resolved_track_cruise_command(retained, output, now_sec);
-    if (submission_draft.has_value()) {
+    if (
+      submission_draft.has_value() &&
+      physical_control_origin_steering_rad_.has_value())
+    {
       const auto bound_submission =
         bind_rate_resolved_track_cruise_submission(
-        submission_draft.value(), output.control[1]);
+        submission_draft.value(),
+        physical_control_origin_steering_rad_.value());
       if (bound_submission.has_value()) {
         static_cast<void>(submit_rate_resolved_track_cruise_shadow(
             problem, bound_submission.value(), now_sec));
@@ -26288,9 +26319,13 @@ struct MPC
         "Rate-resolved normal submission unavailable: intent=%s, reason=%s",
         mpcc_contract::to_string(intent), draft_reject_reason.c_str());
     }
-    if (preentry_execution_draft.has_value()) {
+    if (
+      preentry_execution_draft.has_value() &&
+      physical_control_origin_steering_rad_.has_value())
+    {
       static_cast<void>(submit_rate_resolved_preentry_execution_shadow(
-          std::move(preentry_execution_draft.value()), output.control[1],
+          std::move(preentry_execution_draft.value()),
+          physical_control_origin_steering_rad_.value(),
           now_sec));
     } else if (
       last_v2x_behavior_output_.
@@ -26444,6 +26479,9 @@ struct MPC
   std::uint64_t physical_wall_envelope_cache_scanned_pose_count_{0U};
   std::optional<recovery_footprint::Pose2D> actual_wall_monitor_pose_;
   std::optional<recovery_footprint::Pose2D> predicted_execution_pose_;
+  std::optional<steering_state_contract::PhysicalState>
+  current_physical_steering_state_;
+  std::optional<double> physical_control_origin_steering_rad_;
   double execution_prediction_yaw_rate_radps_{
     std::numeric_limits<double>::quiet_NaN()};
   double execution_prediction_delay_sec_{
@@ -26991,7 +27029,7 @@ struct MPC
   double rate_resolved_track_cruise_command_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   std::uint64_t rate_resolved_track_cruise_last_causal_submission_decision_id_{};
-  double rate_resolved_track_cruise_last_causal_predecessor_steering_rad_{
+  double rate_resolved_track_cruise_last_causal_physical_steering_rad_{
     std::numeric_limits<double>::quiet_NaN()};
   std::shared_ptr<OvertakeTacticalFiveStateLifecycle>
   overtake_tactical_five_state_lifecycle_;
@@ -49474,6 +49512,30 @@ private:
           emit_abrupt_speed_loss_observation(abrupt_speed_loss.value());
         }
       });
+    steering_status_sub_ = create_subscription<SteeringReport>(
+      "/vehicle/status/steering_status",
+      rclcpp::QoS(rclcpp::KeepLast(10)).reliable(),
+      [this](const SteeringReport::SharedPtr msg) {
+        const auto receipt_time = SteadyClock::now();
+        if (!std::isfinite(msg->steering_tire_angle)) {
+          return;
+        }
+        measured_steering_rate_radps_ = 0.0;
+        if (
+          steering_report_ != nullptr &&
+          last_steering_receipt_steady_.has_value())
+        {
+          const double elapsed_sec = std::chrono::duration<double>(
+            receipt_time - last_steering_receipt_steady_.value()).count();
+          if (std::isfinite(elapsed_sec) && elapsed_sec > 1e-6) {
+            measured_steering_rate_radps_ =
+              (msg->steering_tire_angle -
+              steering_report_->steering_tire_angle) / elapsed_sec;
+          }
+        }
+        steering_report_ = msg;
+        last_steering_receipt_steady_ = receipt_time;
+      });
     control_mode_request_sub_ = create_subscription<Bool>(
       "control/control_mode_request_topic", 1, [this](const Bool::SharedPtr msg) {
         if (msg->data && !enable_control_) {
@@ -53762,6 +53824,33 @@ private:
     mpc_->update_predicted_pose_for_execution_contract(
       recovery_footprint::Pose2D{mpc_pose.x, mpc_pose.y, mpc_pose.theta},
       yaw_rate, state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0);
+    steering_state_contract::Result physical_steering_resolution;
+    if (
+      steering_report_ != nullptr &&
+      last_steering_receipt_steady_.has_value())
+    {
+      const double steering_observation_age_sec =
+        std::chrono::duration<double>(
+        steady_now - last_steering_receipt_steady_.value()).count();
+      physical_steering_resolution = steering_state_contract::resolve(
+        steering_state_contract::Request{
+          steering_report_->steering_tire_angle,
+          measured_steering_rate_radps_,
+          steering_observation_age_sec,
+          state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0,
+          mpc_cfg_.odom_timeout_sec,
+          std::abs(mpc_cfg_.delta_max),
+          std::abs(mpc_cfg_.steer_rate_max)});
+    }
+    mpc_->update_physical_steering_state_for_execution_contract(
+      physical_steering_resolution.state);
+    if (!physical_steering_resolution.state.has_value()) {
+      RCLCPP_ERROR_THROTTLE(
+        get_logger(), *get_clock(), 1000,
+        "Six-state physical steering unavailable: reason=%s; canonical normal "
+        "authority remains closed",
+        steering_state_contract::to_string(physical_steering_resolution.reason));
+    }
     mpc_->set_v2x_race_session_active(
       overtake_core::is_v2x_behavior_session_active(
         awsim_state_tracking_enabled_, race_started_,
@@ -54006,13 +54095,37 @@ private:
         std::numeric_limits<double>::quiet_NaN();
       const double reference_curvature = car_->current_waypoint != nullptr ?
         car_->current_waypoint->kappa : std::numeric_limits<double>::quiet_NaN();
+      const double measured_steering_rad = steering_report_ != nullptr ?
+        steering_report_->steering_tire_angle :
+        std::numeric_limits<double>::quiet_NaN();
+      const double physical_origin_steering_rad =
+        physical_steering_resolution.state.has_value() ?
+        physical_steering_resolution.state->prediction_origin_steering_rad :
+        std::numeric_limits<double>::quiet_NaN();
+      const double bounded_measured_steering_rate_radps =
+        physical_steering_resolution.state.has_value() ?
+        physical_steering_resolution.state->bounded_steering_rate_radps :
+        std::numeric_limits<double>::quiet_NaN();
+      const double steering_observation_age_sec =
+        physical_steering_resolution.state.has_value() ?
+        physical_steering_resolution.state->observation_age_sec :
+        std::numeric_limits<double>::quiet_NaN();
+      const bool measured_steering_rate_outside_model =
+        physical_steering_resolution.state.has_value() &&
+        physical_steering_resolution.state->measured_rate_outside_model;
       RCLCPP_INFO_THROTTLE(
         get_logger(), *get_clock(), 1000,
         "Steering debug: wp_id=%d, speed=%.3f, yaw_rate=%.3f, raw=%.4f, "
-        "output=%.4f, predicted_kappa=%.5f, measured_kappa=%.5f, "
+        "output=%.4f, measured_steering=%.4f, physical_origin=%.4f, "
+        "measured_rate=%.4f, bounded_rate=%.4f, rate_clamped=%d, age=%.4f, "
+        "predicted_kappa=%.5f, measured_kappa=%.5f, "
         "error=%.5f, ratio=%.3f, valid=%d, ref_kappa=%.5f, "
         "solver_fallback=%d, recovery=%d",
         mpc_->model->wp_id, actual_v, yaw_rate, u[1], output_steering,
+        measured_steering_rad, physical_origin_steering_rad,
+        measured_steering_rate_radps_, bounded_measured_steering_rate_radps,
+        measured_steering_rate_outside_model ? 1 : 0,
+        steering_observation_age_sec,
         predicted_curvature, measured_curvature, curvature_error, curvature_ratio,
         measured_curvature_valid ? 1 : 0, reference_curvature,
         mpc_fallback_active ? 1 : 0, recovery_command_active ? 1 : 0);
@@ -54199,6 +54312,7 @@ private:
   rclcpp::Publisher<MarkerArray>::SharedPtr section_marker_pub_;
 
   rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<SteeringReport>::SharedPtr steering_status_sub_;
   rclcpp::Subscription<Bool>::SharedPtr control_mode_request_sub_;
   rclcpp::Subscription<Trajectory>::SharedPtr trajectory_sub_;
   rclcpp::Subscription<Empty>::SharedPtr stop_request_sub_;
@@ -54213,8 +54327,11 @@ private:
   rclcpp::TimerBase::SharedPtr ref_vel_marker_timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
   Odometry::SharedPtr odom_;
+  SteeringReport::SharedPtr steering_report_;
   Trajectory::SharedPtr trajectory_;
   std::optional<SteadyClock::time_point> last_odom_receipt_steady_;
+  std::optional<SteadyClock::time_point> last_steering_receipt_steady_;
+  double measured_steering_rate_radps_{};
   std::optional<rclcpp::Time> last_odom_source_stamp_;
   std::optional<SteadyClock::time_point> last_odom_source_advance_steady_;
   awsim_boost::BlockReason last_awsim_boost_block_reason_{awsim_boost::BlockReason::None};

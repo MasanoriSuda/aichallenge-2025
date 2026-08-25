@@ -80,6 +80,11 @@ ament_auto_add_library(${PROJECT_NAME}_mpcc_execution_contract SHARED
   src/mpcc_execution_contract.cpp
 )
 
+ament_auto_add_library(${PROJECT_NAME}_mpcc_steering_state_contract SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/mpcc_steering_state_contract.cpp
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved STATIC
   src/mpcc_rate_resolved.cpp
 )
@@ -379,6 +384,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_rate_resolved_command_candidate
   ${PROJECT_NAME}_mpcc_rate_resolved_production_adapter
   ${PROJECT_NAME}_mpcc_execution_contract
+  ${PROJECT_NAME}_mpcc_steering_state_contract
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_latest_only_worker
   ${PROJECT_NAME}_follow_canonical_async
@@ -412,6 +418,15 @@ if(BUILD_TESTING)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
+
+  ament_add_gtest(test_mpcc_steering_state_contract
+    test/test_mpcc_steering_state_contract.cpp
+  )
+  if(TARGET test_mpcc_steering_state_contract)
+    target_link_libraries(test_mpcc_steering_state_contract
+      ${PROJECT_NAME}_mpcc_steering_state_contract
+    )
+  endif()
 
   ament_add_gtest(test_mpcc_rate_resolved
     test/test_mpcc_rate_resolved.cpp

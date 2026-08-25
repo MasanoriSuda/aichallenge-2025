@@ -1137,6 +1137,25 @@ Finish the architecture simplification instead of leaving permanent dual control
   fallback was changed. The upstream accepted-wall-horizon versus executed-
   vehicle divergence must be audited separately.
 
+- `.steering/20260826-six-state-wall-execution-divergence` joins the first
+  accepted-horizon／wall-contact incident with final command, measured steering
+  and yaw response. The final command reaches AWSIM, and the sustained QP
+  rejection occurs after contact. The earliest divergence is instead that the
+  six-state physical steering state was initialized from the last desired
+  steering command. Desired angle was therefore both publication history and
+  physical state, so fresh and retained wall proofs shared the same false
+  curvature premise. One observed steering-state contract now owns the
+  physical delta origin. `/vehicle/status/steering_status` is freshness
+  checked, projected to the existing latency-compensated control origin using
+  the existing bounded steering-rate model, and supplied to fresh,
+  transition, pre-entry and retained six-state paths. Desired command remains
+  publisher continuity only. Missing physical state closes canonical normal
+  authority; no legacy fallback, parameter, timeout, lease or margin change is
+  introduced. The 25-package build and all 51 package test targets pass.
+  Startup run `output/20260826-004254` proves the updated binary and finite
+  observed-state data flow, but stopped at AWSIM Ready; moving first-hairpin
+  acceptance remains the explicit dynamic gate.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

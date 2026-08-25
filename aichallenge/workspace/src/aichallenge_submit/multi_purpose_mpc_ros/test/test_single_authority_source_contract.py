@@ -502,8 +502,8 @@ def test_five_state_follow_owner_is_physically_deleted() -> None:
     assert not [symbol for symbol in retired_symbols if symbol in SOURCE]
 
 
-def test_rate_resolved_normal_snapshot_is_submitted_after_output_commit() -> None:
-    """Every six-state intent must inherit the command committed this cycle."""
+def test_rate_resolved_normal_snapshot_uses_observed_physical_steering() -> None:
+    """Six-state vehicle state must never be initialized from a desired command."""
 
     builder_start = SOURCE.index(
         "build_rate_resolved_track_cruise_submission_draft("
@@ -525,6 +525,13 @@ def test_rate_resolved_normal_snapshot_is_submitted_after_output_commit() -> Non
     bind = owner.index("bind_rate_resolved_track_cruise_submission(")
     submit = owner.index("submit_rate_resolved_track_cruise_shadow(")
     assert consume < resolve < bind < submit
+    submission = owner[bind:submit]
+    assert "physical_control_origin_steering_rad_.value()" in submission
+    assert "output.control[1]" not in submission
+
+    assert "#include <autoware_auto_vehicle_msgs/msg/steering_report.hpp>" in SOURCE
+    assert "steering_status_sub_ = create_subscription<SteeringReport>(" in SOURCE
+    assert "current_physical_steering_state_" in SOURCE
 
 
 def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() -> None:
@@ -539,7 +546,13 @@ def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() ->
         admission_start,
     )
     admission = SOURCE[admission_start:admission_end]
-    assert "bind_rate_resolved_track_cruise_submission(draft, previous_steering)" in admission
+    assert "physical_control_origin_steering_rad_.has_value()" in admission
+    assert (
+        "bind_rate_resolved_track_cruise_submission(\n"
+        "        draft, physical_control_origin_steering_rad_.value())"
+        in admission
+    )
+    assert "bind_rate_resolved_track_cruise_submission(draft, previous_steering)" not in admission
     assert "build_rate_resolved_submission_snapshot(" in admission
     assert "evaluate_rate_resolved_pipeline(" in admission
     assert "rate_resolved_track_cruise_certified_plan_store_->snapshot()" in admission
@@ -1038,7 +1051,8 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "planner->build_prospective_extended_branch_problem(" in worker
     assert "planner->seal_problem_context_for_problem(" in worker
     assert "bind_rate_resolved_track_cruise_submission(" in submit
-    assert "committed_predecessor_steering_rad" in submit
+    assert "physical_control_origin_steering_rad" in submit
+    assert "committed_predecessor_steering_rad" not in submit
     # The canonical publication request type is shared, but worker ownership
     # remains an injected private member rather than being constructed here.
     assert "std::make_unique<LatestOnlyWorker>" not in submit
@@ -1099,7 +1113,8 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     command_position = production.index("rate_resolved_track_cruise_control(")
     submit_position = production.index("submit_rate_resolved_preentry_execution_shadow(")
     assert build_position < command_position < submit_position
-    assert "output.control[1]" in production[submit_position:]
+    assert "physical_control_origin_steering_rad_.value()" in production[submit_position:]
+    assert "output.control[1]" not in production[submit_position:]
 
     init_start = SOURCE.index("MpcProblem init_problem(")
     init_end = SOURCE.index("void record_solution_contract(", init_start)
@@ -1518,7 +1533,8 @@ def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> Non
     semantic_start = builder.index("rate_resolved_shadow_request.emplace();")
     semantic_end = builder.index("Eigen::VectorXd q =", semantic_start)
     semantic = builder[semantic_start:semantic_end]
-    assert "request.current_steering_rad = previous_steering;" in semantic
+    assert "request.current_steering_rad =\n        physical_control_origin_steering_rad_.value_or(" in semantic
+    assert "request.current_steering_rad = previous_steering;" not in semantic
     assert "request.maximum_abs_steering_rate_radps" in semantic
     assert "first_curvature_input_lower" in semantic
     assert "first_curvature_input_upper" in semantic
@@ -1648,6 +1664,13 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     assert "build_canonical_current_control_path()" in request_builder
     assert "gap_planner->dynamic_world_observation(now_sec)" in request_builder
     assert "dynamic_world.vehicles" in request_builder
+    assert "physical_control_origin_steering_rad_.has_value()" in request_builder
+    assert (
+        "request.current_steering_rad =\n"
+        "      physical_control_origin_steering_rad_.value();"
+        in request_builder
+    )
+    assert "request.current_steering_rad = previous_steering;" not in request_builder
     for forbidden in (
         "publish_control_command(",
         "publish_failsafe_command(",

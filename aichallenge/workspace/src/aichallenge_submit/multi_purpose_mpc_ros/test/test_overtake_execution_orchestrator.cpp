@@ -58,6 +58,77 @@ TEST(OvertakeExecutionOrchestrator, TreatsDynamicEscapeAndGapPlannerAsOneChain)
   EXPECT_EQ(result.conflicts & orchestrator::MultipleLateralAuthorities, 0U);
 }
 
+TEST(OvertakeExecutionOrchestrator, PromotesValidatedDynamicEscapeIdentity)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  request.dynamic_escape_active = true;
+  request.dynamic_escape_path_validated = true;
+  request.dynamic_escape_target_id = "d2";
+  request.dynamic_escape_attempt_id = 17U;
+  request.dynamic_escape_side_sign = -1;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  ASSERT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::CanonicalExecutionIdentitySource::DynamicObstacleEscape);
+  EXPECT_EQ(result.target_id, "d2");
+  EXPECT_EQ(result.generation, 17U);
+  EXPECT_EQ(result.phase, orchestrator::Phase::ShiftOut);
+  EXPECT_EQ(result.side_sign, -1);
+  EXPECT_TRUE(result.target_exclusion_certified);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsDynamicEscapeWithoutExecutionSide)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  request.dynamic_escape_active = true;
+  request.dynamic_escape_path_validated = true;
+  request.dynamic_escape_target_id = "d2";
+  request.dynamic_escape_attempt_id = 17U;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  EXPECT_FALSE(result.active);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::CanonicalExecutionIdentityReason::
+    MalformedDynamicObstacleEscape);
+}
+
+TEST(OvertakeExecutionOrchestrator, KeepsCommittedLineIdentityPrecedence)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  request.overtake_line_active = true;
+  request.overtake_line_target_id = "line-target";
+  request.overtake_line_mission_generation = 5U;
+  request.overtake_line_phase = orchestrator::Phase::Pass;
+  request.overtake_line_side_sign = 1;
+  request.overtake_line_traveled_m = 3.5;
+  request.overtake_line_target_exclusion_certified = true;
+  request.dynamic_escape_active = true;
+  request.dynamic_escape_path_validated = true;
+  request.dynamic_escape_target_id = "escape-target";
+  request.dynamic_escape_attempt_id = 17U;
+  request.dynamic_escape_side_sign = -1;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  ASSERT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::CanonicalExecutionIdentitySource::OvertakeLine);
+  EXPECT_EQ(result.target_id, "line-target");
+  EXPECT_EQ(result.generation, 5U);
+  EXPECT_EQ(result.phase, orchestrator::Phase::Pass);
+  EXPECT_EQ(result.side_sign, 1);
+  EXPECT_DOUBLE_EQ(result.traveled_m, 3.5);
+}
+
 TEST(OvertakeExecutionOrchestrator, ExposesConflictingAuthorities)
 {
   orchestrator::AuthorityRequest request;

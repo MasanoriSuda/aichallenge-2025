@@ -41,12 +41,6 @@ bool same_footprint(
          lhs.margin_m == rhs.margin_m;
 }
 
-bool track_cruise(const contract::ControlIntent intent) noexcept
-{
-  return intent == contract::ControlIntent::Track ||
-         intent == contract::ControlIntent::Cruise;
-}
-
 artifact::PredictedState interpolate_expected_state(
   const artifact::ExecutionArtifact & execution,
   const artifact::Cursor & cursor) noexcept
@@ -365,7 +359,7 @@ Result evaluate(const Request & request)
     result.reason = Reason::CursorUnavailable;
     return result;
   }
-  if (!track_cruise(request.current_intent) ||
+  if (!artifact::supports_intent(request.current_intent) ||
     request.current_intent != execution.identity.source_context.intent)
   {
     result.reason = Reason::IntentMismatch;

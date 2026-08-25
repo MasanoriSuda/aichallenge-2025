@@ -208,6 +208,89 @@ RuntimeReplacementContractResolution resolve_runtime_replacement_contract(
   return result;
 }
 
+const char * to_string(const CanonicalExecutionIdentitySource source) noexcept
+{
+  switch (source) {
+    case CanonicalExecutionIdentitySource::None: return "none";
+    case CanonicalExecutionIdentitySource::OvertakeLine: return "overtake-line";
+    case CanonicalExecutionIdentitySource::DynamicObstacleEscape:
+      return "dynamic-obstacle-escape";
+  }
+  return "unknown";
+}
+
+const char * to_string(const CanonicalExecutionIdentityReason reason) noexcept
+{
+  switch (reason) {
+    case CanonicalExecutionIdentityReason::Inactive: return "inactive";
+    case CanonicalExecutionIdentityReason::OvertakeLine: return "overtake-line";
+    case CanonicalExecutionIdentityReason::DynamicObstacleEscape:
+      return "dynamic-obstacle-escape";
+    case CanonicalExecutionIdentityReason::MalformedOvertakeLine:
+      return "malformed-overtake-line";
+    case CanonicalExecutionIdentityReason::MalformedDynamicObstacleEscape:
+      return "malformed-dynamic-obstacle-escape";
+  }
+  return "unknown";
+}
+
+CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
+  const CanonicalExecutionIdentityRequest & request) noexcept
+{
+  CanonicalExecutionIdentityResolution result;
+  const auto side_valid = [](const int side_sign) {
+      return side_sign == -1 || side_sign == 1;
+    };
+  const bool line_phase_valid =
+    request.overtake_line_phase == Phase::ShiftOut ||
+    request.overtake_line_phase == Phase::Pass ||
+    request.overtake_line_phase == Phase::Return;
+  if (request.overtake_line_active) {
+    if (
+      request.overtake_line_target_id.empty() ||
+      request.overtake_line_mission_generation == 0U ||
+      !line_phase_valid || !side_valid(request.overtake_line_side_sign) ||
+      !std::isfinite(request.overtake_line_traveled_m) ||
+      request.overtake_line_traveled_m < 0.0)
+    {
+      result.reason = CanonicalExecutionIdentityReason::MalformedOvertakeLine;
+      return result;
+    }
+    result.active = true;
+    result.source = CanonicalExecutionIdentitySource::OvertakeLine;
+    result.reason = CanonicalExecutionIdentityReason::OvertakeLine;
+    result.target_id = request.overtake_line_target_id;
+    result.generation = request.overtake_line_mission_generation;
+    result.phase = request.overtake_line_phase;
+    result.side_sign = request.overtake_line_side_sign;
+    result.traveled_m = request.overtake_line_traveled_m;
+    result.target_exclusion_certified =
+      request.overtake_line_target_exclusion_certified;
+    return result;
+  }
+  if (request.dynamic_escape_active) {
+    if (
+      !request.dynamic_escape_path_validated ||
+      request.dynamic_escape_target_id.empty() ||
+      request.dynamic_escape_attempt_id == 0U ||
+      !side_valid(request.dynamic_escape_side_sign))
+    {
+      result.reason =
+        CanonicalExecutionIdentityReason::MalformedDynamicObstacleEscape;
+      return result;
+    }
+    result.active = true;
+    result.source = CanonicalExecutionIdentitySource::DynamicObstacleEscape;
+    result.reason = CanonicalExecutionIdentityReason::DynamicObstacleEscape;
+    result.target_id = request.dynamic_escape_target_id;
+    result.generation = request.dynamic_escape_attempt_id;
+    result.phase = Phase::ShiftOut;
+    result.side_sign = request.dynamic_escape_side_sign;
+    result.target_exclusion_certified = true;
+  }
+  return result;
+}
+
 const char * to_string(const RuntimeReplacementRejectReason reason) noexcept
 {
   switch (reason) {

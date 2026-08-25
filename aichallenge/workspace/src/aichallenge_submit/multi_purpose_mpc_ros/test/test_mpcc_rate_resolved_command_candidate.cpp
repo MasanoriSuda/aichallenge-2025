@@ -21,13 +21,21 @@ namespace physical = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 
-contract::MpccProblemContext source_context()
+contract::MpccProblemContext source_context(
+  const contract::ControlIntent intent = contract::ControlIntent::Cruise)
 {
   contract::MpccProblemContext context;
   context.decision_id = 11U;
-  context.intent = contract::ControlIntent::Cruise;
+  context.intent = intent;
   context.intent_generation = 2U;
   context.observation_generation = 3U;
+  if (contract::canonical_normal_intent_requires_target(intent)) {
+    context.target_obstacle_generation = 3U;
+    context.target_id = "d2";
+  }
+  if (contract::canonical_normal_intent_requires_execution_side(intent)) {
+    context.execution_side_sign = -1;
+  }
   context.stage_geometry_id = 17U;
   context.horizon_steps = 2U;
   context.formulation =
@@ -39,10 +47,11 @@ contract::MpccProblemContext source_context()
   return contract::seal_problem_context(std::move(context));
 }
 
-std::shared_ptr<const certified::CertifiedPlan> certified_plan()
+std::shared_ptr<const certified::CertifiedPlan> certified_plan(
+  const contract::ControlIntent intent = contract::ControlIntent::Cruise)
 {
   auto execution = std::make_shared<artifact::ExecutionArtifact>();
-  execution->identity = {7U, source_context(), 1.0};
+  execution->identity = {7U, source_context(intent), 1.0};
   execution->prediction_origin_sec = 1.0;
   execution->completed_sec = 1.01;
   execution->course_progress_origin_m = 50.0;
@@ -110,12 +119,13 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan()
   return built.plan;
 }
 
-retained::Result accepted_result()
+retained::Result accepted_result(
+  const contract::ControlIntent intent = contract::ControlIntent::Cruise)
 {
   retained::Result result;
   result.reason = retained::Reason::Accepted;
   retained::Proof proof;
-  proof.plan = certified_plan();
+  proof.plan = certified_plan(intent);
   proof.decision_id = 23U;
   proof.cursor.available = true;
   proof.cursor.sequence = 7U;
@@ -224,6 +234,25 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
   ASSERT_EQ(authority.steering_horizon_rad.size(), 1U);
   ASSERT_EQ(authority.world_prediction.first.size(), 1U);
   ASSERT_EQ(authority.world_prediction.second.size(), 1U);
+}
+
+TEST(RateResolvedProductionAdapter, BuildsEveryArtifactOwnedIntent)
+{
+  const std::vector<contract::ControlIntent> intents{
+    contract::ControlIntent::Track,
+    contract::ControlIntent::Cruise,
+    contract::ControlIntent::ShiftOut,
+    contract::ControlIntent::Pass,
+    contract::ControlIntent::Return,
+  };
+  for (const auto intent : intents) {
+    SCOPED_TRACE(contract::to_string(intent));
+    const auto result = production::build(accepted_result(intent));
+    ASSERT_EQ(result.reason, production::Reason::Available);
+    ASSERT_TRUE(result.authority.has_value());
+    EXPECT_EQ(result.authority->problem.intent, intent);
+    EXPECT_EQ(result.authority->command.intent, intent);
+  }
 }
 
 TEST(RateResolvedProductionAdapter, FinalTraceAcceptsExactSixStateIdentity)

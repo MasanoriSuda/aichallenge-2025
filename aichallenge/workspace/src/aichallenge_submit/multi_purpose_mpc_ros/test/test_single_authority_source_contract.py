@@ -369,38 +369,38 @@ def test_canonical_overtake_uses_production_wall_clearance_contract() -> None:
     ) in retained
 
 
-def test_overtake_intents_return_through_one_canonical_production_boundary() -> None:
-    """ShiftOut/Pass/Return cannot fall through to an older normal solver."""
-
-    resolver_start = SOURCE.index("canonical_overtake_production_control(")
-    resolver_end = SOURCE.index("MpcControlCycleResult get_control(", resolver_start)
-    resolver = SOURCE[resolver_start:resolver_end]
-
-    assert "evaluate_overtake_async_shadow(problem, now_sec)" in resolver
-    assert "return canonical_normal_control(" in resolver
-    assert "return canonical_normal_emergency_stop(" in resolver
-    assert "build_extended_progress_problem(" not in resolver
-    assert "solve_extended_progress_problem(" not in resolver
-    assert "evaluate_overtake_canonical_fresh_shadow(" not in resolver
-    assert "convert_extended_solution_to_legacy(" not in resolver
-    assert "solve_problem(" not in resolver
-    assert "extended_progress_circuit_breaker_" not in resolver
-    assert "extended_progress_reentry_gate_" not in resolver
+def test_overtake_intents_use_the_rate_resolved_normal_owner() -> None:
+    """ShiftOut/Pass/Return must use the same six-state owner as racing."""
 
     control_start = SOURCE.index("MpcControlCycleResult get_control(")
     control_end = SOURCE.index(
         "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
         control_start,
     )
-    canonical_boundary = SOURCE.index(
+    overtake_start = SOURCE.index(
         "if (overtake_canonical_async_intent(control_intent))", control_start
     )
-    before_old_path = SOURCE[canonical_boundary:control_end]
+    overtake_end = SOURCE.index(
+        "if (unresolved_dynamic_wait_canonical_scope())", overtake_start
+    )
+    overtake = SOURCE[overtake_start:overtake_end]
     assert (
-        "return canonical_overtake_production_control(\n"
+        "return rate_resolved_normal_production_control(\n"
         "          problem, now_sec, control_intent);"
-    ) in before_old_path
-    assert "solve_problem(" not in before_old_path
+    ) in overtake
+    assert "canonical_overtake_production_control(" not in SOURCE[control_start:control_end]
+    assert "canonical_normal_control(" not in overtake
+    assert "solve_problem(" not in overtake
+
+    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    consume = owner.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
+    resolve = owner.index("rate_resolved_track_cruise_control(")
+    bind = owner.index("bind_rate_resolved_track_cruise_submission(")
+    submit = owner.index("submit_rate_resolved_track_cruise_shadow(")
+    assert consume < resolve < bind < submit
+    assert "VelocityProgress5State" not in owner
 
 
 def test_follow_async_snapshot_is_sealed_after_current_output_commit() -> None:
@@ -431,8 +431,8 @@ def test_follow_async_snapshot_is_sealed_after_current_output_commit() -> None:
     assert "submit_follow_canonical_async(problem, now_sec)" not in evaluator
 
 
-def test_rate_resolved_track_cruise_snapshot_is_submitted_after_output_commit() -> None:
-    """Six-state state zero must inherit the command committed this cycle."""
+def test_rate_resolved_normal_snapshot_is_submitted_after_output_commit() -> None:
+    """Every six-state intent must inherit the command committed this cycle."""
 
     builder_start = SOURCE.index(
         "build_rate_resolved_track_cruise_submission_draft("
@@ -445,23 +445,57 @@ def test_rate_resolved_track_cruise_snapshot_is_submitted_after_output_commit() 
     assert "build_extended_progress_problem(" in builder
     assert "solve_extended_progress_problem(" not in builder
 
-    control_start = SOURCE.index("MpcControlCycleResult get_control(")
-    track_start = SOURCE.index(
-        "if (\n        control_intent == mpcc_contract::ControlIntent::Track ||\n"
-        "        control_intent == mpcc_contract::ControlIntent::Cruise)",
-        control_start,
-    )
-    track_end = SOURCE.index(
-        "if (control_intent == mpcc_contract::ControlIntent::Rejoin)",
-        track_start,
-    )
-    track = SOURCE[track_start:track_end]
+    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
 
-    consume = track.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
-    resolve = track.index("rate_resolved_track_cruise_control(")
-    bind = track.index("bind_rate_resolved_track_cruise_submission(")
-    submit = track.index("submit_rate_resolved_track_cruise_shadow(")
+    consume = owner.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
+    resolve = owner.index("rate_resolved_track_cruise_control(")
+    bind = owner.index("bind_rate_resolved_track_cruise_submission(")
+    submit = owner.index("submit_rate_resolved_track_cruise_shadow(")
     assert consume < resolve < bind < submit
+
+
+def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() -> None:
+    """An intent change cannot publish a solver result before live revalidation."""
+
+    admission_start = SOURCE.index(
+        "evaluate_rate_resolved_transition_admission("
+    )
+    admission_end = SOURCE.index(
+        "RateResolvedRetainedShadowEvaluation\n"
+        "  evaluate_rate_resolved_track_cruise_retained_shadow(",
+        admission_start,
+    )
+    admission = SOURCE[admission_start:admission_end]
+    assert "bind_rate_resolved_track_cruise_submission(draft, previous_steering)" in admission
+    assert "build_rate_resolved_submission_snapshot(" in admission
+    assert "evaluate_rate_resolved_pipeline(" in admission
+    assert "rate_resolved_track_cruise_certified_plan_store_->snapshot()" in admission
+    assert "VelocityProgress5State" not in admission
+    assert "canonical_normal_control(" not in admission
+    assert "canonical_normal_emergency_stop(" not in admission
+    assert "safe_failure_control(" not in admission
+
+    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    first_revalidation = owner.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow("
+    )
+    admission_call = owner.index("evaluate_rate_resolved_transition_admission(")
+    second_revalidation = owner.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow(",
+        first_revalidation + 1,
+    )
+    publication = owner.index("rate_resolved_track_cruise_control(")
+    assert first_revalidation < admission_call < second_revalidation < publication
+    assert "!retained.production_authority.has_value()" in owner
+    assert "ControlIntent::Unknown" in owner
+    assert "last_published_canonical_intent_ != intent" in owner
+    assert "retained.reason == rate_resolved_retained::Reason::MissingPlan" not in owner
+    assert "retained.reason == rate_resolved_retained::Reason::IntentMismatch" not in owner
+    assert "if (admission.certified)" in owner
 
 
 def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
@@ -498,6 +532,29 @@ def test_rate_resolved_track_cruise_has_its_own_six_state_problem_identity() -> 
         in builder
     )
     assert "VelocityProgress5State" not in builder
+
+
+def test_dynamic_escape_materializes_one_canonical_overtake_identity() -> None:
+    """Validated Dynamic Escape may not lose target/attempt/side at MPCC entry."""
+
+    assert "resolve_canonical_execution_identity(" in SOURCE
+    assert (
+        "progress_contouring_active && canonical_execution_identity.active"
+        in SOURCE
+    )
+    assert (
+        "canonical_execution_identity.target_id" in SOURCE
+        and "canonical_execution_identity.generation" in SOURCE
+        and "canonical_execution_identity.side_sign" in SOURCE
+    )
+    assert (
+        "behavior_output.dynamic_obstacle_lateral_escape_attempt_id"
+        in SOURCE
+    )
+    assert (
+        "behavior_output.dynamic_obstacle_lateral_escape_execution_path_validated"
+        in SOURCE
+    )
 
 
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
@@ -972,7 +1029,7 @@ def test_runtime_wall_preplanner_cannot_destroy_canonical_mission() -> None:
     assert "canonical-reference-only" in prefix_failure
 
 
-def test_rate_resolved_track_cruise_worker_is_observation_only_but_retained_proof_owns_control() -> None:
+def test_rate_resolved_worker_is_observation_only_but_retained_proof_owns_control() -> None:
     """Only a current-world-qualified retained six-state proof may own control."""
 
     submit_start = SOURCE.index(
@@ -1004,22 +1061,12 @@ def test_rate_resolved_track_cruise_worker_is_observation_only_but_retained_proo
     ):
         assert forbidden not in transport
 
-    branch_start = SOURCE.index(
-        "if (\n        control_intent == mpcc_contract::ControlIntent::Track ||\n"
-        "        control_intent == mpcc_contract::ControlIntent::Cruise)"
-    )
-    branch_end = SOURCE.index(
-        "if (control_intent == mpcc_contract::ControlIntent::Rejoin)",
-        branch_start,
-    )
+    branch_start = SOURCE.index("rate_resolved_normal_production_control(")
+    branch_end = SOURCE.index("MpcControlCycleResult get_control(", branch_start)
     branch = SOURCE[branch_start:branch_end]
-    assert (
-        "record_rate_resolved_track_cruise_shadow(\n"
-        "          problem, now_sec, retained_rate_resolved);"
-        in branch
-    )
+    assert "record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);" in branch
     assert "record_rate_resolved_track_cruise_command(" in branch
-    assert "retained_rate_resolved" in branch
+    assert "auto retained" in branch
     assert "rate_resolved_track_cruise_control(" in branch
     assert "canonical_result.selected.complete()" not in branch
     assert "output = canonical_normal_control(" not in branch
@@ -1071,8 +1118,8 @@ def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> Non
     assert "physical_first_curvature->reachable_upper_radpm" not in semantic
 
 
-def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
-    """Six-state wall proof must leave the callback and gain no authority."""
+def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> None:
+    """Async and atomic admission share one proof pipeline with no publisher."""
 
     proof_start = SOURCE.index(
         "build_rate_resolved_track_cruise_physical_snapshot("
@@ -1083,23 +1130,27 @@ def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
     record_start = SOURCE.index(
         "void record_rate_resolved_track_cruise_shadow(", submit_start
     )
+    shared_start = SOURCE.index(
+        "RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline("
+    )
+    shared_end = SOURCE.index("struct CanonicalCurrentControlPath", shared_start)
     snapshot_builder = SOURCE[proof_start:submit_start]
     pipeline = SOURCE[submit_start:record_start]
+    shared_pipeline = SOURCE[shared_start:shared_end]
     assert "snapshot.identity.artifact = solver_snapshot.identity;" in snapshot_builder
     assert "problem.progress_stage_geometry" in snapshot_builder
     assert "build_progress_course_frame_knots(" in snapshot_builder
     assert "fingerprint_control_pose_path(" in snapshot_builder
     assert "fingerprint_course_frame_window(" in snapshot_builder
-    assert "rate_resolved_physical::build(" in pipeline
-    assert "rate_resolved_physical_wall::evaluate(" in pipeline
-    assert "certified_plan_store->certify_and_replace(" in pipeline
-    assert (
-        "result.execution_artifact, physical_snapshot.value(), candidate"
-        in pipeline
-    )
-    assert pipeline.index("rate_resolved_physical_wall::evaluate(") < pipeline.index(
+    assert "rate_resolved_physical::build(" in shared_pipeline
+    assert "rate_resolved_physical_wall::evaluate(" in shared_pipeline
+    assert "certified_plan_store->certify_and_replace(" in shared_pipeline
+    assert shared_pipeline.index(
+        "rate_resolved_physical_wall::evaluate("
+    ) < shared_pipeline.index(
         "certified_plan_store->certify_and_replace("
     )
+    assert "evaluate_rate_resolved_pipeline(" in pipeline
     assert pipeline.count(
         "rate_resolved_track_cruise_shadow_worker_->submit_latest("
     ) == 1
@@ -1115,6 +1166,7 @@ def test_rate_resolved_physical_wall_proof_is_async_shadow_only() -> None:
     ):
         assert forbidden not in snapshot_builder
         assert forbidden not in pipeline
+        assert forbidden not in shared_pipeline
 
     adapter_header = (
         Path(__file__).resolve().parents[1]
@@ -1222,17 +1274,11 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     assert "last_message_vehicle_ids_.size() != last_message_vehicle_count_" in snapshot
 
 
-def test_track_cruise_production_has_only_rate_resolved_normal_owner() -> None:
-    """Track/Cruise must not retain a five-state publication fallback."""
+def test_racing_and_overtake_production_have_only_rate_resolved_normal_owner() -> None:
+    """Racing and Overtake must not retain a five-state publication fallback."""
 
-    branch_start = SOURCE.index(
-        "if (\n        control_intent == mpcc_contract::ControlIntent::Track ||\n"
-        "        control_intent == mpcc_contract::ControlIntent::Cruise)"
-    )
-    branch_end = SOURCE.index(
-        "if (control_intent == mpcc_contract::ControlIntent::Rejoin)",
-        branch_start,
-    )
+    branch_start = SOURCE.index("rate_resolved_normal_production_control(")
+    branch_end = SOURCE.index("MpcControlCycleResult get_control(", branch_start)
     branch = SOURCE[branch_start:branch_end]
     assert "evaluate_rate_resolved_track_cruise_retained_shadow(" in branch
     assert "rate_resolved_track_cruise_control(" in branch
@@ -1242,12 +1288,23 @@ def test_track_cruise_production_has_only_rate_resolved_normal_owner() -> None:
     assert "canonical_normal_control(" not in branch
     assert "CanonicalNormalShadowMode::TrackCruise" not in branch
 
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    control_end = SOURCE.index(
+        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
+        control_start,
+    )
+    dispatch = SOURCE[control_start:control_end]
+    assert dispatch.count("return rate_resolved_normal_production_control(") == 2
+    assert "canonical_overtake_production_control(" not in dispatch
+
     package = Path(__file__).resolve().parents[1]
     adapter_source = (
         package / "src" / "mpcc_rate_resolved_production_adapter.cpp"
     ).read_text(encoding="utf-8")
     assert "rate_resolved_command_candidate::build" not in adapter_source
     assert "candidate::build(retained_result)" in adapter_source
+    assert "artifact::supports_intent(source_context.intent)" in adapter_source
+    assert "bool track_or_cruise(" not in adapter_source
     assert "resolve_canonical_normal_authority(" in adapter_source
     assert "build_canonical_normal_command(" in adapter_source
     for forbidden in (
@@ -1510,3 +1567,13 @@ def test_normal_recovery_safety_work_has_one_eligibility_owner() -> None:
     ) in function
     assert "auto output = stuck_recovery_core_->update(input);" in function
     assert "return output;" in function
+
+
+def test_rate_resolved_retained_revalidation_uses_artifact_intent_capability() -> None:
+    """Artifact validation and current-world proof share one intent owner."""
+
+    retained = (
+        PACKAGE_ROOT / "src/mpcc_rate_resolved_retained_revalidation.cpp"
+    ).read_text()
+    assert "artifact::supports_intent(request.current_intent)" in retained
+    assert "bool track_cruise(" not in retained

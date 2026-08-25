@@ -19,13 +19,21 @@ namespace physical =
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 
-contract::MpccProblemContext source_context()
+contract::MpccProblemContext source_context(
+  const contract::ControlIntent intent = contract::ControlIntent::Track)
 {
   contract::MpccProblemContext context;
   context.decision_id = 11U;
-  context.intent = contract::ControlIntent::Track;
+  context.intent = intent;
   context.intent_generation = 1U;
   context.observation_generation = 2U;
+  if (contract::canonical_normal_intent_requires_target(intent)) {
+    context.target_obstacle_generation = 2U;
+    context.target_id = "d2";
+  }
+  if (contract::canonical_normal_intent_requires_execution_side(intent)) {
+    context.execution_side_sign = -1;
+  }
   context.stage_geometry_id = 31U;
   context.horizon_steps = 2U;
   context.formulation =
@@ -37,10 +45,11 @@ contract::MpccProblemContext source_context()
   return contract::seal_problem_context(std::move(context));
 }
 
-artifact::ExecutionArtifact execution_artifact()
+artifact::ExecutionArtifact execution_artifact(
+  const contract::ControlIntent intent = contract::ControlIntent::Track)
 {
   artifact::ExecutionArtifact value;
-  value.identity = {1U, source_context(), 1.0};
+  value.identity = {1U, source_context(intent), 1.0};
   value.prediction_origin_sec = 1.0;
   value.completed_sec = 1.01;
   value.course_progress_origin_m = 50.0;
@@ -124,10 +133,11 @@ physical::Result accepted_result(const physical::Snapshot & snapshot)
 }
 
 std::shared_ptr<const certified::CertifiedPlan> certified_plan(
-  std::shared_ptr<recovery::OccupancyGrid> grid = free_grid())
+  std::shared_ptr<recovery::OccupancyGrid> grid = free_grid(),
+  const contract::ControlIntent intent = contract::ControlIntent::Track)
 {
   auto execution = std::make_shared<const artifact::ExecutionArtifact>(
-    execution_artifact());
+    execution_artifact(intent));
   const auto snapshot = source_snapshot(execution->identity, std::move(grid));
   const auto built = certified::build(
     execution, snapshot, accepted_result(snapshot));
@@ -174,6 +184,25 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
   EXPECT_EQ(result.proof->cursor.control_stage_index, 0U);
   EXPECT_NEAR(result.proof->expected_absolute_progress_m, 50.10, 1e-9);
   EXPECT_EQ(result.proof->obstacle_generation, 7U);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, AcceptsEveryArtifactOwnedIntent)
+{
+  const std::vector<contract::ControlIntent> intents{
+    contract::ControlIntent::Track,
+    contract::ControlIntent::Cruise,
+    contract::ControlIntent::ShiftOut,
+    contract::ControlIntent::Pass,
+    contract::ControlIntent::Return,
+  };
+  for (const auto intent : intents) {
+    SCOPED_TRACE(contract::to_string(intent));
+    const auto plan = certified_plan(free_grid(), intent);
+    ASSERT_NE(plan, nullptr);
+    auto request = accepted_request(plan);
+    request.current_intent = intent;
+    EXPECT_EQ(retained::evaluate(request).reason, retained::Reason::Accepted);
+  }
 }
 
 TEST(

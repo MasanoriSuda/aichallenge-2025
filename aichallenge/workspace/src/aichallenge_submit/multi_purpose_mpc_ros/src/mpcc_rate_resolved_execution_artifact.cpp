@@ -9,13 +9,6 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact
 namespace
 {
 
-bool supported_intent(
-  const mpcc_execution_contract::ControlIntent intent) noexcept
-{
-  return intent == mpcc_execution_contract::ControlIntent::Track ||
-         intent == mpcc_execution_contract::ControlIntent::Cruise;
-}
-
 bool finite_state(const PredictedState & state) noexcept
 {
   return std::isfinite(state.lateral_m) && std::isfinite(state.lag_m) &&
@@ -58,12 +51,22 @@ mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation sample_steering(
 
 }  // namespace
 
+bool supports_intent(
+  const mpcc_execution_contract::ControlIntent intent) noexcept
+{
+  return intent == mpcc_execution_contract::ControlIntent::Track ||
+         intent == mpcc_execution_contract::ControlIntent::Cruise ||
+         intent == mpcc_execution_contract::ControlIntent::ShiftOut ||
+         intent == mpcc_execution_contract::ControlIntent::Pass ||
+         intent == mpcc_execution_contract::ControlIntent::Return;
+}
+
 bool identity_valid(const Identity & identity) noexcept
 {
   return identity.sequence > 0U &&
          mpcc_execution_contract::problem_context_complete(
            identity.source_context) &&
-         supported_intent(identity.source_context.intent) &&
+         supports_intent(identity.source_context.intent) &&
          identity.source_context.formulation ==
          mpcc_execution_contract::Formulation::VelocitySteeringProgress6State &&
          std::isfinite(identity.snapshot_sec) && identity.snapshot_sec >= 0.0;

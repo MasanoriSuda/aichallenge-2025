@@ -235,6 +235,59 @@ struct AuthorityRequest {
   std::string blocking_reason;
 };
 
+enum class CanonicalExecutionIdentitySource {
+  None,
+  OvertakeLine,
+  DynamicObstacleEscape,
+};
+
+enum class CanonicalExecutionIdentityReason {
+  Inactive,
+  OvertakeLine,
+  DynamicObstacleEscape,
+  MalformedOvertakeLine,
+  MalformedDynamicObstacleEscape,
+};
+
+/// Resolve the one execution identity which is allowed to cross the tactical
+/// boundary into the canonical MPCC problem.  Dynamic Escape owns a validated
+/// path without creating an OvertakeLine mission, so deriving this identity
+/// only from OvertakeLineState silently loses its target, generation and side.
+struct CanonicalExecutionIdentityRequest {
+  bool overtake_line_active{false};
+  std::string overtake_line_target_id;
+  std::uint64_t overtake_line_mission_generation{0U};
+  Phase overtake_line_phase{Phase::Idle};
+  int overtake_line_side_sign{0};
+  double overtake_line_traveled_m{0.0};
+  bool overtake_line_target_exclusion_certified{false};
+
+  bool dynamic_escape_active{false};
+  bool dynamic_escape_path_validated{false};
+  std::string dynamic_escape_target_id;
+  std::uint64_t dynamic_escape_attempt_id{0U};
+  int dynamic_escape_side_sign{0};
+};
+
+struct CanonicalExecutionIdentityResolution {
+  bool active{false};
+  CanonicalExecutionIdentitySource source{
+    CanonicalExecutionIdentitySource::None};
+  CanonicalExecutionIdentityReason reason{
+    CanonicalExecutionIdentityReason::Inactive};
+  std::string target_id;
+  std::uint64_t generation{0U};
+  Phase phase{Phase::Idle};
+  int side_sign{0};
+  double traveled_m{0.0};
+  bool target_exclusion_certified{false};
+};
+
+CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
+  const CanonicalExecutionIdentityRequest & request) noexcept;
+const char * to_string(CanonicalExecutionIdentitySource source) noexcept;
+const char * to_string(CanonicalExecutionIdentityReason reason) noexcept;
+
 struct AuthorityResolution {
   bool relevant{false};
   Action action{Action::Cruise};

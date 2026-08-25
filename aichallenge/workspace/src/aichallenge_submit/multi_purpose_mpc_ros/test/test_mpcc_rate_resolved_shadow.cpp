@@ -165,6 +165,38 @@ TEST(MpccRateResolvedShadow, RejectsFiveStateProblemIdentity)
   EXPECT_FALSE(shadow::result_valid(result));
 }
 
+TEST(MpccRateResolvedShadow, SupportsEveryRateResolvedNormalIntent)
+{
+  for (const auto intent : {
+      contract::ControlIntent::Track,
+      contract::ControlIntent::Cruise,
+      contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass,
+      contract::ControlIntent::Return})
+  {
+    shadow::SolverContext context;
+    auto input = snapshot(static_cast<std::uint64_t>(intent) + 10U);
+    auto source = input.identity.source_context;
+    source.intent = intent;
+    const bool overtake_intent =
+      contract::canonical_normal_intent_requires_execution_side(intent);
+    source.target_id = overtake_intent ? "d2" : "";
+    source.target_obstacle_generation =
+      overtake_intent ? source.observation_generation : 0U;
+    source.execution_side_sign = overtake_intent ? 1 : 0;
+    input.identity.source_context =
+      contract::seal_problem_context(std::move(source));
+
+    const auto result = context.evaluate(input);
+    EXPECT_EQ(result.outcome, shadow::Outcome::Solved)
+      << contract::to_string(intent) << ": " << result.detail;
+    ASSERT_NE(result.execution_artifact, nullptr)
+      << contract::to_string(intent);
+    EXPECT_TRUE(execution::identity_valid(result.execution_artifact->identity))
+      << contract::to_string(intent);
+  }
+}
+
 TEST(MpccRateResolvedShadow, RetainsAndSamplesExactRateResolvedArtifact)
 {
   shadow::SolverContext context;

@@ -1802,6 +1802,25 @@ overtake_orchestrator::Phase orchestrator_phase(const OvertakeLinePhase phase)
   return overtake_orchestrator::Phase::Idle;
 }
 
+OvertakeLinePhase overtake_line_phase(const overtake_orchestrator::Phase phase)
+{
+  switch (phase) {
+    case overtake_orchestrator::Phase::Idle:
+      return OvertakeLinePhase::Idle;
+    case overtake_orchestrator::Phase::FollowPrepare:
+      return OvertakeLinePhase::FollowPrepare;
+    case overtake_orchestrator::Phase::ShiftOut:
+      return OvertakeLinePhase::ShiftOut;
+    case overtake_orchestrator::Phase::Pass:
+      return OvertakeLinePhase::Pass;
+    case overtake_orchestrator::Phase::Return:
+      return OvertakeLinePhase::Return;
+    case overtake_orchestrator::Phase::Recovery:
+      return OvertakeLinePhase::Recovery;
+  }
+  return OvertakeLinePhase::Idle;
+}
+
 overtake_orchestrator::Behavior orchestrator_behavior(
   const V2XBehaviorState state)
 {
@@ -5684,6 +5703,138 @@ struct BoundRateResolvedTrackCruiseSubmission
   double committed_predecessor_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
 };
+
+struct RateResolvedPipelineEvaluation
+{
+  rate_resolved_shadow::Result solver;
+  std::optional<rate_resolved_physical_wall::Result> physical;
+};
+
+struct RateResolvedTransitionAdmissionEvaluation
+{
+  bool attempted{false};
+  bool certified{false};
+  std::uint64_t sequence{};
+  rate_resolved_shadow::Outcome solver_outcome{
+    rate_resolved_shadow::Outcome::BuildRejected};
+  rate_resolved_physical_wall::Outcome physical_outcome{
+    rate_resolved_physical_wall::Outcome::InvalidInput};
+  double elapsed_ms{};
+  std::string detail{"not-attempted"};
+};
+
+RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
+  const rate_resolved_shadow::Snapshot & snapshot,
+  std::optional<rate_resolved_physical_wall::Snapshot> physical_snapshot,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> & solver_context,
+  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
+{
+  RateResolvedPipelineEvaluation evaluation;
+  const auto solver_started = SteadyClock::now();
+  try {
+    evaluation.solver = solver_context->evaluate(snapshot);
+  } catch (const std::exception & error) {
+    evaluation.solver.identity = snapshot.identity;
+    evaluation.solver.outcome = rate_resolved_shadow::Outcome::Exception;
+    evaluation.solver.detail = error.what();
+    evaluation.solver.compute_ms =
+      std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - solver_started).count();
+    evaluation.solver.completed_sec = snapshot.identity.snapshot_sec +
+      evaluation.solver.compute_ms * 1.0e-3;
+  } catch (...) {
+    evaluation.solver.identity = snapshot.identity;
+    evaluation.solver.outcome = rate_resolved_shadow::Outcome::Exception;
+    evaluation.solver.detail = "unknown rate-resolved solver exception";
+    evaluation.solver.compute_ms =
+      std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - solver_started).count();
+    evaluation.solver.completed_sec = snapshot.identity.snapshot_sec +
+      evaluation.solver.compute_ms * 1.0e-3;
+  }
+
+  if (
+    !physical_snapshot.has_value() ||
+    evaluation.solver.outcome != rate_resolved_shadow::Outcome::Solved ||
+    evaluation.solver.execution_artifact == nullptr)
+  {
+    return evaluation;
+  }
+
+  const auto physical_started = SteadyClock::now();
+  rate_resolved_physical_wall::Result physical_result;
+  physical_result.identity = physical_snapshot->identity;
+  try {
+    const auto adapted = rate_resolved_physical::build(
+      *evaluation.solver.execution_artifact,
+      physical_snapshot->identity.artifact.source_context.intent,
+      physical_snapshot->identity.artifact.source_context.stage_geometry_id);
+    if (!adapted.exact_trajectory.has_value()) {
+      physical_result.outcome =
+        rate_resolved_physical_wall::Outcome::AdapterRejected;
+      physical_result.diagnostic.reason =
+        mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
+      std::ostringstream detail;
+      detail << "adapter=" << rate_resolved_physical::to_string(adapted.reason)
+             << "/artifact=" << rate_resolved_shadow::artifact::to_string(
+        adapted.artifact_reason)
+             << "/exact=" <<
+        race_mpcc::exact_physical_execution_trajectory_reason_name(
+        adapted.exact_reason)
+             << "/stage=" << adapted.rejected_stage
+             << "/min_progress_transition=" <<
+        adapted.minimum_progress_transition_state
+             << "/delta=" << adapted.minimum_progress_delta_m
+             << "/vtheta=" <<
+        adapted.transition_virtual_progress_speed_mps
+             << "/dt=" << adapted.transition_duration_sec
+             << "/dynamics_defect=" << adapted.progress_dynamics_defect_m
+             << "/progress_tolerance=" <<
+        adapted.certified_progress_regression_tolerance_m
+             << "/certificate_tolerance=" <<
+        evaluation.solver.execution_artifact->physical_global_tolerance;
+      physical_result.detail = detail.str();
+    } else {
+      physical_snapshot->trajectory =
+        std::move(adapted.exact_trajectory.value());
+      physical_snapshot->bound_tolerance_m = std::max(
+        1e-5,
+        evaluation.solver.execution_artifact->maximum_constraint_violation +
+        1e-6);
+      physical_result = rate_resolved_physical_wall::evaluate(
+        physical_snapshot.value());
+    }
+  } catch (const std::exception & error) {
+    physical_result.identity = physical_snapshot->identity;
+    physical_result.outcome = rate_resolved_physical_wall::Outcome::Exception;
+    physical_result.diagnostic.reason =
+      mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
+    physical_result.detail = error.what();
+  } catch (...) {
+    physical_result.identity = physical_snapshot->identity;
+    physical_result.outcome = rate_resolved_physical_wall::Outcome::Exception;
+    physical_result.diagnostic.reason =
+      mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
+    physical_result.detail =
+      "unknown rate-resolved physical wall exception";
+  }
+  physical_result.compute_ms =
+    std::chrono::duration<double, std::milli>(
+    SteadyClock::now() - physical_started).count();
+  physical_result.completed_sec = physical_result.identity.captured_sec +
+    physical_result.compute_ms * 1.0e-3;
+  if (
+    physical_result.outcome ==
+    rate_resolved_physical_wall::Outcome::Accepted &&
+    certified_plan_store != nullptr)
+  {
+    static_cast<void>(certified_plan_store->certify_and_replace(
+      evaluation.solver.execution_artifact, physical_snapshot.value(),
+      physical_result));
+  }
+  evaluation.physical = std::move(physical_result);
+  return evaluation;
+}
 
 struct CanonicalCurrentControlPath
 {
@@ -18744,13 +18895,39 @@ struct MPC
       behavior_output.target_observation_provenance.valid &&
       behavior_output.target_observation_provenance.target_id ==
       behavior_output.target_vehicle_id;
+    const bool overtake_line_target_exclusion_certified =
+      stage_corridor_target_bound_effective ||
+      (behavior_output.locked_target_current_body_footprints_separated &&
+      behavior_output.locked_target_footprint_prediction_valid &&
+      behavior_output.locked_target_predicted_body_footprint_sweep_separated);
+    const auto canonical_execution_identity =
+      overtake_orchestrator::resolve_canonical_execution_identity(
+      overtake_orchestrator::CanonicalExecutionIdentityRequest{
+        overtake_line_output.active && stage_corridor.active,
+        overtake_line_state_.target_vehicle_id,
+        overtake_line_state_.mission_generation,
+        orchestrator_phase(overtake_line_state_.phase),
+        overtake_line_state_.pass_side_sign,
+        overtake_mission_progress_traveled(),
+        overtake_line_target_exclusion_certified,
+        behavior_output.dynamic_obstacle_lateral_escape_execution_active,
+        behavior_output.dynamic_obstacle_lateral_escape_execution_path_validated,
+        behavior_output.dynamic_obstacle_cruise_target_id,
+        behavior_output.dynamic_obstacle_lateral_escape_attempt_id,
+        behavior_output.dynamic_obstacle_lateral_escape_side_sign});
     overtake_orchestrator::AuthorityRequest authority_request;
     authority_request.decision_id = active_control_decision_id_;
     authority_request.episode_id = overtake_line_state_.episode_id;
-    authority_request.mission_generation = overtake_line_state_.mission_generation;
-    authority_request.target_id = !overtake_line_state_.target_vehicle_id.empty() ?
-      overtake_line_state_.target_vehicle_id : behavior_output.target_vehicle_id;
-    authority_request.pass_side_sign = overtake_line_state_.pass_side_sign;
+    authority_request.mission_generation = canonical_execution_identity.active ?
+      canonical_execution_identity.generation :
+      overtake_line_state_.mission_generation;
+    authority_request.target_id = canonical_execution_identity.active ?
+      canonical_execution_identity.target_id :
+      (!overtake_line_state_.target_vehicle_id.empty() ?
+      overtake_line_state_.target_vehicle_id : behavior_output.target_vehicle_id);
+    authority_request.pass_side_sign = canonical_execution_identity.active ?
+      canonical_execution_identity.side_sign :
+      overtake_line_state_.pass_side_sign;
     authority_request.phase = orchestrator_phase(overtake_line_state_.phase);
     authority_request.behavior = orchestrator_behavior(behavior_output.state);
     authority_request.race_session_active = v2x_race_session_active_;
@@ -19404,12 +19581,7 @@ struct MPC
     }
 
     const bool progress_execution_context_active =
-      progress_contouring_active && overtake_line_output.active &&
-      stage_corridor.active &&
-      is_overtake_receding_horizon_execution_phase(overtake_line_state_.phase) &&
-      !overtake_line_state_.target_vehicle_id.empty() &&
-      overtake_line_state_.mission_generation > 0U &&
-      overtake_line_state_.pass_side_sign != 0;
+      progress_contouring_active && canonical_execution_identity.active;
     const bool progress_aligned_wall_contract_context_active =
       progress_contouring_active &&
       (progress_execution_context_active ||
@@ -19694,18 +19866,15 @@ struct MPC
       std::vector<double>{},
       std::move(progress_linearization_point),
       progress_execution_context_active,
-      progress_execution_context_active ? overtake_line_state_.target_vehicle_id : "",
-      progress_execution_context_active ? overtake_line_state_.mission_generation : 0U,
-      progress_execution_context_active ? overtake_line_state_.phase :
-      OvertakeLinePhase::Idle,
-      progress_execution_context_active ? overtake_line_state_.pass_side_sign : 0,
-      progress_execution_context_active ? overtake_mission_progress_traveled() : 0.0,
+      progress_execution_context_active ? canonical_execution_identity.target_id : "",
+      progress_execution_context_active ? canonical_execution_identity.generation : 0U,
+      progress_execution_context_active ?
+      overtake_line_phase(canonical_execution_identity.phase) : OvertakeLinePhase::Idle,
+      progress_execution_context_active ? canonical_execution_identity.side_sign : 0,
+      progress_execution_context_active ? canonical_execution_identity.traveled_m : 0.0,
       progress_execution_required_wall_clearance_m,
       progress_execution_context_active &&
-      (stage_corridor_target_bound_effective ||
-      (behavior_output.locked_target_current_body_footprints_separated &&
-      behavior_output.locked_target_footprint_prediction_valid &&
-      behavior_output.locked_target_predicted_body_footprint_sweep_separated)),
+      canonical_execution_identity.target_exclusion_certified,
       std::move(progress_execution_path_distance_m),
       std::move(progress_execution_lateral_lower_m),
       std::move(progress_execution_lateral_upper_m),
@@ -19869,7 +20038,9 @@ struct MPC
     }
     const double initial_lag_m =
       (legacy.track_cruise_shadow_requested || legacy.follow_shadow_requested ||
-      legacy.rejoin_shadow_requested) ?
+      legacy.rejoin_shadow_requested ||
+      (legacy.progress_execution_context_active &&
+      mpcc_contract::canonical_normal_intent_requires_execution_side(intent))) ?
       initial_frenet_pose->lag_m : 0.0;
     if (
       legacy.follow_shadow_requested &&
@@ -20263,11 +20434,14 @@ struct MPC
 
     std::optional<mpcc_rate_resolved_adapter::Request>
     rate_resolved_shadow_request;
-    const bool rate_resolved_track_cruise_shadow_requested =
+    const bool rate_resolved_racing_requested =
       legacy.track_cruise_shadow_requested &&
       (intent == mpcc_contract::ControlIntent::Track ||
       intent == mpcc_contract::ControlIntent::Cruise);
-    if (rate_resolved_track_cruise_shadow_requested) {
+    const bool rate_resolved_overtake_requested =
+      legacy.progress_execution_context_active &&
+      mpcc_contract::canonical_normal_intent_requires_execution_side(intent);
+    if (rate_resolved_racing_requested || rate_resolved_overtake_requested) {
       rate_resolved_shadow_request.emplace();
       auto & request = rate_resolved_shadow_request.value();
       request.horizon_steps = N;
@@ -26060,12 +26234,16 @@ struct MPC
   {
     reject_reason.clear();
     const auto intent = current_control_intent();
-    if (
-      !problem.track_cruise_shadow_requested ||
-      (intent != mpcc_contract::ControlIntent::Track &&
-      intent != mpcc_contract::ControlIntent::Cruise))
+    const bool racing_scope =
+      problem.track_cruise_shadow_requested &&
+      (intent == mpcc_contract::ControlIntent::Track ||
+      intent == mpcc_contract::ControlIntent::Cruise);
+    const bool overtake_scope =
+      problem.progress_execution_context_active &&
+      mpcc_contract::canonical_normal_intent_requires_execution_side(intent);
+    if (!racing_scope && !overtake_scope)
     {
-      reject_reason = "rate-resolved Track/Cruise scope unavailable";
+      reject_reason = "rate-resolved normal scope unavailable";
       return std::nullopt;
     }
     if (!problem.progress_metadata_available) {
@@ -26108,7 +26286,7 @@ struct MPC
   std::optional<BoundRateResolvedTrackCruiseSubmission>
   bind_rate_resolved_track_cruise_submission(
     const RateResolvedTrackCruiseSubmissionDraft & draft,
-    const MpcControlCycleResult & committed_output) const noexcept
+    const double committed_predecessor_steering_rad) const noexcept
   {
     if (
       draft.horizon_steps <= 0 ||
@@ -26116,39 +26294,38 @@ struct MPC
       !std::isfinite(draft.control_prediction_origin_sec) ||
       !std::isfinite(draft.course_progress_origin_m) ||
       !mpcc_contract::problem_context_complete(draft.source_context) ||
-      !std::isfinite(committed_output.control[1]) ||
-      !std::isfinite(previous_steering) ||
-      std::abs(committed_output.control[1] - previous_steering) > 1e-12)
+      !std::isfinite(committed_predecessor_steering_rad))
     {
       return std::nullopt;
     }
     BoundRateResolvedTrackCruiseSubmission bound;
     bound.request = draft.request;
-    bound.request.current_steering_rad = committed_output.control[1];
+    bound.request.current_steering_rad =
+      committed_predecessor_steering_rad;
     bound.control_prediction_origin_sec =
       draft.control_prediction_origin_sec;
     bound.course_progress_origin_m = draft.course_progress_origin_m;
     bound.horizon_steps = draft.horizon_steps;
     bound.source_context = draft.source_context;
-    bound.committed_predecessor_steering_rad = committed_output.control[1];
+    bound.committed_predecessor_steering_rad =
+      committed_predecessor_steering_rad;
     return bound;
   }
 
-  bool submit_rate_resolved_track_cruise_shadow(
+  std::optional<rate_resolved_shadow::Snapshot>
+  build_rate_resolved_submission_snapshot(
     const MpcProblem & source_problem,
     const BoundRateResolvedTrackCruiseSubmission & bound_submission,
-    const double now_sec)
+    const double now_sec, const std::uint64_t sequence) const
   {
     if (
-      rate_resolved_track_cruise_shadow_worker_ == nullptr ||
-      rate_resolved_track_cruise_shadow_mailbox_ == nullptr ||
-      rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
       model == nullptr || !std::isfinite(model->Ts) || model->Ts <= 0.0 ||
-      bound_submission.horizon_steps <= 0 ||
+      sequence == 0U || bound_submission.horizon_steps <= 0 ||
       bound_submission.request.horizon_steps !=
       bound_submission.horizon_steps ||
       !std::isfinite(bound_submission.control_prediction_origin_sec) ||
       bound_submission.control_prediction_origin_sec < now_sec ||
+      !std::isfinite(bound_submission.course_progress_origin_m) ||
       !std::isfinite(
       bound_submission.committed_predecessor_steering_rad) ||
       bound_submission.request.current_steering_rad !=
@@ -26156,16 +26333,11 @@ struct MPC
       !mpcc_contract::problem_context_complete(
       bound_submission.source_context) ||
       source_problem.progress_stage_geometry.stages.size() <
-      static_cast<std::size_t>(bound_submission.horizon_steps) ||
-      rate_resolved_track_cruise_shadow_next_sequence_ ==
-      std::numeric_limits<std::uint64_t>::max())
+      static_cast<std::size_t>(bound_submission.horizon_steps))
     {
-      ++rate_resolved_track_cruise_shadow_telemetry_window_.
-        submission_reject_count;
-      return false;
+      return std::nullopt;
     }
-    const std::uint64_t sequence =
-      rate_resolved_track_cruise_shadow_next_sequence_++;
+
     rate_resolved_shadow::Snapshot snapshot;
     snapshot.identity.sequence = sequence;
     snapshot.identity.source_context = bound_submission.source_context;
@@ -26184,10 +26356,39 @@ struct MPC
         static_cast<std::size_t>(stage)].cumulative_distance_m);
     }
     snapshot.publication_interval_sec = model->Ts;
+    return snapshot;
+  }
+
+  bool submit_rate_resolved_track_cruise_shadow(
+    const MpcProblem & source_problem,
+    const BoundRateResolvedTrackCruiseSubmission & bound_submission,
+    const double now_sec)
+  {
+    if (
+      rate_resolved_track_cruise_shadow_worker_ == nullptr ||
+      rate_resolved_track_cruise_shadow_mailbox_ == nullptr ||
+      rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
+      rate_resolved_track_cruise_shadow_next_sequence_ ==
+      std::numeric_limits<std::uint64_t>::max())
+    {
+      ++rate_resolved_track_cruise_shadow_telemetry_window_.
+        submission_reject_count;
+      return false;
+    }
+    const std::uint64_t sequence =
+      rate_resolved_track_cruise_shadow_next_sequence_++;
+    auto snapshot = build_rate_resolved_submission_snapshot(
+      source_problem, bound_submission, now_sec, sequence);
+    if (!snapshot.has_value()) {
+      ++rate_resolved_track_cruise_shadow_telemetry_window_.
+        submission_reject_count;
+      return false;
+    }
     RateResolvedPhysicalShadowEvaluation physical_snapshot_rejection;
     auto physical_snapshot =
       build_rate_resolved_track_cruise_physical_snapshot(
-      snapshot, source_problem, now_sec, physical_snapshot_rejection);
+      snapshot.value(), source_problem, now_sec,
+      physical_snapshot_rejection);
     bool physical_registered = false;
     const auto physical_mailbox =
       rate_resolved_track_cruise_physical_wall_mailbox_;
@@ -26230,118 +26431,19 @@ struct MPC
       rate_resolved_track_cruise_certified_plan_store_;
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
-      [snapshot = std::move(snapshot), mailbox, solver_context,
+      [snapshot = std::move(snapshot.value()), mailbox, solver_context,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
         physical_registered, certified_plan_store]() mutable {
-        const auto started = SteadyClock::now();
-        rate_resolved_shadow::Result result;
-        try {
-          result = solver_context->evaluate(snapshot);
-        } catch (const std::exception & error) {
-          result.identity = snapshot.identity;
-          result.outcome = rate_resolved_shadow::Outcome::Exception;
-          result.detail = error.what();
-          result.compute_ms = std::chrono::duration<double, std::milli>(
-            SteadyClock::now() - started).count();
-          result.completed_sec = snapshot.identity.snapshot_sec +
-            result.compute_ms * 1.0e-3;
-        } catch (...) {
-          result.identity = snapshot.identity;
-          result.outcome = rate_resolved_shadow::Outcome::Exception;
-          result.detail = "unknown rate-resolved shadow exception";
-          result.compute_ms = std::chrono::duration<double, std::milli>(
-            SteadyClock::now() - started).count();
-          result.completed_sec = snapshot.identity.snapshot_sec +
-            result.compute_ms * 1.0e-3;
+        if (!physical_registered) {
+          physical_snapshot.reset();
         }
-
-        std::optional<rate_resolved_physical_wall::Result> physical_result;
-        if (
-          physical_registered && physical_snapshot.has_value() &&
-          physical_mailbox != nullptr &&
-          result.outcome == rate_resolved_shadow::Outcome::Solved &&
-          result.execution_artifact != nullptr)
-        {
-          const auto physical_started = SteadyClock::now();
-          rate_resolved_physical_wall::Result candidate;
-          candidate.identity = physical_snapshot->identity;
-          try {
-            const auto adapted = rate_resolved_physical::build(
-              *result.execution_artifact,
-              physical_snapshot->identity.artifact.source_context.intent,
-              physical_snapshot->identity.artifact.source_context.
-              stage_geometry_id);
-            if (!adapted.exact_trajectory.has_value()) {
-              candidate.outcome =
-                rate_resolved_physical_wall::Outcome::AdapterRejected;
-              candidate.diagnostic.reason =
-                mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
-              std::ostringstream detail;
-              detail << "adapter=" <<
-                rate_resolved_physical::to_string(adapted.reason)
-                     << "/artifact=" <<
-                rate_resolved_shadow::artifact::to_string(
-                adapted.artifact_reason)
-                     << "/exact=" <<
-                race_mpcc::exact_physical_execution_trajectory_reason_name(
-                adapted.exact_reason)
-                     << "/stage=" << adapted.rejected_stage
-                     << "/min_progress_transition=" <<
-                adapted.minimum_progress_transition_state
-                     << "/delta=" << adapted.minimum_progress_delta_m
-                     << "/vtheta=" <<
-                adapted.transition_virtual_progress_speed_mps
-                     << "/dt=" << adapted.transition_duration_sec
-                     << "/dynamics_defect=" <<
-                adapted.progress_dynamics_defect_m
-                     << "/progress_tolerance=" <<
-                adapted.certified_progress_regression_tolerance_m
-                     << "/certificate_tolerance=" <<
-                result.execution_artifact->physical_global_tolerance;
-              candidate.detail = detail.str();
-            } else {
-              physical_snapshot->trajectory =
-                std::move(adapted.exact_trajectory.value());
-              physical_snapshot->bound_tolerance_m = std::max(
-                1e-5,
-                result.execution_artifact->maximum_constraint_violation +
-                1e-6);
-              candidate = rate_resolved_physical_wall::evaluate(
-                physical_snapshot.value());
-            }
-          } catch (const std::exception & error) {
-            candidate.identity = physical_snapshot->identity;
-            candidate.outcome =
-              rate_resolved_physical_wall::Outcome::Exception;
-            candidate.diagnostic.reason =
-              mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
-            candidate.detail = error.what();
-          } catch (...) {
-            candidate.identity = physical_snapshot->identity;
-            candidate.outcome =
-              rate_resolved_physical_wall::Outcome::Exception;
-            candidate.diagnostic.reason =
-              mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
-            candidate.detail =
-              "unknown rate-resolved physical wall exception";
-          }
-          candidate.compute_ms = std::chrono::duration<double, std::milli>(
-            SteadyClock::now() - physical_started).count();
-          candidate.completed_sec = candidate.identity.captured_sec +
-            candidate.compute_ms * 1.0e-3;
-          if (
-            candidate.outcome == rate_resolved_physical_wall::Outcome::Accepted &&
-            certified_plan_store != nullptr)
-          {
-            static_cast<void>(certified_plan_store->certify_and_replace(
-              result.execution_artifact, physical_snapshot.value(), candidate));
-          }
-          physical_result = std::move(candidate);
-        }
-        static_cast<void>(mailbox->publish(std::move(result)));
-        if (physical_result.has_value()) {
+        auto evaluation = evaluate_rate_resolved_pipeline(
+          snapshot, std::move(physical_snapshot), solver_context,
+          certified_plan_store);
+        static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
+        if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
           static_cast<void>(physical_mailbox->publish(
-            std::move(physical_result.value())));
+            std::move(evaluation.physical.value())));
         }
       });
     if (!submission.accepted) {
@@ -26368,6 +26470,96 @@ struct MPC
     rate_resolved_track_cruise_last_causal_predecessor_steering_rad_ =
       bound_submission.committed_predecessor_steering_rad;
     return true;
+  }
+
+  RateResolvedTransitionAdmissionEvaluation
+  evaluate_rate_resolved_transition_admission(
+    const MpcProblem & problem,
+    const RateResolvedTrackCruiseSubmissionDraft & draft,
+    const double now_sec)
+  {
+    const auto started = SteadyClock::now();
+    RateResolvedTransitionAdmissionEvaluation admission;
+    auto finish = [&](const std::string & detail) {
+        admission.detail = detail;
+        admission.elapsed_ms =
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return admission;
+      };
+
+    if (
+      rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
+      rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
+      rate_resolved_track_cruise_shadow_next_sequence_ ==
+      std::numeric_limits<std::uint64_t>::max() ||
+      !std::isfinite(previous_steering))
+    {
+      return finish("rate-resolved transition dependencies unavailable");
+    }
+    admission.attempted = true;
+    const auto bound_submission =
+      bind_rate_resolved_track_cruise_submission(draft, previous_steering);
+    if (!bound_submission.has_value()) {
+      return finish("rate-resolved transition predecessor binding rejected");
+    }
+
+    admission.sequence =
+      rate_resolved_track_cruise_shadow_next_sequence_++;
+    auto snapshot = build_rate_resolved_submission_snapshot(
+      problem, bound_submission.value(), now_sec, admission.sequence);
+    if (!snapshot.has_value()) {
+      return finish("rate-resolved transition snapshot rejected");
+    }
+    RateResolvedPhysicalShadowEvaluation physical_rejection;
+    auto physical_snapshot =
+      build_rate_resolved_track_cruise_physical_snapshot(
+      snapshot.value(), problem, now_sec, physical_rejection);
+    if (!physical_snapshot.has_value()) {
+      return finish(
+        std::string{"rate-resolved transition physical snapshot rejected/"} +
+        physical_rejection.detail);
+    }
+
+    auto evaluation = evaluate_rate_resolved_pipeline(
+      snapshot.value(), std::move(physical_snapshot),
+      rate_resolved_track_cruise_shadow_solver_context_,
+      rate_resolved_track_cruise_certified_plan_store_);
+    admission.solver_outcome = evaluation.solver.outcome;
+    if (evaluation.physical.has_value()) {
+      admission.physical_outcome = evaluation.physical->outcome;
+    }
+    if (evaluation.solver.outcome != rate_resolved_shadow::Outcome::Solved) {
+      return finish(
+        std::string{"rate-resolved transition solver rejected/"} +
+        rate_resolved_shadow::to_string(evaluation.solver.outcome) + "/" +
+        evaluation.solver.detail);
+    }
+    if (!evaluation.physical.has_value()) {
+      return finish("rate-resolved transition physical proof missing");
+    }
+    if (
+      evaluation.physical->outcome !=
+      rate_resolved_physical_wall::Outcome::Accepted)
+    {
+      return finish(
+        std::string{"rate-resolved transition physical proof rejected/"} +
+        rate_resolved_physical_wall::to_string(
+        evaluation.physical->outcome) + "/" +
+        evaluation.physical->detail);
+    }
+
+    const auto certified =
+      rate_resolved_track_cruise_certified_plan_store_->snapshot();
+    admission.certified =
+      certified != nullptr && certified->execution_artifact != nullptr &&
+      certified->execution_artifact->identity.sequence == admission.sequence &&
+      certified->execution_artifact->identity.source_context.intent ==
+      draft.source_context.intent;
+    return finish(
+      admission.certified ?
+      "same six-state producer physically certified" :
+      "rate-resolved transition certification store rejected");
   }
 
   RateResolvedRetainedShadowEvaluation
@@ -28501,23 +28693,95 @@ struct MPC
     return output;
   }
 
-  MpcControlCycleResult canonical_overtake_production_control(
+  MpcControlCycleResult rate_resolved_normal_production_control(
     const MpcProblem & problem, const double now_sec,
     const mpcc_contract::ControlIntent intent)
   {
-    auto async_result = evaluate_overtake_async_shadow(problem, now_sec);
-    record_overtake_canonical_async_status(now_sec);
-    record_problem_context(
-      problem, mpcc_contract::Formulation::VelocityProgress5State);
-    record_overtake_canonical_fresh_shadow_telemetry(async_result, now_sec);
-    if (async_result.selected.complete()) {
-      return canonical_normal_control(problem, intent, async_result.selected);
+    const bool racing_scope =
+      problem.track_cruise_shadow_requested &&
+      (intent == mpcc_contract::ControlIntent::Track ||
+      intent == mpcc_contract::ControlIntent::Cruise);
+    const bool overtake_scope =
+      problem.progress_execution_context_active &&
+      mpcc_contract::canonical_normal_intent_requires_execution_side(intent);
+    if (!racing_scope && !overtake_scope) {
+      return canonical_normal_emergency_stop(
+        problem, intent, "rate-resolved normal admission unavailable");
     }
-    return canonical_normal_emergency_stop(
-      problem, intent,
-      "canonical Overtake async authority unavailable: " +
-      async_result.status + "/" + async_result.detail + "/" +
-      async_result.retained_detail);
+
+    std::string draft_reject_reason;
+    const auto submission_draft =
+      build_rate_resolved_track_cruise_submission_draft(
+      problem, now_sec, draft_reject_reason);
+    // Consume the retained artifact against the predecessor which entered
+    // this cycle.  The next asynchronous problem is bound only after the
+    // current command is committed, so all intents share one causal steering
+    // origin and one six-state actuation time base.
+    auto retained =
+      evaluate_rate_resolved_track_cruise_retained_shadow(problem, now_sec);
+    if (
+      !retained.production_authority.has_value() &&
+      submission_draft.has_value() &&
+      last_published_canonical_intent_ !=
+      mpcc_contract::ControlIntent::Unknown &&
+      last_published_canonical_intent_ != intent)
+    {
+      // A retained artifact for the previous intent is not evidence about the
+      // newly requested intent.  In particular, Follow is currently produced
+      // by a separate canonical worker, so the last six-state racing artifact
+      // can be exhausted by the time ShiftOut begins.  Admission must depend
+      // on the intent transition itself, not on why that irrelevant artifact
+      // failed revalidation.  The newly solved artifact still passes the full
+      // immutable physical proof and ordinary current-world join below.
+      const auto previous_intent = last_published_canonical_intent_;
+      const auto admission = evaluate_rate_resolved_transition_admission(
+        problem, submission_draft.value(), now_sec);
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Rate-resolved canonical atomic admission: decision=%lu, "
+        "previous=%s, intent=%s, attempted=%d, certified=%d, sequence=%lu, "
+        "solver=%s, physical=%s, elapsed_ms=%.3f, detail=%s",
+        static_cast<unsigned long>(active_control_decision_id_),
+        mpcc_contract::to_string(previous_intent),
+        mpcc_contract::to_string(intent), admission.attempted ? 1 : 0,
+        admission.certified ? 1 : 0,
+        static_cast<unsigned long>(admission.sequence),
+        rate_resolved_shadow::to_string(admission.solver_outcome),
+        rate_resolved_physical_wall::to_string(admission.physical_outcome),
+        admission.elapsed_ms, admission.detail.c_str());
+      if (admission.certified) {
+        // Admission proves the immutable six-state artifact and its exact
+        // physical trajectory only.  Production still requires the ordinary
+        // current-world join; never publish the synchronous solver result
+        // directly from this transition path.
+        retained = evaluate_rate_resolved_track_cruise_retained_shadow(
+          problem, now_sec);
+      }
+    }
+    record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);
+    auto output = rate_resolved_track_cruise_control(problem, intent, retained);
+    record_rate_resolved_track_cruise_command(retained, output, now_sec);
+    if (submission_draft.has_value()) {
+      const auto bound_submission =
+        bind_rate_resolved_track_cruise_submission(
+        submission_draft.value(), output.control[1]);
+      if (bound_submission.has_value()) {
+        static_cast<void>(submit_rate_resolved_track_cruise_shadow(
+            problem, bound_submission.value(), now_sec));
+      } else {
+        ++rate_resolved_track_cruise_shadow_telemetry_window_.
+          submission_reject_count;
+      }
+    } else {
+      ++rate_resolved_track_cruise_shadow_telemetry_window_.
+        submission_reject_count;
+      static rclcpp::Clock submission_log_clock{RCL_STEADY_TIME};
+      RCLCPP_WARN_THROTTLE(
+        rclcpp::get_logger("mpc_controller"), submission_log_clock, 1000,
+        "Rate-resolved normal submission unavailable: intent=%s, reason=%s",
+        mpcc_contract::to_string(intent), draft_reject_reason.c_str());
+    }
+    return output;
   }
 
   MpcControlCycleResult get_control(
@@ -28641,7 +28905,7 @@ struct MPC
         invalidate_follow_canonical_async_context();
       }
       if (overtake_canonical_async_intent(control_intent)) {
-        return canonical_overtake_production_control(
+        return rate_resolved_normal_production_control(
           problem, now_sec, control_intent);
       }
       if (unresolved_dynamic_wait_canonical_scope()) {
@@ -28653,49 +28917,8 @@ struct MPC
         control_intent == mpcc_contract::ControlIntent::Track ||
         control_intent == mpcc_contract::ControlIntent::Cruise)
       {
-        if (!problem.track_cruise_shadow_requested) {
-          return canonical_normal_emergency_stop(
-            problem, control_intent,
-            "rate-resolved Track/Cruise admission unavailable");
-        }
-        std::string draft_reject_reason;
-        const auto rate_resolved_submission_draft =
-          build_rate_resolved_track_cruise_submission_draft(
-          problem, now_sec, draft_reject_reason);
-        // Revalidate the retained six-state candidate against the predecessor
-        // which entered this cycle.  Do this before resolving the current
-        // production output; after resolution, previous_steering belongs to
-        // the next asynchronous problem.
-        const auto retained_rate_resolved =
-          evaluate_rate_resolved_track_cruise_retained_shadow(problem, now_sec);
-        record_rate_resolved_track_cruise_shadow(
-          problem, now_sec, retained_rate_resolved);
-        auto output = rate_resolved_track_cruise_control(
-          problem, current_control_intent(), retained_rate_resolved);
-        record_rate_resolved_track_cruise_command(
-          retained_rate_resolved, output, now_sec);
-        if (rate_resolved_submission_draft.has_value()) {
-          const auto bound_submission =
-            bind_rate_resolved_track_cruise_submission(
-            rate_resolved_submission_draft.value(), output);
-          if (bound_submission.has_value()) {
-            static_cast<void>(submit_rate_resolved_track_cruise_shadow(
-              problem, bound_submission.value(), now_sec));
-          } else {
-            ++rate_resolved_track_cruise_shadow_telemetry_window_.
-              submission_reject_count;
-          }
-        } else {
-          ++rate_resolved_track_cruise_shadow_telemetry_window_.
-            submission_reject_count;
-          static rclcpp::Clock submission_log_clock{RCL_STEADY_TIME};
-          RCLCPP_WARN_THROTTLE(
-            rclcpp::get_logger("mpc_controller"),
-            submission_log_clock, 1000,
-            "Rate-resolved Track/Cruise submission unavailable: %s",
-            draft_reject_reason.c_str());
-        }
-        return output;
+        return rate_resolved_normal_production_control(
+          problem, now_sec, control_intent);
       }
       if (control_intent == mpcc_contract::ControlIntent::Rejoin) {
         if (!problem.rejoin_shadow_requested) {

@@ -22,6 +22,11 @@ struct Identity
   double snapshot_sec{};
 };
 
+/// Return whether the six-state steering-rate execution artifact owns this
+/// canonical normal intent.  All validators and current-world consumers must
+/// use this single capability definition; duplicating a Track/Cruise-only
+/// subset makes a physically certified Overtake artifact unpublishable.
+bool supports_intent(mpcc_execution_contract::ControlIntent intent) noexcept;
 bool identity_valid(const Identity & identity) noexcept;
 bool same_identity(const Identity & lhs, const Identity & rhs) noexcept;
 

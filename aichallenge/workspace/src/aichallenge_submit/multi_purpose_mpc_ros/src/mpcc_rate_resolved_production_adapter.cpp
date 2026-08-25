@@ -19,13 +19,6 @@ namespace candidate = mpcc_rate_resolved_command_candidate;
 namespace certified = mpcc_rate_resolved_certified_plan;
 namespace physical = mpcc_rate_resolved_physical_wall;
 
-bool track_or_cruise(const contract::ControlIntent intent) noexcept
-{
-  return
-    intent == contract::ControlIntent::Track ||
-    intent == contract::ControlIntent::Cruise;
-}
-
 std::optional<std::pair<std::vector<double>, std::vector<double>>>
 build_world_prediction(
   const physical::Snapshot & snapshot, const artifact::Cursor & cursor) noexcept
@@ -112,7 +105,7 @@ Result build(const retained::Result & retained_result) noexcept
   const auto & source_context = execution.identity.source_context;
   if (
     !contract::problem_context_complete(source_context) ||
-    !track_or_cruise(source_context.intent) ||
+    !artifact::supports_intent(source_context.intent) ||
     source_context.formulation !=
     contract::Formulation::VelocitySteeringProgress6State ||
     proof.decision_id == 0U)

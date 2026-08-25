@@ -5986,19 +5986,6 @@ struct RateResolvedPreentryExecutionShadowMailbox
   std::optional<RateResolvedPreentryExecutionShadowResult> latest_result;
 };
 
-struct RateResolvedTransitionAdmissionEvaluation
-{
-  bool attempted{false};
-  bool certified{false};
-  std::uint64_t sequence{};
-  rate_resolved_shadow::Outcome solver_outcome{
-    rate_resolved_shadow::Outcome::BuildRejected};
-  rate_resolved_physical_wall::Outcome physical_outcome{
-    rate_resolved_physical_wall::Outcome::InvalidInput};
-  double elapsed_ms{};
-  std::string detail{"not-attempted"};
-};
-
 RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
   const rate_resolved_shadow::Snapshot & snapshot,
   std::optional<rate_resolved_physical_wall::Snapshot> physical_snapshot,
@@ -6491,6 +6478,24 @@ struct RateResolvedRetainedShadowEvaluation
   bool candidate_attempted{false};
   bool executed_attempted{false};
   double elapsed_ms{};
+};
+
+struct RateResolvedTransitionAdmissionEvaluation
+{
+  bool attempted{false};
+  bool certified{false};
+  bool current_world_joined{false};
+  std::uint64_t sequence{};
+  rate_resolved_shadow::Outcome solver_outcome{
+    rate_resolved_shadow::Outcome::BuildRejected};
+  rate_resolved_physical_wall::Outcome physical_outcome{
+    rate_resolved_physical_wall::Outcome::InvalidInput};
+  rate_resolved_retained::Reason current_world_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  std::shared_ptr<const rate_resolved_certified::CertifiedPlan> certified_plan;
+  RateResolvedRetainedShadowEvaluation retained;
+  double elapsed_ms{};
+  std::string detail{"not-attempted"};
 };
 
 struct RateResolvedCommandShadowTelemetryWindow
@@ -24552,17 +24557,43 @@ struct MPC
         evaluation.physical->detail);
     }
 
-    const auto certified =
-      rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot();
+    // Keep the exact immutable plan produced by this synchronous transaction.
+    // Looking it up again through Store::candidate_snapshot() is not an atomic
+    // adoption contract: that slot is also written by the asynchronous worker
+    // and physical certification alone says nothing about the current dynamic
+    // world or predecessor command.
+    admission.certified_plan = evaluation.certified_plan.plan;
     admission.certified =
-      certified != nullptr && certified->execution_artifact != nullptr &&
-      certified->execution_artifact->identity.sequence == admission.sequence &&
-      certified->execution_artifact->identity.source_context.intent ==
-      draft.source_context.intent;
+      evaluation.certified_plan.reason ==
+      rate_resolved_certified::RejectReason::None &&
+      admission.certified_plan != nullptr &&
+      admission.certified_plan->execution_artifact != nullptr &&
+      admission.certified_plan->execution_artifact->identity.sequence ==
+      admission.sequence &&
+      admission.certified_plan->execution_artifact->identity.source_context.
+      intent == draft.source_context.intent;
+    if (!admission.certified) {
+      return finish("rate-resolved transition exact certification rejected");
+    }
+
+    admission.retained = evaluate_rate_resolved_track_cruise_plan(
+      problem, now_sec, admission.certified_plan);
+    admission.current_world_reason = admission.retained.reason;
+    admission.current_world_joined =
+      admission.retained.production_authority.has_value();
+    if (!admission.current_world_joined) {
+      std::ostringstream detail;
+      detail << "same six-state producer physically certified/current-world="
+             << rate_resolved_retained::to_string(
+        admission.current_world_reason)
+             << "/sequence=" << admission.sequence
+             << "/blocker=" <<
+        (admission.retained.blocking_obstacle_id.empty() ?
+        "none" : admission.retained.blocking_obstacle_id);
+      return finish(detail.str());
+    }
     return finish(
-      admission.certified ?
-      "same six-state producer physically certified" :
-      "rate-resolved transition certification store rejected");
+      "same six-state producer physically certified/current-world joined");
   }
 
   std::optional<rate_resolved_retained::Request>
@@ -26524,23 +26555,25 @@ struct MPC
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Rate-resolved canonical atomic admission: decision=%lu, "
-        "previous=%s, intent=%s, attempted=%d, certified=%d, sequence=%lu, "
-        "solver=%s, physical=%s, elapsed_ms=%.3f, detail=%s",
+        "previous=%s, intent=%s, attempted=%d, certified=%d, joined=%d, "
+        "sequence=%lu, solver=%s, physical=%s, world=%s, blocker=%s, "
+        "elapsed_ms=%.3f, detail=%s",
         static_cast<unsigned long>(active_control_decision_id_),
         mpcc_contract::to_string(previous_intent),
         mpcc_contract::to_string(intent), admission.attempted ? 1 : 0,
-        admission.certified ? 1 : 0,
+        admission.certified ? 1 : 0, admission.current_world_joined ? 1 : 0,
         static_cast<unsigned long>(admission.sequence),
         rate_resolved_shadow::to_string(admission.solver_outcome),
         rate_resolved_physical_wall::to_string(admission.physical_outcome),
+        rate_resolved_retained::to_string(admission.current_world_reason),
+        admission.retained.blocking_obstacle_id.empty() ?
+        "none" : admission.retained.blocking_obstacle_id.c_str(),
         admission.elapsed_ms, admission.detail.c_str());
       if (admission.certified) {
-        // Admission proves the immutable six-state artifact and its exact
-        // physical trajectory only.  Production still requires the ordinary
-        // current-world join; never publish the synchronous solver result
-        // directly from this transition path.
-        retained = evaluate_rate_resolved_track_cruise_retained_shadow(
-          problem, now_sec);
+        // Consume the ordinary current-world evaluation of the exact plan
+        // certified above.  This remains the canonical retained/production
+        // path; the synchronous solver result is never published directly.
+        retained = admission.retained;
       }
     }
     record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);

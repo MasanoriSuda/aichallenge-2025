@@ -535,7 +535,7 @@ def test_rate_resolved_normal_snapshot_uses_observed_physical_steering() -> None
 
 
 def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() -> None:
-    """An intent change cannot publish a solver result before live revalidation."""
+    """An intent change joins the exact certified plan before publication."""
 
     admission_start = SOURCE.index(
         "evaluate_rate_resolved_transition_admission("
@@ -555,9 +555,13 @@ def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() ->
     assert "bind_rate_resolved_track_cruise_submission(draft, previous_steering)" not in admission
     assert "build_rate_resolved_submission_snapshot(" in admission
     assert "evaluate_rate_resolved_pipeline(" in admission
+    assert "admission.certified_plan = evaluation.certified_plan.plan" in admission
+    assert "evaluate_rate_resolved_track_cruise_plan(" in admission
+    assert "admission.current_world_reason = admission.retained.reason" in admission
+    assert "admission.current_world_joined" in admission
     assert (
         "rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot()"
-        in admission
+        not in admission
     )
     assert "VelocityProgress5State" not in admission
     assert "canonical_normal_control(" not in admission
@@ -571,18 +575,16 @@ def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() ->
         "evaluate_rate_resolved_track_cruise_retained_shadow("
     )
     admission_call = owner.index("evaluate_rate_resolved_transition_admission(")
-    second_revalidation = owner.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow(",
-        first_revalidation + 1,
-    )
     publication = owner.index("rate_resolved_track_cruise_control(")
-    assert first_revalidation < admission_call < second_revalidation < publication
+    assert first_revalidation < admission_call < publication
+    assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 1
     assert "!retained.production_authority.has_value()" in owner
     assert "ControlIntent::Unknown" in owner
     assert "last_published_canonical_intent_ != intent" in owner
     assert "retained.reason == rate_resolved_retained::Reason::MissingPlan" not in owner
     assert "retained.reason == rate_resolved_retained::Reason::IntentMismatch" not in owner
     assert "if (admission.certified)" in owner
+    assert "retained = admission.retained" in owner
 
 
 def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
@@ -654,7 +656,8 @@ def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     admission = SOURCE[admission_start:admission_end]
     assert "build_rate_resolved_submission_snapshot(" in admission
     assert "evaluate_rate_resolved_pipeline(" in admission
-    assert "rate_resolved_track_cruise_certified_plan_store_" in admission
+    assert "admission.certified_plan = evaluation.certified_plan.plan" in admission
+    assert "evaluate_rate_resolved_track_cruise_plan(" in admission
     assert "VelocityProgress5State" not in admission
     assert "legacy-mpc" not in admission
 
@@ -662,10 +665,10 @@ def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
     owner = SOURCE[owner_start:owner_end]
     admission_call = owner.index("evaluate_rate_resolved_transition_admission(")
-    retained_join = owner.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow(", admission_call
-    )
-    assert admission_call < retained_join
+    production = owner.index("rate_resolved_track_cruise_control(")
+    assert admission_call < production
+    assert "retained = admission.retained" in owner
+    assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 1
     assert "last_published_canonical_intent_" in owner
     assert "ControlIntent::Follow" in owner
 

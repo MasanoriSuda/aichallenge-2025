@@ -325,11 +325,8 @@ mpc:
   state_prediction_delay_sec: 0.13
   state_prediction_simulation_only: true
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
-  # First real contouring-progress MPCC stage. During ShiftOut/Pass/Return the
-  # third state changes from fixed-distance elapsed time to physical course
-  # progress. Existing DP stage corridor remains the hard lateral constraint.
-  progress_contouring_mpcc_enabled: true
-  progress_contouring_mpcc_overtake_only: true
+  # The canonical progress MPCC owns every normal intent. During
+  # ShiftOut/Pass/Return the tactical corridor remains the hard lateral constraint.
   # The latest-only worker solves complete left/right Missions with the same
   # 5x3 MPCC before one assessment is atomically promoted to the live callback.
   progress_contouring_dual_branch_enabled: true
@@ -344,10 +341,8 @@ mpc:
   progress_contouring_terminal_lag_weight: 2500.0
   progress_contouring_progress_reward_weight: 2000.0
   progress_contouring_terminal_progress_reward_weight: 5000.0
-  # Extended overtake MPCC: [e_y, e_lag, e_psi, v, theta] and
-  # [acceleration, curvature, virtual progress speed]. The established 3x2
-  # formulation remains the cycle-local fallback when this QP is unavailable.
-  progress_contouring_extended_dynamics_enabled: true
+  # Canonical MPCC: [e_y, e_lag, e_psi, v, theta] and
+  # [acceleration, curvature, virtual progress speed].
   progress_contouring_extended_lag_state_bound_m: 3.0
   # Extended states use their own numerical scale. Keep lateral/heading and
   # terminal guidance explicit so numerical stabilization cannot weaken path

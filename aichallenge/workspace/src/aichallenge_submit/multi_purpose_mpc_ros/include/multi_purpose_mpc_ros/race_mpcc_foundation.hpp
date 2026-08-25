@@ -189,9 +189,6 @@ std::string format_shadow_decision(const ShadowDecision & decision);
 enum class TrackCruiseShadowEligibilityReason
 {
   Eligible,
-  ProgressMpccDisabled,
-  MigrationBoundaryInactive,
-  ExtendedDynamicsDisabled,
   LiveProgressAlreadyActive,
   TacticalSnapshot,
   IntentNotTrackCruise,
@@ -202,9 +199,6 @@ const char * track_cruise_shadow_eligibility_reason_name(
 
 struct TrackCruiseShadowEligibilityRequest
 {
-  bool progress_mpcc_enabled{false};
-  bool overtake_only_boundary{true};
-  bool extended_dynamics_enabled{false};
   bool live_progress_active{false};
   bool tactical_snapshot{false};
   mpcc_execution_contract::ControlIntent intent{
@@ -215,7 +209,7 @@ struct TrackCruiseShadowEligibility
 {
   bool eligible{false};
   TrackCruiseShadowEligibilityReason reason{
-    TrackCruiseShadowEligibilityReason::ProgressMpccDisabled};
+    TrackCruiseShadowEligibilityReason::IntentNotTrackCruise};
 };
 
 TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
@@ -224,9 +218,6 @@ TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
 enum class RejoinShadowEligibilityReason
 {
   Eligible,
-  ProgressMpccDisabled,
-  MigrationBoundaryInactive,
-  ExtendedDynamicsDisabled,
   LiveProgressAlreadyActive,
   TacticalSnapshot,
   IntentNotRejoin,
@@ -237,9 +228,6 @@ const char * rejoin_shadow_eligibility_reason_name(
 
 struct RejoinShadowEligibilityRequest
 {
-  bool progress_mpcc_enabled{false};
-  bool overtake_only_boundary{true};
-  bool extended_dynamics_enabled{false};
   bool live_progress_active{false};
   bool tactical_snapshot{false};
   mpcc_execution_contract::ControlIntent intent{
@@ -250,7 +238,7 @@ struct RejoinShadowEligibility
 {
   bool eligible{false};
   RejoinShadowEligibilityReason reason{
-    RejoinShadowEligibilityReason::ProgressMpccDisabled};
+    RejoinShadowEligibilityReason::IntentNotRejoin};
 };
 
 /// Observe line Recovery with the canonical five-state formulation without
@@ -262,9 +250,6 @@ RejoinShadowEligibility resolve_rejoin_shadow_eligibility(
 enum class FollowShadowEligibilityReason
 {
   Eligible,
-  ProgressMpccDisabled,
-  MigrationBoundaryInactive,
-  ExtendedDynamicsDisabled,
   LiveProgressAlreadyActive,
   TacticalSnapshot,
   IntentNotFollow,
@@ -276,9 +261,6 @@ const char * follow_shadow_eligibility_reason_name(
 
 struct FollowShadowEligibilityRequest
 {
-  bool progress_mpcc_enabled{false};
-  bool overtake_only_boundary{true};
-  bool extended_dynamics_enabled{false};
   bool live_progress_active{false};
   bool tactical_snapshot{false};
   mpcc_execution_contract::ControlIntent intent{
@@ -293,11 +275,11 @@ struct FollowShadowEligibility
 {
   bool eligible{false};
   FollowShadowEligibilityReason reason{
-    FollowShadowEligibilityReason::ProgressMpccDisabled};
+    FollowShadowEligibilityReason::IntentNotFollow};
 };
 
-/// Reuse the existing migration boundary for Follow observation. This does
-/// not grant command authority; it only requests canonical metadata/solve.
+/// Request canonical Follow metadata only for a coherent current-world front
+/// observation. Production authority is resolved separately from this gate.
 FollowShadowEligibility resolve_follow_shadow_eligibility(
   const FollowShadowEligibilityRequest & request) noexcept;
 
@@ -305,7 +287,6 @@ enum class OvertakeCanonicalFreshShadowEligibilityReason
 {
   Eligible,
   ProgressContouringInactive,
-  ExtendedDynamicsDisabled,
   IntentNotOvertakeExecution,
   ExecutionContextUnavailable,
   LateralBoundsInvalid,
@@ -317,7 +298,6 @@ const char * overtake_canonical_fresh_shadow_eligibility_reason_name(
 struct OvertakeCanonicalFreshShadowEligibilityRequest
 {
   bool progress_contouring_active{false};
-  bool extended_dynamics_enabled{false};
   mpcc_execution_contract::ControlIntent intent{
     mpcc_execution_contract::ControlIntent::Unknown};
   bool execution_context_available{false};

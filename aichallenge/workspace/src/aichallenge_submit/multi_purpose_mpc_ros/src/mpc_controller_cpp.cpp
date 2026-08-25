@@ -5493,8 +5493,6 @@ struct MpcConfig
   double state_prediction_delay_sec{0.0};
   bool state_prediction_simulation_only{true};
   double min_linearization_speed_mps{0.5};
-  bool progress_contouring_mpcc_enabled{false};
-  bool progress_contouring_mpcc_overtake_only{true};
   bool progress_contouring_dual_branch_enabled{false};
   double progress_contouring_dual_branch_minimum_objective_advantage{1.0};
   double progress_contouring_dual_branch_minimum_bound_reserve_m{0.02};
@@ -5540,7 +5538,7 @@ struct MpcProblem
   bool rejoin_shadow_requested{false};
   std::string progress_metadata_reject_reason;
   mpcc_progress::ActivationSource progress_contouring_activation_source{
-    mpcc_progress::ActivationSource::Disabled};
+    mpcc_progress::ActivationSource::NormalIntent};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> progress_stage_distance_m;
   std::vector<double> progress_path_curvature_radpm;
@@ -5593,7 +5591,7 @@ struct MpcProblem
   std::string lateral_bounds_contract_failure_source;
   bool follow_shadow_requested{false};
   race_mpcc::FollowShadowEligibilityReason follow_shadow_eligibility_reason{
-    race_mpcc::FollowShadowEligibilityReason::ProgressMpccDisabled};
+    race_mpcc::FollowShadowEligibilityReason::IntentNotFollow};
   race_mpcc::FollowLongitudinalContract follow_longitudinal_contract;
 };
 
@@ -6068,7 +6066,7 @@ struct FollowShadowCycleResult
   std::uint64_t retained_target_tube_id{};
   std::string target_id;
   race_mpcc::FollowShadowEligibilityReason eligibility_reason{
-    race_mpcc::FollowShadowEligibilityReason::ProgressMpccDisabled};
+    race_mpcc::FollowShadowEligibilityReason::IntentNotFollow};
   race_mpcc::FollowLongitudinalContractReason contract_reason{
     race_mpcc::FollowLongitudinalContractReason::InvalidHorizon};
   race_mpcc::ShadowWarmStartResetReason reset_reason{
@@ -6843,44 +6841,38 @@ struct MPC
       std::make_shared<CanonicalNormalLifecycle>();
     overtake_canonical_lifecycle_ =
       std::make_shared<CanonicalNormalLifecycle>();
-    if (
-      cfg.progress_contouring_mpcc_enabled &&
-      cfg.progress_contouring_mpcc_overtake_only &&
-      cfg.progress_contouring.extended_dynamics_enabled)
-    {
-      rejoin_shadow_solver_context_ =
-        std::make_shared<ExtendedBranchSolverContext>(
-        kCanonicalPhysicalRowTolerancePolicy);
-      follow_canonical_lifecycle_->solver_context =
-        std::make_shared<ExtendedBranchSolverContext>(
-        kCanonicalPhysicalRowTolerancePolicy);
-      overtake_canonical_lifecycle_->solver_context =
-        std::make_shared<ExtendedBranchSolverContext>(
-        kCanonicalPhysicalRowTolerancePolicy);
-      if (enable_async_tactical_worker) {
-        rate_resolved_track_cruise_shadow_solver_context_ =
-          std::make_shared<rate_resolved_shadow::SolverContext>();
-        rate_resolved_track_cruise_shadow_mailbox_ =
-          std::make_shared<rate_resolved_shadow::Mailbox>();
-        rate_resolved_track_cruise_shadow_worker_ =
-          std::make_unique<LatestOnlyWorker>();
-        rate_resolved_track_cruise_physical_wall_mailbox_ =
-          std::make_shared<rate_resolved_physical_wall::Mailbox>();
-        rate_resolved_track_cruise_certified_plan_store_ =
-          std::make_shared<rate_resolved_certified::Store>();
-        follow_canonical_async_mailbox_ =
-          std::make_shared<follow_async::Mailbox>();
-        follow_canonical_async_mailbox_->reset_context(
-          follow_canonical_async_context_.context_epoch);
-        follow_canonical_async_worker_ =
-          std::make_unique<LatestOnlyWorker>();
-        overtake_canonical_async_mailbox_ =
-          std::make_shared<follow_async::Mailbox>();
-        overtake_canonical_async_mailbox_->reset_context(
-          overtake_canonical_async_context_.context_epoch);
-        overtake_canonical_async_worker_ =
-          std::make_unique<LatestOnlyWorker>();
-      }
+    rejoin_shadow_solver_context_ =
+      std::make_shared<ExtendedBranchSolverContext>(
+      kCanonicalPhysicalRowTolerancePolicy);
+    follow_canonical_lifecycle_->solver_context =
+      std::make_shared<ExtendedBranchSolverContext>(
+      kCanonicalPhysicalRowTolerancePolicy);
+    overtake_canonical_lifecycle_->solver_context =
+      std::make_shared<ExtendedBranchSolverContext>(
+      kCanonicalPhysicalRowTolerancePolicy);
+    if (enable_async_tactical_worker) {
+      rate_resolved_track_cruise_shadow_solver_context_ =
+        std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_track_cruise_shadow_mailbox_ =
+        std::make_shared<rate_resolved_shadow::Mailbox>();
+      rate_resolved_track_cruise_shadow_worker_ =
+        std::make_unique<LatestOnlyWorker>();
+      rate_resolved_track_cruise_physical_wall_mailbox_ =
+        std::make_shared<rate_resolved_physical_wall::Mailbox>();
+      rate_resolved_track_cruise_certified_plan_store_ =
+        std::make_shared<rate_resolved_certified::Store>();
+      follow_canonical_async_mailbox_ =
+        std::make_shared<follow_async::Mailbox>();
+      follow_canonical_async_mailbox_->reset_context(
+        follow_canonical_async_context_.context_epoch);
+      follow_canonical_async_worker_ =
+        std::make_unique<LatestOnlyWorker>();
+      overtake_canonical_async_mailbox_ =
+        std::make_shared<follow_async::Mailbox>();
+      overtake_canonical_async_mailbox_->reset_context(
+        overtake_canonical_async_context_.context_epoch);
+      overtake_canonical_async_worker_ =
+        std::make_unique<LatestOnlyWorker>();
     }
     if (
       !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_offset) ||
@@ -8513,8 +8505,6 @@ struct MPC
   {
     if (
       !cfg.progress_contouring_dual_branch_enabled ||
-      !cfg.progress_contouring_mpcc_enabled ||
-      !cfg.progress_contouring.extended_dynamics_enabled ||
       !mpcc_lite_async_worker_context_)
     {
       return;
@@ -15218,9 +15208,7 @@ struct MPC
         auto & authoritative_assessment = mission.pass_side_sign > 0 ?
           left_assessment : right_assessment;
         const bool physical_execution_certificate_required =
-          cfg.progress_contouring_dual_branch_enabled &&
-          cfg.progress_contouring_mpcc_enabled &&
-          cfg.progress_contouring.extended_dynamics_enabled;
+          cfg.progress_contouring_dual_branch_enabled;
         std::string certificate_reason = "not-required";
         if (
           physical_execution_certificate_required &&
@@ -15344,9 +15332,7 @@ struct MPC
         const auto async_extended_entry_admission =
           mpcc_progress::resolve_extended_branch_entry_admission(
           mpcc_progress::ExtendedBranchEntryAdmissionRequest{
-            cfg.progress_contouring_dual_branch_enabled &&
-            cfg.progress_contouring_mpcc_enabled &&
-            cfg.progress_contouring.extended_dynamics_enabled,
+            cfg.progress_contouring_dual_branch_enabled,
             async_new_entry_context,
             async_behavior.extended_mpcc_branch_selection.valid,
             async_behavior.extended_mpcc_branch_selection.selected_side_sign,
@@ -19070,8 +19056,6 @@ struct MPC
       overtake_line_state_.phase == OvertakeLinePhase::Return;
     const auto progress_contouring_activation = mpcc_progress::resolve_activation(
       mpcc_progress::ActivationRequest{
-        cfg.progress_contouring_mpcc_enabled,
-        cfg.progress_contouring_mpcc_overtake_only,
         progress_contouring_execution_phase,
         behavior_output.dynamic_obstacle_lateral_escape_active});
     const bool progress_contouring_requested =
@@ -19079,9 +19063,6 @@ struct MPC
     const auto track_cruise_shadow_eligibility =
       race_mpcc::resolve_track_cruise_shadow_eligibility(
       race_mpcc::TrackCruiseShadowEligibilityRequest{
-        cfg.progress_contouring_mpcc_enabled,
-        cfg.progress_contouring_mpcc_overtake_only,
-        cfg.progress_contouring.extended_dynamics_enabled,
         progress_contouring_requested,
         behavior_override != nullptr,
         current_control_intent()});
@@ -19090,9 +19071,6 @@ struct MPC
     const auto rejoin_shadow_eligibility =
       race_mpcc::resolve_rejoin_shadow_eligibility(
       race_mpcc::RejoinShadowEligibilityRequest{
-        cfg.progress_contouring_mpcc_enabled,
-        cfg.progress_contouring_mpcc_overtake_only,
-        cfg.progress_contouring.extended_dynamics_enabled,
         progress_contouring_requested,
         behavior_override != nullptr,
         current_control_intent()});
@@ -19100,9 +19078,6 @@ struct MPC
     const auto follow_shadow_eligibility =
       race_mpcc::resolve_follow_shadow_eligibility(
       race_mpcc::FollowShadowEligibilityRequest{
-        cfg.progress_contouring_mpcc_enabled,
-        cfg.progress_contouring_mpcc_overtake_only,
-        cfg.progress_contouring.extended_dynamics_enabled,
         progress_contouring_requested,
         behavior_override != nullptr,
         current_control_intent(),
@@ -19146,8 +19121,8 @@ struct MPC
     {
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
-        "Progress-contouring MPCC preparation rejected; source=%s, "
-        "dynamic_escape=%d, using legacy MPC for this cycle: %s",
+        "Canonical progress-contouring metadata rejected; source=%s, "
+        "dynamic_escape=%d, normal owner will fail closed for this cycle: %s",
         mpcc_progress::activation_source_name(progress_contouring_activation.source),
         behavior_output.dynamic_obstacle_lateral_escape_active ? 1 : 0,
         progress_contouring_reject_reason.c_str());
@@ -19787,7 +19762,7 @@ struct MPC
     const int configured_legacy_nx_N = legacy_nx * (configured_N + 1);
     const int configured_legacy_nu_N = legacy_nu * configured_N;
     if (
-      !legacy.progress_metadata_available || !cfg.progress_contouring.extended_dynamics_enabled ||
+      !legacy.progress_metadata_available ||
       configured_N <= 0 || model == nullptr || model->reference_path == nullptr ||
       !std::isfinite(model->length) || model->length <= 0.0 ||
       !std::isfinite(legacy.progress_origin_m) ||
@@ -24431,7 +24406,6 @@ struct MPC
       race_mpcc::resolve_overtake_canonical_fresh_shadow_eligibility(
       race_mpcc::OvertakeCanonicalFreshShadowEligibilityRequest{
         problem.progress_contouring_active,
-        cfg.progress_contouring.extended_dynamics_enabled,
         result.intent,
         problem.progress_execution_context_active ||
         problem.dynamic_obstacle_lateral_escape_active ||
@@ -38418,9 +38392,7 @@ private:
           behavior_output.overtake_corridor_center_ey.has_value();
         if (fresh_normal_mission_entry) {
           const bool physical_execution_certificate_required =
-            cfg.progress_contouring_dual_branch_enabled &&
-            cfg.progress_contouring_mpcc_enabled &&
-            cfg.progress_contouring.extended_dynamics_enabled;
+            cfg.progress_contouring_dual_branch_enabled;
           const bool candidate_available =
             behavior_output.overtake_selected_mission.has_value();
           const bool certificate_available =
@@ -47915,12 +47887,6 @@ Config load_config(const std::string & path)
   {
     throw std::runtime_error("mpc.min_linearization_speed_mps must be finite and positive");
   }
-  cfg.mpc.progress_contouring_mpcc_enabled =
-    mpc["progress_contouring_mpcc_enabled"] ?
-    mpc["progress_contouring_mpcc_enabled"].as<bool>() : false;
-  cfg.mpc.progress_contouring_mpcc_overtake_only =
-    mpc["progress_contouring_mpcc_overtake_only"] ?
-    mpc["progress_contouring_mpcc_overtake_only"].as<bool>() : true;
   cfg.mpc.progress_contouring_dual_branch_enabled =
     mpc["progress_contouring_dual_branch_enabled"] ?
     mpc["progress_contouring_dual_branch_enabled"].as<bool>() : false;
@@ -47972,9 +47938,6 @@ Config load_config(const std::string & path)
   progress_contouring.terminal_progress_reward_weight =
     mpc["progress_contouring_terminal_progress_reward_weight"] ?
     mpc["progress_contouring_terminal_progress_reward_weight"].as<double>() : 5000.0;
-  progress_contouring.extended_dynamics_enabled =
-    mpc["progress_contouring_extended_dynamics_enabled"] ?
-    mpc["progress_contouring_extended_dynamics_enabled"].as<bool>() : false;
   progress_contouring.extended_lag_state_bound_m =
     mpc["progress_contouring_extended_lag_state_bound_m"] ?
     mpc["progress_contouring_extended_lag_state_bound_m"].as<double>() : 3.0;
@@ -50709,12 +50672,10 @@ public:
     create_map_ref_path_car_mpc();
     RCLCPP_INFO(
       get_logger(),
-      "Progress-contouring MPCC: %s, scope=%s, lag=%.1f/%.1f, "
+      "Canonical progress-contouring MPCC: always-on, lag=%.1f/%.1f, "
       "reward=%.1f/%.1f, trust=-%.1f/+%.1f m, rti_sqp=%d@%.2f, "
       "conditional=%s/reserve<=%.2f m/defect>=%.2f m/%.3f rad/"
       "curvature>=%.3f rad/m/deadline=%.1f ms/cold<=%.2f s/wall_miss>=%zu",
-      mpc_cfg_.progress_contouring_mpcc_enabled ? "enabled" : "disabled",
-      mpc_cfg_.progress_contouring_mpcc_overtake_only ? "overtake" : "all",
       mpc_cfg_.progress_contouring.lag_weight,
       mpc_cfg_.progress_contouring.terminal_lag_weight,
       mpc_cfg_.progress_contouring.progress_reward_weight,
@@ -50734,11 +50695,10 @@ public:
       mpc_cfg_.progress_contouring.refinement_wall_cache_miss_skip_threshold);
     RCLCPP_INFO(
       get_logger(),
-      "Extended velocity-progress MPCC: %s, tracking=%.1f/%.1f stage, "
+      "Canonical velocity-progress MPCC: always-on, tracking=%.1f/%.1f stage, "
       "%.1f/%.1f terminal (lateral/heading), "
       "wall_tracking=%.2f m/min_scale=%.2f, "
       "dual_branch=%s/advantage>=%.2f/reserve>=%.2f m",
-      mpc_cfg_.progress_contouring.extended_dynamics_enabled ? "enabled" : "disabled",
       mpc_cfg_.progress_contouring.extended_lateral_tracking_weight,
       mpc_cfg_.progress_contouring.extended_heading_tracking_weight,
       mpc_cfg_.progress_contouring.extended_terminal_lateral_tracking_weight,

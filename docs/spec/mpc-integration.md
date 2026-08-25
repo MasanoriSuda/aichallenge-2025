@@ -2180,6 +2180,25 @@ failure-first source contract、25-package build、49 test target、1,821 test�
 Rejoin、publisher、Emergency、Recoveryを変更しておらず、parameter tuningも行っていないため、新規の
 動的replayは要求しない。
 
+#### Canonical normal availability移行ゲートの物理削除（2026-08-25、2025由来の暫定）
+
+旧normal MPC／3-state／direct authority削除後も残っていた
+`progress_contouring_mpcc_enabled`、`progress_contouring_mpcc_overtake_only`、
+`progress_contouring_extended_dynamics_enabled`をSlice 6で物理削除した。これらは旧formulationへ
+切り替えるためのmigration switchだったが、切替先削除後はfalseまたはkey欠落によって唯一のcanonical
+solver lifecycleとeligibilityを無効化し、normal owner不在を作るだけの状態になっていた。
+
+canonical solver lifecycleは常に構築する。Track／Cruise、Follow、Rejoinはcontrol intentと現在世界の
+admission evidence、Overtake／Dynamic Escapeは現在のexecution factからmetadata／solveを要求する。
+旧migration boundary、MPCC disabled、extended dynamics disabledというeligibility理由は削除した。
+左右dual branchは戦術候補生成の任意機能であり、normal formulationの切替ではないため別設定として
+維持する。
+
+標準launchが読む`config/config.yaml`では削除前の3 keyが全てtrueだったため、到達可能なnormal制御は
+変更していない。weight、clearance、margin、timeout、solver tolerance、cadence、Emergencyおよび
+Recoveryも変更していない。failure-first source contract、25-package build、49 test target、1,822 testが
+合格した。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

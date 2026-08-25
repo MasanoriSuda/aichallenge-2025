@@ -16,6 +16,15 @@ MPCC_PROGRESS_HEADER = (
 MPCC_PROGRESS_SOURCE = (
     Path(__file__).resolve().parents[1] / "src" / "mpcc_progress.cpp"
 ).read_text(encoding="utf-8")
+RACE_MPCC_FOUNDATION_HEADER = (
+    Path(__file__).resolve().parents[1]
+    / "include"
+    / "multi_purpose_mpc_ros"
+    / "race_mpcc_foundation.hpp"
+).read_text(encoding="utf-8")
+RACE_MPCC_FOUNDATION_SOURCE = (
+    Path(__file__).resolve().parents[1] / "src" / "race_mpcc_foundation.cpp"
+).read_text(encoding="utf-8")
 V2X_OVERTAKE_HEADER = (
     Path(__file__).resolve().parents[1]
     / "include"
@@ -53,6 +62,32 @@ CONFIG = (
 CLOUD_CONFIG = (
     Path(__file__).resolve().parents[1] / "config" / "config_for_cloud.yaml"
 ).read_text(encoding="utf-8")
+
+
+def test_canonical_normal_owner_has_no_runtime_migration_availability_switch() -> None:
+    """The sole normal owner cannot be disabled after legacy authority deletion."""
+
+    production = "\n".join(
+        (
+            SOURCE,
+            RACE_MPCC_FOUNDATION_HEADER,
+            RACE_MPCC_FOUNDATION_SOURCE,
+            MPCC_PROGRESS_HEADER,
+            MPCC_PROGRESS_SOURCE,
+            CONFIG,
+            CLOUD_CONFIG,
+        )
+    )
+    forbidden = (
+        "progress_contouring_mpcc_enabled",
+        "progress_contouring_mpcc_overtake_only",
+        "progress_contouring_extended_dynamics_enabled",
+        "ProgressMpccDisabled",
+        "MigrationBoundaryInactive",
+        "ExtendedDynamicsDisabled",
+        "overtake_only_boundary",
+    )
+    assert not [token for token in forbidden if token in production]
 
 
 def test_retired_low_speed_direct_authority_is_physically_deleted() -> None:

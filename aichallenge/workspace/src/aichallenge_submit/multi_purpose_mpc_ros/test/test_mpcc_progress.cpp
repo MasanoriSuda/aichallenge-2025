@@ -54,31 +54,31 @@ TEST(MpccProgress, ActivatesForDynamicEscapeOutsideOvertakeLinePhase)
   using multi_purpose_mpc_ros::mpcc_progress::ActivationSource;
   using multi_purpose_mpc_ros::mpcc_progress::resolve_activation;
   const auto resolution = resolve_activation(
-    ActivationRequest{true, true, false, true});
+    ActivationRequest{false, true});
   EXPECT_TRUE(resolution.requested);
   EXPECT_EQ(resolution.source, ActivationSource::DynamicObstacleEscape);
 }
 
-TEST(MpccProgress, KeepsOrdinaryCruiseOnLegacyMpcInOvertakeOnlyScope)
+TEST(MpccProgress, LeavesOrdinaryIntentToItsCanonicalIntentOwner)
 {
   using multi_purpose_mpc_ros::mpcc_progress::ActivationRequest;
   using multi_purpose_mpc_ros::mpcc_progress::ActivationSource;
   using multi_purpose_mpc_ros::mpcc_progress::resolve_activation;
   const auto resolution = resolve_activation(
-    ActivationRequest{true, true, false, false});
+    ActivationRequest{false, false});
   EXPECT_FALSE(resolution.requested);
-  EXPECT_EQ(resolution.source, ActivationSource::OvertakeScopeInactive);
+  EXPECT_EQ(resolution.source, ActivationSource::NormalIntent);
 }
 
-TEST(MpccProgress, GlobalScopeStillActivatesOrdinaryCruise)
+TEST(MpccProgress, ActivatesForOvertakeExecution)
 {
   using multi_purpose_mpc_ros::mpcc_progress::ActivationRequest;
   using multi_purpose_mpc_ros::mpcc_progress::ActivationSource;
   using multi_purpose_mpc_ros::mpcc_progress::resolve_activation;
   const auto resolution = resolve_activation(
-    ActivationRequest{true, false, false, false});
+    ActivationRequest{true, false});
   EXPECT_TRUE(resolution.requested);
-  EXPECT_EQ(resolution.source, ActivationSource::Global);
+  EXPECT_EQ(resolution.source, ActivationSource::OvertakeExecution);
 }
 
 TEST(MpccProgress, ResolvesFirstCurvatureReachabilityInSteeringCoordinates)

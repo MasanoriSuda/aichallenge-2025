@@ -925,6 +925,16 @@ Finish the architecture simplification instead of leaving permanent dual control
   publisher, Emergency or Recovery path changed, so no duplicate dynamic
   replay was required. Slice 6 remains open for separately audited residual
   migration names/owners; tuning remains prohibited.
+- `.steering/20260825-slice6-canonical-availability-gate-removal` removes the
+  expired `enabled`／`overtake_only`／`extended_dynamics_enabled` formulation
+  switches after proving that they guarded the sole canonical normal owner,
+  not an optional feature. Canonical lifecycle construction is unconditional;
+  intent and current-world evidence now own eligibility. The checked-in launch
+  already enabled all three switches, so reachable behavior is unchanged while
+  false／missing ownerless configurations become unrepresentable. The
+  failure-first contract, 25-package build and all 49 test targets (1,822
+  tests) pass. Remaining historical naming/final-source classification is a
+  separate audited cleanup; parameter tuning remains prohibited.
 
 ## Slice 7: Parameter tuning
 

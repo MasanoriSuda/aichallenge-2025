@@ -16,17 +16,13 @@ namespace multi_purpose_mpc_ros::mpcc_progress
 
 enum class ActivationSource
 {
-  Disabled,
-  Global,
+  NormalIntent,
   OvertakeExecution,
   DynamicObstacleEscape,
-  OvertakeScopeInactive,
 };
 
 struct ActivationRequest
 {
-  bool enabled{false};
-  bool overtake_only{true};
   bool overtake_execution_phase{false};
   bool dynamic_obstacle_escape_active{false};
 };
@@ -34,7 +30,7 @@ struct ActivationRequest
 struct ActivationResolution
 {
   bool requested{false};
-  ActivationSource source{ActivationSource::Disabled};
+  ActivationSource source{ActivationSource::NormalIntent};
 };
 
 /// Keep formulation ownership in one place. Dynamic-obstacle escape is a
@@ -56,11 +52,10 @@ struct Config
   double terminal_lag_weight{2500.0};
   double progress_reward_weight{2000.0};
   double terminal_progress_reward_weight{5000.0};
-  bool extended_dynamics_enabled{false};
   double extended_lag_state_bound_m{3.0};
-  // Extended dynamics have different state units and numerical scaling from
-  // the established 3-state MPCC. Keep their tracking weights explicit rather
-  // than inheriting one scale factor for both stage and terminal costs.
+  // Canonical states have different units and numerical scales. Keep their
+  // tracking weights explicit rather than inheriting one scale factor for
+  // both stage and terminal costs.
   double extended_lateral_tracking_weight{500.0};
   double extended_heading_tracking_weight{5000.0};
   double extended_terminal_lateral_tracking_weight{1500.0};

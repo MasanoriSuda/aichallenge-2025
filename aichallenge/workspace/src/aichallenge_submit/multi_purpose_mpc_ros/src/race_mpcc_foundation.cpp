@@ -351,12 +351,6 @@ const char * track_cruise_shadow_eligibility_reason_name(
   switch (reason) {
     case TrackCruiseShadowEligibilityReason::Eligible:
       return "eligible";
-    case TrackCruiseShadowEligibilityReason::ProgressMpccDisabled:
-      return "progress-mpcc-disabled";
-    case TrackCruiseShadowEligibilityReason::MigrationBoundaryInactive:
-      return "migration-boundary-inactive";
-    case TrackCruiseShadowEligibilityReason::ExtendedDynamicsDisabled:
-      return "extended-dynamics-disabled";
     case TrackCruiseShadowEligibilityReason::LiveProgressAlreadyActive:
       return "live-progress-already-active";
     case TrackCruiseShadowEligibilityReason::TacticalSnapshot:
@@ -371,18 +365,6 @@ TrackCruiseShadowEligibility resolve_track_cruise_shadow_eligibility(
   const TrackCruiseShadowEligibilityRequest & request) noexcept
 {
   TrackCruiseShadowEligibility result;
-  if (!request.progress_mpcc_enabled) {
-    result.reason = TrackCruiseShadowEligibilityReason::ProgressMpccDisabled;
-    return result;
-  }
-  if (!request.overtake_only_boundary) {
-    result.reason = TrackCruiseShadowEligibilityReason::MigrationBoundaryInactive;
-    return result;
-  }
-  if (!request.extended_dynamics_enabled) {
-    result.reason = TrackCruiseShadowEligibilityReason::ExtendedDynamicsDisabled;
-    return result;
-  }
   if (request.live_progress_active) {
     result.reason = TrackCruiseShadowEligibilityReason::LiveProgressAlreadyActive;
     return result;
@@ -409,12 +391,6 @@ const char * rejoin_shadow_eligibility_reason_name(
   switch (reason) {
     case RejoinShadowEligibilityReason::Eligible:
       return "eligible";
-    case RejoinShadowEligibilityReason::ProgressMpccDisabled:
-      return "progress-mpcc-disabled";
-    case RejoinShadowEligibilityReason::MigrationBoundaryInactive:
-      return "migration-boundary-inactive";
-    case RejoinShadowEligibilityReason::ExtendedDynamicsDisabled:
-      return "extended-dynamics-disabled";
     case RejoinShadowEligibilityReason::LiveProgressAlreadyActive:
       return "live-progress-already-active";
     case RejoinShadowEligibilityReason::TacticalSnapshot:
@@ -429,18 +405,6 @@ RejoinShadowEligibility resolve_rejoin_shadow_eligibility(
   const RejoinShadowEligibilityRequest & request) noexcept
 {
   RejoinShadowEligibility result;
-  if (!request.progress_mpcc_enabled) {
-    result.reason = RejoinShadowEligibilityReason::ProgressMpccDisabled;
-    return result;
-  }
-  if (!request.overtake_only_boundary) {
-    result.reason = RejoinShadowEligibilityReason::MigrationBoundaryInactive;
-    return result;
-  }
-  if (!request.extended_dynamics_enabled) {
-    result.reason = RejoinShadowEligibilityReason::ExtendedDynamicsDisabled;
-    return result;
-  }
   if (request.live_progress_active) {
     result.reason = RejoinShadowEligibilityReason::LiveProgressAlreadyActive;
     return result;
@@ -464,12 +428,6 @@ const char * follow_shadow_eligibility_reason_name(
   switch (reason) {
     case FollowShadowEligibilityReason::Eligible:
       return "eligible";
-    case FollowShadowEligibilityReason::ProgressMpccDisabled:
-      return "progress-mpcc-disabled";
-    case FollowShadowEligibilityReason::MigrationBoundaryInactive:
-      return "migration-boundary-inactive";
-    case FollowShadowEligibilityReason::ExtendedDynamicsDisabled:
-      return "extended-dynamics-disabled";
     case FollowShadowEligibilityReason::LiveProgressAlreadyActive:
       return "live-progress-already-active";
     case FollowShadowEligibilityReason::TacticalSnapshot:
@@ -486,18 +444,6 @@ FollowShadowEligibility resolve_follow_shadow_eligibility(
   const FollowShadowEligibilityRequest & request) noexcept
 {
   FollowShadowEligibility result;
-  if (!request.progress_mpcc_enabled) {
-    result.reason = FollowShadowEligibilityReason::ProgressMpccDisabled;
-    return result;
-  }
-  if (!request.overtake_only_boundary) {
-    result.reason = FollowShadowEligibilityReason::MigrationBoundaryInactive;
-    return result;
-  }
-  if (!request.extended_dynamics_enabled) {
-    result.reason = FollowShadowEligibilityReason::ExtendedDynamicsDisabled;
-    return result;
-  }
   if (request.live_progress_active) {
     result.reason = FollowShadowEligibilityReason::LiveProgressAlreadyActive;
     return result;
@@ -527,8 +473,6 @@ const char * overtake_canonical_fresh_shadow_eligibility_reason_name(
       return "eligible";
     case OvertakeCanonicalFreshShadowEligibilityReason::ProgressContouringInactive:
       return "progress-contouring-inactive";
-    case OvertakeCanonicalFreshShadowEligibilityReason::ExtendedDynamicsDisabled:
-      return "extended-dynamics-disabled";
     case OvertakeCanonicalFreshShadowEligibilityReason::IntentNotOvertakeExecution:
       return "intent-not-overtake-execution";
     case OvertakeCanonicalFreshShadowEligibilityReason::ExecutionContextUnavailable:
@@ -547,11 +491,6 @@ resolve_overtake_canonical_fresh_shadow_eligibility(
   if (!request.progress_contouring_active) {
     result.reason = OvertakeCanonicalFreshShadowEligibilityReason::
       ProgressContouringInactive;
-    return result;
-  }
-  if (!request.extended_dynamics_enabled) {
-    result.reason = OvertakeCanonicalFreshShadowEligibilityReason::
-      ExtendedDynamicsDisabled;
     return result;
   }
   if (

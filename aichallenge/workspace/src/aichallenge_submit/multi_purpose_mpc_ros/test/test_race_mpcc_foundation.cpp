@@ -104,20 +104,20 @@ TEST(RaceMpccFoundation, FormatsAllFourHomotopiesWithShadowAuthority)
   EXPECT_NE(output.find("authority=shadow"), std::string::npos);
 }
 
-TEST(RaceMpccFoundation, EnablesTrackAndCruiseOnlyAtTheExistingMigrationBoundary)
+TEST(RaceMpccFoundation, EnablesTrackAndCruiseByCanonicalIntent)
 {
   const auto track = race::resolve_track_cruise_shadow_eligibility(
     race::TrackCruiseShadowEligibilityRequest{
-      true, true, true, false, false, contract::ControlIntent::Track});
+      false, false, contract::ControlIntent::Track});
   const auto cruise = race::resolve_track_cruise_shadow_eligibility(
     race::TrackCruiseShadowEligibilityRequest{
-      true, true, true, false, false, contract::ControlIntent::Cruise});
+      false, false, contract::ControlIntent::Cruise});
   const auto follow = race::resolve_track_cruise_shadow_eligibility(
     race::TrackCruiseShadowEligibilityRequest{
-      true, true, true, false, false, contract::ControlIntent::Follow});
+      false, false, contract::ControlIntent::Follow});
   const auto tactical_snapshot = race::resolve_track_cruise_shadow_eligibility(
     race::TrackCruiseShadowEligibilityRequest{
-      true, true, true, false, true, contract::ControlIntent::Track});
+      false, true, contract::ControlIntent::Track});
 
   EXPECT_TRUE(track.eligible);
   EXPECT_TRUE(cruise.eligible);
@@ -134,17 +134,17 @@ TEST(RaceMpccFoundation, EnablesFollowShadowWithoutPromotingOtherIntents)
 {
   const auto follow = race::resolve_follow_shadow_eligibility(
     race::FollowShadowEligibilityRequest{
-      true, true, true, false, false, contract::ControlIntent::Follow, true});
+      false, false, contract::ControlIntent::Follow, true});
   const auto cruise = race::resolve_follow_shadow_eligibility(
     race::FollowShadowEligibilityRequest{
-      true, true, true, false, false, contract::ControlIntent::Cruise, true});
+      false, false, contract::ControlIntent::Cruise, true});
   const auto live = race::resolve_follow_shadow_eligibility(
     race::FollowShadowEligibilityRequest{
-      true, true, true, true, false, contract::ControlIntent::Follow, true});
+      true, false, contract::ControlIntent::Follow, true});
   const auto retained_label_without_front =
     race::resolve_follow_shadow_eligibility(
     race::FollowShadowEligibilityRequest{
-      true, true, true, false, false, contract::ControlIntent::Follow, false});
+      false, false, contract::ControlIntent::Follow, false});
 
   EXPECT_TRUE(follow.eligible);
   EXPECT_EQ(follow.reason, race::FollowShadowEligibilityReason::Eligible);
@@ -158,20 +158,20 @@ TEST(RaceMpccFoundation, EnablesFollowShadowWithoutPromotingOtherIntents)
     race::FollowShadowEligibilityReason::NoCoherentFrontObservation);
 }
 
-TEST(RaceMpccFoundation, EnablesRejoinShadowOnlyAtTheMigrationBoundary)
+TEST(RaceMpccFoundation, EnablesRejoinByCanonicalIntent)
 {
   const auto rejoin = race::resolve_rejoin_shadow_eligibility(
     race::RejoinShadowEligibilityRequest{
-      true, true, true, false, false, contract::ControlIntent::Rejoin});
+      false, false, contract::ControlIntent::Rejoin});
   const auto cruise = race::resolve_rejoin_shadow_eligibility(
     race::RejoinShadowEligibilityRequest{
-      true, true, true, false, false, contract::ControlIntent::Cruise});
+      false, false, contract::ControlIntent::Cruise});
   const auto live = race::resolve_rejoin_shadow_eligibility(
     race::RejoinShadowEligibilityRequest{
-      true, true, true, true, false, contract::ControlIntent::Rejoin});
+      true, false, contract::ControlIntent::Rejoin});
   const auto tactical = race::resolve_rejoin_shadow_eligibility(
     race::RejoinShadowEligibilityRequest{
-      true, true, true, false, true, contract::ControlIntent::Rejoin});
+      false, true, contract::ControlIntent::Rejoin});
 
   EXPECT_TRUE(rejoin.eligible);
   EXPECT_EQ(rejoin.reason, race::RejoinShadowEligibilityReason::Eligible);
@@ -216,7 +216,7 @@ TEST(RaceMpccFoundation, EnablesOvertakeFreshShadowOnlyForLiveExecutionIntents)
 {
   const auto make_request = [](const contract::ControlIntent intent) {
       return race::OvertakeCanonicalFreshShadowEligibilityRequest{
-        true, true, intent, true, true};
+        true, intent, true, true};
     };
   for (const auto intent : {
       contract::ControlIntent::ShiftOut,

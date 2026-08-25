@@ -31189,19 +31189,14 @@ private:
           replacement_canonical_plan, replacement_intent,
           prospective_generation, current_target_observation_generation,
           overtake_line_state_.target_vehicle_id,
-          replacement_plan.mission.pass_side_sign, now_sec,
-          previous_steering,
-          model != nullptr ? model->length :
-          std::numeric_limits<double>::quiet_NaN(),
-          canonical_maximum_steering_step_rad()});
+          replacement_plan.mission.pass_side_sign, now_sec});
       if (!artifact_admission.admitted) {
         if (line_cfg.debug_log_enabled) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine canonical replacement artifact rejected; old Mission retained: "
             "target=%s, side=%d->%d, phase=%s, intent=%s, generation=%lu, "
-            "plan=%lu, reason=%s, actuation=%s, current=%.4f, "
-            "reachable=[%.4f,%.4f], wp_id=%d",
+            "plan=%lu, reason=%s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(), previous_side,
             replacement_plan.mission.pass_side_sign,
             to_string(overtake_line_state_.phase),
@@ -31209,10 +31204,6 @@ private:
             static_cast<unsigned long>(prospective_generation),
             static_cast<unsigned long>(replacement_canonical_plan->plan_id),
             follow_async::to_string(artifact_admission.reason),
-            canonical_plan::to_string(artifact_admission.actuation_reason),
-            previous_steering,
-            artifact_admission.steering_continuity.reachable_lower_rad,
-            artifact_admission.steering_continuity.reachable_upper_rad,
             model->wp_id);
         }
         return false;
@@ -38590,27 +38581,18 @@ private:
               behavior_output.overtake_preentry_canonical_plan,
               expected_intent, prospective_generation,
               target_provenance.observation_generation,
-              behavior_output.target_vehicle_id, pass_side_sign, now_sec,
-              previous_steering,
-              model != nullptr ? model->length :
-              std::numeric_limits<double>::quiet_NaN(),
-              canonical_maximum_steering_step_rad()});
+              behavior_output.target_vehicle_id, pass_side_sign, now_sec});
           if (!preentry_admission.admitted) {
             overtake_locked_side_sign_ = 0;
             RCLCPP_WARN(
               rclcpp::get_logger("mpc_controller"),
               "Overtake entry commit rejected: source=preentry-gate-a, "
               "target=%s, side=%d, intent=%s, generation=%lu, admission=%s, "
-              "actuation=%s, current=%.4f, reachable=[%.4f,%.4f], "
               "action=keep-cruise-follow, wp_id=%d",
               behavior_output.target_vehicle_id.c_str(), pass_side_sign,
               mpcc_contract::to_string(expected_intent),
               static_cast<unsigned long>(prospective_generation),
               follow_async::to_string(preentry_admission.reason),
-              canonical_plan::to_string(preentry_admission.actuation_reason),
-              previous_steering,
-              preentry_admission.steering_continuity.reachable_lower_rad,
-              preentry_admission.steering_continuity.reachable_upper_rad,
               model->wp_id);
             return output;
           }
@@ -38649,40 +38631,11 @@ private:
               static_cast<unsigned long>(prospective_generation), model->wp_id);
             return output;
           }
-          canonical_plan::CanonicalExecutionPlanStoreReason preentry_store_reason{
-            canonical_plan::CanonicalExecutionPlanStoreReason::InvalidPlan};
-          const bool preentry_context_ready =
-            prepare_overtake_canonical_async_context(
-            behavior_output.overtake_preentry_canonical_plan->problem);
-          if (preentry_context_ready && overtake_canonical_lifecycle_ != nullptr) {
-            preentry_store_reason =
-              overtake_canonical_lifecycle_->plan_store.replace(
-              *behavior_output.overtake_preentry_canonical_plan);
-          }
-          const bool preentry_plan_stored =
-            preentry_context_ready &&
-            preentry_store_reason ==
-            canonical_plan::CanonicalExecutionPlanStoreReason::Accepted;
-          if (!preentry_plan_stored) {
-            overtake_line_state_ = entry_rollback_state;
-            overtake_locked_side_sign_ = entry_rollback_side_sign;
-            invalidate_overtake_canonical_async_context();
-            RCLCPP_WARN(
-              rclcpp::get_logger("mpc_controller"),
-              "Overtake entry commit rejected: source=preentry-canonical, "
-              "target=%s, side=%d, intent=%s, generation=%lu, context=%d, "
-              "store=%s, action=keep-cruise-follow, wp_id=%d",
-              behavior_output.target_vehicle_id.c_str(), pass_side_sign,
-              mpcc_contract::to_string(expected_intent),
-              static_cast<unsigned long>(
-                behavior_output.overtake_preentry_canonical_plan != nullptr ?
-                behavior_output.overtake_preentry_canonical_plan->problem.
-                intent_generation : 0U),
-              preentry_context_ready ? 1 : 0,
-              canonical_plan::to_string(preentry_store_reason),
-              model->wp_id);
-            return output;
-          }
+          // The selected five-state branch remains a tactical identity and
+          // physical-entry artifact only.  Do not install it into the retired
+          // five-state normal lifecycle.  After the phase transition the
+          // shared six-state producer performs atomic solve, exact physical
+          // proof and current-world admission before any normal publication.
         }
         transition_overtake_line_phase(
           direct_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,

@@ -609,8 +609,8 @@ def test_follow_fresh_solver_transaction_is_serialized_end_to_end() -> None:
     assert transaction < solve < publish_warm
 
 
-def test_overtake_entry_adopts_the_already_solved_canonical_artifact() -> None:
-    """ShiftOut may not commit first and launch a duplicate initial solve later."""
+def test_overtake_entry_preserves_the_selected_tactical_artifact() -> None:
+    """ShiftOut keeps branch identity/proof without installing old authority."""
 
     branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
     branch_end = SOURCE.index(
@@ -632,11 +632,9 @@ def test_overtake_entry_adopts_the_already_solved_canonical_artifact() -> None:
     )
     entry = SOURCE[entry_start:entry_end]
     assert "resolve_overtake_preentry_plan(" in entry
-    assert "prepare_overtake_canonical_async_context(" in entry
-    assert "plan_store.replace(" in entry
-    assert entry.index("freeze_selected_overtake_mission(") < entry.index(
-        "prepare_overtake_canonical_async_context("
-    )
+    assert "freeze_selected_overtake_mission(" in entry
+    assert "prepare_overtake_canonical_async_context(" not in entry
+    assert "plan_store.replace(" not in entry
 
     certificate_start = SOURCE.index(
         "bool revalidate_overtake_entry_execution_certificate("
@@ -689,6 +687,34 @@ def test_overtake_entry_adopts_the_already_solved_canonical_artifact() -> None:
     fresh = SOURCE[fresh_start:fresh_end]
     assert "extraction.lateral_lower_m.push_back(" in fresh
     assert "extraction.lateral_upper_m.push_back(" in fresh
+
+
+def test_five_state_preentry_artifact_cannot_gate_rate_resolved_actuation() -> None:
+    """The tactical five-state artifact is identity/proof, not command authority."""
+
+    async_source = (
+        PACKAGE_ROOT / "src/follow_canonical_async.cpp"
+    ).read_text(encoding="utf-8")
+    resolver_start = async_source.index("resolve_overtake_preentry_plan(")
+    resolver_end = async_source.index(
+        "const char * to_string(const PublishReason", resolver_start
+    )
+    resolver = async_source[resolver_start:resolver_end]
+    assert "resolve_execution_cursor(" in resolver
+    assert "extract_canonical_actuation(" not in resolver
+    assert "certify_canonical_steering_continuity(" not in resolver
+
+    entry_start = SOURCE.index("const bool fresh_normal_mission_entry =")
+    entry_end = SOURCE.index(
+        "transition_overtake_line_phase(\n"
+        "          direct_pass ? OvertakeLinePhase::Pass",
+        entry_start,
+    )
+    entry = SOURCE[entry_start:entry_end]
+    assert "resolve_overtake_preentry_plan(" in entry
+    assert "steering_continuity" not in entry
+    assert "prepare_overtake_canonical_async_context(" not in entry
+    assert "overtake_canonical_lifecycle_->plan_store.replace(" not in entry
 
 
 def test_runtime_overtake_replacement_is_a_typed_canonical_artifact() -> None:

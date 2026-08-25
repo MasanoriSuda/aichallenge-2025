@@ -13,10 +13,6 @@ namespace follow_compat = multi_purpose_mpc_ros::follow_canonical_async;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace plan = multi_purpose_mpc_ros::canonical_execution_plan;
 
-constexpr double kCurrentSteeringRad = 0.04;
-constexpr double kWheelbaseM = 2.0;
-constexpr double kMaximumSteeringStepRad = 0.0175;
-
 plan::CanonicalExecutionPlan make_follow_plan(
   const std::uint64_t decision_id = 42U,
   const std::uint64_t intent_generation = 3U,
@@ -237,8 +233,7 @@ TEST(CanonicalNormalAsyncOvertakePreentry, RejectsMissingArtifact)
 {
   const auto result = async::resolve_overtake_preentry_plan(
     async::OvertakePreentryPlanRequest{
-      nullptr, contract::ControlIntent::ShiftOut, 3U, 7U, "d2", 1, 10.1,
-      kCurrentSteeringRad, kWheelbaseM, kMaximumSteeringStepRad});
+      nullptr, contract::ControlIntent::ShiftOut, 3U, 7U, "d2", 1, 10.1});
   EXPECT_FALSE(result.admitted);
   EXPECT_EQ(result.reason, async::OvertakePreentryPlanReason::MissingPlan);
 }
@@ -250,7 +245,7 @@ TEST(CanonicalNormalAsyncOvertakePreentry, AcceptsExactLiveIdentity)
   const auto result = async::resolve_overtake_preentry_plan(
     async::OvertakePreentryPlanRequest{
       canonical_plan, contract::ControlIntent::ShiftOut, 3U, 8U, "d2", 1,
-      10.1, kCurrentSteeringRad, kWheelbaseM, kMaximumSteeringStepRad});
+      10.1});
   EXPECT_TRUE(result.admitted);
   EXPECT_EQ(result.reason, async::OvertakePreentryPlanReason::Accepted);
 }
@@ -262,7 +257,7 @@ TEST(CanonicalNormalAsyncOvertakePreentry, RejectsCrossPhaseArtifact)
   const auto result = async::resolve_overtake_preentry_plan(
     async::OvertakePreentryPlanRequest{
       canonical_plan, contract::ControlIntent::ShiftOut, 3U, 7U, "d2", 1,
-      10.1, kCurrentSteeringRad, kWheelbaseM, kMaximumSteeringStepRad});
+      10.1});
   EXPECT_FALSE(result.admitted);
   EXPECT_EQ(result.reason, async::OvertakePreentryPlanReason::IntentMismatch);
 }
@@ -274,7 +269,7 @@ TEST(CanonicalNormalAsyncOvertakePreentry, RejectsWrongMissionGeneration)
   const auto result = async::resolve_overtake_preentry_plan(
     async::OvertakePreentryPlanRequest{
       canonical_plan, contract::ControlIntent::ShiftOut, 3U, 7U, "d2", 1,
-      10.1, kCurrentSteeringRad, kWheelbaseM, kMaximumSteeringStepRad});
+      10.1});
   EXPECT_FALSE(result.admitted);
   EXPECT_EQ(
     result.reason,
@@ -288,7 +283,7 @@ TEST(CanonicalNormalAsyncOvertakePreentry, RejectsWrongSide)
   const auto result = async::resolve_overtake_preentry_plan(
     async::OvertakePreentryPlanRequest{
       canonical_plan, contract::ControlIntent::ShiftOut, 3U, 7U, "d2", -1,
-      10.1, kCurrentSteeringRad, kWheelbaseM, kMaximumSteeringStepRad});
+      10.1});
   EXPECT_FALSE(result.admitted);
   EXPECT_EQ(
     result.reason,
@@ -302,27 +297,21 @@ TEST(CanonicalNormalAsyncOvertakePreentry, RejectsExpiredArtifact)
   const auto result = async::resolve_overtake_preentry_plan(
     async::OvertakePreentryPlanRequest{
       canonical_plan, contract::ControlIntent::ShiftOut, 3U, 7U, "d2", 1,
-      13.0, kCurrentSteeringRad, kWheelbaseM, kMaximumSteeringStepRad});
+      13.0});
   EXPECT_FALSE(result.admitted);
   EXPECT_EQ(result.reason, async::OvertakePreentryPlanReason::CursorUnavailable);
 }
 
-TEST(CanonicalNormalAsyncOvertakePreentry, RejectsUnreachableLiveSteering)
+TEST(CanonicalNormalAsyncOvertakePreentry, DoesNotOwnLiveSteeringAuthority)
 {
   auto canonical_plan = std::make_shared<const plan::CanonicalExecutionPlan>(
     make_follow_plan(42U, 3U, 7U, contract::ControlIntent::ShiftOut));
   const auto result = async::resolve_overtake_preentry_plan(
     async::OvertakePreentryPlanRequest{
       canonical_plan, contract::ControlIntent::ShiftOut, 3U, 7U, "d2", 1,
-      10.1, -0.09187, kWheelbaseM, kMaximumSteeringStepRad});
-  EXPECT_FALSE(result.admitted);
-  EXPECT_EQ(
-    result.reason,
-    async::OvertakePreentryPlanReason::SteeringContinuityRejected);
-  EXPECT_FALSE(result.steering_continuity.certified);
-  EXPECT_EQ(
-    result.steering_continuity.reason,
-    plan::CanonicalSteeringContinuityReason::Unreachable);
+      10.1});
+  EXPECT_TRUE(result.admitted);
+  EXPECT_EQ(result.reason, async::OvertakePreentryPlanReason::Accepted);
 }
 
 }  // namespace

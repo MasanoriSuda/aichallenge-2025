@@ -154,8 +154,6 @@ enum class OvertakePreentryPlanReason
   TargetObservationRollback,
   ExecutionSideMismatch,
   CursorUnavailable,
-  ActuationUnavailable,
-  SteeringContinuityRejected,
 };
 
 const char * to_string(OvertakePreentryPlanReason reason) noexcept;
@@ -170,9 +168,6 @@ struct OvertakePreentryPlanRequest
   std::string expected_target_id;
   int expected_execution_side_sign{};
   double now_sec{};
-  double current_steering_tire_angle_rad{};
-  double wheelbase_m{};
-  double maximum_steering_step_rad{};
 };
 
 struct OvertakePreentryPlanResolution
@@ -182,15 +177,13 @@ struct OvertakePreentryPlanResolution
     OvertakePreentryPlanReason::MissingPlan};
   plan::CanonicalExecutionCursorReason cursor_reason{
     plan::CanonicalExecutionCursorReason::InvalidPlan};
-  plan::CanonicalActuationReason actuation_reason{
-    plan::CanonicalActuationReason::InvalidPlan};
-  plan::CanonicalSteeringContinuityResult steering_continuity;
 };
 
-/// Admit the exact immutable plan produced by the already-solved pre-entry
-/// left/right branch.  The live control cycle must repeat both semantic/lifetime
-/// identity and first-actuation reachability before raising Overtake authority;
-/// current-world wall and obstacle proof remains a separate mandatory gate.
+/// Admit the immutable tactical artifact produced by the already-solved
+/// pre-entry left/right branch.  This boundary checks semantic identity and
+/// lifetime only.  Its five-state actuation is not normal command authority;
+/// the live six-state steering-rate producer independently solves and proves
+/// physical execution after the intent transition.
 OvertakePreentryPlanResolution resolve_overtake_preentry_plan(
   const OvertakePreentryPlanRequest & request) noexcept;
 

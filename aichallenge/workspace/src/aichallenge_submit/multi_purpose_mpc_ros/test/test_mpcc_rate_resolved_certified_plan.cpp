@@ -40,6 +40,7 @@ execution::ExecutionArtifact artifact(const std::uint64_t sequence = 1U)
   value.identity = execution::Identity{
     sequence, source_context(sequence), 10.0 + static_cast<double>(sequence)};
   value.prediction_origin_sec = value.identity.snapshot_sec;
+  value.publication_interval_sec = 0.025;
   value.completed_sec = value.prediction_origin_sec + 0.01;
   value.course_progress_origin_m = 50.0;
   value.semantic_initial_steering_rad = 0.10;

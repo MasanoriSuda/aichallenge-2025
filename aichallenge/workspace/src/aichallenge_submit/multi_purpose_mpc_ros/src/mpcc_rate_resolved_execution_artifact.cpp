@@ -160,6 +160,8 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   }
   if (
     !std::isfinite(artifact.prediction_origin_sec) ||
+    !std::isfinite(artifact.publication_interval_sec) ||
+    artifact.publication_interval_sec <= 0.0 ||
     !std::isfinite(artifact.completed_sec) ||
     artifact.prediction_origin_sec < 0.0 ||
     artifact.prediction_origin_sec < artifact.identity.snapshot_sec ||
@@ -321,6 +323,14 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   if (!sample_steering(artifact, horizon_sec).sample.has_value()) {
     return RejectReason::SemanticSteeringSequenceRejected;
   }
+  if (
+    artifact.publication_interval_sec >
+    horizon_sec + artifact.physical_global_tolerance ||
+    !sample_steering(
+      artifact, artifact.publication_interval_sec).sample.has_value())
+  {
+    return RejectReason::InvalidTiming;
+  }
   return RejectReason::None;
 }
 
@@ -413,7 +423,8 @@ ActuationResult extract_actuation(
     result.reason = ActuationReason::InvalidStageIndex;
     return result;
   }
-  const auto sample = sample_steering(artifact, cursor.elapsed_sec);
+  const auto sample = sample_steering(
+    artifact, cursor.elapsed_sec + artifact.publication_interval_sec);
   result.sample_reason = sample.reason;
   if (!sample.sample.has_value()) {
     result.reason = ActuationReason::SampleRejected;

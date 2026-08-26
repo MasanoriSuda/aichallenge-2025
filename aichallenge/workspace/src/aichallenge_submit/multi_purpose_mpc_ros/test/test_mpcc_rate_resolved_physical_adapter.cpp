@@ -34,6 +34,7 @@ execution::ExecutionArtifact artifact()
   execution::ExecutionArtifact value;
   value.identity = execution::Identity{1U, source_context(), 10.0};
   value.prediction_origin_sec = 10.0;
+  value.publication_interval_sec = 0.025;
   value.completed_sec = 10.01;
   value.course_progress_origin_m = 50.0;
   value.semantic_initial_steering_rad = 0.10;

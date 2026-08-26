@@ -45,6 +45,7 @@ std::shared_ptr<const certified::CertifiedPlan> plan()
   execution::ExecutionArtifact artifact;
   artifact.identity = execution::Identity{3U, context(), 12.0};
   artifact.prediction_origin_sec = 12.02;
+  artifact.publication_interval_sec = 0.025;
   artifact.completed_sec = 12.03;
   artifact.course_progress_origin_m = 50.0;
   artifact.semantic_initial_steering_rad = 0.1;

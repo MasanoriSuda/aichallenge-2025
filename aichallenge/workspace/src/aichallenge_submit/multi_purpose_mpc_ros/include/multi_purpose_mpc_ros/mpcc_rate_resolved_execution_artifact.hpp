@@ -72,6 +72,10 @@ struct ExecutionArtifact
 {
   Identity identity;
   double prediction_origin_sec{};
+  /// Time from one command publication to the next.  The semantic initial
+  /// steering is a physical state at prediction_origin_sec; the desired
+  /// steering command is sampled this interval ahead of the execution cursor.
+  double publication_interval_sec{};
   double completed_sec{};
   double course_progress_origin_m{};
   double semantic_initial_steering_rad{};

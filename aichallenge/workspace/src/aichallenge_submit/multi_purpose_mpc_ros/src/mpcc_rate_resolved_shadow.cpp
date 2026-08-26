@@ -311,6 +311,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   execution_artifact.identity = snapshot.identity;
   execution_artifact.prediction_origin_sec =
     snapshot.control_prediction_origin_sec;
+  execution_artifact.publication_interval_sec =
+    snapshot.publication_interval_sec;
   execution_artifact.completed_sec = snapshot.identity.snapshot_sec +
     std::chrono::duration<double>(SteadyClock::now() - started).count();
   execution_artifact.course_progress_origin_m =

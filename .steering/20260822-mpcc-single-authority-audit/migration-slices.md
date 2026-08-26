@@ -1185,6 +1185,24 @@ Finish the architecture simplification instead of leaving permanent dual control
   the complete 51-test package suite passes.  Moving acceptance remains open
   and must precede direct-Pass promotion or legacy deletion.
 
+- `.steering/20260826-publication-horizon-steering-contract` separates the
+  physical steering state at the latency-compensated prediction origin from
+  the desired steering command serialized at the next publisher tick.  The
+  execution artifact now seals the publication interval and extracts
+  actuation at `cursor elapsed + publication interval`; invalid intervals and
+  exhausted publication samples fail closed.  This directly addresses domain
+  1 decision 900 in `output/20260826-111752`, where a solved, wall-certified,
+  current-world-valid fresh Track/Cruise plan was rejected as
+  `steering-unreachable` because its future physical initial state was treated
+  as an immediate desired command.  No clamp, timeout, lease, tuning or legacy
+  normal fallback is added.  The 25-package build and complete 51-test package
+  suite pass.  In `output/20260826-113945`, both domains moved under certified
+  six-state Cruise commands, the old `command-rejected` signature was absent
+  and callback overruns were zero.  Correct next-publication sampling then
+  exposed a separate formulation defect: first steering-rate motion is not
+  constrained against the previous published desired command.  That successor
+  Slice must repair the QP constraint rather than relax live revalidation.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

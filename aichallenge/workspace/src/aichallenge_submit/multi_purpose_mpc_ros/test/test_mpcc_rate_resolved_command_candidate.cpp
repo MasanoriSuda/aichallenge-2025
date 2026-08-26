@@ -53,6 +53,7 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   auto execution = std::make_shared<artifact::ExecutionArtifact>();
   execution->identity = {7U, source_context(intent), 1.0};
   execution->prediction_origin_sec = 1.0;
+  execution->publication_interval_sec = 0.025;
   execution->completed_sec = 1.01;
   execution->course_progress_origin_m = 50.0;
   execution->semantic_initial_steering_rad = 0.10;

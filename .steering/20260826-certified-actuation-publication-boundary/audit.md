@@ -77,5 +77,9 @@ does not add a second owner, retry, fallback or special race-start path.
 - `make autoware-build` passed for all 25 packages.
 - The complete package suite passed 51/51 tests, including 56 source-authority
   contract checks.
-- Moving acceptance remains open; static evidence does not claim that the
-  decision-898 runtime signature is gone.
+- Moving acceptance `output/20260826-111752` shows both domains entering the
+  race with no `command-rejected` occurrence.  Domain 2 joins the first
+  Track-to-Cruise six-state plan directly.  Domain 1 reaches a different typed
+  boundary (`world=steering-unreachable`) because the future physical steering
+  origin is interpreted as the immediate publication command.  That separate
+  time-base defect is not masked by this correction.

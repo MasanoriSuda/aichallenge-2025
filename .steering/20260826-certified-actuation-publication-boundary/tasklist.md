@@ -6,7 +6,7 @@
 - [x] Implement certified physical projection at the single adapter boundary.
 - [x] Verify values outside the sealed certificate still fail closed.
 - [x] Run focused, package, source-contract and workspace tests.
-- [ ] Run moving dynamic acceptance.
+- [x] Run moving dynamic acceptance.
 - [x] Update audit and migration documentation.
 - [x] Commit without staging the user-owned result JSON.
 
@@ -20,3 +20,8 @@
 - Source authority contract: 56/56 passed as part of the package suite.
 - No parameter, fallback, feature flag, timeout, lease or normal authority was
   added.
+- `output/20260826-111752`: both domains entered the race and the first
+  Track-to-Cruise admission no longer failed with `command-rejected`.  Domain
+  2 joined sequence 301 directly.  Domain 1 reached the later, typed
+  `steering-unreachable` boundary instead, proving that this publication-
+  residual defect is closed while preserving the next independent failure.

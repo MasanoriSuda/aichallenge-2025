@@ -224,7 +224,8 @@ TEST(MpccRateResolvedShadow, RetainsAndSamplesExactRateResolvedArtifact)
     artifact.semantic_initial_steering_rad +
     artifact.control_stages[0].steering_rate_radps *
     artifact.control_stages[0].duration_sec +
-    artifact.control_stages[1].steering_rate_radps * 0.05;
+    artifact.control_stages[1].steering_rate_radps *
+    (0.05 + artifact.publication_interval_sec);
   EXPECT_NEAR(
     actuation.actuation->steering_rad, expected_steering, 1e-9);
   EXPECT_DOUBLE_EQ(
@@ -235,6 +236,50 @@ TEST(MpccRateResolvedShadow, RetainsAndSamplesExactRateResolvedArtifact)
     artifact, artifact.prediction_origin_sec + 0.30);
   EXPECT_FALSE(exhausted.available);
   EXPECT_EQ(exhausted.reason, execution::CursorReason::Exhausted);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  FreshArtifactExtractsTheCertifiedNextPublicationSteering)
+{
+  shadow::SolverContext context;
+  const auto result = context.evaluate(snapshot());
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+
+  const auto cursor = execution::resolve_cursor(
+    *result.execution_artifact,
+    result.execution_artifact->prediction_origin_sec);
+  ASSERT_TRUE(cursor.available);
+  ASSERT_DOUBLE_EQ(cursor.elapsed_sec, 0.0);
+
+  const auto actuation = execution::extract_actuation(
+    *result.execution_artifact, cursor);
+  ASSERT_TRUE(actuation.actuation.has_value());
+  EXPECT_NEAR(
+    actuation.actuation->steering_rad,
+    result.sampled_steering_rad,
+    1e-9);
+}
+
+TEST(MpccRateResolvedShadow, ArtifactRejectsInvalidPublicationTiming)
+{
+  shadow::SolverContext context;
+  const auto result = context.evaluate(snapshot());
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+
+  auto missing_interval = *result.execution_artifact;
+  missing_interval.publication_interval_sec = 0.0;
+  EXPECT_EQ(
+    execution::validate(missing_interval),
+    execution::RejectReason::InvalidTiming);
+
+  auto beyond_horizon = *result.execution_artifact;
+  beyond_horizon.publication_interval_sec = 1.0;
+  EXPECT_EQ(
+    execution::validate(beyond_horizon),
+    execution::RejectReason::InvalidTiming);
 }
 
 TEST(MpccRateResolvedShadow, RejectsMutatedExecutionArtifactProvenance)

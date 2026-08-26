@@ -2512,6 +2512,29 @@ commandとcompatibility speed horizonで共有し、publication後のclampや第
 25 package build、51/51 package testを通した。これはparameter tuningではなくproducer／consumer
 契約の整合修正である。moving runで同signatureが消えるまではSlice Aの動的Gateを閉じない。
 
+#### Certified steering publication horizon（2026-08-26、2025由来の暫定）
+
+six-state execution artifactの`semantic_initial_steering_rad`は、観測時刻ではなくlatency補償後の
+prediction originにおける物理舵角である。一方、final commandのsteeringは次回publisher周期に
+serializationするdesired commandである。従来のartifact cursorはfresh planでelapsed 0を返し、
+prediction-originの物理状態をそのまま即時publication値として扱っていた。この時間基準の混同により、
+solve／wall proof／current-world proofがacceptedでもretained joinが`steering-unreachable`となった。
+
+artifactはsolver snapshotで使用したpublication intervalをsealし、actuation抽出時は
+`cursor elapsed + publication interval`でexact steering sequenceをsampleする。artifact生成時にintervalの
+有限・正・horizon内を検証し、publication sampleを生成できないartifactはfail closedとする。物理初期状態、
+last published desired command、next publication desired commandは別の意味を維持し、clamp、猶予時間、
+legacy normal fallbackは追加しない。
+
+`output/20260826-111752`のdomain 1 decision 900をfailure-first根拠とした。旧実装ではfresh artifactから
+physical initial steeringを抽出するテストが失敗し、修正後はnext-publication sampleへ一致した。
+invalid interval／horizon exhaustionを含む回帰テスト、25 package build、51/51 package testを通した。
+`output/20260826-113945`では両domainがmoving Cruiseへ入り、certified six-state commandを継続publishし、
+旧`command-rejected` signatureは0、callback overrunも0だった。正しいpublication sampleで残る
+`steering-unreachable`は、QPがfuture physical originからのrateだけを制約し、previous published desired commandから
+next publicationまでの到達性をproblem内に持たない別の定式化欠陥である。revalidation緩和やfallbackで隠さず、
+後続Sliceでfirst publication constraintとして修正する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

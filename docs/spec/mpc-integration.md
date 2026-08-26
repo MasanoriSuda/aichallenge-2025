@@ -2616,6 +2616,28 @@ positive dynamic evidenceは後続試験に残る。
 retained proofのstale化とEmergencyを経てRecoveryへ移った。置換ログはその前に存在せず、旧five-state authorityへ戻す
 根拠ではない。solver parameterやfallbackを追加せず、後続Sliceでsix-state formulation／Mission lifecycleの因果を監査する。
 
+#### Six-state Gate A execution prefixの原子的引き渡し（2026-08-26、2025由来の暫定）
+
+`output/20260826-150956`の後続監査で、Gate A proposalはphysical proof済みのsix-state
+`CertifiedPlan`を保持していた一方、FSMへ渡すMissionには未認証の戦術candidateだけをコピーしていたことを確認した。
+`freeze_selected_overtake_mission()`はphysical certificateがないMissionから31点の旧`tactical frenet_dp_path`を選び、
+Gate Aが証明した20段のexact trajectoryを入口で破棄していた。これはsource timestamp、OSQP設定、velocity toleranceではなく、
+証明と実行geometryを別々に引き渡すownership境界の欠陥である。
+
+Gate A proposal生成時に、`CertifiedPlan::physical_snapshot`が所有するexact six-state trajectory、course-progress origin、
+hard wall clearance、target provenanceをMissionへ不可分にbindする。proposal completenessはこのphysical certificateと
+complete exact trajectoryを必須とする。Mission freezeではphysical certificateが存在する場合に旧tactical DP pathを
+選択せず、同じexact prefixを初期実行geometryとする。後続geometryへの置換は既存のsix-state solver／physical wall／
+current-world promotion契約を通過した場合だけ許可する。
+
+failure-first source contract 58件、25 package build、51/51 package test（1,886 test、failure/error/skip 0）を通した。
+`output/20260826-153933`ではShiftOut entryを2件観測し、両方が`certificate=1`、`samples=20`、
+`exact_stages=20`だった。旧`certificate=0`／31点DPへのすり替わりは0件である。
+
+同runで後続に`dynamic-path-blocked`とoptimized-horizon wall failureを観測したが、これはexact Gate A prefixの欠落ではない。
+wall proofを緩和したりretained exceptionを追加したりせず、fresh／retained実行geometryとruntime wall判定の整合を
+別Sliceで監査する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

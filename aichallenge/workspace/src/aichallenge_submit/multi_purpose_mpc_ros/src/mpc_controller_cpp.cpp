@@ -2366,6 +2366,9 @@ struct RateResolvedMissionGateAProposal
            target_obstacle_generation != 0U &&
            (selected_side_sign == -1 || selected_side_sign == 1) &&
            mission.pass_side_sign == selected_side_sign &&
+           mission.physical_execution_certificate_valid &&
+           race_mpcc::exact_physical_execution_trajectory_complete(
+             mission.physical_execution_certificate_exact_trajectory) &&
            certified_plan != nullptr &&
            certified_plan->execution_artifact != nullptr &&
            certified_plan->execution_artifact->identity.source_context.
@@ -2374,6 +2377,51 @@ struct RateResolvedMissionGateAProposal
            execution_side_sign == selected_side_sign;
   }
 };
+
+bool bind_rate_resolved_gate_a_execution_certificate(
+  overtake_core::OvertakeMissionCandidate & mission,
+  const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & plan,
+  const race_mpcc::TargetProvenance & target_provenance)
+{
+  if (
+    plan == nullptr ||
+    rate_resolved_certified::validate(*plan) !=
+    rate_resolved_certified::RejectReason::None ||
+    plan->execution_artifact == nullptr || plan->physical_snapshot == nullptr ||
+    !target_provenance.valid)
+  {
+    return false;
+  }
+  const auto & exact = plan->physical_snapshot->trajectory;
+  if (
+    !race_mpcc::exact_physical_execution_trajectory_complete(exact) ||
+    exact.path_distance_m.size() < 2U ||
+    exact.path_distance_m.size() != exact.lateral_m.size() ||
+    !std::isfinite(plan->execution_artifact->identity.snapshot_sec) ||
+    !std::isfinite(plan->execution_artifact->course_progress_origin_m) ||
+    !std::isfinite(plan->physical_snapshot->hard_wall_clearance_m) ||
+    plan->physical_snapshot->hard_wall_clearance_m < 0.0)
+  {
+    return false;
+  }
+
+  // Gate A certified this exact six-state trajectory.  Bind the immutable
+  // proof to the Mission before the supervisor mutates so the first active
+  // ShiftOut cycle cannot silently fall back to the older tactical DP path.
+  mission.physical_execution_certificate_valid = true;
+  mission.physical_execution_certificate_source_sec =
+    plan->execution_artifact->identity.snapshot_sec;
+  mission.physical_execution_certificate_source_course_progress_m =
+    plan->execution_artifact->course_progress_origin_m;
+  mission.physical_execution_certificate_required_wall_clearance_m =
+    plan->physical_snapshot->hard_wall_clearance_m;
+  mission.physical_execution_certificate_path_distances_m =
+    exact.path_distance_m;
+  mission.physical_execution_certificate_lateral_path_m = exact.lateral_m;
+  mission.physical_execution_certificate_exact_trajectory = exact;
+  mission.physical_execution_certificate_target_provenance = target_provenance;
+  return true;
+}
 
 mpcc_progress::ExtendedBranchEvaluation rate_resolved_preentry_branch_evaluation(
   const RateResolvedPreentryShadowEvaluation & source)
@@ -24364,11 +24412,18 @@ struct MPC
     const auto current_target_provenance =
       selected_target_provenance(live_behavior);
     const auto & plan = result->pipeline.certified_plan.plan;
+    auto certified_mission = result->selected_mission.value_or(
+      overtake_core::OvertakeMissionCandidate{});
+    const bool execution_certificate_bound =
+      result->selected_mission.has_value() &&
+      bind_rate_resolved_gate_a_execution_certificate(
+      certified_mission, plan, result->target_provenance);
     const bool proposal_identity_complete =
       authority_ready && target_validation.valid &&
       result->selected_mission.has_value() &&
       result->selected_mission->feasible &&
       result->selected_mission->pass_side_sign == result->selected_side_sign &&
+      execution_certificate_bound &&
       plan != nullptr && plan->execution_artifact != nullptr &&
       plan->execution_artifact->identity.source_context.target_id ==
       result->target_id &&
@@ -24389,7 +24444,7 @@ struct MPC
         result->target_provenance.observation_generation;
       proposal.target_id = result->target_id;
       proposal.selected_side_sign = result->selected_side_sign;
-      proposal.mission = result->selected_mission.value();
+      proposal.mission = std::move(certified_mission);
       proposal.certified_plan = plan;
       if (proposal.complete()) {
         live_behavior.rate_resolved_mission_gate_a_proposal =
@@ -28670,6 +28725,7 @@ private:
     if (overtake_line_state_.mission_plan.has_value()) {
       const auto & pass_plan = overtake_line_state_.mission_plan.value();
       const bool frenet_dp_execution_path_valid =
+        !physical_execution_certificate_available &&
         line_cfg.mpcc_frenet_dp_execution_enabled &&
         pass_plan.mission.frenet_dp_corridor_checked &&
         pass_plan.mission.frenet_dp_corridor_feasible &&
@@ -36638,11 +36694,11 @@ private:
               static_cast<unsigned long>(prospective_generation), model->wp_id);
             return output;
           }
-          // Gate A freezes supervisor geometry only. After the phase
-          // transition the shared six-state producer performs atomic solve,
-          // exact physical proof and current-world admission before any
-          // normal publication. No five-state pre-entry artifact can admit a
-          // fresh ShiftOut or Direct Pass.
+          // Gate A freezes supervisor geometry together with the exact
+          // six-state execution prefix which passed the physical proof. After
+          // the phase transition the shared producer may replace that prefix
+          // only through another solved/current-world-certified handoff. No
+          // tactical five-state path can overwrite the admitted prefix.
         }
         transition_overtake_line_phase(
           direct_pass ? OvertakeLinePhase::Pass : OvertakeLinePhase::ShiftOut,

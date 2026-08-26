@@ -1167,7 +1167,8 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "tactical_identity.tactical_authority_current" in consume
     assert "current_world_joinable && tactical_identity.tactical_authority_current" in consume
     assert "RateResolvedMissionGateAProposal proposal" in consume
-    assert "proposal.mission = result->selected_mission.value()" in consume
+    assert "bind_rate_resolved_gate_a_execution_certificate(" in consume
+    assert "proposal.mission = std::move(certified_mission)" in consume
     assert "proposal.certified_plan = plan" in consume
     assert "validate_selected_target_provenance(" in consume
     assert (
@@ -1180,6 +1181,27 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "authority=gate-a-evidence,selected=%d" in consume
     assert "certify_and_replace(" not in consume
     assert "publish_control_command(" not in consume
+
+    certificate_start = SOURCE.index(
+        "bool bind_rate_resolved_gate_a_execution_certificate("
+    )
+    certificate_end = SOURCE.index(
+        "struct V2XBehaviorOutput", certificate_start
+    )
+    certificate = SOURCE[certificate_start:certificate_end]
+    assert "rate_resolved_certified::validate(*plan)" in certificate
+    assert "plan->physical_snapshot->trajectory" in certificate
+    assert "plan->execution_artifact->course_progress_origin_m" in certificate
+    assert "mission.physical_execution_certificate_valid = true" in certificate
+    assert "mission.physical_execution_certificate_path_distances_m =" in certificate
+    assert "mission.physical_execution_certificate_lateral_path_m =" in certificate
+
+    freeze_start = SOURCE.index("void freeze_selected_overtake_mission(")
+    freeze_end = SOURCE.index(
+        "bool replace_frozen_overtake_mission_after_dynamic_replan(", freeze_start
+    )
+    freeze = SOURCE[freeze_start:freeze_end]
+    assert "!physical_execution_certificate_available &&" in freeze
 
     invalidation_start = SOURCE.index("void invalidate_mpcc_lite_async_results()")
     invalidation_end = SOURCE.index("void set_gap_planner(", invalidation_start)

@@ -2593,6 +2593,29 @@ IdleからのOvertake entryは必ずsix-state Gate A proposalを要求する。
 不正authority経路の削除を示すが、Direct Pass／ShiftOutの実用品質合格を意味しない。Mission不成立をstart-grid例外や
 parameter tuningで隠さず、後続の動的受入れ試験で評価する。
 
+#### runtime Mission置換のsix-state Gate A統一（2026-08-26、2025由来の暫定）
+
+ShiftOut／Pass／FollowPrepare中のsame-side、cross-side、wall、DynamicWait、opponent-side、SafeSeparationを含む
+すべてのMission置換は、causal `VelocitySteeringProgress6State` proposalを共有境界へ渡さなければならない。
+requested Missionのgeometryだけ、または旧five-state execution artifactだけでfrozen Missionを変更してはならない。
+
+共有境界はstate mutationより前に、prospective generation、target id、target obstacle generation、side、phase由来intent、
+formulation、solver／wall／current-world plan identityを完全一致で検証する。成功時もrequested geometryを再構成して
+freezeせず、proposalが所有するimmutable Missionを使う。証明が欠ける場合は現在のproven Missionを保持する。
+
+このauthority統一と同じSliceで`OvertakeExecutionArtifact`およびfive-state
+`resolve_overtake_preentry_plan()`と対応テストを物理削除した。workspace buildは25 package、package testは
+51/51 target、1886 test、error/failure/skipはいずれも0だった。
+
+`output/20260826-150956`では、d1でsolver、physical wall、Mission identity、current-world joinがすべて成立した
+six-state proposalを観測し、`gate=six-state-shiftout`でgeneration 1の`Idle -> ShiftOut`へ昇格した。直後は一致する
+certified six-state ShiftOut commandを発行した。このrunではruntime Mission置換自体は発生しなかったため、置換成功の
+positive dynamic evidenceは後続試験に残る。
+
+別事象として、ShiftOut開始約0.8秒後からsix-state normal solveがprogress-rate input boxでmaximum iterationとなり、
+retained proofのstale化とEmergencyを経てRecoveryへ移った。置換ログはその前に存在せず、旧five-state authorityへ戻す
+根拠ではない。solver parameterやfallbackを追加せず、後続Sliceでsix-state formulation／Mission lifecycleの因果を監査する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

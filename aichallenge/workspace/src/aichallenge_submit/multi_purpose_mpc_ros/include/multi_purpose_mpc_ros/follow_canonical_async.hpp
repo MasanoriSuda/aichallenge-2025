@@ -141,52 +141,6 @@ CurrentIdentityReason validate_current_identity(
   std::uint64_t active_context_epoch,
   const mpcc_execution_contract::MpccProblemContext & current) noexcept;
 
-enum class OvertakePreentryPlanReason
-{
-  Accepted,
-  MissingPlan,
-  InvalidExpectedIdentity,
-  InvalidPlan,
-  UnsupportedIntent,
-  IntentMismatch,
-  IntentGenerationMismatch,
-  TargetMismatch,
-  TargetObservationRollback,
-  ExecutionSideMismatch,
-  CursorUnavailable,
-};
-
-const char * to_string(OvertakePreentryPlanReason reason) noexcept;
-
-struct OvertakePreentryPlanRequest
-{
-  std::shared_ptr<const plan::CanonicalExecutionPlan> plan;
-  mpcc_execution_contract::ControlIntent expected_intent{
-    mpcc_execution_contract::ControlIntent::Unknown};
-  std::uint64_t expected_intent_generation{};
-  std::uint64_t current_target_observation_generation{};
-  std::string expected_target_id;
-  int expected_execution_side_sign{};
-  double now_sec{};
-};
-
-struct OvertakePreentryPlanResolution
-{
-  bool admitted{false};
-  OvertakePreentryPlanReason reason{
-    OvertakePreentryPlanReason::MissingPlan};
-  plan::CanonicalExecutionCursorReason cursor_reason{
-    plan::CanonicalExecutionCursorReason::InvalidPlan};
-};
-
-/// Admit the immutable tactical artifact produced by the already-solved
-/// pre-entry left/right branch.  This boundary checks semantic identity and
-/// lifetime only.  Its five-state actuation is not normal command authority;
-/// the live six-state steering-rate producer independently solves and proves
-/// physical execution after the intent transition.
-OvertakePreentryPlanResolution resolve_overtake_preentry_plan(
-  const OvertakePreentryPlanRequest & request) noexcept;
-
 enum class PublishReason
 {
   Accepted,

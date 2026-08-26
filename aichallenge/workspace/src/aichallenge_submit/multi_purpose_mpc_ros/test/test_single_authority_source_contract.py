@@ -1166,7 +1166,7 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "tactical_identity.current_world_observation_permitted" in consume
     assert "tactical_identity.tactical_authority_current" in consume
     assert "current_world_joinable && tactical_identity.tactical_authority_current" in consume
-    assert "RateResolvedPreentryGateAProposal proposal" in consume
+    assert "RateResolvedMissionGateAProposal proposal" in consume
     assert "proposal.mission = result->selected_mission.value()" in consume
     assert "proposal.certified_plan = plan" in consume
     assert "validate_selected_target_provenance(" in consume
@@ -1175,7 +1175,7 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
         "        result->target_provenance.observation_generation" in consume
     )
     assert (
-        "live_behavior.rate_resolved_preentry_gate_a_proposal =" in consume
+        "live_behavior.rate_resolved_mission_gate_a_proposal =" in consume
     )
     assert "authority=gate-a-evidence,selected=%d" in consume
     assert "certify_and_replace(" not in consume
@@ -1227,7 +1227,7 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     fsm_start = SOURCE.index("OvertakeLineOutput update_overtake_line(")
     fsm_end = SOURCE.index("bool is_overtake_forbidden_wp(", fsm_start)
     fsm = SOURCE[fsm_start:fsm_end]
-    assert "rate_resolved_preentry_gate_a_proposal" in fsm
+    assert "rate_resolved_mission_gate_a_proposal" in fsm
     assert "six_state_preentry_gate_a_request" in fsm
     assert "six_state_direct_pass_gate_a_request" in fsm
     assert "ControlIntent::ShiftOut" in fsm
@@ -1266,23 +1266,19 @@ def test_unreachable_five_state_overtake_owner_is_physically_deleted() -> None:
     assert "Formulation::Unresolved" in emergency
 
 
-def test_runtime_overtake_replacement_is_a_typed_canonical_artifact() -> None:
-    """Runtime Mission replacement may not drop the selected five-state plan."""
+def test_runtime_overtake_replacement_requires_causal_six_state_gate() -> None:
+    """Runtime Mission mutation may not be owned by geometry or five-state plans."""
 
-    artifact_start = SOURCE.index("struct OvertakeExecutionArtifact")
-    artifact_end = SOURCE.index("struct V2XBehaviorOutput", artifact_start)
-    artifact = SOURCE[artifact_start:artifact_end]
-    assert "OvertakeMissionCandidate mission" in artifact
-    assert "CanonicalExecutionPlan> canonical_plan" in artifact
-    assert "make_overtake_execution_artifact(" in artifact
+    assert "struct OvertakeExecutionArtifact" not in SOURCE
+    assert "make_overtake_execution_artifact(" not in SOURCE
+    assert "resolve_overtake_preentry_plan(" not in SOURCE
 
     behavior_start = SOURCE.index("struct V2XBehaviorOutput")
     behavior_end = SOURCE.index("struct ExtendedMpccBranchArtifact", behavior_start)
     behavior = SOURCE[behavior_start:behavior_end]
-    assert "mpcc_lite_same_side_replan_artifact" in behavior
-    assert "mpcc_lite_cross_side_replan_artifact" in behavior
-    assert "mpcc_lite_same_side_replan_mission" not in behavior
-    assert "mpcc_lite_cross_side_replan_mission" not in behavior
+    assert "rate_resolved_mission_gate_a_proposal" in behavior
+    assert "mpcc_lite_same_side_replan_artifact" not in behavior
+    assert "mpcc_lite_cross_side_replan_artifact" not in behavior
 
     branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
     branch_end = SOURCE.index(
@@ -1320,27 +1316,26 @@ def test_runtime_overtake_replacement_is_a_typed_canonical_artifact() -> None:
     )
     replace_end = SOURCE.index("double mission_completion_reserve_sec() const", replace_start)
     replace = SOURCE[replace_start:replace_end]
-    assert "replacement_canonical_plan" in replace
-    assert "resolve_overtake_preentry_plan(" in replace
+    assert "rate_resolved_mission_gate_a_proposal" in replace
+    assert "replacement_canonical_plan" not in replace
+    assert "resolve_overtake_preentry_plan(" not in replace
     assert "prospective_generation" in replace
+    assert "gate_a_proposal.mission" in replace
+    assert "gate_a_proposal.certified_plan" in replace
+    assert "source_context.intent == replacement_intent" in replace
+    assert "source_context.target_id == overtake_line_state_.target_vehicle_id" in replace
     assert "adopt_overtake_canonical_plan_context(" not in replace
     assert "prepare_overtake_canonical_async_context(" not in replace
-    assert replace.index("resolve_overtake_preentry_plan(") < replace.index(
+    assert replace.index("source_context.intent == replacement_intent") < replace.index(
         "freeze_selected_overtake_mission("
     )
     assert replace.index("freeze_selected_overtake_mission(") < replace.index(
         "transition_overtake_line_phase("
     )
 
-    runtime_start = SOURCE.index(
-        "behavior_output.mpcc_lite_same_side_replan_artifact.has_value()"
-    )
-    runtime_end = SOURCE.index(
-        "behavior_output.opponent_side_replan_ready", runtime_start
-    )
-    runtime = SOURCE[runtime_start:runtime_end]
-    assert "artifact.canonical_plan" in runtime
-    assert "locked_target_observation_generation" in runtime
+    assert SOURCE.count(
+        "behavior_output.rate_resolved_mission_gate_a_proposal"
+    ) >= 3
 
 
 def test_overtake_preentry_target_prediction_is_an_explicit_snapshot_contract() -> None:

@@ -99,6 +99,7 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   snapshot.trajectory.lag_m = {0.0, 0.0};
   snapshot.trajectory.heading_offset_rad = {0.0, 0.0};
   snapshot.trajectory.velocity_mps = {2.1, 2.2};
+  snapshot.trajectory.velocity_lower_bound_tolerance_mps = 1e-6;
   snapshot.trajectory.progress_m = {50.2, 50.4};
   snapshot.trajectory.lateral_lower_m = {-1.0, -1.0};
   snapshot.trajectory.lateral_upper_m = {1.0, 1.0};
@@ -237,6 +238,37 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
   ASSERT_EQ(authority.steering_horizon_rad.size(), 1U);
   ASSERT_EQ(authority.world_prediction.first.size(), 1U);
   ASSERT_EQ(authority.world_prediction.second.size(), 1U);
+}
+
+TEST(
+  RateResolvedProductionAdapter,
+  ProjectsCertifiedLowerBoundResidualsAtPhysicalCommandBoundary)
+{
+  auto retained_result = accepted_result();
+  retained_result.proof->actuation.predicted_speed_mps = -5e-7;
+  retained_result.proof->actuation.virtual_progress_speed_mps = -5e-7;
+
+  const auto result = production::build(retained_result);
+
+  ASSERT_EQ(result.reason, production::Reason::Available);
+  ASSERT_TRUE(result.authority.has_value());
+  EXPECT_DOUBLE_EQ(result.authority->command.predicted_speed_mps, 0.0);
+  EXPECT_DOUBLE_EQ(result.authority->command.virtual_progress_speed_mps, 0.0);
+  ASSERT_FALSE(result.authority->target_speed_horizon_mps.empty());
+  EXPECT_DOUBLE_EQ(result.authority->target_speed_horizon_mps.front(), 0.0);
+}
+
+TEST(
+  RateResolvedProductionAdapter,
+  RejectsLowerBoundResidualOutsidePhysicalCertificate)
+{
+  auto retained_result = accepted_result();
+  retained_result.proof->actuation.predicted_speed_mps = -2e-6;
+
+  const auto result = production::build(retained_result);
+
+  EXPECT_EQ(result.reason, production::Reason::InvalidActuation);
+  EXPECT_FALSE(result.authority.has_value());
 }
 
 TEST(RateResolvedProductionAdapter, BuildsEveryArtifactOwnedIntent)

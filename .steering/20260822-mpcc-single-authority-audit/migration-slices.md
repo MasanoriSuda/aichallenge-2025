@@ -1171,6 +1171,20 @@ Finish the architecture simplification instead of leaving permanent dual control
   solver/retained-source continuity defect remains a separate failure-first
   Slice; it is not hidden by tuning or a new normal fallback here.
 
+- `.steering/20260826-certified-actuation-publication-boundary` closes the
+  next Track/Cruise authority-construction contradiction exposed by moving run
+  `output/20260826-103853`.  At decision 898 the six-state solve, exact physical
+  proof and current-world proof were accepted, but production reported
+  `joined=0,command-rejected`.  The artifact and physical trajectory already
+  certified lower-bound residuals while the final command builder alone
+  required exact nonnegative speed and virtual progress.  The production
+  adapter now projects only values inside those sealed certificates to exact
+  physical zero, uses the identical value in the compatibility horizon, and
+  rejects values outside the certificate.  It adds no fallback, flag, lease,
+  timeout, parameter or second normal authority.  All 25 packages build and
+  the complete 51-test package suite passes.  Moving acceptance remains open
+  and must precede direct-Pass promotion or legacy deletion.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

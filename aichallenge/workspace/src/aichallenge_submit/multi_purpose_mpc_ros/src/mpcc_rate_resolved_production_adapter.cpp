@@ -19,6 +19,18 @@ namespace candidate = mpcc_rate_resolved_command_candidate;
 namespace certified = mpcc_rate_resolved_certified_plan;
 namespace physical = mpcc_rate_resolved_physical_wall;
 
+std::optional<double> project_certified_nonnegative(
+  const double value, const double lower_bound_tolerance) noexcept
+{
+  if (
+    !std::isfinite(value) || !std::isfinite(lower_bound_tolerance) ||
+    lower_bound_tolerance < 0.0 || value < -lower_bound_tolerance)
+  {
+    return std::nullopt;
+  }
+  return std::max(0.0, value);
+}
+
 std::optional<std::pair<std::vector<double>, std::vector<double>>>
 build_world_prediction(
   const physical::Snapshot & snapshot, const artifact::Cursor & cursor) noexcept
@@ -148,6 +160,27 @@ Result build(const retained::Result & retained_result) noexcept
     return result;
   }
 
+  // The physical proof admits lower-bound residuals only inside its recorded
+  // solver tolerance.  Convert that certified numerical representation to the
+  // exact non-negative actuator representation once, at this boundary.  The
+  // immutable execution artifact and its physical evidence remain untouched.
+  const double velocity_lower_bound_tolerance_mps =
+    proof.plan->physical_snapshot->trajectory
+    .velocity_lower_bound_tolerance_mps;
+  const auto projected_speed_mps = project_certified_nonnegative(
+    sampled.predicted_speed_mps, velocity_lower_bound_tolerance_mps);
+  const auto projected_virtual_progress_speed_mps =
+    project_certified_nonnegative(
+    sampled.virtual_progress_speed_mps,
+    execution.physical_global_tolerance);
+  if (
+    !projected_speed_mps.has_value() ||
+    !projected_virtual_progress_speed_mps.has_value())
+  {
+    result.reason = Reason::InvalidActuation;
+    return result;
+  }
+
   const double horizon_duration_sec = std::accumulate(
     execution.control_stages.begin(), execution.control_stages.end(), 0.0,
     [](const double total, const artifact::ControlStage & stage) {
@@ -204,9 +237,9 @@ Result build(const retained::Result & retained_result) noexcept
   const auto command_result = contract::build_canonical_normal_command(
     authority_resolution,
     contract::CanonicalActuation{
-      sampled.predicted_speed_mps, sampled.acceleration_mps2,
+      projected_speed_mps.value(), sampled.acceleration_mps2,
       sampled.curvature_radpm, sampled.steering_rad,
-      sampled.virtual_progress_speed_mps});
+      projected_virtual_progress_speed_mps.value()});
   if (!command_result.command.has_value()) {
     result.reason = Reason::CommandRejected;
     return result;
@@ -232,7 +265,7 @@ Result build(const retained::Result & retained_result) noexcept
     std::size_t offset = 0U;
     offset < proof.cursor.remaining_control_stage_count; ++offset)
   {
-    double speed_mps = sampled.predicted_speed_mps;
+    double speed_mps = projected_speed_mps.value();
     double steering_rad = sampled.steering_rad;
     if (offset > 0U) {
       const std::size_t state_index =
@@ -241,11 +274,17 @@ Result build(const retained::Result & retained_result) noexcept
         result.reason = Reason::PredictionRejected;
         return result;
       }
-      speed_mps = execution.predicted_states[state_index].velocity_mps;
+      const auto projected_horizon_speed_mps = project_certified_nonnegative(
+        execution.predicted_states[state_index].velocity_mps,
+        velocity_lower_bound_tolerance_mps);
+      if (!projected_horizon_speed_mps.has_value()) {
+        result.reason = Reason::PredictionRejected;
+        return result;
+      }
+      speed_mps = projected_horizon_speed_mps.value();
       steering_rad = execution.predicted_states[state_index].steering_rad;
     }
     if (
-      !std::isfinite(speed_mps) || speed_mps < 0.0 ||
       !std::isfinite(steering_rad))
     {
       result.reason = Reason::PredictionRejected;

@@ -27,6 +27,12 @@ Static evidence:
 - `output/20260826-075833`: next exact reject was virtual progress `[0,0]`
 - post-correction launches: zero semantic-adapter rejects, but AWSIM stayed
   `Ready`; moving acceptance was not claimed
+- `output/20260826-103853` subsequently exposed the first post-start authority
+  loss at the final production boundary: decision 898 was solver/physical/world
+  accepted but `joined=0,production_reason=command-rejected`.  The companion
+  `.steering/20260826-certified-actuation-publication-boundary` Slice repairs
+  that certified-residual interpretation mismatch; moving acceptance is still
+  required before Slice A closes.
 
 ## Slice B: dynamic Overtake acceptance
 

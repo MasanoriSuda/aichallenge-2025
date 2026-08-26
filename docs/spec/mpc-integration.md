@@ -2492,6 +2492,26 @@ stateからのnominal wall proofが実車相当の到達経路を証明してい
 wall contact後のQP cascadeとして分離できた。観測欠損／stale時はcanonical normal authorityを閉じ、legacy normal fallbackへ切り替えない。
 wall margin、solver、horizon、weightはこの構造修正では変更しない。
 
+#### Certified actuation publication boundary（2026-08-26、2025由来の暫定）
+
+six-state execution artifactとexact physical trajectoryは、stop／hold境界の
+predicted velocityおよびvirtual-progress speedについて、seal済みsolver残差内の
+微小な負値を物理的な0として証明できる。一方、従来のproduction adapterは
+canonical command生成時だけexact nonnegativeを再要求していた。このため
+`solver=solved,physical=accepted,world=accepted`でもproduction authorityが
+`command-rejected`となり、明示Emergencyへ遷移していた。
+
+production adapterを、証明済み数値表現から物理actuator表現への唯一の変換境界とする。
+predicted velocityはexact physical trajectoryのvelocity lower-bound tolerance、
+virtual-progress speedはexecution artifactのphysical global toleranceを用いる。
+有限値が`[-tolerance, 0)`内なら一度だけexact 0へ射影し、tolerance未満はfail closedとする。
+raw artifact、wall／dynamic proof、solution identityは変更しない。同じ射影値をcanonical
+commandとcompatibility speed horizonで共有し、publication後のclampや第二authorityは設けない。
+
+`output/20260826-103853`のdecision 898をfailure-first根拠とし、許容内／許容外の両回帰テスト、
+25 package build、51/51 package testを通した。これはparameter tuningではなくproducer／consumer
+契約の整合修正である。moving runで同signatureが消えるまではSlice Aの動的Gateを閉じない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

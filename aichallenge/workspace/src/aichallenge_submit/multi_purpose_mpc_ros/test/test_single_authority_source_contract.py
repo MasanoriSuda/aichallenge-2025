@@ -791,7 +791,8 @@ def test_overtake_entry_preserves_the_selected_tactical_artifact() -> None:
         entry_start,
     )
     entry = SOURCE[entry_start:entry_end]
-    assert "resolve_overtake_preentry_plan(" in entry
+    assert "resolve_overtake_preentry_plan(" not in entry
+    assert "six-state-preentry-gate-a" in entry
     assert "freeze_selected_overtake_mission(" in entry
     assert "prepare_overtake_canonical_async_context(" not in entry
     assert "plan_store.replace(" not in entry
@@ -824,20 +825,8 @@ def test_overtake_entry_preserves_the_selected_tactical_artifact() -> None:
     assert "extraction.lateral_upper_m.push_back(" in fresh
 
 
-def test_five_state_preentry_artifact_is_limited_to_unpromoted_direct_pass() -> None:
-    """Fresh ShiftOut may not depend on the retained five-state Gate A."""
-
-    async_source = (
-        PACKAGE_ROOT / "src/follow_canonical_async.cpp"
-    ).read_text(encoding="utf-8")
-    resolver_start = async_source.index("resolve_overtake_preentry_plan(")
-    resolver_end = async_source.index(
-        "const char * to_string(const PublishReason", resolver_start
-    )
-    resolver = async_source[resolver_start:resolver_end]
-    assert "resolve_execution_cursor(" in resolver
-    assert "extract_canonical_actuation(" not in resolver
-    assert "certify_canonical_steering_continuity(" not in resolver
+def test_fresh_preentry_uses_six_state_gate_for_shiftout_and_direct_pass() -> None:
+    """No fresh entry, including start-grid, may bypass six-state Gate A."""
 
     entry_start = SOURCE.index("const bool fresh_normal_mission_entry =")
     entry_end = SOURCE.index(
@@ -846,19 +835,45 @@ def test_five_state_preentry_artifact_is_limited_to_unpromoted_direct_pass() -> 
         entry_start,
     )
     entry = SOURCE[entry_start:entry_end]
-    assert "resolve_overtake_preentry_plan(" in entry
-    assert "five-state-direct-pass-gate-a" in entry
-    assert "six-state-shiftout-gate-a" in entry
-    assert "!direct_pass && !six_state_shiftout_gate_a_request" in entry
-    assert "fresh_entry_uses_six_state_gate_a" in entry
+    assert "resolve_overtake_preentry_plan(" not in entry
+    assert "five-state-direct-pass-gate-a" not in entry
+    assert "six-state-preentry-gate-a" in entry
+    assert "six_state_preentry_gate_a_request" in entry
+    assert "six_state_direct_pass_gate_a_request" in SOURCE
+    assert "ControlIntent::Pass" in SOURCE[
+        SOURCE.index("const bool six_state_preentry_gate_a_request =") : entry_start
+    ]
     assert "freeze_selected_overtake_mission(fresh_entry_mission" in entry
-    assert (
-        "!fresh_entry_uses_six_state_gate_a &&\n"
-        "            cfg.progress_contouring_dual_branch_enabled" in entry
-    )
+    assert "behavior_output.overtake_preentry_canonical_plan" not in entry
     assert "steering_continuity" not in entry
     assert "prepare_overtake_canonical_async_context(" not in entry
     assert "overtake_canonical_lifecycle_->plan_store.replace(" not in entry
+    assert "!behavior_output.start_grid_breakout_active" not in entry
+
+    request_start = SOURCE.index("const bool behavior_requests_overtake =")
+    request_end = SOURCE.index("if (solver_reentry_suppressed", request_start)
+    request = SOURCE[request_start:request_end]
+    assert "six_state_preentry_gate_a_request ||" in request
+    assert "overtake_line_state_.phase != OvertakeLinePhase::Idle" in request
+
+    start_grid_start = SOURCE.index(
+        "if (start_grid_corridor_assessment.gap_available) {"
+    )
+    start_grid_end = SOURCE.index(
+        "const bool dynamic_decision_scope =", start_grid_start
+    )
+    start_grid = SOURCE[start_grid_start:start_grid_end]
+    assert "left_assessment = start_grid_corridor_assessment" not in start_grid
+    assert "right_assessment = start_grid_corridor_assessment" not in start_grid
+    assert "not a normal execution candidate" in start_grid
+
+    mission_collection = SOURCE[
+        SOURCE.index("const auto add_global_mission_candidate =") :
+        SOURCE.index("const bool global_complete_mission_available =")
+    ]
+    assert "add_global_mission_candidate(left_assessment);" in mission_collection
+    assert "add_global_mission_candidate(right_assessment);" in mission_collection
+    assert "if (!start_grid_breakout_attempt)" not in mission_collection
 
 
 def test_six_state_preentry_gate_shadow_uses_explicit_intent_without_authority() -> None:
@@ -881,6 +896,9 @@ def test_six_state_preentry_gate_shadow_uses_explicit_intent_without_authority()
     assert "validate_frenet_dp_target_bound_horizon(" in shadow
     assert "rate_resolved_track_cruise_certified_plan_store_" not in shadow
     assert "canonical_normal_command" not in shadow
+    assert "bind_rate_resolved_track_cruise_submission(" in shadow
+    assert "current_physical_steering_state_->committed_steering_rad" in shadow
+    assert "BoundRateResolvedTrackCruiseSubmission bound_submission;" not in shadow
 
     isolated_start = SOURCE.index(
         "ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch("
@@ -1210,8 +1228,10 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     fsm_end = SOURCE.index("bool is_overtake_forbidden_wp(", fsm_start)
     fsm = SOURCE[fsm_start:fsm_end]
     assert "rate_resolved_preentry_gate_a_proposal" in fsm
-    assert "six_state_shiftout_gate_a_request" in fsm
+    assert "six_state_preentry_gate_a_request" in fsm
+    assert "six_state_direct_pass_gate_a_request" in fsm
     assert "ControlIntent::ShiftOut" in fsm
+    assert "ControlIntent::Pass" in fsm
     assert (
         "proposal_source_context->target_obstacle_generation ==\n"
         "            six_state_gate_a_proposal->target_obstacle_generation" in fsm

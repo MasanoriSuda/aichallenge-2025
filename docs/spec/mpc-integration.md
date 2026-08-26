@@ -2570,6 +2570,29 @@ publisher joinはd1で3324件、d2で3722件が成功しrejectは0、executed se
 これにより旧stale-executed-plan authority lossは解消した。残るFollow -> ShiftOutの`stage-wall-rejected`反復は
 全intent動的受入れの別Sliceで扱い、wall marginやsteering parameterでは隠さない。
 
+#### 全fresh Overtake入口のsix-state Gate A統一（2026-08-26、2025由来の暫定）
+
+fresh `ShiftOut`とDirect `Pass`は、同一のprospective
+`VelocitySteeringProgress6State` proposalからのみMissionを採用する。proposalはexact Mission、intent、target、side、
+prospective Mission generation、physical wall proof、current-world joinを不可分に保持する。FSMはproposal intentが
+`ShiftOut`または`Pass`で、採用phaseと完全一致する場合だけMissionをfreezeする。旧five-state
+`resolve_overtake_preentry_plan()`はfresh entryのproduction authorityではない。
+
+pre-entry shadowもnormal producerと同じimmutable predecessor binderを使う。physical control originの舵角と直前に
+publishしたdesired舵角の一方でも欠ける場合、手作業でbound submissionを構築せずfail closedとする。
+`output/20260826-141125`と`output/20260826-142429`では、このpublished steering binding欠落により全pre-entry snapshotが
+rejectされていた。共通binderへの統合は閾値緩和ではなく、同一producer contractへの収束である。
+
+Gate2の`output/20260826-144042`では、start-grid用のraw geometric corridorがnormal `SideAssessment`を上書きし、
+complete Missionを失ったままbehavior labelだけでgeneration 0の`ShiftOut`へ15回入る別authority bypassを確認した。
+start-grid geometryは戦術選好・診断だけに限定し、normal左右Missionを上書きしない。start-grid中もglobal Missionを収集し、
+IdleからのOvertake entryは必ずsix-state Gate A proposalを要求する。
+
+修正後の`output/20260826-145002`では`Idle -> ShiftOut/Pass`、`unsupported-intent`、generation-0 normal entryはいずれも
+0件だった。このrunではcomplete Missionが得られずpositive Gate A adoptionは未観測である。したがって本証拠は
+不正authority経路の削除を示すが、Direct Pass／ShiftOutの実用品質合格を意味しない。Mission不成立をstart-grid例外や
+parameter tuningで隠さず、後続の動的受入れ試験で評価する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

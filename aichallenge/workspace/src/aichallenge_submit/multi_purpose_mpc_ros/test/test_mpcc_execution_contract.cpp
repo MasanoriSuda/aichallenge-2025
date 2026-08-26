@@ -72,7 +72,8 @@ contract::MpccProblemContext make_context()
   context.target_id = "d2";
   context.execution_side_sign = 1;
   context.horizon_steps = 2U;
-  context.formulation = contract::Formulation::VelocitySteeringProgress6State;
+  context.formulation =
+    contract::Formulation::VelocitySteeringYawResponseProgress7State;
   context.state_schema_id = "ey-elag-epsi-v-steering-progress-v1";
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-obstacle-v1";
@@ -1101,6 +1102,44 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsMalformedExecutableHo
     contract::CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon);
 }
 
+TEST(MpccExecutionContract, RetainedAuthorityAcceptsCertifiedCurrentStagePrefix)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.solution->physical.wall_clear = false;
+  const auto retained = make_canonical_candidate(41U, 1U, 42U);
+  ASSERT_TRUE(retained.solution.has_value());
+  EXPECT_EQ(retained.execution_first_control_stage_index, 0U);
+  EXPECT_EQ(retained.executable_control_stage_count, 1U);
+  EXPECT_EQ(retained.solution->prediction_stage_count, 2U);
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, retained, contract::ControlIntent::Track});
+
+  EXPECT_EQ(
+    resolution.retained_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::None);
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified);
+  EXPECT_EQ(resolution.executable_control_stage_count, 1U);
+}
+
+TEST(MpccExecutionContract, FreshAuthorityStillRequiresCompleteHorizon)
+{
+  const auto fresh = make_canonical_candidate(42U, 1U);
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, contract::CanonicalNormalCandidate{},
+      contract::ControlIntent::Track});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::EmergencyStop);
+  EXPECT_EQ(
+    resolution.fresh_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon);
+}
+
 TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsMismatchedIdentity)
 {
   auto fresh = make_canonical_candidate();
@@ -1201,22 +1240,41 @@ TEST(MpccExecutionContract, CanonicalNormalAuthorityRejectsInvalidRequestTime)
     contract::CanonicalNormalAuthorityReason::InvalidRequest);
 }
 
-TEST(MpccExecutionContract, CanonicalPublicationPreservesCertifiedPhysicalSteering)
+TEST(MpccExecutionContract, CanonicalPublicationCalibratesPhysicalSteeringAtWireBoundary)
 {
   const auto published = contract::resolve_published_steering_tire_angle(
-    0.21, 1.5, true);
+    0.21, 1.435);
 
   ASSERT_TRUE(published.has_value());
-  EXPECT_DOUBLE_EQ(published.value(), 0.21);
+  EXPECT_DOUBLE_EQ(
+    published.value(), static_cast<double>(static_cast<float>(0.30135)));
 }
 
-TEST(MpccExecutionContract, LegacyPublicationRetainsActuatorCalibrationDuringMigration)
+TEST(MpccExecutionContract, CanonicalWirePublicationPreservesCalibratedPhysicalMeaning)
 {
+  constexpr double certified_physical_steering_rad = 0.21;
+  constexpr double actuator_gain = 1.435;
   const auto published = contract::resolve_published_steering_tire_angle(
-    0.21, 1.5, false);
+    certified_physical_steering_rad, actuator_gain);
 
   ASSERT_TRUE(published.has_value());
-  EXPECT_DOUBLE_EQ(published.value(), 0.315);
+  EXPECT_DOUBLE_EQ(
+    published.value(),
+    static_cast<double>(static_cast<float>(
+        static_cast<double>(static_cast<float>(certified_physical_steering_rad)) *
+        actuator_gain)));
+}
+
+TEST(MpccExecutionContract, LegacySupervisorPublicationRetainsActuatorCalibration)
+{
+  const auto published = contract::resolve_published_steering_tire_angle(
+    0.21, 1.5);
+
+  ASSERT_TRUE(published.has_value());
+  EXPECT_DOUBLE_EQ(
+    published.value(),
+    static_cast<double>(static_cast<float>(
+        static_cast<double>(static_cast<float>(0.21)) * 1.5)));
 }
 
 TEST(MpccExecutionContract, PublishedCandidateJoinsAtTheExactWireRepresentation)
@@ -1226,40 +1284,69 @@ TEST(MpccExecutionContract, PublishedCandidateJoinsAtTheExactWireRepresentation)
   command.predicted_speed_mps = 4.123456789;
   command.acceleration_mps2 = 1.234567891;
   command.steering_tire_angle_rad = -0.157369977;
+  constexpr double actuator_gain = 1.435;
 
   const double published_speed = static_cast<float>(command.predicted_speed_mps);
   const double published_acceleration = static_cast<float>(command.acceleration_mps2);
-  const double published_steering = static_cast<float>(command.steering_tire_angle_rad);
+  const double published_steering = static_cast<double>(static_cast<float>(
+      static_cast<double>(static_cast<float>(command.steering_tire_angle_rad)) *
+      actuator_gain));
 
   EXPECT_FALSE(contract::canonical_normal_command_matches_actuation(
       command, published_speed, published_acceleration, published_steering));
   EXPECT_TRUE(contract::canonical_normal_command_matches_serialized_actuation(
-      command, published_speed, published_acceleration, published_steering));
+      command, published_speed, published_acceleration, published_steering,
+      actuator_gain));
   EXPECT_FALSE(contract::canonical_normal_command_matches_serialized_actuation(
       command, published_speed, published_acceleration,
-      static_cast<float>(command.steering_tire_angle_rad + 0.01)));
+      static_cast<float>(published_steering + 0.01), actuator_gain));
 }
 
 TEST(MpccExecutionContract, PublicationRejectsInvalidSteeringContract)
 {
   EXPECT_FALSE(contract::resolve_published_steering_tire_angle(
-    std::numeric_limits<double>::quiet_NaN(), 1.5, true).has_value());
+    std::numeric_limits<double>::quiet_NaN(), 1.5).has_value());
   EXPECT_FALSE(contract::resolve_published_steering_tire_angle(
-    0.21, 0.0, false).has_value());
+    0.21, 0.0).has_value());
 }
 
-TEST(MpccExecutionContract, CanonicalEmergencyKeepsPhysicalSteeringConvention)
+TEST(MpccExecutionContract, SuccessorSteeringOriginRequiresExactWirePublication)
 {
-  EXPECT_TRUE(contract::canonical_normal_uses_physical_steering(
-      false, true, false));
-  EXPECT_TRUE(contract::canonical_normal_uses_physical_steering(
-      true, false, false));
-  EXPECT_FALSE(contract::canonical_normal_uses_physical_steering(
-      false, false, false));
-  EXPECT_FALSE(contract::canonical_normal_uses_physical_steering(
-      true, false, true));
-  EXPECT_FALSE(contract::canonical_normal_uses_physical_steering(
-      false, true, true));
+  constexpr double physical_steering_rad = -0.157369977;
+  constexpr double actuator_gain = 1.435;
+  const double wire_steering_rad = static_cast<double>(static_cast<float>(
+      static_cast<double>(static_cast<float>(physical_steering_rad)) *
+      actuator_gain));
+
+  EXPECT_TRUE(contract::physical_steering_matches_serialized_actuation(
+      physical_steering_rad, wire_steering_rad, actuator_gain));
+  EXPECT_FALSE(contract::physical_steering_matches_serialized_actuation(
+      physical_steering_rad,
+      static_cast<float>(wire_steering_rad + 0.01), actuator_gain));
+  EXPECT_FALSE(contract::physical_steering_matches_serialized_actuation(
+      physical_steering_rad, wire_steering_rad, 0.0));
+}
+
+TEST(MpccExecutionContract, PublicationMirrorsBothRosFloat32Boundaries)
+{
+  // This value reproduced the first retained-authority loss in
+  // output/20260827-010027.  Multiplying the original double before the ROS
+  // physical field is serialized differs by one float ULP from the command
+  // which is actually placed on the wire.
+  constexpr double physical_steering_rad = -0.271520636;
+  constexpr double actuator_gain = 1.435;
+  const double actual_wire_steering_rad = static_cast<double>(
+    static_cast<float>(
+      static_cast<double>(static_cast<float>(physical_steering_rad)) *
+      actuator_gain));
+
+  const auto resolved = contract::resolve_published_steering_tire_angle(
+    physical_steering_rad, actuator_gain);
+
+  ASSERT_TRUE(resolved.has_value());
+  EXPECT_DOUBLE_EQ(resolved.value(), actual_wire_steering_rad);
+  EXPECT_TRUE(contract::physical_steering_matches_serialized_actuation(
+      physical_steering_rad, actual_wire_steering_rad, actuator_gain));
 }
 
 TEST(MpccExecutionContract, PreentryIdentityKeepsSafetyProofSeparateFromIntent)

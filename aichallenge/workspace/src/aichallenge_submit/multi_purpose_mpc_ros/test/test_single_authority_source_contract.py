@@ -273,7 +273,7 @@ def test_overtake_intents_use_the_rate_resolved_normal_owner() -> None:
     overtake = SOURCE[overtake_start:overtake_end]
     assert (
         "return rate_resolved_normal_production_control(\n"
-        "          problem, now_sec, control_intent);"
+        "          std::move(problem), now_sec, control_intent);"
     ) in overtake
     assert "canonical_overtake_production_control(" not in SOURCE[control_start:control_end]
     assert "canonical_normal_control(" not in overtake
@@ -284,9 +284,10 @@ def test_overtake_intents_use_the_rate_resolved_normal_owner() -> None:
     owner = SOURCE[owner_start:owner_end]
     consume = owner.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
     resolve = owner.index("rate_resolved_track_cruise_control(")
-    bind = owner.index("bind_rate_resolved_track_cruise_submission(")
-    submit = owner.index("submit_rate_resolved_track_cruise_shadow(")
-    assert consume < resolve < bind < submit
+    stage = owner.index("pending_rate_resolved_publication_successor_ =")
+    assert consume < resolve < stage
+    assert "bind_rate_resolved_track_cruise_submission(" not in owner
+    assert "submit_rate_resolved_track_cruise_shadow(" not in owner
     assert "VelocityProgress5State" not in owner
 
 
@@ -385,8 +386,8 @@ def test_five_state_follow_owner_is_physically_deleted() -> None:
     assert not [symbol for symbol in retired_symbols if symbol in SOURCE]
 
 
-def test_rate_resolved_normal_snapshot_uses_observed_physical_steering() -> None:
-    """Six-state vehicle state must never be initialized from a desired command."""
+def test_rate_resolved_normal_snapshot_separates_command_and_response_states() -> None:
+    """The integrated steering state is command; measured motion initializes response."""
 
     builder_start = SOURCE.index(
         "build_rate_resolved_track_cruise_submission_draft("
@@ -405,19 +406,66 @@ def test_rate_resolved_normal_snapshot_uses_observed_physical_steering() -> None
 
     consume = owner.index("evaluate_rate_resolved_track_cruise_retained_shadow(")
     resolve = owner.index("rate_resolved_track_cruise_control(")
-    bind = owner.index("bind_rate_resolved_track_cruise_submission(")
-    submit = owner.index("submit_rate_resolved_track_cruise_shadow(")
-    assert consume < resolve < bind < submit
-    submission = owner[bind:submit]
-    assert "physical_control_origin_steering_rad_.value()" in submission
-    assert "output.control[1]" not in submission
+    stage = owner.index("pending_rate_resolved_publication_successor_ =")
+    assert consume < resolve < stage
+    assert "bind_rate_resolved_track_cruise_submission(" not in owner
+    assert "submit_rate_resolved_track_cruise_shadow(" not in owner
 
     assert "#include <autoware_auto_vehicle_msgs/msg/steering_report.hpp>" in SOURCE
     assert "steering_status_sub_ = create_subscription<SteeringReport>(" in SOURCE
     assert "current_physical_steering_state_" in SOURCE
+    update_start = SOURCE.index(
+        "update_physical_steering_state_for_execution_contract("
+    )
+    update_end = SOURCE.index("void update_response_steering_state", update_start)
+    update = SOURCE[update_start:update_end]
+    assert "command_control_origin_steering_rad_" in update
+    assert "current_physical_steering_state_->committed_steering_rad" in update
+    assert "prediction_origin_steering_rad" not in update
 
 
-def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() -> None:
+def test_rate_resolved_successor_is_bound_only_after_exact_publication() -> None:
+    """The next solve must start from this callback's serialized command."""
+
+    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    assert "submit_rate_resolved_track_cruise_shadow(" not in owner
+    assert "submit_rate_resolved_preentry_execution_shadow(" not in owner
+    assert "pending_rate_resolved_publication_successor_" in owner
+
+    recorder_start = SOURCE.index(
+        "record_rate_resolved_publication_successor("
+    )
+    recorder_end = SOURCE.index(
+        "record_canonical_normal_final_command(", recorder_start
+    )
+    recorder = SOURCE[recorder_start:recorder_end]
+    serialized = recorder.index(
+        "physical_steering_matches_serialized_actuation("
+    )
+    bind = recorder.index("bind_rate_resolved_track_cruise_submission(")
+    submit = recorder.index("submit_rate_resolved_track_cruise_shadow(")
+    assert serialized < bind < submit
+    assert "final_physical_steering_rad" in recorder[bind:submit]
+    assert "command_control_origin_steering_rad_.value()" not in recorder
+
+    control_start = SOURCE.index("void control()")
+    control_end = SOURCE.index("void publish_zero_command()", control_start)
+    control = SOURCE[control_start:control_end]
+    publish = control.index("const auto published_steering = publish_control_command(")
+    successor = control.index("mpc_->record_rate_resolved_publication_successor(")
+    assert publish < successor
+    assert "u[1]" in control[successor : successor + 300]
+    successor_call = control[successor : successor + 400]
+    assert (
+        "!recovery_command_active &&\n"
+        "      (!mpc_fallback_active || canonical_emergency_stop)"
+        in successor_call
+    )
+
+
+def test_rate_resolved_intent_transition_admits_the_same_rate_resolved_producer() -> None:
     """An intent change joins the exact certified plan before publication."""
 
     admission_start = SOURCE.index(
@@ -429,12 +477,11 @@ def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() ->
         admission_start,
     )
     admission = SOURCE[admission_start:admission_end]
-    assert "physical_control_origin_steering_rad_.has_value()" in admission
+    assert "command_control_origin_steering_rad_.has_value()" in admission
     assert "current_physical_steering_state_.has_value()" in admission
     assert (
         "bind_rate_resolved_track_cruise_submission(\n"
-        "        draft, physical_control_origin_steering_rad_.value(),\n"
-        "        current_physical_steering_state_->committed_steering_rad)"
+        "        draft, command_control_origin_steering_rad_.value())"
         in admission
     )
     assert "bind_rate_resolved_track_cruise_submission(draft, previous_steering)" not in admission
@@ -509,7 +556,7 @@ def test_rate_resolved_track_cruise_has_its_own_six_state_problem_identity() -> 
     assert (
         "draft.source_context = make_problem_context(\n"
         "      problem,\n"
-        "      mpcc_contract::Formulation::VelocitySteeringProgress6State);"
+        "      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State);"
         in builder
     )
     assert "VelocityProgress5State" not in builder
@@ -675,7 +722,7 @@ def test_fresh_preentry_uses_six_state_gate_for_shiftout_and_direct_pass() -> No
     assert "if (!start_grid_breakout_attempt)" not in mission_collection
 
 
-def test_six_state_preentry_gate_shadow_uses_explicit_intent_without_authority() -> None:
+def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authority() -> None:
     """Prospective Gate A must not inherit the still-live Follow identity."""
 
     assert "struct RateResolvedPreentryShadowEvaluation" in SOURCE
@@ -690,13 +737,14 @@ def test_six_state_preentry_gate_shadow_uses_explicit_intent_without_authority()
     shadow = SOURCE[shadow_start:shadow_end]
     assert "const mpcc_contract::ControlIntent prospective_intent" in shadow
     assert "current_control_intent()" not in shadow
-    assert "Formulation::VelocitySteeringProgress6State" in shadow
+    assert "Formulation::VelocitySteeringYawResponseProgress7State" in shadow
     assert "evaluate_rate_resolved_pipeline(" in shadow
     assert "validate_frenet_dp_target_bound_horizon(" in shadow
     assert "rate_resolved_track_cruise_certified_plan_store_" not in shadow
     assert "canonical_normal_command" not in shadow
     assert "bind_rate_resolved_track_cruise_submission(" in shadow
-    assert "current_physical_steering_state_->committed_steering_rad" in shadow
+    assert "command_control_origin_steering_rad_.value()" in shadow
+    assert "current_physical_steering_state_->committed_steering_rad" not in shadow
     assert "BoundRateResolvedTrackCruiseSubmission bound_submission;" not in shadow
 
     isolated_start = SOURCE.index(
@@ -917,7 +965,9 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "evaluate_v2x_behavior(" not in draft
     assert "solve_extended_progress_problem(" not in draft
 
-    submit_start = SOURCE.index("submit_rate_resolved_preentry_execution_shadow(")
+    submit_start = SOURCE.index(
+        "bool submit_rate_resolved_preentry_execution_shadow("
+    )
     submit_end = SOURCE.index("consume_rate_resolved_preentry_execution_shadow(", submit_start)
     submit = SOURCE[submit_start:submit_end]
     queued = submit.index(
@@ -927,7 +977,7 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "planner->build_prospective_extended_branch_problem(" in worker
     assert "planner->seal_problem_context_for_problem(" in worker
     assert "bind_rate_resolved_track_cruise_submission(" in submit
-    assert "physical_control_origin_steering_rad" in submit
+    assert "command_control_origin_steering_rad" in submit
     assert "committed_predecessor_steering_rad" not in submit
     # The canonical publication request type is shared, but worker ownership
     # remains an injected private member rather than being constructed here.
@@ -1045,10 +1095,11 @@ def test_five_state_overtake_tactical_gate_is_physically_deleted() -> None:
     assert "consume_rate_resolved_preentry_execution_shadow(" not in production
     build_position = production.index("build_rate_resolved_preentry_execution_draft(")
     command_position = production.index("rate_resolved_track_cruise_control(")
-    submit_position = production.index("submit_rate_resolved_preentry_execution_shadow(")
-    assert build_position < command_position < submit_position
-    assert "physical_control_origin_steering_rad_.value()" in production[submit_position:]
-    assert "output.control[1]" not in production[submit_position:]
+    stage_position = production.index(
+        "pending_rate_resolved_publication_successor_ ="
+    )
+    assert build_position < command_position < stage_position
+    assert "submit_rate_resolved_preentry_execution_shadow(" not in production
 
     init_start = SOURCE.index("MpcProblem init_problem(")
     init_end = SOURCE.index("void record_solution_contract(", init_start)
@@ -1260,7 +1311,7 @@ def test_extended_first_stage_linearization_is_anchored_to_the_execution_state()
         r"initial_stage\s*\?\s*initial_frenet_pose->heading_offset_rad", builder
     )
     assert re.search(
-        r"initial_stage\s*\?\s*legacy\.progress_measured_speed_mps", builder
+        r"initial_stage\s*\?\s*legacy\.progress_control_origin_speed_mps", builder
     )
     assert "initial_stage ? previous_curvature" in builder
     assert "legacy.progress_stage_dt_sec[static_cast<std::size_t>(stage)]" in builder
@@ -1464,7 +1515,7 @@ def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> Non
     semantic_start = builder.index("rate_resolved_shadow_request.emplace();")
     semantic_end = builder.index("Eigen::VectorXd q =", semantic_start)
     semantic = builder[semantic_start:semantic_end]
-    assert "request.current_steering_rad =\n        physical_control_origin_steering_rad_.value_or(" in semantic
+    assert "request.current_steering_rad =\n        command_control_origin_steering_rad_.value_or(" in semantic
     assert "request.current_steering_rad = previous_steering;" not in semantic
     assert "request.maximum_abs_steering_rate_radps" in semantic
     assert "first_curvature_input_lower" in semantic
@@ -1601,10 +1652,10 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     assert "build_canonical_current_control_path()" in request_builder
     assert "gap_planner->dynamic_world_observation(now_sec)" in request_builder
     assert "dynamic_world.vehicles" in request_builder
-    assert "physical_control_origin_steering_rad_.has_value()" in request_builder
+    assert "command_control_origin_steering_rad_.has_value()" in request_builder
     assert (
         "request.current_steering_rad =\n"
-        "      physical_control_origin_steering_rad_.value();"
+        "      command_control_origin_steering_rad_.value();"
         in request_builder
     )
     assert "request.current_steering_rad = previous_steering;" not in request_builder
@@ -1674,7 +1725,9 @@ def test_racing_follow_and_overtake_have_only_rate_resolved_normal_owner() -> No
     assert "evaluate_rate_resolved_track_cruise_retained_shadow(" in branch
     assert "rate_resolved_track_cruise_control(" in branch
     assert "build_rate_resolved_track_cruise_submission_draft(" in branch
-    assert "bind_rate_resolved_track_cruise_submission(" in branch
+    assert "pending_rate_resolved_publication_successor_ =" in branch
+    assert "bind_rate_resolved_track_cruise_submission(" not in branch
+    assert "submit_rate_resolved_track_cruise_shadow(" not in branch
     assert "evaluate_canonical_normal_shadow(" not in branch
     assert "canonical_normal_control(" not in branch
     assert "CanonicalNormalShadowMode::TrackCruise" not in branch
@@ -2071,3 +2124,24 @@ def test_shiftout_rolling_source_is_projected_from_six_state_certified_store() -
         "adopt_rate_resolved_shiftout_execution_source(now_sec);"
         in SOURCE
     )
+
+
+def test_latency_wall_proof_reuses_the_canonical_state_prediction_trajectory() -> None:
+    """The latency prefix may not be re-integrated with another yaw model."""
+
+    build_start = SOURCE.index(
+        "build_canonical_current_control_path() const"
+    )
+    build_end = SOURCE.index(
+        "bool unresolved_dynamic_wait_canonical_scope()", build_start
+    )
+    build = SOURCE[build_start:build_end]
+    assert "canonical_current_control_path_" in build
+    assert "predict_constant_turn_rate(" not in build
+
+    control_start = SOURCE.index("void control()")
+    control_end = SOURCE.index("void publish_zero_command()", control_start)
+    control = SOURCE[control_start:control_end]
+    assert "predict_accelerating_yaw_response_trajectory(" in control
+    assert "canonical_control_path = std::move(path);" in control
+    assert "update_predicted_pose_for_execution_contract(" in control

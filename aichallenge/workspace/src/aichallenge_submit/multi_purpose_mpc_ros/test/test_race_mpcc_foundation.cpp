@@ -511,6 +511,7 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryRequiresEveryFiveStateField)
 {
   race::ExactPhysicalExecutionTrajectory trajectory;
   trajectory.progress_origin_m = 100.0;
+  trajectory.elapsed_time_sec = {0.1, 0.2};
   trajectory.path_distance_m = {1.0, 2.0};
   trajectory.lateral_m = {0.2, 0.4};
   trajectory.lag_m = {0.1, -0.1};
@@ -537,6 +538,7 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryRejectsSemanticDiscontinuity)
 {
   race::ExactPhysicalExecutionTrajectory trajectory;
   trajectory.progress_origin_m = 100.0;
+  trajectory.elapsed_time_sec = {0.1, 0.2};
   trajectory.path_distance_m = {1.0, 2.0};
   trajectory.lateral_m = {0.2, 0.4};
   trajectory.lag_m = {0.1, -0.1};
@@ -568,6 +570,7 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAcceptsCertifiedTinyRegression)
 {
   race::ExactPhysicalExecutionTrajectory trajectory;
   trajectory.progress_origin_m = 100.0;
+  trajectory.elapsed_time_sec = {0.1, 0.2};
   trajectory.path_distance_m = {1.0, 2.0};
   trajectory.lateral_m = {0.2, 0.4};
   trajectory.lag_m = {0.1, -0.1};
@@ -590,6 +593,7 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAppliesCertifiedVelocityToleranc
 {
   race::ExactPhysicalExecutionTrajectory trajectory;
   trajectory.progress_origin_m = 100.0;
+  trajectory.elapsed_time_sec = {0.1, 0.2};
   trajectory.path_distance_m = {1.0, 2.0};
   trajectory.lateral_m = {0.2, 0.4};
   trajectory.lag_m = {0.1, -0.1};

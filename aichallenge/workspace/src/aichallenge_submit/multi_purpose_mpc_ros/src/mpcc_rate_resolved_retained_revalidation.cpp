@@ -61,7 +61,118 @@ artifact::PredictedState interpolate_expected_state(
     interpolate(start.heading_offset_rad, end.heading_offset_rad),
     interpolate(start.velocity_mps, end.velocity_mps),
     interpolate(start.progress_m, end.progress_m),
-    interpolate(start.steering_rad, end.steering_rad)};
+    interpolate(start.steering_rad, end.steering_rad),
+    interpolate(
+      start.response_steering_rad, end.response_steering_rad)};
+}
+
+struct ExactPhysicalState
+{
+  double lateral_m{};
+  double lag_m{};
+  double heading_offset_rad{};
+  double velocity_mps{};
+  double absolute_progress_m{};
+};
+
+ExactPhysicalState interpolate_exact_physical_state(
+  const ExactPhysicalState & start, const ExactPhysicalState & end,
+  const double fraction) noexcept
+{
+  const auto interpolate = [fraction](const double lhs, const double rhs) {
+      return lhs + fraction * (rhs - lhs);
+    };
+  return ExactPhysicalState{
+    interpolate(start.lateral_m, end.lateral_m),
+    interpolate(start.lag_m, end.lag_m),
+    interpolate(start.heading_offset_rad, end.heading_offset_rad),
+    interpolate(start.velocity_mps, end.velocity_mps),
+    interpolate(start.absolute_progress_m, end.absolute_progress_m)};
+}
+
+ExactPhysicalState exact_physical_state_at(
+  const race_mpcc_foundation::ExactPhysicalExecutionTrajectory & trajectory,
+  const std::size_t index) noexcept
+{
+  return ExactPhysicalState{
+    trajectory.lateral_m[index],
+    trajectory.lag_m[index],
+    trajectory.heading_offset_rad[index],
+    trajectory.velocity_mps[index],
+    trajectory.progress_m[index]};
+}
+
+ExactPhysicalState exact_physical_state_at(
+  const physical::Snapshot & source, const std::size_t index) noexcept
+{
+  return exact_physical_state_at(source.trajectory, index);
+}
+
+std::optional<ExactPhysicalState> sample_exact_physical_state(
+  const artifact::ExecutionArtifact & execution,
+  const physical::Snapshot & source, const double elapsed_sec) noexcept
+{
+  const auto & trajectory = source.trajectory;
+  if (
+    !std::isfinite(elapsed_sec) || elapsed_sec < 0.0 ||
+    trajectory.elapsed_time_sec.empty() ||
+    elapsed_sec > trajectory.elapsed_time_sec.back() + kIdentityTolerance ||
+    execution.predicted_states.empty() ||
+    std::abs(
+      trajectory.progress_origin_m - execution.course_progress_origin_m) >
+    std::max(kIdentityTolerance, source.bound_tolerance_m))
+  {
+    return std::nullopt;
+  }
+
+  const auto upper = std::lower_bound(
+    trajectory.elapsed_time_sec.begin(), trajectory.elapsed_time_sec.end(),
+    elapsed_sec);
+  if (upper == trajectory.elapsed_time_sec.end()) {
+    return exact_physical_state_at(source, trajectory.elapsed_time_sec.size() - 1U);
+  }
+  const std::size_t upper_index = static_cast<std::size_t>(
+    std::distance(trajectory.elapsed_time_sec.begin(), upper));
+  if (std::abs(*upper - elapsed_sec) <= kIdentityTolerance) {
+    return exact_physical_state_at(source, upper_index);
+  }
+
+  ExactPhysicalState lower_state;
+  double lower_time_sec{};
+  if (upper_index == 0U) {
+    const auto & initial = execution.predicted_states.front();
+    lower_state = ExactPhysicalState{
+      initial.lateral_m,
+      initial.lag_m,
+      initial.heading_offset_rad,
+      initial.velocity_mps,
+      execution.course_progress_origin_m + initial.progress_m};
+  } else {
+    lower_time_sec = trajectory.elapsed_time_sec[upper_index - 1U];
+    lower_state = exact_physical_state_at(source, upper_index - 1U);
+  }
+  const double duration_sec = *upper - lower_time_sec;
+  if (!std::isfinite(duration_sec) || duration_sec <= 0.0) {
+    return std::nullopt;
+  }
+  const double fraction = (elapsed_sec - lower_time_sec) / duration_sec;
+  return interpolate_exact_physical_state(
+    lower_state, exact_physical_state_at(source, upper_index), fraction);
+}
+
+artifact::PredictedState as_predicted_state(
+  const ExactPhysicalState & physical_state,
+  const artifact::PredictedState & command_state,
+  const double progress_origin_m) noexcept
+{
+  return artifact::PredictedState{
+    physical_state.lateral_m,
+    physical_state.lag_m,
+    physical_state.heading_offset_rad,
+    physical_state.velocity_mps,
+    physical_state.absolute_progress_m - progress_origin_m,
+    command_state.steering_rad,
+    command_state.response_steering_rad};
 }
 
 struct LiftResult
@@ -485,7 +596,21 @@ const char * to_string(const Reason reason) noexcept
     case Reason::ControlPathInvalid: return "control-path-invalid";
     case Reason::DelayPrefixBlocked: return "delay-prefix-blocked";
     case Reason::ConnectorBlocked: return "connector-blocked";
+    case Reason::ContinuationRejected: return "continuation-rejected";
+    case Reason::ContinuationWallBlocked:
+      return "continuation-wall-blocked";
     case Reason::Count: break;
+  }
+  return "unknown";
+}
+
+const char * to_string(const StaticWallProofScope scope) noexcept
+{
+  switch (scope) {
+    case StaticWallProofScope::FullSuffix:
+      return "full-suffix";
+    case StaticWallProofScope::CurrentStagePrefix:
+      return "current-stage-prefix";
   }
   return "unknown";
 }
@@ -574,8 +699,11 @@ Result evaluate(const Request & request)
   if (request.decision_id == 0U || !std::isfinite(request.now_sec) ||
     !std::isfinite(request.current_speed_mps) ||
     request.current_speed_mps < 0.0 ||
+    !std::isfinite(request.control_origin_speed_mps) ||
+    request.control_origin_speed_mps < 0.0 ||
     !std::isfinite(request.current_time_steering_rad) ||
     !std::isfinite(request.current_steering_rad) ||
+    !std::isfinite(request.current_response_steering_rad) ||
     !std::isfinite(request.previous_published_steering_rad) ||
     !std::isfinite(request.previous_published_command_age_sec) ||
     request.previous_published_command_age_sec < 0.0 ||
@@ -600,15 +728,30 @@ Result evaluate(const Request & request)
     return result;
   }
 
-  const auto expected = interpolate_expected_state(execution, cursor);
+  const auto affine_command_state = interpolate_expected_state(execution, cursor);
+  const auto exact_physical_state = sample_exact_physical_state(
+    execution, source, cursor.elapsed_sec);
+  if (!exact_physical_state.has_value()) {
+    result.reason = Reason::InvalidPlan;
+    return result;
+  }
+  // The physical certificate owns the executed Frenet pose and velocity.
+  // The affine QP state remains authoritative only for the serialized command
+  // coordinates which are absent from the nonlinear replay artifact.
+  const auto expected = as_predicted_state(
+    exact_physical_state.value(), affine_command_state,
+    execution.course_progress_origin_m);
   const double expected_absolute_progress_m =
-    execution.course_progress_origin_m + expected.progress_m;
+    exact_physical_state->absolute_progress_m;
   result.expected_absolute_progress_m = expected_absolute_progress_m;
   result.progress_continuity_tolerance_m =
     request.progress_continuity_tolerance_m;
   result.current_speed_mps = request.current_speed_mps;
+  result.control_origin_speed_mps = request.control_origin_speed_mps;
   result.current_time_steering_rad = request.current_time_steering_rad;
   result.current_steering_rad = request.current_steering_rad;
+  result.current_response_steering_rad =
+    request.current_response_steering_rad;
   result.previous_published_steering_rad =
     request.previous_published_steering_rad;
   const auto lift = lift_progress(
@@ -626,6 +769,42 @@ Result evaluate(const Request & request)
     result.reason = Reason::CourseFrameUnavailable;
     return result;
   }
+  result.expected_lateral_m = expected.lateral_m;
+  result.expected_lag_m = expected.lag_m;
+  result.expected_heading_offset_rad = expected.heading_offset_rad;
+  result.control_pose = request.control_pose;
+  result.expected_current_pose = expected_pose.value();
+  result.control_pose_error_m = std::hypot(
+    request.control_pose.x_m - expected_pose->x_m,
+    request.control_pose.y_m - expected_pose->y_m);
+  result.control_yaw_error_rad = wrap_to_pi(
+    request.control_pose.yaw_rad - expected_pose->yaw_rad);
+  const auto current_course_frame = mpc_stage_geometry::sample_course_frame(
+    source.course_frame_knots, expected_absolute_progress_m,
+    std::max(kIdentityTolerance, source.bound_tolerance_m));
+  if (!current_course_frame.has_value()) {
+    result.reason = Reason::CourseFrameUnavailable;
+    return result;
+  }
+  const auto current_frenet = contract::project_planar_pose_to_frenet(
+    contract::PlanarPose{
+      request.control_pose.x_m, request.control_pose.y_m,
+      request.control_pose.yaw_rad},
+    contract::PlanarPose{
+      current_course_frame->x_m, current_course_frame->y_m,
+      current_course_frame->heading_rad});
+  if (!current_frenet.has_value()) {
+    result.reason = Reason::InvalidCurrentState;
+    return result;
+  }
+  const artifact::PredictedState current_control_state{
+    current_frenet->lateral_m,
+    current_frenet->lag_m,
+    current_frenet->heading_offset_rad,
+    request.control_origin_speed_mps,
+    expected.progress_m,
+    request.current_steering_rad,
+    request.current_response_steering_rad};
   const double prediction_delay_sec =
     request.control_origin_sec - request.now_sec;
   auto evaluate_follow_gap = [&] (
@@ -659,7 +838,7 @@ Result evaluate(const Request & request)
       return result;
     }
     const auto expected_gap = evaluate_follow_gap(
-      expected, prediction_delay_sec);
+      current_control_state, prediction_delay_sec);
     if (!expected_gap.has_value()) {
       result.reason = Reason::FollowTargetHorizonUnavailable;
       return result;
@@ -681,12 +860,11 @@ Result evaluate(const Request & request)
   result.expected_speed_mps = actuation.actuation->predicted_speed_mps;
   result.expected_steering_rad = actuation.actuation->steering_rad;
 
-  // Steering has two independent contracts.  The observed/projected physical
-  // state initializes the six-state model.  The serialized command, however,
-  // must be slew-reachable from the last successfully published command over
-  // exactly one publication interval.  Substituting observed steering here
-  // makes actuator lag look like an impossible command jump and closes normal
-  // authority even when consecutive commands are physically rate compliant.
+  // The QP owns one serialized command trajectory.  Revalidate its executable
+  // sample against the last command over the actual publication age.  The
+  // measured physical angle belongs to response prediction; making it a
+  // second command origin re-bases the rate integral every cycle and produces
+  // a command trajectory different from the one certified by the QP.
   const double steering_reachability_duration_sec =
     request.previous_published_command_age_sec;
   const double maximum_steering_step_rad =
@@ -737,6 +915,38 @@ Result evaluate(const Request & request)
     return result;
   }
 
+  const auto continuation =
+    mpcc_rate_resolved_physical_adapter::build_continuation(
+    execution, cursor,
+    mpcc_rate_resolved_physical_adapter::ContinuationInitialState{
+      current_control_state.lateral_m,
+      current_control_state.lag_m,
+      current_control_state.heading_offset_rad,
+      current_control_state.velocity_mps,
+      current_control_state.progress_m,
+      actuation.actuation->steering_rad,
+      request.current_response_steering_rad});
+  result.continuation_reason = continuation.reason;
+  result.continuation_scope = continuation.scope;
+  result.continuation_exact_reason = continuation.exact_reason;
+  if (!continuation.exact_trajectory.has_value()) {
+    result.reason = Reason::ContinuationRejected;
+    return result;
+  }
+  const auto & continuation_trajectory =
+    continuation.exact_trajectory.value();
+  result.proved_control_stage_count = continuation.scope ==
+      mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
+      CurrentStagePrefix ?
+    1U : cursor.remaining_control_stage_count;
+  if (
+    continuation.scope ==
+    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
+    CurrentStagePrefix)
+  {
+    result.static_wall_scope = StaticWallProofScope::CurrentStagePrefix;
+  }
+
   auto clearance_footprint = source.footprint;
   clearance_footprint.left_extent_m += source.hard_wall_clearance_m;
   clearance_footprint.right_extent_m += source.hard_wall_clearance_m;
@@ -752,50 +962,51 @@ Result evaluate(const Request & request)
     result.reason = Reason::DelayPrefixBlocked;
     return result;
   }
-  const std::vector<recovery::Pose2D> connector{
-    request.control_pose, expected_pose.value()};
-  const auto connector_result = recovery::evaluate_clear_footprint_path(
-    *source.wall_grid, clearance_footprint, connector,
-    source.swept_step_m);
-  result.connector_path_clearance = connector_result;
-  if (!connector_result.valid) {
-    result.reason = Reason::ControlPathInvalid;
-    return result;
-  }
-  if (!connector_result.clear) {
-    result.reason = Reason::ConnectorBlocked;
-    return result;
-  }
+
+  std::vector<recovery::Pose2D> continuation_path;
+  continuation_path.reserve(continuation_trajectory.progress_m.size() + 1U);
+  continuation_path.push_back(request.control_pose);
+  const double current_stage_remaining_sec =
+    execution.control_stages[cursor.control_stage_index].duration_sec -
+    cursor.stage_elapsed_sec;
+  std::size_t current_stage_last_path_index{};
 
   DynamicPathResult dynamic;
   evaluate_timed_dynamic_path(
     source.footprint, request.measured_to_control_path,
     request.measured_to_control_elapsed_sec, source.swept_step_m,
     request.obstacles, dynamic);
-  evaluate_dynamic_segment(
-    source.footprint, connector.front(), connector.back(),
-    prediction_delay_sec, prediction_delay_sec, source.swept_step_m,
-    request.obstacles, dynamic);
-  auto previous_dynamic_pose = expected_pose.value();
+  auto previous_dynamic_pose = request.control_pose;
   double dynamic_time_sec = prediction_delay_sec;
   for (
-    std::size_t stage_index = cursor.control_stage_index;
-    stage_index < execution.control_stages.size(); ++stage_index)
+    std::size_t sample_index = 0U;
+    sample_index < continuation_trajectory.elapsed_time_sec.size();
+    ++sample_index)
   {
-    const auto endpoint_pose = reconstruct_pose(
-      source, execution.predicted_states[stage_index + 1U]);
+    const double sample_elapsed_sec =
+      continuation_trajectory.elapsed_time_sec[sample_index];
+    const auto physical_endpoint = exact_physical_state_at(
+      continuation_trajectory, sample_index);
+    const auto endpoint_state = as_predicted_state(
+      physical_endpoint, current_control_state,
+      execution.course_progress_origin_m);
+    const auto endpoint_pose = reconstruct_pose(source, endpoint_state);
     if (!endpoint_pose.has_value()) {
       result.reason = Reason::CourseFrameUnavailable;
       return result;
     }
-    const double segment_duration_sec = stage_index == cursor.control_stage_index ?
-      execution.control_stages[stage_index].duration_sec -
-      cursor.stage_elapsed_sec :
-      execution.control_stages[stage_index].duration_sec;
-    const double endpoint_time_sec = dynamic_time_sec + segment_duration_sec;
+    continuation_path.push_back(endpoint_pose.value());
+    if (
+      sample_elapsed_sec <= current_stage_remaining_sec +
+      execution.physical_global_tolerance)
+    {
+      current_stage_last_path_index = continuation_path.size() - 1U;
+    }
+    const double endpoint_time_sec = prediction_delay_sec +
+      sample_elapsed_sec;
     if (follow_target != nullptr) {
       const auto stage_gap = evaluate_follow_gap(
-        execution.predicted_states[stage_index + 1U], endpoint_time_sec);
+        endpoint_state, endpoint_time_sec);
       if (!stage_gap.has_value()) {
         result.reason = Reason::FollowTargetHorizonUnavailable;
         return result;
@@ -810,13 +1021,49 @@ Result evaluate(const Request & request)
     }
     evaluate_dynamic_segment(
       source.footprint, previous_dynamic_pose, endpoint_pose.value(),
-      dynamic_time_sec, dynamic_time_sec + segment_duration_sec,
+      dynamic_time_sec, endpoint_time_sec,
       source.swept_step_m, request.obstacles, dynamic);
-    dynamic_time_sec += segment_duration_sec;
+    dynamic_time_sec = endpoint_time_sec;
     previous_dynamic_pose = endpoint_pose.value();
     if (!dynamic.valid || !dynamic.clear) {
       break;
     }
+  }
+  const auto continuation_clearance =
+    recovery::evaluate_clear_footprint_path(
+    *source.wall_grid, clearance_footprint, continuation_path,
+    source.swept_step_m);
+  result.continuation_path_clearance = continuation_clearance;
+  if (!continuation_clearance.valid) {
+    result.reason = Reason::ControlPathInvalid;
+    return result;
+  }
+  if (!continuation_clearance.clear) {
+    if (
+      current_stage_last_path_index < 2U ||
+      current_stage_last_path_index >= continuation_path.size())
+    {
+      result.reason = Reason::ContinuationRejected;
+      return result;
+    }
+    const std::vector<recovery::Pose2D> current_stage_path{
+      continuation_path.begin(),
+      continuation_path.begin() + current_stage_last_path_index + 1U};
+    const auto current_stage_clearance =
+      recovery::evaluate_clear_footprint_path(
+      *source.wall_grid, clearance_footprint, current_stage_path,
+      source.swept_step_m);
+    result.current_stage_path_clearance = current_stage_clearance;
+    if (!current_stage_clearance.valid) {
+      result.reason = Reason::ControlPathInvalid;
+      return result;
+    }
+    if (!current_stage_clearance.clear) {
+      result.reason = Reason::ContinuationWallBlocked;
+      return result;
+    }
+    result.static_wall_scope = StaticWallProofScope::CurrentStagePrefix;
+    result.proved_control_stage_count = 1U;
   }
   result.blocking_obstacle_id = dynamic.blocking_obstacle_id;
   result.dynamic_checked_pose_count = dynamic.checked_pose_count;
@@ -828,6 +1075,42 @@ Result evaluate(const Request & request)
   if (!dynamic.clear) {
     result.reason = Reason::DynamicPathBlocked;
     return result;
+  }
+
+  auto proved_continuation_trajectory = continuation_trajectory;
+  auto proved_stage_end_velocity_mps = continuation.stage_end_velocity_mps;
+  auto proved_stage_end_steering_rad = continuation.stage_end_steering_rad;
+  if (result.proved_control_stage_count == 1U) {
+    const std::size_t proved_sample_count = current_stage_last_path_index;
+    const auto retain_proved_samples =
+      [proved_sample_count](auto & values) {
+        if (values.size() > proved_sample_count) {
+          values.resize(proved_sample_count);
+        }
+      };
+    retain_proved_samples(proved_continuation_trajectory.elapsed_time_sec);
+    retain_proved_samples(proved_continuation_trajectory.path_distance_m);
+    retain_proved_samples(proved_continuation_trajectory.lateral_m);
+    retain_proved_samples(proved_continuation_trajectory.lag_m);
+    retain_proved_samples(proved_continuation_trajectory.heading_offset_rad);
+    retain_proved_samples(proved_continuation_trajectory.velocity_mps);
+    retain_proved_samples(proved_continuation_trajectory.progress_m);
+    retain_proved_samples(proved_continuation_trajectory.lateral_lower_m);
+    retain_proved_samples(proved_continuation_trajectory.lateral_upper_m);
+    proved_continuation_trajectory.minimum_lateral_bound_reserve_m =
+      std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0U; index < proved_sample_count; ++index) {
+      proved_continuation_trajectory.minimum_lateral_bound_reserve_m =
+        std::min(
+          proved_continuation_trajectory.minimum_lateral_bound_reserve_m,
+          std::min(
+            proved_continuation_trajectory.lateral_m[index] -
+            proved_continuation_trajectory.lateral_lower_m[index],
+            proved_continuation_trajectory.lateral_upper_m[index] -
+            proved_continuation_trajectory.lateral_m[index]));
+    }
+    proved_stage_end_velocity_mps.resize(1U);
+    proved_stage_end_steering_rad.resize(1U);
   }
 
   Proof proof;
@@ -860,13 +1143,26 @@ Result evaluate(const Request & request)
   proof.velocity_reachability_duration_sec =
     result.velocity_reachability_duration_sec;
   proof.delay_checked_pose_count = delay.checked_pose_count;
-  proof.connector_checked_pose_count = connector_result.checked_pose_count;
+  proof.connector_checked_pose_count = 0U;
+  proof.static_wall_scope = result.static_wall_scope;
+  proof.continuation_scope = result.continuation_scope;
+  proof.proved_control_stage_count = result.proved_control_stage_count;
+  proof.static_wall_checked_pose_count =
+    result.static_wall_scope == StaticWallProofScope::FullSuffix ?
+    continuation_clearance.checked_pose_count :
+    result.current_stage_path_clearance.checked_pose_count;
   proof.dynamic_checked_pose_count = dynamic.checked_pose_count;
   proof.minimum_dynamic_clearance_m = dynamic.minimum_clearance_m;
   proof.follow_target_observation_generation =
     result.follow_target_observation_generation;
   proof.follow_checked_state_count = result.follow_checked_state_count;
   proof.follow_minimum_gap_m = result.follow_minimum_gap_m;
+  proof.continuation_trajectory =
+    std::move(proved_continuation_trajectory);
+  proof.continuation_stage_end_velocity_mps =
+    std::move(proved_stage_end_velocity_mps);
+  proof.continuation_stage_end_steering_rad =
+    std::move(proved_stage_end_steering_rad);
   result.reason = Reason::Accepted;
   result.proof = std::move(proof);
   return result;

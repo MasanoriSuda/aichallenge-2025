@@ -33,26 +33,26 @@ std::optional<double> project_certified_nonnegative(
 
 std::optional<std::pair<std::vector<double>, std::vector<double>>>
 build_world_prediction(
-  const physical::Snapshot & snapshot, const artifact::Cursor & cursor) noexcept
+  const physical::Snapshot & snapshot,
+  const race_mpcc_foundation::ExactPhysicalExecutionTrajectory & trajectory)
+noexcept
 {
   if (
-    !cursor.available || !physical::snapshot_valid(snapshot) ||
-    cursor.control_stage_index >= snapshot.trajectory.progress_m.size())
+    !physical::snapshot_valid(snapshot) ||
+    !race_mpcc_foundation::exact_physical_execution_trajectory_complete(
+      trajectory))
   {
     return std::nullopt;
   }
   std::pair<std::vector<double>, std::vector<double>> prediction;
-  const std::size_t remaining =
-    snapshot.trajectory.progress_m.size() - cursor.control_stage_index;
-  prediction.first.reserve(remaining);
-  prediction.second.reserve(remaining);
+  prediction.first.reserve(trajectory.progress_m.size());
+  prediction.second.reserve(trajectory.progress_m.size());
   const double tolerance_m = std::max(1e-9, snapshot.bound_tolerance_m);
   for (
-    std::size_t index = cursor.control_stage_index;
-    index < snapshot.trajectory.progress_m.size(); ++index)
+    std::size_t index = 0U; index < trajectory.progress_m.size(); ++index)
   {
     const auto frame = mpc_stage_geometry::sample_course_frame(
-      snapshot.course_frame_knots, snapshot.trajectory.progress_m[index],
+      snapshot.course_frame_knots, trajectory.progress_m[index],
       tolerance_m);
     if (!frame.has_value()) {
       return std::nullopt;
@@ -60,9 +60,8 @@ build_world_prediction(
     const auto pose = contract::reconstruct_planar_pose_from_frenet(
       contract::PlanarPose{frame->x_m, frame->y_m, frame->heading_rad},
       contract::FrenetPose{
-        snapshot.trajectory.lateral_m[index],
-        snapshot.trajectory.lag_m[index],
-        snapshot.trajectory.heading_offset_rad[index]});
+        trajectory.lateral_m[index], trajectory.lag_m[index],
+        trajectory.heading_offset_rad[index]});
     if (!pose.has_value()) {
       return std::nullopt;
     }
@@ -119,7 +118,7 @@ Result build(const retained::Result & retained_result) noexcept
     !contract::problem_context_complete(source_context) ||
     !artifact::supports_intent(source_context.intent) ||
     source_context.formulation !=
-    contract::Formulation::VelocitySteeringProgress6State ||
+    contract::Formulation::VelocitySteeringYawResponseProgress7State ||
     proof.decision_id == 0U)
   {
     result.reason = Reason::InvalidIdentity;
@@ -139,7 +138,10 @@ Result build(const retained::Result & retained_result) noexcept
     !proof.cursor.available ||
     proof.cursor.sequence != execution.identity.sequence ||
     proof.cursor.remaining_control_stage_count == 0U ||
-    proof.cursor.control_stage_index >= execution.control_stages.size())
+    proof.cursor.control_stage_index >= execution.control_stages.size() ||
+    proof.proved_control_stage_count == 0U ||
+    proof.proved_control_stage_count >
+    proof.cursor.remaining_control_stage_count)
   {
     result.reason = Reason::InvalidCursor;
     return result;
@@ -199,9 +201,11 @@ Result build(const retained::Result & retained_result) noexcept
   solution.physical.wall_clear = true;
   solution.physical.obstacles_clear = true;
   solution.physical.minimum_wall_clearance_m =
-    proof.plan->physical_snapshot->trajectory.minimum_lateral_bound_reserve_m;
+    proof.continuation_trajectory.minimum_lateral_bound_reserve_m;
   solution.physical.minimum_obstacle_clearance_m =
     proof.minimum_dynamic_clearance_m;
+  // The solution identity remains the original complete horizon; executable
+  // suffix length is carried independently by CanonicalNormalCandidate.
   solution.prediction_stage_count = execution.control_stages.size();
   solution.valid_until_sec =
     execution.prediction_origin_sec + horizon_duration_sec;
@@ -214,7 +218,7 @@ Result build(const retained::Result & retained_result) noexcept
   retained_candidate.problem = source_context;
   retained_candidate.solution = solution;
   retained_candidate.executable_control_stage_count =
-    proof.cursor.remaining_control_stage_count;
+    proof.proved_control_stage_count;
   retained_candidate.execution_plan_id = execution.identity.sequence;
   retained_candidate.execution_certificate_decision_id = proof.decision_id;
   retained_candidate.execution_first_control_stage_index =
@@ -245,7 +249,7 @@ Result build(const retained::Result & retained_result) noexcept
     return result;
   }
   const auto world_prediction = build_world_prediction(
-    *proof.plan->physical_snapshot, proof.cursor);
+    *proof.plan->physical_snapshot, proof.continuation_trajectory);
   if (!world_prediction.has_value()) {
     result.reason = Reason::PredictionRejected;
     return result;
@@ -258,31 +262,34 @@ Result build(const retained::Result & retained_result) noexcept
   authority.first_control_stage_index = proof.cursor.control_stage_index;
   authority.maximum_abs_steering_rad = std::abs(sampled.steering_rad);
   authority.target_speed_horizon_mps.reserve(
-    proof.cursor.remaining_control_stage_count);
+    proof.proved_control_stage_count);
   authority.steering_horizon_rad.reserve(
-    proof.cursor.remaining_control_stage_count);
+    proof.proved_control_stage_count);
+  if (
+    proof.continuation_stage_end_velocity_mps.size() !=
+    proof.proved_control_stage_count ||
+    proof.continuation_stage_end_steering_rad.size() !=
+    proof.proved_control_stage_count)
+  {
+    result.reason = Reason::PredictionRejected;
+    return result;
+  }
   for (
     std::size_t offset = 0U;
-    offset < proof.cursor.remaining_control_stage_count; ++offset)
+    offset < proof.proved_control_stage_count; ++offset)
   {
     double speed_mps = projected_speed_mps.value();
     double steering_rad = sampled.steering_rad;
     if (offset > 0U) {
-      const std::size_t state_index =
-        proof.cursor.control_stage_index + offset;
-      if (state_index >= execution.predicted_states.size()) {
-        result.reason = Reason::PredictionRejected;
-        return result;
-      }
       const auto projected_horizon_speed_mps = project_certified_nonnegative(
-        execution.predicted_states[state_index].velocity_mps,
+        proof.continuation_stage_end_velocity_mps[offset - 1U],
         velocity_lower_bound_tolerance_mps);
       if (!projected_horizon_speed_mps.has_value()) {
         result.reason = Reason::PredictionRejected;
         return result;
       }
       speed_mps = projected_horizon_speed_mps.value();
-      steering_rad = execution.predicted_states[state_index].steering_rad;
+      steering_rad = proof.continuation_stage_end_steering_rad[offset - 1U];
     }
     if (
       !std::isfinite(steering_rad))

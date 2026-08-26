@@ -96,6 +96,10 @@ TargetProvenanceValidation validate_target_provenance(
 struct ExactPhysicalExecutionTrajectory
 {
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
+  /// Sample time from the common control/prediction origin.  Retained and
+  /// dynamic-obstacle consumers must use this same clock rather than
+  /// reconstructing stage timing from the affine QP states.
+  std::vector<double> elapsed_time_sec;
   std::vector<double> path_distance_m;
   std::vector<double> lateral_m;
   std::vector<double> lag_m;
@@ -122,6 +126,7 @@ enum class ExactPhysicalExecutionTrajectoryReason
   InvalidProgressRegressionTolerance,
   InvalidVelocityLowerBoundTolerance,
   InvalidMinimumLateralReserve,
+  TimeShapeMismatch,
   LateralShapeMismatch,
   LagShapeMismatch,
   HeadingShapeMismatch,
@@ -129,6 +134,7 @@ enum class ExactPhysicalExecutionTrajectoryReason
   ProgressShapeMismatch,
   LowerBoundShapeMismatch,
   UpperBoundShapeMismatch,
+  InvalidElapsedTime,
   InvalidPathDistance,
   NonFiniteLateral,
   NonFiniteLag,

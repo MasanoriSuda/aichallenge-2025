@@ -19,13 +19,21 @@ problem::AssemblyRequest straight_request(const int horizon = 3)
 {
   problem::AssemblyRequest request;
   request.horizon_steps = horizon;
-  request.initial_state << 0.0, 0.0, 0.0, 2.0, 0.0, 0.10;
+  request.initial_state << 0.0, 0.0, 0.0, 2.0, 0.0, 0.10, 0.08;
   request.linearizations.reserve(static_cast<std::size_t>(horizon));
   for (int stage = 0; stage < horizon; ++stage) {
+    model::LinearizationRequest linearization_request;
+    linearization_request.reference_velocity_mps = 2.0;
+    linearization_request.reference_progress_m = 0.2 * stage;
+    linearization_request.reference_steering_rad = 0.10;
+    linearization_request.reference_response_steering_rad = 0.08;
+    linearization_request.reference_virtual_progress_speed_mps = 2.0;
+    linearization_request.wheelbase_m = 2.0;
+    linearization_request.yaw_response_gain = 0.75;
+    linearization_request.yaw_response_time_constant_sec = 0.13;
+    linearization_request.stage_dt_sec = 0.10;
     const auto linearization = model::linearize_temporal_frenet(
-      model::LinearizationRequest{
-        0.0, 0.0, 0.0, 2.0, 0.2 * stage, 0.10,
-        0.0, 0.0, 2.0, 0.0, 2.0, 0.10});
+      linearization_request);
     EXPECT_TRUE(linearization.has_value());
     request.linearizations.push_back(linearization.value());
   }
@@ -40,9 +48,12 @@ problem::AssemblyRequest straight_request(const int horizon = 3)
     request.state_reference[offset + model::kVelocityIndex] = 2.0;
     request.state_reference[offset + model::kProgressIndex] = 0.2 * stage;
     request.state_reference[offset + model::kSteeringIndex] = 0.10;
+    request.state_reference[offset + model::kResponseSteeringIndex] = 0.08;
     request.state_lower[offset + model::kVelocityIndex] = 0.0;
     request.state_lower[offset + model::kSteeringIndex] = -0.6;
     request.state_upper[offset + model::kSteeringIndex] = 0.6;
+    request.state_lower[offset + model::kResponseSteeringIndex] = -0.6;
+    request.state_upper[offset + model::kResponseSteeringIndex] = 0.6;
   }
   request.input_reference = Eigen::VectorXd::Zero(input_values);
   request.input_lower = Eigen::VectorXd::Zero(input_values);
@@ -144,10 +155,12 @@ TEST(MpccRateResolvedProblem, StateZeroEqualityAndSteeringOwnersAreExplicit)
   EXPECT_EQ(steering_rate.element, model::kSteeringRateIndex);
 }
 
-TEST(MpccRateResolvedProblem, DecodesRuntimeRow254AsFirstProgressSpeedInput)
+TEST(MpccRateResolvedProblem, DecodesFirstProgressSpeedInputForCurrentStateDimension)
 {
   constexpr int horizon = 20;
-  const auto semantic = problem::decode_row(254, horizon);
+  constexpr int state_values = model::kStateDimension * (horizon + 1);
+  const auto semantic = problem::decode_row(
+    2 * state_values + model::kVirtualProgressSpeedIndex, horizon);
   ASSERT_TRUE(semantic.valid);
   EXPECT_EQ(semantic.kind, problem::RowKind::InputBox);
   EXPECT_EQ(semantic.stage, 0);
@@ -261,7 +274,7 @@ TEST(MpccRateResolvedProblem, SolvesStraightProblemWithinActuatorBounds)
   }
 }
 
-TEST(MpccRateResolvedProblem, GenericWarmStartShiftAcceptsSixByThreeLayout)
+TEST(MpccRateResolvedProblem, GenericWarmStartShiftAcceptsSevenByThreeLayout)
 {
   constexpr std::size_t horizon = 3U;
   constexpr std::size_t nx =

@@ -10,7 +10,7 @@
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved
 {
 
-inline constexpr int kStateDimension = 6;
+inline constexpr int kStateDimension = 7;
 inline constexpr int kInputDimension = 3;
 inline constexpr int kLateralIndex = 0;
 inline constexpr int kLagIndex = 1;
@@ -18,6 +18,7 @@ inline constexpr int kHeadingIndex = 2;
 inline constexpr int kVelocityIndex = 3;
 inline constexpr int kProgressIndex = 4;
 inline constexpr int kSteeringIndex = 5;
+inline constexpr int kResponseSteeringIndex = 6;
 inline constexpr int kAccelerationIndex = 0;
 inline constexpr int kSteeringRateIndex = 1;
 inline constexpr int kVirtualProgressSpeedIndex = 2;
@@ -30,11 +31,14 @@ struct LinearizationRequest
   double reference_velocity_mps{};
   double reference_progress_m{};
   double reference_steering_rad{};
+  double reference_response_steering_rad{};
   double reference_acceleration_mps2{};
   double reference_steering_rate_radps{};
   double reference_virtual_progress_speed_mps{};
   double reference_path_curvature_radpm{};
   double wheelbase_m{};
+  double yaw_response_gain{1.0};
+  double yaw_response_time_constant_sec{};
   double stage_dt_sec{};
   double minimum_frenet_denominator{0.20};
   double minimum_stage_dt_sec{0.01};
@@ -53,7 +57,9 @@ struct Linearization
 };
 
 /// Linearize the temporal Frenet bicycle model whose lateral actuator is a
-/// steering-rate input and whose steering angle is part of the state.
+/// steering-rate input. Commanded steering and the tire/yaw response steering
+/// are distinct states; the latter follows the former through the identified
+/// first-order vehicle yaw response.
 std::optional<Linearization> linearize_temporal_frenet(
   const LinearizationRequest & request) noexcept;
 

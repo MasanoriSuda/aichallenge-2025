@@ -1803,6 +1803,15 @@ AWSIM非接触の直接証明ではない。`output/20260823-065700`では、run
 `/aichallenge/pitstop/condition`で相関する。これは診断契約であり、certificateの合否、margin、
 solver weight、authority、commandを変更しない。
 
+七状態command/response契約とretained current-stage prefixを接続した
+`output/20260827-020001`でも、WP72--76付近で同種の外部速度損失を5回観測した。最初の
+`8.738 -> 5.013 m/s`低下直前のwire commandは`+1.366 m/s2`であり、vehicle velocity reportは
+EKF odometryより先にほぼ0 m/sを示した。別イベントではIMUに900 m/s2超のimpulseも記録された。
+Emergency authorityと`velocity-unreachable`は最初の物理低下の次周期に発生しているため、
+MPCCの縦指令が急失速を開始したという仮説は棄却する。一方、occupancy footprintは全イベントで
+clearだったため、完全なTrack/Cruise GateにはAWSIM collider／penalty geometryと実行trajectoryの
+境界を別Sliceで特定する必要がある。ここでもwall marginや速度を根拠なく調整して証拠差を隠さない。
+
 #### Solved-progress course-frame wall contract（2026-08-22）
 
 5-state解の`e_y` / `e_psi`は固定の`ref_wp_id + stage`へ貼り付けず、同じ解が持つ絶対進捗
@@ -2570,6 +2579,26 @@ publisher joinはd1で3324件、d2で3722件が成功しrejectは0、executed se
 これにより旧stale-executed-plan authority lossは解消した。残るFollow -> ShiftOutの`stage-wall-rejected`反復は
 全intent動的受入れの別Sliceで扱い、wall marginやsteering parameterでは隠さない。
 
+#### Seven-state command／response state所有権（2026-08-26、2025由来の暫定）
+
+上記のsix-state契約は当時の障害切り分け履歴として残すが、現行の
+`VelocitySteeringYawResponseProgress7State`へそのまま適用しない。seven-stateでは操舵を次の二つへ分離する。
+
+- `delta_command`: steering-rate入力で厳密に積分され、最終的にserializationされるphysical-equivalent command。
+- `delta_response`: steering report／yaw-rate観測から推定され、車両yaw dynamicsを生成する応答状態。
+
+`delta_command`の初期値は、直前に正常publishされたphysical-equivalent commandだけである。fresh solve、retained
+revalidation、execution artifact、publisherはこの同じcommand系列を使用する。retained command reachabilityも、直前の
+publish値と実際のpublish ageから証明する。観測実舵角やyaw由来応答をcommand積分原点へ使ってはならない。
+
+`delta_response`はcontrol originへ射影した観測応答から初期化し、command transport／yaw responseをvehicle dynamicsへ
+反映する。これはcommand trajectoryとは独立した観測状態であり、publisher出力やcommand slew到達可能性の原点ではない。
+
+この分離が必要な理由は、遅延した観測値で`delta_command`を毎callback再初期化すると、同じsteering-rate列でも前周期に
+証明・publishしたcommand系列とは異なるtrajectoryになるためである。one-originという個数だけでは契約を証明できず、
+そのoriginがstateの入力／出力意味と一致することをfailure-first testで固定する。wall margin、solver設定、weight、
+legacy fallbackでこの不整合を隠してはならない。
+
 #### 全fresh Overtake入口のsix-state Gate A統一（2026-08-26、2025由来の暫定）
 
 fresh `ShiftOut`とDirect `Pass`は、同一のprospective
@@ -2676,6 +2705,41 @@ stage geometry、exact physical trajectory、target tube、generic branch rankin
 `locked target stale or lost`が残る。削除前runにも存在するためfive-state削除回帰ではないが、レース実用品質の
 統合Gateは未合格である。Slice 7のparameter tuningへ直行せず、まずsix-state fresh／retained proof continuity、
 target lifecycle、callback tailをfailure-firstで監査する。five-state fallbackを復活させてはならない。
+
+#### Seven-state操舵系列の単一起点化（2026-08-26、2025由来の暫定）
+
+前節「物理舵角とdesired publication系列の分離」で導入した二つの積分起点は、
+`output/20260826-202338`および`output/20260826-203435`の動的証拠により撤回する。
+QPは実測物理舵角からsteering-rate列を積分してwall証明を行う一方、execution artifactは同じrate列を
+前回desired commandから積分してcommandを抽出していた。後者のoffsetは各replanで再導入され、例として
+QP初期舵角が約-0.097 radである同一解から約-0.365 radのphysical-equivalent commandが配信された。
+したがってsolver／wall proofが証明した軌道とAWSIMが実行する軌道は同一ではなかった。
+
+seven-state canonical normal authorityでは、直前に正常serializationされたphysical-equivalent commandと
+certified steering-rate列から作る一つの`delta_command` trajectoryだけを、QP state、wall proof、
+fresh／retained command抽出の正本とする。実測舵角／yaw-rateから推定する`delta_response`は車両yaw dynamicsの
+観測初期状態であり、command積分、prefix reachability、artifact actuationの第二初期値には使用しない。
+これにより一つのsolver artifact内部にもsingle authorityを適用する。
+
+この変更はsteering-rate、wall margin、OSQP、weight、timeoutの調整ではない。二つの異なる初期値から作った
+系列の一方だけを物理証明していたproducer／consumer契約の修正である。全46 package test target、1,869 testが
+error／failure／skip 0で合格した。Track/Cruiseの六周動的Gateは未完であり、合格前にSlice 7 tuningへ進まない。
+
+#### Retained receding-prefix authority（2026-08-27、2025由来の暫定）
+
+retained artifactはcurrent-world physical stateからdelay pathと残りtrajectoryを再生して再証明する。再生後の
+非線形trajectoryまたはstatic-wall suffixが後段で不成立でも、現在の実行stage全体が同じhard constraintで成立する場合、
+その一stageだけを`CurrentStagePrefix`として実行できる。全suffix成立時は`FullSuffix`とする。
+
+`CurrentStagePrefix`はtimeout、grace、hold commandまたは第二controllerではない。immutable artifactの同じfirst actuationを
+publishする有限のcurrent-world authority transactionであり、trajectory、stage-end velocity／steering trace、
+`executable_control_stage_count`を同じ一stage境界へ切り詰める。次周期はfresh solveまたは新しいretained再証明を必須とし、
+artifact ageだけで権限を延長しない。
+
+fresh current-decision artifactは従来どおり残り全horizonを証明しなければならない。current stage自体の非線形trajectory、
+actuator reachability、wall、dynamic obstacle、Follow hard gap、identity／freshness不成立はfail closedを維持する。
+したがって「後段suffixは次のreceding solveが必要」と「現在commandが危険」を同一視せず、現在安全なMPCC commandを
+Emergencyで分断しない一方、未証明のsuffixを実行権限として広告しない。
 
 ### 提出ファイルへの影響
 

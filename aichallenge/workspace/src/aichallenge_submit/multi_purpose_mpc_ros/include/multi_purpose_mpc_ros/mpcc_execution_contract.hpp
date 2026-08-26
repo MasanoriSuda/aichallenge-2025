@@ -28,7 +28,7 @@ enum class ControlIntent
 enum class Formulation
 {
   Unresolved,
-  VelocitySteeringProgress6State,
+  VelocitySteeringYawResponseProgress7State,
   SolverDerivedBypass,
 };
 
@@ -36,7 +36,7 @@ const char * to_string(ControlIntent intent) noexcept;
 const char * to_string(Formulation formulation) noexcept;
 
 /// Intents whose normal lateral and longitudinal command may be owned by the
-/// canonical six-state MPCC authority. Recovery and emergency overrides are
+/// canonical seven-state MPCC authority. Recovery and emergency overrides are
 /// intentionally outside this contract.
 bool canonical_normal_intent_supported(ControlIntent intent) noexcept;
 
@@ -69,7 +69,7 @@ struct AtomicIntentAdmissionResolution
 };
 
 /// Resolve an intent proposal without creating an authority gap.  The previous
-/// intent is eligible only when it is itself a supported six-state intent and
+/// intent is eligible only when it is itself a supported seven-state intent and
 /// has passed current-world proof in this cycle.
 AtomicIntentAdmissionResolution resolve_atomic_intent_admission(
   const AtomicIntentAdmissionRequest & request) noexcept;
@@ -425,6 +425,7 @@ struct CanonicalActuation
   double predicted_speed_mps{};
   double acceleration_mps2{};
   double curvature_radpm{};
+  /// Physical-equivalent desired tire angle used by the bicycle model.
   double steering_tire_angle_rad{};
   double virtual_progress_speed_mps{};
 };
@@ -444,6 +445,7 @@ struct CanonicalNormalCommand
   double predicted_speed_mps{};
   double acceleration_mps2{};
   double curvature_radpm{};
+  /// Physical tire angle used by the bicycle model, wall certificate and wire.
   double steering_tire_angle_rad{};
   double virtual_progress_speed_mps{};
 };
@@ -469,36 +471,37 @@ CanonicalNormalCommandResult build_canonical_normal_command(
   const CanonicalNormalAuthorityResolution & authority,
   const CanonicalActuation & actuation) noexcept;
 
-/// Verify the model command immediately before publication.  A canonical
-/// command is already expressed as the physical tire angle used by its model
-/// and certificate, so later actuator gain is forbidden.
+/// Verify the physical/model command immediately before publication.  A
+/// canonical command is already expressed in the physical tire angle used by
+/// its model and certificate, so a later actuator gain is forbidden.
 bool canonical_normal_command_matches_actuation(
   const CanonicalNormalCommand & command, double target_speed_mps,
   double acceleration_mps2, double steering_tire_angle_rad) noexcept;
 
-/// Verify the command after serialization into the ROS control message.  The
-/// Ackermann message stores its scalar actuation fields as float32, so exact
-/// double comparison here would reject the very command that crossed the
-/// publisher boundary.  This remains an exact comparison in the wire type; it
-/// is not a numeric tolerance or a second actuation policy.
+/// Verify the physical command after calibrated serialization into the ROS
+/// control message. The canonical command remains in model/physical units;
+/// only this boundary applies the plant's wire calibration. The Ackermann
+/// message stores its scalar actuation fields as float32, so this remains an
+/// exact comparison in the wire type rather than a numeric tolerance.
 bool canonical_normal_command_matches_serialized_actuation(
   const CanonicalNormalCommand & command, double target_speed_mps,
-  double acceleration_mps2, double steering_tire_angle_rad) noexcept;
+  double acceleration_mps2, double wire_steering_tire_angle_rad,
+  double actuator_gain) noexcept;
 
-/// Resolve the tire angle serialized to the vehicle interface.  Legacy normal
-/// paths retain their calibrated raw-command convention during migration;
-/// canonical normal authority must publish the certified physical angle
-/// exactly.
+/// Verify that one physical steering command is exactly the value serialized
+/// at the calibrated ROS boundary.  This is the publication predecessor proof
+/// used before a successor MPCC problem may be submitted, including bootstrap
+/// cycles whose published command is an emergency stop rather than a certified
+/// normal command.
+bool physical_steering_matches_serialized_actuation(
+  double physical_steering_tire_angle_rad,
+  double wire_steering_tire_angle_rad, double actuator_gain) noexcept;
+
+/// Serialize one physical-equivalent tire angle to the vehicle interface.
+/// Every authority uses this single calibrated boundary; the canonical model,
+/// wall proof and command reachability never consume the wire representation.
 std::optional<double> resolve_published_steering_tire_angle(
-  double model_steering_tire_angle_rad, double legacy_actuator_gain,
-  bool canonical_normal_authority) noexcept;
-
-/// Select the physical steering publication convention for every normal
-/// command owned by the canonical controller. Recovery is a
-/// distinct supervisor and retains its existing actuator convention.
-bool canonical_normal_uses_physical_steering(
-  bool canonical_normal_authority, bool canonical_emergency_stop,
-  bool recovery_override) noexcept;
+  double physical_steering_tire_angle_rad, double actuator_gain) noexcept;
 
 enum class FinalAuthorityClass
 {

@@ -15,20 +15,20 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact
 struct Identity
 {
   std::uint64_t sequence{};
-  /// Exact immutable problem identity consumed by the six-state solver.
+  /// Exact immutable problem identity consumed by the seven-state solver.
   /// Retained execution keeps this source identity while a separate current
   /// decision certifies the executable suffix against the current world.
   mpcc_execution_contract::MpccProblemContext source_context;
   double snapshot_sec{};
 };
 
-/// Return whether the six-state steering-rate execution artifact owns this
+/// Return whether the seven-state steering-rate execution artifact owns this
 /// canonical normal intent.  All validators and current-world consumers must
 /// use this single capability definition; duplicating a Track/Cruise-only
 /// subset makes a physically certified Overtake artifact unpublishable.
 bool supports_intent(mpcc_execution_contract::ControlIntent intent) noexcept;
 
-/// Resolve whether the current semantic problem can create a six-state normal
+/// Resolve whether the current semantic problem can create a seven-state normal
 /// request for the selected intent.  Both semantic request assembly and the
 /// submission boundary must use this resolver so an intent cannot be admitted
 /// by one layer and silently omitted by the next.
@@ -49,6 +49,9 @@ struct PredictedState
   double velocity_mps{};
   double progress_m{};
   double steering_rad{};
+  /// Effective steering state which produces yaw after actuator response.
+  /// This is distinct from the serialized command state above.
+  double response_steering_rad{};
 };
 
 struct ControlStage
@@ -63,10 +66,12 @@ struct ControlStage
   /// certificate inset is applied.
   double acceleration_lower_mps2{};
   double acceleration_upper_mps2{};
+  /// Course curvature used by the Frenet dynamics for this stage.
+  double path_curvature_radpm{};
 };
 
 /// Complete immutable representation of one physically row-certified
-/// six-state/three-input solve.  This deliberately does not reuse the
+/// seven-state/three-input solve.  This deliberately does not reuse the
 /// curvature-input CanonicalExecutionPlan representation.
 struct ExecutionArtifact
 {
@@ -78,12 +83,15 @@ struct ExecutionArtifact
   double publication_interval_sec{};
   double completed_sec{};
   double course_progress_origin_m{};
-  /// Physical steering at the latency-compensated prediction origin.
+  /// Physical-equivalent serialized steering command at the
+  /// latency-compensated control origin.  The measured/yaw-derived response
+  /// state is deliberately not an alternate execution origin.
   double semantic_initial_steering_rad{};
-  /// Desired steering command which preceded this solve snapshot.  This is a
-  /// publication predecessor, not a vehicle state.
-  double publication_initial_steering_rad{};
+  double semantic_initial_response_steering_rad{};
   double wheelbase_m{};
+  double yaw_response_gain{1.0};
+  double yaw_response_time_constant_sec{0.13};
+  double minimum_frenet_denominator{0.20};
   double maximum_abs_steering_rad{};
   double maximum_abs_steering_rate_radps{};
   double physical_global_tolerance{};

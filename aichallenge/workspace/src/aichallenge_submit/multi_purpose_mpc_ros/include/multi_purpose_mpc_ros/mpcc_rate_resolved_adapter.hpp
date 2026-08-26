@@ -51,9 +51,18 @@ struct Request
   int horizon_steps{};
   Eigen::Matrix<double, kLegacyStateDimension, 1> initial_state{
     Eigen::Matrix<double, kLegacyStateDimension, 1>::Zero()};
+  /// Physical-equivalent steering command at the control origin.  This is
+  /// the state driven exactly by the optimized steering-rate input and the
+  /// sole origin used by command extraction.  It is not a measured tire
+  /// angle; actuator and yaw lag are represented by the response state.
   double current_steering_rad{};
-  double previous_published_steering_rad{};
+  /// Effective steering reconstructed from observed yaw motion at the same
+  /// control origin.  It influences vehicle yaw but never initializes the
+  /// serialized command trajectory.
+  double current_response_steering_rad{};
   double wheelbase_m{};
+  double yaw_response_gain{1.0};
+  double yaw_response_time_constant_sec{};
   double maximum_abs_steering_rad{};
   double maximum_abs_steering_rate_radps{};
   double minimum_frenet_denominator{0.20};

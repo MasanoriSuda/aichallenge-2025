@@ -177,6 +177,8 @@ const char * exact_physical_execution_trajectory_reason_name(
       return "invalid-velocity-lower-bound-tolerance";
     case ExactPhysicalExecutionTrajectoryReason::InvalidMinimumLateralReserve:
       return "invalid-minimum-lateral-reserve";
+    case ExactPhysicalExecutionTrajectoryReason::TimeShapeMismatch:
+      return "time-shape-mismatch";
     case ExactPhysicalExecutionTrajectoryReason::LateralShapeMismatch:
       return "lateral-shape-mismatch";
     case ExactPhysicalExecutionTrajectoryReason::LagShapeMismatch:
@@ -191,6 +193,8 @@ const char * exact_physical_execution_trajectory_reason_name(
       return "lower-bound-shape-mismatch";
     case ExactPhysicalExecutionTrajectoryReason::UpperBoundShapeMismatch:
       return "upper-bound-shape-mismatch";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidElapsedTime:
+      return "invalid-elapsed-time";
     case ExactPhysicalExecutionTrajectoryReason::InvalidPathDistance:
       return "invalid-path-distance";
     case ExactPhysicalExecutionTrajectoryReason::NonFiniteLateral:
@@ -245,6 +249,9 @@ validate_exact_physical_execution_trajectory(
     return reject(
       ExactPhysicalExecutionTrajectoryReason::InvalidMinimumLateralReserve);
   }
+  if (trajectory.elapsed_time_sec.size() != stage_count) {
+    return reject(ExactPhysicalExecutionTrajectoryReason::TimeShapeMismatch);
+  }
   if (trajectory.lateral_m.size() != stage_count) {
     return reject(ExactPhysicalExecutionTrajectoryReason::LateralShapeMismatch);
   }
@@ -268,7 +275,9 @@ validate_exact_physical_execution_trajectory(
   }
   double previous_distance_m = -std::numeric_limits<double>::infinity();
   double previous_progress_m = -std::numeric_limits<double>::infinity();
+  double previous_elapsed_sec{};
   for (std::size_t stage = 0U; stage < stage_count; ++stage) {
+    const double elapsed_sec = trajectory.elapsed_time_sec[stage];
     const double distance_m = trajectory.path_distance_m[stage];
     const double lateral_m = trajectory.lateral_m[stage];
     const double lag_m = trajectory.lag_m[stage];
@@ -278,6 +287,12 @@ validate_exact_physical_execution_trajectory(
     const double lower_m = trajectory.lateral_lower_m[stage];
     const double upper_m = trajectory.lateral_upper_m[stage];
     const int stage_index = static_cast<int>(stage);
+    if (
+      !std::isfinite(elapsed_sec) || elapsed_sec <= previous_elapsed_sec)
+    {
+      return reject(
+        ExactPhysicalExecutionTrajectoryReason::InvalidElapsedTime, stage_index);
+    }
     if (!std::isfinite(distance_m) || distance_m <= previous_distance_m) {
       return reject(
         ExactPhysicalExecutionTrajectoryReason::InvalidPathDistance, stage_index);
@@ -308,12 +323,16 @@ validate_exact_physical_execution_trajectory(
       return reject(
         ExactPhysicalExecutionTrajectoryReason::ProgressRegressed, stage_index);
     }
-    if (!std::isfinite(lower_m) || !std::isfinite(upper_m) || lower_m > upper_m) {
+    if (
+      !std::isfinite(lower_m) || !std::isfinite(upper_m) || lower_m > upper_m ||
+      lateral_m < lower_m || lateral_m > upper_m)
+    {
       return reject(
         ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds, stage_index);
     }
     previous_distance_m = distance_m;
     previous_progress_m = progress_m;
+    previous_elapsed_sec = elapsed_sec;
   }
   return ExactPhysicalExecutionTrajectoryValidation{
     true, ExactPhysicalExecutionTrajectoryReason::Accepted, -1};

@@ -33,9 +33,10 @@ TEST(
   EXPECT_NEAR(
     result.state->committed_command_projection_duration_sec, 0.004, 1e-12);
   EXPECT_NEAR(result.state->current_time_steering_rad, 0.2028, 1e-12);
+  EXPECT_NEAR(result.state->prediction_origin_steering_rad, 0.2938, 1e-12);
 }
 
-TEST(MpccSteeringStateContract, ReachesCommittedInputWithinLatencyPrefix)
+TEST(MpccSteeringStateContract, ReachesPhysicalEquivalentCommandAtDelayOrigin)
 {
   const auto result = steering::resolve(valid_request());
 
@@ -53,7 +54,7 @@ TEST(MpccSteeringStateContract, ReachesCommittedInputWithinLatencyPrefix)
   EXPECT_TRUE(result.state->committed_command_reached);
 }
 
-TEST(MpccSteeringStateContract, LimitsCommittedInputByPhysicalSteeringRate)
+TEST(MpccSteeringStateContract, BoundsLargePhysicalEquivalentCommand)
 {
   auto request = valid_request();
   request.committed_steering_rad = 0.40;
@@ -66,7 +67,7 @@ TEST(MpccSteeringStateContract, LimitsCommittedInputByPhysicalSteeringRate)
   EXPECT_FALSE(result.state->committed_command_reached);
 }
 
-TEST(MpccSteeringStateContract, LimitsOppositeDirectionCommittedInput)
+TEST(MpccSteeringStateContract, BoundsOppositePhysicalEquivalentCommand)
 {
   auto request = valid_request();
   request.committed_steering_rad = -0.20;

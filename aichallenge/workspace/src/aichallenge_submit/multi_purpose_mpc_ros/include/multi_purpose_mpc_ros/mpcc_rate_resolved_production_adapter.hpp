@@ -32,7 +32,7 @@ enum class Reason
 
 const char * to_string(Reason reason) noexcept;
 
-/// Complete six-state normal authority ready for the existing final publisher.
+/// Complete seven-state normal authority ready for the existing final publisher.
 /// This adapter can only transform already accepted evidence.  It may project
 /// a lower-bound solver residual to the exact physical boundary when that
 /// residual is covered by the sealed certificate; it cannot solve, weaken a

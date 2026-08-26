@@ -15,7 +15,8 @@ bool finite_state(const PredictedState & state) noexcept
          std::isfinite(state.heading_offset_rad) &&
          std::isfinite(state.velocity_mps) &&
          std::isfinite(state.progress_m) &&
-         std::isfinite(state.steering_rad);
+         std::isfinite(state.steering_rad) &&
+         std::isfinite(state.response_steering_rad);
 }
 
 bool finite_control(const ControlStage & control) noexcept
@@ -27,7 +28,8 @@ bool finite_control(const ControlStage & control) noexcept
          std::isfinite(control.virtual_progress_lower_mps) &&
          std::isfinite(control.virtual_progress_upper_mps) &&
          std::isfinite(control.acceleration_lower_mps2) &&
-         std::isfinite(control.acceleration_upper_mps2);
+         std::isfinite(control.acceleration_upper_mps2) &&
+         std::isfinite(control.path_curvature_radpm);
 }
 
 mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation
@@ -57,14 +59,6 @@ sample_physical_steering(
 {
   return sample_steering_sequence(
     artifact, artifact.semantic_initial_steering_rad, elapsed_sec);
-}
-
-mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation
-sample_publication_steering(
-  const ExecutionArtifact & artifact, const double elapsed_sec) noexcept
-{
-  return sample_steering_sequence(
-    artifact, artifact.publication_initial_steering_rad, elapsed_sec);
 }
 
 }  // namespace
@@ -115,7 +109,7 @@ bool identity_valid(const Identity & identity) noexcept
            identity.source_context) &&
          supports_intent(identity.source_context.intent) &&
          identity.source_context.formulation ==
-         mpcc_execution_contract::Formulation::VelocitySteeringProgress6State &&
+         mpcc_execution_contract::Formulation::VelocitySteeringYawResponseProgress7State &&
          std::isfinite(identity.snapshot_sec) && identity.snapshot_sec >= 0.0;
 }
 
@@ -192,8 +186,14 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   }
   if (
     !std::isfinite(artifact.semantic_initial_steering_rad) ||
-    !std::isfinite(artifact.publication_initial_steering_rad) ||
+    !std::isfinite(artifact.semantic_initial_response_steering_rad) ||
     !std::isfinite(artifact.wheelbase_m) || artifact.wheelbase_m <= 0.0 ||
+    !std::isfinite(artifact.yaw_response_gain) ||
+    artifact.yaw_response_gain <= 0.0 ||
+    !std::isfinite(artifact.yaw_response_time_constant_sec) ||
+    artifact.yaw_response_time_constant_sec <= 0.0 ||
+    !std::isfinite(artifact.minimum_frenet_denominator) ||
+    artifact.minimum_frenet_denominator <= 0.0 ||
     !std::isfinite(artifact.maximum_abs_steering_rad) ||
     artifact.maximum_abs_steering_rad <= 0.0 ||
     artifact.maximum_abs_steering_rad >= half_pi ||
@@ -201,7 +201,7 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     artifact.maximum_abs_steering_rate_radps <= 0.0 ||
     std::abs(artifact.semantic_initial_steering_rad) >
     artifact.maximum_abs_steering_rad ||
-    std::abs(artifact.publication_initial_steering_rad) >
+    std::abs(artifact.semantic_initial_response_steering_rad) >
     artifact.maximum_abs_steering_rad)
   {
     return RejectReason::InvalidLimits;
@@ -264,6 +264,8 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     }
     if (
       std::abs(state.steering_rad) >
+      artifact.maximum_abs_steering_rad + tolerance ||
+      std::abs(state.response_steering_rad) >
       artifact.maximum_abs_steering_rad + tolerance)
     {
       return RejectReason::InvalidPredictedState;
@@ -276,6 +278,13 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     std::abs(
       artifact.predicted_states.front().steering_rad -
       artifact.semantic_initial_steering_rad) > tolerance)
+  {
+    return RejectReason::InitialSteeringMismatch;
+  }
+  if (
+    std::abs(
+      artifact.predicted_states.front().response_steering_rad -
+      artifact.semantic_initial_response_steering_rad) > tolerance)
   {
     return RejectReason::InitialSteeringMismatch;
   }
@@ -328,6 +337,24 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     {
       return RejectReason::SteeringDynamicsMismatch;
     }
+    const double response_decay = std::exp(
+      -control.duration_sec / artifact.yaw_response_time_constant_sec);
+    const double response_rate_integral_sec =
+      control.duration_sec - artifact.yaw_response_time_constant_sec *
+      (1.0 - response_decay);
+    const double predicted_next_response =
+      artifact.predicted_states[index].steering_rad +
+      (artifact.predicted_states[index].response_steering_rad -
+      artifact.predicted_states[index].steering_rad) * response_decay +
+      control.steering_rate_radps * response_rate_integral_sec;
+    if (
+      std::abs(
+        predicted_next_response -
+        artifact.predicted_states[index + 1U].response_steering_rad) >
+      residual_bound_m)
+    {
+      return RejectReason::SteeringDynamicsMismatch;
+    }
     const double progress_delta_m =
       artifact.predicted_states[index + 1U].progress_m -
       artifact.predicted_states[index].progress_m;
@@ -343,9 +370,7 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
       return RejectReason::ProgressRegressionBeyondCertificate;
     }
   }
-  if (
-    !sample_physical_steering(artifact, horizon_sec).sample.has_value() ||
-    !sample_publication_steering(artifact, horizon_sec).sample.has_value())
+  if (!sample_physical_steering(artifact, horizon_sec).sample.has_value())
   {
     return RejectReason::SemanticSteeringSequenceRejected;
   }
@@ -353,8 +378,6 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     artifact.publication_interval_sec >
     horizon_sec + artifact.physical_global_tolerance ||
     !sample_physical_steering(
-      artifact, artifact.publication_interval_sec).sample.has_value() ||
-    !sample_publication_steering(
       artifact, artifact.publication_interval_sec).sample.has_value())
   {
     return RejectReason::InvalidTiming;
@@ -454,7 +477,11 @@ ActuationResult extract_actuation(
   // cursor.elapsed_sec is elapsed time since the publication predecessor was
   // sealed.  It already accounts for asynchronous result age; advancing by a
   // second publication interval would manufacture an unreachable command.
-  const auto sample = sample_publication_steering(
+  // Execute the exact physical-equivalent command sequence which initialized
+  // the QP and received the wall certificate.  Actuator calibration is
+  // applied once at the wire boundary.  Measured tire angle and inferred yaw
+  // response are observation states, never alternate command origins.
+  const auto sample = sample_physical_steering(
     artifact, cursor.elapsed_sec);
   result.sample_reason = sample.reason;
   if (!sample.sample.has_value()) {

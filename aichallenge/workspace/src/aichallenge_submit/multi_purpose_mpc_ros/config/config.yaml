@@ -322,6 +322,11 @@ mpc:
   # 0.125 s reproduces the non-mutating equivalent of the 2025 Pure Pursuit prediction.
   state_prediction_delay_sec: 0.13
   state_prediction_simulation_only: true
+  # Identified from four 2026-08-26 bags: measured yaw response is 0.74--0.79
+  # of kinematic curvature with an equivalent 0.11--0.15 s response state.
+  # These describe the simulated vehicle plant, not a tracking-weight tune.
+  yaw_response_gain: 0.75
+  yaw_response_time_constant_sec: 0.13
   min_linearization_speed_mps: 0.5 # [m/s], avoid singular 1/v terms below this speed
   # The canonical progress MPCC owns every normal intent. During
   # ShiftOut/Pass/Return the tactical corridor remains the hard lateral constraint.
@@ -394,8 +399,10 @@ mpc:
   waypoint_forward_jump_weight: 1.0
   waypoint_minimum_forward_reach_m: 1.5
   waypoint_forward_reach_time_scale: 4.0
-  # 2026-07-17 AWSIM experiment: keep MPC model steering and published steering identical.
-  steering_tire_angle_gain_var: 1.5
+  # AWSIM wire-to-physical steering calibration. Three 2026-08-26 bags measured
+  # physical steering = wire command * 0.6969 after the transport delay, so
+  # serialize the MPCC physical-equivalent command with the measured inverse.
+  steering_tire_angle_gain_var: 1.435
   # steering_tire_angle_gain_var: 1.0
   # accel_low_pass_gain: 0.1
   # steer_low_pass_gain: 0.3

@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_RETAINED_REVALIDATION_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -18,6 +19,7 @@ namespace certified = mpcc_rate_resolved_certified_plan;
 namespace contract = mpcc_execution_contract;
 namespace physical = mpcc_rate_resolved_physical_wall;
 namespace recovery = recovery_footprint;
+namespace race = race_mpcc_foundation;
 
 struct DynamicObstacle
 {
@@ -34,7 +36,7 @@ struct DynamicWorldObservation
 };
 
 /// Current Follow target in the same course-progress frame used to build the
-/// current six-state semantic problem.  This is not retained solver state: it
+/// current seven-state semantic problem.  This is not retained solver state: it
 /// is fresh world evidence which must re-certify the retained suffix.
 struct FollowTargetObservation
 {
@@ -88,17 +90,22 @@ struct Request
   DynamicWorldObservation obstacles;
   std::optional<FollowTargetObservation> follow_target;
   double current_speed_mps{};
+  /// Velocity projected to control_origin_sec by the same latency predictor
+  /// which produced control_pose.
+  double control_origin_speed_mps{};
   /// Physical steering estimated at request.now_sec from the latest measured
   /// report and the command which was already committed before this cycle.
   double current_time_steering_rad{};
-  /// Physical steering projected to control_origin_sec if the previously
-  /// committed command remains held.  This is diagnostic provenance and the
-  /// fresh problem's nominal initial state, not the predecessor of the next
-  /// serialized command.
+  /// Physical steering projected to control_origin_sec.  It is diagnostic
+  /// observation provenance only; the seven-state command trajectory and
+  /// command reachability do not originate from this value.
   double current_steering_rad{};
-  /// Last steering command successfully serialized to the actuator.  Command
-  /// slew is a publication-to-publication contract and must not be inferred
-  /// from either observed physical steering value above.
+  /// Effective yaw-producing steering projected to control_origin_sec.
+  double current_response_steering_rad{};
+  /// Last steering command successfully serialized to the actuator.  This is
+  /// the integrated command-state origin and owns publication-to-publication
+  /// slew reachability.  Observed physical steering instead contributes to
+  /// the measured-to-control response prediction.
   double previous_published_steering_rad{};
   /// Actual age of previous_published_steering_rad at current evaluation.
   /// Callback overrun and asynchronous solve time make the nominal controller
@@ -135,10 +142,25 @@ enum class Reason
   ControlPathInvalid,
   DelayPrefixBlocked,
   ConnectorBlocked,
+  ContinuationRejected,
+  ContinuationWallBlocked,
   Count,
 };
 
 const char * to_string(Reason reason) noexcept;
+
+/// Static-wall extent proven for this retained publication.  A retained
+/// artifact is re-evaluated every control cycle, so authority may certify the
+/// exact remainder of the current control stage while requiring a successor
+/// before a later stage.  This never weakens the delay path, dynamic-obstacle,
+/// Follow-gap, or actuator-reachability proofs.
+enum class StaticWallProofScope
+{
+  FullSuffix,
+  CurrentStagePrefix,
+};
+
+const char * to_string(StaticWallProofScope scope) noexcept;
 
 struct Proof
 {
@@ -169,12 +191,22 @@ struct Proof
   double velocity_reachability_duration_sec{};
   std::size_t delay_checked_pose_count{};
   std::size_t connector_checked_pose_count{};
+  StaticWallProofScope static_wall_scope{StaticWallProofScope::FullSuffix};
+  mpcc_rate_resolved_physical_adapter::ContinuationProofScope
+  continuation_scope{
+    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix};
+  std::size_t proved_control_stage_count{};
+  std::size_t static_wall_checked_pose_count{};
   std::size_t dynamic_checked_pose_count{};
   double minimum_dynamic_clearance_m{
     std::numeric_limits<double>::infinity()};
   std::uint64_t follow_target_observation_generation{};
   std::size_t follow_checked_state_count{};
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory
+  continuation_trajectory;
+  std::vector<double> continuation_stage_end_velocity_mps;
+  std::vector<double> continuation_stage_end_steering_rad;
 };
 
 struct Result
@@ -193,6 +225,14 @@ struct Result
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
   double expected_absolute_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
+  double expected_lateral_m{std::numeric_limits<double>::quiet_NaN()};
+  double expected_lag_m{std::numeric_limits<double>::quiet_NaN()};
+  double expected_heading_offset_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  recovery::Pose2D control_pose;
+  recovery::Pose2D expected_current_pose;
+  double control_pose_error_m{std::numeric_limits<double>::quiet_NaN()};
+  double control_yaw_error_rad{std::numeric_limits<double>::quiet_NaN()};
   double lifted_measured_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
   double progress_difference_m{
@@ -200,10 +240,14 @@ struct Result
   double progress_continuity_tolerance_m{
     std::numeric_limits<double>::quiet_NaN()};
   double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  double control_origin_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
   double expected_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double current_time_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
   double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  double current_response_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   double previous_published_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
   double expected_steering_rad{std::numeric_limits<double>::quiet_NaN()};
@@ -227,6 +271,20 @@ struct Result
     std::numeric_limits<double>::quiet_NaN()};
   recovery::PathClearanceResult delay_path_clearance;
   recovery::PathClearanceResult connector_path_clearance;
+  StaticWallProofScope static_wall_scope{StaticWallProofScope::FullSuffix};
+  mpcc_rate_resolved_physical_adapter::ContinuationProofScope
+  continuation_scope{
+    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason
+  continuation_exact_reason{
+    race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  std::size_t proved_control_stage_count{};
+  recovery::PathClearanceResult current_stage_path_clearance;
+  recovery::PathClearanceResult continuation_path_clearance;
+  mpcc_rate_resolved_physical_adapter::ContinuationRejectReason
+  continuation_reason{
+    mpcc_rate_resolved_physical_adapter::ContinuationRejectReason::
+    InvalidArtifact};
   std::optional<Proof> proof;
 };
 

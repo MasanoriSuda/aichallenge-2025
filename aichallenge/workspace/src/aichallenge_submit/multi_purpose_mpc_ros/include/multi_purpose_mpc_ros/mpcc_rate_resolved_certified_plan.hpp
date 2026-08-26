@@ -15,7 +15,7 @@ namespace artifact = mpcc_rate_resolved_execution_artifact;
 namespace physical = mpcc_rate_resolved_physical_wall;
 namespace contract = mpcc_execution_contract;
 
-/// One immutable six-state execution artifact joined to the exact physical
+/// One immutable seven-state execution artifact joined to the exact physical
 /// proof which accepted that artifact.  This is retained evidence only; it has
 /// deliberately no command or publisher representation.
 struct CertifiedPlan

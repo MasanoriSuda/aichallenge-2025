@@ -275,6 +275,7 @@ target_include_directories(
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
   ${PROJECT_NAME}_mpc_stage_geometry
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_recovery_footprint

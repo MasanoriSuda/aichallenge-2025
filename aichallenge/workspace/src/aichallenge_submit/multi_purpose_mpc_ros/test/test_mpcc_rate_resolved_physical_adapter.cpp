@@ -21,7 +21,7 @@ contract::MpccProblemContext source_context()
   context.stage_geometry_id = 4U;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringProgress6State;
+    contract::Formulation::VelocitySteeringYawResponseProgress7State;
   context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-v1";
@@ -38,7 +38,7 @@ execution::ExecutionArtifact artifact()
   value.completed_sec = 10.01;
   value.course_progress_origin_m = 50.0;
   value.semantic_initial_steering_rad = 0.10;
-  value.publication_initial_steering_rad = 0.10;
+  value.semantic_initial_response_steering_rad = 0.10;
   value.wheelbase_m = 2.0;
   value.maximum_abs_steering_rad = 0.60;
   value.maximum_abs_steering_rate_radps = 1.0;
@@ -46,9 +46,9 @@ execution::ExecutionArtifact artifact()
   value.maximum_constraint_violation = 1e-8;
   value.maximum_normalized_constraint_violation = 0.1;
   value.predicted_states = {
-    {0.0, 0.1, 0.0, 2.0, 0.0, 0.10},
-    {0.1, 0.0, 0.01, 2.1, 0.2, 0.11},
-    {0.2, 0.0, 0.02, 2.2, 0.4, 0.12},
+    {0.0, 0.1, 0.0, 2.0, 0.0, 0.10, 0.10},
+    {0.1, 0.0, 0.01, 2.1, 0.2, 0.11, 0.10302380180000528},
+    {0.2, 0.0, 0.02, 2.2, 0.4, 0.12, 0.10979124524044208},
   };
   value.control_stages = {
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
@@ -62,7 +62,7 @@ execution::ExecutionArtifact artifact()
 
 }  // namespace
 
-TEST(MpccRateResolvedPhysicalAdapter, PreservesExactStatesOneThroughHorizon)
+TEST(MpccRateResolvedPhysicalAdapter, ReplaysControlsThroughNonlinearModel)
 {
   const auto source = artifact();
   const auto result = adapter::build(
@@ -71,19 +71,127 @@ TEST(MpccRateResolvedPhysicalAdapter, PreservesExactStatesOneThroughHorizon)
   ASSERT_EQ(result.reason, adapter::RejectReason::None);
   ASSERT_TRUE(result.exact_trajectory.has_value());
   const auto & exact = result.exact_trajectory.value();
-  ASSERT_EQ(exact.lateral_m.size(), 2U);
+  ASSERT_GT(exact.lateral_m.size(), 2U);
   EXPECT_DOUBLE_EQ(exact.progress_origin_m, 50.0);
-  EXPECT_DOUBLE_EQ(exact.path_distance_m[0], 0.2);
-  EXPECT_DOUBLE_EQ(exact.progress_m[0], 50.2);
-  EXPECT_DOUBLE_EQ(exact.lag_m[1], 0.0);
-  EXPECT_DOUBLE_EQ(exact.heading_offset_rad[1], 0.02);
-  EXPECT_DOUBLE_EQ(exact.velocity_mps[1], 2.2);
-  EXPECT_DOUBLE_EQ(exact.minimum_lateral_bound_reserve_m, 0.8);
+  EXPECT_GT(exact.path_distance_m.front(), 0.0);
+  EXPECT_DOUBLE_EQ(exact.path_distance_m.back(), 0.4);
+  EXPECT_NEAR(exact.progress_m.back(), 50.4, 1e-12);
+  EXPECT_NEAR(exact.velocity_mps.back(), 2.2, 1e-12);
+  EXPECT_GT(exact.minimum_lateral_bound_reserve_m, 0.0);
+  EXPECT_LT(exact.minimum_lateral_bound_reserve_m, 1.0);
   EXPECT_EQ(result.minimum_progress_transition_state, 1);
   EXPECT_DOUBLE_EQ(result.minimum_progress_delta_m, 0.2);
   EXPECT_DOUBLE_EQ(result.transition_virtual_progress_speed_mps, 2.0);
   EXPECT_DOUBLE_EQ(result.transition_duration_sec, 0.10);
   EXPECT_NEAR(result.progress_dynamics_defect_m, 0.0, 1e-12);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  ReplaysPartialSuffixFromCurrentPhysicalState)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.05);
+  ASSERT_TRUE(cursor.available);
+
+  const auto result = adapter::build_continuation(
+    source, cursor,
+    adapter::ContinuationInitialState{
+      -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105});
+
+  ASSERT_EQ(result.reason, adapter::ContinuationRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  const auto & exact = result.exact_trajectory.value();
+  EXPECT_LT(exact.lateral_m.front(), -0.59);
+  EXPECT_NEAR(exact.elapsed_time_sec.back(), 0.15, 1e-12);
+  EXPECT_NEAR(exact.path_distance_m.back(), 0.40, 1e-12);
+  EXPECT_NEAR(exact.progress_m.back(), 50.40, 1e-12);
+  ASSERT_EQ(result.stage_end_velocity_mps.size(), 2U);
+  ASSERT_EQ(result.stage_end_steering_rad.size(), 2U);
+  EXPECT_NEAR(result.stage_end_velocity_mps.back(), 2.20, 1e-12);
+  EXPECT_NEAR(result.stage_end_steering_rad.back(), 0.12, 1e-12);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RejectsContinuationOutsideCertifiedLateralCorridor)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.05);
+  ASSERT_TRUE(cursor.available);
+
+  const auto result = adapter::build_continuation(
+    source, cursor,
+    adapter::ContinuationInitialState{
+      1.10, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105});
+
+  EXPECT_EQ(
+    result.reason,
+    adapter::ContinuationRejectReason::InitialLateralBoundRejected);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RetainsCurrentStageWhenOnlyLaterContinuationLeavesCorridor)
+{
+  auto source = artifact();
+  source.semantic_initial_steering_rad = 0.35;
+  source.semantic_initial_response_steering_rad = 0.35;
+  source.predicted_states = {
+    {0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 0.4, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 0.8, 0.35, 0.35},
+  };
+  source.control_stages = {
+    {0.0, 0.0, 8.0, 0.05, 0.0, 10.0, -3.0, 1.37},
+    {0.0, 0.0, 8.0, 0.05, 0.0, 10.0, -3.0, 1.37},
+  };
+  source.nominal_path_distance_m = {0.0, 0.4, 0.8};
+  source.lateral_lower_m = {-0.03, -0.03, -0.03};
+  source.lateral_upper_m = {0.03, 0.03, 0.03};
+  const auto cursor = execution::resolve_cursor(source, 10.001);
+  ASSERT_TRUE(cursor.available);
+
+  const auto result = adapter::build_continuation(
+    source, cursor,
+    adapter::ContinuationInitialState{
+      0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35});
+
+  ASSERT_EQ(result.reason, adapter::ContinuationRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  EXPECT_EQ(
+    result.scope, adapter::ContinuationProofScope::CurrentStagePrefix);
+  EXPECT_EQ(result.stage_end_velocity_mps.size(), 1U);
+  EXPECT_EQ(result.stage_end_steering_rad.size(), 1U);
+  EXPECT_LT(result.exact_trajectory->elapsed_time_sec.back(), 0.05);
+  EXPECT_LE(result.exact_trajectory->lateral_m.back(), 0.03);
+}
+
+TEST(MpccRateResolvedPhysicalAdapter, RejectsLinearizedStatesThatHideNonlinearWallDeparture)
+{
+  auto source = artifact();
+  source.semantic_initial_steering_rad = 0.35;
+  source.semantic_initial_response_steering_rad = 0.35;
+  source.predicted_states = {
+    {0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 4.0, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 8.0, 0.35, 0.35},
+  };
+  source.control_stages = {
+    {0.0, 0.0, 8.0, 0.50, 0.0, 10.0, -3.0, 1.37},
+    {0.0, 0.0, 8.0, 0.50, 0.0, 10.0, -3.0, 1.37},
+  };
+  source.nominal_path_distance_m = {0.0, 4.0, 8.0};
+  source.lateral_lower_m = {-0.20, -0.20, -0.20};
+  source.lateral_upper_m = {0.20, 0.20, 0.20};
+
+  const auto result = adapter::build(
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
+
+  EXPECT_EQ(result.reason, adapter::RejectReason::ExactTrajectoryRejected);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
 }
 
 TEST(MpccRateResolvedPhysicalAdapter, RejectsCurrentSemanticMismatch)
@@ -154,7 +262,7 @@ TEST(MpccRateResolvedPhysicalAdapter, AppliesCertifiedToleranceToInternalProgres
     result.artifact_reason, execution::RejectReason::InvalidControlStage);
 }
 
-TEST(MpccRateResolvedPhysicalAdapter, PropagatesCertifiedPredictedVelocityResidual)
+TEST(MpccRateResolvedPhysicalAdapter, DoesNotUseAffineVelocityAsPhysicalRollout)
 {
   auto source = artifact();
   source.predicted_states[1].velocity_mps = -5e-7;
@@ -164,8 +272,8 @@ TEST(MpccRateResolvedPhysicalAdapter, PropagatesCertifiedPredictedVelocityResidu
     source.identity.source_context.stage_geometry_id);
   ASSERT_EQ(result.reason, adapter::RejectReason::None);
   ASSERT_TRUE(result.exact_trajectory.has_value());
-  EXPECT_DOUBLE_EQ(
-    result.exact_trajectory->velocity_mps.front(), -5e-7);
+  EXPECT_NEAR(
+    result.exact_trajectory->velocity_mps.front(), 2.01, 1e-12);
   EXPECT_GT(
     result.exact_trajectory->velocity_lower_bound_tolerance_mps, 5e-7);
 

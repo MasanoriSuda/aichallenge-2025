@@ -236,8 +236,8 @@ const char * to_string(const Formulation formulation) noexcept
 {
   switch (formulation) {
     case Formulation::Unresolved: return "unresolved";
-    case Formulation::VelocitySteeringProgress6State:
-      return "velocity-steering-progress-6state";
+    case Formulation::VelocitySteeringYawResponseProgress7State:
+      return "velocity-steering-yaw-response-progress-7state";
     case Formulation::SolverDerivedBypass: return "solver-derived-bypass";
   }
   return "unknown";
@@ -313,7 +313,8 @@ bool canonical_normal_intent_requires_execution_side(
 bool canonical_normal_formulation_supported(
   const Formulation formulation) noexcept
 {
-  return formulation == Formulation::VelocitySteeringProgress6State;
+  return formulation ==
+    Formulation::VelocitySteeringYawResponseProgress7State;
 }
 
 std::uint64_t fingerprint_stage_geometry(
@@ -679,13 +680,18 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
   }
   if (
     candidate.execution_first_control_stage_index >=
-    solution.prediction_stage_count ||
+    solution.prediction_stage_count)
+  {
+    return CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon;
+  }
+  const std::size_t remaining_control_stage_count =
+    solution.prediction_stage_count -
+    candidate.execution_first_control_stage_index;
+  if (
     candidate.executable_control_stage_count >
-    solution.prediction_stage_count -
-    candidate.execution_first_control_stage_index ||
-    candidate.executable_control_stage_count !=
-    solution.prediction_stage_count -
-    candidate.execution_first_control_stage_index)
+    remaining_control_stage_count ||
+    (require_current_decision &&
+    candidate.executable_control_stage_count != remaining_control_stage_count))
   {
     return CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon;
   }
@@ -861,13 +867,15 @@ bool canonical_normal_command_matches_actuation(
 bool canonical_normal_command_matches_serialized_actuation(
   const CanonicalNormalCommand & command, const double target_speed_mps,
   const double acceleration_mps2,
-  const double steering_tire_angle_rad) noexcept
+  const double wire_steering_tire_angle_rad,
+  const double actuator_gain) noexcept
 {
   if (
     command.source == CanonicalNormalAuthoritySource::EmergencyStop ||
     !std::isfinite(target_speed_mps) ||
     !std::isfinite(acceleration_mps2) ||
-    !std::isfinite(steering_tire_angle_rad))
+    !std::isfinite(wire_steering_tire_angle_rad) ||
+    !std::isfinite(actuator_gain) || actuator_gain <= 0.0)
   {
     return false;
   }
@@ -879,37 +887,51 @@ bool canonical_normal_command_matches_serialized_actuation(
   return
     wire_equal(command.predicted_speed_mps, target_speed_mps) &&
     wire_equal(command.acceleration_mps2, acceleration_mps2) &&
-    wire_equal(command.steering_tire_angle_rad, steering_tire_angle_rad);
+    [&]() {
+      const auto expected = resolve_published_steering_tire_angle(
+        command.steering_tire_angle_rad, actuator_gain);
+      return expected.has_value() && wire_equal(
+        expected.value(), wire_steering_tire_angle_rad);
+    }();
+}
+
+bool physical_steering_matches_serialized_actuation(
+  const double physical_steering_tire_angle_rad,
+  const double wire_steering_tire_angle_rad,
+  const double actuator_gain) noexcept
+{
+  const auto expected = resolve_published_steering_tire_angle(
+    physical_steering_tire_angle_rad, actuator_gain);
+  return
+    expected.has_value() && std::isfinite(wire_steering_tire_angle_rad) &&
+    static_cast<float>(expected.value()) ==
+    static_cast<float>(wire_steering_tire_angle_rad);
 }
 
 std::optional<double> resolve_published_steering_tire_angle(
-  const double model_steering_tire_angle_rad,
-  const double legacy_actuator_gain,
-  const bool canonical_normal_authority) noexcept
+  const double physical_steering_tire_angle_rad,
+  const double actuator_gain) noexcept
 {
   if (
-    !std::isfinite(model_steering_tire_angle_rad) ||
-    !std::isfinite(legacy_actuator_gain) || legacy_actuator_gain <= 0.0)
+    !std::isfinite(physical_steering_tire_angle_rad) ||
+    !std::isfinite(actuator_gain) || actuator_gain <= 0.0)
   {
     return std::nullopt;
   }
-  const double published = canonical_normal_authority ?
-    model_steering_tire_angle_rad :
-    model_steering_tire_angle_rad * legacy_actuator_gain;
-  if (!std::isfinite(published)) {
+  // Mirror the actual Ackermann ROS message pipeline exactly. The physical
+  // command first crosses a float32 message field, then actuator calibration
+  // is applied, and the calibrated value crosses the final float32 field.
+  // Multiplying the original double and rounding only once can differ by one
+  // ULP and falsely classify a command which was published as unexecuted.
+  const float serialized_physical_steering_rad =
+    static_cast<float>(physical_steering_tire_angle_rad);
+  const double calibrated_wire_steering_rad =
+    static_cast<double>(serialized_physical_steering_rad) * actuator_gain;
+  if (!std::isfinite(calibrated_wire_steering_rad)) {
     return std::nullopt;
   }
-  return published;
-}
-
-bool canonical_normal_uses_physical_steering(
-  const bool canonical_normal_authority,
-  const bool canonical_emergency_stop,
-  const bool recovery_override) noexcept
-{
-  return
-    !recovery_override &&
-    (canonical_normal_authority || canonical_emergency_stop);
+  return static_cast<double>(
+    static_cast<float>(calibrated_wire_steering_rad));
 }
 
 const char * to_string(const FinalAuthorityClass authority) noexcept

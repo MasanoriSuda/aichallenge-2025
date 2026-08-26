@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -20,7 +21,10 @@ adapter::Request curved_request(const int horizon = 4)
   request.horizon_steps = horizon;
   request.initial_state << 0.0, 0.0, 0.0, 3.0, 0.0;
   request.current_steering_rad = 0.0;
+  request.current_response_steering_rad = 0.0;
   request.wheelbase_m = 2.5;
+  request.yaw_response_gain = 0.75;
+  request.yaw_response_time_constant_sec = 0.13;
   request.maximum_abs_steering_rad = 0.6;
   request.maximum_abs_steering_rate_radps = 1.0;
   request.previous_input << 0.0, 0.0, 3.0;
@@ -57,15 +61,19 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
   constexpr int stage = 1;
   const int state_offset = model::kStateDimension * stage;
   const int input_offset = 0;
-  const double steering_reference = std::atan(2.5 * 0.08);
+  const double steering_reference = std::atan(2.5 * 0.08 / 0.75);
   const double jacobian =
-    1.0 / (2.5 * std::pow(std::cos(steering_reference), 2.0));
+    0.75 / (2.5 * std::pow(std::cos(steering_reference), 2.0));
   EXPECT_DOUBLE_EQ(
     result->problem.state_reference[state_offset + model::kLateralIndex],
     request.states[stage].reference[0]);
   EXPECT_DOUBLE_EQ(
     result->problem.state_reference[state_offset + model::kSteeringIndex],
     steering_reference);
+  EXPECT_GE(
+    result->problem.state_reference[
+      state_offset + model::kResponseSteeringIndex],
+    0.0);
   EXPECT_DOUBLE_EQ(
     result->problem.state_lower[state_offset + model::kSteeringIndex],
     -0.6);
@@ -111,7 +119,7 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
   EXPECT_NEAR(
     result->problem.input_weight[
       input_offset + model::kSteeringRateIndex],
-    0.2 * std::pow(1.0 / 2.5, 2.0) * 0.1 * 0.1, 1e-12);
+    0.2 * std::pow(0.75 / 2.5, 2.0) * 0.1 * 0.1, 1e-12);
   EXPECT_DOUBLE_EQ(
     result->problem.input_delta_weight[model::kSteeringRateIndex], 0.0);
   EXPECT_DOUBLE_EQ(
@@ -132,10 +140,45 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
 
 TEST(
   MpccRateResolvedAdapter,
-  KeepsObservedSteeringAsStateZeroWhileSealingPublicationEnvelope)
+  CurvatureReferenceUsesTheSameYawResponseGainAsTheDynamics)
+{
+  const auto request = curved_request();
+  const auto result = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(result.has_value());
+
+  constexpr int stage = 1;
+  const int state_offset = model::kStateDimension * stage;
+  const double steering = result->problem.state_reference[
+    state_offset + model::kSteeringIndex];
+  const double represented_curvature =
+    request.yaw_response_gain * std::tan(steering) / request.wheelbase_m;
+
+  EXPECT_NEAR(
+    represented_curvature,
+    request.inputs.front().reference[adapter::kLegacyCurvatureIndex], 1e-12);
+  EXPECT_NEAR(
+    result->problem.state_lower[state_offset + model::kSteeringIndex],
+    std::max(-request.maximum_abs_steering_rad, std::atan(
+      request.wheelbase_m *
+      request.inputs.front().lower[adapter::kLegacyCurvatureIndex] /
+      request.yaw_response_gain)),
+    1e-12);
+  EXPECT_NEAR(
+    result->problem.state_upper[state_offset + model::kSteeringIndex],
+    std::min(request.maximum_abs_steering_rad, std::atan(
+      request.wheelbase_m *
+      request.inputs.front().upper[adapter::kLegacyCurvatureIndex] /
+      request.yaw_response_gain)),
+    1e-12);
+}
+
+TEST(
+  MpccRateResolvedAdapter,
+  UsesCommandSteeringAsTheOnlyPrefixReachabilityOrigin)
 {
   auto request = curved_request();
   request.current_steering_rad = -0.12;
+  request.current_response_steering_rad = -0.08;
   request.states.front().reference << 1.0, 1.0, 0.2, 4.0, 0.5;
   const auto result = adapter::build(request, kSolverTolerance);
   ASSERT_TRUE(result.has_value());
@@ -145,13 +188,17 @@ TEST(
   EXPECT_DOUBLE_EQ(
     result->problem.initial_state[model::kSteeringIndex], -0.12);
   EXPECT_DOUBLE_EQ(
+    result->problem.initial_state[model::kResponseSteeringIndex], -0.08);
+  EXPECT_DOUBLE_EQ(
     result->problem.state_reference[model::kSteeringIndex], -0.12);
   EXPECT_DOUBLE_EQ(
     result->problem.state_lower[model::kSteeringIndex], -0.6);
   EXPECT_DOUBLE_EQ(
     result->problem.state_upper[model::kSteeringIndex], 0.6);
   ASSERT_TRUE(result->problem.steering_rate_prefix_bounds.has_value());
-  const double prefix_margin = (1e-3 + 1e-3 * 0.6) / (1.0 - 1e-3);
+  // Robustification scales with the largest cumulative physical delta.  From
+  // -0.12 rad the positive span to the +0.60 rad actuator bound is 0.72 rad.
+  const double prefix_margin = (1e-3 + 1e-3 * 0.72) / (1.0 - 1e-3);
   EXPECT_NEAR(
     result->problem.steering_rate_prefix_bounds->
     minimum_cumulative_delta_rad,
@@ -159,7 +206,7 @@ TEST(
   EXPECT_NEAR(
     result->problem.steering_rate_prefix_bounds->
     maximum_cumulative_delta_rad,
-    0.60 - prefix_margin, 1e-12);
+    0.72 - prefix_margin, 1e-12);
   EXPECT_DOUBLE_EQ(
     result->problem.state_weight[model::kSteeringIndex], 0.0);
 }
@@ -386,19 +433,17 @@ TEST(MpccRateResolvedAdapter, FirstRateIsRobustlyReachableFromSemanticSteering)
 
 TEST(
   MpccRateResolvedAdapter,
-  IntersectsExactPhysicalAndDesiredSteeringRatePrefixes)
+  SteeringRatePrefixHasOnePhysicalStateOrigin)
 {
   auto request = curved_request();
   request.current_steering_rad = -0.20;
-  request.previous_published_steering_rad = 0.40;
   const auto result = adapter::build(request, kSolverTolerance);
   ASSERT_TRUE(result.has_value());
 
   ASSERT_TRUE(result->problem.steering_rate_prefix_bounds.has_value());
-  const double prefix_margin = (1e-3 + 1e-3 * 0.4) / (1.0 - 1e-3);
-  // The exact cumulative rate must satisfy both physical origin -0.20 and
-  // publication origin +0.40. Their physical intersection is [-0.40, 0.20]
-  // before the solver-certificate inset.
+  const double prefix_margin = (1e-3 + 1e-3 * 0.8) / (1.0 - 1e-3);
+  // Only the physical origin -0.20 is a vehicle state. The exact cumulative
+  // delta may use the complete [-0.40, 0.80] physical steering envelope.
   EXPECT_NEAR(
     result->problem.steering_rate_prefix_bounds->
     minimum_cumulative_delta_rad,
@@ -406,8 +451,5 @@ TEST(
   EXPECT_NEAR(
     result->problem.steering_rate_prefix_bounds->
     maximum_cumulative_delta_rad,
-    0.20 - prefix_margin, 1e-12);
-
-  request.previous_published_steering_rad = 0.61;
-  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
+    0.80 - prefix_margin, 1e-12);
 }

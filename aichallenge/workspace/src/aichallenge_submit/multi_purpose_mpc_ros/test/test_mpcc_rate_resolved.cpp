@@ -19,11 +19,14 @@ rate::LinearizationRequest nominal_request()
   request.reference_velocity_mps = 7.0;
   request.reference_progress_m = 12.0;
   request.reference_steering_rad = 0.15;
+  request.reference_response_steering_rad = 0.10;
   request.reference_acceleration_mps2 = 0.4;
   request.reference_steering_rate_radps = -0.2;
   request.reference_virtual_progress_speed_mps = 6.8;
   request.reference_path_curvature_radpm = 0.04;
   request.wheelbase_m = 2.0;
+  request.yaw_response_gain = 0.75;
+  request.yaw_response_time_constant_sec = 0.13;
   request.stage_dt_sec = 0.12;
   return request;
 }
@@ -40,7 +43,8 @@ TEST(MpccRateResolved, ReferencePointSatisfiesAffineDynamics)
   state <<
     request.reference_lateral_m, request.reference_lag_m,
     request.reference_heading_rad, request.reference_velocity_mps,
-    request.reference_progress_m, request.reference_steering_rad;
+    request.reference_progress_m, request.reference_steering_rad,
+    request.reference_response_steering_rad;
   Eigen::Matrix<double, rate::kInputDimension, 1> input;
   input <<
     request.reference_acceleration_mps2,
@@ -67,23 +71,55 @@ TEST(MpccRateResolved, ReferencePointSatisfiesAffineDynamics)
     1e-12);
   EXPECT_NEAR(
     next[rate::kHeadingIndex],
-    request.reference_heading_rad + request.stage_dt_sec *
-    (request.reference_velocity_mps * std::tan(request.reference_steering_rad) /
-    request.wheelbase_m - request.reference_path_curvature_radpm *
-    request.reference_virtual_progress_speed_mps),
+    request.reference_heading_rad + request.yaw_response_gain *
+    request.reference_velocity_mps / request.wheelbase_m *
+    (std::tan(request.reference_response_steering_rad) *
+    request.stage_dt_sec +
+    (1.0 /
+    (std::cos(request.reference_response_steering_rad) *
+    std::cos(request.reference_response_steering_rad))) *
+    ((request.reference_steering_rad -
+    request.reference_response_steering_rad) *
+    (request.stage_dt_sec - request.yaw_response_time_constant_sec *
+    (1.0 - std::exp(
+      -request.stage_dt_sec /
+      request.yaw_response_time_constant_sec))) +
+    request.reference_steering_rate_radps *
+    (0.5 * request.stage_dt_sec * request.stage_dt_sec -
+    request.yaw_response_time_constant_sec * request.stage_dt_sec +
+    request.yaw_response_time_constant_sec *
+    request.yaw_response_time_constant_sec *
+    (1.0 - std::exp(
+      -request.stage_dt_sec /
+      request.yaw_response_time_constant_sec))))) -
+    request.stage_dt_sec * request.reference_path_curvature_radpm *
+    request.reference_virtual_progress_speed_mps,
     1e-12);
   EXPECT_NEAR(
     next[rate::kSteeringIndex],
     request.reference_steering_rad + request.stage_dt_sec *
     request.reference_steering_rate_radps,
     1e-12);
+  EXPECT_NEAR(
+    next[rate::kResponseSteeringIndex],
+    request.reference_steering_rad +
+    (request.reference_response_steering_rad -
+    request.reference_steering_rad) * std::exp(
+      -request.stage_dt_sec /
+      request.yaw_response_time_constant_sec) +
+    request.reference_steering_rate_radps *
+    (request.stage_dt_sec - request.yaw_response_time_constant_sec *
+    (1.0 - std::exp(
+      -request.stage_dt_sec /
+      request.yaw_response_time_constant_sec))),
+    1e-12);
 }
 
-TEST(MpccRateResolved, SteeringRateChangesStateNotHeadingInstantaneously)
+TEST(MpccRateResolved, SteeringRatePropagatesThroughResponseWithinStage)
 {
   const auto linearization = rate::linearize_temporal_frenet(nominal_request());
   ASSERT_TRUE(linearization.has_value());
-  EXPECT_DOUBLE_EQ(
+  EXPECT_GT(
     linearization->input_matrix(
       rate::kHeadingIndex, rate::kSteeringRateIndex),
     0.0);
@@ -93,7 +129,19 @@ TEST(MpccRateResolved, SteeringRateChangesStateNotHeadingInstantaneously)
     nominal_request().stage_dt_sec);
   EXPECT_GT(
     linearization->state_matrix(
+      rate::kHeadingIndex, rate::kResponseSteeringIndex),
+    0.0);
+  EXPECT_GT(
+    linearization->state_matrix(
       rate::kHeadingIndex, rate::kSteeringIndex),
+    0.0);
+  EXPECT_GT(
+    linearization->state_matrix(
+      rate::kResponseSteeringIndex, rate::kSteeringIndex),
+    0.0);
+  EXPECT_GT(
+    linearization->input_matrix(
+      rate::kResponseSteeringIndex, rate::kSteeringRateIndex),
     0.0);
 }
 

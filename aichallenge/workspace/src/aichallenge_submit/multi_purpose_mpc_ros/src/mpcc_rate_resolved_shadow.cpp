@@ -86,7 +86,6 @@ bool result_valid(const Result & result) noexcept
          std::isfinite(result.first_steering_rate_radps) &&
          std::isfinite(result.first_virtual_progress_speed_mps) &&
          std::isfinite(result.initial_steering_rad) &&
-         std::isfinite(result.publication_initial_steering_rad) &&
          std::isfinite(result.solver_initial_steering_rad) &&
          std::isfinite(result.sampled_steering_rad) &&
          std::isfinite(result.first_steering_rate_physical_lower_radps) &&
@@ -247,8 +246,6 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   const int state_values = model::kStateDimension * (horizon + 1);
   const auto & primal = outcome.result->primal;
   result.initial_steering_rad = snapshot.request.current_steering_rad;
-  result.publication_initial_steering_rad =
-    snapshot.request.previous_published_steering_rad;
   result.solver_initial_steering_rad = primal[model::kSteeringIndex];
   result.first_acceleration_mps2 =
     primal[state_values + model::kAccelerationIndex];
@@ -322,9 +319,14 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     snapshot.course_progress_origin_m;
   execution_artifact.semantic_initial_steering_rad =
     snapshot.request.current_steering_rad;
-  execution_artifact.publication_initial_steering_rad =
-    snapshot.request.previous_published_steering_rad;
+  execution_artifact.semantic_initial_response_steering_rad =
+    snapshot.request.current_response_steering_rad;
   execution_artifact.wheelbase_m = snapshot.request.wheelbase_m;
+  execution_artifact.yaw_response_gain = snapshot.request.yaw_response_gain;
+  execution_artifact.yaw_response_time_constant_sec =
+    snapshot.request.yaw_response_time_constant_sec;
+  execution_artifact.minimum_frenet_denominator =
+    snapshot.request.minimum_frenet_denominator;
   execution_artifact.maximum_abs_steering_rad =
     snapshot.request.maximum_abs_steering_rad;
   execution_artifact.maximum_abs_steering_rate_radps =
@@ -352,7 +354,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
         primal[state_offset + model::kHeadingIndex],
         primal[state_offset + model::kVelocityIndex],
         primal[state_offset + model::kProgressIndex],
-        primal[state_offset + model::kSteeringIndex]});
+        primal[state_offset + model::kSteeringIndex],
+        primal[state_offset + model::kResponseSteeringIndex]});
     const auto & semantic =
       snapshot.request.states[static_cast<std::size_t>(stage)];
     execution_artifact.lateral_lower_m.push_back(semantic.lower[0]);
@@ -371,7 +374,9 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
         snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[2],
         snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[2],
         snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[0],
-        snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[0]});
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[0],
+        snapshot.request.inputs[
+          static_cast<std::size_t>(stage)].path_curvature_radpm});
   }
   result.execution_artifact_reject_reason =
     artifact::validate(execution_artifact);

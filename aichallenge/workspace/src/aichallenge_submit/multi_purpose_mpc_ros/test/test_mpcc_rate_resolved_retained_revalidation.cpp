@@ -37,7 +37,7 @@ contract::MpccProblemContext source_context(
   context.stage_geometry_id = 31U;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringProgress6State;
+    contract::Formulation::VelocitySteeringYawResponseProgress7State;
   context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-v1";
@@ -55,7 +55,7 @@ artifact::ExecutionArtifact execution_artifact(
   value.completed_sec = 1.01;
   value.course_progress_origin_m = 50.0;
   value.semantic_initial_steering_rad = 0.10;
-  value.publication_initial_steering_rad = 0.10;
+  value.semantic_initial_response_steering_rad = 0.10;
   value.wheelbase_m = 2.0;
   value.maximum_abs_steering_rad = 0.60;
   value.maximum_abs_steering_rate_radps = 1.0;
@@ -63,9 +63,9 @@ artifact::ExecutionArtifact execution_artifact(
   value.maximum_constraint_violation = 1e-8;
   value.maximum_normalized_constraint_violation = 0.1;
   value.predicted_states = {
-    {0.0, 0.10, 0.0, 2.0, 0.0, 0.10},
-    {0.10, 0.0, 0.0, 2.1, 0.2, 0.11},
-    {0.20, 0.0, 0.0, 2.2, 0.4, 0.12},
+    {0.0, 0.10, 0.0, 2.0, 0.0, 0.10, 0.10},
+    {0.10, 0.0, 0.0, 2.1, 0.2, 0.11, 0.10302380180000528},
+    {0.20, 0.0, 0.0, 2.2, 0.4, 0.12, 0.10979124524044208},
   };
   value.control_stages = {
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
@@ -105,6 +105,7 @@ physical::Snapshot source_snapshot(
   snapshot.current_pose = {50.0, 0.0, 0.0};
   snapshot.control_prefix = {snapshot.current_pose};
   snapshot.trajectory.progress_origin_m = 50.0;
+  snapshot.trajectory.elapsed_time_sec = {0.1, 0.2};
   snapshot.trajectory.path_distance_m = {0.2, 0.4};
   snapshot.trajectory.lateral_m = {0.10, 0.20};
   snapshot.trajectory.lag_m = {0.0, 0.0};
@@ -172,8 +173,10 @@ retained::Request accepted_request(
   request.obstacles.observed_sec = 1.05;
   request.obstacles.current = true;
   request.current_speed_mps = 2.05;
+  request.control_origin_speed_mps = 2.05;
   request.current_time_steering_rad = 0.105;
   request.current_steering_rad = 0.105;
+  request.current_response_steering_rad = 0.105;
   request.previous_published_steering_rad = 0.105;
   request.previous_published_command_age_sec = 0.025;
   request.minimum_acceleration_mps2 = -3.0;
@@ -244,10 +247,36 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
   const auto result = retained::evaluate(accepted_request(plan));
   ASSERT_EQ(result.reason, retained::Reason::Accepted);
   ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(
+    result.proof->static_wall_scope,
+    retained::StaticWallProofScope::FullSuffix);
+  EXPECT_EQ(result.proof->proved_control_stage_count, 2U);
   EXPECT_EQ(result.proof->cursor.control_stage_index, 0U);
   EXPECT_NEAR(result.cursor_elapsed_sec, 0.05, 1e-9);
   EXPECT_NEAR(result.proof->expected_absolute_progress_m, 50.10, 1e-9);
   EXPECT_EQ(result.proof->obstacle_generation, 7U);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsObstacleOnCurrentStateContinuationInsteadOfOldCertifiedSuffix)
+{
+  const auto plan = certified_plan();
+  ASSERT_NE(plan, nullptr);
+  auto request = accepted_request(plan);
+  // The retained artifact was certified around y=+0.1..+0.2.  The current
+  // control-origin state is now on the other side of the reference path.  A
+  // wall-clear chord back to the old state is not evidence that replaying the
+  // old control suffix from this state remains dynamically clear.
+  request.control_pose = {50.05, -0.60, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.obstacles.obstacles.push_back(
+    {"d2", {50.32, -0.60, 0.0, 0.0, 0.08}});
+
+  const auto result = retained::evaluate(request);
+
+  EXPECT_EQ(result.reason, retained::Reason::DynamicPathBlocked);
+  EXPECT_EQ(result.blocking_obstacle_id, "d2");
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, AcceptsEveryArtifactOwnedIntent)
@@ -411,6 +440,33 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsFutureCrossingObstacle)
     retained::Reason::DynamicPathBlocked);
 }
 
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  DoesNotReuseOldCertifiedStateSuffixAfterTheStateOriginMoves)
+{
+  auto execution = std::make_shared<const artifact::ExecutionArtifact>(
+    execution_artifact());
+  auto snapshot = source_snapshot(execution->identity);
+  // The old nonlinear certificate reached y=0.8.  It proves the old solve,
+  // but after the vehicle has moved it is no longer current state evidence.
+  // The retained input suffix is replayed from the current y=0.05 origin, so
+  // an obstacle which intersects only the old state suffix must not block it.
+  snapshot.trajectory.lateral_m = {0.8, 0.8};
+  snapshot.trajectory.minimum_lateral_bound_reserve_m = 0.2;
+  const auto built = certified::build(
+    execution, snapshot, accepted_result(snapshot));
+  ASSERT_EQ(built.reason, certified::RejectReason::None);
+  ASSERT_NE(built.plan, nullptr);
+
+  auto request = accepted_request(built.plan);
+  request.obstacles.obstacles.push_back(
+    {"nonlinear-suffix", {50.20, 0.80, 0.0, 0.0, 0.10}});
+
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
+  EXPECT_TRUE(result.blocking_obstacle_id.empty());
+}
+
 TEST(MpccRateResolvedRetainedRevalidation, RejectsObstacleCrossingDuringDelayPrefix)
 {
   const auto plan = certified_plan();
@@ -527,26 +583,27 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
+  request.current_time_steering_rad = -0.10;
   request.previous_published_steering_rad = -0.10;
+  request.previous_published_command_age_sec = 0.0;
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::SteeringUnreachable);
   EXPECT_NEAR(result.current_steering_rad, 0.105, 1e-9);
-  EXPECT_NEAR(result.current_time_steering_rad, 0.105, 1e-9);
+  EXPECT_NEAR(result.current_time_steering_rad, -0.10, 1e-9);
   EXPECT_NEAR(result.previous_published_steering_rad, -0.10, 1e-9);
-  // At now=1.05 the artifact cursor is 50 ms old.  Desired-command
-  // continuity advances from its sealed publication predecessor for exactly
-  // that elapsed time; the physical steering origin is a separate state.
+  // At zero publication age the certified command sample must agree with the
+  // last serialized command within solver tolerance.
   EXPECT_NEAR(result.expected_steering_rad, 0.105, 1e-9);
   EXPECT_NEAR(result.steering_difference_rad, 0.205, 1e-9);
-  EXPECT_NEAR(result.maximum_steering_step_rad, 0.025001, 1e-9);
-  EXPECT_NEAR(result.reachable_steering_lower_rad, -0.125001, 1e-9);
-  EXPECT_NEAR(result.reachable_steering_upper_rad, -0.074999, 1e-9);
-  EXPECT_NEAR(result.steering_reachability_duration_sec, 0.025, 1e-9);
+  EXPECT_NEAR(result.maximum_steering_step_rad, 0.000001, 1e-9);
+  EXPECT_NEAR(result.reachable_steering_lower_rad, -0.100001, 1e-9);
+  EXPECT_NEAR(result.reachable_steering_upper_rad, -0.099999, 1e-9);
+  EXPECT_NEAR(result.steering_reachability_duration_sec, 0.0, 1e-9);
 }
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  UsesPublishedCommandForSteeringReachability)
+  UsesPublishedCommandStateForSteeringReachability)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
@@ -554,33 +611,32 @@ TEST(
   request.measured_to_control_path = {
     request.control_pose, request.control_pose};
   request.measured_to_control_elapsed_sec = {0.0, 0.05};
-  request.current_time_steering_rad = -0.247;
-  request.current_steering_rad = -0.337;
-  request.previous_published_steering_rad = 0.10;
+  request.current_time_steering_rad = 0.08;
+  request.current_steering_rad = 0.105;
+  request.previous_published_steering_rad = 0.08;
+  request.previous_published_command_age_sec = 0.040;
 
-  // The physical state belongs to model initialization.  Serialized command
-  // reachability belongs to the last published command; actuator lag must not
-  // turn a compliant 0.100 -> 0.110 retained command into a false
-  // rejection.
+  // The measured physical state may lag far behind.  Command authority is
+  // nevertheless valid because the next serialized sample is reachable from
+  // the last serialized command over the actual publication age.
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::Accepted);
   ASSERT_TRUE(result.proof.has_value());
-  EXPECT_NEAR(result.proof->previous_published_steering_rad, 0.10, 1e-9);
-  EXPECT_NEAR(result.proof->steering_difference_rad, 0.010, 1e-9);
-  EXPECT_NEAR(result.proof->steering_reachability_duration_sec, 0.025, 1e-9);
+  EXPECT_NEAR(result.proof->previous_published_steering_rad, 0.08, 1e-9);
+  EXPECT_NEAR(result.proof->steering_difference_rad, 0.030, 1e-9);
+  EXPECT_NEAR(result.proof->steering_reachability_duration_sec, 0.040, 1e-9);
 }
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  UsesActualPublishedCommandAgeInsteadOfNominalControllerPeriod)
+  PreviousCommandAgeOwnsCommandReachability)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
   request.previous_published_steering_rad = 0.075;
 
-  // At the 50 ms cursor the immutable publication sequence requests 0.105
-  // rad.  A 30 ms delta is reachable when the previous command was actually
-  // published 40 ms ago, even though the nominal controller period is 25 ms.
+  // The command age is the causal time available for the serialized command
+  // to move from the predecessor to the retained artifact sample.
   request.previous_published_command_age_sec = 0.040;
   const auto accepted = retained::evaluate(request);
   EXPECT_EQ(accepted.reason, retained::Reason::Accepted);
@@ -588,7 +644,7 @@ TEST(
   EXPECT_NEAR(
     accepted.proof->steering_reachability_duration_sec, 0.040, 1e-9);
 
-  request.previous_published_command_age_sec = 0.025;
+  request.previous_published_command_age_sec = 0.010;
   EXPECT_EQ(
     retained::evaluate(request).reason,
     retained::Reason::SteeringUnreachable);
@@ -610,7 +666,9 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableVelocity)
   EXPECT_NEAR(result.expected_speed_mps, 2.05, 1e-9);
 }
 
-TEST(MpccRateResolvedRetainedRevalidation, RejectsBlockedConnector)
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  DoesNotTreatUnusedChordToOldStateAsAnExecutionPath)
 {
   auto grid = free_grid();
   const auto plan = certified_plan(grid);
@@ -622,9 +680,59 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsBlockedConnector)
   ASSERT_TRUE(occupied.has_value());
   grid->cells[occupied->row * grid->width + occupied->column] =
     recovery::CellState::Occupied;
+  EXPECT_EQ(retained::evaluate(request).reason, retained::Reason::Accepted);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, RejectsBlockedCurrentContinuation)
+{
+  auto grid = free_grid();
+  const auto occupied = grid->world_to_grid(50.20, 0.05);
+  ASSERT_TRUE(occupied.has_value());
+  grid->cells[occupied->row * grid->width + occupied->column] =
+    recovery::CellState::Occupied;
+  const auto plan = certified_plan(grid);
+  ASSERT_NE(plan, nullptr);
+  auto request = accepted_request(plan);
+
   EXPECT_EQ(
     retained::evaluate(request).reason,
-    retained::Reason::ConnectorBlocked);
+    retained::Reason::ContinuationWallBlocked);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RetainsClearCurrentStageWhenOnlyLaterSuffixNeedsReplanning)
+{
+  auto grid = free_grid();
+  // The first continuation endpoint is at approximately (50.20, 0.10) and
+  // the second is at approximately (50.41, 0.10).  Block only the second
+  // endpoint.  Receding-horizon authority owns the
+  // current execution stage, not an assertion that an old open-loop suffix
+  // will remain executable after the next solve.
+  const auto occupied = grid->world_to_grid(50.40, 0.10);
+  ASSERT_TRUE(occupied.has_value());
+  grid->cells[occupied->row * grid->width + occupied->column] =
+    recovery::CellState::Occupied;
+  const auto plan = certified_plan(grid);
+  ASSERT_NE(plan, nullptr);
+  auto request = accepted_request(plan);
+
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(
+    result.static_wall_scope,
+    retained::StaticWallProofScope::CurrentStagePrefix);
+  EXPECT_EQ(
+    result.proof->static_wall_scope,
+    retained::StaticWallProofScope::CurrentStagePrefix);
+  EXPECT_EQ(result.proof->proved_control_stage_count, 1U);
+  EXPECT_EQ(
+    result.proof->continuation_stage_end_velocity_mps.size(), 1U);
+  EXPECT_TRUE(result.current_stage_path_clearance.valid);
+  EXPECT_TRUE(result.current_stage_path_clearance.clear);
+  EXPECT_TRUE(result.continuation_path_clearance.valid);
+  EXPECT_FALSE(result.continuation_path_clearance.clear);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsExhaustedArtifact)

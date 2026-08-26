@@ -13,9 +13,9 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_source
 namespace certified = mpcc_rate_resolved_certified_plan;
 namespace contract = mpcc_execution_contract;
 
-/// Identity expected by the live Overtake Mission when a certified six-state
+/// Identity expected by the live Overtake Mission when a certified seven-state
 /// solve is projected into the rolling lateral-prefix supervisor.  The
-/// projection is not a command authority; it only keeps the next six-state
+/// projection is not a command authority; it only keeps the next seven-state
 /// problem's execution corridor causally connected to the accepted solve.
 struct Request
 {
@@ -42,7 +42,7 @@ enum class RejectReason
 const char * to_string(RejectReason reason) noexcept;
 
 /// Lossless lateral/progress projection of the exact physical trajectory
-/// already joined to the immutable six-state artifact.  source_snapshot_sec
+/// already joined to the immutable seven-state artifact.  source_snapshot_sec
 /// intentionally remains the original observation time: adopting or
 /// revalidating this value can never renew the source age.
 struct Source

@@ -32,7 +32,7 @@ contract::MpccProblemContext context()
   value.stage_geometry_id = 20U;
   value.horizon_steps = 2U;
   value.formulation =
-    contract::Formulation::VelocitySteeringProgress6State;
+    contract::Formulation::VelocitySteeringYawResponseProgress7State;
   value.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
   value.input_schema_id = "accel-steering-rate-progress-rate-v1";
   value.bounds_schema_id = "stage-wall-v1";
@@ -49,7 +49,7 @@ std::shared_ptr<const certified::CertifiedPlan> plan()
   artifact.completed_sec = 12.03;
   artifact.course_progress_origin_m = 50.0;
   artifact.semantic_initial_steering_rad = 0.1;
-  artifact.publication_initial_steering_rad = 0.1;
+  artifact.semantic_initial_response_steering_rad = 0.1;
   artifact.wheelbase_m = 2.0;
   artifact.maximum_abs_steering_rad = 0.6;
   artifact.maximum_abs_steering_rate_radps = 1.0;
@@ -57,9 +57,9 @@ std::shared_ptr<const certified::CertifiedPlan> plan()
   artifact.maximum_constraint_violation = 1e-8;
   artifact.maximum_normalized_constraint_violation = 0.1;
   artifact.predicted_states = {
-    {0.0, 0.0, 0.0, 3.0, 0.0, 0.1},
-    {-0.1, 0.0, 0.0, 3.1, 0.3, 0.1},
-    {-0.2, 0.0, 0.0, 3.2, 0.6, 0.1},
+    {0.0, 0.0, 0.0, 3.0, 0.0, 0.1, 0.1},
+    {-0.1, 0.0, 0.0, 3.1, 0.3, 0.1, 0.1},
+    {-0.2, 0.0, 0.0, 3.2, 0.6, 0.1, 0.1},
   };
   artifact.control_stages = {
     {1.0, 0.0, 3.0, 0.1, 0.0, 4.0, -3.0, 1.37},
@@ -88,6 +88,7 @@ std::shared_ptr<const certified::CertifiedPlan> plan()
   snapshot.current_pose = {50.0, 0.0, 0.0};
   snapshot.control_prefix = {snapshot.current_pose};
   snapshot.trajectory.progress_origin_m = 50.0;
+  snapshot.trajectory.elapsed_time_sec = {0.1, 0.2};
   snapshot.trajectory.path_distance_m = {0.3, 0.6};
   snapshot.trajectory.lateral_m = {-0.1, -0.2};
   snapshot.trajectory.lag_m = {0.0, 0.0};

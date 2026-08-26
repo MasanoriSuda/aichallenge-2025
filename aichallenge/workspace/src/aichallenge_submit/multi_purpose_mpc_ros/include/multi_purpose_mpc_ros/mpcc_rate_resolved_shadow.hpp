@@ -64,7 +64,6 @@ struct Result
   double first_steering_rate_radps{};
   double first_virtual_progress_speed_mps{};
   double initial_steering_rad{};
-  double publication_initial_steering_rad{};
   double solver_initial_steering_rad{};
   double sampled_steering_rad{};
   double calculated_terminal_steering_rad{};
@@ -101,7 +100,7 @@ bool identity_valid(const Identity & identity) noexcept;
 bool result_valid(const Result & result) noexcept;
 
 /// Dedicated numerical owner for the rate-resolved shadow. Calls are
-/// serialized and deliberately cold-started until an exact six-state
+/// serialized and deliberately cold-started until an exact seven-state
 /// progress-rebase warm-start contract is approved.
 class SolverContext
 {

@@ -52,7 +52,11 @@ struct PhysicalState
   double current_time_steering_rad{};
   double prediction_delay_sec{};
   double projection_duration_sec{};
+  /// Maximum physical-equivalent desired-angle motion between the measured
+  /// report and the delayed execution origin.
   double maximum_reachable_step_rad{};
+  /// Rate-bounded physical steering at the delayed execution origin.  The
+  /// committed value is in physical-equivalent units, never AWSIM wire units.
   double prediction_origin_steering_rad{};
   bool committed_command_reached{false};
 };
@@ -63,10 +67,10 @@ struct Result
   std::optional<PhysicalState> state;
 };
 
-/// Project one measured steering report onto the same latency-compensated
-/// control origin used by the six-state pose.  The committed command is the
-/// zero-order-held actuator input already published during the latency prefix;
-/// it is never substituted for the measured physical state.
+/// Resolve the observed physical steering onto the latency-compensated
+/// six-state origin.  The committed input is a physical-equivalent desired
+/// angle whose calibrated wire command reaches the plant after the same delay;
+/// wire steering must not be passed to this contract.
 Result resolve(const Request & request) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_steering_state_contract

@@ -26,7 +26,7 @@ enum class Reason
 
 const char * to_string(Reason reason) noexcept;
 
-/// Complete publisher-shaped proposal from one accepted retained six-state
+/// Complete publisher-shaped proposal from one accepted retained seven-state
 /// proof. It deliberately remains distinct from the final publication command
 /// so retained-certificate provenance cannot be lost before authority admission.
 struct Candidate

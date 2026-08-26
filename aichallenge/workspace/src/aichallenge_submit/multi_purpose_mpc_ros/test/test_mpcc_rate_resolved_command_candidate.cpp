@@ -18,6 +18,8 @@ namespace artifact =
   multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
 namespace certified = multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
 namespace physical = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
+namespace physical_adapter =
+  multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 
@@ -39,7 +41,7 @@ contract::MpccProblemContext source_context(
   context.stage_geometry_id = 17U;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringProgress6State;
+    contract::Formulation::VelocitySteeringYawResponseProgress7State;
   context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-v1";
@@ -57,7 +59,7 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   execution->completed_sec = 1.01;
   execution->course_progress_origin_m = 50.0;
   execution->semantic_initial_steering_rad = 0.10;
-  execution->publication_initial_steering_rad = 0.10;
+  execution->semantic_initial_response_steering_rad = 0.10;
   execution->wheelbase_m = 2.0;
   execution->maximum_abs_steering_rad = 0.60;
   execution->maximum_abs_steering_rate_radps = 1.0;
@@ -65,9 +67,9 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   execution->maximum_constraint_violation = 1e-8;
   execution->maximum_normalized_constraint_violation = 0.1;
   execution->predicted_states = {
-    {0.0, 0.10, 0.0, 2.0, 0.0, 0.10},
-    {0.10, 0.0, 0.0, 2.1, 0.2, 0.11},
-    {0.20, 0.0, 0.0, 2.2, 0.4, 0.12},
+    {0.0, 0.10, 0.0, 2.0, 0.0, 0.10, 0.10},
+    {0.10, 0.0, 0.0, 2.1, 0.2, 0.11, 0.10302380180000528},
+    {0.20, 0.0, 0.0, 2.2, 0.4, 0.12, 0.10979124524044208},
   };
   execution->control_stages = {
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
@@ -96,6 +98,7 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   snapshot.current_pose = {50.0, 0.0, 0.0};
   snapshot.control_prefix = {snapshot.current_pose};
   snapshot.trajectory.progress_origin_m = 50.0;
+  snapshot.trajectory.elapsed_time_sec = {0.1, 0.2};
   snapshot.trajectory.path_distance_m = {0.2, 0.4};
   snapshot.trajectory.lateral_m = {0.10, 0.20};
   snapshot.trajectory.lag_m = {0.0, 0.0};
@@ -137,6 +140,7 @@ retained::Result accepted_result(
   proof.cursor.sequence = 7U;
   proof.cursor.control_stage_index = 1U;
   proof.cursor.remaining_control_stage_count = 1U;
+  proof.proved_control_stage_count = 1U;
   proof.observation_origin_sec = 1.05;
   proof.control_origin_sec = 1.05;
   proof.actuation.sequence = 7U;
@@ -147,6 +151,10 @@ retained::Result accepted_result(
   proof.actuation.steering_rad = 0.1;
   proof.actuation.curvature_radpm = 0.05;
   proof.actuation.virtual_progress_speed_mps = 4.1;
+  proof.continuation_trajectory =
+    proof.plan->physical_snapshot->trajectory;
+  proof.continuation_stage_end_velocity_mps = {2.2};
+  proof.continuation_stage_end_steering_rad = {0.12};
   result.proof = proof;
   return result;
 }
@@ -182,10 +190,10 @@ TEST(RateResolvedCommandCandidate, PreservesRetainedIdentityAndActuation) {
   EXPECT_EQ(candidate.source_context.intent, contract::ControlIntent::Cruise);
   EXPECT_EQ(
     candidate.source_context.formulation,
-    contract::Formulation::VelocitySteeringProgress6State);
+    contract::Formulation::VelocitySteeringYawResponseProgress7State);
   EXPECT_STREQ(
     contract::to_string(candidate.source_context.formulation),
-    "velocity-steering-progress-6state");
+    "velocity-steering-yaw-response-progress-7state");
   EXPECT_EQ(candidate.control_stage_index, 1U);
   EXPECT_DOUBLE_EQ(candidate.predicted_speed_mps, 4.2);
   EXPECT_DOUBLE_EQ(candidate.acceleration_mps2, 0.8);
@@ -222,7 +230,7 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
   EXPECT_TRUE(contract::solution_certified(authority.solution));
   EXPECT_EQ(
     authority.problem.formulation,
-    contract::Formulation::VelocitySteeringProgress6State);
+    contract::Formulation::VelocitySteeringYawResponseProgress7State);
   EXPECT_EQ(authority.command.decision_id, 23U);
   EXPECT_EQ(authority.command.execution_plan_id, 7U);
   EXPECT_EQ(authority.command.execution_certificate_decision_id, 23U);
@@ -231,15 +239,44 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
     contract::CanonicalNormalAuthoritySource::RetainedCertified);
   EXPECT_EQ(
     authority.command.formulation,
-    contract::Formulation::VelocitySteeringProgress6State);
+    contract::Formulation::VelocitySteeringYawResponseProgress7State);
   EXPECT_TRUE(authority.command.retained_solution);
   EXPECT_DOUBLE_EQ(authority.command.predicted_speed_mps, 4.2);
   EXPECT_DOUBLE_EQ(authority.command.acceleration_mps2, 0.8);
   EXPECT_DOUBLE_EQ(authority.command.steering_tire_angle_rad, 0.1);
   ASSERT_EQ(authority.target_speed_horizon_mps.size(), 1U);
   ASSERT_EQ(authority.steering_horizon_rad.size(), 1U);
-  ASSERT_EQ(authority.world_prediction.first.size(), 1U);
-  ASSERT_EQ(authority.world_prediction.second.size(), 1U);
+  ASSERT_EQ(authority.world_prediction.first.size(), 2U);
+  ASSERT_EQ(authority.world_prediction.second.size(), 2U);
+}
+
+TEST(
+  RateResolvedProductionAdapter,
+  PublishesOnlyTheCurrentStageCertifiedByPrefixProof)
+{
+  auto retained_result = accepted_result();
+  retained_result.proof->cursor.control_stage_index = 0U;
+  retained_result.proof->cursor.remaining_control_stage_count = 2U;
+  retained_result.proof->actuation.control_stage_index = 0U;
+  retained_result.proof->proved_control_stage_count = 1U;
+  retained_result.proof->continuation_scope =
+    physical_adapter::ContinuationProofScope::CurrentStagePrefix;
+  retained_result.proof->continuation_trajectory.elapsed_time_sec.resize(2U);
+  retained_result.proof->continuation_trajectory.path_distance_m.resize(2U);
+  retained_result.proof->continuation_trajectory.lateral_m.resize(2U);
+  retained_result.proof->continuation_trajectory.lag_m.resize(2U);
+  retained_result.proof->continuation_trajectory.heading_offset_rad.resize(2U);
+  retained_result.proof->continuation_trajectory.velocity_mps.resize(2U);
+  retained_result.proof->continuation_trajectory.progress_m.resize(2U);
+  retained_result.proof->continuation_trajectory.lateral_lower_m.resize(2U);
+  retained_result.proof->continuation_trajectory.lateral_upper_m.resize(2U);
+
+  const auto result = production::build(retained_result);
+
+  ASSERT_EQ(result.reason, production::Reason::Available);
+  ASSERT_TRUE(result.authority.has_value());
+  EXPECT_EQ(result.authority->target_speed_horizon_mps.size(), 1U);
+  EXPECT_EQ(result.authority->steering_horizon_rad.size(), 1U);
 }
 
 TEST(
@@ -307,7 +344,7 @@ TEST(RateResolvedProductionAdapter, FinalTraceAcceptsExactSixStateIdentity)
   EXPECT_EQ(decision.reason, "matching-certified-solution");
   EXPECT_EQ(
     decision.formulation,
-    contract::Formulation::VelocitySteeringProgress6State);
+    contract::Formulation::VelocitySteeringYawResponseProgress7State);
   EXPECT_EQ(decision.execution_plan_id, 7U);
   EXPECT_EQ(decision.execution_certificate_decision_id, 23U);
 }

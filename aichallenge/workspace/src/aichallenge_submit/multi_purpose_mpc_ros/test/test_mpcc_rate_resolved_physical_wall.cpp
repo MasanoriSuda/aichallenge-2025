@@ -22,7 +22,7 @@ contract::MpccProblemContext source_context()
   context.stage_geometry_id = 30U;
   context.horizon_steps = 2U;
   context.formulation =
-    contract::Formulation::VelocitySteeringProgress6State;
+    contract::Formulation::VelocitySteeringYawResponseProgress7State;
   context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-v1";
@@ -59,6 +59,7 @@ wall::Snapshot snapshot()
   value.current_pose = recovery::Pose2D{0.0, 0.0, 0.0};
   value.control_prefix = {value.current_pose};
   value.trajectory.progress_origin_m = 0.0;
+  value.trajectory.elapsed_time_sec = {0.1, 0.2};
   value.trajectory.path_distance_m = {1.0, 2.0};
   value.trajectory.lateral_m = {0.0, 0.0};
   value.trajectory.lag_m = {0.0, 0.0};

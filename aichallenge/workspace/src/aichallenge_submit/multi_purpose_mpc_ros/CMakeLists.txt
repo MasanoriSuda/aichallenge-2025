@@ -371,8 +371,6 @@ target_include_directories(mpc_controller_cpp PRIVATE
 target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_awsim_boost_start_dash
   ${PROJECT_NAME}_awsim_control_mode_guard
-  ${PROJECT_NAME}_canonical_execution_plan_adapter
-  ${PROJECT_NAME}_canonical_retained_world_revalidation
   ${PROJECT_NAME}_path_core
   ${PROJECT_NAME}_mpcc_progress
   ${PROJECT_NAME}_mpcc_rate_resolved_shadow
@@ -387,7 +385,6 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_steering_state_contract
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_latest_only_worker
-  ${PROJECT_NAME}_follow_canonical_async
   ${PROJECT_NAME}_overtake_decision_trace
   ${PROJECT_NAME}_overtake_execution_orchestrator
   ${PROJECT_NAME}_mpc_state_prediction

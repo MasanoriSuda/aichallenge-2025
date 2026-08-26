@@ -33,6 +33,11 @@ struct Identity
 
 bool identity_valid(const Identity & identity) noexcept;
 bool same_identity(const Identity & lhs, const Identity & rhs) noexcept;
+std::uint64_t fingerprint_control_pose_path(
+  const std::vector<recovery::Pose2D> & measured_to_control_path,
+  const recovery::Pose2D & control_pose) noexcept;
+std::uint64_t fingerprint_course_frame_window(
+  const std::vector<mpc_stage_geometry::CourseFrameKnot> & knots) noexcept;
 
 /// Immutable input for a complete current-world footprint proof. The shared
 /// grid owner is required because this object crosses the control-thread

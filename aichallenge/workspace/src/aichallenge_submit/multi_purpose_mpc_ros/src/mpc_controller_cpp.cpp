@@ -10,11 +10,7 @@
 #include <geometry_msgs/msg/vector3.hpp>
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/awsim_control_mode_guard.hpp>
-#include <multi_purpose_mpc_ros/canonical_execution_plan.hpp>
-#include <multi_purpose_mpc_ros/canonical_execution_plan_adapter.hpp>
-#include <multi_purpose_mpc_ros/canonical_retained_world_revalidation.hpp>
 #include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
-#include <multi_purpose_mpc_ros/canonical_normal_async.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
@@ -124,15 +120,7 @@ using SteadyClock = std::chrono::steady_clock;
 namespace path_core = ::multi_purpose_mpc_ros::path_core;
 namespace awsim_boost = ::multi_purpose_mpc_ros::awsim_boost;
 namespace awsim_control_mode = ::multi_purpose_mpc_ros::awsim_control_mode;
-namespace canonical_plan = ::multi_purpose_mpc_ros::canonical_execution_plan;
-namespace canonical_plan_adapter =
-  ::multi_purpose_mpc_ros::canonical_execution_plan_adapter;
-namespace canonical_retained =
-  ::multi_purpose_mpc_ros::canonical_retained_revalidation;
-namespace canonical_retained_world =
-  ::multi_purpose_mpc_ros::canonical_retained_world_revalidation;
 namespace external_speed_loss = ::multi_purpose_mpc_ros::external_speed_loss;
-namespace follow_async = ::multi_purpose_mpc_ros::canonical_normal_async;
 namespace mpc_state_prediction = ::multi_purpose_mpc_ros::mpc_state_prediction;
 namespace mpc_stage_geometry = ::multi_purpose_mpc_ros::mpc_stage_geometry;
 namespace mpcc_contract = ::multi_purpose_mpc_ros::mpcc_execution_contract;
@@ -2642,8 +2630,6 @@ struct V2XBehaviorOutput
   /// Immutable executable artifact produced by the same selected dual branch
   /// as `overtake_selected_mission`.  It is entry evidence only; the live
   /// controller repeats current-world proof before publishing it.
-  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
-  overtake_preentry_canonical_plan;
   bool overtake_selected_side_conflict{false};
   int overtake_lookahead_inner_side{0};
   bool overtake_inner_preference_selected{false};
@@ -2813,8 +2799,6 @@ struct ExtendedMpccBranchArtifact
 {
   mpcc_progress::ExtendedBranchEvaluation evaluation;
   RateResolvedPreentryShadowEvaluation rate_resolved_preentry_shadow;
-  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
-  preentry_canonical_plan;
 };
 
 struct MpccLiteAsyncResult
@@ -6280,46 +6264,6 @@ struct ProgressContouringMpcPreparation
   double minimum_stage_distance_m{};
 };
 
-struct MpcOsqpTelemetryWindow
-{
-  std::uint64_t solve_count{};
-  std::uint64_t failure_count{};
-  std::uint64_t setup_count{};
-  std::uint64_t update_count{};
-  std::uint64_t rebuild_count{};
-  std::uint64_t warm_start_count{};
-  std::uint64_t warm_start_reject_count{};
-  std::uint64_t cold_reset_count{};
-  std::uint64_t total_iterations{};
-  int maximum_iterations{};
-  double total_ms{};
-  double maximum_total_ms{};
-  double solve_ms{};
-  double maximum_solve_ms{};
-};
-
-// Commandless tactical Gate A evidence. This bundle exists only long enough
-// to preserve the exact pre-entry plan selected by the left/right evaluator;
-// it is not a final normal-command selector or retained authority store.
-struct TacticalPreentrySelection
-{
-  std::optional<mpcc_contract::CanonicalNormalCommand> command;
-  std::optional<mpcc_contract::MpccProblemContext> problem;
-  std::optional<mpcc_contract::CertifiedMpccSolution> solution;
-  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> plan;
-  canonical_plan::CanonicalExecutionCursor cursor;
-  std::pair<std::vector<double>, std::vector<double>> prediction;
-  bool steering_continuity_certified{false};
-
-  bool complete() const noexcept
-  {
-    return command.has_value() && problem.has_value() && solution.has_value() &&
-      plan != nullptr && cursor.available && !prediction.first.empty() &&
-      prediction.first.size() == prediction.second.size() &&
-      steering_continuity_certified;
-  }
-};
-
 struct MpcControlCycleResult
 {
   Eigen::Vector2d control{Eigen::Vector2d::Zero()};
@@ -6605,40 +6549,6 @@ struct ControlCallbackTimingObservation
   const char * checkpoint{"entry"};
 };
 
-struct OvertakeCanonicalFreshShadowResult
-{
-  bool eligible{false};
-  race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason eligibility_reason{
-    race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason::
-    ProgressContouringInactive};
-  bool context_complete{false};
-  bool lateral_contract_satisfied{false};
-  bool execution_primal_accepted{false};
-  bool actuation_extracted{false};
-  bool trajectory_extracted{false};
-  bool physical_certificate_checked{false};
-  bool physically_certified{false};
-  bool canonical_chain_ready{false};
-  bool prediction_available{false};
-  bool selection_complete{false};
-  std::uint64_t decision_id{};
-  std::size_t warm_start_stage_advance{};
-  mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
-  double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
-  double required_lateral_tracking_reserve_m{};
-  double total_ms{};
-  double maximum_actuation_difference{
-    std::numeric_limits<double>::quiet_NaN()};
-  mpcc_progress::ExtendedExecutionPrimalNormalizationReason primal_reason{
-    mpcc_progress::ExtendedExecutionPrimalNormalizationReason::InvalidShape};
-  canonical_plan_adapter::FreshCanonicalCommandReason chain_reason{
-    canonical_plan_adapter::FreshCanonicalCommandReason::PlanRejected};
-  mpcc_contract::PhysicalWallCertificateDiagnostic physical_wall_diagnostic;
-  TacticalPreentrySelection selected;
-  std::string status{"not-eligible"};
-  std::string detail{"not-evaluated"};
-};
-
 struct CanonicalNormalPendingActuation
 {
   std::uint64_t decision_id{};
@@ -6662,55 +6572,6 @@ struct CanonicalNormalFinalActuationTelemetryWindow
   double maximum_optimized_steering_vs_final_difference_rad{};
 };
 
-// Canonical Follow and Overtake contracts compare physical rows with different
-// units and magnitudes (lateral/lag metres, speed, progress and dynamics).  A
-// single global residual scale can accept a lateral-bound breach merely because
-// another row carries a larger progress value.  Use independent physical row
-// tolerances wherever these candidates are admitted by a row-wise certificate.
-constexpr auto kCanonicalPhysicalRowTolerancePolicy =
-  persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized;
-
-/// Long-lived OSQP state for one tactical homotopy. Tactical MPC objects are
-/// immutable snapshots and intentionally short-lived; keeping solver state in
-/// the snapshot made every left/right evaluation a cold start. The context is
-/// shared with snapshots, but reset atomically whenever its planning identity
-/// changes.
-struct ExtendedBranchSolverContext
-{
-  explicit ExtendedBranchSolverContext(
-    const persistent_osqp::ConstraintPreconditioningPolicy policy =
-      persistent_osqp::ConstraintPreconditioningPolicy::None)
-  : solver(policy) {}
-
-  std::mutex mutex;
-  std::uint64_t context_epoch{};
-  std::string target_id;
-  int side_sign{};
-  int horizon_size{};
-  bool identity_initialized{false};
-  persistent_osqp::PersistentOsqpSolver solver;
-  persistent_osqp::CertifiedWarmStartStore certified_warm_start;
-  std::uint64_t solve_count{};
-  std::uint64_t reset_count{};
-  std::uint64_t warm_start_count{};
-};
-
-/// Shared numerical lifetime for the tactical five-state left/right Gate A.
-/// It cannot publish actuation; normal production belongs to the independent
-/// steering-rate-resolved six-state artifact store.
-struct OvertakeTacticalFiveStateLifecycle
-{
-  std::shared_ptr<ExtendedBranchSolverContext> solver_context;
-  // A fresh canonical solve spans warm-identity resolution, the persistent
-  // solver transaction, and certified warm-start publication.  Keep those
-  // three operations atomic when the async worker and a one-shot authority
-  // admission solve share this lifecycle.
-  std::mutex solver_transaction_mutex;
-  std::mutex warm_start_mutex;
-  std::optional<race_mpcc::ShadowWarmStartIdentity> warm_start_identity;
-  std::uint64_t context_epoch{};
-};
-
 struct MPC
 {
   MPC(
@@ -6726,11 +6587,6 @@ struct MPC
   {
     (void)use_obstacle_avoidance;
     (void)use_path_constraints_topic;
-    overtake_tactical_five_state_lifecycle_ =
-      std::make_shared<OvertakeTacticalFiveStateLifecycle>();
-    overtake_tactical_five_state_lifecycle_->solver_context =
-      std::make_shared<ExtendedBranchSolverContext>(
-      kCanonicalPhysicalRowTolerancePolicy);
     if (enable_async_tactical_worker) {
       rate_resolved_track_cruise_shadow_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
@@ -6767,12 +6623,6 @@ struct MPC
       mpcc_lite_async_mailbox_ = std::make_shared<MpccLiteAsyncMailbox>();
       mpcc_lite_async_mailbox_->context_epoch = mpcc_lite_async_context_epoch_;
       mpcc_lite_async_worker_ = std::make_unique<LatestOnlyWorker>();
-      extended_left_branch_solver_context_ =
-        std::make_shared<ExtendedBranchSolverContext>(
-        kCanonicalPhysicalRowTolerancePolicy);
-      extended_right_branch_solver_context_ =
-        std::make_shared<ExtendedBranchSolverContext>(
-        kCanonicalPhysicalRowTolerancePolicy);
       rate_resolved_preentry_left_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_preentry_right_solver_context_ =
@@ -6879,14 +6729,6 @@ struct MPC
     snapshot->mpcc_lite_shadow_last_log_sec_ = mpcc_lite_shadow_last_log_sec_;
     snapshot->mpcc_lite_shadow_last_feasible_resolution_ =
       mpcc_lite_shadow_last_feasible_resolution_;
-    snapshot->mpcc_lite_control_last_feasible_entry_mission_ =
-      mpcc_lite_control_last_feasible_entry_mission_;
-    snapshot->mpcc_lite_control_last_feasible_entry_plan_ =
-      mpcc_lite_control_last_feasible_entry_plan_;
-    snapshot->mpcc_lite_control_last_feasible_target_id_ =
-      mpcc_lite_control_last_feasible_target_id_;
-    snapshot->mpcc_lite_control_last_feasible_entry_sec_ =
-      mpcc_lite_control_last_feasible_entry_sec_;
     snapshot->mpcc_frenet_dp_last_path_distances_ =
       mpcc_frenet_dp_last_path_distances_;
     snapshot->mpcc_frenet_dp_last_lateral_path_ =
@@ -6910,16 +6752,10 @@ struct MPC
     snapshot->mpcc_lite_shadow_last_feasible_side_sign_ =
       mpcc_lite_shadow_last_feasible_side_sign_;
     snapshot->mpcc_lite_async_context_epoch_ = mpcc_lite_async_context_epoch_;
-    snapshot->extended_left_branch_solver_context_ =
-      extended_left_branch_solver_context_;
-    snapshot->extended_right_branch_solver_context_ =
-      extended_right_branch_solver_context_;
     snapshot->rate_resolved_preentry_left_solver_context_ =
       rate_resolved_preentry_left_solver_context_;
     snapshot->rate_resolved_preentry_right_solver_context_ =
       rate_resolved_preentry_right_solver_context_;
-    snapshot->overtake_tactical_five_state_lifecycle_ =
-      overtake_tactical_five_state_lifecycle_;
     snapshot->next_overtake_episode_id_ = next_overtake_episode_id_;
     snapshot->dynamic_obstacle_lateral_escape_attempt_tracker_ =
       dynamic_obstacle_lateral_escape_attempt_tracker_;
@@ -7529,11 +7365,6 @@ struct MPC
     mpcc_lite_shadow_last_log_sec_ =
       -std::numeric_limits<double>::infinity();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
-    mpcc_lite_control_last_feasible_entry_mission_.reset();
-    mpcc_lite_control_last_feasible_entry_plan_.reset();
-    mpcc_lite_control_last_feasible_target_id_.clear();
-    mpcc_lite_control_last_feasible_entry_sec_ =
-      -std::numeric_limits<double>::infinity();
     mpcc_frenet_dp_last_path_distances_.clear();
     mpcc_frenet_dp_last_lateral_path_.clear();
     mpcc_frenet_dp_last_target_id_.clear();
@@ -8412,14 +8243,9 @@ struct MPC
     const V2XTacticalSideAssessment & assessment,
     const int horizon_size, const double now_sec,
     const OvertakeArtifactIdentitySeed & artifact_identity,
-    std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> * const
-    preentry_canonical_plan,
     RateResolvedPreentryShadowEvaluation * const
     rate_resolved_preentry_shadow)
   {
-    if (preentry_canonical_plan != nullptr) {
-      preentry_canonical_plan->reset();
-    }
     if (rate_resolved_preentry_shadow != nullptr) {
       *rate_resolved_preentry_shadow =
         RateResolvedPreentryShadowEvaluation{};
@@ -8428,251 +8254,30 @@ struct MPC
     evaluation.side_sign = assessment.side;
     try {
       std::string reject_reason;
-      auto prospective = build_prospective_extended_branch_problem(
+      const auto prospective = build_prospective_extended_branch_problem(
         source_behavior, assessment, horizon_size, now_sec,
         artifact_identity, reject_reason);
       if (!prospective.has_value()) {
         evaluation.failure_reason = reject_reason;
         return evaluation;
       }
-      evaluation.attempted = true;
+
+      auto six_state = evaluate_rate_resolved_preentry_shadow(
+        prospective->source_problem, prospective->extended_problem,
+        prospective->intent, source_behavior, assessment,
+        std::max<std::uint64_t>(
+          1U, artifact_identity.source_mission_generation + 1U),
+        now_sec);
+      evaluation = rate_resolved_preentry_branch_evaluation(six_state);
       evaluation.candidate_source = prospective->candidate_source;
       evaluation.prefix_only = prospective->prefix_only;
-      MpcProblem legacy = std::move(prospective->source_problem);
-      auto extended = std::optional<ExtendedProgressMpcProblem>{
-        std::move(prospective->extended_problem)};
-      const auto prospective_intent = prospective->intent;
-      const int tracking_wp_id = legacy.tracking_wp_id;
-      const int effective_horizon = extended->N;
       if (rate_resolved_preentry_shadow != nullptr) {
-        *rate_resolved_preentry_shadow =
-          evaluate_rate_resolved_preentry_shadow(
-          legacy, extended.value(), prospective_intent, source_behavior,
-          assessment,
-          std::max<std::uint64_t>(
-            1U, artifact_identity.source_mission_generation + 1U),
-          now_sec);
-      }
-      if (active_extended_branch_solver_context_ != nullptr) {
-        active_extended_branch_horizon_size_ = effective_horizon;
-      }
-      const auto outcome = solve_extended_progress_problem(extended.value(), now_sec);
-      evaluation.solve_ms = outcome.telemetry.solve_ms;
-      evaluation.iterations = outcome.telemetry.iterations;
-      evaluation.warm_start_applied = last_extended_branch_warm_start_applied_;
-      evaluation.solver_context_reset = last_extended_branch_context_reset_;
-      evaluation.solver_context_solve_count =
-        last_extended_branch_context_solve_count_;
-      if (!outcome.result.has_value()) {
-        evaluation.failure_reason = outcome.failure_detail;
-        return evaluation;
-      }
-      const auto execution_primal =
-        mpcc_progress::normalize_extended_execution_primal(
-        outcome.result->primal, extended->l, extended->u,
-        outcome.result->constraint_violation,
-        outcome.result->constraint_tolerance, effective_horizon);
-      if (
-        execution_primal.reason !=
-        mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted)
-      {
-        evaluation.failure_reason = std::string{
-          "extended branch execution primal rejected: "} +
-          mpcc_progress::extended_execution_primal_normalization_reason_name(
-          execution_primal.reason);
-        return evaluation;
-      }
-      const auto & primal = execution_primal.primal;
-      constexpr int nx = mpcc_progress::kExtendedStateDimension;
-      const int nx_N = nx * (effective_horizon + 1);
-      if (
-        primal.size() != extended->P.rows() ||
-        primal.size() <= nx * effective_horizon + 4)
-      {
-        evaluation.failure_reason = "extended branch solution size mismatch";
-        return evaluation;
-      }
-
-      // A QP-feasible branch is not necessarily physically executable.  The
-      // stage corridor is expressed in Frenet centre coordinates, whereas the
-      // final wall monitor evaluates the yawed vehicle footprint.  Validate
-      // the exact solved branch before it can participate in left/right
-      // selection; otherwise a nominally better wall-side branch is selected
-      // first and rejected only after ShiftOut has already started.
-      evaluation.physical_wall_validation_attempted = true;
-      evaluation.physical_wall_validation_scope = to_string(
-        SolvedExecutionWallValidationScope::SweptFromCurrentPose);
-      const auto robust_clearance = resolve_robust_clearance(
-        tracking_wp_id, effective_horizon);
-      const double physical_wall_clearance_m = std::max(
-        0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
-      const double planning_wall_clearance_m = robust_clearance.valid ?
-        robust_clearance.wall_planning_clearance_m : physical_wall_clearance_m;
-      const auto wall_contract =
-        overtake_orchestrator::resolve_wall_clearance_contract(
-        physical_wall_clearance_m, planning_wall_clearance_m,
-        cfg.v2x_behavior.overtake_line.runtime_wall_preplan_enabled,
-        std::max(
-          0.0,
-          cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve));
-      evaluation.physical_wall_required_clearance_m = wall_contract.valid ?
-        wall_contract.required_clearance_m : planning_wall_clearance_m;
-      const double extraction_tolerance =
-        std::isfinite(outcome.result->maximum_constraint_violation) ?
-        std::max(
-          1e-5,
-          outcome.result->maximum_constraint_violation + 1e-6) : 1e-5;
-      std::string physical_wall_reject_reason;
-      auto exact_wall_proof = build_exact_extended_wall_proof_input(
-        legacy, extended.value(), primal, extraction_tolerance,
-        physical_wall_reject_reason);
-      if (!exact_wall_proof.has_value()) {
-        evaluation.failure_reason = physical_wall_reject_reason;
-        return evaluation;
-      }
-      evaluation.physical_wall_validation_passed =
-        solved_mpcc_execution_path_wall_safe(
-        exact_wall_proof->aligned, exact_wall_proof->exact.path_distance_m,
-        tracking_wp_id, effective_horizon,
-        exact_wall_proof->lateral_lower_m,
-        exact_wall_proof->lateral_upper_m,
-        evaluation.physical_wall_required_clearance_m,
-        physical_wall_reject_reason, extraction_tolerance,
-        SolvedExecutionWallValidationScope::SweptFromCurrentPose);
-      if (!evaluation.physical_wall_validation_passed) {
-        evaluation.failure_reason =
-          "physical execution contract: " + physical_wall_reject_reason;
-        return evaluation;
-      }
-      const bool target_release_certified =
-        source_behavior.locked_target_current_body_footprints_separated &&
-        source_behavior.locked_target_footprint_prediction_valid &&
-        source_behavior.locked_target_predicted_body_footprint_sweep_separated;
-      if (!target_release_certified) {
-        double planned_ego_speed_mps = std::max(1.0, current_speed_mps_);
-        for (const double velocity_mps : exact_wall_proof->exact.velocity_mps) {
-          if (std::isfinite(velocity_mps)) {
-            planned_ego_speed_mps = std::max(
-              planned_ego_speed_mps, std::max(0.0, velocity_mps));
-          }
-        }
-        const auto target_tube = build_current_overtake_target_tube(
-          source_behavior, exact_wall_proof->exact.path_distance_m,
-          planned_ego_speed_mps);
-        const auto target_path = target_tube.valid ?
-          overtake_core::validate_frenet_dp_target_bound_horizon(
-          overtake_core::FrenetDpTargetBoundHorizonRequest{
-            true, assessment.side,
-            std::max(0.0, cfg.v2x_gap.vehicle_radius),
-            exact_wall_proof->exact.lateral_m, target_tube.lateral_m,
-            target_tube.separation_active}) :
-          overtake_core::FrenetDpTargetBoundHorizonResolution{};
-        if (!target_tube.valid || !target_path.valid || !target_path.feasible) {
-          std::ostringstream reason;
-          reason << "physical execution target contract: "
-                 << target_tube.reason;
-          if (target_tube.valid) {
-            reason << ", sample=" << target_path.failure_index
-                   << ", separation="
-                   << target_path.minimum_signed_separation_m << " m";
-          }
-          evaluation.failure_reason = reason.str();
-          return evaluation;
-        }
-      }
-      legacy.progress_execution_target_exclusion_certified = true;
-      evaluation.physical_execution_certificate_valid = true;
-      evaluation.physical_execution_certificate_source_sec = now_sec;
-      evaluation.physical_execution_certificate_source_course_progress_m =
-        exact_wall_proof->exact.progress_origin_m;
-      evaluation.physical_execution_certificate_path_distances_m =
-        exact_wall_proof->exact.path_distance_m;
-      evaluation.physical_execution_certificate_lateral_path_m =
-        exact_wall_proof->exact.lateral_m;
-      evaluation.physical_execution_certificate_exact_trajectory =
-        std::move(exact_wall_proof->exact);
-      evaluation.physical_execution_certificate_target_provenance =
-        selected_target_provenance(source_behavior);
-
-      double quadratic_cost = 0.0;
-      for (int outer = 0; outer < extended->P.outerSize(); ++outer) {
-        for (Eigen::SparseMatrix<double>::InnerIterator it(extended->P, outer); it; ++it) {
-          const double contribution = primal[it.row()] * it.value() * primal[it.col()];
-          quadratic_cost += it.row() == it.col() ? 0.5 * contribution : contribution;
-        }
-      }
-      evaluation.objective = quadratic_cost + extended->q.dot(primal);
-      evaluation.minimum_lateral_bound_reserve_m =
-        std::numeric_limits<double>::infinity();
-      for (int stage = 1; stage < effective_horizon + 1; ++stage) {
-        const int lateral_index = nx * stage + mpcc_progress::kExtendedLateralIndex;
-        const int box_row = nx_N + lateral_index;
-        const double lateral = primal[lateral_index];
-        const double lower = extended->l[box_row];
-        const double upper = extended->u[box_row];
-        if (
-          !std::isfinite(lateral) || !std::isfinite(lower) || !std::isfinite(upper) ||
-          lower > upper)
-        {
-          evaluation.failure_reason = "extended branch lateral bounds invalid";
-          return evaluation;
-        }
-        evaluation.minimum_lateral_bound_reserve_m = std::min(
-          evaluation.minimum_lateral_bound_reserve_m,
-          std::min(lateral - lower, upper - lateral));
-      }
-      const int terminal = nx * effective_horizon;
-      evaluation.terminal_progress_m =
-        primal[terminal + mpcc_progress::kExtendedProgressIndex];
-      evaluation.terminal_velocity_mps =
-        primal[terminal + mpcc_progress::kExtendedVelocityIndex];
-      evaluation.feasible =
-        std::isfinite(evaluation.objective) &&
-        std::isfinite(evaluation.minimum_lateral_bound_reserve_m) &&
-        std::isfinite(evaluation.terminal_progress_m) &&
-        std::isfinite(evaluation.terminal_velocity_mps);
-      if (!evaluation.feasible) {
-        evaluation.failure_reason = "extended branch metrics are non-finite";
-      } else {
-        // Preserve the executable artifact from this already-solved branch.
-        // Reducing it to Mission metrics here forced production to launch a
-        // second solve after ShiftOut had already taken authority.
-        const auto target_provenance = selected_target_provenance(source_behavior);
-        mpcc_contract::MpccProblemContext prospective_context;
-        prospective_context.decision_id = active_control_decision_id_;
-        prospective_context.observation_generation = active_control_decision_id_;
-        prospective_context.intent = prospective_intent;
-        prospective_context.intent_generation =
-          std::max<std::uint64_t>(
-          1U, artifact_identity.source_mission_generation + 1U);
-        prospective_context.target_id = source_behavior.target_vehicle_id;
-        prospective_context.target_obstacle_generation =
-          target_provenance.observation_generation;
-        prospective_context.execution_side_sign = assessment.side;
-        prospective_context.formulation =
-          mpcc_contract::Formulation::VelocityProgress5State;
-        prospective_context = seal_problem_context_for_problem(
-          legacy, std::move(prospective_context), effective_horizon);
-        const auto canonical = evaluate_overtake_canonical_fresh_shadow(
-          legacy, extended.value(), outcome.result.value(), now_sec,
-          prospective_context);
-        if (!canonical.selection_complete || canonical.selected.plan == nullptr) {
-          evaluation.feasible = false;
-          evaluation.failure_reason =
-            std::string{"pre-entry canonical artifact rejected: "} +
-            canonical.status + "/" + canonical.detail;
-        } else if (preentry_canonical_plan == nullptr) {
-          evaluation.feasible = false;
-          evaluation.failure_reason =
-            "pre-entry canonical artifact output unavailable";
-        } else {
-          *preentry_canonical_plan = canonical.selected.plan;
-        }
+        *rate_resolved_preentry_shadow = std::move(six_state);
       }
     } catch (const std::exception & error) {
       evaluation.failure_reason = error.what();
     } catch (...) {
-      evaluation.failure_reason = "unknown extended branch exception";
+      evaluation.failure_reason = "unknown six-state branch exception";
     }
     return evaluation;
   }
@@ -8693,21 +8298,12 @@ struct MPC
         return artifact;
       }
       auto & branch = snapshot->planner;
-      branch->active_extended_branch_solver_context_ = assessment.side > 0 ?
-        branch->extended_left_branch_solver_context_ :
-        branch->extended_right_branch_solver_context_;
       branch->active_rate_resolved_preentry_solver_context_ =
         assessment.side > 0 ?
         branch->rate_resolved_preentry_left_solver_context_ :
         branch->rate_resolved_preentry_right_solver_context_;
-      branch->active_extended_branch_context_epoch_ =
-        mpcc_lite_async_context_epoch_;
-      branch->active_extended_branch_target_id_ = behavior.target_vehicle_id;
-      branch->active_extended_branch_side_sign_ = assessment.side;
-      branch->active_extended_branch_horizon_size_ = horizon_size;
       artifact.evaluation = branch->evaluate_extended_mpcc_branch(
         behavior, assessment, horizon_size, now_sec, artifact_identity,
-        &artifact.preentry_canonical_plan,
         &artifact.rate_resolved_preentry_shadow);
       return artifact;
     } catch (const std::exception & error) {
@@ -8865,15 +8461,11 @@ struct MPC
     }
     behavior.extended_mpcc_right_branch = std::move(right_artifact.evaluation);
     behavior.extended_mpcc_left_branch = std::move(left_artifact.evaluation);
-    behavior.extended_mpcc_branch_selection = mpcc_progress::select_extended_branch(
-      mpcc_progress::ExtendedBranchSelectionRequest{
-        behavior.extended_mpcc_left_branch,
-        behavior.extended_mpcc_right_branch,
-        artifact_identity.source_side_sign,
-        behavior.overtake_pass_side_sign,
-        behavior.opponent_side_replan_no_return,
-        cfg.progress_contouring_dual_branch_minimum_objective_advantage,
-        cfg.progress_contouring_dual_branch_minimum_bound_reserve_m});
+    // Diagnostics and tactical selection now expose the same six-state result.
+    // There is no second five-state branch decision which can veto or replace
+    // this homotopy before causal Gate A admission.
+    behavior.extended_mpcc_branch_selection =
+      behavior.rate_resolved_preentry_branch_selection;
     const auto & selection = behavior.extended_mpcc_branch_selection;
     const bool new_entry =
       artifact_identity.source_phase == OvertakeLinePhase::Idle &&
@@ -8891,7 +8483,6 @@ struct MPC
         behavior.overtake_tiny_shift_direct_pass = false;
         behavior.validated_overtake_entry_longitudinal_owner = false;
         behavior.validated_overtake_entry_immediate_execution = false;
-        behavior.overtake_preentry_canonical_plan.reset();
         behavior.reason = std::string{"dual MPCC entry held: "} + reason;
       };
     if (!selection.valid || selection.selected_side_sign == 0) {
@@ -8934,34 +8525,19 @@ struct MPC
       }
       return;
     }
-    const auto & selected_branch = selection.selected_side_sign > 0 ?
-      behavior.extended_mpcc_left_branch : behavior.extended_mpcc_right_branch;
-    const auto & selected_preentry_plan = selection.selected_side_sign > 0 ?
-      left_artifact.preentry_canonical_plan :
-      right_artifact.preentry_canonical_plan;
-    if (
-      selected_branch.side_sign == selected_mission.pass_side_sign &&
-      selected_branch.physical_execution_certificate_valid &&
-      selected_branch.physical_wall_validation_attempted &&
-      selected_branch.physical_wall_validation_passed)
-    {
-      selected_mission.physical_execution_certificate_valid = true;
-      selected_mission.physical_execution_certificate_source_sec =
-        selected_branch.physical_execution_certificate_source_sec;
-      selected_mission.physical_execution_certificate_source_course_progress_m =
-        selected_branch.physical_execution_certificate_source_course_progress_m;
-      selected_mission.physical_execution_certificate_required_wall_clearance_m =
-        selected_branch.physical_wall_required_clearance_m;
-      selected_mission.physical_execution_certificate_path_distances_m =
-        selected_branch.physical_execution_certificate_path_distances_m;
-      selected_mission.physical_execution_certificate_lateral_path_m =
-        selected_branch.physical_execution_certificate_lateral_path_m;
-      selected_mission.physical_execution_certificate_exact_trajectory =
-        selected_branch.physical_execution_certificate_exact_trajectory;
-      selected_mission.physical_execution_certificate_target_provenance =
-        selected_branch.physical_execution_certificate_target_provenance;
-    }
-    behavior.overtake_preentry_canonical_plan = selected_preentry_plan;
+    // This Mission is a tactical hint only.  The causal worker must bind the
+    // current-world six-state execution certificate atomically at Gate A.
+    selected_mission.physical_execution_certificate_valid = false;
+    selected_mission.physical_execution_certificate_source_sec =
+      -std::numeric_limits<double>::infinity();
+    selected_mission.physical_execution_certificate_source_course_progress_m =
+      std::numeric_limits<double>::quiet_NaN();
+    selected_mission.physical_execution_certificate_required_wall_clearance_m =
+      std::numeric_limits<double>::quiet_NaN();
+    selected_mission.physical_execution_certificate_path_distances_m.clear();
+    selected_mission.physical_execution_certificate_lateral_path_m.clear();
+    selected_mission.physical_execution_certificate_exact_trajectory = {};
+    selected_mission.physical_execution_certificate_target_provenance = {};
     const bool base_line = std::abs(selected_mission.goal_lateral_m) <= kEps;
     behavior.overtake_pass_side_sign = selection.selected_side_sign;
     behavior.overtake_gap_available = true;
@@ -9110,11 +8686,6 @@ struct MPC
     mpcc_lite_shadow_last_log_sec_ =
       -std::numeric_limits<double>::infinity();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
-    mpcc_lite_control_last_feasible_entry_mission_.reset();
-    mpcc_lite_control_last_feasible_entry_plan_.reset();
-    mpcc_lite_control_last_feasible_target_id_.clear();
-    mpcc_lite_control_last_feasible_entry_sec_ =
-      -std::numeric_limits<double>::infinity();
     mpcc_frenet_dp_last_path_distances_.clear();
     mpcc_frenet_dp_last_lateral_path_.clear();
     mpcc_frenet_dp_last_target_id_.clear();
@@ -15537,96 +15108,6 @@ struct MPC
           (resolution.minimum_speed_proof.used_certified_execution_speed ?
           "certified-execution" : "mission-rollout"));
       };
-    const auto apply_mpcc_entry_execution_contract = [&] (
-      overtake_core::OvertakeMissionCandidate & mission,
-      const std::shared_ptr<const canonical_plan::CanonicalExecutionPlan> &
-      preentry_plan,
-      const char * source)
-      {
-        if (mission.pass_side_sign != -1 && mission.pass_side_sign != 1) {
-          return false;
-        }
-        auto & authoritative_assessment = mission.pass_side_sign > 0 ?
-          left_assessment : right_assessment;
-        const bool physical_execution_certificate_required =
-          cfg.progress_contouring_dual_branch_enabled;
-        std::string certificate_reason = "not-required";
-        if (
-          physical_execution_certificate_required &&
-          preentry_plan == nullptr)
-        {
-          certificate_reason = "pre-entry canonical plan unavailable";
-        }
-        if (
-          physical_execution_certificate_required &&
-          (preentry_plan == nullptr ||
-          !revalidate_overtake_entry_execution_certificate(
-            mission, *preentry_plan, output,
-            ref_wp_id, N, lb, ub, now_sec, certificate_reason)))
-        {
-          authoritative_assessment.gap_available = false;
-          authoritative_assessment.selected_mission.reset();
-          authoritative_assessment.mpcc_receding_mission.reset();
-          authoritative_assessment.reason =
-            std::string{"physical execution certificate rejected: "} +
-            certificate_reason;
-          authoritative_assessment.guard_reason = authoritative_assessment.reason;
-          side_selection = {
-            overtake_core::PassSide::None,
-            overtake_core::SideSelectionReason::NoFeasibleSide};
-          side_selected_for_execution = false;
-          static rclcpp::Clock certificate_log_clock{RCL_STEADY_TIME};
-          RCLCPP_WARN_THROTTLE(
-            rclcpp::get_logger("mpc_controller"), certificate_log_clock, 250,
-            "Overtake entry commit rejected: source=%s, target=%s, side=%d, "
-            "certificate=%d, age=%.3f s, source_s=%.3f m, current_s=%.3f m, "
-            "required_wall=%.3f m, reason=%s, wp_id=%d",
-            source, output.target_vehicle_id.c_str(), mission.pass_side_sign,
-            mission.physical_execution_certificate_valid ? 1 : 0,
-            now_sec - mission.physical_execution_certificate_source_sec,
-            mission.physical_execution_certificate_source_course_progress_m,
-            model != nullptr ? model->s : std::numeric_limits<double>::quiet_NaN(),
-            mission.physical_execution_certificate_required_wall_clearance_m,
-            certificate_reason.c_str(), model != nullptr ? model->wp_id : -1);
-          return false;
-        }
-        authoritative_assessment.side = mission.pass_side_sign;
-        authoritative_assessment.gap_available = true;
-        authoritative_assessment.selected_mission = mission;
-        authoritative_assessment.mpcc_receding_mission = mission;
-        authoritative_assessment.corridor_center_ey = mission.goal_lateral_m;
-        authoritative_assessment.required_lateral_shift = mission.lateral_shift_m;
-        authoritative_assessment.required_lateral_accel =
-          mission.max_required_lateral_accel_mps2;
-        authoritative_assessment.minimum_motion_goal_available = true;
-        authoritative_assessment.base_line_clear =
-          std::abs(mission.goal_lateral_m) <= kEps;
-        authoritative_assessment.direct_base_line_pass_ready =
-          mission.direct_pass && authoritative_assessment.base_line_clear &&
-          mission.current_position_clear;
-        authoritative_assessment.direct_tiny_shift_pass_ready =
-          mission.direct_pass && !authoritative_assessment.base_line_clear &&
-          mission.current_position_clear;
-        std::ostringstream authority_reason;
-        authority_reason << "MPCC-lite entry contract selected: source=" << source
-                         << ", candidate=" <<
-          (mission.progressive_entry ? "progressive" : "complete")
-                         << ", physical=" <<
-          (mission.physical_execution_certificate_valid ? "certified" : "not-required")
-                         << ", speed_proof=" <<
-          (std::isfinite(certified_execution_minimum_speed(mission)) ?
-          "certified-execution" : "mission-rollout");
-        authoritative_assessment.reason = authority_reason.str();
-        authoritative_assessment.guard_reason = authoritative_assessment.reason;
-        side_selection = {
-          pass_side(mission.pass_side_sign),
-          overtake_core::SideSelectionReason::HigherQuality};
-        side_selected_for_execution = true;
-        if (mission.progressive_entry) {
-          mpcc_lite_progressive_entry_authorized_side = mission.pass_side_sign;
-        }
-        return true;
-      };
     if (async_shadow_enabled) {
       if (accepted_async_tactical_result != nullptr) {
         const auto & async_result = *accepted_async_tactical_result;
@@ -15662,161 +15143,53 @@ struct MPC
         suppress_retry_blocked_async_mission(
           output.mpcc_lite_cross_side_replan_mission);
 
-        const auto async_entry_mission =
-          async_behavior.overtake_selected_mission;
-        const int async_entry_side =
-          async_behavior.overtake_pass_side_sign;
         const bool async_new_entry_context =
           locked_pass_side == 0 &&
           overtake_line_state_.phase == OvertakeLinePhase::Idle &&
           fresh_overtake_entry_commit_window_open;
-        const auto async_extended_entry_admission =
+        const auto & async_selection =
+          async_behavior.rate_resolved_preentry_branch_selection;
+        const auto & async_mission_hint =
+          async_behavior.rate_resolved_preentry_selected_mission_hint;
+        const auto async_entry_admission =
           mpcc_progress::resolve_extended_branch_entry_admission(
           mpcc_progress::ExtendedBranchEntryAdmissionRequest{
             cfg.progress_contouring_dual_branch_enabled,
             async_new_entry_context,
-            async_behavior.extended_mpcc_branch_selection.valid,
-            async_behavior.extended_mpcc_branch_selection.selected_side_sign,
-            async_entry_mission.has_value() ?
-            async_entry_mission->pass_side_sign : async_entry_side});
+            async_selection.valid,
+            async_selection.selected_side_sign,
+            async_mission_hint.has_value() ?
+            async_mission_hint->pass_side_sign : 0});
         if (
-          async_extended_entry_admission.valid &&
-          async_extended_entry_admission.hold_current_path)
+          async_entry_admission.valid &&
+          async_entry_admission.hold_current_path)
         {
           dual_entry_execution_contract_hold = true;
           dual_entry_execution_contract_reason =
             mpcc_progress::extended_branch_entry_admission_reason_name(
-            async_extended_entry_admission.reason);
+            async_entry_admission.reason);
           side_selection = {
             overtake_core::PassSide::None,
             overtake_core::SideSelectionReason::NoFeasibleSide};
           side_selected_for_execution = false;
           static rclcpp::Clock dual_entry_hold_log_clock{RCL_STEADY_TIME};
           RCLCPP_WARN_THROTTLE(
-            rclcpp::get_logger("mpc_controller"), dual_entry_hold_log_clock, 1000,
-            "Overtake dual execution entry held: target=%s, action=stay-current-safe-path, "
-            "reason=%s, L=%d/%d/%s/%.2f/%s, R=%d/%d/%s/%.2f/%s, wp_id=%d",
+            rclcpp::get_logger("mpc_controller"), dual_entry_hold_log_clock,
+            1000,
+            "Overtake six-state entry held: target=%s, "
+            "action=stay-current-safe-path, reason=%s, L=%d/%d/%s, "
+            "R=%d/%d/%s, wp_id=%d",
             output.target_vehicle_id.c_str(),
             dual_entry_execution_contract_reason.c_str(),
-            async_behavior.extended_mpcc_left_branch.
-            physical_wall_validation_attempted ? 1 : 0,
-            async_behavior.extended_mpcc_left_branch.
-            physical_wall_validation_passed ? 1 : 0,
-            async_behavior.extended_mpcc_left_branch.
-            physical_wall_validation_scope.c_str(),
-            async_behavior.extended_mpcc_left_branch.
-            physical_wall_required_clearance_m,
-            async_behavior.extended_mpcc_left_branch.failure_reason.empty() ?
-            "ok" : async_behavior.extended_mpcc_left_branch.failure_reason.c_str(),
-            async_behavior.extended_mpcc_right_branch.
-            physical_wall_validation_attempted ? 1 : 0,
-            async_behavior.extended_mpcc_right_branch.
-            physical_wall_validation_passed ? 1 : 0,
-            async_behavior.extended_mpcc_right_branch.
-            physical_wall_validation_scope.c_str(),
-            async_behavior.extended_mpcc_right_branch.
-            physical_wall_required_clearance_m,
-            async_behavior.extended_mpcc_right_branch.failure_reason.empty() ?
-            "ok" : async_behavior.extended_mpcc_right_branch.failure_reason.c_str(),
+            async_behavior.overtake_rate_resolved_preentry_left.attempted ? 1 : 0,
+            async_behavior.overtake_rate_resolved_preentry_left.complete ? 1 : 0,
+            async_behavior.overtake_rate_resolved_preentry_left.detail.c_str(),
+            async_behavior.overtake_rate_resolved_preentry_right.attempted ? 1 : 0,
+            async_behavior.overtake_rate_resolved_preentry_right.complete ? 1 : 0,
+            async_behavior.overtake_rate_resolved_preentry_right.detail.c_str(),
             model->wp_id);
         }
-        const auto async_entry_prefix_resolution = [&]() {
-            overtake_core::MpccLitePrefixExecutionResolution resolution;
-            if (!async_entry_mission.has_value()) {
-              return resolution;
-            }
-            if (!async_entry_mission->progressive_entry) {
-              resolution.valid = true;
-              resolution.admitted = true;
-              return resolution;
-            }
-            overtake_core::MpccLitePrefixExecutionRequest request;
-            request.new_entry_context = true;
-            request.before_no_return = true;
-            request.candidate_progressive = true;
-            request.candidate_feasible = async_entry_mission->feasible;
-            request.body_clear_deadline_checked =
-              async_entry_mission->body_clear_deadline_checked;
-            request.body_clear_deadline_feasible =
-              async_entry_mission->body_clear_deadline_feasible;
-            request.target_clearance_checked =
-              async_entry_mission->pass_target_uncertainty_checked ||
-              async_entry_mission->pass_target_clearance_checked;
-            request.minimum_target_surface_clearance_m =
-              async_entry_mission->pass_target_uncertainty_checked ?
-              async_entry_mission->
-              predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
-              async_entry_mission->predicted_minimum_pass_target_surface_clearance_m;
-            request.predicted_body_clear_time_sec =
-              async_entry_mission->predicted_body_clear_time_sec;
-            request.predicted_body_clear_distance_m =
-              async_entry_mission->predicted_body_clear_distance_m;
-            request.predicted_minimum_ego_speed_mps =
-              async_entry_mission->predicted_minimum_ego_speed_mps;
-            request.minimum_ego_speed_mps =
-              overtake_core::resolve_cross_side_minimum_speed_requirement(
-              std::max(0.0, current_speed_mps_),
-              std::max(0.0, output.overtake_entry_target_speed));
-            request.planning_minimum_ego_speed_mps =
-              async_entry_mission->planning_minimum_ego_speed_requirement_mps;
-            request.minimum_speed_tolerance_mps =
-              shadow_cfg.mpcc_lite_prefix_minimum_speed_tolerance_mps;
-            request.minimum_path_wall_clearance_m =
-              async_entry_mission->minimum_path_wall_clearance_m;
-            request.minimum_required_path_wall_clearance_m =
-              std::max(0.10, robust_wall_planning_clearance);
-            request.remaining_time_budget_sec =
-              std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit);
-            request.remaining_distance_budget_m =
-              std::max(0.0, shadow_cfg.pass_horizon_absolute_distance_limit);
-            configure_new_entry_completion_proof(
-              request, async_entry_mission.value(),
-              output.overtake_entry_target_speed);
-            return overtake_core::resolve_mpcc_lite_prefix_execution(request);
-          }();
         if (
-          async_entry_mission.has_value() &&
-          async_entry_mission->progressive_entry &&
-          !async_entry_prefix_resolution.admitted)
-        {
-          log_mpcc_entry_admission_rejection(
-            "async-result", async_entry_side, async_entry_mission.value(),
-            output.overtake_entry_target_speed, async_entry_prefix_resolution);
-        }
-        const bool async_entry_context =
-          async_new_entry_context &&
-          async_extended_entry_admission.valid &&
-          async_extended_entry_admission.admitted &&
-          (async_entry_side == -1 || async_entry_side == 1) &&
-          async_entry_mission.has_value() &&
-          async_behavior.overtake_preentry_canonical_plan != nullptr &&
-          async_entry_mission->pass_side_sign == async_entry_side &&
-          async_entry_mission->feasible &&
-          async_entry_prefix_resolution.valid &&
-          async_entry_prefix_resolution.admitted &&
-          !is_overtake_line_side_retry_blocked(
-            async_entry_side, output.target_vehicle_id, now_sec) &&
-          (!std::isfinite(async_entry_mission->dynamic_valid_until_sec) ||
-          now_sec <= async_entry_mission->dynamic_valid_until_sec + kEps);
-        if (async_entry_context) {
-          auto accepted_async_entry_mission = async_entry_mission.value();
-          if (apply_mpcc_entry_execution_contract(
-              accepted_async_entry_mission,
-              async_behavior.overtake_preentry_canonical_plan,
-              "async-result"))
-          {
-            output.overtake_preentry_canonical_plan =
-              async_behavior.overtake_preentry_canonical_plan;
-            mpcc_lite_control_last_feasible_entry_mission_ =
-              accepted_async_entry_mission;
-            mpcc_lite_control_last_feasible_entry_plan_ =
-              async_behavior.overtake_preentry_canonical_plan;
-            mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
-            mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
-            mpcc_authority_action =
-              overtake_core::MpccLiteAuthorityAction::SelectEntry;
-          }
-        } else if (
           output.mpcc_lite_same_side_replan_mission.has_value() ||
           output.mpcc_lite_cross_side_replan_mission.has_value())
         {
@@ -15950,19 +15323,12 @@ struct MPC
             output.rate_resolved_preentry_branch_selection;
           const auto & six_adoption =
             output.rate_resolved_preentry_adoption_shadow;
-          const bool selection_agree =
-            six_selection.valid ==
-            output.extended_mpcc_branch_selection.valid &&
-            (!six_selection.valid ||
-            six_selection.selected_side_sign ==
-            output.extended_mpcc_branch_selection.selected_side_sign);
           RCLCPP_INFO(
             rclcpp::get_logger("mpc_controller"),
             "Overtake six-state preentry shadow: "
             "L=%d/%d/%d/%d/%d/%d/%s/%.2f/%.2f/%.2f/%.2f/%.2f/%s,"
             "R=%d/%d/%d/%d/%d/%d/%s/%.2f/%.2f/%.2f/%.2f/%.2f/%s,"
-            "five_selected=%d,six_selected=%d,selection_agree=%d,"
-            "selection_valid=five%d/six%d,"
+            "selected=%d,selection_valid=%d,"
             "six_side=L%d/R%d,six_eligibility=L%s/R%s,six_reason=%s,"
             "adoption=%d/%d/%s/%s/target:%s/seq:%lu/intent:%s/"
             "time:snapshot:%.3f/prediction:%.3f/control:%.3f/age:%.3f/"
@@ -15999,10 +15365,7 @@ struct MPC
             six_right.terminal_progress_m,
             six_right.minimum_lateral_bound_reserve_m,
             six_right.detail.c_str(),
-            output.extended_mpcc_branch_selection.selected_side_sign,
             six_selection.selected_side_sign,
-            selection_agree ? 1 : 0,
-            output.extended_mpcc_branch_selection.valid ? 1 : 0,
             six_selection.valid ? 1 : 0,
             six_left.side_sign,
             six_right.side_sign,
@@ -16511,17 +15874,6 @@ struct MPC
           best_dp_corridor.tactical_strategy;
         mpcc_frenet_dp_last_feasible_sec_ = now_sec;
       }
-      const bool cached_entry_matches_last_feasible =
-        last_feasible_hold && best_shadow_side != 0 &&
-        mpcc_lite_control_last_feasible_entry_mission_.has_value() &&
-        mpcc_lite_control_last_feasible_entry_mission_->pass_side_sign ==
-        best_shadow_side &&
-        mpcc_lite_control_last_feasible_target_id_ == output.target_vehicle_id &&
-        now_sec - mpcc_lite_control_last_feasible_entry_sec_ <=
-        shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec + kEps;
-      if (!winning_mission.has_value() && cached_entry_matches_last_feasible) {
-        winning_mission = mpcc_lite_control_last_feasible_entry_mission_;
-      }
       const auto is_complete_rear_clear_mission =
         [](const std::optional<overtake_core::OvertakeMissionCandidate> & mission) {
           return mission.has_value() && !mission->progressive_entry &&
@@ -16803,34 +16155,10 @@ struct MPC
           locked_pass_side,
           best_shadow_branch});
       mpcc_authority_action = authority.action;
+      // Fresh entry is owned exclusively by the asynchronous causal six-state
+      // Gate A worker.  This local tactical shadow may still propose runtime
+      // replacements, but it cannot cache or admit a second entry artifact.
       if (
-        authority.action == overtake_core::MpccLiteAuthorityAction::SelectEntry &&
-        winning_mission.has_value() && authority.selected_side_sign != 0)
-      {
-        if (!last_feasible_hold && authority.selected_side_sign > 0) {
-          left_assessment = shadow_left_assessment;
-        } else if (!last_feasible_hold) {
-          right_assessment = shadow_right_assessment;
-        }
-        auto cached_mission = winning_mission.value();
-        cached_mission.pass_side_sign = authority.selected_side_sign;
-        const bool entry_contract_applied =
-          apply_mpcc_entry_execution_contract(
-          cached_mission, output.overtake_preentry_canonical_plan,
-          "dual-current");
-        // Prefix execution uses the shared progressive-entry admission.
-        // Complete Missions retain their full-plan contract.
-        if (
-          entry_contract_applied && !last_feasible_hold &&
-          output.overtake_preentry_canonical_plan != nullptr)
-        {
-          mpcc_lite_control_last_feasible_entry_mission_ = cached_mission;
-          mpcc_lite_control_last_feasible_entry_plan_ =
-            output.overtake_preentry_canonical_plan;
-          mpcc_lite_control_last_feasible_target_id_ = output.target_vehicle_id;
-          mpcc_lite_control_last_feasible_entry_sec_ = now_sec;
-        }
-      } else if (
         authority.action == overtake_core::MpccLiteAuthorityAction::ReplaceActive &&
         winning_mission.has_value() && authority.selected_side_sign == locked_pass_side)
       {
@@ -16842,11 +16170,6 @@ struct MPC
       {
         output.mpcc_lite_cross_side_replan_mission = winning_mission.value();
       } else if (shadow_runtime_hard_fault) {
-        mpcc_lite_control_last_feasible_entry_mission_.reset();
-        mpcc_lite_control_last_feasible_entry_plan_.reset();
-        mpcc_lite_control_last_feasible_target_id_.clear();
-        mpcc_lite_control_last_feasible_entry_sec_ =
-          -std::numeric_limits<double>::infinity();
         mpcc_frenet_dp_last_path_distances_.clear();
         mpcc_frenet_dp_last_lateral_path_.clear();
         mpcc_frenet_dp_last_target_id_.clear();
@@ -16938,164 +16261,6 @@ struct MPC
         mpcc_lite_shadow_last_logged_agreement_ = shadow_agrees;
         mpcc_lite_shadow_last_logged_hold_ = last_feasible_hold;
       }
-    }
-    const bool mpcc_entry_cache_fresh =
-      mpcc_lite_control_last_feasible_entry_mission_.has_value() &&
-      mpcc_lite_control_last_feasible_entry_plan_ != nullptr &&
-      std::isfinite(mpcc_lite_control_last_feasible_entry_sec_) &&
-      now_sec >= mpcc_lite_control_last_feasible_entry_sec_ &&
-      now_sec - mpcc_lite_control_last_feasible_entry_sec_ <=
-      shadow_cfg.mpcc_lite_shadow_last_feasible_max_age_sec + kEps;
-    const bool mpcc_entry_context_valid =
-      shadow_cfg.mpcc_lite_control_enabled &&
-      locked_pass_side == 0 &&
-      overtake_line_state_.phase == OvertakeLinePhase::Idle &&
-      has_front_vehicle && !start_grid_breakout_attempt &&
-      fresh_overtake_entry_commit_window_open &&
-      !output.target_vehicle_id.empty() &&
-      mpcc_lite_control_last_feasible_target_id_ == output.target_vehicle_id &&
-      effective_front_risk_level != FrontRiskLevel::EmergencyBrake &&
-      !overtake_solver_recovery_active_ && !overtake_forbidden_wp;
-    if (mpcc_entry_cache_fresh && mpcc_entry_context_valid) {
-      const auto & cached_mission =
-        mpcc_lite_control_last_feasible_entry_mission_.value();
-      std::optional<overtake_core::OvertakeMissionCandidate> admitted_mission;
-      bool progressive_prefix_admitted = false;
-      const bool cached_prediction_fresh =
-        !std::isfinite(cached_mission.dynamic_valid_until_sec) ||
-        now_sec <= cached_mission.dynamic_valid_until_sec + kEps;
-      const bool cached_complete_mission_valid =
-        cached_prediction_fresh && !cached_mission.progressive_entry &&
-        cached_mission.feasible && cached_mission.body_clear_deadline_checked &&
-        cached_mission.body_clear_deadline_feasible &&
-        cached_mission.rear_clear_prediction_checked &&
-        cached_mission.rear_clear_prediction_feasible &&
-        std::isfinite(cached_mission.predicted_rear_clear_time_sec) &&
-        cached_mission.predicted_rear_clear_time_sec >= 0.0 &&
-        std::isfinite(cached_mission.predicted_rear_clear_ego_distance_m) &&
-        cached_mission.predicted_rear_clear_ego_distance_m >= 0.0 &&
-        (cached_mission.pass_target_uncertainty_checked ||
-        cached_mission.pass_target_clearance_checked) &&
-        std::isfinite(
-          cached_mission.pass_target_uncertainty_checked ?
-          cached_mission.
-          predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
-          cached_mission.predicted_minimum_pass_target_surface_clearance_m) &&
-        (cached_mission.pass_target_uncertainty_checked ?
-        cached_mission.predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
-        cached_mission.predicted_minimum_pass_target_surface_clearance_m) >= -kEps &&
-        (cached_mission.pass_side_sign == -1 ||
-        cached_mission.pass_side_sign == 1);
-      if (cached_complete_mission_valid) {
-        admitted_mission = cached_mission;
-      } else if (
-        cached_mission.progressive_entry &&
-        (cached_mission.pass_side_sign == -1 ||
-        cached_mission.pass_side_sign == 1))
-      {
-        // The lease retains only target/side authority. Never replay the
-        // cached prefix itself: select and re-admit a prefix generated from
-        // the current V2X/track sample on the same side.
-        const auto & current_assessment = cached_mission.pass_side_sign > 0 ?
-          left_assessment : right_assessment;
-        std::optional<overtake_core::OvertakeMissionCandidate> current_prefix;
-        if (
-          current_assessment.selected_mission.has_value() &&
-          current_assessment.selected_mission->progressive_entry)
-        {
-          current_prefix = current_assessment.selected_mission;
-        } else if (
-          current_assessment.mpcc_receding_mission.has_value() &&
-          current_assessment.mpcc_receding_mission->progressive_entry)
-        {
-          current_prefix = current_assessment.mpcc_receding_mission;
-        }
-        if (
-          current_prefix.has_value() &&
-          current_prefix->pass_side_sign == cached_mission.pass_side_sign &&
-          (!std::isfinite(current_prefix->dynamic_valid_until_sec) ||
-          now_sec <= current_prefix->dynamic_valid_until_sec + kEps))
-        {
-          const double minimum_prefix_speed_mps =
-            overtake_core::resolve_cross_side_minimum_speed_requirement(
-            std::max(0.0, current_speed_mps_),
-            std::max(0.0, output.overtake_entry_target_speed));
-          overtake_core::MpccLitePrefixExecutionRequest prefix_request;
-          prefix_request.new_entry_context = true;
-          prefix_request.before_no_return = true;
-          prefix_request.candidate_progressive =
-            current_prefix->progressive_entry;
-          prefix_request.candidate_feasible = current_prefix->feasible;
-          prefix_request.body_clear_deadline_checked =
-            current_prefix->body_clear_deadline_checked;
-          prefix_request.body_clear_deadline_feasible =
-            current_prefix->body_clear_deadline_feasible;
-          prefix_request.target_clearance_checked =
-            current_prefix->pass_target_uncertainty_checked ||
-            current_prefix->pass_target_clearance_checked;
-          prefix_request.minimum_target_surface_clearance_m =
-            current_prefix->pass_target_uncertainty_checked ?
-            current_prefix->
-            predicted_minimum_pass_target_uncertainty_adjusted_clearance_m :
-            current_prefix->predicted_minimum_pass_target_surface_clearance_m;
-          prefix_request.predicted_body_clear_time_sec =
-            current_prefix->predicted_body_clear_time_sec;
-          prefix_request.predicted_body_clear_distance_m =
-            current_prefix->predicted_body_clear_distance_m;
-          prefix_request.predicted_minimum_ego_speed_mps =
-            current_prefix->predicted_minimum_ego_speed_mps;
-          prefix_request.minimum_ego_speed_mps = minimum_prefix_speed_mps;
-          prefix_request.planning_minimum_ego_speed_mps =
-            current_prefix->planning_minimum_ego_speed_requirement_mps;
-          prefix_request.minimum_speed_tolerance_mps =
-            shadow_cfg.mpcc_lite_prefix_minimum_speed_tolerance_mps;
-          prefix_request.minimum_path_wall_clearance_m =
-            current_prefix->minimum_path_wall_clearance_m;
-          prefix_request.minimum_required_path_wall_clearance_m =
-            std::max(0.10, robust_wall_planning_clearance);
-          prefix_request.remaining_time_budget_sec =
-            std::max(0.0, shadow_cfg.pass_horizon_absolute_time_limit);
-          prefix_request.remaining_distance_budget_m =
-            std::max(0.0, shadow_cfg.pass_horizon_absolute_distance_limit);
-          configure_new_entry_completion_proof(
-            prefix_request, current_prefix.value(),
-            output.overtake_entry_target_speed);
-          const auto prefix_execution =
-            overtake_core::resolve_mpcc_lite_prefix_execution(prefix_request);
-          progressive_prefix_admitted =
-            prefix_execution.valid && prefix_execution.admitted;
-          if (progressive_prefix_admitted) {
-            admitted_mission = current_prefix;
-          } else {
-            log_mpcc_entry_admission_rejection(
-              "cached-fresh", cached_mission.pass_side_sign,
-              current_prefix.value(), output.overtake_entry_target_speed,
-              prefix_execution);
-          }
-        }
-      }
-      if (admitted_mission.has_value()) {
-        auto & mission = admitted_mission.value();
-        if (apply_mpcc_entry_execution_contract(
-            mission, mpcc_lite_control_last_feasible_entry_plan_,
-            "cached-fresh"))
-        {
-          output.overtake_preentry_canonical_plan =
-            mpcc_lite_control_last_feasible_entry_plan_;
-        }
-      }
-    } else if (
-      mpcc_lite_control_last_feasible_entry_mission_.has_value() &&
-      (!mpcc_entry_cache_fresh ||
-      mpcc_lite_control_last_feasible_target_id_ != output.target_vehicle_id ||
-      effective_front_risk_level == FrontRiskLevel::EmergencyBrake ||
-      overtake_solver_recovery_active_))
-    {
-      mpcc_lite_control_last_feasible_entry_mission_.reset();
-      mpcc_lite_control_last_feasible_entry_plan_.reset();
-      mpcc_lite_control_last_feasible_target_id_.clear();
-      mpcc_lite_control_last_feasible_entry_sec_ =
-        -std::numeric_limits<double>::infinity();
     }
     // The diagnostic fields were initially populated before MPCC authority.
     // Refresh them so logs describe the branch that can actually execute.
@@ -21111,357 +20276,8 @@ struct MPC
     return resolution;
   }
 
-  persistent_osqp::SolveOutcome solve_extended_progress_problem(
-    const ExtendedProgressMpcProblem & problem, const double now_sec,
-    const bool record_runtime_telemetry = true,
-    const std::size_t warm_start_stage_advance = 1U)
-  {
-    std::unique_lock<std::mutex> branch_context_lock;
-    auto * solver = &persistent_extended_osqp_solver_;
-    auto * certified_warm_start = &certified_extended_osqp_warm_start_;
-    last_extended_branch_warm_start_applied_ = false;
-    last_extended_branch_context_reset_ = false;
-    last_extended_branch_context_solve_count_ = 0U;
-    if (active_extended_branch_solver_context_ != nullptr) {
-      auto & context = *active_extended_branch_solver_context_;
-      branch_context_lock = std::unique_lock<std::mutex>(context.mutex);
-      const bool identity_matches =
-        context.identity_initialized &&
-        context.context_epoch == active_extended_branch_context_epoch_ &&
-        context.target_id == active_extended_branch_target_id_ &&
-        context.side_sign == active_extended_branch_side_sign_ &&
-        context.horizon_size == active_extended_branch_horizon_size_;
-      if (!identity_matches) {
-        context.solver.reset();
-        context.certified_warm_start.reset();
-        context.context_epoch = active_extended_branch_context_epoch_;
-        context.target_id = active_extended_branch_target_id_;
-        context.side_sign = active_extended_branch_side_sign_;
-        context.horizon_size = active_extended_branch_horizon_size_;
-        context.identity_initialized = true;
-        ++context.reset_count;
-        last_extended_branch_context_reset_ = true;
-      }
-      solver = &context.solver;
-      certified_warm_start = &context.certified_warm_start;
-      ++context.solve_count;
-      last_extended_branch_context_solve_count_ = context.solve_count;
-    }
-
-    auto previous_certified = certified_warm_start->consume_fresh(
-      now_sec, kOsqpWarmStartMaximumAgeSec);
-    const std::optional<double> previous_progress_origin =
-      previous_certified.has_value() ?
-      std::optional<double>{previous_certified->progress_origin_m} :
-      std::nullopt;
-    const bool progress_discontinuous =
-      previous_progress_origin.has_value() &&
-      mpcc_progress::progress_origin_discontinuous(
-        previous_progress_origin.value(), problem.progress_origin_m,
-        std::max(2.0, cfg.progress_contouring.trust_region_backward_m));
-    if (progress_discontinuous) {
-      solver->reset();
-      previous_certified.reset();
-      last_extended_branch_context_reset_ = true;
-    }
-    std::optional<persistent_osqp::WarmStart> warm_start;
-    if (previous_certified.has_value()) {
-      warm_start = persistent_osqp::shift_mpc_warm_start(
-        previous_certified->value, static_cast<std::size_t>(problem.N),
-        static_cast<std::size_t>(mpcc_progress::kExtendedStateDimension),
-        static_cast<std::size_t>(mpcc_progress::kExtendedInputDimension),
-        problem.trailing_dual_stage_blocks, warm_start_stage_advance);
-      if (
-        warm_start.has_value() && previous_progress_origin.has_value() &&
-        !mpcc_progress::rebase_extended_progress_warm_start(
-          warm_start->primal, problem.N, previous_progress_origin.value(),
-          problem.progress_origin_m))
-      {
-        warm_start.reset();
-      }
-    }
-    auto outcome = solver->solve(
-      problem.P, problem.A, problem.q, problem.l, problem.u, warm_start,
-      problem.variable_scaling);
-    last_extended_branch_warm_start_applied_ =
-      outcome.telemetry.warm_start_applied;
-    if (
-      active_extended_branch_solver_context_ != nullptr &&
-      outcome.telemetry.warm_start_applied)
-    {
-      ++active_extended_branch_solver_context_->warm_start_count;
-    }
-    if (!outcome.result.has_value()) {
-      std::ostringstream detail;
-      detail << outcome.failure_detail
-             << ", warm_candidate=" << (previous_certified.has_value() ? 1 : 0)
-             << ", warm_stage_advance=" << warm_start_stage_advance
-             << ", first_kappa_box=["
-             << problem.first_curvature_input_lower_radpm << ','
-             << problem.first_curvature_input_upper_radpm << ']'
-             << ", first_kappa_rate=["
-             << problem.first_curvature_rate_lower_radpm << ','
-             << problem.first_curvature_rate_upper_radpm << ']'
-             << ", first_kappa_intersection=["
-             << problem.first_curvature_intersection_lower_radpm << ','
-             << problem.first_curvature_intersection_upper_radpm << ']'
-             << ", first_kappa_feasible="
-             << (problem.first_curvature_intersection_feasible ? 1 : 0)
-             << ", first_kappa_physical_rate=["
-             << problem.first_curvature_physical_lower_radpm << ','
-             << problem.first_curvature_physical_upper_radpm << ']'
-             << ", previous_steering="
-             << problem.first_curvature_previous_steering_rad
-             << ", maximum_steering_step="
-             << problem.first_curvature_maximum_steering_step_rad
-             << ", state0_ey=" << problem.state_zero_lateral_m
-             << "/[" << problem.state_zero_lateral_lower_m << ','
-             << problem.state_zero_lateral_upper_m << ']'
-             << "/feasible="
-             << (problem.state_zero_lateral_feasible ? 1 : 0)
-             << ", forced_state1_ey=" << problem.forced_first_lateral_m
-             << "/[" << problem.first_lateral_lower_m << ','
-             << problem.first_lateral_upper_m << ']'
-             << "/input_norm="
-             << problem.first_lateral_input_sensitivity_norm
-             << "/feasible="
-             << (problem.forced_first_lateral_feasible ? 1 : 0);
-      outcome.failure_detail = detail.str();
-      if (record_runtime_telemetry) {
-        record_osqp_telemetry(outcome, now_sec);
-      }
-      return outcome;
-    }
-
-    auto wall_refinement =
-      mpcc_progress::ProgressAlignedWallBoundsResolution{};
-    bool wall_refinement_attempted = false;
-    bool wall_refinement_succeeded = false;
-    bool wall_refinement_solve_failed = false;
-    if (
-      problem.progress_aligned_wall_refinement_active &&
-      cfg.progress_contouring.rti_sqp_iterations > 1)
-    {
-      ExtendedProgressMpcProblem refined_problem = problem;
-      wall_refinement = relinearize_extended_progress_wall_bounds(
-        refined_problem, outcome.result->primal);
-      wall_refinement_attempted =
-        wall_refinement.valid && wall_refinement.feasible &&
-        wall_refinement.applied;
-      if (wall_refinement_attempted) {
-        const persistent_osqp::WarmStart refinement_warm_start{
-          outcome.result->primal, outcome.result->dual};
-        auto refined_outcome = solver->solve(
-          refined_problem.P, refined_problem.A, refined_problem.q,
-          refined_problem.l, refined_problem.u, refinement_warm_start,
-          refined_problem.variable_scaling);
-        auto combined_telemetry = outcome.telemetry;
-        combined_telemetry.setup_performed =
-          combined_telemetry.setup_performed ||
-          refined_outcome.telemetry.setup_performed;
-        combined_telemetry.update_performed =
-          combined_telemetry.update_performed ||
-          refined_outcome.telemetry.update_performed;
-        combined_telemetry.structural_rebuild =
-          combined_telemetry.structural_rebuild ||
-          refined_outcome.telemetry.structural_rebuild;
-        combined_telemetry.update_rebuild =
-          combined_telemetry.update_rebuild ||
-          refined_outcome.telemetry.update_rebuild;
-        combined_telemetry.warm_start_applied =
-          combined_telemetry.warm_start_applied ||
-          refined_outcome.telemetry.warm_start_applied;
-        combined_telemetry.warm_start_rejected =
-          combined_telemetry.warm_start_rejected ||
-          refined_outcome.telemetry.warm_start_rejected;
-        combined_telemetry.cold_reset_after_failure =
-          combined_telemetry.cold_reset_after_failure ||
-          refined_outcome.telemetry.cold_reset_after_failure;
-        combined_telemetry.maximum_iterations_reached =
-          combined_telemetry.maximum_iterations_reached ||
-          refined_outcome.telemetry.maximum_iterations_reached;
-        combined_telemetry.setup_ms += refined_outcome.telemetry.setup_ms;
-        combined_telemetry.update_ms += refined_outcome.telemetry.update_ms;
-        combined_telemetry.warm_start_ms +=
-          refined_outcome.telemetry.warm_start_ms;
-        combined_telemetry.solve_ms += refined_outcome.telemetry.solve_ms;
-        combined_telemetry.total_ms += refined_outcome.telemetry.total_ms;
-        combined_telemetry.iterations += refined_outcome.telemetry.iterations;
-        if (refined_outcome.result.has_value()) {
-          // Aggregate timing/attempt counters above, but keep convergence
-          // provenance bound to the result that will actually execute.
-          combined_telemetry.status = refined_outcome.telemetry.status;
-          combined_telemetry.objective_value =
-            refined_outcome.telemetry.objective_value;
-          combined_telemetry.primal_residual =
-            refined_outcome.telemetry.primal_residual;
-          combined_telemetry.dual_residual =
-            refined_outcome.telemetry.dual_residual;
-          combined_telemetry.rho_updates =
-            refined_outcome.telemetry.rho_updates;
-          combined_telemetry.rho_estimate =
-            refined_outcome.telemetry.rho_estimate;
-          combined_telemetry.absolute_tolerance =
-            refined_outcome.telemetry.absolute_tolerance;
-          combined_telemetry.relative_tolerance =
-            refined_outcome.telemetry.relative_tolerance;
-          combined_telemetry.scaling_iterations =
-            refined_outcome.telemetry.scaling_iterations;
-          combined_telemetry.scaled_termination =
-            refined_outcome.telemetry.scaled_termination;
-          combined_telemetry.row_tolerance_preconditioned =
-            refined_outcome.telemetry.row_tolerance_preconditioned;
-          combined_telemetry.variable_coordinate_scaled =
-            refined_outcome.telemetry.variable_coordinate_scaled;
-          combined_telemetry.minimum_variable_scale =
-            refined_outcome.telemetry.minimum_variable_scale;
-          combined_telemetry.maximum_variable_scale =
-            refined_outcome.telemetry.maximum_variable_scale;
-          combined_telemetry.maximum_row_scale =
-            refined_outcome.telemetry.maximum_row_scale;
-          combined_telemetry.physical_constraint_scale =
-            refined_outcome.telemetry.physical_constraint_scale;
-          combined_telemetry.physical_global_tolerance =
-            refined_outcome.telemetry.physical_global_tolerance;
-          outcome = std::move(refined_outcome);
-          outcome.telemetry = combined_telemetry;
-          wall_refinement_succeeded = true;
-        } else {
-          outcome.telemetry = combined_telemetry;
-          wall_refinement_solve_failed = true;
-        }
-      }
-    }
-    if (
-      problem.progress_aligned_wall_refinement_active &&
-      !mpcc_lite_async_worker_context_ &&
-      cfg.v2x_behavior.overtake_line.debug_log_enabled &&
-      (!std::isfinite(progress_aligned_wall_refinement_last_log_sec_) ||
-      now_sec - progress_aligned_wall_refinement_last_log_sec_ >= 1.0))
-    {
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "Extended MPCC progress-aligned wall RTI: valid=%d, feasible=%d, "
-        "applied=%d, attempted=%d, solved=%d, solve_failed=%d, "
-        "reason=%s, coupled_segments=%zu, out_of_range=%zu, "
-        "failure_stage=%d, progress_mismatch_max=%.3f m, source=%s",
-        wall_refinement.valid ? 1 : 0,
-        wall_refinement.feasible ? 1 : 0,
-        wall_refinement.applied ? 1 : 0,
-        wall_refinement_attempted ? 1 : 0,
-        wall_refinement_succeeded ? 1 : 0,
-        wall_refinement_solve_failed ? 1 : 0,
-        mpcc_progress::progress_aligned_wall_bounds_reason_name(
-          wall_refinement.reason),
-        wall_refinement.aligned_stage_count,
-        wall_refinement.out_of_range_stage_count,
-        wall_refinement.first_failure_stage,
-        wall_refinement.maximum_progress_mismatch_m,
-        problem.wall_contract_source.c_str());
-      progress_aligned_wall_refinement_last_log_sec_ = now_sec;
-    }
-    if (record_runtime_telemetry) {
-      record_osqp_telemetry(outcome, now_sec);
-    }
-    return outcome;
-  }
-
-  bool publish_certified_extended_progress_warm_start(
-    const Eigen::VectorXd & normalized_primal,
-    const Eigen::VectorXd & solver_dual,
-    const double certified_sec,
-    const double progress_origin_m)
-  {
-    auto * store = &certified_extended_osqp_warm_start_;
-    std::unique_lock<std::mutex> branch_context_lock;
-    if (active_extended_branch_solver_context_ != nullptr) {
-      auto & context = *active_extended_branch_solver_context_;
-      branch_context_lock = std::unique_lock<std::mutex>(context.mutex);
-      const bool identity_matches =
-        context.identity_initialized &&
-        context.context_epoch == active_extended_branch_context_epoch_ &&
-        context.target_id == active_extended_branch_target_id_ &&
-        context.side_sign == active_extended_branch_side_sign_ &&
-        context.horizon_size == active_extended_branch_horizon_size_;
-      if (!identity_matches) {
-        return false;
-      }
-      store = &context.certified_warm_start;
-    }
-    return store->publish(
-      persistent_osqp::WarmStart{normalized_primal, solver_dual},
-      certified_sec, progress_origin_m);
-  }
-
-  void record_osqp_telemetry(
-    const persistent_osqp::SolveOutcome & outcome, const double now_sec)
-  {
-    auto & window = osqp_telemetry_window_;
-    ++window.solve_count;
-    window.failure_count += outcome.result.has_value() ? 0U : 1U;
-    window.setup_count += outcome.telemetry.setup_performed ? 1U : 0U;
-    window.update_count += outcome.telemetry.update_performed ? 1U : 0U;
-    window.rebuild_count +=
-      (outcome.telemetry.structural_rebuild || outcome.telemetry.update_rebuild) ? 1U : 0U;
-    window.warm_start_count += outcome.telemetry.warm_start_applied ? 1U : 0U;
-    window.warm_start_reject_count += outcome.telemetry.warm_start_rejected ? 1U : 0U;
-    window.cold_reset_count += outcome.telemetry.cold_reset_after_failure ? 1U : 0U;
-    window.total_iterations += static_cast<std::uint64_t>(
-      std::max(0, outcome.telemetry.iterations));
-    window.maximum_iterations = std::max(
-      window.maximum_iterations, outcome.telemetry.iterations);
-    window.total_ms += outcome.telemetry.total_ms;
-    window.maximum_total_ms = std::max(
-      window.maximum_total_ms, outcome.telemetry.total_ms);
-    window.solve_ms += outcome.telemetry.solve_ms;
-    window.maximum_solve_ms = std::max(
-      window.maximum_solve_ms, outcome.telemetry.solve_ms);
-
-    if (!std::isfinite(now_sec)) {
-      return;
-    }
-    if (
-      !std::isfinite(last_osqp_telemetry_log_sec_) ||
-      now_sec < last_osqp_telemetry_log_sec_)
-    {
-      last_osqp_telemetry_log_sec_ = now_sec;
-      return;
-    }
-    if (now_sec - last_osqp_telemetry_log_sec_ < 1.0) {
-      return;
-    }
-    if (
-      cfg.v2x_behavior.overtake_line.debug_log_enabled &&
-      window.solve_count > 0U)
-    {
-      const double denominator = static_cast<double>(window.solve_count);
-      RCLCPP_INFO(
-        rclcpp::get_logger("mpc_controller"),
-        "OSQP runtime: cycles=%zu, failures=%zu, setup=%zu, update=%zu, "
-        "rebuild=%zu, warm=%zu, warm_reject=%zu, cold_reset=%zu, "
-        "total_ms=%.3f/%.3f(avg/max), solve_ms=%.3f/%.3f(avg/max), "
-        "iterations=%.1f/%d(avg/max)",
-        static_cast<std::size_t>(window.solve_count),
-        static_cast<std::size_t>(window.failure_count),
-        static_cast<std::size_t>(window.setup_count),
-        static_cast<std::size_t>(window.update_count),
-        static_cast<std::size_t>(window.rebuild_count),
-        static_cast<std::size_t>(window.warm_start_count),
-        static_cast<std::size_t>(window.warm_start_reject_count),
-        static_cast<std::size_t>(window.cold_reset_count),
-        window.total_ms / denominator, window.maximum_total_ms,
-        window.solve_ms / denominator, window.maximum_solve_ms,
-        static_cast<double>(window.total_iterations) / denominator,
-        window.maximum_iterations);
-    }
-    window = MpcOsqpTelemetryWindow{};
-    last_osqp_telemetry_log_sec_ = now_sec;
-  }
-
   void reset_osqp_history()
   {
-    persistent_extended_osqp_solver_.reset();
-    certified_extended_osqp_warm_start_.reset();
     // Do not block the 40 Hz callback on a branch worker which may currently
     // hold its solver mutex. Epoch invalidation makes the in-flight result
     // unadoptable and causes each context to reset lazily on its next solve.
@@ -22688,307 +21504,6 @@ struct MPC
     return result;
   }
 
-  bool revalidate_overtake_entry_execution_certificate(
-    overtake_core::OvertakeMissionCandidate & mission,
-    const canonical_plan::CanonicalExecutionPlan & preentry_plan,
-    const V2XBehaviorOutput & current_behavior,
-    const int ref_wp_id, const int horizon_size,
-    const Eigen::VectorXd & lower_bound, const Eigen::VectorXd & upper_bound,
-    const double now_sec, std::string & reject_reason)
-  {
-    reject_reason.clear();
-    const auto & line_cfg = cfg.v2x_behavior.overtake_line;
-    if (
-      !mission.physical_execution_certificate_valid ||
-      !std::isfinite(mission.physical_execution_certificate_source_sec) ||
-      !std::isfinite(
-        mission.physical_execution_certificate_source_course_progress_m) ||
-      !race_mpcc::exact_physical_execution_trajectory_complete(
-        mission.physical_execution_certificate_exact_trajectory) ||
-      !overtake_core::is_valid_frenet_dp_execution_path(
-        mission.physical_execution_certificate_path_distances_m,
-        mission.physical_execution_certificate_lateral_path_m))
-    {
-      reject_reason = "physical execution certificate unavailable";
-      return false;
-    }
-    if (
-      model == nullptr || model->reference_path == nullptr ||
-      !std::isfinite(model->s) || !std::isfinite(now_sec) || horizon_size <= 0 ||
-      lower_bound.size() < horizon_size || upper_bound.size() < horizon_size)
-    {
-      reject_reason = "physical execution certificate context invalid";
-      return false;
-    }
-    const double certificate_age_sec =
-      now_sec - mission.physical_execution_certificate_source_sec;
-    const double maximum_age_sec = std::max(
-      0.0, line_cfg.receding_horizon_last_solved_prefix_max_age_sec);
-    if (
-      !std::isfinite(certificate_age_sec) || certificate_age_sec < -kEps ||
-      certificate_age_sec > maximum_age_sec + kEps)
-    {
-      reject_reason = "physical execution certificate stale";
-      return false;
-    }
-
-    const auto target_validation = validate_selected_target_provenance(
-      mission.physical_execution_certificate_target_provenance,
-      current_behavior, certificate_age_sec);
-    if (!target_validation.valid) {
-      std::ostringstream reason;
-      reason << "physical execution target provenance "
-             << race_mpcc::target_provenance_reject_reason_name(
-        target_validation.reject_reason)
-             << ", ds=" << target_validation.progress_delta_m
-             << " m, de=" << target_validation.lateral_delta_m << " m";
-      reject_reason = reason.str();
-      return false;
-    }
-
-    double advanced_distance_m =
-      model->s - mission.physical_execution_certificate_source_course_progress_m;
-    const double path_length_m = model->reference_path->length;
-    if (
-      model->reference_path->circular && std::isfinite(path_length_m) &&
-      path_length_m > 0.0)
-    {
-      while (advanced_distance_m > 0.5 * path_length_m) {
-        advanced_distance_m -= path_length_m;
-      }
-      while (advanced_distance_m < -0.5 * path_length_m) {
-        advanced_distance_m += path_length_m;
-      }
-    }
-    if (!std::isfinite(advanced_distance_m) || advanced_distance_m < -0.05) {
-      reject_reason = "physical execution certificate progress regressed";
-      return false;
-    }
-    advanced_distance_m = std::max(0.0, advanced_distance_m);
-
-    std::vector<double> current_path_distances;
-    std::vector<double> legacy_lateral_targets;
-    current_path_distances.reserve(static_cast<std::size_t>(horizon_size));
-    legacy_lateral_targets.reserve(static_cast<std::size_t>(horizon_size));
-    for (int stage = 0; stage < horizon_size; ++stage) {
-      const double path_distance = horizon_path_distance_to_index(
-        ref_wp_id, static_cast<std::size_t>(stage));
-      current_path_distances.push_back(path_distance);
-      const double progress = overtake_core::resolve_overtake_line_horizon_progress(
-        overtake_core::OvertakeLineHorizonProgressRequest{
-          mission.direct_pass, 0.0, path_distance,
-          std::max(0.5, mission.shift_distance_m)});
-      legacy_lateral_targets.push_back(
-        model->spatial_state.e_y + progress *
-        (mission.goal_lateral_m - model->spatial_state.e_y));
-    }
-    const auto execution_reference =
-      overtake_core::resolve_frenet_dp_execution_reference(
-      overtake_core::FrenetDpExecutionReferenceRequest{
-        true, advanced_distance_m,
-        2U,
-        mission.physical_execution_certificate_path_distances_m,
-        mission.physical_execution_certificate_lateral_path_m,
-        current_path_distances, legacy_lateral_targets});
-    if (
-      !execution_reference.valid || !execution_reference.active)
-    {
-      reject_reason = "physical execution certificate resampling failed";
-      return false;
-    }
-    const auto trust_envelope =
-      overtake_core::resolve_frenet_dp_execution_trust_envelope(
-      overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
-        true, line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
-        execution_reference.lateral_targets_m, legacy_lateral_targets});
-    if (!trust_envelope.valid || !trust_envelope.active) {
-      reject_reason = "physical execution certificate trust envelope failed";
-      return false;
-    }
-
-    const bool target_release_certified =
-      current_behavior.locked_target_current_body_footprints_separated &&
-      current_behavior.locked_target_footprint_prediction_valid &&
-      current_behavior.locked_target_predicted_body_footprint_sweep_separated;
-    if (!target_release_certified) {
-      const auto cursor = canonical_plan::resolve_execution_cursor(
-        preentry_plan, now_sec);
-      const auto window = canonical_retained::build_retained_execution_window(
-        preentry_plan, cursor);
-      if (!window.window.has_value()) {
-        reject_reason = "physical execution canonical window unavailable";
-        return false;
-      }
-      std::vector<double> plan_time_sec{0.0};
-      std::vector<double> plan_lateral_m{
-        window.window->expected_current_state.lateral_m};
-      plan_time_sec.reserve(window.window->samples.size() + 1U);
-      plan_lateral_m.reserve(window.window->samples.size() + 1U);
-      for (const auto & sample : window.window->samples) {
-        plan_time_sec.push_back(sample.relative_time_sec);
-        plan_lateral_m.push_back(sample.endpoint.lateral_m);
-      }
-      const auto plan_distance_m =
-        canonical_retained::sample_retained_progress_advance(
-        window.window.value(), plan_time_sec);
-      if (!plan_distance_m.has_value()) {
-        reject_reason = "physical execution canonical progress unavailable";
-        return false;
-      }
-      double planned_ego_speed_mps = std::max(1.0, current_speed_mps_);
-      for (const auto & state : preentry_plan.predicted_states) {
-        if (std::isfinite(state.velocity_mps)) {
-          planned_ego_speed_mps = std::max(
-            planned_ego_speed_mps, std::max(0.0, state.velocity_mps));
-        }
-      }
-      const auto target_tube = build_current_overtake_target_tube(
-        current_behavior, plan_distance_m.value(), planned_ego_speed_mps,
-        &plan_time_sec);
-      const auto target_path = target_tube.valid ?
-        overtake_core::validate_frenet_dp_target_bound_horizon(
-        overtake_core::FrenetDpTargetBoundHorizonRequest{
-          true, mission.pass_side_sign,
-          std::max(0.0, cfg.v2x_gap.vehicle_radius),
-          plan_lateral_m, target_tube.lateral_m,
-          target_tube.separation_active}) :
-        overtake_core::FrenetDpTargetBoundHorizonResolution{};
-      if (!target_tube.valid || !target_path.valid || !target_path.feasible) {
-        std::ostringstream reason;
-        reason << "physical execution current target tube rejected: "
-               << target_tube.reason;
-        if (target_tube.valid) {
-          reason << ", sample=" << target_path.failure_index
-                 << ", separation="
-                 << target_path.minimum_signed_separation_m << " m";
-        }
-        reject_reason = reason.str();
-        return false;
-      }
-    }
-
-    const auto robust_clearance = resolve_robust_clearance(ref_wp_id, horizon_size);
-    const double physical_wall_clearance_m = std::max(0.0, line_cfg.min_wall_clearance);
-    const double planning_wall_clearance_m = robust_clearance.valid ?
-      robust_clearance.wall_planning_clearance_m : physical_wall_clearance_m;
-    const auto wall_contract = overtake_orchestrator::resolve_wall_clearance_contract(
-      physical_wall_clearance_m, planning_wall_clearance_m,
-      line_cfg.runtime_wall_preplan_enabled,
-      std::max(0.0, line_cfg.runtime_wall_preplan_reserve));
-    if (!wall_contract.valid) {
-      reject_reason = "physical execution wall contract invalid";
-      return false;
-    }
-
-    // Revalidate the immutable pose sequence certified by the selected
-    // five-state branch.  The current course frame may have advanced while the
-    // asynchronous result was in flight, but lag, heading and solved progress
-    // remain part of the certificate and must not be rebuilt from lateral-only
-    // Mission samples.
-    const auto runtime_geometry = build_stage_geometry(
-      ref_wp_id, static_cast<std::size_t>(horizon_size));
-    if (
-      !runtime_geometry.valid ||
-      runtime_geometry.stages.size() != static_cast<std::size_t>(horizon_size))
-    {
-      reject_reason = "physical execution current stage geometry unavailable";
-      return false;
-    }
-    std::vector<mpcc_contract::StageGeometryIdentity> raw_stages;
-    std::vector<double> current_transition_distances_m;
-    raw_stages.reserve(runtime_geometry.stages.size());
-    current_transition_distances_m.reserve(current_path_distances.size());
-    double previous_path_distance_m = 0.0;
-    for (std::size_t stage = 0U; stage < runtime_geometry.stages.size(); ++stage) {
-      const auto & geometry_stage = runtime_geometry.stages[stage];
-      raw_stages.push_back(mpcc_contract::StageGeometryIdentity{
-        geometry_stage.transition_from_waypoint,
-        geometry_stage.state_waypoint,
-        geometry_stage.transition_distance_m,
-        geometry_stage.cumulative_distance_m});
-      current_transition_distances_m.push_back(
-        current_path_distances[stage] - previous_path_distance_m);
-      previous_path_distance_m = current_path_distances[stage];
-    }
-    const auto effective_runtime_geometry =
-      mpcc_contract::resolve_effective_stage_geometry(
-      runtime_geometry.tracking_waypoint, runtime_geometry.circular,
-      raw_stages, current_transition_distances_m);
-    if (!effective_runtime_geometry.has_value()) {
-      reject_reason = "physical execution effective stage geometry unavailable";
-      return false;
-    }
-
-    const auto & exact =
-      mission.physical_execution_certificate_exact_trajectory;
-    if (exact.path_distance_m.size() != static_cast<std::size_t>(horizon_size)) {
-      reject_reason = "physical execution exact horizon mismatch";
-      return false;
-    }
-    const double exact_minimum_progress_m = std::min(
-      exact.progress_origin_m,
-      *std::min_element(exact.progress_m.begin(), exact.progress_m.end()));
-    const double exact_maximum_progress_m = *std::max_element(
-      exact.progress_m.begin(), exact.progress_m.end());
-    const auto current_course_frame_knots = build_progress_course_frame_knots(
-      effective_runtime_geometry.value(), model->s,
-      exact_minimum_progress_m, exact_maximum_progress_m);
-    if (!current_course_frame_knots.has_value()) {
-      reject_reason = "physical execution exact course frame unavailable";
-      return false;
-    }
-    Eigen::VectorXd exact_lower_bound(horizon_size);
-    Eigen::VectorXd exact_upper_bound(horizon_size);
-    for (int stage = 0; stage < horizon_size; ++stage) {
-      exact_lower_bound[stage] =
-        exact.lateral_lower_m[static_cast<std::size_t>(stage)];
-      exact_upper_bound[stage] =
-        exact.lateral_upper_m[static_cast<std::size_t>(stage)];
-    }
-    const AlignedMpccExecutionTrajectory exact_trajectory{
-      certificate_age_sec, advanced_distance_m,
-      exact.minimum_lateral_bound_reserve_m,
-      exact.lateral_m, exact.lag_m, exact.heading_offset_rad,
-      exact.progress_origin_m, exact.progress_m,
-      current_course_frame_knots.value()};
-    if (!solved_mpcc_execution_path_wall_safe(
-        exact_trajectory, exact.path_distance_m, ref_wp_id, horizon_size,
-        exact_lower_bound, exact_upper_bound,
-        wall_contract.required_clearance_m, reject_reason, 1e-5,
-        SolvedExecutionWallValidationScope::SweptFromCurrentPose))
-    {
-      reject_reason = "exact five-state certificate: " + reject_reason;
-      return false;
-    }
-
-    // The trust-envelope result is a derived initial Mission reference, not a
-    // replacement physical certificate.  It must also be usable at entry, but
-    // it owns reference generation only; each live five-state solve receives
-    // its own exact physical proof before command adaptation.
-    const AlignedMpccExecutionTrajectory current_trajectory{
-      certificate_age_sec, advanced_distance_m, 0.0,
-      trust_envelope.lateral_targets_m, {}, {},
-      std::numeric_limits<double>::quiet_NaN(), {}, {}};
-    if (!solved_mpcc_execution_path_wall_safe(
-        current_trajectory, current_path_distances, ref_wp_id, horizon_size,
-        lower_bound, upper_bound, wall_contract.required_clearance_m,
-        reject_reason, 1e-5,
-        SolvedExecutionWallValidationScope::SweptFromCurrentPose))
-    {
-      reject_reason = "derived execution reference: " + reject_reason;
-      return false;
-    }
-
-    // Keep source time, target provenance and exact solve identity immutable.
-    // Only rebase the derived first execution reference to the current horizon.
-    mission.physical_execution_certificate_path_distances_m =
-      std::move(current_path_distances);
-    mission.physical_execution_certificate_lateral_path_m =
-      trust_envelope.lateral_targets_m;
-    reject_reason = "exact five-state certificate accepted";
-    return true;
-  }
-
   bool dynamic_margin_escape_solution_wall_safe(
     const MpcProblem & problem, const Eigen::VectorXd & primal,
     const double maximum_constraint_violation,
@@ -23170,645 +21685,6 @@ struct MPC
     return path;
   }
 
-  std::optional<std::pair<std::vector<double>, std::vector<double>>>
-  build_canonical_world_prediction(
-    const canonical_plan::CanonicalExecutionPlan & plan,
-    const canonical_plan::CanonicalExecutionCursor & cursor,
-    const std::vector<mpc_stage_geometry::CourseFrameKnot> & course_frame_knots,
-    const double course_frame_tolerance_m,
-    std::string & reject_reason)
-    const
-  {
-    reject_reason.clear();
-    if (
-      !cursor.available || cursor.plan_id != plan.plan_id ||
-      cursor.first_control_stage_index >= plan.control_stages.size() ||
-      cursor.first_control_stage_index + 1U >= plan.predicted_states.size() ||
-      course_frame_knots.empty() || !std::isfinite(course_frame_tolerance_m) ||
-      course_frame_tolerance_m < 0.0)
-    {
-      std::ostringstream detail;
-      detail << "canonical prediction identity invalid: cursor="
-             << (cursor.available ? 1 : 0)
-             << ", cursor_plan=" << cursor.plan_id
-             << ", plan=" << plan.plan_id
-             << ", first_control=" << cursor.first_control_stage_index
-             << ", controls=" << plan.control_stages.size()
-             << ", states=" << plan.predicted_states.size()
-             << ", knots=" << course_frame_knots.size()
-             << ", tolerance=" << course_frame_tolerance_m;
-      reject_reason = detail.str();
-      return std::nullopt;
-    }
-    std::pair<std::vector<double>, std::vector<double>> prediction;
-    const std::size_t first_state = cursor.first_control_stage_index + 1U;
-    prediction.first.reserve(plan.predicted_states.size() - first_state);
-    prediction.second.reserve(plan.predicted_states.size() - first_state);
-    for (std::size_t index = first_state; index < plan.predicted_states.size(); ++index) {
-      const auto & state = plan.predicted_states[index];
-      const auto frame = mpc_stage_geometry::sample_course_frame(
-        course_frame_knots, state.progress_m, course_frame_tolerance_m);
-      if (!frame.has_value()) {
-        std::ostringstream detail;
-        detail << "canonical course frame unavailable: state=" << index
-               << ", progress=" << std::setprecision(17) << state.progress_m
-               << ", range=[" << course_frame_knots.front().progress_m
-               << "," << course_frame_knots.back().progress_m << "]"
-               << ", tolerance=" << course_frame_tolerance_m
-               << ", knots=" << course_frame_knots.size();
-        reject_reason = detail.str();
-        return std::nullopt;
-      }
-      const auto world = mpcc_contract::reconstruct_planar_pose_from_frenet(
-        mpcc_contract::PlanarPose{
-          frame->x_m, frame->y_m, frame->heading_rad},
-        mpcc_contract::FrenetPose{
-          state.lateral_m, state.lag_m, state.heading_offset_rad});
-      if (!world.has_value()) {
-        std::ostringstream detail;
-        detail << "canonical Frenet reconstruction unavailable: state=" << index
-               << ", lateral=" << state.lateral_m
-               << ", lag=" << state.lag_m
-               << ", heading=" << state.heading_offset_rad
-               << ", progress=" << state.progress_m;
-        reject_reason = detail.str();
-        return std::nullopt;
-      }
-      prediction.first.push_back(world->x_m);
-      prediction.second.push_back(world->y_m);
-    }
-    if (prediction.first.empty()) {
-      reject_reason = "canonical prediction horizon empty";
-      return std::nullopt;
-    }
-    reject_reason = "accepted";
-    return prediction;
-  }
-
-  double canonical_maximum_steering_step_rad() const noexcept
-  {
-    return
-      model != nullptr && std::isfinite(model->Ts) && model->Ts >= 0.0 &&
-      std::isfinite(cfg.steer_rate_max) && cfg.steer_rate_max >= 0.0 ?
-      cfg.steer_rate_max * model->Ts :
-      std::numeric_limits<double>::quiet_NaN();
-  }
-
-  bool certify_canonical_steering_continuity(
-    const canonical_plan::CanonicalActuation & actuation,
-    std::string & reject_reason) const
-  {
-    const double maximum_steering_step_rad =
-      canonical_maximum_steering_step_rad();
-    const auto continuity =
-      canonical_plan::certify_canonical_steering_continuity(
-      canonical_plan::CanonicalSteeringContinuityRequest{
-        previous_steering,
-        actuation.steering_tire_angle_rad,
-        maximum_steering_step_rad});
-    if (continuity.certified) {
-      reject_reason = "accepted";
-      return true;
-    }
-    std::ostringstream detail;
-    detail << "canonical steering continuity rejected: "
-           << canonical_plan::to_string(continuity.reason)
-           << ", current=" << previous_steering
-           << ", candidate=" << actuation.steering_tire_angle_rad
-           << ", difference=" << continuity.steering_difference_rad
-           << ", reachable=[" << continuity.reachable_lower_rad << ','
-           << continuity.reachable_upper_rad << ']'
-           << ", maximum_step=" << maximum_steering_step_rad
-           << ", plan=" << actuation.plan_id
-           << ", stage=" << actuation.control_stage_index;
-    reject_reason = detail.str();
-    return false;
-  }
-
-  OvertakeCanonicalFreshShadowResult make_overtake_canonical_shadow_result(
-    const MpcProblem & problem,
-    const mpcc_contract::MpccProblemContext & context) const
-  {
-    OvertakeCanonicalFreshShadowResult result;
-    result.decision_id = context.decision_id;
-    result.intent = context.intent;
-    result.eligibility_reason =
-      race_mpcc::resolve_overtake_canonical_fresh_shadow_eligibility(
-      race_mpcc::OvertakeCanonicalFreshShadowEligibilityRequest{
-        problem.progress_contouring_active,
-        result.intent,
-        problem.progress_execution_context_active ||
-        problem.dynamic_obstacle_lateral_escape_active ||
-        problem.dynamic_obstacle_margin_escape_tracking_contract_active,
-        problem.lateral_bounds_contract_valid}).reason;
-    result.eligible = result.eligibility_reason ==
-      race_mpcc::OvertakeCanonicalFreshShadowEligibilityReason::Eligible;
-    return result;
-  }
-
-  OvertakeCanonicalFreshShadowResult
-  evaluate_overtake_canonical_fresh_shadow(
-    const MpcProblem & problem,
-    const ExtendedProgressMpcProblem & extended_problem,
-    const persistent_osqp::SolveResult & solve_result,
-    const double now_sec,
-    const mpcc_contract::MpccProblemContext & snapshot_context)
-  {
-    constexpr int progress_metadata_nx = 3;
-    auto result = make_overtake_canonical_shadow_result(
-      problem, snapshot_context);
-    result.initial_lag_m = extended_problem.initial_lag_m;
-    result.required_lateral_tracking_reserve_m =
-      extended_problem.required_lateral_tracking_reserve_m;
-    const auto started = SteadyClock::now();
-    const auto finish = [&result, &started]() {
-        result.total_ms = std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - started).count();
-        return result;
-      };
-    if (!result.eligible) {
-      result.status = "eligibility-reject";
-      result.detail =
-        race_mpcc::overtake_canonical_fresh_shadow_eligibility_reason_name(
-        result.eligibility_reason);
-      return finish();
-    }
-
-    const auto & context = snapshot_context;
-    result.context_complete = mpcc_contract::problem_context_complete(context);
-    if (!result.context_complete) {
-      result.status = "context-reject";
-      result.detail = "canonical Overtake context incomplete";
-      return finish();
-    }
-    const int horizon_size = extended_problem.N;
-    if (
-      horizon_size <= 0 || horizon_size > problem.N ||
-      context.horizon_steps != static_cast<std::size_t>(horizon_size))
-    {
-      result.status = "horizon-contract-reject";
-      result.detail = "canonical Overtake horizon/context mismatch";
-      return finish();
-    }
-
-    const auto lateral_contract =
-      mpcc_progress::evaluate_extended_lateral_constraint_contract(
-      solve_result.constraint_violation,
-      solve_result.constraint_tolerance, horizon_size);
-    result.lateral_contract_satisfied =
-      lateral_contract.valid && lateral_contract.satisfied;
-    if (!result.lateral_contract_satisfied) {
-      result.status = "lateral-contract-reject";
-      std::ostringstream detail;
-      detail << "stage=" << lateral_contract.worst_stage
-             << ", violation="
-             << lateral_contract.maximum_violation_m
-             << "m, tolerance="
-             << lateral_contract.maximum_tolerance_m << "m";
-      result.detail = detail.str();
-      return finish();
-    }
-
-    const auto execution_primal =
-      mpcc_progress::normalize_extended_execution_primal(
-      solve_result.primal, extended_problem.l, extended_problem.u,
-      solve_result.constraint_violation, solve_result.constraint_tolerance,
-      horizon_size);
-    result.primal_reason = execution_primal.reason;
-    result.execution_primal_accepted = execution_primal.reason ==
-      mpcc_progress::ExtendedExecutionPrimalNormalizationReason::Accepted;
-    if (!result.execution_primal_accepted) {
-      result.status = "execution-primal-reject";
-      result.detail =
-        mpcc_progress::extended_execution_primal_normalization_reason_name(
-        execution_primal.reason);
-      return finish();
-    }
-
-    const auto direct_actuation = mpcc_progress::extract_actuation_proposal(
-      execution_primal.primal, horizon_size, model->length);
-    result.actuation_extracted = direct_actuation.has_value();
-    if (!result.actuation_extracted) {
-      result.status = "actuation-reject";
-      result.detail = "exact first actuation unavailable";
-      return finish();
-    }
-
-    std::vector<double> path_distance_m;
-    path_distance_m.reserve(static_cast<std::size_t>(horizon_size));
-    Eigen::VectorXd lower_bound(horizon_size);
-    Eigen::VectorXd upper_bound(horizon_size);
-    std::vector<double> lower_bound_m;
-    std::vector<double> upper_bound_m;
-    lower_bound_m.reserve(static_cast<std::size_t>(horizon_size));
-    upper_bound_m.reserve(static_cast<std::size_t>(horizon_size));
-    for (int stage = 0; stage < horizon_size; ++stage) {
-      path_distance_m.push_back(
-        problem.progress_stage_geometry.stages[
-        static_cast<std::size_t>(stage)].cumulative_distance_m);
-      lower_bound[stage] =
-        problem.progress_state_lower[(stage + 1) * progress_metadata_nx];
-      upper_bound[stage] =
-        problem.progress_state_upper[(stage + 1) * progress_metadata_nx];
-      lower_bound_m.push_back(lower_bound[stage]);
-      upper_bound_m.push_back(upper_bound[stage]);
-    }
-    const double tolerance_m = std::max(
-      1e-5, lateral_contract.maximum_tolerance_m);
-    mpcc_progress::ExecutionTrajectoryDiagnostic pose_diagnostic;
-    const auto pose_trajectory =
-      mpcc_progress::extract_extended_execution_trajectory(
-      execution_primal.primal, horizon_size, path_distance_m,
-      lower_bound_m, upper_bound_m, extended_problem.progress_origin_m,
-      tolerance_m, &pose_diagnostic);
-    result.trajectory_extracted = pose_trajectory.has_value();
-    if (!result.trajectory_extracted) {
-      result.status = "trajectory-reject";
-      result.detail = std::string{"exact trajectory rejected: "} +
-        mpcc_progress::execution_trajectory_rejection_name(
-        pose_diagnostic.rejection) + ", stage=" +
-        std::to_string(pose_diagnostic.stage);
-      return finish();
-    }
-
-    AlignedMpccExecutionTrajectory exact_trajectory{
-      0.0, 0.0, pose_trajectory->minimum_lateral_bound_reserve_m,
-      pose_trajectory->lateral_m, pose_trajectory->lag_m,
-      pose_trajectory->heading_offset_rad,
-      extended_problem.progress_origin_m, pose_trajectory->progress_m, {}};
-    if (!exact_trajectory.progress_m.empty()) {
-      const double maximum_progress_m = *std::max_element(
-        exact_trajectory.progress_m.begin(), exact_trajectory.progress_m.end());
-      const auto knots = build_progress_course_frame_knots(
-        problem.progress_stage_geometry, exact_trajectory.progress_origin_m,
-        exact_trajectory.progress_origin_m,
-        maximum_progress_m);
-      if (knots.has_value()) {
-        exact_trajectory.course_frame_knots = knots.value();
-      }
-    }
-    if (exact_trajectory.course_frame_knots.empty()) {
-      result.status = "course-frame-reject";
-      result.detail = "exact trajectory course-frame unavailable";
-      return finish();
-    }
-
-    std::string certificate_reason;
-    result.physical_certificate_checked = true;
-    result.physically_certified = solved_mpcc_execution_path_wall_safe(
-      exact_trajectory, path_distance_m, problem.ref_wp_id, horizon_size,
-      lower_bound, upper_bound,
-      problem.progress_execution_required_wall_clearance_m,
-      certificate_reason, tolerance_m,
-      SolvedExecutionWallValidationScope::SweptFromCurrentPose,
-      &result.physical_wall_diagnostic);
-    if (!result.physically_certified) {
-      result.status = "physical-certificate-reject";
-      result.detail = certificate_reason + ", " +
-        mpcc_contract::format_physical_wall_certificate_diagnostic(
-        result.physical_wall_diagnostic);
-      return finish();
-    }
-    if (!problem.progress_execution_target_exclusion_certified) {
-      result.status = "target-certificate-reject";
-      result.detail =
-        "exact five-state trajectory lacks current target exclusion proof";
-      return finish();
-    }
-
-    double horizon_sec = 0.0;
-    for (int stage = 0; stage < horizon_size; ++stage) {
-      horizon_sec += problem.progress_stage_dt_sec[
-        static_cast<std::size_t>(stage)];
-    }
-    mpcc_contract::CertifiedMpccSolution canonical_solution;
-    canonical_solution.solution_id = result.decision_id;
-    canonical_solution.problem_fingerprint = context.fingerprint;
-    canonical_solution.formulation =
-      mpcc_contract::Formulation::VelocityProgress5State;
-    canonical_solution.solved = true;
-    canonical_solution.finite = execution_primal.primal.allFinite();
-    canonical_solution.constraints_satisfied =
-      result.lateral_contract_satisfied;
-    canonical_solution.maximum_constraint_violation =
-      solve_result.maximum_constraint_violation;
-    canonical_solution.physical.checked = true;
-    canonical_solution.physical.wall_clear = result.physically_certified;
-    canonical_solution.physical.obstacles_clear =
-      problem.progress_execution_target_exclusion_certified &&
-      problem.lateral_bounds_contract_valid &&
-      result.lateral_contract_satisfied;
-    canonical_solution.prediction_stage_count =
-      static_cast<std::size_t>(horizon_size);
-    canonical_solution.valid_until_sec = now_sec + horizon_sec;
-
-    canonical_plan_adapter::CanonicalPlanExtractionRequest extraction;
-    extraction.plan_id = result.decision_id;
-    extraction.problem = context;
-    extraction.solution = canonical_solution;
-    extraction.solved_sec = now_sec;
-    extraction.progress_origin_m = extended_problem.progress_origin_m;
-    extraction.required_lateral_tracking_reserve_m =
-      extended_problem.required_lateral_tracking_reserve_m;
-    extraction.stage_duration_sec.assign(
-      problem.progress_stage_dt_sec.begin(),
-      problem.progress_stage_dt_sec.begin() + horizon_size);
-    extraction.lateral_lower_m.reserve(
-      static_cast<std::size_t>(horizon_size + 1));
-    extraction.lateral_upper_m.reserve(
-      static_cast<std::size_t>(horizon_size + 1));
-    for (int state = 0; state <= horizon_size; ++state) {
-      extraction.lateral_lower_m.push_back(
-        problem.progress_state_lower[state * progress_metadata_nx]);
-      extraction.lateral_upper_m.push_back(
-        problem.progress_state_upper[state * progress_metadata_nx]);
-    }
-    extraction.extended_primal = execution_primal.primal;
-    auto chain = canonical_plan_adapter::build_fresh_canonical_command(
-      canonical_plan_adapter::FreshCanonicalCommandRequest{
-        extraction, result.decision_id, now_sec, result.intent,
-        model->length,
-        mpcc_contract::CanonicalActuation{
-          direct_actuation->predicted_speed_mps,
-          direct_actuation->acceleration_mps2,
-          direct_actuation->curvature_radpm,
-          direct_actuation->steering_tire_angle_rad,
-          direct_actuation->virtual_progress_speed_mps},
-        1e-12});
-    result.chain_reason = chain.reason;
-    result.maximum_actuation_difference = chain.maximum_actuation_difference;
-    result.canonical_chain_ready =
-      chain.command.has_value() && chain.plan.has_value() &&
-      chain.cursor.available;
-    if (!result.canonical_chain_ready) {
-      result.status = "canonical-chain-reject";
-      std::ostringstream detail;
-      detail << canonical_plan_adapter::to_string(chain.reason)
-             << ", extraction="
-             << canonical_plan_adapter::to_string(chain.extraction_reason)
-             << ", plan="
-             << canonical_plan::to_string(chain.plan_reject_reason)
-             << ", cursor=" << canonical_plan::to_string(chain.cursor_reason)
-             << ", candidate="
-             << canonical_plan::to_string(chain.candidate_reason)
-             << ", authority="
-             << mpcc_contract::to_string(chain.authority_source) << '/'
-             << mpcc_contract::to_string(chain.authority_reason);
-      result.detail = detail.str();
-      return finish();
-    }
-    std::string steering_continuity_reject_reason;
-    if (!certify_canonical_steering_continuity(
-        canonical_plan::CanonicalActuation{
-          chain.plan->plan_id,
-          chain.cursor.first_control_stage_index,
-          direct_actuation->predicted_speed_mps,
-          direct_actuation->acceleration_mps2,
-          direct_actuation->curvature_radpm,
-          direct_actuation->steering_tire_angle_rad,
-          direct_actuation->virtual_progress_speed_mps},
-        steering_continuity_reject_reason))
-    {
-      result.status = "canonical-steering-continuity-reject";
-      result.detail = steering_continuity_reject_reason;
-      return finish();
-    }
-
-    auto plan = std::make_shared<const canonical_plan::CanonicalExecutionPlan>(
-      std::move(chain.plan.value()));
-    std::string prediction_reason;
-    const auto prediction = build_canonical_world_prediction(
-      *plan, chain.cursor, exact_trajectory.course_frame_knots,
-      tolerance_m, prediction_reason);
-    result.prediction_available = prediction.has_value();
-    if (!result.prediction_available) {
-      result.status = "prediction-reject";
-      result.detail = prediction_reason;
-      return finish();
-    }
-    result.selected.command = chain.command;
-    result.selected.problem = plan->problem;
-    result.selected.solution = plan->solution;
-    result.selected.plan = std::move(plan);
-    result.selected.cursor = chain.cursor;
-    result.selected.prediction = prediction.value();
-    result.selected.steering_continuity_certified = true;
-    result.selection_complete = result.selected.complete();
-    if (
-      result.selection_complete &&
-      !publish_certified_extended_progress_warm_start(
-        execution_primal.primal, solve_result.dual, now_sec,
-        extended_problem.progress_origin_m))
-    {
-      result.selection_complete = false;
-      result.selected = {};
-      result.status = "warm-start-publication-reject";
-      result.detail =
-        "Overtake certified warm-start publication rejected";
-      return finish();
-    }
-    result.status = result.selection_complete ? "canonical-ready" :
-      "selection-incomplete";
-    result.detail = certificate_reason;
-    if (
-      extended_problem.tracking_horizon_reason ==
-      mpcc_progress::LateralTrackingHorizonReason::BoundedPrefix)
-    {
-      std::ostringstream detail;
-      detail << result.detail << ", bounded-prefix="
-             << extended_problem.N << '/'
-             << extended_problem.configured_horizon_steps
-             << ", first_unavailable_state="
-             << extended_problem.first_unavailable_tracking_state;
-      result.detail = detail.str();
-    }
-    return finish();
-  }
-
-  OvertakeCanonicalFreshShadowResult
-  evaluate_overtake_canonical_worker_fresh(
-    const MpcProblem & problem, const double now_sec,
-    const mpcc_contract::MpccProblemContext & snapshot_context)
-  {
-    auto result = make_overtake_canonical_shadow_result(problem, snapshot_context);
-    if (!result.eligible) {
-      result.status = "eligibility-reject";
-      result.detail =
-        race_mpcc::overtake_canonical_fresh_shadow_eligibility_reason_name(
-        result.eligibility_reason);
-      return result;
-    }
-    const auto current_context = seal_problem_context_for_problem(
-      problem, snapshot_context);
-    if (
-      !mpcc_contract::problem_context_complete(snapshot_context) ||
-      snapshot_context.intent != result.intent ||
-      snapshot_context.fingerprint != current_context.fingerprint)
-    {
-      result.status = "context-reject";
-      result.detail = "sealed Overtake snapshot context does not match problem";
-      return result;
-    }
-
-    std::string build_reject_reason;
-    const auto extended_problem = build_extended_progress_problem(
-      problem, snapshot_context.intent, build_reject_reason);
-    if (!extended_problem.has_value()) {
-      result.status = "build-reject";
-      result.detail = build_reject_reason.empty() ?
-        "extended Overtake problem unavailable" : build_reject_reason;
-      return result;
-    }
-    const auto execution_context = seal_problem_context_for_problem(
-      problem, snapshot_context, extended_problem->N);
-    if (!mpcc_contract::problem_context_complete(execution_context)) {
-      result.status = "horizon-context-reject";
-      result.detail = "bounded Overtake context sealing failed";
-      return result;
-    }
-    if (
-      overtake_tactical_five_state_lifecycle_ == nullptr ||
-      overtake_tactical_five_state_lifecycle_->solver_context == nullptr)
-    {
-      result.status = "solver-context-reject";
-      result.detail = "dedicated Overtake canonical solver context unavailable";
-      return result;
-    }
-
-    const auto warm_identity =
-      make_canonical_shadow_warm_start_identity(problem, execution_context);
-    race_mpcc::ShadowWarmStartResolution warm_resolution;
-    std::uint64_t context_epoch{};
-    {
-      std::lock_guard<std::mutex> lock(
-        overtake_tactical_five_state_lifecycle_->warm_start_mutex);
-      warm_resolution = race_mpcc::resolve_shadow_warm_start(
-        overtake_tactical_five_state_lifecycle_->warm_start_identity,
-        warm_identity);
-      if (warm_resolution.valid) {
-        if (warm_resolution.reset_context) {
-          auto & epoch = overtake_tactical_five_state_lifecycle_->context_epoch;
-          epoch = epoch == std::numeric_limits<std::uint64_t>::max() ?
-            1U : epoch + 1U;
-        }
-        overtake_tactical_five_state_lifecycle_->warm_start_identity =
-          warm_identity;
-      }
-      context_epoch = overtake_tactical_five_state_lifecycle_->context_epoch;
-    }
-    if (!warm_resolution.valid) {
-      result.status = "warm-context-reject";
-      result.detail = race_mpcc::shadow_warm_start_reset_reason_name(
-        warm_resolution.reason);
-      return result;
-    }
-    result.warm_start_stage_advance = warm_resolution.stage_advance;
-
-    const auto previous_context = active_extended_branch_solver_context_;
-    const auto previous_epoch = active_extended_branch_context_epoch_;
-    const auto previous_target = active_extended_branch_target_id_;
-    const int previous_side = active_extended_branch_side_sign_;
-    const int previous_horizon = active_extended_branch_horizon_size_;
-    const bool previous_warm = last_extended_branch_warm_start_applied_;
-    const bool previous_reset = last_extended_branch_context_reset_;
-    const auto previous_count = last_extended_branch_context_solve_count_;
-    auto restore_solver_context = ScopeExit([this, previous_context, previous_epoch,
-        previous_target, previous_side, previous_horizon, previous_warm,
-        previous_reset, previous_count]() {
-        active_extended_branch_solver_context_ = previous_context;
-        active_extended_branch_context_epoch_ = previous_epoch;
-        active_extended_branch_target_id_ = previous_target;
-        active_extended_branch_side_sign_ = previous_side;
-        active_extended_branch_horizon_size_ = previous_horizon;
-        last_extended_branch_warm_start_applied_ = previous_warm;
-        last_extended_branch_context_reset_ = previous_reset;
-        last_extended_branch_context_solve_count_ = previous_count;
-      });
-    active_extended_branch_solver_context_ =
-      overtake_tactical_five_state_lifecycle_->solver_context;
-    active_extended_branch_context_epoch_ = context_epoch;
-    active_extended_branch_target_id_ = snapshot_context.target_id;
-    active_extended_branch_side_sign_ =
-      problem.progress_execution_side_sign != 0 ?
-      problem.progress_execution_side_sign :
-      problem.dynamic_obstacle_lateral_escape_side_sign;
-    active_extended_branch_horizon_size_ = extended_problem->N;
-
-    const auto outcome = solve_extended_progress_problem(
-      extended_problem.value(), now_sec, false,
-      warm_resolution.stage_advance);
-    if (!outcome.result.has_value()) {
-      result.status = "solve-reject";
-      result.detail = outcome.failure_detail;
-      if (outcome.constraint_failure.has_value()) {
-        const auto semantic = mpcc_progress::decode_extended_constraint_row(
-          outcome.constraint_failure->row, extended_problem->N, false, true);
-        std::ostringstream detail;
-        detail << result.detail << ", semantic="
-               << mpcc_progress::extended_constraint_row_kind_name(
-          semantic.kind) << '/'
-               << mpcc_progress::extended_constraint_field_name(
-          semantic.field) << '@' << semantic.stage;
-        result.detail = detail.str();
-      }
-      constexpr int nx = mpcc_progress::kExtendedStateDimension;
-      constexpr int nu = mpcc_progress::kExtendedInputDimension;
-      const int horizon = extended_problem->N;
-      const int state_variable_count = nx * (horizon + 1);
-      const int variable_count = state_variable_count + nu * horizon;
-      const int box_offset = state_variable_count;
-      const int first_curvature_box_row =
-        box_offset + state_variable_count +
-        mpcc_progress::kExtendedCurvatureIndex;
-      const int first_curvature_rate_row =
-        state_variable_count + variable_count;
-      const int first_lateral_box_row =
-        box_offset + nx + mpcc_progress::kExtendedLateralIndex;
-      const int second_lateral_box_row =
-        box_offset + 2 * nx + mpcc_progress::kExtendedLateralIndex;
-      if (
-        horizon >= 2 && first_curvature_box_row < extended_problem->l.size() &&
-        first_curvature_rate_row < extended_problem->l.size() &&
-        second_lateral_box_row < extended_problem->l.size())
-      {
-        const double admissible_curvature_lower = std::max(
-          extended_problem->l[first_curvature_box_row],
-          extended_problem->l[first_curvature_rate_row]);
-        const double admissible_curvature_upper = std::min(
-          extended_problem->u[first_curvature_box_row],
-          extended_problem->u[first_curvature_rate_row]);
-        std::ostringstream detail;
-        detail << result.detail
-               << ", horizon=" << horizon << '/'
-               << extended_problem->configured_horizon_steps
-               << ", first_unavailable_state="
-               << extended_problem->first_unavailable_tracking_state
-               << ", kappa_box=["
-               << extended_problem->l[first_curvature_box_row] << ','
-               << extended_problem->u[first_curvature_box_row] << ']'
-               << ", kappa_rate=["
-               << extended_problem->l[first_curvature_rate_row] << ','
-               << extended_problem->u[first_curvature_rate_row] << ']'
-               << ", kappa_admissible=[" << admissible_curvature_lower
-               << ',' << admissible_curvature_upper << ']'
-               << ", x0_ey=" << -extended_problem->l[0]
-               << ", state1_ey=["
-               << extended_problem->l[first_lateral_box_row] << ','
-               << extended_problem->u[first_lateral_box_row] << ']'
-               << ", state2_ey=["
-               << extended_problem->l[second_lateral_box_row] << ','
-               << extended_problem->u[second_lateral_box_row] << ']'
-               << ", warm=" << (outcome.telemetry.warm_start_applied ? 1 : 0)
-               << ", reset=" << (last_extended_branch_context_reset_ ? 1 : 0);
-        result.detail = detail.str();
-      }
-      return result;
-    }
-    return evaluate_overtake_canonical_fresh_shadow(
-      problem, extended_problem.value(), outcome.result.value(), now_sec,
-      execution_context);
-  }
-
   bool unresolved_dynamic_wait_canonical_scope() const noexcept
   {
     if (!last_overtake_authority_trace_.has_value()) {
@@ -23887,10 +21763,10 @@ struct MPC
     snapshot.control_prefix = control_prefix->poses;
     snapshot.course_frame_knots = course_frame_knots.value();
     snapshot.identity.pose_snapshot_id =
-      canonical_retained_world::fingerprint_control_pose_path(snapshot.control_prefix,
+      rate_resolved_physical_wall::fingerprint_control_pose_path(snapshot.control_prefix,
       snapshot.control_prefix.back());
     snapshot.identity.course_frame_window_id =
-      canonical_retained_world::fingerprint_course_frame_window(
+      rate_resolved_physical_wall::fingerprint_course_frame_window(
       snapshot.course_frame_knots);
     snapshot.wall_grid = overtake_static_wall_grid_snapshot_owner_;
     snapshot.wall_grid_fingerprint = overtake_static_wall_grid_fingerprint_;
@@ -27096,13 +24972,6 @@ struct MPC
     -std::numeric_limits<double>::infinity()};
   std::optional<overtake_core::MpccLiteShadowResolution>
   mpcc_lite_shadow_last_feasible_resolution_;
-  std::optional<overtake_core::OvertakeMissionCandidate>
-  mpcc_lite_control_last_feasible_entry_mission_;
-  std::shared_ptr<const canonical_plan::CanonicalExecutionPlan>
-  mpcc_lite_control_last_feasible_entry_plan_;
-  std::string mpcc_lite_control_last_feasible_target_id_;
-  double mpcc_lite_control_last_feasible_entry_sec_{
-    -std::numeric_limits<double>::infinity()};
   std::vector<double> mpcc_frenet_dp_last_path_distances_;
   std::vector<double> mpcc_frenet_dp_last_lateral_path_;
   std::string mpcc_frenet_dp_last_target_id_;
@@ -27360,7 +25229,6 @@ struct MPC
     context.bounds_schema_id.clear();
     context.cost_schema_id.clear();
     const bool progress_geometry_required =
-      formulation == mpcc_contract::Formulation::VelocityProgress5State ||
       formulation ==
       mpcc_contract::Formulation::VelocitySteeringProgress6State;
     const int effective_horizon_steps = horizon_steps_override >= 0 ?
@@ -27399,28 +25267,6 @@ struct MPC
     context.horizon_steps = static_cast<std::size_t>(
       std::max(0, effective_horizon_steps));
     switch (formulation) {
-      case mpcc_contract::Formulation::VelocityProgress5State:
-        context.state_schema_id = "ey-elag-epsi-v-progress-v1";
-        context.input_schema_id = "accel-curvature-progress-rate-v1";
-        if (
-          context.intent == mpcc_contract::ControlIntent::Follow &&
-          problem.follow_longitudinal_contract.valid)
-        {
-          context.bounds_schema_id =
-            "progress-stage-wall-follow-target-v1";
-          context.cost_schema_id = "velocity-progress-follow-gap-v1";
-        } else if (
-          mpcc_contract::canonical_normal_intent_requires_execution_side(
-            context.intent))
-        {
-          context.bounds_schema_id =
-            "progress-stage-wall-obstacle-tracking-tube-v1";
-          context.cost_schema_id = "velocity-progress-v1";
-        } else {
-          context.bounds_schema_id = "progress-stage-wall-obstacle-v1";
-          context.cost_schema_id = "velocity-progress-v1";
-        }
-        break;
       case mpcc_contract::Formulation::VelocitySteeringProgress6State:
         context.state_schema_id =
           "ey-elag-epsi-v-progress-steering-v1";
@@ -27437,6 +25283,8 @@ struct MPC
         context.cost_schema_id = "derived-bypass-v1";
         break;
       case mpcc_contract::Formulation::Unresolved:
+        break;
+      default:
         break;
     }
     return mpcc_contract::seal_problem_context(std::move(context));
@@ -27498,12 +25346,6 @@ struct MPC
   int overtake_infeasibility_counter_{0};
   int last_solved_wp_id{0};
   Eigen::VectorXd current_control;
-  persistent_osqp::PersistentOsqpSolver persistent_extended_osqp_solver_{
-    kCanonicalPhysicalRowTolerancePolicy};
-  persistent_osqp::CertifiedWarmStartStore
-  certified_extended_osqp_warm_start_;
-  std::shared_ptr<ExtendedBranchSolverContext> extended_left_branch_solver_context_;
-  std::shared_ptr<ExtendedBranchSolverContext> extended_right_branch_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_preentry_left_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
@@ -27561,28 +25403,14 @@ struct MPC
   std::uint64_t rate_resolved_track_cruise_last_causal_submission_decision_id_{};
   double rate_resolved_track_cruise_last_causal_physical_steering_rad_{
     std::numeric_limits<double>::quiet_NaN()};
-  std::shared_ptr<OvertakeTacticalFiveStateLifecycle>
-  overtake_tactical_five_state_lifecycle_;
   std::optional<CanonicalNormalPendingActuation>
   pending_canonical_normal_actuation_;
   CanonicalNormalFinalActuationTelemetryWindow
   canonical_normal_final_actuation_telemetry_window_;
   double last_canonical_normal_final_actuation_log_sec_{
     std::numeric_limits<double>::quiet_NaN()};
-  std::shared_ptr<ExtendedBranchSolverContext> active_extended_branch_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   active_rate_resolved_preentry_solver_context_;
-  std::uint64_t active_extended_branch_context_epoch_{};
-  std::string active_extended_branch_target_id_;
-  int active_extended_branch_side_sign_{};
-  int active_extended_branch_horizon_size_{};
-  bool last_extended_branch_warm_start_applied_{false};
-  bool last_extended_branch_context_reset_{false};
-  std::uint64_t last_extended_branch_context_solve_count_{};
-  MpcOsqpTelemetryWindow osqp_telemetry_window_;
-  double last_osqp_telemetry_log_sec_{std::numeric_limits<double>::quiet_NaN()};
-  double progress_aligned_wall_refinement_last_log_sec_{
-    std::numeric_limits<double>::quiet_NaN()};
   std::optional<SolvedMpccExecutionTrajectory> solved_mpcc_execution_trajectory_;
   std::optional<SolvedMpccExecutionTrajectory>
   last_physically_validated_mpcc_execution_trajectory_;
@@ -27839,11 +25667,6 @@ private:
     overtake_receding_horizon_scheduled_cache_target_lateral_m_ =
       std::numeric_limits<double>::quiet_NaN();
     mpcc_lite_shadow_last_feasible_resolution_.reset();
-    mpcc_lite_control_last_feasible_entry_mission_.reset();
-    mpcc_lite_control_last_feasible_entry_plan_.reset();
-    mpcc_lite_control_last_feasible_target_id_.clear();
-    mpcc_lite_control_last_feasible_entry_sec_ =
-      -std::numeric_limits<double>::infinity();
     mpcc_frenet_dp_last_path_distances_.clear();
     mpcc_frenet_dp_last_lateral_path_.clear();
     mpcc_frenet_dp_last_target_id_.clear();

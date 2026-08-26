@@ -2638,6 +2638,23 @@ failure-first source contract 58件、25 package build、51/51 package test（1,
 wall proofを緩和したりretained exceptionを追加したりせず、fresh／retained実行geometryとruntime wall判定の整合を
 別Sliceで監査する。
 
+#### Five-state Overtake tactical Gateの撤去（2026-08-26、2025由来の暫定）
+
+`output/20260826-153933`の監査では、同じ左右candidateをprospective six-stateと旧five-stateが
+別々に解いていた。旧five-stateの`progress-regressed`が`dual execution entry held`を発行できたため、
+command publisherをsix-stateへ統一した後も、古い定式化が戦術選択と入口抑止を所有するlive Gateとして残っていた。
+
+左右candidateはprospective `VelocitySteeringProgress6State`だけで評価・比較する。選択された戦術Missionは
+certificate-free hintとしてcausal Gate Aへ渡し、current-world six-state workerがexact physical proofと
+execution prefixを原子的にbindする。five-state fresh evaluator、per-side solver/warm start、pre-entry plan、
+retained entry cache、certificate revalidator、第二branch selectionは削除した。control pose pathとcourse frameの
+fingerprintは、旧retained-world moduleではなくsix-state physical-wall moduleが所有する。
+
+`output/20260826-161516`では3件の`Idle -> ShiftOut`がすべて`gate=six-state-shiftout`で採用され、
+各entryは`certificate=1`、`samples=20`、`exact_stages=20`だった。five-state decision、selection、
+`progress-regressed`は0件である。後続のtarget stale/lost、Emergency、callback overrunは統合品質Gateへ残し、
+このauthority削除Sliceではparameter、timeout、lease、wall margin、solver設定を変更しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

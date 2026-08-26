@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <sstream>
 #include <utility>
@@ -14,6 +15,37 @@ namespace
 {
 
 using SteadyClock = std::chrono::steady_clock;
+
+class FingerprintBuilder
+{
+public:
+  void add_uint64(const std::uint64_t value) noexcept
+  {
+    for (std::size_t shift = 0U; shift < sizeof(value); ++shift) {
+      const auto byte = static_cast<unsigned char>(value >> (8U * shift));
+      hash_ ^= static_cast<std::uint64_t>(byte);
+      hash_ *= 1099511628211ULL;
+    }
+  }
+
+  void add_size(const std::size_t value) noexcept
+  {
+    add_uint64(static_cast<std::uint64_t>(value));
+  }
+
+  void add_double(const double value) noexcept
+  {
+    std::uint64_t bits{};
+    static_assert(sizeof(bits) == sizeof(value), "unexpected double width");
+    std::memcpy(&bits, &value, sizeof(value));
+    add_uint64(bits);
+  }
+
+  std::uint64_t value() const noexcept {return hash_ == 0U ? 1U : hash_;}
+
+private:
+  std::uint64_t hash_{1469598103934665603ULL};
+};
 
 bool finite_pose(const recovery::Pose2D & pose) noexcept
 {
@@ -52,6 +84,56 @@ bool same_identity(const Identity & lhs, const Identity & rhs) noexcept
     lhs.pose_snapshot_id == rhs.pose_snapshot_id &&
     lhs.course_frame_window_id == rhs.course_frame_window_id &&
     lhs.captured_sec == rhs.captured_sec;
+}
+
+std::uint64_t fingerprint_control_pose_path(
+  const std::vector<recovery::Pose2D> & measured_to_control_path,
+  const recovery::Pose2D & control_pose) noexcept
+{
+  if (measured_to_control_path.empty() || !finite_pose(control_pose)) {
+    return 0U;
+  }
+  FingerprintBuilder builder;
+  builder.add_size(measured_to_control_path.size());
+  for (const auto & pose : measured_to_control_path) {
+    if (!finite_pose(pose)) {
+      return 0U;
+    }
+    builder.add_double(pose.x_m);
+    builder.add_double(pose.y_m);
+    builder.add_double(pose.yaw_rad);
+  }
+  builder.add_double(control_pose.x_m);
+  builder.add_double(control_pose.y_m);
+  builder.add_double(control_pose.yaw_rad);
+  return builder.value();
+}
+
+std::uint64_t fingerprint_course_frame_window(
+  const std::vector<mpc_stage_geometry::CourseFrameKnot> & knots) noexcept
+{
+  if (knots.size() < 2U) {
+    return 0U;
+  }
+  FingerprintBuilder builder;
+  builder.add_size(knots.size());
+  double previous_progress_m = -std::numeric_limits<double>::infinity();
+  for (const auto & knot : knots) {
+    if (
+      !std::isfinite(knot.progress_m) || !std::isfinite(knot.x_m) ||
+      !std::isfinite(knot.y_m) || !std::isfinite(knot.heading_rad) ||
+      knot.progress_m <= previous_progress_m)
+    {
+      return 0U;
+    }
+    builder.add_double(knot.progress_m);
+    builder.add_double(knot.x_m);
+    builder.add_double(knot.y_m);
+    builder.add_double(knot.heading_rad);
+    builder.add_uint64(static_cast<std::uint64_t>(knot.waypoint));
+    previous_progress_m = knot.progress_m;
+  }
+  return builder.value();
 }
 
 bool snapshot_valid(const Snapshot & snapshot) noexcept

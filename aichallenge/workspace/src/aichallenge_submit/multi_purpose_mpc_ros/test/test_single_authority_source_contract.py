@@ -63,6 +63,7 @@ CLOUD_CONFIG = (
     Path(__file__).resolve().parents[1] / "config" / "config_for_cloud.yaml"
 ).read_text(encoding="utf-8")
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+CMAKE = (PACKAGE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
 LEGACY_BOOST_SURFACE = "\n".join(
     path.read_text(encoding="utf-8")
     for path in (
@@ -187,41 +188,6 @@ def test_retired_low_speed_direct_authority_is_physically_deleted() -> None:
         assert not [token for token in forbidden if token in config]
 
 
-def test_overtake_worker_fresh_chain_uses_sealed_snapshot_context() -> None:
-    """A tactical clone must not re-derive authority omitted from its snapshot."""
-
-    worker_start = SOURCE.index("evaluate_overtake_canonical_worker_fresh(")
-    worker_end = SOURCE.index(
-        "bool unresolved_dynamic_wait_canonical_scope() const noexcept",
-        worker_start,
-    )
-    worker = SOURCE[worker_start:worker_end]
-
-    assert "make_overtake_canonical_shadow_result(problem, snapshot_context)" in worker
-    assert (
-        "evaluate_overtake_canonical_fresh_shadow(\n"
-        "      problem, extended_problem.value(), outcome.result.value(), now_sec,\n"
-        "      execution_context)"
-    ) in worker
-    assert "make_problem_context(\n      problem" not in worker
-    assert (
-        "const auto execution_context = seal_problem_context_for_problem(\n"
-        "      problem, snapshot_context, extended_problem->N)"
-    ) in worker
-
-    fresh_start = SOURCE.index(
-        "OvertakeCanonicalFreshShadowResult\n"
-        "  evaluate_overtake_canonical_fresh_shadow("
-    )
-    fresh_end = SOURCE.index(
-        "evaluate_overtake_canonical_worker_fresh(", fresh_start
-    )
-    fresh = SOURCE[fresh_start:fresh_end]
-
-    assert "const auto context = make_problem_context(" not in fresh
-    assert "const auto & context = snapshot_context;" in fresh
-
-
 def test_follow_qp_keeps_planning_and_physical_gap_contracts_separate() -> None:
     """Nominal feasibility must not consume the physical hard-gap boundary."""
 
@@ -270,33 +236,6 @@ def test_follow_current_world_observation_survives_a_new_intent_proposal() -> No
     assert "problem.follow_longitudinal_contract.valid" not in evaluate
 
 
-def test_overtake_wall_proof_uses_exact_five_state_trajectory() -> None:
-    """Wall proof must retain lag, heading and solved progress until certified."""
-
-    branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
-    branch_end = SOURCE.index(
-        "evaluate_isolated_extended_mpcc_branch(", branch_start
-    )
-    branch = SOURCE[branch_start:branch_end]
-
-    proof_input = branch.index("build_exact_extended_wall_proof_input(")
-    physical_proof = branch.index("solved_mpcc_execution_path_wall_safe(")
-    assert proof_input < physical_proof
-    assert "exact_wall_proof->aligned" in branch
-    assert "physical_execution_certificate_exact_trajectory" in branch
-    assert "convert_extended_solution_to_legacy(" not in branch[:physical_proof]
-
-    helper_start = SOURCE.index("build_exact_extended_wall_proof_input(")
-    helper_end = SOURCE.index(
-        "executed_extended_progress_solution_wall_safe(", helper_start
-    )
-    helper = SOURCE[helper_start:helper_end]
-    assert "extract_extended_execution_trajectory(" in helper
-    assert "exact.lag_m = extracted->lag_m" in helper
-    assert "exact.heading_offset_rad = extracted->heading_offset_rad" in helper
-    assert "exact.progress_m = extracted->progress_m" in helper
-
-
 def test_overtake_entry_speed_proof_uses_selected_exact_trajectory() -> None:
     """Final prefix admission must not fall back to legacy rollout speed."""
 
@@ -315,90 +254,6 @@ def test_overtake_entry_speed_proof_uses_selected_exact_trajectory() -> None:
         "request.certified_execution_minimum_speed_mps =\n"
         "          certified_execution_minimum_speed(mission);"
     ) in admission
-
-
-def test_bounded_overtake_prefix_has_one_horizon_owner_end_to_end() -> None:
-    """Every pre-entry consumer must use the horizon built into the QP."""
-
-    builder_start = SOURCE.index("build_prospective_extended_branch_problem(")
-    builder_end = SOURCE.index("evaluate_extended_mpcc_branch(", builder_start)
-    builder = SOURCE[builder_start:builder_end]
-    assert "auto extended_problem = build_extended_progress_problem(" in builder
-    assert "extended_problem->N <= 0 || extended_problem->N > N" in builder
-
-    branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
-    branch_end = SOURCE.index(
-        "evaluate_isolated_extended_mpcc_branch(", branch_start
-    )
-    branch = SOURCE[branch_start:branch_end]
-    adopted = branch.index(
-        "auto prospective = build_prospective_extended_branch_problem("
-    )
-    consumers = branch[adopted:]
-
-    assert "std::move(prospective->extended_problem)" in consumers
-    assert "const int effective_horizon = extended->N;" in consumers
-    assert (
-        "active_extended_branch_horizon_size_ = effective_horizon;" in consumers
-    )
-    assert "outcome.result->constraint_tolerance, effective_horizon" in consumers
-    assert "const int nx_N = nx * (effective_horizon + 1);" in consumers
-    assert "tracking_wp_id, effective_horizon," in consumers
-    assert "for (int stage = 1; stage < effective_horizon + 1; ++stage)" in consumers
-    assert "const int terminal = nx * effective_horizon;" in consumers
-    assert (
-        "legacy, std::move(prospective_context), effective_horizon)" in consumers
-    )
-
-    helper_start = SOURCE.index("build_exact_extended_wall_proof_input(")
-    helper_end = SOURCE.index(
-        "executed_extended_progress_solution_wall_safe(", helper_start
-    )
-    helper = SOURCE[helper_start:helper_end]
-    assert "const int effective_horizon = extended_problem.N;" in helper
-    assert "extract_extended_execution_trajectory(\n      primal, effective_horizon" in helper
-    assert "for (int stage = 0; stage < effective_horizon; ++stage)" in helper
-
-    entry_start = SOURCE.index(
-        "bool revalidate_overtake_entry_execution_certificate("
-    )
-    entry_end = SOURCE.index(
-        "bool dynamic_margin_escape_solution_wall_safe(", entry_start
-    )
-    entry = SOURCE[entry_start:entry_end]
-    assert "exact_physical_execution_trajectory_complete(" in entry
-    assert "exact.lag_m" in entry
-    assert "exact.heading_offset_rad" in entry
-    assert "exact.progress_m" in entry
-    assert "exact five-state certificate accepted" in entry
-    assert "physical_execution_certificate_source_sec = now_sec" not in entry
-    assert (
-        "physical_execution_certificate_source_course_progress_m = model->s"
-        not in entry
-    )
-
-
-def test_canonical_overtake_uses_production_wall_clearance_contract() -> None:
-    """Fresh and retained candidates must not certify a zero-margin shadow."""
-
-    fresh_start = SOURCE.index(
-        "OvertakeCanonicalFreshShadowResult\n"
-        "  evaluate_overtake_canonical_fresh_shadow("
-    )
-    fresh_end = SOURCE.index(
-        "evaluate_overtake_canonical_worker_fresh(", fresh_start
-    )
-    fresh = SOURCE[fresh_start:fresh_end]
-    physical_proof = fresh.index("solved_mpcc_execution_path_wall_safe(")
-    physical_proof_end = fresh.index(
-        "SolvedExecutionWallValidationScope::SweptFromCurrentPose",
-        physical_proof,
-    )
-    proof_call = fresh[physical_proof:physical_proof_end]
-    assert "problem.progress_execution_required_wall_clearance_m" in proof_call
-    assert "upper_bound, 0.0" not in proof_call
-
-    assert "void evaluate_overtake_canonical_retained_shadow(" not in SOURCE
 
 
 def test_overtake_intents_use_the_rate_resolved_normal_owner() -> None:
@@ -769,62 +624,6 @@ def test_shared_rate_resolved_solver_transaction_is_serialized_end_to_end() -> N
     ]
 
 
-def test_overtake_entry_preserves_the_selected_tactical_artifact() -> None:
-    """ShiftOut keeps branch identity/proof without installing old authority."""
-
-    branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
-    branch_end = SOURCE.index(
-        "evaluate_isolated_extended_mpcc_branch(", branch_start
-    )
-    branch = SOURCE[branch_start:branch_end]
-    solve = branch.index("solve_extended_progress_problem(")
-    target_proof = branch.index("build_current_overtake_target_tube(")
-    canonical = branch.index("evaluate_overtake_canonical_fresh_shadow(")
-    assert solve < target_proof < canonical
-    assert "legacy.progress_execution_target_exclusion_certified = true" in branch
-    assert "preentry_canonical_plan" in branch
-
-    entry_start = SOURCE.index("const bool fresh_normal_mission_entry =")
-    entry_end = SOURCE.index(
-        "transition_overtake_line_phase(\n"
-        "          direct_pass ? OvertakeLinePhase::Pass",
-        entry_start,
-    )
-    entry = SOURCE[entry_start:entry_end]
-    assert "resolve_overtake_preentry_plan(" not in entry
-    assert "six-state-preentry-gate-a" in entry
-    assert "freeze_selected_overtake_mission(" in entry
-    assert "prepare_overtake_canonical_async_context(" not in entry
-    assert "plan_store.replace(" not in entry
-
-    certificate_start = SOURCE.index(
-        "bool revalidate_overtake_entry_execution_certificate("
-    )
-    certificate_end = SOURCE.index(
-        "bool dynamic_margin_escape_solution_wall_safe(", certificate_start
-    )
-    certificate = SOURCE[certificate_start:certificate_end]
-    assert "const canonical_plan::CanonicalExecutionPlan & preentry_plan" in certificate
-    assert "sample_retained_progress_advance(" in certificate
-    assert "preentry_plan.predicted_states" in certificate
-    assert "&plan_time_sec" in certificate
-    assert "build_current_overtake_target_tube(" in certificate
-    assert "validate_frenet_dp_target_bound_horizon(" in certificate
-
-    assert "void evaluate_overtake_canonical_retained_shadow(" not in SOURCE
-
-    fresh_start = SOURCE.index(
-        "OvertakeCanonicalFreshShadowResult\n"
-        "  evaluate_overtake_canonical_fresh_shadow("
-    )
-    fresh_end = SOURCE.index(
-        "evaluate_overtake_canonical_worker_fresh(", fresh_start
-    )
-    fresh = SOURCE[fresh_start:fresh_end]
-    assert "extraction.lateral_lower_m.push_back(" in fresh
-    assert "extraction.lateral_upper_m.push_back(" in fresh
-
-
 def test_fresh_preentry_uses_six_state_gate_for_shiftout_and_direct_pass() -> None:
     """No fresh entry, including start-grid, may bypass six-state Gate A."""
 
@@ -918,19 +717,13 @@ def test_six_state_preentry_gate_shadow_uses_explicit_intent_without_authority()
         selection_start,
     )
     selection = SOURCE[selection_start:selection_end]
-    selector_start = selection.index(
-        "behavior.extended_mpcc_branch_selection = "
-        "mpcc_progress::select_extended_branch("
-    )
-    selector_end = selection.index(
-        "const auto & selection = behavior.extended_mpcc_branch_selection;",
-        selector_start,
-    )
-    assert "overtake_rate_resolved_preentry" not in selection[
-        selector_start:selector_end
-    ]
-    assert "left_artifact.preentry_canonical_plan" in selection
-    assert "right_artifact.preentry_canonical_plan" in selection
+    assert selection.count("mpcc_progress::select_extended_branch(") == 1
+    assert "behavior.rate_resolved_preentry_branch_selection =" in selection
+    assert (
+        "behavior.extended_mpcc_branch_selection =\n"
+        "      behavior.rate_resolved_preentry_branch_selection;"
+    ) in selection
+    assert "preentry_canonical_plan" not in selection
     assert "authority=shadow,selected=0" in SOURCE
     assert "if (six_left.attempted || six_right.attempted)" in SOURCE
 
@@ -971,16 +764,15 @@ def test_six_state_preentry_selection_preserves_exact_evidence_without_authority
     selection = SOURCE[selection_start:selection_end]
     assert "behavior.rate_resolved_preentry_branch_selection =" in selection
     assert "rate_resolved_preentry_branch_evaluation(" in selection
-    assert "const auto & selection = behavior.extended_mpcc_branch_selection;" in selection
-    assert "behavior.rate_resolved_preentry_branch_selection.selected_side_sign" not in (
-        selection[
-            selection.index("const auto & selection = behavior.extended_mpcc_branch_selection;") :
-        ]
-    )
-
-    assert "six_selected=%d" in SOURCE
-    assert "selection_agree=%d" in SOURCE
-    assert "selection_valid=five%d/six%d" in SOURCE
+    assert (
+        "behavior.extended_mpcc_branch_selection =\n"
+        "      behavior.rate_resolved_preentry_branch_selection;"
+    ) in selection
+    assert "preentry_canonical_plan" not in selection
+    assert "five_selected=%d" not in SOURCE
+    assert "selection_agree=%d" not in SOURCE
+    assert "selection_valid=five%d/six%d" not in SOURCE
+    assert '"selected=%d,selection_valid=%d,"' in SOURCE
     assert "authority=shadow,selected=0" in SOURCE
 
     import_start = SOURCE.index("if (accepted_async_tactical_result != nullptr) {")
@@ -1050,11 +842,7 @@ def test_six_state_preentry_adoption_reuses_current_world_proof_without_authorit
     assert "if (!mpcc_lite_async_worker_context_)" in imported
     assert "evaluate_rate_resolved_preentry_adoption_shadow(output, now_sec)" in imported
 
-    contract_start = SOURCE.index("const auto apply_mpcc_entry_execution_contract =")
-    contract_end = SOURCE.index("if (async_shadow_enabled) {", contract_start)
-    assert "rate_resolved_preentry_adoption_shadow" not in SOURCE[
-        contract_start:contract_end
-    ]
+    assert "apply_mpcc_entry_execution_contract" not in SOURCE
     assert "adoption=%d/%d/%s/%s/target:%s" in SOURCE
     assert "authority=shadow,selected=0" in SOURCE
 
@@ -1202,6 +990,42 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     )
     freeze = SOURCE[freeze_start:freeze_end]
     assert "!physical_execution_certificate_available &&" in freeze
+
+
+def test_five_state_overtake_tactical_gate_is_physically_deleted() -> None:
+    """A five-state tactical result cannot gate the six-state Mission."""
+
+    retired_symbols = (
+        "preentry_canonical_plan",
+        "overtake_preentry_canonical_plan",
+        "mpcc_lite_control_last_feasible_entry_plan_",
+        "apply_mpcc_entry_execution_contract",
+        "revalidate_overtake_entry_execution_certificate",
+        "evaluate_overtake_canonical_fresh_shadow",
+        "evaluate_overtake_canonical_worker_fresh",
+        "overtake_tactical_five_state_lifecycle_",
+    )
+    for symbol in retired_symbols:
+        assert symbol not in SOURCE
+    controller_link_start = CMAKE.index("target_link_libraries(mpc_controller_cpp")
+    controller_link_end = CMAKE.index(")", controller_link_start)
+    controller_links = CMAKE[controller_link_start:controller_link_end]
+    for retired_library in (
+        "canonical_execution_plan_adapter",
+        "canonical_retained_world_revalidation",
+        "follow_canonical_async",
+    ):
+        assert retired_library not in controller_links
+
+    branch_start = SOURCE.index("evaluate_extended_mpcc_branch(")
+    branch_end = SOURCE.index(
+        "ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch(",
+        branch_start,
+    )
+    branch = SOURCE[branch_start:branch_end]
+    assert "evaluate_rate_resolved_preentry_shadow(" in branch
+    assert "solve_extended_progress_problem(" not in branch
+    assert "Formulation::VelocityProgress5State" not in branch
 
     invalidation_start = SOURCE.index("void invalidate_mpcc_lite_async_results()")
     invalidation_end = SOURCE.index("void set_gap_planner(", invalidation_start)
@@ -1381,7 +1205,7 @@ def test_overtake_preentry_target_prediction_is_an_explicit_snapshot_contract() 
 
     tube_start = SOURCE.index("CurrentOvertakeTargetTube build_current_overtake_target_tube(")
     tube_end = SOURCE.index(
-        "bool revalidate_overtake_entry_execution_certificate(", tube_start
+        "bool dynamic_margin_escape_solution_wall_safe(", tube_start
     )
     tube = SOURCE[tube_start:tube_end]
     assert "committed_target_prediction_available" in tube

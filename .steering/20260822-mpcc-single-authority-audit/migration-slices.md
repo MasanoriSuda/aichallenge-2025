@@ -1221,6 +1221,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   publisher joins are 3324/3722 with zero reject and executed sequences advance
   continuously.  This Slice is dynamically accepted; repeated physically
   rejected ShiftOut requests are the next all-intent transition Slice.
+- `.steering/20260826-slice6-five-state-tactical-gate-removal` removes the
+  final live five-state tactical veto in front of six-state Overtake Gate A.
+  Each valid side is solved and physically certified only by the prospective
+  six-state pipeline; one six-state selection supplies a certificate-free
+  Mission hint to the causal current-world worker.  The five-state fresh
+  evaluator, solver contexts, pre-entry plan, retained cache and certificate
+  revalidator are physically absent from the controller, and their migration
+  libraries are no longer linked into the production executable.  In
+  `output/20260826-161516`, all three observed fresh ShiftOut entries were
+  admitted by exact six-state Gate A certificates and no five-state branch or
+  progress-regression trace remained.  Target-loss, Emergency and runtime
+  overrun findings remain final integration-Gate inputs rather than reasons to
+  restore the old authority.
 
 ## Slice 7: Parameter tuning
 

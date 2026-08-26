@@ -132,6 +132,35 @@ TEST(MpccRateResolvedPhysicalWall, RejectsUnsealedWorldIdentity)
   EXPECT_EQ(result.outcome, wall::Outcome::InvalidInput);
 }
 
+TEST(MpccRateResolvedPhysicalWall, FingerprintsExactPhysicalProofInputs)
+{
+  const std::vector<recovery::Pose2D> prefix{
+    {0.0, 0.0, 0.0}, {0.5, 0.1, 0.05}};
+  const std::vector<multi_purpose_mpc_ros::mpc_stage_geometry::CourseFrameKnot>
+  knots{{0.0, 0.0, 0.0, 0.0, 0}, {1.0, 1.0, 0.1, 0.05, 1}};
+
+  const auto pose_fingerprint =
+    wall::fingerprint_control_pose_path(prefix, prefix.back());
+  const auto course_fingerprint =
+    wall::fingerprint_course_frame_window(knots);
+  EXPECT_NE(pose_fingerprint, 0U);
+  EXPECT_NE(course_fingerprint, 0U);
+
+  auto changed_prefix = prefix;
+  changed_prefix.back().y_m += 0.01;
+  auto changed_knots = knots;
+  changed_knots.back().heading_rad += 0.01;
+  EXPECT_NE(
+    wall::fingerprint_control_pose_path(changed_prefix, changed_prefix.back()),
+    pose_fingerprint);
+  EXPECT_NE(
+    wall::fingerprint_course_frame_window(changed_knots), course_fingerprint);
+  EXPECT_EQ(
+    wall::fingerprint_control_pose_path({}, recovery::Pose2D{}), 0U);
+  EXPECT_EQ(
+    wall::fingerprint_course_frame_window({knots.front()}), 0U);
+}
+
 TEST(MpccRateResolvedPhysicalWall, MailboxIsMonotonicAndNonBlocking)
 {
   wall::Mailbox mailbox;

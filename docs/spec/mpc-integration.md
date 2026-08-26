@@ -1045,11 +1045,11 @@ colcon が自動解決するため、特別な指定は不要。
 
 MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 
-自己位置の計測時刻補正は MPC の waypoint offset ではなく、`aichallenge_submit_launch/launch/reference.launch.xml` から EKF に渡す。さらにSIMでは、EKF出力をMPC初期状態へ変換する直前に、2025 Pure Pursuit由来のCTRV予測を適用して制御計算・アクチュエータ遅延を補う。EKFの `0.3 s` とMPCの `0.125 s` はいずれも2025由来の暫定調整値であり、2026 AWSIMで実測した確定値ではない。
+自己位置の計測時刻補正は MPC の waypoint offset ではなく、`aichallenge_submit_launch/launch/reference.launch.xml` から EKF に渡す。sensor timestamp の実測根拠がないため、SIM/実車とも EKF の追加遅延は既定 `0.0 s` とする。SIMでは別責務として、EKF出力をMPC初期状態へ変換する直前に、同定済みの操舵応答モデルで `0.13 s` の制御・アクチュエータ時間を予測する。sensor measurement delay と controller/actuator prediction を重ねて同じ遅延を二重補正してはならない。
 
 | launch 引数 | 現在の値 | 確認事項 |
 |---------|---------|---------|
-| `simulation_pose_additional_delay` | `0.3` | SIM の pose measurement 追加遅延 [s]。同条件の `0.0` との A/B 比較で要調整 |
+| `simulation_pose_additional_delay` | `0.0` | SIM の実測済み pose measurement 追加遅延 [s]。非ゼロ値は sensor timestamp の計測根拠がある場合だけ指定する |
 | `vehicle_pose_additional_delay` | `0.0` | 実車の pose measurement 追加遅延 [s]。センサ時刻遅延を実測するまで補正しない |
 
 | 設定項目 | 現在の値 | 確認事項 |
@@ -1065,8 +1065,8 @@ MPC の config ファイル: `multi_purpose_mpc_ros/config/config.yaml`
 | `awsim_boost.motion_speed_threshold_mps` | `0.1` | 発車と判定する符号付き前進速度 |
 | `awsim_boost.max_trigger_speed_mps` | `1.0` | 遅延発動を禁止する最大前進速度 |
 | `awsim_boost.motion_trigger_timeout_sec` | `0.5` | 初回前進検出後に安全条件成立を待つ上限時間 |
-| `mpc.steering_tire_angle_gain_var` | `1.5` | legacy / Recoveryのpublish時だけ適用する2025 AWSIM向け出力補償。5-state canonical Track/Cruiseへは重ねない。内部モデル、実機値、2026公式値は未確定 |
-| `mpc.state_prediction_delay_sec` | `0.125` | EKF補正後の自己位置を速度・ヨーレートで先行予測する時間 [s]。`0.0` で無効 |
+| `mpc.steering_tire_angle_gain_var` | `1.435` | 物理舵角とwire指令の同定済み変換。canonical MPCCは物理舵角で証明し、publish境界だけでwire値へ変換する |
+| `mpc.state_prediction_delay_sec` | `0.13` | 現在poseから制御・アクチュエータ応答時点までを同定済み操舵応答モデルで予測する時間 [s]。sensor measurement delayではない。`0.0`で無効 |
 | `mpc.state_prediction_simulation_only` | `true` | `true` のとき明示的なsimulation launchでのみMPC初期状態予測を有効化 |
 | `mpc.waypoint_local_association_enabled` | `true` | 前回tracking WP近傍の連続探索を有効化。`false`は全経路最近傍へ戻す |
 | `mpc.waypoint_local_lookbehind_m` / `mpc.waypoint_local_lookahead_m` | `8.0` / `30.0` | 前回WPから局所探索する後方／前方経路距離 [m] |

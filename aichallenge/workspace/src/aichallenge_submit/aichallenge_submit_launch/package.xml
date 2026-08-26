@@ -41,6 +41,7 @@
   <exec_depend>topic_tools</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>autoware_lint_common</test_depend>
 
   <export>

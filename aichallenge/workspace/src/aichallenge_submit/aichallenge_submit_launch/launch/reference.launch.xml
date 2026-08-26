@@ -9,11 +9,11 @@
   <arg name="sensor_model" default="racing_kart_sensor_kit" description="sensor model name"/>
   <!-- Optional parameters -->
   <!--
-    EKF pose timing compensation. The simulation default is a 2025-derived provisional
-    value and remains overrideable for A/B testing; do not apply it to the vehicle unless
-    the actual sensor timestamp delay has been measured.
+    EKF pose timing compensation. Keep both defaults at zero: a nonzero value changes the
+    time represented by the map pose and requires measured sensor timestamp evidence.
+    The controller's separate state-prediction horizon models actuator/command response.
   -->
-  <arg name="simulation_pose_additional_delay" default="0.3" description="additional pose measurement delay for simulation [s]"/>
+  <arg name="simulation_pose_additional_delay" default="0.0" description="measured additional pose measurement delay for simulation [s]"/>
   <arg name="vehicle_pose_additional_delay" default="0.0" description="additional pose measurement delay for vehicle [s]"/>
   <!-- Map -->
   <arg name="lanelet2_map_file" default="lanelet2_map.osm" description="lanelet2 map file name"/>

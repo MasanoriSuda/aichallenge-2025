@@ -2535,6 +2535,41 @@ invalid interval／horizon exhaustionを含む回帰テスト、25 package build
 next publicationまでの到達性をproblem内に持たない別の定式化欠陥である。revalidation緩和やfallbackで隠さず、
 後続Sliceでfirst publication constraintとして修正する。
 
+#### 物理舵角とdesired publication系列の分離（2026-08-26、2025由来の暫定）
+
+`output/20260826-113945`の後続監査で、上記の「first publication constraint不足」という
+説明をさらに上流へ修正した。six-state QPのsteering stateはlatency補償後の物理舵角であり、
+publisherが継続すべき系列の初期値はsolve snapshot直前のdesired commandである。従来artifactは
+前者を`semantic_initial_steering_rad`へsealした後、desired command抽出でも同じ値を初期値に
+再利用していた。actuator lagによって両者が離れていると、正しいsteering-rate列から誤った
+desired系列を生成し、current-world revalidationが`steering-unreachable`として正当に拒否した。
+
+artifactとsolver requestは次の二つを別々にsealする。
+
+- `semantic_initial_steering_rad`: 物理dynamicsとwall proofの初期値。
+- `publication_initial_steering_rad`: 直前にpublishしたdesired commandであり、command continuityの初期値。
+
+両系列は同じcertified steering-rate列で進むため、その差はhorizon内で一定である。QPは各stageへ
+steering-rateの累積prefix rowを追加し、物理originとdesired publication originから見た角度limitの
+交差区間を直接制約する。通常のphysical steering state boxを平行移動するだけでは第二originからの
+累積rate列を証明できないため採用しない。これにより物理trajectoryとdesired commandの双方が最大舵角内に
+あることをproblem内で証明する。artifact cursorは
+seal済みpublication predecessorからの経過時刻なので、command抽出時にpublisher intervalをもう一度
+加算しない。publisher interval自体は、少なくとも次周期まで両系列がsample可能であることのartifact
+validity証明として維持する。
+
+これはreachability limitの緩和、最終command clamp、別normal authority、solver／wall parameter調整ではない。
+物理状態とdesired commandという二つの異なる意味を一つの値へ重ねていたproducer contractの修正である。
+publisher境界では、serialization前のdouble指令は完全一致を維持する。ROS Ackermann messageのfloat32 fieldへ
+変換した後は、そのwire表現同士を完全一致で照合してからcandidateをexecuted planへ昇格する。doubleと
+float32をそのまま完全一致比較して正常publicationを拒否することも、数値toleranceで別指令を許すこともない。
+
+failure-first test、direct cumulative prefix、retained cursor抽出、provenance fixtureを含む全package testと
+workspace buildを通した。`output/20260826-124000`では両domainの`semantic-steering-sequence-rejected=0`、
+publisher joinはd1で3324件、d2で3722件が成功しrejectは0、executed sequenceは2942／2998まで進んだ。
+これにより旧stale-executed-plan authority lossは解消した。残るFollow -> ShiftOutの`stage-wall-rejected`反復は
+全intent動的受入れの別Sliceで扱い、wall marginやsteering parameterでは隠さない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

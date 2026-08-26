@@ -125,6 +125,8 @@ const char * to_string(const RejectReason reason) noexcept
       return "acceleration-inset-unavailable";
     case RejectReason::SteeringRateInsetUnavailable:
       return "steering-rate-inset-unavailable";
+    case RejectReason::SteeringPrefixInsetUnavailable:
+      return "steering-prefix-inset-unavailable";
   }
   return "unknown";
 }
@@ -156,11 +158,14 @@ std::optional<Result> build(
   if (
     horizon <= 0 || !request.initial_state.allFinite() ||
     !std::isfinite(request.current_steering_rad) ||
+    !std::isfinite(request.previous_published_steering_rad) ||
     !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
     !std::isfinite(request.maximum_abs_steering_rad) ||
     request.maximum_abs_steering_rad <= 0.0 ||
     request.maximum_abs_steering_rad >= half_pi ||
     std::abs(request.current_steering_rad) >
+    request.maximum_abs_steering_rad ||
+    std::abs(request.previous_published_steering_rad) >
     request.maximum_abs_steering_rad ||
     !std::isfinite(request.maximum_abs_steering_rate_radps) ||
     request.maximum_abs_steering_rate_radps < 0.0 ||
@@ -238,6 +243,29 @@ std::optional<Result> build(
   result.steering_upper_rad.resize(static_cast<std::size_t>(horizon + 1));
   result.curvature_to_steering_jacobian_radpm_per_rad.resize(
     static_cast<std::size_t>(horizon));
+  // The exact input prefix, rather than the solver steering state and its
+  // equality residual, owns desired-command publication.  One cumulative
+  // interval certifies both the physical and desired origins under the same
+  // steering-rate sequence.
+  const double physical_prefix_lower = std::max(
+    -request.maximum_abs_steering_rad - request.current_steering_rad,
+    -request.maximum_abs_steering_rad -
+    request.previous_published_steering_rad);
+  const double physical_prefix_upper = std::min(
+    request.maximum_abs_steering_rad - request.current_steering_rad,
+    request.maximum_abs_steering_rad -
+    request.previous_published_steering_rad);
+  const auto solver_prefix_bounds = inset_for_exact_physical_boundary(
+    physical_prefix_lower, physical_prefix_upper, solver_tolerance);
+  if (!solver_prefix_bounds.has_value()) {
+    return reject(
+      RejectReason::SteeringPrefixInsetUnavailable, -1,
+      model::kSteeringRateIndex, 0.0,
+      physical_prefix_lower, physical_prefix_upper);
+  }
+  problem.steering_rate_prefix_bounds =
+    mpcc_rate_resolved_problem::SteeringRatePrefixBounds{
+      solver_prefix_bounds->lower, solver_prefix_bounds->upper};
 
   for (int stage = 0; stage <= horizon; ++stage) {
     const int state_offset = model::kStateDimension * stage;

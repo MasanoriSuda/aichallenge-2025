@@ -80,6 +80,41 @@ TEST(MpccRateResolvedProblem, AssemblesExactVariableAndRowLayout)
   EXPECT_EQ(assembled->upper_bound.size(), assembled->constraints.rows());
 }
 
+TEST(MpccRateResolvedProblem, AddsOneExactDesiredSteeringPrefixRowPerStage)
+{
+  auto request = straight_request();
+  request.steering_rate_prefix_bounds = problem::SteeringRatePrefixBounds{
+    -1.15, 0.05};
+  const auto assembled = problem::assemble(request);
+  ASSERT_TRUE(assembled.has_value());
+  constexpr int horizon = 3;
+  constexpr int state_values = model::kStateDimension * (horizon + 1);
+  constexpr int input_values = model::kInputDimension * horizon;
+  constexpr int variable_count = state_values + input_values;
+  EXPECT_EQ(
+    assembled->constraints.rows(),
+    state_values + variable_count + horizon);
+  const int prefix_offset = state_values + variable_count;
+  for (int stage = 0; stage < horizon; ++stage) {
+    EXPECT_DOUBLE_EQ(assembled->lower_bound[prefix_offset + stage], -1.15);
+    EXPECT_DOUBLE_EQ(assembled->upper_bound[prefix_offset + stage], 0.05);
+    const auto semantic = problem::decode_row(
+      prefix_offset + stage, horizon);
+    ASSERT_TRUE(semantic.valid);
+    EXPECT_EQ(semantic.kind, problem::RowKind::SteeringRatePrefix);
+    EXPECT_EQ(semantic.stage, stage);
+    for (int prefix_stage = 0; prefix_stage < horizon; ++prefix_stage) {
+      const double expected = prefix_stage <= stage ? 0.10 : 0.0;
+      EXPECT_DOUBLE_EQ(
+        assembled->constraints.coeff(
+          prefix_offset + stage,
+          state_values + prefix_stage * model::kInputDimension +
+          model::kSteeringRateIndex),
+        expected);
+    }
+  }
+}
+
 TEST(MpccRateResolvedProblem, StateZeroEqualityAndSteeringOwnersAreExplicit)
 {
   const auto request = straight_request();

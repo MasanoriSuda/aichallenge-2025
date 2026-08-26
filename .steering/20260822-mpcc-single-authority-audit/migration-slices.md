@@ -1202,6 +1202,25 @@ Finish the architecture simplification instead of leaving permanent dual control
   exposed a separate formulation defect: first steering-rate motion is not
   constrained against the previous published desired command.  That successor
   Slice must repair the QP constraint rather than relax live revalidation.
+- `.steering/20260826-physical-publication-steering-separation` refines that
+  successor diagnosis at the producer boundary.  The latency-compensated
+  physical steering state and the previously published desired command are
+  distinct sequence origins.  The exact same certified steering-rate vector
+  advances both, while exact cumulative-rate prefix rows constrain both angle
+  series at every stage.  Execution artifacts now seal
+  both origins, desired command extraction starts from the publication origin
+  at the exact cursor elapsed time, and the publisher interval remains an
+  artifact sampleability certificate instead of being added twice.  The
+  failure-first test proves the old artifact emitted the physical-origin value
+  instead of the sealed desired predecessor.  A second dynamic falsification
+  found that float32 ROS serialization was compared directly to the original
+  double command, preventing candidate-to-executed promotion.  The boundary
+  now uses exact wire-representation equality while pre-serialization remains
+  exact double equality.  No clamp, tolerance change, timeout, lease, solver
+  tuning, or legacy authority is introduced.  In `output/20260826-124000`,
+  publisher joins are 3324/3722 with zero reject and executed sequences advance
+  continuously.  This Slice is dynamically accepted; repeated physically
+  rejected ShiftOut requests are the next all-intent transition Slice.
 
 ## Slice 7: Parameter tuning
 

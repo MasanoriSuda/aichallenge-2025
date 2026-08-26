@@ -30,8 +30,10 @@ bool finite_control(const ControlStage & control) noexcept
          std::isfinite(control.acceleration_upper_mps2);
 }
 
-mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation sample_steering(
-  const ExecutionArtifact & artifact, const double elapsed_sec) noexcept
+mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation
+sample_steering_sequence(
+  const ExecutionArtifact & artifact, const double initial_steering_rad,
+  const double elapsed_sec) noexcept
 {
   std::vector<double> rates;
   std::vector<double> durations;
@@ -43,10 +45,26 @@ mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation sample_steering(
   }
   return mpcc_rate_resolved::evaluate_certified_actuation_sequence_sample(
     mpcc_rate_resolved::CertifiedActuationSequenceSampleRequest{
-        artifact.semantic_initial_steering_rad, std::move(rates),
+        initial_steering_rad, std::move(rates),
         std::move(durations), elapsed_sec, artifact.maximum_abs_steering_rad,
         artifact.wheelbase_m,
         artifact.maximum_normalized_constraint_violation});
+}
+
+mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation
+sample_physical_steering(
+  const ExecutionArtifact & artifact, const double elapsed_sec) noexcept
+{
+  return sample_steering_sequence(
+    artifact, artifact.semantic_initial_steering_rad, elapsed_sec);
+}
+
+mpcc_rate_resolved::CertifiedActuationSequenceSampleEvaluation
+sample_publication_steering(
+  const ExecutionArtifact & artifact, const double elapsed_sec) noexcept
+{
+  return sample_steering_sequence(
+    artifact, artifact.publication_initial_steering_rad, elapsed_sec);
 }
 
 }  // namespace
@@ -174,12 +192,17 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   }
   if (
     !std::isfinite(artifact.semantic_initial_steering_rad) ||
+    !std::isfinite(artifact.publication_initial_steering_rad) ||
     !std::isfinite(artifact.wheelbase_m) || artifact.wheelbase_m <= 0.0 ||
     !std::isfinite(artifact.maximum_abs_steering_rad) ||
     artifact.maximum_abs_steering_rad <= 0.0 ||
     artifact.maximum_abs_steering_rad >= half_pi ||
     !std::isfinite(artifact.maximum_abs_steering_rate_radps) ||
-    artifact.maximum_abs_steering_rate_radps <= 0.0)
+    artifact.maximum_abs_steering_rate_radps <= 0.0 ||
+    std::abs(artifact.semantic_initial_steering_rad) >
+    artifact.maximum_abs_steering_rad ||
+    std::abs(artifact.publication_initial_steering_rad) >
+    artifact.maximum_abs_steering_rad)
   {
     return RejectReason::InvalidLimits;
   }
@@ -320,13 +343,18 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
       return RejectReason::ProgressRegressionBeyondCertificate;
     }
   }
-  if (!sample_steering(artifact, horizon_sec).sample.has_value()) {
+  if (
+    !sample_physical_steering(artifact, horizon_sec).sample.has_value() ||
+    !sample_publication_steering(artifact, horizon_sec).sample.has_value())
+  {
     return RejectReason::SemanticSteeringSequenceRejected;
   }
   if (
     artifact.publication_interval_sec >
     horizon_sec + artifact.physical_global_tolerance ||
-    !sample_steering(
+    !sample_physical_steering(
+      artifact, artifact.publication_interval_sec).sample.has_value() ||
+    !sample_publication_steering(
       artifact, artifact.publication_interval_sec).sample.has_value())
   {
     return RejectReason::InvalidTiming;
@@ -423,8 +451,11 @@ ActuationResult extract_actuation(
     result.reason = ActuationReason::InvalidStageIndex;
     return result;
   }
-  const auto sample = sample_steering(
-    artifact, cursor.elapsed_sec + artifact.publication_interval_sec);
+  // cursor.elapsed_sec is elapsed time since the publication predecessor was
+  // sealed.  It already accounts for asynchronous result age; advancing by a
+  // second publication interval would manufacture an unreachable command.
+  const auto sample = sample_publication_steering(
+    artifact, cursor.elapsed_sec);
   result.sample_reason = sample.reason;
   if (!sample.sample.has_value()) {
     result.reason = ActuationReason::SampleRejected;

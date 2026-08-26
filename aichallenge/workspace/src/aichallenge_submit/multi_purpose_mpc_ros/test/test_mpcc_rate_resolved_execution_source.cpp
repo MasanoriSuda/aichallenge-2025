@@ -49,6 +49,7 @@ std::shared_ptr<const certified::CertifiedPlan> plan()
   artifact.completed_sec = 12.03;
   artifact.course_progress_origin_m = 50.0;
   artifact.semantic_initial_steering_rad = 0.1;
+  artifact.publication_initial_steering_rad = 0.1;
   artifact.wheelbase_m = 2.0;
   artifact.maximum_abs_steering_rad = 0.6;
   artifact.maximum_abs_steering_rate_radps = 1.0;

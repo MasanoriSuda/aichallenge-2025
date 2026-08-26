@@ -818,6 +818,30 @@ bool canonical_normal_command_matches_actuation(
     steering_tire_angle_rad == command.steering_tire_angle_rad;
 }
 
+bool canonical_normal_command_matches_serialized_actuation(
+  const CanonicalNormalCommand & command, const double target_speed_mps,
+  const double acceleration_mps2,
+  const double steering_tire_angle_rad) noexcept
+{
+  if (
+    command.source == CanonicalNormalAuthoritySource::EmergencyStop ||
+    !std::isfinite(target_speed_mps) ||
+    !std::isfinite(acceleration_mps2) ||
+    !std::isfinite(steering_tire_angle_rad))
+  {
+    return false;
+  }
+  const auto wire_equal = [](const double expected, const double actual) {
+      return
+        std::isfinite(expected) && std::isfinite(actual) &&
+        static_cast<float>(expected) == static_cast<float>(actual);
+    };
+  return
+    wire_equal(command.predicted_speed_mps, target_speed_mps) &&
+    wire_equal(command.acceleration_mps2, acceleration_mps2) &&
+    wire_equal(command.steering_tire_angle_rad, steering_tire_angle_rad);
+}
+
 std::optional<double> resolve_published_steering_tire_angle(
   const double model_steering_tire_angle_rad,
   const double legacy_actuator_gain,

@@ -44,6 +44,7 @@ execution::ExecutionArtifact artifact(const std::uint64_t sequence = 1U)
   value.completed_sec = value.prediction_origin_sec + 0.01;
   value.course_progress_origin_m = 50.0;
   value.semantic_initial_steering_rad = 0.10;
+  value.publication_initial_steering_rad = 0.10;
   value.wheelbase_m = 2.0;
   value.maximum_abs_steering_rad = 0.60;
   value.maximum_abs_steering_rate_radps = 1.0;

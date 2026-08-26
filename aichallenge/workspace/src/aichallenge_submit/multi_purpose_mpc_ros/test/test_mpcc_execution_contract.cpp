@@ -1176,6 +1176,27 @@ TEST(MpccExecutionContract, LegacyPublicationRetainsActuatorCalibrationDuringMig
   EXPECT_DOUBLE_EQ(published.value(), 0.315);
 }
 
+TEST(MpccExecutionContract, PublishedCandidateJoinsAtTheExactWireRepresentation)
+{
+  contract::CanonicalNormalCommand command;
+  command.source = contract::CanonicalNormalAuthoritySource::RetainedCertified;
+  command.predicted_speed_mps = 4.123456789;
+  command.acceleration_mps2 = 1.234567891;
+  command.steering_tire_angle_rad = -0.157369977;
+
+  const double published_speed = static_cast<float>(command.predicted_speed_mps);
+  const double published_acceleration = static_cast<float>(command.acceleration_mps2);
+  const double published_steering = static_cast<float>(command.steering_tire_angle_rad);
+
+  EXPECT_FALSE(contract::canonical_normal_command_matches_actuation(
+      command, published_speed, published_acceleration, published_steering));
+  EXPECT_TRUE(contract::canonical_normal_command_matches_serialized_actuation(
+      command, published_speed, published_acceleration, published_steering));
+  EXPECT_FALSE(contract::canonical_normal_command_matches_serialized_actuation(
+      command, published_speed, published_acceleration,
+      static_cast<float>(command.steering_tire_angle_rad + 0.01)));
+}
+
 TEST(MpccExecutionContract, PublicationRejectsInvalidSteeringContract)
 {
   EXPECT_FALSE(contract::resolve_published_steering_tire_angle(

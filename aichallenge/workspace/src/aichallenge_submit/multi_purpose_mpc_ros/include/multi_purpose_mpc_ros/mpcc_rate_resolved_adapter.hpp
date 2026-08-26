@@ -52,6 +52,7 @@ struct Request
   Eigen::Matrix<double, kLegacyStateDimension, 1> initial_state{
     Eigen::Matrix<double, kLegacyStateDimension, 1>::Zero()};
   double current_steering_rad{};
+  double previous_published_steering_rad{};
   double wheelbase_m{};
   double maximum_abs_steering_rad{};
   double maximum_abs_steering_rate_radps{};
@@ -92,6 +93,7 @@ enum class RejectReason
   LinearizationUnavailable,
   AccelerationInsetUnavailable,
   SteeringRateInsetUnavailable,
+  SteeringPrefixInsetUnavailable,
 };
 
 struct BuildDiagnostic

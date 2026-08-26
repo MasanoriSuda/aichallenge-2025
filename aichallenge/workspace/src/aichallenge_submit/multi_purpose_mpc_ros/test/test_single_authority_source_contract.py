@@ -547,9 +547,11 @@ def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() ->
     )
     admission = SOURCE[admission_start:admission_end]
     assert "physical_control_origin_steering_rad_.has_value()" in admission
+    assert "current_physical_steering_state_.has_value()" in admission
     assert (
         "bind_rate_resolved_track_cruise_submission(\n"
-        "        draft, physical_control_origin_steering_rad_.value())"
+        "        draft, physical_control_origin_steering_rad_.value(),\n"
+        "        current_physical_steering_state_->committed_steering_rad)"
         in admission
     )
     assert "bind_rate_resolved_track_cruise_submission(draft, previous_steering)" not in admission
@@ -1984,12 +1986,12 @@ def test_certified_candidate_becomes_retained_only_after_exact_publication() -> 
         "last_overtake_authority_trace() const noexcept", record_start
     )
     record = SOURCE[record_start:record_end]
-    assert "canonical_normal_command_matches_actuation(" in record
+    assert "canonical_normal_command_matches_serialized_actuation(" in record
     assert "pending.promote_to_executed" in record
     assert "mark_executed(" in record
-    assert record.index("canonical_normal_command_matches_actuation(") < record.index(
-        "mark_executed("
-    )
+    assert record.index(
+        "canonical_normal_command_matches_serialized_actuation("
+    ) < record.index("mark_executed(")
 
     control_start = SOURCE.index("void control()")
     control_end = SOURCE.index("void publish_zero_command()", control_start)

@@ -86,6 +86,7 @@ bool result_valid(const Result & result) noexcept
          std::isfinite(result.first_steering_rate_radps) &&
          std::isfinite(result.first_virtual_progress_speed_mps) &&
          std::isfinite(result.initial_steering_rad) &&
+         std::isfinite(result.publication_initial_steering_rad) &&
          std::isfinite(result.solver_initial_steering_rad) &&
          std::isfinite(result.sampled_steering_rad) &&
          std::isfinite(result.first_steering_rate_physical_lower_radps) &&
@@ -246,6 +247,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   const int state_values = model::kStateDimension * (horizon + 1);
   const auto & primal = outcome.result->primal;
   result.initial_steering_rad = snapshot.request.current_steering_rad;
+  result.publication_initial_steering_rad =
+    snapshot.request.previous_published_steering_rad;
   result.solver_initial_steering_rad = primal[model::kSteeringIndex];
   result.first_acceleration_mps2 =
     primal[state_values + model::kAccelerationIndex];
@@ -319,6 +322,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     snapshot.course_progress_origin_m;
   execution_artifact.semantic_initial_steering_rad =
     snapshot.request.current_steering_rad;
+  execution_artifact.publication_initial_steering_rad =
+    snapshot.request.previous_published_steering_rad;
   execution_artifact.wheelbase_m = snapshot.request.wheelbase_m;
   execution_artifact.maximum_abs_steering_rad =
     snapshot.request.maximum_abs_steering_rad;

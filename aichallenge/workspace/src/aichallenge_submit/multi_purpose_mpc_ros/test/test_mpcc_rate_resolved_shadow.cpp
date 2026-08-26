@@ -80,6 +80,7 @@ shadow::Snapshot snapshot(const std::uint64_t sequence = 1U)
   result.identity.snapshot_sec = 10.0 + 0.1 * sequence;
   result.control_prediction_origin_sec = result.identity.snapshot_sec + 0.13;
   result.request = straight_request();
+  result.request.previous_published_steering_rad = 0.05;
   result.course_progress_origin_m = 50.0;
   result.nominal_path_distance_m = {0.0, 0.2, 0.4, 0.6};
   result.publication_interval_sec = 0.025;
@@ -98,6 +99,9 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_TRUE(result.constraints_satisfied);
   EXPECT_TRUE(result.actuation_sampled);
   EXPECT_DOUBLE_EQ(result.initial_steering_rad, input.request.current_steering_rad);
+  EXPECT_DOUBLE_EQ(
+    result.publication_initial_steering_rad,
+    input.request.previous_published_steering_rad);
   EXPECT_TRUE(std::isfinite(result.solver_initial_steering_rad));
   EXPECT_NEAR(
     result.sampled_steering_rad,
@@ -144,6 +148,9 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_DOUBLE_EQ(
     result.execution_artifact->semantic_initial_steering_rad,
     input.request.current_steering_rad);
+  EXPECT_DOUBLE_EQ(
+    result.execution_artifact->publication_initial_steering_rad,
+    input.request.previous_published_steering_rad);
   EXPECT_DOUBLE_EQ(
     result.execution_artifact->control_stages.front().steering_rate_radps,
     result.first_steering_rate_radps);
@@ -221,11 +228,11 @@ TEST(MpccRateResolvedShadow, RetainsAndSamplesExactRateResolvedArtifact)
     actuation.sample_reason,
     multi_purpose_mpc_ros::mpcc_rate_resolved::ActuationSampleReason::Accepted);
   const double expected_steering =
-    artifact.semantic_initial_steering_rad +
+    artifact.publication_initial_steering_rad +
     artifact.control_stages[0].steering_rate_radps *
     artifact.control_stages[0].duration_sec +
     artifact.control_stages[1].steering_rate_radps *
-    (0.05 + artifact.publication_interval_sec);
+    0.05;
   EXPECT_NEAR(
     actuation.actuation->steering_rad, expected_steering, 1e-9);
   EXPECT_DOUBLE_EQ(
@@ -240,25 +247,25 @@ TEST(MpccRateResolvedShadow, RetainsAndSamplesExactRateResolvedArtifact)
 
 TEST(
   MpccRateResolvedShadow,
-  FreshArtifactExtractsTheCertifiedNextPublicationSteering)
+  FreshArtifactPublishesFromTheSealedDesiredCommandPredecessor)
 {
   shadow::SolverContext context;
   const auto result = context.evaluate(snapshot());
   ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
   ASSERT_NE(result.execution_artifact, nullptr);
 
+  const auto & artifact = *result.execution_artifact;
   const auto cursor = execution::resolve_cursor(
-    *result.execution_artifact,
-    result.execution_artifact->prediction_origin_sec);
+    artifact, artifact.prediction_origin_sec);
   ASSERT_TRUE(cursor.available);
   ASSERT_DOUBLE_EQ(cursor.elapsed_sec, 0.0);
 
   const auto actuation = execution::extract_actuation(
-    *result.execution_artifact, cursor);
+    artifact, cursor);
   ASSERT_TRUE(actuation.actuation.has_value());
   EXPECT_NEAR(
     actuation.actuation->steering_rad,
-    result.sampled_steering_rad,
+    artifact.publication_initial_steering_rad,
     1e-9);
 }
 

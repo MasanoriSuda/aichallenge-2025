@@ -57,6 +57,7 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   execution->completed_sec = 1.01;
   execution->course_progress_origin_m = 50.0;
   execution->semantic_initial_steering_rad = 0.10;
+  execution->publication_initial_steering_rad = 0.10;
   execution->wheelbase_m = 2.0;
   execution->maximum_abs_steering_rad = 0.60;
   execution->maximum_abs_steering_rate_radps = 1.0;

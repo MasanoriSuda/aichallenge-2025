@@ -130,7 +130,9 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
       state_values + input_offset + model::kVirtualProgressSpeedIndex], -0.2);
 }
 
-TEST(MpccRateResolvedAdapter, KeepsObservedSteeringAsTheOnlyStageZeroValue)
+TEST(
+  MpccRateResolvedAdapter,
+  KeepsObservedSteeringAsStateZeroWhileSealingPublicationEnvelope)
 {
   auto request = curved_request();
   request.current_steering_rad = -0.12;
@@ -148,6 +150,16 @@ TEST(MpccRateResolvedAdapter, KeepsObservedSteeringAsTheOnlyStageZeroValue)
     result->problem.state_lower[model::kSteeringIndex], -0.6);
   EXPECT_DOUBLE_EQ(
     result->problem.state_upper[model::kSteeringIndex], 0.6);
+  ASSERT_TRUE(result->problem.steering_rate_prefix_bounds.has_value());
+  const double prefix_margin = (1e-3 + 1e-3 * 0.6) / (1.0 - 1e-3);
+  EXPECT_NEAR(
+    result->problem.steering_rate_prefix_bounds->
+    minimum_cumulative_delta_rad,
+    -0.48 + prefix_margin, 1e-12);
+  EXPECT_NEAR(
+    result->problem.steering_rate_prefix_bounds->
+    maximum_cumulative_delta_rad,
+    0.60 - prefix_margin, 1e-12);
   EXPECT_DOUBLE_EQ(
     result->problem.state_weight[model::kSteeringIndex], 0.0);
 }
@@ -370,4 +382,32 @@ TEST(MpccRateResolvedAdapter, FirstRateIsRobustlyReachableFromSemanticSteering)
   auto invalid_tolerance = kSolverTolerance;
   invalid_tolerance.relative = 1.0;
   EXPECT_FALSE(adapter::build(curved_request(), invalid_tolerance).has_value());
+}
+
+TEST(
+  MpccRateResolvedAdapter,
+  IntersectsExactPhysicalAndDesiredSteeringRatePrefixes)
+{
+  auto request = curved_request();
+  request.current_steering_rad = -0.20;
+  request.previous_published_steering_rad = 0.40;
+  const auto result = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(result.has_value());
+
+  ASSERT_TRUE(result->problem.steering_rate_prefix_bounds.has_value());
+  const double prefix_margin = (1e-3 + 1e-3 * 0.4) / (1.0 - 1e-3);
+  // The exact cumulative rate must satisfy both physical origin -0.20 and
+  // publication origin +0.40. Their physical intersection is [-0.40, 0.20]
+  // before the solver-certificate inset.
+  EXPECT_NEAR(
+    result->problem.steering_rate_prefix_bounds->
+    minimum_cumulative_delta_rad,
+    -0.40 + prefix_margin, 1e-12);
+  EXPECT_NEAR(
+    result->problem.steering_rate_prefix_bounds->
+    maximum_cumulative_delta_rad,
+    0.20 - prefix_margin, 1e-12);
+
+  request.previous_published_steering_rad = 0.61;
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 }

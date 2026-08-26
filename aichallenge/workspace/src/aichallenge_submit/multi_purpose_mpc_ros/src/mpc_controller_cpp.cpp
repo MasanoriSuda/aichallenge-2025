@@ -5949,6 +5949,8 @@ struct BoundRateResolvedTrackCruiseSubmission
   mpcc_contract::MpccProblemContext source_context;
   double physical_control_origin_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  double publication_initial_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct RateResolvedPipelineEvaluation
@@ -6633,6 +6635,9 @@ struct CanonicalNormalFinalActuationTelemetryWindow
 {
   std::uint64_t joined_count{};
   std::uint64_t rejected_count{};
+  std::uint64_t identity_rejected_count{};
+  std::uint64_t serialized_actuation_rejected_count{};
+  std::uint64_t execution_promotion_rejected_count{};
   double total_predicted_speed_vs_final_target_difference_mps{};
   double maximum_predicted_speed_vs_final_target_difference_mps{};
   double total_optimized_acceleration_vs_final_difference_mps2{};
@@ -7866,16 +7871,17 @@ struct MPC
     const auto pending = pending_canonical_normal_actuation_.value();
     pending_canonical_normal_actuation_.reset();
     auto & window = canonical_normal_final_actuation_telemetry_window_;
-    if (
-      pending.decision_id != decision_id ||
-      !std::isfinite(final_target_speed_mps) ||
-      !std::isfinite(final_acceleration_mps2) ||
-      !std::isfinite(final_steering_rad) ||
-      !mpcc_contract::canonical_normal_command_matches_actuation(
+    if (pending.decision_id != decision_id) {
+      ++window.rejected_count;
+      ++window.identity_rejected_count;
+      return;
+    }
+    if (!mpcc_contract::canonical_normal_command_matches_serialized_actuation(
         pending.command, final_target_speed_mps, final_acceleration_mps2,
         final_steering_rad))
     {
       ++window.rejected_count;
+      ++window.serialized_actuation_rejected_count;
       return;
     }
 
@@ -7888,6 +7894,7 @@ struct MPC
         rate_resolved_certified::StoreReason::Accepted)
       {
         ++window.rejected_count;
+        ++window.execution_promotion_rejected_count;
         RCLCPP_ERROR(
           rclcpp::get_logger("mpc_controller"),
           "Canonical MPCC published candidate execution promotion rejected: "
@@ -7939,12 +7946,18 @@ struct MPC
     RCLCPP_INFO(
       rclcpp::get_logger("mpc_controller"),
       "Canonical MPCC production actuation join: joined=%zu, rejected=%zu, "
+      "reject_reason=identity:%zu/serialized:%zu/promotion:%zu, "
       "predicted_speed_vs_final_target=%.3f/%.3f(avg/max)mps, "
       "optimized_acceleration_vs_final=%.3f/%.3f(avg/max)mps2, "
       "optimized_steering_vs_final=%.4f/%.4f(avg/max)rad, "
       "authority=production, selected=1",
       static_cast<std::size_t>(window.joined_count),
       static_cast<std::size_t>(window.rejected_count),
+      static_cast<std::size_t>(window.identity_rejected_count),
+      static_cast<std::size_t>(
+        window.serialized_actuation_rejected_count),
+      static_cast<std::size_t>(
+        window.execution_promotion_rejected_count),
       window.total_predicted_speed_vs_final_target_difference_mps / joined,
       window.maximum_predicted_speed_vs_final_target_difference_mps,
       window.total_optimized_acceleration_vs_final_difference_mps2 / joined,
@@ -23909,6 +23922,8 @@ struct MPC
       extended_problem->rate_resolved_track_cruise_shadow_request.value();
     draft.request.current_steering_rad =
       std::numeric_limits<double>::quiet_NaN();
+    draft.request.previous_published_steering_rad =
+      std::numeric_limits<double>::quiet_NaN();
     draft.control_prediction_origin_sec =
       now_sec + execution_prediction_delay_sec_;
     draft.course_progress_origin_m = extended_problem->progress_origin_m;
@@ -23927,7 +23942,8 @@ struct MPC
   std::optional<BoundRateResolvedTrackCruiseSubmission>
   bind_rate_resolved_track_cruise_submission(
     const RateResolvedTrackCruiseSubmissionDraft & draft,
-    const double physical_control_origin_steering_rad) const noexcept
+    const double physical_control_origin_steering_rad,
+    const double publication_initial_steering_rad) const noexcept
   {
     if (
       draft.horizon_steps <= 0 ||
@@ -23935,7 +23951,8 @@ struct MPC
       !std::isfinite(draft.control_prediction_origin_sec) ||
       !std::isfinite(draft.course_progress_origin_m) ||
       !mpcc_contract::problem_context_complete(draft.source_context) ||
-      !std::isfinite(physical_control_origin_steering_rad))
+      !std::isfinite(physical_control_origin_steering_rad) ||
+      !std::isfinite(publication_initial_steering_rad))
     {
       return std::nullopt;
     }
@@ -23943,6 +23960,8 @@ struct MPC
     bound.request = draft.request;
     bound.request.current_steering_rad =
       physical_control_origin_steering_rad;
+    bound.request.previous_published_steering_rad =
+      publication_initial_steering_rad;
     bound.control_prediction_origin_sec =
       draft.control_prediction_origin_sec;
     bound.course_progress_origin_m = draft.course_progress_origin_m;
@@ -23950,6 +23969,8 @@ struct MPC
     bound.source_context = draft.source_context;
     bound.physical_control_origin_steering_rad =
       physical_control_origin_steering_rad;
+    bound.publication_initial_steering_rad =
+      publication_initial_steering_rad;
     return bound;
   }
 
@@ -23971,6 +23992,9 @@ struct MPC
       bound_submission.physical_control_origin_steering_rad) ||
       bound_submission.request.current_steering_rad !=
       bound_submission.physical_control_origin_steering_rad ||
+      !std::isfinite(bound_submission.publication_initial_steering_rad) ||
+      bound_submission.request.previous_published_steering_rad !=
+      bound_submission.publication_initial_steering_rad ||
       !mpcc_contract::problem_context_complete(
       bound_submission.source_context) ||
       source_problem.progress_stage_geometry.stages.size() <
@@ -24116,6 +24140,7 @@ struct MPC
   bool submit_rate_resolved_preentry_execution_shadow(
     RateResolvedPreentryExecutionDraft draft,
     const double physical_control_origin_steering_rad,
+    const double publication_initial_steering_rad,
     const double now_sec)
   {
     if (
@@ -24135,6 +24160,7 @@ struct MPC
       (draft.selected_side_sign != -1 && draft.selected_side_sign != 1) ||
       !std::isfinite(draft.snapshot_sec) ||
       !std::isfinite(physical_control_origin_steering_rad) ||
+      !std::isfinite(publication_initial_steering_rad) ||
       !std::isfinite(now_sec) || now_sec < draft.snapshot_sec ||
       draft.context_epoch != mpcc_lite_async_context_epoch_)
     {
@@ -24167,7 +24193,8 @@ struct MPC
     const auto submission =
       rate_resolved_preentry_execution_shadow_worker_->submit_latest(
       [draft = std::move(draft), physical_control_origin_steering_rad,
-      sequence, solver_context, mailbox, result = std::move(result)]() mutable {
+      publication_initial_steering_rad, sequence, solver_context, mailbox,
+      result = std::move(result)]() mutable {
         const auto started = SteadyClock::now();
         const auto finish_build = [&](const std::string & detail) {
             result.build_detail = detail;
@@ -24210,6 +24237,8 @@ struct MPC
             rate_resolved_track_cruise_shadow_request.value();
           submission_draft.request.current_steering_rad =
             std::numeric_limits<double>::quiet_NaN();
+          submission_draft.request.previous_published_steering_rad =
+            std::numeric_limits<double>::quiet_NaN();
           submission_draft.control_prediction_origin_sec =
             draft.snapshot_sec + std::max(
             0.0, planner->execution_prediction_delay_sec_);
@@ -24218,7 +24247,8 @@ struct MPC
           submission_draft.horizon_steps = prospective->extended_problem.N;
           submission_draft.source_context = prospective_context;
           const auto bound = planner->bind_rate_resolved_track_cruise_submission(
-            submission_draft, physical_control_origin_steering_rad);
+            submission_draft, physical_control_origin_steering_rad,
+            publication_initial_steering_rad);
           if (!mpcc_contract::problem_context_complete(prospective_context)) {
             finish_build("causal source context incomplete");
           } else if (!bound.has_value()) {
@@ -24500,14 +24530,16 @@ struct MPC
       rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
       rate_resolved_track_cruise_shadow_next_sequence_ ==
       std::numeric_limits<std::uint64_t>::max() ||
-      !physical_control_origin_steering_rad_.has_value())
+      !physical_control_origin_steering_rad_.has_value() ||
+      !current_physical_steering_state_.has_value())
     {
       return finish("rate-resolved transition dependencies unavailable");
     }
     admission.attempted = true;
     const auto bound_submission =
       bind_rate_resolved_track_cruise_submission(
-        draft, physical_control_origin_steering_rad_.value());
+        draft, physical_control_origin_steering_rad_.value(),
+        current_physical_steering_state_->committed_steering_rad);
     if (!bound_submission.has_value()) {
       return finish("rate-resolved transition predecessor binding rejected");
     }
@@ -25263,7 +25295,8 @@ struct MPC
       "constraint=%.3g/norm:%.3g, first_rate=%.3fradps, "
       "publish_step=%.4frad, last=seq:%lu/decision:%lu/intent:%s/"
       "source:0x%016lx/geometry:0x%016lx/outcome:%s/sample_reason:%s/"
-      "dt:%.6f/stage_dt:%.6f/delta0:%.9f/solver_delta0:%.9f/rate:%.9f/terminal:%.9f/"
+      "dt:%.6f/stage_dt:%.6f/physical0:%.9f/publication0:%.9f/"
+      "solver_physical0:%.9f/rate:%.9f/terminal:%.9f/"
       "sampled:%.9f/delta_max:%.9f/rate_max:%.9f/"
       "rate_bounds:physical[%.9f,%.9f]/solver[%.9f,%.9f]/margin:%.9f/"
       "sample_stage:%lu/sample_stage_dt:%.6f/horizon_dt:%.6f/"
@@ -25367,6 +25400,8 @@ struct MPC
       window.last_result_available ? last.publication_interval_sec : 0.0,
       window.last_result_available ? last.first_stage_duration_sec : 0.0,
       window.last_result_available ? last.initial_steering_rad : 0.0,
+      window.last_result_available ?
+      last.publication_initial_steering_rad : 0.0,
       window.last_result_available ? last.solver_initial_steering_rad : 0.0,
       window.last_result_available ? last.first_steering_rate_radps : 0.0,
       window.last_result_available ? last.calculated_terminal_steering_rad : 0.0,
@@ -26581,12 +26616,14 @@ struct MPC
     record_rate_resolved_track_cruise_command(retained, output, now_sec);
     if (
       submission_draft.has_value() &&
-      physical_control_origin_steering_rad_.has_value())
+      physical_control_origin_steering_rad_.has_value() &&
+      current_physical_steering_state_.has_value())
     {
       const auto bound_submission =
         bind_rate_resolved_track_cruise_submission(
         submission_draft.value(),
-        physical_control_origin_steering_rad_.value());
+        physical_control_origin_steering_rad_.value(),
+        current_physical_steering_state_->committed_steering_rad);
       if (bound_submission.has_value()) {
         static_cast<void>(submit_rate_resolved_track_cruise_shadow(
             problem, bound_submission.value(), now_sec));
@@ -26605,11 +26642,13 @@ struct MPC
     }
     if (
       preentry_execution_draft.has_value() &&
-      physical_control_origin_steering_rad_.has_value())
+      physical_control_origin_steering_rad_.has_value() &&
+      current_physical_steering_state_.has_value())
     {
       static_cast<void>(submit_rate_resolved_preentry_execution_shadow(
           std::move(preentry_execution_draft.value()),
           physical_control_origin_steering_rad_.value(),
+          current_physical_steering_state_->committed_steering_rad,
           now_sec));
     } else if (
       last_v2x_behavior_output_.

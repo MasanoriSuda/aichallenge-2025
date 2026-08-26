@@ -55,6 +55,7 @@ artifact::ExecutionArtifact execution_artifact(
   value.completed_sec = 1.01;
   value.course_progress_origin_m = 50.0;
   value.semantic_initial_steering_rad = 0.10;
+  value.publication_initial_steering_rad = 0.10;
   value.wheelbase_m = 2.0;
   value.maximum_abs_steering_rad = 0.60;
   value.maximum_abs_steering_rate_radps = 1.0;
@@ -498,11 +499,11 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
   EXPECT_NEAR(result.current_steering_rad, 0.105, 1e-9);
   EXPECT_NEAR(result.current_time_steering_rad, 0.105, 1e-9);
   EXPECT_NEAR(result.previous_published_steering_rad, -0.10, 1e-9);
-  // At now=1.05 the artifact cursor is 50 ms old.  Publication reachability
-  // must compare the command serialized for the next 25 ms publication, not
-  // the physical steering state at the current cursor.
-  EXPECT_NEAR(result.expected_steering_rad, 0.1075, 1e-9);
-  EXPECT_NEAR(result.steering_difference_rad, 0.2075, 1e-9);
+  // At now=1.05 the artifact cursor is 50 ms old.  Desired-command
+  // continuity advances from its sealed publication predecessor for exactly
+  // that elapsed time; the physical steering origin is a separate state.
+  EXPECT_NEAR(result.expected_steering_rad, 0.105, 1e-9);
+  EXPECT_NEAR(result.steering_difference_rad, 0.205, 1e-9);
   EXPECT_NEAR(result.maximum_steering_step_rad, 0.025001, 1e-9);
   EXPECT_NEAR(result.reachable_steering_lower_rad, -0.125001, 1e-9);
   EXPECT_NEAR(result.reachable_steering_upper_rad, -0.074999, 1e-9);
@@ -525,13 +526,13 @@ TEST(
 
   // The physical state belongs to model initialization.  Serialized command
   // reachability belongs to the last published command; actuator lag must not
-  // turn a compliant 0.100 -> 0.1125 next-publication command into a false
+  // turn a compliant 0.100 -> 0.110 retained command into a false
   // rejection.
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::Accepted);
   ASSERT_TRUE(result.proof.has_value());
   EXPECT_NEAR(result.proof->previous_published_steering_rad, 0.10, 1e-9);
-  EXPECT_NEAR(result.proof->steering_difference_rad, 0.0125, 1e-9);
+  EXPECT_NEAR(result.proof->steering_difference_rad, 0.010, 1e-9);
   EXPECT_NEAR(result.proof->steering_reachability_duration_sec, 0.025, 1e-9);
 }
 

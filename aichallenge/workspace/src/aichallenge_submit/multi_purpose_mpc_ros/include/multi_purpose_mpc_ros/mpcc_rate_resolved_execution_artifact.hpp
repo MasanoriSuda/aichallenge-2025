@@ -72,13 +72,17 @@ struct ExecutionArtifact
 {
   Identity identity;
   double prediction_origin_sec{};
-  /// Time from one command publication to the next.  The semantic initial
-  /// steering is a physical state at prediction_origin_sec; the desired
-  /// steering command is sampled this interval ahead of the execution cursor.
+  /// Time from one command publication to the next.  It certifies that both
+  /// physical and desired steering sequences can be sampled over a complete
+  /// publisher period; cursor elapsed time is not advanced by this value.
   double publication_interval_sec{};
   double completed_sec{};
   double course_progress_origin_m{};
+  /// Physical steering at the latency-compensated prediction origin.
   double semantic_initial_steering_rad{};
+  /// Desired steering command which preceded this solve snapshot.  This is a
+  /// publication predecessor, not a vehicle state.
+  double publication_initial_steering_rad{};
   double wheelbase_m{};
   double maximum_abs_steering_rad{};
   double maximum_abs_steering_rate_radps{};

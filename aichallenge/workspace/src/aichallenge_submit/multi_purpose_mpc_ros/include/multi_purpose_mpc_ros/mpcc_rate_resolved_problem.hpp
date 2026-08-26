@@ -15,6 +15,15 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_problem
 
 namespace model = mpcc_rate_resolved;
 
+/// Exact desired-steering envelope for the cumulative steering-rate input
+/// sequence.  This is independent of the physical steering state equality:
+/// actuator lag may make the publication predecessor differ from x0.delta.
+struct SteeringRatePrefixBounds
+{
+  double minimum_cumulative_delta_rad{};
+  double maximum_cumulative_delta_rad{};
+};
+
 struct AssemblyRequest
 {
   int horizon_steps{};
@@ -34,6 +43,7 @@ struct AssemblyRequest
     Eigen::Matrix<double, model::kInputDimension, 1>::Zero()};
   Eigen::Matrix<double, model::kInputDimension, 1> input_delta_weight{
     Eigen::Matrix<double, model::kInputDimension, 1>::Zero()};
+  std::optional<SteeringRatePrefixBounds> steering_rate_prefix_bounds;
 };
 
 struct Problem
@@ -55,6 +65,7 @@ enum class RowKind
   DynamicsEquality,
   StateBox,
   InputBox,
+  SteeringRatePrefix,
 };
 
 struct RowSemantic

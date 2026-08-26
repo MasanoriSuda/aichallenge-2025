@@ -444,6 +444,15 @@ bool canonical_normal_command_matches_actuation(
   const CanonicalNormalCommand & command, double target_speed_mps,
   double acceleration_mps2, double steering_tire_angle_rad) noexcept;
 
+/// Verify the command after serialization into the ROS control message.  The
+/// Ackermann message stores its scalar actuation fields as float32, so exact
+/// double comparison here would reject the very command that crossed the
+/// publisher boundary.  This remains an exact comparison in the wire type; it
+/// is not a numeric tolerance or a second actuation policy.
+bool canonical_normal_command_matches_serialized_actuation(
+  const CanonicalNormalCommand & command, double target_speed_mps,
+  double acceleration_mps2, double steering_tire_angle_rad) noexcept;
+
 /// Resolve the tire angle serialized to the vehicle interface.  Legacy normal
 /// paths retain their calibrated raw-command convention during migration;
 /// canonical normal authority must publish the certified physical angle

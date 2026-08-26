@@ -44,6 +44,8 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
   const int state_values = nx * (horizon + 1);
   const int input_values = nu * horizon;
   const int variable_count = state_values + input_values;
+  const int steering_prefix_rows =
+    request.steering_rate_prefix_bounds.has_value() ? horizon : 0;
   if (
     request.linearizations.size() != static_cast<std::size_t>(horizon) ||
     request.state_reference.size() != state_values ||
@@ -66,7 +68,14 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
     !request.input_delta_weight.allFinite() ||
     (request.input_delta_weight.array() < 0.0).any() ||
     !valid_bounds(request.state_lower, request.state_upper) ||
-    !valid_bounds(request.input_lower, request.input_upper))
+    !valid_bounds(request.input_lower, request.input_upper) ||
+    (request.steering_rate_prefix_bounds.has_value() &&
+    (!std::isfinite(
+      request.steering_rate_prefix_bounds->minimum_cumulative_delta_rad) ||
+    !std::isfinite(
+      request.steering_rate_prefix_bounds->maximum_cumulative_delta_rad) ||
+    request.steering_rate_prefix_bounds->minimum_cumulative_delta_rad >
+    request.steering_rate_prefix_bounds->maximum_cumulative_delta_rad)))
   {
     return std::nullopt;
   }
@@ -123,8 +132,20 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
     constraint_triplets.emplace_back(
       box_offset + variable, variable, 1.0);
   }
+  const int steering_prefix_offset = state_values + variable_count;
+  if (request.steering_rate_prefix_bounds.has_value()) {
+    for (int stage = 0; stage < horizon; ++stage) {
+      for (int prefix_stage = 0; prefix_stage <= stage; ++prefix_stage) {
+        constraint_triplets.emplace_back(
+          steering_prefix_offset + stage,
+          state_values + prefix_stage * nu + model::kSteeringRateIndex,
+          request.linearizations[static_cast<std::size_t>(prefix_stage)].
+          stage_dt_sec);
+      }
+    }
+  }
   Eigen::SparseMatrix<double> constraints(
-    state_values + variable_count, variable_count);
+    state_values + variable_count + steering_prefix_rows, variable_count);
   constraints.setFromTriplets(
     constraint_triplets.begin(), constraint_triplets.end());
   constraints.makeCompressed();
@@ -139,10 +160,18 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
   Eigen::VectorXd box_upper(variable_count);
   box_lower << request.state_lower, request.input_lower;
   box_upper << request.state_upper, request.input_upper;
-  Eigen::VectorXd lower_bound(state_values + variable_count);
-  Eigen::VectorXd upper_bound(state_values + variable_count);
-  lower_bound << equality, box_lower;
-  upper_bound << equality, box_upper;
+  Eigen::VectorXd lower_bound(
+    state_values + variable_count + steering_prefix_rows);
+  Eigen::VectorXd upper_bound(
+    state_values + variable_count + steering_prefix_rows);
+  lower_bound.head(state_values + variable_count) << equality, box_lower;
+  upper_bound.head(state_values + variable_count) << equality, box_upper;
+  if (request.steering_rate_prefix_bounds.has_value()) {
+    lower_bound.tail(steering_prefix_rows).setConstant(
+      request.steering_rate_prefix_bounds->minimum_cumulative_delta_rad);
+    upper_bound.tail(steering_prefix_rows).setConstant(
+      request.steering_rate_prefix_bounds->maximum_cumulative_delta_rad);
+  }
 
   Eigen::VectorXd linear_cost = Eigen::VectorXd::Zero(variable_count);
   if (request.additional_linear_cost.size() != 0) {
@@ -223,6 +252,12 @@ RowSemantic decode_row(const int row, const int horizon_steps) noexcept
     return RowSemantic{
       true, RowKind::InputBox, input_row / nu, input_row % nu};
   }
+  const int prefix_row = input_row - input_values;
+  if (prefix_row < horizon_steps) {
+    return RowSemantic{
+      true, RowKind::SteeringRatePrefix, prefix_row,
+      model::kSteeringRateIndex};
+  }
   return {};
 }
 
@@ -233,6 +268,7 @@ const char * row_kind_name(const RowKind kind) noexcept
     case RowKind::DynamicsEquality: return "dynamics-equality";
     case RowKind::StateBox: return "state-box";
     case RowKind::InputBox: return "input-box";
+    case RowKind::SteeringRatePrefix: return "steering-rate-prefix";
   }
   return "unknown";
 }

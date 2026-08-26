@@ -219,58 +219,6 @@ const char * extended_constraint_row_kind_name(
 const char * extended_constraint_field_name(
   ExtendedConstraintField field) noexcept;
 
-enum class ExtendedExecutionPrimalBoundaryField
-{
-  None,
-  PredictedVelocity,
-  Acceleration,
-  Curvature,
-  VirtualProgressSpeed,
-};
-
-enum class ExtendedExecutionPrimalNormalizationReason
-{
-  Accepted,
-  InvalidShape,
-  InvalidResidualContract,
-  CertifiedBoundViolation,
-};
-
-struct ExtendedExecutionPrimalNormalization
-{
-  ExtendedExecutionPrimalNormalizationReason reason{
-    ExtendedExecutionPrimalNormalizationReason::InvalidShape};
-  Eigen::VectorXd primal;
-  std::size_t normalized_value_count{};
-  double maximum_adjustment{};
-  ExtendedExecutionPrimalBoundaryField rejected_field{
-    ExtendedExecutionPrimalBoundaryField::None};
-  int rejected_stage{-1};
-  double rejected_value{std::numeric_limits<double>::quiet_NaN()};
-  double rejected_violation{std::numeric_limits<double>::quiet_NaN()};
-  double rejected_tolerance{std::numeric_limits<double>::quiet_NaN()};
-};
-
-const char * extended_execution_primal_normalization_reason_name(
-  ExtendedExecutionPrimalNormalizationReason reason) noexcept;
-const char * extended_execution_primal_boundary_field_name(
-  ExtendedExecutionPrimalBoundaryField field) noexcept;
-
-/// Convert a numerically certified five-state QP primal into a semantic
-/// execution artifact.  Raw solver values are preserved by the caller for
-/// residual telemetry and warm start.  Every state/input field used by the
-/// normal command or execution horizon is projected to its exact QP box bound
-/// only when the corresponding certified row is within its recorded
-/// tolerance.  This keeps solver certification, execution and publication on
-/// one actuator-bound contract.
-ExtendedExecutionPrimalNormalization normalize_extended_execution_primal(
-  const Eigen::VectorXd & primal,
-  const Eigen::VectorXd & constraint_lower,
-  const Eigen::VectorXd & constraint_upper,
-  const Eigen::VectorXd & constraint_violation,
-  const Eigen::VectorXd & constraint_tolerance,
-  int horizon_size) noexcept;
-
 struct ExtendedLinearizationRequest
 {
   double reference_lateral_m{};
@@ -708,36 +656,6 @@ struct ExecutionTrajectory
   double minimum_lateral_bound_reserve_m{};
 };
 
-struct ExtendedExecutionTrajectory
-{
-  std::vector<double> path_distance_m;
-  std::vector<double> lateral_m;
-  std::vector<double> lag_m;
-  std::vector<double> heading_offset_rad;
-  std::vector<double> velocity_mps;
-  std::vector<double> progress_m;
-  double minimum_lateral_bound_reserve_m{};
-};
-
-struct ExtendedLateralConstraintContract
-{
-  bool valid{false};
-  bool satisfied{false};
-  int worst_stage{-1};
-  double maximum_violation_m{};
-  double maximum_tolerance_m{};
-  double maximum_normalized_violation{};
-};
-
-/// Apply a semantic acceptance contract to the stage-1..N lateral box rows of
-/// a five-state QP. The residual and tolerance vectors are supplied by the
-/// solver adapter. Other-unit rows (notably course progress) cannot relax this
-/// metre-domain contract.
-ExtendedLateralConstraintContract evaluate_extended_lateral_constraint_contract(
-  const Eigen::VectorXd & constraint_violation,
-  const Eigen::VectorXd & constraint_tolerance,
-  int horizon_size) noexcept;
-
 enum class ExecutionTrajectoryRejection
 {
   None,
@@ -768,17 +686,6 @@ std::optional<ExecutionTrajectory> extract_execution_trajectory(
   const std::vector<double> & lateral_lower_m,
   const std::vector<double> & lateral_upper_m,
   double bound_tolerance_m = 1e-5,
-  ExecutionTrajectoryDiagnostic * diagnostic = nullptr) noexcept;
-
-/// Extract the exact stage-1..N pose and motion state from the five-state
-/// formulation. Unlike the legacy conversion, heading is retained as a
-/// first-class solved state and is never reconstructed from lateral samples.
-std::optional<ExtendedExecutionTrajectory> extract_extended_execution_trajectory(
-  const Eigen::VectorXd & primal, int horizon_size,
-  const std::vector<double> & path_distance_m,
-  const std::vector<double> & lateral_lower_m,
-  const std::vector<double> & lateral_upper_m,
-  double progress_origin_m, double bound_tolerance_m = 1e-5,
   ExecutionTrajectoryDiagnostic * diagnostic = nullptr) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_progress

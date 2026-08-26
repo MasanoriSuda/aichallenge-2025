@@ -161,12 +161,12 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_FALSE(shadow::result_valid(invalid));
 }
 
-TEST(MpccRateResolvedShadow, RejectsFiveStateProblemIdentity)
+TEST(MpccRateResolvedShadow, RejectsNoncanonicalProblemIdentity)
 {
   shadow::SolverContext context;
   auto input = snapshot();
   input.identity.source_context.formulation =
-    contract::Formulation::VelocityProgress5State;
+    contract::Formulation::SolverDerivedBypass;
   const auto result = context.evaluate(input);
   EXPECT_EQ(result.outcome, shadow::Outcome::BuildRejected);
   EXPECT_FALSE(shadow::result_valid(result));

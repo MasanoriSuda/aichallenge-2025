@@ -2655,6 +2655,28 @@ fingerprintは、旧retained-world moduleではなくsix-state physical-wall mod
 `progress-regressed`は0件である。後続のtarget stale/lost、Emergency、callback overrunは統合品質Gateへ残し、
 このauthority削除Sliceではparameter、timeout、lease、wall margin、solver設定を変更しない。
 
+#### Five-state normal実装の物理削除とSlice 6完了（2026-08-26、2025由来の暫定）
+
+six-state normal authorityへ到達不能になっただけの旧five-state実装を互換fallbackとして残さない。
+`VelocityProgress5State` formulation、canonical execution plan、retained/current-world revalidation、
+five-state plan adapter、Follow async alias、five-state専用warm-start lifecycle、対応CMake target／test、
+controller内の呼び出しゼロのthree/five-state wall helper、定義と自己テストだけ残っていたfive-state
+primal正規化／trajectory抽出／横制約検査、未使用warm-start storeを物理削除した。
+
+stage geometry、exact physical trajectory、target tube、generic branch rankingはsix-stateでも使用する物理データであり、
+旧名称を理由に削除しない。normal formulation contractが許可するのは
+`VelocitySteeringProgress6State`だけである。`SolverDerivedBypass`は非canonical入力を明示的にrejectする試験用／
+例外的identityであり、normal publisher authorityではない。EmergencyとRecoveryは従来どおり外部supervisorとする。
+
+25 package build、残る46/46 package test target、1,887 testが成功した。
+`output/20260826-163720`では両domainがsix-state production commandで走行し、domain 1のShiftOutは
+`gate=six-state-shiftout`、`certificate=1`、20 exact stageで採用された。five-state traceは0件である。
+
+これを構造上のSlice 6完了とする。ただし、同runには`retained-proof-unavailable`による短い明示Emergencyと
+`locked target stale or lost`が残る。削除前runにも存在するためfive-state削除回帰ではないが、レース実用品質の
+統合Gateは未合格である。Slice 7のparameter tuningへ直行せず、まずsix-state fresh／retained proof continuity、
+target lifecycle、callback tailをfailure-firstで監査する。five-state fallbackを復活させてはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

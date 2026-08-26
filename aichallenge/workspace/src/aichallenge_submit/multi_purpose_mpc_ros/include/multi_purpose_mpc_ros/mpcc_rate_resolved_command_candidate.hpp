@@ -27,8 +27,8 @@ enum class Reason
 const char * to_string(Reason reason) noexcept;
 
 /// Complete publisher-shaped proposal from one accepted retained six-state
-/// proof.  It deliberately remains a distinct type from CanonicalNormalCommand,
-/// whose current contract is five-state-specific.
+/// proof. It deliberately remains distinct from the final publication command
+/// so retained-certificate provenance cannot be lost before authority admission.
 struct Candidate
 {
   std::uint64_t decision_id{};

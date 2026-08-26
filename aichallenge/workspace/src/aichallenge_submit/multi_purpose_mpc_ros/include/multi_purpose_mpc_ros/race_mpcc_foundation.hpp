@@ -89,7 +89,7 @@ TargetProvenanceValidation validate_target_provenance(
   const TargetProvenanceValidationRequest & request) noexcept;
 
 /// Immutable pose-state artifact used by a physical wall certificate for one
-/// five-state MPCC solve.  The vectors describe stages 1..N in the same
+/// canonical MPCC solve.  The vectors describe stages 1..N in the same
 /// order.  Keeping lag, heading and solved progress here prevents a later
 /// consumer from silently rebuilding a different pose sequence from lateral
 /// samples alone.
@@ -153,7 +153,7 @@ ExactPhysicalExecutionTrajectoryValidation
 validate_exact_physical_execution_trajectory(
   const ExactPhysicalExecutionTrajectory & trajectory) noexcept;
 
-/// A certificate without every five-state pose/progress field is not exact
+/// A certificate without every canonical pose/progress field is not exact
 /// and must not admit or revalidate an Overtake execution path.
 bool exact_physical_execution_trajectory_complete(
   const ExactPhysicalExecutionTrajectory & trajectory) noexcept;
@@ -245,7 +245,7 @@ struct RejoinShadowEligibility
     RejoinShadowEligibilityReason::IntentNotRejoin};
 };
 
-/// Observe line Recovery with the canonical five-state formulation without
+/// Observe line Recovery with the canonical six-state formulation without
 /// granting it production authority. Rejoin deliberately has no target or
 /// pass-side identity; its semantic goal is the base racing line.
 RejoinShadowEligibility resolve_rejoin_shadow_eligibility(
@@ -369,7 +369,7 @@ const char * follow_longitudinal_contract_reason_name(
   FollowLongitudinalContractReason reason) noexcept;
 
 /// Inputs required to turn one fresh front-target observation into the
-/// longitudinal portion of a five-state Follow horizon. All progress values
+/// longitudinal portion of a canonical Follow horizon. All progress values
 /// are relative to the current MPCC progress origin.
 struct FollowLongitudinalContractRequest
 {
@@ -449,55 +449,6 @@ FollowEffectiveGapCertificate evaluate_follow_effective_gap(
   const std::vector<double> & solved_progress_m,
   const std::vector<double> & solved_lag_m,
   double hard_gap_m, double tolerance_m) noexcept;
-
-enum class ShadowWarmStartResetReason
-{
-  None,
-  InitialContext,
-  InvalidPreviousContext,
-  InvalidCurrentContext,
-  IntentChanged,
-  FormulationChanged,
-  HorizonChanged,
-  SchemaChanged,
-  StageGeometryDiscontinuous,
-};
-
-const char * shadow_warm_start_reset_reason_name(
-  ShadowWarmStartResetReason reason) noexcept;
-
-struct ShadowWarmStartIdentity
-{
-  mpcc_execution_contract::ControlIntent intent{
-    mpcc_execution_contract::ControlIntent::Unknown};
-  mpcc_execution_contract::Formulation formulation{
-    mpcc_execution_contract::Formulation::Unresolved};
-  std::size_t horizon_steps{};
-  std::string state_schema_id;
-  std::string input_schema_id;
-  std::string bounds_schema_id;
-  std::string cost_schema_id;
-  std::uint64_t stage_geometry_id{};
-  int tracking_waypoint{};
-  bool circular{false};
-  std::vector<mpcc_execution_contract::StageGeometryIdentity> stages;
-};
-
-struct ShadowWarmStartResolution
-{
-  bool valid{false};
-  bool apply_warm_start{false};
-  bool reset_context{true};
-  /// Exact physical stage advance between compatible horizon geometries.
-  /// Solver invocation count is deliberately not used as a proxy.
-  std::size_t stage_advance{};
-  ShadowWarmStartResetReason reason{
-    ShadowWarmStartResetReason::InvalidCurrentContext};
-};
-
-ShadowWarmStartResolution resolve_shadow_warm_start(
-  const std::optional<ShadowWarmStartIdentity> & previous,
-  const ShadowWarmStartIdentity & current) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::race_mpcc_foundation
 

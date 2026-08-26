@@ -764,7 +764,7 @@ struct SnapshotMinimumSpeedAdmissionRequest
   double live_requirement_mps{std::numeric_limits<double>::quiet_NaN()};
   double tolerance_mps{0.02};
   /// Minimum velocity from the exact certified execution trajectory selected
-  /// by the five-state MPCC. NaN means that this newer proof source is absent
+  /// by the canonical MPCC. NaN means that this newer proof source is absent
   /// and the Mission-level kinematic prediction remains authoritative.
   double certified_execution_minimum_speed_mps{
     std::numeric_limits<double>::quiet_NaN()};
@@ -4840,7 +4840,7 @@ struct MpccLitePrefixExecutionRequest
   double predicted_body_clear_distance_m{std::numeric_limits<double>::infinity()};
   double predicted_minimum_ego_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double minimum_ego_speed_mps{};
-  /// Exact selected five-state execution evidence. NaN keeps the older
+  /// Exact selected canonical execution evidence. NaN keeps the older
   /// Mission-level prediction as the fail-closed fallback.
   double certified_execution_minimum_speed_mps{
     std::numeric_limits<double>::quiet_NaN()};

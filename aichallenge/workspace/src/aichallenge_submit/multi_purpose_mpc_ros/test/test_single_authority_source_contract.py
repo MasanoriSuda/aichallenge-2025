@@ -1205,7 +1205,7 @@ def test_overtake_preentry_target_prediction_is_an_explicit_snapshot_contract() 
 
     tube_start = SOURCE.index("CurrentOvertakeTargetTube build_current_overtake_target_tube(")
     tube_end = SOURCE.index(
-        "bool dynamic_margin_escape_solution_wall_safe(", tube_start
+        "build_canonical_current_control_path() const", tube_start
     )
     tube = SOURCE[tube_start:tube_end]
     assert "committed_target_prediction_available" in tube
@@ -1791,6 +1791,73 @@ def test_retired_three_state_normal_representations_are_physically_deleted() -> 
         '"progress-contouring-3state"',
         '"legacy-spatial-tracking-v1"',
         '"progress-contouring-v1"',
+    )
+    assert not [token for token in forbidden if token in production]
+
+
+def test_retired_five_state_normal_implementation_is_physically_deleted() -> None:
+    """The old canonical owner must not remain buildable or reconnectable."""
+
+    retired_files = (
+        "canonical_execution_plan.hpp",
+        "canonical_execution_plan_adapter.hpp",
+        "canonical_retained_revalidation.hpp",
+        "canonical_retained_world_revalidation.hpp",
+        "follow_canonical_async.hpp",
+        "canonical_normal_async.hpp",
+        "canonical_execution_plan.cpp",
+        "canonical_execution_plan_adapter.cpp",
+        "canonical_retained_revalidation.cpp",
+        "canonical_retained_world_revalidation.cpp",
+        "follow_canonical_async.cpp",
+        "test_canonical_execution_plan.cpp",
+        "test_canonical_execution_plan_adapter.cpp",
+        "test_canonical_retained_revalidation.cpp",
+        "test_canonical_retained_world_revalidation.cpp",
+        "test_follow_canonical_async.cpp",
+    )
+    for name in retired_files:
+        assert not list(PACKAGE_ROOT.rglob(name)), name
+
+    production = "\n".join(
+        (
+            SOURCE,
+            MPCC_PROGRESS_HEADER,
+            MPCC_PROGRESS_SOURCE,
+            MPCC_EXECUTION_CONTRACT_HEADER,
+            MPCC_EXECUTION_CONTRACT_SOURCE,
+            RACE_MPCC_FOUNDATION_HEADER,
+            RACE_MPCC_FOUNDATION_SOURCE,
+            (
+                PACKAGE_ROOT
+                / "include"
+                / "multi_purpose_mpc_ros"
+                / "persistent_osqp.hpp"
+            ).read_text(encoding="utf-8"),
+            (PACKAGE_ROOT / "src" / "persistent_osqp.cpp").read_text(
+                encoding="utf-8"
+            ),
+            CMAKE,
+        )
+    )
+    forbidden = (
+        "VelocityProgress5State",
+        '"velocity-progress-5state"',
+        "ShadowWarmStartIdentity",
+        "resolve_shadow_warm_start(",
+        "build_exact_extended_wall_proof_input(",
+        "executed_extended_progress_solution_wall_safe(",
+        "dynamic_margin_escape_solution_wall_safe(",
+        "executed_progress_solution_wall_safe(",
+        "make_canonical_shadow_warm_start_identity(",
+        "normalize_extended_execution_primal(",
+        "evaluate_extended_lateral_constraint_contract(",
+        "extract_extended_execution_trajectory(",
+        "CertifiedWarmStartStore",
+        "canonical_execution_plan",
+        "canonical_retained_revalidation",
+        "canonical_retained_world_revalidation",
+        "follow_canonical_async",
     )
     assert not [token for token in forbidden if token in production]
 

@@ -236,7 +236,6 @@ const char * to_string(const Formulation formulation) noexcept
 {
   switch (formulation) {
     case Formulation::Unresolved: return "unresolved";
-    case Formulation::VelocityProgress5State: return "velocity-progress-5state";
     case Formulation::VelocitySteeringProgress6State:
       return "velocity-steering-progress-6state";
     case Formulation::SolverDerivedBypass: return "solver-derived-bypass";
@@ -314,9 +313,7 @@ bool canonical_normal_intent_requires_execution_side(
 bool canonical_normal_formulation_supported(
   const Formulation formulation) noexcept
 {
-  return
-    formulation == Formulation::VelocityProgress5State ||
-    formulation == Formulation::VelocitySteeringProgress6State;
+  return formulation == Formulation::VelocitySteeringProgress6State;
 }
 
 std::uint64_t fingerprint_stage_geometry(

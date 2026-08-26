@@ -1234,6 +1234,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   progress-regression trace remained.  Target-loss, Emergency and runtime
   overrun findings remain final integration-Gate inputs rather than reasons to
   restore the old authority.
+- `.steering/20260826-slice6-five-state-physical-removal` closes structural
+  Slice 6.  The complete but unreachable five-state canonical plan, retained
+  proof, plan adapter and Follow async library island is removed from source,
+  headers, CMake and tests.  The common formulation contract no longer
+  represents `VelocityProgress5State`, its shadow warm-start lifecycle and
+  declaration-only controller wall helpers, five-state-only primal/trajectory/
+  constraint helpers and the unused certified warm-start store are deleted,
+  and rejection tests use the explicit noncanonical bypass. The remaining
+  46/46 CTest targets and 1,887 tests pass. In `output/20260826-163720`, both domains moved on
+  six-state production joins and the observed ShiftOut entry used an exact
+  six-state Gate A certificate; no five-state trace remained.  Existing
+  retained-proof Emergency and target-loss episodes are post-migration
+  integration-quality debt, not a reason to restore a second owner.
 
 ## Slice 7: Parameter tuning
 

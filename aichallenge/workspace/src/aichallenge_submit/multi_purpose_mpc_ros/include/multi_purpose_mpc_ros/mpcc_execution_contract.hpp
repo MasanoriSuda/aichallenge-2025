@@ -28,7 +28,6 @@ enum class ControlIntent
 enum class Formulation
 {
   Unresolved,
-  VelocityProgress5State,
   VelocitySteeringProgress6State,
   SolverDerivedBypass,
 };
@@ -37,7 +36,7 @@ const char * to_string(ControlIntent intent) noexcept;
 const char * to_string(Formulation formulation) noexcept;
 
 /// Intents whose normal lateral and longitudinal command may be owned by the
-/// canonical five-state MPCC authority. Recovery and emergency overrides are
+/// canonical six-state MPCC authority. Recovery and emergency overrides are
 /// intentionally outside this contract.
 bool canonical_normal_intent_supported(ControlIntent intent) noexcept;
 
@@ -131,9 +130,8 @@ struct PreentryTacticalIdentityResolution
 PreentryTacticalIdentityResolution resolve_preentry_tactical_identity(
   const PreentryTacticalIdentityRequest & request) noexcept;
 
-/// Formulations allowed to own a certified normal publisher command during
-/// the staged single-authority migration. Legacy three-state and direct
-/// bypass paths are intentionally excluded.
+/// The sole formulation allowed to own a certified normal publisher command.
+/// Exceptional solver-derived bypass paths are intentionally excluded.
 bool canonical_normal_formulation_supported(Formulation formulation) noexcept;
 
 struct StageGeometryIdentity
@@ -204,7 +202,7 @@ struct PlanarPose
 
 /// Complete Frenet pose relative to one course-frame pose.  `lag_m` is the
 /// signed along-track displacement from the virtual progress frame; it must
-/// not be silently replaced by zero when constructing a five-state MPCC x0.
+/// not be silently replaced by zero when constructing a canonical MPCC x0.
 struct FrenetPose
 {
   double lateral_m{};

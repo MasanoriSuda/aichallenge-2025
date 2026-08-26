@@ -195,7 +195,7 @@ TEST(RateResolvedCommandCandidate, PreservesRetainedIdentityAndActuation) {
   EXPECT_DOUBLE_EQ(candidate.virtual_progress_speed_mps, 4.1);
 }
 
-TEST(RateResolvedCommandCandidate, RejectsFiveStateArtifactIdentity)
+TEST(RateResolvedCommandCandidate, RejectsNoncanonicalArtifactIdentity)
 {
   auto retained_result = accepted_result();
   auto mutable_plan = std::make_shared<certified::CertifiedPlan>(
@@ -203,7 +203,7 @@ TEST(RateResolvedCommandCandidate, RejectsFiveStateArtifactIdentity)
   auto mutable_artifact = std::make_shared<artifact::ExecutionArtifact>(
     *mutable_plan->execution_artifact);
   mutable_artifact->identity.source_context.formulation =
-    contract::Formulation::VelocityProgress5State;
+    contract::Formulation::SolverDerivedBypass;
   mutable_plan->execution_artifact = std::move(mutable_artifact);
   retained_result.proof->plan = std::move(mutable_plan);
 

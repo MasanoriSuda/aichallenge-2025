@@ -72,9 +72,9 @@ contract::MpccProblemContext make_context()
   context.target_id = "d2";
   context.execution_side_sign = 1;
   context.horizon_steps = 2U;
-  context.formulation = contract::Formulation::VelocityProgress5State;
-  context.state_schema_id = "ey-elag-epsi-v-progress-v1";
-  context.input_schema_id = "accel-curvature-progress-rate-v1";
+  context.formulation = contract::Formulation::VelocitySteeringProgress6State;
+  context.state_schema_id = "ey-elag-epsi-v-steering-progress-v1";
+  context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-obstacle-v1";
   context.cost_schema_id = "velocity-progress-v1";
   return contract::seal_problem_context(std::move(context));

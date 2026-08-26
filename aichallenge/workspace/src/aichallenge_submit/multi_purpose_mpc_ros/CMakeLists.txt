@@ -148,61 +148,11 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_shadow
   Threads::Threads
 )
 
-ament_auto_add_library(${PROJECT_NAME}_canonical_execution_plan SHARED
-  NO_TARGET_LINK_LIBRARIES
-  src/canonical_execution_plan.cpp
-)
-target_link_libraries(${PROJECT_NAME}_canonical_execution_plan
-  ${PROJECT_NAME}_mpcc_execution_contract
-  Threads::Threads
-)
-
-ament_auto_add_library(${PROJECT_NAME}_canonical_retained_revalidation SHARED
-  NO_TARGET_LINK_LIBRARIES
-  src/canonical_retained_revalidation.cpp
-)
-target_link_libraries(${PROJECT_NAME}_canonical_retained_revalidation
-  ${PROJECT_NAME}_canonical_execution_plan
-)
-
-ament_auto_add_library(${PROJECT_NAME}_canonical_retained_world_revalidation SHARED
-  NO_TARGET_LINK_LIBRARIES
-  src/canonical_retained_world_revalidation.cpp
-)
-target_link_libraries(${PROJECT_NAME}_canonical_retained_world_revalidation
-  ${PROJECT_NAME}_canonical_retained_revalidation
-  ${PROJECT_NAME}_mpc_stage_geometry
-  ${PROJECT_NAME}_mpcc_execution_contract
-  ${PROJECT_NAME}_recovery_footprint
-)
-
-ament_auto_add_library(${PROJECT_NAME}_canonical_execution_plan_adapter SHARED
-  NO_TARGET_LINK_LIBRARIES
-  src/canonical_execution_plan_adapter.cpp
-)
-target_include_directories(${PROJECT_NAME}_canonical_execution_plan_adapter PUBLIC
-  ${EIGEN3_INCLUDE_DIRS}
-)
-target_link_libraries(${PROJECT_NAME}_canonical_execution_plan_adapter
-  ${PROJECT_NAME}_canonical_execution_plan
-  ${PROJECT_NAME}_mpcc_progress
-)
-
 ament_auto_add_library(${PROJECT_NAME}_latest_only_worker SHARED
   NO_TARGET_LINK_LIBRARIES
   src/latest_only_worker.cpp
 )
 target_link_libraries(${PROJECT_NAME}_latest_only_worker Threads::Threads)
-
-ament_auto_add_library(${PROJECT_NAME}_follow_canonical_async SHARED
-  NO_TARGET_LINK_LIBRARIES
-  src/follow_canonical_async.cpp
-)
-target_link_libraries(${PROJECT_NAME}_follow_canonical_async
-  ${PROJECT_NAME}_canonical_execution_plan
-  ${PROJECT_NAME}_latest_only_worker
-  Threads::Threads
-)
 
 ament_auto_add_library(${PROJECT_NAME}_overtake_decision_trace SHARED
   NO_TARGET_LINK_LIBRARIES
@@ -648,15 +598,6 @@ if(BUILD_TESTING)
     )
   endif()
 
-  ament_add_gtest(test_follow_canonical_async
-    test/test_follow_canonical_async.cpp
-  )
-  if(TARGET test_follow_canonical_async)
-    target_link_libraries(test_follow_canonical_async
-      ${PROJECT_NAME}_follow_canonical_async
-    )
-  endif()
-
   ament_add_gtest(test_overtake_decision_trace
     test/test_overtake_decision_trace.cpp
   )
@@ -681,42 +622,6 @@ if(BUILD_TESTING)
   if(TARGET test_mpcc_execution_contract)
     target_link_libraries(test_mpcc_execution_contract
       ${PROJECT_NAME}_mpcc_execution_contract
-    )
-  endif()
-
-  ament_add_gtest(test_canonical_execution_plan
-    test/test_canonical_execution_plan.cpp
-  )
-  if(TARGET test_canonical_execution_plan)
-    target_link_libraries(test_canonical_execution_plan
-      ${PROJECT_NAME}_canonical_execution_plan
-    )
-  endif()
-
-  ament_add_gtest(test_canonical_retained_revalidation
-    test/test_canonical_retained_revalidation.cpp
-  )
-  if(TARGET test_canonical_retained_revalidation)
-    target_link_libraries(test_canonical_retained_revalidation
-      ${PROJECT_NAME}_canonical_retained_revalidation
-    )
-  endif()
-
-  ament_add_gtest(test_canonical_retained_world_revalidation
-    test/test_canonical_retained_world_revalidation.cpp
-  )
-  if(TARGET test_canonical_retained_world_revalidation)
-    target_link_libraries(test_canonical_retained_world_revalidation
-      ${PROJECT_NAME}_canonical_retained_world_revalidation
-    )
-  endif()
-
-  ament_add_gtest(test_canonical_execution_plan_adapter
-    test/test_canonical_execution_plan_adapter.cpp
-  )
-  if(TARGET test_canonical_execution_plan_adapter)
-    target_link_libraries(test_canonical_execution_plan_adapter
-      ${PROJECT_NAME}_canonical_execution_plan_adapter
     )
   endif()
 

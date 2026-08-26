@@ -173,6 +173,8 @@ const char * exact_physical_execution_trajectory_reason_name(
       return "invalid-progress-origin";
     case ExactPhysicalExecutionTrajectoryReason::InvalidProgressRegressionTolerance:
       return "invalid-progress-regression-tolerance";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidVelocityLowerBoundTolerance:
+      return "invalid-velocity-lower-bound-tolerance";
     case ExactPhysicalExecutionTrajectoryReason::InvalidMinimumLateralReserve:
       return "invalid-minimum-lateral-reserve";
     case ExactPhysicalExecutionTrajectoryReason::LateralShapeMismatch:
@@ -230,6 +232,13 @@ validate_exact_physical_execution_trajectory(
       ExactPhysicalExecutionTrajectoryReason::InvalidProgressRegressionTolerance);
   }
   if (
+    !std::isfinite(trajectory.velocity_lower_bound_tolerance_mps) ||
+    trajectory.velocity_lower_bound_tolerance_mps < 0.0)
+  {
+    return reject(
+      ExactPhysicalExecutionTrajectoryReason::InvalidVelocityLowerBoundTolerance);
+  }
+  if (
     !std::isfinite(trajectory.minimum_lateral_bound_reserve_m) ||
     trajectory.minimum_lateral_bound_reserve_m < 0.0)
   {
@@ -284,7 +293,10 @@ validate_exact_physical_execution_trajectory(
       return reject(
         ExactPhysicalExecutionTrajectoryReason::NonFiniteHeading, stage_index);
     }
-    if (!std::isfinite(velocity_mps) || velocity_mps < 0.0) {
+    if (
+      !std::isfinite(velocity_mps) ||
+      velocity_mps < -trajectory.velocity_lower_bound_tolerance_mps)
+    {
       return reject(
         ExactPhysicalExecutionTrajectoryReason::InvalidVelocity, stage_index);
     }

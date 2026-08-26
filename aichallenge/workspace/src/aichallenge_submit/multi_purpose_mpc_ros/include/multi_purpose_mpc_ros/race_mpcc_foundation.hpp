@@ -109,6 +109,9 @@ struct ExactPhysicalExecutionTrajectory
   /// Maximum solver-certified backwards progress admitted between adjacent
   /// raw states. The world-pose samples are never clamped or rewritten.
   double progress_regression_tolerance_m{};
+  /// Maximum solver-certified residual below the semantic zero-velocity
+  /// bound. Raw solved states remain unchanged for physical proof.
+  double velocity_lower_bound_tolerance_mps{};
 };
 
 enum class ExactPhysicalExecutionTrajectoryReason
@@ -117,6 +120,7 @@ enum class ExactPhysicalExecutionTrajectoryReason
   TooFewStages,
   InvalidProgressOrigin,
   InvalidProgressRegressionTolerance,
+  InvalidVelocityLowerBoundTolerance,
   InvalidMinimumLateralReserve,
   LateralShapeMismatch,
   LagShapeMismatch,

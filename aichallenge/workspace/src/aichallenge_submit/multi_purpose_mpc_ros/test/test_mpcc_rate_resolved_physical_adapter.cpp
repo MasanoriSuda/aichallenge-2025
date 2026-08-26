@@ -112,7 +112,7 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsInvalidArtifactBeforeConversion)
   EXPECT_FALSE(result.exact_trajectory.has_value());
 }
 
-TEST(MpccRateResolvedPhysicalAdapter, RejectsActuationOutsideExactPhysicalEnvelope)
+TEST(MpccRateResolvedPhysicalAdapter, AppliesCertifiedToleranceToInternalProgressInput)
 {
   auto source = artifact();
   source.control_stages.front().acceleration_mps2 = 1.3700001;
@@ -125,13 +125,57 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsActuationOutsideExactPhysicalEnvelo
     execution::RejectReason::InvalidAccelerationControlBounds);
 
   source = artifact();
-  source.control_stages.front().virtual_progress_speed_mps = -1e-9;
+  source.control_stages.front().virtual_progress_speed_mps = -5e-7;
+  source.control_stages.front().virtual_progress_lower_mps = 0.0;
+  source.control_stages.front().virtual_progress_upper_mps = 0.0;
+  source.predicted_states[1].progress_m = -5e-8;
+  source.predicted_states[2].progress_m = 0.19999995;
+  source.maximum_constraint_violation = 5e-7;
+  result = adapter::build(
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(result.reason, adapter::RejectReason::None);
+  EXPECT_TRUE(result.exact_trajectory.has_value());
+
+  source = artifact();
+  source.control_stages.front().virtual_progress_speed_mps = -2e-6;
+  source.control_stages.front().virtual_progress_lower_mps = 0.0;
+  source.control_stages.front().virtual_progress_upper_mps = 0.0;
+  source.predicted_states[1].progress_m = -2e-7;
+  source.predicted_states[2].progress_m = 0.1999998;
+  source.maximum_constraint_violation = 2e-6;
   result = adapter::build(
     source, contract::ControlIntent::Track,
     source.identity.source_context.stage_geometry_id);
   EXPECT_EQ(result.reason, adapter::RejectReason::InvalidArtifact);
   EXPECT_EQ(
     result.artifact_reason, execution::RejectReason::InvalidControlStage);
+}
+
+TEST(MpccRateResolvedPhysicalAdapter, PropagatesCertifiedPredictedVelocityResidual)
+{
+  auto source = artifact();
+  source.predicted_states[1].velocity_mps = -5e-7;
+  source.maximum_constraint_violation = 5e-7;
+  auto result = adapter::build(
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
+  ASSERT_EQ(result.reason, adapter::RejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  EXPECT_DOUBLE_EQ(
+    result.exact_trajectory->velocity_mps.front(), -5e-7);
+  EXPECT_GT(
+    result.exact_trajectory->velocity_lower_bound_tolerance_mps, 5e-7);
+
+  source = artifact();
+  source.predicted_states[1].velocity_mps = -2e-6;
+  source.maximum_constraint_violation = 5e-7;
+  result = adapter::build(
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(result.reason, adapter::RejectReason::InvalidArtifact);
+  EXPECT_EQ(
+    result.artifact_reason, execution::RejectReason::InvalidPredictedState);
 }
 
 TEST(MpccRateResolvedPhysicalAdapter, AcceptsCertifiedProgressRegression)

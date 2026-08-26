@@ -756,7 +756,7 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAcceptsCertifiedTinyRegression)
     race::ExactPhysicalExecutionTrajectoryReason::ProgressRegressed);
 }
 
-TEST(RaceMpccFoundation, ExactPhysicalTrajectoryReportsNegativeVelocityStage)
+TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAppliesCertifiedVelocityTolerance)
 {
   race::ExactPhysicalExecutionTrajectory trajectory;
   trajectory.progress_origin_m = 100.0;
@@ -769,12 +769,16 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryReportsNegativeVelocityStage)
   trajectory.lateral_lower_m = {-0.5, -0.5};
   trajectory.lateral_upper_m = {0.8, 0.8};
   trajectory.minimum_lateral_bound_reserve_m = 0.4;
+  trajectory.velocity_lower_bound_tolerance_mps = 1e-7;
 
-  const auto validation =
+  EXPECT_TRUE(race::exact_physical_execution_trajectory_complete(trajectory));
+
+  trajectory.velocity_lower_bound_tolerance_mps = 1e-9;
+  const auto outside_certificate =
     race::validate_exact_physical_execution_trajectory(trajectory);
-  EXPECT_FALSE(validation.complete);
+  EXPECT_FALSE(outside_certificate.complete);
   EXPECT_EQ(
-    validation.reason,
+    outside_certificate.reason,
     race::ExactPhysicalExecutionTrajectoryReason::InvalidVelocity);
-  EXPECT_EQ(validation.stage, 1);
+  EXPECT_EQ(outside_certificate.stage, 1);
 }

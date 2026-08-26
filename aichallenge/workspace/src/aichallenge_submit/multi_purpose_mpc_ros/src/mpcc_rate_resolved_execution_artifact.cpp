@@ -212,6 +212,7 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     return RejectReason::CorridorCountMismatch;
   }
   const double tolerance = artifact.physical_global_tolerance;
+  const double residual_bound = artifact.maximum_constraint_violation + 1e-9;
   double previous_path_distance_m = -std::numeric_limits<double>::infinity();
   for (std::size_t index = 0U; index < artifact.predicted_states.size(); ++index) {
     const auto & state = artifact.predicted_states[index];
@@ -242,6 +243,9 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     {
       return RejectReason::InvalidPredictedState;
     }
+    if (state.velocity_mps < -residual_bound) {
+      return RejectReason::InvalidPredictedState;
+    }
   }
   if (
     std::abs(
@@ -251,7 +255,7 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     return RejectReason::InitialSteeringMismatch;
   }
   double horizon_sec = 0.0;
-  const double residual_bound_m = artifact.maximum_constraint_violation + 1e-9;
+  const double residual_bound_m = residual_bound;
   for (std::size_t index = 0U; index < artifact.control_stages.size(); ++index) {
     const auto & control = artifact.control_stages[index];
     if (
@@ -274,9 +278,14 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     {
       return RejectReason::InvalidProgressControlBounds;
     }
+    // Virtual progress is an internal solver input.  Revalidate its certified
+    // row with the sealed global tolerance; unlike physical acceleration, it
+    // has no separately inset command envelope at this boundary.
     if (
-      control.virtual_progress_speed_mps < control.virtual_progress_lower_mps ||
-      control.virtual_progress_speed_mps > control.virtual_progress_upper_mps)
+      control.virtual_progress_speed_mps <
+      control.virtual_progress_lower_mps - tolerance ||
+      control.virtual_progress_speed_mps >
+      control.virtual_progress_upper_mps + tolerance)
     {
       return RejectReason::InvalidControlStage;
     }

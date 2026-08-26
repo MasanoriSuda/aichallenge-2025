@@ -60,6 +60,7 @@ Result build(
   exact.minimum_lateral_bound_reserve_m =
     std::numeric_limits<double>::infinity();
   const double residual_bound_m = artifact.maximum_constraint_violation + 1e-9;
+  exact.velocity_lower_bound_tolerance_mps = residual_bound_m;
   for (std::size_t state_index = 1U; state_index < state_count; ++state_index) {
     const auto & state = artifact.predicted_states[state_index];
     const auto & previous_state = artifact.predicted_states[state_index - 1U];

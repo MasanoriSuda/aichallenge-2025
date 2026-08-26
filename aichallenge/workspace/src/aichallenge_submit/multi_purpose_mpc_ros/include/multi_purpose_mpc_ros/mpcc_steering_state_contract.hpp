@@ -32,6 +32,10 @@ struct Request
   /// actuator.  It may be newer than the steering observation and therefore
   /// cannot be applied retrospectively over the full observation age.
   double committed_command_age_sec{};
+  /// Age on the ROS control-time axis.  Execution-artifact cursors use this
+  /// axis, whereas committed_command_age_sec above belongs to the steady
+  /// receipt-time axis used for observation projection.
+  double committed_command_control_age_sec{};
 };
 
 struct PhysicalState
@@ -39,6 +43,11 @@ struct PhysicalState
   double measured_steering_rad{};
   double committed_steering_rad{};
   double observation_age_sec{};
+  /// Actual elapsed time since committed_steering_rad was published.  This
+  /// is the causal command-to-command reachability duration; it is not the
+  /// nominal controller period.
+  double committed_command_age_sec{};
+  double committed_command_control_age_sec{};
   double committed_command_projection_duration_sec{};
   double current_time_steering_rad{};
   double prediction_delay_sec{};

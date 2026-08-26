@@ -41,6 +41,40 @@ const char * to_string(Formulation formulation) noexcept;
 /// intentionally outside this contract.
 bool canonical_normal_intent_supported(ControlIntent intent) noexcept;
 
+enum class AtomicIntentAdmissionReason
+{
+  ProposedAccepted,
+  PreviousRetained,
+  NoCurrentWorldAuthority,
+  InvalidIntent,
+};
+
+const char * to_string(AtomicIntentAdmissionReason reason) noexcept;
+
+struct AtomicIntentAdmissionRequest
+{
+  ControlIntent proposed_intent{ControlIntent::Unknown};
+  ControlIntent previous_published_intent{ControlIntent::Unknown};
+  bool proposed_current_world_authority{false};
+  bool previous_current_world_authority{false};
+};
+
+struct AtomicIntentAdmissionResolution
+{
+  AtomicIntentAdmissionReason reason{
+    AtomicIntentAdmissionReason::InvalidIntent};
+  ControlIntent effective_intent{ControlIntent::Unknown};
+  bool authority_available{false};
+  bool proposal_adopted{false};
+  bool previous_retained{false};
+};
+
+/// Resolve an intent proposal without creating an authority gap.  The previous
+/// intent is eligible only when it is itself a supported six-state intent and
+/// has passed current-world proof in this cycle.
+AtomicIntentAdmissionResolution resolve_atomic_intent_admission(
+  const AtomicIntentAdmissionRequest & request) noexcept;
+
 /// Canonical normal intents whose identity is incomplete without the observed
 /// target vehicle and its observation generation.
 bool canonical_normal_intent_requires_target(ControlIntent intent) noexcept;

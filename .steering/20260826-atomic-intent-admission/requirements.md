@@ -1,40 +1,30 @@
 # Requirements
 
-## Goal
+## Objective
 
-Make a canonical intent transition one traceable admission transaction.  A
-six-state solve and immutable physical proof are necessary, but they are not
-evidence that the exact plan is joinable to the current command and dynamic
-world.
-
-## Evidence boundary
-
-- baseline HEAD: `83edbba`
-- moving evidence: `output/20260826-055949/d2/autoware.log`
-- incident: decision 2140 changes `Pass -> Return`, synchronously certifies
-  sequence 1551, then publishes `retained-proof-unavailable` emergency
-- subsequent cycles repeat synchronous Return solves and lose normal authority
+Prevent an unproved normal-intent proposal from replacing the currently
+executed six-state normal authority.  A Follow -> ShiftOut (or any other normal
+intent transition) becomes effective only when the exact new six-state plan is
+solved, physically certified and joined against the current world.
 
 ## Constraints
 
-- Do not tune solver, vehicle, wall, speed or clearance parameters.
-- Do not add a fallback, lease, timeout or alternate normal authority.
-- The exact physically certified plan must be the plan evaluated against the
-  current world; do not rediscover it from a mutable newest-candidate slot.
-- A physically certified but current-world-rejected plan must remain fail
-  closed and expose the typed rejection reason.
-- Preserve ROS and evaluation interfaces and the user-owned
-  `aichallenge/result-summary.json` modification.
+- Keep one six-state normal authority; do not restore five-state or legacy MPC.
+- Do not add a timeout, lease, retry flag, clamp or parameter change.
+- Emergency remains mandatory when neither the proposal nor the previously
+  published six-state intent has current-world proof.
+- Update the published intent only after the selected command crosses the ROS
+  publisher boundary.
+- Preserve the user-owned `aichallenge/result-summary.json`.
 
-## Definition of done
+## Exit criteria
 
-- Transition admission reports physical certification and production join as
-  separate facts.
-- The exact admitted sequence is used for current-world evaluation.
-- Production consumes that exact evaluation without a second mutable-store
-  lookup.
-- Failure-first source/contract tests prevent a return to
-  `certified -> rescan store -> unexplained emergency`.
-- Package build and complete tests pass.
-- A moving run records the exact Return join rejection or successful Return
-  publication before any tactical-state promotion work continues.
+- A rejected ShiftOut proposal can publish a currently valid previous-intent
+  six-state plan without claiming ShiftOut authority.
+- An accepted proposal atomically publishes the new intent.
+- No normal command is emitted without current-world revalidation.
+- Dynamic run shows physically rejected ShiftOut proposals without the former
+  matching Emergency pulses.
+- A valid current Follow problem must consume the same continuity-constrained
+  target observation that formed its six-state horizon; retained-proof
+  checking must not independently select another course branch.

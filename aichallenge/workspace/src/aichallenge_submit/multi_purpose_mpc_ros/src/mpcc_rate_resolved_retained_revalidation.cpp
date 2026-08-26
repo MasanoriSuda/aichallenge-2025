@@ -404,6 +404,51 @@ void evaluate_timed_dynamic_path(
 
 }  // namespace
 
+std::optional<FollowTargetObservation> build_follow_target_observation(
+  const FollowTargetObservationBuildRequest & request) noexcept
+{
+  if (
+    request.target_id.empty() || request.observation_generation == 0U ||
+    !std::isfinite(request.observed_sec) || request.observed_sec < 0.0 ||
+    !std::isfinite(request.current_target_gap_m) ||
+    request.current_target_gap_m < 0.0 ||
+    !std::isfinite(request.current_ego_progress_offset_m) ||
+    !std::isfinite(request.hard_gap_m) || request.hard_gap_m < 0.0 ||
+    !std::isfinite(request.target_speed_mps) || request.target_speed_mps < 0.0 ||
+    request.stage_duration_sec.empty() ||
+    std::any_of(
+      request.stage_duration_sec.begin(), request.stage_duration_sec.end(),
+      [](const double duration_sec) {
+        return !std::isfinite(duration_sec) || duration_sec <= 0.0;
+      }))
+  {
+    return std::nullopt;
+  }
+
+  FollowTargetObservation observation;
+  observation.target_id = request.target_id;
+  observation.observation_generation = request.observation_generation;
+  observation.observed_sec = request.observed_sec;
+  observation.current_target_gap_m = request.current_target_gap_m;
+  observation.hard_gap_m = request.hard_gap_m;
+  observation.target_speed_mps = request.target_speed_mps;
+  observation.current = request.current;
+  observation.elapsed_time_sec.reserve(request.stage_duration_sec.size() + 1U);
+  observation.target_progress_from_current_origin_m.reserve(
+    request.stage_duration_sec.size() + 1U);
+  double elapsed_sec = 0.0;
+  for (std::size_t state = 0U; state <= request.stage_duration_sec.size(); ++state) {
+    if (state > 0U) {
+      elapsed_sec += request.stage_duration_sec[state - 1U];
+    }
+    observation.elapsed_time_sec.push_back(elapsed_sec);
+    observation.target_progress_from_current_origin_m.push_back(
+      request.current_ego_progress_offset_m + request.current_target_gap_m +
+      request.target_speed_mps * elapsed_sec);
+  }
+  return observation;
+}
+
 const char * to_string(const Reason reason) noexcept
 {
   switch (reason) {
@@ -532,8 +577,8 @@ Result evaluate(const Request & request)
     !std::isfinite(request.current_time_steering_rad) ||
     !std::isfinite(request.current_steering_rad) ||
     !std::isfinite(request.previous_published_steering_rad) ||
-    !std::isfinite(request.publication_interval_sec) ||
-    request.publication_interval_sec <= 0.0 ||
+    !std::isfinite(request.previous_published_command_age_sec) ||
+    request.previous_published_command_age_sec < 0.0 ||
     !std::isfinite(request.minimum_acceleration_mps2) ||
     !std::isfinite(request.maximum_acceleration_mps2) ||
     request.minimum_acceleration_mps2 > request.maximum_acceleration_mps2 ||
@@ -643,7 +688,7 @@ Result evaluate(const Request & request)
   // makes actuator lag look like an impossible command jump and closes normal
   // authority even when consecutive commands are physically rate compliant.
   const double steering_reachability_duration_sec =
-    request.publication_interval_sec;
+    request.previous_published_command_age_sec;
   const double maximum_steering_step_rad =
     execution.maximum_abs_steering_rate_radps *
     steering_reachability_duration_sec + execution.physical_global_tolerance;

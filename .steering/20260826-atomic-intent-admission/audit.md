@@ -1,63 +1,75 @@
-# Audit
+# Root-cause audit
 
-## Observed phenomenon
+## Evidence
 
-In `output/20260826-055949/d2/autoware.log`:
+In `output/20260826-124000/d1/autoware.log`:
 
-- decision 2140 changes `Pass -> Return`;
-- synchronous sequence 1551 solves and passes the immutable physical wall
-  proof in 5.251 ms;
-- the same decision publishes an emergency command with
-  `retained-proof-unavailable`;
-- decisions 2141 and 2142 repeat physical certification without acquiring
-  Return production authority;
-- decisions 2143 onward reach maximum iterations after emergency braking has
-  changed the predecessor state.
+- 68 Follow -> ShiftOut atomic admissions solve successfully but fail the
+  physical proof with `stage-wall-rejected`.
+- The proposal becomes `canonical_intent=shiftout` before admission completes.
+- the retained candidate is then rejected by intent mismatch or steering
+  reachability;
+- production reports `retained-proof-unavailable` and publishes canonical
+  Emergency;
+- subsequent callbacks return to Follow and repeat the proposal.
 
-The preceding retained telemetry already alternates
-`velocity-unreachable`, `steering-unreachable` and
-`dynamic-path-blocked`.  These are upstream adoption failures, not evidence
-that the Return QP itself was initially infeasible.
+The publisher boundary itself is healthy in the same run: 3324 candidate joins
+succeed with zero reject and executed sequence reaches 2942.  Therefore this is
+not the preceding publication-ledger defect.
 
-## Root cause
+## Earliest violated invariant
 
-`evaluate_rate_resolved_transition_admission()` ended at physical
-certification and returned only a boolean and sequence.  The production owner
-then rescanned the shared newest-candidate store and performed current-world
-revalidation separately.  Therefore:
+A proposed normal intent must not replace the effective normal intent until an
+executable six-state plan for that proposal has crossed Gate A.  Failed
+proposals are observations, not authority transitions.
 
-1. the word `certified` was incorrectly interpreted as adoption-ready;
-2. the exact certified object was not part of the transition result;
-3. the dynamic-world or predecessor-continuity rejection was erased from the
-   atomic-admission log;
-4. the tactical phase had no evidence explaining why canonical authority did
-   not cross the publisher boundary.
+## Falsification
 
-This is an authority/adoption transaction defect.  Solver tuning, wall margin
-changes and a new fallback cannot correct it.
+- Solver unable to formulate: false; the transition solver returns `solved`.
+- Wall guard too strict: not established and irrelevant to authority loss; a
+  rejected path must not remove the current owner.
+- stale executed ledger: false after the preceding Slice; sequence advances.
+- adoption-order defect: directly supported by the proposed intent and
+  physical rejection occurring in the same decision; highest confidence.
 
-## Implemented correction
+## Intermediate falsification
 
-- The transition result now owns the exact certified plan pointer.
-- That exact plan receives the ordinary current-world retained evaluation in
-  the same synchronous transaction.
-- The production owner consumes that returned evaluation directly and no
-  longer looks the transition plan up again in a mutable store.
-- The log distinguishes `certified` from `joined` and reports the typed world
-  reason and blocking obstacle.
-- A rejected world join remains fail closed.
+`output/20260826-140054/d2/autoware.log` showed that the first all-V2X join was
+not sufficient:
 
-## Validation
+- 43 Follow -> Cruise decisions reported
+  `previous_world=follow-target-observation-unavailable`;
+- proposed Follow artifacts also intermittently failed with the same reason;
+- the target still existed in the current Cartesian obstacle set.
 
-- `make autoware-build`: 25 packages passed.
-- complete package CTest: 51/51 passed.
-- source authority contract: 56/56 passed.
-- no parameter, fallback, timeout, ROS interface or evaluation-schema change.
+This disproved the assumption that a stateless Cartesian-to-course projection
+was equivalent to the continuity-constrained observation which built the
+Follow problem.  The duplicate projection was removed from the current Follow
+path.  It remains only as a fail-closed recovery of evidence for a previously
+published Follow intent whose new proposal is not Follow.
 
-## Remaining evidence gap
+## Acceptance evidence
 
-AWSIM remained in `Ready` during autonomous start attempts, so this Slice does
-not claim moving acceptance.  The next manual moving run must determine
-whether the first Return rejection is a dynamic blocker, reachability failure,
-or a successful join.  If `certified=1,joined=0` remains, prospective Return
-admission before tactical phase mutation is the next structural Slice.
+Static validation after the final repair:
+
+- `make autoware-build`: 25 packages passed;
+- `colcon test --packages-select multi_purpose_mpc_ros`: 51/51 targets passed;
+- package results: 1924 tests, zero errors, failures or skips (prior run), with
+  the final run again reporting 100% target success.
+
+Dynamic validation in `output/20260826-141125`:
+
+- ordinary Cruise -> Follow and Follow -> Cruise transitions joined normally;
+- Follow -> ShiftOut was accepted when its exact six-state proof passed;
+- five physically rejected ShiftOut proposals (`stage-wall-rejected`) retained
+  the current Follow plan with `resolution=previous-retained` and
+  `previous_world=accepted`;
+- current Follow no longer produced
+  `follow-target-observation-unavailable`;
+- two ShiftOut -> Follow decisions with a genuinely unavailable V2X dynamic
+  observation rejected both alternatives.  They were not converted into an
+  uncertified hold.
+
+The observed result satisfies the invariant: a tactical proposal cannot remove
+normal authority, but an old intent is not retained without current-world
+proof.

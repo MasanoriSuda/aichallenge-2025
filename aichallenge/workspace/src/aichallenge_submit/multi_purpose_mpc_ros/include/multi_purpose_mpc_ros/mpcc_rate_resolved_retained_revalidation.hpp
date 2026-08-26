@@ -49,6 +49,26 @@ struct FollowTargetObservation
   bool current{false};
 };
 
+struct FollowTargetObservationBuildRequest
+{
+  std::string target_id;
+  std::uint64_t observation_generation{};
+  double observed_sec{};
+  double current_target_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double current_ego_progress_offset_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double hard_gap_m{std::numeric_limits<double>::quiet_NaN()};
+  double target_speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  std::vector<double> stage_duration_sec;
+  bool current{false};
+};
+
+/// Build fresh Follow evidence from an intent-independent current-world
+/// target projection.  The resulting horizon has no solver authority; it is
+/// consumed only when revalidating an already published Follow artifact.
+std::optional<FollowTargetObservation> build_follow_target_observation(
+  const FollowTargetObservationBuildRequest & request) noexcept;
+
 struct Request
 {
   std::shared_ptr<const certified::CertifiedPlan> plan;
@@ -80,7 +100,10 @@ struct Request
   /// slew is a publication-to-publication contract and must not be inferred
   /// from either observed physical steering value above.
   double previous_published_steering_rad{};
-  double publication_interval_sec{};
+  /// Actual age of previous_published_steering_rad at current evaluation.
+  /// Callback overrun and asynchronous solve time make the nominal controller
+  /// period an invalid substitute for this causal publication duration.
+  double previous_published_command_age_sec{};
   double minimum_acceleration_mps2{};
   double maximum_acceleration_mps2{};
 };

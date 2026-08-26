@@ -242,6 +242,34 @@ def test_follow_qp_keeps_planning_and_physical_gap_contracts_separate() -> None:
     assert "Reason::FollowStageGapViolation" in retained_source
 
 
+def test_follow_current_world_observation_survives_a_new_intent_proposal() -> None:
+    """Current Follow owns its projection; prior Follow can rejoin all V2X."""
+
+    helper_start = SOURCE.index("build_current_follow_target_observation(")
+    helper_end = SOURCE.index(
+        "RateResolvedPreentryAdoptionShadowEvaluation\n", helper_start
+    )
+    helper = SOURCE[helper_start:helper_end]
+    assert "execution.identity.source_context.target_id" in helper
+    assert "problem.follow_longitudinal_contract" in helper
+    assert "follow.target_id == target_id" in helper
+    assert "follow.target_observation_generation" in helper
+    assert "current_world.obstacles.obstacles" in helper
+    assert "selected_target_provenance(" not in helper
+    assert "last_v2x_behavior_output_" not in helper
+    assert "build_follow_target_observation(" in helper
+
+    evaluate_start = SOURCE.index(
+        "RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan("
+    )
+    evaluate_end = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow(", evaluate_start
+    )
+    evaluate = SOURCE[evaluate_start:evaluate_end]
+    assert "build_current_follow_target_observation(" in evaluate
+    assert "problem.follow_longitudinal_contract.valid" not in evaluate
+
+
 def test_overtake_wall_proof_uses_exact_five_state_trajectory() -> None:
     """Wall proof must retain lag, heading and solved progress until certified."""
 
@@ -579,14 +607,21 @@ def test_rate_resolved_intent_transition_admits_the_same_six_state_producer() ->
     admission_call = owner.index("evaluate_rate_resolved_transition_admission(")
     publication = owner.index("rate_resolved_track_cruise_control(")
     assert first_revalidation < admission_call < publication
-    assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 1
+    # A tactical intent change is atomic: first prove the proposed intent,
+    # then prove the last actually published intent in the same current world
+    # when the proposal cannot be adopted.
+    assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 2
     assert "!retained.production_authority.has_value()" in owner
     assert "ControlIntent::Unknown" in owner
     assert "last_published_canonical_intent_ != intent" in owner
     assert "retained.reason == rate_resolved_retained::Reason::MissingPlan" not in owner
     assert "retained.reason == rate_resolved_retained::Reason::IntentMismatch" not in owner
-    assert "if (admission.certified)" in owner
+    assert "if (admission.current_world_joined)" in owner
     assert "retained = admission.retained" in owner
+    assert "const auto previous_intent = last_published_canonical_intent_" in owner
+    assert "resolve_atomic_intent_admission(" in owner
+    assert "effective_intent = atomic_resolution.effective_intent" in owner
+    assert "problem, effective_intent, retained" in owner
 
 
 def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
@@ -670,9 +705,35 @@ def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     production = owner.index("rate_resolved_track_cruise_control(")
     assert admission_call < production
     assert "retained = admission.retained" in owner
-    assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 1
+    assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 2
     assert "last_published_canonical_intent_" in owner
     assert "ControlIntent::Follow" in owner
+    assert "resolve_atomic_intent_admission(" in owner
+    assert "effective_intent = atomic_resolution.effective_intent" in owner
+
+
+def test_last_published_intent_is_a_publication_ledger() -> None:
+    """Solver selection may not advance the actually-published intent ledger."""
+
+    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    assert "last_published_canonical_intent_ =" not in owner
+
+    recorder_start = SOURCE.index("record_canonical_normal_final_command(")
+    recorder_end = SOURCE.index(
+        "const std::optional<overtake_orchestrator::AuthorityTrace> &",
+        recorder_start,
+    )
+    recorder = SOURCE[recorder_start:recorder_end]
+    serialized_join = recorder.index(
+        "canonical_normal_command_matches_serialized_actuation("
+    )
+    ledger_update = recorder.index(
+        "last_published_canonical_intent_ = pending.command.intent"
+    )
+    assert serialized_join < ledger_update
+    assert recorder.index("mark_executed(") < ledger_update
 
 
 def test_shared_rate_resolved_solver_transaction_is_serialized_end_to_end() -> None:

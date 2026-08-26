@@ -13,6 +13,49 @@ namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace
 {
 
+TEST(MpccExecutionContract, AtomicIntentAdoptsOnlyAJoinedProposal)
+{
+  const auto proposed = contract::resolve_atomic_intent_admission(
+    contract::AtomicIntentAdmissionRequest{
+      contract::ControlIntent::ShiftOut, contract::ControlIntent::Follow,
+      true, true});
+  EXPECT_TRUE(proposed.authority_available);
+  EXPECT_TRUE(proposed.proposal_adopted);
+  EXPECT_FALSE(proposed.previous_retained);
+  EXPECT_EQ(proposed.effective_intent, contract::ControlIntent::ShiftOut);
+  EXPECT_EQ(
+    proposed.reason,
+    contract::AtomicIntentAdmissionReason::ProposedAccepted);
+}
+
+TEST(MpccExecutionContract, AtomicIntentRetainsProvedPreviousOwnerOnRejection)
+{
+  const auto retained = contract::resolve_atomic_intent_admission(
+    contract::AtomicIntentAdmissionRequest{
+      contract::ControlIntent::ShiftOut, contract::ControlIntent::Follow,
+      false, true});
+  EXPECT_TRUE(retained.authority_available);
+  EXPECT_FALSE(retained.proposal_adopted);
+  EXPECT_TRUE(retained.previous_retained);
+  EXPECT_EQ(retained.effective_intent, contract::ControlIntent::Follow);
+  EXPECT_EQ(
+    retained.reason,
+    contract::AtomicIntentAdmissionReason::PreviousRetained);
+}
+
+TEST(MpccExecutionContract, AtomicIntentFailsClosedWithoutEitherProof)
+{
+  const auto unavailable = contract::resolve_atomic_intent_admission(
+    contract::AtomicIntentAdmissionRequest{
+      contract::ControlIntent::ShiftOut, contract::ControlIntent::Follow,
+      false, false});
+  EXPECT_FALSE(unavailable.authority_available);
+  EXPECT_EQ(unavailable.effective_intent, contract::ControlIntent::Unknown);
+  EXPECT_EQ(
+    unavailable.reason,
+    contract::AtomicIntentAdmissionReason::NoCurrentWorldAuthority);
+}
+
 contract::MpccProblemContext make_context()
 {
   contract::MpccProblemContext context;

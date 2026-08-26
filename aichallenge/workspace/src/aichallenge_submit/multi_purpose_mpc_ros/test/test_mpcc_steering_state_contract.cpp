@@ -13,7 +13,7 @@ namespace
 steering::Request valid_request()
 {
   return steering::Request{
-    0.20, 0.24, 0.01, 0.13, 0.50, 0.61, 0.70, 0.02};
+    0.20, 0.24, 0.01, 0.13, 0.50, 0.61, 0.70, 0.02, 0.05};
 }
 
 TEST(
@@ -43,6 +43,8 @@ TEST(MpccSteeringStateContract, ReachesCommittedInputWithinLatencyPrefix)
   ASSERT_TRUE(result.state.has_value());
   EXPECT_DOUBLE_EQ(result.state->measured_steering_rad, 0.20);
   EXPECT_DOUBLE_EQ(result.state->committed_steering_rad, 0.24);
+  EXPECT_DOUBLE_EQ(result.state->committed_command_age_sec, 0.02);
+  EXPECT_DOUBLE_EQ(result.state->committed_command_control_age_sec, 0.05);
   EXPECT_NEAR(result.state->current_time_steering_rad, 0.207, 1e-12);
   EXPECT_DOUBLE_EQ(result.state->prediction_delay_sec, 0.13);
   EXPECT_DOUBLE_EQ(result.state->projection_duration_sec, 0.14);

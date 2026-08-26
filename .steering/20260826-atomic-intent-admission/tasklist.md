@@ -1,14 +1,12 @@
 # Tasklist
 
-- [x] Freeze baseline and identify the first failed transition.
-- [x] Separate physical certification from production current-world join.
-- [x] Add failure-first source/contract coverage.
-- [x] Return the exact certified plan and current-world evaluation from
-      synchronous transition admission.
-- [x] Consume the returned evaluation without a mutable store rescan.
-- [x] Add typed transition join logging, including blocker identity.
-- [x] Run build, focused tests, complete package tests and source-contract
-      tests.
-- [x] Update audit evidence.
-- [x] Commit the Slice.
-- [ ] Capture moving Return evidence (manual AWSIM start currently required).
+- [x] Freeze dynamic evidence and causal graph.
+- [x] Add pure atomic-intent selection contract and failure-first tests.
+- [x] Revalidate previous published intent only after proposal rejection.
+- [x] Move published-intent ledger update to the publication join.
+- [x] Remove duplicate current-Follow course projection ownership.
+- [x] Add proposal/effective-intent telemetry.
+- [x] Run build and full package tests.
+- [x] Run moving dev2 acceptance.
+- [x] Update steering audit and migration evidence.
+- [x] Commit without staging user-owned result JSON.

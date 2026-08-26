@@ -175,7 +175,7 @@ retained::Request accepted_request(
   request.current_time_steering_rad = 0.105;
   request.current_steering_rad = 0.105;
   request.previous_published_steering_rad = 0.105;
-  request.publication_interval_sec = 0.025;
+  request.previous_published_command_age_sec = 0.025;
   request.minimum_acceleration_mps2 = -3.0;
   request.maximum_acceleration_mps2 = 1.0;
   return request;
@@ -201,6 +201,40 @@ retained::Request accepted_follow_request()
     {5.0, 5.2, 5.4},
     true};
   return request;
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  BuildsFreshFollowEvidenceWithoutAProposedFollowIntent)
+{
+  const auto observation = retained::build_follow_target_observation(
+    retained::FollowTargetObservationBuildRequest{
+      "d2", 9U, 2.0, 5.0, 0.2, 3.0, 2.0, {0.1, 0.2}, true});
+
+  ASSERT_TRUE(observation.has_value());
+  EXPECT_EQ(observation->target_id, "d2");
+  EXPECT_EQ(observation->observation_generation, 9U);
+  ASSERT_EQ(observation->elapsed_time_sec.size(), 3U);
+  EXPECT_NEAR(observation->elapsed_time_sec[0], 0.0, 1e-9);
+  EXPECT_NEAR(observation->elapsed_time_sec[1], 0.1, 1e-9);
+  EXPECT_NEAR(observation->elapsed_time_sec[2], 0.3, 1e-9);
+  ASSERT_EQ(observation->target_progress_from_current_origin_m.size(), 3U);
+  EXPECT_NEAR(observation->target_progress_from_current_origin_m[0], 5.2, 1e-9);
+  EXPECT_NEAR(observation->target_progress_from_current_origin_m[1], 5.4, 1e-9);
+  EXPECT_NEAR(observation->target_progress_from_current_origin_m[2], 5.8, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsMalformedFreshFollowEvidence)
+{
+  auto request = retained::FollowTargetObservationBuildRequest{
+    "d2", 9U, 2.0, 5.0, 0.2, 3.0, 2.0, {0.1, 0.2}, true};
+  request.target_id.clear();
+  EXPECT_FALSE(retained::build_follow_target_observation(request).has_value());
+  request.target_id = "d2";
+  request.stage_duration_sec = {0.1, 0.0};
+  EXPECT_FALSE(retained::build_follow_target_observation(request).has_value());
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
@@ -534,6 +568,30 @@ TEST(
   EXPECT_NEAR(result.proof->previous_published_steering_rad, 0.10, 1e-9);
   EXPECT_NEAR(result.proof->steering_difference_rad, 0.010, 1e-9);
   EXPECT_NEAR(result.proof->steering_reachability_duration_sec, 0.025, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  UsesActualPublishedCommandAgeInsteadOfNominalControllerPeriod)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.previous_published_steering_rad = 0.075;
+
+  // At the 50 ms cursor the immutable publication sequence requests 0.105
+  // rad.  A 30 ms delta is reachable when the previous command was actually
+  // published 40 ms ago, even though the nominal controller period is 25 ms.
+  request.previous_published_command_age_sec = 0.040;
+  const auto accepted = retained::evaluate(request);
+  EXPECT_EQ(accepted.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(accepted.proof.has_value());
+  EXPECT_NEAR(
+    accepted.proof->steering_reachability_duration_sec, 0.040, 1e-9);
+
+  request.previous_published_command_age_sec = 0.025;
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::SteeringUnreachable);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableVelocity)

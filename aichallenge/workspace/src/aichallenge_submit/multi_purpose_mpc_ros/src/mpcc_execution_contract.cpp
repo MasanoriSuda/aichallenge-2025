@@ -253,6 +253,49 @@ bool canonical_normal_intent_supported(const ControlIntent intent) noexcept
     intent == ControlIntent::Rejoin;
 }
 
+const char * to_string(const AtomicIntentAdmissionReason reason) noexcept
+{
+  switch (reason) {
+    case AtomicIntentAdmissionReason::ProposedAccepted:
+      return "proposed-accepted";
+    case AtomicIntentAdmissionReason::PreviousRetained:
+      return "previous-retained";
+    case AtomicIntentAdmissionReason::NoCurrentWorldAuthority:
+      return "no-current-world-authority";
+    case AtomicIntentAdmissionReason::InvalidIntent:
+      return "invalid-intent";
+  }
+  return "unknown";
+}
+
+AtomicIntentAdmissionResolution resolve_atomic_intent_admission(
+  const AtomicIntentAdmissionRequest & request) noexcept
+{
+  AtomicIntentAdmissionResolution result;
+  if (!canonical_normal_intent_supported(request.proposed_intent)) {
+    return result;
+  }
+  if (request.proposed_current_world_authority) {
+    result.reason = AtomicIntentAdmissionReason::ProposedAccepted;
+    result.effective_intent = request.proposed_intent;
+    result.authority_available = true;
+    result.proposal_adopted = true;
+    return result;
+  }
+  if (
+    canonical_normal_intent_supported(request.previous_published_intent) &&
+    request.previous_current_world_authority)
+  {
+    result.reason = AtomicIntentAdmissionReason::PreviousRetained;
+    result.effective_intent = request.previous_published_intent;
+    result.authority_available = true;
+    result.previous_retained = true;
+    return result;
+  }
+  result.reason = AtomicIntentAdmissionReason::NoCurrentWorldAuthority;
+  return result;
+}
+
 bool canonical_normal_intent_requires_target(const ControlIntent intent) noexcept
 {
   return

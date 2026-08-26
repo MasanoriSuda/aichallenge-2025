@@ -7905,6 +7905,11 @@ struct MPC
       }
     }
 
+    // The tactical proposal and solver selection are not publication events.
+    // Update this ledger only after the exact serialized command has joined
+    // and any newly certified candidate has become the executed plan.
+    last_published_canonical_intent_ = pending.command.intent;
+
     const double speed_difference_mps = std::abs(
       pending.command.predicted_speed_mps - final_target_speed_mps);
     const double acceleration_difference_mps2 = std::abs(
@@ -24609,7 +24614,8 @@ struct MPC
     }
 
     admission.retained = evaluate_rate_resolved_track_cruise_plan(
-      problem, now_sec, admission.certified_plan);
+      problem, now_sec, draft.source_context.intent,
+      admission.certified_plan);
     admission.current_world_reason = admission.retained.reason;
     admission.current_world_joined =
       admission.retained.production_authority.has_value();
@@ -24688,10 +24694,167 @@ struct MPC
       physical_control_origin_steering_rad_.value();
     request.previous_published_steering_rad =
       current_physical_steering_state_->committed_steering_rad;
-    request.publication_interval_sec = model->Ts;
+    request.previous_published_command_age_sec =
+      current_physical_steering_state_->committed_command_control_age_sec;
     request.minimum_acceleration_mps2 = cfg.a_min;
     request.maximum_acceleration_mps2 = cfg.a_max;
     return request;
+  }
+
+  std::optional<rate_resolved_retained::FollowTargetObservation>
+  build_current_follow_target_observation(
+    const MpcProblem & problem,
+    const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & plan,
+    const rate_resolved_retained::Request & current_world) const
+  {
+    if (
+      plan == nullptr || plan->execution_artifact == nullptr ||
+      model == nullptr || model->reference_path == nullptr ||
+      !current_world.obstacles.current)
+    {
+      return std::nullopt;
+    }
+    const auto & execution = *plan->execution_artifact;
+    const auto & target_id = execution.identity.source_context.target_id;
+    if (target_id.empty()) {
+      return std::nullopt;
+    }
+
+    std::vector<double> stage_duration_sec;
+    stage_duration_sec.reserve(execution.control_stages.size());
+    for (const auto & stage : execution.control_stages) {
+      stage_duration_sec.push_back(stage.duration_sec);
+    }
+
+    // When the current tactical intent is Follow, the problem already owns
+    // the canonical, continuity-constrained course projection used to build
+    // the six-state Follow horizon.  Re-projecting the same Cartesian V2X
+    // sample here can choose another branch at a course crossing and make an
+    // otherwise valid Follow artifact appear to have no target observation.
+    // Consume that current-world evidence when its immutable target identity
+    // matches the artifact.  The Cartesian rejoin below is reserved for
+    // revalidating a previously published Follow artifact after the proposed
+    // tactical intent has stopped producing a Follow contract.
+    const auto & follow = problem.follow_longitudinal_contract;
+    if (
+      follow.valid && follow.target_id == target_id &&
+      follow.target_observation_generation == current_world.obstacles.generation)
+    {
+      return rate_resolved_retained::build_follow_target_observation(
+        rate_resolved_retained::FollowTargetObservationBuildRequest{
+          follow.target_id,
+          follow.target_observation_generation,
+          current_world.obstacles.observed_sec,
+          follow.current_target_gap_m,
+          follow.current_ego_progress_offset_m,
+          follow.hard_gap_m,
+          follow.target_speed_mps,
+          std::move(stage_duration_sec),
+          true});
+    }
+
+    const auto target = std::find_if(
+      current_world.obstacles.obstacles.begin(),
+      current_world.obstacles.obstacles.end(),
+      [&target_id](const rate_resolved_retained::DynamicObstacle & obstacle) {
+        return obstacle.id == target_id;
+      });
+    if (target == current_world.obstacles.obstacles.end()) {
+      return std::nullopt;
+    }
+
+    std::vector<v2x_overtake_core::CoursePoint> course_path;
+    course_path.reserve(
+      static_cast<std::size_t>(model->reference_path->n_waypoints));
+    for (int waypoint_id = 0;
+      waypoint_id < model->reference_path->n_waypoints; ++waypoint_id)
+    {
+      const auto & waypoint = model->reference_path->get_waypoint(waypoint_id);
+      course_path.push_back({waypoint.x, waypoint.y});
+    }
+    if (course_path.size() < 2U) {
+      return std::nullopt;
+    }
+
+    double maximum_cross_track_m = model->width;
+    for (Eigen::Index index = 0;
+      index < problem.progress_state_lower.size(); index += 3)
+    {
+      if (std::isfinite(problem.progress_state_lower[index])) {
+        maximum_cross_track_m = std::max(
+          maximum_cross_track_m,
+          std::abs(problem.progress_state_lower[index]));
+      }
+      if (index < problem.progress_state_upper.size() &&
+        std::isfinite(problem.progress_state_upper[index]))
+      {
+        maximum_cross_track_m = std::max(
+          maximum_cross_track_m,
+          std::abs(problem.progress_state_upper[index]));
+      }
+    }
+    maximum_cross_track_m +=
+      cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin;
+    const double lookahead_distance_m = std::max(
+      cfg.v2x_behavior.follow_distance,
+      cfg.v2x_behavior.front_progress_detection_distance);
+    if (
+      !std::isfinite(maximum_cross_track_m) || maximum_cross_track_m <= 0.0 ||
+      !std::isfinite(lookahead_distance_m) || lookahead_distance_m <= 0.0)
+    {
+      return std::nullopt;
+    }
+    const auto projection = v2x_overtake_core::project_forward_course_progress(
+      course_path,
+      v2x_overtake_core::ForwardCourseProjectionRequest{
+        static_cast<std::size_t>(std::max(0, problem.tracking_wp_id)),
+        model->reference_path->circular,
+        model->temporal_state.x,
+        model->temporal_state.y,
+        target->circle.x_m,
+        target->circle.y_m,
+        target->circle.velocity_x_mps,
+        target->circle.velocity_y_mps,
+        cfg.v2x_behavior.front_progress_lookbehind_distance,
+        lookahead_distance_m,
+        maximum_cross_track_m,
+        std::nullopt,
+        std::numeric_limits<double>::infinity()});
+    if (!projection.valid || projection.forward_distance_m < 0.0) {
+      return std::nullopt;
+    }
+
+    const int origin_waypoint_id =
+      problem.progress_stage_geometry.tracking_waypoint;
+    if (
+      origin_waypoint_id < 0 ||
+      origin_waypoint_id >= model->reference_path->n_waypoints)
+    {
+      return std::nullopt;
+    }
+    const auto & origin_waypoint = model->reference_path->get_waypoint(
+      origin_waypoint_id);
+    const auto ego_frenet = mpcc_contract::project_planar_pose_to_frenet(
+      mpcc_contract::PlanarPose{
+        model->temporal_state.x, model->temporal_state.y,
+        model->temporal_state.psi},
+      mpcc_contract::PlanarPose{
+        origin_waypoint.x, origin_waypoint.y, origin_waypoint.psi});
+    if (!ego_frenet.has_value()) {
+      return std::nullopt;
+    }
+
+    return rate_resolved_retained::build_follow_target_observation(
+      rate_resolved_retained::FollowTargetObservationBuildRequest{
+        target_id,
+        current_world.obstacles.generation,
+        current_world.obstacles.observed_sec,
+        projection.forward_distance_m,
+        ego_frenet->lag_m,
+        cfg.v2x_behavior.moving_follow_hard_distance,
+        std::max(0.0, projection.along_track_speed_mps),
+        std::move(stage_duration_sec),
+        true});
   }
 
   RateResolvedPreentryAdoptionShadowEvaluation
@@ -24819,6 +24982,7 @@ struct MPC
 
   RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan(
     const MpcProblem & problem, const double now_sec,
+    const mpcc_contract::ControlIntent evaluation_intent,
     std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan) const
   {
     const auto started = SteadyClock::now();
@@ -24840,42 +25004,16 @@ struct MPC
       evaluation.sequence = plan->execution_artifact->identity.sequence;
     }
     evaluation.selected_plan = plan;
-    const auto current_intent = current_control_intent();
     auto request = build_rate_resolved_current_world_request(
-      plan, current_intent, problem.progress_origin_m, now_sec);
+      plan, evaluation_intent, problem.progress_origin_m, now_sec);
     if (!request.has_value()) {
       evaluation.reason =
         rate_resolved_retained::Reason::InvalidCurrentState;
       return finish();
     }
-    if (
-      current_intent == mpcc_contract::ControlIntent::Follow &&
-      problem.follow_longitudinal_contract.valid)
-    {
-      const auto & follow_contract = problem.follow_longitudinal_contract;
-      const auto target_provenance = selected_target_provenance(
-        last_v2x_behavior_output_);
-      const double target_age_sec = now_sec - target_provenance.receipt_sec;
-      const bool target_current =
-        target_provenance.valid && request->obstacles.current &&
-        target_provenance.target_id == follow_contract.target_id &&
-        target_provenance.observation_generation ==
-        follow_contract.target_observation_generation &&
-        target_provenance.observation_generation ==
-        request->obstacles.generation &&
-        overtake_core::is_v2x_receipt_age_fresh(
-        target_age_sec, cfg.v2x_gap.timeout_sec,
-        kV2XReceiptFutureToleranceSec);
-      request->follow_target = rate_resolved_retained::FollowTargetObservation{
-        follow_contract.target_id,
-        follow_contract.target_observation_generation,
-        now_sec,
-        follow_contract.current_target_gap_m,
-        follow_contract.hard_gap_m,
-        follow_contract.target_speed_mps,
-        follow_contract.elapsed_time_sec,
-        follow_contract.target_progress_m,
-        target_current};
+    if (evaluation_intent == mpcc_contract::ControlIntent::Follow) {
+      request->follow_target = build_current_follow_target_observation(
+        problem, plan, request.value());
     }
     evaluation.obstacle_count = request->obstacles.obstacles.size();
     const auto result = rate_resolved_retained::evaluate(request.value());
@@ -24953,7 +25091,8 @@ struct MPC
 
   RateResolvedRetainedShadowEvaluation
   evaluate_rate_resolved_track_cruise_retained_shadow(
-    const MpcProblem & problem, const double now_sec) const
+    const MpcProblem & problem, const double now_sec,
+    const mpcc_contract::ControlIntent evaluation_intent) const
   {
     const auto started = SteadyClock::now();
     RateResolvedRetainedShadowEvaluation final_evaluation;
@@ -24977,7 +25116,7 @@ struct MPC
 
     if (candidate_plan != nullptr) {
       final_evaluation = evaluate_rate_resolved_track_cruise_plan(
-        problem, now_sec, candidate_plan);
+        problem, now_sec, evaluation_intent, candidate_plan);
       final_evaluation.candidate_attempted = true;
       final_evaluation.candidate_reason = final_evaluation.reason;
       final_evaluation.candidate_sequence = candidate_sequence;
@@ -24998,7 +25137,7 @@ struct MPC
       const auto candidate_reason = final_evaluation.candidate_reason;
       const bool candidate_attempted = final_evaluation.candidate_attempted;
       auto executed_evaluation = evaluate_rate_resolved_track_cruise_plan(
-        problem, now_sec, executed_plan);
+        problem, now_sec, evaluation_intent, executed_plan);
       executed_evaluation.candidate_attempted = candidate_attempted;
       executed_evaluation.candidate_reason = candidate_reason;
       executed_evaluation.candidate_sequence = candidate_sequence;
@@ -26512,7 +26651,6 @@ struct MPC
     last_problem_context_ = authority.problem;
     last_solution_contract_ = authority.solution;
     last_solution_is_retained_ = true;
-    last_published_canonical_intent_ = intent;
     failure_fallback_speed_.reset();
     infeasibility_counter = 0;
     overtake_infeasibility_counter_ = 0;
@@ -26570,8 +26708,9 @@ struct MPC
     // this cycle.  The next asynchronous problem is bound only after the
     // current command is committed, so all intents share one causal steering
     // origin and one six-state actuation time base.
-    auto retained =
-      evaluate_rate_resolved_track_cruise_retained_shadow(problem, now_sec);
+    auto effective_intent = intent;
+    auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
+      problem, now_sec, intent);
     if (
       !retained.production_authority.has_value() &&
       submission_draft.has_value() &&
@@ -26587,16 +26726,55 @@ struct MPC
       const auto previous_intent = last_published_canonical_intent_;
       const auto admission = evaluate_rate_resolved_transition_admission(
         problem, submission_draft.value(), now_sec);
+      if (admission.current_world_joined) {
+        // Consume the ordinary current-world evaluation of the exact plan
+        // certified above.  This remains the canonical retained/production
+        // path; the synchronous solver result is never published directly.
+        retained = admission.retained;
+      }
+      auto previous_retained =
+        RateResolvedRetainedShadowEvaluation{};
+      if (!retained.production_authority.has_value()) {
+        previous_retained =
+          evaluate_rate_resolved_track_cruise_retained_shadow(
+          problem, now_sec, previous_intent);
+      }
+      const auto atomic_resolution =
+        mpcc_contract::resolve_atomic_intent_admission(
+        mpcc_contract::AtomicIntentAdmissionRequest{
+          intent, previous_intent,
+          retained.production_authority.has_value(),
+          previous_retained.production_authority.has_value()});
+      const bool previous_joined =
+        previous_retained.production_authority.has_value();
+      if (atomic_resolution.previous_retained) {
+        retained = std::move(previous_retained);
+      }
+      if (atomic_resolution.authority_available) {
+        effective_intent = atomic_resolution.effective_intent;
+      }
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Rate-resolved canonical atomic admission: decision=%lu, "
-        "previous=%s, intent=%s, attempted=%d, certified=%d, joined=%d, "
+        "previous=%s, proposed=%s, effective=%s, resolution=%s, "
+        "attempted=%d, certified=%d, joined=%d, previous_joined=%d, "
+        "previous_world=%s, previous_candidate=%s/%lu, "
+        "previous_executed=%s/%lu, "
         "sequence=%lu, solver=%s, physical=%s, world=%s, blocker=%s, "
         "elapsed_ms=%.3f, detail=%s",
         static_cast<unsigned long>(active_control_decision_id_),
         mpcc_contract::to_string(previous_intent),
-        mpcc_contract::to_string(intent), admission.attempted ? 1 : 0,
+        mpcc_contract::to_string(intent),
+        mpcc_contract::to_string(effective_intent),
+        mpcc_contract::to_string(atomic_resolution.reason),
+        admission.attempted ? 1 : 0,
         admission.certified ? 1 : 0, admission.current_world_joined ? 1 : 0,
+        previous_joined ? 1 : 0,
+        rate_resolved_retained::to_string(previous_retained.reason),
+        rate_resolved_retained::to_string(previous_retained.candidate_reason),
+        static_cast<unsigned long>(previous_retained.candidate_sequence),
+        rate_resolved_retained::to_string(previous_retained.executed_reason),
+        static_cast<unsigned long>(previous_retained.executed_sequence),
         static_cast<unsigned long>(admission.sequence),
         rate_resolved_shadow::to_string(admission.solver_outcome),
         rate_resolved_physical_wall::to_string(admission.physical_outcome),
@@ -26604,15 +26782,10 @@ struct MPC
         admission.retained.blocking_obstacle_id.empty() ?
         "none" : admission.retained.blocking_obstacle_id.c_str(),
         admission.elapsed_ms, admission.detail.c_str());
-      if (admission.certified) {
-        // Consume the ordinary current-world evaluation of the exact plan
-        // certified above.  This remains the canonical retained/production
-        // path; the synchronous solver result is never published directly.
-        retained = admission.retained;
-      }
     }
     record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);
-    auto output = rate_resolved_track_cruise_control(problem, intent, retained);
+    auto output = rate_resolved_track_cruise_control(
+      problem, effective_intent, retained);
     record_rate_resolved_track_cruise_command(retained, output, now_sec);
     if (
       submission_draft.has_value() &&
@@ -50354,6 +50527,7 @@ private:
     command_pub_->publish(raw_command);
     last_published_steering_rad_ = raw_command.lateral.steering_tire_angle;
     last_published_steering_steady_ = SteadyClock::now();
+    last_published_steering_control_time_ = stamp;
     const double actual_speed_mps =
       odom_ != nullptr && std::isfinite(odom_->twist.twist.linear.x) ?
       odom_->twist.twist.linear.x : std::numeric_limits<double>::quiet_NaN();
@@ -50394,6 +50568,7 @@ private:
     command_pub_->publish(final_command);
     last_published_steering_rad_ = final_command.lateral.steering_tire_angle;
     last_published_steering_steady_ = SteadyClock::now();
+    last_published_steering_control_time_ = stamp;
     command_failsafe_active_ = false;
     return published_steering;
   }
@@ -54150,7 +54325,8 @@ private:
     if (
       steering_report_ != nullptr &&
       last_steering_receipt_steady_.has_value() &&
-      last_published_steering_steady_.has_value())
+      last_published_steering_steady_.has_value() &&
+      last_published_steering_control_time_.has_value())
     {
       const double steering_observation_age_sec =
         std::chrono::duration<double>(
@@ -54160,6 +54336,8 @@ private:
         steady_now -
         last_published_steering_steady_.value())
         .count();
+      const double committed_command_control_age_sec =
+        (current_time - last_published_steering_control_time_.value()).seconds();
       physical_steering_resolution = steering_state_contract::resolve(
         steering_state_contract::Request{
           steering_report_->steering_tire_angle,
@@ -54168,7 +54346,8 @@ private:
           state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0,
           mpc_cfg_.odom_timeout_sec,
           std::abs(mpc_cfg_.delta_max),
-          std::abs(mpc_cfg_.steer_rate_max), committed_command_age_sec});
+          std::abs(mpc_cfg_.steer_rate_max), committed_command_age_sec,
+          committed_command_control_age_sec});
     }
     mpc_->update_physical_steering_state_for_execution_contract(
       physical_steering_resolution.state);
@@ -54447,6 +54626,11 @@ private:
         physical_steering_resolution.state
         ->committed_command_projection_duration_sec :
         std::numeric_limits<double>::quiet_NaN();
+      const double committed_control_age_sec =
+        physical_steering_resolution.state.has_value() ?
+        physical_steering_resolution.state
+        ->committed_command_control_age_sec :
+        std::numeric_limits<double>::quiet_NaN();
       const bool committed_command_reached =
         physical_steering_resolution.state.has_value() &&
         physical_steering_resolution.state->committed_command_reached;
@@ -54456,6 +54640,7 @@ private:
         "output=%.4f, measured_steering=%.4f, physical_origin=%.4f, "
         "committed_input=%.4f, reachable_step=%.4f, command_reached=%d, "
         "observation_age=%.4f, committed_projection=%.4f, "
+        "committed_control_age=%.4f, "
         "predicted_kappa=%.5f, measured_kappa=%.5f, "
         "error=%.5f, ratio=%.3f, valid=%d, ref_kappa=%.5f, "
         "solver_fallback=%d, recovery=%d",
@@ -54465,6 +54650,7 @@ private:
         committed_command_reached ? 1 : 0,
         steering_observation_age_sec,
         committed_projection_duration_sec,
+        committed_control_age_sec,
         predicted_curvature, measured_curvature, curvature_error, curvature_ratio,
         measured_curvature_valid ? 1 : 0, reference_curvature,
         mpc_fallback_active ? 1 : 0, recovery_command_active ? 1 : 0);
@@ -54672,6 +54858,7 @@ private:
   std::optional<SteadyClock::time_point> last_steering_receipt_steady_;
   std::optional<double> last_published_steering_rad_;
   std::optional<SteadyClock::time_point> last_published_steering_steady_;
+  std::optional<rclcpp::Time> last_published_steering_control_time_;
   std::optional<rclcpp::Time> last_odom_source_stamp_;
   std::optional<SteadyClock::time_point> last_odom_source_advance_steady_;
   awsim_boost::BlockReason last_awsim_boost_block_reason_{awsim_boost::BlockReason::None};

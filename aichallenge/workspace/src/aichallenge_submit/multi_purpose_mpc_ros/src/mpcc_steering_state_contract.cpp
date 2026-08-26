@@ -50,7 +50,9 @@ Result resolve(const Request & request) noexcept
     !std::isfinite(request.maximum_abs_steering_rate_radps) ||
     request.maximum_abs_steering_rate_radps < 0.0 ||
     !std::isfinite(request.committed_command_age_sec) ||
-    request.committed_command_age_sec < 0.0)
+    request.committed_command_age_sec < 0.0 ||
+    !std::isfinite(request.committed_command_control_age_sec) ||
+    request.committed_command_control_age_sec < 0.0)
   {
     result.reason = Reason::InvalidLimits;
     return result;
@@ -72,6 +74,9 @@ Result resolve(const Request & request) noexcept
   state.measured_steering_rad = request.measured_steering_rad;
   state.committed_steering_rad = request.committed_steering_rad.value();
   state.observation_age_sec = request.observation_age_sec;
+  state.committed_command_age_sec = request.committed_command_age_sec;
+  state.committed_command_control_age_sec =
+    request.committed_command_control_age_sec;
   state.prediction_delay_sec = request.prediction_delay_sec;
   state.committed_command_projection_duration_sec = std::min(
     request.observation_age_sec, request.committed_command_age_sec);

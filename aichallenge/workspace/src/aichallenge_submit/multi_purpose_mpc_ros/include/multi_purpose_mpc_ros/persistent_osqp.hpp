@@ -13,6 +13,12 @@
 namespace multi_purpose_mpc_ros::persistent_osqp
 {
 
+/// OSQP reports `solved inaccurate` when the residual is within ten times
+/// the configured tolerance.  The physical-row certificate accepts the same
+/// status, so any producer that reserves an exact actuator boundary must
+/// reserve this maximum accepted multiplier as well.
+inline constexpr double kSolvedInaccurateToleranceMultiplier = 10.0;
+
 struct WarmStart
 {
   Eigen::VectorXd primal;

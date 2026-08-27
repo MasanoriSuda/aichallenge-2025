@@ -15,6 +15,16 @@ namespace
 
 constexpr solver::PhysicalConstraintTolerance kSolverTolerance{1e-3, 1e-3};
 
+double exact_inset_margin(const double characteristic)
+{
+  const double accepted_absolute =
+    solver::kSolvedInaccurateToleranceMultiplier * kSolverTolerance.absolute;
+  const double accepted_relative =
+    solver::kSolvedInaccurateToleranceMultiplier * kSolverTolerance.relative;
+  return (accepted_absolute + accepted_relative * characteristic) /
+    (1.0 - accepted_relative);
+}
+
 adapter::Request curved_request(const int horizon = 4)
 {
   adapter::Request request;
@@ -86,7 +96,7 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
   EXPECT_DOUBLE_EQ(
     result->problem.input_reference[
       input_offset + model::kSteeringRateIndex], 0.0);
-  const double first_rate_margin = (1e-3 + 1e-3 * 1.0) / (1.0 - 1e-3);
+  const double first_rate_margin = exact_inset_margin(1.0);
   EXPECT_NEAR(
     result->problem.input_lower[
       input_offset + model::kSteeringRateIndex],
@@ -95,8 +105,7 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
     result->problem.input_upper[
       input_offset + model::kSteeringRateIndex],
     1.0 - first_rate_margin, 1e-12);
-  const double acceleration_margin =
-    (1e-3 + 1e-3 * 1.0) / (1.0 - 1e-3);
+  const double acceleration_margin = first_rate_margin;
   EXPECT_NEAR(
     result->problem.input_lower[
       input_offset + model::kAccelerationIndex],
@@ -105,6 +114,26 @@ TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
     result->problem.input_upper[
       input_offset + model::kAccelerationIndex],
     1.0 - acceleration_margin, 1e-12);
+  const double acceleration_solver_lower =
+    result->problem.input_lower[
+    input_offset + model::kAccelerationIndex];
+  const double acceleration_solver_upper =
+    result->problem.input_upper[
+    input_offset + model::kAccelerationIndex];
+  const double accepted_lower_residual =
+    solver::kSolvedInaccurateToleranceMultiplier *
+    (kSolverTolerance.absolute + kSolverTolerance.relative *
+    std::abs(acceleration_solver_lower));
+  const double accepted_upper_residual =
+    solver::kSolvedInaccurateToleranceMultiplier *
+    (kSolverTolerance.absolute + kSolverTolerance.relative *
+    std::abs(acceleration_solver_upper));
+  EXPECT_GE(
+    acceleration_solver_lower - accepted_lower_residual,
+    request.inputs.front().lower[model::kAccelerationIndex]);
+  EXPECT_LE(
+    acceleration_solver_upper + accepted_upper_residual,
+    request.inputs.front().upper[model::kAccelerationIndex]);
   EXPECT_NEAR(
     result->problem.input_lower[
       input_offset + model::kVirtualProgressSpeedIndex],
@@ -231,7 +260,7 @@ TEST(
   ASSERT_TRUE(result->problem.steering_rate_prefix_bounds.has_value());
   // Robustification scales with the largest cumulative physical delta.  From
   // -0.12 rad the positive span to the +0.60 rad actuator bound is 0.72 rad.
-  const double prefix_margin = (1e-3 + 1e-3 * 0.72) / (1.0 - 1e-3);
+  const double prefix_margin = exact_inset_margin(0.72);
   EXPECT_NEAR(
     result->problem.steering_rate_prefix_bounds->
     minimum_cumulative_delta_rad,
@@ -549,12 +578,13 @@ TEST(MpccRateResolvedAdapter, FirstRateIsRobustlyReachableFromSemanticSteering)
   const auto result = adapter::build(request, kSolverTolerance);
   ASSERT_TRUE(result.has_value());
 
-  const double margin = (1e-3 + 1e-3 * 1.0) / (1.0 - 1e-3);
+  const double margin = exact_inset_margin(1.0);
   EXPECT_DOUBLE_EQ(result->first_steering_rate_physical_upper_radps, 0.0);
   EXPECT_NEAR(result->first_steering_rate_solver_upper_radps, -margin, 1e-12);
   const double accepted_upper_residual =
-    kSolverTolerance.absolute + kSolverTolerance.relative *
-    std::abs(result->first_steering_rate_solver_upper_radps);
+    solver::kSolvedInaccurateToleranceMultiplier *
+    (kSolverTolerance.absolute + kSolverTolerance.relative *
+    std::abs(result->first_steering_rate_solver_upper_radps));
   EXPECT_LE(
     result->first_steering_rate_solver_upper_radps + accepted_upper_residual,
     result->first_steering_rate_physical_upper_radps);
@@ -577,7 +607,7 @@ TEST(
   ASSERT_TRUE(result.has_value());
 
   ASSERT_TRUE(result->problem.steering_rate_prefix_bounds.has_value());
-  const double prefix_margin = (1e-3 + 1e-3 * 0.8) / (1.0 - 1e-3);
+  const double prefix_margin = exact_inset_margin(0.8);
   // Only the physical origin -0.20 is a vehicle state. The exact cumulative
   // delta may use the complete [-0.40, 0.80] physical steering envelope.
   EXPECT_NEAR(

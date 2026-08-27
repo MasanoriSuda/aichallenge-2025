@@ -80,11 +80,17 @@ std::optional<SolverInsetBounds> inset_for_exact_physical_boundary(
   const double physical_lower, const double physical_upper,
   const persistent_osqp::PhysicalConstraintTolerance & tolerance) noexcept
 {
+  const double accepted_absolute =
+    persistent_osqp::kSolvedInaccurateToleranceMultiplier *
+    tolerance.absolute;
+  const double accepted_relative =
+    persistent_osqp::kSolvedInaccurateToleranceMultiplier *
+    tolerance.relative;
   if (
     std::isnan(physical_lower) || std::isnan(physical_upper) ||
-    physical_lower > physical_upper || !std::isfinite(tolerance.absolute) ||
-    tolerance.absolute < 0.0 || !std::isfinite(tolerance.relative) ||
-    tolerance.relative < 0.0 || tolerance.relative >= 1.0)
+    physical_lower > physical_upper || !std::isfinite(accepted_absolute) ||
+    accepted_absolute < 0.0 || !std::isfinite(accepted_relative) ||
+    accepted_relative < 0.0 || accepted_relative >= 1.0)
   {
     return std::nullopt;
   }
@@ -96,8 +102,8 @@ std::optional<SolverInsetBounds> inset_for_exact_physical_boundary(
     characteristic = std::max(characteristic, std::abs(physical_upper));
   }
   const double margin =
-    (tolerance.absolute + tolerance.relative * characteristic) /
-    (1.0 - tolerance.relative);
+    (accepted_absolute + accepted_relative * characteristic) /
+    (1.0 - accepted_relative);
   const double solver_lower = std::isfinite(physical_lower) ?
     physical_lower + margin : physical_lower;
   const double solver_upper = std::isfinite(physical_upper) ?

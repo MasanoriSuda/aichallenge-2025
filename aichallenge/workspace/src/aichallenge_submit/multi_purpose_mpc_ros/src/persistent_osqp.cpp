@@ -1066,7 +1066,8 @@ SolveOutcome PersistentOsqpSolver::solve(
   }
 
   const double inaccurate_multiplier =
-    info->status_val == OSQP_SOLVED_INACCURATE ? 10.0 : 1.0;
+    info->status_val == OSQP_SOLVED_INACCURATE ?
+    kSolvedInaccurateToleranceMultiplier : 1.0;
   const auto residual_report = evaluate_constraint_residuals(
     prepared->constraints, primal, lower_bound, upper_bound,
     static_cast<double>(impl_->physical_absolute_tolerance),

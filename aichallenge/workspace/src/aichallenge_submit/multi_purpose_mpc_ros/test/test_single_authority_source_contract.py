@@ -800,6 +800,35 @@ def test_rate_resolved_solver_is_owned_only_by_the_async_worker() -> None:
     assert "evaluate_rate_resolved_pipeline(" not in owner
 
 
+def test_final_physical_refinement_receives_current_problem_sqp_correction() -> None:
+    """The artifact must certify the final refined formulation, not an old tangent."""
+
+    shadow_source = (
+        PACKAGE_ROOT / "src/mpcc_rate_resolved_shadow.cpp"
+    ).read_text(encoding="utf-8")
+    evaluate_start = shadow_source.index("Result SolverContext::evaluate(")
+    evaluate_end = shadow_source.index("const char * to_string(", evaluate_start)
+    evaluate = shadow_source[evaluate_start:evaluate_end]
+
+    dynamic_refinement = evaluate.index(
+        "result.dynamic_obstacle_refinement_requested ="
+    )
+    post_refinement = evaluate.index(
+        "result.post_refinement_linearization_requested ="
+    )
+    artifact_publication = evaluate.index(
+        "result.execution_artifact_reject_reason ="
+    )
+    correction = evaluate[post_refinement:artifact_publication]
+
+    assert dynamic_refinement < post_refinement < artifact_publication
+    assert "evaluate_post_refinement_proof" in correction
+    assert "relinearize_around_primal(" in correction
+    assert "build_current_problem_bootstrap(" in correction
+    assert "&outcome.result->primal" in correction
+    assert "adapted->problem" in correction
+
+
 def test_fresh_preentry_uses_six_state_gate_for_shiftout_and_direct_pass() -> None:
     """No fresh entry, including start-grid, may bypass six-state Gate A."""
 

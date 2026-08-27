@@ -1,6 +1,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp"
 
@@ -16,6 +17,12 @@ namespace
 {
 
 using SteadyClock = std::chrono::steady_clock;
+
+// The first exact replay is free of extra solver work.  If a physically
+// refined candidate still exposes a nonlinear model/proof gap, at most three
+// current-problem SQP corrections are allowed before failing closed.  This is
+// a deterministic certification budget, not a fallback or a lease extension.
+constexpr std::size_t kMaximumPhysicalProofSqpCorrections = 3U;
 
 struct ProgressWallRefinement
 {
@@ -200,6 +207,118 @@ ProgressWallRefinement build_progress_wall_refinement(
   return result;
 }
 
+std::optional<artifact::ExecutionArtifact> build_execution_artifact(
+  const Snapshot & snapshot,
+  const mpcc_rate_resolved_problem::AssemblyRequest & final_problem,
+  const persistent_osqp::SolveOutcome & outcome,
+  const double completed_sec) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  if (
+    !outcome.result.has_value() ||
+    !outcome.result->primal.allFinite() ||
+    !std::isfinite(completed_sec))
+  {
+    return std::nullopt;
+  }
+  const int horizon = snapshot.request.horizon_steps;
+  const int execution_horizon = snapshot.execution_prefix_steps;
+  const int state_values = model::kStateDimension * (horizon + 1);
+  const int variable_count =
+    state_values + model::kInputDimension * horizon;
+  if (
+    horizon <= 0 || execution_horizon <= 0 ||
+    execution_horizon > horizon ||
+    outcome.result->primal.size() != variable_count ||
+    final_problem.state_lower.size() != state_values ||
+    final_problem.state_upper.size() != state_values ||
+    snapshot.nominal_path_distance_m.size() <
+    static_cast<std::size_t>(execution_horizon + 1))
+  {
+    return std::nullopt;
+  }
+
+  const auto & primal = outcome.result->primal;
+  artifact::ExecutionArtifact execution_artifact;
+  execution_artifact.identity = snapshot.identity;
+  execution_artifact.prediction_origin_sec =
+    snapshot.control_prediction_origin_sec;
+  execution_artifact.publication_interval_sec =
+    snapshot.publication_interval_sec;
+  execution_artifact.completed_sec = completed_sec;
+  execution_artifact.course_progress_origin_m =
+    snapshot.course_progress_origin_m;
+  execution_artifact.semantic_initial_steering_rad =
+    snapshot.request.current_steering_rad;
+  execution_artifact.semantic_initial_response_steering_rad =
+    snapshot.request.current_response_steering_rad;
+  execution_artifact.wheelbase_m = snapshot.request.wheelbase_m;
+  execution_artifact.yaw_response_gain = snapshot.request.yaw_response_gain;
+  execution_artifact.yaw_response_time_constant_sec =
+    snapshot.request.yaw_response_time_constant_sec;
+  execution_artifact.minimum_frenet_denominator =
+    snapshot.request.minimum_frenet_denominator;
+  execution_artifact.maximum_abs_steering_rad =
+    snapshot.request.maximum_abs_steering_rad;
+  execution_artifact.maximum_abs_steering_rate_radps =
+    snapshot.request.maximum_abs_steering_rate_radps;
+  execution_artifact.physical_global_tolerance =
+    outcome.telemetry.physical_global_tolerance;
+  execution_artifact.maximum_constraint_violation =
+    outcome.result->maximum_constraint_violation;
+  execution_artifact.maximum_normalized_constraint_violation =
+    outcome.result->maximum_normalized_constraint_violation;
+  execution_artifact.predicted_states.reserve(
+    static_cast<std::size_t>(execution_horizon + 1));
+  execution_artifact.nominal_path_distance_m.assign(
+    snapshot.nominal_path_distance_m.begin(),
+    snapshot.nominal_path_distance_m.begin() + execution_horizon + 1);
+  execution_artifact.lateral_lower_m.reserve(
+    static_cast<std::size_t>(execution_horizon + 1));
+  execution_artifact.lateral_upper_m.reserve(
+    static_cast<std::size_t>(execution_horizon + 1));
+  for (int stage = 0; stage <= execution_horizon; ++stage) {
+    const int state_offset = model::kStateDimension * stage;
+    execution_artifact.predicted_states.push_back(
+      artifact::PredictedState{
+        primal[state_offset + model::kLateralIndex],
+        primal[state_offset + model::kLagIndex],
+        primal[state_offset + model::kHeadingIndex],
+        primal[state_offset + model::kVelocityIndex],
+        primal[state_offset + model::kProgressIndex],
+        primal[state_offset + model::kSteeringIndex],
+        primal[state_offset + model::kResponseSteeringIndex]});
+    execution_artifact.lateral_lower_m.push_back(
+      final_problem.state_lower[
+        state_offset + model::kLateralIndex]);
+    execution_artifact.lateral_upper_m.push_back(
+      final_problem.state_upper[
+        state_offset + model::kLateralIndex]);
+  }
+  execution_artifact.control_stages.reserve(
+    static_cast<std::size_t>(execution_horizon));
+  for (int stage = 0; stage < execution_horizon; ++stage) {
+    const int input_offset =
+      state_values + model::kInputDimension * stage;
+    execution_artifact.control_stages.push_back(
+      artifact::ControlStage{
+        primal[input_offset + model::kAccelerationIndex],
+        primal[input_offset + model::kSteeringRateIndex],
+        primal[input_offset + model::kVirtualProgressSpeedIndex],
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec,
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[2],
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[2],
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[0],
+        snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[0],
+        snapshot.request.inputs[
+          static_cast<std::size_t>(stage)].path_curvature_radpm});
+  }
+  if (artifact::validate(execution_artifact) != artifact::RejectReason::None) {
+    return std::nullopt;
+  }
+  return execution_artifact;
+}
+
 }  // namespace
 
 const char * to_string(const Outcome outcome) noexcept
@@ -213,6 +332,8 @@ const char * to_string(const Outcome outcome) noexcept
       return "solve-rejected";
     case Outcome::NonfiniteResult:
       return "nonfinite-result";
+    case Outcome::PhysicalProofRejected:
+      return "physical-proof-rejected";
     case Outcome::ActuationSampleRejected:
       return "actuation-sample-rejected";
     case Outcome::ArtifactRejected:
@@ -445,7 +566,8 @@ RecedingWarmStartResolution resolve_receding_warm_start(
 
 std::optional<persistent_osqp::WarmStart> build_current_problem_bootstrap(
   const mpcc_rate_resolved_problem::AssemblyRequest & current_problem,
-  const std::size_t current_constraint_count) noexcept
+  const std::size_t current_constraint_count,
+  const Eigen::VectorXd * preceding_same_problem_primal) noexcept
 {
   namespace model = mpcc_rate_resolved;
   const int horizon = current_problem.horizon_steps;
@@ -471,6 +593,10 @@ std::optional<persistent_osqp::WarmStart> build_current_problem_bootstrap(
   {
     return std::nullopt;
   }
+  const bool use_preceding_inputs =
+    preceding_same_problem_primal != nullptr &&
+    preceding_same_problem_primal->size() == variable_count &&
+    preceding_same_problem_primal->allFinite();
 
   Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_count);
   primal.head<model::kStateDimension>() = current_problem.initial_state;
@@ -480,6 +606,9 @@ std::optional<persistent_osqp::WarmStart> build_current_problem_bootstrap(
     const int input_offset = stage * model::kInputDimension;
     const int primal_input_offset = state_values + input_offset;
     Eigen::Matrix<double, model::kInputDimension, 1> input =
+      use_preceding_inputs ?
+      preceding_same_problem_primal->segment<model::kInputDimension>(
+      primal_input_offset) :
       current_problem.input_reference.segment<model::kInputDimension>(
       input_offset);
     for (int element = 0; element < model::kInputDimension; ++element) {
@@ -503,8 +632,10 @@ std::optional<persistent_osqp::WarmStart> build_current_problem_bootstrap(
     }
     // Assembly owns the affine equality
     //   -x[k+1] + A*x[k] + B*u[k] = equality_offset.
-    // Roll it out exactly so a fresh tactical candidate does not begin from
-    // OSQP's all-zero point while x[0] and the progress state are non-zero.
+    // Roll it out exactly so neither a fresh tactical candidate nor an SQP
+    // correction begins from state values belonging to superseded equality
+    // rows.  A same-problem input prefix is safe to transport because its
+    // inputs are re-projected and every state/dual is rebuilt here.
     primal.segment<model::kStateDimension>(next_state_offset) =
       linearization.state_matrix *
       primal.segment<model::kStateDimension>(state_offset) +
@@ -603,6 +734,18 @@ bool result_valid(const Result & result) noexcept
          result.successive_linearization_solved &&
          result.successive_linearization_reason ==
          mpcc_rate_resolved_adapter::RelinearizationReason::Accepted &&
+         result.post_refinement_physical_proof_checked ==
+         (result.progress_wall_refinement_solved ||
+         result.dynamic_obstacle_refinement_solved) &&
+         (!result.post_refinement_physical_proof_checked ||
+         result.post_refinement_physical_proof_accepted) &&
+         (!result.post_refinement_linearization_requested ||
+         (result.post_refinement_linearization_applied &&
+         result.post_refinement_linearization_bootstrap_applied &&
+         result.post_refinement_linearization_solved &&
+         result.post_refinement_linearization_count > 0U &&
+         result.post_refinement_linearization_reason ==
+         mpcc_rate_resolved_adapter::RelinearizationReason::Accepted)) &&
          result.execution_artifact_reject_reason ==
          artifact::RejectReason::None &&
          result.execution_artifact != nullptr &&
@@ -833,10 +976,11 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   // relinearized QP can then be structurally infeasible even though both the
   // provisional trajectory and the wall corridor are individually valid.
   //
-  // This is the single canonical SQP correction.  Wall and dynamic-obstacle
-  // refinements below constrain its solution without changing the dynamics
-  // rows again, so their accepted primal remains a feasible warm start and
-  // the final exact replay certifies the same formulation.
+  // This is the pre-refinement canonical SQP correction.  Wall and dynamic-
+  // obstacle refinements below constrain its solution.  Those refinements can
+  // move the primal away from this tangent, so a second current-problem-owned
+  // correction is conditionally required after the last physical refinement
+  // before exact nonlinear replay may certify the artifact.
   result.successive_linearization_requested = true;
   const auto relinearization =
     mpcc_rate_resolved_adapter::relinearize_around_primal(
@@ -866,7 +1010,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   // by the relinearized problem itself.
   auto relinearized_warm_start = build_current_problem_bootstrap(
     adapted->problem,
-    static_cast<std::size_t>(relinearized_assembled->lower_bound.size()));
+    static_cast<std::size_t>(relinearized_assembled->lower_bound.size()),
+    &outcome.result->primal);
   if (!relinearized_warm_start.has_value()) {
     result.outcome = Outcome::AssemblyRejected;
     result.solved = false;
@@ -1102,6 +1247,154 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     outcome = std::move(refined_outcome);
     result.dynamic_obstacle_refinement_solved = true;
   }
+
+  // Physical refinements can move the final primal away from the nonlinear
+  // trajectory represented by the pre-refinement tangent.  First replay the
+  // exact execution prefix: when it is already physically valid, another QP
+  // solve would add latency and a new failure mode without improving proof.
+  // Only a demonstrated model/proof gap requests a current-problem SQP
+  // correction.  Every correction preserves the complete refined problem and
+  // is rechecked by the same exact proof before artifact publication.
+  const bool physical_problem_refined =
+    result.progress_wall_refinement_solved ||
+    result.dynamic_obstacle_refinement_solved;
+  mpcc_rate_resolved_physical_adapter::Result post_refinement_proof;
+  const auto evaluate_post_refinement_proof = [&]() {
+      const auto candidate = build_execution_artifact(
+        snapshot, adapted->problem, outcome,
+        snapshot.identity.snapshot_sec +
+        std::chrono::duration<double>(
+          SteadyClock::now() - started).count());
+      if (!candidate.has_value()) {
+        return mpcc_rate_resolved_physical_adapter::Result{};
+      }
+      return mpcc_rate_resolved_physical_adapter::build(
+        candidate.value(), snapshot.identity.source_context.intent,
+        snapshot.identity.source_context.stage_geometry_id);
+    };
+  if (physical_problem_refined) {
+    result.post_refinement_physical_proof_checked = true;
+    post_refinement_proof = evaluate_post_refinement_proof();
+  }
+  while (
+    physical_problem_refined &&
+    post_refinement_proof.reason ==
+    mpcc_rate_resolved_physical_adapter::RejectReason::
+    ExactTrajectoryRejected &&
+    result.post_refinement_linearization_count <
+    kMaximumPhysicalProofSqpCorrections)
+  {
+    result.post_refinement_linearization_requested = true;
+    ++result.post_refinement_linearization_count;
+    const auto post_refinement_linearization =
+      mpcc_rate_resolved_adapter::relinearize_around_primal(
+      snapshot.request, outcome.result->primal, adapted->problem);
+    result.post_refinement_linearization_reason =
+      post_refinement_linearization.reason;
+    result.post_refinement_linearization_failure_stage =
+      post_refinement_linearization.stage;
+    result.post_refinement_linearization_applied =
+      post_refinement_linearization.applied;
+    if (!post_refinement_linearization.applied) {
+      result.outcome = Outcome::AssemblyRejected;
+      result.solved = false;
+      result.detail =
+        std::string{"rate-resolved post-refinement linearization rejected: "} +
+        mpcc_rate_resolved_adapter::to_string(
+        post_refinement_linearization.reason) +
+        "/stage=" + std::to_string(post_refinement_linearization.stage);
+      return finish();
+    }
+
+    auto post_refinement_assembled =
+      mpcc_rate_resolved_problem::assemble(adapted->problem);
+    if (!post_refinement_assembled.has_value()) {
+      result.outcome = Outcome::AssemblyRejected;
+      result.solved = false;
+      result.detail =
+        "rate-resolved post-refinement relinearized QP assembly rejected";
+      return finish();
+    }
+    auto post_refinement_warm_start = build_current_problem_bootstrap(
+      adapted->problem,
+      static_cast<std::size_t>(
+        post_refinement_assembled->lower_bound.size()),
+      &outcome.result->primal);
+    if (!post_refinement_warm_start.has_value()) {
+      result.outcome = Outcome::AssemblyRejected;
+      result.solved = false;
+      result.detail =
+        "rate-resolved post-refinement current-problem bootstrap rejected";
+      return finish();
+    }
+    result.post_refinement_linearization_bootstrap_applied = true;
+    auto post_refinement_outcome = solver_.solve(
+      post_refinement_assembled->quadratic_cost,
+      post_refinement_assembled->constraints,
+      post_refinement_assembled->linear_cost,
+      post_refinement_assembled->lower_bound,
+      post_refinement_assembled->upper_bound,
+      post_refinement_warm_start,
+      post_refinement_assembled->variable_scaling);
+    result.solver = post_refinement_outcome.telemetry;
+    if (!post_refinement_outcome.result.has_value()) {
+      result.outcome = Outcome::SolveRejected;
+      result.solved = false;
+      result.detail =
+        std::string{"rate-resolved post-refinement relinearized QP rejected: "} +
+        post_refinement_outcome.failure_detail;
+      if (post_refinement_outcome.constraint_failure.has_value()) {
+        const auto semantic = mpcc_rate_resolved_problem::decode_row(
+          post_refinement_outcome.constraint_failure->row,
+          snapshot.request.horizon_steps,
+          adapted->problem.steering_rate_prefix_bounds.has_value(),
+          adapted->problem.progress_aligned_wall_constraints.has_value(),
+          static_cast<int>(
+            adapted->problem.swept_lateral_wall_constraints.size()),
+          &adapted->problem.dynamic_obstacle_constraints);
+        if (semantic.valid) {
+          result.detail += std::string{", row_semantic="} +
+            mpcc_rate_resolved_problem::row_kind_name(semantic.kind) +
+            "/stage=" + std::to_string(semantic.stage) +
+            "/element=" + std::to_string(semantic.element);
+        }
+      }
+      return finish();
+    }
+    if (!post_refinement_outcome.result->primal.allFinite()) {
+      result.outcome = Outcome::NonfiniteResult;
+      result.solved = false;
+      result.finite = false;
+      result.detail =
+        "rate-resolved post-refinement solver returned non-finite primal";
+      return finish();
+    }
+    assembled = std::move(post_refinement_assembled);
+    outcome = std::move(post_refinement_outcome);
+    result.post_refinement_linearization_solved = true;
+    post_refinement_proof = evaluate_post_refinement_proof();
+  }
+  if (physical_problem_refined) {
+    result.post_refinement_physical_proof_accepted =
+      post_refinement_proof.reason ==
+      mpcc_rate_resolved_physical_adapter::RejectReason::None;
+    if (!result.post_refinement_physical_proof_accepted) {
+      result.outcome = Outcome::PhysicalProofRejected;
+      result.solved = false;
+      std::ostringstream detail;
+      detail << "rate-resolved post-refinement physical proof rejected: "
+             << mpcc_rate_resolved_physical_adapter::to_string(
+        post_refinement_proof.reason)
+             << "/exact=" <<
+        race_mpcc_foundation::exact_physical_execution_trajectory_reason_name(
+        post_refinement_proof.exact_reason)
+             << "/stage=" << post_refinement_proof.rejected_stage
+             << "/corrections=" <<
+        result.post_refinement_linearization_count;
+      result.detail = detail.str();
+      return finish();
+    }
+  }
   result.solver = outcome.telemetry;
   result.constraints_satisfied = true;
   result.maximum_constraint_violation =
@@ -1180,87 +1473,19 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   result.sampled_steering_rad = sample.sample->steering_rad;
   result.sampled_curvature_radpm = sample.sample->curvature_radpm;
 
-  artifact::ExecutionArtifact execution_artifact;
-  execution_artifact.identity = snapshot.identity;
-  execution_artifact.prediction_origin_sec =
-    snapshot.control_prediction_origin_sec;
-  execution_artifact.publication_interval_sec =
-    snapshot.publication_interval_sec;
-  execution_artifact.completed_sec = snapshot.identity.snapshot_sec +
-    std::chrono::duration<double>(SteadyClock::now() - started).count();
-  execution_artifact.course_progress_origin_m =
-    snapshot.course_progress_origin_m;
-  execution_artifact.semantic_initial_steering_rad =
-    snapshot.request.current_steering_rad;
-  execution_artifact.semantic_initial_response_steering_rad =
-    snapshot.request.current_response_steering_rad;
-  execution_artifact.wheelbase_m = snapshot.request.wheelbase_m;
-  execution_artifact.yaw_response_gain = snapshot.request.yaw_response_gain;
-  execution_artifact.yaw_response_time_constant_sec =
-    snapshot.request.yaw_response_time_constant_sec;
-  execution_artifact.minimum_frenet_denominator =
-    snapshot.request.minimum_frenet_denominator;
-  execution_artifact.maximum_abs_steering_rad =
-    snapshot.request.maximum_abs_steering_rad;
-  execution_artifact.maximum_abs_steering_rate_radps =
-    snapshot.request.maximum_abs_steering_rate_radps;
-  execution_artifact.physical_global_tolerance =
-    outcome.telemetry.physical_global_tolerance;
-  execution_artifact.maximum_constraint_violation =
-    outcome.result->maximum_constraint_violation;
-  execution_artifact.maximum_normalized_constraint_violation =
-    outcome.result->maximum_normalized_constraint_violation;
-  execution_artifact.predicted_states.reserve(
-    static_cast<std::size_t>(execution_horizon + 1));
-  execution_artifact.nominal_path_distance_m.assign(
-    snapshot.nominal_path_distance_m.begin(),
-    snapshot.nominal_path_distance_m.begin() + execution_horizon + 1);
-  execution_artifact.lateral_lower_m.reserve(
-    static_cast<std::size_t>(execution_horizon + 1));
-  execution_artifact.lateral_upper_m.reserve(
-    static_cast<std::size_t>(execution_horizon + 1));
-  for (int stage = 0; stage <= execution_horizon; ++stage) {
-    const int state_offset = model::kStateDimension * stage;
-    execution_artifact.predicted_states.push_back(
-      artifact::PredictedState{
-        primal[state_offset + model::kLateralIndex],
-        primal[state_offset + model::kLagIndex],
-        primal[state_offset + model::kHeadingIndex],
-        primal[state_offset + model::kVelocityIndex],
-        primal[state_offset + model::kProgressIndex],
-        primal[state_offset + model::kSteeringIndex],
-        primal[state_offset + model::kResponseSteeringIndex]});
-    // The execution certificate must carry the bounds of the final solved QP.
-    // snapshot.request is the pre-refinement semantic input; using it here
-    // made the publisher validate a different corridor from the progress,
-    // physical-wall and dynamic-obstacle refinements which produced primal.
-    execution_artifact.lateral_lower_m.push_back(
-      adapted->problem.state_lower[
-        state_offset + model::kLateralIndex]);
-    execution_artifact.lateral_upper_m.push_back(
-      adapted->problem.state_upper[
-        state_offset + model::kLateralIndex]);
-  }
-  execution_artifact.control_stages.reserve(
-    static_cast<std::size_t>(execution_horizon));
-  for (int stage = 0; stage < execution_horizon; ++stage) {
-    const int input_offset =
-      state_values + model::kInputDimension * stage;
-    execution_artifact.control_stages.push_back(
-      artifact::ControlStage{
-        primal[input_offset + model::kAccelerationIndex],
-        primal[input_offset + model::kSteeringRateIndex],
-        primal[input_offset + model::kVirtualProgressSpeedIndex],
-        snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec,
-        snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[2],
-        snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[2],
-        snapshot.request.inputs[static_cast<std::size_t>(stage)].lower[0],
-        snapshot.request.inputs[static_cast<std::size_t>(stage)].upper[0],
-        snapshot.request.inputs[
-          static_cast<std::size_t>(stage)].path_curvature_radpm});
+  auto execution_artifact = build_execution_artifact(
+    snapshot, adapted->problem, outcome,
+    snapshot.identity.snapshot_sec +
+    std::chrono::duration<double>(SteadyClock::now() - started).count());
+  if (!execution_artifact.has_value()) {
+    result.outcome = Outcome::ArtifactRejected;
+    result.detail = "execution artifact construction rejected";
+    result.solved = false;
+    result.constraints_satisfied = false;
+    return finish();
   }
   result.execution_artifact_reject_reason =
-    artifact::validate(execution_artifact);
+    artifact::validate(execution_artifact.value());
   if (
     result.execution_artifact_reject_reason !=
     artifact::RejectReason::None)
@@ -1274,7 +1499,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   }
   result.execution_artifact =
     std::make_shared<const artifact::ExecutionArtifact>(
-    std::move(execution_artifact));
+    std::move(execution_artifact.value()));
   RecedingWarmStartSeed next_warm_start;
   next_warm_start.identity = snapshot.identity;
   next_warm_start.control_prediction_origin_sec =
@@ -1322,6 +1547,21 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       (result.successive_linearization_bootstrap_applied ? 1 : 0)
            << "/solved=" <<
       (result.successive_linearization_solved ? 1 : 0);
+    detail << ", post_refinement_linearization="
+           << mpcc_rate_resolved_adapter::to_string(
+      result.post_refinement_linearization_reason)
+           << "/requested=" <<
+      (result.post_refinement_linearization_requested ? 1 : 0)
+           << "/applied=" <<
+      (result.post_refinement_linearization_applied ? 1 : 0)
+           << "/bootstrap=" <<
+      (result.post_refinement_linearization_bootstrap_applied ? 1 : 0)
+           << "/solved=" <<
+      (result.post_refinement_linearization_solved ? 1 : 0)
+           << "/count=" << result.post_refinement_linearization_count
+           << "/proof=" <<
+      (result.post_refinement_physical_proof_checked ? 1 : 0) << '/'
+           << (result.post_refinement_physical_proof_accepted ? 1 : 0);
     result.detail = detail.str();
   } else {
     result.detail = std::string{"accepted, progress_wall=not-requested/"} +
@@ -1334,7 +1574,23 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       "/bootstrap=" +
       (result.successive_linearization_bootstrap_applied ? "1" : "0") +
       "/solved=" +
-      (result.successive_linearization_solved ? "1" : "0");
+      (result.successive_linearization_solved ? "1" : "0") +
+      ", post_refinement_linearization=" +
+      mpcc_rate_resolved_adapter::to_string(
+      result.post_refinement_linearization_reason) +
+      "/requested=" +
+      (result.post_refinement_linearization_requested ? "1" : "0") +
+      "/applied=" +
+      (result.post_refinement_linearization_applied ? "1" : "0") +
+      "/bootstrap=" +
+      (result.post_refinement_linearization_bootstrap_applied ? "1" : "0") +
+      "/solved=" +
+      (result.post_refinement_linearization_solved ? "1" : "0") +
+      "/count=" +
+      std::to_string(result.post_refinement_linearization_count) +
+      "/proof=" +
+      (result.post_refinement_physical_proof_checked ? "1" : "0") + "/" +
+      (result.post_refinement_physical_proof_accepted ? "1" : "0");
   }
   return finish();
 }

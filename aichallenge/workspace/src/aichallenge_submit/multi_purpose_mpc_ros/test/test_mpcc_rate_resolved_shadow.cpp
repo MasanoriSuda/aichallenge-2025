@@ -199,6 +199,20 @@ TEST(MpccRateResolvedShadow, DoesNotBindFutureWallSampleBeforeProgressSolve)
   EXPECT_DOUBLE_EQ(result.pre_refinement_lateral_support_upper_m, 1.9);
   EXPECT_TRUE(result.progress_wall_refinement_applied);
   EXPECT_TRUE(result.progress_wall_refinement_solved);
+  EXPECT_TRUE(result.post_refinement_physical_proof_checked);
+  EXPECT_TRUE(result.post_refinement_physical_proof_accepted);
+  EXPECT_EQ(
+    result.post_refinement_linearization_requested,
+    result.post_refinement_linearization_count > 0U);
+  if (result.post_refinement_linearization_requested) {
+    EXPECT_TRUE(result.post_refinement_linearization_applied);
+    EXPECT_TRUE(result.post_refinement_linearization_bootstrap_applied);
+    EXPECT_TRUE(result.post_refinement_linearization_solved);
+    EXPECT_EQ(
+      result.post_refinement_linearization_reason,
+      multi_purpose_mpc_ros::mpcc_rate_resolved_adapter::
+      RelinearizationReason::Accepted);
+  }
 }
 
 TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
@@ -219,6 +233,13 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
     result.successive_linearization_reason,
     multi_purpose_mpc_ros::mpcc_rate_resolved_adapter::
     RelinearizationReason::Accepted);
+  EXPECT_FALSE(result.post_refinement_linearization_requested);
+  EXPECT_FALSE(result.post_refinement_linearization_applied);
+  EXPECT_FALSE(result.post_refinement_linearization_bootstrap_applied);
+  EXPECT_FALSE(result.post_refinement_linearization_solved);
+  EXPECT_FALSE(result.post_refinement_physical_proof_checked);
+  EXPECT_FALSE(result.post_refinement_physical_proof_accepted);
+  EXPECT_EQ(result.post_refinement_linearization_count, 0U);
   EXPECT_NE(
     result.receding_warm_start_diagnostic.find("previous=empty-cache"),
     std::string::npos);
@@ -327,6 +348,48 @@ TEST(MpccRateResolvedShadow, CurrentProblemBootstrapOwnsCurrentAffineDynamics)
       linearization.input_matrix * input - linearization.equality_offset;
     EXPECT_LT(equality_residual.lpNorm<Eigen::Infinity>(), 1.0e-12);
   }
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  CurrentProblemBootstrapTransportsOnlySameProblemInputs)
+{
+  const auto adapted = adapter::build(
+    straight_request(), solver::PhysicalConstraintTolerance{1.0e-3, 1.0e-3});
+  ASSERT_TRUE(adapted.has_value());
+  const auto assembled = problem::assemble(adapted->problem);
+  ASSERT_TRUE(assembled.has_value());
+  const int state_values = model::kStateDimension *
+    (adapted->problem.horizon_steps + 1);
+  const int variable_count = state_values + model::kInputDimension *
+    adapted->problem.horizon_steps;
+  Eigen::VectorXd preceding = Eigen::VectorXd::Constant(variable_count, 99.0);
+  for (int stage = 0; stage < adapted->problem.horizon_steps; ++stage) {
+    const int input_offset = stage * model::kInputDimension;
+    const int primal_input = state_values + input_offset;
+    for (int element = 0; element < model::kInputDimension; ++element) {
+      preceding[primal_input + element] =
+        adapted->problem.input_lower[input_offset + element] +
+        0.25 * (adapted->problem.input_upper[input_offset + element] -
+        adapted->problem.input_lower[input_offset + element]);
+    }
+  }
+
+  const auto bootstrap = shadow::build_current_problem_bootstrap(
+    adapted->problem,
+    static_cast<std::size_t>(assembled->lower_bound.size()), &preceding);
+  ASSERT_TRUE(bootstrap.has_value());
+  EXPECT_TRUE(
+    bootstrap->primal.head<model::kStateDimension>().isApprox(
+      adapted->problem.initial_state));
+  for (int stage = 0; stage < adapted->problem.horizon_steps; ++stage) {
+    const int input_offset = stage * model::kInputDimension;
+    const int primal_input = state_values + input_offset;
+    EXPECT_TRUE(
+      bootstrap->primal.segment<model::kInputDimension>(primal_input).isApprox(
+        preceding.segment<model::kInputDimension>(primal_input)));
+  }
+  EXPECT_TRUE(bootstrap->dual.isZero());
 }
 
 TEST(MpccRateResolvedShadow, RecedingWarmStartRebasesProgressAndCurrentState)
@@ -629,6 +692,16 @@ TEST(MpccRateResolvedShadow, TradesProgressForReachableOpponentSeparation)
   EXPECT_TRUE(result.dynamic_obstacle_refinement_requested);
   EXPECT_TRUE(result.dynamic_obstacle_refinement_applied);
   EXPECT_TRUE(result.dynamic_obstacle_refinement_solved);
+  EXPECT_TRUE(result.post_refinement_physical_proof_checked);
+  EXPECT_TRUE(result.post_refinement_physical_proof_accepted);
+  EXPECT_EQ(
+    result.post_refinement_linearization_requested,
+    result.post_refinement_linearization_count > 0U);
+  if (result.post_refinement_linearization_requested) {
+    EXPECT_TRUE(result.post_refinement_linearization_applied);
+    EXPECT_TRUE(result.post_refinement_linearization_bootstrap_applied);
+    EXPECT_TRUE(result.post_refinement_linearization_solved);
+  }
   EXPECT_GT(result.dynamic_obstacle_stay_behind_row_count, 0U);
   EXPECT_TRUE(shadow::result_valid(result));
 }

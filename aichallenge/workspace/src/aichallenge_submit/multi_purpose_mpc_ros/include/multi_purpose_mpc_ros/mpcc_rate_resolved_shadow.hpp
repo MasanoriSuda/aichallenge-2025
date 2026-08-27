@@ -60,6 +60,7 @@ enum class Outcome
   AssemblyRejected,
   SolveRejected,
   NonfiniteResult,
+  PhysicalProofRejected,
   ActuationSampleRejected,
   ArtifactRejected,
   Solved,
@@ -186,6 +187,17 @@ struct Result
     successive_linearization_reason{
       mpcc_rate_resolved_adapter::RelinearizationReason::InvalidRequest};
   int successive_linearization_failure_stage{-1};
+  bool post_refinement_linearization_requested{false};
+  bool post_refinement_linearization_applied{false};
+  bool post_refinement_linearization_bootstrap_applied{false};
+  bool post_refinement_linearization_solved{false};
+  bool post_refinement_physical_proof_checked{false};
+  bool post_refinement_physical_proof_accepted{false};
+  std::size_t post_refinement_linearization_count{};
+  mpcc_rate_resolved_adapter::RelinearizationReason
+    post_refinement_linearization_reason{
+      mpcc_rate_resolved_adapter::RelinearizationReason::InvalidRequest};
+  int post_refinement_linearization_failure_stage{-1};
   persistent_osqp::SolveTelemetry solver;
   artifact::RejectReason execution_artifact_reject_reason{
     artifact::RejectReason::None};
@@ -230,10 +242,14 @@ RecedingWarmStartResolution resolve_receding_warm_start(
 /// is used when no semantically compatible solved iterate exists.  It carries
 /// no execution authority and does not cross an intent/formulation boundary:
 /// inputs are projected into the current boxes and the current affine
-/// dynamics are rolled out from the exact initial state.
+/// dynamics are rolled out from the exact initial state.  When a preceding
+/// iterate from the same semantic problem is supplied, only its input prefix
+/// is transported; all states are rebuilt under the current equality rows and
+/// all duals are cold-started.
 std::optional<persistent_osqp::WarmStart> build_current_problem_bootstrap(
   const mpcc_rate_resolved_problem::AssemblyRequest & current_problem,
-  std::size_t current_constraint_count) noexcept;
+  std::size_t current_constraint_count,
+  const Eigen::VectorXd * preceding_same_problem_primal = nullptr) noexcept;
 
 /// Dedicated numerical owner for the rate-resolved shadow. Calls are
 /// serialized; a successful full-horizon iterate may seed only a semantically

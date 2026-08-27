@@ -282,7 +282,8 @@ AtomicIntentAdmissionResolution resolve_atomic_intent_admission(
     return result;
   }
   if (
-    canonical_normal_intent_supported(request.previous_published_intent) &&
+    (canonical_normal_intent_supported(request.previous_published_intent) ||
+    request.previous_published_intent == ControlIntent::Stop) &&
     request.previous_current_world_authority)
   {
     result.reason = AtomicIntentAdmissionReason::PreviousRetained;

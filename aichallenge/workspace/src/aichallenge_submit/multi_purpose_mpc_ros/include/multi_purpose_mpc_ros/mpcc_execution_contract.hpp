@@ -68,9 +68,11 @@ struct AtomicIntentAdmissionResolution
   bool previous_retained{false};
 };
 
-/// Resolve an intent proposal without creating an authority gap.  The previous
-/// intent is eligible only when it is itself a supported seven-state intent and
-/// has passed current-world proof in this cycle.
+/// Resolve an intent proposal without creating an authority gap. The previous
+/// intent is eligible when it is either a supported seven-state normal intent
+/// with current-world proof or an already published Stop authority. Stop is an
+/// external supervisor rather than a canonical normal formulation, but it must
+/// remain authoritative until its normal successor is ready.
 AtomicIntentAdmissionResolution resolve_atomic_intent_admission(
   const AtomicIntentAdmissionRequest & request) noexcept;
 

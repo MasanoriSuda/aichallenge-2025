@@ -6469,6 +6469,8 @@ struct MpcControlCycleResult
   double maximum_steering_rad{};
   std::optional<mpcc_contract::CanonicalNormalCommand> canonical_normal_command;
   bool canonical_emergency_stop{false};
+  mpcc_contract::ControlIntent published_authority_intent{
+    mpcc_contract::ControlIntent::Unknown};
 
   MpcControlCycleResult() = default;
 
@@ -7732,6 +7734,7 @@ struct MPC
     last_solution_contract_.reset();
     last_solution_is_retained_ = false;
     last_published_canonical_intent_ = mpcc_contract::ControlIntent::Unknown;
+    last_published_authority_intent_ = mpcc_contract::ControlIntent::Unknown;
     retained_execution_identity_was_selected_ = false;
     retained_execution_identity_last_sequence_ = 0U;
     last_rate_resolved_serialized_predecessor_.reset();
@@ -8192,6 +8195,26 @@ struct MPC
       window.last_rejected_final_wire_steering_rad);
     window = CanonicalNormalFinalActuationTelemetryWindow{};
     last_canonical_normal_final_actuation_log_sec_ = now_sec;
+  }
+
+  void record_final_published_authority(
+    const mpcc_contract::ControlIntent authority_intent,
+    const bool publication_overridden) noexcept
+  {
+    if (publication_overridden) {
+      last_published_authority_intent_ =
+        mpcc_contract::ControlIntent::Unknown;
+      return;
+    }
+    if (
+      mpcc_contract::canonical_normal_intent_supported(authority_intent) ||
+      authority_intent == mpcc_contract::ControlIntent::Stop)
+    {
+      last_published_authority_intent_ = authority_intent;
+      return;
+    }
+    last_published_authority_intent_ =
+      mpcc_contract::ControlIntent::Unknown;
   }
 
   const std::optional<overtake_orchestrator::AuthorityTrace> &
@@ -25177,7 +25200,7 @@ struct MPC
     const std::string & reason)
   {
     record_problem_context(
-      problem, mpcc_contract::Formulation::Unresolved);
+      problem, mpcc_contract::Formulation::Unresolved, intent);
     const double maximum_steering = std::isfinite(cfg.delta_max) ?
       std::max(0.0, std::abs(cfg.delta_max)) : 0.0;
     const double steering = std::isfinite(previous_steering) ?
@@ -25198,6 +25221,9 @@ struct MPC
       "-emergency/" + reason;
     MpcControlCycleResult output{Eigen::Vector2d(0.0, steering), std::abs(steering)};
     output.canonical_emergency_stop = true;
+    if (intent == mpcc_contract::ControlIntent::Stop) {
+      output.published_authority_intent = intent;
+    }
     return output;
   }
 
@@ -25304,6 +25330,7 @@ struct MPC
         command.predicted_speed_mps, command.steering_tire_angle_rad),
       maximum_steering};
     output.canonical_normal_command = command;
+    output.published_authority_intent = intent;
     return output;
   }
 
@@ -25354,13 +25381,14 @@ struct MPC
     // current command is committed, so all intents share one causal steering
     // origin and one six-state actuation time base.
     auto effective_intent = intent;
+    bool published_stop_retained = false;
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
       problem, now_sec, intent);
     if (
       !retained.production_authority.has_value() &&
-      last_published_canonical_intent_ !=
+      last_published_authority_intent_ !=
       mpcc_contract::ControlIntent::Unknown &&
-      last_published_canonical_intent_ != intent)
+      last_published_authority_intent_ != intent)
     {
       // Gate A already solved and physically certified the exact seven-state
       // ShiftOut/Pass plan before mutating the FSM. Re-solving that same
@@ -25368,7 +25396,7 @@ struct MPC
       // control callback and left a normal-authority hole after the phase
       // switch. Revalidate the immutable Gate A evidence against the current
       // world instead; it becomes retained evidence only after publication.
-      const auto previous_intent = last_published_canonical_intent_;
+      const auto previous_intent = last_published_authority_intent_;
       bool gate_a_plan_attempted = false;
       bool gate_a_plan_joined = false;
       std::uint64_t gate_a_sequence = 0U;
@@ -25405,7 +25433,12 @@ struct MPC
       }
       auto previous_retained =
         RateResolvedRetainedShadowEvaluation{};
-      if (!retained.production_authority.has_value()) {
+      const bool previous_stop_authority =
+        previous_intent == mpcc_contract::ControlIntent::Stop;
+      if (
+        !retained.production_authority.has_value() &&
+        !previous_stop_authority)
+      {
         previous_retained =
           evaluate_rate_resolved_track_cruise_retained_shadow(
           problem, now_sec, previous_intent);
@@ -25415,6 +25448,7 @@ struct MPC
         mpcc_contract::AtomicIntentAdmissionRequest{
           intent, previous_intent,
           retained.production_authority.has_value(),
+          previous_stop_authority ||
           previous_retained.production_authority.has_value()});
       const auto proposed_world_reason = retained.reason;
       const std::string proposed_blocker = retained.blocking_obstacle_id;
@@ -25425,9 +25459,13 @@ struct MPC
       const auto previous_executed_reason = previous_retained.executed_reason;
       const auto previous_executed_sequence =
         previous_retained.executed_sequence;
-      const bool previous_joined =
+      const bool previous_joined = previous_stop_authority ||
         previous_retained.production_authority.has_value();
-      if (atomic_resolution.previous_retained) {
+      published_stop_retained =
+        atomic_resolution.previous_retained &&
+        atomic_resolution.effective_intent ==
+        mpcc_contract::ControlIntent::Stop;
+      if (atomic_resolution.previous_retained && !published_stop_retained) {
         retained = std::move(previous_retained);
       }
       if (atomic_resolution.authority_available) {
@@ -25438,6 +25476,7 @@ struct MPC
         "Rate-resolved canonical atomic admission: decision=%lu, "
         "previous=%s, proposed=%s, effective=%s, resolution=%s, "
         "gate_a_attempted=%d, gate_a_joined=%d, previous_joined=%d, "
+        "previous_external_stop=%d, "
         "proposed_world=%s, previous_world=%s, "
         "previous_candidate=%s/%lu, previous_executed=%s/%lu, "
         "gate_a_sequence=%lu, blocker=%s",
@@ -25448,6 +25487,7 @@ struct MPC
         mpcc_contract::to_string(atomic_resolution.reason),
         gate_a_plan_attempted ? 1 : 0, gate_a_plan_joined ? 1 : 0,
         previous_joined ? 1 : 0,
+        previous_stop_authority ? 1 : 0,
         rate_resolved_retained::to_string(proposed_world_reason),
         rate_resolved_retained::to_string(previous_world_reason),
         rate_resolved_retained::to_string(previous_candidate_reason),
@@ -25458,8 +25498,12 @@ struct MPC
         proposed_blocker.empty() ? "none" : proposed_blocker.c_str());
     }
     record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);
-    auto output = rate_resolved_track_cruise_control(
-      problem, effective_intent, retained);
+    auto output = published_stop_retained ?
+      canonical_normal_emergency_stop(
+        problem, mpcc_contract::ControlIntent::Stop,
+        "published Stop retained until normal authority joins") :
+      rate_resolved_track_cruise_control(
+        problem, effective_intent, retained);
     record_rate_resolved_track_cruise_command(retained, output, now_sec);
     if (!submission_draft.has_value()) {
       ++rate_resolved_track_cruise_shadow_telemetry_window_.
@@ -26078,9 +26122,12 @@ struct MPC
 
   void record_problem_context(
     const MpcProblem & problem,
-    const mpcc_contract::Formulation formulation)
+    const mpcc_contract::Formulation formulation,
+    const std::optional<mpcc_contract::ControlIntent> intent_override =
+    std::nullopt)
   {
-    last_problem_context_ = make_problem_context(problem, formulation);
+    last_problem_context_ = make_problem_context(
+      problem, formulation, intent_override);
     last_solution_contract_.reset();
     last_solution_is_retained_ = false;
   }
@@ -26223,7 +26270,13 @@ struct MPC
   std::string last_control_resolution_reason_{"not-evaluated"};
   std::optional<mpcc_contract::MpccProblemContext> last_problem_context_;
   std::optional<mpcc_contract::CertifiedMpccSolution> last_solution_contract_;
+  /// Last normal canonical intent whose exact command crossed the wire.
+  /// Stop shadow selection uses this to preserve the interrupted semantic.
   mpcc_contract::ControlIntent last_published_canonical_intent_{
+    mpcc_contract::ControlIntent::Unknown};
+  /// Last effective authority whose exact command crossed the wire. Unlike
+  /// the normal ledger above, this includes explicit external Stop.
+  mpcc_contract::ControlIntent last_published_authority_intent_{
     mpcc_contract::ControlIntent::Unknown};
   bool retained_execution_identity_was_selected_{false};
   std::uint64_t retained_execution_identity_last_sequence_{0U};
@@ -53380,6 +53433,10 @@ private:
     mpc_->record_canonical_normal_final_command(
       active_control_decision_id_, u[0], acc, published_steering.value(),
       current_time.seconds());
+    mpc_->record_final_published_authority(
+      mpc_cycle.published_authority_intent,
+      recovery_command_active || !enable_control_ ||
+      executed_solution_wall_hold_active);
     mpc_->record_rate_resolved_publication_successor(
       active_control_decision_id_, u[0], acc, u[1],
       published_steering.value(),

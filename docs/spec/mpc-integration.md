@@ -1,6 +1,6 @@
 # multi_purpose_mpc_ros インテグレーション設計
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-26。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-27。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-02-10
 
@@ -2757,6 +2757,23 @@ state-box可行性確認も同じ座標へ統一する。型としてtheta-only 
 `output/20260827-211306`のdomain 1ではrace Start後のdynamic-obstacle Follow契約38件が全件solveし、
 reject、Emergency、normal fallback、callback overrunはいずれも0件だった。本変更はgap、wall、OSQP、
 steering、timeoutの調整ではなく、既存canonical contractから逸脱したproducerの座標系修正である。
+
+#### Stopからnormalへの原子的authority引き渡し（2026-08-27、2025由来の暫定）
+
+SafetyBrakeの明示Stopがwireを所有した後、normal intentのcurrent-world authorityがまだ準備できていない場合は、
+最後にpublishしたnormal intentではなく、実際にpublishしたStopをprevious authorityとして保持する。Stop中断前の
+normal semanticはStop shadow successorの選択に必要なため、normal-only ledgerとeffective wire-authority ledgerを
+分離する。
+
+Stop保持はtimeout、grace、古いnormal commandの再利用ではない。既にpublish済みのStopを、exact normal successorが
+current-world proofを通過するまで同一authorityとして継続し、successor成立時だけatomicに切り替える。Recovery、control
+disable、final wall holdが出力を上書きした周期はwire-authority ledgerを無効化し、canonical commandが実際に配信されたと
+推定してはならない。
+
+`output/20260827-214537`では`SafetyBrake -> Follow`境界でproposed ShiftOutが未成立の間、
+`previous=stop`、`effective=stop`、`previous_external_stop=1`としてStopを保持し、旧Cruiseをprevious authorityにした
+generic Emergency gapは発生しなかった。後続ShiftOutの`steering-unreachable`／`progress-lift-rejected`は、Stop後の
+現位置から中断Missionへ再接続できない別のlifecycle課題であり、Stop保持、wall、steering、solver閾値の緩和で隠さない。
 
 ### 提出ファイルへの影響
 

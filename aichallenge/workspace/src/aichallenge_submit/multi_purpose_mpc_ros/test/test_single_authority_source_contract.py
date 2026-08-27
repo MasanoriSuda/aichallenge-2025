@@ -539,8 +539,8 @@ def test_rate_resolved_intent_transition_reuses_gate_a_without_sync_solve() -> N
     assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 2
     assert "!retained.production_authority.has_value()" in owner
     assert "ControlIntent::Unknown" in owner
-    assert "last_published_canonical_intent_ != intent" in owner
-    assert "const auto previous_intent = last_published_canonical_intent_" in owner
+    assert "last_published_authority_intent_ != intent" in owner
+    assert "const auto previous_intent = last_published_authority_intent_" in owner
     assert "resolve_atomic_intent_admission(" in owner
     assert "effective_intent = atomic_resolution.effective_intent" in owner
     assert "problem, effective_intent, retained" in owner
@@ -758,7 +758,8 @@ def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     production = owner.index("rate_resolved_track_cruise_control(")
     assert initial_revalidation < previous_revalidation < resolution < production
     assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 2
-    assert "last_published_canonical_intent_" in owner
+    assert "last_published_authority_intent_" in owner
+    assert "previous_stop_authority" in owner
     assert "ControlIntent::Follow" in owner
     assert "resolve_atomic_intent_admission(" in owner
     assert "effective_intent = atomic_resolution.effective_intent" in owner
@@ -789,6 +790,26 @@ def test_last_published_intent_is_a_publication_ledger() -> None:
     )
     assert serialized_join < ledger_update
     assert recorder.index("mark_executed(") < ledger_update
+
+    authority_recorder = recorder[
+        recorder.index("record_final_published_authority(") :
+    ]
+    assert "last_published_authority_intent_ = authority_intent" in authority_recorder
+    assert "ControlIntent::Stop" in authority_recorder
+
+    publish_call = SOURCE.index(
+        "const auto published_steering = publish_control_command("
+    )
+    normal_record = SOURCE.index(
+        "mpc_->record_canonical_normal_final_command(", publish_call
+    )
+    authority_record = SOURCE.index(
+        "mpc_->record_final_published_authority(", normal_record
+    )
+    assert publish_call < normal_record < authority_record
+    assert "mpc_cycle.published_authority_intent" in SOURCE[
+        authority_record : authority_record + 240
+    ]
 
 
 def test_rate_resolved_solver_is_owned_only_by_the_async_worker() -> None:

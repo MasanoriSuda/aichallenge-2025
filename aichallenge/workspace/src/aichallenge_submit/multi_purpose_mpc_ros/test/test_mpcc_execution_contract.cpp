@@ -56,6 +56,30 @@ TEST(MpccExecutionContract, AtomicIntentFailsClosedWithoutEitherProof)
     contract::AtomicIntentAdmissionReason::NoCurrentWorldAuthority);
 }
 
+TEST(MpccExecutionContract, AtomicIntentRetainsPublishedStopUntilNormalJoins)
+{
+  const auto retained = contract::resolve_atomic_intent_admission(
+    contract::AtomicIntentAdmissionRequest{
+      contract::ControlIntent::Follow, contract::ControlIntent::Stop,
+      false, true});
+  EXPECT_TRUE(retained.authority_available);
+  EXPECT_FALSE(retained.proposal_adopted);
+  EXPECT_TRUE(retained.previous_retained);
+  EXPECT_EQ(retained.effective_intent, contract::ControlIntent::Stop);
+  EXPECT_EQ(
+    retained.reason,
+    contract::AtomicIntentAdmissionReason::PreviousRetained);
+
+  const auto joined = contract::resolve_atomic_intent_admission(
+    contract::AtomicIntentAdmissionRequest{
+      contract::ControlIntent::Follow, contract::ControlIntent::Stop,
+      true, true});
+  EXPECT_TRUE(joined.authority_available);
+  EXPECT_TRUE(joined.proposal_adopted);
+  EXPECT_FALSE(joined.previous_retained);
+  EXPECT_EQ(joined.effective_intent, contract::ControlIntent::Follow);
+}
+
 contract::MpccProblemContext make_context()
 {
   contract::MpccProblemContext context;

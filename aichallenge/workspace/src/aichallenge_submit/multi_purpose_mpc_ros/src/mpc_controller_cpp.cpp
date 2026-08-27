@@ -1822,6 +1822,21 @@ OvertakeLinePhase overtake_line_phase(const overtake_orchestrator::Phase phase)
   return OvertakeLinePhase::Idle;
 }
 
+std::optional<overtake_orchestrator::Phase> overtake_phase_for_intent(
+  const mpcc_contract::ControlIntent intent)
+{
+  switch (intent) {
+    case mpcc_contract::ControlIntent::ShiftOut:
+      return overtake_orchestrator::Phase::ShiftOut;
+    case mpcc_contract::ControlIntent::Pass:
+      return overtake_orchestrator::Phase::Pass;
+    case mpcc_contract::ControlIntent::Return:
+      return overtake_orchestrator::Phase::Return;
+    default:
+      return std::nullopt;
+  }
+}
+
 overtake_orchestrator::Behavior orchestrator_behavior(
   const V2XBehaviorState state)
 {
@@ -7717,6 +7732,8 @@ struct MPC
     last_solution_contract_.reset();
     last_solution_is_retained_ = false;
     last_published_canonical_intent_ = mpcc_contract::ControlIntent::Unknown;
+    retained_execution_identity_was_selected_ = false;
+    retained_execution_identity_last_sequence_ = 0U;
     last_rate_resolved_serialized_predecessor_.reset();
     failure_fallback_speed_ = 0.0;
     infeasibility_counter = 0;
@@ -17722,7 +17739,7 @@ struct MPC
         overtake_locked_side_sign_ = overtake_pass_side_sign;
       }
     }
-    const bool use_overtake_side_target =
+    bool use_overtake_side_target =
       behavior_output.state == V2XBehaviorState::Overtake && overtake_pass_side_sign != 0 &&
       !suppress_overtake_after_solver_failures && !explicit_overtake_line_owns_plan;
     const int follow_preposition_inner_side =
@@ -18771,6 +18788,60 @@ struct MPC
       (behavior_output.locked_target_current_body_footprints_separated &&
       behavior_output.locked_target_footprint_prediction_valid &&
       behavior_output.locked_target_predicted_body_footprint_sweep_separated);
+    bool retained_execution_active = false;
+    std::string retained_execution_target_id;
+    std::uint64_t retained_execution_mission_generation = 0U;
+    overtake_orchestrator::Phase retained_execution_phase =
+      overtake_orchestrator::Phase::Idle;
+    int retained_execution_side_sign = 0;
+    double retained_execution_traveled_m = 0.0;
+    std::uint64_t retained_execution_sequence = 0U;
+    rate_resolved_artifact::CursorReason retained_execution_cursor_reason =
+      rate_resolved_artifact::CursorReason::InvalidArtifact;
+    if (rate_resolved_track_cruise_certified_plan_store_ != nullptr) {
+      const auto retained_plan =
+        rate_resolved_track_cruise_certified_plan_store_->snapshot();
+      if (
+        retained_plan != nullptr &&
+        rate_resolved_certified::validate(*retained_plan) ==
+        rate_resolved_certified::RejectReason::None &&
+        retained_plan->execution_artifact != nullptr)
+      {
+        const auto & artifact = *retained_plan->execution_artifact;
+        const auto & source_context = artifact.identity.source_context;
+        const auto retained_phase = overtake_phase_for_intent(
+          source_context.intent);
+        const auto cursor = rate_resolved_artifact::resolve_cursor(
+          artifact, now_sec + std::max(0.0, execution_prediction_delay_sec_));
+        retained_execution_sequence = artifact.identity.sequence;
+        retained_execution_cursor_reason = cursor.reason;
+        if (
+          source_context.intent == last_published_canonical_intent_ &&
+          retained_phase.has_value() && cursor.available &&
+          !source_context.target_id.empty() &&
+          source_context.intent_generation != 0U &&
+          (source_context.execution_side_sign == -1 ||
+          source_context.execution_side_sign == 1))
+        {
+          retained_execution_active = true;
+          retained_execution_target_id = source_context.target_id;
+          retained_execution_mission_generation =
+            source_context.intent_generation;
+          retained_execution_phase = retained_phase.value();
+          retained_execution_side_sign =
+            source_context.execution_side_sign;
+          const bool live_mission_matches =
+            overtake_line_state_.target_vehicle_id ==
+            source_context.target_id &&
+            overtake_line_state_.mission_generation ==
+            source_context.intent_generation &&
+            overtake_line_state_.pass_side_sign ==
+            source_context.execution_side_sign;
+          retained_execution_traveled_m = live_mission_matches ?
+            overtake_mission_progress_traveled() : 0.0;
+        }
+      }
+    }
     const auto canonical_execution_identity =
       overtake_orchestrator::resolve_canonical_execution_identity(
       overtake_orchestrator::CanonicalExecutionIdentityRequest{
@@ -18788,7 +18859,50 @@ struct MPC
         behavior_output.dynamic_obstacle_lateral_escape_execution_path_validated,
         behavior_output.dynamic_obstacle_cruise_target_id,
         behavior_output.dynamic_obstacle_lateral_escape_attempt_id,
-        behavior_output.dynamic_obstacle_lateral_escape_side_sign});
+        behavior_output.dynamic_obstacle_lateral_escape_side_sign,
+        retained_execution_active,
+        retained_execution_target_id,
+        retained_execution_mission_generation,
+        retained_execution_phase,
+        retained_execution_side_sign,
+        retained_execution_traveled_m,
+        false});
+    const bool retained_execution_identity_selected =
+      canonical_execution_identity.source ==
+      overtake_orchestrator::CanonicalExecutionIdentitySource::
+      RetainedExecutedArtifact;
+    if (retained_execution_identity_selected) {
+      // The publisher still owns this side. Rebuild a fresh current-world
+      // reference for the same homotopy instead of letting a transient Follow
+      // label produce the successor which will replace it.
+      overtake_pass_side_sign = canonical_execution_identity.side_sign;
+      use_overtake_side_target = true;
+    }
+    if (
+      retained_execution_identity_selected !=
+      retained_execution_identity_was_selected_ ||
+      (retained_execution_identity_selected &&
+      retained_execution_sequence != retained_execution_identity_last_sequence_))
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Canonical executed-intent replenishment: active=%d, source=%s, "
+        "intent=%s, target=%s, generation=%lu, side=%d, sequence=%lu, "
+        "cursor=%s, decision=%lu, wp_id=%d",
+        retained_execution_identity_selected ? 1 : 0,
+        overtake_orchestrator::to_string(canonical_execution_identity.source),
+        mpcc_contract::to_string(last_published_canonical_intent_),
+        canonical_execution_identity.target_id.empty() ? "none" :
+        canonical_execution_identity.target_id.c_str(),
+        static_cast<unsigned long>(canonical_execution_identity.generation),
+        canonical_execution_identity.side_sign,
+        static_cast<unsigned long>(retained_execution_sequence),
+        rate_resolved_artifact::to_string(retained_execution_cursor_reason),
+        static_cast<unsigned long>(active_control_decision_id_), model->wp_id);
+    }
+    retained_execution_identity_was_selected_ =
+      retained_execution_identity_selected;
+    retained_execution_identity_last_sequence_ = retained_execution_sequence;
     overtake_orchestrator::AuthorityRequest authority_request;
     authority_request.decision_id = active_control_decision_id_;
     authority_request.episode_id = overtake_line_state_.episode_id;
@@ -18802,7 +18916,9 @@ struct MPC
     authority_request.pass_side_sign = canonical_execution_identity.active ?
       canonical_execution_identity.side_sign :
       overtake_line_state_.pass_side_sign;
-    authority_request.phase = orchestrator_phase(overtake_line_state_.phase);
+    authority_request.phase = canonical_execution_identity.active ?
+      canonical_execution_identity.phase :
+      orchestrator_phase(overtake_line_state_.phase);
     authority_request.behavior = orchestrator_behavior(behavior_output.state);
     authority_request.race_session_active = v2x_race_session_active_;
     if (overtake_line_output.active) {
@@ -18837,6 +18953,10 @@ struct MPC
         overtake_orchestrator::PathSource::DynamicObstacleEscape;
       authority_request.path_age_sec =
         behavior_output.dynamic_obstacle_lateral_escape_execution_path_age_sec;
+    } else if (retained_execution_identity_selected) {
+      authority_request.path_source_hint =
+        overtake_orchestrator::PathSource::DynamicObstacleEscape;
+      authority_request.path_age_sec = 0.0;
     } else if (planner_output.active && planner_output.feasible) {
       authority_request.path_source_hint = overtake_orchestrator::PathSource::GapPlanner;
       authority_request.path_age_sec = 0.0;
@@ -18846,7 +18966,8 @@ struct MPC
     authority_request.gap_planner_active =
       planner_output.active && planner_output.feasible && apply_gap_planner_state_bounds;
     authority_request.dynamic_obstacle_escape_active =
-      behavior_output.dynamic_obstacle_lateral_escape_execution_active;
+      behavior_output.dynamic_obstacle_lateral_escape_execution_active ||
+      retained_execution_identity_selected;
     authority_request.dynamic_obstacle_follow_cap_suppressed =
       behavior_output.dynamic_obstacle_follow_cap_suppressed;
     authority_request.dynamic_wait_active =
@@ -26102,6 +26223,8 @@ struct MPC
   std::optional<mpcc_contract::CertifiedMpccSolution> last_solution_contract_;
   mpcc_contract::ControlIntent last_published_canonical_intent_{
     mpcc_contract::ControlIntent::Unknown};
+  bool retained_execution_identity_was_selected_{false};
+  std::uint64_t retained_execution_identity_last_sequence_{0U};
   std::uint64_t solution_contract_sequence_{0U};
   bool last_solution_is_retained_{false};
   bool stage_corridor_mpc_constraints_was_active_{false};

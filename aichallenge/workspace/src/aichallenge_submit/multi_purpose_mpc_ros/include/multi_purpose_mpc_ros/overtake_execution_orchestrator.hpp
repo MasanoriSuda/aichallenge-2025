@@ -239,14 +239,17 @@ enum class CanonicalExecutionIdentitySource {
   None,
   OvertakeLine,
   DynamicObstacleEscape,
+  RetainedExecutedArtifact,
 };
 
 enum class CanonicalExecutionIdentityReason {
   Inactive,
   OvertakeLine,
   DynamicObstacleEscape,
+  RetainedExecutedArtifact,
   MalformedOvertakeLine,
   MalformedDynamicObstacleEscape,
+  MalformedRetainedExecutedArtifact,
 };
 
 /// Resolve the one execution identity which is allowed to cross the tactical
@@ -272,6 +275,18 @@ struct CanonicalExecutionIdentityRequest {
   std::string dynamic_escape_target_id;
   std::uint64_t dynamic_escape_attempt_id{0U};
   int dynamic_escape_side_sign{0};
+
+  /// Fallback identity from the exact certified artifact whose command most
+  /// recently crossed the publisher boundary. The caller may activate it only
+  /// while that immutable artifact has an executable cursor at the current
+  /// control origin; no tactical lease or timeout is implied here.
+  bool retained_execution_active{false};
+  std::string retained_execution_target_id;
+  std::uint64_t retained_execution_mission_generation{0U};
+  Phase retained_execution_phase{Phase::Idle};
+  int retained_execution_side_sign{0};
+  double retained_execution_traveled_m{0.0};
+  bool retained_execution_target_exclusion_certified{false};
 };
 
 struct CanonicalExecutionIdentityResolution {

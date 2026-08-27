@@ -716,6 +716,31 @@ def test_dynamic_escape_materializes_one_canonical_overtake_identity() -> None:
     )
 
 
+def test_published_overtake_identity_is_replenished_before_problem_assembly() -> None:
+    """Executed intent, not a transient tactical label, owns its successor QP."""
+
+    init_start = SOURCE.index("MpcProblem init_problem(")
+    init_end = SOURCE.index(
+        "std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem(",
+        init_start,
+    )
+    init = SOURCE[init_start:init_end]
+    cursor = init.index("rate_resolved_artifact::resolve_cursor(")
+    identity = init.index("resolve_canonical_execution_identity(")
+    phase = init.index(
+        "authority_request.phase = canonical_execution_identity.active"
+    )
+    problem_intent = init.index("const auto resolved_control_intent")
+    assert cursor < identity < phase < problem_intent
+    assert "source_context.intent == last_published_canonical_intent_" in init
+    assert "retained_execution_identity_selected" in init
+    assert "use_overtake_side_target = true" in init
+    assert (
+        "CanonicalExecutionIdentitySource::\n      RetainedExecutedArtifact"
+        in init
+    )
+
+
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     """Follow waits on async evidence while the published intent keeps authority."""
 

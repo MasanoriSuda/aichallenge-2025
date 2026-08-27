@@ -259,6 +259,8 @@ const char * to_string(const CanonicalExecutionIdentitySource source) noexcept
     case CanonicalExecutionIdentitySource::OvertakeLine: return "overtake-line";
     case CanonicalExecutionIdentitySource::DynamicObstacleEscape:
       return "dynamic-obstacle-escape";
+    case CanonicalExecutionIdentitySource::RetainedExecutedArtifact:
+      return "retained-executed-artifact";
   }
   return "unknown";
 }
@@ -270,10 +272,14 @@ const char * to_string(const CanonicalExecutionIdentityReason reason) noexcept
     case CanonicalExecutionIdentityReason::OvertakeLine: return "overtake-line";
     case CanonicalExecutionIdentityReason::DynamicObstacleEscape:
       return "dynamic-obstacle-escape";
+    case CanonicalExecutionIdentityReason::RetainedExecutedArtifact:
+      return "retained-executed-artifact";
     case CanonicalExecutionIdentityReason::MalformedOvertakeLine:
       return "malformed-overtake-line";
     case CanonicalExecutionIdentityReason::MalformedDynamicObstacleEscape:
       return "malformed-dynamic-obstacle-escape";
+    case CanonicalExecutionIdentityReason::MalformedRetainedExecutedArtifact:
+      return "malformed-retained-executed-artifact";
   }
   return "unknown";
 }
@@ -347,6 +353,38 @@ CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
     result.phase = Phase::ShiftOut;
     result.side_sign = request.dynamic_escape_side_sign;
     result.target_exclusion_certified = true;
+    return result;
+  }
+  if (request.retained_execution_active) {
+    const bool retained_phase_valid =
+      request.retained_execution_phase == Phase::ShiftOut ||
+      request.retained_execution_phase == Phase::Pass ||
+      request.retained_execution_phase == Phase::Return;
+    if (
+      request.retained_execution_target_id.empty() ||
+      request.retained_execution_mission_generation == 0U ||
+      !retained_phase_valid ||
+      !side_valid(request.retained_execution_side_sign) ||
+      !std::isfinite(request.retained_execution_traveled_m) ||
+      request.retained_execution_traveled_m < 0.0)
+    {
+      result.reason = CanonicalExecutionIdentityReason::
+        MalformedRetainedExecutedArtifact;
+      return result;
+    }
+    result.active = true;
+    result.source =
+      CanonicalExecutionIdentitySource::RetainedExecutedArtifact;
+    result.reason =
+      CanonicalExecutionIdentityReason::RetainedExecutedArtifact;
+    result.target_id = request.retained_execution_target_id;
+    result.generation = request.retained_execution_mission_generation;
+    result.phase = request.retained_execution_phase;
+    result.side_sign = request.retained_execution_side_sign;
+    result.traveled_m = request.retained_execution_traveled_m;
+    result.target_exclusion_certified =
+      request.retained_execution_target_exclusion_certified;
+    return result;
   }
   return result;
 }

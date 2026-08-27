@@ -155,6 +155,100 @@ TEST(OvertakeExecutionOrchestrator, RejectsDynamicEscapeWithoutExecutionSide)
     MalformedDynamicObstacleEscape);
 }
 
+TEST(OvertakeExecutionOrchestrator, ReplenishesPublishedExecutedIdentity)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  request.retained_execution_active = true;
+  request.retained_execution_target_id = "d2";
+  request.retained_execution_mission_generation = 17U;
+  request.retained_execution_phase = orchestrator::Phase::ShiftOut;
+  request.retained_execution_side_sign = -1;
+  request.retained_execution_traveled_m = 1.25;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  ASSERT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::CanonicalExecutionIdentitySource::
+    RetainedExecutedArtifact);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::CanonicalExecutionIdentityReason::
+    RetainedExecutedArtifact);
+  EXPECT_EQ(result.target_id, "d2");
+  EXPECT_EQ(result.generation, 17U);
+  EXPECT_EQ(result.phase, orchestrator::Phase::ShiftOut);
+  EXPECT_EQ(result.side_sign, -1);
+  EXPECT_DOUBLE_EQ(result.traveled_m, 1.25);
+}
+
+TEST(OvertakeExecutionOrchestrator, LiveEscapePrecedesRetainedExecution)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  request.dynamic_escape_active = true;
+  request.dynamic_escape_path_validated = true;
+  request.dynamic_escape_target_id = "live";
+  request.dynamic_escape_attempt_id = 21U;
+  request.dynamic_escape_side_sign = 1;
+  request.retained_execution_active = true;
+  request.retained_execution_target_id = "retained";
+  request.retained_execution_mission_generation = 17U;
+  request.retained_execution_phase = orchestrator::Phase::ShiftOut;
+  request.retained_execution_side_sign = -1;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  ASSERT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::CanonicalExecutionIdentitySource::DynamicObstacleEscape);
+  EXPECT_EQ(result.target_id, "live");
+  EXPECT_EQ(result.generation, 21U);
+  EXPECT_EQ(result.side_sign, 1);
+}
+
+TEST(OvertakeExecutionOrchestrator, ExpiredRetainedExecutionDoesNotLatch)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  request.retained_execution_active = false;
+  // Metadata may remain observable after cursor exhaustion, but it cannot
+  // create authority once the exact executable-cursor gate is false.
+  request.retained_execution_target_id = "d2";
+  request.retained_execution_mission_generation = 17U;
+  request.retained_execution_phase = orchestrator::Phase::Pass;
+  request.retained_execution_side_sign = 1;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  EXPECT_FALSE(result.active);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::CanonicalExecutionIdentityReason::Inactive);
+}
+
+TEST(OvertakeExecutionOrchestrator, RejectsMalformedRetainedExecution)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  request.retained_execution_active = true;
+  request.retained_execution_target_id = "d2";
+  request.retained_execution_mission_generation = 17U;
+  request.retained_execution_phase = orchestrator::Phase::ShiftOut;
+  // Missing side is an incomplete homotopy identity.
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  EXPECT_FALSE(result.active);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::CanonicalExecutionIdentityReason::
+    MalformedRetainedExecutedArtifact);
+}
+
 TEST(OvertakeExecutionOrchestrator, KeepsCommittedLineIdentityPrecedence)
 {
   orchestrator::CanonicalExecutionIdentityRequest request;

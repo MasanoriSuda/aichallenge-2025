@@ -7243,6 +7243,38 @@ struct BodyClearHandoffSpeedReferenceResolution
 BodyClearHandoffSpeedReferenceResolution resolve_body_clear_handoff_speed_reference(
   const BodyClearHandoffSpeedReferenceRequest & request) noexcept;
 
+struct TargetBoundReplanSpeedRetentionRequest
+{
+  bool execution_prefix_active{false};
+  bool front_cap_release_ready{false};
+  bool precontact_squeeze_escape_active{false};
+  bool current_body_footprints_separated{false};
+  bool footprint_prediction_valid{false};
+  bool predicted_body_footprint_sweep_separated{false};
+  double retained_speed_mps{};
+  double current_reference_speed_mps{std::numeric_limits<double>::infinity()};
+  double current_velocity_floor_mps{};
+  double target_speed_mps{std::numeric_limits<double>::infinity()};
+  double maximum_speed_mps{std::numeric_limits<double>::infinity()};
+};
+
+struct TargetBoundReplanSpeedRetentionResolution
+{
+  bool valid{false};
+  bool retention_active{false};
+  bool revoked_by_dynamic_certificate{false};
+  double target_velocity_reference_mps{std::numeric_limits<double>::infinity()};
+  double target_velocity_floor_mps{};
+  double closing_speed_limit_mps{std::numeric_limits<double>::infinity()};
+};
+
+/// A retained target-bound prefix may preserve lateral continuity while its
+/// longitudinal authority is independently revoked by the current-world
+/// target certificate.  This resolver prevents stale replan speed ownership
+/// from overriding a front-cap or pre-contact decision made in the same cycle.
+TargetBoundReplanSpeedRetentionResolution resolve_target_bound_replan_speed_retention(
+  const TargetBoundReplanSpeedRetentionRequest & request) noexcept;
+
 enum class OvertakeExecutionSideSource
 {
   None,

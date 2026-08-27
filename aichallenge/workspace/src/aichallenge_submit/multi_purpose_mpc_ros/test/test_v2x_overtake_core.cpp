@@ -152,6 +152,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CommittedShiftOutBehaviorOwnersh
 using multi_purpose_mpc_ros::v2x_overtake_core::BodyClearExecutionHandoffRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::BodyClearExecutionHandoffReleaseReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::BodyClearHandoffSpeedReferenceRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::TargetBoundReplanSpeedRetentionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_target_bound_replan_speed_retention;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeExecutionSideSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeLineTransitionAction;
@@ -14885,6 +14887,69 @@ TEST(V2XOvertakeCoreMissionOwnership, PredictionUncertaintyHoldsSpeedWithoutDrop
   request.current_body_footprints_separated = false;
   resolution = resolve_body_clear_handoff_speed_reference(request);
   EXPECT_FALSE(resolution.hold_active);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership,
+     TargetBoundReplanRetainsSpeedOnlyWithCurrentDynamicCertificate)
+{
+  TargetBoundReplanSpeedRetentionRequest request;
+  request.execution_prefix_active = true;
+  request.front_cap_release_ready = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.retained_speed_mps = 7.0;
+  request.current_reference_speed_mps = 5.0;
+  request.current_velocity_floor_mps = 0.0;
+  request.target_speed_mps = 4.0;
+  request.maximum_speed_mps = 11.11;
+
+  auto resolution = resolve_target_bound_replan_speed_retention(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.retention_active);
+  EXPECT_FALSE(resolution.revoked_by_dynamic_certificate);
+  EXPECT_DOUBLE_EQ(resolution.target_velocity_reference_mps, 7.0);
+  EXPECT_DOUBLE_EQ(resolution.target_velocity_floor_mps, 7.0);
+  EXPECT_DOUBLE_EQ(resolution.closing_speed_limit_mps, 3.0);
+
+  request.front_cap_release_ready = false;
+  resolution = resolve_target_bound_replan_speed_retention(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.retention_active);
+  EXPECT_TRUE(resolution.revoked_by_dynamic_certificate);
+  EXPECT_DOUBLE_EQ(resolution.target_velocity_reference_mps, 5.0);
+  EXPECT_DOUBLE_EQ(resolution.target_velocity_floor_mps, 0.0);
+
+  request.front_cap_release_ready = true;
+  request.precontact_squeeze_escape_active = true;
+  resolution = resolve_target_bound_replan_speed_retention(request);
+  EXPECT_FALSE(resolution.retention_active);
+  EXPECT_TRUE(resolution.revoked_by_dynamic_certificate);
+
+  request.precontact_squeeze_escape_active = false;
+  request.predicted_body_footprint_sweep_separated = false;
+  resolution = resolve_target_bound_replan_speed_retention(request);
+  EXPECT_FALSE(resolution.retention_active);
+  EXPECT_TRUE(resolution.revoked_by_dynamic_certificate);
+}
+
+TEST(V2XOvertakeCoreMissionOwnership,
+     TargetBoundReplanSpeedRetentionRejectsInvalidInputs)
+{
+  TargetBoundReplanSpeedRetentionRequest request;
+  request.execution_prefix_active = true;
+  request.front_cap_release_ready = true;
+  request.current_body_footprints_separated = true;
+  request.footprint_prediction_valid = true;
+  request.predicted_body_footprint_sweep_separated = true;
+  request.retained_speed_mps = std::numeric_limits<double>::quiet_NaN();
+  request.current_reference_speed_mps = 5.0;
+  request.target_speed_mps = 4.0;
+  request.maximum_speed_mps = 11.11;
+
+  const auto resolution = resolve_target_bound_replan_speed_retention(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.retention_active);
 }
 
 TEST(V2XOvertakeCoreMissionOwnership, PassOwnerReleasesForEveryHardAbort)

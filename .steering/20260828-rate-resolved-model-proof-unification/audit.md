@@ -57,8 +57,10 @@ misreported as a proof of infeasibility.
 - Track/Cruise exact physical proofs were accepted repeatedly.
 - The previous `exact-trajectory-rejected` lateral-bound signature did not
   recur in the run.
-- Control callback examples remained below the 25 ms control period
-  (`max=13.851 ms`, no callback overrun in the emitted runtime summaries).
+- Normal runtime summaries included sub-25 ms windows, but Overtake entry also
+  emitted callback overruns (for example `60.294 ms / 25 ms`,
+  `observation_only=1`).  Scheduling therefore remains a separate Slice 6
+  defect; this model/proof repair did not claim to solve it.
 - Overtake reached `Idle -> ShiftOut -> Pass`, proving that the canonical
   transition did not prevent production entry.
 

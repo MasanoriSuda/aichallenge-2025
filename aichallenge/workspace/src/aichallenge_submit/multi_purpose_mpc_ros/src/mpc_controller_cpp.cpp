@@ -41079,20 +41079,46 @@ private:
         std::min(cfg.v_max, std::max(0.0, locked_target_speed)));
       output.target_velocity_floor = 0.0;
     }
-    if (overtake_line_state_.target_bound_execution_replan_prefix_executing) {
-      const double retained_speed = std::min(
-        cfg.v_max,
+    const auto target_bound_speed_retention =
+      overtake_core::resolve_target_bound_replan_speed_retention(
+      overtake_core::TargetBoundReplanSpeedRetentionRequest{
+        overtake_line_state_.target_bound_execution_replan_prefix_executing,
+        output.front_cap_release_ready,
+        behavior_output.precontact_squeeze_escape_active,
+        behavior_output.locked_target_current_body_footprints_separated,
+        behavior_output.locked_target_footprint_prediction_valid,
+        behavior_output.locked_target_predicted_body_footprint_sweep_separated,
         std::max(
           0.0,
-          overtake_line_state_.target_bound_execution_replan_hold_start_speed_mps));
-      output.target_velocity_reference = std::isfinite(output.target_velocity_reference) ?
-        std::max(output.target_velocity_reference, retained_speed) : retained_speed;
-      output.target_velocity_floor = std::max(
-        output.target_velocity_floor, retained_speed);
-      if (std::isfinite(locked_target_speed)) {
-        output.closing_speed_limit = std::max(
-          0.0, retained_speed - std::max(0.0, locked_target_speed));
+          overtake_line_state_.target_bound_execution_replan_hold_start_speed_mps),
+        output.target_velocity_reference,
+        output.target_velocity_floor,
+        locked_target_speed,
+        cfg.v_max});
+    if (target_bound_speed_retention.retention_active) {
+      output.target_velocity_reference =
+        target_bound_speed_retention.target_velocity_reference_mps;
+      output.target_velocity_floor =
+        target_bound_speed_retention.target_velocity_floor_mps;
+      if (std::isfinite(target_bound_speed_retention.closing_speed_limit_mps)) {
+        output.closing_speed_limit =
+          target_bound_speed_retention.closing_speed_limit_mps;
       }
+    } else if (target_bound_speed_retention.revoked_by_dynamic_certificate) {
+      static rclcpp::Clock target_bound_speed_revoke_clock{RCL_STEADY_TIME};
+      RCLCPP_WARN_THROTTLE(
+        rclcpp::get_logger("mpc_controller"), target_bound_speed_revoke_clock, 1000,
+        "OvertakeLine target-bound speed retention revoked by current dynamic "
+        "certificate: target=%s, phase=%s, cap_release=%d, precontact=%d, "
+        "current_clear=%d, prediction=%d, sweep_clear=%d, reference=%.2f, floor=%.2f",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        to_string(overtake_line_state_.phase),
+        output.front_cap_release_ready ? 1 : 0,
+        behavior_output.precontact_squeeze_escape_active ? 1 : 0,
+        behavior_output.locked_target_current_body_footprints_separated ? 1 : 0,
+        behavior_output.locked_target_footprint_prediction_valid ? 1 : 0,
+        behavior_output.locked_target_predicted_body_footprint_sweep_separated ? 1 : 0,
+        output.target_velocity_reference, output.target_velocity_floor);
     }
     const bool stopped_prediction_lease_active = std::isfinite(
       overtake_line_state_.pass_stopped_prediction_lease_start_sec);

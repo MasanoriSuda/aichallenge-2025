@@ -12416,6 +12416,54 @@ BodyClearHandoffSpeedReferenceResolution resolve_body_clear_handoff_speed_refere
   return resolution;
 }
 
+TargetBoundReplanSpeedRetentionResolution resolve_target_bound_replan_speed_retention(
+  const TargetBoundReplanSpeedRetentionRequest & request) noexcept
+{
+  TargetBoundReplanSpeedRetentionResolution resolution;
+  if (
+    !std::isfinite(request.retained_speed_mps) || request.retained_speed_mps < 0.0 ||
+    std::isnan(request.current_reference_speed_mps) ||
+    !std::isfinite(request.current_velocity_floor_mps) ||
+    request.current_velocity_floor_mps < 0.0 ||
+    std::isnan(request.target_speed_mps) ||
+    std::isnan(request.maximum_speed_mps) || request.maximum_speed_mps < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.target_velocity_reference_mps = request.current_reference_speed_mps;
+  resolution.target_velocity_floor_mps = request.current_velocity_floor_mps;
+
+  const bool dynamic_certificate_clear =
+    request.front_cap_release_ready &&
+    !request.precontact_squeeze_escape_active &&
+    request.current_body_footprints_separated &&
+    request.footprint_prediction_valid &&
+    request.predicted_body_footprint_sweep_separated;
+  resolution.revoked_by_dynamic_certificate =
+    request.execution_prefix_active && !dynamic_certificate_clear;
+  resolution.retention_active =
+    request.execution_prefix_active && dynamic_certificate_clear;
+  if (!resolution.retention_active) {
+    return resolution;
+  }
+
+  const double retained_speed = std::isfinite(request.maximum_speed_mps) ?
+    std::min(request.maximum_speed_mps, request.retained_speed_mps) :
+    request.retained_speed_mps;
+  resolution.target_velocity_reference_mps =
+    std::isfinite(request.current_reference_speed_mps) ?
+    std::max(request.current_reference_speed_mps, retained_speed) : retained_speed;
+  resolution.target_velocity_floor_mps = std::max(
+    request.current_velocity_floor_mps, retained_speed);
+  if (std::isfinite(request.target_speed_mps) && request.target_speed_mps >= 0.0) {
+    resolution.closing_speed_limit_mps = std::max(
+      0.0, retained_speed - request.target_speed_mps);
+  }
+  return resolution;
+}
+
 OvertakeExecutionSideResolution resolve_overtake_execution_side(
   const OvertakeExecutionSideRequest & request) noexcept
 {

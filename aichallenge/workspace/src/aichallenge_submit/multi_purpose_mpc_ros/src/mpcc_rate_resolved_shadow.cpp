@@ -208,19 +208,31 @@ ProgressWallRefinement build_progress_wall_refinement(
   return result;
 }
 
-std::optional<artifact::ExecutionArtifact> build_execution_artifact(
+struct ExecutionArtifactBuildResult
+{
+  std::optional<artifact::ExecutionArtifact> execution_artifact;
+  artifact::RejectReason reject_reason{artifact::RejectReason::InvalidCertificate};
+  const char * detail{"construction-not-attempted"};
+};
+
+ExecutionArtifactBuildResult build_execution_artifact(
   const Snapshot & snapshot,
   const mpcc_rate_resolved_problem::AssemblyRequest & final_problem,
   const persistent_osqp::SolveOutcome & outcome,
   const double completed_sec) noexcept
 {
   namespace model = mpcc_rate_resolved;
-  if (
-    !outcome.result.has_value() ||
-    !outcome.result->primal.allFinite() ||
-    !std::isfinite(completed_sec))
-  {
-    return std::nullopt;
+  if (!outcome.result.has_value()) {
+    return {std::nullopt, artifact::RejectReason::InvalidCertificate,
+      "missing-solve-result"};
+  }
+  if (!outcome.result->primal.allFinite()) {
+    return {std::nullopt, artifact::RejectReason::InvalidCertificate,
+      "nonfinite-solve-result"};
+  }
+  if (!std::isfinite(completed_sec)) {
+    return {std::nullopt, artifact::RejectReason::InvalidTiming,
+      "invalid-completion-time"};
   }
   const int horizon = snapshot.request.horizon_steps;
   const int execution_horizon = snapshot.execution_prefix_steps;
@@ -236,7 +248,8 @@ std::optional<artifact::ExecutionArtifact> build_execution_artifact(
     snapshot.nominal_path_distance_m.size() <
     static_cast<std::size_t>(execution_horizon + 1))
   {
-    return std::nullopt;
+    return {std::nullopt, artifact::RejectReason::InvalidCertificate,
+      "dimension-contract-mismatch"};
   }
 
   const auto & primal = outcome.result->primal;
@@ -314,10 +327,11 @@ std::optional<artifact::ExecutionArtifact> build_execution_artifact(
         snapshot.request.inputs[
           static_cast<std::size_t>(stage)].path_curvature_radpm});
   }
-  if (artifact::validate(execution_artifact) != artifact::RejectReason::None) {
-    return std::nullopt;
+  const auto reject_reason = artifact::validate(execution_artifact);
+  if (reject_reason != artifact::RejectReason::None) {
+    return {std::nullopt, reject_reason, "artifact-validation-rejected"};
   }
-  return execution_artifact;
+  return {std::move(execution_artifact), artifact::RejectReason::None, "accepted"};
 }
 
 }  // namespace
@@ -676,7 +690,12 @@ bool result_valid(const Result & result) noexcept
              mpcc_rate_resolved::ActuationSampleReason::Count;
     }
     if (result.outcome == Outcome::ArtifactRejected) {
-      return !result.solved && result.actuation_sampled &&
+      const bool sampling_state_valid = result.actuation_sampled ?
+        result.actuation_sample_reason ==
+        mpcc_rate_resolved::ActuationSampleReason::Accepted :
+        result.actuation_sample_reason ==
+        mpcc_rate_resolved::ActuationSampleReason::Count;
+      return !result.solved && sampling_state_valid &&
              result.execution_artifact == nullptr &&
              result.execution_artifact_reject_reason !=
              artifact::RejectReason::None;
@@ -1307,17 +1326,19 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     result.progress_wall_refinement_solved ||
     result.dynamic_obstacle_refinement_solved;
   mpcc_rate_resolved_physical_adapter::Result post_refinement_proof;
+  ExecutionArtifactBuildResult post_refinement_artifact_build;
   const auto evaluate_post_refinement_proof = [&]() {
-      const auto candidate = build_execution_artifact(
+      post_refinement_artifact_build = build_execution_artifact(
         snapshot, adapted->problem, outcome,
         snapshot.identity.snapshot_sec +
         std::chrono::duration<double>(
           SteadyClock::now() - started).count());
-      if (!candidate.has_value()) {
+      if (!post_refinement_artifact_build.execution_artifact.has_value()) {
         return mpcc_rate_resolved_physical_adapter::Result{};
       }
       return mpcc_rate_resolved_physical_adapter::build(
-        candidate.value(), snapshot.identity.source_context.intent,
+        post_refinement_artifact_build.execution_artifact.value(),
+        snapshot.identity.source_context.intent,
         snapshot.identity.source_context.stage_geometry_id);
     };
   if (physical_problem_refined) {
@@ -1430,6 +1451,22 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     post_refinement_proof = evaluate_post_refinement_proof();
   }
   if (physical_problem_refined) {
+    if (!post_refinement_artifact_build.execution_artifact.has_value()) {
+      result.outcome = Outcome::ArtifactRejected;
+      result.solved = false;
+      result.execution_artifact_reject_reason =
+        post_refinement_artifact_build.reject_reason;
+      std::ostringstream detail;
+      detail << "rate-resolved post-refinement artifact construction rejected: "
+             << post_refinement_artifact_build.detail << "/reason="
+             << artifact::to_string(post_refinement_artifact_build.reject_reason);
+      result.detail = detail.str();
+      capture_failure(
+        mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
+        adapted->problem, assembled.value(), last_refinement_warm_start,
+        outcome, "artifact-construction-rejected");
+      return finish();
+    }
     result.post_refinement_physical_proof_accepted =
       post_refinement_proof.reason ==
       mpcc_rate_resolved_physical_adapter::RejectReason::None;
@@ -1532,17 +1569,24 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   result.sampled_steering_rad = sample.sample->steering_rad;
   result.sampled_curvature_radpm = sample.sample->curvature_radpm;
 
-  auto execution_artifact = build_execution_artifact(
+  auto execution_artifact_build = build_execution_artifact(
     snapshot, adapted->problem, outcome,
     snapshot.identity.snapshot_sec +
     std::chrono::duration<double>(SteadyClock::now() - started).count());
-  if (!execution_artifact.has_value()) {
+  if (!execution_artifact_build.execution_artifact.has_value()) {
     result.outcome = Outcome::ArtifactRejected;
-    result.detail = "execution artifact construction rejected";
+    result.execution_artifact_reject_reason =
+      execution_artifact_build.reject_reason;
+    std::ostringstream detail;
+    detail << "execution artifact construction rejected: "
+           << execution_artifact_build.detail << "/reason="
+           << artifact::to_string(execution_artifact_build.reject_reason);
+    result.detail = detail.str();
     result.solved = false;
     result.constraints_satisfied = false;
     return finish();
   }
+  auto execution_artifact = std::move(execution_artifact_build.execution_artifact);
   result.execution_artifact_reject_reason =
     artifact::validate(execution_artifact.value());
   if (

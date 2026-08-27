@@ -382,6 +382,45 @@ TEST(MpccRateResolvedDynamicObstacle, PartialEscapeNeverExceedsWallOnlyWitness)
   }
 }
 
+TEST(
+  MpccRateResolvedDynamicObstacle,
+  TacticalSidePreservesAcquiredSeparationWhenWallWitnessReturns)
+{
+  auto request = request_with_lateral_suffix();
+  request.pass_side_sign = -1;
+  const std::array<double, 5> lateral_m{{-1.0, -1.0, -0.9, -0.4, 0.2}};
+  for (int stage = 0; stage <= 4; ++stage) {
+    const int state = stage * model::kStateDimension;
+    request.wall_only_primal[state + model::kProgressIndex] =
+      0.5 * static_cast<double>(stage);
+    request.wall_only_primal[state + model::kLagIndex] = 0.0;
+    // The current state has already acquired the selected homotopy.  The
+    // obstacle-free witness later returns through the target because it has
+    // no dynamic-obstacle rows yet; refinement must not copy that drift.
+    request.wall_only_primal[state + model::kLateralIndex] =
+      lateral_m[static_cast<std::size_t>(stage)];
+  }
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_EQ(result.resolved_side_sign, -1);
+  EXPECT_EQ(result.first_pass_side_stage, 0);
+  EXPECT_EQ(result.stay_behind_row_count, 0U);
+  EXPECT_EQ(result.pass_side_row_count, 4U);
+  EXPECT_EQ(result.partial_escape_row_count, 0U);
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  for (std::size_t index = 0U; index < 4U; ++index) {
+    const auto & constraint =
+      result.problem->dynamic_obstacle_constraints[index];
+    EXPECT_EQ(
+      constraint.axis,
+      problem::DynamicObstacleConstraintAxis::Lateral);
+    EXPECT_DOUBLE_EQ(constraint.upper, -0.75);
+  }
+}
+
 TEST(MpccRateResolvedDynamicObstacle, RejectsMalformedPredictionInsteadOfDroppingIt)
 {
   auto request = request_with_lateral_suffix();

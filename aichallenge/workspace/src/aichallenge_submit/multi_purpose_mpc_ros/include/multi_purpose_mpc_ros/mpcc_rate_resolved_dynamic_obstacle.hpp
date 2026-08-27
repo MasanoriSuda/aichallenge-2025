@@ -84,7 +84,10 @@ struct Result
 /// an instantaneous non-decrease physically unreachable; it is never made
 /// stricter than the wall-only trajectory which witnesses the branch.
 /// This is the QP form of the same initial-overlap escape contract used by the
-/// current-world physical verifier; it does not weaken a newly clear state.
+/// current-world physical verifier.  Once the current physical state has full
+/// lateral separation on an explicitly selected side, that acquired homotopy
+/// remains hard even if the obstacle-free wall witness crosses back later.
+/// A separated middle prediction alone never establishes this ownership.
 /// Longitudinal classification and rows use the physical progress coordinate
 /// theta + e_lag, never virtual progress theta alone.
 Result refine(const Request & request) noexcept;

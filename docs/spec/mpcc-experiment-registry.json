@@ -64,6 +64,18 @@
       "production_impact": "none; only rejected-result evidence capture was added",
       "deleted_code": [],
       "revisit_condition": "only if the recorded QP, solver policy or immutable problem fingerprint changes"
+    },
+    {
+      "experiment_id": "20260828-acquired-pass-homotopy-preservation",
+      "baseline_commit": "e098f9945b1a706a9f01334be09345711e8bdabb",
+      "snapshot_ids": [],
+      "hypothesis": "an explicit Pass side loses already acquired lateral separation because the obstacle-free wall witness crosses the target later",
+      "changed_dimension": "dynamic_obstacle_convexification",
+      "result": "inconclusive",
+      "reason": "failure-first and full package tests prove the acquired-side contract, but the bounded Gate ended in an earlier ShiftOut wall-target infeasibility before Pass and did not exercise the repaired condition",
+      "production_impact": "explicit selected-side refinement now preserves full stage-zero separation; authority, solver, margins, leases and fallbacks are unchanged",
+      "deleted_code": [],
+      "revisit_condition": "a moving Gate reaches Pass with acquired lateral separation and either completes Return or freezes the first subsequent structural rejection"
     }
   ]
 }

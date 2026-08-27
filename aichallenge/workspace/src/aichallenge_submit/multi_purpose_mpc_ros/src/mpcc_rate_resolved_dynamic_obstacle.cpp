@@ -274,6 +274,31 @@ Result refine(const Request & request) noexcept
     }
   }
 
+  // An explicitly selected tactical side must preserve separation which the
+  // current physical state has already acquired.  The future wall-only
+  // witness is allowed to cross the peer because it does not contain the
+  // dynamic obstacle yet; using that future crossing to demote the current
+  // state back to stay-behind discards the selected homotopy and creates the
+  // Pass inward-drift observed before SafetyBrake.  This is deliberately
+  // based on stage-zero physical state, not on one separated middle sample.
+  if (
+    !preserve_current_side && resolved_side_sign != 0 &&
+    result.first_valid_stage >= 0)
+  {
+    const auto & first_prediction = request.stages[
+      static_cast<std::size_t>(result.first_valid_stage)];
+    initial_signed_side_separation_m =
+      static_cast<double>(resolved_side_sign) *
+      (request.wall_only_primal[model::kLateralIndex] -
+      first_prediction.target_lateral_m);
+    if (
+      initial_signed_side_separation_m + request.separation_tolerance_m >=
+      first_prediction.lateral_center_separation_m)
+    {
+      preserve_current_side = true;
+    }
+  }
+
   // A pass-side switch is accepted only when separation is sustained for the
   // remainder of the valid prediction suffix.  One noisy separated sample
   // must not alternate the disjunctive branch stage by stage.

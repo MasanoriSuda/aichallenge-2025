@@ -1,5 +1,6 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 
+#include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
@@ -758,6 +759,27 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   const auto started = SteadyClock::now();
   Result result;
   result.identity = snapshot.identity;
+  const auto capture_failure = [&result, &snapshot](
+      const mpcc_architecture_snapshot::PipelineStage pipeline_stage,
+      const mpcc_rate_resolved_problem::AssemblyRequest & request,
+      const mpcc_rate_resolved_problem::Problem & problem,
+      const std::optional<persistent_osqp::WarmStart> & warm_start,
+      const persistent_osqp::SolveOutcome & outcome,
+      const std::string & failure_outcome) {
+      const auto recorded = mpcc_architecture_snapshot::record_failure(
+        snapshot, request, problem, warm_start, outcome, pipeline_stage,
+        failure_outcome, result.detail);
+      if (recorded.status ==
+        mpcc_architecture_snapshot::RecordStatus::Written)
+      {
+        result.detail += ", architecture_snapshot=" +
+          recorded.snapshot_file.generic_string();
+      } else if (recorded.status ==
+        mpcc_architecture_snapshot::RecordStatus::IoFailure)
+      {
+        result.detail += ", architecture_snapshot_error=" + recorded.detail;
+      }
+    };
   const auto finish = [&result, &snapshot, &started]() {
       result.compute_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - started).count();
@@ -958,6 +980,10 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       }
       result.detail = detail.str();
     }
+    capture_failure(
+      mpcc_architecture_snapshot::PipelineStage::Initial,
+      adapted->problem, assembled.value(),
+      warm_start_resolution.warm_start, outcome, "solve-rejected");
     return finish();
   }
   result.solved = true;
@@ -1050,6 +1076,10 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
           "/element=" + std::to_string(semantic.element);
       }
     }
+    capture_failure(
+      mpcc_architecture_snapshot::PipelineStage::SuccessiveLinearization,
+      adapted->problem, relinearized_assembled.value(),
+      relinearized_warm_start, relinearized_outcome, "solve-rejected");
     return finish();
   }
   if (!relinearized_outcome.result->primal.allFinite()) {
@@ -1068,6 +1098,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     snapshot.progress_aligned_wall_refinement_active;
   result.physical_wall_refinement_requested =
     snapshot.physical_wall_refinement_active;
+  std::optional<persistent_osqp::WarmStart> last_refinement_warm_start;
   if (snapshot.progress_aligned_wall_refinement_active) {
     auto refinement = build_progress_wall_refinement(
       snapshot, adapted->problem, outcome.result->primal,
@@ -1116,8 +1147,9 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       result.detail = "rate-resolved wall-refined QP assembly rejected";
       return finish();
     }
-    const persistent_osqp::WarmStart warm_start{
-      outcome.result->primal, outcome.result->dual};
+    std::optional<persistent_osqp::WarmStart> warm_start{
+      persistent_osqp::WarmStart{
+        outcome.result->primal, outcome.result->dual}};
     auto refined_outcome = solver_.solve(
       refined_assembled->quadratic_cost, refined_assembled->constraints,
       refined_assembled->linear_cost, refined_assembled->lower_bound,
@@ -1129,6 +1161,10 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       result.solved = false;
       result.detail = std::string{"rate-resolved wall-refined QP rejected: "} +
         refined_outcome.failure_detail;
+      capture_failure(
+        mpcc_architecture_snapshot::PipelineStage::WallRefinement,
+        refinement.request.value(), refined_assembled.value(), warm_start,
+        refined_outcome, "solve-rejected");
       return finish();
     }
     if (!refined_outcome.result->primal.allFinite()) {
@@ -1142,6 +1178,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     adapted->problem = std::move(refinement.request.value());
     assembled = std::move(refined_assembled);
     outcome = std::move(refined_outcome);
+    last_refinement_warm_start = std::move(warm_start);
     result.progress_wall_refinement_solved = true;
     result.physical_wall_refinement_solved =
       !snapshot.physical_wall_refinement_active ||
@@ -1205,8 +1242,9 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
         "rate-resolved dynamic-obstacle QP assembly rejected";
       return finish();
     }
-    const persistent_osqp::WarmStart warm_start{
-      outcome.result->primal, outcome.result->dual};
+    std::optional<persistent_osqp::WarmStart> warm_start{
+      persistent_osqp::WarmStart{
+        outcome.result->primal, outcome.result->dual}};
     auto refined_outcome = solver_.solve(
       refined_assembled->quadratic_cost, refined_assembled->constraints,
       refined_assembled->linear_cost, refined_assembled->lower_bound,
@@ -1234,6 +1272,11 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
             "/element=" + std::to_string(semantic.element);
         }
       }
+      capture_failure(
+        mpcc_architecture_snapshot::PipelineStage::
+        DynamicObstacleRefinement,
+        refinement.problem.value(), refined_assembled.value(), warm_start,
+        refined_outcome, "solve-rejected");
       return finish();
     }
     if (!refined_outcome.result->primal.allFinite()) {
@@ -1247,6 +1290,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     adapted->problem = std::move(refinement.problem.value());
     assembled = std::move(refined_assembled);
     outcome = std::move(refined_outcome);
+    last_refinement_warm_start = std::move(warm_start);
     result.dynamic_obstacle_refinement_solved = true;
   }
 
@@ -1361,6 +1405,12 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
             "/element=" + std::to_string(semantic.element);
         }
       }
+      capture_failure(
+        mpcc_architecture_snapshot::PipelineStage::
+        PostRefinementLinearization,
+        adapted->problem, post_refinement_assembled.value(),
+        post_refinement_warm_start, post_refinement_outcome,
+        "solve-rejected");
       return finish();
     }
     if (!post_refinement_outcome.result->primal.allFinite()) {
@@ -1373,6 +1423,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     }
     assembled = std::move(post_refinement_assembled);
     outcome = std::move(post_refinement_outcome);
+    last_refinement_warm_start = std::move(post_refinement_warm_start);
     result.post_refinement_linearization_solved = true;
     post_refinement_proof = evaluate_post_refinement_proof();
   }
@@ -1394,6 +1445,10 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
              << "/corrections=" <<
         result.post_refinement_linearization_count;
       result.detail = detail.str();
+      capture_failure(
+        mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
+        adapted->problem, assembled.value(), last_refinement_warm_start,
+        outcome, "physical-proof-rejected");
       return finish();
     }
   }

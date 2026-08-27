@@ -5,6 +5,11 @@
       "snapshot_id": "b6da7ebb-source-audit-only",
       "manifest": ".steering/20260827-architecture-escape-hatch/snapshots/b6da7ebb-source-audit-only.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "f1734886-shiftout-initial-1152",
+      "manifest": ".steering/20260828-rate-resolved-failure-snapshot/snapshots/f1734886-shiftout-initial-1152.json",
+      "replay_ready": false
     }
   ],
   "experiments": [
@@ -45,6 +50,20 @@
       "production_impact": "none; production authority remains frozen",
       "deleted_code": [],
       "revisit_condition": "capture one complete b6da7ebb current-world Pass/Return failure snapshot"
+    },
+    {
+      "experiment_id": "20260828-shiftout-initial-exact-qp-replay",
+      "baseline_commit": "f1734886b7c33787f813b85c87cbabb95e74975d",
+      "snapshot_ids": [
+        "f1734886-shiftout-initial-1152"
+      ],
+      "hypothesis": "the first live ShiftOut rejection is caused by stale warm-start or live scheduling state",
+      "changed_dimension": "warm_start_and_scheduling",
+      "result": "rejected",
+      "reason": "the identical frozen QP failed at 4000 iterations with both recorded warm start and cold start on the same stage-zero steering-rate input row",
+      "production_impact": "none; only rejected-result evidence capture was added",
+      "deleted_code": [],
+      "revisit_condition": "only if the recorded QP, solver policy or immutable problem fingerprint changes"
     }
   ]
 }

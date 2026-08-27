@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "f1734886-shiftout-initial-1152",
+  "baseline_commit": "f1734886b7c33787f813b85c87cbabb95e74975d",
+  "run_id": "20260828-003105",
+  "domain_id": 1,
+  "decision_id": 1152,
+  "failure_family": "shiftout-initial-single-sqp-maximum-iterations",
+  "replay_ready": false,
+  "incomplete_reason": "the exact numerical QP is replayable locally, but this initial pre-entry problem did not carry a physical wall grid or a complete Pass/Return physical certificate and therefore cannot support the full A-D architecture comparison",
+  "payloads": {},
+  "local_numerical_snapshot": {
+    "path": "output/20260828-003105/d1/mpcc_architecture_snapshots/000000001152-shiftout-initial-solve-rejected/snapshot.yaml",
+    "sha256": "d90d0b43f7551b60ec4269e8bc99671a3d6b2b5e637d21330bc29f2db4b2c08d",
+    "size_bytes": 58872
+  }
+}

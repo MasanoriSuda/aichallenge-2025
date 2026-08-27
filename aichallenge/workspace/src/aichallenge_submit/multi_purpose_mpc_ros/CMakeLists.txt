@@ -133,6 +133,21 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_problem
 )
 
+add_library(${PROJECT_NAME}_mpcc_architecture_snapshot STATIC
+  src/mpcc_architecture_snapshot.cpp
+)
+target_include_directories(${PROJECT_NAME}_mpcc_architecture_snapshot PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_architecture_snapshot
+  ${PROJECT_NAME}_mpcc_rate_resolved_adapter
+  ${PROJECT_NAME}_mpcc_execution_contract
+  ${PROJECT_NAME}_persistent_osqp
+  yaml-cpp
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_shadow STATIC
   src/mpcc_rate_resolved_shadow.cpp
   src/mpcc_rate_resolved_dynamic_obstacle.cpp
@@ -145,12 +160,26 @@ target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved_shadow PUBLIC
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_shadow
   ${PROJECT_NAME}_mpcc_rate_resolved_adapter
+  ${PROJECT_NAME}_mpcc_architecture_snapshot
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
   ${PROJECT_NAME}_mpcc_progress
   ${PROJECT_NAME}_mpc_stage_geometry
   ${PROJECT_NAME}_recovery_footprint
   ${PROJECT_NAME}_persistent_osqp
   Threads::Threads
+)
+
+add_executable(mpcc_qp_replay
+  src/mpcc_qp_replay.cpp
+)
+target_include_directories(mpcc_qp_replay PRIVATE
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(mpcc_qp_replay
+  ${PROJECT_NAME}_mpcc_architecture_snapshot
+)
+install(TARGETS mpcc_qp_replay
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_auto_add_library(${PROJECT_NAME}_latest_only_worker SHARED
@@ -442,6 +471,18 @@ if(BUILD_TESTING)
     target_link_libraries(test_mpcc_rate_resolved_shadow
       ${PROJECT_NAME}_mpcc_rate_resolved_shadow
       ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_architecture_snapshot
+    test/test_mpcc_architecture_snapshot.cpp
+  )
+  if(TARGET test_mpcc_architecture_snapshot)
+    target_include_directories(test_mpcc_architecture_snapshot PRIVATE
+      ${EIGEN3_INCLUDE_DIRS}
+    )
+    target_link_libraries(test_mpcc_architecture_snapshot
+      ${PROJECT_NAME}_mpcc_architecture_snapshot
     )
   endif()
 

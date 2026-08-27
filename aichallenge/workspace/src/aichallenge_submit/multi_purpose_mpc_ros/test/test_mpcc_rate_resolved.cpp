@@ -90,6 +90,66 @@ TEST(MpccRateResolved, SteeringRatePropagatesThroughResponseWithinStage)
     0.0);
 }
 
+TEST(MpccRateResolved, AffineStateRowsUseExactAnalyticCoefficients)
+{
+  const auto request = nominal_request();
+  const auto linearization = rate::linearize_temporal_frenet(request);
+  ASSERT_TRUE(linearization.has_value());
+
+  EXPECT_DOUBLE_EQ(
+    linearization->state_matrix(rate::kVelocityIndex, rate::kVelocityIndex),
+    1.0);
+  EXPECT_DOUBLE_EQ(
+    linearization->input_matrix(
+      rate::kVelocityIndex, rate::kAccelerationIndex),
+    request.stage_dt_sec);
+  EXPECT_DOUBLE_EQ(
+    linearization->state_matrix(rate::kProgressIndex, rate::kProgressIndex),
+    1.0);
+  EXPECT_DOUBLE_EQ(
+    linearization->input_matrix(
+      rate::kProgressIndex, rate::kVirtualProgressSpeedIndex),
+    request.stage_dt_sec);
+  EXPECT_DOUBLE_EQ(
+    linearization->state_matrix(rate::kSteeringIndex, rate::kSteeringIndex),
+    1.0);
+  EXPECT_DOUBLE_EQ(
+    linearization->input_matrix(
+      rate::kSteeringIndex, rate::kSteeringRateIndex),
+    request.stage_dt_sec);
+
+  const double decay = std::exp(
+    -request.stage_dt_sec / request.yaw_response_time_constant_sec);
+  const double rate_integral =
+    request.stage_dt_sec - request.yaw_response_time_constant_sec *
+    (1.0 - decay);
+  EXPECT_DOUBLE_EQ(
+    linearization->state_matrix(
+      rate::kResponseSteeringIndex, rate::kSteeringIndex),
+    1.0 - decay);
+  EXPECT_DOUBLE_EQ(
+    linearization->state_matrix(
+      rate::kResponseSteeringIndex, rate::kResponseSteeringIndex),
+    decay);
+  EXPECT_DOUBLE_EQ(
+    linearization->input_matrix(
+      rate::kResponseSteeringIndex, rate::kSteeringRateIndex),
+    rate_integral);
+
+  for (int column = 0; column < rate::kStateDimension; ++column) {
+    if (column != rate::kProgressIndex) {
+      EXPECT_DOUBLE_EQ(
+        linearization->state_matrix(rate::kProgressIndex, column), 0.0);
+    }
+  }
+  for (int column = 0; column < rate::kInputDimension; ++column) {
+    if (column != rate::kVirtualProgressSpeedIndex) {
+      EXPECT_DOUBLE_EQ(
+        linearization->input_matrix(rate::kProgressIndex, column), 0.0);
+    }
+  }
+}
+
 TEST(MpccRateResolved, RejectsInvalidGeometryAndTiming)
 {
   auto request = nominal_request();

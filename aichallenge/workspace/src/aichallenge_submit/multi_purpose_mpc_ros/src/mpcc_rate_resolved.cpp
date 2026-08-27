@@ -232,6 +232,42 @@ std::optional<Linearization> linearize_temporal_frenet(
     }
     result.input_matrix.col(element) = column.value();
   }
+
+  // These rows are exactly affine under the stage's constant inputs.  Keep
+  // their solver rows bit-for-bit consistent with the immutable execution
+  // artifact contract instead of retaining finite-difference noise.
+  result.state_matrix.row(kVelocityIndex).setZero();
+  result.input_matrix.row(kVelocityIndex).setZero();
+  result.state_matrix(kVelocityIndex, kVelocityIndex) = 1.0;
+  result.input_matrix(kVelocityIndex, kAccelerationIndex) =
+    request.stage_dt_sec;
+
+  result.state_matrix.row(kProgressIndex).setZero();
+  result.input_matrix.row(kProgressIndex).setZero();
+  result.state_matrix(kProgressIndex, kProgressIndex) = 1.0;
+  result.input_matrix(kProgressIndex, kVirtualProgressSpeedIndex) =
+    request.stage_dt_sec;
+
+  result.state_matrix.row(kSteeringIndex).setZero();
+  result.input_matrix.row(kSteeringIndex).setZero();
+  result.state_matrix(kSteeringIndex, kSteeringIndex) = 1.0;
+  result.input_matrix(kSteeringIndex, kSteeringRateIndex) =
+    request.stage_dt_sec;
+
+  const double response_decay = std::exp(
+    -request.stage_dt_sec / request.yaw_response_time_constant_sec);
+  const double response_rate_integral_sec =
+    request.stage_dt_sec - request.yaw_response_time_constant_sec *
+    (1.0 - response_decay);
+  result.state_matrix.row(kResponseSteeringIndex).setZero();
+  result.input_matrix.row(kResponseSteeringIndex).setZero();
+  result.state_matrix(kResponseSteeringIndex, kSteeringIndex) =
+    1.0 - response_decay;
+  result.state_matrix(kResponseSteeringIndex, kResponseSteeringIndex) =
+    response_decay;
+  result.input_matrix(kResponseSteeringIndex, kSteeringRateIndex) =
+    response_rate_integral_sec;
+
   result.stage_dt_sec = request.stage_dt_sec;
   result.equality_offset =
     result.state_matrix * reference_state + result.input_matrix *

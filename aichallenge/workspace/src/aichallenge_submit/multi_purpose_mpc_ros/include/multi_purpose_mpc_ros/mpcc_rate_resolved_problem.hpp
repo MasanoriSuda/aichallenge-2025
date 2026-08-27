@@ -154,14 +154,17 @@ RowSemantic decode_row(
   nullptr) noexcept;
 const char * row_kind_name(RowKind kind) noexcept;
 
-/// Exact stage-zero interval implied for one input by the input box and every
-/// stage-one state row which depends only on that input.  This is a
+/// Stage-zero interval implied for one input by the input box and every
+/// stage-one state row which depends only on that input. Coupled rows are
+/// reported explicitly and never treated as proof of feasibility. This is a
 /// formulation diagnostic, not a projection or a fallback: an empty interval
-/// proves that the QP producer supplied mutually inconsistent hard bounds.
+/// from the separable subset still proves that the QP producer supplied
+/// mutually inconsistent hard bounds.
 struct FirstStageInputFeasibility
 {
   bool evaluated{false};
   bool separable{false};
+  bool conclusive{false};
   bool feasible{false};
   int input_element{-1};
   double declared_lower{};

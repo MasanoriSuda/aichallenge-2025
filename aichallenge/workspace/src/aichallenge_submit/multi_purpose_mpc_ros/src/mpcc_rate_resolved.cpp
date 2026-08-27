@@ -5,169 +5,237 @@
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved
 {
+namespace
+{
+
+constexpr double kMaximumNonlinearIntegrationStepSec = 0.01;
+constexpr double kNumericalDerivativeRelativeStep = 1.0e-6;
+
+bool transition_request_valid(const LinearizationRequest & request) noexcept
+{
+  constexpr double half_pi = 1.57079632679489661923;
+  return
+    std::isfinite(request.reference_lateral_m) &&
+    std::isfinite(request.reference_lag_m) &&
+    std::isfinite(request.reference_heading_rad) &&
+    std::isfinite(request.reference_velocity_mps) &&
+    std::isfinite(request.reference_progress_m) &&
+    std::isfinite(request.reference_steering_rad) &&
+    std::abs(request.reference_steering_rad) < half_pi &&
+    std::isfinite(request.reference_response_steering_rad) &&
+    std::abs(request.reference_response_steering_rad) < half_pi &&
+    std::isfinite(request.reference_acceleration_mps2) &&
+    std::isfinite(request.reference_steering_rate_radps) &&
+    std::isfinite(request.reference_virtual_progress_speed_mps) &&
+    std::isfinite(request.reference_path_curvature_radpm) &&
+    std::isfinite(request.wheelbase_m) && request.wheelbase_m > 0.0 &&
+    std::isfinite(request.yaw_response_gain) &&
+    request.yaw_response_gain > 0.0 &&
+    std::isfinite(request.yaw_response_time_constant_sec) &&
+    request.yaw_response_time_constant_sec > 0.0 &&
+    std::isfinite(request.stage_dt_sec) &&
+    std::isfinite(request.minimum_frenet_denominator) &&
+    request.minimum_frenet_denominator > 0.0 &&
+    std::isfinite(request.minimum_stage_dt_sec) &&
+    request.minimum_stage_dt_sec > 0.0 &&
+    std::isfinite(request.maximum_stage_dt_sec) &&
+    request.maximum_stage_dt_sec >= request.minimum_stage_dt_sec &&
+    request.stage_dt_sec >= request.minimum_stage_dt_sec &&
+    request.stage_dt_sec <= request.maximum_stage_dt_sec;
+}
+
+StateVector request_state(const LinearizationRequest & request) noexcept
+{
+  return (StateVector() <<
+    request.reference_lateral_m, request.reference_lag_m,
+    request.reference_heading_rad, request.reference_velocity_mps,
+    request.reference_progress_m, request.reference_steering_rad,
+    request.reference_response_steering_rad).finished();
+}
+
+InputVector request_input(const LinearizationRequest & request) noexcept
+{
+  return (InputVector() <<
+    request.reference_acceleration_mps2,
+    request.reference_steering_rate_radps,
+    request.reference_virtual_progress_speed_mps).finished();
+}
+
+void set_request_state(
+  LinearizationRequest & request, const StateVector & state) noexcept
+{
+  request.reference_lateral_m = state[kLateralIndex];
+  request.reference_lag_m = state[kLagIndex];
+  request.reference_heading_rad = state[kHeadingIndex];
+  request.reference_velocity_mps = state[kVelocityIndex];
+  request.reference_progress_m = state[kProgressIndex];
+  request.reference_steering_rad = state[kSteeringIndex];
+  request.reference_response_steering_rad = state[kResponseSteeringIndex];
+}
+
+void set_request_input(
+  LinearizationRequest & request, const InputVector & input) noexcept
+{
+  request.reference_acceleration_mps2 = input[kAccelerationIndex];
+  request.reference_steering_rate_radps = input[kSteeringRateIndex];
+  request.reference_virtual_progress_speed_mps =
+    input[kVirtualProgressSpeedIndex];
+}
+
+double response_steering_after_ramp(
+  const double initial_command_rad,
+  const double initial_response_rad,
+  const double steering_rate_radps,
+  const double elapsed_sec,
+  const double time_constant_sec) noexcept
+{
+  const double decay = std::exp(-elapsed_sec / time_constant_sec);
+  return initial_command_rad +
+         (initial_response_rad - initial_command_rad) * decay +
+         steering_rate_radps *
+         (elapsed_sec - time_constant_sec * (1.0 - decay));
+}
+
+}  // namespace
+
+std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
+  const LinearizationRequest & request) noexcept
+{
+  if (!transition_request_valid(request)) {
+    return std::nullopt;
+  }
+  const auto substep_count = static_cast<std::size_t>(std::max(
+      1.0, std::ceil(
+        request.stage_dt_sec / kMaximumNonlinearIntegrationStepSec)));
+  const double step_sec =
+    request.stage_dt_sec / static_cast<double>(substep_count);
+  StateVector state = request_state(request);
+  const InputVector input = request_input(request);
+  for (std::size_t substep = 0U; substep < substep_count; ++substep) {
+    const double steering = state[kSteeringIndex];
+    const double response = state[kResponseSteeringIndex];
+    const double steering_rate = input[kSteeringRateIndex];
+    const double response_mid = response_steering_after_ramp(
+      steering, response, steering_rate, 0.5 * step_sec,
+      request.yaw_response_time_constant_sec);
+    const double response_next = response_steering_after_ramp(
+      steering, response, steering_rate, step_sec,
+      request.yaw_response_time_constant_sec);
+    const double velocity_mid = state[kVelocityIndex] +
+      0.5 * input[kAccelerationIndex] * step_sec;
+    const double heading_rate_mid =
+      request.yaw_response_gain * velocity_mid * std::tan(response_mid) /
+      request.wheelbase_m - request.reference_path_curvature_radpm *
+      input[kVirtualProgressSpeedIndex];
+    const double heading_mid = state[kHeadingIndex] +
+      0.5 * heading_rate_mid * step_sec;
+    const double lateral_rate_mid = velocity_mid * std::sin(heading_mid);
+    const double lateral_mid = state[kLateralIndex] +
+      0.5 * lateral_rate_mid * step_sec;
+    const double denominator = 1.0 -
+      request.reference_path_curvature_radpm * lateral_mid;
+    if (
+      !std::isfinite(response_mid) || !std::isfinite(response_next) ||
+      !std::isfinite(velocity_mid) || !std::isfinite(heading_rate_mid) ||
+      !std::isfinite(heading_mid) || !std::isfinite(lateral_rate_mid) ||
+      !std::isfinite(denominator) ||
+      denominator < request.minimum_frenet_denominator)
+    {
+      return std::nullopt;
+    }
+    const double physical_progress_rate =
+      velocity_mid * std::cos(heading_mid) / denominator;
+    state[kLateralIndex] += lateral_rate_mid * step_sec;
+    state[kLagIndex] +=
+      (physical_progress_rate - input[kVirtualProgressSpeedIndex]) * step_sec;
+    state[kHeadingIndex] += heading_rate_mid * step_sec;
+    state[kVelocityIndex] += input[kAccelerationIndex] * step_sec;
+    state[kProgressIndex] +=
+      input[kVirtualProgressSpeedIndex] * step_sec;
+    state[kSteeringIndex] += steering_rate * step_sec;
+    state[kResponseSteeringIndex] = response_next;
+    if (!state.allFinite()) {
+      return std::nullopt;
+    }
+  }
+  return NonlinearTransition{state, substep_count};
+}
 
 std::optional<Linearization> linearize_temporal_frenet(
   const LinearizationRequest & request) noexcept
 {
-  constexpr double half_pi = 1.57079632679489661923;
   if (
-    !std::isfinite(request.reference_lateral_m) ||
-    !std::isfinite(request.reference_lag_m) ||
-    !std::isfinite(request.reference_heading_rad) ||
-    !std::isfinite(request.reference_velocity_mps) ||
     request.reference_velocity_mps < 0.0 ||
-    !std::isfinite(request.reference_progress_m) ||
-    !std::isfinite(request.reference_steering_rad) ||
-    std::abs(request.reference_steering_rad) >= half_pi ||
-    !std::isfinite(request.reference_response_steering_rad) ||
-    std::abs(request.reference_response_steering_rad) >= half_pi ||
-    !std::isfinite(request.reference_acceleration_mps2) ||
-    !std::isfinite(request.reference_steering_rate_radps) ||
-    !std::isfinite(request.reference_virtual_progress_speed_mps) ||
-    request.reference_virtual_progress_speed_mps < 0.0 ||
-    !std::isfinite(request.reference_path_curvature_radpm) ||
-    !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
-    !std::isfinite(request.yaw_response_gain) ||
-    request.yaw_response_gain <= 0.0 ||
-    !std::isfinite(request.yaw_response_time_constant_sec) ||
-    request.yaw_response_time_constant_sec <= 0.0 ||
-    !std::isfinite(request.stage_dt_sec) ||
-    !std::isfinite(request.minimum_frenet_denominator) ||
-    request.minimum_frenet_denominator <= 0.0 ||
-    !std::isfinite(request.minimum_stage_dt_sec) ||
-    request.minimum_stage_dt_sec <= 0.0 ||
-    !std::isfinite(request.maximum_stage_dt_sec) ||
-    request.maximum_stage_dt_sec < request.minimum_stage_dt_sec ||
-    request.stage_dt_sec < request.minimum_stage_dt_sec ||
-    request.stage_dt_sec > request.maximum_stage_dt_sec)
+    request.reference_virtual_progress_speed_mps < 0.0)
   {
     return std::nullopt;
   }
-
-  const double lateral = request.reference_lateral_m;
-  const double heading = request.reference_heading_rad;
-  const double velocity = request.reference_velocity_mps;
-  const double steering = request.reference_steering_rad;
-  const double response_steering =
-    request.reference_response_steering_rad;
-  const double path_curvature = request.reference_path_curvature_radpm;
-  const double progress_speed = request.reference_virtual_progress_speed_mps;
-  const double denominator = 1.0 - path_curvature * lateral;
-  if (
-    !std::isfinite(denominator) ||
-    denominator <= request.minimum_frenet_denominator)
-  {
+  const auto reference_transition =
+    evaluate_temporal_frenet_transition(request);
+  if (!reference_transition.has_value()) {
     return std::nullopt;
   }
-
-  const double sin_heading = std::sin(heading);
-  const double cos_heading = std::cos(heading);
-  const double tan_response_steering = std::tan(response_steering);
-  const double cos_response_steering = std::cos(response_steering);
-  const double secant_squared_response_steering =
-    1.0 / (cos_response_steering * cos_response_steering);
-  const double yaw_velocity_jacobian =
-    request.yaw_response_gain * tan_response_steering /
-    request.wheelbase_m;
-  const double yaw_response_jacobian =
-    request.yaw_response_gain * velocity *
-    secant_squared_response_steering / request.wheelbase_m;
-  const double physical_progress_rate = velocity * cos_heading / denominator;
-
   using StateMatrix = Eigen::Matrix<double, kStateDimension, kStateDimension>;
   using InputMatrix = Eigen::Matrix<double, kStateDimension, kInputDimension>;
-  using StateVector = Eigen::Matrix<double, kStateDimension, 1>;
-  using InputVector = Eigen::Matrix<double, kInputDimension, 1>;
-
-  StateMatrix continuous_state = StateMatrix::Zero();
-  continuous_state(kLateralIndex, kHeadingIndex) = velocity * cos_heading;
-  continuous_state(kLateralIndex, kVelocityIndex) = sin_heading;
-  continuous_state(kLagIndex, kLateralIndex) =
-    velocity * cos_heading * path_curvature /
-    (denominator * denominator);
-  continuous_state(kLagIndex, kHeadingIndex) =
-    -velocity * sin_heading / denominator;
-  continuous_state(kLagIndex, kVelocityIndex) = cos_heading / denominator;
-  continuous_state(kHeadingIndex, kVelocityIndex) = yaw_velocity_jacobian;
-  continuous_state(kHeadingIndex, kResponseSteeringIndex) =
-    yaw_response_jacobian;
-  continuous_state(kResponseSteeringIndex, kSteeringIndex) =
-    1.0 / request.yaw_response_time_constant_sec;
-  continuous_state(kResponseSteeringIndex, kResponseSteeringIndex) =
-    -1.0 / request.yaw_response_time_constant_sec;
-
-  InputMatrix continuous_input = InputMatrix::Zero();
-  continuous_input(kLagIndex, kVirtualProgressSpeedIndex) = -1.0;
-  continuous_input(kHeadingIndex, kVirtualProgressSpeedIndex) = -path_curvature;
-  continuous_input(kVelocityIndex, kAccelerationIndex) = 1.0;
-  continuous_input(kProgressIndex, kVirtualProgressSpeedIndex) = 1.0;
-  continuous_input(kSteeringIndex, kSteeringRateIndex) = 1.0;
-
-  const double dt = request.stage_dt_sec;
+  const StateVector reference_state = request_state(request);
+  const InputVector reference_input = request_input(request);
   Linearization result;
-  result.state_matrix = StateMatrix::Identity() + dt * continuous_state;
-  result.input_matrix = dt * continuous_input;
-  const double yaw_response_decay = std::exp(
-    -dt / request.yaw_response_time_constant_sec);
-  const double response_integral_from_response_sec =
-    request.yaw_response_time_constant_sec * (1.0 - yaw_response_decay);
-  const double response_integral_from_steering_sec =
-    dt - response_integral_from_response_sec;
-  const double response_integral_from_rate_sec2 =
-    0.5 * dt * dt - request.yaw_response_time_constant_sec * dt +
-    request.yaw_response_time_constant_sec *
-    request.yaw_response_time_constant_sec * (1.0 - yaw_response_decay);
-
-  // Steering rate is held constant over a stage.  The response state sees
-  // the resulting steering ramp during that same stage, and yaw integrates
-  // that response.  Forward Euler previously omitted both paths, introducing
-  // an artificial full-stage delay.  The optimizer then certified a vehicle
-  // which turned later than AWSIM and could accept a horizon whose real
-  // footprint reached the wall first.
-  result.state_matrix(kHeadingIndex, kResponseSteeringIndex) =
-    yaw_response_jacobian * response_integral_from_response_sec;
-  result.state_matrix(kHeadingIndex, kSteeringIndex) =
-    yaw_response_jacobian * response_integral_from_steering_sec;
-  result.input_matrix(kHeadingIndex, kSteeringRateIndex) =
-    yaw_response_jacobian * response_integral_from_rate_sec2;
-  result.state_matrix.row(kResponseSteeringIndex).setZero();
-  result.state_matrix(kResponseSteeringIndex, kSteeringIndex) =
-    1.0 - yaw_response_decay;
-  result.state_matrix(
-    kResponseSteeringIndex, kResponseSteeringIndex) = yaw_response_decay;
-  result.input_matrix(kResponseSteeringIndex, kSteeringRateIndex) =
-    response_integral_from_steering_sec;
-  result.stage_dt_sec = dt;
-
-  const StateVector reference_state = (StateVector() <<
-    lateral, request.reference_lag_m, heading, velocity,
-    request.reference_progress_m, steering, response_steering).finished();
-  const InputVector reference_input = (InputVector() <<
-    request.reference_acceleration_mps2,
-    request.reference_steering_rate_radps, progress_speed).finished();
-  const double integrated_response_delta_rad_sec =
-    (steering - response_steering) *
-    response_integral_from_steering_sec +
-    request.reference_steering_rate_radps *
-    response_integral_from_rate_sec2;
-  const double integrated_yaw_response_rad_sec =
-    tan_response_steering * dt +
-    secant_squared_response_steering * integrated_response_delta_rad_sec;
-  const StateVector next_reference = (StateVector() <<
-    lateral + dt * velocity * sin_heading,
-    request.reference_lag_m + dt * (physical_progress_rate - progress_speed),
-    heading + request.yaw_response_gain * velocity *
-    integrated_yaw_response_rad_sec / request.wheelbase_m -
-    dt * path_curvature * progress_speed,
-    velocity + dt * request.reference_acceleration_mps2,
-    request.reference_progress_m + dt * progress_speed,
-    steering + dt * request.reference_steering_rate_radps,
-    steering + (response_steering - steering) *
-    yaw_response_decay + request.reference_steering_rate_radps *
-    response_integral_from_steering_sec).finished();
+  result.state_matrix = StateMatrix::Zero();
+  result.input_matrix = InputMatrix::Zero();
+  const auto numerical_column = [&](const bool state_column, const int element)
+      -> std::optional<StateVector> {
+      const double reference_value = state_column ?
+        reference_state[element] : reference_input[element];
+      const double delta = kNumericalDerivativeRelativeStep *
+        std::max(1.0, std::abs(reference_value));
+      auto plus_request = request;
+      auto minus_request = request;
+      if (state_column) {
+        auto plus_state = reference_state;
+        auto minus_state = reference_state;
+        plus_state[element] += delta;
+        minus_state[element] -= delta;
+        set_request_state(plus_request, plus_state);
+        set_request_state(minus_request, minus_state);
+      } else {
+        auto plus_input = reference_input;
+        auto minus_input = reference_input;
+        plus_input[element] += delta;
+        minus_input[element] -= delta;
+        set_request_input(plus_request, plus_input);
+        set_request_input(minus_request, minus_input);
+      }
+      const auto plus = evaluate_temporal_frenet_transition(plus_request);
+      const auto minus = evaluate_temporal_frenet_transition(minus_request);
+      if (plus.has_value() && minus.has_value()) {
+        return (plus->next_state - minus->next_state) / (2.0 * delta);
+      }
+      if (plus.has_value()) {
+        return (plus->next_state - reference_transition->next_state) / delta;
+      }
+      if (minus.has_value()) {
+        return (reference_transition->next_state - minus->next_state) / delta;
+      }
+      return std::nullopt;
+    };
+  for (int element = 0; element < kStateDimension; ++element) {
+    const auto column = numerical_column(true, element);
+    if (!column.has_value()) {
+      return std::nullopt;
+    }
+    result.state_matrix.col(element) = column.value();
+  }
+  for (int element = 0; element < kInputDimension; ++element) {
+    const auto column = numerical_column(false, element);
+    if (!column.has_value()) {
+      return std::nullopt;
+    }
+    result.input_matrix.col(element) = column.value();
+  }
+  result.stage_dt_sec = request.stage_dt_sec;
   result.equality_offset =
-    result.state_matrix * reference_state +
-    result.input_matrix * reference_input - next_reference;
+    result.state_matrix * reference_state + result.input_matrix *
+    reference_input - reference_transition->next_state;
 
   if (
     !result.state_matrix.allFinite() || !result.input_matrix.allFinite() ||

@@ -22,7 +22,72 @@ EY, ELAG, EPSI, VELOCITY, PROGRESS, STEERING, RESPONSE = range(NX)
 ACCELERATION, STEERING_RATE, PROGRESS_RATE = range(NU)
 
 
-def rollout(document: dict, controls: np.ndarray) -> np.ndarray:
+MAXIMUM_NONLINEAR_ROLLOUT_STEP_SEC = 0.01
+
+
+def _response_steering_after_ramp(
+    initial_command: float,
+    initial_response: float,
+    steering_rate: float,
+    elapsed: float,
+    time_constant: float,
+) -> float:
+    decay = math.exp(-elapsed / time_constant)
+    return (
+        initial_command
+        + (initial_response - initial_command) * decay
+        + steering_rate * (elapsed - time_constant * (1.0 - decay))
+    )
+
+
+def _advance_production_nonlinear_state(
+    state: np.ndarray,
+    control: np.ndarray,
+    curvature: float,
+    step_sec: float,
+    wheelbase: float,
+    response_gain: float,
+    response_tau: float,
+    minimum_denominator: float,
+) -> np.ndarray | None:
+    acceleration, steering_rate, progress_rate = control
+    ey, elag, epsi, velocity, progress, steering, response = state
+    response_mid = _response_steering_after_ramp(
+        steering, response, steering_rate, 0.5 * step_sec, response_tau
+    )
+    response_next = _response_steering_after_ramp(
+        steering, response, steering_rate, step_sec, response_tau
+    )
+    velocity_mid = velocity + 0.5 * acceleration * step_sec
+    heading_rate_mid = (
+        response_gain * velocity_mid * math.tan(response_mid) / wheelbase
+        - curvature * progress_rate
+    )
+    heading_mid = epsi + 0.5 * heading_rate_mid * step_sec
+    lateral_rate_mid = velocity_mid * math.sin(heading_mid)
+    lateral_mid = ey + 0.5 * lateral_rate_mid * step_sec
+    denominator = 1.0 - curvature * lateral_mid
+    if denominator < minimum_denominator:
+        return None
+    physical_progress_rate = velocity_mid * math.cos(heading_mid) / denominator
+    next_state = np.asarray(
+        [
+            ey + lateral_rate_mid * step_sec,
+            elag + (physical_progress_rate - progress_rate) * step_sec,
+            epsi + heading_rate_mid * step_sec,
+            velocity + acceleration * step_sec,
+            progress + progress_rate * step_sec,
+            steering + steering_rate * step_sec,
+            response_next,
+        ],
+        dtype=float,
+    )
+    return next_state if np.all(np.isfinite(next_state)) else None
+
+
+def rollout(
+    document: dict, controls: np.ndarray
+) -> tuple[np.ndarray, list[tuple[int, float, np.ndarray]]]:
     source = document["source"]
     semantic = source["semantic_request"]
     assembly = document["assembly_request"]
@@ -33,51 +98,35 @@ def rollout(document: dict, controls: np.ndarray) -> np.ndarray:
     response_tau = float(semantic["yaw_response_time_constant_sec"])
     minimum_denominator = float(semantic["minimum_frenet_denominator"])
 
+    dense_states: list[tuple[int, float, np.ndarray]] = []
     for stage, stage_input in enumerate(semantic["inputs"]):
         dt = float(stage_input["stage_dt_sec"])
         curvature = float(stage_input["path_curvature_radpm"])
-        acceleration, steering_rate, progress_rate = controls[stage]
-        ey, elag, epsi, velocity, progress, steering, response = state
-        denominator = 1.0 - curvature * ey
-        if denominator <= minimum_denominator:
-            return np.full((len(controls) + 1, NX), np.nan)
-        decay = math.exp(-dt / response_tau)
-        response_from_steering = dt - response_tau * (1.0 - decay)
-        response_from_rate = (
-            0.5 * dt * dt
-            - response_tau * dt
-            + response_tau * response_tau * (1.0 - decay)
-        )
-        integrated_response = (
-            math.tan(response) * dt
-            + (1.0 / (math.cos(response) ** 2))
-            * ((steering - response) * response_from_steering
-               + steering_rate * response_from_rate)
-        )
-        state = np.asarray(
-            [
-                ey + dt * velocity * math.sin(epsi),
-                elag + dt * (
-                    velocity * math.cos(epsi) / denominator - progress_rate
-                ),
-                epsi
-                + response_gain * velocity * integrated_response / wheelbase
-                - dt * curvature * progress_rate,
-                velocity + dt * acceleration,
-                progress + dt * progress_rate,
-                steering + dt * steering_rate,
-                steering + (response - steering) * decay
-                + steering_rate * response_from_steering,
-            ],
-            dtype=float,
-        )
+        substep_count = max(1, math.ceil(dt / MAXIMUM_NONLINEAR_ROLLOUT_STEP_SEC))
+        step_sec = dt / substep_count
+        for substep in range(substep_count):
+            next_state = _advance_production_nonlinear_state(
+                state,
+                controls[stage],
+                curvature,
+                step_sec,
+                wheelbase,
+                response_gain,
+                response_tau,
+                minimum_denominator,
+            )
+            if next_state is None:
+                invalid = np.full((len(controls) + 1, NX), np.nan)
+                return invalid, []
+            state = next_state
+            dense_states.append((stage, (substep + 1) / substep_count, state.copy()))
         states.append(state.copy())
-    return np.asarray(states)
+    return np.asarray(states), dense_states
 
 
 def constraint_values(document: dict, controls: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     assembly = document["assembly_request"]
-    states = rollout(document, controls)
+    states, dense_states = rollout(document, controls)
     if not np.all(np.isfinite(states)):
         return np.asarray([np.nan]), np.asarray([0.0]), np.asarray([0.0])
 
@@ -91,6 +140,28 @@ def constraint_values(document: dict, controls: np.ndarray) -> tuple[np.ndarray,
         values.extend(states[stage])
         lower.extend(state_lower[stage])
         upper.extend(state_upper[stage])
+
+    # Production does not certify only the QP knot states. It replays the
+    # command sequence with <=10 ms nonlinear substeps and checks every sample
+    # against linearly interpolated lateral bounds. Keep the offline D probe
+    # identical to that proof; otherwise endpoint-only feasibility can be
+    # misclassified as a single-SQP limitation.
+    physical_tolerance = float(
+        document["production_outcome"]["telemetry"]["physical_global_tolerance"]
+    )
+    for stage, fraction, dense_state in dense_states:
+        interpolate = 1.0 - fraction
+        dense_lower = (
+            interpolate * state_lower[stage, EY]
+            + fraction * state_lower[stage + 1, EY]
+        )
+        dense_upper = (
+            interpolate * state_upper[stage, EY]
+            + fraction * state_upper[stage + 1, EY]
+        )
+        values.append(dense_state[EY])
+        lower.append(dense_lower - physical_tolerance)
+        upper.append(dense_upper + physical_tolerance)
 
     prefix = assembly.get("steering_rate_prefix_bounds")
     if prefix:
@@ -146,6 +217,35 @@ def residuals(document: dict, flat_controls: np.ndarray) -> np.ndarray:
     return np.concatenate(parts)
 
 
+def dense_physical_diagnostic(
+    document: dict, controls: np.ndarray
+) -> tuple[float, int, float, float, float, float]:
+    assembly = document["assembly_request"]
+    states, dense_states = rollout(document, controls)
+    if not np.all(np.isfinite(states)):
+        return -math.inf, -1, math.nan, math.nan, math.nan, math.nan
+    state_lower = np.asarray(assembly["state_lower"], dtype=float).reshape((-1, NX))
+    state_upper = np.asarray(assembly["state_upper"], dtype=float).reshape((-1, NX))
+    tolerance = float(
+        document["production_outcome"]["telemetry"]["physical_global_tolerance"]
+    )
+    best = (math.inf, -1, math.nan, math.nan, math.nan, math.nan)
+    for stage, fraction, state in dense_states:
+        interpolate = 1.0 - fraction
+        lower = (
+            interpolate * state_lower[stage, EY]
+            + fraction * state_lower[stage + 1, EY]
+        )
+        upper = (
+            interpolate * state_upper[stage, EY]
+            + fraction * state_upper[stage + 1, EY]
+        )
+        slack = min(state[EY] - lower + tolerance, upper - state[EY] + tolerance)
+        if slack < best[0]:
+            best = (slack, stage, fraction, state[EY], lower, upper)
+    return best
+
+
 def solve(snapshot: Path, attempts: int) -> int:
     document = yaml.safe_load(snapshot.read_text(encoding="utf-8"))
     assembly = document["assembly_request"]
@@ -197,11 +297,28 @@ def solve(snapshot: Path, attempts: int) -> int:
 
     assert best is not None
     feasible = best.success and best_slack >= -1.0e-6
+    optimized_controls = best.x[:-1].reshape((horizon, NU))
+    optimized_dense = dense_physical_diagnostic(document, optimized_controls)
+    state_values = NX * (horizon + 1)
+    production_primal = np.asarray(
+        document["production_outcome"]["result"]["primal"], dtype=float
+    )
+    production_controls = production_primal[state_values:].reshape((horizon, NU))
+    production_dense = dense_physical_diagnostic(document, production_controls)
     print(
         f"snapshot={snapshot} attempts={attempts} "
         f"optimizer_converged={best.success} feasible={feasible} "
         f"minimum_slack={best_slack:.9g} iterations={best.nit} "
-        f"message={best.message}"
+        f"message={best.message}\n"
+        f"production_dense_slack={production_dense[0]:.9g} "
+        f"stage={production_dense[1]} fraction={production_dense[2]:.6g} "
+        f"lateral={production_dense[3]:.9g} "
+        f"bounds=[{production_dense[4]:.9g},{production_dense[5]:.9g}]\n"
+        f"optimized_dense_slack={optimized_dense[0]:.9g} "
+        f"stage={optimized_dense[1]} fraction={optimized_dense[2]:.6g} "
+        f"lateral={optimized_dense[3]:.9g} "
+        f"bounds=[{optimized_dense[4]:.9g},{optimized_dense[5]:.9g}] "
+        f"control_l2_delta={np.linalg.norm(optimized_controls - production_controls):.9g}"
     )
     return 0 if feasible else 1
 

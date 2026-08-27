@@ -971,7 +971,9 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       if (feasibility.evaluated) {
         detail << ", first_vtheta=" <<
           (feasibility.separable ? "separable" : "coupled") << '/' <<
-          (feasibility.feasible ? "feasible" : "empty") <<
+          (feasibility.conclusive ?
+          (feasibility.feasible ? "feasible" : "empty") :
+          "inconclusive") <<
           "/declared:[" << feasibility.declared_lower << ',' <<
           feasibility.declared_upper << "]/implied:[" <<
           feasibility.implied_lower << ',' << feasibility.implied_upper <<

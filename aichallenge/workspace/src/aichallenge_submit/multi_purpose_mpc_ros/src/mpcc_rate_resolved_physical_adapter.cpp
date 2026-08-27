@@ -22,20 +22,6 @@ struct NonlinearState
   double response_steering_rad{};
 };
 
-double response_steering_after_ramp(
-  const double initial_command_rad,
-  const double initial_response_rad,
-  const double steering_rate_radps,
-  const double elapsed_sec,
-  const double time_constant_sec) noexcept
-{
-  const double decay = std::exp(-elapsed_sec / time_constant_sec);
-  return initial_command_rad +
-         (initial_response_rad - initial_command_rad) * decay +
-         steering_rate_radps *
-         (elapsed_sec - time_constant_sec * (1.0 - decay));
-}
-
 bool finite(const NonlinearState & state) noexcept
 {
   return std::isfinite(state.lateral_m) && std::isfinite(state.lag_m) &&
@@ -52,52 +38,41 @@ bool advance_nonlinear_state(
   const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
   const double step_sec) noexcept
 {
-  const double response_mid_rad = response_steering_after_ramp(
-    state.steering_rad, state.response_steering_rad,
-    control.steering_rate_radps, 0.5 * step_sec,
-    artifact.yaw_response_time_constant_sec);
-  const double response_next_rad = response_steering_after_ramp(
-    state.steering_rad, state.response_steering_rad,
-    control.steering_rate_radps, step_sec,
-    artifact.yaw_response_time_constant_sec);
-  const double velocity_mid_mps =
-    state.velocity_mps + 0.5 * control.acceleration_mps2 * step_sec;
-  const double heading_rate_mid_radps =
-    artifact.yaw_response_gain * velocity_mid_mps *
-    std::tan(response_mid_rad) / artifact.wheelbase_m -
-    control.path_curvature_radpm *
+  mpcc_rate_resolved::LinearizationRequest request;
+  request.reference_lateral_m = state.lateral_m;
+  request.reference_lag_m = state.lag_m;
+  request.reference_heading_rad = state.heading_offset_rad;
+  request.reference_velocity_mps = state.velocity_mps;
+  request.reference_progress_m = state.progress_m;
+  request.reference_steering_rad = state.steering_rad;
+  request.reference_response_steering_rad = state.response_steering_rad;
+  request.reference_acceleration_mps2 = control.acceleration_mps2;
+  request.reference_steering_rate_radps = control.steering_rate_radps;
+  request.reference_virtual_progress_speed_mps =
     control.virtual_progress_speed_mps;
-  const double heading_mid_rad =
-    state.heading_offset_rad + 0.5 * heading_rate_mid_radps * step_sec;
-  const double lateral_rate_mid_mps =
-    velocity_mid_mps * std::sin(heading_mid_rad);
-  const double lateral_mid_m =
-    state.lateral_m + 0.5 * lateral_rate_mid_mps * step_sec;
-  const double frenet_denominator =
-    1.0 - control.path_curvature_radpm * lateral_mid_m;
-  if (
-    !std::isfinite(response_mid_rad) ||
-    !std::isfinite(response_next_rad) ||
-    !std::isfinite(velocity_mid_mps) ||
-    !std::isfinite(heading_rate_mid_radps) ||
-    !std::isfinite(heading_mid_rad) ||
-    !std::isfinite(lateral_rate_mid_mps) ||
-    !std::isfinite(frenet_denominator) ||
-    frenet_denominator < artifact.minimum_frenet_denominator)
-  {
+  request.reference_path_curvature_radpm = control.path_curvature_radpm;
+  request.wheelbase_m = artifact.wheelbase_m;
+  request.yaw_response_gain = artifact.yaw_response_gain;
+  request.yaw_response_time_constant_sec =
+    artifact.yaw_response_time_constant_sec;
+  request.stage_dt_sec = step_sec;
+  request.minimum_frenet_denominator = artifact.minimum_frenet_denominator;
+  request.minimum_stage_dt_sec = step_sec;
+  request.maximum_stage_dt_sec = step_sec;
+  const auto transition =
+    mpcc_rate_resolved::evaluate_temporal_frenet_transition(request);
+  if (!transition.has_value()) {
     return false;
   }
-  const double physical_progress_rate_mps =
-    velocity_mid_mps * std::cos(heading_mid_rad) / frenet_denominator;
-  state.lateral_m += lateral_rate_mid_mps * step_sec;
-  state.lag_m +=
-    (physical_progress_rate_mps -
-    control.virtual_progress_speed_mps) * step_sec;
-  state.heading_offset_rad += heading_rate_mid_radps * step_sec;
-  state.velocity_mps += control.acceleration_mps2 * step_sec;
-  state.progress_m += control.virtual_progress_speed_mps * step_sec;
-  state.steering_rad += control.steering_rate_radps * step_sec;
-  state.response_steering_rad = response_next_rad;
+  const auto & next = transition->next_state;
+  state.lateral_m = next[mpcc_rate_resolved::kLateralIndex];
+  state.lag_m = next[mpcc_rate_resolved::kLagIndex];
+  state.heading_offset_rad = next[mpcc_rate_resolved::kHeadingIndex];
+  state.velocity_mps = next[mpcc_rate_resolved::kVelocityIndex];
+  state.progress_m = next[mpcc_rate_resolved::kProgressIndex];
+  state.steering_rad = next[mpcc_rate_resolved::kSteeringIndex];
+  state.response_steering_rad =
+    next[mpcc_rate_resolved::kResponseSteeringIndex];
   return finite(state);
 }
 

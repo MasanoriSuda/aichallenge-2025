@@ -23,6 +23,9 @@ inline constexpr int kAccelerationIndex = 0;
 inline constexpr int kSteeringRateIndex = 1;
 inline constexpr int kVirtualProgressSpeedIndex = 2;
 
+using StateVector = Eigen::Matrix<double, kStateDimension, 1>;
+using InputVector = Eigen::Matrix<double, kInputDimension, 1>;
+
 struct LinearizationRequest
 {
   double reference_lateral_m{};
@@ -56,10 +59,22 @@ struct Linearization
   double stage_dt_sec{};
 };
 
-/// Linearize the temporal Frenet bicycle model whose lateral actuator is a
-/// steering-rate input. Commanded steering and the tire/yaw response steering
-/// are distinct states; the latter follows the former through the identified
-/// first-order vehicle yaw response.
+struct NonlinearTransition
+{
+  StateVector next_state{StateVector::Zero()};
+  std::size_t integration_substep_count{};
+};
+
+/// Evaluate the canonical nonlinear seven-state transition used by both SQP
+/// tangent construction and the exact publication proof. The stage is
+/// integrated with midpoint substeps no longer than 10 ms.
+std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
+  const LinearizationRequest & request) noexcept;
+
+/// Linearize the canonical nonlinear temporal Frenet transition whose lateral
+/// actuator is a steering-rate input. Commanded steering and the tire/yaw
+/// response steering are distinct states; the latter follows the former
+/// through the identified first-order vehicle yaw response.
 std::optional<Linearization> linearize_temporal_frenet(
   const LinearizationRequest & request) noexcept;
 

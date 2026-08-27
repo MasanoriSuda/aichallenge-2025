@@ -554,6 +554,7 @@ FirstStageInputFeasibility analyze_first_stage_input_feasibility(
     if (std::abs(coefficient) <= coefficient_tolerance) {
       continue;
     }
+    bool coupled = false;
     for (int other_input = 0; other_input < nu; ++other_input) {
       if (
         other_input != input_element &&
@@ -561,9 +562,12 @@ FirstStageInputFeasibility analyze_first_stage_input_feasibility(
         coefficient_tolerance)
       {
         result.separable = false;
-        result.feasible = false;
-        return result;
+        coupled = true;
+        break;
       }
+    }
+    if (coupled) {
+      continue;
     }
     const double base =
       linearization.state_matrix.row(state_element).dot(request.initial_state) -
@@ -584,9 +588,11 @@ FirstStageInputFeasibility analyze_first_stage_input_feasibility(
       result.limiting_upper_state_element = state_element;
     }
   }
-  result.feasible =
+  const bool separable_interval_nonempty =
     !std::isnan(result.implied_lower) && !std::isnan(result.implied_upper) &&
     result.implied_lower <= result.implied_upper;
+  result.conclusive = result.separable || !separable_interval_nonempty;
+  result.feasible = result.conclusive && separable_interval_nonempty;
   return result;
 }
 

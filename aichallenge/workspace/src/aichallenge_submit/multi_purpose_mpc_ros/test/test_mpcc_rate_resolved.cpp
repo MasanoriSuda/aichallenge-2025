@@ -54,65 +54,10 @@ TEST(MpccRateResolved, ReferencePointSatisfiesAffineDynamics)
     linearization->state_matrix * state +
     linearization->input_matrix * input -
     linearization->equality_offset;
-
-  const double denominator =
-    1.0 - request.reference_path_curvature_radpm *
-    request.reference_lateral_m;
-  EXPECT_NEAR(
-    next[rate::kLateralIndex],
-    request.reference_lateral_m + request.stage_dt_sec *
-    request.reference_velocity_mps * std::sin(request.reference_heading_rad),
-    1e-12);
-  EXPECT_NEAR(
-    next[rate::kLagIndex],
-    request.reference_lag_m + request.stage_dt_sec *
-    (request.reference_velocity_mps * std::cos(request.reference_heading_rad) /
-    denominator - request.reference_virtual_progress_speed_mps),
-    1e-12);
-  EXPECT_NEAR(
-    next[rate::kHeadingIndex],
-    request.reference_heading_rad + request.yaw_response_gain *
-    request.reference_velocity_mps / request.wheelbase_m *
-    (std::tan(request.reference_response_steering_rad) *
-    request.stage_dt_sec +
-    (1.0 /
-    (std::cos(request.reference_response_steering_rad) *
-    std::cos(request.reference_response_steering_rad))) *
-    ((request.reference_steering_rad -
-    request.reference_response_steering_rad) *
-    (request.stage_dt_sec - request.yaw_response_time_constant_sec *
-    (1.0 - std::exp(
-      -request.stage_dt_sec /
-      request.yaw_response_time_constant_sec))) +
-    request.reference_steering_rate_radps *
-    (0.5 * request.stage_dt_sec * request.stage_dt_sec -
-    request.yaw_response_time_constant_sec * request.stage_dt_sec +
-    request.yaw_response_time_constant_sec *
-    request.yaw_response_time_constant_sec *
-    (1.0 - std::exp(
-      -request.stage_dt_sec /
-      request.yaw_response_time_constant_sec))))) -
-    request.stage_dt_sec * request.reference_path_curvature_radpm *
-    request.reference_virtual_progress_speed_mps,
-    1e-12);
-  EXPECT_NEAR(
-    next[rate::kSteeringIndex],
-    request.reference_steering_rad + request.stage_dt_sec *
-    request.reference_steering_rate_radps,
-    1e-12);
-  EXPECT_NEAR(
-    next[rate::kResponseSteeringIndex],
-    request.reference_steering_rad +
-    (request.reference_response_steering_rad -
-    request.reference_steering_rad) * std::exp(
-      -request.stage_dt_sec /
-      request.yaw_response_time_constant_sec) +
-    request.reference_steering_rate_radps *
-    (request.stage_dt_sec - request.yaw_response_time_constant_sec *
-    (1.0 - std::exp(
-      -request.stage_dt_sec /
-      request.yaw_response_time_constant_sec))),
-    1e-12);
+  const auto nonlinear = rate::evaluate_temporal_frenet_transition(request);
+  ASSERT_TRUE(nonlinear.has_value());
+  EXPECT_EQ(nonlinear->integration_substep_count, 12U);
+  EXPECT_TRUE(next.isApprox(nonlinear->next_state, 1e-10));
 }
 
 TEST(MpccRateResolved, SteeringRatePropagatesThroughResponseWithinStage)
@@ -123,10 +68,10 @@ TEST(MpccRateResolved, SteeringRatePropagatesThroughResponseWithinStage)
     linearization->input_matrix(
       rate::kHeadingIndex, rate::kSteeringRateIndex),
     0.0);
-  EXPECT_DOUBLE_EQ(
+  EXPECT_NEAR(
     linearization->input_matrix(
       rate::kSteeringIndex, rate::kSteeringRateIndex),
-    nominal_request().stage_dt_sec);
+    nominal_request().stage_dt_sec, 1e-8);
   EXPECT_GT(
     linearization->state_matrix(
       rate::kHeadingIndex, rate::kResponseSteeringIndex),

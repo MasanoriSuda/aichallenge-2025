@@ -343,10 +343,11 @@ TEST(MpccRateResolvedProblem, DetectsEmptyFirstProgressSpeedInterval)
   const auto diagnostic = problem::analyze_first_stage_input_feasibility(
     request, model::kVirtualProgressSpeedIndex);
   ASSERT_TRUE(diagnostic.evaluated);
-  ASSERT_TRUE(diagnostic.separable);
+  EXPECT_FALSE(diagnostic.separable);
+  EXPECT_TRUE(diagnostic.conclusive);
   EXPECT_FALSE(diagnostic.feasible);
   EXPECT_DOUBLE_EQ(diagnostic.declared_lower, 0.01);
-  EXPECT_NEAR(diagnostic.implied_upper, 0.0, 1e-12);
+  EXPECT_NEAR(diagnostic.implied_upper, 0.0, 1e-9);
   EXPECT_EQ(
     diagnostic.limiting_upper_state_element,
     model::kProgressIndex);
@@ -358,8 +359,9 @@ TEST(MpccRateResolvedProblem, ReportsFeasibleFirstProgressSpeedIntersection)
   const auto diagnostic = problem::analyze_first_stage_input_feasibility(
     request, model::kVirtualProgressSpeedIndex);
   ASSERT_TRUE(diagnostic.evaluated);
-  ASSERT_TRUE(diagnostic.separable);
-  EXPECT_TRUE(diagnostic.feasible);
+  EXPECT_FALSE(diagnostic.separable);
+  EXPECT_FALSE(diagnostic.conclusive);
+  EXPECT_FALSE(diagnostic.feasible);
   EXPECT_LE(diagnostic.implied_lower, diagnostic.implied_upper);
 }
 

@@ -1175,6 +1175,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       refinement.first_valid_stage;
     result.dynamic_obstacle_first_wall_only_progress_m =
       refinement.first_wall_only_progress_m;
+    result.dynamic_obstacle_first_wall_only_effective_progress_m =
+      refinement.first_wall_only_effective_progress_m;
     result.dynamic_obstacle_first_wall_only_lateral_m =
       refinement.first_wall_only_lateral_m;
     result.dynamic_obstacle_first_target_progress_m =

@@ -255,7 +255,7 @@ TEST(MpccRateResolvedProblem, KeepsDynamicObstacleRowsOutOfStateBoxes)
     -1.15, 0.05};
   request.dynamic_obstacle_constraints = {
     problem::DynamicObstacleConstraint{
-      1, problem::DynamicObstacleConstraintAxis::Progress,
+      1, problem::DynamicObstacleConstraintAxis::EffectiveProgress,
       -std::numeric_limits<double>::infinity(), 0.35},
     problem::DynamicObstacleConstraint{
       2, problem::DynamicObstacleConstraintAxis::Lateral,
@@ -273,6 +273,9 @@ TEST(MpccRateResolvedProblem, KeepsDynamicObstacleRowsOutOfStateBoxes)
   EXPECT_DOUBLE_EQ(
     assembled->constraints.coeff(
       obstacle_offset, nx + model::kProgressIndex), 1.0);
+  EXPECT_DOUBLE_EQ(
+    assembled->constraints.coeff(
+      obstacle_offset, nx + model::kLagIndex), 1.0);
   EXPECT_DOUBLE_EQ(assembled->upper_bound[obstacle_offset], 0.35);
   EXPECT_DOUBLE_EQ(
     assembled->constraints.coeff(
@@ -282,7 +285,9 @@ TEST(MpccRateResolvedProblem, KeepsDynamicObstacleRowsOutOfStateBoxes)
     obstacle_offset, horizon, true, false, 0,
     &request.dynamic_obstacle_constraints);
   ASSERT_TRUE(semantic.valid);
-  EXPECT_EQ(semantic.kind, problem::RowKind::DynamicObstacleProgress);
+  EXPECT_EQ(
+    semantic.kind,
+    problem::RowKind::DynamicObstacleEffectiveProgress);
   EXPECT_EQ(semantic.stage, 1);
 }
 

@@ -51,6 +51,7 @@ struct Result
   std::size_t partial_escape_row_count{};
   int first_valid_stage{-1};
   double first_wall_only_progress_m{};
+  double first_wall_only_effective_progress_m{};
   double first_wall_only_lateral_m{};
   double first_target_progress_m{};
   double first_target_lateral_m{};
@@ -73,6 +74,8 @@ struct Result
 /// non-worsening partial escape envelope until full separation is reachable.
 /// This is the QP form of the same initial-overlap escape contract used by the
 /// current-world physical verifier; it does not weaken a newly clear state.
+/// Longitudinal classification and rows use the physical progress coordinate
+/// theta + e_lag, never virtual progress theta alone.
 Result refine(const Request & request) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_obstacle

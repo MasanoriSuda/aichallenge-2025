@@ -82,8 +82,12 @@ bool valid_dynamic_obstacle_constraints(
   const int horizon) noexcept
 {
   for (const auto & constraint : constraints) {
+    const bool supported_axis =
+      constraint.axis == DynamicObstacleConstraintAxis::Lateral ||
+      constraint.axis == DynamicObstacleConstraintAxis::EffectiveProgress;
     if (
       constraint.state_stage <= 0 || constraint.state_stage > horizon ||
+      !supported_axis ||
       std::isnan(constraint.lower) || std::isnan(constraint.upper) ||
       constraint.lower > constraint.upper)
     {
@@ -289,9 +293,18 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
     const auto & obstacle = request.dynamic_obstacle_constraints[index];
     const int row = dynamic_obstacle_offset + static_cast<int>(index);
     const int state = obstacle.state_stage * nx;
-    const int element = obstacle.axis == DynamicObstacleConstraintAxis::Lateral ?
-      model::kLateralIndex : model::kProgressIndex;
-    constraint_triplets.emplace_back(row, state + element, 1.0);
+    if (obstacle.axis == DynamicObstacleConstraintAxis::Lateral) {
+      constraint_triplets.emplace_back(
+        row, state + model::kLateralIndex, 1.0);
+    } else {
+      // Physical along-track position is theta + e_lag.  A theta-only row
+      // disagrees with the canonical Follow gap certificate and can turn a
+      // safe negative-lag state into a false longitudinal collision.
+      constraint_triplets.emplace_back(
+        row, state + model::kProgressIndex, 1.0);
+      constraint_triplets.emplace_back(
+        row, state + model::kLagIndex, 1.0);
+    }
   }
   Eigen::SparseMatrix<double> constraints(
     state_values + variable_count + steering_prefix_rows + progress_wall_rows +
@@ -475,7 +488,8 @@ RowSemantic decode_row(
     return RowSemantic{
       true,
       obstacle.axis == DynamicObstacleConstraintAxis::Lateral ?
-      RowKind::DynamicObstacleLateral : RowKind::DynamicObstacleProgress,
+      RowKind::DynamicObstacleLateral :
+      RowKind::DynamicObstacleEffectiveProgress,
       obstacle.state_stage,
       obstacle.axis == DynamicObstacleConstraintAxis::Lateral ?
       model::kLateralIndex : model::kProgressIndex};
@@ -498,8 +512,8 @@ const char * row_kind_name(const RowKind kind) noexcept
     case RowKind::SweptLateralWall: return "swept-lateral-wall";
     case RowKind::DynamicObstacleLateral:
       return "dynamic-obstacle-lateral";
-    case RowKind::DynamicObstacleProgress:
-      return "dynamic-obstacle-progress";
+    case RowKind::DynamicObstacleEffectiveProgress:
+      return "dynamic-obstacle-effective-progress";
   }
   return "unknown";
 }

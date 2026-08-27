@@ -160,6 +160,7 @@ struct Result
   std::size_t dynamic_obstacle_partial_escape_row_count{};
   int dynamic_obstacle_first_valid_stage{-1};
   double dynamic_obstacle_first_wall_only_progress_m{};
+  double dynamic_obstacle_first_wall_only_effective_progress_m{};
   double dynamic_obstacle_first_wall_only_lateral_m{};
   double dynamic_obstacle_first_target_progress_m{};
   double dynamic_obstacle_first_target_lateral_m{};

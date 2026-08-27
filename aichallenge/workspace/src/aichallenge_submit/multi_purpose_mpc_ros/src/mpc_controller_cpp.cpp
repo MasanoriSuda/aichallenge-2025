@@ -24371,7 +24371,8 @@ struct MPC
         "seq=%lu/decision=%lu/intent=%s, requested=1/applied=%d/solved=%d/"
         "reason=%s, rows=stay_behind:%lu/pass_side:%lu/partial_escape:%lu/"
         "side:%d/first_pass_stage:%d, "
-        "first=stage:%d/wall:p%.3f,d%.3f/target:p%.3f,d%.3f/"
+        "first=stage:%d/wall:theta%.3f,effective%.3f,d%.3f/"
+        "target:p%.3f,d%.3f/"
         "margin:behind%.3f,left%.3f,right%.3f, "
         "outcome=%s/detail=%s",
         static_cast<unsigned long>(dynamic.identity.sequence),
@@ -24391,6 +24392,7 @@ struct MPC
         dynamic.dynamic_obstacle_first_pass_side_stage,
         dynamic.dynamic_obstacle_first_valid_stage,
         dynamic.dynamic_obstacle_first_wall_only_progress_m,
+        dynamic.dynamic_obstacle_first_wall_only_effective_progress_m,
         dynamic.dynamic_obstacle_first_wall_only_lateral_m,
         dynamic.dynamic_obstacle_first_target_progress_m,
         dynamic.dynamic_obstacle_first_target_lateral_m,

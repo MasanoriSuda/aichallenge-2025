@@ -2741,6 +2741,23 @@ actuator reachability、wall、dynamic obstacle、Follow hard gap、identity／f
 したがって「後段suffixは次のreceding solveが必要」と「現在commandが危険」を同一視せず、現在安全なMPCC commandを
 Emergencyで分断しない一方、未証明のsuffixを実行権限として広告しない。
 
+#### 動的障害物の物理進捗座標統一（2026-08-27、2025由来の暫定）
+
+seven-state canonical MPCCの車両進捗には、virtual progress `theta`とcontouring lag `e_lag`がある。
+車体の物理的なcourse進捗は`theta + e_lag`であり、Follow hard gap、retained current-world revalidation、
+stage-wise dynamic-obstacle constraintはすべてこの同一座標を使用する。dynamic-obstacleの縦制約を
+`theta`単独へ掛けてはならない。
+
+`output/20260827-204645`では、負のlagを持つ有効なFollow解を`theta`単独で前方重複と誤判定し、
+不要な全horizon横escapeへ変換した結果、QP不成立、直前Cruise cursorの枯渇、Emergencyへ伝播した。
+修正後は縦方向rowを`theta + e_lag <= target_progress - longitudinal_overlap`として組み立て、branch分類と
+state-box可行性確認も同じ座標へ統一する。型としてtheta-only obstacle rowを表現不能にし、診断ではraw
+`theta`とeffective progressを別々に出力する。
+
+`output/20260827-211306`のdomain 1ではrace Start後のdynamic-obstacle Follow契約38件が全件solveし、
+reject、Emergency、normal fallback、callback overrunはいずれも0件だった。本変更はgap、wall、OSQP、
+steering、timeoutの調整ではなく、既存canonical contractから逸脱したproducerの座標系修正である。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

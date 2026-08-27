@@ -74,7 +74,7 @@ struct SweptLateralWallConstraint
 enum class DynamicObstacleConstraintAxis
 {
   Lateral,
-  Progress,
+  EffectiveProgress,
 };
 
 struct DynamicObstacleConstraint
@@ -135,7 +135,7 @@ enum class RowKind
   ProgressAlignedWallUpper,
   SweptLateralWall,
   DynamicObstacleLateral,
-  DynamicObstacleProgress,
+  DynamicObstacleEffectiveProgress,
 };
 
 struct RowSemantic

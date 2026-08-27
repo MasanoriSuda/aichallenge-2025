@@ -99,6 +99,8 @@ Result refine(const Request & request) noexcept
       const int state = (stage + 1) * model::kStateDimension;
       const double progress =
         request.wall_only_primal[state + model::kProgressIndex];
+      const double effective_progress = progress +
+        request.wall_only_primal[state + model::kLagIndex];
       const double lateral =
         request.wall_only_primal[state + model::kLateralIndex];
       if (first_valid_stage < 0) {
@@ -108,12 +110,13 @@ Result refine(const Request & request) noexcept
           prediction.target_lateral_m;
         result.first_valid_stage = stage;
         result.first_wall_only_progress_m = progress;
+        result.first_wall_only_effective_progress_m = effective_progress;
         result.first_wall_only_lateral_m = lateral;
         result.first_target_progress_m = prediction.target_progress_m;
         result.first_target_lateral_m = prediction.target_lateral_m;
         result.first_stay_behind_margin_m =
           prediction.target_progress_m - prediction.longitudinal_overlap_m -
-          progress;
+          effective_progress;
         result.first_positive_side_margin_m =
           lateral - (
           prediction.target_lateral_m +
@@ -129,7 +132,7 @@ Result refine(const Request & request) noexcept
           prediction.target_lateral_m - prediction.lateral_center_separation_m;
       }
       behind_every_stage = behind_every_stage &&
-        progress <= prediction.target_progress_m -
+        effective_progress <= prediction.target_progress_m -
         prediction.longitudinal_overlap_m + request.separation_tolerance_m;
       positive_side_every_stage = positive_side_every_stage &&
         lateral + request.separation_tolerance_m >=
@@ -146,11 +149,15 @@ Result refine(const Request & request) noexcept
         const double negative_side_upper =
           prediction.target_lateral_m -
           prediction.lateral_center_separation_m;
+        const double minimum_effective_progress =
+          request.wall_only_problem.state_lower[
+          state + model::kProgressIndex] +
+          request.wall_only_problem.state_lower[state + model::kLagIndex];
         stay_behind_box_feasible_every_stage =
           stay_behind_box_feasible_every_stage &&
+          !std::isnan(minimum_effective_progress) &&
           stay_behind_upper + request.separation_tolerance_m >=
-          request.wall_only_problem.state_lower[
-          state + model::kProgressIndex];
+          minimum_effective_progress;
         positive_side_box_feasible_every_stage =
           positive_side_box_feasible_every_stage &&
           positive_side_lower - request.separation_tolerance_m <=
@@ -222,16 +229,19 @@ Result refine(const Request & request) noexcept
       const int state = (stage + 1) * model::kStateDimension;
       const double progress =
         request.wall_only_primal[state + model::kProgressIndex];
+      const double effective_progress = progress +
+        request.wall_only_primal[state + model::kLagIndex];
       const double lateral =
         request.wall_only_primal[state + model::kLateralIndex];
       result.first_valid_stage = stage;
       result.first_wall_only_progress_m = progress;
+      result.first_wall_only_effective_progress_m = effective_progress;
       result.first_wall_only_lateral_m = lateral;
       result.first_target_progress_m = prediction.target_progress_m;
       result.first_target_lateral_m = prediction.target_lateral_m;
       result.first_stay_behind_margin_m =
         prediction.target_progress_m - prediction.longitudinal_overlap_m -
-        progress;
+        effective_progress;
       result.first_positive_side_margin_m =
         lateral - (
         prediction.target_lateral_m +
@@ -306,11 +316,15 @@ Result refine(const Request & request) noexcept
       if (first_pass_side_stage < 0 || stage < first_pass_side_stage) {
         const double stay_behind_upper =
           prediction.target_progress_m - prediction.longitudinal_overlap_m;
+        const double minimum_effective_progress =
+          request.wall_only_problem.state_lower[
+          state + model::kProgressIndex] +
+          request.wall_only_problem.state_lower[state + model::kLagIndex];
         prepass_stay_behind_box_feasible =
           prepass_stay_behind_box_feasible &&
+          !std::isnan(minimum_effective_progress) &&
           stay_behind_upper + request.separation_tolerance_m >=
-          request.wall_only_problem.state_lower[
-          state + model::kProgressIndex];
+          minimum_effective_progress;
       }
       if (resolved_side_sign > 0) {
         const double side_lower = prediction.target_lateral_m +
@@ -386,7 +400,8 @@ Result refine(const Request & request) noexcept
       }
       ++result.pass_side_row_count;
     } else {
-      constraint.axis = problem::DynamicObstacleConstraintAxis::Progress;
+      constraint.axis =
+        problem::DynamicObstacleConstraintAxis::EffectiveProgress;
       constraint.upper =
         prediction.target_progress_m - prediction.longitudinal_overlap_m;
       ++result.stay_behind_row_count;

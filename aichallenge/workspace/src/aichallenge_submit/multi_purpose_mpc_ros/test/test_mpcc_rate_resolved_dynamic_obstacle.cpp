@@ -47,7 +47,7 @@ TEST(MpccRateResolvedDynamicObstacle, HoldsProgressUntilLateralSuffixIsReachable
   ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
   EXPECT_EQ(
     result.problem->dynamic_obstacle_constraints[0].axis,
-    problem::DynamicObstacleConstraintAxis::Progress);
+    problem::DynamicObstacleConstraintAxis::EffectiveProgress);
   EXPECT_DOUBLE_EQ(
     result.problem->dynamic_obstacle_constraints[0].upper, 1.2);
   EXPECT_EQ(
@@ -55,6 +55,52 @@ TEST(MpccRateResolvedDynamicObstacle, HoldsProgressUntilLateralSuffixIsReachable
     problem::DynamicObstacleConstraintAxis::Lateral);
   EXPECT_DOUBLE_EQ(
     result.problem->dynamic_obstacle_constraints[2].lower, 0.75);
+}
+
+TEST(MpccRateResolvedDynamicObstacle, FollowClassifiesStayBehindByEffectiveProgress)
+{
+  auto request = request_with_lateral_suffix();
+  request.pass_side_sign = 0;
+  const int state_count = model::kStateDimension * 5;
+  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(
+    state_count, -std::numeric_limits<double>::infinity());
+  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(
+    state_count, std::numeric_limits<double>::infinity());
+  for (int stage = 0; stage <= 4; ++stage) {
+    const int state = stage * model::kStateDimension;
+    const double raw_progress = 0.5 * static_cast<double>(stage);
+    request.wall_only_primal[state + model::kProgressIndex] = raw_progress;
+    request.wall_only_primal[state + model::kLagIndex] = -1.0;
+    request.wall_only_primal[state + model::kLateralIndex] = 0.70;
+    request.wall_only_problem.state_lower[state + model::kProgressIndex] =
+      raw_progress;
+    request.wall_only_problem.state_upper[state + model::kProgressIndex] =
+      4.0;
+    request.wall_only_problem.state_lower[state + model::kLagIndex] = -1.0;
+    request.wall_only_problem.state_upper[state + model::kLagIndex] = 1.0;
+    request.wall_only_problem.state_lower[state + model::kLateralIndex] = -2.0;
+    request.wall_only_problem.state_upper[state + model::kLateralIndex] = 2.0;
+  }
+  request.stages.assign(4, dynamic_obstacle::StagePrediction{
+    true, 2.0, 0.0, 0.8, 0.75});
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_DOUBLE_EQ(result.first_wall_only_progress_m, 0.5);
+  EXPECT_DOUBLE_EQ(result.first_wall_only_effective_progress_m, -0.5);
+  EXPECT_GT(result.first_stay_behind_margin_m, 0.0);
+  EXPECT_EQ(result.resolved_side_sign, 0);
+  EXPECT_EQ(result.first_pass_side_stage, -1);
+  EXPECT_EQ(result.stay_behind_row_count, 4U);
+  EXPECT_EQ(result.pass_side_row_count, 0U);
+  EXPECT_EQ(result.partial_escape_row_count, 0U);
+  for (const auto & constraint : result.problem->dynamic_obstacle_constraints) {
+    EXPECT_EQ(
+      constraint.axis,
+      problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+  }
 }
 
 TEST(MpccRateResolvedDynamicObstacle, DoesNotTrustOneSeparatedMiddleSample)
@@ -159,6 +205,8 @@ TEST(MpccRateResolvedDynamicObstacle, CruiseRejectsUnreachableStayBehindAndKeeps
     request.wall_only_primal[state + model::kLateralIndex] = 0.70;
     request.wall_only_problem.state_lower[state + model::kProgressIndex] = 0.0;
     request.wall_only_problem.state_upper[state + model::kProgressIndex] = 4.0;
+    request.wall_only_problem.state_lower[state + model::kLagIndex] = 0.0;
+    request.wall_only_problem.state_upper[state + model::kLagIndex] = 0.0;
     request.wall_only_problem.state_lower[state + model::kLateralIndex] = -2.0;
     request.wall_only_problem.state_upper[state + model::kLateralIndex] = 2.0;
   }
@@ -201,6 +249,8 @@ TEST(MpccRateResolvedDynamicObstacle, TacticalSideUsesTheSamePartialEscapeContra
       0.70 + 0.02 * static_cast<double>(stage);
     request.wall_only_problem.state_lower[state + model::kProgressIndex] = 0.0;
     request.wall_only_problem.state_upper[state + model::kProgressIndex] = 4.0;
+    request.wall_only_problem.state_lower[state + model::kLagIndex] = 0.0;
+    request.wall_only_problem.state_upper[state + model::kLagIndex] = 0.0;
     request.wall_only_problem.state_lower[state + model::kLateralIndex] = -2.0;
     request.wall_only_problem.state_upper[state + model::kLateralIndex] = 2.0;
   }

@@ -1,0 +1,204 @@
+#include "multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp"
+
+#include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
+
+#include <gtest/gtest.h>
+
+#include <memory>
+#include <vector>
+
+namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver
+{
+namespace
+{
+
+mpcc_rate_resolved_shadow::Snapshot make_source()
+{
+  namespace contract = mpcc_execution_contract;
+  namespace model = mpcc_rate_resolved;
+  namespace shadow = mpcc_rate_resolved_shadow;
+  shadow::Snapshot source;
+  source.identity.sequence = 9U;
+  source.identity.snapshot_sec = 20.0;
+  source.identity.source_context.decision_id = 7U;
+  source.identity.source_context.intent = contract::ControlIntent::ShiftOut;
+  source.identity.source_context.intent_generation = 4U;
+  source.identity.source_context.observation_generation = 11U;
+  source.identity.source_context.stage_geometry_id = 12U;
+  source.identity.source_context.target_obstacle_generation = 13U;
+  source.identity.source_context.target_id = "d2";
+  source.identity.source_context.execution_side_sign = 1;
+  source.identity.source_context.horizon_steps = 3U;
+  source.identity.source_context.formulation =
+    contract::Formulation::VelocitySteeringYawResponseProgress7State;
+  source.identity.source_context.state_schema_id = "state-7";
+  source.identity.source_context.input_schema_id = "input-3";
+  source.identity.source_context.bounds_schema_id = "bounds";
+  source.identity.source_context.cost_schema_id = "cost";
+  source.identity.source_context = contract::seal_problem_context(
+    source.identity.source_context);
+  source.control_prediction_origin_sec = 20.1;
+  source.execution_prefix_steps = 3;
+  source.course_progress_origin_m = 100.0;
+  source.nominal_path_distance_m = {0.0, 1.0, 2.0, 3.0};
+  source.publication_interval_sec = 0.025;
+
+  auto & request = source.request;
+  request.horizon_steps = 3;
+  request.initial_state << 0.0, 0.0, 0.0, 4.0, 0.0;
+  request.current_steering_rad = 0.0;
+  request.current_response_steering_rad = 0.0;
+  request.wheelbase_m = 1.0;
+  request.yaw_response_gain = 1.0;
+  request.yaw_response_time_constant_sec = 0.1;
+  request.maximum_abs_steering_rad = 0.5;
+  request.maximum_abs_steering_rate_radps = 1.0;
+  request.states.resize(4U);
+  for (std::size_t index = 0U; index < request.states.size(); ++index) {
+    auto & state = request.states[index];
+    state.reference << 1.25, 0.2, 0.3, 4.0, static_cast<double>(index);
+    state.lower << -2.0, -1.0, -0.6, 0.0, 0.0;
+    state.upper << 2.0, 1.0, 0.6, 8.0, 5.0;
+    state.weight.setOnes();
+  }
+  request.states.front().lower = request.initial_state;
+  request.states.front().upper = request.initial_state;
+  request.inputs.resize(3U);
+  for (auto & input : request.inputs) {
+    input.reference << 0.0, 0.0, 4.0;
+    input.lower << -2.0, -0.5, 0.0;
+    input.upper << 1.0, 0.5, 8.0;
+    input.weight.setOnes();
+    input.stage_dt_sec = 0.1;
+  }
+  source.progress_aligned_wall_refinement_active = true;
+  source.wall_reference_progress_m = {0.0, 1.0, 2.0, 3.0};
+  source.wall_lower_m = {-2.0, -2.0, -2.0, -2.0};
+  source.wall_upper_m = {2.0, 2.0, 2.0, 2.0};
+  source.dynamic_obstacle_refinement_active = true;
+  source.dynamic_obstacle_pass_side_sign = 1;
+  source.dynamic_obstacle_stages = {
+    {true, 1.0, 0.0, 0.6, 0.8},
+    {true, 2.0, 0.0, 0.6, 0.8},
+    {true, 5.0, 0.0, 0.6, 0.8}};
+  source.physical_wall_refinement_active = true;
+  auto grid = std::make_shared<recovery_footprint::OccupancyGrid>();
+  grid->width = 2U;
+  grid->height = 2U;
+  grid->resolution_m = 1.0;
+  grid->cells.assign(4U, recovery_footprint::CellState::Free);
+  source.wall_grid = grid;
+  source.wall_footprint.front_extent_m = 1.0;
+  source.wall_footprint.rear_extent_m = 1.0;
+  source.wall_footprint.left_extent_m = 0.725;
+  source.wall_footprint.right_extent_m = 0.725;
+  source.wall_course_frame_knots = {
+    {99.0, -1.0, 0.0, 0.0, 1},
+    {104.0, 4.0, 0.0, 0.0, 2}};
+  source.wall_lateral_sample_step_m = 0.1;
+  source.wall_translation_bucket_width_m = 0.1;
+
+  source.replay_world.emplace();
+  auto & world = source.replay_world.value();
+  world.observation_generation = 11U;
+  world.observed_sec = 20.0;
+  world.current = true;
+  world.current_pose = {0.0, 0.0, 0.0};
+  world.control_prefix = {{0.0, 0.0, 0.0}, {0.1, 0.0, 0.0}};
+  world.wall_grid_fingerprint =
+    recovery_footprint::occupancy_grid_fingerprint(*grid);
+  world.hard_wall_clearance_m = 0.2;
+  world.bound_tolerance_m = 1e-5;
+  world.swept_step_m = 0.1;
+  world.obstacles.push_back(
+    shadow::ReplayDynamicObstacle{
+      "d2", 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.8, 11U});
+  EXPECT_TRUE(mpcc_architecture_snapshot::interaction_snapshot_complete(source));
+  return source;
+}
+
+TEST(MpccStatelessManeuver, BuildsBothSidesWithoutMissionGeometry)
+{
+  const auto source = make_source();
+  const auto source_fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  const auto left = build(source, source_fingerprint, 1);
+  const auto right = build(source, source_fingerprint, -1);
+  ASSERT_TRUE(left.seed.has_value()) << left.detail;
+  ASSERT_TRUE(right.seed.has_value()) << right.detail;
+  EXPECT_EQ(left.reason, RejectReason::Accepted);
+  EXPECT_EQ(right.reason, RejectReason::Accepted);
+  EXPECT_EQ(left.seed->terminal_successor, TerminalSuccessor::Return);
+  EXPECT_EQ(right.seed->terminal_successor, TerminalSuccessor::Return);
+  EXPECT_GT(left.seed->lateral_reference_m[1], 0.0);
+  EXPECT_LT(right.seed->lateral_reference_m[1], 0.0);
+  EXPECT_NE(left.seed->candidate_fingerprint, right.seed->candidate_fingerprint);
+}
+
+TEST(MpccStatelessManeuver, IgnoresPersistentMissionLateralAndHeadingReference)
+{
+  const auto source = make_source();
+  auto changed_mission = source;
+  for (auto & state : changed_mission.request.states) {
+    state.reference[mpcc_rate_resolved::kLateralIndex] = -1.75;
+    state.reference[mpcc_rate_resolved::kHeadingIndex] = -0.45;
+  }
+  const auto original = build(
+    source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
+  const auto changed = build(
+    changed_mission,
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(changed_mission), 1);
+  ASSERT_TRUE(original.seed.has_value()) << original.detail;
+  ASSERT_TRUE(changed.seed.has_value()) << changed.detail;
+  EXPECT_EQ(original.seed->lateral_reference_m, changed.seed->lateral_reference_m);
+  EXPECT_EQ(
+    original.seed->solver_snapshot.request.states[2].reference[
+      mpcc_rate_resolved::kHeadingIndex], 0.0);
+  EXPECT_EQ(
+    changed.seed->solver_snapshot.request.states[2].reference[
+      mpcc_rate_resolved::kHeadingIndex], 0.0);
+}
+
+TEST(MpccStatelessManeuver, UsesStopOnlyAsExplicitTerminalSuccessor)
+{
+  auto source = make_source();
+  source.dynamic_obstacle_stages.back().target_progress_m = 3.0;
+  const auto result = build(
+    source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
+  ASSERT_TRUE(result.seed.has_value()) << result.detail;
+  EXPECT_EQ(result.seed->terminal_successor, TerminalSuccessor::Stop);
+  EXPECT_TRUE(result.seed->stop_suffix.available);
+  EXPECT_EQ(result.seed->stop_suffix.target_velocity_mps, 0.0);
+  EXPECT_LT(result.seed->stop_suffix.maximum_deceleration_mps2, 0.0);
+}
+
+TEST(MpccStatelessManeuver, RejectsInvalidSideAndMixedObservation)
+{
+  auto source = make_source();
+  const auto fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  EXPECT_EQ(build(source, fingerprint, 0).reason, RejectReason::InvalidSide);
+  EXPECT_EQ(
+    build(source, fingerprint + 1U, 1).reason,
+    RejectReason::SourceFingerprintMismatch);
+  source.replay_world->obstacles.front().observation_generation = 12U;
+  EXPECT_EQ(
+    build(source, fingerprint, 1).reason, RejectReason::IncompleteSnapshot);
+}
+
+TEST(MpccStatelessManeuver, RejectsWhenNoTerminalSuccessorExists)
+{
+  auto source = make_source();
+  source.dynamic_obstacle_stages.back().target_progress_m = 3.0;
+  for (auto & input : source.request.inputs) {
+    input.lower[mpcc_rate_resolved::kAccelerationIndex] = 0.0;
+  }
+  const auto result = build(
+    source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
+  EXPECT_EQ(result.reason, RejectReason::TerminalSuccessorUnavailable);
+  EXPECT_FALSE(result.seed.has_value());
+}
+
+}  // namespace
+}  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver

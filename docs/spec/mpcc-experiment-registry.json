@@ -165,6 +165,18 @@
       "production_impact": "observation-only source capture; production authority, solver policy, clearance, timeout, lease and fallback behavior are unchanged",
       "deleted_code": [],
       "revisit_condition": "a live rejected Overtake source cannot produce a complete seal from one observation generation or an external encounter requires an explicitly unknown field"
+    },
+    {
+      "experiment_id": "20260828-stateless-maneuver-seed",
+      "baseline_commit": "fa063748",
+      "snapshot_ids": [],
+      "hypothesis": "either Overtake homotopy can be rebuilt from one immutable current-world snapshot without persistent Mission geometry or phase lifecycle",
+      "changed_dimension": "candidate_lifecycle_isolation",
+      "result": "accepted",
+      "reason": "both sides produce independently sealed seven-state pre-solve seeds, persistent Mission lateral and heading references do not affect the rebuilt geometry, and incomplete provenance or terminal successor is rejected",
+      "production_impact": "none; the pure producer is linked only by an offline replay CLI and tests and does not run a solver or publish commands",
+      "deleted_code": [],
+      "revisit_condition": "IM-3 shows that the produced seed cannot be evaluated by the unchanged seven-state SQP and exact proof pipeline without lifecycle-dependent reconstruction"
     }
   ]
 }

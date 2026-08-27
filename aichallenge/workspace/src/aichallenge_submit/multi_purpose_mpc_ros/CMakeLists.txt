@@ -149,6 +149,19 @@ target_link_libraries(${PROJECT_NAME}_mpcc_architecture_snapshot
   yaml-cpp
 )
 
+add_library(${PROJECT_NAME}_mpcc_stateless_maneuver STATIC
+  src/mpcc_stateless_maneuver.cpp
+)
+target_include_directories(${PROJECT_NAME}_mpcc_stateless_maneuver PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_stateless_maneuver
+  ${PROJECT_NAME}_mpcc_architecture_snapshot
+  ${PROJECT_NAME}_mpcc_execution_contract
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_shadow STATIC
   src/mpcc_rate_resolved_shadow.cpp
   src/mpcc_rate_resolved_dynamic_obstacle.cpp
@@ -180,6 +193,16 @@ target_link_libraries(mpcc_qp_replay
   ${PROJECT_NAME}_mpcc_architecture_snapshot
 )
 install(TARGETS mpcc_qp_replay
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+add_executable(mpcc_maneuver_replay
+  src/mpcc_maneuver_replay.cpp
+)
+target_link_libraries(mpcc_maneuver_replay
+  ${PROJECT_NAME}_mpcc_stateless_maneuver
+)
+install(TARGETS mpcc_maneuver_replay
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -484,6 +507,18 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_architecture_snapshot
       ${PROJECT_NAME}_mpcc_architecture_snapshot
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_stateless_maneuver
+    test/test_mpcc_stateless_maneuver.cpp
+  )
+  if(TARGET test_mpcc_stateless_maneuver)
+    target_include_directories(test_mpcc_stateless_maneuver PRIVATE
+      ${EIGEN3_INCLUDE_DIRS}
+    )
+    target_link_libraries(test_mpcc_stateless_maneuver
+      ${PROJECT_NAME}_mpcc_stateless_maneuver
     )
   endif()
 

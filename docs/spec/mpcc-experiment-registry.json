@@ -151,6 +151,20 @@
         "A/B-only counters and structured logs"
       ],
       "revisit_condition": "an independent current-world InteractionBundle producer and replay-ready snapshot exist without depending on persistent Mission geometry or phase lifecycle"
+    },
+    {
+      "experiment_id": "20260828-interaction-snapshot-replay-contract",
+      "baseline_commit": "ce78f928",
+      "snapshot_ids": [
+        "im1-unit-interaction-roundtrip"
+      ],
+      "hypothesis": "the existing failure artifact can support A/B/C/D comparison without reconstructing current-world or physical-proof inputs",
+      "changed_dimension": "immutable_replay_input_contract",
+      "result": "accepted",
+      "reason": "the previous exact-QP-only artifact lacked loadable all-vehicle and measured-to-control physical inputs; the new sealed Interaction Snapshot round-trips them and rejects any world, wall, identity or semantic mutation",
+      "production_impact": "observation-only source capture; production authority, solver policy, clearance, timeout, lease and fallback behavior are unchanged",
+      "deleted_code": [],
+      "revisit_condition": "a live rejected Overtake source cannot produce a complete seal from one observation generation or an external encounter requires an explicitly unknown field"
     }
   ]
 }

@@ -2,16 +2,12 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_ARCHITECTURE_SNAPSHOT_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
 #include <filesystem>
 #include <optional>
 #include <string>
-
-namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
-{
-struct Snapshot;
-}  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot
 {
@@ -75,6 +71,38 @@ struct RecordedQp
   std::string failure_outcome;
   std::string failure_detail;
 };
+
+/// Complete immutable input shared by architecture candidates A/B/C/D.  It is
+/// observation-only data and deliberately exposes no publisher, mailbox,
+/// certified-plan store or command conversion API.
+struct RecordedInteractionSnapshot
+{
+  mpcc_rate_resolved_shadow::Snapshot source;
+  RecordedQp recorded_qp;
+  std::uint64_t interaction_fingerprint{};
+};
+
+/// Verify that every current-world and semantic field required to construct
+/// an independent candidate and rerun exact physical proof is owned by the
+/// snapshot.
+bool interaction_snapshot_complete(
+  const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
+
+/// Deterministic seal over semantic request, world, wall and obstacle inputs.
+/// Returns zero for incomplete input.
+std::uint64_t fingerprint_interaction_snapshot(
+  const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
+
+bool interaction_snapshot_matches_fingerprint(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t expected_fingerprint) noexcept;
+
+/// Load a replay-ready architecture snapshot.  Exact-QP-only legacy artifacts
+/// remain available through load_recorded_qp but are rejected here with an
+/// explicit incomplete detail.
+std::optional<RecordedInteractionSnapshot> load_recorded_interaction_snapshot(
+  const std::filesystem::path & snapshot_file,
+  std::string * detail = nullptr) noexcept;
 
 /// Load only the exact convex problem required for deterministic solver
 /// replay.  Semantic and physical provenance remain in snapshot.yaml for the

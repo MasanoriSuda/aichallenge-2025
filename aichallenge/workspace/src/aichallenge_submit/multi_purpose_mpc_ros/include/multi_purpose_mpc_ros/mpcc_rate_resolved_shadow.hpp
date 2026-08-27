@@ -16,12 +16,49 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
 {
 
 namespace artifact = mpcc_rate_resolved_execution_artifact;
 using Identity = artifact::Identity;
+
+/// Owned current-world vehicle observation used only to reproduce an
+/// architecture comparison.  It carries no candidate, certificate or command
+/// authority.  The radius is the exact peer-only physical radius resolved by
+/// the live controller for this observation epoch.
+struct ReplayDynamicObstacle
+{
+  std::string id;
+  double x_m{};
+  double y_m{};
+  double velocity_x_mps{};
+  double velocity_y_mps{};
+  double acceleration_x_mps2{};
+  double acceleration_y_mps2{};
+  double covariance_x_m2{};
+  double covariance_y_m2{};
+  double radius_m{};
+  std::uint64_t observation_generation{};
+};
+
+/// Exact current-world inputs which are outside the convex QP but required to
+/// rebuild alternative candidates and rerun final physical proof.  This data
+/// is captured from the same callback epoch as Snapshot::request.
+struct ReplayWorld
+{
+  std::uint64_t observation_generation{};
+  double observed_sec{};
+  bool current{false};
+  recovery_footprint::Pose2D current_pose;
+  std::vector<recovery_footprint::Pose2D> control_prefix;
+  std::uint64_t wall_grid_fingerprint{};
+  double hard_wall_clearance_m{};
+  double bound_tolerance_m{};
+  double swept_step_m{};
+  std::vector<ReplayDynamicObstacle> obstacles;
+};
 
 struct Snapshot
 {
@@ -51,6 +88,7 @@ struct Snapshot
   double wall_heading_bucket_width_rad{0.025};
   double wall_translation_bucket_width_m{};
   double wall_boundary_guard_m{0.001};
+  std::optional<ReplayWorld> replay_world;
   double publication_interval_sec{};
 };
 

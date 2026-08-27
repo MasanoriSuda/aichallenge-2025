@@ -48,6 +48,78 @@ mpcc_rate_resolved_shadow::Snapshot make_snapshot(
   return snapshot;
 }
 
+mpcc_rate_resolved_shadow::Snapshot make_interaction_snapshot(
+  const mpcc_execution_contract::ControlIntent intent)
+{
+  auto snapshot = make_snapshot(intent);
+  snapshot.identity.source_context =
+    mpcc_execution_contract::seal_problem_context(
+    snapshot.identity.source_context);
+  snapshot.request.initial_state.setZero();
+  snapshot.request.current_steering_rad = 0.02;
+  snapshot.request.current_response_steering_rad = 0.01;
+  snapshot.request.wheelbase_m = 1.0;
+  snapshot.request.yaw_response_gain = 1.0;
+  snapshot.request.yaw_response_time_constant_sec = 0.1;
+  snapshot.request.maximum_abs_steering_rad = 0.5;
+  snapshot.request.maximum_abs_steering_rate_radps = 1.0;
+  snapshot.request.states.resize(2U);
+  snapshot.request.inputs.resize(1U);
+  snapshot.request.states[0].lower.setConstant(-10.0);
+  snapshot.request.states[0].upper.setConstant(10.0);
+  snapshot.request.states[1].lower.setConstant(-10.0);
+  snapshot.request.states[1].upper.setConstant(10.0);
+  snapshot.request.inputs[0].lower.setConstant(-2.0);
+  snapshot.request.inputs[0].upper.setConstant(2.0);
+  snapshot.request.inputs[0].stage_dt_sec = 0.1;
+  snapshot.progress_aligned_wall_refinement_active = true;
+  snapshot.wall_reference_progress_m = {3.0, 4.0};
+  snapshot.wall_lower_m = {-2.0, -2.0};
+  snapshot.wall_upper_m = {2.0, 2.0};
+  snapshot.physical_wall_refinement_active = true;
+  auto grid = std::make_shared<recovery_footprint::OccupancyGrid>();
+  grid->width = 2U;
+  grid->height = 2U;
+  grid->resolution_m = 0.5;
+  grid->cells = {
+    recovery_footprint::CellState::Free,
+    recovery_footprint::CellState::Free,
+    recovery_footprint::CellState::Free,
+    recovery_footprint::CellState::Free};
+  snapshot.wall_grid = grid;
+  snapshot.wall_footprint.front_extent_m = 1.0;
+  snapshot.wall_footprint.rear_extent_m = 1.0;
+  snapshot.wall_footprint.left_extent_m = 0.725;
+  snapshot.wall_footprint.right_extent_m = 0.725;
+  snapshot.wall_course_frame_knots = {
+    mpc_stage_geometry::CourseFrameKnot{3.0, 0.0, 0.0, 0.0, 10},
+    mpc_stage_geometry::CourseFrameKnot{4.0, 1.0, 0.0, 0.0, 11}};
+  snapshot.wall_lateral_sample_step_m = 0.1;
+  snapshot.wall_translation_bucket_width_m = 0.1;
+  snapshot.dynamic_obstacle_refinement_active = true;
+  snapshot.dynamic_obstacle_pass_side_sign = 1;
+  snapshot.dynamic_obstacle_stages = {
+    mpcc_rate_resolved_dynamic_obstacle::StagePrediction{
+      true, 4.0, 0.5, 2.0, 1.5}};
+  snapshot.replay_world.emplace();
+  snapshot.replay_world->observation_generation = 3U;
+  snapshot.replay_world->observed_sec = 12.5;
+  snapshot.replay_world->current = true;
+  snapshot.replay_world->current_pose = {0.0, 0.0, 0.0};
+  snapshot.replay_world->control_prefix = {
+    recovery_footprint::Pose2D{0.0, 0.0, 0.0},
+    recovery_footprint::Pose2D{0.1, 0.0, 0.0}};
+  snapshot.replay_world->wall_grid_fingerprint =
+    recovery_footprint::occupancy_grid_fingerprint(*grid);
+  snapshot.replay_world->hard_wall_clearance_m = 0.2;
+  snapshot.replay_world->bound_tolerance_m = 1e-5;
+  snapshot.replay_world->swept_step_m = 0.1;
+  snapshot.replay_world->obstacles.push_back(
+    mpcc_rate_resolved_shadow::ReplayDynamicObstacle{
+      "d2", 4.0, 0.5, 1.0, 0.0, 0.1, 0.0, 0.02, 0.03, 0.8, 3U});
+  return snapshot;
+}
+
 mpcc_rate_resolved_problem::Problem make_problem()
 {
   mpcc_rate_resolved_problem::Problem problem;
@@ -135,6 +207,76 @@ TEST(MpccArchitectureSnapshot, WritesLoadsAndReplaysExactProblem)
   const auto cold_replay = replay_recorded_qp(written.snapshot_file, false);
   ASSERT_TRUE(cold_replay.loaded) << cold_replay.detail;
   EXPECT_TRUE(cold_replay.outcome.result.has_value()) << cold_replay.detail;
+}
+
+TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
+{
+  const auto root = output_root("interaction-roundtrip");
+  std::filesystem::remove_all(root);
+  const auto snapshot = make_interaction_snapshot(
+    mpcc_execution_contract::ControlIntent::Pass);
+  const auto written = record_failure(
+    snapshot, make_assembly_request(), make_valid_problem(), std::nullopt,
+    persistent_osqp::SolveOutcome{}, PipelineStage::Initial,
+    "unit-interaction-roundtrip", "intentional replay-ready evidence", root);
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+
+  std::string detail;
+  const auto loaded = load_recorded_interaction_snapshot(
+    written.snapshot_file, &detail);
+  ASSERT_TRUE(loaded.has_value()) << detail;
+  EXPECT_TRUE(interaction_snapshot_complete(loaded->source));
+  EXPECT_TRUE(
+    interaction_snapshot_matches_fingerprint(
+      loaded->source, loaded->interaction_fingerprint));
+  ASSERT_TRUE(loaded->source.replay_world.has_value());
+  EXPECT_EQ(loaded->source.identity.source_context.target_id, "d2");
+  EXPECT_EQ(loaded->source.replay_world->observation_generation, 3U);
+  ASSERT_EQ(loaded->source.replay_world->obstacles.size(), 1U);
+  EXPECT_EQ(loaded->source.replay_world->obstacles.front().id, "d2");
+  EXPECT_EQ(loaded->source.wall_grid->cells.size(), 4U);
+
+  auto vehicle_mutated = loaded->source;
+  vehicle_mutated.replay_world->obstacles.front().x_m += 0.01;
+  EXPECT_FALSE(
+    interaction_snapshot_matches_fingerprint(
+      vehicle_mutated, loaded->interaction_fingerprint));
+
+  auto wall_mutated = loaded->source;
+  wall_mutated.wall_lower_m.front() -= 0.01;
+  EXPECT_FALSE(
+    interaction_snapshot_matches_fingerprint(
+      wall_mutated, loaded->interaction_fingerprint));
+
+  auto identity_mutated = loaded->source;
+  ++identity_mutated.identity.source_context.decision_id;
+  EXPECT_FALSE(
+    interaction_snapshot_matches_fingerprint(
+      identity_mutated, loaded->interaction_fingerprint));
+
+  auto semantic_mutated = loaded->source;
+  semantic_mutated.request.initial_state[0] += 0.01;
+  EXPECT_FALSE(
+    interaction_snapshot_matches_fingerprint(
+      semantic_mutated, loaded->interaction_fingerprint));
+}
+
+TEST(MpccArchitectureSnapshot, OldExactQpSnapshotIsNotInteractionReplayReady)
+{
+  const auto root = output_root("interaction-incomplete");
+  std::filesystem::remove_all(root);
+  const auto written = record_failure(
+    make_snapshot(mpcc_execution_contract::ControlIntent::ShiftOut),
+    make_assembly_request(), make_valid_problem(), std::nullopt,
+    persistent_osqp::SolveOutcome{}, PipelineStage::Initial,
+    "unit-interaction-incomplete", "missing replay world", root);
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+  EXPECT_TRUE(load_recorded_qp(written.snapshot_file).has_value());
+
+  std::string detail;
+  EXPECT_FALSE(
+    load_recorded_interaction_snapshot(written.snapshot_file, &detail).has_value());
+  EXPECT_EQ(detail, "interaction snapshot incomplete");
 }
 
 TEST(MpccArchitectureSnapshot, DeduplicatesFailureFamilyPerProcess)

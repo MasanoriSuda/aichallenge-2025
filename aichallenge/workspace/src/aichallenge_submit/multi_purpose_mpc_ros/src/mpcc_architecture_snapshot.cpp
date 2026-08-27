@@ -8,8 +8,10 @@
 #include <Eigen/Sparse>
 
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <limits>
@@ -17,6 +19,7 @@
 #include <set>
 #include <sstream>
 #include <system_error>
+#include <type_traits>
 #include <vector>
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot
@@ -447,6 +450,57 @@ YAML::Node source_node(
     grid["payload"] = wall_grid_file;
   }
   node["wall_grid"] = grid;
+  YAML::Node replay_world;
+  replay_world["available"] = source.replay_world.has_value();
+  if (source.replay_world.has_value()) {
+    const auto & world = source.replay_world.value();
+    replay_world["observation_generation"] = world.observation_generation;
+    replay_world["observed_sec"] = world.observed_sec;
+    replay_world["current"] = world.current;
+    YAML::Node current_pose;
+    current_pose["x_m"] = world.current_pose.x_m;
+    current_pose["y_m"] = world.current_pose.y_m;
+    current_pose["yaw_rad"] = world.current_pose.yaw_rad;
+    replay_world["current_pose"] = current_pose;
+    YAML::Node control_prefix(YAML::NodeType::Sequence);
+    for (const auto & pose : world.control_prefix) {
+      YAML::Node item;
+      item["x_m"] = pose.x_m;
+      item["y_m"] = pose.y_m;
+      item["yaw_rad"] = pose.yaw_rad;
+      control_prefix.push_back(item);
+    }
+    replay_world["control_prefix"] = control_prefix;
+    replay_world["wall_grid_fingerprint"] = world.wall_grid_fingerprint;
+    replay_world["hard_wall_clearance_m"] = world.hard_wall_clearance_m;
+    replay_world["bound_tolerance_m"] = world.bound_tolerance_m;
+    replay_world["swept_step_m"] = world.swept_step_m;
+    auto obstacles = world.obstacles;
+    std::sort(
+      obstacles.begin(), obstacles.end(),
+      [](const shadow::ReplayDynamicObstacle & lhs,
+        const shadow::ReplayDynamicObstacle & rhs) {
+        return lhs.id < rhs.id;
+      });
+    YAML::Node obstacle_nodes(YAML::NodeType::Sequence);
+    for (const auto & obstacle : obstacles) {
+      YAML::Node item;
+      item["id"] = obstacle.id;
+      item["x_m"] = obstacle.x_m;
+      item["y_m"] = obstacle.y_m;
+      item["velocity_x_mps"] = obstacle.velocity_x_mps;
+      item["velocity_y_mps"] = obstacle.velocity_y_mps;
+      item["acceleration_x_mps2"] = obstacle.acceleration_x_mps2;
+      item["acceleration_y_mps2"] = obstacle.acceleration_y_mps2;
+      item["covariance_x_m2"] = obstacle.covariance_x_m2;
+      item["covariance_y_m2"] = obstacle.covariance_y_m2;
+      item["radius_m"] = obstacle.radius_m;
+      item["observation_generation"] = obstacle.observation_generation;
+      obstacle_nodes.push_back(item);
+    }
+    replay_world["obstacles"] = obstacle_nodes;
+  }
+  node["replay_world"] = replay_world;
   return node;
 }
 
@@ -495,6 +549,429 @@ std::optional<Eigen::SparseMatrix<double>> load_sparse(
   return matrix;
 }
 
+template<int Size>
+bool load_fixed_vector(
+  const YAML::Node & node, Eigen::Matrix<double, Size, 1> & value)
+{
+  if (!node || !node.IsSequence() || node.size() != static_cast<std::size_t>(Size)) {
+    return false;
+  }
+  for (int index = 0; index < Size; ++index) {
+    value[index] = node[static_cast<std::size_t>(index)].as<double>();
+  }
+  return value.allFinite();
+}
+
+std::optional<std::vector<double>> load_std_vector(const YAML::Node & node)
+{
+  if (!node || !node.IsSequence()) {
+    return std::nullopt;
+  }
+  std::vector<double> values;
+  values.reserve(node.size());
+  for (const auto & item : node) {
+    const double value = item.as<double>();
+    if (!std::isfinite(value)) {
+      return std::nullopt;
+    }
+    values.push_back(value);
+  }
+  return values;
+}
+
+std::optional<contract::ControlIntent> parse_intent(const std::string & value)
+{
+  using Intent = contract::ControlIntent;
+  if (value == "track") return Intent::Track;
+  if (value == "cruise") return Intent::Cruise;
+  if (value == "follow") return Intent::Follow;
+  if (value == "hold") return Intent::Hold;
+  if (value == "stop") return Intent::Stop;
+  if (value == "shiftout") return Intent::ShiftOut;
+  if (value == "pass") return Intent::Pass;
+  if (value == "return") return Intent::Return;
+  if (value == "rejoin") return Intent::Rejoin;
+  return std::nullopt;
+}
+
+std::optional<contract::Formulation> parse_formulation(
+  const std::string & value)
+{
+  using Formulation = contract::Formulation;
+  if (value == "velocity-steering-yaw-response-progress-7state") {
+    return Formulation::VelocitySteeringYawResponseProgress7State;
+  }
+  if (value == "solver-derived-bypass") {
+    return Formulation::SolverDerivedBypass;
+  }
+  return std::nullopt;
+}
+
+std::optional<mpcc_rate_resolved_adapter::Request> load_semantic_request(
+  const YAML::Node & node)
+{
+  namespace adapter = mpcc_rate_resolved_adapter;
+  if (!node || !node.IsMap()) {
+    return std::nullopt;
+  }
+  adapter::Request request;
+  request.horizon_steps = node["horizon_steps"].as<int>();
+  if (
+    request.horizon_steps <= 0 ||
+    !load_fixed_vector(node["initial_state"], request.initial_state) ||
+    !load_fixed_vector(node["previous_input"], request.previous_input) ||
+    !load_fixed_vector(node["input_delta_weight"], request.input_delta_weight))
+  {
+    return std::nullopt;
+  }
+  request.current_steering_rad = node["current_steering_rad"].as<double>();
+  request.current_response_steering_rad =
+    node["current_response_steering_rad"].as<double>();
+  request.wheelbase_m = node["wheelbase_m"].as<double>();
+  request.yaw_response_gain = node["yaw_response_gain"].as<double>();
+  request.yaw_response_time_constant_sec =
+    node["yaw_response_time_constant_sec"].as<double>();
+  request.maximum_abs_steering_rad =
+    node["maximum_abs_steering_rad"].as<double>();
+  request.maximum_abs_steering_rate_radps =
+    node["maximum_abs_steering_rate_radps"].as<double>();
+  request.minimum_frenet_denominator =
+    node["minimum_frenet_denominator"].as<double>();
+  request.minimum_stage_dt_sec = node["minimum_stage_dt_sec"].as<double>();
+  request.maximum_stage_dt_sec = node["maximum_stage_dt_sec"].as<double>();
+  const auto states = node["states"];
+  const auto inputs = node["inputs"];
+  if (
+    !states || !states.IsSequence() || !inputs || !inputs.IsSequence() ||
+    states.size() != static_cast<std::size_t>(request.horizon_steps + 1) ||
+    inputs.size() != static_cast<std::size_t>(request.horizon_steps))
+  {
+    return std::nullopt;
+  }
+  request.states.reserve(states.size());
+  for (const auto & item : states) {
+    adapter::StateStage stage;
+    if (
+      !load_fixed_vector(item["reference"], stage.reference) ||
+      !load_fixed_vector(item["lower"], stage.lower) ||
+      !load_fixed_vector(item["upper"], stage.upper) ||
+      !load_fixed_vector(item["weight"], stage.weight) ||
+      !load_fixed_vector(item["linear_cost"], stage.linear_cost))
+    {
+      return std::nullopt;
+    }
+    request.states.push_back(std::move(stage));
+  }
+  request.inputs.reserve(inputs.size());
+  for (const auto & item : inputs) {
+    adapter::InputStage stage;
+    if (
+      !load_fixed_vector(item["reference"], stage.reference) ||
+      !load_fixed_vector(item["lower"], stage.lower) ||
+      !load_fixed_vector(item["upper"], stage.upper) ||
+      !load_fixed_vector(item["weight"], stage.weight) ||
+      !load_fixed_vector(item["linear_cost"], stage.linear_cost))
+    {
+      return std::nullopt;
+    }
+    stage.path_curvature_radpm = item["path_curvature_radpm"].as<double>();
+    stage.stage_dt_sec = item["stage_dt_sec"].as<double>();
+    request.inputs.push_back(std::move(stage));
+  }
+  return request;
+}
+
+bool finite_pose(const recovery_footprint::Pose2D & pose) noexcept
+{
+  return std::isfinite(pose.x_m) && std::isfinite(pose.y_m) &&
+         std::isfinite(pose.yaw_rad);
+}
+
+std::optional<recovery_footprint::Pose2D> load_pose(const YAML::Node & node)
+{
+  if (!node || !node.IsMap()) {
+    return std::nullopt;
+  }
+  recovery_footprint::Pose2D pose{
+    node["x_m"].as<double>(), node["y_m"].as<double>(),
+    node["yaw_rad"].as<double>()};
+  return finite_pose(pose) ? std::optional{pose} : std::nullopt;
+}
+
+std::optional<std::shared_ptr<const recovery_footprint::OccupancyGrid>>
+load_wall_grid(
+  const YAML::Node & node, const std::filesystem::path & snapshot_file)
+{
+  if (!node || !node.IsMap() || !node["available"] ||
+    !node["available"].as<bool>())
+  {
+    return std::shared_ptr<const recovery_footprint::OccupancyGrid>{};
+  }
+  auto grid = std::make_shared<recovery_footprint::OccupancyGrid>();
+  grid->width = node["width"].as<std::size_t>();
+  grid->height = node["height"].as<std::size_t>();
+  grid->resolution_m = node["resolution_m"].as<double>();
+  grid->origin_x_m = node["origin_x_m"].as<double>();
+  grid->origin_y_m = node["origin_y_m"].as<double>();
+  const std::string axis = node["y_axis"].as<std::string>();
+  if (axis == "row-zero-at-minimum-y") {
+    grid->y_axis = recovery_footprint::YAxisConvention::RowZeroAtMinimumY;
+  } else if (axis == "row-zero-at-maximum-y") {
+    grid->y_axis = recovery_footprint::YAxisConvention::RowZeroAtMaximumY;
+  } else {
+    return std::nullopt;
+  }
+  const std::size_t cell_count = node["cell_count"].as<std::size_t>();
+  const std::string payload = node["payload"].as<std::string>();
+  if (payload.empty() || cell_count != grid->width * grid->height) {
+    return std::nullopt;
+  }
+  std::ifstream stream(snapshot_file.parent_path() / payload, std::ios::binary);
+  if (!stream) {
+    return std::nullopt;
+  }
+  grid->cells.reserve(cell_count);
+  for (std::size_t index = 0U; index < cell_count; ++index) {
+    std::int8_t value{};
+    stream.read(reinterpret_cast<char *>(&value), sizeof(value));
+    if (!stream) {
+      return std::nullopt;
+    }
+    if (value < -1 || value > 1) {
+      return std::nullopt;
+    }
+    grid->cells.push_back(
+      static_cast<recovery_footprint::CellState>(value));
+  }
+  if (!grid->valid()) {
+    return std::nullopt;
+  }
+  return std::shared_ptr<const recovery_footprint::OccupancyGrid>{grid};
+}
+
+std::optional<shadow::Snapshot> load_source_snapshot(
+  const YAML::Node & root, const std::filesystem::path & snapshot_file)
+{
+  const auto node = root["source"];
+  const auto problem_context = node["problem_context"];
+  const auto intent = parse_intent(problem_context["intent"].as<std::string>());
+  const auto formulation = parse_formulation(
+    problem_context["formulation"].as<std::string>());
+  auto semantic = load_semantic_request(node["semantic_request"]);
+  if (!intent || !formulation || !semantic) {
+    return std::nullopt;
+  }
+  shadow::Snapshot source;
+  source.identity.sequence = node["sequence"].as<std::uint64_t>();
+  source.identity.snapshot_sec = node["snapshot_sec"].as<double>();
+  auto & context = source.identity.source_context;
+  context.decision_id = problem_context["decision_id"].as<std::uint64_t>();
+  context.intent = intent.value();
+  context.intent_generation =
+    problem_context["intent_generation"].as<std::uint64_t>();
+  context.observation_generation =
+    problem_context["observation_generation"].as<std::uint64_t>();
+  context.stage_geometry_id =
+    problem_context["stage_geometry_id"].as<std::uint64_t>();
+  context.target_obstacle_generation =
+    problem_context["target_obstacle_generation"].as<std::uint64_t>();
+  context.target_id = problem_context["target_id"].as<std::string>();
+  context.execution_side_sign = problem_context["execution_side_sign"].as<int>();
+  context.horizon_steps = problem_context["horizon_steps"].as<std::size_t>();
+  context.formulation = formulation.value();
+  context.state_schema_id = problem_context["state_schema_id"].as<std::string>();
+  context.input_schema_id = problem_context["input_schema_id"].as<std::string>();
+  context.bounds_schema_id = problem_context["bounds_schema_id"].as<std::string>();
+  context.cost_schema_id = problem_context["cost_schema_id"].as<std::string>();
+  context.fingerprint = problem_context["fingerprint"].as<std::uint64_t>();
+  source.control_prediction_origin_sec =
+    node["control_prediction_origin_sec"].as<double>();
+  source.course_progress_origin_m =
+    node["course_progress_origin_m"].as<double>();
+  source.execution_prefix_steps = node["execution_prefix_steps"].as<int>();
+  source.publication_interval_sec = node["publication_interval_sec"].as<double>();
+  source.request = std::move(semantic.value());
+  auto nominal = load_std_vector(node["nominal_path_distance_m"]);
+  auto wall_progress = load_std_vector(node["wall_reference_progress_m"]);
+  auto wall_lower = load_std_vector(node["wall_lower_m"]);
+  auto wall_upper = load_std_vector(node["wall_upper_m"]);
+  if (!nominal || !wall_progress || !wall_lower || !wall_upper) {
+    return std::nullopt;
+  }
+  source.nominal_path_distance_m = std::move(nominal.value());
+  source.progress_aligned_wall_refinement_active =
+    node["progress_aligned_wall_refinement_active"].as<bool>();
+  source.wall_reference_progress_m = std::move(wall_progress.value());
+  source.wall_lower_m = std::move(wall_lower.value());
+  source.wall_upper_m = std::move(wall_upper.value());
+  source.progress_wall_profile_diagnostic =
+    node["progress_wall_profile_diagnostic"].as<std::string>();
+  source.dynamic_obstacle_refinement_active =
+    node["dynamic_obstacle_refinement_active"].as<bool>();
+  source.dynamic_obstacle_pass_side_sign =
+    node["dynamic_obstacle_pass_side_sign"].as<int>();
+  const auto stages = node["dynamic_obstacle_stages"];
+  if (!stages || !stages.IsSequence()) {
+    return std::nullopt;
+  }
+  source.dynamic_obstacle_stages.reserve(stages.size());
+  for (const auto & item : stages) {
+    source.dynamic_obstacle_stages.push_back(
+      mpcc_rate_resolved_dynamic_obstacle::StagePrediction{
+        item["valid"].as<bool>(), item["target_progress_m"].as<double>(),
+        item["target_lateral_m"].as<double>(),
+        item["longitudinal_overlap_m"].as<double>(),
+        item["lateral_center_separation_m"].as<double>()});
+  }
+  source.physical_wall_refinement_active =
+    node["physical_wall_refinement_active"].as<bool>();
+  const auto footprint = node["wall_footprint"];
+  source.wall_footprint.front_extent_m = footprint["front_extent_m"].as<double>();
+  source.wall_footprint.rear_extent_m = footprint["rear_extent_m"].as<double>();
+  source.wall_footprint.left_extent_m = footprint["left_extent_m"].as<double>();
+  source.wall_footprint.right_extent_m = footprint["right_extent_m"].as<double>();
+  source.wall_footprint.margin_m = footprint["margin_m"].as<double>();
+  const auto knots = node["wall_course_frame_knots"];
+  if (!knots || !knots.IsSequence()) {
+    return std::nullopt;
+  }
+  source.wall_course_frame_knots.reserve(knots.size());
+  for (const auto & item : knots) {
+    source.wall_course_frame_knots.push_back(
+      mpc_stage_geometry::CourseFrameKnot{
+        item["progress_m"].as<double>(), item["x_m"].as<double>(),
+        item["y_m"].as<double>(), item["heading_rad"].as<double>(),
+        item["waypoint"].as<int>()});
+  }
+  source.wall_lateral_sample_step_m =
+    node["wall_lateral_sample_step_m"].as<double>();
+  source.wall_heading_bucket_width_rad =
+    node["wall_heading_bucket_width_rad"].as<double>();
+  source.wall_translation_bucket_width_m =
+    node["wall_translation_bucket_width_m"].as<double>();
+  source.wall_boundary_guard_m = node["wall_boundary_guard_m"].as<double>();
+  auto grid = load_wall_grid(node["wall_grid"], snapshot_file);
+  if (!grid.has_value()) {
+    return std::nullopt;
+  }
+  source.wall_grid = std::move(grid.value());
+  const auto replay = node["replay_world"];
+  if (replay && replay["available"] && replay["available"].as<bool>()) {
+    shadow::ReplayWorld world;
+    world.observation_generation =
+      replay["observation_generation"].as<std::uint64_t>();
+    world.observed_sec = replay["observed_sec"].as<double>();
+    world.current = replay["current"].as<bool>();
+    const auto current_pose = load_pose(replay["current_pose"]);
+    const auto prefix = replay["control_prefix"];
+    if (!current_pose || !prefix || !prefix.IsSequence()) {
+      return std::nullopt;
+    }
+    world.current_pose = current_pose.value();
+    world.control_prefix.reserve(prefix.size());
+    for (const auto & item : prefix) {
+      const auto pose = load_pose(item);
+      if (!pose) {
+        return std::nullopt;
+      }
+      world.control_prefix.push_back(pose.value());
+    }
+    world.wall_grid_fingerprint =
+      replay["wall_grid_fingerprint"].as<std::uint64_t>();
+    world.hard_wall_clearance_m = replay["hard_wall_clearance_m"].as<double>();
+    world.bound_tolerance_m = replay["bound_tolerance_m"].as<double>();
+    world.swept_step_m = replay["swept_step_m"].as<double>();
+    const auto obstacles = replay["obstacles"];
+    if (!obstacles || !obstacles.IsSequence()) {
+      return std::nullopt;
+    }
+    world.obstacles.reserve(obstacles.size());
+    for (const auto & item : obstacles) {
+      world.obstacles.push_back(shadow::ReplayDynamicObstacle{
+        item["id"].as<std::string>(), item["x_m"].as<double>(),
+        item["y_m"].as<double>(), item["velocity_x_mps"].as<double>(),
+        item["velocity_y_mps"].as<double>(),
+        item["acceleration_x_mps2"].as<double>(),
+        item["acceleration_y_mps2"].as<double>(),
+        item["covariance_x_m2"].as<double>(),
+        item["covariance_y_m2"].as<double>(), item["radius_m"].as<double>(),
+        item["observation_generation"].as<std::uint64_t>()});
+    }
+    std::sort(
+      world.obstacles.begin(), world.obstacles.end(),
+      [](const shadow::ReplayDynamicObstacle & lhs,
+        const shadow::ReplayDynamicObstacle & rhs) {
+        return lhs.id < rhs.id;
+      });
+    source.replay_world = std::move(world);
+  }
+  return source;
+}
+
+class InteractionFingerprintBuilder
+{
+public:
+  void append_byte(const std::uint8_t value) noexcept
+  {
+    value_ ^= value;
+    value_ *= 1099511628211ULL;
+  }
+
+  void append_u64(const std::uint64_t value) noexcept
+  {
+    for (unsigned int shift = 0U; shift < 64U; shift += 8U) {
+      append_byte(static_cast<std::uint8_t>((value >> shift) & 0xffU));
+    }
+  }
+
+  void append_i64(const std::int64_t value) noexcept
+  {
+    append_u64(static_cast<std::uint64_t>(value));
+  }
+
+  void append_bool(const bool value) noexcept
+  {
+    append_byte(value ? 1U : 0U);
+  }
+
+  void append_double(double value) noexcept
+  {
+    if (value == 0.0) value = 0.0;
+    std::uint64_t bits{};
+    std::memcpy(&bits, &value, sizeof(bits));
+    append_u64(bits);
+  }
+
+  void append_string(const std::string & value) noexcept
+  {
+    append_u64(static_cast<std::uint64_t>(value.size()));
+    for (const unsigned char character : value) append_byte(character);
+  }
+
+  template<typename Derived>
+  void append_eigen(const Eigen::MatrixBase<Derived> & value) noexcept
+  {
+    append_u64(static_cast<std::uint64_t>(value.size()));
+    for (Eigen::Index index = 0; index < value.size(); ++index) {
+      append_double(value(index));
+    }
+  }
+
+  void append_vector(const std::vector<double> & values) noexcept
+  {
+    append_u64(static_cast<std::uint64_t>(values.size()));
+    for (const double value : values) append_double(value);
+  }
+
+  std::uint64_t finish() const noexcept
+  {
+    return value_ == 0U ? 1U : value_;
+  }
+
+private:
+  std::uint64_t value_{14695981039346656037ULL};
+};
+
 std::string failure_key(
   const shadow::Snapshot & source, const PipelineStage stage,
   const std::string & failure_outcome)
@@ -531,6 +1008,317 @@ const char * to_string(const RecordStatus status) noexcept
     case RecordStatus::IoFailure: return "io-failure";
   }
   return "invalid-input";
+}
+
+bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
+{
+  try {
+    const auto & request = source.request;
+    if (
+      source.identity.sequence == 0U ||
+      !std::isfinite(source.identity.snapshot_sec) ||
+      !std::isfinite(source.control_prediction_origin_sec) ||
+      source.control_prediction_origin_sec < source.identity.snapshot_sec ||
+      !std::isfinite(source.course_progress_origin_m) ||
+      !std::isfinite(source.publication_interval_sec) ||
+      source.publication_interval_sec <= 0.0 ||
+      !contract::problem_context_complete(source.identity.source_context) ||
+      request.horizon_steps <= 0 ||
+      source.identity.source_context.horizon_steps !=
+      static_cast<std::size_t>(request.horizon_steps) ||
+      source.execution_prefix_steps <= 0 ||
+      source.execution_prefix_steps > request.horizon_steps ||
+      !request.initial_state.allFinite() ||
+      !request.previous_input.allFinite() ||
+      !request.input_delta_weight.allFinite() ||
+      !std::isfinite(request.current_steering_rad) ||
+      !std::isfinite(request.current_response_steering_rad) ||
+      !std::isfinite(request.wheelbase_m) || request.wheelbase_m <= 0.0 ||
+      !std::isfinite(request.yaw_response_gain) ||
+      !std::isfinite(request.yaw_response_time_constant_sec) ||
+      request.yaw_response_time_constant_sec <= 0.0 ||
+      !std::isfinite(request.maximum_abs_steering_rad) ||
+      request.maximum_abs_steering_rad <= 0.0 ||
+      !std::isfinite(request.maximum_abs_steering_rate_radps) ||
+      request.maximum_abs_steering_rate_radps <= 0.0 ||
+      !std::isfinite(request.minimum_frenet_denominator) ||
+      request.minimum_frenet_denominator <= 0.0 ||
+      !std::isfinite(request.minimum_stage_dt_sec) ||
+      !std::isfinite(request.maximum_stage_dt_sec) ||
+      request.minimum_stage_dt_sec <= 0.0 ||
+      request.maximum_stage_dt_sec < request.minimum_stage_dt_sec ||
+      request.states.size() !=
+      static_cast<std::size_t>(request.horizon_steps + 1) ||
+      request.inputs.size() != static_cast<std::size_t>(request.horizon_steps) ||
+      source.nominal_path_distance_m.size() !=
+      static_cast<std::size_t>(request.horizon_steps + 1))
+    {
+      return false;
+    }
+    for (const auto & stage : request.states) {
+      if (
+        !stage.reference.allFinite() || !stage.lower.allFinite() ||
+        !stage.upper.allFinite() || !stage.weight.allFinite() ||
+        !stage.linear_cost.allFinite() ||
+        (stage.lower.array() > stage.upper.array()).any())
+      {
+        return false;
+      }
+    }
+    for (const auto & stage : request.inputs) {
+      if (
+        !stage.reference.allFinite() || !stage.lower.allFinite() ||
+        !stage.upper.allFinite() || !stage.weight.allFinite() ||
+        !stage.linear_cost.allFinite() ||
+        (stage.lower.array() > stage.upper.array()).any() ||
+        !std::isfinite(stage.path_curvature_radpm) ||
+        !std::isfinite(stage.stage_dt_sec) || stage.stage_dt_sec <= 0.0)
+      {
+        return false;
+      }
+    }
+    if (
+      !source.progress_aligned_wall_refinement_active ||
+      source.wall_reference_progress_m.size() < 2U ||
+      source.wall_reference_progress_m.size() != source.wall_lower_m.size() ||
+      source.wall_reference_progress_m.size() != source.wall_upper_m.size() ||
+      !source.physical_wall_refinement_active || source.wall_grid == nullptr ||
+      !source.wall_grid->valid() || !source.wall_footprint.valid() ||
+      source.wall_course_frame_knots.size() < 2U ||
+      !std::isfinite(source.wall_lateral_sample_step_m) ||
+      source.wall_lateral_sample_step_m <= 0.0 ||
+      !std::isfinite(source.wall_heading_bucket_width_rad) ||
+      source.wall_heading_bucket_width_rad <= 0.0 ||
+      !std::isfinite(source.wall_translation_bucket_width_m) ||
+      source.wall_translation_bucket_width_m <= 0.0 ||
+      !std::isfinite(source.wall_boundary_guard_m) ||
+      source.wall_boundary_guard_m < 0.0 || !source.replay_world.has_value())
+    {
+      return false;
+    }
+    for (std::size_t index = 0U; index < source.wall_reference_progress_m.size(); ++index) {
+      if (
+        !std::isfinite(source.wall_reference_progress_m[index]) ||
+        !std::isfinite(source.wall_lower_m[index]) ||
+        !std::isfinite(source.wall_upper_m[index]) ||
+        source.wall_lower_m[index] > source.wall_upper_m[index] ||
+        (index > 0U && source.wall_reference_progress_m[index] <=
+        source.wall_reference_progress_m[index - 1U]))
+      {
+        return false;
+      }
+    }
+    for (std::size_t index = 0U; index < source.nominal_path_distance_m.size(); ++index) {
+      if (
+        !std::isfinite(source.nominal_path_distance_m[index]) ||
+        source.nominal_path_distance_m[index] < 0.0 ||
+        (index > 0U && source.nominal_path_distance_m[index] <
+        source.nominal_path_distance_m[index - 1U]))
+      {
+        return false;
+      }
+    }
+    if (
+      source.dynamic_obstacle_refinement_active &&
+      source.dynamic_obstacle_stages.size() !=
+      static_cast<std::size_t>(request.horizon_steps))
+    {
+      return false;
+    }
+    for (const auto & stage : source.dynamic_obstacle_stages) {
+      if (
+        !std::isfinite(stage.target_progress_m) ||
+        !std::isfinite(stage.target_lateral_m) ||
+        !std::isfinite(stage.longitudinal_overlap_m) ||
+        !std::isfinite(stage.lateral_center_separation_m))
+      {
+        return false;
+      }
+    }
+    for (const auto & knot : source.wall_course_frame_knots) {
+      if (
+        !std::isfinite(knot.progress_m) || !std::isfinite(knot.x_m) ||
+        !std::isfinite(knot.y_m) || !std::isfinite(knot.heading_rad))
+      {
+        return false;
+      }
+    }
+    const auto & world = source.replay_world.value();
+    if (
+      !world.current || world.observation_generation == 0U ||
+      world.observation_generation !=
+      source.identity.source_context.observation_generation ||
+      !std::isfinite(world.observed_sec) || !finite_pose(world.current_pose) ||
+      world.control_prefix.empty() ||
+      std::any_of(
+        world.control_prefix.begin(), world.control_prefix.end(),
+        [](const auto & pose) {return !finite_pose(pose);}) ||
+      std::abs(world.control_prefix.front().x_m - world.current_pose.x_m) > 1e-9 ||
+      std::abs(world.control_prefix.front().y_m - world.current_pose.y_m) > 1e-9 ||
+      std::abs(world.control_prefix.front().yaw_rad - world.current_pose.yaw_rad) > 1e-9 ||
+      world.wall_grid_fingerprint == 0U ||
+      world.wall_grid_fingerprint !=
+      recovery_footprint::occupancy_grid_fingerprint(*source.wall_grid) ||
+      !std::isfinite(world.hard_wall_clearance_m) ||
+      world.hard_wall_clearance_m < 0.0 ||
+      !std::isfinite(world.bound_tolerance_m) || world.bound_tolerance_m < 0.0 ||
+      !std::isfinite(world.swept_step_m) || world.swept_step_m <= 0.0)
+    {
+      return false;
+    }
+    std::set<std::string> obstacle_ids;
+    bool target_present = source.identity.source_context.target_id.empty();
+    for (const auto & obstacle : world.obstacles) {
+      if (
+        obstacle.id.empty() || !obstacle_ids.insert(obstacle.id).second ||
+        obstacle.observation_generation != world.observation_generation ||
+        !std::isfinite(obstacle.x_m) || !std::isfinite(obstacle.y_m) ||
+        !std::isfinite(obstacle.velocity_x_mps) ||
+        !std::isfinite(obstacle.velocity_y_mps) ||
+        !std::isfinite(obstacle.acceleration_x_mps2) ||
+        !std::isfinite(obstacle.acceleration_y_mps2) ||
+        !std::isfinite(obstacle.covariance_x_m2) ||
+        obstacle.covariance_x_m2 < 0.0 ||
+        !std::isfinite(obstacle.covariance_y_m2) ||
+        obstacle.covariance_y_m2 < 0.0 ||
+        !std::isfinite(obstacle.radius_m) || obstacle.radius_m <= 0.0)
+      {
+        return false;
+      }
+      target_present = target_present ||
+        obstacle.id == source.identity.source_context.target_id;
+    }
+    return target_present;
+  } catch (...) {
+    return false;
+  }
+}
+
+std::uint64_t fingerprint_interaction_snapshot(
+  const shadow::Snapshot & source) noexcept
+{
+  if (!interaction_snapshot_complete(source)) {
+    return 0U;
+  }
+  InteractionFingerprintBuilder builder;
+  builder.append_string("mpcc-interaction-snapshot-v1");
+  builder.append_u64(source.identity.sequence);
+  builder.append_u64(source.identity.source_context.fingerprint);
+  builder.append_double(source.identity.snapshot_sec);
+  builder.append_double(source.control_prediction_origin_sec);
+  builder.append_i64(source.execution_prefix_steps);
+  builder.append_double(source.course_progress_origin_m);
+  builder.append_double(source.publication_interval_sec);
+  const auto & request = source.request;
+  builder.append_i64(request.horizon_steps);
+  builder.append_eigen(request.initial_state);
+  builder.append_double(request.current_steering_rad);
+  builder.append_double(request.current_response_steering_rad);
+  builder.append_double(request.wheelbase_m);
+  builder.append_double(request.yaw_response_gain);
+  builder.append_double(request.yaw_response_time_constant_sec);
+  builder.append_double(request.maximum_abs_steering_rad);
+  builder.append_double(request.maximum_abs_steering_rate_radps);
+  builder.append_double(request.minimum_frenet_denominator);
+  builder.append_double(request.minimum_stage_dt_sec);
+  builder.append_double(request.maximum_stage_dt_sec);
+  builder.append_eigen(request.previous_input);
+  builder.append_eigen(request.input_delta_weight);
+  builder.append_u64(static_cast<std::uint64_t>(request.states.size()));
+  for (const auto & stage : request.states) {
+    builder.append_eigen(stage.reference);
+    builder.append_eigen(stage.lower);
+    builder.append_eigen(stage.upper);
+    builder.append_eigen(stage.weight);
+    builder.append_eigen(stage.linear_cost);
+  }
+  builder.append_u64(static_cast<std::uint64_t>(request.inputs.size()));
+  for (const auto & stage : request.inputs) {
+    builder.append_eigen(stage.reference);
+    builder.append_eigen(stage.lower);
+    builder.append_eigen(stage.upper);
+    builder.append_eigen(stage.weight);
+    builder.append_eigen(stage.linear_cost);
+    builder.append_double(stage.path_curvature_radpm);
+    builder.append_double(stage.stage_dt_sec);
+  }
+  builder.append_vector(source.nominal_path_distance_m);
+  builder.append_vector(source.wall_reference_progress_m);
+  builder.append_vector(source.wall_lower_m);
+  builder.append_vector(source.wall_upper_m);
+  builder.append_bool(source.dynamic_obstacle_refinement_active);
+  builder.append_i64(source.dynamic_obstacle_pass_side_sign);
+  builder.append_u64(
+    static_cast<std::uint64_t>(source.dynamic_obstacle_stages.size()));
+  for (const auto & stage : source.dynamic_obstacle_stages) {
+    builder.append_bool(stage.valid);
+    builder.append_double(stage.target_progress_m);
+    builder.append_double(stage.target_lateral_m);
+    builder.append_double(stage.longitudinal_overlap_m);
+    builder.append_double(stage.lateral_center_separation_m);
+  }
+  builder.append_double(source.wall_footprint.front_extent_m);
+  builder.append_double(source.wall_footprint.rear_extent_m);
+  builder.append_double(source.wall_footprint.left_extent_m);
+  builder.append_double(source.wall_footprint.right_extent_m);
+  builder.append_double(source.wall_footprint.margin_m);
+  builder.append_u64(
+    static_cast<std::uint64_t>(source.wall_course_frame_knots.size()));
+  for (const auto & knot : source.wall_course_frame_knots) {
+    builder.append_double(knot.progress_m);
+    builder.append_double(knot.x_m);
+    builder.append_double(knot.y_m);
+    builder.append_double(knot.heading_rad);
+    builder.append_i64(knot.waypoint);
+  }
+  builder.append_double(source.wall_lateral_sample_step_m);
+  builder.append_double(source.wall_heading_bucket_width_rad);
+  builder.append_double(source.wall_translation_bucket_width_m);
+  builder.append_double(source.wall_boundary_guard_m);
+  const auto & world = source.replay_world.value();
+  builder.append_u64(world.observation_generation);
+  builder.append_double(world.observed_sec);
+  builder.append_double(world.current_pose.x_m);
+  builder.append_double(world.current_pose.y_m);
+  builder.append_double(world.current_pose.yaw_rad);
+  builder.append_u64(static_cast<std::uint64_t>(world.control_prefix.size()));
+  for (const auto & pose : world.control_prefix) {
+    builder.append_double(pose.x_m);
+    builder.append_double(pose.y_m);
+    builder.append_double(pose.yaw_rad);
+  }
+  builder.append_u64(world.wall_grid_fingerprint);
+  builder.append_double(world.hard_wall_clearance_m);
+  builder.append_double(world.bound_tolerance_m);
+  builder.append_double(world.swept_step_m);
+  auto obstacles = world.obstacles;
+  std::sort(
+    obstacles.begin(), obstacles.end(),
+    [](const shadow::ReplayDynamicObstacle & lhs,
+      const shadow::ReplayDynamicObstacle & rhs) {return lhs.id < rhs.id;});
+  builder.append_u64(static_cast<std::uint64_t>(obstacles.size()));
+  for (const auto & obstacle : obstacles) {
+    builder.append_string(obstacle.id);
+    builder.append_double(obstacle.x_m);
+    builder.append_double(obstacle.y_m);
+    builder.append_double(obstacle.velocity_x_mps);
+    builder.append_double(obstacle.velocity_y_mps);
+    builder.append_double(obstacle.acceleration_x_mps2);
+    builder.append_double(obstacle.acceleration_y_mps2);
+    builder.append_double(obstacle.covariance_x_m2);
+    builder.append_double(obstacle.covariance_y_m2);
+    builder.append_double(obstacle.radius_m);
+    builder.append_u64(obstacle.observation_generation);
+  }
+  return builder.finish();
+}
+
+bool interaction_snapshot_matches_fingerprint(
+  const shadow::Snapshot & source,
+  const std::uint64_t expected_fingerprint) noexcept
+{
+  return expected_fingerprint != 0U &&
+         fingerprint_interaction_snapshot(source) == expected_fingerprint;
 }
 
 RecordResult record_failure(
@@ -630,6 +1418,8 @@ RecordResult record_failure(
     root["failure_detail"] = failure_detail;
     root["source"] = source_node(
       source, source.wall_grid != nullptr ? grid_payload : "");
+    root["interaction_fingerprint"] =
+      fingerprint_interaction_snapshot(source);
     root["assembly_request"] = assembly_request_node(assembly_request);
     root["exact_qp"] = exact_problem_node(exact_problem);
     root["warm_start"] = warm_start_node(warm_start);
@@ -750,6 +1540,54 @@ std::optional<RecordedQp> load_recorded_qp(
     if (detail != nullptr) {
       *detail = "unknown snapshot loader exception";
     }
+    return std::nullopt;
+  }
+}
+
+std::optional<RecordedInteractionSnapshot> load_recorded_interaction_snapshot(
+  const std::filesystem::path & snapshot_file, std::string * detail) noexcept
+{
+  try {
+    const YAML::Node root = YAML::LoadFile(snapshot_file.string());
+    if (!root["schema"] ||
+      root["schema"].as<std::string>() !=
+      "mpcc-architecture-failure-snapshot/v1")
+    {
+      if (detail != nullptr) *detail = "unsupported snapshot schema";
+      return std::nullopt;
+    }
+    auto source = load_source_snapshot(root, snapshot_file);
+    if (!source.has_value() || !interaction_snapshot_complete(source.value())) {
+      if (detail != nullptr) *detail = "interaction snapshot incomplete";
+      return std::nullopt;
+    }
+    if (!root["interaction_fingerprint"]) {
+      if (detail != nullptr) *detail = "interaction fingerprint unavailable";
+      return std::nullopt;
+    }
+    const std::uint64_t fingerprint =
+      root["interaction_fingerprint"].as<std::uint64_t>();
+    if (!interaction_snapshot_matches_fingerprint(source.value(), fingerprint)) {
+      if (detail != nullptr) *detail = "interaction fingerprint mismatch";
+      return std::nullopt;
+    }
+    std::string qp_detail;
+    auto recorded_qp = load_recorded_qp(snapshot_file, &qp_detail);
+    if (!recorded_qp.has_value()) {
+      if (detail != nullptr) *detail = "exact QP unavailable: " + qp_detail;
+      return std::nullopt;
+    }
+    RecordedInteractionSnapshot recorded;
+    recorded.source = std::move(source.value());
+    recorded.recorded_qp = std::move(recorded_qp.value());
+    recorded.interaction_fingerprint = fingerprint;
+    if (detail != nullptr) *detail = "loaded";
+    return recorded;
+  } catch (const std::exception & exception) {
+    if (detail != nullptr) *detail = exception.what();
+    return std::nullopt;
+  } catch (...) {
+    if (detail != nullptr) *detail = "unknown interaction snapshot loader exception";
     return std::nullopt;
   }
 }

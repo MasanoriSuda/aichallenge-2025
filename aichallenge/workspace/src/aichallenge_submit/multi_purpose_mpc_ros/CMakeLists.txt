@@ -145,6 +145,7 @@ target_link_libraries(${PROJECT_NAME}_mpcc_architecture_snapshot
   ${PROJECT_NAME}_mpcc_rate_resolved_adapter
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_persistent_osqp
+  ${PROJECT_NAME}_recovery_footprint
   yaml-cpp
 )
 

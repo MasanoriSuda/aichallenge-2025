@@ -22581,6 +22581,65 @@ struct MPC
     return snapshot;
   }
 
+  void bind_rate_resolved_replay_world(
+    rate_resolved_shadow::Snapshot & solver_snapshot,
+    const rate_resolved_physical_wall::Snapshot & physical_snapshot,
+    const double now_sec)
+  {
+    if (
+      gap_planner == nullptr || !std::isfinite(now_sec) ||
+      physical_snapshot.wall_grid == nullptr ||
+      physical_snapshot.wall_grid_fingerprint == 0U ||
+      physical_snapshot.control_prefix.empty())
+    {
+      return;
+    }
+    const auto dynamic_world = gap_planner->dynamic_world_observation(now_sec);
+    if (!dynamic_world.current || dynamic_world.observation_generation == 0U) {
+      return;
+    }
+    rate_resolved_shadow::ReplayWorld replay;
+    replay.observation_generation = dynamic_world.observation_generation;
+    replay.observed_sec = now_sec;
+    replay.current = true;
+    replay.current_pose = physical_snapshot.current_pose;
+    replay.control_prefix = physical_snapshot.control_prefix;
+    replay.wall_grid_fingerprint = physical_snapshot.wall_grid_fingerprint;
+    replay.hard_wall_clearance_m =
+      physical_snapshot.hard_wall_clearance_m;
+    replay.bound_tolerance_m = physical_snapshot.bound_tolerance_m;
+    replay.swept_step_m = physical_snapshot.swept_step_m;
+    replay.obstacles.reserve(dynamic_world.vehicles.size());
+    for (const auto & vehicle : dynamic_world.vehicles) {
+      const auto radius_m = rate_resolved_retained::resolve_peer_circle_radius(
+        cfg.v2x_gap.vehicle_radius, overtake_static_wall_footprint_,
+        cfg.v2x_gap.prediction_margin +
+        std::max(vehicle.covariance_x, vehicle.covariance_y));
+      if (!radius_m.has_value()) {
+        return;
+      }
+      replay.obstacles.push_back(rate_resolved_shadow::ReplayDynamicObstacle{
+        vehicle.id,
+        vehicle.x,
+        vehicle.y,
+        vehicle.vx,
+        vehicle.vy,
+        vehicle.ax,
+        vehicle.ay,
+        vehicle.covariance_x,
+        vehicle.covariance_y,
+        radius_m.value(),
+        vehicle.observation_generation});
+    }
+    std::sort(
+      replay.obstacles.begin(), replay.obstacles.end(),
+      [](const rate_resolved_shadow::ReplayDynamicObstacle & lhs,
+        const rate_resolved_shadow::ReplayDynamicObstacle & rhs) {
+        return lhs.id < rhs.id;
+      });
+    solver_snapshot.replay_world = std::move(replay);
+  }
+
   bool submit_rate_resolved_track_cruise_shadow(
     const MpcProblem & source_problem,
     const BoundRateResolvedTrackCruiseSubmission & bound_submission,
@@ -22617,6 +22676,8 @@ struct MPC
     if (physical_snapshot.has_value() && physical_mailbox != nullptr) {
       bind_rate_resolved_physical_wall_refinement(
         snapshot.value(), physical_snapshot.value());
+      bind_rate_resolved_replay_world(
+        snapshot.value(), physical_snapshot.value(), now_sec);
       physical_registered = physical_mailbox->register_submission(
         physical_snapshot->identity);
       if (!physical_registered) {

@@ -10,6 +10,11 @@
       "snapshot_id": "f1734886-shiftout-initial-1152",
       "manifest": ".steering/20260828-rate-resolved-failure-snapshot/snapshots/f1734886-shiftout-initial-1152.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "0287d193-live-mission-lifecycle-ab",
+      "manifest": ".steering/20260828-mission-lifecycle-ab-comparison/snapshots/0287d193-live-mission-lifecycle-ab.json",
+      "replay_ready": false
     }
   ],
   "experiments": [
@@ -128,6 +133,24 @@
       "production_impact": "accepted production baseline remains N=20 with 40 Hz solve submission",
       "deleted_code": [],
       "revisit_condition": "structural backlog is closed and a replay-ready performance-only failure demonstrates a new isolated tuning dimension"
+    },
+    {
+      "experiment_id": "20260828-mission-lifecycle-live-ab",
+      "baseline_commit": "0287d1930bfdd7b89c36a25cb9f75bd76800d762",
+      "snapshot_ids": [
+        "0287d193-live-mission-lifecycle-ab"
+      ],
+      "hypothesis": "the persistent Mission and a fresh stateless receding candidate can be compared on one active Overtake world with the same seven-state SQP",
+      "changed_dimension": "candidate_lifecycle_isolation",
+      "result": "blocked",
+      "reason": "after adapting the observation-only A arm to the valid frozen runtime Mission, all 18 final active ShiftOut observations still lacked an independently generated receding B candidate, so no same-world solver pair existed",
+      "production_impact": "none; observation-only live instrumentation and unused audit API were removed after evidence capture",
+      "deleted_code": [
+        "bounded live Mission lifecycle A/B worker hook",
+        "Mission lifecycle A/B candidate-isolation API",
+        "A/B-only counters and structured logs"
+      ],
+      "revisit_condition": "an independent current-world InteractionBundle producer and replay-ready snapshot exist without depending on persistent Mission geometry or phase lifecycle"
     }
   ]
 }

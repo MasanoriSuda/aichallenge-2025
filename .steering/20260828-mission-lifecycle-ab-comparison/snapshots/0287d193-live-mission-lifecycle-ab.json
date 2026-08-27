@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "0287d193-live-mission-lifecycle-ab",
+  "baseline_commit": "0287d1930bfdd7b89c36a25cb9f75bd76800d762",
+  "evidence_type": "simulation-log",
+  "replay_ready": false,
+  "production_authority_changed": false,
+  "runs": [
+    "output/20260828-073117",
+    "output/20260828-074011",
+    "output/20260828-074712"
+  ],
+  "domains": [
+    1,
+    2
+  ],
+  "observed_domain": 1,
+  "classification": "candidate-comparison-blocked-by-lifecycle-coupling",
+  "comparable_solver_pairs": 0,
+  "final_observation": {
+    "run": "output/20260828-074712",
+    "phase": "ShiftOut",
+    "target": "d2",
+    "persistent_candidate_available": true,
+    "receding_candidate_available": false,
+    "wait_records": 18
+  },
+  "replay_missing_fields": [
+    "owned seven-state initial condition",
+    "time-indexed wall bounds",
+    "time-indexed opponent occupancy",
+    "complete solver problem matrices",
+    "exact physical proof input"
+  ]
+}
+

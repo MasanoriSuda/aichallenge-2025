@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "snapshots": [
+    {
+      "snapshot_id": "b6da7ebb-source-audit-only",
+      "manifest": ".steering/20260827-architecture-escape-hatch/snapshots/b6da7ebb-source-audit-only.json",
+      "replay_ready": false
+    }
+  ],
+  "experiments": [
+    {
+      "experiment_id": "20260827-reachable-preview-horizon",
+      "baseline_commit": "b6da7ebb296292bf57929ed9064a9fb789b95df0",
+      "snapshot_ids": [],
+      "hypothesis": "a longer reachable preview horizon restores Pass completion",
+      "changed_dimension": "horizon_generation",
+      "result": "rejected",
+      "reason": "the historical Slice recorded worse dynamic behavior and did not provide same-snapshot causal evidence",
+      "production_impact": "none; experiment was reverted",
+      "deleted_code": [],
+      "revisit_condition": "a replay-ready snapshot proves horizon truncation is the earliest invariant violation"
+    },
+    {
+      "experiment_id": "20260827-post-refinement-extra-sqp",
+      "baseline_commit": "b6da7ebb296292bf57929ed9064a9fb789b95df0",
+      "snapshot_ids": [],
+      "hypothesis": "an additional live SQP iteration closes the physical proof gap",
+      "changed_dimension": "convexification_iterations",
+      "result": "rejected",
+      "reason": "historical live attempts reached maximum iteration or unacceptable callback cost without proving the producer contract",
+      "production_impact": "none; no extra production retry remains",
+      "deleted_code": [],
+      "revisit_condition": "offline D succeeds on the same replay-ready snapshot while current C fails"
+    },
+    {
+      "experiment_id": "20260828-a-d-escape-hatch-baseline",
+      "baseline_commit": "b6da7ebb296292bf57929ed9064a9fb789b95df0",
+      "snapshot_ids": [
+        "b6da7ebb-source-audit-only"
+      ],
+      "hypothesis": "remaining Pass/Return failures can be classified among lifecycle, candidate, single-SQP and physical feasibility",
+      "changed_dimension": "architecture_comparison",
+      "result": "inconclusive",
+      "reason": "no replay-ready b6da7ebb Pass/Return failure snapshot exists yet",
+      "production_impact": "none; production authority remains frozen",
+      "deleted_code": [],
+      "revisit_condition": "capture one complete b6da7ebb current-world Pass/Return failure snapshot"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "b6da7ebb-source-audit-only",
+  "baseline_commit": "b6da7ebb296292bf57929ed9064a9fb789b95df0",
+  "run_id": "source-audit-only",
+  "domain_id": 0,
+  "decision_id": 0,
+  "failure_family": "pass-return-dynamic-acceptance",
+  "replay_ready": false,
+  "incomplete_reason": "current baseline has source/static evidence but no complete immutable Pass/Return failure payload",
+  "payloads": {}
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPCC failure snapshot manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "baseline_commit",
+    "run_id",
+    "domain_id",
+    "decision_id",
+    "failure_family",
+    "replay_ready",
+    "payloads"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "baseline_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "domain_id": {"type": "integer", "minimum": 0},
+    "decision_id": {"type": "integer", "minimum": 0},
+    "failure_family": {"type": "string", "minLength": 1},
+    "replay_ready": {"type": "boolean"},
+    "incomplete_reason": {"type": "string"},
+    "payloads": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["path", "sha256", "size_bytes"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "size_bytes": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

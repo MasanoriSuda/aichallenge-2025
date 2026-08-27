@@ -18,6 +18,42 @@ Do not interpret "single MPCC" as putting target selection, homotopy selection, 
 emergency stop, or reverse Recovery inside one solver. Those components may remain separate, but they
 must not independently emit a normal racing command.
 
+## Architecture escape-hatch
+
+Single certified normal authority is an invariant. A specific persistent
+Mission representation, candidate generator, MPCC formulation,
+convexification schedule, or solver backend is not an invariant.
+
+Stop production changes and run a same-snapshot architecture comparison before
+the third patch in one failure family, or earlier when any of the following is
+observed:
+
+- two root-cause hypotheses for the same scene have been falsified;
+- ShiftOut is repeatedly demonstrated but Pass or Return has no positive
+  dynamic acceptance;
+- another resume, reconnect, replenish, retry, timeout, lease, grace or
+  fallback rule is being proposed;
+- a numerical solve and exact physical certificate repeatedly disagree;
+- fresh/retained authority disappears repeatedly for the same immutable
+  world/problem fingerprint.
+
+The minimum comparison keeps production authority unchanged and evaluates the
+same immutable failure snapshot with:
+
+1. persistent Mission plus the current seven-state SQP;
+2. stateless receding ManeuverBundle plus the same SQP;
+3. a rough spline, polynomial or lattice candidate plus the same seven-state
+   refinement;
+4. a bounded offline multi-SQP or nonlinear feasibility solve.
+
+Do not call all-method failure physical infeasibility unless an explicit
+bounded physical infeasibility certificate exists. A local optimizer failing
+to find a solution is `Unknown`.
+
+Record accepted, rejected and inconclusive comparisons in the central MPCC
+experiment registry. Do not repeat a rejected experiment unless its recorded
+revisit condition is satisfied.
+
 ## Root-cause-first default
 
 Controller, planner, solver, wall/corridor, authority, handoff, and recovery regressions begin in

@@ -769,6 +769,10 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_single_authority_source_contract
     test/test_single_authority_source_contract.py
   )
+  ament_add_pytest_test(test_mpcc_architecture_audit
+    test/test_mpcc_architecture_audit.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/tools/mpcc_architecture_audit
+  )
 endif()
 
 ament_python_install_package(${PROJECT_NAME}
@@ -782,6 +786,11 @@ ament_python_install_package(kaleidoscope
 
 ament_python_install_package(localization_scope
   PACKAGE_DIR tools/localization_scope/localization_scope
+  SCRIPTS_DESTINATION lib/${PROJECT_NAME}
+)
+
+ament_python_install_package(mpcc_architecture_audit
+  PACKAGE_DIR tools/mpcc_architecture_audit/mpcc_architecture_audit
   SCRIPTS_DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -800,6 +809,7 @@ install(PROGRAMS
   scripts/reference_path_visualizer
   scripts/reference_velocity_configulator
   scripts/localization_scope
+  scripts/mpcc_architecture_audit
   scripts/pure_pursuit_trajectory_editor
   scripts/trajectory_editor
   scripts/v2x_position_editor

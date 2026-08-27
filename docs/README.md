@@ -22,6 +22,8 @@
 - `log-design.md` — `/output` 配下へログを集約する設計（compose / `run_evaluation.bash` の出力レイアウト）。
 - `makefile-target-naming.md` — Makefile ターゲットの `<service>-<command>` 命名ガイドライン。
 - `mpc-integration.md` — `multi_purpose_mpc_ros` のインテグレーション設計。
+- `mpcc-experiment-governance.md` — MPCC failure snapshot、Algorithm Pivot Gate、A〜D方式比較、Slice 7移行条件。
+- `mpcc-experiment-registry.json` — MPCC方式比較の採用・棄却・保留と再検討条件の正本台帳。
 - `open-questions.md` — 2026 公式仕様と現行実装の差分、運営確認が必要な事項。
 - `safety-gates.md` — 障害物停止、NPC 追い越し、車線維持の検証方針。
 - `submission-workflow.md` — 提出 tar.gz 作成、ローカル評価、公式提出前チェックの手順。

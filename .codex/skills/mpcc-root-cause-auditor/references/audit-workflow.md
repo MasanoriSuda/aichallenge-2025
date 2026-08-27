@@ -109,6 +109,27 @@ certificate consistency, replayability, timing, migration risk, and legacy delet
 Reject a proposal whose main effect is threshold tuning or an additional exceptional branch unless
 the user explicitly approves it as temporary and its removal test is defined.
 
+## 8a. Architecture escape-hatch
+
+Before a third implementation Slice in the same failure family, or when the
+package `AGENTS.md` trigger fires, stop production changes and demote the
+current architecture to one candidate. Seal one immutable, replay-ready
+snapshot and compare:
+
+- A: persistent Mission pipeline plus the current canonical SQP;
+- B: stateless receding ManeuverBundle plus the same SQP;
+- C: an independently generated rough path plus the same refinement;
+- D: a bounded offline multi-SQP or nonlinear feasibility solve.
+
+The compared methods must share world/problem fingerprint, state, reference,
+wall map, peer prediction, physical model and hard constraints. Record every
+outcome in the central experiment registry. The comparison is observation-only
+and cannot publish or change production authority.
+
+Classify `all failed` as physical infeasibility only with an explicit bounded
+certificate. Otherwise classify it as `Unknown` and improve evidence or search
+coverage before changing production.
+
 ## 9. Implementation gate
 
 Before an approved implementation slice, report:

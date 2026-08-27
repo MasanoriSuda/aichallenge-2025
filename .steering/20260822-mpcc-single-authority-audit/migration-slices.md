@@ -1248,6 +1248,17 @@ Finish the architecture simplification instead of leaving permanent dual control
   retained-proof Emergency and target-loss episodes are post-migration
   integration-quality debt, not a reason to restore a second owner.
 
+- `.steering/20260828-shiftout-physical-separation-handoff` repairs a
+  post-migration persistent-Mission lifecycle defect found by the frozen
+  architecture escape-hatch audit. ShiftOut completion no longer requires an
+  obsolete frozen `goal_ey` after its planned distance when a continuous
+  course-frame observation proves physical center separation on the selected
+  homotopy. Fresh dynamic and physical Pass-entry horizons remain mandatory.
+  In `output/20260828-044759`, the new completion reason was exercised by
+  `ShiftOut -> Pass -> Return -> Idle`; no ShiftOut/Pass Recovery or actual
+  footprint wall-margin violation occurred. This is an accepted structural
+  prerequisite for Slice 7, not parameter tuning.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

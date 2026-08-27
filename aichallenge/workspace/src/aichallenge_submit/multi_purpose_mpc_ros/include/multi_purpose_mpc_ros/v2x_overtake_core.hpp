@@ -224,6 +224,25 @@ struct ShiftOutCompletionRequest
   double target_lateral_m{};
   double lateral_tolerance_m{};
   int pass_side_sign{};
+  /// A current, continuous locked-target observation is available in the
+  /// course frame.  This is deliberately separate from generic 2-D footprint
+  /// separation, which may be true only because the target is still ahead.
+  bool selected_side_separation_observation_valid{false};
+  double target_relative_lateral_m{std::numeric_limits<double>::infinity()};
+  double physical_center_separation_m{std::numeric_limits<double>::infinity()};
+};
+
+enum class ShiftOutCompletionReason
+{
+  Incomplete,
+  PlannedLateralGoal,
+  SelectedSidePhysicalSeparation,
+};
+
+struct ShiftOutCompletionResolution
+{
+  bool complete{false};
+  ShiftOutCompletionReason reason{ShiftOutCompletionReason::Incomplete};
 };
 
 /// True once the vehicle reaches or crosses the target line toward pass_side_sign.
@@ -232,8 +251,16 @@ bool has_reached_pass_side_lateral_goal(
   double current_lateral_m, double target_lateral_m,
   double lateral_tolerance_m, int pass_side_sign) noexcept;
 
+/// Resolve the ShiftOut semantic boundary. A selected-side physical lateral
+/// separation is an acceptable boundary even when a frozen path-sample goal
+/// has become obsolete; Pass admission remains a separate horizon proof.
+ShiftOutCompletionResolution resolve_shiftout_completion(
+  const ShiftOutCompletionRequest & request) noexcept;
+
+const char * to_string(ShiftOutCompletionReason reason) noexcept;
+
 /// Enter Pass only after both longitudinal shift distance and directional
-/// lateral target completion. Invalid observations never complete ShiftOut.
+/// lateral completion. Invalid observations never complete ShiftOut.
 bool is_shiftout_complete(const ShiftOutCompletionRequest & request) noexcept;
 
 struct OvertakeFrontCapReleaseRequest

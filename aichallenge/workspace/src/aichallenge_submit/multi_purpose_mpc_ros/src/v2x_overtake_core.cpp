@@ -378,19 +378,59 @@ bool has_reached_pass_side_lateral_goal(
     current_lateral_m <= target_lateral_m + lateral_tolerance_m;
 }
 
-bool is_shiftout_complete(const ShiftOutCompletionRequest & request) noexcept
+ShiftOutCompletionResolution resolve_shiftout_completion(
+  const ShiftOutCompletionRequest & request) noexcept
 {
+  ShiftOutCompletionResolution resolution;
   if (
     !request.phase_hold_elapsed ||
     !std::isfinite(request.traveled_distance_m) || request.traveled_distance_m < 0.0 ||
     !std::isfinite(request.required_distance_m) || request.required_distance_m < 0.0)
   {
-    return false;
+    return resolution;
   }
-  return request.traveled_distance_m >= request.required_distance_m &&
-         has_reached_pass_side_lateral_goal(
-           request.current_lateral_m, request.target_lateral_m,
-           request.lateral_tolerance_m, request.pass_side_sign);
+  if (request.traveled_distance_m < request.required_distance_m) {
+    return resolution;
+  }
+  if (has_reached_pass_side_lateral_goal(
+      request.current_lateral_m, request.target_lateral_m,
+      request.lateral_tolerance_m, request.pass_side_sign))
+  {
+    resolution.complete = true;
+    resolution.reason = ShiftOutCompletionReason::PlannedLateralGoal;
+    return resolution;
+  }
+  const bool selected_side_physical_separation =
+    request.selected_side_separation_observation_valid &&
+    request.pass_side_sign != 0 &&
+    std::isfinite(request.target_relative_lateral_m) &&
+    std::isfinite(request.physical_center_separation_m) &&
+    request.physical_center_separation_m > 0.0 &&
+    -static_cast<double>(request.pass_side_sign) *
+    request.target_relative_lateral_m >= request.physical_center_separation_m;
+  if (selected_side_physical_separation) {
+    resolution.complete = true;
+    resolution.reason = ShiftOutCompletionReason::SelectedSidePhysicalSeparation;
+  }
+  return resolution;
+}
+
+const char * to_string(const ShiftOutCompletionReason reason) noexcept
+{
+  switch (reason) {
+    case ShiftOutCompletionReason::Incomplete:
+      return "incomplete";
+    case ShiftOutCompletionReason::PlannedLateralGoal:
+      return "planned_lateral_goal";
+    case ShiftOutCompletionReason::SelectedSidePhysicalSeparation:
+      return "selected_side_physical_separation";
+  }
+  return "unknown";
+}
+
+bool is_shiftout_complete(const ShiftOutCompletionRequest & request) noexcept
+{
+  return resolve_shiftout_completion(request).complete;
 }
 
 bool can_release_overtake_front_cap(

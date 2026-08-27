@@ -58,6 +58,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::StartGridBreakoutSpeedReferenceR
 using multi_purpose_mpc_ros::v2x_overtake_core::V2XPeerIdentityTracker;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_v2x_receipt_age_fresh;
 using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::ShiftOutCompletionReason;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeFrontCapReleaseRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassPolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassFrontCapTransitionReason;
@@ -350,6 +351,7 @@ using multi_purpose_mpc_ros::v2x_overtake_core::should_apply_overtake_side_retry
 using multi_purpose_mpc_ros::v2x_overtake_core::evaluate_overtake_mission_horizon_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_start_grid_breakout_speed_reference;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_shiftout_complete;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_shiftout_completion;
 using multi_purpose_mpc_ros::v2x_overtake_core::can_release_overtake_front_cap;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_committed_pass_policy;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_precontact_squeeze_escape;
@@ -1634,6 +1636,37 @@ TEST(V2XOvertakeCoreSpeed, RequiresDistanceAndLateralCompletionBeforePass)
   EXPECT_FALSE(is_shiftout_complete(request));
   request.traveled_distance_m = 8.0;
   request.phase_hold_elapsed = false;
+  EXPECT_FALSE(is_shiftout_complete(request));
+}
+
+TEST(V2XOvertakeCoreSpeed, AcceptsSelectedSidePhysicalSeparationAtShiftBoundary)
+{
+  ShiftOutCompletionRequest request;
+  request.phase_hold_elapsed = true;
+  request.traveled_distance_m = 32.92;
+  request.required_distance_m = 7.0;
+  request.current_lateral_m = 1.57;
+  request.target_lateral_m = 2.20;
+  request.lateral_tolerance_m = 0.15;
+  request.pass_side_sign = 1;
+  request.selected_side_separation_observation_valid = true;
+  request.target_relative_lateral_m = -1.59;
+  request.physical_center_separation_m = 1.45;
+
+  EXPECT_TRUE(is_shiftout_complete(request));
+  EXPECT_EQ(
+    resolve_shiftout_completion(request).reason,
+    ShiftOutCompletionReason::SelectedSidePhysicalSeparation);
+
+  request.target_relative_lateral_m = 1.59;
+  EXPECT_FALSE(is_shiftout_complete(request));
+  request.target_relative_lateral_m = -1.44;
+  EXPECT_FALSE(is_shiftout_complete(request));
+  request.target_relative_lateral_m = -1.59;
+  request.selected_side_separation_observation_valid = false;
+  EXPECT_FALSE(is_shiftout_complete(request));
+  request.selected_side_separation_observation_valid = true;
+  request.traveled_distance_m = 6.99;
   EXPECT_FALSE(is_shiftout_complete(request));
 }
 

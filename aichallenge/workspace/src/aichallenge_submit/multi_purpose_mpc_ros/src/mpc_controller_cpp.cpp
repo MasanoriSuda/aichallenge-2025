@@ -36324,14 +36324,24 @@ private:
     const bool committed_forward_completion_guard_lost =
       forward_completion_was_latched && !committed_forward_completion.active;
     const double shiftout_lateral_tolerance = std::max(0.15, 0.25 * lateral_offset);
+    const bool selected_side_separation_observation_valid =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+      locked_target_seen && locked_target_matches &&
+      locked_target_progress_continuous &&
+      !behavior_output.locked_target_position_jump &&
+      !behavior_output.locked_target_course_progress_rejected;
+    const auto shiftout_completion = overtake_core::resolve_shiftout_completion(
+      overtake_core::ShiftOutCompletionRequest{
+        phase_hold_elapsed, overtake_line_state_.phase_traveled_m,
+        overtake_mission_shift_distance(), current_ey,
+        feasible_goal_for_phase, shiftout_lateral_tolerance,
+        overtake_line_state_.pass_side_sign,
+        selected_side_separation_observation_valid,
+        behavior_output.locked_target_relative_lateral,
+        std::max(0.0, cfg.v2x_gap.vehicle_radius)});
     const bool shiftout_complete =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
-      overtake_core::is_shiftout_complete(
-        overtake_core::ShiftOutCompletionRequest{
-          phase_hold_elapsed, overtake_line_state_.phase_traveled_m,
-          overtake_mission_shift_distance(), current_ey,
-          feasible_goal_for_phase, shiftout_lateral_tolerance,
-          overtake_line_state_.pass_side_sign});
+      shiftout_completion.complete;
     const bool pass_entry_execution_horizon_required =
       line_cfg.pass_entry_physical_gate_enabled &&
       committed_pass_horizon_enabled && shiftout_complete;
@@ -36492,12 +36502,13 @@ private:
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
           "OvertakeLine Pass entry physical gate held: target=%s, side=%d, "
-          "phase=%s, speed=%.2f, predicted=%d, ttc=%.2f s, "
+          "phase=%s, completion=%s, speed=%.2f, predicted=%d, ttc=%.2f s, "
           "trigger=%s, execution_reason=%s, execution_ay=%.2f m/s2, "
           "lease=%.2f s/%.2f m, hold_limit=%.2f s/%.2f m, wp_id=%d",
           overtake_line_state_.target_vehicle_id.c_str(),
           overtake_line_state_.pass_side_sign,
-          to_string(overtake_line_state_.phase), current_speed_mps_,
+          to_string(overtake_line_state_.phase),
+          overtake_core::to_string(shiftout_completion.reason), current_speed_mps_,
           actual_wall_preplan_prediction_warning ? 1 : 0,
           actual_wall_preplan_prediction_ttc_sec,
           pass_entry_execution_horizon_required &&
@@ -36593,7 +36604,9 @@ private:
         transition_overtake_line_phase(
           OvertakeLinePhase::Pass, now_sec, current_ey,
           overtake_line_state_.pass_side_sign,
-          "shift complete with fresh dynamic and physical Pass horizon");
+          std::string("shift complete (") +
+          overtake_core::to_string(shiftout_completion.reason) +
+          ") with fresh dynamic and physical Pass horizon");
       } else if (committed_pass_horizon_enabled) {
         if (!overtake_line_state_.shiftout_fresh_horizon_wait_active) {
           overtake_line_state_.shiftout_fresh_horizon_wait_active = true;
@@ -36604,9 +36617,10 @@ private:
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine Pass entry held for fresh horizon: target=%s, side=%d, "
-            "source_age=%.3f, ttl=%.3f",
+            "completion=%s, source_age=%.3f, ttl=%.3f",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
+            overtake_core::to_string(shiftout_completion.reason),
             live_prediction_source_age_sec,
             live_prediction_timing.valid ? live_prediction_timing.remaining_sec : 0.0);
         }
@@ -36636,7 +36650,9 @@ private:
       } else {
         transition_overtake_line_phase(
           OvertakeLinePhase::Pass, now_sec, current_ey,
-          overtake_line_state_.pass_side_sign, "shift complete");
+          overtake_line_state_.pass_side_sign,
+          std::string("shift complete (") +
+          overtake_core::to_string(shiftout_completion.reason) + ")");
       }
     }
 

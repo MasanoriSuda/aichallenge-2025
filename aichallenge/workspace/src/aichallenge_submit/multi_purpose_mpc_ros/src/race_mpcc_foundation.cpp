@@ -591,6 +591,32 @@ StopAuthorityAction resolve_stop_authority_action(
     StopAuthorityAction::EmergencyStop : StopAuthorityAction::NotOwned;
 }
 
+StopLateralAction resolve_stop_lateral_action(
+  const StopLateralActionRequest & request) noexcept
+{
+  if (!std::isfinite(request.current_speed_mps)) {
+    return StopLateralAction::Neutralize;
+  }
+  if (request.current_speed_mps <= 0.0) {
+    return StopLateralAction::HoldAtRest;
+  }
+  return request.reference_path_target_available ?
+    StopLateralAction::TrackReferencePath : StopLateralAction::Neutralize;
+}
+
+const char * stop_lateral_action_name(const StopLateralAction action) noexcept
+{
+  switch (action) {
+    case StopLateralAction::HoldAtRest:
+      return "hold-at-rest";
+    case StopLateralAction::TrackReferencePath:
+      return "track-reference-path";
+    case StopLateralAction::Neutralize:
+      return "neutralize";
+  }
+  return "unknown";
+}
+
 const char * stop_shadow_intent_reason_name(
   const StopShadowIntentReason reason) noexcept
 {

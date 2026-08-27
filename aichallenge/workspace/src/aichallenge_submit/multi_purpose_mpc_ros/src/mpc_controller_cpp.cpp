@@ -25203,8 +25203,34 @@ struct MPC
       problem, mpcc_contract::Formulation::Unresolved, intent);
     const double maximum_steering = std::isfinite(cfg.delta_max) ?
       std::max(0.0, std::abs(cfg.delta_max)) : 0.0;
-    const double steering = std::isfinite(previous_steering) ?
+    double steering = std::isfinite(previous_steering) ?
       clip(previous_steering, -maximum_steering, maximum_steering) : 0.0;
+    auto stop_lateral_action = race_mpcc::StopLateralAction::HoldAtRest;
+    if (intent == mpcc_contract::ControlIntent::Stop) {
+      const double current_speed = std::isfinite(current_speed_mps_) ?
+        std::max(0.0, current_speed_mps_) :
+        std::numeric_limits<double>::quiet_NaN();
+      const auto path_target = solver_fallback_path_steering_target(
+        current_speed, maximum_steering);
+      stop_lateral_action = race_mpcc::resolve_stop_lateral_action(
+        race_mpcc::StopLateralActionRequest{
+          current_speed, path_target.has_value()});
+      if (
+        stop_lateral_action != race_mpcc::StopLateralAction::HoldAtRest)
+      {
+        const double target =
+          stop_lateral_action ==
+          race_mpcc::StopLateralAction::TrackReferencePath ?
+          path_target.value() : 0.0;
+        const double time_step = model != nullptr && std::isfinite(model->Ts) ?
+          std::max(0.0, model->Ts) : 0.0;
+        steering = v2x_overtake_core::
+          rate_limit_solver_fallback_steering_toward_target(
+          v2x_overtake_core::SolverFallbackSteeringRequest{
+            steering, target, maximum_steering,
+            std::max(0.0, cfg.steer_rate_max), time_step});
+      }
+    }
     current_control = Eigen::VectorXd::Zero(2 * std::max(0, problem.N));
     for (int stage = 0; stage < problem.N; ++stage) {
       current_control[2 * stage] = 0.0;
@@ -25218,7 +25244,10 @@ struct MPC
     last_control_was_fallback_ = true;
     last_control_resolution_reason_ =
       std::string{"canonical-"} + mpcc_contract::to_string(intent) +
-      "-emergency/" + reason;
+      "-emergency/" + reason +
+      (intent == mpcc_contract::ControlIntent::Stop ?
+      std::string{"/lateral="} +
+      race_mpcc::stop_lateral_action_name(stop_lateral_action) : "");
     MpcControlCycleResult output{Eigen::Vector2d(0.0, steering), std::abs(steering)};
     output.canonical_emergency_stop = true;
     if (intent == mpcc_contract::ControlIntent::Stop) {

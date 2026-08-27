@@ -2775,6 +2775,25 @@ disable、final wall holdが出力を上書きした周期はwire-authority ledg
 generic Emergency gapは発生しなかった。後続ShiftOutの`steering-unreachable`／`progress-lift-rejected`は、Stop後の
 現位置から中断Missionへ再接続できない別のlifecycle課題であり、Stop保持、wall、steering、solver閾値の緩和で隠さない。
 
+#### 走行中Stopの横authority（2026-08-27、2025由来の暫定）
+
+明示SafetyBrake Stopは引き続きnormal MPCCから分離したexternal Emergency supervisorであり、速度0と最大制動を
+最終wire commandとして所有する。ただし、走行中にStopへ入った瞬間の操舵を停止までzero-order holdしてはならない。
+最大制動中も車両は数m進むため、発火時点では妥当だった操舵がコース曲率変化に対してstaleとなるからである。
+
+Stop中に実速度が残っている場合は、現在のcourse-frame状態から既存のspatial path feedbackと横加速度envelopeで
+基準経路の操舵targetを求め、既存の物理操舵rate limit内で前周期commandからtargetへ移行する。targetを構成できない
+場合だけneutralへrate-limitし、停止後だけ現在のbounded commandを保持する。この横方策はnormal solver artifactを
+publish／executeせず、Stopの速度・制動authorityとatomic Stop-to-normal handoffを変更しない。
+
+`output/20260827-214537`ではStop開始時5.15 m/sから同じphysical steering `-0.159 rad`を保持し続け、reference curvatureが
+約`-0.098`から`-0.032 rad/m`へ変化する間にwall状態がclearから0.31 m、0.00 m、実接触へ悪化した。これはStop後の
+ShiftOut再接続不成立より上流の原因であり、Stopの横zero-order holdを設計不変条件としていた過去契約を棄却する。
+
+修正後の`output/20260827-221458`は2台走行を約2分確認し、wall contactなしで通常Cruiseへ復帰したが、明示SafetyBrake
+Stop自体は発火しなかった。そのため静的契約、47/47 package test target、1,938 testは合格している一方、走行中Stopの
+操舵追従は次の再現走行で動的受入れを継続する。Stopを発火しなかったrunを動的合格の根拠にはしない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

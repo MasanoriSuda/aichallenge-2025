@@ -2,6 +2,7 @@
 
 #include <multi_purpose_mpc_ros/race_mpcc_foundation.hpp>
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -268,6 +269,27 @@ TEST(RaceMpccFoundation, StopEmergencyAuthorityNeverBorrowsNormalControl)
   EXPECT_EQ(
     race::resolve_stop_authority_action(contract::ControlIntent::Stop),
     race::StopAuthorityAction::EmergencyStop);
+}
+
+TEST(RaceMpccFoundation, MovingStopNeverOwnsAConstantSteeringHold)
+{
+  EXPECT_EQ(
+    race::resolve_stop_lateral_action(
+      race::StopLateralActionRequest{5.0, true}),
+    race::StopLateralAction::TrackReferencePath);
+  EXPECT_EQ(
+    race::resolve_stop_lateral_action(
+      race::StopLateralActionRequest{5.0, false}),
+    race::StopLateralAction::Neutralize);
+  EXPECT_EQ(
+    race::resolve_stop_lateral_action(
+      race::StopLateralActionRequest{
+        std::numeric_limits<double>::quiet_NaN(), true}),
+    race::StopLateralAction::Neutralize);
+  EXPECT_EQ(
+    race::resolve_stop_lateral_action(
+      race::StopLateralActionRequest{0.0, true}),
+    race::StopLateralAction::HoldAtRest);
 }
 
 TEST(RaceMpccFoundation, StopKeepsOnlyTheLatentNormalShadowWarm)

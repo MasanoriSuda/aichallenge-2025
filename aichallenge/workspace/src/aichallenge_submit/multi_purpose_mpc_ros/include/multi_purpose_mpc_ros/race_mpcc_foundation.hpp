@@ -366,6 +366,29 @@ enum class StopAuthorityAction
 StopAuthorityAction resolve_stop_authority_action(
   mpcc_execution_contract::ControlIntent intent) noexcept;
 
+enum class StopLateralAction
+{
+  HoldAtRest,
+  TrackReferencePath,
+  Neutralize,
+};
+
+struct StopLateralActionRequest
+{
+  double current_speed_mps{};
+  bool reference_path_target_available{false};
+};
+
+/// Emergency Stop owns the complete wire command. While the vehicle is still
+/// moving, a stale constant steering command is not a valid lateral policy:
+/// braking from race speed still traverses several metres. Prefer the current
+/// base-path feedback target and otherwise converge toward neutral. Holding is
+/// reserved for standstill, where changing steering only creates chatter.
+StopLateralAction resolve_stop_lateral_action(
+  const StopLateralActionRequest & request) noexcept;
+
+const char * stop_lateral_action_name(StopLateralAction action) noexcept;
+
 enum class StopShadowIntentReason
 {
   NotStop,

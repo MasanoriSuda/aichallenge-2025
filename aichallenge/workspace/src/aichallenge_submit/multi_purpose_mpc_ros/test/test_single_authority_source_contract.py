@@ -664,6 +664,26 @@ def test_stop_keeps_the_same_canonical_pipeline_warm_without_normal_authority() 
     )
 
 
+def test_moving_stop_uses_emergency_path_tracking_without_normal_authority() -> None:
+    """Stop remains external, but a moving Stop may not freeze steering."""
+
+    emergency_start = SOURCE.index(
+        "MpcControlCycleResult canonical_normal_emergency_stop("
+    )
+    emergency_end = SOURCE.index(
+        "void prepare_rate_resolved_stop_shadow_successor(", emergency_start
+    )
+    emergency = SOURCE[emergency_start:emergency_end]
+    assert "resolve_stop_lateral_action(" in emergency
+    assert "solver_fallback_path_steering_target(" in emergency
+    assert "rate_limit_solver_fallback_steering_toward_target(" in emergency
+    assert "StopLateralAction::HoldAtRest" in emergency
+    assert "StopLateralAction::TrackReferencePath" in emergency
+    assert "rate_resolved_track_cruise_control(" not in emergency
+    assert "pending_canonical_normal_actuation_" in emergency
+    assert "output.canonical_normal_command" not in emergency
+
+
 def test_problem_intent_is_resolved_after_current_cycle_authority_trace() -> None:
     """A reset trace must not stamp Follow/Overtake artifacts as Cruise."""
 

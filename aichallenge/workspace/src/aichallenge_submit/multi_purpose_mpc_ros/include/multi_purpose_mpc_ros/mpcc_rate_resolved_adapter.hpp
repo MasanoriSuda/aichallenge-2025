@@ -138,9 +138,14 @@ std::optional<Result> build(
   BuildDiagnostic * diagnostic = nullptr) noexcept;
 
 /// Replace only the temporal Frenet dynamics with tangents at the current QP
-/// iterate.  Costs, state/input boxes, physical-wall rows and dynamic-obstacle
-/// rows remain unchanged, so a second solve is one SQP correction of the same
-/// semantic problem rather than a new fallback formulation.
+/// iterate.  The solver-certified iterate is projected onto its exact variable
+/// boxes solely to select a physical linearization point: an accepted residual
+/// may otherwise make a nominally non-negative velocity infinitesimally
+/// negative and outside the nonlinear model domain.  The solved trajectory is
+/// not clamped or certified by this projection.  Costs, state/input boxes,
+/// physical-wall rows and dynamic-obstacle rows remain unchanged, so a second
+/// solve is one SQP correction of the same semantic problem rather than a new
+/// fallback formulation.
 RelinearizationResult relinearize_around_primal(
   const Request & request, const Eigen::VectorXd & primal,
   mpcc_rate_resolved_problem::AssemblyRequest & problem) noexcept;

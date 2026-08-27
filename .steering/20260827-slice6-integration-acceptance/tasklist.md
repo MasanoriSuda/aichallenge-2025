@@ -10,10 +10,9 @@
   identity/coverage gaps.
 - [x] Verify physical deletion of retired three/five-state normal authority.
 - [x] Run focused/full tests and `make autoware-build` after code changes.
-- [ ] Re-run the moving two-vehicle Gate (blocked: AWSIM remains `Ready` in
-  `make dev2`; development startup integration is intentionally outside this
-  Slice).
+- [x] Re-run the moving two-vehicle Gate and observe canonical Track/Cruise,
+  Follow and ShiftOut authority.
 - [ ] Run and audit the three-vehicle Gate.
 - [x] Record the observed coverage, excluded runs and remaining risks.
-- [ ] Record dynamic Slice 6 acceptance after dev2/dev3 movement is restored.
+- [ ] Record dynamic Slice 6 acceptance after Pass/Return and dev3 evidence.
 - [x] Commit structural repairs without generated artifacts.

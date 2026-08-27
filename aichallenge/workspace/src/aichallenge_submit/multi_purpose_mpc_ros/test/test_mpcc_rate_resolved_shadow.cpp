@@ -213,6 +213,7 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_TRUE(result.receding_warm_start_applied);
   EXPECT_TRUE(result.successive_linearization_requested);
   EXPECT_TRUE(result.successive_linearization_applied);
+  EXPECT_TRUE(result.successive_linearization_bootstrap_applied);
   EXPECT_TRUE(result.successive_linearization_solved);
   EXPECT_EQ(
     result.successive_linearization_reason,

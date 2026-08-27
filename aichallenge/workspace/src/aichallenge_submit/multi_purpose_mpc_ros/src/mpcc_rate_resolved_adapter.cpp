@@ -541,20 +541,34 @@ RelinearizationResult relinearize_around_primal(
   for (int stage = 0; stage < horizon; ++stage) {
     const int state = model::kStateDimension * stage;
     const int input = state_values + model::kInputDimension * stage;
+    const int problem_input = model::kInputDimension * stage;
     const auto & semantic_input =
       request.inputs[static_cast<std::size_t>(stage)];
+    Eigen::Matrix<double, model::kStateDimension, 1> linearization_state;
+    Eigen::Matrix<double, model::kInputDimension, 1> linearization_input;
+    for (int element = 0; element < model::kStateDimension; ++element) {
+      linearization_state[element] = std::clamp(
+        primal[state + element], problem.state_lower[state + element],
+        problem.state_upper[state + element]);
+    }
+    for (int element = 0; element < model::kInputDimension; ++element) {
+      linearization_input[element] = std::clamp(
+        primal[input + element],
+        problem.input_lower[problem_input + element],
+        problem.input_upper[problem_input + element]);
+    }
     const auto linearization = model::linearize_temporal_frenet(
       model::LinearizationRequest{
-        primal[state + model::kLateralIndex],
-        primal[state + model::kLagIndex],
-        primal[state + model::kHeadingIndex],
-        primal[state + model::kVelocityIndex],
-        primal[state + model::kProgressIndex],
-        primal[state + model::kSteeringIndex],
-        primal[state + model::kResponseSteeringIndex],
-        primal[input + model::kAccelerationIndex],
-        primal[input + model::kSteeringRateIndex],
-        primal[input + model::kVirtualProgressSpeedIndex],
+        linearization_state[model::kLateralIndex],
+        linearization_state[model::kLagIndex],
+        linearization_state[model::kHeadingIndex],
+        linearization_state[model::kVelocityIndex],
+        linearization_state[model::kProgressIndex],
+        linearization_state[model::kSteeringIndex],
+        linearization_state[model::kResponseSteeringIndex],
+        linearization_input[model::kAccelerationIndex],
+        linearization_input[model::kSteeringRateIndex],
+        linearization_input[model::kVirtualProgressSpeedIndex],
         semantic_input.path_curvature_radpm,
         request.wheelbase_m,
         request.yaw_response_gain,

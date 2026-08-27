@@ -180,6 +180,7 @@ struct Result
   bool receding_warm_start_applied{false};
   bool successive_linearization_requested{false};
   bool successive_linearization_applied{false};
+  bool successive_linearization_bootstrap_applied{false};
   bool successive_linearization_solved{false};
   mpcc_rate_resolved_adapter::RelinearizationReason
     successive_linearization_reason{

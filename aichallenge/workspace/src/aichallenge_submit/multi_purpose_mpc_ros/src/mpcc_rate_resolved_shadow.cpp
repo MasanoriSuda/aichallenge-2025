@@ -599,6 +599,7 @@ bool result_valid(const Result & result) noexcept
          mpcc_rate_resolved_dynamic_obstacle::Reason::Applied)) &&
          result.successive_linearization_requested &&
          result.successive_linearization_applied &&
+         result.successive_linearization_bootstrap_applied &&
          result.successive_linearization_solved &&
          result.successive_linearization_reason ==
          mpcc_rate_resolved_adapter::RelinearizationReason::Accepted &&
@@ -824,6 +825,100 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     result.solved = false;
     return finish();
   }
+  // The first QP is deliberately broad in progress-aligned wall space.  Use
+  // that unconstricted solution to move the affine dynamics tangent onto the
+  // current nonlinear trajectory before building any progress/lag/heading
+  // trust bucket.  Reversing this order makes the wall proof own a narrow box
+  // around a trajectory that does not satisfy the new affine equalities: the
+  // relinearized QP can then be structurally infeasible even though both the
+  // provisional trajectory and the wall corridor are individually valid.
+  //
+  // This is the single canonical SQP correction.  Wall and dynamic-obstacle
+  // refinements below constrain its solution without changing the dynamics
+  // rows again, so their accepted primal remains a feasible warm start and
+  // the final exact replay certifies the same formulation.
+  result.successive_linearization_requested = true;
+  const auto relinearization =
+    mpcc_rate_resolved_adapter::relinearize_around_primal(
+    snapshot.request, outcome.result->primal, adapted->problem);
+  result.successive_linearization_reason = relinearization.reason;
+  result.successive_linearization_failure_stage = relinearization.stage;
+  result.successive_linearization_applied = relinearization.applied;
+  if (!relinearization.applied) {
+    result.outcome = Outcome::AssemblyRejected;
+    result.solved = false;
+    result.detail = std::string{"rate-resolved successive linearization rejected: "} +
+      mpcc_rate_resolved_adapter::to_string(relinearization.reason) +
+      "/stage=" + std::to_string(relinearization.stage);
+    return finish();
+  }
+  auto relinearized_assembled =
+    mpcc_rate_resolved_problem::assemble(adapted->problem);
+  if (!relinearized_assembled.has_value()) {
+    result.outcome = Outcome::AssemblyRejected;
+    result.solved = false;
+    result.detail = "rate-resolved relinearized QP assembly rejected";
+    return finish();
+  }
+  // The provisional primal and dual belong to the preceding affine equality
+  // system.  Reusing them after replacing every temporal dynamics row gives
+  // OSQP a warm start with stale equality provenance.  Roll out a seed owned
+  // by the relinearized problem itself.
+  auto relinearized_warm_start = build_current_problem_bootstrap(
+    adapted->problem,
+    static_cast<std::size_t>(relinearized_assembled->lower_bound.size()));
+  if (!relinearized_warm_start.has_value()) {
+    result.outcome = Outcome::AssemblyRejected;
+    result.solved = false;
+    result.detail =
+      "rate-resolved relinearized current-problem bootstrap rejected";
+    return finish();
+  }
+  result.successive_linearization_bootstrap_applied = true;
+  auto relinearized_outcome = solver_.solve(
+    relinearized_assembled->quadratic_cost,
+    relinearized_assembled->constraints,
+    relinearized_assembled->linear_cost,
+    relinearized_assembled->lower_bound,
+    relinearized_assembled->upper_bound,
+    relinearized_warm_start,
+    relinearized_assembled->variable_scaling);
+  result.solver = relinearized_outcome.telemetry;
+  if (!relinearized_outcome.result.has_value()) {
+    result.outcome = Outcome::SolveRejected;
+    result.solved = false;
+    result.detail = std::string{"rate-resolved relinearized QP rejected: "} +
+      relinearized_outcome.failure_detail;
+    if (relinearized_outcome.constraint_failure.has_value()) {
+      const auto semantic = mpcc_rate_resolved_problem::decode_row(
+        relinearized_outcome.constraint_failure->row,
+        snapshot.request.horizon_steps,
+        adapted->problem.steering_rate_prefix_bounds.has_value(),
+        adapted->problem.progress_aligned_wall_constraints.has_value(),
+        static_cast<int>(
+          adapted->problem.swept_lateral_wall_constraints.size()),
+        &adapted->problem.dynamic_obstacle_constraints);
+      if (semantic.valid) {
+        result.detail += std::string{", row_semantic="} +
+          mpcc_rate_resolved_problem::row_kind_name(semantic.kind) +
+          "/stage=" + std::to_string(semantic.stage) +
+          "/element=" + std::to_string(semantic.element);
+      }
+    }
+    return finish();
+  }
+  if (!relinearized_outcome.result->primal.allFinite()) {
+    result.outcome = Outcome::NonfiniteResult;
+    result.solved = false;
+    result.finite = false;
+    result.detail =
+      "rate-resolved relinearized solver returned non-finite primal";
+    return finish();
+  }
+  assembled = std::move(relinearized_assembled);
+  outcome = std::move(relinearized_outcome);
+  result.successive_linearization_solved = true;
+
   result.progress_wall_refinement_requested =
     snapshot.progress_aligned_wall_refinement_active;
   result.physical_wall_refinement_requested =
@@ -1007,81 +1102,6 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     outcome = std::move(refined_outcome);
     result.dynamic_obstacle_refinement_solved = true;
   }
-  // The semantic adapter linearizes around the incoming reference path.  Wall
-  // and opponent refinement can move the optimizer materially away from that
-  // reference, so publishing the first affine solution would certify a
-  // different vehicle than the nonlinear execution replay.  Perform one SQP
-  // correction around the final refined primal while retaining exactly the
-  // same costs and hard rows.  This is part of the canonical formulation, not
-  // a fallback and not a relaxed alternate problem.
-  result.successive_linearization_requested = true;
-  const auto relinearization =
-    mpcc_rate_resolved_adapter::relinearize_around_primal(
-    snapshot.request, outcome.result->primal, adapted->problem);
-  result.successive_linearization_reason = relinearization.reason;
-  result.successive_linearization_failure_stage = relinearization.stage;
-  result.successive_linearization_applied = relinearization.applied;
-  if (!relinearization.applied) {
-    result.outcome = Outcome::AssemblyRejected;
-    result.solved = false;
-    result.detail = std::string{"rate-resolved successive linearization rejected: "} +
-      mpcc_rate_resolved_adapter::to_string(relinearization.reason) +
-      "/stage=" + std::to_string(relinearization.stage);
-    return finish();
-  }
-  auto relinearized_assembled =
-    mpcc_rate_resolved_problem::assemble(adapted->problem);
-  if (!relinearized_assembled.has_value()) {
-    result.outcome = Outcome::AssemblyRejected;
-    result.solved = false;
-    result.detail = "rate-resolved relinearized QP assembly rejected";
-    return finish();
-  }
-  const persistent_osqp::WarmStart relinearized_warm_start{
-    outcome.result->primal, outcome.result->dual};
-  auto relinearized_outcome = solver_.solve(
-    relinearized_assembled->quadratic_cost,
-    relinearized_assembled->constraints,
-    relinearized_assembled->linear_cost,
-    relinearized_assembled->lower_bound,
-    relinearized_assembled->upper_bound,
-    relinearized_warm_start,
-    relinearized_assembled->variable_scaling);
-  result.solver = relinearized_outcome.telemetry;
-  if (!relinearized_outcome.result.has_value()) {
-    result.outcome = Outcome::SolveRejected;
-    result.solved = false;
-    result.detail = std::string{"rate-resolved relinearized QP rejected: "} +
-      relinearized_outcome.failure_detail;
-    if (relinearized_outcome.constraint_failure.has_value()) {
-      const auto semantic = mpcc_rate_resolved_problem::decode_row(
-        relinearized_outcome.constraint_failure->row,
-        snapshot.request.horizon_steps,
-        adapted->problem.steering_rate_prefix_bounds.has_value(),
-        adapted->problem.progress_aligned_wall_constraints.has_value(),
-        static_cast<int>(
-          adapted->problem.swept_lateral_wall_constraints.size()),
-        &adapted->problem.dynamic_obstacle_constraints);
-      if (semantic.valid) {
-        result.detail += std::string{", row_semantic="} +
-          mpcc_rate_resolved_problem::row_kind_name(semantic.kind) +
-          "/stage=" + std::to_string(semantic.stage) +
-          "/element=" + std::to_string(semantic.element);
-      }
-    }
-    return finish();
-  }
-  if (!relinearized_outcome.result->primal.allFinite()) {
-    result.outcome = Outcome::NonfiniteResult;
-    result.solved = false;
-    result.finite = false;
-    result.detail =
-      "rate-resolved relinearized solver returned non-finite primal";
-    return finish();
-  }
-  assembled = std::move(relinearized_assembled);
-  outcome = std::move(relinearized_outcome);
-  result.successive_linearization_solved = true;
   result.solver = outcome.telemetry;
   result.constraints_satisfied = true;
   result.maximum_constraint_violation =
@@ -1298,6 +1318,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       result.successive_linearization_reason)
            << "/applied=" <<
       (result.successive_linearization_applied ? 1 : 0)
+           << "/bootstrap=" <<
+      (result.successive_linearization_bootstrap_applied ? 1 : 0)
            << "/solved=" <<
       (result.successive_linearization_solved ? 1 : 0);
     result.detail = detail.str();
@@ -1309,6 +1331,8 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       result.successive_linearization_reason) +
       "/applied=" +
       (result.successive_linearization_applied ? "1" : "0") +
+      "/bootstrap=" +
+      (result.successive_linearization_bootstrap_applied ? "1" : "0") +
       "/solved=" +
       (result.successive_linearization_solved ? "1" : "0");
   }

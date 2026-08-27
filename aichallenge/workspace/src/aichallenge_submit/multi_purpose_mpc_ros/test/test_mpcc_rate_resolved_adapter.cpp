@@ -363,6 +363,40 @@ TEST(MpccRateResolvedAdapter, RejectsRelinearizationWithoutACompleteIterate)
   EXPECT_EQ(result.reason, adapter::RelinearizationReason::InvalidPrimal);
 }
 
+TEST(
+  MpccRateResolvedAdapter,
+  ProjectsCertifiedBoxResidualBeforeSelectingTheNonlinearTangent)
+{
+  const auto request = curved_request();
+  auto adapted = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(adapted.has_value());
+  const int horizon = request.horizon_steps;
+  const int state_values = model::kStateDimension * (horizon + 1);
+  const int variable_count =
+    state_values + model::kInputDimension * horizon;
+  Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_count);
+  for (int stage = 0; stage <= horizon; ++stage) {
+    const int state = model::kStateDimension * stage;
+    primal[state + model::kVelocityIndex] = 3.0;
+    primal[state + model::kProgressIndex] = 0.3 * stage;
+  }
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int input = state_values + model::kInputDimension * stage;
+    primal[input + model::kVirtualProgressSpeedIndex] = 3.0;
+  }
+  // OSQP may return a point this far outside a zero lower box while the row is
+  // still certified by its configured residual.  It is not a physical
+  // negative speed and must not make the next SQP tangent undefined.
+  primal[model::kVelocityIndex] = -1.0e-6;
+  primal[state_values + model::kVirtualProgressSpeedIndex] = -1.0e-6;
+
+  const auto result = adapter::relinearize_around_primal(
+    request, primal, adapted->problem);
+
+  EXPECT_TRUE(result.applied);
+  EXPECT_EQ(result.reason, adapter::RelinearizationReason::Accepted);
+}
+
 TEST(MpccRateResolvedAdapter, RejectsMalformedOrUnphysicalSnapshots)
 {
   auto request = curved_request();

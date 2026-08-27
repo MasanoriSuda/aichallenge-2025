@@ -55,3 +55,21 @@ Slice 7のparameter tuningは、少なくとも次を満たした後にだけ開
 - Track/Cruise、Follow、ShiftOut、Pass、Returnの動的受入れがある。
 - stale/wrong-generation/unproved artifact publicationが0件である。
 - failure snapshotが再生可能で、残る異常が構造欠陥ではなく性能差として分類される。
+
+## Slice 7 bounded tuning outcome（2026-08-28、2025由来の暫定）
+
+canonical seven-state normal authorityの動的基準はcommit `b273d56d`、
+`output/20260828-044759`、`N=20`、40 Hz production solve submissionとする。
+同runでは`Idle -> ShiftOut -> Pass -> Return -> Idle`が完遂し、Overtake
+Recoveryおよびactual-footprint wall-margin violationは0件だった。
+
+この基準に対し、`N=16`、`N=18`、`N=20`のままproduction solveを20 Hzへ
+間引く三候補を一変数ずつ評価した。いずれも計算量の一部は改善したが、
+独立runでterminal successor、wall feasibilityまたはRejoin authority continuityを
+失ったため棄却し、source/config/testを基準状態へ戻した。
+
+したがってbounded Slice 7 tuning campaignは「採用parameter変更なし」で完了する。
+これはrace-production品質の完了を意味しない。callback tail、maximum iteration、
+canonical Emergencyはarchitecture/integration backlogとして扱い、proof horizon短縮、
+solve間引き、clearance、tolerance、leaseで隠さない。再試験条件は
+`mpcc-experiment-registry.json`を正本とする。

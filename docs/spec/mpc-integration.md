@@ -2794,6 +2794,28 @@ ShiftOut再接続不成立より上流の原因であり、Stopの横zero-order 
 Stop自体は発火しなかった。そのため静的契約、47/47 package test target、1,938 testは合格している一方、走行中Stopの
 操舵追従は次の再現走行で動的受入れを継続する。Stopを発火しなかったrunを動的合格の根拠にはしない。
 
+#### Slice 7 bounded parameter tuningの完了（2026-08-28、2025由来の暫定）
+
+canonical seven-state normal authorityの構造基準をcommit `b273d56d`、
+`output/20260828-044759`、`N=20`、40 Hz production solve submissionとして固定した。
+同runでは4件の`Idle -> ShiftOut`、2件の`ShiftOut -> Pass`、1件の
+`Pass -> Return -> Idle`を観測し、Overtake Recoveryとactual-footprint wall-margin
+violationはいずれも0件だった。一方、callback overrunは102/5713 cycle、最大MPCC
+cycleは56.310 msであり、実時間tailは残った。
+
+一変数A/Bとして、`N=16`、`N=18`、`N=20`を維持した20 Hz production solve
+submissionを評価した。16段はterminal successorを失ってDynamicWait Recoveryへ入り、
+18段は初回runで改善したものの独立runでstatic-wall Recoveryとactual-footprint wall
+violationを再発した。20 Hz候補はsolve投入数を減らしたがPassへ到達せず、Rejoinで
+normal authority holeを40回発生させ、callback最大値も61.687 msまで残った。
+
+三候補はすべて棄却し、local/cloud configurationを`N=20`へ戻し、20 Hz cadenceの
+source、config、telemetry、testを物理削除した。したがってSlice 7のbounded tuningは
+「採用変更なし」で完了する。現在の基準をrace-production完成とは判定しない。
+callback tail、maximum iteration、canonical Emergencyおよび複数条件での再現性は、
+parameter tuningで隠さずarchitecture/integration backlogとして再分類する。実験の再開条件は
+`docs/spec/mpcc-experiment-registry.json`を正本とする。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

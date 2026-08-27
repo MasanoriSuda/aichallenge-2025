@@ -76,6 +76,58 @@
       "production_impact": "explicit selected-side refinement now preserves full stage-zero separation; authority, solver, margins, leases and fallbacks are unchanged",
       "deleted_code": [],
       "revisit_condition": "a moving Gate reaches Pass with acquired lateral separation and either completes Return or freezes the first subsequent structural rejection"
+    },
+    {
+      "experiment_id": "20260828-slice7-horizon-16",
+      "baseline_commit": "b273d56d",
+      "snapshot_ids": [],
+      "hypothesis": "reducing the canonical horizon from 20 to 16 stages lowers the mandatory solve tail without losing complete Overtake execution",
+      "changed_dimension": "canonical_horizon_stage_count",
+      "result": "rejected",
+      "reason": "the dynamic run lost Pass-to-Return-to-Idle completion and added DynamicWait Recovery caused by missing wall-feasible lateral authority",
+      "production_impact": "none; local and cloud configuration were restored to N=20",
+      "deleted_code": [],
+      "revisit_condition": "a new terminal-successor formulation proves the same physical future with fewer stages on replay-ready encounters"
+    },
+    {
+      "experiment_id": "20260828-slice7-horizon-18",
+      "baseline_commit": "b273d56d",
+      "snapshot_ids": [],
+      "hypothesis": "an 18-stage horizon retains terminal successor viability while reducing the solve tail",
+      "changed_dimension": "canonical_horizon_stage_count",
+      "result": "rejected",
+      "reason": "a favorable first run was not reproducible; the independent run added static-wall Recovery and actual-footprint wall-margin violation",
+      "production_impact": "none; local and cloud configuration were restored to N=20",
+      "deleted_code": [],
+      "revisit_condition": "a changed horizon representation or terminal certificate removes the independent-run wall-feasibility regression"
+    },
+    {
+      "experiment_id": "20260828-slice7-production-solve-cadence-20hz",
+      "baseline_commit": "b273d56d",
+      "snapshot_ids": [],
+      "hypothesis": "a 20 Hz production solve cadence with 40 Hz current-world revalidation preserves certified authority while reducing callback contention",
+      "changed_dimension": "production_solve_submission_cadence",
+      "result": "rejected",
+      "reason": "the bounded run reached no Pass and repeated a Rejoin normal-authority hole 40 times while maximum callback time remained above 60 ms",
+      "production_impact": "none; cadence source, config, telemetry and tests were removed",
+      "deleted_code": [
+        "production solve cadence resolver",
+        "production cadence telemetry",
+        "production cadence configuration"
+      ],
+      "revisit_condition": "a certified multi-cycle suffix contract explicitly bridges Rejoin and changing-wall states before solve cadence is reduced"
+    },
+    {
+      "experiment_id": "20260828-slice7-bounded-tuning-closure",
+      "baseline_commit": "b273d56d",
+      "snapshot_ids": [],
+      "hypothesis": "at least one isolated parameter family improves compute performance without weakening dynamic Overtake completion",
+      "changed_dimension": "tuning_campaign_decision",
+      "result": "rejected",
+      "reason": "all bounded candidates weakened reproducible physical or authority completion; no production parameter change is accepted",
+      "production_impact": "accepted production baseline remains N=20 with 40 Hz solve submission",
+      "deleted_code": [],
+      "revisit_condition": "structural backlog is closed and a replay-ready performance-only failure demonstrates a new isolated tuning dimension"
     }
   ]
 }

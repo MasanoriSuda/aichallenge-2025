@@ -8,4 +8,4 @@
 - [x] Run one `make dev2` validation; stop before a second run because the
   first run met hard rejection criteria.
 - [x] Reject and fully remove the candidate implementation.
-- [ ] Commit the completed Slice 7 experiment record.
+- [x] Commit the completed Slice 7 experiment record.

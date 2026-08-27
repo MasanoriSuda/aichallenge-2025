@@ -274,6 +274,8 @@ const char * to_string(const CanonicalExecutionIdentityReason reason) noexcept
       return "dynamic-obstacle-escape";
     case CanonicalExecutionIdentityReason::RetainedExecutedArtifact:
       return "retained-executed-artifact";
+    case CanonicalExecutionIdentityReason::RetainedExecutedArtifactSuperseded:
+      return "retained-executed-artifact-superseded";
     case CanonicalExecutionIdentityReason::MalformedOvertakeLine:
       return "malformed-overtake-line";
     case CanonicalExecutionIdentityReason::MalformedDynamicObstacleEscape:
@@ -356,6 +358,11 @@ CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
     return result;
   }
   if (request.retained_execution_active) {
+    if (!request.retained_execution_matches_live_tactical_state) {
+      result.reason = CanonicalExecutionIdentityReason::
+        RetainedExecutedArtifactSuperseded;
+      return result;
+    }
     const bool retained_phase_valid =
       request.retained_execution_phase == Phase::ShiftOut ||
       request.retained_execution_phase == Phase::Pass ||

@@ -18814,6 +18814,7 @@ struct MPC
       behavior_output.locked_target_footprint_prediction_valid &&
       behavior_output.locked_target_predicted_body_footprint_sweep_separated);
     bool retained_execution_active = false;
+    bool retained_execution_matches_live_tactical_state = false;
     std::string retained_execution_target_id;
     std::uint64_t retained_execution_mission_generation = 0U;
     overtake_orchestrator::Phase retained_execution_phase =
@@ -18862,6 +18863,10 @@ struct MPC
             source_context.intent_generation &&
             overtake_line_state_.pass_side_sign ==
             source_context.execution_side_sign;
+          retained_execution_matches_live_tactical_state =
+            live_mission_matches &&
+            orchestrator_phase(overtake_line_state_.phase) ==
+            retained_phase.value();
           retained_execution_traveled_m = live_mission_matches ?
             overtake_mission_progress_traveled() : 0.0;
         }
@@ -18886,6 +18891,7 @@ struct MPC
         behavior_output.dynamic_obstacle_lateral_escape_attempt_id,
         behavior_output.dynamic_obstacle_lateral_escape_side_sign,
         retained_execution_active,
+        retained_execution_matches_live_tactical_state,
         retained_execution_target_id,
         retained_execution_mission_generation,
         retained_execution_phase,

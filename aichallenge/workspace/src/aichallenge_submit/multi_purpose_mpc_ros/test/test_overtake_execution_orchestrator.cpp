@@ -159,6 +159,7 @@ TEST(OvertakeExecutionOrchestrator, ReplenishesPublishedExecutedIdentity)
 {
   orchestrator::CanonicalExecutionIdentityRequest request;
   request.retained_execution_active = true;
+  request.retained_execution_matches_live_tactical_state = true;
   request.retained_execution_target_id = "d2";
   request.retained_execution_mission_generation = 17U;
   request.retained_execution_phase = orchestrator::Phase::ShiftOut;
@@ -230,10 +231,31 @@ TEST(OvertakeExecutionOrchestrator, ExpiredRetainedExecutionDoesNotLatch)
     orchestrator::CanonicalExecutionIdentityReason::Inactive);
 }
 
+TEST(OvertakeExecutionOrchestrator, TerminalStateSupersedesRetainedExecution)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  request.retained_execution_active = true;
+  request.retained_execution_matches_live_tactical_state = false;
+  request.retained_execution_target_id = "d2";
+  request.retained_execution_mission_generation = 17U;
+  request.retained_execution_phase = orchestrator::Phase::Return;
+  request.retained_execution_side_sign = -1;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  EXPECT_FALSE(result.active);
+  EXPECT_EQ(
+    result.reason,
+    orchestrator::CanonicalExecutionIdentityReason::
+    RetainedExecutedArtifactSuperseded);
+}
+
 TEST(OvertakeExecutionOrchestrator, RejectsMalformedRetainedExecution)
 {
   orchestrator::CanonicalExecutionIdentityRequest request;
   request.retained_execution_active = true;
+  request.retained_execution_matches_live_tactical_state = true;
   request.retained_execution_target_id = "d2";
   request.retained_execution_mission_generation = 17U;
   request.retained_execution_phase = orchestrator::Phase::ShiftOut;

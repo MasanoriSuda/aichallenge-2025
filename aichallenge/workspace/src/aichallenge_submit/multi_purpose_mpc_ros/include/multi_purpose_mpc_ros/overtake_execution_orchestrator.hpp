@@ -247,6 +247,7 @@ enum class CanonicalExecutionIdentityReason {
   OvertakeLine,
   DynamicObstacleEscape,
   RetainedExecutedArtifact,
+  RetainedExecutedArtifactSuperseded,
   MalformedOvertakeLine,
   MalformedDynamicObstacleEscape,
   MalformedRetainedExecutedArtifact,
@@ -281,6 +282,11 @@ struct CanonicalExecutionIdentityRequest {
   /// while that immutable artifact has an executable cursor at the current
   /// control origin; no tactical lease or timeout is implied here.
   bool retained_execution_active{false};
+  /// The published artifact is a bridge, not an owner of tactical lifetime.
+  /// It may replenish only while the live Mission still has the identical
+  /// target, generation, homotopy and phase.  A terminal or different phase
+  /// supersedes it even when its numerical cursor remains executable.
+  bool retained_execution_matches_live_tactical_state{false};
   std::string retained_execution_target_id;
   std::uint64_t retained_execution_mission_generation{0U};
   Phase retained_execution_phase{Phase::Idle};

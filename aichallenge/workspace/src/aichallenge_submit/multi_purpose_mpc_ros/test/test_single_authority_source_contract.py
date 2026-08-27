@@ -1754,6 +1754,25 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
     assert "build_progress_course_frame_knots(" in snapshot_builder
     assert "fingerprint_control_pose_path(" in snapshot_builder
     assert "fingerprint_course_frame_window(" in snapshot_builder
+    assert (
+        "snapshot.hard_wall_clearance_m =\n"
+        "      problem.progress_execution_physical_wall_clearance_m;"
+    ) in snapshot_builder
+    assert "snapshot.hard_wall_clearance_m = 0.0;" not in snapshot_builder
+    physical_contract = SOURCE.index(
+        "const double progress_execution_physical_wall_clearance_m ="
+    )
+    profile_gate = SOURCE.index(
+        "if (progress_aligned_wall_contract_context_active) {", physical_contract
+    )
+    contract_binding = SOURCE[physical_contract:profile_gate]
+    assert "execution_wall_contract.physical_clearance_m" in contract_binding
+    assert "execution_wall_contract.required_clearance_m" in contract_binding
+    assert (
+        "snapshot.hard_wall_clearance_m =\n"
+        "      problem.progress_execution_required_wall_clearance_m;"
+    ) not in snapshot_builder
+    assert "resolve_clearance_footprint(" in SOURCE
     assert "rate_resolved_physical::build(" in physical_evaluator
     assert "rate_resolved_physical_wall::evaluate(" in physical_evaluator
     assert "evaluate_rate_resolved_physical_solution(" in shared_pipeline

@@ -136,6 +136,23 @@ std::uint64_t fingerprint_course_frame_window(
   return builder.value();
 }
 
+std::optional<recovery::FootprintExtents> resolve_clearance_footprint(
+  const recovery::FootprintExtents & footprint,
+  const double hard_wall_clearance_m) noexcept
+{
+  if (
+    !footprint.valid() || !std::isfinite(hard_wall_clearance_m) ||
+    hard_wall_clearance_m < 0.0)
+  {
+    return std::nullopt;
+  }
+  auto result = footprint;
+  result.left_extent_m += hard_wall_clearance_m;
+  result.right_extent_m += hard_wall_clearance_m;
+  return result.valid() ?
+    std::optional<recovery::FootprintExtents>{result} : std::nullopt;
+}
+
 bool snapshot_valid(const Snapshot & snapshot) noexcept
 {
   const auto trajectory_validation =
@@ -213,9 +230,14 @@ Result evaluate(const Snapshot & snapshot)
       "rate-resolved physical wall snapshot invalid");
   }
 
-  auto clearance_footprint = snapshot.footprint;
-  clearance_footprint.left_extent_m += snapshot.hard_wall_clearance_m;
-  clearance_footprint.right_extent_m += snapshot.hard_wall_clearance_m;
+  const auto clearance_footprint = resolve_clearance_footprint(
+    snapshot.footprint, snapshot.hard_wall_clearance_m);
+  if (!clearance_footprint.has_value()) {
+    return reject(
+      Outcome::InvalidInput,
+      contract::PhysicalWallCertificateReason::InvalidInput,
+      "rate-resolved physical wall clearance contract invalid");
+  }
 
   result.diagnostic.stage_index = -1;
   result.diagnostic.waypoint_id = -1;
@@ -223,7 +245,7 @@ Result evaluate(const Snapshot & snapshot)
   result.diagnostic.pose_y_m = snapshot.current_pose.y_m;
   result.diagnostic.pose_yaw_rad = snapshot.current_pose.yaw_rad;
   const auto current_sample = recovery::sample_footprint(
-    *snapshot.wall_grid, clearance_footprint, snapshot.current_pose);
+    *snapshot.wall_grid, clearance_footprint.value(), snapshot.current_pose);
   result.diagnostic.out_of_map = current_sample.out_of_map;
   result.diagnostic.contact_cell_count = current_sample.contact_cells.size();
   if (
@@ -241,7 +263,7 @@ Result evaluate(const Snapshot & snapshot)
   }
 
   const auto prefix_sweep = recovery::evaluate_clear_footprint_path(
-    *snapshot.wall_grid, clearance_footprint, snapshot.control_prefix,
+    *snapshot.wall_grid, clearance_footprint.value(), snapshot.control_prefix,
     snapshot.swept_step_m);
   if (!prefix_sweep.valid || !prefix_sweep.clear) {
     result.diagnostic.reason =
@@ -346,7 +368,7 @@ Result evaluate(const Snapshot & snapshot)
     result.diagnostic.pose_y_m = world_pose.y_m;
     result.diagnostic.pose_yaw_rad = world_pose.yaw_rad;
     const auto endpoint_sample = recovery::sample_footprint(
-      *snapshot.wall_grid, clearance_footprint, world_pose);
+      *snapshot.wall_grid, clearance_footprint.value(), world_pose);
     result.diagnostic.out_of_map = endpoint_sample.out_of_map;
     result.diagnostic.contact_cell_count =
       endpoint_sample.contact_cells.size();
@@ -368,7 +390,7 @@ Result evaluate(const Snapshot & snapshot)
   }
 
   const auto swept = recovery::evaluate_clear_footprint_path(
-    *snapshot.wall_grid, clearance_footprint, swept_path,
+    *snapshot.wall_grid, clearance_footprint.value(), swept_path,
     snapshot.swept_step_m);
   if (!swept.valid || !swept.clear) {
     result.diagnostic.swept_rejected_path_index = swept.rejected_path_index;

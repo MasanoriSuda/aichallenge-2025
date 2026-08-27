@@ -484,7 +484,11 @@ TEST(OvertakeExecutionOrchestrator, AlignsAdmissionAndRuntimeWallClearance)
   const auto result = orchestrator::resolve_wall_clearance_contract(
     0.10, 0.15, true, 0.10);
   ASSERT_TRUE(result.valid);
+  EXPECT_DOUBLE_EQ(result.physical_clearance_m, 0.10);
+  EXPECT_DOUBLE_EQ(result.planning_clearance_m, 0.15);
+  EXPECT_DOUBLE_EQ(result.runtime_reserve_m, 0.10);
   EXPECT_DOUBLE_EQ(result.required_clearance_m, 0.20);
+  EXPECT_LT(result.physical_clearance_m, result.required_clearance_m);
 
   orchestrator::AuthorityRequest request;
   request.phase = orchestrator::Phase::Pass;

@@ -5845,6 +5845,8 @@ struct MpcProblem
   OvertakeLinePhase progress_execution_phase{OvertakeLinePhase::Idle};
   int progress_execution_side_sign{0};
   double progress_execution_mission_traveled_m{};
+  double progress_execution_physical_wall_clearance_m{
+    std::numeric_limits<double>::quiet_NaN()};
   double progress_execution_required_wall_clearance_m{
     std::numeric_limits<double>::quiet_NaN()};
   bool progress_execution_target_exclusion_certified{false};
@@ -6264,11 +6266,16 @@ void bind_rate_resolved_physical_wall_refinement(
   rate_resolved_shadow::Snapshot & solver_snapshot,
   const rate_resolved_physical_wall::Snapshot & physical_snapshot) noexcept
 {
+  const auto clearance_footprint =
+    rate_resolved_physical_wall::resolve_clearance_footprint(
+    physical_snapshot.footprint,
+    physical_snapshot.hard_wall_clearance_m);
   if (
     !solver_snapshot.progress_aligned_wall_refinement_active ||
     physical_snapshot.wall_grid == nullptr ||
     !physical_snapshot.wall_grid->valid() ||
     !physical_snapshot.footprint.valid() ||
+    !clearance_footprint.has_value() ||
     physical_snapshot.course_frame_knots.size() < 2U ||
     !std::isfinite(physical_snapshot.swept_step_m) ||
     physical_snapshot.swept_step_m <= 0.0)
@@ -6277,7 +6284,7 @@ void bind_rate_resolved_physical_wall_refinement(
   }
   solver_snapshot.physical_wall_refinement_active = true;
   solver_snapshot.wall_grid = physical_snapshot.wall_grid;
-  solver_snapshot.wall_footprint = physical_snapshot.footprint;
+  solver_snapshot.wall_footprint = clearance_footprint.value();
   solver_snapshot.wall_course_frame_knots =
     physical_snapshot.course_frame_knots;
   solver_snapshot.wall_lateral_sample_step_m =
@@ -19498,33 +19505,48 @@ struct MPC
     std::vector<double> progress_execution_target_lateral_m;
     std::vector<double> progress_execution_target_longitudinal_overlap_m;
     std::vector<double> progress_execution_target_lateral_separation_m;
-    double progress_execution_required_wall_clearance_m =
+    // Wall proof exists before any tactical Mission is admitted.  Resolving
+    // this contract only inside an active execution context made left/right
+    // pre-entry proposals impossible to certify: their physical snapshot was
+    // requested before ShiftOut, while the clearance remained NaN.  Keep the
+    // physical and planning values owned by every canonical problem; only the
+    // progress-indexed profile remains conditional on normal MPCC scope.
+    const auto execution_robust_clearance =
+      resolve_robust_clearance(tracking_wp_id, N);
+    const double physical_wall_clearance_m = std::max(
+      0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
+    const double planning_wall_clearance_m =
+      execution_robust_clearance.valid ?
+      execution_robust_clearance.wall_planning_clearance_m :
+      physical_wall_clearance_m;
+    const auto execution_wall_contract =
+      overtake_orchestrator::resolve_wall_clearance_contract(
+      physical_wall_clearance_m, planning_wall_clearance_m,
+      cfg.v2x_behavior.overtake_line.runtime_wall_preplan_enabled,
+      std::max(
+        0.0,
+        cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve));
+    const double progress_execution_physical_wall_clearance_m =
+      execution_wall_contract.valid ?
+      execution_wall_contract.physical_clearance_m :
       std::numeric_limits<double>::quiet_NaN();
+    const double progress_execution_required_wall_clearance_m =
+      execution_wall_contract.valid ?
+      execution_wall_contract.required_clearance_m :
+      std::numeric_limits<double>::quiet_NaN();
+    const bool physical_wall_clearance_valid =
+      std::isfinite(progress_execution_physical_wall_clearance_m) &&
+      progress_execution_physical_wall_clearance_m >= 0.0;
+    const bool required_wall_clearance_valid =
+      std::isfinite(progress_execution_required_wall_clearance_m) &&
+      progress_execution_required_wall_clearance_m >= 0.0;
     if (progress_aligned_wall_contract_context_active) {
-      const auto execution_robust_clearance =
-        resolve_robust_clearance(tracking_wp_id, N);
-      const double physical_wall_clearance_m = std::max(
-        0.0, cfg.v2x_behavior.overtake_line.min_wall_clearance);
-      const double planning_wall_clearance_m =
-        execution_robust_clearance.valid ?
-        execution_robust_clearance.wall_planning_clearance_m :
-        physical_wall_clearance_m;
-      const auto execution_wall_contract =
-        overtake_orchestrator::resolve_wall_clearance_contract(
-        physical_wall_clearance_m, planning_wall_clearance_m,
-        cfg.v2x_behavior.overtake_line.runtime_wall_preplan_enabled,
-        std::max(
-          0.0,
-          cfg.v2x_behavior.overtake_line.runtime_wall_preplan_reserve));
-      if (execution_wall_contract.valid) {
-        progress_execution_required_wall_clearance_m =
-          execution_wall_contract.required_clearance_m;
-      }
       progress_execution_path_distance_m.reserve(static_cast<std::size_t>(N));
       progress_execution_lateral_lower_m.reserve(static_cast<std::size_t>(N));
       progress_execution_lateral_upper_m.reserve(static_cast<std::size_t>(N));
       std::optional<std::pair<double, double>> current_physical_wall_interval;
       if (
+        physical_wall_clearance_valid && required_wall_clearance_valid &&
         overtake_static_wall_grid_ != nullptr &&
         overtake_static_wall_footprint_.valid() &&
         model->reference_path->n_waypoints > 0 &&
@@ -19576,7 +19598,7 @@ struct MPC
               scalar_lower_m, scalar_upper_m,
               scalar_lower_m, scalar_upper_m,
               model->spatial_state.e_y, model->spatial_state.e_psi,
-              0.0, sample_step_m);
+              progress_execution_physical_wall_clearance_m, sample_step_m);
             if (
               interval.valid && interval.feasible &&
               std::isfinite(interval.lower_lateral_offset_m) &&
@@ -19610,9 +19632,12 @@ struct MPC
         }
       } else {
         progress_aligned_wall_contract_diagnostic =
-          "physical-wall-map-or-footprint-unavailable";
+          physical_wall_clearance_valid && required_wall_clearance_valid ?
+          "physical-wall-map-or-footprint-unavailable" :
+          "wall-clearance-contract-invalid";
       }
       const bool overtake_wall_profile_available =
+        required_wall_clearance_valid &&
         current_physical_wall_interval.has_value() &&
         overtake_line_output.stage_wall_corridor_lower_ey.size() ==
         static_cast<std::size_t>(N) &&
@@ -19706,7 +19731,8 @@ struct MPC
             recovery_footprint::Pose2D{waypoint.x, waypoint.y, waypoint.psi},
             scalar_lower_m, scalar_upper_m,
             scalar_lower_m, scalar_upper_m,
-            reference_lateral_m, heading_offset_rad, 0.0, sample_step_m);
+            reference_lateral_m, heading_offset_rad,
+            progress_execution_physical_wall_clearance_m, sample_step_m);
           if (
             !interval.valid || !interval.feasible ||
             !std::isfinite(interval.lower_lateral_offset_m) ||
@@ -19900,6 +19926,7 @@ struct MPC
       overtake_line_phase(canonical_execution_identity.phase) : OvertakeLinePhase::Idle,
       progress_execution_context_active ? canonical_execution_identity.side_sign : 0,
       progress_execution_context_active ? canonical_execution_identity.traveled_m : 0.0,
+      progress_execution_physical_wall_clearance_m,
       progress_execution_required_wall_clearance_m,
       progress_execution_context_active &&
       canonical_execution_identity.target_exclusion_certified,
@@ -22173,7 +22200,18 @@ struct MPC
     snapshot.wall_grid = overtake_static_wall_grid_snapshot_owner_;
     snapshot.wall_grid_fingerprint = overtake_static_wall_grid_fingerprint_;
     snapshot.footprint = overtake_static_wall_footprint_;
-    snapshot.hard_wall_clearance_m = 0.0;
+    if (
+      !std::isfinite(problem.progress_execution_physical_wall_clearance_m) ||
+      problem.progress_execution_physical_wall_clearance_m < 0.0)
+    {
+      rejection.outcome = RateResolvedPhysicalShadowOutcome::WallRejected;
+      rejection.wall_diagnostic.reason =
+        mpcc_contract::PhysicalWallCertificateReason::InvalidInput;
+      rejection.detail = "canonical physical wall clearance unavailable";
+      return std::nullopt;
+    }
+    snapshot.hard_wall_clearance_m =
+      problem.progress_execution_physical_wall_clearance_m;
     snapshot.bound_tolerance_m = 1e-5;
     snapshot.swept_step_m = std::max(
       1e-3, std::min(0.10, 0.5 * snapshot.wall_grid->resolution_m));
@@ -24750,7 +24788,8 @@ struct MPC
         "generation=%lu, target=%s, phase=%s, side=%d, "
         "command_published=%d, "
         "reference_certificate=%s/%s/%.3f m, "
-        "validation=swept-current-to-horizon, required=%.3f m, stages=%d, "
+        "validation=swept-current-to-horizon, physical=%.3f m, "
+        "planning_required=%.3f m, stages=%d, "
         "result=%s, action=%s, reason=%s, wp_id=%d",
         static_cast<unsigned long>(decision_id),
         static_cast<unsigned long>(overtake_line_state_.episode_id),
@@ -24761,6 +24800,7 @@ struct MPC
         execution_command_published ? 1 : 0,
         reference_certificate, reference_path_source,
         reference_minimum_clearance_m,
+        problem.progress_execution_physical_wall_clearance_m,
         problem.progress_execution_required_wall_clearance_m, problem.N,
         result, overtake_orchestrator::to_string(action), trace_reason.c_str(),
         problem.ref_wp_id);
@@ -24771,7 +24811,8 @@ struct MPC
         "generation=%lu, target=%s, phase=%s, side=%d, traveled=%.3f m, "
         "command_published=%d, "
         "reference_certificate=%s/%s/%.3f m, "
-        "validation=swept-current-to-horizon, required=%.3f m, stages=%d, "
+        "validation=swept-current-to-horizon, physical=%.3f m, "
+        "planning_required=%.3f m, stages=%d, "
         "result=%s, action=%s, reason=%s, wp_id=%d",
         static_cast<unsigned long>(decision_id),
         static_cast<unsigned long>(overtake_line_state_.episode_id),
@@ -24783,6 +24824,7 @@ struct MPC
         execution_command_published ? 1 : 0,
         reference_certificate, reference_path_source,
         reference_minimum_clearance_m,
+        problem.progress_execution_physical_wall_clearance_m,
         problem.progress_execution_required_wall_clearance_m, problem.N,
         result, overtake_orchestrator::to_string(action), trace_reason.c_str(),
         problem.ref_wp_id);
@@ -25949,7 +25991,7 @@ struct MPC
       problem.lateral_bounds_contract_valid && solution.constraints_satisfied;
     solution.physical.minimum_wall_clearance_m =
       problem.progress_execution_context_active ?
-      problem.progress_execution_required_wall_clearance_m :
+      problem.progress_execution_physical_wall_clearance_m :
       std::numeric_limits<double>::quiet_NaN();
     solution.prediction_stage_count =
       static_cast<std::size_t>(std::max(0, problem.N));

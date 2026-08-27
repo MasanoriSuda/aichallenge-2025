@@ -88,6 +88,34 @@ TEST(MpccRateResolvedPhysicalWall, AcceptsCompleteSweptFreePath)
   EXPECT_TRUE(wall::result_valid(result));
 }
 
+TEST(MpccRateResolvedPhysicalWall, ExpandsOnlyLateralHardClearanceOnce)
+{
+  const recovery::FootprintExtents footprint{0.8, 0.7, 0.6, 0.5, 0.1};
+  const auto expanded = wall::resolve_clearance_footprint(footprint, 0.4);
+  ASSERT_TRUE(expanded.has_value());
+  EXPECT_DOUBLE_EQ(expanded->front_extent_m, 0.8);
+  EXPECT_DOUBLE_EQ(expanded->rear_extent_m, 0.7);
+  EXPECT_DOUBLE_EQ(expanded->left_extent_m, 1.0);
+  EXPECT_DOUBLE_EQ(expanded->right_extent_m, 0.9);
+  EXPECT_DOUBLE_EQ(expanded->margin_m, 0.1);
+  EXPECT_FALSE(wall::resolve_clearance_footprint(footprint, -0.1).has_value());
+}
+
+TEST(MpccRateResolvedPhysicalWall, HardClearanceCanRejectRawFootprintPath)
+{
+  auto raw = snapshot();
+  const auto occupied = raw.wall_grid->world_to_grid(0.0, 0.3);
+  ASSERT_TRUE(occupied.has_value());
+  auto mutable_grid = std::make_shared<recovery::OccupancyGrid>(*raw.wall_grid);
+  mutable_grid->cells[occupied->row * mutable_grid->width + occupied->column] =
+    recovery::CellState::Occupied;
+  raw.wall_grid = mutable_grid;
+
+  EXPECT_EQ(wall::evaluate(raw).outcome, wall::Outcome::Accepted);
+  raw.hard_wall_clearance_m = 0.3;
+  EXPECT_EQ(wall::evaluate(raw).outcome, wall::Outcome::CurrentPoseRejected);
+}
+
 TEST(MpccRateResolvedPhysicalWall, RejectsWallContactBetweenStages)
 {
   auto value = snapshot();

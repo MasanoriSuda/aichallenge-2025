@@ -39,6 +39,13 @@ std::uint64_t fingerprint_control_pose_path(
 std::uint64_t fingerprint_course_frame_window(
   const std::vector<mpc_stage_geometry::CourseFrameKnot> & knots) noexcept;
 
+/// Resolve the one hard wall-clearance footprint consumed by QP physical
+/// refinement, fresh proof, and retained proof. Wall clearance is lateral;
+/// longitudinal extents and rasterization margin retain separate meanings.
+std::optional<recovery::FootprintExtents> resolve_clearance_footprint(
+  const recovery::FootprintExtents & footprint,
+  double hard_wall_clearance_m) noexcept;
+
 /// Immutable input for a complete current-world footprint proof. The shared
 /// grid owner is required because this object crosses the control-thread
 /// lifetime boundary.

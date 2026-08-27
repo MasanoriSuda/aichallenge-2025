@@ -1,6 +1,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 
 #include "multi_purpose_mpc_ros/mpc_stage_geometry.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -1032,11 +1033,14 @@ Result evaluate(const Request & request)
     result.static_wall_scope = StaticWallProofScope::CurrentStagePrefix;
   }
 
-  auto clearance_footprint = source.footprint;
-  clearance_footprint.left_extent_m += source.hard_wall_clearance_m;
-  clearance_footprint.right_extent_m += source.hard_wall_clearance_m;
+  const auto clearance_footprint = physical::resolve_clearance_footprint(
+    source.footprint, source.hard_wall_clearance_m);
+  if (!clearance_footprint.has_value()) {
+    result.reason = Reason::StaticWorldMismatch;
+    return result;
+  }
   const auto delay = recovery::evaluate_clear_footprint_path(
-    *source.wall_grid, clearance_footprint,
+    *source.wall_grid, clearance_footprint.value(),
     request.measured_to_control_path, source.swept_step_m);
   result.delay_path_clearance = delay;
   if (!delay.valid) {
@@ -1132,7 +1136,7 @@ Result evaluate(const Request & request)
   finalize_dynamic_path(request.obstacles, dynamic);
   const auto continuation_clearance =
     recovery::evaluate_clear_footprint_path(
-    *source.wall_grid, clearance_footprint, continuation_path,
+    *source.wall_grid, clearance_footprint.value(), continuation_path,
     source.swept_step_m);
   result.continuation_path_clearance = continuation_clearance;
   if (!continuation_clearance.valid) {
@@ -1152,7 +1156,7 @@ Result evaluate(const Request & request)
       continuation_path.begin() + current_stage_last_path_index + 1U};
     const auto current_stage_clearance =
       recovery::evaluate_clear_footprint_path(
-      *source.wall_grid, clearance_footprint, current_stage_path,
+      *source.wall_grid, clearance_footprint.value(), current_stage_path,
       source.swept_step_m);
     result.current_stage_path_clearance = current_stage_clearance;
     if (!current_stage_clearance.valid) {

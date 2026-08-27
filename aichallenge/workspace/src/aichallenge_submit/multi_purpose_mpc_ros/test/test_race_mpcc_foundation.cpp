@@ -270,6 +270,48 @@ TEST(RaceMpccFoundation, StopEmergencyAuthorityNeverBorrowsNormalControl)
     race::StopAuthorityAction::EmergencyStop);
 }
 
+TEST(RaceMpccFoundation, StopKeepsOnlyTheLatentNormalShadowWarm)
+{
+  const auto not_stop = race::resolve_stop_shadow_intent(
+    race::StopShadowIntentRequest{
+      contract::ControlIntent::Cruise, contract::ControlIntent::Cruise,
+      false, false, false, true});
+  EXPECT_FALSE(not_stop.requested);
+  EXPECT_EQ(not_stop.intent, contract::ControlIntent::Unknown);
+
+  const auto front = race::resolve_stop_shadow_intent(
+    race::StopShadowIntentRequest{
+      contract::ControlIntent::Stop, contract::ControlIntent::Cruise,
+      false, false, true, true});
+  EXPECT_TRUE(front.requested);
+  EXPECT_EQ(front.intent, contract::ControlIntent::Follow);
+  EXPECT_EQ(front.reason, race::StopShadowIntentReason::CoherentFront);
+
+  const auto interrupted_pass = race::resolve_stop_shadow_intent(
+    race::StopShadowIntentRequest{
+      contract::ControlIntent::Stop, contract::ControlIntent::Pass,
+      true, false, true, true});
+  EXPECT_TRUE(interrupted_pass.requested);
+  EXPECT_EQ(interrupted_pass.intent, contract::ControlIntent::Pass);
+  EXPECT_EQ(
+    interrupted_pass.reason,
+    race::StopShadowIntentReason::InterruptedOvertake);
+
+  const auto missing_pass_context = race::resolve_stop_shadow_intent(
+    race::StopShadowIntentRequest{
+      contract::ControlIntent::Stop, contract::ControlIntent::Pass,
+      false, false, false, true});
+  EXPECT_TRUE(missing_pass_context.requested);
+  EXPECT_EQ(missing_pass_context.intent, contract::ControlIntent::Cruise);
+
+  const auto pre_race = race::resolve_stop_shadow_intent(
+    race::StopShadowIntentRequest{
+      contract::ControlIntent::Stop, contract::ControlIntent::Unknown,
+      false, false, false, false});
+  EXPECT_TRUE(pre_race.requested);
+  EXPECT_EQ(pre_race.intent, contract::ControlIntent::Track);
+}
+
 namespace
 {
 
@@ -564,6 +606,9 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryRejectsSemanticDiscontinuity)
     bounds.reason,
     race::ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds);
   EXPECT_EQ(bounds.stage, 1);
+  EXPECT_DOUBLE_EQ(bounds.rejected_lateral_m, 0.4);
+  EXPECT_DOUBLE_EQ(bounds.rejected_lateral_lower_m, 0.9);
+  EXPECT_DOUBLE_EQ(bounds.rejected_lateral_upper_m, 0.8);
 }
 
 TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAcceptsCertifiedTinyRegression)
@@ -587,6 +632,73 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAcceptsCertifiedTinyRegression)
   EXPECT_EQ(
     race::validate_exact_physical_execution_trajectory(trajectory).reason,
     race::ExactPhysicalExecutionTrajectoryReason::ProgressRegressed);
+}
+
+TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAcceptsOnlyCertifiedLateralResidual)
+{
+  race::ExactPhysicalExecutionTrajectory trajectory;
+  trajectory.progress_origin_m = 100.0;
+  trajectory.elapsed_time_sec = {0.1, 0.2};
+  trajectory.path_distance_m = {1.0, 2.0};
+  trajectory.lateral_m = {0.2, 0.40001};
+  trajectory.lag_m = {0.1, -0.1};
+  trajectory.heading_offset_rad = {0.15, -0.20};
+  trajectory.velocity_mps = {4.0, 4.5};
+  trajectory.progress_m = {101.1, 102.2};
+  trajectory.lateral_lower_m = {-0.5, -0.5};
+  trajectory.lateral_upper_m = {0.4, 0.4};
+  trajectory.minimum_lateral_bound_reserve_m = 0.0;
+  trajectory.lateral_bound_tolerance_m = 2.0e-5;
+
+  EXPECT_TRUE(race::exact_physical_execution_trajectory_complete(trajectory));
+
+  trajectory.lateral_bound_tolerance_m = 1.0e-6;
+  const auto outside_certificate =
+    race::validate_exact_physical_execution_trajectory(trajectory);
+  EXPECT_FALSE(outside_certificate.complete);
+  EXPECT_EQ(
+    outside_certificate.reason,
+    race::ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds);
+  EXPECT_DOUBLE_EQ(outside_certificate.rejected_lateral_m, 0.40001);
+  EXPECT_DOUBLE_EQ(outside_certificate.rejected_lateral_lower_m, -0.5);
+  EXPECT_DOUBLE_EQ(outside_certificate.rejected_lateral_upper_m, 0.4);
+
+  trajectory.lateral_bound_tolerance_m =
+    std::numeric_limits<double>::quiet_NaN();
+  EXPECT_EQ(
+    race::validate_exact_physical_execution_trajectory(trajectory).reason,
+    race::ExactPhysicalExecutionTrajectoryReason::InvalidLateralBoundTolerance);
+}
+
+TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAcceptsOneExecutableEndpoint)
+{
+  race::ExactPhysicalExecutionTrajectory trajectory;
+  trajectory.progress_origin_m = 100.0;
+  trajectory.elapsed_time_sec = {0.005};
+  trajectory.path_distance_m = {0.02};
+  trajectory.lateral_m = {0.2};
+  trajectory.lag_m = {0.0};
+  trajectory.heading_offset_rad = {0.0};
+  trajectory.velocity_mps = {4.0};
+  trajectory.progress_m = {100.02};
+  trajectory.lateral_lower_m = {-0.5};
+  trajectory.lateral_upper_m = {0.8};
+  trajectory.minimum_lateral_bound_reserve_m = 0.6;
+
+  EXPECT_TRUE(race::exact_physical_execution_trajectory_complete(trajectory));
+
+  trajectory.elapsed_time_sec.clear();
+  trajectory.path_distance_m.clear();
+  trajectory.lateral_m.clear();
+  trajectory.lag_m.clear();
+  trajectory.heading_offset_rad.clear();
+  trajectory.velocity_mps.clear();
+  trajectory.progress_m.clear();
+  trajectory.lateral_lower_m.clear();
+  trajectory.lateral_upper_m.clear();
+  EXPECT_EQ(
+    race::validate_exact_physical_execution_trajectory(trajectory).reason,
+    race::ExactPhysicalExecutionTrajectoryReason::TooFewStages);
 }
 
 TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAppliesCertifiedVelocityTolerance)

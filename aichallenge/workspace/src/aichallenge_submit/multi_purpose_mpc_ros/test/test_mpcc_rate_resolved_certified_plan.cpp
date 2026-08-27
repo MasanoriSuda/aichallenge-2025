@@ -203,15 +203,17 @@ TEST(MpccRateResolvedCertifiedPlan, CertificationDoesNotImplyExecution)
   EXPECT_FALSE(certified_state.executed_plan_available);
   EXPECT_EQ(certified_state.latest_certified_sequence, 5U);
   EXPECT_EQ(certified_state.latest_executed_sequence, 0U);
+  EXPECT_EQ(certified_state.latest_execution_decision_id, 0U);
 
   EXPECT_EQ(
-    store.mark_executed(candidate.plan),
+    store.mark_executed(candidate.plan, 100U),
     certified::StoreReason::Accepted);
   ASSERT_NE(store.snapshot(), nullptr);
   EXPECT_EQ(store.snapshot()->execution_artifact->identity.sequence, 5U);
   const auto executed_state = store.state();
   EXPECT_TRUE(executed_state.executed_plan_available);
   EXPECT_EQ(executed_state.latest_executed_sequence, 5U);
+  EXPECT_EQ(executed_state.latest_execution_decision_id, 100U);
   EXPECT_EQ(executed_state.executed_count, 1U);
 }
 
@@ -224,7 +226,7 @@ TEST(MpccRateResolvedCertifiedPlan, NewerCandidateDoesNotReplaceExecutedPlan)
   ASSERT_NE(candidate.plan, nullptr);
   ASSERT_EQ(store.replace(executed.plan), certified::StoreReason::Accepted);
   ASSERT_EQ(
-    store.mark_executed(executed.plan),
+    store.mark_executed(executed.plan, 100U),
     certified::StoreReason::Accepted);
 
   EXPECT_EQ(store.replace(candidate.plan), certified::StoreReason::Accepted);
@@ -245,7 +247,7 @@ TEST(MpccRateResolvedCertifiedPlan, ConditionalClearOnlyClearsExecutedPlan)
   ASSERT_NE(newer_candidate.plan, nullptr);
   ASSERT_EQ(store.replace(executed.plan), certified::StoreReason::Accepted);
   ASSERT_EQ(
-    store.mark_executed(executed.plan), certified::StoreReason::Accepted);
+    store.mark_executed(executed.plan, 100U), certified::StoreReason::Accepted);
   ASSERT_EQ(
     store.replace(newer_candidate.plan), certified::StoreReason::Accepted);
 
@@ -264,7 +266,8 @@ TEST(MpccRateResolvedCertifiedPlan, FailedReplacementPreservesExecutedPlan)
   const auto first = build_plan(5U);
   ASSERT_NE(first.plan, nullptr);
   EXPECT_EQ(store.replace(first.plan), certified::StoreReason::Accepted);
-  EXPECT_EQ(store.mark_executed(first.plan), certified::StoreReason::Accepted);
+  EXPECT_EQ(
+    store.mark_executed(first.plan, 100U), certified::StoreReason::Accepted);
 
   auto malformed = std::make_shared<certified::CertifiedPlan>(*first.plan);
   malformed->physical_outcome = physical::Outcome::StageWallRejected;
@@ -272,6 +275,35 @@ TEST(MpccRateResolvedCertifiedPlan, FailedReplacementPreservesExecutedPlan)
   const auto retained = store.snapshot();
   ASSERT_NE(retained, nullptr);
   EXPECT_EQ(retained->execution_artifact->identity.sequence, 5U);
+}
+
+TEST(MpccRateResolvedCertifiedPlan, PublicationOrdersIndependentProducerSequences)
+{
+  certified::Store store;
+  const auto normal = build_plan(100U);
+  const auto gate_a = build_plan(5U);
+  const auto stale_publication = build_plan(101U);
+  ASSERT_NE(normal.plan, nullptr);
+  ASSERT_NE(gate_a.plan, nullptr);
+  ASSERT_NE(stale_publication.plan, nullptr);
+  ASSERT_EQ(store.replace(normal.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.mark_executed(normal.plan, 200U), certified::StoreReason::Accepted);
+
+  // Gate A is a different certification producer. Its local artifact sequence
+  // is smaller, but its exact command crossed the publisher later and must
+  // become the retained plan.
+  EXPECT_EQ(
+    store.mark_executed(gate_a.plan, 201U), certified::StoreReason::Accepted);
+  ASSERT_NE(store.snapshot(), nullptr);
+  EXPECT_EQ(store.snapshot()->execution_artifact->identity.sequence, 5U);
+  EXPECT_EQ(store.state().latest_execution_decision_id, 201U);
+
+  // Publication chronology, not producer sequence, prevents rollback.
+  EXPECT_EQ(
+    store.mark_executed(stale_publication.plan, 199U),
+    certified::StoreReason::StaleSequence);
+  EXPECT_EQ(store.snapshot()->execution_artifact->identity.sequence, 5U);
 }
 
 TEST(MpccRateResolvedCertifiedPlan, AdmissionRecordsTypedCertificationReject)

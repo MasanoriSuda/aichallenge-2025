@@ -32,6 +32,9 @@ struct Result
   race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason exact_reason{
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
   int rejected_stage{-1};
+  double rejected_lateral_m{std::numeric_limits<double>::quiet_NaN()};
+  double rejected_lateral_lower_m{std::numeric_limits<double>::quiet_NaN()};
+  double rejected_lateral_upper_m{std::numeric_limits<double>::quiet_NaN()};
   int minimum_progress_transition_state{-1};
   double minimum_progress_delta_m{
     std::numeric_limits<double>::infinity()};
@@ -75,6 +78,8 @@ enum class ContinuationRejectReason
   InvalidCursor,
   InvalidInitialState,
   InitialLateralBoundRejected,
+  NonlinearModelRejected,
+  ActuatorEnvelopeRejected,
   ExactTrajectoryRejected,
   Count,
 };

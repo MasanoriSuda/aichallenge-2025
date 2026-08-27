@@ -128,6 +128,10 @@ const char * to_string(const ContinuationRejectReason reason) noexcept
       return "invalid-initial-state";
     case ContinuationRejectReason::InitialLateralBoundRejected:
       return "initial-lateral-bound-rejected";
+    case ContinuationRejectReason::NonlinearModelRejected:
+      return "nonlinear-model-rejected";
+    case ContinuationRejectReason::ActuatorEnvelopeRejected:
+      return "actuator-envelope-rejected";
     case ContinuationRejectReason::ExactTrajectoryRejected:
       return "exact-trajectory-rejected";
     case ContinuationRejectReason::Count: break;
@@ -192,6 +196,7 @@ Result build(
     std::numeric_limits<double>::infinity();
   const double residual_bound_m = artifact.maximum_constraint_violation + 1e-9;
   exact.velocity_lower_bound_tolerance_mps = residual_bound_m;
+  exact.lateral_bound_tolerance_m = artifact.physical_global_tolerance;
   // Preserve the solver certificate diagnostics, but never use its affine
   // state samples as physical wall evidence.  They only prove the assembled
   // QP; the exact command sequence below is independently replayed through
@@ -277,6 +282,9 @@ Result build(
     race::validate_exact_physical_execution_trajectory(exact);
   result.exact_reason = validation.reason;
   result.rejected_stage = validation.stage;
+  result.rejected_lateral_m = validation.rejected_lateral_m;
+  result.rejected_lateral_lower_m = validation.rejected_lateral_lower_m;
+  result.rejected_lateral_upper_m = validation.rejected_lateral_upper_m;
   if (!validation.complete) {
     result.reason = RejectReason::ExactTrajectoryRejected;
     return result;
@@ -380,6 +388,7 @@ ContinuationResult build_continuation(
     std::numeric_limits<double>::infinity();
   const double residual_bound_m = artifact.maximum_constraint_violation + 1e-9;
   exact.velocity_lower_bound_tolerance_mps = residual_bound_m;
+  exact.lateral_bound_tolerance_m = artifact.physical_global_tolerance;
   double elapsed_sec{};
   std::size_t current_stage_sample_count{};
   for (std::size_t stage = first_stage;
@@ -411,7 +420,7 @@ ContinuationResult build_continuation(
     const double upper_end_m = artifact.lateral_upper_m[stage + 1U];
     for (std::size_t substep = 0U; substep < substep_count; ++substep) {
       if (!advance_nonlinear_state(nonlinear, control, artifact, step_sec)) {
-        result.reason = ContinuationRejectReason::ExactTrajectoryRejected;
+        result.reason = ContinuationRejectReason::NonlinearModelRejected;
         result.rejected_stage = static_cast<int>(exact.path_distance_m.size());
         return result;
       }
@@ -422,7 +431,7 @@ ContinuationResult build_continuation(
         std::abs(nonlinear.response_steering_rad) >
         artifact.maximum_abs_steering_rad + tolerance)
       {
-        result.reason = ContinuationRejectReason::ExactTrajectoryRejected;
+        result.reason = ContinuationRejectReason::ActuatorEnvelopeRejected;
         result.rejected_stage = static_cast<int>(exact.path_distance_m.size());
         return result;
       }
@@ -469,7 +478,7 @@ ContinuationResult build_continuation(
   result.exact_reason = validation.reason;
   if (!validation.complete) {
     if (
-      current_stage_sample_count >= 2U && validation.stage >= 0 &&
+      current_stage_sample_count >= 1U && validation.stage >= 0 &&
       static_cast<std::size_t>(validation.stage) >=
       current_stage_sample_count)
     {

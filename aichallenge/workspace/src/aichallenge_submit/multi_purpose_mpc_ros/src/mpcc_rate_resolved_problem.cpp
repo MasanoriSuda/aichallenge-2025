@@ -31,7 +31,97 @@ bool valid_bounds(
   return true;
 }
 
+bool valid_progress_aligned_wall_constraints(
+  const ProgressAlignedWallConstraints & wall, const int horizon) noexcept
+{
+  const auto expected = static_cast<std::size_t>(horizon);
+  if (
+    wall.lower_slope.size() != expected ||
+    wall.lower_intercept.size() != expected ||
+    wall.upper_slope.size() != expected ||
+    wall.upper_intercept.size() != expected)
+  {
+    return false;
+  }
+  for (std::size_t stage = 0U; stage < expected; ++stage) {
+    if (
+      !std::isfinite(wall.lower_slope[stage]) ||
+      !std::isfinite(wall.upper_slope[stage]) ||
+      std::isnan(wall.lower_intercept[stage]) ||
+      std::isnan(wall.upper_intercept[stage]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool valid_swept_lateral_wall_constraints(
+  const std::vector<SweptLateralWallConstraint> & constraints,
+  const int horizon) noexcept
+{
+  for (const auto & constraint : constraints) {
+    if (
+      constraint.transition_stage < 0 ||
+      constraint.transition_stage >= horizon ||
+      !std::isfinite(constraint.destination_ratio) ||
+      constraint.destination_ratio <= 0.0 ||
+      constraint.destination_ratio >= 1.0 ||
+      std::isnan(constraint.lower_m) ||
+      std::isnan(constraint.upper_m) ||
+      constraint.lower_m > constraint.upper_m)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool valid_dynamic_obstacle_constraints(
+  const std::vector<DynamicObstacleConstraint> & constraints,
+  const int horizon) noexcept
+{
+  for (const auto & constraint : constraints) {
+    if (
+      constraint.state_stage <= 0 || constraint.state_stage > horizon ||
+      std::isnan(constraint.lower) || std::isnan(constraint.upper) ||
+      constraint.lower > constraint.upper)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
+
+std::optional<Eigen::Matrix<double, model::kInputDimension, 1>>
+resolve_serialized_previous_input(
+  const SerializedPreviousInputRequest & request) noexcept
+{
+  if (
+    !std::isfinite(request.acceleration_mps2) ||
+    !std::isfinite(request.virtual_progress_speed_mps) ||
+    request.virtual_progress_speed_mps < 0.0 ||
+    !std::isfinite(request.previous_steering_rad) ||
+    !std::isfinite(request.published_steering_rad) ||
+    !std::isfinite(request.publication_interval_sec) ||
+    request.publication_interval_sec <= 0.0)
+  {
+    return std::nullopt;
+  }
+  Eigen::Matrix<double, model::kInputDimension, 1> previous_input;
+  previous_input[model::kAccelerationIndex] = request.acceleration_mps2;
+  previous_input[model::kSteeringRateIndex] =
+    (request.published_steering_rad - request.previous_steering_rad) /
+    request.publication_interval_sec;
+  previous_input[model::kVirtualProgressSpeedIndex] =
+    request.virtual_progress_speed_mps;
+  if (!previous_input.allFinite()) {
+    return std::nullopt;
+  }
+  return previous_input;
+}
 
 std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
 {
@@ -46,6 +136,12 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
   const int variable_count = state_values + input_values;
   const int steering_prefix_rows =
     request.steering_rate_prefix_bounds.has_value() ? horizon : 0;
+  const int progress_wall_rows =
+    request.progress_aligned_wall_constraints.has_value() ? 2 * horizon : 0;
+  const int swept_wall_rows = static_cast<int>(
+    request.swept_lateral_wall_constraints.size());
+  const int dynamic_obstacle_rows = static_cast<int>(
+    request.dynamic_obstacle_constraints.size());
   if (
     request.linearizations.size() != static_cast<std::size_t>(horizon) ||
     request.state_reference.size() != state_values ||
@@ -75,7 +171,14 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
     !std::isfinite(
       request.steering_rate_prefix_bounds->maximum_cumulative_delta_rad) ||
     request.steering_rate_prefix_bounds->minimum_cumulative_delta_rad >
-    request.steering_rate_prefix_bounds->maximum_cumulative_delta_rad)))
+    request.steering_rate_prefix_bounds->maximum_cumulative_delta_rad)) ||
+    (request.progress_aligned_wall_constraints.has_value() &&
+    !valid_progress_aligned_wall_constraints(
+      request.progress_aligned_wall_constraints.value(), horizon)) ||
+    !valid_swept_lateral_wall_constraints(
+      request.swept_lateral_wall_constraints, horizon) ||
+    !valid_dynamic_obstacle_constraints(
+      request.dynamic_obstacle_constraints, horizon))
   {
     return std::nullopt;
   }
@@ -144,8 +247,56 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
       }
     }
   }
+  const int progress_wall_offset = steering_prefix_offset + steering_prefix_rows;
+  if (request.progress_aligned_wall_constraints.has_value()) {
+    const auto & wall = request.progress_aligned_wall_constraints.value();
+    for (int stage = 0; stage < horizon; ++stage) {
+      const int state = (stage + 1) * nx;
+      const int lower_row = progress_wall_offset + 2 * stage;
+      const int upper_row = lower_row + 1;
+      const auto index = static_cast<std::size_t>(stage);
+      constraint_triplets.emplace_back(
+        lower_row, state + model::kLateralIndex, 1.0);
+      constraint_triplets.emplace_back(
+        lower_row, state + model::kProgressIndex,
+        -wall.lower_slope[index]);
+      constraint_triplets.emplace_back(
+        upper_row, state + model::kLateralIndex, 1.0);
+      constraint_triplets.emplace_back(
+        upper_row, state + model::kProgressIndex,
+        -wall.upper_slope[index]);
+    }
+  }
+  const int swept_wall_offset = progress_wall_offset + progress_wall_rows;
+  for (std::size_t index = 0U;
+    index < request.swept_lateral_wall_constraints.size(); ++index)
+  {
+    const auto & wall = request.swept_lateral_wall_constraints[index];
+    const int row = swept_wall_offset + static_cast<int>(index);
+    const int source_state = wall.transition_stage * nx;
+    const int destination_state = (wall.transition_stage + 1) * nx;
+    constraint_triplets.emplace_back(
+      row, source_state + model::kLateralIndex,
+      1.0 - wall.destination_ratio);
+    constraint_triplets.emplace_back(
+      row, destination_state + model::kLateralIndex,
+      wall.destination_ratio);
+  }
+  const int dynamic_obstacle_offset = swept_wall_offset + swept_wall_rows;
+  for (std::size_t index = 0U;
+    index < request.dynamic_obstacle_constraints.size(); ++index)
+  {
+    const auto & obstacle = request.dynamic_obstacle_constraints[index];
+    const int row = dynamic_obstacle_offset + static_cast<int>(index);
+    const int state = obstacle.state_stage * nx;
+    const int element = obstacle.axis == DynamicObstacleConstraintAxis::Lateral ?
+      model::kLateralIndex : model::kProgressIndex;
+    constraint_triplets.emplace_back(row, state + element, 1.0);
+  }
   Eigen::SparseMatrix<double> constraints(
-    state_values + variable_count + steering_prefix_rows, variable_count);
+    state_values + variable_count + steering_prefix_rows + progress_wall_rows +
+    swept_wall_rows + dynamic_obstacle_rows,
+    variable_count);
   constraints.setFromTriplets(
     constraint_triplets.begin(), constraint_triplets.end());
   constraints.makeCompressed();
@@ -161,16 +312,44 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
   box_lower << request.state_lower, request.input_lower;
   box_upper << request.state_upper, request.input_upper;
   Eigen::VectorXd lower_bound(
-    state_values + variable_count + steering_prefix_rows);
+    state_values + variable_count + steering_prefix_rows + progress_wall_rows +
+    swept_wall_rows + dynamic_obstacle_rows);
   Eigen::VectorXd upper_bound(
-    state_values + variable_count + steering_prefix_rows);
+    state_values + variable_count + steering_prefix_rows + progress_wall_rows +
+    swept_wall_rows + dynamic_obstacle_rows);
   lower_bound.head(state_values + variable_count) << equality, box_lower;
   upper_bound.head(state_values + variable_count) << equality, box_upper;
   if (request.steering_rate_prefix_bounds.has_value()) {
-    lower_bound.tail(steering_prefix_rows).setConstant(
+    lower_bound.segment(steering_prefix_offset, steering_prefix_rows).setConstant(
       request.steering_rate_prefix_bounds->minimum_cumulative_delta_rad);
-    upper_bound.tail(steering_prefix_rows).setConstant(
+    upper_bound.segment(steering_prefix_offset, steering_prefix_rows).setConstant(
       request.steering_rate_prefix_bounds->maximum_cumulative_delta_rad);
+  }
+  if (request.progress_aligned_wall_constraints.has_value()) {
+    const auto & wall = request.progress_aligned_wall_constraints.value();
+    for (int stage = 0; stage < horizon; ++stage) {
+      const auto index = static_cast<std::size_t>(stage);
+      const int lower_row = progress_wall_offset + 2 * stage;
+      const int upper_row = lower_row + 1;
+      lower_bound[lower_row] = wall.lower_intercept[index];
+      upper_bound[lower_row] = std::numeric_limits<double>::infinity();
+      lower_bound[upper_row] = -std::numeric_limits<double>::infinity();
+      upper_bound[upper_row] = wall.upper_intercept[index];
+    }
+  }
+  for (std::size_t index = 0U;
+    index < request.swept_lateral_wall_constraints.size(); ++index)
+  {
+    const int row = swept_wall_offset + static_cast<int>(index);
+    lower_bound[row] = request.swept_lateral_wall_constraints[index].lower_m;
+    upper_bound[row] = request.swept_lateral_wall_constraints[index].upper_m;
+  }
+  for (std::size_t index = 0U;
+    index < request.dynamic_obstacle_constraints.size(); ++index)
+  {
+    const int row = dynamic_obstacle_offset + static_cast<int>(index);
+    lower_bound[row] = request.dynamic_obstacle_constraints[index].lower;
+    upper_bound[row] = request.dynamic_obstacle_constraints[index].upper;
   }
 
   Eigen::VectorXd linear_cost = Eigen::VectorXd::Zero(variable_count);
@@ -229,7 +408,12 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
     std::move(scaling.value()), horizon};
 }
 
-RowSemantic decode_row(const int row, const int horizon_steps) noexcept
+RowSemantic decode_row(
+  const int row, const int horizon_steps,
+  const bool steering_rate_prefix_active,
+  const bool progress_aligned_wall_active,
+  const int swept_lateral_wall_count,
+  const std::vector<DynamicObstacleConstraint> * dynamic_obstacle_constraints) noexcept
 {
   constexpr int nx = model::kStateDimension;
   constexpr int nu = model::kInputDimension;
@@ -252,11 +436,49 @@ RowSemantic decode_row(const int row, const int horizon_steps) noexcept
     return RowSemantic{
       true, RowKind::InputBox, input_row / nu, input_row % nu};
   }
-  const int prefix_row = input_row - input_values;
-  if (prefix_row < horizon_steps) {
+  int trailing_row = input_row - input_values;
+  if (steering_rate_prefix_active && trailing_row < horizon_steps) {
     return RowSemantic{
-      true, RowKind::SteeringRatePrefix, prefix_row,
+      true, RowKind::SteeringRatePrefix, trailing_row,
       model::kSteeringRateIndex};
+  }
+  if (steering_rate_prefix_active) {
+    trailing_row -= horizon_steps;
+  }
+  if (progress_aligned_wall_active && trailing_row < 2 * horizon_steps) {
+    return RowSemantic{
+      true,
+      trailing_row % 2 == 0 ? RowKind::ProgressAlignedWallLower :
+      RowKind::ProgressAlignedWallUpper,
+      trailing_row / 2, model::kLateralIndex};
+  }
+  if (progress_aligned_wall_active) {
+    trailing_row -= 2 * horizon_steps;
+  }
+  if (
+    swept_lateral_wall_count > 0 && trailing_row >= 0 &&
+    trailing_row < swept_lateral_wall_count)
+  {
+    return RowSemantic{
+      true, RowKind::SweptLateralWall, trailing_row,
+      model::kLateralIndex};
+  }
+  if (swept_lateral_wall_count > 0) {
+    trailing_row -= swept_lateral_wall_count;
+  }
+  if (
+    dynamic_obstacle_constraints != nullptr && trailing_row >= 0 &&
+    trailing_row < static_cast<int>(dynamic_obstacle_constraints->size()))
+  {
+    const auto & obstacle = (*dynamic_obstacle_constraints)[
+      static_cast<std::size_t>(trailing_row)];
+    return RowSemantic{
+      true,
+      obstacle.axis == DynamicObstacleConstraintAxis::Lateral ?
+      RowKind::DynamicObstacleLateral : RowKind::DynamicObstacleProgress,
+      obstacle.state_stage,
+      obstacle.axis == DynamicObstacleConstraintAxis::Lateral ?
+      model::kLateralIndex : model::kProgressIndex};
   }
   return {};
 }
@@ -269,6 +491,15 @@ const char * row_kind_name(const RowKind kind) noexcept
     case RowKind::StateBox: return "state-box";
     case RowKind::InputBox: return "input-box";
     case RowKind::SteeringRatePrefix: return "steering-rate-prefix";
+    case RowKind::ProgressAlignedWallLower:
+      return "progress-aligned-wall-lower";
+    case RowKind::ProgressAlignedWallUpper:
+      return "progress-aligned-wall-upper";
+    case RowKind::SweptLateralWall: return "swept-lateral-wall";
+    case RowKind::DynamicObstacleLateral:
+      return "dynamic-obstacle-lateral";
+    case RowKind::DynamicObstacleProgress:
+      return "dynamic-obstacle-progress";
   }
   return "unknown";
 }

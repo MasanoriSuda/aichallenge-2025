@@ -179,9 +179,14 @@ std::shared_ptr<const CertifiedPlan> Store::candidate_snapshot() const
   return candidate_plan_;
 }
 
-StoreReason Store::mark_executed(std::shared_ptr<const CertifiedPlan> plan)
+StoreReason Store::mark_executed(
+  std::shared_ptr<const CertifiedPlan> plan,
+  const std::uint64_t publication_decision_id)
 {
-  if (plan == nullptr || validate(*plan) != RejectReason::None) {
+  if (
+    plan == nullptr || validate(*plan) != RejectReason::None ||
+    publication_decision_id == 0U)
+  {
     std::lock_guard<std::mutex> lock(mutex_);
     ++invalid_plan_count_;
     last_reason_ = StoreReason::InvalidPlan;
@@ -189,17 +194,28 @@ StoreReason Store::mark_executed(std::shared_ptr<const CertifiedPlan> plan)
   }
   const auto sequence = plan->execution_artifact->identity.sequence;
   std::lock_guard<std::mutex> lock(mutex_);
-  if (sequence < latest_executed_sequence_) {
+  if (publication_decision_id < latest_execution_decision_id_) {
     ++stale_sequence_count_;
     last_reason_ = StoreReason::StaleSequence;
     return StoreReason::StaleSequence;
   }
-  if (executed_plan_ != nullptr && sequence == latest_executed_sequence_) {
-    last_reason_ = StoreReason::Accepted;
-    return StoreReason::Accepted;
+  if (publication_decision_id == latest_execution_decision_id_) {
+    if (
+      executed_plan_ != nullptr &&
+      artifact::same_identity(
+        executed_plan_->execution_artifact->identity,
+        plan->execution_artifact->identity))
+    {
+      last_reason_ = StoreReason::Accepted;
+      return StoreReason::Accepted;
+    }
+    ++stale_sequence_count_;
+    last_reason_ = StoreReason::StaleSequence;
+    return StoreReason::StaleSequence;
   }
   executed_plan_ = std::move(plan);
   latest_executed_sequence_ = sequence;
+  latest_execution_decision_id_ = publication_decision_id;
   ++executed_count_;
   last_reason_ = StoreReason::Accepted;
   return StoreReason::Accepted;
@@ -217,6 +233,7 @@ StoreState Store::state() const
   StoreState state;
   state.latest_certified_sequence = latest_certified_sequence_;
   state.latest_executed_sequence = latest_executed_sequence_;
+  state.latest_execution_decision_id = latest_execution_decision_id_;
   state.accepted_count = accepted_count_;
   state.executed_count = executed_count_;
   state.invalid_plan_count = invalid_plan_count_;

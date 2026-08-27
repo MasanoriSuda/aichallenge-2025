@@ -261,6 +261,11 @@ struct CanonicalExecutionIdentityRequest {
   int overtake_line_side_sign{0};
   double overtake_line_traveled_m{0.0};
   bool overtake_line_target_exclusion_certified{false};
+  /// FollowPrepare/DynamicMissionWait is a tactical pause of an existing
+  /// execution identity.  Its canonical phase remains the interrupted
+  /// ShiftOut or Pass phase while the validated lateral prefix owns control.
+  bool dynamic_wait_active{false};
+  Phase dynamic_wait_origin_phase{Phase::Idle};
 
   bool dynamic_escape_active{false};
   bool dynamic_escape_path_validated{false};
@@ -335,6 +340,37 @@ struct CanonicalControlIntentResolution {
 CanonicalControlIntentResolution resolve_canonical_control_intent(
   const AuthorityRequest & request,
   const AuthorityResolution & resolution) noexcept;
+
+enum class DynamicObstacleContractSource {
+  None,
+  StageCorridor,
+  CurrentTargetTube,
+};
+
+const char * to_string(DynamicObstacleContractSource source) noexcept;
+
+struct DynamicObstacleContractRequest {
+  bool canonical_normal_scope_active{false};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  bool target_exclusion_certified{false};
+  bool stage_corridor_target_bound_effective{false};
+  bool stage_corridor_contract_complete{false};
+  bool current_target_tube_complete{false};
+};
+
+struct DynamicObstacleContractResolution {
+  bool active{false};
+  DynamicObstacleContractSource source{DynamicObstacleContractSource::None};
+};
+
+/// Select the current-world target tube independently from the legacy stage
+/// corridor owner.  Cruise/Follow use a stay-behind disjunction, while
+/// ShiftOut/Pass can switch to the selected lateral side.  In both cases the
+/// obstacle belongs to the canonical QP before current-world certification;
+/// the verifier must not be the first layer that discovers the opponent.
+DynamicObstacleContractResolution resolve_dynamic_obstacle_contract(
+  const DynamicObstacleContractRequest & request) noexcept;
 
 const char * to_string(Phase phase) noexcept;
 const char * to_string(Behavior behavior) noexcept;

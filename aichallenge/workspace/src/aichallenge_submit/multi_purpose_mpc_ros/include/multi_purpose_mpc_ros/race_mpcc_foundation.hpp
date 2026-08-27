@@ -116,6 +116,11 @@ struct ExactPhysicalExecutionTrajectory
   /// Maximum solver-certified residual below the semantic zero-velocity
   /// bound. Raw solved states remain unchanged for physical proof.
   double velocity_lower_bound_tolerance_mps{};
+  /// Solver-certified physical tolerance for the lateral corridor rows.
+  /// The nonlinear replay remains the wall-proof trajectory; this tolerance
+  /// only prevents an already accepted numerical row residual from being
+  /// reinterpreted as a new hard failure by a downstream strict comparison.
+  double lateral_bound_tolerance_m{};
 };
 
 enum class ExactPhysicalExecutionTrajectoryReason
@@ -125,6 +130,7 @@ enum class ExactPhysicalExecutionTrajectoryReason
   InvalidProgressOrigin,
   InvalidProgressRegressionTolerance,
   InvalidVelocityLowerBoundTolerance,
+  InvalidLateralBoundTolerance,
   InvalidMinimumLateralReserve,
   TimeShapeMismatch,
   LateralShapeMismatch,
@@ -150,6 +156,9 @@ struct ExactPhysicalExecutionTrajectoryValidation
   ExactPhysicalExecutionTrajectoryReason reason{
     ExactPhysicalExecutionTrajectoryReason::TooFewStages};
   int stage{-1};
+  double rejected_lateral_m{std::numeric_limits<double>::quiet_NaN()};
+  double rejected_lateral_lower_m{std::numeric_limits<double>::quiet_NaN()};
+  double rejected_lateral_upper_m{std::numeric_limits<double>::quiet_NaN()};
 };
 
 const char * exact_physical_execution_trajectory_reason_name(
@@ -356,6 +365,46 @@ enum class StopAuthorityAction
 /// solver for lateral control before braking is applied downstream.
 StopAuthorityAction resolve_stop_authority_action(
   mpcc_execution_contract::ControlIntent intent) noexcept;
+
+enum class StopShadowIntentReason
+{
+  NotStop,
+  InterruptedOvertake,
+  InterruptedRejoin,
+  CoherentFront,
+  RaceCruise,
+  PreRaceTrack,
+};
+
+const char * stop_shadow_intent_reason_name(
+  StopShadowIntentReason reason) noexcept;
+
+struct StopShadowIntentRequest
+{
+  mpcc_execution_contract::ControlIntent active_intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  mpcc_execution_contract::ControlIntent last_published_normal_intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  bool interrupted_overtake_context_available{false};
+  bool interrupted_rejoin_context_available{false};
+  bool coherent_front_observation{false};
+  bool race_session_active{false};
+};
+
+struct StopShadowIntentResolution
+{
+  bool requested{false};
+  mpcc_execution_contract::ControlIntent intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  StopShadowIntentReason reason{StopShadowIntentReason::NotStop};
+};
+
+/// SafetyBrake remains the only Stop command owner. While it owns the wire,
+/// this resolver chooses the normal intent whose *shadow successor* must stay
+/// warm from the actually published braking command. The result never grants
+/// normal production authority during Stop.
+StopShadowIntentResolution resolve_stop_shadow_intent(
+  const StopShadowIntentRequest & request) noexcept;
 
 enum class FollowLongitudinalContractReason
 {

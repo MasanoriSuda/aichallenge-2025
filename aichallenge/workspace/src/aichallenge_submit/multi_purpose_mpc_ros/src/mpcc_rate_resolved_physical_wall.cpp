@@ -200,7 +200,8 @@ Result evaluate(const Snapshot & snapshot)
       std::string detail) {
       result.outcome = outcome;
       result.diagnostic.reason = reason;
-      result.detail = std::move(detail);
+      result.detail = std::move(detail) + ", " +
+        contract::format_physical_wall_certificate_diagnostic(result.diagnostic);
       return finish(std::move(result), started, snapshot.identity.captured_sec);
     };
 

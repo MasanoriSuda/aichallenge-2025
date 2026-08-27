@@ -236,6 +236,31 @@ def test_follow_current_world_observation_survives_a_new_intent_proposal() -> No
     assert "problem.follow_longitudinal_contract.valid" not in evaluate
 
 
+def test_identical_v2x_source_repeat_preserves_validated_motion_proof() -> None:
+    """A bridge repeat must not erase the current dynamic-world observation."""
+
+    update_start = SOURCE.index(
+        "void update(const V2XVehiclePositionArray & msg, const double receipt_sec)"
+    )
+    update_end = SOURCE.index("std::vector<TrackedVehicle> active_vehicles", update_start)
+    update = SOURCE[update_start:update_end]
+    classify = update.index("classify_opponent_sample_continuity(")
+    reusable = update.index("OpponentSampleContinuity::ReusableDuplicate")
+    invalid = update.index("OpponentSampleContinuity::InvalidNonadvancing")
+    store = update.index("tracked.motion_estimate_valid =")
+    assert classify < reusable < invalid < store
+    for retained_motion in (
+        "vx = tracked.vx;",
+        "vy = tracked.vy;",
+        "ax = tracked.ax;",
+        "ay = tracked.ay;",
+        "velocity_observation_valid = true;",
+        "motion_estimate_valid = true;",
+    ):
+        assert retained_motion in update[reusable:invalid]
+    assert "invalid_velocity = true;" in update[invalid:store]
+
+
 def test_overtake_entry_speed_proof_uses_selected_exact_trajectory() -> None:
     """Final prefix admission must not fall back to legacy rollout speed."""
 
@@ -444,11 +469,24 @@ def test_rate_resolved_successor_is_bound_only_after_exact_publication() -> None
     serialized = recorder.index(
         "physical_steering_matches_serialized_actuation("
     )
+    longitudinal = recorder.index(
+        "mpcc_rate_resolved_problem::resolve_serialized_previous_input("
+    )
     bind = recorder.index("bind_rate_resolved_track_cruise_submission(")
     submit = recorder.index("submit_rate_resolved_track_cruise_shadow(")
-    assert serialized < bind < submit
-    assert "final_physical_steering_rad" in recorder[bind:submit]
+    assert serialized < longitudinal < bind < submit
+    assert "final_acceleration_mps2" in recorder[serialized:bind]
+    assert "final_target_speed_mps" in recorder[serialized:bind]
+    assert "final_physical_steering_rad" in recorder[serialized:bind]
+    assert "committed_command_control_age_sec" in recorder[serialized:bind]
+    assert "previous_curvature" not in recorder
     assert "command_control_origin_steering_rad_.value()" not in recorder
+
+    reset_start = SOURCE.index("void reset_control_history(")
+    reset_end = SOURCE.index("void synchronize_wall_handoff_hold_control(", reset_start)
+    assert "last_rate_resolved_serialized_predecessor_.reset();" in SOURCE[
+        reset_start:reset_end
+    ]
 
     control_start = SOURCE.index("void control()")
     control_end = SOURCE.index("void publish_zero_command()", control_start)
@@ -456,8 +494,8 @@ def test_rate_resolved_successor_is_bound_only_after_exact_publication() -> None
     publish = control.index("const auto published_steering = publish_control_command(")
     successor = control.index("mpc_->record_rate_resolved_publication_successor(")
     assert publish < successor
-    assert "u[1]" in control[successor : successor + 300]
-    successor_call = control[successor : successor + 400]
+    successor_call = control[successor : successor + 450]
+    assert "u[0], acc, u[1]" in successor_call
     assert (
         "!recovery_command_active &&\n"
         "      (!mpc_fallback_active || canonical_emergency_stop)"
@@ -465,65 +503,50 @@ def test_rate_resolved_successor_is_bound_only_after_exact_publication() -> None
     )
 
 
-def test_rate_resolved_intent_transition_admits_the_same_rate_resolved_producer() -> None:
-    """An intent change joins the exact certified plan before publication."""
+def test_rate_resolved_intent_transition_reuses_gate_a_without_sync_solve() -> None:
+    """Overtake entry joins Gate A evidence without solving in the callback."""
 
-    admission_start = SOURCE.index(
-        "evaluate_rate_resolved_transition_admission("
-    )
-    admission_end = SOURCE.index(
-        "RateResolvedRetainedShadowEvaluation\n"
-        "  evaluate_rate_resolved_track_cruise_retained_shadow(",
-        admission_start,
-    )
-    admission = SOURCE[admission_start:admission_end]
-    assert "command_control_origin_steering_rad_.has_value()" in admission
-    assert "current_physical_steering_state_.has_value()" in admission
-    assert (
-        "bind_rate_resolved_track_cruise_submission(\n"
-        "        draft, command_control_origin_steering_rad_.value())"
-        in admission
-    )
-    assert "bind_rate_resolved_track_cruise_submission(draft, previous_steering)" not in admission
-    assert "build_rate_resolved_submission_snapshot(" in admission
-    assert "evaluate_rate_resolved_pipeline(" in admission
-    assert "admission.certified_plan = evaluation.certified_plan.plan" in admission
-    assert "evaluate_rate_resolved_track_cruise_plan(" in admission
-    assert "admission.current_world_reason = admission.retained.reason" in admission
-    assert "admission.current_world_joined" in admission
-    assert (
-        "rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot()"
-        not in admission
-    )
-    assert "VelocityProgress5State" not in admission
-    assert "canonical_normal_control(" not in admission
-    assert "canonical_normal_emergency_stop(" not in admission
-    assert "safe_failure_control(" not in admission
-
+    assert "RateResolvedTransitionAdmissionEvaluation" not in SOURCE
+    assert "evaluate_rate_resolved_transition_admission(" not in SOURCE
     owner_start = SOURCE.index("rate_resolved_normal_production_control(")
     owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
     owner = SOURCE[owner_start:owner_end]
     first_revalidation = owner.index(
         "evaluate_rate_resolved_track_cruise_retained_shadow("
     )
-    admission_call = owner.index("evaluate_rate_resolved_transition_admission(")
+    gate_a_lookup = owner.index(
+        "last_v2x_behavior_output_.rate_resolved_mission_gate_a_proposal"
+    )
+    gate_a_revalidation = owner.index(
+        "evaluate_rate_resolved_track_cruise_plan("
+    )
+    previous_revalidation = owner.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow(",
+        first_revalidation + 1,
+    )
     publication = owner.index("rate_resolved_track_cruise_control(")
-    assert first_revalidation < admission_call < publication
-    # A tactical intent change is atomic: first prove the proposed intent,
-    # then prove the last actually published intent in the same current world
-    # when the proposal cannot be adopted.
+    assert (
+        first_revalidation
+        < gate_a_lookup
+        < gate_a_revalidation
+        < previous_revalidation
+        < publication
+    )
+    assert "gate_a_proposal->certified_plan" in owner
+    assert "gate_a_proposal->prospective_mission_generation" in owner
+    assert "gate_a_proposal->target_id" in owner
+    assert "gate_a_proposal->selected_side_sign" in owner
     assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 2
     assert "!retained.production_authority.has_value()" in owner
     assert "ControlIntent::Unknown" in owner
     assert "last_published_canonical_intent_ != intent" in owner
-    assert "retained.reason == rate_resolved_retained::Reason::MissingPlan" not in owner
-    assert "retained.reason == rate_resolved_retained::Reason::IntentMismatch" not in owner
-    assert "if (admission.current_world_joined)" in owner
-    assert "retained = admission.retained" in owner
     assert "const auto previous_intent = last_published_canonical_intent_" in owner
     assert "resolve_atomic_intent_admission(" in owner
     assert "effective_intent = atomic_resolution.effective_intent" in owner
     assert "problem, effective_intent, retained" in owner
+    assert "evaluate_rate_resolved_pipeline(" not in owner
+    assert "build_rate_resolved_submission_snapshot(" not in owner
+    assert "rate_resolved_track_cruise_shadow_solver_context_" not in owner
 
 
 def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
@@ -543,8 +566,8 @@ def test_rate_resolved_track_cruise_uses_explicit_control_time_origin() -> None:
     assert "request.measured_to_control_elapsed_sec = control_path->elapsed_sec;" in SOURCE
 
 
-def test_rate_resolved_track_cruise_has_its_own_six_state_problem_identity() -> None:
-    """A six-state artifact must not inherit the five-state fingerprint."""
+def test_rate_resolved_track_cruise_identity_names_the_effective_solver_horizon() -> None:
+    """The seven-state identity must name the reduced horizon actually solved."""
 
     builder_start = SOURCE.index(
         "build_rate_resolved_track_cruise_submission_draft("
@@ -556,10 +579,118 @@ def test_rate_resolved_track_cruise_has_its_own_six_state_problem_identity() -> 
     assert (
         "draft.source_context = make_problem_context(\n"
         "      problem,\n"
-        "      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State);"
+        "      mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State,\n"
+        "      intent, extended_problem->N);"
         in builder
     )
+    assert "const mpcc_contract::ControlIntent intent" in builder
     assert "VelocityProgress5State" not in builder
+
+
+def test_rate_resolved_submission_boundaries_reject_context_horizon_mismatch() -> None:
+    """A stale identity horizon must never enter the canonical solver mailbox."""
+
+    bind_start = SOURCE.index(
+        "std::optional<BoundRateResolvedTrackCruiseSubmission>\n"
+        "  bind_rate_resolved_track_cruise_submission("
+    )
+    bind_end = SOURCE.index(
+        "build_rate_resolved_submission_snapshot(", bind_start
+    )
+    bind = SOURCE[bind_start:bind_end]
+    assert (
+        "draft.source_context.horizon_steps !=\n"
+        "      static_cast<std::size_t>(draft.horizon_steps)"
+        in bind
+    )
+
+    snapshot_start = bind_end
+    snapshot_end = SOURCE.index(
+        "submit_rate_resolved_track_cruise_shadow(", snapshot_start
+    )
+    snapshot = SOURCE[snapshot_start:snapshot_end]
+    assert (
+        "bound_submission.source_context.horizon_steps !=\n"
+        "      static_cast<std::size_t>(bound_submission.horizon_steps)"
+        in snapshot
+    )
+
+
+def test_canonical_execution_certificate_keeps_the_complete_hard_proved_horizon() -> None:
+    """A tactical lease must not truncate an already hard-proved QP plan."""
+
+    builder_start = SOURCE.index(
+        "build_extended_progress_problem("
+    )
+    builder_end = SOURCE.index(
+        "build_rate_resolved_track_cruise_submission_draft(", builder_start
+    )
+    builder = SOURCE[builder_start:builder_end]
+    assert "const int execution_prefix_steps = N;" in builder
+    assert "resolve_receding_execution_horizon(" not in builder
+    assert (
+        "std::move(variable_scaling.value()), N, execution_prefix_steps"
+        in builder
+    )
+
+
+def test_stop_keeps_the_same_canonical_pipeline_warm_without_normal_authority() -> None:
+    """Emergency owns the wire; its publication only seeds a 7-state shadow."""
+
+    prepare_start = SOURCE.index(
+        "prepare_rate_resolved_stop_shadow_successor("
+    )
+    prepare_end = SOURCE.index(
+        "rate_resolved_track_cruise_control(", prepare_start
+    )
+    prepare = SOURCE[prepare_start:prepare_end]
+    assert "build_rate_resolved_track_cruise_submission_draft(" in prepare
+    assert "problem, shadow_intent, now_sec" in prepare
+    assert "pending_rate_resolved_publication_successor_" in prepare
+    assert "rate_resolved_track_cruise_control(" not in prepare
+    assert "production_authority" not in prepare
+
+    stop_start = SOURCE.index(
+        "resolve_stop_authority_action(control_intent)"
+    )
+    stop_end = SOURCE.index(
+        "rate_resolved_artifact::supports_intent(control_intent)", stop_start
+    )
+    stop = SOURCE[stop_start:stop_end]
+    assert "canonical_normal_emergency_stop(" in stop
+    assert "prepare_rate_resolved_stop_shadow_successor(" in stop
+    assert stop.index("canonical_normal_emergency_stop(") < stop.index(
+        "prepare_rate_resolved_stop_shadow_successor("
+    )
+
+
+def test_problem_intent_is_resolved_after_current_cycle_authority_trace() -> None:
+    """A reset trace must not stamp Follow/Overtake artifacts as Cruise."""
+
+    init_start = SOURCE.index("MpcProblem init_problem(")
+    init_end = SOURCE.index("build_extended_progress_problem(", init_start)
+    init = SOURCE[init_start:init_end]
+    trace = "last_overtake_authority_trace_ = authority_trace;"
+    resolved = "const auto resolved_control_intent = current_control_intent();"
+    intent = "const auto problem_intent = semantic_intent_override.value_or("
+    assert trace in init
+    assert resolved in init
+    assert intent in init
+    assert init.index(trace) < init.index(resolved) < init.index(intent)
+
+    control_start = SOURCE.index("MpcControlCycleResult get_control(")
+    control_end = SOURCE.index(
+        "std::pair<std::vector<double>, std::vector<double>> update_prediction(",
+        control_start,
+    )
+    control = SOURCE[control_start:control_end]
+    problem = control.index("MpcProblem problem =")
+    production_intent = control.index(
+        "const auto control_intent = problem.resolved_control_intent;"
+    )
+    assert problem < production_intent
+    assert "const auto control_intent = current_control_intent();" not in control
+    assert "problem.problem_intent" in control
 
 
 def test_dynamic_escape_materializes_one_canonical_overtake_identity() -> None:
@@ -586,32 +717,29 @@ def test_dynamic_escape_materializes_one_canonical_overtake_identity() -> None:
 
 
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
-    """Intent elevation must be atomic with a current executable six-state plan."""
-
-    admission_start = SOURCE.index("evaluate_rate_resolved_transition_admission(")
-    admission_end = SOURCE.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow(", admission_start
-    )
-    admission = SOURCE[admission_start:admission_end]
-    assert "build_rate_resolved_submission_snapshot(" in admission
-    assert "evaluate_rate_resolved_pipeline(" in admission
-    assert "admission.certified_plan = evaluation.certified_plan.plan" in admission
-    assert "evaluate_rate_resolved_track_cruise_plan(" in admission
-    assert "VelocityProgress5State" not in admission
-    assert "legacy-mpc" not in admission
+    """Follow waits on async evidence while the published intent keeps authority."""
 
     owner_start = SOURCE.index("rate_resolved_normal_production_control(")
     owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
     owner = SOURCE[owner_start:owner_end]
-    admission_call = owner.index("evaluate_rate_resolved_transition_admission(")
+    initial_revalidation = owner.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow("
+    )
+    previous_revalidation = owner.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow(",
+        initial_revalidation + 1,
+    )
+    resolution = owner.index("resolve_atomic_intent_admission(")
     production = owner.index("rate_resolved_track_cruise_control(")
-    assert admission_call < production
-    assert "retained = admission.retained" in owner
+    assert initial_revalidation < previous_revalidation < resolution < production
     assert owner.count("evaluate_rate_resolved_track_cruise_retained_shadow(") == 2
     assert "last_published_canonical_intent_" in owner
     assert "ControlIntent::Follow" in owner
     assert "resolve_atomic_intent_admission(" in owner
     assert "effective_intent = atomic_resolution.effective_intent" in owner
+    assert "evaluate_rate_resolved_pipeline(" not in owner
+    assert "build_rate_resolved_submission_snapshot(" not in owner
+    assert "rate_resolved_track_cruise_shadow_solver_context_" not in owner
 
 
 def test_last_published_intent_is_a_publication_ledger() -> None:
@@ -638,8 +766,8 @@ def test_last_published_intent_is_a_publication_ledger() -> None:
     assert recorder.index("mark_executed(") < ledger_update
 
 
-def test_shared_rate_resolved_solver_transaction_is_serialized_end_to_end() -> None:
-    """Async refresh and transition admission share one serialized solver owner."""
+def test_rate_resolved_solver_is_owned_only_by_the_async_worker() -> None:
+    """The control callback revalidates evidence but never enters the solver."""
 
     shadow_header = (
         PACKAGE_ROOT / "include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
@@ -658,17 +786,18 @@ def test_shared_rate_resolved_solver_transaction_is_serialized_end_to_end() -> N
 
     submit_start = SOURCE.index("submit_rate_resolved_track_cruise_shadow(")
     submit_end = SOURCE.index(
-        "evaluate_rate_resolved_transition_admission(", submit_start
-    )
-    admission_end = SOURCE.index(
-        "evaluate_rate_resolved_track_cruise_retained_shadow(", submit_end
+        "void consume_rate_resolved_preentry_execution_shadow(", submit_start
     )
     assert "rate_resolved_track_cruise_shadow_solver_context_" in SOURCE[
         submit_start:submit_end
     ]
-    assert "rate_resolved_track_cruise_shadow_solver_context_" in SOURCE[
-        submit_end:admission_end
-    ]
+    assert "evaluate_rate_resolved_transition_admission(" not in SOURCE
+
+    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    assert "rate_resolved_track_cruise_shadow_solver_context_" not in owner
+    assert "evaluate_rate_resolved_pipeline(" not in owner
 
 
 def test_fresh_preentry_uses_six_state_gate_for_shiftout_and_direct_pass() -> None:
@@ -743,7 +872,7 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "rate_resolved_track_cruise_certified_plan_store_" not in shadow
     assert "canonical_normal_command" not in shadow
     assert "bind_rate_resolved_track_cruise_submission(" in shadow
-    assert "command_control_origin_steering_rad_.value()" in shadow
+    assert "last_rate_resolved_serialized_predecessor_.value()" in shadow
     assert "current_physical_steering_state_->committed_steering_rad" not in shadow
     assert "BoundRateResolvedTrackCruiseSubmission bound_submission;" not in shadow
 
@@ -919,6 +1048,20 @@ def test_tactical_async_and_isolated_branches_share_one_owned_snapshot_boundary(
     assert "gap_planner->tactical_snapshot()" in helper
     assert "snapshot.planner->reference_path_snapshot_owner_" in helper
 
+    clone_start = SOURCE.index("std::shared_ptr<MPC> tactical_snapshot(")
+    clone_end = SOURCE.index("struct OwnedTacticalSnapshot", clone_start)
+    clone = SOURCE[clone_start:clone_end]
+    assert (
+        "snapshot->last_rate_resolved_serialized_predecessor_ =\n"
+        "      last_rate_resolved_serialized_predecessor_;"
+        in clone
+    )
+    assert (
+        "snapshot->control_origin_speed_mps_ =\n"
+        "      control_origin_speed_mps_;"
+        in clone
+    )
+
     isolated_start = SOURCE.index(
         "ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch("
     )
@@ -977,7 +1120,8 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "planner->build_prospective_extended_branch_problem(" in worker
     assert "planner->seal_problem_context_for_problem(" in worker
     assert "bind_rate_resolved_track_cruise_submission(" in submit
-    assert "command_control_origin_steering_rad" in submit
+    assert "RateResolvedSerializedPredecessor predecessor" in submit
+    assert "submission_draft.request.previous_input.setConstant(" in submit
     assert "committed_predecessor_steering_rad" not in submit
     # The canonical publication request type is shared, but worker ownership
     # remains an injected private member rather than being constructed here.
@@ -996,7 +1140,10 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "publish_control_command(" not in submit
 
     consume_start = submit_end
-    consume_end = SOURCE.index("RateResolvedTransitionAdmissionEvaluation", consume_start)
+    consume_end = SOURCE.index(
+        "RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan(",
+        consume_start,
+    )
     consume = SOURCE[consume_start:consume_end]
     assert "build_rate_resolved_current_world_request(" in consume
     assert "rate_resolved_retained::evaluate(" in consume
@@ -1294,6 +1441,34 @@ def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:
     assert "solve_problem(" not in before_old_path
 
 
+def test_dynamic_wait_target_tube_is_independent_of_legacy_stage_corridor() -> None:
+    """A rolling ShiftOut/Pass QP must not lose its opponent with the old corridor."""
+
+    contract_start = SOURCE.index(
+        "const auto dynamic_obstacle_contract ="
+    )
+    contract_end = SOURCE.index(
+        "return MpcProblem{", contract_start
+    )
+    contract_scope = SOURCE[contract_start:contract_end]
+    assert "resolve_dynamic_obstacle_contract(" in contract_scope
+    assert "current_target_tube_complete" in contract_scope
+    assert "DynamicObstacleContractSource::CurrentTargetTube" in contract_scope
+    assert "current_target_tube.prediction_valid" in contract_scope
+    assert "current_target_tube.progress_m" in contract_scope
+
+    resolver_start = OVERTAKE_ORCHESTRATOR_SOURCE.index(
+        "DynamicObstacleContractResolution resolve_dynamic_obstacle_contract("
+    )
+    resolver_end = OVERTAKE_ORCHESTRATOR_SOURCE.index(
+        "CorridorMetrics analyze_corridor(", resolver_start
+    )
+    resolver = OVERTAKE_ORCHESTRATOR_SOURCE[resolver_start:resolver_end]
+    assert "stage_corridor_target_bound_effective" in resolver
+    assert "current_target_tube_complete" in resolver
+    assert "target_exclusion_certified" in resolver
+
+
 def test_extended_first_stage_linearization_is_anchored_to_the_execution_state() -> None:
     """The first affine dynamics block must be tangent at the fixed state zero."""
 
@@ -1397,6 +1572,31 @@ def test_canonical_overtake_demotes_legacy_mission_viability_owner() -> None:
     assert "enter_dynamic_mission_wait" not in demotion
     assert "arm_overtake_line_side_retry_block" not in demotion
     assert "reset_overtake_line_state" not in demotion
+
+    # Demoting the legacy viability result must gate the complete legacy
+    # transition path, not merely its first retained-Mission branch.  The
+    # canonical reference is still allowed to feed the seven-state solver, so
+    # a later fall-through to Return/DynamicWait/Recovery would give the
+    # retired viability checker Mission authority again.
+    legacy_transition_start = transition.index(
+        "bool rebuild_after_phase_transition = false;"
+    )
+    legacy_transition_end = transition.index(
+        "if (rebuild_after_phase_transition)", legacy_transition_start
+    )
+    legacy_transition = transition[
+        legacy_transition_start:legacy_transition_end
+    ]
+    assert "if (!receding_viability_reference_only)" in transition[
+        legacy_start:legacy_transition_start + 1
+    ]
+    for token in (
+        "begin_validated_return",
+        "enter_dynamic_mission_wait",
+        "arm_overtake_line_side_retry_block",
+        "transition_overtake_line_phase",
+    ):
+        assert token in legacy_transition
 
     speed_cap_start = SOURCE.index(
         "horizon_evaluation.static_map_wall_infeasible", resolution_start
@@ -1525,7 +1725,7 @@ def test_rate_resolved_shadow_replaces_legacy_first_curvature_time_base() -> Non
 
 
 def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> None:
-    """Async and atomic admission share one proof pipeline with no publisher."""
+    """Async certification owns physical proof and cannot publish commands."""
 
     proof_start = SOURCE.index(
         "std::optional<rate_resolved_physical_wall::Snapshot>\n"
@@ -1540,20 +1740,26 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
     shared_start = SOURCE.index(
         "RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline("
     )
+    evaluator_start = SOURCE.index(
+        "RateResolvedPhysicalSolutionEvaluation "
+        "evaluate_rate_resolved_physical_solution("
+    )
     shared_end = SOURCE.index("struct CanonicalCurrentControlPath", shared_start)
     snapshot_builder = SOURCE[proof_start:submit_start]
     pipeline = SOURCE[submit_start:record_start]
+    physical_evaluator = SOURCE[evaluator_start:shared_start]
     shared_pipeline = SOURCE[shared_start:shared_end]
     assert "snapshot.identity.artifact = solver_snapshot.identity;" in snapshot_builder
     assert "problem.progress_stage_geometry" in snapshot_builder
     assert "build_progress_course_frame_knots(" in snapshot_builder
     assert "fingerprint_control_pose_path(" in snapshot_builder
     assert "fingerprint_course_frame_window(" in snapshot_builder
-    assert "rate_resolved_physical::build(" in shared_pipeline
-    assert "rate_resolved_physical_wall::evaluate(" in shared_pipeline
+    assert "rate_resolved_physical::build(" in physical_evaluator
+    assert "rate_resolved_physical_wall::evaluate(" in physical_evaluator
+    assert "evaluate_rate_resolved_physical_solution(" in shared_pipeline
     assert "certified_plan_store->certify_and_replace(" in shared_pipeline
     assert shared_pipeline.index(
-        "rate_resolved_physical_wall::evaluate("
+        "evaluate_rate_resolved_physical_solution("
     ) < shared_pipeline.index(
         "certified_plan_store->certify_and_replace("
     )
@@ -1573,6 +1779,7 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
     ):
         assert forbidden not in snapshot_builder
         assert forbidden not in pipeline
+        assert forbidden not in physical_evaluator
         assert forbidden not in shared_pipeline
 
     adapter_header = (
@@ -1742,9 +1949,19 @@ def test_racing_follow_and_overtake_have_only_rate_resolved_normal_owner() -> No
     assert "rate_resolved_artifact::supports_intent(control_intent)" in dispatch
     assert "canonical_overtake_production_control(" not in dispatch
 
+    # The same scope predicate is intentionally consumed by three producers:
+    # the wall-profile producer, semantic request builder and physical-proof
+    # snapshot builder. None is an additional command authority.
     assert SOURCE.count(
         "rate_resolved_artifact::request_scope_available("
-    ) == 2
+    ) == 3
+    assert "const bool rate_resolved_normal_scope_active =" in SOURCE
+    assert (
+        "const bool progress_contouring_execution_phase =\n"
+        "      canonical_execution_identity.active;"
+    ) in SOURCE
+    assert "const bool rate_resolved_request_requested =" in SOURCE
+    assert "const bool normal_scope_available =" in SOURCE
     assert "rate_resolved_racing_requested" not in SOURCE
     assert "rate_resolved_overtake_requested" not in SOURCE
 

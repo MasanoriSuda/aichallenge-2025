@@ -10193,6 +10193,45 @@ CourseLateralPrediction resolve_course_lateral_prediction(
   return result;
 }
 
+OpponentSampleContinuity classify_opponent_sample_continuity(
+  const OpponentSampleContinuityRequest & request) noexcept
+{
+  if (
+    !request.previous_sample_valid ||
+    !std::isfinite(request.previous_stamp_sec) ||
+    !std::isfinite(request.current_stamp_sec) ||
+    !std::isfinite(request.previous_x_m) ||
+    !std::isfinite(request.previous_y_m) ||
+    !std::isfinite(request.current_x_m) ||
+    !std::isfinite(request.current_y_m) ||
+    !std::isfinite(request.timestamp_tolerance_sec) ||
+    request.timestamp_tolerance_sec < 0.0 ||
+    !std::isfinite(request.position_tolerance_m) ||
+    request.position_tolerance_m < 0.0)
+  {
+    return OpponentSampleContinuity::InvalidNonadvancing;
+  }
+
+  const double sample_interval_sec =
+    request.current_stamp_sec - request.previous_stamp_sec;
+  if (sample_interval_sec > request.timestamp_tolerance_sec) {
+    return OpponentSampleContinuity::Advanced;
+  }
+  if (sample_interval_sec < -request.timestamp_tolerance_sec) {
+    return OpponentSampleContinuity::InvalidNonadvancing;
+  }
+
+  const double geometry_delta_m = std::hypot(
+    request.current_x_m - request.previous_x_m,
+    request.current_y_m - request.previous_y_m);
+  if (geometry_delta_m > request.position_tolerance_m) {
+    return OpponentSampleContinuity::InvalidNonadvancing;
+  }
+  return request.previous_motion_estimate_valid ?
+         OpponentSampleContinuity::ReusableDuplicate :
+         OpponentSampleContinuity::DuplicateWithoutMotionEstimate;
+}
+
 OpponentMotionFilterResolution update_opponent_motion_filter(
   const OpponentMotionFilterRequest & request) noexcept
 {

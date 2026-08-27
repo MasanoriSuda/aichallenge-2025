@@ -413,8 +413,11 @@ using multi_purpose_mpc_ros::v2x_overtake_core::advance_prediction_time;
 using multi_purpose_mpc_ros::v2x_overtake_core::CourseAlignedPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::CourseLateralPredictionRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OpponentMotionFilterRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSampleContinuity;
+using multi_purpose_mpc_ros::v2x_overtake_core::OpponentSampleContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_course_aligned_prediction;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_course_lateral_prediction;
+using multi_purpose_mpc_ros::v2x_overtake_core::classify_opponent_sample_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_opponent_motion_filter;
 using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -740,6 +743,40 @@ TEST(V2XOpponentMotionFilter, InitializesFirstVelocityWithoutAccelerationSpike)
   EXPECT_DOUBLE_EQ(result.velocity_y_mps, 0.5);
   EXPECT_DOUBLE_EQ(result.acceleration_x_mps2, 0.0);
   EXPECT_DOUBLE_EQ(result.acceleration_y_mps2, 0.0);
+}
+
+TEST(V2XOpponentMotionFilter, ReusesValidatedMotionForIdenticalRepeatedSourceSample)
+{
+  OpponentSampleContinuityRequest request;
+  request.previous_sample_valid = true;
+  request.previous_motion_estimate_valid = true;
+  request.previous_stamp_sec = 22.75;
+  request.current_stamp_sec = 22.75;
+  request.previous_x_m = 89636.0;
+  request.previous_y_m = 43140.0;
+  request.current_x_m = request.previous_x_m;
+  request.current_y_m = request.previous_y_m;
+
+  EXPECT_EQ(
+    classify_opponent_sample_continuity(request),
+    OpponentSampleContinuity::ReusableDuplicate);
+}
+
+TEST(V2XOpponentMotionFilter, RejectsChangedGeometryAtRepeatedSourceTimestamp)
+{
+  OpponentSampleContinuityRequest request;
+  request.previous_sample_valid = true;
+  request.previous_motion_estimate_valid = true;
+  request.previous_stamp_sec = 22.75;
+  request.current_stamp_sec = 22.75;
+  request.previous_x_m = 89636.0;
+  request.previous_y_m = 43140.0;
+  request.current_x_m = request.previous_x_m + 0.01;
+  request.current_y_m = request.previous_y_m;
+
+  EXPECT_EQ(
+    classify_opponent_sample_continuity(request),
+    OpponentSampleContinuity::InvalidNonadvancing);
 }
 
 TEST(V2XOvertakeCoreSpeed, UsesCappedNormalSpeedWithoutStartConfiguration)

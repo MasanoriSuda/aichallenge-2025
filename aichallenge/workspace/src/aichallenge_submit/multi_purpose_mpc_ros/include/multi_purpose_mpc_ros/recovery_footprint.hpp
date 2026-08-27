@@ -368,6 +368,27 @@ enum class DynamicClearanceRejectReason
 
 const char * to_string(DynamicClearanceRejectReason reason) noexcept;
 
+/// Stateful signed-clearance proof shared by normal MPCC and reverse
+/// Recovery.  A path which starts clear may never overlap.  A path which
+/// starts inside a conservatively inflated obstacle may execute only while
+/// every sample is non-worsening and the proved prefix ends with measurable
+/// separation progress.
+struct DynamicClearanceSequence
+{
+  bool initialized{false};
+  bool initial_overlap{false};
+  std::size_t checked_pose_count{};
+  double initial_clearance_m{std::numeric_limits<double>::quiet_NaN()};
+  double previous_clearance_m{std::numeric_limits<double>::quiet_NaN()};
+  double final_clearance_m{std::numeric_limits<double>::quiet_NaN()};
+  double minimum_clearance_m{std::numeric_limits<double>::infinity()};
+};
+
+DynamicClearanceRejectReason observe_dynamic_clearance(
+  DynamicClearanceSequence & sequence, double clearance_m) noexcept;
+DynamicClearanceRejectReason finalize_dynamic_clearance(
+  const DynamicClearanceSequence & sequence) noexcept;
+
 struct DynamicClearanceResult
 {
   bool valid{false};

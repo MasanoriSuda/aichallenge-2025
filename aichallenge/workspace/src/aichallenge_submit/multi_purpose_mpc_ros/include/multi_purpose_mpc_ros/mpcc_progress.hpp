@@ -108,6 +108,45 @@ struct StageDistanceResolution
 std::optional<StageDistanceResolution> resolve_stage_distances(
   const std::vector<double> & raw_stage_distance_m, const Config & config) noexcept;
 
+enum class ReachableHorizonReason
+{
+  InvalidInput,
+  NoReachableStage,
+  ReachabilityLimited,
+  CompleteHorizon,
+};
+
+struct ReachableHorizonRequest
+{
+  double initial_speed_mps{};
+  double maximum_acceleration_mps2{};
+  double maximum_lag_m{};
+  std::vector<double> stage_distance_m;
+  std::vector<double> stage_dt_sec;
+};
+
+struct ReachableHorizonResolution
+{
+  bool valid{false};
+  int horizon_steps{};
+  int first_unreachable_stage{-1};
+  double horizon_duration_sec{};
+  double horizon_reference_distance_m{};
+  double maximum_reachable_distance_m{};
+  ReachableHorizonReason reason{ReachableHorizonReason::InvalidInput};
+};
+
+/// Keep the temporal MPCC horizon inside the distance that its physical
+/// velocity state can reach while respecting the lag-state bound.  The source
+/// path is spatially sampled, so a stopped vehicle otherwise inherits the
+/// complete 20 m legacy horizon with 0.25 s stages.  That makes a sparse QP
+/// claim authority over several seconds of nonlinear motion and is not the
+/// same discretization contract as a receding temporal controller.
+ReachableHorizonResolution resolve_reachable_temporal_horizon(
+  const ReachableHorizonRequest & request) noexcept;
+
+const char * reachable_horizon_reason_name(ReachableHorizonReason reason) noexcept;
+
 /// Detect a course-progress discontinuity that makes an earlier MPCC warm-start
 /// unsafe to reinterpret, notably the positive-to-zero wrap at a lap boundary.
 bool progress_origin_discontinuous(
@@ -412,6 +451,10 @@ struct ProgressAlignedWallBoundsRequest
   std::vector<double> current_upper_m;
   std::vector<double> current_progress_lower_m;
   std::vector<double> current_progress_upper_m;
+  /// Numerical coverage allowed only at the two profile endpoints. This must
+  /// match the solver's accepted physical-row tolerance; it is not a planning
+  /// or wall-clearance margin.
+  double boundary_tolerance_m{};
 };
 
 struct ProgressAlignedWallBoundsResolution
@@ -443,6 +486,34 @@ ProgressAlignedWallBoundsResolution resolve_progress_aligned_wall_bounds(
 
 const char * progress_aligned_wall_bounds_reason_name(
   ProgressAlignedWallBoundsReason reason) noexcept;
+
+enum class ProgressProfileSupportReason
+{
+  Accepted,
+  InvalidInput,
+  CorridorCollapsed,
+};
+
+struct ProgressProfileSupportIntersection
+{
+  bool valid{false};
+  bool feasible{false};
+  bool applied{false};
+  ProgressProfileSupportReason reason{
+    ProgressProfileSupportReason::InvalidInput};
+  double lower_m{};
+  double upper_m{};
+};
+
+/// Intersect one optimizer progress box with the finite progress interval for
+/// which a physical wall profile exists. A wall-constrained QP must not reward
+/// progress outside the geometry its second solve can certify.
+ProgressProfileSupportIntersection intersect_progress_profile_support(
+  double lower_m, double upper_m,
+  double profile_lower_m, double profile_upper_m) noexcept;
+
+const char * progress_profile_support_reason_name(
+  ProgressProfileSupportReason reason) noexcept;
 
 struct ProgressCost
 {

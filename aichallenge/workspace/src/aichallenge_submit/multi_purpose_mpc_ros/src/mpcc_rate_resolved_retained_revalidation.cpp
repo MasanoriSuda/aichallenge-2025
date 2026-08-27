@@ -267,6 +267,7 @@ struct DynamicPathResult
   std::string blocking_obstacle_id;
   std::size_t checked_pose_count{};
   double minimum_clearance_m{std::numeric_limits<double>::infinity()};
+  std::vector<recovery::DynamicClearanceSequence> obstacle_clearance;
 };
 
 bool dynamic_observation_valid(
@@ -393,7 +394,15 @@ void evaluate_dynamic_pose(
   if (!result.valid || !result.clear) {
     return;
   }
-  for (const auto & obstacle : observation.obstacles) {
+  if (result.obstacle_clearance.empty()) {
+    result.obstacle_clearance.resize(observation.obstacles.size());
+  } else if (result.obstacle_clearance.size() != observation.obstacles.size()) {
+    result.valid = false;
+    result.clear = false;
+    return;
+  }
+  for (std::size_t index = 0U; index < observation.obstacles.size(); ++index) {
+    const auto & obstacle = observation.obstacles[index];
     const auto clearance = recovery::circle_obstacle_clearance_at_time(
       footprint, pose, obstacle.circle, elapsed_time_sec);
     if (!clearance.has_value()) {
@@ -405,9 +414,33 @@ void evaluate_dynamic_pose(
     ++result.checked_pose_count;
     result.minimum_clearance_m = std::min(
       result.minimum_clearance_m, clearance.value());
-    if (clearance.value() < -kIdentityTolerance) {
+    const auto clearance_reason = recovery::observe_dynamic_clearance(
+      result.obstacle_clearance[index], clearance.value());
+    if (clearance_reason != recovery::DynamicClearanceRejectReason::None) {
       result.clear = false;
       result.blocking_obstacle_id = obstacle.id;
+      return;
+    }
+  }
+}
+
+void finalize_dynamic_path(
+  const DynamicWorldObservation & observation, DynamicPathResult & result)
+{
+  if (!result.valid || !result.clear) {
+    return;
+  }
+  if (result.obstacle_clearance.size() != observation.obstacles.size()) {
+    result.valid = false;
+    result.clear = false;
+    return;
+  }
+  for (std::size_t index = 0U; index < observation.obstacles.size(); ++index) {
+    const auto reason = recovery::finalize_dynamic_clearance(
+      result.obstacle_clearance[index]);
+    if (reason != recovery::DynamicClearanceRejectReason::None) {
+      result.clear = false;
+      result.blocking_obstacle_id = observation.obstacles[index].id;
       return;
     }
   }
@@ -515,6 +548,32 @@ void evaluate_timed_dynamic_path(
 
 }  // namespace
 
+std::optional<double> resolve_peer_circle_radius(
+  const double forbidden_ego_center_distance_m,
+  const recovery::FootprintExtents & ego_footprint,
+  const double peer_uncertainty_margin_m) noexcept
+{
+  if (
+    !std::isfinite(forbidden_ego_center_distance_m) ||
+    forbidden_ego_center_distance_m < 0.0 || !ego_footprint.valid() ||
+    !std::isfinite(peer_uncertainty_margin_m) ||
+    peer_uncertainty_margin_m < 0.0)
+  {
+    return std::nullopt;
+  }
+  const double ego_body_lateral_extent_m = std::max(
+    ego_footprint.left_extent_m, ego_footprint.right_extent_m);
+  const double peer_body_radius_m =
+    forbidden_ego_center_distance_m - ego_body_lateral_extent_m;
+  if (peer_body_radius_m < -kIdentityTolerance) {
+    return std::nullopt;
+  }
+  const double resolved_radius_m =
+    std::max(0.0, peer_body_radius_m) + peer_uncertainty_margin_m;
+  return std::isfinite(resolved_radius_m) ?
+    std::optional<double>{resolved_radius_m} : std::nullopt;
+}
+
 std::optional<FollowTargetObservation> build_follow_target_observation(
   const FollowTargetObservationBuildRequest & request) noexcept
 {
@@ -592,7 +651,6 @@ const char * to_string(const Reason reason) noexcept
     case Reason::CourseFrameUnavailable: return "course-frame-unavailable";
     case Reason::ActuationRejected: return "actuation-rejected";
     case Reason::SteeringUnreachable: return "steering-unreachable";
-    case Reason::VelocityUnreachable: return "velocity-unreachable";
     case Reason::ControlPathInvalid: return "control-path-invalid";
     case Reason::DelayPrefixBlocked: return "delay-prefix-blocked";
     case Reason::ConnectorBlocked: return "connector-blocked";
@@ -610,6 +668,17 @@ const char * to_string(const StaticWallProofScope scope) noexcept
     case StaticWallProofScope::FullSuffix:
       return "full-suffix";
     case StaticWallProofScope::CurrentStagePrefix:
+      return "current-stage-prefix";
+  }
+  return "unknown";
+}
+
+const char * to_string(const DynamicObstacleProofScope scope) noexcept
+{
+  switch (scope) {
+    case DynamicObstacleProofScope::FullSuffix:
+      return "full-suffix";
+    case DynamicObstacleProofScope::CurrentStagePrefix:
       return "current-stage-prefix";
   }
   return "unknown";
@@ -807,6 +876,17 @@ Result evaluate(const Request & request)
     request.current_response_steering_rad};
   const double prediction_delay_sec =
     request.control_origin_sec - request.now_sec;
+  if (
+    prediction_delay_sec <= kIdentityTolerance &&
+    std::abs(request.control_origin_speed_mps - request.current_speed_mps) >
+    kIdentityTolerance)
+  {
+    // With no observation-to-control interval both values describe the same
+    // physical state.  Reject contradictory input provenance before any
+    // retained trajectory is joined.
+    result.reason = Reason::InvalidCurrentState;
+    return result;
+  }
   auto evaluate_follow_gap = [&] (
       const artifact::PredictedState & state,
       const double elapsed_time_sec) -> std::optional<double>
@@ -908,12 +988,17 @@ Result evaluate(const Request & request)
   result.reachable_velocity_upper_mps = velocity_upper_mps;
   result.velocity_reachability_duration_sec =
     velocity_reachability_duration_sec;
-  if (actuation.actuation->predicted_speed_mps < velocity_lower_mps ||
-    actuation.actuation->predicted_speed_mps > velocity_upper_mps)
-  {
-    result.reason = Reason::VelocityUnreachable;
-    return result;
-  }
+
+  // The retained artifact's predicted velocity is an old model state, not a
+  // serialized actuator coordinate.  Requiring that state to remain exactly
+  // reachable from the new observation creates a second velocity origin and
+  // rejects the same fresh state used by the continuation below.  Preserve
+  // the discrepancy and historical reachability envelope as diagnostics,
+  // then build one current-world command from the fresh control-origin speed
+  // and the artifact's still-certified control inputs.
+  auto current_world_actuation = actuation.actuation.value();
+  current_world_actuation.predicted_speed_mps =
+    request.control_origin_speed_mps;
 
   const auto continuation =
     mpcc_rate_resolved_physical_adapter::build_continuation(
@@ -976,6 +1061,11 @@ Result evaluate(const Request & request)
     source.footprint, request.measured_to_control_path,
     request.measured_to_control_elapsed_sec, source.swept_step_m,
     request.obstacles, dynamic);
+  // Keep an independent proof for exactly the control stage which can be
+  // published now.  The full suffix still owns diagnostics and future
+  // replanning, but a collision in a later stage must not erase a clear
+  // current-stage authority interval.
+  DynamicPathResult current_stage_dynamic = dynamic;
   auto previous_dynamic_pose = request.control_pose;
   double dynamic_time_sec = prediction_delay_sec;
   for (
@@ -1019,6 +1109,15 @@ Result evaluate(const Request & request)
         return result;
       }
     }
+    if (
+      sample_elapsed_sec <= current_stage_remaining_sec +
+      execution.physical_global_tolerance)
+    {
+      evaluate_dynamic_segment(
+        source.footprint, previous_dynamic_pose, endpoint_pose.value(),
+        dynamic_time_sec, endpoint_time_sec,
+        source.swept_step_m, request.obstacles, current_stage_dynamic);
+    }
     evaluate_dynamic_segment(
       source.footprint, previous_dynamic_pose, endpoint_pose.value(),
       dynamic_time_sec, endpoint_time_sec,
@@ -1029,6 +1128,8 @@ Result evaluate(const Request & request)
       break;
     }
   }
+  finalize_dynamic_path(request.obstacles, current_stage_dynamic);
+  finalize_dynamic_path(request.obstacles, dynamic);
   const auto continuation_clearance =
     recovery::evaluate_clear_footprint_path(
     *source.wall_grid, clearance_footprint, continuation_path,
@@ -1040,7 +1141,7 @@ Result evaluate(const Request & request)
   }
   if (!continuation_clearance.clear) {
     if (
-      current_stage_last_path_index < 2U ||
+      current_stage_last_path_index < 1U ||
       current_stage_last_path_index >= continuation_path.size())
     {
       result.reason = Reason::ContinuationRejected;
@@ -1073,8 +1174,17 @@ Result evaluate(const Request & request)
     return result;
   }
   if (!dynamic.clear) {
-    result.reason = Reason::DynamicPathBlocked;
-    return result;
+    if (!current_stage_dynamic.valid) {
+      result.reason = Reason::DynamicPathInvalid;
+      return result;
+    }
+    if (!current_stage_dynamic.clear) {
+      result.reason = Reason::DynamicPathBlocked;
+      return result;
+    }
+    result.dynamic_obstacle_scope =
+      DynamicObstacleProofScope::CurrentStagePrefix;
+    result.proved_control_stage_count = 1U;
   }
 
   auto proved_continuation_trajectory = continuation_trajectory;
@@ -1122,7 +1232,7 @@ Result evaluate(const Request & request)
   proof.control_origin_sec = request.control_origin_sec;
   proof.prediction_delay_sec = prediction_delay_sec;
   proof.cursor = cursor;
-  proof.actuation = actuation.actuation.value();
+  proof.actuation = current_world_actuation;
   proof.expected_current_state = expected;
   proof.expected_current_pose = expected_pose.value();
   proof.expected_absolute_progress_m = expected_absolute_progress_m;
@@ -1145,14 +1255,19 @@ Result evaluate(const Request & request)
   proof.delay_checked_pose_count = delay.checked_pose_count;
   proof.connector_checked_pose_count = 0U;
   proof.static_wall_scope = result.static_wall_scope;
+  proof.dynamic_obstacle_scope = result.dynamic_obstacle_scope;
   proof.continuation_scope = result.continuation_scope;
   proof.proved_control_stage_count = result.proved_control_stage_count;
   proof.static_wall_checked_pose_count =
     result.static_wall_scope == StaticWallProofScope::FullSuffix ?
     continuation_clearance.checked_pose_count :
     result.current_stage_path_clearance.checked_pose_count;
-  proof.dynamic_checked_pose_count = dynamic.checked_pose_count;
-  proof.minimum_dynamic_clearance_m = dynamic.minimum_clearance_m;
+  const auto & proved_dynamic =
+    result.dynamic_obstacle_scope ==
+    DynamicObstacleProofScope::CurrentStagePrefix ?
+    current_stage_dynamic : dynamic;
+  proof.dynamic_checked_pose_count = proved_dynamic.checked_pose_count;
+  proof.minimum_dynamic_clearance_m = proved_dynamic.minimum_clearance_m;
   proof.follow_target_observation_generation =
     result.follow_target_observation_generation;
   proof.follow_checked_state_count = result.follow_checked_state_count;

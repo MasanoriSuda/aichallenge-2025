@@ -35,6 +35,15 @@ struct DynamicWorldObservation
   bool current{false};
 };
 
+/// Convert the V2X planner's forbidden ego-center distance into the radius of
+/// the peer-only circle consumed by the physical footprint verifier.  The
+/// planner distance already contains the ego body half width; passing it
+/// directly as a peer radius would inflate the ego body twice.
+std::optional<double> resolve_peer_circle_radius(
+  double forbidden_ego_center_distance_m,
+  const recovery::FootprintExtents & ego_footprint,
+  double peer_uncertainty_margin_m) noexcept;
+
 /// Current Follow target in the same course-progress frame used to build the
 /// current seven-state semantic problem.  This is not retained solver state: it
 /// is fresh world evidence which must re-certify the retained suffix.
@@ -138,7 +147,6 @@ enum class Reason
   CourseFrameUnavailable,
   ActuationRejected,
   SteeringUnreachable,
-  VelocityUnreachable,
   ControlPathInvalid,
   DelayPrefixBlocked,
   ConnectorBlocked,
@@ -152,8 +160,8 @@ const char * to_string(Reason reason) noexcept;
 /// Static-wall extent proven for this retained publication.  A retained
 /// artifact is re-evaluated every control cycle, so authority may certify the
 /// exact remainder of the current control stage while requiring a successor
-/// before a later stage.  This never weakens the delay path, dynamic-obstacle,
-/// Follow-gap, or actuator-reachability proofs.
+/// before a later stage.  This never weakens the delay path, current-stage
+/// dynamic-obstacle, Follow-gap, or actuator-reachability proofs.
 enum class StaticWallProofScope
 {
   FullSuffix,
@@ -161,6 +169,18 @@ enum class StaticWallProofScope
 };
 
 const char * to_string(StaticWallProofScope scope) noexcept;
+
+/// Dynamic-world extent proven for this publication.  A future obstacle in a
+/// later stage is a replanning obligation, not proof that the exact current
+/// stage is unsafe.  Delay-prefix and current-stage intersections remain hard
+/// rejections.
+enum class DynamicObstacleProofScope
+{
+  FullSuffix,
+  CurrentStagePrefix,
+};
+
+const char * to_string(DynamicObstacleProofScope scope) noexcept;
 
 struct Proof
 {
@@ -172,6 +192,10 @@ struct Proof
   double control_origin_sec{};
   double prediction_delay_sec{};
   artifact::Cursor cursor;
+  /// Current-world joined actuation.  Acceleration, steering-rate, steering
+  /// and progress-rate remain the immutable artifact controls.  Velocity is
+  /// a state, not an actuator input, and is therefore re-anchored to the fresh
+  /// control-origin observation used by continuation certification.
   artifact::Actuation actuation;
   artifact::PredictedState expected_current_state;
   recovery::Pose2D expected_current_pose;
@@ -192,6 +216,8 @@ struct Proof
   std::size_t delay_checked_pose_count{};
   std::size_t connector_checked_pose_count{};
   StaticWallProofScope static_wall_scope{StaticWallProofScope::FullSuffix};
+  DynamicObstacleProofScope dynamic_obstacle_scope{
+    DynamicObstacleProofScope::FullSuffix};
   mpcc_rate_resolved_physical_adapter::ContinuationProofScope
   continuation_scope{
     mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix};
@@ -272,6 +298,8 @@ struct Result
   recovery::PathClearanceResult delay_path_clearance;
   recovery::PathClearanceResult connector_path_clearance;
   StaticWallProofScope static_wall_scope{StaticWallProofScope::FullSuffix};
+  DynamicObstacleProofScope dynamic_obstacle_scope{
+    DynamicObstacleProofScope::FullSuffix};
   mpcc_rate_resolved_physical_adapter::ContinuationProofScope
   continuation_scope{
     mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix};

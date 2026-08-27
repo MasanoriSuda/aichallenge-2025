@@ -1,4 +1,5 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 
 #include <gtest/gtest.h>
 
@@ -11,10 +12,19 @@ namespace shadow =
   multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
 namespace adapter =
   multi_purpose_mpc_ros::mpcc_rate_resolved_adapter;
+namespace model = multi_purpose_mpc_ros::mpcc_rate_resolved;
+namespace problem = multi_purpose_mpc_ros::mpcc_rate_resolved_problem;
+namespace solver = multi_purpose_mpc_ros::persistent_osqp;
 namespace execution =
   multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
+namespace physical =
+  multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
 namespace contract =
   multi_purpose_mpc_ros::mpcc_execution_contract;
+namespace wall_refinement =
+  multi_purpose_mpc_ros::mpcc_rate_resolved_wall_refinement;
+namespace recovery =
+  multi_purpose_mpc_ros::recovery_footprint;
 
 namespace
 {
@@ -83,13 +93,113 @@ shadow::Snapshot snapshot(const std::uint64_t sequence = 1U)
   result.identity.snapshot_sec = 10.0 + 0.1 * sequence;
   result.control_prediction_origin_sec = result.identity.snapshot_sec + 0.13;
   result.request = straight_request();
+  result.execution_prefix_steps = result.request.horizon_steps;
   result.course_progress_origin_m = 50.0;
   result.nominal_path_distance_m = {0.0, 0.2, 0.4, 0.6};
   result.publication_interval_sec = 0.025;
   return result;
 }
 
+recovery::OccupancyGrid corridor_grid()
+{
+  recovery::OccupancyGrid grid;
+  grid.width = 240U;
+  grid.height = 240U;
+  grid.resolution_m = 0.1;
+  grid.origin_x_m = 0.0;
+  grid.origin_y_m = 0.0;
+  grid.y_axis = recovery::YAxisConvention::RowZeroAtMinimumY;
+  grid.cells.assign(grid.width * grid.height, recovery::CellState::Free);
+  for (std::size_t column = 0U; column < grid.width; ++column) {
+    const auto wall = grid.world_to_grid(
+      grid.origin_x_m + grid.resolution_m * static_cast<double>(column),
+      10.0);
+    if (wall.has_value()) {
+      grid.cells[wall->row * grid.width + wall->column] =
+        recovery::CellState::Occupied;
+    }
+  }
+  return grid;
+}
+
+wall_refinement::Request wall_request(
+  const recovery::OccupancyGrid & grid, const double heading_rad)
+{
+  wall_refinement::Request request;
+  request.active = true;
+  request.wall_grid = &grid;
+  request.footprint = recovery::FootprintExtents{1.0, 1.0, 0.2, 0.2, 0.0};
+  request.course_frame_knots = {
+    {0.0, 5.0, 8.0, 0.0, 0},
+    {20.0, 25.0, 8.0, 0.0, 1}};
+  request.course_progress_origin_m = 0.0;
+  request.heading_bucket_width_rad = 0.025;
+  request.translation_bucket_width_m = 0.05;
+  request.lateral_sample_step_m = 0.05;
+  request.boundary_guard_m = 0.001;
+  request.stages.push_back(wall_refinement::StageRequest{
+    5.0, 1.4, 0.0, heading_rad,
+    -0.5, 1.8, -1.0, 1.0, -1.0, 1.0, 4.0, 6.0});
+  return request;
+}
+
 }  // namespace
+
+TEST(MpccRateResolvedWallRefinement, ResolvesUnionSupportBeforeProgressIsKnown)
+{
+  const auto result =
+    wall_refinement::resolve_pre_refinement_lateral_support(
+    wall_refinement::PreRefinementLateralSupportRequest{
+      true, -0.4,
+      {-0.8, -0.2, 1.7, 1.6},
+      {0.6, 0.9, 2.0, 2.1}});
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.applied);
+  EXPECT_EQ(
+    result.reason,
+    wall_refinement::PreRefinementLateralSupportReason::Accepted);
+  EXPECT_DOUBLE_EQ(result.lower_m, -0.8);
+  EXPECT_DOUBLE_EQ(result.upper_m, 2.1);
+}
+
+TEST(MpccRateResolvedWallRefinement, RejectsMalformedPreRefinementProfile)
+{
+  const auto result =
+    wall_refinement::resolve_pre_refinement_lateral_support(
+    wall_refinement::PreRefinementLateralSupportRequest{
+      true, 0.0, {-0.5, 0.3}, {0.5, 0.2}});
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.applied);
+  EXPECT_EQ(
+    result.reason,
+    wall_refinement::PreRefinementLateralSupportReason::InvalidInput);
+}
+
+TEST(MpccRateResolvedShadow, DoesNotBindFutureWallSampleBeforeProgressSolve)
+{
+  shadow::SolverContext context;
+  auto input = snapshot();
+  for (std::size_t stage = 1U; stage < input.request.states.size(); ++stage) {
+    input.request.states[stage].lower[0] = 1.7;
+    input.request.states[stage].upper[0] = 1.9;
+  }
+  input.progress_aligned_wall_refinement_active = true;
+  input.wall_reference_progress_m = {0.0, 1.0, 2.0, 3.0};
+  input.wall_lower_m = {-0.5, -0.5, 1.7, 1.7};
+  input.wall_upper_m = {0.5, 0.5, 1.9, 1.9};
+  input.progress_wall_profile_diagnostic = "future-corridor-shift";
+
+  const auto result = context.evaluate(input);
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  EXPECT_TRUE(result.pre_refinement_lateral_support_applied);
+  EXPECT_EQ(
+    result.pre_refinement_lateral_support_reason,
+    wall_refinement::PreRefinementLateralSupportReason::Accepted);
+  EXPECT_DOUBLE_EQ(result.pre_refinement_lateral_support_lower_m, -0.5);
+  EXPECT_DOUBLE_EQ(result.pre_refinement_lateral_support_upper_m, 1.9);
+  EXPECT_TRUE(result.progress_wall_refinement_applied);
+  EXPECT_TRUE(result.progress_wall_refinement_solved);
+}
 
 TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
 {
@@ -97,6 +207,20 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   const auto input = snapshot();
   const auto result = context.evaluate(input);
   ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  EXPECT_EQ(
+    result.receding_warm_start_reason,
+    shadow::RecedingWarmStartReason::CurrentProblemBootstrap);
+  EXPECT_TRUE(result.receding_warm_start_applied);
+  EXPECT_TRUE(result.successive_linearization_requested);
+  EXPECT_TRUE(result.successive_linearization_applied);
+  EXPECT_TRUE(result.successive_linearization_solved);
+  EXPECT_EQ(
+    result.successive_linearization_reason,
+    multi_purpose_mpc_ros::mpcc_rate_resolved_adapter::
+    RelinearizationReason::Accepted);
+  EXPECT_NE(
+    result.receding_warm_start_diagnostic.find("previous=empty-cache"),
+    std::string::npos);
   EXPECT_TRUE(shadow::result_valid(result));
   EXPECT_TRUE(result.constraints_satisfied);
   EXPECT_TRUE(result.actuation_sampled);
@@ -150,11 +274,483 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_DOUBLE_EQ(
     result.execution_artifact->control_stages.front().steering_rate_radps,
     result.first_steering_rate_radps);
+  const auto physical_result = physical::build(
+    *result.execution_artifact, contract::ControlIntent::Track,
+    input.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(physical_result.reason, physical::RejectReason::None);
+  EXPECT_TRUE(physical_result.exact_trajectory.has_value());
 
   auto invalid = result;
   invalid.first_steering_rate_certificate_margin_radps =
     std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(shadow::result_valid(invalid));
+}
+
+TEST(MpccRateResolvedShadow, CurrentProblemBootstrapOwnsCurrentAffineDynamics)
+{
+  const auto adapted = adapter::build(
+    straight_request(), solver::PhysicalConstraintTolerance{1.0e-3, 1.0e-3});
+  ASSERT_TRUE(adapted.has_value());
+  const auto assembled = problem::assemble(adapted->problem);
+  ASSERT_TRUE(assembled.has_value());
+  const auto bootstrap = shadow::build_current_problem_bootstrap(
+    adapted->problem,
+    static_cast<std::size_t>(assembled->lower_bound.size()));
+  ASSERT_TRUE(bootstrap.has_value());
+  const auto & primal = bootstrap->primal;
+  EXPECT_TRUE(primal.allFinite());
+  EXPECT_EQ(bootstrap->dual.size(), assembled->lower_bound.size());
+  EXPECT_TRUE(bootstrap->dual.isZero());
+  EXPECT_TRUE(
+    primal.head<model::kStateDimension>().isApprox(
+      adapted->problem.initial_state));
+
+  const int state_values = model::kStateDimension *
+    (adapted->problem.horizon_steps + 1);
+  for (int stage = 0; stage < adapted->problem.horizon_steps; ++stage) {
+    const int state_offset = stage * model::kStateDimension;
+    const int next_state_offset = (stage + 1) * model::kStateDimension;
+    const int input_offset = stage * model::kInputDimension;
+    const auto input = primal.segment<model::kInputDimension>(
+      state_values + input_offset);
+    for (int element = 0; element < model::kInputDimension; ++element) {
+      EXPECT_GE(input[element], adapted->problem.input_lower[input_offset + element]);
+      EXPECT_LE(input[element], adapted->problem.input_upper[input_offset + element]);
+    }
+    const auto & linearization =
+      adapted->problem.linearizations[static_cast<std::size_t>(stage)];
+    const auto equality_residual =
+      -primal.segment<model::kStateDimension>(next_state_offset) +
+      linearization.state_matrix *
+      primal.segment<model::kStateDimension>(state_offset) +
+      linearization.input_matrix * input - linearization.equality_offset;
+    EXPECT_LT(equality_residual.lpNorm<Eigen::Infinity>(), 1.0e-12);
+  }
+}
+
+TEST(MpccRateResolvedShadow, RecedingWarmStartRebasesProgressAndCurrentState)
+{
+  const auto previous_snapshot = snapshot(1U);
+  auto current = snapshot(2U);
+  current.identity.source_context.intent_generation =
+    previous_snapshot.identity.source_context.intent_generation;
+  current.identity.source_context.stage_geometry_id = 999U;
+  current.identity.source_context =
+    contract::seal_problem_context(current.identity.source_context);
+  current.control_prediction_origin_sec =
+    previous_snapshot.control_prediction_origin_sec + 0.025;
+  current.course_progress_origin_m = 50.4;
+  current.request.initial_state << 0.2, -0.1, 0.05, 2.3, 0.0;
+
+  const auto adapted = adapter::build(
+    current.request,
+    multi_purpose_mpc_ros::persistent_osqp::PhysicalConstraintTolerance{
+      1.0e-4, 1.0e-4});
+  ASSERT_TRUE(adapted.has_value());
+  const int horizon = current.request.horizon_steps;
+  const int state_values =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension *
+    (horizon + 1);
+  const int variable_count = state_values +
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension * horizon;
+  Eigen::VectorXd previous_primal(variable_count);
+  for (int index = 0; index < variable_count; ++index) {
+    previous_primal[index] = 0.01 * static_cast<double>(index + 1);
+  }
+  for (int stage = 0; stage <= horizon; ++stage) {
+    previous_primal[
+      stage * multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension +
+      multi_purpose_mpc_ros::mpcc_rate_resolved::kProgressIndex] =
+      0.3 * stage;
+  }
+  shadow::RecedingWarmStartSeed previous{
+    previous_snapshot.identity,
+    previous_snapshot.control_prediction_origin_sec,
+    previous_snapshot.course_progress_origin_m,
+    {0.10, 0.10, 0.10},
+    previous_primal};
+
+  const auto resolution = shadow::resolve_receding_warm_start(
+    previous, current, adapted->problem, 123U);
+
+  ASSERT_EQ(resolution.reason, shadow::RecedingWarmStartReason::Available);
+  ASSERT_TRUE(resolution.warm_start.has_value());
+  EXPECT_EQ(resolution.stage_advance, 0U);
+  EXPECT_EQ(resolution.warm_start->dual.size(), 123);
+  EXPECT_TRUE(resolution.warm_start->dual.isZero());
+  EXPECT_TRUE(
+    resolution.warm_start->primal.head<
+      multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension>().isApprox(
+      adapted->problem.initial_state));
+  EXPECT_NEAR(
+    resolution.warm_start->primal[
+      multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension +
+      multi_purpose_mpc_ros::mpcc_rate_resolved::kProgressIndex],
+    -0.1, 1.0e-12);
+  EXPECT_DOUBLE_EQ(
+    resolution.warm_start->primal[state_values],
+    previous_primal[state_values]);
+}
+
+TEST(MpccRateResolvedShadow, RecedingWarmStartShiftsOneCompleteStage)
+{
+  const auto previous_snapshot = snapshot(1U);
+  auto current = snapshot(2U);
+  current.identity.source_context.intent_generation =
+    previous_snapshot.identity.source_context.intent_generation;
+  current.identity.source_context.stage_geometry_id = 999U;
+  current.identity.source_context =
+    contract::seal_problem_context(current.identity.source_context);
+  current.control_prediction_origin_sec =
+    previous_snapshot.control_prediction_origin_sec + 0.11;
+  const auto adapted = adapter::build(
+    current.request,
+    multi_purpose_mpc_ros::persistent_osqp::PhysicalConstraintTolerance{
+      1.0e-4, 1.0e-4});
+  ASSERT_TRUE(adapted.has_value());
+  const int horizon = current.request.horizon_steps;
+  const int state_values =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension *
+    (horizon + 1);
+  const int variable_count = state_values +
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension * horizon;
+  Eigen::VectorXd previous_primal(variable_count);
+  for (int index = 0; index < variable_count; ++index) {
+    previous_primal[index] = static_cast<double>(index + 1);
+  }
+  shadow::RecedingWarmStartSeed previous{
+    previous_snapshot.identity,
+    previous_snapshot.control_prediction_origin_sec,
+    previous_snapshot.course_progress_origin_m,
+    {0.10, 0.10, 0.10},
+    previous_primal};
+
+  const auto resolution = shadow::resolve_receding_warm_start(
+    previous, current, adapted->problem, 80U);
+
+  ASSERT_EQ(resolution.reason, shadow::RecedingWarmStartReason::Available);
+  ASSERT_TRUE(resolution.warm_start.has_value());
+  EXPECT_EQ(resolution.stage_advance, 1U);
+  EXPECT_DOUBLE_EQ(
+    resolution.warm_start->primal[state_values],
+    previous_primal[
+      state_values + multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension]);
+  EXPECT_DOUBLE_EQ(
+    resolution.warm_start->primal[
+      2 * multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension +
+      multi_purpose_mpc_ros::mpcc_rate_resolved::kLateralIndex],
+    previous_primal[
+      3 * multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension +
+      multi_purpose_mpc_ros::mpcc_rate_resolved::kLateralIndex]);
+}
+
+TEST(MpccRateResolvedShadow, RecedingWarmStartResizesAcrossPlanningHorizons)
+{
+  auto previous_snapshot = snapshot(1U);
+  previous_snapshot.identity.source_context.intent = contract::ControlIntent::Pass;
+  previous_snapshot.identity.source_context.target_id = "d2";
+  previous_snapshot.identity.source_context.target_obstacle_generation = 5U;
+  previous_snapshot.identity.source_context.execution_side_sign = -1;
+  previous_snapshot.identity.source_context =
+    contract::seal_problem_context(previous_snapshot.identity.source_context);
+
+  auto current = snapshot(2U);
+  current.request = straight_request(5);
+  current.execution_prefix_steps = 2;
+  current.nominal_path_distance_m = {0.0, 0.2, 0.4, 0.6, 0.8, 1.0};
+  current.identity.source_context = previous_snapshot.identity.source_context;
+  current.identity.source_context.decision_id += 1U;
+  current.identity.source_context.stage_geometry_id += 1U;
+  current.identity.source_context.horizon_steps = 5U;
+  current.identity.source_context =
+    contract::seal_problem_context(current.identity.source_context);
+  current.control_prediction_origin_sec =
+    previous_snapshot.control_prediction_origin_sec + 0.025;
+
+  const auto adapted = adapter::build(
+    current.request,
+    multi_purpose_mpc_ros::persistent_osqp::PhysicalConstraintTolerance{
+      1.0e-4, 1.0e-4});
+  ASSERT_TRUE(adapted.has_value());
+  constexpr int previous_horizon = 3;
+  const int previous_state_values =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension *
+    (previous_horizon + 1);
+  const int previous_variable_count = previous_state_values +
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension *
+    previous_horizon;
+  Eigen::VectorXd previous_primal(previous_variable_count);
+  for (int index = 0; index < previous_variable_count; ++index) {
+    previous_primal[index] = static_cast<double>(index + 1);
+  }
+  shadow::RecedingWarmStartSeed previous{
+    previous_snapshot.identity,
+    previous_snapshot.control_prediction_origin_sec,
+    previous_snapshot.course_progress_origin_m,
+    {0.10, 0.10, 0.10},
+    previous_primal};
+
+  const auto resolution = shadow::resolve_receding_warm_start(
+    previous, current, adapted->problem, 140U);
+
+  ASSERT_EQ(resolution.reason, shadow::RecedingWarmStartReason::Available);
+  ASSERT_TRUE(resolution.warm_start.has_value());
+  const int current_state_values =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension * 6;
+  const int current_variable_count = current_state_values +
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension * 5;
+  EXPECT_EQ(resolution.warm_start->primal.size(), current_variable_count);
+  EXPECT_TRUE(
+    resolution.warm_start->primal.head<
+      multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension>().isApprox(
+      adapted->problem.initial_state));
+  EXPECT_DOUBLE_EQ(
+    resolution.warm_start->primal[current_state_values],
+    previous_primal[previous_state_values]);
+  EXPECT_DOUBLE_EQ(
+    resolution.warm_start->primal[
+      current_state_values +
+      4 * multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension],
+    previous_primal[
+      previous_state_values +
+      2 * multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension]);
+}
+
+TEST(MpccRateResolvedShadow, RecedingWarmStartRejectsTacticalIdentityChanges)
+{
+  auto previous_snapshot = snapshot(1U);
+  previous_snapshot.identity.source_context.intent = contract::ControlIntent::Pass;
+  previous_snapshot.identity.source_context.target_id = "d2";
+  previous_snapshot.identity.source_context.target_obstacle_generation = 5U;
+  previous_snapshot.identity.source_context.execution_side_sign = 1;
+  previous_snapshot.identity.source_context =
+    contract::seal_problem_context(previous_snapshot.identity.source_context);
+  auto current = snapshot(2U);
+  current.identity.source_context = previous_snapshot.identity.source_context;
+  current.identity.source_context.decision_id += 1U;
+  current.identity.source_context.target_id = "d3";
+  current.identity.source_context =
+    contract::seal_problem_context(current.identity.source_context);
+  const auto adapted = adapter::build(
+    current.request,
+    multi_purpose_mpc_ros::persistent_osqp::PhysicalConstraintTolerance{
+      1.0e-4, 1.0e-4});
+  ASSERT_TRUE(adapted.has_value());
+  const int horizon = current.request.horizon_steps;
+  const int variable_count =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension * (horizon + 1) +
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension * horizon;
+  shadow::RecedingWarmStartSeed previous{
+    previous_snapshot.identity,
+    previous_snapshot.control_prediction_origin_sec,
+    previous_snapshot.course_progress_origin_m,
+    {0.10, 0.10, 0.10},
+    Eigen::VectorXd::Zero(variable_count)};
+
+  const auto target_changed = shadow::resolve_receding_warm_start(
+    previous, current, adapted->problem, 80U);
+  EXPECT_EQ(
+    target_changed.reason,
+    shadow::RecedingWarmStartReason::SemanticMismatch);
+  EXPECT_EQ(target_changed.diagnostic, "target-id");
+  EXPECT_FALSE(target_changed.warm_start.has_value());
+
+  current.identity.source_context.target_id = "d2";
+  current.identity.source_context.execution_side_sign = -1;
+  current.identity.source_context =
+    contract::seal_problem_context(current.identity.source_context);
+  const auto side_changed = shadow::resolve_receding_warm_start(
+    previous, current, adapted->problem, 80U);
+  EXPECT_EQ(
+    side_changed.reason,
+    shadow::RecedingWarmStartReason::SemanticMismatch);
+  EXPECT_EQ(side_changed.diagnostic, "execution-side");
+
+  current.identity.source_context.execution_side_sign = 1;
+  current.identity.source_context.intent_generation += 1U;
+  current.identity.source_context =
+    contract::seal_problem_context(current.identity.source_context);
+  const auto generation_changed = shadow::resolve_receding_warm_start(
+    previous, current, adapted->problem, 80U);
+  EXPECT_EQ(
+    generation_changed.reason,
+    shadow::RecedingWarmStartReason::SemanticMismatch);
+  EXPECT_EQ(generation_changed.diagnostic, "intent-generation");
+}
+
+TEST(MpccRateResolvedShadow, RecedingWarmStartRejectsExhaustedHorizon)
+{
+  const auto previous_snapshot = snapshot(1U);
+  auto current = snapshot(2U);
+  current.identity.source_context.intent_generation =
+    previous_snapshot.identity.source_context.intent_generation;
+  current.identity.source_context =
+    contract::seal_problem_context(current.identity.source_context);
+  current.control_prediction_origin_sec =
+    previous_snapshot.control_prediction_origin_sec + 0.31;
+  const auto adapted = adapter::build(
+    current.request,
+    multi_purpose_mpc_ros::persistent_osqp::PhysicalConstraintTolerance{
+      1.0e-4, 1.0e-4});
+  ASSERT_TRUE(adapted.has_value());
+  const int horizon = current.request.horizon_steps;
+  const int variable_count =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kStateDimension * (horizon + 1) +
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kInputDimension * horizon;
+  shadow::RecedingWarmStartSeed previous{
+    previous_snapshot.identity,
+    previous_snapshot.control_prediction_origin_sec,
+    previous_snapshot.course_progress_origin_m,
+    {0.10, 0.10, 0.10},
+    Eigen::VectorXd::Zero(variable_count)};
+
+  const auto resolution = shadow::resolve_receding_warm_start(
+    previous, current, adapted->problem, 80U);
+  EXPECT_EQ(
+    resolution.reason,
+    shadow::RecedingWarmStartReason::HorizonExhausted);
+  EXPECT_FALSE(resolution.warm_start.has_value());
+}
+
+TEST(MpccRateResolvedShadow, TradesProgressForReachableOpponentSeparation)
+{
+  auto input = snapshot();
+  input.dynamic_obstacle_refinement_active = true;
+  input.dynamic_obstacle_pass_side_sign = 1;
+  input.dynamic_obstacle_stages.assign(
+    3U,
+    multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_obstacle::StagePrediction{
+      true, 0.8, 0.75, 0.20, 0.30});
+
+  shadow::SolverContext solver;
+  const auto result = solver.evaluate(input);
+  EXPECT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  EXPECT_TRUE(result.dynamic_obstacle_refinement_requested);
+  EXPECT_TRUE(result.dynamic_obstacle_refinement_applied);
+  EXPECT_TRUE(result.dynamic_obstacle_refinement_solved);
+  EXPECT_GT(result.dynamic_obstacle_stay_behind_row_count, 0U);
+  EXPECT_TRUE(shadow::result_valid(result));
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  SolvesCompletePlanningHorizonButPublishesOnlyCertifiedPrefix)
+{
+  auto input = snapshot();
+  input.execution_prefix_steps = 2;
+
+  shadow::SolverContext context;
+  const auto result = context.evaluate(input);
+
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+  EXPECT_EQ(result.planning_stage_count, 3U);
+  EXPECT_EQ(result.certified_stage_count, 2U);
+  EXPECT_EQ(result.execution_artifact->control_stages.size(), 2U);
+  EXPECT_EQ(result.execution_artifact->predicted_states.size(), 3U);
+  EXPECT_EQ(result.execution_artifact->nominal_path_distance_m.size(), 3U);
+  EXPECT_EQ(result.execution_artifact->lateral_lower_m.size(), 3U);
+  EXPECT_EQ(result.execution_artifact->lateral_upper_m.size(), 3U);
+  EXPECT_NEAR(result.certified_horizon_duration_sec, 0.20, 1e-12);
+  EXPECT_TRUE(shadow::result_valid(result));
+}
+
+TEST(MpccRateResolvedShadow, RefinesWallRowsAtTheSolvedProgress)
+{
+  shadow::SolverContext context;
+  auto input = snapshot();
+  input.progress_aligned_wall_refinement_active = true;
+  input.wall_reference_progress_m = {0.0, 0.3, 0.6, 1.0};
+  input.wall_lower_m = {-1.0, -0.8, -0.6, -0.4};
+  input.wall_upper_m = {1.0, 0.9, 0.8, 0.7};
+
+  const auto result = context.evaluate(input);
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  EXPECT_TRUE(result.progress_wall_refinement_requested);
+  EXPECT_TRUE(result.progress_wall_refinement_applied);
+  EXPECT_TRUE(result.progress_wall_refinement_solved);
+  EXPECT_EQ(
+    result.progress_wall_refinement_reason,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ProgressAlignedWallBoundsReason::Accepted);
+  ASSERT_NE(result.execution_artifact, nullptr);
+  EXPECT_GT(result.progress_wall_refinement_aligned_stage_count, 0U);
+}
+
+TEST(MpccRateResolvedShadow, RejectsWhenRequestedWallRefinementCannotBeBuilt)
+{
+  shadow::SolverContext context;
+  auto input = snapshot();
+  input.progress_aligned_wall_refinement_active = true;
+  // The first QP is deliberately allowed to solve without wall rows. A
+  // malformed physical-wall profile must not let that provisional solution
+  // escape as a production artifact.
+  input.wall_reference_progress_m = {0.0};
+  input.wall_lower_m = {-1.0};
+  input.wall_upper_m = {1.0};
+
+  const auto result = context.evaluate(input);
+  EXPECT_EQ(result.outcome, shadow::Outcome::AssemblyRejected);
+  EXPECT_FALSE(result.solved);
+  EXPECT_TRUE(result.progress_wall_refinement_requested);
+  EXPECT_FALSE(result.progress_wall_refinement_applied);
+  EXPECT_EQ(
+    result.progress_wall_refinement_reason,
+    multi_purpose_mpc_ros::mpcc_progress::
+    ProgressAlignedWallBoundsReason::InvalidInput);
+  EXPECT_EQ(result.execution_artifact, nullptr);
+  EXPECT_NE(result.detail.find("wall refinement rejected"), std::string::npos);
+}
+
+TEST(MpccRateResolvedShadow, PhysicalWallRefinementRetainsHeadingInCertificate)
+{
+  const auto grid = corridor_grid();
+  auto aligned_request = wall_request(grid, 0.0);
+  auto rotated_request = wall_request(grid, 0.5);
+  aligned_request.stages.front().lag_lower_m =
+    -std::numeric_limits<double>::infinity();
+  aligned_request.stages.front().lag_upper_m =
+    std::numeric_limits<double>::infinity();
+  aligned_request.stages.front().heading_lower_rad =
+    -std::numeric_limits<double>::infinity();
+  aligned_request.stages.front().heading_upper_rad =
+    std::numeric_limits<double>::infinity();
+  rotated_request.stages.front().lag_lower_m =
+    -std::numeric_limits<double>::infinity();
+  rotated_request.stages.front().lag_upper_m =
+    std::numeric_limits<double>::infinity();
+  rotated_request.stages.front().heading_lower_rad =
+    -std::numeric_limits<double>::infinity();
+  rotated_request.stages.front().heading_upper_rad =
+    std::numeric_limits<double>::infinity();
+  const auto aligned = wall_refinement::resolve(aligned_request);
+  const auto rotated = wall_refinement::resolve(rotated_request);
+
+  ASSERT_TRUE(aligned.applied) << aligned.detail;
+  ASSERT_TRUE(rotated.applied) << rotated.detail;
+  ASSERT_EQ(aligned.stages.size(), 1U);
+  ASSERT_EQ(rotated.stages.size(), 1U);
+  EXPECT_EQ(aligned.swept_lateral_constraints.size(), 4U);
+  EXPECT_EQ(rotated.swept_lateral_constraints.size(), 4U);
+  EXPECT_LT(
+    rotated.stages.front().lateral_upper_m,
+    aligned.stages.front().lateral_upper_m - 0.2);
+  EXPECT_LE(
+    rotated.stages.front().heading_lower_rad, 0.5 + 1e-12);
+  EXPECT_GE(
+    rotated.stages.front().heading_upper_rad, 0.5 - 1e-12);
+  EXPECT_LT(
+    rotated.stages.front().heading_upper_rad -
+    rotated.stages.front().heading_lower_rad,
+    0.026);
+  EXPECT_LT(
+    rotated.stages.front().lag_upper_m -
+    rotated.stages.front().lag_lower_m,
+    0.051);
+  EXPECT_LT(
+    rotated.stages.front().progress_upper_m -
+    rotated.stages.front().progress_lower_m,
+    0.051);
 }
 
 TEST(MpccRateResolvedShadow, RejectsNoncanonicalProblemIdentity)

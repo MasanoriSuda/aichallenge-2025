@@ -533,6 +533,57 @@ TEST(MpccProgress, RejectsCorruptStageDistanceInsteadOfRepairingIt)
   EXPECT_FALSE(result.has_value());
 }
 
+TEST(MpccProgress, LimitsStoppedTemporalHorizonToPhysicallyReachablePrefix)
+{
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_reachable_temporal_horizon(
+    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonRequest{
+      0.0, 1.37, 3.0,
+      std::vector<double>(20U, 1.2),
+      std::vector<double>(20U, 0.24)});
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.horizon_steps, 2);
+  EXPECT_EQ(result.first_unreachable_stage, 2);
+  EXPECT_EQ(
+    result.reason,
+    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonReason::
+    ReachabilityLimited);
+  EXPECT_NEAR(result.horizon_duration_sec, 0.48, 1e-12);
+  EXPECT_NEAR(result.horizon_reference_distance_m, 2.4, 1e-12);
+  EXPECT_NEAR(result.maximum_reachable_distance_m, 3.157824, 1e-12);
+}
+
+TEST(MpccProgress, KeepsCompleteTemporalHorizonAtReachableRaceSpeed)
+{
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_reachable_temporal_horizon(
+    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonRequest{
+      10.0, 1.0, 3.0,
+      std::vector<double>(20U, 1.0),
+      std::vector<double>(20U, 0.10)});
+  ASSERT_TRUE(result.valid);
+  EXPECT_EQ(result.horizon_steps, 20);
+  EXPECT_EQ(result.first_unreachable_stage, -1);
+  EXPECT_EQ(
+    result.reason,
+    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonReason::
+    CompleteHorizon);
+}
+
+TEST(MpccProgress, RejectsTemporalHorizonWithoutOneReachableStage)
+{
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_reachable_temporal_horizon(
+    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonRequest{
+      0.0, 0.0, 0.1, {1.0}, {0.1}});
+  EXPECT_FALSE(result.valid);
+  EXPECT_EQ(result.horizon_steps, 0);
+  EXPECT_EQ(
+    result.reason,
+    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonReason::
+    NoReachableStage);
+}
+
 TEST(MpccProgress, DetectsLapProgressWrapForWarmStartReset)
 {
   EXPECT_TRUE(multi_purpose_mpc_ros::mpcc_progress::progress_origin_discontinuous(
@@ -1033,6 +1084,55 @@ TEST(MpccProgress, DoesNotExtrapolateWallBoundsOutsideProfile)
   EXPECT_EQ(result.reason, ProgressAlignedWallBoundsReason::NoCoveringSegment);
   EXPECT_EQ(result.out_of_range_stage_count, 1U);
   EXPECT_EQ(result.first_failure_stage, 0);
+}
+
+TEST(MpccProgress, AcceptsOnlySolverToleranceAtWallProfileEndpoint)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::ProgressAlignedWallBoundsRequest;
+  using multi_purpose_mpc_ros::mpcc_progress::ProgressAlignedWallBoundsReason;
+  const auto result =
+    multi_purpose_mpc_ros::mpcc_progress::resolve_progress_aligned_wall_bounds(
+    ProgressAlignedWallBoundsRequest{
+      true,
+      {0.0, 10.0},
+      {-1.0, -0.5},
+      {1.0, 0.5},
+      {10.001},
+      {-2.0},
+      {2.0},
+      {0.0},
+      {10.0},
+      0.002});
+
+  ASSERT_TRUE(result.valid);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_TRUE(result.applied);
+  EXPECT_EQ(result.reason, ProgressAlignedWallBoundsReason::Accepted);
+  ASSERT_EQ(result.progress_upper_m.size(), 1U);
+  EXPECT_NEAR(result.progress_upper_m.front(), 10.0, 1e-12);
+}
+
+TEST(MpccProgress, IntersectsOptimizerProgressWithPhysicalProfileSupport)
+{
+  using multi_purpose_mpc_ros::mpcc_progress::
+    ProgressProfileSupportReason;
+  const auto accepted =
+    multi_purpose_mpc_ros::mpcc_progress::intersect_progress_profile_support(
+    15.0, 22.0, 0.0, 20.0);
+  ASSERT_TRUE(accepted.valid);
+  ASSERT_TRUE(accepted.feasible);
+  EXPECT_TRUE(accepted.applied);
+  EXPECT_EQ(accepted.reason, ProgressProfileSupportReason::Accepted);
+  EXPECT_NEAR(accepted.lower_m, 15.0, 1e-12);
+  EXPECT_NEAR(accepted.upper_m, 20.0, 1e-12);
+
+  const auto collapsed =
+    multi_purpose_mpc_ros::mpcc_progress::intersect_progress_profile_support(
+    21.0, 22.0, 0.0, 20.0);
+  ASSERT_TRUE(collapsed.valid);
+  EXPECT_FALSE(collapsed.feasible);
+  EXPECT_EQ(
+    collapsed.reason, ProgressProfileSupportReason::CorridorCollapsed);
 }
 
 }  // namespace

@@ -79,6 +79,8 @@ TEST(MpccRateResolvedPhysicalAdapter, ReplaysControlsThroughNonlinearModel)
   EXPECT_NEAR(exact.velocity_mps.back(), 2.2, 1e-12);
   EXPECT_GT(exact.minimum_lateral_bound_reserve_m, 0.0);
   EXPECT_LT(exact.minimum_lateral_bound_reserve_m, 1.0);
+  EXPECT_DOUBLE_EQ(
+    exact.lateral_bound_tolerance_m, source.physical_global_tolerance);
   EXPECT_EQ(result.minimum_progress_transition_state, 1);
   EXPECT_DOUBLE_EQ(result.minimum_progress_delta_m, 0.2);
   EXPECT_DOUBLE_EQ(result.transition_virtual_progress_speed_mps, 2.0);
@@ -110,6 +112,27 @@ TEST(
   ASSERT_EQ(result.stage_end_steering_rad.size(), 2U);
   EXPECT_NEAR(result.stage_end_velocity_mps.back(), 2.20, 1e-12);
   EXPECT_NEAR(result.stage_end_steering_rad.back(), 0.12, 1e-12);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  CertifiesTheLastExecutableEndpointNearArtifactExhaustion)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.195);
+  ASSERT_TRUE(cursor.available);
+  ASSERT_EQ(cursor.remaining_control_stage_count, 1U);
+
+  const auto result = adapter::build_continuation(
+    source, cursor,
+    adapter::ContinuationInitialState{
+      0.19, 0.0, 0.019, 2.195, 0.39, 0.1195, 0.109});
+
+  ASSERT_EQ(result.reason, adapter::ContinuationRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  EXPECT_EQ(result.exact_trajectory->elapsed_time_sec.size(), 1U);
+  EXPECT_EQ(result.stage_end_velocity_mps.size(), 1U);
+  EXPECT_EQ(result.stage_end_steering_rad.size(), 1U);
 }
 
 TEST(
@@ -192,6 +215,9 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsLinearizedStatesThatHideNonlinearWa
 
   EXPECT_EQ(result.reason, adapter::RejectReason::ExactTrajectoryRejected);
   EXPECT_FALSE(result.exact_trajectory.has_value());
+  EXPECT_GT(result.rejected_lateral_m, result.rejected_lateral_upper_m);
+  EXPECT_DOUBLE_EQ(result.rejected_lateral_lower_m, -0.20);
+  EXPECT_DOUBLE_EQ(result.rejected_lateral_upper_m, 0.20);
 }
 
 TEST(MpccRateResolvedPhysicalAdapter, RejectsCurrentSemanticMismatch)

@@ -630,6 +630,60 @@ const char * to_string(const DynamicClearanceRejectReason reason) noexcept
   return "unknown";
 }
 
+DynamicClearanceRejectReason observe_dynamic_clearance(
+  DynamicClearanceSequence & sequence, const double clearance_m) noexcept
+{
+  if (!finite(clearance_m)) {
+    return DynamicClearanceRejectReason::InvalidObstacle;
+  }
+  if (!sequence.initialized) {
+    sequence.initialized = true;
+    sequence.initial_overlap =
+      clearance_m < -kClearanceComparisonToleranceM;
+    sequence.checked_pose_count = 1U;
+    sequence.initial_clearance_m = clearance_m;
+    sequence.previous_clearance_m = clearance_m;
+    sequence.final_clearance_m = clearance_m;
+    sequence.minimum_clearance_m = clearance_m;
+    return DynamicClearanceRejectReason::None;
+  }
+  DynamicClearanceRejectReason reason = DynamicClearanceRejectReason::None;
+  if (
+    !sequence.initial_overlap &&
+    clearance_m < -kClearanceComparisonToleranceM)
+  {
+    reason = DynamicClearanceRejectReason::NewOverlap;
+  } else if (
+    sequence.initial_overlap &&
+    clearance_m + kClearanceComparisonToleranceM <
+    sequence.previous_clearance_m)
+  {
+    reason = DynamicClearanceRejectReason::InitialOverlapWorsened;
+  }
+  ++sequence.checked_pose_count;
+  sequence.previous_clearance_m = clearance_m;
+  sequence.final_clearance_m = clearance_m;
+  sequence.minimum_clearance_m = std::min(
+    sequence.minimum_clearance_m, clearance_m);
+  return reason;
+}
+
+DynamicClearanceRejectReason finalize_dynamic_clearance(
+  const DynamicClearanceSequence & sequence) noexcept
+{
+  if (!sequence.initialized || sequence.checked_pose_count == 0U) {
+    return DynamicClearanceRejectReason::InvalidRollout;
+  }
+  if (
+    sequence.initial_overlap &&
+    sequence.final_clearance_m <
+    sequence.initial_clearance_m + kMinimumEscapeImprovementM)
+  {
+    return DynamicClearanceRejectReason::InitialOverlapNotImproved;
+  }
+  return DynamicClearanceRejectReason::None;
+}
+
 std::optional<double> circle_obstacle_clearance_at_time(
   const FootprintExtents & footprint, const Pose2D & pose,
   const CircleObstacle & obstacle, const double elapsed_time_sec) noexcept
@@ -687,9 +741,7 @@ DynamicClearanceResult evaluate_circle_obstacle_clearance(
   }
 
   result.valid = true;
-  result.minimum_clearance_m = std::numeric_limits<double>::infinity();
-  double previous_clearance_m = std::numeric_limits<double>::quiet_NaN();
-  bool initial_overlap = false;
+  DynamicClearanceSequence clearance_sequence;
   for (std::size_t index = 0U; index < rollout.size(); ++index) {
     const auto & rollout_pose = rollout[index];
     const double distance_fraction = std::clamp(
@@ -701,41 +753,22 @@ DynamicClearanceResult evaluate_circle_obstacle_clearance(
       obstacle.y_m + obstacle.velocity_y_mps * prediction_time_sec;
     const double clearance_m = circle_to_footprint_clearance(
       footprint, rollout_pose.pose, obstacle_x_m, obstacle_y_m, obstacle.radius_m);
-    if (!finite(clearance_m)) {
-      result.valid = false;
-      result.reason = DynamicClearanceRejectReason::InvalidObstacle;
-      return result;
-    }
-    ++result.checked_pose_count;
-    result.minimum_clearance_m = std::min(result.minimum_clearance_m, clearance_m);
-    result.final_clearance_m = clearance_m;
-    if (index == 0U) {
-      result.initial_clearance_m = clearance_m;
-      previous_clearance_m = clearance_m;
-      initial_overlap = clearance_m < -kClearanceComparisonToleranceM;
-      continue;
-    }
-    if (!initial_overlap && clearance_m < -kClearanceComparisonToleranceM) {
-      result.reason = DynamicClearanceRejectReason::NewOverlap;
+    const auto observation = observe_dynamic_clearance(
+      clearance_sequence, clearance_m);
+    result.checked_pose_count = clearance_sequence.checked_pose_count;
+    result.initial_clearance_m = clearance_sequence.initial_clearance_m;
+    result.minimum_clearance_m = clearance_sequence.minimum_clearance_m;
+    result.final_clearance_m = clearance_sequence.final_clearance_m;
+    if (observation != DynamicClearanceRejectReason::None) {
+      result.reason = observation;
       result.rejected_at_distance_m = rollout_pose.reverse_distance_m;
       return result;
     }
-    if (
-      initial_overlap &&
-      clearance_m + kClearanceComparisonToleranceM < previous_clearance_m)
-    {
-      result.reason = DynamicClearanceRejectReason::InitialOverlapWorsened;
-      result.rejected_at_distance_m = rollout_pose.reverse_distance_m;
-      return result;
-    }
-    previous_clearance_m = clearance_m;
   }
 
-  if (
-    initial_overlap &&
-    result.final_clearance_m < result.initial_clearance_m + kMinimumEscapeImprovementM)
-  {
-    result.reason = DynamicClearanceRejectReason::InitialOverlapNotImproved;
+  const auto completion = finalize_dynamic_clearance(clearance_sequence);
+  if (completion != DynamicClearanceRejectReason::None) {
+    result.reason = completion;
     result.rejected_at_distance_m = total_distance_m;
     return result;
   }

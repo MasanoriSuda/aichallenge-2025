@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -15,6 +16,24 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_problem
 
 namespace model = mpcc_rate_resolved;
 
+/// Exact previous input seen by the rate-resolved problem at a ROS command
+/// publication boundary.  Acceleration and desired steering angle are wire
+/// actuation values.  Steering rate is reconstructed from two consecutive
+/// serialized desired angles over their measured publication interval; it is
+/// never populated with curvature from the retired five-state formulation.
+struct SerializedPreviousInputRequest
+{
+  double acceleration_mps2{};
+  double virtual_progress_speed_mps{};
+  double previous_steering_rad{};
+  double published_steering_rad{};
+  double publication_interval_sec{};
+};
+
+std::optional<Eigen::Matrix<double, model::kInputDimension, 1>>
+resolve_serialized_previous_input(
+  const SerializedPreviousInputRequest & request) noexcept;
+
 /// Exact desired-steering envelope for the cumulative steering-rate input
 /// sequence.  This is independent of the physical steering state equality:
 /// actuator lag may make the publication predecessor differ from x0.delta.
@@ -22,6 +41,48 @@ struct SteeringRatePrefixBounds
 {
   double minimum_cumulative_delta_rad{};
   double maximum_cumulative_delta_rad{};
+};
+
+/// One affine physical-wall segment per predicted state.  The rows couple the
+/// optimized lateral state to the optimized progress state instead of binding
+/// the vehicle to a wall interval sampled at a different nominal distance.
+struct ProgressAlignedWallConstraints
+{
+  std::vector<double> lower_slope;
+  std::vector<double> lower_intercept;
+  std::vector<double> upper_slope;
+  std::vector<double> upper_intercept;
+};
+
+/// One physical-wall row at an interior point of a state transition. The
+/// destination_ratio interpolates lateral state i -> i+1 and therefore closes
+/// the former endpoint-only wall contract.
+struct SweptLateralWallConstraint
+{
+  int transition_stage{-1};
+  double destination_ratio{};
+  double lower_m{};
+  double upper_m{};
+};
+
+/// One convex branch of the stage-wise dynamic-obstacle disjunction.  The
+/// tactical layer chooses a pass side, while the rate-resolved execution layer
+/// chooses, for each stage, whether it can already occupy that side or must
+/// remain longitudinally behind the opponent.  Keeping this as a separate row
+/// prevents a nominal-time opponent sample from becoming an unconditional
+/// lateral state box.
+enum class DynamicObstacleConstraintAxis
+{
+  Lateral,
+  Progress,
+};
+
+struct DynamicObstacleConstraint
+{
+  int state_stage{-1};
+  DynamicObstacleConstraintAxis axis{DynamicObstacleConstraintAxis::Lateral};
+  double lower{-std::numeric_limits<double>::infinity()};
+  double upper{std::numeric_limits<double>::infinity()};
 };
 
 struct AssemblyRequest
@@ -44,6 +105,10 @@ struct AssemblyRequest
   Eigen::Matrix<double, model::kInputDimension, 1> input_delta_weight{
     Eigen::Matrix<double, model::kInputDimension, 1>::Zero()};
   std::optional<SteeringRatePrefixBounds> steering_rate_prefix_bounds;
+  std::optional<ProgressAlignedWallConstraints>
+    progress_aligned_wall_constraints;
+  std::vector<SweptLateralWallConstraint> swept_lateral_wall_constraints;
+  std::vector<DynamicObstacleConstraint> dynamic_obstacle_constraints;
 };
 
 struct Problem
@@ -66,6 +131,11 @@ enum class RowKind
   StateBox,
   InputBox,
   SteeringRatePrefix,
+  ProgressAlignedWallLower,
+  ProgressAlignedWallUpper,
+  SweptLateralWall,
+  DynamicObstacleLateral,
+  DynamicObstacleProgress,
 };
 
 struct RowSemantic
@@ -76,7 +146,12 @@ struct RowSemantic
   int element{-1};
 };
 
-RowSemantic decode_row(int row, int horizon_steps) noexcept;
+RowSemantic decode_row(
+  int row, int horizon_steps, bool steering_rate_prefix_active = true,
+  bool progress_aligned_wall_active = false,
+  int swept_lateral_wall_count = 0,
+  const std::vector<DynamicObstacleConstraint> * dynamic_obstacle_constraints =
+  nullptr) noexcept;
 const char * row_kind_name(RowKind kind) noexcept;
 
 /// Exact stage-zero interval implied for one input by the input box and every

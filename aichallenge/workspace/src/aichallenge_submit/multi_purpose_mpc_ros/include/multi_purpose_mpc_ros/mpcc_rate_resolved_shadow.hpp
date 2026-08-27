@@ -4,7 +4,10 @@
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp"
+#include "multi_purpose_mpc_ros/mpcc_progress.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
 #include <cstddef>
@@ -25,8 +28,29 @@ struct Snapshot
   Identity identity;
   double control_prediction_origin_sec{};
   mpcc_rate_resolved_adapter::Request request;
+  /// Leading solved stages which may cross the execution boundary.  The
+  /// request still carries the complete planning horizon: shortening the QP
+  /// itself makes a distant tactical terminal target numerically abrupt.
+  int execution_prefix_steps{};
   double course_progress_origin_m{};
   std::vector<double> nominal_path_distance_m;
+  bool progress_aligned_wall_refinement_active{false};
+  std::vector<double> wall_reference_progress_m;
+  std::vector<double> wall_lower_m;
+  std::vector<double> wall_upper_m;
+  std::string progress_wall_profile_diagnostic{"not-provided"};
+  bool dynamic_obstacle_refinement_active{false};
+  int dynamic_obstacle_pass_side_sign{0};
+  std::vector<mpcc_rate_resolved_dynamic_obstacle::StagePrediction>
+    dynamic_obstacle_stages;
+  bool physical_wall_refinement_active{false};
+  std::shared_ptr<const recovery_footprint::OccupancyGrid> wall_grid;
+  recovery_footprint::FootprintExtents wall_footprint;
+  std::vector<mpc_stage_geometry::CourseFrameKnot> wall_course_frame_knots;
+  double wall_lateral_sample_step_m{};
+  double wall_heading_bucket_width_rad{0.025};
+  double wall_translation_bucket_width_m{};
+  double wall_boundary_guard_m{0.001};
   double publication_interval_sec{};
 };
 
@@ -44,6 +68,21 @@ enum class Outcome
 };
 
 const char * to_string(Outcome outcome) noexcept;
+
+enum class RecedingWarmStartReason
+{
+  Available,
+  CurrentProblemBootstrap,
+  EmptyCache,
+  InvalidPrevious,
+  InvalidCurrent,
+  SemanticMismatch,
+  TimeRegression,
+  HorizonExhausted,
+  DimensionMismatch,
+};
+
+const char * to_string(RecedingWarmStartReason reason) noexcept;
 
 struct Result
 {
@@ -76,6 +115,7 @@ struct Result
   double first_steering_rate_solver_lower_radps{};
   double first_steering_rate_solver_upper_radps{};
   double first_steering_rate_certificate_margin_radps{};
+  std::size_t planning_stage_count{};
   std::size_t certified_stage_count{};
   std::size_t sampled_stage_index{};
   double sampled_stage_elapsed_sec{};
@@ -89,6 +129,62 @@ struct Result
   int maximum_normalized_constraint_row{-1};
   mpcc_rate_resolved_problem::FirstStageInputFeasibility
     first_virtual_progress_feasibility;
+  bool progress_wall_refinement_requested{false};
+  bool pre_refinement_lateral_support_applied{false};
+  mpcc_rate_resolved_wall_refinement::PreRefinementLateralSupportReason
+    pre_refinement_lateral_support_reason{
+      mpcc_rate_resolved_wall_refinement::
+      PreRefinementLateralSupportReason::NotRequested};
+  double pre_refinement_lateral_support_lower_m{};
+  double pre_refinement_lateral_support_upper_m{};
+  bool progress_wall_refinement_applied{false};
+  bool progress_wall_refinement_solved{false};
+  mpcc_progress::ProgressAlignedWallBoundsReason
+    progress_wall_refinement_reason{
+      mpcc_progress::ProgressAlignedWallBoundsReason::NotRequested};
+  std::size_t progress_wall_refinement_aligned_stage_count{};
+  std::size_t progress_wall_refinement_out_of_range_stage_count{};
+  int progress_wall_refinement_first_failure_stage{-1};
+  double progress_wall_refinement_maximum_mismatch_m{};
+  bool dynamic_obstacle_refinement_requested{false};
+  bool dynamic_obstacle_refinement_applied{false};
+  bool dynamic_obstacle_refinement_solved{false};
+  mpcc_rate_resolved_dynamic_obstacle::Reason
+    dynamic_obstacle_refinement_reason{
+      mpcc_rate_resolved_dynamic_obstacle::Reason::NotRequested};
+  int dynamic_obstacle_resolved_side_sign{};
+  int dynamic_obstacle_first_pass_side_stage{-1};
+  std::size_t dynamic_obstacle_stay_behind_row_count{};
+  std::size_t dynamic_obstacle_pass_side_row_count{};
+  std::size_t dynamic_obstacle_partial_escape_row_count{};
+  int dynamic_obstacle_first_valid_stage{-1};
+  double dynamic_obstacle_first_wall_only_progress_m{};
+  double dynamic_obstacle_first_wall_only_lateral_m{};
+  double dynamic_obstacle_first_target_progress_m{};
+  double dynamic_obstacle_first_target_lateral_m{};
+  double dynamic_obstacle_first_stay_behind_margin_m{};
+  double dynamic_obstacle_first_positive_side_margin_m{};
+  double dynamic_obstacle_first_negative_side_margin_m{};
+  bool physical_wall_refinement_requested{false};
+  bool physical_wall_refinement_applied{false};
+  bool physical_wall_refinement_solved{false};
+  mpcc_rate_resolved_wall_refinement::Reason
+    physical_wall_refinement_reason{
+      mpcc_rate_resolved_wall_refinement::Reason::NotRequested};
+  int physical_wall_refinement_first_failure_stage{-1};
+  std::size_t physical_wall_refinement_checked_pose_count{};
+  RecedingWarmStartReason receding_warm_start_reason{
+    RecedingWarmStartReason::EmptyCache};
+  std::string receding_warm_start_diagnostic{"empty-cache"};
+  std::size_t receding_warm_start_stage_advance{};
+  bool receding_warm_start_applied{false};
+  bool successive_linearization_requested{false};
+  bool successive_linearization_applied{false};
+  bool successive_linearization_solved{false};
+  mpcc_rate_resolved_adapter::RelinearizationReason
+    successive_linearization_reason{
+      mpcc_rate_resolved_adapter::RelinearizationReason::InvalidRequest};
+  int successive_linearization_failure_stage{-1};
   persistent_osqp::SolveTelemetry solver;
   artifact::RejectReason execution_artifact_reject_reason{
     artifact::RejectReason::None};
@@ -99,9 +195,48 @@ struct Result
 bool identity_valid(const Identity & identity) noexcept;
 bool result_valid(const Result & result) noexcept;
 
+/// Successful full-horizon numerical iterate retained only as an initial
+/// guess for the next QP.  It is neither an execution artifact nor authority:
+/// every current problem is still solved and certified independently.
+struct RecedingWarmStartSeed
+{
+  Identity identity;
+  double control_prediction_origin_sec{};
+  double course_progress_origin_m{};
+  std::vector<double> stage_durations_sec;
+  Eigen::VectorXd primal;
+};
+
+struct RecedingWarmStartResolution
+{
+  RecedingWarmStartReason reason{RecedingWarmStartReason::EmptyCache};
+  std::string diagnostic{"empty-cache"};
+  std::size_t stage_advance{};
+  std::optional<persistent_osqp::WarmStart> warm_start;
+};
+
+/// Transport one successful seven-state iterate to the current control and
+/// course-progress origins.  Tactical target/generation/side and all schemas
+/// must remain identical; observation and stage geometry may advance because
+/// the current QP proves them again.  Current x0 is always overwritten and
+/// current dual rows are deliberately cold-started.
+RecedingWarmStartResolution resolve_receding_warm_start(
+  const RecedingWarmStartSeed & previous, const Snapshot & current,
+  const mpcc_rate_resolved_problem::AssemblyRequest & current_problem,
+  std::size_t current_constraint_count) noexcept;
+
+/// Build a numerical seed solely from the current seven-state problem.  This
+/// is used when no semantically compatible solved iterate exists.  It carries
+/// no execution authority and does not cross an intent/formulation boundary:
+/// inputs are projected into the current boxes and the current affine
+/// dynamics are rolled out from the exact initial state.
+std::optional<persistent_osqp::WarmStart> build_current_problem_bootstrap(
+  const mpcc_rate_resolved_problem::AssemblyRequest & current_problem,
+  std::size_t current_constraint_count) noexcept;
+
 /// Dedicated numerical owner for the rate-resolved shadow. Calls are
-/// serialized and deliberately cold-started until an exact seven-state
-/// progress-rebase warm-start contract is approved.
+/// serialized; a successful full-horizon iterate may seed only a semantically
+/// compatible current seven-state problem under the contract above.
 class SolverContext
 {
 public:
@@ -109,6 +244,7 @@ public:
 
 private:
   std::mutex mutex_;
+  std::optional<RecedingWarmStartSeed> warm_start_seed_;
   persistent_osqp::PersistentOsqpSolver solver_{
     persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};
 };

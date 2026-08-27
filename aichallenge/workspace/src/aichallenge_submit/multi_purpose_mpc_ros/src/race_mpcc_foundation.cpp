@@ -175,6 +175,8 @@ const char * exact_physical_execution_trajectory_reason_name(
       return "invalid-progress-regression-tolerance";
     case ExactPhysicalExecutionTrajectoryReason::InvalidVelocityLowerBoundTolerance:
       return "invalid-velocity-lower-bound-tolerance";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidLateralBoundTolerance:
+      return "invalid-lateral-bound-tolerance";
     case ExactPhysicalExecutionTrajectoryReason::InvalidMinimumLateralReserve:
       return "invalid-minimum-lateral-reserve";
     case ExactPhysicalExecutionTrajectoryReason::TimeShapeMismatch:
@@ -219,10 +221,14 @@ validate_exact_physical_execution_trajectory(
   const std::size_t stage_count = trajectory.path_distance_m.size();
   const auto reject = [](
       const ExactPhysicalExecutionTrajectoryReason reason,
-      const int stage = -1) {
-      return ExactPhysicalExecutionTrajectoryValidation{false, reason, stage};
+      const int stage = -1,
+      const double lateral_m = std::numeric_limits<double>::quiet_NaN(),
+      const double lower_m = std::numeric_limits<double>::quiet_NaN(),
+      const double upper_m = std::numeric_limits<double>::quiet_NaN()) {
+      return ExactPhysicalExecutionTrajectoryValidation{
+        false, reason, stage, lateral_m, lower_m, upper_m};
     };
-  if (stage_count < 2U) {
+  if (stage_count < 1U) {
     return reject(ExactPhysicalExecutionTrajectoryReason::TooFewStages);
   }
   if (!std::isfinite(trajectory.progress_origin_m)) {
@@ -241,6 +247,13 @@ validate_exact_physical_execution_trajectory(
   {
     return reject(
       ExactPhysicalExecutionTrajectoryReason::InvalidVelocityLowerBoundTolerance);
+  }
+  if (
+    !std::isfinite(trajectory.lateral_bound_tolerance_m) ||
+    trajectory.lateral_bound_tolerance_m < 0.0)
+  {
+    return reject(
+      ExactPhysicalExecutionTrajectoryReason::InvalidLateralBoundTolerance);
   }
   if (
     !std::isfinite(trajectory.minimum_lateral_bound_reserve_m) ||
@@ -325,17 +338,22 @@ validate_exact_physical_execution_trajectory(
     }
     if (
       !std::isfinite(lower_m) || !std::isfinite(upper_m) || lower_m > upper_m ||
-      lateral_m < lower_m || lateral_m > upper_m)
+      lateral_m < lower_m - trajectory.lateral_bound_tolerance_m ||
+      lateral_m > upper_m + trajectory.lateral_bound_tolerance_m)
     {
       return reject(
-        ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds, stage_index);
+        ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds,
+        stage_index, lateral_m, lower_m, upper_m);
     }
     previous_distance_m = distance_m;
     previous_progress_m = progress_m;
     previous_elapsed_sec = elapsed_sec;
   }
   return ExactPhysicalExecutionTrajectoryValidation{
-    true, ExactPhysicalExecutionTrajectoryReason::Accepted, -1};
+    true, ExactPhysicalExecutionTrajectoryReason::Accepted, -1,
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN()};
 }
 
 bool exact_physical_execution_trajectory_complete(
@@ -571,6 +589,70 @@ StopAuthorityAction resolve_stop_authority_action(
 {
   return intent == mpcc_execution_contract::ControlIntent::Stop ?
     StopAuthorityAction::EmergencyStop : StopAuthorityAction::NotOwned;
+}
+
+const char * stop_shadow_intent_reason_name(
+  const StopShadowIntentReason reason) noexcept
+{
+  switch (reason) {
+    case StopShadowIntentReason::NotStop:
+      return "not-stop";
+    case StopShadowIntentReason::InterruptedOvertake:
+      return "interrupted-overtake";
+    case StopShadowIntentReason::InterruptedRejoin:
+      return "interrupted-rejoin";
+    case StopShadowIntentReason::CoherentFront:
+      return "coherent-front";
+    case StopShadowIntentReason::RaceCruise:
+      return "race-cruise";
+    case StopShadowIntentReason::PreRaceTrack:
+      return "pre-race-track";
+  }
+  return "unknown";
+}
+
+StopShadowIntentResolution resolve_stop_shadow_intent(
+  const StopShadowIntentRequest & request) noexcept
+{
+  StopShadowIntentResolution result;
+  if (request.active_intent != mpcc_execution_contract::ControlIntent::Stop) {
+    return result;
+  }
+  const bool interrupted_overtake =
+    request.last_published_normal_intent ==
+    mpcc_execution_contract::ControlIntent::ShiftOut ||
+    request.last_published_normal_intent ==
+    mpcc_execution_contract::ControlIntent::Pass ||
+    request.last_published_normal_intent ==
+    mpcc_execution_contract::ControlIntent::Return;
+  if (interrupted_overtake && request.interrupted_overtake_context_available) {
+    result.requested = true;
+    result.intent = request.last_published_normal_intent;
+    result.reason = StopShadowIntentReason::InterruptedOvertake;
+    return result;
+  }
+  if (
+    request.last_published_normal_intent ==
+    mpcc_execution_contract::ControlIntent::Rejoin &&
+    request.interrupted_rejoin_context_available)
+  {
+    result.requested = true;
+    result.intent = mpcc_execution_contract::ControlIntent::Rejoin;
+    result.reason = StopShadowIntentReason::InterruptedRejoin;
+    return result;
+  }
+  result.requested = true;
+  if (request.coherent_front_observation) {
+    result.intent = mpcc_execution_contract::ControlIntent::Follow;
+    result.reason = StopShadowIntentReason::CoherentFront;
+  } else if (request.race_session_active) {
+    result.intent = mpcc_execution_contract::ControlIntent::Cruise;
+    result.reason = StopShadowIntentReason::RaceCruise;
+  } else {
+    result.intent = mpcc_execution_contract::ControlIntent::Track;
+    result.reason = StopShadowIntentReason::PreRaceTrack;
+  }
+  return result;
 }
 
 const char * follow_longitudinal_contract_reason_name(

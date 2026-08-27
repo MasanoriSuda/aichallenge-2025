@@ -139,6 +139,18 @@ const char * to_string(const RejectReason reason) noexcept
   return "unknown";
 }
 
+const char * to_string(const RelinearizationReason reason) noexcept
+{
+  switch (reason) {
+    case RelinearizationReason::Accepted: return "accepted";
+    case RelinearizationReason::InvalidRequest: return "invalid-request";
+    case RelinearizationReason::InvalidPrimal: return "invalid-primal";
+    case RelinearizationReason::LinearizationUnavailable:
+      return "linearization-unavailable";
+  }
+  return "unknown";
+}
+
 std::optional<Result> build(
   const Request & request,
   const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
@@ -300,7 +312,7 @@ std::optional<Result> build(
       request.states[static_cast<std::size_t>(stage)].linear_cost;
 
     const int source_input = std::max(0, stage - 1);
-    const double steering_reference = stage == 0 ?
+    const double requested_steering_reference = stage == 0 ?
       request.current_steering_rad :
       steering_from_curvature(
       request.wheelbase_m, request.yaw_response_gain,
@@ -323,15 +335,25 @@ std::optional<Result> build(
       steering_from_curvature(
         request.wheelbase_m, request.yaw_response_gain, curvature_upper));
     if (
-      !std::isfinite(steering_reference) ||
+      !std::isfinite(requested_steering_reference) ||
       !std::isfinite(steering_lower) || !std::isfinite(steering_upper) ||
       steering_lower > steering_upper)
     {
       return reject(
         RejectReason::SteeringBoundsUnavailable, stage,
-        model::kSteeringIndex, steering_reference, steering_lower,
+        model::kSteeringIndex, requested_steering_reference, steering_lower,
         steering_upper);
     }
+    // Curvature is a soft legacy reference, while steering is the physical
+    // state owned by the seven-state model.  A reference curvature outside
+    // the actuator envelope must therefore project to the nearest feasible
+    // steering reference.  Rejecting the complete problem here creates an
+    // authority hole exactly on the high-curvature stages where saturation is
+    // expected.  This is reference normalization before optimization, not a
+    // post-solve command clamp; the optimized state and rate prefix remain
+    // certified against the unchanged physical bounds below.
+    const double steering_reference = std::clamp(
+      requested_steering_reference, steering_lower, steering_upper);
     problem.state_reference[state_offset + model::kSteeringIndex] =
       steering_reference;
     problem.state_lower[state_offset + model::kSteeringIndex] = steering_lower;
@@ -490,6 +512,67 @@ std::optional<Result> build(
       curvature_change_weight * jacobian * jacobian *
       legacy_input.stage_dt_sec * legacy_input.stage_dt_sec;
   }
+  return result;
+}
+
+RelinearizationResult relinearize_around_primal(
+  const Request & request, const Eigen::VectorXd & primal,
+  mpcc_rate_resolved_problem::AssemblyRequest & problem) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  const int horizon = request.horizon_steps;
+  const int state_values = model::kStateDimension * (horizon + 1);
+  const int variable_count = state_values + model::kInputDimension * horizon;
+  RelinearizationResult result;
+  if (
+    horizon <= 0 || request.inputs.size() != static_cast<std::size_t>(horizon) ||
+    problem.horizon_steps != horizon ||
+    problem.linearizations.size() != static_cast<std::size_t>(horizon))
+  {
+    return result;
+  }
+  if (primal.size() != variable_count || !primal.allFinite()) {
+    result.reason = RelinearizationReason::InvalidPrimal;
+    return result;
+  }
+
+  std::vector<model::Linearization> linearizations;
+  linearizations.reserve(static_cast<std::size_t>(horizon));
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int state = model::kStateDimension * stage;
+    const int input = state_values + model::kInputDimension * stage;
+    const auto & semantic_input =
+      request.inputs[static_cast<std::size_t>(stage)];
+    const auto linearization = model::linearize_temporal_frenet(
+      model::LinearizationRequest{
+        primal[state + model::kLateralIndex],
+        primal[state + model::kLagIndex],
+        primal[state + model::kHeadingIndex],
+        primal[state + model::kVelocityIndex],
+        primal[state + model::kProgressIndex],
+        primal[state + model::kSteeringIndex],
+        primal[state + model::kResponseSteeringIndex],
+        primal[input + model::kAccelerationIndex],
+        primal[input + model::kSteeringRateIndex],
+        primal[input + model::kVirtualProgressSpeedIndex],
+        semantic_input.path_curvature_radpm,
+        request.wheelbase_m,
+        request.yaw_response_gain,
+        request.yaw_response_time_constant_sec,
+        semantic_input.stage_dt_sec,
+        request.minimum_frenet_denominator,
+        request.minimum_stage_dt_sec,
+        request.maximum_stage_dt_sec});
+    if (!linearization.has_value()) {
+      result.reason = RelinearizationReason::LinearizationUnavailable;
+      result.stage = stage;
+      return result;
+    }
+    linearizations.push_back(linearization.value());
+  }
+  problem.linearizations = std::move(linearizations);
+  result.reason = RelinearizationReason::Accepted;
+  result.applied = true;
   return result;
 }
 

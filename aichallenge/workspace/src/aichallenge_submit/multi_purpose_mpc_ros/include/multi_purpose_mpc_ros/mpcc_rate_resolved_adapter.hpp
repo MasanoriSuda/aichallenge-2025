@@ -115,12 +115,37 @@ struct BuildDiagnostic
   double upper{std::numeric_limits<double>::quiet_NaN()};
 };
 
+enum class RelinearizationReason
+{
+  Accepted,
+  InvalidRequest,
+  InvalidPrimal,
+  LinearizationUnavailable,
+};
+
+struct RelinearizationResult
+{
+  RelinearizationReason reason{RelinearizationReason::InvalidRequest};
+  int stage{-1};
+  bool applied{false};
+};
+
 const char * to_string(RejectReason reason) noexcept;
 
 std::optional<Result> build(
   const Request & request,
   const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
   BuildDiagnostic * diagnostic = nullptr) noexcept;
+
+/// Replace only the temporal Frenet dynamics with tangents at the current QP
+/// iterate.  Costs, state/input boxes, physical-wall rows and dynamic-obstacle
+/// rows remain unchanged, so a second solve is one SQP correction of the same
+/// semantic problem rather than a new fallback formulation.
+RelinearizationResult relinearize_around_primal(
+  const Request & request, const Eigen::VectorXd & primal,
+  mpcc_rate_resolved_problem::AssemblyRequest & problem) noexcept;
+
+const char * to_string(RelinearizationReason reason) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_adapter
 

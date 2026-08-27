@@ -104,6 +104,25 @@ TEST(MpccRateResolvedPhysicalWall, RejectsWallContactBetweenStages)
     contract::PhysicalWallCertificateReason::SweptPathViolation);
 }
 
+TEST(MpccRateResolvedPhysicalWall, RejectionDetailPreservesPhysicalProvenance)
+{
+  auto value = snapshot();
+  const auto occupied = value.wall_grid->world_to_grid(1.0, 0.0);
+  ASSERT_TRUE(occupied.has_value());
+  auto mutable_grid = std::make_shared<recovery::OccupancyGrid>(*value.wall_grid);
+  mutable_grid->cells[occupied->row * mutable_grid->width + occupied->column] =
+    recovery::CellState::Occupied;
+  value.wall_grid = mutable_grid;
+
+  const auto result = wall::evaluate(value);
+  ASSERT_EQ(result.outcome, wall::Outcome::StageWallRejected);
+  EXPECT_NE(result.detail.find("reason=hard-wall-contact"), std::string::npos);
+  EXPECT_NE(result.detail.find("stage=0"), std::string::npos);
+  EXPECT_NE(result.detail.find("wp=0"), std::string::npos);
+  EXPECT_NE(result.detail.find("pose=(1.000,0.000,0.000)"), std::string::npos);
+  EXPECT_NE(result.detail.find("contacts="), std::string::npos);
+}
+
 TEST(MpccRateResolvedPhysicalWall, RejectsCurvedControlPrefixHiddenByClearChord)
 {
   auto value = snapshot();

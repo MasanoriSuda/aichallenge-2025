@@ -76,6 +76,31 @@ problem::AssemblyRequest straight_request(const int horizon = 3)
 
 }  // namespace
 
+TEST(MpccRateResolvedProblem, ResolvesPreviousInputFromSerializedPublication)
+{
+  const auto previous_input = problem::resolve_serialized_previous_input(
+    problem::SerializedPreviousInputRequest{
+      0.75, 4.0, 0.02, 0.05, 0.025});
+
+  ASSERT_TRUE(previous_input.has_value());
+  EXPECT_DOUBLE_EQ((*previous_input)[model::kAccelerationIndex], 0.75);
+  EXPECT_NEAR(
+    (*previous_input)[model::kSteeringRateIndex], 1.2, 1e-12);
+  EXPECT_DOUBLE_EQ(
+    (*previous_input)[model::kVirtualProgressSpeedIndex], 4.0);
+}
+
+TEST(MpccRateResolvedProblem, RejectsIncompleteSerializedPublicationPredecessor)
+{
+  EXPECT_FALSE(problem::resolve_serialized_previous_input(
+      problem::SerializedPreviousInputRequest{
+        0.75, 2.0, 0.02, 0.05, 0.0}).has_value());
+  EXPECT_FALSE(problem::resolve_serialized_previous_input(
+      problem::SerializedPreviousInputRequest{
+        std::numeric_limits<double>::quiet_NaN(), 2.0, 0.02, 0.05,
+        0.025}).has_value());
+}
+
 TEST(MpccRateResolvedProblem, AssemblesExactVariableAndRowLayout)
 {
   const auto assembled = problem::assemble(straight_request());
@@ -124,6 +149,141 @@ TEST(MpccRateResolvedProblem, AddsOneExactDesiredSteeringPrefixRowPerStage)
         expected);
     }
   }
+}
+
+TEST(MpccRateResolvedProblem, CouplesPhysicalWallBoundsToOptimizedProgress)
+{
+  auto request = straight_request();
+  request.steering_rate_prefix_bounds = problem::SteeringRatePrefixBounds{
+    -1.15, 0.05};
+  problem::ProgressAlignedWallConstraints wall;
+  wall.lower_slope = {0.10, -0.20, 0.30};
+  wall.lower_intercept = {-1.0, -0.8, -1.2};
+  wall.upper_slope = {-0.05, 0.15, -0.25};
+  wall.upper_intercept = {1.0, 0.9, 1.1};
+  request.progress_aligned_wall_constraints = wall;
+
+  const auto assembled = problem::assemble(request);
+  ASSERT_TRUE(assembled.has_value());
+  constexpr int horizon = 3;
+  constexpr int state_values = model::kStateDimension * (horizon + 1);
+  constexpr int input_values = model::kInputDimension * horizon;
+  constexpr int variable_count = state_values + input_values;
+  const int wall_offset = state_values + variable_count + horizon;
+  EXPECT_EQ(assembled->constraints.rows(), wall_offset + 2 * horizon);
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int state = (stage + 1) * model::kStateDimension;
+    const int lower_row = wall_offset + 2 * stage;
+    const int upper_row = lower_row + 1;
+    EXPECT_DOUBLE_EQ(
+      assembled->constraints.coeff(
+        lower_row, state + model::kLateralIndex), 1.0);
+    EXPECT_DOUBLE_EQ(
+      assembled->constraints.coeff(
+        lower_row, state + model::kProgressIndex),
+      -wall.lower_slope[static_cast<std::size_t>(stage)]);
+    EXPECT_DOUBLE_EQ(
+      assembled->lower_bound[lower_row],
+      wall.lower_intercept[static_cast<std::size_t>(stage)]);
+    EXPECT_TRUE(std::isinf(assembled->upper_bound[lower_row]));
+    EXPECT_DOUBLE_EQ(
+      assembled->constraints.coeff(
+        upper_row, state + model::kLateralIndex), 1.0);
+    EXPECT_DOUBLE_EQ(
+      assembled->constraints.coeff(
+        upper_row, state + model::kProgressIndex),
+      -wall.upper_slope[static_cast<std::size_t>(stage)]);
+    EXPECT_TRUE(std::isinf(assembled->lower_bound[upper_row]));
+    EXPECT_DOUBLE_EQ(
+      assembled->upper_bound[upper_row],
+      wall.upper_intercept[static_cast<std::size_t>(stage)]);
+    const auto lower_semantic = problem::decode_row(
+      lower_row, horizon, true, true);
+    ASSERT_TRUE(lower_semantic.valid);
+    EXPECT_EQ(
+      lower_semantic.kind,
+      problem::RowKind::ProgressAlignedWallLower);
+    EXPECT_EQ(lower_semantic.stage, stage);
+  }
+}
+
+TEST(MpccRateResolvedProblem, ConstrainsLateralMotionBetweenSparseStages)
+{
+  auto request = straight_request();
+  request.steering_rate_prefix_bounds = problem::SteeringRatePrefixBounds{
+    -1.15, 0.05};
+  problem::ProgressAlignedWallConstraints wall;
+  wall.lower_slope = {0.0, 0.0, 0.0};
+  wall.lower_intercept = {-1.0, -1.0, -1.0};
+  wall.upper_slope = {0.0, 0.0, 0.0};
+  wall.upper_intercept = {1.0, 1.0, 1.0};
+  request.progress_aligned_wall_constraints = wall;
+  request.swept_lateral_wall_constraints = {
+    problem::SweptLateralWallConstraint{1, 0.25, -0.4, 0.6},
+    problem::SweptLateralWallConstraint{1, 0.75, -0.2, 0.5}};
+
+  const auto assembled = problem::assemble(request);
+  ASSERT_TRUE(assembled.has_value());
+  constexpr int horizon = 3;
+  constexpr int state_values = model::kStateDimension * (horizon + 1);
+  constexpr int input_values = model::kInputDimension * horizon;
+  constexpr int variable_count = state_values + input_values;
+  const int swept_offset =
+    state_values + variable_count + horizon + 2 * horizon;
+  ASSERT_EQ(assembled->constraints.rows(), swept_offset + 2);
+  const int source = model::kStateDimension;
+  const int destination = 2 * model::kStateDimension;
+  EXPECT_DOUBLE_EQ(
+    assembled->constraints.coeff(
+      swept_offset, source + model::kLateralIndex), 0.75);
+  EXPECT_DOUBLE_EQ(
+    assembled->constraints.coeff(
+      swept_offset, destination + model::kLateralIndex), 0.25);
+  EXPECT_DOUBLE_EQ(assembled->lower_bound[swept_offset], -0.4);
+  EXPECT_DOUBLE_EQ(assembled->upper_bound[swept_offset], 0.6);
+  const auto semantic = problem::decode_row(
+    swept_offset + 1, horizon, true, true, 2);
+  ASSERT_TRUE(semantic.valid);
+  EXPECT_EQ(semantic.kind, problem::RowKind::SweptLateralWall);
+  EXPECT_EQ(semantic.stage, 1);
+}
+
+TEST(MpccRateResolvedProblem, KeepsDynamicObstacleRowsOutOfStateBoxes)
+{
+  auto request = straight_request();
+  request.steering_rate_prefix_bounds = problem::SteeringRatePrefixBounds{
+    -1.15, 0.05};
+  request.dynamic_obstacle_constraints = {
+    problem::DynamicObstacleConstraint{
+      1, problem::DynamicObstacleConstraintAxis::Progress,
+      -std::numeric_limits<double>::infinity(), 0.35},
+    problem::DynamicObstacleConstraint{
+      2, problem::DynamicObstacleConstraintAxis::Lateral,
+      0.75, std::numeric_limits<double>::infinity()}};
+
+  const auto assembled = problem::assemble(request);
+  ASSERT_TRUE(assembled.has_value());
+  constexpr int horizon = 3;
+  constexpr int nx = model::kStateDimension;
+  constexpr int state_values = nx * (horizon + 1);
+  constexpr int input_values = model::kInputDimension * horizon;
+  constexpr int variable_count = state_values + input_values;
+  const int obstacle_offset = state_values + variable_count + horizon;
+  ASSERT_EQ(assembled->constraints.rows(), obstacle_offset + 2);
+  EXPECT_DOUBLE_EQ(
+    assembled->constraints.coeff(
+      obstacle_offset, nx + model::kProgressIndex), 1.0);
+  EXPECT_DOUBLE_EQ(assembled->upper_bound[obstacle_offset], 0.35);
+  EXPECT_DOUBLE_EQ(
+    assembled->constraints.coeff(
+      obstacle_offset + 1, 2 * nx + model::kLateralIndex), 1.0);
+  EXPECT_DOUBLE_EQ(assembled->lower_bound[obstacle_offset + 1], 0.75);
+  const auto semantic = problem::decode_row(
+    obstacle_offset, horizon, true, false, 0,
+    &request.dynamic_obstacle_constraints);
+  ASSERT_TRUE(semantic.valid);
+  EXPECT_EQ(semantic.kind, problem::RowKind::DynamicObstacleProgress);
+  EXPECT_EQ(semantic.stage, 1);
 }
 
 TEST(MpccRateResolvedProblem, StateZeroEqualityAndSteeringOwnersAreExplicit)

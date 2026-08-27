@@ -187,6 +187,81 @@ std::optional<StageDistanceResolution> resolve_stage_distances(
   return result;
 }
 
+const char * reachable_horizon_reason_name(
+  const ReachableHorizonReason reason) noexcept
+{
+  switch (reason) {
+    case ReachableHorizonReason::InvalidInput: return "invalid-input";
+    case ReachableHorizonReason::NoReachableStage: return "no-reachable-stage";
+    case ReachableHorizonReason::ReachabilityLimited:
+      return "reachability-limited";
+    case ReachableHorizonReason::CompleteHorizon: return "complete-horizon";
+  }
+  return "unknown";
+}
+
+ReachableHorizonResolution resolve_reachable_temporal_horizon(
+  const ReachableHorizonRequest & request) noexcept
+{
+  constexpr double kDistanceToleranceM = 1e-9;
+  ReachableHorizonResolution result;
+  if (
+    !std::isfinite(request.initial_speed_mps) ||
+    request.initial_speed_mps < 0.0 ||
+    !std::isfinite(request.maximum_acceleration_mps2) ||
+    request.maximum_acceleration_mps2 < 0.0 ||
+    !std::isfinite(request.maximum_lag_m) || request.maximum_lag_m < 0.0 ||
+    request.stage_distance_m.empty() ||
+    request.stage_distance_m.size() != request.stage_dt_sec.size())
+  {
+    return result;
+  }
+
+  double elapsed_sec = 0.0;
+  double reference_distance_m = 0.0;
+  for (std::size_t stage = 0U; stage < request.stage_distance_m.size(); ++stage) {
+    const double distance_m = request.stage_distance_m[stage];
+    const double dt_sec = request.stage_dt_sec[stage];
+    if (
+      !std::isfinite(distance_m) || distance_m <= 0.0 ||
+      !std::isfinite(dt_sec) || dt_sec <= 0.0)
+    {
+      return ReachableHorizonResolution{};
+    }
+    elapsed_sec += dt_sec;
+    reference_distance_m += distance_m;
+    const double reachable_distance_m =
+      request.initial_speed_mps * elapsed_sec +
+      0.5 * request.maximum_acceleration_mps2 * elapsed_sec * elapsed_sec +
+      request.maximum_lag_m;
+    if (
+      !std::isfinite(elapsed_sec) || !std::isfinite(reference_distance_m) ||
+      !std::isfinite(reachable_distance_m))
+    {
+      return ReachableHorizonResolution{};
+    }
+    if (reference_distance_m > reachable_distance_m + kDistanceToleranceM) {
+      result.first_unreachable_stage = static_cast<int>(stage);
+      break;
+    }
+    result.horizon_steps = static_cast<int>(stage + 1U);
+    result.horizon_duration_sec = elapsed_sec;
+    result.horizon_reference_distance_m = reference_distance_m;
+    result.maximum_reachable_distance_m = reachable_distance_m;
+  }
+
+  if (result.horizon_steps == 0) {
+    result.reason = ReachableHorizonReason::NoReachableStage;
+    return result;
+  }
+  result.valid = true;
+  result.reason =
+    result.horizon_steps == static_cast<int>(request.stage_distance_m.size()) ?
+    ReachableHorizonReason::CompleteHorizon :
+    ReachableHorizonReason::ReachabilityLimited;
+  return result;
+}
+
 std::optional<WallAwareTrackingReferenceResolution>
 resolve_wall_aware_tracking_reference(
   const WallAwareTrackingReferenceRequest & request) noexcept
@@ -845,7 +920,9 @@ ProgressAlignedWallBoundsResolution resolve_progress_aligned_wall_bounds(
     request.current_lower_m.size() != horizon ||
     request.current_upper_m.size() != horizon ||
     request.current_progress_lower_m.size() != horizon ||
-    request.current_progress_upper_m.size() != horizon)
+    request.current_progress_upper_m.size() != horizon ||
+    !std::isfinite(request.boundary_tolerance_m) ||
+    request.boundary_tolerance_m < 0.0)
   {
     result.reason = ProgressAlignedWallBoundsReason::InvalidInput;
     return result;
@@ -896,7 +973,10 @@ ProgressAlignedWallBoundsResolution resolve_progress_aligned_wall_bounds(
     result.maximum_progress_mismatch_m = std::max(
       result.maximum_progress_mismatch_m,
       std::abs(solved_progress - request.reference_progress_m[reference_stage]));
-    if (solved_progress < first_progress || solved_progress > last_progress) {
+    if (
+      solved_progress < first_progress - request.boundary_tolerance_m ||
+      solved_progress > last_progress + request.boundary_tolerance_m)
+    {
       ++result.out_of_range_stage_count;
       result.valid = true;
       result.reason = ProgressAlignedWallBoundsReason::NoCoveringSegment;
@@ -904,9 +984,11 @@ ProgressAlignedWallBoundsResolution resolve_progress_aligned_wall_bounds(
       return result;
     }
 
+    const double covered_progress = std::clamp(
+      solved_progress, first_progress, last_progress);
     auto upper_sample = std::lower_bound(
       request.reference_progress_m.begin(),
-      request.reference_progress_m.end(), solved_progress);
+      request.reference_progress_m.end(), covered_progress);
     if (upper_sample == request.reference_progress_m.begin()) {
       ++upper_sample;
     } else if (upper_sample == request.reference_progress_m.end()) {
@@ -962,6 +1044,47 @@ ProgressAlignedWallBoundsResolution resolve_progress_aligned_wall_bounds(
   result.feasible = true;
   result.applied = result.aligned_stage_count == horizon;
   result.reason = ProgressAlignedWallBoundsReason::Accepted;
+  return result;
+}
+
+const char * progress_profile_support_reason_name(
+  const ProgressProfileSupportReason reason) noexcept
+{
+  switch (reason) {
+    case ProgressProfileSupportReason::Accepted:
+      return "accepted";
+    case ProgressProfileSupportReason::InvalidInput:
+      return "invalid-input";
+    case ProgressProfileSupportReason::CorridorCollapsed:
+      return "corridor-collapsed";
+  }
+  return "unknown";
+}
+
+ProgressProfileSupportIntersection intersect_progress_profile_support(
+  const double lower_m, const double upper_m,
+  const double profile_lower_m, const double profile_upper_m) noexcept
+{
+  ProgressProfileSupportIntersection result;
+  if (
+    !std::isfinite(lower_m) || !std::isfinite(upper_m) ||
+    !std::isfinite(profile_lower_m) ||
+    !std::isfinite(profile_upper_m) || lower_m > upper_m ||
+    profile_lower_m > profile_upper_m)
+  {
+    return result;
+  }
+  result.valid = true;
+  result.lower_m = std::max(lower_m, profile_lower_m);
+  result.upper_m = std::min(upper_m, profile_upper_m);
+  if (result.lower_m > result.upper_m) {
+    result.reason = ProgressProfileSupportReason::CorridorCollapsed;
+    return result;
+  }
+  result.feasible = true;
+  result.applied =
+    result.lower_m != lower_m || result.upper_m != upper_m;
+  result.reason = ProgressProfileSupportReason::Accepted;
   return result;
 }
 

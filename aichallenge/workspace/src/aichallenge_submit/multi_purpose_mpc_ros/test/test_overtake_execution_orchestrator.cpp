@@ -40,6 +40,62 @@ TEST(OvertakeExecutionOrchestrator, ResolvesCommittedPassOwners)
   EXPECT_EQ(result.conflicts, orchestrator::NoConflict);
 }
 
+TEST(
+  OvertakeExecutionOrchestrator,
+  DynamicWaitShiftOutKeepsCurrentTargetTubeWithoutStageCorridor)
+{
+  orchestrator::DynamicObstacleContractRequest request;
+  request.canonical_normal_scope_active = true;
+  request.intent = contract::ControlIntent::ShiftOut;
+  request.current_target_tube_complete = true;
+
+  const auto result = orchestrator::resolve_dynamic_obstacle_contract(request);
+
+  EXPECT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::DynamicObstacleContractSource::CurrentTargetTube);
+}
+
+TEST(
+  OvertakeExecutionOrchestrator,
+  DynamicObstacleContractPrefersStageCorridorAndReleasesAfterExclusion)
+{
+  orchestrator::DynamicObstacleContractRequest request;
+  request.canonical_normal_scope_active = true;
+  request.intent = contract::ControlIntent::Pass;
+  request.stage_corridor_target_bound_effective = true;
+  request.stage_corridor_contract_complete = true;
+  request.current_target_tube_complete = true;
+
+  auto result = orchestrator::resolve_dynamic_obstacle_contract(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::DynamicObstacleContractSource::StageCorridor);
+
+  request.target_exclusion_certified = true;
+  result = orchestrator::resolve_dynamic_obstacle_contract(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_EQ(result.source, orchestrator::DynamicObstacleContractSource::None);
+}
+
+TEST(
+  OvertakeExecutionOrchestrator,
+  DynamicObstacleContractKeepsCruiseBehindCurrentTargetTube)
+{
+  orchestrator::DynamicObstacleContractRequest request;
+  request.canonical_normal_scope_active = true;
+  request.intent = contract::ControlIntent::Cruise;
+  request.current_target_tube_complete = true;
+
+  const auto result = orchestrator::resolve_dynamic_obstacle_contract(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::DynamicObstacleContractSource::CurrentTargetTube);
+}
+
 TEST(OvertakeExecutionOrchestrator, TreatsDynamicEscapeAndGapPlannerAsOneChain)
 {
   orchestrator::AuthorityRequest request;
@@ -127,6 +183,36 @@ TEST(OvertakeExecutionOrchestrator, KeepsCommittedLineIdentityPrecedence)
   EXPECT_EQ(result.phase, orchestrator::Phase::Pass);
   EXPECT_EQ(result.side_sign, 1);
   EXPECT_DOUBLE_EQ(result.traveled_m, 3.5);
+}
+
+TEST(
+  OvertakeExecutionOrchestrator,
+  KeepsDynamicWaitOriginAsCanonicalExecutionIdentity)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  // The live stage corridor is deliberately unavailable while DynamicWait
+  // owns a previously certified execution prefix.  Losing the tactical
+  // corridor must not erase the interrupted ShiftOut execution identity.
+  request.overtake_line_active = false;
+  request.overtake_line_target_id = "d2";
+  request.overtake_line_mission_generation = 8U;
+  request.overtake_line_phase = orchestrator::Phase::FollowPrepare;
+  request.overtake_line_side_sign = 1;
+  request.overtake_line_traveled_m = 2.5;
+  request.dynamic_wait_active = true;
+  request.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  ASSERT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::CanonicalExecutionIdentitySource::OvertakeLine);
+  EXPECT_EQ(result.target_id, "d2");
+  EXPECT_EQ(result.generation, 8U);
+  EXPECT_EQ(result.phase, orchestrator::Phase::ShiftOut);
+  EXPECT_EQ(result.side_sign, 1);
 }
 
 TEST(OvertakeExecutionOrchestrator, ExposesConflictingAuthorities)

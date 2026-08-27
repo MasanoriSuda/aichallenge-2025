@@ -229,6 +229,35 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
+  ConvertsCombinedCenterExclusionToPeerOnlyCircleRadius)
+{
+  const recovery::FootprintExtents ego{
+    1.49, 0.51, 0.725, 0.725, 0.05};
+
+  const auto radius = retained::resolve_peer_circle_radius(
+    1.45, ego, 0.05);
+
+  ASSERT_TRUE(radius.has_value());
+  EXPECT_NEAR(radius.value(), 0.775, 1e-12);
+  const auto clearance = recovery::circle_obstacle_clearance_at_time(
+    ego, recovery::Pose2D{0.0, 0.0, 0.0},
+    recovery::CircleObstacle{0.0, 1.55, 0.0, 0.0, radius.value()}, 0.0);
+  ASSERT_TRUE(clearance.has_value());
+  EXPECT_NEAR(clearance.value(), 0.0, 1e-12);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsCenterExclusionSmallerThanEgoBodyExtent)
+{
+  const recovery::FootprintExtents ego{
+    1.49, 0.51, 0.725, 0.725, 0.05};
+
+  EXPECT_FALSE(retained::resolve_peer_circle_radius(0.70, ego, 0.05).has_value());
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
   RejectsMalformedFreshFollowEvidence)
 {
   auto request = retained::FollowTargetObservationBuildRequest{
@@ -271,7 +300,10 @@ TEST(
   request.control_pose = {50.05, -0.60, 0.0};
   request.measured_to_control_path = {request.control_pose};
   request.obstacles.obstacles.push_back(
-    {"d2", {50.32, -0.60, 0.0, 0.0, 0.08}});
+    // Intersect the exact current control stage.  A later-stage-only
+    // intersection is intentionally handled by the receding prefix contract
+    // below and therefore is not the invariant under test here.
+    {"d2", {50.15, -0.60, 0.0, 0.0, 0.08}});
 
   const auto result = retained::evaluate(request);
 
@@ -427,6 +459,40 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsIntersectingDynamicObstacle)
   EXPECT_LT(result.minimum_dynamic_clearance_m, 0.0);
 }
 
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  AcceptsMonotonicEscapeFromInitialInflatedOverlap)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  // Conservative circle inflation overlaps the current rear corner, but the
+  // exact canonical continuation moves monotonically away from it.
+  request.obstacles.obstacles.push_back(
+    {"initial-overlap", {49.95, 0.05, 0.0, 0.0, 0.10}});
+
+  const auto result = retained::evaluate(request);
+
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_LT(result.proof->minimum_dynamic_clearance_m, 0.0);
+  EXPECT_GT(result.proof->dynamic_checked_pose_count, 1U);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsCanonicalContinuationThatWorsensInitialInflatedOverlap)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.obstacles.obstacles.push_back(
+    {"worsening-overlap", {50.15, 0.05, 0.0, 0.0, 0.10}});
+
+  const auto result = retained::evaluate(request);
+
+  EXPECT_EQ(result.reason, retained::Reason::DynamicPathBlocked);
+  EXPECT_EQ(result.blocking_obstacle_id, "worsening-overlap");
+}
+
 TEST(MpccRateResolvedRetainedRevalidation, RejectsFutureCrossingObstacle)
 {
   const auto plan = certified_plan();
@@ -438,6 +504,32 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsFutureCrossingObstacle)
   EXPECT_EQ(
     retained::evaluate(request).reason,
     retained::Reason::DynamicPathBlocked);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RetainsClearCurrentStageWhenOnlyLaterDynamicSuffixNeedsReplanning)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  // The first continuation endpoint is clear.  The peer intersects only the
+  // second control stage.  Receding-horizon authority must certify the exact
+  // clear stage which can be published now and require a successor plan,
+  // rather than converting a future replanning obligation into an immediate
+  // Emergency stop.
+  request.obstacles.obstacles.push_back(
+    {"later-peer", {50.40, 0.10, 0.0, 0.0, 0.05}});
+
+  const auto result = retained::evaluate(request);
+
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(result.proof->proved_control_stage_count, 1U);
+  EXPECT_EQ(
+    result.proof->dynamic_obstacle_scope,
+    retained::DynamicObstacleProofScope::CurrentStagePrefix);
+  EXPECT_EQ(result.blocking_obstacle_id, "later-peer");
+  EXPECT_LT(result.minimum_dynamic_clearance_m, 0.0);
 }
 
 TEST(
@@ -650,20 +742,46 @@ TEST(
     retained::Reason::SteeringUnreachable);
 }
 
-TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableVelocity)
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsContradictoryVelocityAtIdenticalTimeOrigin)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
   request.current_speed_mps = 4.0;
   const auto result = retained::evaluate(request);
-  EXPECT_EQ(result.reason, retained::Reason::VelocityUnreachable);
+  EXPECT_EQ(result.reason, retained::Reason::InvalidCurrentState);
   EXPECT_FALSE(result.proof.has_value());
-  EXPECT_NEAR(result.velocity_difference_mps, -1.95, 1e-9);
-  EXPECT_NEAR(result.reachable_velocity_lower_mps, 3.999999, 1e-9);
-  EXPECT_NEAR(result.reachable_velocity_upper_mps, 4.000001, 1e-9);
-  EXPECT_NEAR(result.velocity_reachability_duration_sec, 0.0, 1e-9);
-  EXPECT_NEAR(result.current_speed_mps, 4.0, 1e-9);
-  EXPECT_NEAR(result.expected_speed_mps, 2.05, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  ReanchorsRetainedVelocityStateToCurrentControlOrigin)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 1.05;
+  request.control_origin_sec = 1.18;
+  request.measured_to_control_path = {
+    request.control_pose, request.control_pose};
+  request.measured_to_control_elapsed_sec = {0.0, 0.13};
+  request.measured_course_progress_m = 50.20;
+  request.current_speed_mps = 1.8;
+  request.control_origin_speed_mps = 1.7;
+
+  // The retained artifact's old velocity state is not an actuator command.
+  // The nonlinear continuation is rebuilt from the fresh control-origin
+  // velocity, so a model mismatch must not close otherwise valid authority.
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_DOUBLE_EQ(
+    result.proof->actuation.predicted_speed_mps,
+    request.control_origin_speed_mps);
+  ASSERT_FALSE(result.proof->continuation_trajectory.velocity_mps.empty());
+  EXPECT_LT(
+    result.proof->continuation_trajectory.velocity_mps.front(),
+    result.expected_speed_mps);
 }
 
 TEST(
@@ -744,6 +862,32 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsExhaustedArtifact)
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::CursorUnavailable);
   EXPECT_EQ(result.cursor_reason, artifact::CursorReason::Exhausted);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  AcceptsOneRemainingExecutableEndpoint)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 1.195;
+  request.control_origin_sec = 1.195;
+  request.obstacles.observed_sec = request.now_sec;
+  request.measured_course_progress_m = 50.39;
+  request.control_pose = {50.39, 0.195, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.current_speed_mps = 2.195;
+  request.control_origin_speed_mps = 2.195;
+  request.current_time_steering_rad = 0.1195;
+  request.current_steering_rad = 0.1195;
+  request.current_response_steering_rad = 0.109;
+  request.previous_published_steering_rad = 0.1195;
+
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(result.proof->proved_control_stage_count, 1U);
+  EXPECT_EQ(result.proof->continuation_trajectory.elapsed_time_sec.size(), 1U);
 }
 
 }  // namespace

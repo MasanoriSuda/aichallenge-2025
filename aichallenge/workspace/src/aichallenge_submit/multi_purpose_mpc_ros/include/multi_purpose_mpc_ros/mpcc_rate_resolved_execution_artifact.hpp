@@ -70,9 +70,11 @@ struct ControlStage
   double path_curvature_radpm{};
 };
 
-/// Complete immutable representation of one physically row-certified
-/// seven-state/three-input solve.  This deliberately does not reuse the
-/// curvature-input CanonicalExecutionPlan representation.
+/// Immutable executable prefix of one complete, physically row-certified
+/// seven-state/three-input solve.  Planning may use a longer horizon than this
+/// artifact; only this leading prefix crosses the execution boundary.  This
+/// deliberately does not reuse the curvature-input CanonicalExecutionPlan
+/// representation.
 struct ExecutionArtifact
 {
   Identity identity;

@@ -135,6 +135,8 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_adapter
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_shadow STATIC
   src/mpcc_rate_resolved_shadow.cpp
+  src/mpcc_rate_resolved_dynamic_obstacle.cpp
+  src/mpcc_rate_resolved_wall_refinement.cpp
 )
 target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved_shadow PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -144,6 +146,9 @@ target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved_shadow PUBLIC
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_shadow
   ${PROJECT_NAME}_mpcc_rate_resolved_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
+  ${PROJECT_NAME}_mpcc_progress
+  ${PROJECT_NAME}_mpc_stage_geometry
+  ${PROJECT_NAME}_recovery_footprint
   ${PROJECT_NAME}_persistent_osqp
   Threads::Threads
 )
@@ -401,6 +406,18 @@ if(BUILD_TESTING)
     )
   endif()
 
+  ament_add_gtest(test_mpcc_rate_resolved_dynamic_obstacle
+    test/test_mpcc_rate_resolved_dynamic_obstacle.cpp
+  )
+  if(TARGET test_mpcc_rate_resolved_dynamic_obstacle)
+    target_include_directories(test_mpcc_rate_resolved_dynamic_obstacle PRIVATE
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    )
+    target_link_libraries(test_mpcc_rate_resolved_dynamic_obstacle
+      ${PROJECT_NAME}_mpcc_rate_resolved_shadow
+    )
+  endif()
+
   ament_add_gtest(test_mpcc_rate_resolved_adapter
     test/test_mpcc_rate_resolved_adapter.cpp
   )
@@ -423,6 +440,7 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_shadow
       ${PROJECT_NAME}_mpcc_rate_resolved_shadow
+      ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
     )
   endif()
 

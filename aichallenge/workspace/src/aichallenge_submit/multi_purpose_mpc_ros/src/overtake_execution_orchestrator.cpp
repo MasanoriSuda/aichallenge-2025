@@ -40,6 +40,50 @@ void append_phase(std::ostringstream & stream, bool & first, const char * phase)
 
 }  // namespace
 
+const char * to_string(const DynamicObstacleContractSource source) noexcept
+{
+  switch (source) {
+    case DynamicObstacleContractSource::None: return "none";
+    case DynamicObstacleContractSource::StageCorridor: return "stage-corridor";
+    case DynamicObstacleContractSource::CurrentTargetTube:
+      return "current-target-tube";
+  }
+  return "unknown";
+}
+
+DynamicObstacleContractResolution resolve_dynamic_obstacle_contract(
+  const DynamicObstacleContractRequest & request) noexcept
+{
+  DynamicObstacleContractResolution resolution;
+  const bool passing_intent =
+    request.intent == mpcc_execution_contract::ControlIntent::ShiftOut ||
+    request.intent == mpcc_execution_contract::ControlIntent::Pass;
+  const bool stay_behind_intent =
+    request.intent == mpcc_execution_contract::ControlIntent::Cruise ||
+    request.intent == mpcc_execution_contract::ControlIntent::Follow;
+  if (
+    !request.canonical_normal_scope_active ||
+    (!passing_intent && !stay_behind_intent) ||
+    request.target_exclusion_certified)
+  {
+    return resolution;
+  }
+  if (
+    passing_intent &&
+    request.stage_corridor_target_bound_effective &&
+    request.stage_corridor_contract_complete)
+  {
+    resolution.active = true;
+    resolution.source = DynamicObstacleContractSource::StageCorridor;
+    return resolution;
+  }
+  if (request.current_target_tube_complete) {
+    resolution.active = true;
+    resolution.source = DynamicObstacleContractSource::CurrentTargetTube;
+  }
+  return resolution;
+}
+
 CorridorMetrics analyze_corridor(
   const std::vector<double> & lower_m,
   const std::vector<double> & upper_m,
@@ -241,11 +285,27 @@ CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
   const auto side_valid = [](const int side_sign) {
       return side_sign == -1 || side_sign == 1;
     };
+  const bool dynamic_wait_origin_valid =
+    request.dynamic_wait_origin_phase == Phase::ShiftOut ||
+    request.dynamic_wait_origin_phase == Phase::Pass;
+  const Phase effective_line_phase =
+    request.overtake_line_phase == Phase::FollowPrepare &&
+    request.dynamic_wait_active && dynamic_wait_origin_valid ?
+    request.dynamic_wait_origin_phase : request.overtake_line_phase;
   const bool line_phase_valid =
-    request.overtake_line_phase == Phase::ShiftOut ||
-    request.overtake_line_phase == Phase::Pass ||
-    request.overtake_line_phase == Phase::Return;
-  if (request.overtake_line_active) {
+    effective_line_phase == Phase::ShiftOut ||
+    effective_line_phase == Phase::Pass ||
+    effective_line_phase == Phase::Return;
+  // `overtake_line_active` describes the current tactical stage corridor.
+  // DynamicWait is entered precisely when that corridor is temporarily
+  // unavailable, while a separately certified lateral prefix still owns the
+  // interrupted ShiftOut/Pass execution.  Treating the tactical flag as the
+  // execution-identity flag erased the canonical MPCC producer for one cycle
+  // and forced an emergency stop.  DynamicWait therefore keeps the line
+  // identity alive, but still has to pass every ordinary identity check below.
+  const bool line_execution_identity_requested =
+    request.overtake_line_active || request.dynamic_wait_active;
+  if (line_execution_identity_requested) {
     if (
       request.overtake_line_target_id.empty() ||
       request.overtake_line_mission_generation == 0U ||
@@ -261,7 +321,7 @@ CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
     result.reason = CanonicalExecutionIdentityReason::OvertakeLine;
     result.target_id = request.overtake_line_target_id;
     result.generation = request.overtake_line_mission_generation;
-    result.phase = request.overtake_line_phase;
+    result.phase = effective_line_phase;
     result.side_sign = request.overtake_line_side_sign;
     result.traveled_m = request.overtake_line_traveled_m;
     result.target_exclusion_certified =

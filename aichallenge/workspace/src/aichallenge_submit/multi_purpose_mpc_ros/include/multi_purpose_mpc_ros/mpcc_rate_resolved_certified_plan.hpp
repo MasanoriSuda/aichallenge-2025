@@ -71,6 +71,7 @@ struct StoreState
 {
   std::uint64_t latest_certified_sequence{};
   std::uint64_t latest_executed_sequence{};
+  std::uint64_t latest_execution_decision_id{};
   std::uint64_t accepted_count{};
   std::uint64_t executed_count{};
   std::uint64_t invalid_plan_count{};
@@ -111,7 +112,13 @@ public:
     const physical::Result & physical_result);
   StoreReason replace(std::shared_ptr<const CertifiedPlan> plan);
   std::shared_ptr<const CertifiedPlan> candidate_snapshot() const;
-  StoreReason mark_executed(std::shared_ptr<const CertifiedPlan> plan);
+  /// Record the exact plan whose command crossed the publisher boundary.
+  /// Artifact sequences order one producer's certification stream; they do
+  /// not order publication across the normal and pre-entry Gate A producers.
+  /// Publication decision identity is therefore the sole execution ledger.
+  StoreReason mark_executed(
+    std::shared_ptr<const CertifiedPlan> plan,
+    std::uint64_t publication_decision_id);
   /// Last plan whose command was successfully published.
   std::shared_ptr<const CertifiedPlan> snapshot() const;
   StoreState state() const;
@@ -123,6 +130,7 @@ private:
   std::shared_ptr<const CertifiedPlan> candidate_plan_;
   std::shared_ptr<const CertifiedPlan> executed_plan_;
   std::uint64_t latest_executed_sequence_{};
+  std::uint64_t latest_execution_decision_id_{};
   std::uint64_t executed_count_{};
   std::uint64_t latest_certified_sequence_{};
   std::uint64_t accepted_count_{};

@@ -5721,6 +5721,36 @@ struct OpponentMotionFilterResolution
   double acceleration_y_mps2{};
 };
 
+enum class OpponentSampleContinuity
+{
+  Advanced,
+  ReusableDuplicate,
+  DuplicateWithoutMotionEstimate,
+  InvalidNonadvancing,
+};
+
+struct OpponentSampleContinuityRequest
+{
+  bool previous_sample_valid{false};
+  bool previous_motion_estimate_valid{false};
+  double previous_stamp_sec{};
+  double current_stamp_sec{};
+  double previous_x_m{};
+  double previous_y_m{};
+  double current_x_m{};
+  double current_y_m{};
+  double timestamp_tolerance_sec{1e-9};
+  double position_tolerance_m{1e-6};
+};
+
+/// Classify whether a V2X source sample advances time or is a byte-equivalent
+/// repeat of the last geometry. A repeated sample may reuse an already
+/// validated motion estimate; it must not erase that estimate merely because
+/// finite differencing has no new time interval. Changed geometry at a
+/// nonadvancing timestamp remains invalid.
+OpponentSampleContinuity classify_opponent_sample_continuity(
+  const OpponentSampleContinuityRequest & request) noexcept;
+
 /// Smooth a finite-difference V2X velocity and estimate bounded acceleration.
 /// The first valid observation initializes velocity and leaves acceleration at
 /// zero. Invalid input is fail-closed so the tracker can reset its estimate.

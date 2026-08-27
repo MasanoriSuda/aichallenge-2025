@@ -174,6 +174,39 @@ TEST(
 
 TEST(
   MpccRateResolvedAdapter,
+  KeepsInfeasibleCurvatureReferencesInsideThePhysicalSteeringModel)
+{
+  auto request = curved_request(8);
+  request.maximum_abs_steering_rad = 0.366519143;
+  for (auto & input : request.inputs) {
+    // This legacy curvature target requires more steering than the actuator
+    // can produce.  It is a soft reference, not grounds for deleting the
+    // entire canonical normal problem while the vehicle is moving.
+    input.reference[adapter::kLegacyCurvatureIndex] = 0.30;
+    input.lower[adapter::kLegacyCurvatureIndex] = -0.30;
+    input.upper[adapter::kLegacyCurvatureIndex] = 0.30;
+  }
+
+  adapter::BuildDiagnostic diagnostic;
+  const auto result = adapter::build(request, kSolverTolerance, &diagnostic);
+
+  ASSERT_TRUE(result.has_value())
+    << adapter::to_string(diagnostic.reason) << " stage=" << diagnostic.stage
+    << " value=" << diagnostic.value;
+  for (int stage = 0; stage <= request.horizon_steps; ++stage) {
+    const int offset = model::kStateDimension * stage;
+    EXPECT_LE(
+      std::abs(result->problem.state_reference[offset + model::kSteeringIndex]),
+      request.maximum_abs_steering_rad);
+    EXPECT_LE(
+      std::abs(result->problem.state_reference[
+        offset + model::kResponseSteeringIndex]),
+      request.maximum_abs_steering_rad);
+  }
+}
+
+TEST(
+  MpccRateResolvedAdapter,
   UsesCommandSteeringAsTheOnlyPrefixReachabilityOrigin)
 {
   auto request = curved_request();
@@ -259,6 +292,75 @@ TEST(MpccRateResolvedAdapter, CurvedSnapshotSolvesWithinPhysicalActuatorBoxes)
     EXPECT_GE(steering_rate, -1.0);
     EXPECT_LE(steering_rate, 1.0);
   }
+}
+
+TEST(MpccRateResolvedAdapter, RelinearizesTheSameProblemAroundTheSolvedIterate)
+{
+  const auto request = curved_request();
+  auto adapted = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(adapted.has_value());
+  const int horizon = request.horizon_steps;
+  const int state_values = model::kStateDimension * (horizon + 1);
+  const int variable_count =
+    state_values + model::kInputDimension * horizon;
+  Eigen::VectorXd primal = Eigen::VectorXd::Zero(variable_count);
+  for (int stage = 0; stage <= horizon; ++stage) {
+    const int state = model::kStateDimension * stage;
+    primal[state + model::kLateralIndex] = 0.08 * stage;
+    primal[state + model::kLagIndex] = -0.02 * stage;
+    primal[state + model::kHeadingIndex] = 0.03 * stage;
+    primal[state + model::kVelocityIndex] = 3.0 + 0.05 * stage;
+    primal[state + model::kProgressIndex] = 0.30 * stage;
+    primal[state + model::kSteeringIndex] = 0.04 * stage;
+    primal[state + model::kResponseSteeringIndex] = 0.03 * stage;
+  }
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int input = state_values + model::kInputDimension * stage;
+    primal[input + model::kAccelerationIndex] = 0.10;
+    primal[input + model::kSteeringRateIndex] = 0.15;
+    primal[input + model::kVirtualProgressSpeedIndex] = 3.0;
+  }
+  const auto original_state_lower = adapted->problem.state_lower;
+  const auto original_input_upper = adapted->problem.input_upper;
+  const auto original_third = adapted->problem.linearizations[2];
+
+  const auto relinearized = adapter::relinearize_around_primal(
+    request, primal, adapted->problem);
+
+  ASSERT_TRUE(relinearized.applied);
+  EXPECT_EQ(
+    relinearized.reason, adapter::RelinearizationReason::Accepted);
+  EXPECT_EQ(relinearized.stage, -1);
+  EXPECT_TRUE(adapted->problem.state_lower.isApprox(original_state_lower, 0.0));
+  EXPECT_TRUE(adapted->problem.input_upper.isApprox(original_input_upper, 0.0));
+  EXPECT_FALSE(adapted->problem.linearizations[2].equality_offset.isApprox(
+    original_third.equality_offset, 1e-12));
+  const auto & tangent = adapted->problem.linearizations[2];
+  const int state = 2 * model::kStateDimension;
+  const int input = state_values + 2 * model::kInputDimension;
+  const Eigen::Matrix<double, model::kStateDimension, 1> reference_state =
+    primal.segment<model::kStateDimension>(state);
+  const Eigen::Matrix<double, model::kInputDimension, 1> reference_input =
+    primal.segment<model::kInputDimension>(input);
+  const auto tangent_next = tangent.state_matrix * reference_state +
+    tangent.input_matrix * reference_input - tangent.equality_offset;
+  EXPECT_TRUE(tangent_next.allFinite());
+  EXPECT_GT(tangent_next[model::kProgressIndex],
+    reference_state[model::kProgressIndex]);
+}
+
+TEST(MpccRateResolvedAdapter, RejectsRelinearizationWithoutACompleteIterate)
+{
+  const auto request = curved_request();
+  auto adapted = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(adapted.has_value());
+  Eigen::VectorXd incomplete = Eigen::VectorXd::Zero(3);
+
+  const auto result = adapter::relinearize_around_primal(
+    request, incomplete, adapted->problem);
+
+  EXPECT_FALSE(result.applied);
+  EXPECT_EQ(result.reason, adapter::RelinearizationReason::InvalidPrimal);
 }
 
 TEST(MpccRateResolvedAdapter, RejectsMalformedOrUnphysicalSnapshots)

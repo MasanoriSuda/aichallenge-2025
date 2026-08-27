@@ -13,6 +13,35 @@ namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace
 {
 
+TEST(MpccExecutionContract, ProspectiveOvertakeIntentDefaultsToShiftOut)
+{
+  EXPECT_EQ(
+    contract::resolve_prospective_overtake_intent(
+      contract::ProspectiveOvertakeIntentRequest{}),
+    contract::ControlIntent::ShiftOut);
+}
+
+TEST(MpccExecutionContract, ProspectiveOvertakeIntentPreservesPassSemantics)
+{
+  auto request = contract::ProspectiveOvertakeIntentRequest{};
+  request.fresh_direct_pass = true;
+  EXPECT_EQ(
+    contract::resolve_prospective_overtake_intent(request),
+    contract::ControlIntent::Pass);
+
+  request = contract::ProspectiveOvertakeIntentRequest{};
+  request.active_pass_same_side = true;
+  EXPECT_EQ(
+    contract::resolve_prospective_overtake_intent(request),
+    contract::ControlIntent::Pass);
+
+  request = contract::ProspectiveOvertakeIntentRequest{};
+  request.paused_pass_same_side_continuation = true;
+  EXPECT_EQ(
+    contract::resolve_prospective_overtake_intent(request),
+    contract::ControlIntent::Pass);
+}
+
 TEST(MpccExecutionContract, AtomicIntentAdoptsOnlyAJoinedProposal)
 {
   const auto proposed = contract::resolve_atomic_intent_admission(

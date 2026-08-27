@@ -85,6 +85,21 @@ bool canonical_normal_intent_requires_target(ControlIntent intent) noexcept;
 bool canonical_normal_intent_requires_execution_side(
   ControlIntent intent) noexcept;
 
+struct ProspectiveOvertakeIntentRequest
+{
+  bool fresh_direct_pass{false};
+  bool active_pass_same_side{false};
+  bool paused_pass_same_side_continuation{false};
+};
+
+/// Resolve the semantic owner before constructing a speculative Overtake
+/// problem.  The returned value must be used by both the source-problem
+/// producer and the seven-state adapter; deriving it after source construction
+/// creates a split-brain candidate whose bounds and immutable identity name
+/// different intents.
+ControlIntent resolve_prospective_overtake_intent(
+  const ProspectiveOvertakeIntentRequest & request) noexcept;
+
 /// Classifies whether an asynchronously rebuilt pre-entry trajectory still
 /// belongs to the current tactical intent.  A temporarily unavailable
 /// tactical selection is deliberately distinct from an explicit opposite-side

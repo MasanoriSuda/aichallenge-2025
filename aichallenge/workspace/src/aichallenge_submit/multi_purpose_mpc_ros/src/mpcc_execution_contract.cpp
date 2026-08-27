@@ -101,6 +101,15 @@ std::string fingerprint_text(const std::uint64_t value)
 
 }  // namespace
 
+ControlIntent resolve_prospective_overtake_intent(
+  const ProspectiveOvertakeIntentRequest & request) noexcept
+{
+  return
+    request.fresh_direct_pass || request.active_pass_same_side ||
+    request.paused_pass_same_side_continuation ?
+    ControlIntent::Pass : ControlIntent::ShiftOut;
+}
+
 std::optional<FrenetPose> project_planar_pose_to_frenet(
   const PlanarPose & pose, const PlanarPose & course_frame) noexcept
 {

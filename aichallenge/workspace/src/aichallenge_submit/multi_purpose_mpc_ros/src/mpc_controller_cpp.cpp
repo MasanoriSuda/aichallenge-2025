@@ -8610,9 +8610,28 @@ struct MPC
     stage_corridor_target_bound_suppressed_until_sec_ =
       -std::numeric_limits<double>::infinity();
 
+    const bool selected_side_changes =
+      artifact_identity.source_side_sign != 0 &&
+      assessment.side != artifact_identity.source_side_sign;
+    const bool paused_pass_same_side_continuation =
+      artifact_identity.source_phase == OvertakeLinePhase::FollowPrepare &&
+      artifact_identity.source_follow_prepare_origin_phase ==
+      OvertakeLinePhase::Pass && !selected_side_changes;
+    const bool fresh_direct_pass =
+      artifact_identity.source_phase == OvertakeLinePhase::Idle &&
+      artifact_identity.source_side_sign == 0 && candidate->direct_pass &&
+      candidate->current_position_clear;
+    const auto prospective_intent =
+      mpcc_contract::resolve_prospective_overtake_intent(
+      mpcc_contract::ProspectiveOvertakeIntentRequest{
+        fresh_direct_pass,
+        artifact_identity.source_phase == OvertakeLinePhase::Pass &&
+        !selected_side_changes,
+        paused_pass_same_side_continuation});
+
     MpcProblem source_problem = init_problem(
       N, model->safety_margin, now_sec, tracking_wp_id,
-      get_preview_wp_id(tracking_wp_id), &behavior);
+      get_preview_wp_id(tracking_wp_id), &behavior, prospective_intent);
     if (!source_problem.lateral_bounds_contract_valid) {
       std::ostringstream reason;
       reason << "lateral-bound-contract source="
@@ -8629,23 +8648,6 @@ struct MPC
       reject_reason = "progress-contouring branch unavailable";
       return std::nullopt;
     }
-    const bool selected_side_changes =
-      artifact_identity.source_side_sign != 0 &&
-      assessment.side != artifact_identity.source_side_sign;
-    const bool paused_pass_same_side_continuation =
-      artifact_identity.source_phase == OvertakeLinePhase::FollowPrepare &&
-      artifact_identity.source_follow_prepare_origin_phase ==
-      OvertakeLinePhase::Pass && !selected_side_changes;
-    const bool fresh_direct_pass =
-      artifact_identity.source_phase == OvertakeLinePhase::Idle &&
-      artifact_identity.source_side_sign == 0 && candidate->direct_pass &&
-      candidate->current_position_clear;
-    const auto prospective_intent =
-      fresh_direct_pass ||
-      (artifact_identity.source_phase == OvertakeLinePhase::Pass &&
-      !selected_side_changes) || paused_pass_same_side_continuation ?
-      mpcc_contract::ControlIntent::Pass :
-      mpcc_contract::ControlIntent::ShiftOut;
     std::string extended_reject_reason;
     auto extended_problem = build_extended_progress_problem(
       source_problem, prospective_intent, extended_reject_reason);

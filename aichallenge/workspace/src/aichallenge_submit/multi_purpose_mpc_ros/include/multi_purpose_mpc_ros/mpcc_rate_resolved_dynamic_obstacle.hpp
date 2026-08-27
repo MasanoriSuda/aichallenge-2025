@@ -25,8 +25,16 @@ struct Request
   bool active{false};
   int pass_side_sign{};
   std::vector<StagePrediction> stages;
+  /// Physically solved witness used only to classify the reachable convex
+  /// obstacle branch. Its progress trust buckets must not implicitly become
+  /// constraints of a later coupled solve.
   mpcc_rate_resolved_problem::AssemblyRequest wall_only_problem;
   Eigen::VectorXd wall_only_primal;
+  /// Optional compatible broad problem which receives the obstacle rows.
+  /// When absent, rows are applied to wall_only_problem for callers which do
+  /// not need coupled wall/obstacle refinement.
+  std::optional<mpcc_rate_resolved_problem::AssemblyRequest>
+    constraint_target_problem;
   double separation_tolerance_m{1e-6};
 };
 

@@ -1120,6 +1120,18 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   result.physical_wall_refinement_requested =
     snapshot.physical_wall_refinement_active;
   std::optional<persistent_osqp::WarmStart> last_refinement_warm_start;
+  // Preserve the broad, relinearized current-world problem.  A wall-only
+  // solve below is a physical homotopy witness; its narrow progress buckets
+  // must not remove the longitudinal freedom needed by a subsequent
+  // stay-behind obstacle constraint.
+  const bool coupled_wall_obstacle_refinement =
+    snapshot.progress_aligned_wall_refinement_active &&
+    snapshot.dynamic_obstacle_refinement_active;
+  std::optional<mpcc_rate_resolved_problem::AssemblyRequest>
+    broad_problem_before_wall;
+  if (coupled_wall_obstacle_refinement) {
+    broad_problem_before_wall = adapted->problem;
+  }
   if (snapshot.progress_aligned_wall_refinement_active) {
     auto refinement = build_progress_wall_refinement(
       snapshot, adapted->problem, outcome.result->primal,
@@ -1208,15 +1220,19 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
   result.dynamic_obstacle_refinement_requested =
     snapshot.dynamic_obstacle_refinement_active;
   if (snapshot.dynamic_obstacle_refinement_active) {
+    mpcc_rate_resolved_dynamic_obstacle::Request dynamic_request;
+    dynamic_request.active = true;
+    dynamic_request.pass_side_sign =
+      snapshot.dynamic_obstacle_pass_side_sign;
+    dynamic_request.stages = snapshot.dynamic_obstacle_stages;
+    dynamic_request.wall_only_problem = adapted->problem;
+    dynamic_request.wall_only_primal = outcome.result->primal;
+    dynamic_request.constraint_target_problem = broad_problem_before_wall;
+    dynamic_request.separation_tolerance_m =
+      solver_.physical_constraint_tolerance().absolute;
     const auto refinement =
       mpcc_rate_resolved_dynamic_obstacle::refine(
-      mpcc_rate_resolved_dynamic_obstacle::Request{
-        true,
-        snapshot.dynamic_obstacle_pass_side_sign,
-        snapshot.dynamic_obstacle_stages,
-        adapted->problem,
-        outcome.result->primal,
-        solver_.physical_constraint_tolerance().absolute});
+      dynamic_request);
     result.dynamic_obstacle_refinement_reason = refinement.reason;
     result.dynamic_obstacle_refinement_applied = refinement.applied;
     result.dynamic_obstacle_resolved_side_sign =
@@ -1263,9 +1279,20 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
         "rate-resolved dynamic-obstacle QP assembly rejected";
       return finish();
     }
-    std::optional<persistent_osqp::WarmStart> warm_start{
-      persistent_osqp::WarmStart{
-        outcome.result->primal, outcome.result->dual}};
+    // The target problem has a different row set from the wall witness.  Its
+    // primal seed may borrow controls, but state and dual values are rebuilt
+    // from the target problem's own equalities and row count.
+    auto warm_start = build_current_problem_bootstrap(
+      refinement.problem.value(),
+      static_cast<std::size_t>(refined_assembled->lower_bound.size()),
+      &outcome.result->primal);
+    if (!warm_start.has_value()) {
+      result.outcome = Outcome::AssemblyRejected;
+      result.solved = false;
+      result.detail =
+        "rate-resolved dynamic-obstacle current-problem bootstrap rejected";
+      return finish();
+    }
     auto refined_outcome = solver_.solve(
       refined_assembled->quadratic_cost, refined_assembled->constraints,
       refined_assembled->linear_cost, refined_assembled->lower_bound,
@@ -1313,6 +1340,113 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     outcome = std::move(refined_outcome);
     last_refinement_warm_start = std::move(warm_start);
     result.dynamic_obstacle_refinement_solved = true;
+
+    if (coupled_wall_obstacle_refinement) {
+      // The dynamic-aware provisional trajectory is allowed to brake or
+      // change progress.  Rebuild wall segments around that trajectory, while
+      // retaining the dynamic rows, and solve the actual joint problem that
+      // will be certified for publication.
+      auto joint_refinement = build_progress_wall_refinement(
+        snapshot, adapted->problem, outcome.result->primal,
+        solver_.physical_constraint_tolerance());
+      result.progress_wall_refinement_reason =
+        joint_refinement.resolution.reason;
+      result.progress_wall_refinement_aligned_stage_count =
+        joint_refinement.resolution.aligned_stage_count;
+      result.progress_wall_refinement_out_of_range_stage_count =
+        joint_refinement.resolution.out_of_range_stage_count;
+      result.progress_wall_refinement_first_failure_stage =
+        joint_refinement.resolution.first_failure_stage;
+      result.progress_wall_refinement_maximum_mismatch_m =
+        joint_refinement.resolution.maximum_progress_mismatch_m;
+      result.progress_wall_refinement_applied =
+        joint_refinement.request.has_value();
+      result.physical_wall_refinement_reason =
+        joint_refinement.physical.reason;
+      result.physical_wall_refinement_applied =
+        joint_refinement.physical.applied;
+      result.physical_wall_refinement_first_failure_stage =
+        joint_refinement.physical.first_failure_stage;
+      result.physical_wall_refinement_checked_pose_count =
+        joint_refinement.physical.checked_pose_count;
+      if (!joint_refinement.request.has_value()) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.detail =
+          "rate-resolved coupled wall/obstacle refinement rejected";
+        return finish();
+      }
+      auto joint_assembled = mpcc_rate_resolved_problem::assemble(
+        joint_refinement.request.value());
+      if (!joint_assembled.has_value()) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.detail =
+          "rate-resolved coupled wall/obstacle QP assembly rejected";
+        return finish();
+      }
+      auto joint_warm_start = build_current_problem_bootstrap(
+        joint_refinement.request.value(),
+        static_cast<std::size_t>(joint_assembled->lower_bound.size()),
+        &outcome.result->primal);
+      if (!joint_warm_start.has_value()) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.detail =
+          "rate-resolved coupled wall/obstacle bootstrap rejected";
+        return finish();
+      }
+      auto joint_outcome = solver_.solve(
+        joint_assembled->quadratic_cost, joint_assembled->constraints,
+        joint_assembled->linear_cost, joint_assembled->lower_bound,
+        joint_assembled->upper_bound, joint_warm_start,
+        joint_assembled->variable_scaling);
+      result.solver = joint_outcome.telemetry;
+      if (!joint_outcome.result.has_value()) {
+        result.outcome = Outcome::SolveRejected;
+        result.solved = false;
+        result.detail =
+          std::string{"rate-resolved coupled wall/obstacle QP rejected: "} +
+          joint_outcome.failure_detail;
+        if (joint_outcome.constraint_failure.has_value()) {
+          const auto semantic = mpcc_rate_resolved_problem::decode_row(
+            joint_outcome.constraint_failure->row,
+            snapshot.request.horizon_steps,
+            joint_refinement.request->steering_rate_prefix_bounds.has_value(),
+            joint_refinement.request->progress_aligned_wall_constraints.has_value(),
+            static_cast<int>(
+              joint_refinement.request->swept_lateral_wall_constraints.size()),
+            &joint_refinement.request->dynamic_obstacle_constraints);
+          if (semantic.valid) {
+            result.detail += std::string{", row_semantic="} +
+              mpcc_rate_resolved_problem::row_kind_name(semantic.kind) +
+              "/stage=" + std::to_string(semantic.stage) +
+              "/element=" + std::to_string(semantic.element);
+          }
+        }
+        capture_failure(
+          mpcc_architecture_snapshot::PipelineStage::WallRefinement,
+          joint_refinement.request.value(), joint_assembled.value(),
+          joint_warm_start, joint_outcome, "coupled-solve-rejected");
+        return finish();
+      }
+      if (!joint_outcome.result->primal.allFinite()) {
+        result.outcome = Outcome::NonfiniteResult;
+        result.solved = false;
+        result.finite = false;
+        result.detail =
+          "rate-resolved coupled wall/obstacle solver returned non-finite primal";
+        return finish();
+      }
+      adapted->problem = std::move(joint_refinement.request.value());
+      assembled = std::move(joint_assembled);
+      outcome = std::move(joint_outcome);
+      last_refinement_warm_start = std::move(joint_warm_start);
+      result.progress_wall_refinement_solved = true;
+      result.physical_wall_refinement_solved =
+        !snapshot.physical_wall_refinement_active ||
+        result.physical_wall_refinement_applied;
+    }
   }
 
   // Physical refinements can move the final primal away from the nonlinear

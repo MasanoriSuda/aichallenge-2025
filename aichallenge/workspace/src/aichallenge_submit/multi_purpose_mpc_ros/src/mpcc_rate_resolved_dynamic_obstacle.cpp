@@ -44,6 +44,27 @@ Result refine(const Request & request) noexcept
     result.reason = Reason::InvalidInput;
     return result;
   }
+  if (request.constraint_target_problem.has_value()) {
+    const auto & target = request.constraint_target_problem.value();
+    const auto & witness = request.wall_only_problem;
+    const bool compatible =
+      target.horizon_steps == horizon &&
+      target.linearizations.size() == witness.linearizations.size() &&
+      target.state_reference.size() == witness.state_reference.size() &&
+      target.state_lower.size() == witness.state_lower.size() &&
+      target.state_upper.size() == witness.state_upper.size() &&
+      target.state_weight.size() == witness.state_weight.size() &&
+      target.input_reference.size() == witness.input_reference.size() &&
+      target.input_lower.size() == witness.input_lower.size() &&
+      target.input_upper.size() == witness.input_upper.size() &&
+      target.input_weight.size() == witness.input_weight.size() &&
+      target.additional_linear_cost.size() ==
+      witness.additional_linear_cost.size();
+    if (!compatible) {
+      result.reason = Reason::InvalidInput;
+      return result;
+    }
+  }
   bool any_valid = false;
   for (const auto & stage : request.stages) {
     if (!stage.valid) {
@@ -358,7 +379,8 @@ Result refine(const Request & request) noexcept
     }
   }
 
-  auto refined = request.wall_only_problem;
+  auto refined = request.constraint_target_problem.has_value() ?
+    request.constraint_target_problem.value() : request.wall_only_problem;
   refined.dynamic_obstacle_constraints.clear();
   refined.dynamic_obstacle_constraints.reserve(request.stages.size());
   for (int stage = 0; stage < horizon; ++stage) {

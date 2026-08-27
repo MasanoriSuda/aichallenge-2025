@@ -57,6 +57,63 @@ TEST(MpccRateResolvedDynamicObstacle, HoldsProgressUntilLateralSuffixIsReachable
     result.problem->dynamic_obstacle_constraints[2].lower, 0.75);
 }
 
+TEST(MpccRateResolvedDynamicObstacle, AppliesWitnessBranchToCompatibleBroadProblem)
+{
+  auto request = request_with_lateral_suffix();
+  const int state_count = model::kStateDimension * 5;
+  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(
+    state_count, -2.0);
+  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(
+    state_count, 2.0);
+  for (int stage = 1; stage <= 4; ++stage) {
+    const int state = stage * model::kStateDimension;
+    const double witness_progress = 0.5 * static_cast<double>(stage);
+    request.wall_only_problem.state_lower[state + model::kProgressIndex] =
+      witness_progress - 0.025;
+    request.wall_only_problem.state_upper[state + model::kProgressIndex] =
+      witness_progress + 0.025;
+  }
+  auto broad = request.wall_only_problem;
+  for (int stage = 1; stage <= 4; ++stage) {
+    const int state = stage * model::kStateDimension;
+    broad.state_lower[state + model::kProgressIndex] = 0.0;
+    broad.state_upper[state + model::kProgressIndex] = 4.0;
+  }
+  request.constraint_target_problem = broad;
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_EQ(result.first_pass_side_stage, 2);
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  for (int stage = 1; stage <= 4; ++stage) {
+    const int state = stage * model::kStateDimension;
+    EXPECT_DOUBLE_EQ(
+      result.problem->state_lower[state + model::kProgressIndex], 0.0);
+    EXPECT_DOUBLE_EQ(
+      result.problem->state_upper[state + model::kProgressIndex], 4.0);
+  }
+  EXPECT_NE(
+    result.problem->state_lower[
+      model::kStateDimension + model::kProgressIndex],
+    request.wall_only_problem.state_lower[
+      model::kStateDimension + model::kProgressIndex]);
+}
+
+TEST(MpccRateResolvedDynamicObstacle, RejectsIncompatibleConstraintTarget)
+{
+  auto request = request_with_lateral_suffix();
+  request.constraint_target_problem = request.wall_only_problem;
+  request.constraint_target_problem->horizon_steps = 3;
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  EXPECT_FALSE(result.applied);
+  EXPECT_EQ(result.reason, dynamic_obstacle::Reason::InvalidInput);
+  EXPECT_FALSE(result.problem.has_value());
+}
+
 TEST(MpccRateResolvedDynamicObstacle, FollowClassifiesStayBehindByEffectiveProgress)
 {
   auto request = request_with_lateral_suffix();

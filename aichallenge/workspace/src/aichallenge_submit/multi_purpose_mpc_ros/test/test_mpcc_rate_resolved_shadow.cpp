@@ -706,6 +706,35 @@ TEST(MpccRateResolvedShadow, TradesProgressForReachableOpponentSeparation)
   EXPECT_TRUE(shadow::result_valid(result));
 }
 
+TEST(MpccRateResolvedShadow, CouplesDynamicProgressChoiceBeforeFinalWallProof)
+{
+  auto input = snapshot();
+  input.progress_aligned_wall_refinement_active = true;
+  input.wall_reference_progress_m = {0.0, 0.3, 0.6, 1.0};
+  input.wall_lower_m = {-1.0, -0.9, -0.8, -0.7};
+  input.wall_upper_m = {1.0, 0.9, 0.8, 0.7};
+  input.dynamic_obstacle_refinement_active = true;
+  input.dynamic_obstacle_pass_side_sign = 1;
+  input.dynamic_obstacle_stages.assign(
+    3U,
+    multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_obstacle::StagePrediction{
+      true, 0.8, 0.75, 0.20, 0.30});
+
+  shadow::SolverContext solver;
+  const auto result = solver.evaluate(input);
+
+  EXPECT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  EXPECT_TRUE(result.progress_wall_refinement_requested);
+  EXPECT_TRUE(result.progress_wall_refinement_applied);
+  EXPECT_TRUE(result.progress_wall_refinement_solved);
+  EXPECT_TRUE(result.dynamic_obstacle_refinement_requested);
+  EXPECT_TRUE(result.dynamic_obstacle_refinement_applied);
+  EXPECT_TRUE(result.dynamic_obstacle_refinement_solved);
+  EXPECT_TRUE(result.post_refinement_physical_proof_checked);
+  EXPECT_TRUE(result.post_refinement_physical_proof_accepted);
+  EXPECT_TRUE(shadow::result_valid(result));
+}
+
 TEST(
   MpccRateResolvedShadow,
   SolvesCompletePlanningHorizonButPublishesOnlyCertifiedPrefix)

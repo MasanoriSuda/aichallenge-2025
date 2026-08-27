@@ -70,8 +70,11 @@ struct Result
 /// selected side, the optimized progress remains behind until a suffix has
 /// achieved lateral body separation, after which that pass-side separation is
 /// hard.  If the observed state is already inside both full-separation and
-/// stay-behind bounds, the demonstrated wall-only homotopy instead supplies a
-/// non-worsening partial escape envelope until full separation is reachable.
+/// stay-behind bounds, the demonstrated wall-only homotopy instead supplies
+/// the reachable partial escape envelope until full separation is reached.
+/// The envelope may initially decrease when steering/yaw-response lag makes
+/// an instantaneous non-decrease physically unreachable; it is never made
+/// stricter than the wall-only trajectory which witnesses the branch.
 /// This is the QP form of the same initial-overlap escape contract used by the
 /// current-world physical verifier; it does not weaken a newly clear state.
 /// Longitudinal classification and rows use the physical progress coordinate

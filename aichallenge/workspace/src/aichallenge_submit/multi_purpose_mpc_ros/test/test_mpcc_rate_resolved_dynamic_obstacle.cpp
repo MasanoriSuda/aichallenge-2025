@@ -277,6 +277,54 @@ TEST(MpccRateResolvedDynamicObstacle, TacticalSideUsesTheSamePartialEscapeContra
   }
 }
 
+TEST(MpccRateResolvedDynamicObstacle, PartialEscapeNeverExceedsWallOnlyWitness)
+{
+  auto request = request_with_lateral_suffix();
+  request.pass_side_sign = 1;
+  const int state_count = model::kStateDimension * 5;
+  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(
+    state_count, -std::numeric_limits<double>::infinity());
+  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(
+    state_count, std::numeric_limits<double>::infinity());
+  const std::array<double, 5> lateral_m{{0.70, 0.66, 0.68, 0.72, 0.76}};
+  for (int stage = 0; stage <= 4; ++stage) {
+    const int state = stage * model::kStateDimension;
+    request.wall_only_primal[state + model::kProgressIndex] =
+      0.5 * static_cast<double>(stage);
+    request.wall_only_primal[state + model::kLateralIndex] =
+      lateral_m[static_cast<std::size_t>(stage)];
+    request.wall_only_problem.state_lower[state + model::kProgressIndex] = 0.0;
+    request.wall_only_problem.state_upper[state + model::kProgressIndex] = 4.0;
+    request.wall_only_problem.state_lower[state + model::kLagIndex] = 0.0;
+    request.wall_only_problem.state_upper[state + model::kLagIndex] = 0.0;
+    request.wall_only_problem.state_lower[state + model::kLateralIndex] = -2.0;
+    request.wall_only_problem.state_upper[state + model::kLateralIndex] = 2.0;
+  }
+  request.stages.assign(4, dynamic_obstacle::StagePrediction{
+    true, 0.0, 0.0, 0.8, 0.75});
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  EXPECT_EQ(result.partial_escape_row_count, 3U);
+  const std::array<double, 4> expected_lower{{0.66, 0.68, 0.72, 0.75}};
+  for (std::size_t index = 0U; index < expected_lower.size(); ++index) {
+    const auto & constraint =
+      result.problem->dynamic_obstacle_constraints[index];
+    EXPECT_EQ(
+      constraint.axis,
+      problem::DynamicObstacleConstraintAxis::Lateral);
+    EXPECT_DOUBLE_EQ(constraint.lower, expected_lower[index]);
+    EXPECT_LE(
+      constraint.lower,
+      request.wall_only_primal[
+        static_cast<int>(index + 1U) * model::kStateDimension +
+        model::kLateralIndex]);
+  }
+}
+
 TEST(MpccRateResolvedDynamicObstacle, RejectsMalformedPredictionInsteadOfDroppingIt)
 {
   auto request = request_with_lateral_suffix();

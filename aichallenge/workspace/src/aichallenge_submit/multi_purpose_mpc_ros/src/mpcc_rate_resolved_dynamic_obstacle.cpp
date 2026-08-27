@@ -378,11 +378,17 @@ Result refine(const Request & request) noexcept
           static_cast<double>(resolved_side_sign) *
           (request.wall_only_primal[state + model::kLateralIndex] -
           prediction.target_lateral_m);
+        // The wall-only solution is the reachability witness for this
+        // convexification.  Do not silently strengthen it with the measured
+        // stage-zero separation: steering and yaw-response lag can make a
+        // short, bounded decrease unavoidable even though the certified
+        // trajectory subsequently separates.  Requiring an instantaneous
+        // non-decrease creates a hard row which neither the witness nor the
+        // physical model can satisfy.  Full separation remains mandatory as
+        // soon as the demonstrated trajectory reaches it.
         required_signed_separation_m = std::min(
           prediction.lateral_center_separation_m,
-          std::max(
-            initial_signed_side_separation_m,
-            wall_only_signed_separation_m));
+          wall_only_signed_separation_m);
         if (
           required_signed_separation_m + request.separation_tolerance_m <
           prediction.lateral_center_separation_m)

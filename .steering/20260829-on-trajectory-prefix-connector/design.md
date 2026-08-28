@@ -34,6 +34,22 @@ If the candidate still diverges because current feedback changes the parent
 trajectory, implement an AS-RTI-style latest-state feedback correction rather
 than adding another lease or grace period.
 
+## Dynamic decision
+
+Run `output/20260829-025035` produced no exact on-parent-trajectory successor.
+Even the lower-speed d2 vehicle continuously produced small but non-zero
+parent/candidate state differences.  The d1 parent later exhausted its
+certified cursor after candidate promotion stopped.  A fixed committed prefix
+would remove the unpublished-prefix error, but it would not absorb normal
+plant/estimator feedback after that prefix was planned.
+
+Therefore the production direction is latest-state feedback correction.  The
+existing asynchronous solve remains the preparation result; a bounded
+feedback phase must re-anchor that exact problem to the latest physical state
+and then pass the unchanged exact wall/current-world proof.  The next Slice is
+an observation-only runtime A/B first because a full synchronous solve has
+already exceeded the 25 ms callback budget.
+
 ## Non-goals
 
 - No parameter tuning.

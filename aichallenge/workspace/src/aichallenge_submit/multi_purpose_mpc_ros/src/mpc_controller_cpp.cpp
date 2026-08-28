@@ -14,6 +14,7 @@
 #include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
+#include <multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp>
@@ -136,6 +137,8 @@ namespace overtake_orchestrator =
   ::multi_purpose_mpc_ros::overtake_execution_orchestrator;
 namespace persistent_osqp = ::multi_purpose_mpc_ros::persistent_osqp;
 namespace mpcc_progress = ::multi_purpose_mpc_ros::mpcc_progress;
+namespace on_trajectory_connector =
+  ::multi_purpose_mpc_ros::mpcc_on_trajectory_connector;
 namespace rate_resolved_shadow =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
 namespace rate_resolved_physical =
@@ -6886,6 +6889,19 @@ struct RateResolvedRetainedShadowEvaluation
   std::optional<rate_resolved_production::Authority> production_authority;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
   bool selected_from_executed{false};
+  bool on_trajectory_connector_attempted{false};
+  on_trajectory_connector::Reason on_trajectory_connector_reason{
+    on_trajectory_connector::Reason::InvalidRequest};
+  double on_trajectory_parent_elapsed_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double on_trajectory_candidate_elapsed_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double on_trajectory_lateral_difference_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double on_trajectory_progress_difference_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double on_trajectory_steering_difference_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   rate_resolved_retained::Reason candidate_reason{
     rate_resolved_retained::Reason::MissingPlan};
   rate_resolved_shadow::artifact::CursorReason candidate_cursor_reason{
@@ -24203,6 +24219,37 @@ struct MPC
       rate_resolved_shadow::artifact::same_identity(
         candidate_plan->execution_artifact->identity,
         executed_plan->execution_artifact->identity);
+    on_trajectory_connector::Result connector_result;
+    const bool connector_attempted =
+      candidate_plan != nullptr && executed_plan != nullptr &&
+      !candidate_is_executed && model != nullptr &&
+      model->reference_path != nullptr;
+    if (connector_attempted) {
+      connector_result = on_trajectory_connector::evaluate(
+        on_trajectory_connector::Request{
+          executed_plan,
+          candidate_plan,
+          executed_entry.first_published_control_origin_sec,
+          executed_entry.first_published_artifact_elapsed_sec,
+          now_sec + std::max(0.0, execution_prediction_delay_sec_),
+          model->reference_path->length,
+          model->reference_path->circular});
+    }
+    const auto attach_connector =
+      [&](RateResolvedRetainedShadowEvaluation & evaluation) {
+        evaluation.on_trajectory_connector_attempted = connector_attempted;
+        evaluation.on_trajectory_connector_reason = connector_result.reason;
+        evaluation.on_trajectory_parent_elapsed_sec =
+          connector_result.parent_elapsed_sec;
+        evaluation.on_trajectory_candidate_elapsed_sec =
+          connector_result.candidate_elapsed_sec;
+        evaluation.on_trajectory_lateral_difference_m =
+          connector_result.lateral_difference_m;
+        evaluation.on_trajectory_progress_difference_m =
+          connector_result.progress_difference_m;
+        evaluation.on_trajectory_steering_difference_rad =
+          connector_result.steering_difference_rad;
+      };
 
     if (candidate_plan != nullptr) {
       final_evaluation = evaluate_rate_resolved_track_cruise_plan(
@@ -24242,6 +24289,7 @@ struct MPC
         final_evaluation.minimum_dynamic_clearance_m;
       final_evaluation.candidate_sequence = candidate_sequence;
       final_evaluation.executed_sequence = executed_sequence;
+      attach_connector(final_evaluation);
       if (final_evaluation.production_authority.has_value()) {
         final_evaluation.selected_from_executed =
           candidate_is_executed;
@@ -24315,6 +24363,7 @@ struct MPC
         executed_evaluation.production_authority.has_value();
       final_evaluation = std::move(executed_evaluation);
     }
+    attach_connector(final_evaluation);
     final_evaluation.elapsed_ms =
       std::chrono::duration<double, std::milli>(SteadyClock::now() - started)
       .count();
@@ -24916,6 +24965,9 @@ struct MPC
       "continuation:%s/exact:%s/proved_stages:%lu/blocked_by:%s/"
       "min_dynamic_clearance:%.3f/executed:%d/seq:%lu/"
       "reason:%s/source:%s, "
+      "on_trajectory=attempted:%d/reason:%s/"
+      "parent_elapsed:%.6f/candidate_elapsed:%.6f/"
+      "lateral_delta:%.6f/progress_delta:%.6f/steering_delta:%.6f, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.retained_attempt_count),
       static_cast<unsigned long>(retained_count(
@@ -25052,7 +25104,15 @@ struct MPC
       window.last_retained.production_authority.has_value() ?
       (window.last_retained.selected_from_executed ? "executed" :
       "candidate") :
-      "none");
+      "none",
+      window.last_retained.on_trajectory_connector_attempted ? 1 : 0,
+      on_trajectory_connector::to_string(
+        window.last_retained.on_trajectory_connector_reason),
+      window.last_retained.on_trajectory_parent_elapsed_sec,
+      window.last_retained.on_trajectory_candidate_elapsed_sec,
+      window.last_retained.on_trajectory_lateral_difference_m,
+      window.last_retained.on_trajectory_progress_difference_m,
+      window.last_retained.on_trajectory_steering_difference_rad);
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(

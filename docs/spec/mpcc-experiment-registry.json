@@ -294,6 +294,18 @@
       "production_impact": "Return problem construction may continue after the completed target leaves the active tactical set; current wall and all currently observed peer proofs remain mandatory; solver, clearance, horizon, lease, timeout, fallback and authority arbitration are unchanged",
       "deleted_code": [],
       "revisit_condition": "a two-vehicle run reaches rear-clear and either shows fresh intent=return submissions through target deselection followed by Return-to-Idle, or freezes the first new exact rejection"
+    },
+    {
+      "experiment_id": "20260829-on-trajectory-prefix-connector",
+      "baseline_commit": "07dc53c694aeded1a45b7df04c07100c02f8e190",
+      "snapshot_ids": [],
+      "hypothesis": "an asynchronous normal candidate can be joined causally by comparing its state with the last actually published certified trajectory at one control time",
+      "changed_dimension": "observation_only_async_parent_candidate_connector",
+      "result": "accepted",
+      "reason": "run 20260829-025035 produced zero exact parent/candidate joins: d1 had 23 state mismatches and 39 exhausted parent cursors while d2 had 64 state mismatches; this proves that elapsed suffix selection does not establish a causal state connection and that a fixed parent alone cannot absorb normal latest-state feedback",
+      "production_impact": "none; the connector is data only, production authority and all solver, wall, timing and behavior parameters are unchanged",
+      "deleted_code": [],
+      "revisit_condition": "an observation-only AS-RTI-style feedback phase demonstrates a certified latest-state join within the runtime budget, after which production promotion deletes elapsed-suffix-only candidate adoption atomically"
     }
   ]
 }

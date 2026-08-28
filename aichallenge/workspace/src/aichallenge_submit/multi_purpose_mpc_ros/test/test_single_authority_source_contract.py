@@ -2589,3 +2589,37 @@ def test_latency_wall_proof_reuses_the_canonical_state_prediction_trajectory() -
     assert "predict_accelerating_yaw_response_trajectory(" in control
     assert "canonical_control_path = std::move(path);" in control
     assert "update_predicted_pose_for_execution_contract(" in control
+
+
+def test_on_trajectory_connector_is_observation_only() -> None:
+    """Parent/candidate state comparison cannot create control authority."""
+
+    connector_header = (
+        PACKAGE_ROOT
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_on_trajectory_connector.hpp"
+    ).read_text(encoding="utf-8")
+    connector_source = (
+        PACKAGE_ROOT / "src" / "mpcc_on_trajectory_connector.cpp"
+    ).read_text(encoding="utf-8")
+    connector = connector_header + connector_source
+    assert "Result evaluate(const Request & request) noexcept" in connector
+    assert "production_adapter" not in connector
+    assert "command_candidate" not in connector
+    assert "mark_executed(" not in connector
+    assert "publish_control_command(" not in connector
+
+    retained_start = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow("
+    )
+    retained_end = SOURCE.index(
+        "void record_rate_resolved_track_cruise_shadow(", retained_start
+    )
+    retained = SOURCE[retained_start:retained_end]
+    connector_call = retained.index("on_trajectory_connector::evaluate(")
+    authority_build = retained.index(
+        "evaluate_rate_resolved_track_cruise_plan(", connector_call
+    )
+    assert connector_call < authority_build
+    assert "connector_result.accepted()" not in retained

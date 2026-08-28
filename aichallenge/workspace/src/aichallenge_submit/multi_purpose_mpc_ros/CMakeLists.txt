@@ -311,6 +311,18 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
   Threads::Threads
 )
 
+add_library(${PROJECT_NAME}_mpcc_on_trajectory_connector STATIC
+  src/mpcc_on_trajectory_connector.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_on_trajectory_connector PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_on_trajectory_connector
+  ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_execution_source STATIC
   src/mpcc_rate_resolved_execution_source.cpp
 )
@@ -431,6 +443,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+  ${PROJECT_NAME}_mpcc_on_trajectory_connector
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_source
   ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
   ${PROJECT_NAME}_mpcc_stateless_maneuver
@@ -621,6 +634,15 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_certified_plan
       ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_on_trajectory_connector
+    test/test_mpcc_on_trajectory_connector.cpp
+  )
+  if(TARGET test_mpcc_on_trajectory_connector)
+    target_link_libraries(test_mpcc_on_trajectory_connector
+      ${PROJECT_NAME}_mpcc_on_trajectory_connector
     )
   endif()
 

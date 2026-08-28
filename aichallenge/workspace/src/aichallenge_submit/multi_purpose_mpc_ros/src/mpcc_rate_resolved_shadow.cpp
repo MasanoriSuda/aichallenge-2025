@@ -2457,6 +2457,8 @@ Result SolverContext::evaluate_impl(
     result.dynamic_obstacle_ahead_row_count = refinement.ahead_row_count;
     result.dynamic_obstacle_diagonal_row_count =
       refinement.diagonal_row_count;
+    result.dynamic_obstacle_physical_axis_support_applied =
+      refinement.physical_axis_support_applied;
     result.dynamic_obstacle_physical_diagonal_guidance_applied =
       refinement.physical_diagonal_guidance_applied;
     result.dynamic_obstacle_forced_constraint_fraction =

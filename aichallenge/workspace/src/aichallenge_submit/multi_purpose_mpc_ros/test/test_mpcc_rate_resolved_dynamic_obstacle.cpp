@@ -533,6 +533,38 @@ TEST(MpccRateResolvedDynamicObstacle, PhysicalDiagonalUsesBodySupportFunction)
   EXPECT_NEAR(full_side.lower, 1.5, 1e-12);
 }
 
+TEST(MpccRateResolvedDynamicObstacle, OrdinaryRowsUsePhysicalBodySupport)
+{
+  auto request = request_with_lateral_suffix();
+  for (int stage = 3; stage <= 4; ++stage) {
+    const int state = stage * model::kStateDimension;
+    request.wall_only_primal[state + model::kLateralIndex] = 3.0;
+  }
+  request.physical_separation_geometry =
+    dynamic_obstacle::PhysicalSeparationGeometry{
+    1.4, 0.5, 0.7, 0.6, 0.1, 0.8};
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_TRUE(result.physical_axis_support_applied);
+  EXPECT_FALSE(result.physical_diagonal_guidance_applied);
+  EXPECT_EQ(result.first_pass_side_stage, 2);
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  const auto & behind = result.problem->dynamic_obstacle_constraints[0];
+  EXPECT_EQ(
+    behind.axis,
+    problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+  // target progress 2.0 - (front 1.4 + margin 0.1 + circle 0.8)
+  EXPECT_NEAR(behind.upper, -0.3, 1e-12);
+  const auto & side = result.problem->dynamic_obstacle_constraints[2];
+  EXPECT_EQ(side.axis, problem::DynamicObstacleConstraintAxis::Lateral);
+  // Ego passes on the positive-lateral side, so the target-facing support is
+  // the ego right extent: 0.6 + margin 0.1 + circle 0.8.
+  EXPECT_NEAR(side.lower, 1.5, 1e-12);
+}
+
 TEST(MpccRateResolvedDynamicObstacle, RejectsPhysicalGeometryWithoutDiagonal)
 {
   auto request = request_with_lateral_suffix();

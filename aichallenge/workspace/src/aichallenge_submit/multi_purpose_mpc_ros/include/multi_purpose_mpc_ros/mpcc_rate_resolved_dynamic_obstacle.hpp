@@ -16,14 +16,17 @@ struct StagePrediction
   bool valid{false};
   double target_progress_m{};
   double target_lateral_m{};
+  /// Compatibility separations for callers without an immutable physical
+  /// replay world.  When PhysicalSeparationGeometry is present, every branch
+  /// classification and row uses its oriented support instead.
   double longitudinal_overlap_m{};
   double lateral_center_separation_m{};
 };
 
 /// Exact asymmetric ego body and peer circle used by the nonlinear dynamic
-/// certificate.  Shadow architecture candidates may use this geometry to
-/// form a physical support half-space instead of the normalized candidate-E
-/// approximation.  Live production does not populate it yet.
+/// certificate.  Every production dynamic-obstacle disjunct is derived from
+/// this same geometry; scalar StagePrediction separation is only a
+/// compatibility source when an immutable replay world is unavailable.
 struct PhysicalSeparationGeometry
 {
   double ego_front_extent_m{};
@@ -99,6 +102,7 @@ struct Result
   std::size_t pass_side_row_count{};
   std::size_t ahead_row_count{};
   std::size_t diagonal_row_count{};
+  bool physical_axis_support_applied{false};
   bool physical_diagonal_guidance_applied{false};
   int first_valid_stage{-1};
   double first_wall_only_progress_m{};

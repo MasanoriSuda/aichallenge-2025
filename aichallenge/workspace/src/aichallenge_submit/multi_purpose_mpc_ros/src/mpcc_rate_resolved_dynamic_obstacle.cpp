@@ -135,6 +135,68 @@ Result refine(const Request & request) noexcept
     return result;
   }
 
+  const PhysicalSeparationGeometry * const physical_geometry =
+    request.forced_physical_separation_geometry.has_value() ?
+    &request.forced_physical_separation_geometry.value() :
+    (request.physical_separation_geometry.has_value() ?
+    &request.physical_separation_geometry.value() : nullptr);
+  result.physical_axis_support_applied = physical_geometry != nullptr;
+  // Support of the exact asymmetric ego rectangle plus the peer circle in a
+  // course-frame direction.  The body orientation is frozen at the solved
+  // wall-only witness for this SQP convexification; unchanged nonlinear proof
+  // still owns final acceptance when the refined heading changes.
+  const auto physical_support = [&] (
+      const int stage, const double course_longitudinal_normal,
+      const double course_lateral_normal) {
+      const int state = (stage + 1) * model::kStateDimension;
+      const double heading_offset =
+        request.wall_only_primal[state + model::kHeadingIndex];
+      const double cosine = std::cos(heading_offset);
+      const double sine = std::sin(heading_offset);
+      const double body_forward_normal =
+        course_longitudinal_normal * cosine +
+        course_lateral_normal * sine;
+      const double body_left_normal =
+        -course_longitudinal_normal * sine +
+        course_lateral_normal * cosine;
+      const double longitudinal_support = body_forward_normal >= 0.0 ?
+        body_forward_normal *
+        (physical_geometry->ego_front_extent_m +
+        physical_geometry->ego_margin_m) :
+        -body_forward_normal *
+        (physical_geometry->ego_rear_extent_m +
+        physical_geometry->ego_margin_m);
+      const double lateral_support = body_left_normal >= 0.0 ?
+        body_left_normal *
+        (physical_geometry->ego_left_extent_m +
+        physical_geometry->ego_margin_m) :
+        -body_left_normal *
+        (physical_geometry->ego_right_extent_m +
+        physical_geometry->ego_margin_m);
+      return longitudinal_support + lateral_support +
+        physical_geometry->opponent_radius_m;
+    };
+  const auto behind_separation = [&] (
+      const int stage, const StagePrediction & prediction) {
+      return physical_geometry != nullptr ?
+        physical_support(stage, 1.0, 0.0) :
+        prediction.longitudinal_overlap_m;
+    };
+  const auto ahead_separation = [&] (
+      const int stage, const StagePrediction & prediction) {
+      return physical_geometry != nullptr ?
+        physical_support(stage, -1.0, 0.0) :
+        prediction.longitudinal_overlap_m;
+    };
+  const auto side_separation = [&] (
+      const int stage, const int side_sign,
+      const StagePrediction & prediction) {
+      return physical_geometry != nullptr ?
+        physical_support(
+        stage, 0.0, -static_cast<double>(side_sign)) :
+        prediction.lateral_center_separation_m;
+    };
+
   // Cruise/Follow does not own a tactical side.  It may nevertheless already
   // have one physically coherent wall-only homotopy.  Preserve that homotopy
   // instead of converting a side-by-side target into an impossible
@@ -173,6 +235,12 @@ Result refine(const Request & request) noexcept
         request.wall_only_primal[state + model::kLagIndex];
       const double lateral =
         request.wall_only_primal[state + model::kLateralIndex];
+      const double behind_separation_m =
+        behind_separation(stage, prediction);
+      const double positive_side_separation_m =
+        side_separation(stage, 1, prediction);
+      const double negative_side_separation_m =
+        side_separation(stage, -1, prediction);
       if (first_valid_stage < 0) {
         first_valid_stage = stage;
         initial_relative_lateral_m =
@@ -185,40 +253,40 @@ Result refine(const Request & request) noexcept
         result.first_target_progress_m = prediction.target_progress_m;
         result.first_target_lateral_m = prediction.target_lateral_m;
         result.first_stay_behind_margin_m =
-          prediction.target_progress_m - prediction.longitudinal_overlap_m -
+          prediction.target_progress_m - behind_separation_m -
           effective_progress;
         result.first_positive_side_margin_m =
           lateral - (
           prediction.target_lateral_m +
-          prediction.lateral_center_separation_m);
+          positive_side_separation_m);
         result.first_negative_side_margin_m =
           prediction.target_lateral_m -
-          prediction.lateral_center_separation_m - lateral;
+          negative_side_separation_m - lateral;
         first_stage_positive_separated =
           lateral + request.separation_tolerance_m >=
-          prediction.target_lateral_m + prediction.lateral_center_separation_m;
+          prediction.target_lateral_m + positive_side_separation_m;
         first_stage_negative_separated =
           lateral - request.separation_tolerance_m <=
-          prediction.target_lateral_m - prediction.lateral_center_separation_m;
+          prediction.target_lateral_m - negative_side_separation_m;
       }
       behind_every_stage = behind_every_stage &&
         effective_progress <= prediction.target_progress_m -
-        prediction.longitudinal_overlap_m + request.separation_tolerance_m;
+        behind_separation_m + request.separation_tolerance_m;
       positive_side_every_stage = positive_side_every_stage &&
         lateral + request.separation_tolerance_m >=
-        prediction.target_lateral_m + prediction.lateral_center_separation_m;
+        prediction.target_lateral_m + positive_side_separation_m;
       negative_side_every_stage = negative_side_every_stage &&
         lateral - request.separation_tolerance_m <=
-        prediction.target_lateral_m - prediction.lateral_center_separation_m;
+        prediction.target_lateral_m - negative_side_separation_m;
       if (state_box_available) {
         const double stay_behind_upper =
-          prediction.target_progress_m - prediction.longitudinal_overlap_m;
+          prediction.target_progress_m - behind_separation_m;
         const double positive_side_lower =
           prediction.target_lateral_m +
-          prediction.lateral_center_separation_m;
+          positive_side_separation_m;
         const double negative_side_upper =
           prediction.target_lateral_m -
-          prediction.lateral_center_separation_m;
+          negative_side_separation_m;
         const double minimum_effective_progress =
           request.wall_only_problem.state_lower[
           state + model::kProgressIndex] +
@@ -300,15 +368,16 @@ Result refine(const Request & request) noexcept
       result.first_target_progress_m = prediction.target_progress_m;
       result.first_target_lateral_m = prediction.target_lateral_m;
       result.first_stay_behind_margin_m =
-        prediction.target_progress_m - prediction.longitudinal_overlap_m -
+        prediction.target_progress_m -
+        behind_separation(stage, prediction) -
         effective_progress;
       result.first_positive_side_margin_m =
         lateral - (
         prediction.target_lateral_m +
-        prediction.lateral_center_separation_m);
+        side_separation(stage, 1, prediction));
       result.first_negative_side_margin_m =
         prediction.target_lateral_m -
-        prediction.lateral_center_separation_m - lateral;
+        side_separation(stage, -1, prediction) - lateral;
       break;
     }
   }
@@ -332,7 +401,8 @@ Result refine(const Request & request) noexcept
       first_prediction.target_lateral_m);
     if (
       initial_signed_side_separation_m + request.separation_tolerance_m >=
-      first_prediction.lateral_center_separation_m)
+      side_separation(
+        result.first_valid_stage, resolved_side_sign, first_prediction))
     {
       preserve_current_side = true;
     }
@@ -359,9 +429,11 @@ Result refine(const Request & request) noexcept
       const int state = (stage + 1) * model::kStateDimension;
       const double lateral =
         request.wall_only_primal[state + model::kLateralIndex];
+      const double required_separation_m =
+        side_separation(stage, resolved_side_sign, prediction);
       const double boundary = prediction.target_lateral_m +
         static_cast<double>(resolved_side_sign) *
-        prediction.lateral_center_separation_m;
+        required_separation_m;
       const bool separated = resolved_side_sign > 0 ?
         lateral + request.separation_tolerance_m >= boundary :
         lateral - request.separation_tolerance_m <= boundary;
@@ -402,7 +474,8 @@ Result refine(const Request & request) noexcept
       const int state = (stage + 1) * model::kStateDimension;
       if (first_pass_side_stage < 0 || stage < first_pass_side_stage) {
         const double stay_behind_upper =
-          prediction.target_progress_m - prediction.longitudinal_overlap_m;
+          prediction.target_progress_m -
+          behind_separation(stage, prediction);
         const double minimum_effective_progress =
           request.wall_only_problem.state_lower[
           state + model::kProgressIndex] +
@@ -415,14 +488,14 @@ Result refine(const Request & request) noexcept
       }
       if (resolved_side_sign > 0) {
         const double side_lower = prediction.target_lateral_m +
-          prediction.lateral_center_separation_m;
+          side_separation(stage, resolved_side_sign, prediction);
         selected_side_box_feasible = selected_side_box_feasible &&
           side_lower - request.separation_tolerance_m <=
           request.wall_only_problem.state_upper[
           state + model::kLateralIndex];
       } else {
         const double side_upper = prediction.target_lateral_m -
-          prediction.lateral_center_separation_m;
+          side_separation(stage, resolved_side_sign, prediction);
         selected_side_box_feasible = selected_side_box_feasible &&
           side_upper + request.separation_tolerance_m >=
           request.wall_only_problem.state_lower[
@@ -478,41 +551,6 @@ Result refine(const Request & request) noexcept
     forced_physical_diagonal || automatic_physical_diagonal;
   const bool diagonal = forced_diagonal || automatic_physical_diagonal;
 
-  // Support of the exact asymmetric ego rectangle plus the peer circle in a
-  // course-frame direction.  The body orientation is frozen at the solved
-  // wall-only witness for this SQP convexification; unchanged nonlinear proof
-  // still owns final acceptance when the refined heading changes.
-  const auto physical_support = [&] (
-      const int stage, const double course_longitudinal_normal,
-      const double course_lateral_normal) {
-      const auto & geometry = forced_physical_diagonal ?
-        request.forced_physical_separation_geometry.value() :
-        request.physical_separation_geometry.value();
-      const int state = (stage + 1) * model::kStateDimension;
-      const double heading_offset =
-        request.wall_only_primal[state + model::kHeadingIndex];
-      const double cosine = std::cos(heading_offset);
-      const double sine = std::sin(heading_offset);
-      const double body_forward_normal =
-        course_longitudinal_normal * cosine +
-        course_lateral_normal * sine;
-      const double body_left_normal =
-        -course_longitudinal_normal * sine +
-        course_lateral_normal * cosine;
-      const double longitudinal_support = body_forward_normal >= 0.0 ?
-        body_forward_normal *
-        (geometry.ego_front_extent_m + geometry.ego_margin_m) :
-        -body_forward_normal *
-        (geometry.ego_rear_extent_m + geometry.ego_margin_m);
-      const double lateral_support = body_left_normal >= 0.0 ?
-        body_left_normal *
-        (geometry.ego_left_extent_m + geometry.ego_margin_m) :
-        -body_left_normal *
-        (geometry.ego_right_extent_m + geometry.ego_margin_m);
-      return longitudinal_support + lateral_support +
-        geometry.opponent_radius_m;
-    };
-
   auto refined = request.constraint_target_problem.has_value() ?
     request.constraint_target_problem.value() : request.wall_only_problem;
   refined.dynamic_obstacle_constraints.clear();
@@ -534,17 +572,13 @@ Result refine(const Request & request) noexcept
       if (stage < diagonal_start) {
         constraint.axis =
           problem::DynamicObstacleConstraintAxis::EffectiveProgress;
-        const double separation_m = physical_diagonal ?
-          physical_support(stage, 1.0, 0.0) :
-          prediction.longitudinal_overlap_m;
+        const double separation_m = behind_separation(stage, prediction);
         constraint.upper = prediction.target_progress_m - separation_m;
         ++result.stay_behind_row_count;
       } else if (stage >= full_side) {
         constraint.axis = problem::DynamicObstacleConstraintAxis::Lateral;
-        const double separation_m = physical_diagonal ?
-          physical_support(
-          stage, 0.0, -static_cast<double>(resolved_side_sign)) :
-          prediction.lateral_center_separation_m;
+        const double separation_m =
+          side_separation(stage, resolved_side_sign, prediction);
         const double boundary = prediction.target_lateral_m +
           static_cast<double>(resolved_side_sign) *
           separation_m;
@@ -596,7 +630,7 @@ Result refine(const Request & request) noexcept
         request.wall_only_primal[state + model::kProgressIndex] +
         request.wall_only_primal[state + model::kLagIndex];
       const double final_lower_m =
-        prediction.target_progress_m + prediction.longitudinal_overlap_m;
+        prediction.target_progress_m + ahead_separation(stage, prediction);
       constraint.lower = witness_effective_progress_m +
         forced_constraint_fraction *
         (final_lower_m - witness_effective_progress_m);
@@ -604,7 +638,7 @@ Result refine(const Request & request) noexcept
     } else if (first_pass_side_stage >= 0 && stage >= first_pass_side_stage) {
       constraint.axis = problem::DynamicObstacleConstraintAxis::Lateral;
       const double required_signed_separation_m =
-        prediction.lateral_center_separation_m;
+        side_separation(stage, resolved_side_sign, prediction);
       const double boundary = prediction.target_lateral_m +
         static_cast<double>(resolved_side_sign) *
         required_signed_separation_m;
@@ -627,7 +661,7 @@ Result refine(const Request & request) noexcept
         request.wall_only_primal[state + model::kProgressIndex] +
         request.wall_only_primal[state + model::kLagIndex];
       const double final_upper_m =
-        prediction.target_progress_m - prediction.longitudinal_overlap_m;
+        prediction.target_progress_m - behind_separation(stage, prediction);
       constraint.upper = witness_effective_progress_m +
         forced_constraint_fraction *
         (final_upper_m - witness_effective_progress_m);

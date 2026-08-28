@@ -25345,7 +25345,7 @@ struct MPC
         "Rate-resolved dynamic-obstacle contract: "
         "seq=%lu/decision=%lu/intent=%s, requested=1/applied=%d/solved=%d/"
         "reason=%s, rows=stay_behind:%lu/pass_side:%lu/diagonal:%lu/"
-        "physical_diagonal:%d/"
+        "physical_axis:%d/physical_diagonal:%d/"
         "side:%d/first_pass_stage:%d, "
         "first=stage:%d/wall:theta%.3f,effective%.3f,d%.3f/"
         "target:p%.3f,d%.3f/"
@@ -25364,6 +25364,7 @@ struct MPC
           dynamic.dynamic_obstacle_pass_side_row_count),
         static_cast<unsigned long>(
           dynamic.dynamic_obstacle_diagonal_row_count),
+        dynamic.dynamic_obstacle_physical_axis_support_applied ? 1 : 0,
         dynamic.dynamic_obstacle_physical_diagonal_guidance_applied ? 1 : 0,
         dynamic.dynamic_obstacle_resolved_side_sign,
         dynamic.dynamic_obstacle_first_pass_side_stage,

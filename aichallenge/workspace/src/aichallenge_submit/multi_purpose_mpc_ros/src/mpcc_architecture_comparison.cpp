@@ -633,6 +633,8 @@ ArmResult evaluate_arm(
            << "/ahead_rows=" << solved.dynamic_obstacle_ahead_row_count
            << "/diagonal_rows="
            << solved.dynamic_obstacle_diagonal_row_count
+           << "/physical_axis="
+           << (solved.dynamic_obstacle_physical_axis_support_applied ? 1 : 0)
            << "/physical_diagonal="
            << (solved.dynamic_obstacle_physical_diagonal_guidance_applied ? 1 : 0)
            << "/reason=" << recovery::to_string(dynamic_result.rejection_reason)

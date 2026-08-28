@@ -180,4 +180,56 @@ TEST(MpccRateResolvedExecutionSource, PreservesObservationTimeWithoutRenewalInpu
   EXPECT_EQ(first.source.artifact_sequence, second.source.artifact_sequence);
 }
 
+TEST(MpccRateResolvedExecutionSource, ResolvesPublishedCursorAndMeasuredProgress)
+{
+  const auto certified_plan = plan();
+  ASSERT_NE(certified_plan, nullptr);
+  const auto result = source::build_published(source::PublishedRequest{
+    request(certified_plan.get()), 20.15, 20.0, 50.45, 100.0, false});
+  ASSERT_TRUE(result.accepted());
+  EXPECT_TRUE(result.published.cursor.available);
+  EXPECT_EQ(result.published.cursor.control_stage_index, 1U);
+  EXPECT_NEAR(result.published.cursor.stage_elapsed_sec, 0.05, 1e-9);
+  EXPECT_NEAR(result.published.advanced_distance_m, 0.45, 1e-9);
+  EXPECT_EQ(result.published.source.source_snapshot_sec, 12.0);
+}
+
+TEST(MpccRateResolvedExecutionSource, UsesPublicationClockInsteadOfSolveAge)
+{
+  const auto certified_plan = plan();
+  ASSERT_NE(certified_plan, nullptr);
+  // The immutable solve is eight seconds old, but the plan has only been
+  // executing for 50 ms.  Publication time, not solve time, owns the cursor.
+  const auto result = source::build_published(source::PublishedRequest{
+    request(certified_plan.get()), 20.05, 20.0, 50.15, 100.0, false});
+  ASSERT_TRUE(result.accepted());
+  EXPECT_EQ(result.published.cursor.control_stage_index, 0U);
+  EXPECT_NEAR(result.published.cursor.stage_elapsed_sec, 0.05, 1e-9);
+}
+
+TEST(MpccRateResolvedExecutionSource, RejectsExhaustedPublishedArtifact)
+{
+  const auto certified_plan = plan();
+  ASSERT_NE(certified_plan, nullptr);
+  const auto result = source::build_published(source::PublishedRequest{
+    request(certified_plan.get()), 20.21, 20.0, 50.7, 100.0, false});
+  EXPECT_EQ(result.reason, source::PublishedRejectReason::CursorUnavailable);
+  EXPECT_EQ(
+    result.published.cursor.reason,
+    execution::CursorReason::Exhausted);
+}
+
+TEST(MpccRateResolvedExecutionSource, LiftsProgressAcrossCircularWrap)
+{
+  const auto certified_plan = plan();
+  ASSERT_NE(certified_plan, nullptr);
+  // Express the source origin near the end of a 50 m lap without mutating the
+  // immutable certified plan by using an equivalent measured progress one lap
+  // behind.  The resolver must select the short forward displacement.
+  const auto result = source::build_published(source::PublishedRequest{
+    request(certified_plan.get()), 20.05, 20.0, 0.2, 50.0, true});
+  ASSERT_TRUE(result.accepted());
+  EXPECT_NEAR(result.published.advanced_distance_m, 0.2, 1e-9);
+}
+
 }  // namespace

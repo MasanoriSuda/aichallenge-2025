@@ -321,6 +321,7 @@ target_include_directories(
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_execution_source
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+  ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
 )
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof STATIC

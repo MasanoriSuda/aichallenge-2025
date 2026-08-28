@@ -6613,6 +6613,17 @@ struct AlignedMpccExecutionTrajectory
   std::vector<mpc_stage_geometry::CourseFrameKnot> course_frame_knots;
 };
 
+struct PublishedMpccExecutionAlignment
+{
+  bool identity_expected{false};
+  std::uint64_t artifact_sequence{};
+  double remaining_distance_m{};
+  mpcc_rate_resolved_execution_artifact::CursorReason cursor_reason{
+    mpcc_rate_resolved_execution_artifact::CursorReason::InvalidArtifact};
+  std::string reason{"not requested"};
+  std::optional<AlignedMpccExecutionTrajectory> trajectory;
+};
+
 enum class SolvedExecutionWallValidationScope
 {
   DiscreteStages,
@@ -21628,6 +21639,84 @@ struct MPC
       fallback_lateral_m, now_sec, reject_reason);
   }
 
+  PublishedMpccExecutionAlignment
+  align_published_shiftout_execution_trajectory(
+    const std::vector<double> & current_path_distance_m,
+    const std::vector<double> & fallback_lateral_m,
+    const double now_sec) const
+  {
+    PublishedMpccExecutionAlignment alignment;
+    if (
+      rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
+      model == nullptr || model->reference_path == nullptr)
+    {
+      alignment.reason = "published store or course unavailable";
+      return alignment;
+    }
+    const auto executed_entry =
+      rate_resolved_track_cruise_certified_plan_store_->executed_snapshot();
+    const auto & plan = executed_entry.plan;
+    if (plan == nullptr || plan->execution_artifact == nullptr) {
+      alignment.reason = "no published execution artifact";
+      return alignment;
+    }
+    alignment.artifact_sequence =
+      plan->execution_artifact->identity.sequence;
+    const auto identity = rate_resolved_execution_source::build(
+      rate_resolved_execution_source::Request{
+        plan.get(), mpcc_contract::ControlIntent::ShiftOut,
+        overtake_line_state_.target_vehicle_id,
+        overtake_line_state_.mission_generation,
+        overtake_line_state_.pass_side_sign});
+    if (!identity.accepted()) {
+      alignment.reason = std::string{"published identity rejected/"} +
+        rate_resolved_execution_source::to_string(identity.reason);
+      return alignment;
+    }
+    alignment.identity_expected = true;
+    const auto published = rate_resolved_execution_source::build_published(
+      rate_resolved_execution_source::PublishedRequest{
+        rate_resolved_execution_source::Request{
+          plan.get(), mpcc_contract::ControlIntent::ShiftOut,
+          overtake_line_state_.target_vehicle_id,
+          overtake_line_state_.mission_generation,
+          overtake_line_state_.pass_side_sign},
+        now_sec + std::max(0.0, execution_prediction_delay_sec_),
+        executed_entry.first_published_control_origin_sec,
+        model->s, model->reference_path->length,
+        model->reference_path->circular});
+    alignment.cursor_reason = published.published.cursor.reason;
+    if (!published.accepted()) {
+      alignment.reason = std::string{"published source rejected/"} +
+        rate_resolved_execution_source::to_string(published.reason);
+      return alignment;
+    }
+    const auto & source = published.published.source;
+    const auto resampled = overtake_core::resample_receding_horizon_warm_start(
+      overtake_core::RecedingHorizonWarmStartRequest{
+        published.published.advanced_distance_m,
+        source.path_distance_m, source.lateral_m,
+        current_path_distance_m, fallback_lateral_m});
+    if (
+      !resampled.valid || !resampled.used_previous_solution ||
+      resampled.lateral_targets_m.size() != current_path_distance_m.size())
+    {
+      alignment.reason = "published trajectory resampling failed";
+      return alignment;
+    }
+    alignment.trajectory = AlignedMpccExecutionTrajectory{
+      published.published.cursor.elapsed_sec,
+      published.published.advanced_distance_m,
+      source.minimum_lateral_bound_reserve_m,
+      resampled.lateral_targets_m, {}, {},
+      std::numeric_limits<double>::quiet_NaN(), {}, {}};
+    alignment.remaining_distance_m = std::max(
+      0.0, source.path_distance_m.back() -
+      published.published.advanced_distance_m);
+    alignment.reason = "published execution artifact aligned";
+    return alignment;
+  }
+
   std::optional<std::vector<mpc_stage_geometry::CourseFrameKnot>>
   build_progress_course_frame_knots(
     const mpcc_contract::EffectiveStageGeometry & geometry,
@@ -26796,6 +26885,8 @@ struct MPC
   double solved_mpcc_execution_authority_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   bool solved_mpcc_execution_authority_was_active_{false};
+  bool published_shiftout_execution_alignment_was_active_{false};
+  std::string published_shiftout_execution_alignment_last_reason_;
   double progress_contouring_fallback_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   double progress_contouring_stage_normalization_last_log_sec_{
@@ -33793,6 +33884,57 @@ private:
     std::optional<AlignedMpccExecutionTrajectory> aligned_solved_execution;
     const bool dp_execution_authority_active =
       dp_execution_authority.valid && dp_execution_authority.authority_active;
+    PublishedMpccExecutionAlignment published_shiftout_execution_alignment;
+    const bool published_shiftout_execution_alignment_requested =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      (execution_origin_dynamic_wait_active &&
+      overtake_line_state_.follow_prepare_origin_phase ==
+      OvertakeLinePhase::ShiftOut);
+    if (published_shiftout_execution_alignment_requested) {
+      std::vector<double> current_path_distances;
+      std::vector<double> current_fallback_lateral;
+      current_path_distances.reserve(static_cast<std::size_t>(N));
+      current_fallback_lateral.reserve(static_cast<std::size_t>(N));
+      for (int i = 0; i < N; ++i) {
+        current_path_distances.push_back(
+          horizon_path_distance_to_index(
+            ref_wp_id, static_cast<std::size_t>(i)));
+        current_fallback_lateral.push_back(current_ey);
+      }
+      published_shiftout_execution_alignment =
+        align_published_shiftout_execution_trajectory(
+        current_path_distances, current_fallback_lateral, now_sec);
+    }
+    const bool published_shiftout_execution_profile_active =
+      published_shiftout_execution_alignment.trajectory.has_value();
+    const bool published_shiftout_alignment_changed =
+      published_shiftout_execution_profile_active !=
+      published_shiftout_execution_alignment_was_active_ ||
+      published_shiftout_execution_alignment.reason !=
+      published_shiftout_execution_alignment_last_reason_;
+    if (
+      line_cfg.debug_log_enabled &&
+      published_shiftout_execution_alignment_requested &&
+      published_shiftout_alignment_changed)
+    {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Published ShiftOut execution alignment: active=%d, expected=%d, "
+        "artifact=%lu, cursor=%s, reason=%s, phase=%s, wp_id=%d",
+        published_shiftout_execution_profile_active ? 1 : 0,
+        published_shiftout_execution_alignment.identity_expected ? 1 : 0,
+        static_cast<unsigned long>(
+          published_shiftout_execution_alignment.artifact_sequence),
+        rate_resolved_artifact::to_string(
+          published_shiftout_execution_alignment.cursor_reason),
+        published_shiftout_execution_alignment.reason.c_str(),
+        execution_origin_dynamic_wait_active ? "RollingReplan" :
+        to_string(overtake_line_state_.phase), model->wp_id);
+    }
+    published_shiftout_execution_alignment_was_active_ =
+      published_shiftout_execution_profile_active;
+    published_shiftout_execution_alignment_last_reason_ =
+      published_shiftout_execution_alignment.reason;
     // The six-state certified store is the sole normal solve owner. Project
     // its exact accepted ShiftOut horizon into the lateral-prefix supervisor
     // before testing whether a newer rolling execution source is available.
@@ -34671,8 +34813,12 @@ private:
           prefix_horizon_distances[static_cast<std::size_t>(i)] =
             horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i));
         }
+        const bool published_execution_prefix_active =
+          published_shiftout_execution_profile_active &&
+          published_shiftout_execution_alignment.trajectory->lateral_m.size() ==
+          static_cast<std::size_t>(N) && !contact_prefix_active;
         const bool continuous_dp_prefix_requested =
-          dp_execution_authority_active &&
+          !published_execution_prefix_active && dp_execution_authority_active &&
           execution_origin_dynamic_wait_active && !contact_prefix_active;
         const auto continuous_dp_reference =
           overtake_core::resolve_frenet_dp_execution_reference(
@@ -34687,17 +34833,21 @@ private:
         const bool continuous_dp_prefix_active =
           continuous_dp_reference.valid && continuous_dp_reference.active;
         const bool solved_execution_prefix_active =
-          !continuous_dp_prefix_active && solved_execution_bridge_active &&
+          !published_execution_prefix_active && !continuous_dp_prefix_active &&
+          solved_execution_bridge_active &&
           aligned_solved_execution.has_value() &&
           aligned_solved_execution->lateral_m.size() == static_cast<std::size_t>(N) &&
           !contact_prefix_active;
         const std::optional<std::vector<double>> continuous_dp_override =
-          continuous_dp_prefix_active ?
+          published_execution_prefix_active ?
+          std::optional<std::vector<double>>{
+          published_shiftout_execution_alignment.trajectory->lateral_m} :
+          (continuous_dp_prefix_active ?
           std::optional<std::vector<double>>{
           continuous_dp_reference.lateral_targets_m} :
           (solved_execution_prefix_active ?
           std::optional<std::vector<double>>{
-          aligned_solved_execution->lateral_m} : std::nullopt);
+          aligned_solved_execution->lateral_m} : std::nullopt));
         prefix_horizon = evaluate_overtake_line_horizon(
           ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, false,
           prefix_distance, prefix_goal_ey, prefix_wall_clearance,
@@ -34750,7 +34900,9 @@ private:
             output.target_epsi.assign(static_cast<std::size_t>(N), 0.0);
             output.target_active.assign(static_cast<std::size_t>(N), true);
             output.receding_horizon_active = true;
-            output.receding_horizon_fallback = !continuous_dp_prefix_active;
+            output.receding_horizon_fallback =
+              !published_execution_prefix_active &&
+              !continuous_dp_prefix_active;
             output.receding_horizon_last_feasible_hold_active = true;
             output.max_required_lateral_accel =
               prefix_horizon.max_required_lateral_accel;
@@ -34840,11 +34992,14 @@ private:
         }
 
         publish_lateral_prefix();
-        output.receding_horizon_fallback_reason = continuous_dp_prefix_active ?
+        output.receding_horizon_fallback_reason =
+          published_execution_prefix_active ?
+          "published certified ShiftOut execution retained through rolling replan" :
+          (continuous_dp_prefix_active ?
           "continuous DP execution retained through rolling replan" :
           physical_margin_fallback ?
           "dynamic Mission current-side physical-margin prefix" :
-          "dynamic Mission current-side robust-margin prefix";
+          "dynamic Mission current-side robust-margin prefix");
         output.target_velocity_reference =
           prefix_policy.target_velocity_reference_mps;
         output.closing_speed_limit = prefix_policy.closing_speed_mps;
@@ -34870,7 +35025,7 @@ private:
             "OvertakeLine dynamic Mission forward prefix active: "
             "target=%s, side=%d, closing=%.2f, full=%d, "
             "v_ref=%.2f, v_floor=%.2f, wall=%s, distance=%.2f m, "
-            "contact=%d, bias=%.2f m, continuous_dp=%d, remaining=%.2f m, wp_id=%d",
+            "contact=%d, bias=%.2f m, source=%s, remaining=%.2f m, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(), mission_side_sign,
             prefix_policy.closing_speed_mps,
             prefix_policy.full_closing_authority ? 1 : 0,
@@ -34879,8 +35034,13 @@ private:
             physical_margin_fallback ? "physical" : "robust",
             prefix_distance, contact_prefix_active ? 1 : 0,
             prefix_goal_ey - current_ey,
-            continuous_dp_prefix_active ? 1 : 0,
-            continuous_dp_reference.remaining_distance_m, model->wp_id);
+            published_execution_prefix_active ? "published-artifact" :
+            (continuous_dp_prefix_active ? "continuous-dp" :
+            (solved_execution_prefix_active ? "solved-bridge" : "live-hold")),
+            published_execution_prefix_active ?
+            published_shiftout_execution_alignment.remaining_distance_m :
+            continuous_dp_reference.remaining_distance_m,
+            model->wp_id);
         }
         overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active = true;
         overtake_line_state_.dynamic_mission_wait_lateral_hold_was_active = false;
@@ -36802,7 +36962,22 @@ private:
 
       std::optional<std::vector<double>> entry_execution_override;
       bool authoritative_execution_profile_expected = false;
-      if (dp_execution_authority_active) {
+      if (published_shiftout_execution_alignment.identity_expected) {
+        authoritative_execution_profile_expected = true;
+        if (published_shiftout_execution_profile_active) {
+          const auto trust_envelope =
+            overtake_core::resolve_frenet_dp_execution_trust_envelope(
+            overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
+              published_shiftout_execution_alignment.trajectory->lateral_m.size() ==
+              static_cast<std::size_t>(N),
+              line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
+              published_shiftout_execution_alignment.trajectory->lateral_m,
+              entry_nominal_lateral});
+          if (trust_envelope.valid && trust_envelope.active) {
+            entry_execution_override = trust_envelope.lateral_targets_m;
+          }
+        }
+      } else if (dp_execution_authority_active) {
         authoritative_execution_profile_expected = true;
         auto execution_reference =
           overtake_core::resolve_frenet_dp_execution_reference(
@@ -36845,6 +37020,8 @@ private:
       if (authoritative_execution_profile_expected && !entry_execution_override) {
         pass_entry_execution_horizon_available = false;
         pass_entry_execution_horizon_reason =
+          published_shiftout_execution_alignment.identity_expected ?
+          published_shiftout_execution_alignment.reason :
           "authoritative execution profile unavailable";
       } else {
         const auto execution_horizon = evaluate_overtake_line_horizon(
@@ -36900,6 +37077,9 @@ private:
     const bool runtime_wall_escape_prefix_execution_active =
       overtake_line_state_.mission_runtime_wall_escape_prefix_active &&
       effective_execution_authority_active;
+    const bool published_execution_pass_gate_valid =
+      published_shiftout_execution_profile_active &&
+      pass_entry_execution_horizon_available;
     const double pass_entry_gate_elapsed_sec =
       pass_entry_gate_was_active && std::isfinite(
       overtake_line_state_.shiftout_pass_entry_physical_hold_start_sec) ?
@@ -36917,7 +37097,8 @@ private:
         line_cfg.pass_entry_physical_gate_enabled,
         pass_entry_gate_inside_window,
         actual_wall_preplan_warning &&
-        !runtime_wall_escape_prefix_execution_active,
+        !runtime_wall_escape_prefix_execution_active &&
+        !published_execution_pass_gate_valid,
         pass_entry_execution_horizon_required,
         pass_entry_execution_horizon_available,
         runtime_wall_hard_fault,

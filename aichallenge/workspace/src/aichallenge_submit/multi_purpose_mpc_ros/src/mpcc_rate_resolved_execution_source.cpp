@@ -87,4 +87,91 @@ Result build(const Request & request)
   return result;
 }
 
+const char * to_string(const PublishedRejectReason reason) noexcept
+{
+  switch (reason) {
+    case PublishedRejectReason::None: return "none";
+    case PublishedRejectReason::SourceRejected: return "source-rejected";
+    case PublishedRejectReason::InvalidExecutionClock:
+      return "invalid-execution-clock";
+    case PublishedRejectReason::CursorUnavailable:
+      return "cursor-unavailable";
+    case PublishedRejectReason::InvalidCourseProgress:
+      return "invalid-course-progress";
+    case PublishedRejectReason::CourseProgressRegressed:
+      return "course-progress-regressed";
+  }
+  return "unknown";
+}
+
+PublishedResult build_published(const PublishedRequest & request)
+{
+  namespace retained = mpcc_rate_resolved_retained_revalidation;
+  PublishedResult result;
+  const auto projected = build(request.identity);
+  result.source_reason = projected.reason;
+  if (!projected.accepted()) {
+    return result;
+  }
+  if (
+    !std::isfinite(request.current_control_origin_sec) ||
+    request.current_control_origin_sec < 0.0 ||
+    !std::isfinite(request.first_published_control_origin_sec) ||
+    request.first_published_control_origin_sec < 0.0 ||
+    request.current_control_origin_sec + 1e-9 <
+    request.first_published_control_origin_sec)
+  {
+    result.reason = PublishedRejectReason::InvalidExecutionClock;
+    return result;
+  }
+  const auto & artifact = *request.identity.plan->execution_artifact;
+  const auto cursor = retained::resolve_execution_cursor(
+    artifact, request.current_control_origin_sec,
+    retained::ExecutionClock{
+      retained::ExecutionClockKind::PublishedPlan,
+      request.first_published_control_origin_sec});
+  if (!cursor.available) {
+    result.reason = PublishedRejectReason::CursorUnavailable;
+    result.published.cursor = cursor;
+    return result;
+  }
+  if (
+    !std::isfinite(request.measured_course_progress_m) ||
+    !std::isfinite(projected.source.course_progress_origin_m) ||
+    (request.circular &&
+    (!std::isfinite(request.path_length_m) || request.path_length_m <= 0.0)))
+  {
+    result.reason = PublishedRejectReason::InvalidCourseProgress;
+    return result;
+  }
+
+  double advanced_distance_m =
+    request.measured_course_progress_m -
+    projected.source.course_progress_origin_m;
+  if (request.circular) {
+    const double half_path_length_m = 0.5 * request.path_length_m;
+    while (advanced_distance_m > half_path_length_m) {
+      advanced_distance_m -= request.path_length_m;
+    }
+    while (advanced_distance_m < -half_path_length_m) {
+      advanced_distance_m += request.path_length_m;
+    }
+  }
+  constexpr double kProgressToleranceM = 1e-3;
+  if (!std::isfinite(advanced_distance_m)) {
+    result.reason = PublishedRejectReason::InvalidCourseProgress;
+    return result;
+  }
+  if (advanced_distance_m < -kProgressToleranceM) {
+    result.reason = PublishedRejectReason::CourseProgressRegressed;
+    return result;
+  }
+
+  result.published.source = projected.source;
+  result.published.cursor = cursor;
+  result.published.advanced_distance_m = std::max(0.0, advanced_distance_m);
+  result.reason = PublishedRejectReason::None;
+  return result;
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_source

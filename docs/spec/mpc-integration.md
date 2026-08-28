@@ -2846,6 +2846,29 @@ progress profileのprovenanceは`overtake-scalar-support-with-physical-anchor`�
 hard constraint、SQP refinement、最終exact proofはlatest-only seven-state workerだけが所有する。
 clearance、solver tolerance、cadence、lease、fallback、production authorityは変更しない。
 
+#### Pass境界のpublished artifact同一性（2026-08-28、2025由来の暫定）
+
+canonical productionがretained planを実行している間、OvertakeLine supervisorはPass入口や
+ShiftOut起点のDynamicWaitで別のDP prefix／solved bridge／fallback lineを証明してはならない。
+`output/20260828-215316`では、productionはsequence 3238のcertified ShiftOut artifactを継続配信
+していた一方、supervisor側のcandidate lifecycleが先に失効したため、別のfallback lineに対して
+wall gateを評価し、FollowPrepareからRecoveryへ遷移した。これはwall clearanceではなく、実際の
+command producerとphase gateが異なるexecution identityを使用したlifecycle defectである。
+
+ShiftOutからPassへ移る境界では、certified plan storeの`executed_snapshot()`と
+`first_published_control_origin_sec`を正本とする。target、Mission generation、side、ShiftOut intentが
+完全一致するlast actually published artifactについて、publication clockからimmutable execution cursorを
+進め、現在の物理course progressへexact certified lateral trajectoryを再配置する。solve/snapshot時刻を
+更新したり、未publish candidateをexecuted evidenceとして扱ってはならない。cursor exhaustionまたは
+identity不一致時にはauthorityを与えない。
+
+参照候補の優先順位は、(1) matching published artifact、(2) active DP execution prefix、
+(3) temporarily promoted solved bridge、(4) current-goal fallbackとする。ただしpublished artifactは
+lateral referenceだけを供給し、現在状態からのwall、横加速度、reachability評価は従来どおりfail closedで
+ある。nominal wall warningだけを理由に実行中artifactと異なるlineへ切り替えないが、runtime hard wall faultは
+引き続き即時拒否する。production authority、clearance、solver tolerance、lease、grace、timeout、speed policyは
+変更しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

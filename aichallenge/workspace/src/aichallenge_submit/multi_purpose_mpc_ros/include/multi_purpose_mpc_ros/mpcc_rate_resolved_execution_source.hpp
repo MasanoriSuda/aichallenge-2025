@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_EXECUTION_SOURCE_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 
 #include <cstdint>
 #include <string>
@@ -70,6 +71,53 @@ struct Result
 };
 
 Result build(const Request & request);
+
+/// Publication-clock projection of the exact plan which actually crossed the
+/// command boundary.  This is deliberately separate from `build()`: an
+/// unpublished candidate has no execution cursor and may not be used to keep a
+/// live tactical phase alive.
+struct PublishedRequest
+{
+  Request identity;
+  double current_control_origin_sec{};
+  double first_published_control_origin_sec{};
+  double measured_course_progress_m{};
+  double path_length_m{};
+  bool circular{false};
+};
+
+enum class PublishedRejectReason
+{
+  None,
+  SourceRejected,
+  InvalidExecutionClock,
+  CursorUnavailable,
+  InvalidCourseProgress,
+  CourseProgressRegressed,
+};
+
+const char * to_string(PublishedRejectReason reason) noexcept;
+
+struct PublishedSource
+{
+  Source source;
+  mpcc_rate_resolved_execution_artifact::Cursor cursor;
+  double advanced_distance_m{};
+};
+
+struct PublishedResult
+{
+  PublishedRejectReason reason{PublishedRejectReason::SourceRejected};
+  RejectReason source_reason{RejectReason::MissingPlan};
+  PublishedSource published;
+
+  bool accepted() const noexcept
+  {
+    return reason == PublishedRejectReason::None;
+  }
+};
+
+PublishedResult build_published(const PublishedRequest & request);
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_source
 

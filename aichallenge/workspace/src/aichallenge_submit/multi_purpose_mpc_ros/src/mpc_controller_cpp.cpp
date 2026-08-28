@@ -3436,6 +3436,18 @@ struct PhysicalWallEnvelopeCacheTelemetry
   std::size_t entry_count{};
 };
 
+struct OvertakeLineRuntimeTelemetry
+{
+  std::uint64_t horizon_evaluation_count{};
+  double horizon_evaluation_ms{};
+  std::uint64_t receding_optimization_count{};
+  double receding_optimization_ms{};
+  std::uint64_t solved_execution_validation_count{};
+  double solved_execution_validation_ms{};
+  std::uint64_t solved_wall_certificate_count{};
+  double solved_wall_certificate_ms{};
+};
+
 struct OvertakeLineEntryPreflight
 {
   bool feasible{true};
@@ -18860,9 +18872,65 @@ struct MPC
       behavior_output.overtake_execution_corridor_blocked = true;
     }
     dynamic_planning_finished = SteadyClock::now();
+    const std::uint64_t overtake_wall_requests_before =
+      physical_wall_envelope_cache_request_count_;
+    const std::uint64_t overtake_wall_misses_before =
+      physical_wall_envelope_cache_miss_count_;
+    const std::uint64_t overtake_wall_scanned_poses_before =
+      physical_wall_envelope_cache_scanned_pose_count_;
+    overtake_line_runtime_telemetry_ = OvertakeLineRuntimeTelemetry{};
+    overtake_line_runtime_observation_active_ = behavior_override == nullptr;
     auto overtake_line_output =
       update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
     overtake_line_finished = SteadyClock::now();
+    overtake_line_runtime_observation_active_ = false;
+    const double overtake_line_runtime_ms =
+      std::chrono::duration<double, std::milli>(
+      overtake_line_finished - dynamic_planning_finished).count();
+    if (behavior_override == nullptr && overtake_line_runtime_ms > 20.0) {
+      const auto counter_delta = [](
+          const std::uint64_t after, const std::uint64_t before) {
+          return after >= before ? after - before : after;
+        };
+      const std::uint64_t wall_requests = counter_delta(
+        physical_wall_envelope_cache_request_count_,
+        overtake_wall_requests_before);
+      const std::uint64_t wall_misses = counter_delta(
+        physical_wall_envelope_cache_miss_count_,
+        overtake_wall_misses_before);
+      const std::uint64_t wall_scanned_poses = counter_delta(
+        physical_wall_envelope_cache_scanned_pose_count_,
+        overtake_wall_scanned_poses_before);
+      static rclcpp::Clock overtake_line_runtime_log_clock{RCL_STEADY_TIME};
+      RCLCPP_WARN_THROTTLE(
+        rclcpp::get_logger("mpc_controller"), overtake_line_runtime_log_clock,
+        1000,
+        "OvertakeLine runtime ownership: decision=%lu, total=%.3fms, "
+        "horizon=%lu/%.3fms, receding=%lu/%.3fms, "
+        "solved_validation=%lu/%.3fms, solved_wall=%lu/%.3fms, "
+        "wall_cache=requests:%lu/misses:%lu/scanned_poses:%lu, "
+        "phase=%s, target=%s, wp_id=%d, observation_only=1",
+        static_cast<unsigned long>(active_control_decision_id_),
+        overtake_line_runtime_ms,
+        static_cast<unsigned long>(
+        overtake_line_runtime_telemetry_.horizon_evaluation_count),
+        overtake_line_runtime_telemetry_.horizon_evaluation_ms,
+        static_cast<unsigned long>(
+        overtake_line_runtime_telemetry_.receding_optimization_count),
+        overtake_line_runtime_telemetry_.receding_optimization_ms,
+        static_cast<unsigned long>(
+        overtake_line_runtime_telemetry_.solved_execution_validation_count),
+        overtake_line_runtime_telemetry_.solved_execution_validation_ms,
+        static_cast<unsigned long>(
+        overtake_line_runtime_telemetry_.solved_wall_certificate_count),
+        overtake_line_runtime_telemetry_.solved_wall_certificate_ms,
+        static_cast<unsigned long>(wall_requests),
+        static_cast<unsigned long>(wall_misses),
+        static_cast<unsigned long>(wall_scanned_poses),
+        to_string(overtake_line_state_.phase),
+        behavior_output.target_vehicle_id.empty() ?
+        "none" : behavior_output.target_vehicle_id.c_str(), model->wp_id);
+    }
     const double requested_overtake_speed_floor_mps =
       overtake_line_output.target_velocity_floor;
     const auto normalized_overtake_speed_window =
@@ -21946,6 +22014,16 @@ struct MPC
     const SolvedExecutionWallValidationScope validation_scope,
     mpcc_contract::PhysicalWallCertificateDiagnostic * diagnostic = nullptr) const
   {
+    const auto runtime_started = SteadyClock::now();
+    [[maybe_unused]] const auto runtime_guard = make_scope_exit([this, runtime_started]() {
+        if (!overtake_line_runtime_observation_active_) {
+          return;
+        }
+        ++overtake_line_runtime_telemetry_.solved_wall_certificate_count;
+        overtake_line_runtime_telemetry_.solved_wall_certificate_ms +=
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - runtime_started).count();
+      });
     mpcc_contract::PhysicalWallCertificateDiagnostic wall_diagnostic;
     auto publish_diagnostic = ScopeExit([&wall_diagnostic, diagnostic]() {
         if (diagnostic != nullptr) {
@@ -24921,6 +24999,16 @@ struct MPC
     const double hard_wall_clearance_m,
     const double now_sec, std::string & reject_reason)
   {
+    const auto runtime_started = SteadyClock::now();
+    [[maybe_unused]] const auto runtime_guard = make_scope_exit([this, runtime_started]() {
+        if (!overtake_line_runtime_observation_active_) {
+          return;
+        }
+        ++overtake_line_runtime_telemetry_.solved_execution_validation_count;
+        overtake_line_runtime_telemetry_.solved_execution_validation_ms +=
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - runtime_started).count();
+      });
     constexpr auto wall_validation_scope =
       SolvedExecutionWallValidationScope::SweptFromCurrentPose;
     std::string latest_reject_reason;
@@ -26126,6 +26214,8 @@ struct MPC
   std::uint64_t physical_wall_envelope_cache_miss_count_{0U};
   std::uint64_t physical_wall_envelope_cache_evaluation_count_{0U};
   std::uint64_t physical_wall_envelope_cache_scanned_pose_count_{0U};
+  mutable bool overtake_line_runtime_observation_active_{false};
+  mutable OvertakeLineRuntimeTelemetry overtake_line_runtime_telemetry_;
   std::optional<recovery_footprint::Pose2D> actual_wall_monitor_pose_;
   std::optional<recovery_footprint::Pose2D> predicted_execution_pose_;
   std::optional<CanonicalCurrentControlPath> canonical_current_control_path_;
@@ -28952,6 +29042,16 @@ private:
     const std::optional<std::vector<double>> & lateral_target_override =
     std::nullopt) const
   {
+    const auto runtime_started = SteadyClock::now();
+    [[maybe_unused]] const auto runtime_guard = make_scope_exit([this, runtime_started]() {
+        if (!overtake_line_runtime_observation_active_) {
+          return;
+        }
+        ++overtake_line_runtime_telemetry_.horizon_evaluation_count;
+        overtake_line_runtime_telemetry_.horizon_evaluation_ms +=
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - runtime_started).count();
+      });
     OvertakeLineHorizonEvaluation evaluation;
     const auto record_physical_failure = [&evaluation](
         const overtake_core::RecedingHorizonPhysicalFailureCause cause,
@@ -29835,6 +29935,16 @@ private:
     const bool rear_clear_confirmed,
     const double now_sec)
   {
+    const auto runtime_started = SteadyClock::now();
+    [[maybe_unused]] const auto runtime_guard = make_scope_exit([this, runtime_started]() {
+        if (!overtake_line_runtime_observation_active_) {
+          return;
+        }
+        ++overtake_line_runtime_telemetry_.receding_optimization_count;
+        overtake_line_runtime_telemetry_.receding_optimization_ms +=
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - runtime_started).count();
+      });
     OvertakeRecedingHorizonEvaluation result;
     result.horizon = baseline_horizon;
     const auto & line_cfg = cfg.v2x_behavior.overtake_line;

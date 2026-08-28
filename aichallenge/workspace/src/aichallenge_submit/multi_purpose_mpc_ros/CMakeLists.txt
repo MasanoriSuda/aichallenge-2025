@@ -197,6 +197,24 @@ install(TARGETS mpcc_qp_replay
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(mpcc_prepared_suffix_replay
+  src/mpcc_prepared_suffix_replay.cpp
+)
+target_include_directories(mpcc_prepared_suffix_replay PRIVATE
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(mpcc_prepared_suffix_replay
+  ${PROJECT_NAME}_mpcc_architecture_snapshot
+  ${PROJECT_NAME}_mpcc_rate_resolved_shadow
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
+  ${PROJECT_NAME}_race_mpcc_foundation
+  ${PROJECT_NAME}_mpcc_rate_resolved_problem
+  ${PROJECT_NAME}_persistent_osqp
+)
+install(TARGETS mpcc_prepared_suffix_replay
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 add_executable(mpcc_maneuver_replay
   src/mpcc_maneuver_replay.cpp
 )

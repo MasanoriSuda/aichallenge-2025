@@ -631,6 +631,34 @@ bool load_fixed_vector(
   return value.allFinite();
 }
 
+template<int Rows, int Columns>
+bool load_fixed_matrix(
+  const YAML::Node & node, Eigen::Matrix<double, Rows, Columns> & value)
+{
+  if (
+    !node || !node.IsMap() || !node["rows"] || !node["columns"] ||
+    !node["values"] || !node["values"].IsSequence() ||
+    node["rows"].as<int>() != Rows ||
+    node["columns"].as<int>() != Columns ||
+    node["values"].size() != static_cast<std::size_t>(Rows))
+  {
+    return false;
+  }
+  for (int row = 0; row < Rows; ++row) {
+    const auto entries = node["values"][static_cast<std::size_t>(row)];
+    if (!entries.IsSequence() ||
+      entries.size() != static_cast<std::size_t>(Columns))
+    {
+      return false;
+    }
+    for (int column = 0; column < Columns; ++column) {
+      value(row, column) =
+        entries[static_cast<std::size_t>(column)].as<double>();
+    }
+  }
+  return value.allFinite();
+}
+
 template<int Size>
 bool load_bound_vector(
   const YAML::Node & node, Eigen::Matrix<double, Size, 1> & value)
@@ -664,6 +692,24 @@ std::optional<std::vector<double>> load_std_vector(const YAML::Node & node)
   return values;
 }
 
+std::optional<std::vector<double>> load_std_bound_vector(
+  const YAML::Node & node)
+{
+  if (!node || !node.IsSequence()) {
+    return std::nullopt;
+  }
+  std::vector<double> values;
+  values.reserve(node.size());
+  for (const auto & item : node) {
+    const double value = item.as<double>();
+    if (std::isnan(value)) {
+      return std::nullopt;
+    }
+    values.push_back(value);
+  }
+  return values;
+}
+
 std::optional<contract::ControlIntent> parse_intent(const std::string & value)
 {
   using Intent = contract::ControlIntent;
@@ -677,6 +723,140 @@ std::optional<contract::ControlIntent> parse_intent(const std::string & value)
   if (value == "return") return Intent::Return;
   if (value == "rejoin") return Intent::Rejoin;
   return std::nullopt;
+}
+
+std::optional<problem::DynamicObstacleConstraintAxis>
+parse_dynamic_obstacle_axis(const std::string & value)
+{
+  if (value == "lateral") {
+    return problem::DynamicObstacleConstraintAxis::Lateral;
+  }
+  if (value == "effective-progress") {
+    return problem::DynamicObstacleConstraintAxis::EffectiveProgress;
+  }
+  if (value == "coupled-lateral-progress") {
+    return problem::DynamicObstacleConstraintAxis::CoupledLateralProgress;
+  }
+  return std::nullopt;
+}
+
+std::optional<problem::AssemblyRequest> load_assembly_request(
+  const YAML::Node & node)
+{
+  namespace model = mpcc_rate_resolved;
+  if (!node || !node.IsMap() || !node["horizon_steps"]) {
+    return std::nullopt;
+  }
+  problem::AssemblyRequest request;
+  request.horizon_steps = node["horizon_steps"].as<int>();
+  auto state_reference = load_vector(node["state_reference"]);
+  auto state_lower = load_vector(node["state_lower"]);
+  auto state_upper = load_vector(node["state_upper"]);
+  auto state_weight = load_vector(node["state_weight"]);
+  auto input_reference = load_vector(node["input_reference"]);
+  auto input_lower = load_vector(node["input_lower"]);
+  auto input_upper = load_vector(node["input_upper"]);
+  auto input_weight = load_vector(node["input_weight"]);
+  auto additional_linear_cost = load_vector(node["additional_linear_cost"]);
+  if (
+    request.horizon_steps <= 0 ||
+    !load_fixed_vector(node["initial_state"], request.initial_state) ||
+    !load_fixed_vector(node["previous_input"], request.previous_input) ||
+    !load_fixed_vector(
+      node["input_delta_weight"], request.input_delta_weight) ||
+    !state_reference || !state_lower || !state_upper || !state_weight ||
+    !input_reference || !input_lower || !input_upper || !input_weight ||
+    !additional_linear_cost)
+  {
+    return std::nullopt;
+  }
+  request.state_reference = std::move(state_reference.value());
+  request.state_lower = std::move(state_lower.value());
+  request.state_upper = std::move(state_upper.value());
+  request.state_weight = std::move(state_weight.value());
+  request.input_reference = std::move(input_reference.value());
+  request.input_lower = std::move(input_lower.value());
+  request.input_upper = std::move(input_upper.value());
+  request.input_weight = std::move(input_weight.value());
+  request.additional_linear_cost =
+    std::move(additional_linear_cost.value());
+
+  const auto linearizations = node["linearizations"];
+  if (!linearizations || !linearizations.IsSequence()) {
+    return std::nullopt;
+  }
+  request.linearizations.reserve(linearizations.size());
+  for (const auto & item : linearizations) {
+    model::Linearization linearization;
+    if (
+      !load_fixed_matrix(
+        item["state_matrix"], linearization.state_matrix) ||
+      !load_fixed_matrix(
+        item["input_matrix"], linearization.input_matrix) ||
+      !load_fixed_vector(
+        item["equality_offset"], linearization.equality_offset))
+    {
+      return std::nullopt;
+    }
+    linearization.stage_dt_sec = item["stage_dt_sec"].as<double>();
+    if (!std::isfinite(linearization.stage_dt_sec)) {
+      return std::nullopt;
+    }
+    request.linearizations.push_back(std::move(linearization));
+  }
+
+  if (node["steering_rate_prefix_bounds"]) {
+    const auto bounds = node["steering_rate_prefix_bounds"];
+    request.steering_rate_prefix_bounds =
+      problem::SteeringRatePrefixBounds{
+      bounds["minimum_cumulative_delta_rad"].as<double>(),
+      bounds["maximum_cumulative_delta_rad"].as<double>()};
+  }
+  if (node["progress_aligned_wall_constraints"]) {
+    const auto wall = node["progress_aligned_wall_constraints"];
+    auto lower_slope = load_std_vector(wall["lower_slope"]);
+    auto lower_intercept = load_std_bound_vector(wall["lower_intercept"]);
+    auto upper_slope = load_std_vector(wall["upper_slope"]);
+    auto upper_intercept = load_std_bound_vector(wall["upper_intercept"]);
+    if (!lower_slope || !lower_intercept || !upper_slope || !upper_intercept) {
+      return std::nullopt;
+    }
+    request.progress_aligned_wall_constraints =
+      problem::ProgressAlignedWallConstraints{
+      std::move(lower_slope.value()), std::move(lower_intercept.value()),
+      std::move(upper_slope.value()), std::move(upper_intercept.value())};
+  }
+
+  const auto swept = node["swept_lateral_wall_constraints"];
+  const auto obstacles = node["dynamic_obstacle_constraints"];
+  if (!swept || !swept.IsSequence() ||
+    !obstacles || !obstacles.IsSequence())
+  {
+    return std::nullopt;
+  }
+  request.swept_lateral_wall_constraints.reserve(swept.size());
+  for (const auto & item : swept) {
+    request.swept_lateral_wall_constraints.push_back(
+      problem::SweptLateralWallConstraint{
+        item["transition_stage"].as<int>(),
+        item["destination_ratio"].as<double>(),
+        item["lower_m"].as<double>(), item["upper_m"].as<double>()});
+  }
+  request.dynamic_obstacle_constraints.reserve(obstacles.size());
+  for (const auto & item : obstacles) {
+    const auto axis = parse_dynamic_obstacle_axis(
+      item["axis"].as<std::string>());
+    if (!axis.has_value()) {
+      return std::nullopt;
+    }
+    request.dynamic_obstacle_constraints.push_back(
+      problem::DynamicObstacleConstraint{
+        item["state_stage"].as<int>(), axis.value(),
+        item["lower"].as<double>(), item["upper"].as<double>(),
+        item["lateral_coefficient"].as<double>(),
+        item["effective_progress_coefficient"].as<double>()});
+  }
+  return request;
 }
 
 std::optional<contract::Formulation> parse_formulation(
@@ -1844,6 +2024,11 @@ std::optional<RecordedInteractionSnapshot> load_recorded_interaction_snapshot(
       if (detail != nullptr) *detail = "interaction snapshot incomplete";
       return std::nullopt;
     }
+    auto assembly_request = load_assembly_request(root["assembly_request"]);
+    if (!assembly_request.has_value()) {
+      if (detail != nullptr) *detail = "assembly request unavailable";
+      return std::nullopt;
+    }
     if (!root["interaction_fingerprint"]) {
       if (detail != nullptr) *detail = "interaction fingerprint unavailable";
       return std::nullopt;
@@ -1862,6 +2047,7 @@ std::optional<RecordedInteractionSnapshot> load_recorded_interaction_snapshot(
     }
     RecordedInteractionSnapshot recorded;
     recorded.source = std::move(source.value());
+    recorded.assembly_request = std::move(assembly_request.value());
     recorded.recorded_qp = std::move(recorded_qp.value());
     recorded.interaction_fingerprint = fingerprint;
     if (detail != nullptr) *detail = "loaded";

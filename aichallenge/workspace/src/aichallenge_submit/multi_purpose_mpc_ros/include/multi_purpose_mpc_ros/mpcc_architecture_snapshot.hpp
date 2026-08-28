@@ -78,6 +78,7 @@ struct RecordedQp
 struct RecordedInteractionSnapshot
 {
   mpcc_rate_resolved_shadow::Snapshot source;
+  mpcc_rate_resolved_problem::AssemblyRequest assembly_request;
   RecordedQp recorded_qp;
   std::uint64_t interaction_fingerprint{};
 };

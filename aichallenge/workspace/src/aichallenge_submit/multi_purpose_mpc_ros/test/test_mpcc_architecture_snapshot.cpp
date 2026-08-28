@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <Eigen/Sparse>
+#include <yaml-cpp/yaml.h>
 
 #include <filesystem>
 #include <fstream>
@@ -266,6 +267,13 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   ASSERT_EQ(loaded->source.replay_world->obstacles.size(), 1U);
   EXPECT_EQ(loaded->source.replay_world->obstacles.front().id, "d2");
   EXPECT_EQ(loaded->source.wall_grid->cells.size(), 4U);
+  EXPECT_EQ(loaded->assembly_request.horizon_steps, 1);
+  EXPECT_TRUE(
+    loaded->assembly_request.state_reference.isApprox(
+      make_assembly_request().state_reference));
+  EXPECT_TRUE(
+    loaded->assembly_request.input_reference.isApprox(
+      make_assembly_request().input_reference));
 
   auto vehicle_mutated = loaded->source;
   vehicle_mutated.replay_world->obstacles.front().x_m += 0.01;
@@ -302,6 +310,31 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   EXPECT_FALSE(
     interaction_snapshot_matches_fingerprint(
       semantic_mutated, loaded->interaction_fingerprint));
+}
+
+TEST(MpccArchitectureSnapshot, RejectsMalformedRecordedAssemblyRequest)
+{
+  const auto root = output_root("interaction-malformed-assembly");
+  std::filesystem::remove_all(root);
+  const auto snapshot = make_interaction_snapshot(
+    mpcc_execution_contract::ControlIntent::ShiftOut);
+  const auto written = record_failure(
+    snapshot, make_assembly_request(), make_valid_problem(), std::nullopt,
+    persistent_osqp::SolveOutcome{}, PipelineStage::Initial,
+    "unit-malformed-assembly", "intentional malformed assembly evidence", root);
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+
+  auto yaml = YAML::LoadFile(written.snapshot_file.string());
+  yaml["assembly_request"]["horizon_steps"] = 0;
+  std::ofstream output(written.snapshot_file, std::ios::trunc);
+  ASSERT_TRUE(output.good());
+  output << yaml;
+  output.close();
+
+  std::string detail;
+  EXPECT_FALSE(
+    load_recorded_interaction_snapshot(written.snapshot_file, &detail).has_value());
+  EXPECT_EQ(detail, "assembly request unavailable");
 }
 
 TEST(MpccArchitectureSnapshot, OldExactQpSnapshotIsNotInteractionReplayReady)

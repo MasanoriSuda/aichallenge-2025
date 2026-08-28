@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
+#include "multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -314,6 +315,21 @@ struct Result
     std::numeric_limits<double>::quiet_NaN()};
   double steering_reachability_duration_sec{
     std::numeric_limits<double>::quiet_NaN()};
+  bool feedback_shadow_attempted{false};
+  mpcc_latest_state_feedback::Reason feedback_shadow_reason{
+    mpcc_latest_state_feedback::Reason::InvalidInput};
+  double feedback_shadow_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double feedback_shadow_correction_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  mpcc_rate_resolved_physical_adapter::ContinuationRejectReason
+  feedback_shadow_continuation_reason{
+    mpcc_rate_resolved_physical_adapter::ContinuationRejectReason::
+    InvalidArtifact};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason
+  feedback_shadow_exact_reason{
+    race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  bool feedback_shadow_continuation_available{false};
   double velocity_difference_mps{
     std::numeric_limits<double>::quiet_NaN()};
   double reachable_velocity_lower_mps{

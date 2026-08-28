@@ -323,6 +323,15 @@ target_link_libraries(${PROJECT_NAME}_mpcc_on_trajectory_connector
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
 )
 
+add_library(${PROJECT_NAME}_mpcc_latest_state_feedback STATIC
+  src/mpcc_latest_state_feedback.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_latest_state_feedback PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_execution_source STATIC
   src/mpcc_rate_resolved_execution_source.cpp
 )
@@ -359,6 +368,7 @@ target_include_directories(
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+  ${PROJECT_NAME}_mpcc_latest_state_feedback
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
   ${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof
@@ -643,6 +653,15 @@ if(BUILD_TESTING)
   if(TARGET test_mpcc_on_trajectory_connector)
     target_link_libraries(test_mpcc_on_trajectory_connector
       ${PROJECT_NAME}_mpcc_on_trajectory_connector
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_latest_state_feedback
+    test/test_mpcc_latest_state_feedback.cpp
+  )
+  if(TARGET test_mpcc_latest_state_feedback)
+    target_link_libraries(test_mpcc_latest_state_feedback
+      ${PROJECT_NAME}_mpcc_latest_state_feedback
     )
   endif()
 

@@ -139,6 +139,8 @@ namespace persistent_osqp = ::multi_purpose_mpc_ros::persistent_osqp;
 namespace mpcc_progress = ::multi_purpose_mpc_ros::mpcc_progress;
 namespace on_trajectory_connector =
   ::multi_purpose_mpc_ros::mpcc_on_trajectory_connector;
+namespace latest_state_feedback =
+  ::multi_purpose_mpc_ros::mpcc_latest_state_feedback;
 namespace rate_resolved_shadow =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
 namespace rate_resolved_physical =
@@ -6850,6 +6852,20 @@ struct RateResolvedRetainedShadowEvaluation
   double reachable_steering_lower_rad{};
   double reachable_steering_upper_rad{};
   double steering_reachability_duration_sec{};
+  bool feedback_shadow_attempted{false};
+  latest_state_feedback::Reason feedback_shadow_reason{
+    latest_state_feedback::Reason::InvalidInput};
+  double feedback_shadow_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double feedback_shadow_correction_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  rate_resolved_physical::ContinuationRejectReason
+  feedback_shadow_continuation_reason{
+    rate_resolved_physical::ContinuationRejectReason::InvalidArtifact};
+  race_mpcc::ExactPhysicalExecutionTrajectoryReason
+  feedback_shadow_exact_reason{
+    race_mpcc::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  bool feedback_shadow_continuation_available{false};
   double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double control_origin_speed_mps{
     std::numeric_limits<double>::quiet_NaN()};
@@ -7009,6 +7025,9 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   std::uint64_t retained_attempt_count{};
   std::uint64_t retained_full_suffix_accept_count{};
   std::uint64_t retained_current_stage_prefix_accept_count{};
+  std::uint64_t feedback_shadow_attempt_count{};
+  std::uint64_t feedback_shadow_projected_count{};
+  std::uint64_t feedback_shadow_continuation_accept_count{};
   double total_retained_ms{};
   double maximum_retained_ms{};
   RateResolvedRetainedShadowEvaluation last_retained;
@@ -24129,6 +24148,19 @@ struct MPC
       result.reachable_steering_upper_rad;
     evaluation.steering_reachability_duration_sec =
       result.steering_reachability_duration_sec;
+    evaluation.feedback_shadow_attempted =
+      result.feedback_shadow_attempted;
+    evaluation.feedback_shadow_reason = result.feedback_shadow_reason;
+    evaluation.feedback_shadow_steering_rad =
+      result.feedback_shadow_steering_rad;
+    evaluation.feedback_shadow_correction_rad =
+      result.feedback_shadow_correction_rad;
+    evaluation.feedback_shadow_continuation_reason =
+      result.feedback_shadow_continuation_reason;
+    evaluation.feedback_shadow_exact_reason =
+      result.feedback_shadow_exact_reason;
+    evaluation.feedback_shadow_continuation_available =
+      result.feedback_shadow_continuation_available;
     evaluation.current_speed_mps = result.current_speed_mps;
     evaluation.control_origin_speed_mps = result.control_origin_speed_mps;
     evaluation.expected_speed_mps = result.expected_speed_mps;
@@ -24315,6 +24347,20 @@ struct MPC
         final_evaluation.candidate_steering_difference_rad;
       const double candidate_maximum_steering_step_rad =
         final_evaluation.candidate_maximum_steering_step_rad;
+      const bool candidate_feedback_shadow_attempted =
+        final_evaluation.feedback_shadow_attempted;
+      const auto candidate_feedback_shadow_reason =
+        final_evaluation.feedback_shadow_reason;
+      const double candidate_feedback_shadow_steering_rad =
+        final_evaluation.feedback_shadow_steering_rad;
+      const double candidate_feedback_shadow_correction_rad =
+        final_evaluation.feedback_shadow_correction_rad;
+      const auto candidate_feedback_shadow_continuation_reason =
+        final_evaluation.feedback_shadow_continuation_reason;
+      const auto candidate_feedback_shadow_exact_reason =
+        final_evaluation.feedback_shadow_exact_reason;
+      const bool candidate_feedback_shadow_continuation_available =
+        final_evaluation.feedback_shadow_continuation_available;
       const auto candidate_continuation_reason =
         final_evaluation.candidate_continuation_reason;
       const auto candidate_continuation_exact_reason =
@@ -24345,6 +24391,20 @@ struct MPC
         candidate_steering_difference_rad;
       executed_evaluation.candidate_maximum_steering_step_rad =
         candidate_maximum_steering_step_rad;
+      executed_evaluation.feedback_shadow_attempted =
+        candidate_feedback_shadow_attempted;
+      executed_evaluation.feedback_shadow_reason =
+        candidate_feedback_shadow_reason;
+      executed_evaluation.feedback_shadow_steering_rad =
+        candidate_feedback_shadow_steering_rad;
+      executed_evaluation.feedback_shadow_correction_rad =
+        candidate_feedback_shadow_correction_rad;
+      executed_evaluation.feedback_shadow_continuation_reason =
+        candidate_feedback_shadow_continuation_reason;
+      executed_evaluation.feedback_shadow_exact_reason =
+        candidate_feedback_shadow_exact_reason;
+      executed_evaluation.feedback_shadow_continuation_available =
+        candidate_feedback_shadow_continuation_available;
       executed_evaluation.candidate_continuation_reason =
         candidate_continuation_reason;
       executed_evaluation.candidate_continuation_exact_reason =
@@ -24391,6 +24451,17 @@ struct MPC
         ++window.retained_current_stage_prefix_accept_count;
       } else {
         ++window.retained_full_suffix_accept_count;
+      }
+    }
+    if (retained.feedback_shadow_attempted) {
+      ++window.feedback_shadow_attempt_count;
+      if (retained.feedback_shadow_reason ==
+        latest_state_feedback::Reason::ProjectedToReachableEnvelope)
+      {
+        ++window.feedback_shadow_projected_count;
+      }
+      if (retained.feedback_shadow_continuation_available) {
+        ++window.feedback_shadow_continuation_accept_count;
       }
     }
     window.total_retained_ms += retained.elapsed_ms;
@@ -24968,6 +25039,9 @@ struct MPC
       "on_trajectory=attempted:%d/reason:%s/"
       "parent_elapsed:%.6f/candidate_elapsed:%.6f/"
       "lateral_delta:%.6f/progress_delta:%.6f/steering_delta:%.6f, "
+      "feedback_shadow=attempted:%lu/projected:%lu/continuation:%lu/"
+      "last_attempted:%d/reason:%s/steering:%.6f/correction:%.6f/"
+      "continuation_reason:%s/exact:%s/available:%d, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.retained_attempt_count),
       static_cast<unsigned long>(retained_count(
@@ -25112,7 +25186,21 @@ struct MPC
       window.last_retained.on_trajectory_candidate_elapsed_sec,
       window.last_retained.on_trajectory_lateral_difference_m,
       window.last_retained.on_trajectory_progress_difference_m,
-      window.last_retained.on_trajectory_steering_difference_rad);
+      window.last_retained.on_trajectory_steering_difference_rad,
+      static_cast<unsigned long>(window.feedback_shadow_attempt_count),
+      static_cast<unsigned long>(window.feedback_shadow_projected_count),
+      static_cast<unsigned long>(
+        window.feedback_shadow_continuation_accept_count),
+      window.last_retained.feedback_shadow_attempted ? 1 : 0,
+      latest_state_feedback::to_string(
+        window.last_retained.feedback_shadow_reason),
+      window.last_retained.feedback_shadow_steering_rad,
+      window.last_retained.feedback_shadow_correction_rad,
+      rate_resolved_physical::to_string(
+        window.last_retained.feedback_shadow_continuation_reason),
+      race_mpcc::exact_physical_execution_trajectory_reason_name(
+        window.last_retained.feedback_shadow_exact_reason),
+      window.last_retained.feedback_shadow_continuation_available ? 1 : 0);
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(

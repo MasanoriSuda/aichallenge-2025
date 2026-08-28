@@ -856,6 +856,36 @@ Result evaluate(const Request & request)
     actuation.actuation->steering_rad < reachable_steering_lower_rad ||
     actuation.actuation->steering_rad > reachable_steering_upper_rad)
   {
+    result.feedback_shadow_attempted = true;
+    const auto feedback = mpcc_latest_state_feedback::solve(
+      mpcc_latest_state_feedback::Request{
+        request.previous_published_steering_rad,
+        actuation.actuation->steering_rad,
+        execution.maximum_abs_steering_rad,
+        execution.maximum_abs_steering_rate_radps,
+        steering_reachability_duration_sec,
+        execution.physical_global_tolerance});
+    result.feedback_shadow_reason = feedback.reason;
+    result.feedback_shadow_steering_rad = feedback.feedback_steering_rad;
+    result.feedback_shadow_correction_rad = feedback.correction_rad;
+    if (feedback.available()) {
+      const auto feedback_continuation =
+        mpcc_rate_resolved_physical_adapter::build_continuation(
+        execution, cursor,
+        mpcc_rate_resolved_physical_adapter::ContinuationInitialState{
+          current_control_state.lateral_m,
+          current_control_state.lag_m,
+          current_control_state.heading_offset_rad,
+          current_control_state.velocity_mps,
+          current_control_state.progress_m,
+          feedback.feedback_steering_rad,
+          request.current_response_steering_rad});
+      result.feedback_shadow_continuation_reason =
+        feedback_continuation.reason;
+      result.feedback_shadow_exact_reason = feedback_continuation.exact_reason;
+      result.feedback_shadow_continuation_available =
+        feedback_continuation.exact_trajectory.has_value();
+    }
     result.reason = Reason::SteeringUnreachable;
     return result;
   }

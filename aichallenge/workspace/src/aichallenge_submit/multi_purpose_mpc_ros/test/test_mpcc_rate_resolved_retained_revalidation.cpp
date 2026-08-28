@@ -693,6 +693,18 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
   EXPECT_NEAR(result.reachable_steering_lower_rad, -0.100001, 1e-9);
   EXPECT_NEAR(result.reachable_steering_upper_rad, -0.099999, 1e-9);
   EXPECT_NEAR(result.steering_reachability_duration_sec, 0.0, 1e-9);
+  EXPECT_TRUE(result.feedback_shadow_attempted);
+  EXPECT_EQ(
+    result.feedback_shadow_reason,
+    multi_purpose_mpc_ros::mpcc_latest_state_feedback::Reason::
+    ProjectedToReachableEnvelope);
+  EXPECT_NEAR(result.feedback_shadow_steering_rad, -0.099999, 1e-9);
+  EXPECT_NEAR(result.feedback_shadow_correction_rad, -0.204999, 1e-9);
+  EXPECT_EQ(
+    result.feedback_shadow_continuation_reason,
+    multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::
+    ContinuationRejectReason::None);
+  EXPECT_TRUE(result.feedback_shadow_continuation_available);
 }
 
 TEST(

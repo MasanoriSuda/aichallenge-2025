@@ -2623,3 +2623,38 @@ def test_on_trajectory_connector_is_observation_only() -> None:
     )
     assert connector_call < authority_build
     assert "connector_result.accepted()" not in retained
+
+
+def test_latest_state_feedback_ab_cannot_create_authority() -> None:
+    """The bounded feedback projection remains diagnostic until certified."""
+
+    feedback_header = (
+        PACKAGE_ROOT
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_latest_state_feedback.hpp"
+    ).read_text(encoding="utf-8")
+    feedback_source = (
+        PACKAGE_ROOT / "src" / "mpcc_latest_state_feedback.cpp"
+    ).read_text(encoding="utf-8")
+    feedback = feedback_header + feedback_source
+    assert "Result solve(const Request & request) noexcept" in feedback
+    assert "production_adapter" not in feedback
+    assert "command_candidate" not in feedback
+    assert "mark_executed(" not in feedback
+    assert "publish_control_command(" not in feedback
+
+    retained_source = (
+        PACKAGE_ROOT / "src" / "mpcc_rate_resolved_retained_revalidation.cpp"
+    ).read_text(encoding="utf-8")
+    steering_reject = retained_source.index("Reason::SteeringUnreachable")
+    feedback_call = retained_source.index(
+        "mpcc_latest_state_feedback::solve(", steering_reject
+    )
+    production_reject = retained_source.index(
+        "result.reason = Reason::SteeringUnreachable;", feedback_call
+    )
+    assert feedback_call < production_reject
+    assert "feedback_shadow_continuation_available" in retained_source[
+        feedback_call:production_reject
+    ]

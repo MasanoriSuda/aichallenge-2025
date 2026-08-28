@@ -306,6 +306,18 @@
       "production_impact": "none; the connector is data only, production authority and all solver, wall, timing and behavior parameters are unchanged",
       "deleted_code": [],
       "revisit_condition": "an observation-only AS-RTI-style feedback phase demonstrates a certified latest-state join within the runtime budget, after which production promotion deletes elapsed-suffix-only candidate adoption atomically"
+    },
+    {
+      "experiment_id": "20260829-latest-state-feedback-steering-ab",
+      "baseline_commit": "12b1273f",
+      "snapshot_ids": [],
+      "hypothesis": "a bounded latest-state steering feedback phase can reconnect asynchronous seven-state candidates rejected by the publication-to-publication slew proof without weakening the physical envelope",
+      "changed_dimension": "observation_only_latest_state_feedback_connector",
+      "result": "accepted",
+      "reason": "run 20260829-031339 projected all 3148 observed steering-unreachable candidate evaluations into the unchanged actuator envelope and 3076 (97.7 percent) produced an exact nonlinear continuation; d1 simultaneously exhausted its old executed cursor and entered canonical emergency despite continuing to generate reconnectable candidates",
+      "production_impact": "none; production still returns steering-unreachable and the feedback module cannot construct authority, publish a command or mark an artifact executed",
+      "deleted_code": [],
+      "revisit_condition": "the corrected trajectory passes unchanged current wall, timed dynamic-obstacle and terminal-successor proofs in observation-only runtime evidence, after which promotion creates one feedback-certified artifact and deletes elapsed-suffix-only candidate adoption atomically"
     }
   ]
 }

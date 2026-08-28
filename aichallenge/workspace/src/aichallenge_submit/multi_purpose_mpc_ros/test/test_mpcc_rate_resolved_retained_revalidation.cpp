@@ -713,7 +713,29 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  UnpublishedCandidateSplicesAtCurrentControlOriginWithoutPrefixAuthority)
+  BootstrapCandidateStartsAtZeroWithoutExecutedPrefix)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.previous_published_steering_rad = 0.079;
+  request.previous_published_command_age_sec = 0.025;
+  request.execution_clock = {
+    retained::ExecutionClockKind::BootstrapCandidate,
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN()};
+
+  const auto bootstrap = retained::evaluate(request);
+
+  ASSERT_EQ(bootstrap.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(bootstrap.proof.has_value());
+  EXPECT_NEAR(bootstrap.cursor_elapsed_sec, 0.0, 1e-9);
+  EXPECT_EQ(bootstrap.proof->cursor.control_stage_index, 0U);
+  EXPECT_NEAR(bootstrap.proof->cursor.stage_elapsed_sec, 0.0, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  TimeAlignedCandidateSplicesAtCurrentControlOriginWithoutPrefixAuthority)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
@@ -735,7 +757,7 @@ TEST(
   // time-aligned suffix, where the same current-world actuator proof correctly
   // rejects this deliberately unreachable command.
   request.execution_clock = {
-    retained::ExecutionClockKind::UnpublishedCandidate,
+    retained::ExecutionClockKind::TimeAlignedCandidate,
     std::numeric_limits<double>::quiet_NaN(),
     std::numeric_limits<double>::quiet_NaN()};
   const auto candidate = retained::evaluate(request);
@@ -745,7 +767,7 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  MovingUnpublishedCandidateUsesReachableSuffixCrossSection)
+  MovingTimeAlignedCandidateUsesReachableSuffixCrossSection)
 {
   auto execution = execution_artifact();
   // State zero is a narrow physical cross-section at the old prediction
@@ -764,7 +786,7 @@ TEST(
 
   auto request = accepted_request(built.plan);
   request.execution_clock = {
-    retained::ExecutionClockKind::UnpublishedCandidate,
+    retained::ExecutionClockKind::TimeAlignedCandidate,
     std::numeric_limits<double>::quiet_NaN(),
     std::numeric_limits<double>::quiet_NaN()};
 

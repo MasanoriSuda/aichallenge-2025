@@ -23595,7 +23595,7 @@ struct MPC
         plan, intent, model != nullptr ? model->s :
         std::numeric_limits<double>::quiet_NaN(), now_sec,
         rate_resolved_retained::ExecutionClock{
-          rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+          rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
           std::numeric_limits<double>::quiet_NaN(),
           std::numeric_limits<double>::quiet_NaN()});
       if (request.has_value()) {
@@ -24052,7 +24052,7 @@ struct MPC
       plan, evaluation.intent, model != nullptr ? model->s :
       std::numeric_limits<double>::quiet_NaN(), now_sec,
       rate_resolved_retained::ExecutionClock{
-        rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+        rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
         std::numeric_limits<double>::quiet_NaN(),
         std::numeric_limits<double>::quiet_NaN()});
     if (!request.has_value()) {
@@ -24344,7 +24344,9 @@ struct MPC
           executed_entry.first_published_control_origin_sec,
           executed_entry.first_published_artifact_elapsed_sec} :
         rate_resolved_retained::ExecutionClock{
-          rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+          executed_plan == nullptr ?
+          rate_resolved_retained::ExecutionClockKind::BootstrapCandidate :
+          rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
           std::numeric_limits<double>::quiet_NaN(),
           std::numeric_limits<double>::quiet_NaN()});
       final_evaluation.candidate_attempted = true;
@@ -26421,7 +26423,7 @@ struct MPC
           retained = evaluate_rate_resolved_track_cruise_plan(
             problem, now_sec, intent, gate_a_proposal->certified_plan,
             rate_resolved_retained::ExecutionClock{
-              rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+              rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
               std::numeric_limits<double>::quiet_NaN(),
               std::numeric_limits<double>::quiet_NaN()});
           gate_a_plan_joined = retained.production_authority.has_value();

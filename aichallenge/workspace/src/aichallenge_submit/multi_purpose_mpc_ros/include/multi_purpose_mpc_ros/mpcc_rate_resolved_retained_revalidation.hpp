@@ -74,19 +74,21 @@ std::optional<FollowTargetObservation> build_follow_target_observation(
 enum class ExecutionClockKind
 {
   Unknown,
-  UnpublishedCandidate,
+  BootstrapCandidate,
+  TimeAlignedCandidate,
   PublishedPlan,
 };
 
 const char * to_string(ExecutionClockKind kind) noexcept;
 
-/// Causal execution time is not certificate age.  An unpublished candidate is
-/// spliced at the suffix corresponding to the current control origin; its
-/// skipped prefix receives no authority and the suffix must still pass the
-/// current physical-state, actuator, wall and dynamic-world connector proofs.
-/// A published plan instead advances from the artifact-local cursor at its
-/// first exact publisher join.  Publication time alone is insufficient when
-/// the first command came from a time-aligned candidate suffix.
+/// Causal execution time is not certificate age.  A bootstrap candidate has
+/// no executed predecessor and starts at cursor zero.  A moving unpublished
+/// successor is spliced at the suffix corresponding to the current control
+/// origin; its skipped prefix receives no authority and the suffix must still
+/// pass the current physical-state, actuator, wall and dynamic-world connector
+/// proofs.  A published plan instead advances from the artifact-local cursor
+/// at its first exact publisher join.  Publication time alone is insufficient
+/// when the first command came from a time-aligned candidate suffix.
 struct ExecutionClock
 {
   ExecutionClockKind kind{ExecutionClockKind::Unknown};

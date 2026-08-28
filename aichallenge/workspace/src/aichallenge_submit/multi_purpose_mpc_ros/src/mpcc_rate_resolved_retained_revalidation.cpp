@@ -472,8 +472,10 @@ const char * to_string(const ExecutionClockKind kind) noexcept
   switch (kind) {
     case ExecutionClockKind::Unknown:
       return "unknown";
-    case ExecutionClockKind::UnpublishedCandidate:
-      return "unpublished-candidate";
+    case ExecutionClockKind::BootstrapCandidate:
+      return "bootstrap-candidate";
+    case ExecutionClockKind::TimeAlignedCandidate:
+      return "time-aligned-candidate";
     case ExecutionClockKind::PublishedPlan:
       return "published-plan";
   }
@@ -492,7 +494,12 @@ artifact::Cursor resolve_execution_cursor(
   }
   double elapsed_sec{};
   switch (clock.kind) {
-    case ExecutionClockKind::UnpublishedCandidate:
+    case ExecutionClockKind::BootstrapCandidate:
+      // No artifact command has crossed the publisher and no predecessor plan
+      // exists. Candidate age is proof provenance, not executed control.
+      elapsed_sec = 0.0;
+      break;
+    case ExecutionClockKind::TimeAlignedCandidate:
       // The solver labels state zero with prediction_origin_sec, not with the
       // later instant at which its asynchronous result is consumed.  Keeping
       // every unpublished result at cursor zero compares the current vehicle

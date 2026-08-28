@@ -2693,3 +2693,25 @@ def test_latest_state_feedback_ab_cannot_create_authority() -> None:
     assert "feedback_shadow_proof_available" in controller
     assert "feedback_shadow_proof_available ?" in controller
     assert "if (retained.feedback_shadow_proof_available)" not in controller
+
+
+def test_normal_candidate_clock_separates_bootstrap_from_moving_successor() -> None:
+    """Only a Store with no executed predecessor may start at cursor zero."""
+
+    retained_start = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow("
+    )
+    retained_end = SOURCE.index(
+        "void record_rate_resolved_track_cruise_shadow(", retained_start
+    )
+    retained = SOURCE[retained_start:retained_end]
+    assert "executed_plan == nullptr ?" in retained
+    assert "ExecutionClockKind::BootstrapCandidate" in retained
+    assert "ExecutionClockKind::TimeAlignedCandidate" in retained
+    assert retained.index("executed_plan == nullptr ?") < retained.index(
+        "ExecutionClockKind::BootstrapCandidate"
+    ) < retained.index("ExecutionClockKind::TimeAlignedCandidate")
+
+    # Gate-A and pre-entry proposals are successors to live normal authority;
+    # they must never acquire cold-bootstrap cursor semantics.
+    assert SOURCE.count("ExecutionClockKind::BootstrapCandidate") == 1

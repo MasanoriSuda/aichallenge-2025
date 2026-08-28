@@ -75,8 +75,13 @@ repaired run revoked that authority in one control interval. This satisfies
 the Slice objective: old Mission geometry no longer survives a failed current
 dynamic certificate.
 
-The full Overtake Gate did not pass. ShiftOut continued for roughly eight
-seconds, did not reach Pass, and later entered SafetyBrake. This is a separate
-candidate/Mission execution-consistency failure, not permission to reintroduce
-the deleted prefix or tune its budget. It becomes the next frozen root-cause
-investigation.
+The first two Overtake episodes did not pass: each remained in ShiftOut and
+later entered SafetyBrake. A third independent episode did reach
+`ShiftOut -> Pass -> Return`, proving that the repaired path can overtake.
+However Return stopped with canonical authority unavailable and completed only
+through external Recovery; it was not a clean `Return -> Idle` completion.
+
+These are separate candidate/Mission and Return execution-continuity failures,
+not permission to reintroduce the deleted prefix or tune its budget. The next
+root-cause investigation compares the failed ShiftOut episodes, the successful
+Pass, and the failed Return handoff from this same run.

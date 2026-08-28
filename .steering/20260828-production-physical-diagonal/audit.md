@@ -133,3 +133,10 @@ its current dynamic certificate became unsafe and ended in SafetyBrake rather
 than Return. The diagonal Slice therefore remains statically accepted but
 dynamically inconclusive; the downstream lifecycle defect is handled in
 `20260828-target-bound-current-world-proof` without tuning this topology.
+
+After that lifecycle repair, run `output/20260828-133920` produced an ordinary
+`ShiftOut -> Pass -> Return` episode. This is evidence that Pass/Return remains
+reachable after deleting unsafe retained geometry, but it does not accept the
+physical-diagonal production path: no diagonal artifact was published in that
+episode, and Return later lost canonical authority and required external
+Recovery. Physical-diagonal dynamic acceptance therefore remains open.

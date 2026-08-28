@@ -15,4 +15,6 @@
 - [x] Commit the coherent production Slice.
 - [x] Execute dynamic Pass -> Return Gate before tuning (Gate failed; evidence
       transferred to `20260828-target-bound-current-world-proof`).
-- [ ] Obtain dynamic Pass -> Return acceptance after the lifecycle repair.
+- [x] Obtain dynamic Pass -> Return evidence after the lifecycle repair
+      (ordinary episode reached Return; physical-diagonal publication remains
+      unaccepted and Return continuity failed).

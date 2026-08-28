@@ -12073,7 +12073,7 @@ struct MPC
     const bool defer_live_side_generation =
       defer_live_tactical_generation(
         shadow_cfg.mpcc_lite_async_worker_enabled,
-        mpcc_lite_async_worker_context_, start_grid_breakout_attempt);
+        mpcc_lite_async_worker_context_);
 
     const auto assess_side = [&](const int side, const bool shadow_only) {
       SideAssessment assessment;
@@ -17652,6 +17652,13 @@ struct MPC
     const std::optional<mpcc_contract::ControlIntent> semantic_intent_override =
     std::nullopt)
   {
+    const auto runtime_started = SteadyClock::now();
+    auto behavior_started = runtime_started;
+    auto behavior_finished = runtime_started;
+    auto preentry_finished = runtime_started;
+    auto dynamic_planning_started = runtime_started;
+    auto dynamic_planning_finished = runtime_started;
+    auto overtake_line_finished = runtime_started;
     constexpr int nx = 3;
     constexpr int nu = 2;
     const int nx_N = nx * (N + 1);
@@ -17829,8 +17836,10 @@ struct MPC
 
     const std::uint64_t wall_cache_miss_count_before_problem =
       physical_wall_envelope_cache_miss_count_;
+    behavior_started = SteadyClock::now();
     auto behavior_output = behavior_override != nullptr ?
       *behavior_override : evaluate_v2x_behavior(ref_wp_id, N, lb, ub, now_sec);
+    behavior_finished = SteadyClock::now();
     prewarm_overtake_entry_wall_cache(
       behavior_output, ref_wp_id, N, lb, ub, now_sec);
     // Consume the causal selected-side result at the boundary where Gate A is
@@ -17841,6 +17850,7 @@ struct MPC
       consume_rate_resolved_preentry_execution_shadow(
         behavior_output, now_sec);
     }
+    preentry_finished = SteadyClock::now();
     last_v2x_behavior_output_ = behavior_output;
     const bool solver_overtake_cooldown_active =
       v2x_overtake_core::is_solver_cooldown_active(
@@ -18052,6 +18062,7 @@ struct MPC
     const auto run_gap_planner = [&](const int dynamic_escape_forced_side) {
         return run_gap_planner_with(*gap_planner, dynamic_escape_forced_side, 0.0);
       };
+    dynamic_planning_started = SteadyClock::now();
     auto planner_output = use_gap_planner ?
       (use_low_speed_local_path ?
       plan_low_speed_local_path_with_static_wall_preflight(
@@ -18848,8 +18859,10 @@ struct MPC
       behavior_output.overtake_gap_available = false;
       behavior_output.overtake_execution_corridor_blocked = true;
     }
+    dynamic_planning_finished = SteadyClock::now();
     auto overtake_line_output =
       update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+    overtake_line_finished = SteadyClock::now();
     const double requested_overtake_speed_floor_mps =
       overtake_line_output.target_velocity_floor;
     const auto normalized_overtake_speed_window =
@@ -20268,6 +20281,38 @@ struct MPC
         current_target_tube.longitudinal_overlap_m;
       progress_execution_target_lateral_separation_m =
         current_target_tube.lateral_center_separation_m;
+    }
+
+    const auto runtime_finished = SteadyClock::now();
+    const double runtime_total_ms =
+      std::chrono::duration<double, std::milli>(
+      runtime_finished - runtime_started).count();
+    if (behavior_override == nullptr && runtime_total_ms > 20.0) {
+      static rclcpp::Clock runtime_log_clock{RCL_STEADY_TIME};
+      RCLCPP_WARN_THROTTLE(
+        rclcpp::get_logger("mpc_controller"), runtime_log_clock, 1000,
+        "Canonical problem assembly runtime: decision=%lu, total=%.3fms, "
+        "regions=setup:%.3f/behavior:%.3f/preentry:%.3f/"
+        "dynamic-planning:%.3f/overtake-line:%.3f/finalize:%.3fms, "
+        "intent=%s, behavior=%s, phase=%s, target=%s, wp_id=%d",
+        static_cast<unsigned long>(active_control_decision_id_),
+        runtime_total_ms,
+        std::chrono::duration<double, std::milli>(
+          behavior_started - runtime_started).count(),
+        std::chrono::duration<double, std::milli>(
+          behavior_finished - behavior_started).count(),
+        std::chrono::duration<double, std::milli>(
+          preentry_finished - behavior_finished).count(),
+        std::chrono::duration<double, std::milli>(
+          dynamic_planning_finished - dynamic_planning_started).count(),
+        std::chrono::duration<double, std::milli>(
+          overtake_line_finished - dynamic_planning_finished).count(),
+        std::chrono::duration<double, std::milli>(
+          runtime_finished - overtake_line_finished).count(),
+        mpcc_contract::to_string(problem_intent),
+        to_string(behavior_output.state), to_string(overtake_line_state_.phase),
+        behavior_output.target_vehicle_id.empty() ?
+        "none" : behavior_output.target_vehicle_id.c_str(), model->wp_id);
     }
 
     return MpcProblem{
@@ -25702,6 +25747,7 @@ struct MPC
     MpcProblem problem, const double now_sec,
     const mpcc_contract::ControlIntent intent)
   {
+    const auto production_started = SteadyClock::now();
     const bool racing_scope =
       problem.track_cruise_shadow_requested &&
       (intent == mpcc_contract::ControlIntent::Track ||
@@ -25735,11 +25781,13 @@ struct MPC
       build_rate_resolved_preentry_execution_draft(
       last_v2x_behavior_output_, now_sec,
       preentry_execution_draft_reject_reason);
+    const auto preentry_draft_finished = SteadyClock::now();
 
     std::string draft_reject_reason;
     const auto submission_draft =
       build_rate_resolved_track_cruise_submission_draft(
       problem, intent, now_sec, draft_reject_reason);
+    const auto submission_draft_finished = SteadyClock::now();
     // Consume the retained artifact against the predecessor which entered
     // this cycle.  The next asynchronous problem is bound only after the
     // current command is committed, so all intents share one causal steering
@@ -25864,6 +25912,7 @@ struct MPC
         static_cast<unsigned long>(gate_a_sequence),
         proposed_blocker.empty() ? "none" : proposed_blocker.c_str());
     }
+    const auto retained_join_finished = SteadyClock::now();
     record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);
     auto output = published_stop_retained ?
       canonical_normal_emergency_stop(
@@ -25906,6 +25955,34 @@ struct MPC
       PendingRateResolvedPublicationSuccessor{
       active_control_decision_id_, now_sec, std::move(problem),
       std::move(submission_draft), std::move(preentry_execution_draft)};
+    const auto production_finished = SteadyClock::now();
+    const double production_total_ms =
+      std::chrono::duration<double, std::milli>(
+      production_finished - production_started).count();
+    if (production_total_ms > 20.0) {
+      static rclcpp::Clock runtime_log_clock{RCL_STEADY_TIME};
+      RCLCPP_WARN_THROTTLE(
+        rclcpp::get_logger("mpc_controller"), runtime_log_clock, 1000,
+        "Canonical production join runtime: decision=%lu, total=%.3fms, "
+        "regions=preentry-draft:%.3f/submission-draft:%.3f/"
+        "retained-join:%.3f/output-successor:%.3fms, intent=%s, "
+        "preentry=%d, retained=%d, selected=%d",
+        static_cast<unsigned long>(active_control_decision_id_),
+        production_total_ms,
+        std::chrono::duration<double, std::milli>(
+          preentry_draft_finished - production_started).count(),
+        std::chrono::duration<double, std::milli>(
+          submission_draft_finished - preentry_draft_finished).count(),
+        std::chrono::duration<double, std::milli>(
+          retained_join_finished - submission_draft_finished).count(),
+        std::chrono::duration<double, std::milli>(
+          production_finished - retained_join_finished).count(),
+        mpcc_contract::to_string(intent),
+        pending_rate_resolved_publication_successor_->
+        preentry_draft.has_value() ? 1 : 0,
+        retained.production_authority.has_value() ? 1 : 0,
+        output.canonical_normal_command.has_value() ? 1 : 0);
+    }
     return output;
   }
 

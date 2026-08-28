@@ -73,25 +73,25 @@ TEST(LatestOnlyWorkerResultPublication, RejectsResultThatWasNeverSubmitted)
 TEST(LatestOnlyWorkerOwnership, DefersOrdinaryLiveTacticalGeneration)
 {
   EXPECT_TRUE(
-    multi_purpose_mpc_ros::defer_live_tactical_generation(true, false, false));
+    multi_purpose_mpc_ros::defer_live_tactical_generation(true, false));
 }
 
 TEST(LatestOnlyWorkerOwnership, KeepsCompleteGenerationInsideWorkerSnapshot)
 {
   EXPECT_FALSE(
-    multi_purpose_mpc_ros::defer_live_tactical_generation(true, true, false));
+    multi_purpose_mpc_ros::defer_live_tactical_generation(true, true));
 }
 
 TEST(LatestOnlyWorkerOwnership, KeepsSynchronousFallbackWhenWorkerIsDisabled)
 {
   EXPECT_FALSE(
-    multi_purpose_mpc_ros::defer_live_tactical_generation(false, false, false));
+    multi_purpose_mpc_ros::defer_live_tactical_generation(false, false));
 }
 
-TEST(LatestOnlyWorkerOwnership, KeepsDedicatedStartGridAssessmentLive)
+TEST(LatestOnlyWorkerOwnership, DefersStartGridTacticalGenerationToo)
 {
-  EXPECT_FALSE(
-    multi_purpose_mpc_ros::defer_live_tactical_generation(true, false, true));
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::defer_live_tactical_generation(true, false));
 }
 
 TEST(LatestOnlyWorker, ReplacesPendingJobWithoutWaitingForRunningJob)

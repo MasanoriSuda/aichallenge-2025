@@ -197,10 +197,10 @@
       "hypothesis": "the first native replay-ready Pass failure discriminates persistent Mission lifecycle from a stateless current-world candidate under the same seven-state SQP and exact proofs",
       "changed_dimension": "candidate_lifecycle_isolation",
       "result": "inconclusive",
-      "reason": "run 20260828-094214 domain 1 fingerprint 7246006054995400977 reproduced A solver failure; positive-side B solved but exact dynamic proof found -0.007975 m clearance, so the registered outcome is model-certificate mismatch rather than a certified lifecycle win",
+      "reason": "run 20260828-094214 domain 1 fingerprint 7246006054995400977 reproduced A solver failure; positive-side B solved but nine partial-escape rows allowed a stage-2 node with -0.209098 m full-disjunction reserve and -0.143659 m exact clearance; affine and nonlinear nodes differed by at most 0.0000923 m, localizing the model-certificate mismatch to candidate convexification rather than Mission lifecycle or SQP state linearization",
       "production_impact": "none; comparison contracts and immutable observation capture changed, while normal command authority, solver policy, clearances, leases and fallbacks are unchanged",
       "deleted_code": [],
-      "revisit_condition": "the sparse convex opponent model and dense swept physical proof share one discretization and footprint contract, after which the identical fingerprint is rerun before candidate C or offline D"
+      "revisit_condition": "candidate C supplies a rough path whose nodes satisfy the complete behind-or-side physical disjunction without partial-escape relaxation, then the identical fingerprint is rerun through the unchanged seven-state refinement and exact proof before offline D"
     }
   ]
 }

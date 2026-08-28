@@ -553,6 +553,15 @@ if(BUILD_TESTING)
     )
   endif()
 
+  ament_add_gtest(test_mpcc_rate_resolved_dynamic_proof
+    test/test_mpcc_rate_resolved_dynamic_proof.cpp
+  )
+  if(TARGET test_mpcc_rate_resolved_dynamic_proof)
+    target_link_libraries(test_mpcc_rate_resolved_dynamic_proof
+      ${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof
+    )
+  endif()
+
   ament_add_gtest(test_mpcc_stateless_maneuver
     test/test_mpcc_stateless_maneuver.cpp
   )

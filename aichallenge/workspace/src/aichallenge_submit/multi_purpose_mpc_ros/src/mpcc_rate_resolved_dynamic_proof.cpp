@@ -74,16 +74,30 @@ void observe_pose(
       result.valid = false;
       result.clear = false;
       result.blocking_obstacle_id = obstacle.id;
+      result.rejection_reason =
+        recovery::DynamicClearanceRejectReason::InvalidObstacle;
+      result.rejected_obstacle_id = obstacle.id;
+      result.rejected_elapsed_sec = elapsed_time_sec;
+      result.rejected_pose = pose;
       return;
     }
     ++result.checked_pose_count;
-    result.minimum_clearance_m = std::min(
-      result.minimum_clearance_m, clearance.value());
+    if (clearance.value() < result.minimum_clearance_m) {
+      result.minimum_clearance_m = clearance.value();
+      result.minimum_clearance_obstacle_id = obstacle.id;
+      result.minimum_clearance_elapsed_sec = elapsed_time_sec;
+      result.minimum_clearance_pose = pose;
+    }
     const auto reason = recovery::observe_dynamic_clearance(
       result.obstacle_clearance[index], clearance.value());
     if (reason != recovery::DynamicClearanceRejectReason::None) {
       result.clear = false;
       result.blocking_obstacle_id = obstacle.id;
+      result.rejection_reason = reason;
+      result.rejected_obstacle_id = obstacle.id;
+      result.rejected_elapsed_sec = elapsed_time_sec;
+      result.rejected_pose = pose;
+      result.rejected_clearance_m = clearance.value();
       return;
     }
   }
@@ -205,6 +219,10 @@ void finalize(
     if (reason != recovery::DynamicClearanceRejectReason::None) {
       result.clear = false;
       result.blocking_obstacle_id = observation.obstacles[index].id;
+      result.rejection_reason = reason;
+      result.rejected_obstacle_id = observation.obstacles[index].id;
+      result.rejected_clearance_m =
+        result.obstacle_clearance[index].final_clearance_m;
       return;
     }
   }

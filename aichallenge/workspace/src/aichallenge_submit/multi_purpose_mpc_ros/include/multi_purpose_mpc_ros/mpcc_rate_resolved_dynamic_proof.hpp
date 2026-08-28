@@ -35,8 +35,24 @@ struct Result
   bool valid{true};
   bool clear{true};
   std::string blocking_obstacle_id;
+  recovery::DynamicClearanceRejectReason rejection_reason{
+    recovery::DynamicClearanceRejectReason::None};
+  std::string rejected_obstacle_id;
+  double rejected_elapsed_sec{std::numeric_limits<double>::quiet_NaN()};
+  recovery::Pose2D rejected_pose{
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN()};
+  double rejected_clearance_m{std::numeric_limits<double>::quiet_NaN()};
   std::size_t checked_pose_count{};
   double minimum_clearance_m{std::numeric_limits<double>::infinity()};
+  std::string minimum_clearance_obstacle_id;
+  double minimum_clearance_elapsed_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  recovery::Pose2D minimum_clearance_pose{
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN()};
   std::vector<recovery::DynamicClearanceSequence> obstacle_clearance;
 };
 

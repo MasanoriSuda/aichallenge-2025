@@ -407,6 +407,8 @@ TEST(PersistentOsqpSolver, RowToleranceNormalizationClosesMixedUnitToleranceLeak
   EXPECT_NEAR(normalized_outcome.result->primal[1], 500.0, 5e-2);
   EXPECT_LE(
     normalized_outcome.result->maximum_normalized_constraint_violation, 1.0);
+  EXPECT_EQ(normalized_outcome.telemetry.scaling_iterations, 0);
+  EXPECT_GT(baseline_outcome.telemetry.scaling_iterations, 0);
 }
 
 TEST(PersistentOsqpSolver, RowToleranceNormalizationUsesDimensionlessRows)

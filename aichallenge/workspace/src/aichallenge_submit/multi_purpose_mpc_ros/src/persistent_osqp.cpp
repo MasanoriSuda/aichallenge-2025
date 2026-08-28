@@ -647,6 +647,13 @@ struct PersistentOsqpSolver::Impl
       ConstraintPreconditioningPolicy::RowToleranceNormalized)
     {
       settings.eps_rel = 0.0;
+      // This policy already owns both transformations presented to OSQP:
+      // physical-units-per-solver-unit variable coordinates and per-row
+      // physical tolerance normalization. Applying OSQP's opaque Ruiz
+      // scaling a second time breaks that single numerical provenance and can
+      // make an otherwise feasible rate-resolved QP stall at the iteration
+      // limit. Keep OSQP's internal scaling only for the unconditioned policy.
+      settings.scaling = 0;
     }
     settings.verbose = false;
     settings.warm_start = true;

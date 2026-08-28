@@ -121,6 +121,52 @@ struct LatestStateFeedbackPreparation
   Eigen::VectorXd prepared_primal;
 };
 
+/// Result of moving an immutable semantic candidate to a later control clock
+/// without changing the absolute time of any surviving future stage.  This is
+/// observation-only architecture evidence: it does not carry a mailbox, Store
+/// or publication API.
+enum class TimeAlignedSuffixReason
+{
+  Accepted,
+  InvalidRequest,
+  TimeRegression,
+  HorizonExhausted,
+  ExecutionPrefixExhausted,
+  SubminimumFirstStage,
+  NominalPathMismatch,
+  DynamicObstacleStageMismatch,
+  Count,
+};
+
+const char * to_string(TimeAlignedSuffixReason reason) noexcept;
+
+struct TimeAlignedSuffixRequest
+{
+  const Snapshot * source{};
+  double control_prediction_origin_sec{};
+  artifact::PredictedState initial_state;
+  Eigen::Matrix<double, mpcc_rate_resolved::kInputDimension, 1>
+  previous_input{
+    Eigen::Matrix<double, mpcc_rate_resolved::kInputDimension, 1>::Zero()};
+};
+
+struct TimeAlignedSuffixResult
+{
+  TimeAlignedSuffixReason reason{TimeAlignedSuffixReason::InvalidRequest};
+  std::size_t consumed_stage_count{};
+  double elapsed_in_first_remaining_stage_sec{};
+  double first_remaining_stage_duration_sec{};
+  std::optional<Snapshot> snapshot;
+  std::string detail{"not-evaluated"};
+};
+
+/// Rebuild a complete semantic suffix at the latest control origin.  State,
+/// input, nominal path and dynamic-obstacle arrays all advance by one common
+/// stage count.  The active first stage is shortened instead of restarting its
+/// old duration, so surviving stages keep their original absolute timestamps.
+TimeAlignedSuffixResult resolve_time_aligned_suffix(
+  const TimeAlignedSuffixRequest & request) noexcept;
+
 enum class LatestStateFeedbackReason
 {
   InvalidRequest,

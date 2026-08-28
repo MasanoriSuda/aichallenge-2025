@@ -478,6 +478,122 @@ TEST(
     old_origin.course_progress_origin_m + latest_in_old_origin.progress_m);
 }
 
+TEST(
+  MpccRateResolvedShadow,
+  TimeAlignedSuffixSolvesTheMixedOriginFeedbackCounterexample)
+{
+  shadow::SolverContext preparation_context;
+  shadow::LatestStateFeedbackSolverContext feedback_context;
+  auto old_origin = snapshot();
+  old_origin.request = narrow_progress_request();
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.40, 0.10, 0.08};
+  const double feedback_origin_sec =
+    old_origin.control_prediction_origin_sec + 0.20;
+  const auto old_qp = feedback_context.evaluate(
+    shadow::LatestStateFeedbackRequest{
+      prepared.latest_state_feedback_preparation,
+      feedback_origin_sec,
+      old_origin.control_prediction_origin_sec + 0.07,
+      latest_state,
+      old_origin.request.previous_input});
+  ASSERT_EQ(old_qp.reason, shadow::LatestStateFeedbackReason::SolveRejected)
+    << old_qp.detail;
+
+  const auto suffix = shadow::resolve_time_aligned_suffix(
+    shadow::TimeAlignedSuffixRequest{
+      &old_origin, feedback_origin_sec, latest_state,
+      old_origin.request.previous_input});
+  ASSERT_EQ(suffix.reason, shadow::TimeAlignedSuffixReason::Accepted)
+    << suffix.detail;
+  ASSERT_TRUE(suffix.snapshot.has_value());
+  EXPECT_EQ(suffix.consumed_stage_count, 2U);
+  EXPECT_NEAR(suffix.first_remaining_stage_duration_sec, 0.10, 1e-12);
+  EXPECT_EQ(suffix.snapshot->request.horizon_steps, 1);
+  EXPECT_EQ(suffix.snapshot->execution_prefix_steps, 1);
+  EXPECT_EQ(suffix.snapshot->request.states.size(), 2U);
+  EXPECT_EQ(suffix.snapshot->request.inputs.size(), 1U);
+  EXPECT_EQ(suffix.snapshot->nominal_path_distance_m.size(), 2U);
+  EXPECT_NEAR(suffix.snapshot->nominal_path_distance_m.front(), 0.0, 1e-12);
+  EXPECT_NEAR(suffix.snapshot->nominal_path_distance_m.back(), 0.20, 1e-12);
+
+  shadow::SolverContext suffix_context;
+  const auto solved = suffix_context.evaluate(suffix.snapshot.value());
+  EXPECT_EQ(solved.outcome, shadow::Outcome::Solved) << solved.detail;
+  ASSERT_NE(solved.execution_artifact, nullptr);
+  EXPECT_NEAR(
+    solved.execution_artifact->predicted_states.front().progress_m,
+    latest_state.progress_m,
+    solved.execution_artifact->physical_global_tolerance);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  TimeAlignedSuffixMovesEveryStageIndexedInputWithOneClock)
+{
+  auto source = snapshot();
+  source.dynamic_obstacle_stages = {
+    {true, 10.0, 1.0, 0.8, 0.75},
+    {true, 20.0, 1.1, 0.8, 0.75},
+    {true, 30.0, 1.2, 0.8, 0.75}};
+  source.dynamic_obstacle_forced_first_pass_side_stage = 2;
+  source.dynamic_obstacle_forced_first_ahead_stage = 3;
+  source.dynamic_obstacle_forced_diagonal_start_stage = 1;
+  source.dynamic_obstacle_forced_diagonal_full_side_stage = 2;
+  const execution::PredictedState latest_state{
+    0.1, 0.0, 0.0, 2.0, 0.22, 0.10, 0.08};
+
+  const auto suffix = shadow::resolve_time_aligned_suffix(
+    shadow::TimeAlignedSuffixRequest{
+      &source, source.control_prediction_origin_sec + 0.11,
+      latest_state, source.request.previous_input});
+
+  ASSERT_EQ(suffix.reason, shadow::TimeAlignedSuffixReason::Accepted)
+    << suffix.detail;
+  ASSERT_TRUE(suffix.snapshot.has_value());
+  EXPECT_EQ(suffix.consumed_stage_count, 1U);
+  EXPECT_NEAR(suffix.elapsed_in_first_remaining_stage_sec, 0.01, 1e-12);
+  EXPECT_NEAR(suffix.first_remaining_stage_duration_sec, 0.09, 1e-12);
+  EXPECT_EQ(suffix.snapshot->request.horizon_steps, 2);
+  EXPECT_EQ(suffix.snapshot->dynamic_obstacle_stages.size(), 2U);
+  EXPECT_DOUBLE_EQ(
+    suffix.snapshot->dynamic_obstacle_stages.front().target_progress_m,
+    20.0);
+  ASSERT_EQ(suffix.snapshot->nominal_path_distance_m.size(), 3U);
+  EXPECT_NEAR(suffix.snapshot->nominal_path_distance_m[0], 0.0, 1e-12);
+  EXPECT_NEAR(suffix.snapshot->nominal_path_distance_m[1], 0.18, 1e-12);
+  EXPECT_NEAR(suffix.snapshot->nominal_path_distance_m[2], 0.38, 1e-12);
+  EXPECT_EQ(
+    suffix.snapshot->dynamic_obstacle_forced_first_pass_side_stage, 1);
+  EXPECT_EQ(suffix.snapshot->dynamic_obstacle_forced_first_ahead_stage, 2);
+  EXPECT_EQ(suffix.snapshot->dynamic_obstacle_forced_diagonal_start_stage, 0);
+  EXPECT_EQ(
+    suffix.snapshot->dynamic_obstacle_forced_diagonal_full_side_stage, 1);
+  EXPECT_EQ(
+    suffix.snapshot->identity.source_context.horizon_steps, 2U);
+  EXPECT_TRUE(contract::problem_context_complete(
+      suffix.snapshot->identity.source_context));
+}
+
+TEST(MpccRateResolvedShadow, TimeAlignedSuffixRejectsSubminimumRemainder)
+{
+  const auto source = snapshot();
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.19, 0.10, 0.08};
+  const auto suffix = shadow::resolve_time_aligned_suffix(
+    shadow::TimeAlignedSuffixRequest{
+      &source, source.control_prediction_origin_sec + 0.095,
+      latest_state, source.request.previous_input});
+  EXPECT_EQ(
+    suffix.reason,
+    shadow::TimeAlignedSuffixReason::SubminimumFirstStage);
+  EXPECT_FALSE(suffix.snapshot.has_value());
+}
+
 TEST(MpccRateResolvedShadow, RejectsDynamicWorldFromDifferentObservationEpoch)
 {
   shadow::SolverContext context;

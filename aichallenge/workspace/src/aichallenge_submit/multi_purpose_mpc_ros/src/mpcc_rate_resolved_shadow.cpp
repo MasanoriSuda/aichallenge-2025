@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <exception>
 #include <sstream>
 #include <utility>
 
@@ -826,6 +827,274 @@ persistent_osqp::PhysicalConstraintTolerance
 SolverContext::physical_constraint_tolerance() const noexcept
 {
   return solver_.physical_constraint_tolerance();
+}
+
+const char * to_string(const TimeAlignedSuffixReason reason) noexcept
+{
+  switch (reason) {
+    case TimeAlignedSuffixReason::Accepted:
+      return "accepted";
+    case TimeAlignedSuffixReason::InvalidRequest:
+      return "invalid-request";
+    case TimeAlignedSuffixReason::TimeRegression:
+      return "time-regression";
+    case TimeAlignedSuffixReason::HorizonExhausted:
+      return "horizon-exhausted";
+    case TimeAlignedSuffixReason::ExecutionPrefixExhausted:
+      return "execution-prefix-exhausted";
+    case TimeAlignedSuffixReason::SubminimumFirstStage:
+      return "subminimum-first-stage";
+    case TimeAlignedSuffixReason::NominalPathMismatch:
+      return "nominal-path-mismatch";
+    case TimeAlignedSuffixReason::DynamicObstacleStageMismatch:
+      return "dynamic-obstacle-stage-mismatch";
+    case TimeAlignedSuffixReason::Count:
+      return "count";
+  }
+  return "unknown";
+}
+
+TimeAlignedSuffixResult resolve_time_aligned_suffix(
+  const TimeAlignedSuffixRequest & request) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  TimeAlignedSuffixResult result;
+  const auto reject = [&result](
+      const TimeAlignedSuffixReason reason, const std::string & detail) {
+      result.reason = reason;
+      result.detail = detail;
+      return result;
+    };
+  try {
+    if (
+      request.source == nullptr ||
+      !artifact::identity_valid(request.source->identity) ||
+      !std::isfinite(request.control_prediction_origin_sec) ||
+      !std::isfinite(request.source->control_prediction_origin_sec) ||
+      !request.previous_input.allFinite())
+    {
+      return reject(
+        TimeAlignedSuffixReason::InvalidRequest,
+        "invalid source identity, timing or previous input");
+    }
+    const auto & source = *request.source;
+    const auto & latest = request.initial_state;
+    if (
+      !std::isfinite(latest.lateral_m) || !std::isfinite(latest.lag_m) ||
+      !std::isfinite(latest.heading_offset_rad) ||
+      !std::isfinite(latest.velocity_mps) || latest.velocity_mps < 0.0 ||
+      !std::isfinite(latest.progress_m) ||
+      !std::isfinite(latest.steering_rad) ||
+      !std::isfinite(latest.response_steering_rad) ||
+      std::abs(latest.steering_rad) >
+      source.request.maximum_abs_steering_rad ||
+      std::abs(latest.response_steering_rad) >
+      source.request.maximum_abs_steering_rad)
+    {
+      return reject(
+        TimeAlignedSuffixReason::InvalidRequest,
+        "invalid latest seven-state observation");
+    }
+    const int horizon = source.request.horizon_steps;
+    if (
+      horizon <= 0 ||
+      source.request.inputs.size() != static_cast<std::size_t>(horizon) ||
+      source.request.states.size() != static_cast<std::size_t>(horizon + 1) ||
+      source.execution_prefix_steps <= 0 ||
+      source.execution_prefix_steps > horizon)
+    {
+      return reject(
+        TimeAlignedSuffixReason::InvalidRequest,
+        "invalid source horizon or execution prefix");
+    }
+    if (
+      source.nominal_path_distance_m.size() !=
+      static_cast<std::size_t>(horizon + 1))
+    {
+      return reject(
+        TimeAlignedSuffixReason::NominalPathMismatch,
+        "nominal path does not match source horizon");
+    }
+    if (
+      !source.dynamic_obstacle_stages.empty() &&
+      source.dynamic_obstacle_stages.size() !=
+      static_cast<std::size_t>(horizon))
+    {
+      return reject(
+        TimeAlignedSuffixReason::DynamicObstacleStageMismatch,
+        "dynamic obstacle stages do not match source horizon");
+    }
+
+    double elapsed_sec = request.control_prediction_origin_sec -
+      source.control_prediction_origin_sec;
+    constexpr double kTimeEpsilonSec = 1.0e-9;
+    if (!std::isfinite(elapsed_sec) || elapsed_sec < -kTimeEpsilonSec) {
+      return reject(
+        TimeAlignedSuffixReason::TimeRegression,
+        "feedback control origin precedes preparation origin");
+    }
+    elapsed_sec = std::max(0.0, elapsed_sec);
+    std::size_t consumed = 0U;
+    while (consumed < source.request.inputs.size()) {
+      const double stage_dt = source.request.inputs[consumed].stage_dt_sec;
+      if (!std::isfinite(stage_dt) || stage_dt <= 0.0) {
+        return reject(
+          TimeAlignedSuffixReason::InvalidRequest,
+          "source contains invalid stage duration");
+      }
+      if (elapsed_sec < stage_dt - kTimeEpsilonSec) {
+        break;
+      }
+      elapsed_sec = std::max(0.0, elapsed_sec - stage_dt);
+      ++consumed;
+    }
+    result.consumed_stage_count = consumed;
+    result.elapsed_in_first_remaining_stage_sec = elapsed_sec;
+    if (consumed >= source.request.inputs.size()) {
+      return reject(
+        TimeAlignedSuffixReason::HorizonExhausted,
+        "feedback control origin is outside the prepared horizon");
+    }
+    if (consumed >= static_cast<std::size_t>(source.execution_prefix_steps)) {
+      return reject(
+        TimeAlignedSuffixReason::ExecutionPrefixExhausted,
+        "feedback control origin is outside the certified execution prefix");
+    }
+    const double source_first_dt =
+      source.request.inputs[consumed].stage_dt_sec;
+    const double first_remaining_dt = source_first_dt - elapsed_sec;
+    result.first_remaining_stage_duration_sec = first_remaining_dt;
+    if (
+      !std::isfinite(first_remaining_dt) ||
+      first_remaining_dt < source.request.minimum_stage_dt_sec)
+    {
+      return reject(
+        TimeAlignedSuffixReason::SubminimumFirstStage,
+        "remaining first stage is shorter than the model contract");
+    }
+
+    for (std::size_t index = 0U;
+      index < source.nominal_path_distance_m.size(); ++index)
+    {
+      const double distance = source.nominal_path_distance_m[index];
+      if (
+        !std::isfinite(distance) ||
+        (index > 0U &&
+        distance + 1.0e-9 < source.nominal_path_distance_m[index - 1U]))
+      {
+        return reject(
+          TimeAlignedSuffixReason::NominalPathMismatch,
+          "nominal path is nonfinite or nonmonotonic");
+      }
+    }
+
+    Snapshot suffix = source;
+    const int suffix_horizon =
+      horizon - static_cast<int>(consumed);
+    suffix.control_prediction_origin_sec =
+      request.control_prediction_origin_sec;
+    suffix.request.horizon_steps = suffix_horizon;
+    suffix.request.initial_state <<
+      latest.lateral_m, latest.lag_m, latest.heading_offset_rad,
+      latest.velocity_mps, latest.progress_m;
+    suffix.request.current_steering_rad = latest.steering_rad;
+    suffix.request.current_response_steering_rad =
+      latest.response_steering_rad;
+    suffix.request.previous_input[0] =
+      request.previous_input[model::kAccelerationIndex];
+    suffix.request.previous_input[2] =
+      request.previous_input[model::kVirtualProgressSpeedIndex];
+
+    std::vector<mpcc_rate_resolved_adapter::StateStage> states;
+    states.reserve(static_cast<std::size_t>(suffix_horizon + 1));
+    auto current_stage = source.request.states[consumed];
+    current_stage.reference <<
+      latest.lateral_m, latest.lag_m, latest.heading_offset_rad,
+      latest.velocity_mps, latest.progress_m;
+    current_stage.lower = current_stage.reference;
+    current_stage.upper = current_stage.reference;
+    states.push_back(std::move(current_stage));
+    for (std::size_t stage = consumed + 1U;
+      stage < source.request.states.size(); ++stage)
+    {
+      states.push_back(source.request.states[stage]);
+    }
+    suffix.request.states = std::move(states);
+
+    suffix.request.inputs.assign(
+      source.request.inputs.begin() + static_cast<std::ptrdiff_t>(consumed),
+      source.request.inputs.end());
+    suffix.request.inputs.front().stage_dt_sec = first_remaining_dt;
+    suffix.execution_prefix_steps =
+      source.execution_prefix_steps - static_cast<int>(consumed);
+
+    const double first_fraction = elapsed_sec / source_first_dt;
+    const double current_nominal_distance =
+      source.nominal_path_distance_m[consumed] + first_fraction *
+      (source.nominal_path_distance_m[consumed + 1U] -
+      source.nominal_path_distance_m[consumed]);
+    suffix.nominal_path_distance_m.clear();
+    suffix.nominal_path_distance_m.reserve(
+      static_cast<std::size_t>(suffix_horizon + 1));
+    suffix.nominal_path_distance_m.push_back(0.0);
+    for (std::size_t stage = consumed + 1U;
+      stage < source.nominal_path_distance_m.size(); ++stage)
+    {
+      const double relative_distance =
+        source.nominal_path_distance_m[stage] - current_nominal_distance;
+      if (!std::isfinite(relative_distance) || relative_distance < -1.0e-9) {
+        return reject(
+          TimeAlignedSuffixReason::NominalPathMismatch,
+          "feedback origin lies beyond a nominal path stage");
+      }
+      suffix.nominal_path_distance_m.push_back(
+        std::max(0.0, relative_distance));
+    }
+
+    if (!source.dynamic_obstacle_stages.empty()) {
+      suffix.dynamic_obstacle_stages.assign(
+        source.dynamic_obstacle_stages.begin() +
+        static_cast<std::ptrdiff_t>(consumed),
+        source.dynamic_obstacle_stages.end());
+    }
+    const auto shift_optional_stage = [consumed](const int stage) {
+        if (stage < 0) {
+          return -1;
+        }
+        return std::max(0, stage - static_cast<int>(consumed));
+      };
+    suffix.dynamic_obstacle_forced_first_pass_side_stage =
+      shift_optional_stage(
+      source.dynamic_obstacle_forced_first_pass_side_stage);
+    suffix.dynamic_obstacle_forced_first_ahead_stage =
+      shift_optional_stage(source.dynamic_obstacle_forced_first_ahead_stage);
+    suffix.dynamic_obstacle_forced_diagonal_start_stage =
+      shift_optional_stage(
+      source.dynamic_obstacle_forced_diagonal_start_stage);
+    suffix.dynamic_obstacle_forced_diagonal_full_side_stage =
+      shift_optional_stage(
+      source.dynamic_obstacle_forced_diagonal_full_side_stage);
+
+    auto source_context = suffix.identity.source_context;
+    source_context.horizon_steps =
+      static_cast<std::size_t>(suffix_horizon);
+    suffix.identity.source_context =
+      mpcc_execution_contract::seal_problem_context(
+      std::move(source_context));
+
+    result.reason = TimeAlignedSuffixReason::Accepted;
+    result.snapshot = std::move(suffix);
+    result.detail = "time-aligned semantic suffix rebuilt";
+    return result;
+  } catch (const std::exception & error) {
+    return reject(
+      TimeAlignedSuffixReason::InvalidRequest,
+      std::string{"suffix rebuild exception: "} + error.what());
+  } catch (...) {
+    return reject(
+      TimeAlignedSuffixReason::InvalidRequest,
+      "suffix rebuild unknown exception");
+  }
 }
 
 persistent_osqp::PhysicalConstraintTolerance

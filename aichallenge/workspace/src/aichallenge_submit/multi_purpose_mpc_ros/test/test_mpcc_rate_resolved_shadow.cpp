@@ -85,6 +85,21 @@ adapter::Request straight_request(const int horizon = 3)
   return request;
 }
 
+adapter::Request narrow_progress_request(const int horizon = 3)
+{
+  auto request = straight_request(horizon);
+  for (int stage = 0; stage <= horizon; ++stage) {
+    auto & state = request.states[static_cast<std::size_t>(stage)];
+    const double progress_reference_m = 0.2 * static_cast<double>(stage);
+    state.reference[model::kProgressIndex] = progress_reference_m;
+    state.lower[model::kProgressIndex] = progress_reference_m - 0.025;
+    state.upper[model::kProgressIndex] = progress_reference_m + 0.025;
+  }
+  request.states.front().lower[model::kProgressIndex] = 0.0;
+  request.states.front().upper[model::kProgressIndex] = 0.0;
+  return request;
+}
+
 shadow::Snapshot snapshot(const std::uint64_t sequence = 1U)
 {
   shadow::Snapshot result;
@@ -410,6 +425,57 @@ TEST(MpccRateResolvedShadow, LatestStateFeedbackRejectsInvalidLatestState)
   EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::InvalidRequest);
   EXPECT_FALSE(result.solve_attempted);
   EXPECT_EQ(result.execution_artifact, nullptr);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  ArchitectureEscapeHatchClassifiesOldOriginFeedbackAsProblemRebuildDefect)
+{
+  shadow::SolverContext preparation_context;
+  shadow::LatestStateFeedbackSolverContext feedback_context;
+  auto old_origin = snapshot();
+  old_origin.request = narrow_progress_request();
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+
+  // The vehicle has advanced 0.40 m relative to the preparation's local
+  // progress origin. Replacing only x0 leaves every future progress box and
+  // SQP linearization at the old origin, so stage one cannot be reached.
+  const execution::PredictedState latest_in_old_origin{
+    0.0, 0.0, 0.0, 2.0, 0.40, 0.10, 0.08};
+  const auto old_problem_feedback = feedback_context.evaluate(
+    shadow::LatestStateFeedbackRequest{
+      prepared.latest_state_feedback_preparation,
+      old_origin.control_prediction_origin_sec + 0.20,
+      old_origin.control_prediction_origin_sec + 0.07,
+      latest_in_old_origin,
+      old_origin.request.previous_input});
+  EXPECT_EQ(
+    old_problem_feedback.reason,
+    shadow::LatestStateFeedbackReason::SolveRejected)
+    << old_problem_feedback.detail;
+  EXPECT_EQ(old_problem_feedback.execution_artifact, nullptr);
+
+  // A current-world rebuild represents the same physical state at a new local
+  // course-progress origin. It rebuilds all stage bounds, references and
+  // linearizations together instead of mixing two time origins.
+  shadow::SolverContext current_world_context;
+  auto current_world = old_origin;
+  current_world.identity.sequence += 1U;
+  current_world.identity.snapshot_sec += 0.20;
+  current_world.control_prediction_origin_sec += 0.20;
+  current_world.course_progress_origin_m += latest_in_old_origin.progress_m;
+  current_world.request = narrow_progress_request();
+  current_world.identity.source_context.decision_id += 1U;
+  current_world.identity.source_context = contract::seal_problem_context(
+    std::move(current_world.identity.source_context));
+  const auto rebuilt = current_world_context.evaluate(current_world);
+  EXPECT_EQ(rebuilt.outcome, shadow::Outcome::Solved) << rebuilt.detail;
+  ASSERT_NE(rebuilt.execution_artifact, nullptr);
+  EXPECT_DOUBLE_EQ(
+    rebuilt.execution_artifact->course_progress_origin_m,
+    old_origin.course_progress_origin_m + latest_in_old_origin.progress_m);
 }
 
 TEST(MpccRateResolvedShadow, RejectsDynamicWorldFromDifferentObservationEpoch)

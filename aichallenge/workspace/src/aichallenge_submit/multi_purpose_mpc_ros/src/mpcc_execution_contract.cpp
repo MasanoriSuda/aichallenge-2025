@@ -538,6 +538,10 @@ std::uint64_t problem_context_fingerprint(
   builder.append_u64(context.target_obstacle_generation);
   builder.append_string(context.target_id);
   builder.append_i64(context.execution_side_sign);
+  builder.append_bool(context.dynamic_obstacle_constraint_active);
+  builder.append_u64(context.dynamic_obstacle_generation);
+  builder.append_string(context.dynamic_obstacle_id);
+  builder.append_i64(context.dynamic_obstacle_side_sign);
   builder.append_u64(static_cast<std::uint64_t>(context.horizon_steps));
   builder.append_enum(context.formulation);
   builder.append_string(context.state_schema_id);
@@ -565,12 +569,22 @@ bool problem_context_complete(const MpccProblemContext & context) noexcept
     canonical_normal_intent_requires_execution_side(context.intent) ?
     (context.execution_side_sign == -1 || context.execution_side_sign == 1) :
     context.execution_side_sign == 0;
+  const bool dynamic_obstacle_identity_complete =
+    context.dynamic_obstacle_constraint_active ?
+    (!context.dynamic_obstacle_id.empty() &&
+    context.dynamic_obstacle_generation > 0U &&
+    context.dynamic_obstacle_side_sign >= -1 &&
+    context.dynamic_obstacle_side_sign <= 1) :
+    (context.dynamic_obstacle_id.empty() &&
+    context.dynamic_obstacle_generation == 0U &&
+    context.dynamic_obstacle_side_sign == 0);
   return
     context.decision_id > 0U && context.intent != ControlIntent::Unknown &&
     context.stage_geometry_id > 0U && context.horizon_steps > 0U &&
     context.formulation != Formulation::Unresolved && schemas_complete(context) &&
     required_target_present && target_generation_complete &&
-    execution_side_complete && context.fingerprint > 0U &&
+    execution_side_complete && dynamic_obstacle_identity_complete &&
+    context.fingerprint > 0U &&
     context.fingerprint == problem_context_fingerprint(context);
 }
 

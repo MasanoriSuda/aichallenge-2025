@@ -144,13 +144,23 @@ TargetHorizon rebuild_target_horizon(
     return result;
   }
   const auto & world = source.replay_world.value();
+  const auto & problem_context = source.identity.source_context;
+  const std::string & selected_obstacle_id =
+    problem_context.dynamic_obstacle_constraint_active ?
+    problem_context.dynamic_obstacle_id : problem_context.target_id;
+  const std::uint64_t selected_obstacle_generation =
+    problem_context.dynamic_obstacle_constraint_active ?
+    problem_context.dynamic_obstacle_generation :
+    problem_context.target_obstacle_generation;
   const auto target = std::find_if(
     world.obstacles.begin(), world.obstacles.end(),
     [&](const auto & obstacle) {
-      return obstacle.id == source.identity.source_context.target_id;
+      return obstacle.id == selected_obstacle_id;
     });
   if (
+    selected_obstacle_id.empty() || selected_obstacle_generation == 0U ||
     target == world.obstacles.end() || target->observation_generation == 0U ||
+    target->observation_generation != selected_obstacle_generation ||
     target->observation_generation != world.observation_generation ||
     !std::isfinite(target->x_m) || !std::isfinite(target->y_m) ||
     !std::isfinite(target->velocity_x_mps) ||
@@ -376,6 +386,14 @@ static Result build_with_intent_policy(
         "stateless producer is restricted to Overtake intents");
     }
     const int horizon = source.request.horizon_steps;
+    const auto & source_context = source.identity.source_context;
+    const std::string & selected_obstacle_id =
+      source_context.dynamic_obstacle_constraint_active ?
+      source_context.dynamic_obstacle_id : source_context.target_id;
+    const std::uint64_t selected_obstacle_generation =
+      source_context.dynamic_obstacle_constraint_active ?
+      source_context.dynamic_obstacle_generation :
+      source_context.target_obstacle_generation;
     const auto target_horizon = rebuild_target_horizon(source);
     if (
       !target_horizon.accepted || target_horizon.stages.size() !=
@@ -397,10 +415,16 @@ static Result build_with_intent_policy(
     auto & candidate = seed.solver_snapshot;
     if (!follow_audit) {
       candidate.identity.source_context.execution_side_sign = pass_side_sign;
-      candidate.identity.source_context.fingerprint = 0U;
-      candidate.identity.source_context = contract::seal_problem_context(
-        candidate.identity.source_context);
     }
+    candidate.identity.source_context.dynamic_obstacle_constraint_active = true;
+    candidate.identity.source_context.dynamic_obstacle_id = selected_obstacle_id;
+    candidate.identity.source_context.dynamic_obstacle_generation =
+      selected_obstacle_generation;
+    candidate.identity.source_context.dynamic_obstacle_side_sign =
+      pass_side_sign;
+    candidate.identity.source_context.fingerprint = 0U;
+    candidate.identity.source_context = contract::seal_problem_context(
+      candidate.identity.source_context);
     candidate.dynamic_obstacle_pass_side_sign = pass_side_sign;
     candidate.dynamic_obstacle_refinement_active = true;
     candidate.dynamic_obstacle_stages = target_horizon.stages;
@@ -526,7 +550,10 @@ Result bind_current_world_target_preserving_geometry(
 
   auto & seed = result.seed.value();
   auto & candidate = seed.solver_snapshot;
-  candidate.identity = source.identity;
+  // build() sealed the newly introduced target rows into the candidate
+  // problem identity.  Preserve that identity while restoring only the
+  // captured path/reference geometry; assigning source.identity here would
+  // make the QP rows and their immutable provenance disagree.
   candidate.request = source.request;
   seed.lateral_reference_m.clear();
   seed.lateral_reference_m.reserve(source.request.states.size());

@@ -2869,6 +2869,33 @@ lateral referenceだけを供給し、現在状態からのwall、横加速度�
 引き続き即時拒否する。production authority、clearance、solver tolerance、lease、grace、timeout、speed policyは
 変更しない。
 
+#### 動的障害物制約のproblem identity分離（2026-08-28、2025由来の暫定）
+
+seven-state QPの`MpccProblemContext`では、戦術Missionが意味する`target_id`と、stage-wiseな
+動的障害物rowを生成した車両のidentityを別契約とする。Track／Cruiseは戦術targetを持たない一方で、
+現在の前走車に対するstay-behind rowを持てるため、両者を同じfieldで表すと物理rowだけが存在して
+生成元provenanceをfingerprintできない。
+
+動的障害物制約がactiveなproblemは、obstacle ID、V2X observation generation、constraint side
+（stay-behindは0、pass homotopyは-1／+1）をall-or-noneで保持する。これらをproblem fingerprint、
+solver artifact、physical replay world、architecture snapshotへ一貫して渡す。semantic targetが空である
+ことを理由に制約identityを省略せず、反対に制約がinactiveなproblemへ前周期のidentityを残さない。
+warm startの意味互換性はactive、ID、sideを比較するが、毎観測で変わるgenerationだけを理由に同じ
+物理問題系列のwarm startを捨てない。solution／replayの完全一致判定ではgenerationも必須である。
+
+architecture failure snapshotは、このidentityを持つ新規artifactをschema v2として記録する。v1 artifactは
+exact QP replayには引き続き使えるが、どの障害物世代がrowを生成したかを後から推測できないため、
+物理worldを用いるA/B/C/D interaction replayへ自動移行しない。targetまたは最新worldから値を補完して
+provenance不一致を隠すことは禁止する。
+
+`output/20260828-230302`では、修正前runに反復していた
+`physical obstacle world does not match problem identity`と
+`dynamic obstacle refinement has no matching problem identity`はいずれも0件だった。Cruise／Followに加え、
+ShiftOutでもcertified／executed-retainedのseven-state normal commandを観測した。一方、同runは後段で
+`dynamic Mission wait: live overtake corridor unavailable`からFollowPrepareへ遷移しており、これは
+constraint identity修正の合格条件に含めない。Mission lifecycle／intent引き渡しの別Sliceで扱い、
+clearance、timeout、fallbackまたはsolver toleranceの変更で混在させない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

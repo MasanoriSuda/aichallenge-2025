@@ -101,6 +101,19 @@ shadow::Snapshot snapshot(const std::uint64_t sequence = 1U)
   return result;
 }
 
+void bind_dynamic_obstacle_identity(
+  shadow::Snapshot & snapshot, const std::string & obstacle_id = "d2",
+  const std::uint64_t observation_generation = 7U,
+  const int side_sign = 1)
+{
+  auto & context = snapshot.identity.source_context;
+  context.dynamic_obstacle_constraint_active = true;
+  context.dynamic_obstacle_id = obstacle_id;
+  context.dynamic_obstacle_generation = observation_generation;
+  context.dynamic_obstacle_side_sign = side_sign;
+  context = contract::seal_problem_context(std::move(context));
+}
+
 recovery::OccupancyGrid corridor_grid()
 {
   recovery::OccupancyGrid grid;
@@ -321,6 +334,7 @@ TEST(MpccRateResolvedShadow, RejectsDynamicWorldFromDifferentObservationEpoch)
   problem_context.execution_side_sign = 1;
   input.identity.source_context =
     contract::seal_problem_context(std::move(problem_context));
+  bind_dynamic_obstacle_identity(input, "d2", 7U, 1);
   input.dynamic_obstacle_refinement_active = true;
   input.dynamic_obstacle_pass_side_sign = 1;
   input.dynamic_obstacle_stages.assign(
@@ -335,8 +349,11 @@ TEST(MpccRateResolvedShadow, RejectsDynamicWorldFromDifferentObservationEpoch)
   const auto result = context.evaluate(input);
 
   EXPECT_EQ(result.outcome, shadow::Outcome::AssemblyRejected);
-  EXPECT_EQ(
-    result.detail, "physical obstacle world does not match problem identity");
+  EXPECT_NE(
+    result.detail.find("physical obstacle world does not match problem identity"),
+    std::string::npos);
+  EXPECT_NE(result.detail.find("expected_generation=7"), std::string::npos);
+  EXPECT_NE(result.detail.find("observed_generation=8"), std::string::npos);
 }
 
 TEST(MpccRateResolvedShadow, CurrentProblemBootstrapOwnsCurrentAffineDynamics)
@@ -710,6 +727,7 @@ TEST(MpccRateResolvedShadow, RecedingWarmStartRejectsExhaustedHorizon)
 TEST(MpccRateResolvedShadow, TradesProgressForReachableOpponentSeparation)
 {
   auto input = snapshot();
+  bind_dynamic_obstacle_identity(input);
   input.dynamic_obstacle_refinement_active = true;
   input.dynamic_obstacle_pass_side_sign = 1;
   input.dynamic_obstacle_stages.assign(
@@ -737,9 +755,38 @@ TEST(MpccRateResolvedShadow, TradesProgressForReachableOpponentSeparation)
   EXPECT_TRUE(shadow::result_valid(result));
 }
 
+TEST(
+  MpccRateResolvedShadow,
+  CruiseStayBehindUsesDedicatedDynamicObstacleIdentity)
+{
+  auto input = snapshot();
+  auto problem_context = input.identity.source_context;
+  problem_context.intent = contract::ControlIntent::Cruise;
+  input.identity.source_context =
+    contract::seal_problem_context(std::move(problem_context));
+  bind_dynamic_obstacle_identity(input, "d2", 7U, 0);
+  ASSERT_TRUE(input.identity.source_context.target_id.empty());
+  input.dynamic_obstacle_refinement_active = true;
+  input.dynamic_obstacle_pass_side_sign = 0;
+  input.dynamic_obstacle_stages.assign(
+    3U,
+    multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_obstacle::StagePrediction{
+      true, 0.8, 0.0, 0.20, 0.30});
+
+  shadow::SolverContext solver;
+  const auto result = solver.evaluate(input);
+
+  EXPECT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  EXPECT_TRUE(result.dynamic_obstacle_refinement_requested);
+  EXPECT_TRUE(result.dynamic_obstacle_refinement_applied);
+  EXPECT_GT(result.dynamic_obstacle_stay_behind_row_count, 0U);
+  EXPECT_TRUE(shadow::result_valid(result));
+}
+
 TEST(MpccRateResolvedShadow, CouplesDynamicProgressChoiceBeforeFinalWallProof)
 {
   auto input = snapshot();
+  bind_dynamic_obstacle_identity(input);
   input.progress_aligned_wall_refinement_active = true;
   input.wall_reference_progress_m = {0.0, 0.3, 0.6, 1.0};
   input.wall_lower_m = {-1.0, -0.9, -0.8, -0.7};

@@ -30,6 +30,10 @@ mpcc_rate_resolved_shadow::Snapshot make_source()
   source.identity.source_context.target_obstacle_generation = 13U;
   source.identity.source_context.target_id = "d2";
   source.identity.source_context.execution_side_sign = 1;
+  source.identity.source_context.dynamic_obstacle_constraint_active = true;
+  source.identity.source_context.dynamic_obstacle_generation = 13U;
+  source.identity.source_context.dynamic_obstacle_id = "d2";
+  source.identity.source_context.dynamic_obstacle_side_sign = 1;
   source.identity.source_context.horizon_steps = 3U;
   source.identity.source_context.formulation =
     contract::Formulation::VelocitySteeringYawResponseProgress7State;
@@ -333,6 +337,12 @@ TEST(MpccStatelessManeuver, RebuildsTargetHorizonWithoutMissionTargetStages)
   auto source = make_source();
   source.dynamic_obstacle_refinement_active = false;
   source.dynamic_obstacle_stages.clear();
+  source.identity.source_context.dynamic_obstacle_constraint_active = false;
+  source.identity.source_context.dynamic_obstacle_generation = 0U;
+  source.identity.source_context.dynamic_obstacle_id.clear();
+  source.identity.source_context.dynamic_obstacle_side_sign = 0;
+  source.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
   source.replay_world->obstacles.front().x_m = 2.0;
   const auto result = build(
     source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
@@ -350,6 +360,12 @@ TEST(MpccStatelessManeuver, BindsCurrentTargetWithoutChangingCapturedGeometry)
   source.dynamic_obstacle_refinement_active = false;
   source.dynamic_obstacle_pass_side_sign = 0;
   source.dynamic_obstacle_stages.clear();
+  source.identity.source_context.dynamic_obstacle_constraint_active = false;
+  source.identity.source_context.dynamic_obstacle_generation = 0U;
+  source.identity.source_context.dynamic_obstacle_id.clear();
+  source.identity.source_context.dynamic_obstacle_side_sign = 0;
+  source.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
   const auto source_fingerprint =
     mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
 
@@ -359,9 +375,11 @@ TEST(MpccStatelessManeuver, BindsCurrentTargetWithoutChangingCapturedGeometry)
   ASSERT_TRUE(result.seed.has_value()) << result.detail;
   const auto & candidate = result.seed->solver_snapshot;
   EXPECT_EQ(candidate.identity.sequence, source.identity.sequence);
-  EXPECT_EQ(
+  EXPECT_NE(
     candidate.identity.source_context.fingerprint,
     source.identity.source_context.fingerprint);
+  EXPECT_TRUE(
+    candidate.identity.source_context.dynamic_obstacle_constraint_active);
   ASSERT_EQ(candidate.request.states.size(), source.request.states.size());
   ASSERT_EQ(candidate.request.inputs.size(), source.request.inputs.size());
   for (std::size_t index = 0U; index < source.request.states.size(); ++index) {

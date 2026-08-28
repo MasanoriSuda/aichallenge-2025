@@ -34,6 +34,17 @@ namespace shadow = mpcc_rate_resolved_shadow;
 std::mutex record_mutex;
 std::set<std::string> recorded_failure_keys;
 
+constexpr const char * kExactQpSnapshotSchemaV1 =
+  "mpcc-architecture-failure-snapshot/v1";
+constexpr const char * kInteractionSnapshotSchemaV2 =
+  "mpcc-architecture-failure-snapshot/v2";
+
+bool supported_exact_qp_schema(const std::string & schema) noexcept
+{
+  return schema == kExactQpSnapshotSchemaV1 ||
+         schema == kInteractionSnapshotSchemaV2;
+}
+
 template<typename LowerDerived, typename UpperDerived>
 bool valid_semantic_bounds(
   const Eigen::MatrixBase<LowerDerived> & lower,
@@ -400,6 +411,13 @@ YAML::Node source_node(
     context.target_obstacle_generation;
   problem_context["target_id"] = context.target_id;
   problem_context["execution_side_sign"] = context.execution_side_sign;
+  problem_context["dynamic_obstacle_constraint_active"] =
+    context.dynamic_obstacle_constraint_active;
+  problem_context["dynamic_obstacle_generation"] =
+    context.dynamic_obstacle_generation;
+  problem_context["dynamic_obstacle_id"] = context.dynamic_obstacle_id;
+  problem_context["dynamic_obstacle_side_sign"] =
+    context.dynamic_obstacle_side_sign;
   problem_context["horizon_steps"] = context.horizon_steps;
   problem_context["formulation"] = contract::to_string(context.formulation);
   problem_context["state_schema_id"] = context.state_schema_id;
@@ -844,6 +862,16 @@ std::optional<shadow::Snapshot> load_source_snapshot(
     problem_context["target_obstacle_generation"].as<std::uint64_t>();
   context.target_id = problem_context["target_id"].as<std::string>();
   context.execution_side_sign = problem_context["execution_side_sign"].as<int>();
+  if (problem_context["dynamic_obstacle_constraint_active"]) {
+    context.dynamic_obstacle_constraint_active =
+      problem_context["dynamic_obstacle_constraint_active"].as<bool>();
+    context.dynamic_obstacle_generation =
+      problem_context["dynamic_obstacle_generation"].as<std::uint64_t>();
+    context.dynamic_obstacle_id =
+      problem_context["dynamic_obstacle_id"].as<std::string>();
+    context.dynamic_obstacle_side_sign =
+      problem_context["dynamic_obstacle_side_sign"].as<int>();
+  }
   context.horizon_steps = problem_context["horizon_steps"].as<std::size_t>();
   context.formulation = formulation.value();
   context.state_schema_id = problem_context["state_schema_id"].as<std::string>();
@@ -1238,6 +1266,16 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     {
       return false;
     }
+    const auto & problem_context = source.identity.source_context;
+    if (
+      source.dynamic_obstacle_refinement_active !=
+      problem_context.dynamic_obstacle_constraint_active ||
+      (source.dynamic_obstacle_refinement_active &&
+      source.dynamic_obstacle_pass_side_sign !=
+      problem_context.dynamic_obstacle_side_sign))
+    {
+      return false;
+    }
     if (
       source.dynamic_obstacle_forced_first_pass_side_stage < -1 ||
       source.dynamic_obstacle_forced_first_pass_side_stage >=
@@ -1314,8 +1352,9 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     const auto & world = source.replay_world.value();
     if (
       !world.current || world.observation_generation == 0U ||
+      (problem_context.dynamic_obstacle_constraint_active &&
       world.observation_generation !=
-      source.identity.source_context.target_obstacle_generation ||
+      problem_context.dynamic_obstacle_generation) ||
       !std::isfinite(world.observed_sec) || !finite_pose(world.current_pose) ||
       world.control_prefix.empty() ||
       world.control_prefix.size() != world.control_prefix_elapsed_sec.size() ||
@@ -1372,7 +1411,8 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
       }
     }
     std::set<std::string> obstacle_ids;
-    bool target_present = source.identity.source_context.target_id.empty();
+    bool target_present =
+      !problem_context.dynamic_obstacle_constraint_active;
     for (const auto & obstacle : world.obstacles) {
       if (
         obstacle.id.empty() || !obstacle_ids.insert(obstacle.id).second ||
@@ -1391,7 +1431,7 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
         return false;
       }
       target_present = target_present ||
-        obstacle.id == source.identity.source_context.target_id;
+        obstacle.id == problem_context.dynamic_obstacle_id;
     }
     return target_present;
   } catch (...) {
@@ -1641,7 +1681,11 @@ RecordResult record_failure(
     }
 
     YAML::Node root;
-    root["schema"] = "mpcc-architecture-failure-snapshot/v1";
+    // v2 makes the stage-wise dynamic-obstacle constraint identity part of
+    // the immutable interaction snapshot.  A v1 artifact still contains an
+    // exact QP, but it cannot be upgraded for physical A/B/C/D replay without
+    // guessing which obstacle generation produced its constraint rows.
+    root["schema"] = kInteractionSnapshotSchemaV2;
     root["pipeline_stage"] = to_string(pipeline_stage);
     root["failure_outcome"] = failure_outcome;
     root["failure_detail"] = failure_detail;
@@ -1706,8 +1750,7 @@ std::optional<RecordedQp> load_recorded_qp(
   try {
     const YAML::Node root = YAML::LoadFile(snapshot_file.string());
     if (!root["schema"] ||
-      root["schema"].as<std::string>() !=
-      "mpcc-architecture-failure-snapshot/v1")
+      !supported_exact_qp_schema(root["schema"].as<std::string>()))
     {
       if (detail != nullptr) {
         *detail = "unsupported snapshot schema";
@@ -1778,10 +1821,21 @@ std::optional<RecordedInteractionSnapshot> load_recorded_interaction_snapshot(
 {
   try {
     const YAML::Node root = YAML::LoadFile(snapshot_file.string());
-    if (!root["schema"] ||
-      root["schema"].as<std::string>() !=
-      "mpcc-architecture-failure-snapshot/v1")
+    if (!root["schema"])
     {
+      if (detail != nullptr) *detail = "unsupported snapshot schema";
+      return std::nullopt;
+    }
+    const std::string schema = root["schema"].as<std::string>();
+    if (schema == kExactQpSnapshotSchemaV1) {
+      if (detail != nullptr) {
+        *detail =
+          "v1 snapshot has no immutable dynamic-obstacle constraint identity; "
+          "exact QP replay remains available";
+      }
+      return std::nullopt;
+    }
+    if (schema != kInteractionSnapshotSchemaV2) {
       if (detail != nullptr) *detail = "unsupported snapshot schema";
       return std::nullopt;
     }

@@ -34,6 +34,10 @@ shadow::Snapshot source_snapshot()
   context.target_obstacle_generation = 13U;
   context.target_id = "d2";
   context.execution_side_sign = 1;
+  context.dynamic_obstacle_constraint_active = true;
+  context.dynamic_obstacle_generation = 13U;
+  context.dynamic_obstacle_id = "d2";
+  context.dynamic_obstacle_side_sign = 1;
   context.horizon_steps = 3U;
   context.formulation =
     contract::Formulation::VelocitySteeringYawResponseProgress7State;
@@ -257,6 +261,12 @@ TEST(
   source.dynamic_obstacle_refinement_active = false;
   source.dynamic_obstacle_pass_side_sign = 0;
   source.dynamic_obstacle_stages.clear();
+  source.identity.source_context.dynamic_obstacle_constraint_active = false;
+  source.identity.source_context.dynamic_obstacle_generation = 0U;
+  source.identity.source_context.dynamic_obstacle_id.clear();
+  source.identity.source_context.dynamic_obstacle_side_sign = 0;
+  source.identity.source_context = contract::seal_problem_context(
+    source.identity.source_context);
   const auto source_fingerprint =
     architecture::fingerprint_interaction_snapshot(source);
 

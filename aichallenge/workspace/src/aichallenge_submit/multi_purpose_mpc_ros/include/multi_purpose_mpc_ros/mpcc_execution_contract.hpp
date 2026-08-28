@@ -305,6 +305,13 @@ struct MpccProblemContext
   std::uint64_t target_obstacle_generation{};
   std::string target_id;
   int execution_side_sign{};
+  // Identity of the obstacle which generated stage-wise QP constraints.
+  // This is deliberately independent from target_id: Track/Cruise may carry
+  // a stay-behind obstacle constraint without owning a tactical Mission.
+  bool dynamic_obstacle_constraint_active{false};
+  std::uint64_t dynamic_obstacle_generation{};
+  std::string dynamic_obstacle_id;
+  int dynamic_obstacle_side_sign{};
   std::size_t horizon_steps{};
   Formulation formulation{Formulation::Unresolved};
   std::string state_schema_id;

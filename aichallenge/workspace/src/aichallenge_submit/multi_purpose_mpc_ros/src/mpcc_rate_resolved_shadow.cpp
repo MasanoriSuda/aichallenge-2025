@@ -437,7 +437,13 @@ RecedingWarmStartResolution resolve_receding_warm_start(
     previous_context.intent != current_context.intent ||
     previous_context.intent_generation != current_context.intent_generation ||
     previous_context.target_id != current_context.target_id ||
-    previous_context.execution_side_sign != current_context.execution_side_sign)
+    previous_context.execution_side_sign != current_context.execution_side_sign ||
+    previous_context.dynamic_obstacle_constraint_active !=
+    current_context.dynamic_obstacle_constraint_active ||
+    previous_context.dynamic_obstacle_id !=
+    current_context.dynamic_obstacle_id ||
+    previous_context.dynamic_obstacle_side_sign !=
+    current_context.dynamic_obstacle_side_sign)
   {
     resolution.reason = RecedingWarmStartReason::SemanticMismatch;
     if (
@@ -475,6 +481,21 @@ RecedingWarmStartResolution resolve_receding_warm_start(
       resolution.diagnostic = "intent-generation";
     } else if (previous_context.target_id != current_context.target_id) {
       resolution.diagnostic = "target-id";
+    } else if (
+      previous_context.dynamic_obstacle_constraint_active !=
+      current_context.dynamic_obstacle_constraint_active)
+    {
+      resolution.diagnostic = "dynamic-obstacle-active";
+    } else if (
+      previous_context.dynamic_obstacle_id !=
+      current_context.dynamic_obstacle_id)
+    {
+      resolution.diagnostic = "dynamic-obstacle-id";
+    } else if (
+      previous_context.dynamic_obstacle_side_sign !=
+      current_context.dynamic_obstacle_side_sign)
+    {
+      resolution.diagnostic = "dynamic-obstacle-side";
     } else {
       resolution.diagnostic = "execution-side";
     }
@@ -1434,6 +1455,20 @@ Result SolverContext::evaluate_impl(
   result.dynamic_obstacle_refinement_requested =
     snapshot.dynamic_obstacle_refinement_active;
   if (snapshot.dynamic_obstacle_refinement_active) {
+    const auto & source_context = snapshot.identity.source_context;
+    if (
+      !source_context.dynamic_obstacle_constraint_active ||
+      source_context.dynamic_obstacle_id.empty() ||
+      source_context.dynamic_obstacle_generation == 0U ||
+      source_context.dynamic_obstacle_side_sign !=
+      snapshot.dynamic_obstacle_pass_side_sign)
+    {
+      result.outcome = Outcome::AssemblyRejected;
+      result.solved = false;
+      result.detail =
+        "dynamic obstacle refinement has no matching problem identity";
+      return finish();
+    }
     mpcc_rate_resolved_dynamic_obstacle::Request dynamic_request;
     dynamic_request.active = true;
     dynamic_request.pass_side_sign =
@@ -1458,23 +1493,33 @@ Result SolverContext::evaluate_impl(
     }
     if (snapshot.replay_world.has_value()) {
       const auto & world = snapshot.replay_world.value();
-      const auto & source_context = snapshot.identity.source_context;
       if (
         !world.current || world.observation_generation == 0U ||
-        source_context.target_id.empty() ||
+        !source_context.dynamic_obstacle_constraint_active ||
+        source_context.dynamic_obstacle_id.empty() ||
         world.observation_generation !=
-        source_context.target_obstacle_generation)
+        source_context.dynamic_obstacle_generation)
       {
         result.outcome = Outcome::AssemblyRejected;
         result.solved = false;
-        result.detail =
-          "physical obstacle world does not match problem identity";
+        std::ostringstream detail;
+        detail << "physical obstacle world does not match problem identity"
+               << ": expected_id="
+               << (source_context.dynamic_obstacle_id.empty() ?
+               "none" : source_context.dynamic_obstacle_id)
+               << ", expected_generation="
+               << source_context.dynamic_obstacle_generation
+               << ", observed_generation=" << world.observation_generation
+               << ", constraint_active="
+               << source_context.dynamic_obstacle_constraint_active;
+        result.detail = detail.str();
         return finish();
       }
       const auto target = std::find_if(
         world.obstacles.begin(), world.obstacles.end(),
         [&snapshot](const ReplayDynamicObstacle & obstacle) {
-          return obstacle.id == snapshot.identity.source_context.target_id;
+          return obstacle.id ==
+                 snapshot.identity.source_context.dynamic_obstacle_id;
         });
       if (target == world.obstacles.end()) {
         result.outcome = Outcome::AssemblyRejected;

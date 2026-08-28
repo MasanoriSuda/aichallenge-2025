@@ -7,8 +7,10 @@
 #include <Eigen/Sparse>
 
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,10 @@ mpcc_rate_resolved_shadow::Snapshot make_snapshot(
   snapshot.identity.source_context.target_obstacle_generation = 5U;
   snapshot.identity.source_context.target_id = "d2";
   snapshot.identity.source_context.execution_side_sign = 1;
+  snapshot.identity.source_context.dynamic_obstacle_constraint_active = true;
+  snapshot.identity.source_context.dynamic_obstacle_generation = 5U;
+  snapshot.identity.source_context.dynamic_obstacle_id = "d2";
+  snapshot.identity.source_context.dynamic_obstacle_side_sign = 1;
   snapshot.identity.source_context.horizon_steps = 1U;
   snapshot.identity.source_context.formulation =
     mpcc_execution_contract::Formulation::
@@ -245,6 +251,12 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
       loaded->source, loaded->interaction_fingerprint));
   ASSERT_TRUE(loaded->source.replay_world.has_value());
   EXPECT_EQ(loaded->source.identity.source_context.target_id, "d2");
+  EXPECT_TRUE(
+    loaded->source.identity.source_context.dynamic_obstacle_constraint_active);
+  EXPECT_EQ(
+    loaded->source.identity.source_context.dynamic_obstacle_id, "d2");
+  EXPECT_EQ(
+    loaded->source.identity.source_context.dynamic_obstacle_generation, 5U);
   EXPECT_EQ(loaded->source.replay_world->observation_generation, 5U);
   EXPECT_EQ(
     loaded->source.replay_world->control_prefix_elapsed_sec,
@@ -308,6 +320,43 @@ TEST(MpccArchitectureSnapshot, OldExactQpSnapshotIsNotInteractionReplayReady)
   EXPECT_FALSE(
     load_recorded_interaction_snapshot(written.snapshot_file, &detail).has_value());
   EXPECT_EQ(detail, "interaction snapshot incomplete");
+}
+
+TEST(MpccArchitectureSnapshot, V1KeepsExactQpButRejectsInteractionMigration)
+{
+  const auto root = output_root("v1-exact-qp-only");
+  std::filesystem::remove_all(root);
+  const auto written = record_failure(
+    make_snapshot(mpcc_execution_contract::ControlIntent::ShiftOut),
+    make_assembly_request(), make_valid_problem(), std::nullopt,
+    persistent_osqp::SolveOutcome{}, PipelineStage::Initial,
+    "unit-v1-boundary", "legacy schema boundary", root);
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+
+  std::ifstream input(written.snapshot_file);
+  ASSERT_TRUE(input.good());
+  std::ostringstream contents;
+  contents << input.rdbuf();
+  std::string legacy = contents.str();
+  const std::string v2 = "mpcc-architecture-failure-snapshot/v2";
+  const auto schema_position = legacy.find(v2);
+  ASSERT_NE(schema_position, std::string::npos);
+  legacy.replace(
+    schema_position, v2.size(), "mpcc-architecture-failure-snapshot/v1");
+  const auto legacy_file = written.snapshot_file.parent_path() / "snapshot-v1.yaml";
+  std::ofstream output(legacy_file);
+  ASSERT_TRUE(output.good());
+  output << legacy;
+  output.close();
+
+  std::string detail;
+  EXPECT_TRUE(load_recorded_qp(legacy_file, &detail).has_value()) << detail;
+  EXPECT_FALSE(
+    load_recorded_interaction_snapshot(legacy_file, &detail).has_value());
+  EXPECT_EQ(
+    detail,
+    "v1 snapshot has no immutable dynamic-obstacle constraint identity; "
+    "exact QP replay remains available");
 }
 
 TEST(MpccArchitectureSnapshot, DeduplicatesFailureFamilyPerProcess)

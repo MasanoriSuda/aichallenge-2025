@@ -8566,6 +8566,16 @@ struct MPC
     prospective_context.target_obstacle_generation =
       target_provenance.observation_generation;
     prospective_context.execution_side_sign = assessment.side;
+    prospective_context.dynamic_obstacle_constraint_active =
+      problem.progress_execution_dynamic_obstacle_contract_active;
+    if (prospective_context.dynamic_obstacle_constraint_active) {
+      prospective_context.dynamic_obstacle_id =
+        target_provenance.target_id;
+      prospective_context.dynamic_obstacle_generation =
+        target_provenance.observation_generation;
+      prospective_context.dynamic_obstacle_side_sign =
+        problem.progress_execution_dynamic_obstacle_side_sign;
+    }
     prospective_context.formulation =
       mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State;
     prospective_context = seal_problem_context_for_problem(
@@ -23290,6 +23300,17 @@ struct MPC
           prospective_context.target_obstacle_generation =
             draft.target_obstacle_generation;
           prospective_context.execution_side_sign = draft.selected_side_sign;
+          prospective_context.dynamic_obstacle_constraint_active =
+            prospective->source_problem.
+            progress_execution_dynamic_obstacle_contract_active;
+          if (prospective_context.dynamic_obstacle_constraint_active) {
+            prospective_context.dynamic_obstacle_id = draft.target_id;
+            prospective_context.dynamic_obstacle_generation =
+              draft.target_obstacle_generation;
+            prospective_context.dynamic_obstacle_side_sign =
+              prospective->source_problem.
+              progress_execution_dynamic_obstacle_side_sign;
+          }
           prospective_context.formulation =
             mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State;
           prospective_context = planner->seal_problem_context_for_problem(
@@ -26671,6 +26692,14 @@ struct MPC
       if (context.target_id.empty()) {
         context.target_id = provenance.target_id;
       }
+    }
+    context.dynamic_obstacle_constraint_active =
+      problem.progress_execution_dynamic_obstacle_contract_active;
+    if (context.dynamic_obstacle_constraint_active) {
+      context.dynamic_obstacle_id = provenance.target_id;
+      context.dynamic_obstacle_generation = provenance.observation_generation;
+      context.dynamic_obstacle_side_sign =
+        problem.progress_execution_dynamic_obstacle_side_sign;
     }
     context.formulation = formulation;
     return seal_problem_context_for_problem(

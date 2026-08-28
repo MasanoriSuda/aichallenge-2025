@@ -333,6 +333,56 @@ TEST(MpccExecutionContract, CanonicalTargetBoundIntentsRequireLiveTargetProvenan
 
 TEST(
   MpccExecutionContract,
+  CruiseMayOwnDynamicConstraintWithoutTacticalMissionTarget)
+{
+  auto context = make_track_context();
+  context.intent = contract::ControlIntent::Cruise;
+  context.dynamic_obstacle_constraint_active = true;
+  context.dynamic_obstacle_id = "d2";
+  context.dynamic_obstacle_generation = 73U;
+  context.dynamic_obstacle_side_sign = 0;
+  context = contract::seal_problem_context(std::move(context));
+
+  ASSERT_TRUE(contract::problem_context_complete(context));
+  EXPECT_TRUE(context.target_id.empty());
+  EXPECT_EQ(context.target_obstacle_generation, 0U);
+
+  auto changed_generation = context;
+  changed_generation.dynamic_obstacle_generation += 1U;
+  changed_generation = contract::seal_problem_context(
+    std::move(changed_generation));
+  EXPECT_TRUE(contract::problem_context_complete(changed_generation));
+  EXPECT_NE(context.fingerprint, changed_generation.fingerprint);
+}
+
+TEST(MpccExecutionContract, DynamicConstraintIdentityIsAllOrNone)
+{
+  auto inactive_with_identity = make_track_context();
+  inactive_with_identity.dynamic_obstacle_id = "d2";
+  inactive_with_identity.dynamic_obstacle_generation = 73U;
+  inactive_with_identity = contract::seal_problem_context(
+    std::move(inactive_with_identity));
+  EXPECT_FALSE(contract::problem_context_complete(inactive_with_identity));
+
+  auto active_without_generation = make_track_context();
+  active_without_generation.dynamic_obstacle_constraint_active = true;
+  active_without_generation.dynamic_obstacle_id = "d2";
+  active_without_generation = contract::seal_problem_context(
+    std::move(active_without_generation));
+  EXPECT_FALSE(contract::problem_context_complete(active_without_generation));
+
+  auto active_with_invalid_side = make_track_context();
+  active_with_invalid_side.dynamic_obstacle_constraint_active = true;
+  active_with_invalid_side.dynamic_obstacle_id = "d2";
+  active_with_invalid_side.dynamic_obstacle_generation = 73U;
+  active_with_invalid_side.dynamic_obstacle_side_sign = 2;
+  active_with_invalid_side = contract::seal_problem_context(
+    std::move(active_with_invalid_side));
+  EXPECT_FALSE(contract::problem_context_complete(active_with_invalid_side));
+}
+
+TEST(
+  MpccExecutionContract,
   CanonicalReturnRequiresEncounterIdentityButNotLiveTargetObservation)
 {
   EXPECT_TRUE(

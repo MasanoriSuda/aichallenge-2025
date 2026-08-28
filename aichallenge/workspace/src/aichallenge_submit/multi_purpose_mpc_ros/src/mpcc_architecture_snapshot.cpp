@@ -34,13 +34,6 @@ namespace shadow = mpcc_rate_resolved_shadow;
 std::mutex record_mutex;
 std::set<std::string> recorded_failure_keys;
 
-bool is_overtake(const contract::ControlIntent intent) noexcept
-{
-  return intent == contract::ControlIntent::ShiftOut ||
-         intent == contract::ControlIntent::Pass ||
-         intent == contract::ControlIntent::Return;
-}
-
 template<typename LowerDerived, typename UpperDerived>
 bool valid_semantic_bounds(
   const Eigen::MatrixBase<LowerDerived> & lower,
@@ -1121,7 +1114,7 @@ const char * to_string(const RecordStatus status) noexcept
   switch (status) {
     case RecordStatus::Written: return "written";
     case RecordStatus::Duplicate: return "duplicate";
-    case RecordStatus::NotOvertake: return "not-overtake";
+    case RecordStatus::UnsupportedIntent: return "unsupported-intent";
     case RecordStatus::InvalidInput: return "invalid-input";
     case RecordStatus::IoFailure: return "io-failure";
   }
@@ -1571,9 +1564,9 @@ RecordResult record_failure(
   RecordResult result;
   try {
     const auto intent = source.identity.source_context.intent;
-    if (!is_overtake(intent)) {
-      result.status = RecordStatus::NotOvertake;
-      result.detail = "capture is restricted to Overtake intents";
+    if (!contract::canonical_normal_intent_supported(intent)) {
+      result.status = RecordStatus::UnsupportedIntent;
+      result.detail = "capture requires a canonical normal intent";
       return result;
     }
     if (

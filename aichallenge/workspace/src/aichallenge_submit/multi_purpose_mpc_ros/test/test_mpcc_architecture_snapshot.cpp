@@ -329,15 +329,34 @@ TEST(MpccArchitectureSnapshot, DeduplicatesFailureFamilyPerProcess)
   EXPECT_EQ(second.status, RecordStatus::Duplicate) << second.detail;
 }
 
-TEST(MpccArchitectureSnapshot, RefusesNonOvertakeCapture)
+TEST(MpccArchitectureSnapshot, WritesExactQpForFollowFailure)
+{
+  const auto root = output_root("follow-exact-qp");
+  std::filesystem::remove_all(root);
+  const auto snapshot = make_snapshot(
+    mpcc_execution_contract::ControlIntent::Follow);
+  const auto written = record_failure(
+    snapshot, make_assembly_request(), make_valid_problem(), std::nullopt,
+    persistent_osqp::SolveOutcome{}, PipelineStage::Initial,
+    "unit-follow", "canonical Follow failure", root);
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+  std::string detail;
+  const auto loaded = load_recorded_qp(written.snapshot_file, &detail);
+  ASSERT_TRUE(loaded.has_value()) << detail;
+  EXPECT_EQ(loaded->intent, "follow");
+  EXPECT_FALSE(
+    load_recorded_interaction_snapshot(written.snapshot_file).has_value());
+}
+
+TEST(MpccArchitectureSnapshot, RefusesUnsupportedIntentCapture)
 {
   const auto snapshot = make_snapshot(
-    mpcc_execution_contract::ControlIntent::Cruise);
+    mpcc_execution_contract::ControlIntent::Stop);
   const auto result = record_failure(
     snapshot, make_assembly_request(), make_valid_problem(), std::nullopt,
     persistent_osqp::SolveOutcome{}, PipelineStage::Initial,
-    "unit-not-overtake", "must not write", output_root("not-overtake"));
-  EXPECT_EQ(result.status, RecordStatus::NotOvertake);
+    "unit-unsupported", "must not write", output_root("unsupported"));
+  EXPECT_EQ(result.status, RecordStatus::UnsupportedIntent);
 }
 
 }  // namespace

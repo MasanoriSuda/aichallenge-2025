@@ -31,7 +31,7 @@ enum class RecordStatus
 {
   Written,
   Duplicate,
-  NotOvertake,
+  UnsupportedIntent,
   InvalidInput,
   IoFailure,
 };
@@ -46,10 +46,10 @@ struct RecordResult
 };
 
 /// Persist the exact QP and immutable semantic/world provenance which were
-/// already rejected by production.  This function has no control authority
-/// and never changes a problem, warm start or solver setting.  At most one
-/// artifact per (intent, pipeline stage, failure outcome) is written by one
-/// process.
+/// already rejected by production for any canonical seven-state normal
+/// intent. This function has no control authority and never changes a problem,
+/// warm start or solver setting. At most one artifact per (intent, pipeline
+/// stage, failure outcome) is written by one process.
 RecordResult record_failure(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,

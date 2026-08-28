@@ -1218,23 +1218,25 @@ Result SolverContext::evaluate_impl(
       wall_feasibility_restoration_audit)
     {
       result.wall_feasibility_restoration_attempted = true;
-      // This problem retains the selected physical lateral interval and every
-      // wall/actuation row, but restores only the heading state bounds owned
-      // by the post-hoc wall trust bucket. The resulting trajectory is not a
-      // certificate: its wall interval was proved at the old heading bucket.
-      // It is used only to construct a new nonlinear tangent and fresh wall
-      // refinement below.
+      // This problem retains every explicit wall/actuation row, but restores
+      // the lateral/lag/heading/progress state boxes owned by the post-hoc
+      // physical wall bucket. The resulting trajectory is not a certificate:
+      // its wall rows were proved at the old pose bucket. It is used only to
+      // construct a new nonlinear tangent and fresh wall refinement below.
       auto restoration_problem = refinement.request.value();
       for (int stage = 1; stage <= snapshot.request.horizon_steps; ++stage) {
         const int state = stage * mpcc_rate_resolved::kStateDimension;
-        restoration_problem.state_lower[
-          state + mpcc_rate_resolved::kHeadingIndex] =
-          adapted->problem.state_lower[
-          state + mpcc_rate_resolved::kHeadingIndex];
-        restoration_problem.state_upper[
-          state + mpcc_rate_resolved::kHeadingIndex] =
-          adapted->problem.state_upper[
-          state + mpcc_rate_resolved::kHeadingIndex];
+        for (const int element : {
+            mpcc_rate_resolved::kLateralIndex,
+            mpcc_rate_resolved::kLagIndex,
+            mpcc_rate_resolved::kHeadingIndex,
+            mpcc_rate_resolved::kProgressIndex})
+        {
+          restoration_problem.state_lower[state + element] =
+            adapted->problem.state_lower[state + element];
+          restoration_problem.state_upper[state + element] =
+            adapted->problem.state_upper[state + element];
+        }
       }
 
       persistent_osqp::SolveOutcome restoration_outcome;
@@ -1299,6 +1301,14 @@ Result SolverContext::evaluate_impl(
           result.wall_feasibility_restoration_detail =
             std::string{"restoration-solve-rejected/"} +
             restoration_outcome.failure_detail;
+          // Preserve the exact Phase-I problem at the common failure capture
+          // boundary. Recording the original full refinement here made a
+          // `restoration-solve-rejected` snapshot describe the wrong QP and
+          // prevented independent feasibility classification.
+          refinement.request = restoration_problem;
+          refined_assembled = std::move(restoration_assembled);
+          refined_outcome = std::move(restoration_outcome);
+          warm_start = std::move(restoration_warm_start);
           restoration_failed = true;
           break;
         }

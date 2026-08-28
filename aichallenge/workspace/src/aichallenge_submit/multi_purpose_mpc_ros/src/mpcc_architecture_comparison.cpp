@@ -750,7 +750,7 @@ Report compare(
         {std::pair{Arm::StatelessLeftB, 1},
          std::pair{Arm::StatelessRightB, -1}})
       {
-        const auto rebuilt = maneuver::build_follow_escape_audit(
+        const auto rebuilt = maneuver::build_follow_escape(
           source, source_fingerprint, side);
         if (!rebuilt.seed.has_value()) {
           const auto stage =

@@ -463,13 +463,27 @@ TEST(MpccStatelessManeuver, FollowEscapeIsAvailableOnlyThroughAuditEntryPoint)
   EXPECT_EQ(production.reason, RejectReason::UnsupportedIntent);
   EXPECT_FALSE(production.seed.has_value());
 
-  const auto audit = build_follow_escape_audit(source, fingerprint, 1);
+  const auto audit = build_follow_escape(source, fingerprint, 1);
   EXPECT_EQ(audit.reason, RejectReason::Accepted) << audit.detail;
   ASSERT_TRUE(audit.seed.has_value());
   EXPECT_EQ(audit.seed->pass_side_sign, 1);
   EXPECT_EQ(
     audit.seed->solver_snapshot.identity.source_context.intent,
     mpcc_execution_contract::ControlIntent::Follow);
+
+  const auto population = build_follow_escape_candidates(source);
+  EXPECT_EQ(population.reason, RejectReason::Accepted) << population.detail;
+  ASSERT_EQ(population.candidates.size(), 2U);
+  EXPECT_EQ(population.candidates[0].seed.pass_side_sign, 1);
+  EXPECT_EQ(population.candidates[1].seed.pass_side_sign, -1);
+  for (const auto & candidate : population.candidates) {
+    EXPECT_EQ(
+      candidate.seed.solver_snapshot.identity.source_context.intent,
+      mpcc_execution_contract::ControlIntent::Follow);
+    EXPECT_EQ(
+      candidate.seed.solver_snapshot.identity.source_context.execution_side_sign,
+      0);
+  }
 }
 
 TEST(MpccStatelessManeuver, RejectsInvalidSideAndMixedObservation)

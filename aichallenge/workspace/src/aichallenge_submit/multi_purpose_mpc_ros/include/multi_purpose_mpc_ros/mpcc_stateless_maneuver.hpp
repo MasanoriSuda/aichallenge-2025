@@ -140,10 +140,12 @@ Result build(
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
 
-/// Audit-only normal-intent escape candidate. This deliberately accepts only
+/// Data-only normal-intent escape candidate. This deliberately accepts only
 /// Follow and has no authority surface. Production Overtake callers continue
-/// to use build(), whose intent contract remains unchanged.
-Result build_follow_escape_audit(
+/// to use build(), whose intent contract remains unchanged. A candidate needs
+/// the common SQP, exact proofs, retained revalidation and publication join
+/// before it can affect execution.
+Result build_follow_escape(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
@@ -198,6 +200,11 @@ Result build_physical_diagonal_schedule(
 CandidateSet build_bounded_candidates(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   int pass_side_sign) noexcept;
+
+/// Bounded current-world Follow escape population. It contains at most one
+/// direct candidate per side and does not solve, certify, retain or publish.
+CandidateSet build_follow_escape_candidates(
+  const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver
 

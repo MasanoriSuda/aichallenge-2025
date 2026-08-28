@@ -495,7 +495,7 @@ Result build(
     source, source_interaction_fingerprint, pass_side_sign, false);
 }
 
-Result build_follow_escape_audit(
+Result build_follow_escape(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,
   const int pass_side_sign) noexcept
@@ -811,6 +811,51 @@ CandidateSet build_bounded_candidates(
     "direct and earliest physical diagonal candidates" :
     "direct candidate only";
   return result;
+}
+
+CandidateSet build_follow_escape_candidates(
+  const mpcc_rate_resolved_shadow::Snapshot & source) noexcept
+{
+  namespace architecture = mpcc_architecture_snapshot;
+  CandidateSet population;
+  if (
+    source.identity.source_context.intent !=
+    mpcc_execution_contract::ControlIntent::Follow)
+  {
+    population.reason = RejectReason::UnsupportedIntent;
+    population.detail = "Follow escape population accepts only Follow intent";
+    return population;
+  }
+  population.source_interaction_fingerprint =
+    architecture::fingerprint_interaction_snapshot(source);
+  if (population.source_interaction_fingerprint == 0U) {
+    population.reason = RejectReason::IncompleteSnapshot;
+    population.detail = "Follow escape source fingerprint unavailable";
+    return population;
+  }
+  std::ostringstream rejected;
+  for (const int side : {1, -1}) {
+    auto built = build_follow_escape(
+      source, population.source_interaction_fingerprint, side);
+    if (!built.seed.has_value()) {
+      rejected << (side > 0 ? "positive" : "negative") << '='
+               << to_string(built.reason) << '/' << built.detail << ';';
+      continue;
+    }
+    population.candidates.push_back(
+      Candidate{CandidateKind::DirectSide, std::move(built.seed.value())});
+  }
+  if (population.candidates.empty()) {
+    population.reason = RejectReason::CandidateSealUnavailable;
+    population.detail =
+      std::string{"no Follow escape candidate/"} + rejected.str();
+    return population;
+  }
+  population.reason = RejectReason::Accepted;
+  population.detail =
+    std::string{"accepted/count="} +
+    std::to_string(population.candidates.size());
+  return population;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver

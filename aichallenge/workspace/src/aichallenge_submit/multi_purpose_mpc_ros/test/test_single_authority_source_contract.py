@@ -1004,6 +1004,38 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "population.candidates" in population
     assert "OvertakeMissionCandidate" not in population
 
+    follow_population_start = SOURCE.index(
+        "evaluate_rate_resolved_follow_escape_population("
+    )
+    follow_population_end = SOURCE.index(
+        "void bind_rate_resolved_physical_wall_refinement(",
+        follow_population_start,
+    )
+    follow_population = SOURCE[follow_population_start:follow_population_end]
+    assert "build_follow_escape_candidates(" in follow_population
+    assert "persistent-follow" in follow_population
+    assert "std::make_shared<rate_resolved_shadow::SolverContext>()" in follow_population
+    assert "observation_only_store" in follow_population
+    assert "certified_plan_store->replace(" in follow_population
+    assert follow_population.index("persistent-follow") < follow_population.index(
+        "build_follow_escape_candidates("
+    )
+    assert "source_context.execution_side_sign =" not in follow_population
+
+    normal_submit_start = SOURCE.index(
+        "bool submit_rate_resolved_track_cruise_shadow("
+    )
+    normal_submit_end = SOURCE.index(
+        "bool submit_rate_resolved_preentry_execution_shadow(",
+        normal_submit_start,
+    )
+    normal_submit = SOURCE[normal_submit_start:normal_submit_end]
+    assert "ControlIntent::Follow" in normal_submit
+    assert "evaluate_rate_resolved_follow_escape_population(" in normal_submit
+    assert normal_submit.count(
+        "rate_resolved_track_cruise_shadow_worker_->submit_latest("
+    ) == 1
+
     isolated_start = SOURCE.index(
         "ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch("
     )

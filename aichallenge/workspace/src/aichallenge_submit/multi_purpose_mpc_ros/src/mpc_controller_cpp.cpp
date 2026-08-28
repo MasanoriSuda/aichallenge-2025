@@ -6348,6 +6348,124 @@ evaluate_rate_resolved_current_world_population(
   return result;
 }
 
+RateResolvedCurrentWorldPopulationEvaluation
+evaluate_rate_resolved_follow_escape_population(
+  const rate_resolved_shadow::Snapshot & source,
+  const rate_resolved_physical_wall::Snapshot & physical_source,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> & solver_context,
+  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
+{
+  const auto certified = [](const RateResolvedPipelineEvaluation & evaluation) {
+      return
+        evaluation.solver.outcome == rate_resolved_shadow::Outcome::Solved &&
+        evaluation.physical.has_value() &&
+        evaluation.physical->outcome ==
+        rate_resolved_physical_wall::Outcome::Accepted &&
+        evaluation.certified_plan.plan != nullptr;
+    };
+  const auto evidence_rank = [&certified](
+      const RateResolvedPipelineEvaluation & evaluation) {
+      if (certified(evaluation)) {
+        return 4;
+      }
+      if (evaluation.physical.has_value()) {
+        return 3;
+      }
+      if (evaluation.solver.solved) {
+        return 2;
+      }
+      return evaluation.solver.solve_attempted ? 1 : 0;
+    };
+
+  RateResolvedCurrentWorldPopulationEvaluation result;
+  result.candidate_source = "persistent-follow";
+  auto persistent_physical = physical_source;
+  auto persistent = evaluate_rate_resolved_pipeline(
+    source,
+    std::optional<rate_resolved_physical_wall::Snapshot>{
+      std::move(persistent_physical)},
+    solver_context, certified_plan_store);
+  if (certified(persistent)) {
+    result.pipeline = std::move(persistent);
+    result.detail = "accepted/persistent-follow";
+    return result;
+  }
+
+  int best_rank = evidence_rank(persistent);
+  result.pipeline = std::move(persistent);
+  const auto population = stateless_maneuver::build_follow_escape_candidates(
+    source);
+  if (
+    population.reason != stateless_maneuver::RejectReason::Accepted ||
+    population.candidates.empty())
+  {
+    result.detail =
+      std::string{"Follow escape population rejected/"} +
+      stateless_maneuver::to_string(population.reason) + "/" +
+      population.detail;
+    result.pipeline.solver.detail =
+      result.detail + ", persistent=" + result.pipeline.solver.detail;
+    return result;
+  }
+
+  bool selected_certified = false;
+  double selected_terminal_progress_m =
+    -std::numeric_limits<double>::infinity();
+  double selected_terminal_velocity_mps =
+    -std::numeric_limits<double>::infinity();
+  for (const auto & candidate : population.candidates) {
+    ++result.candidate_count;
+    auto physical = physical_source;
+    physical.identity.artifact = candidate.seed.solver_snapshot.identity;
+    // Follow identity is deliberately side-free. A fresh context per side
+    // prevents one candidate's primal/dual state from becoming untracked
+    // cross-homotopy provenance.
+    const auto candidate_solver_context =
+      std::make_shared<rate_resolved_shadow::SolverContext>();
+    const std::shared_ptr<rate_resolved_certified::Store>
+    observation_only_store;
+    auto evaluation = evaluate_rate_resolved_pipeline(
+      candidate.seed.solver_snapshot,
+      std::optional<rate_resolved_physical_wall::Snapshot>{
+        std::move(physical)},
+      candidate_solver_context, observation_only_store);
+    const bool candidate_certified = certified(evaluation);
+    const int rank = evidence_rank(evaluation);
+    const double terminal_progress_m =
+      evaluation.solver.terminal_progress_m;
+    const double terminal_velocity_mps =
+      evaluation.solver.terminal_velocity_mps;
+    const bool better_certified = candidate_certified &&
+      (!selected_certified ||
+      terminal_progress_m > selected_terminal_progress_m + 1e-9 ||
+      (std::abs(terminal_progress_m - selected_terminal_progress_m) <= 1e-9 &&
+      terminal_velocity_mps > selected_terminal_velocity_mps));
+    if (better_certified || (!selected_certified && rank > best_rank)) {
+      selected_certified = candidate_certified;
+      selected_terminal_progress_m = terminal_progress_m;
+      selected_terminal_velocity_mps = terminal_velocity_mps;
+      best_rank = rank;
+      result.pipeline = std::move(evaluation);
+      result.candidate_source = candidate.seed.pass_side_sign > 0 ?
+        "follow-escape-positive" : "follow-escape-negative";
+    }
+  }
+
+  if (selected_certified) {
+    const auto store_reason = certified_plan_store != nullptr ?
+      certified_plan_store->replace(result.pipeline.certified_plan.plan) :
+      rate_resolved_certified::StoreReason::InvalidPlan;
+    result.detail = std::string{"selected/"} + result.candidate_source +
+      "/store=" + rate_resolved_certified::to_string(store_reason);
+  } else {
+    result.detail = std::string{"no certified Follow escape/best="} +
+      result.candidate_source;
+  }
+  result.pipeline.solver.detail =
+    result.detail + ", pipeline=" + result.pipeline.solver.detail;
+  return result;
+}
+
 void bind_rate_resolved_physical_wall_refinement(
   rate_resolved_shadow::Snapshot & solver_snapshot,
   const rate_resolved_physical_wall::Snapshot & physical_snapshot) noexcept
@@ -22809,9 +22927,16 @@ struct MPC
         if (!physical_registered) {
           physical_snapshot.reset();
         }
-        auto evaluation = evaluate_rate_resolved_pipeline(
-          snapshot, std::move(physical_snapshot), solver_context,
-          certified_plan_store);
+        auto evaluation =
+          snapshot.identity.source_context.intent ==
+          mpcc_contract::ControlIntent::Follow &&
+          physical_snapshot.has_value() ?
+          evaluate_rate_resolved_follow_escape_population(
+            snapshot, physical_snapshot.value(), solver_context,
+            certified_plan_store).pipeline :
+          evaluate_rate_resolved_pipeline(
+            snapshot, std::move(physical_snapshot), solver_context,
+            certified_plan_store);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
           static_cast<void>(physical_mailbox->publish(

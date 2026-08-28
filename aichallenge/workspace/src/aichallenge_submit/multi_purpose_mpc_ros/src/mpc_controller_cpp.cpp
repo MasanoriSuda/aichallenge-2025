@@ -22604,6 +22604,25 @@ struct MPC
     replay.current = true;
     replay.current_pose = physical_snapshot.current_pose;
     replay.control_prefix = physical_snapshot.control_prefix;
+    const auto canonical_control_path = build_canonical_current_control_path();
+    const bool same_control_prefix =
+      canonical_control_path.has_value() &&
+      canonical_control_path->poses.size() == replay.control_prefix.size() &&
+      std::equal(
+      canonical_control_path->poses.begin(),
+      canonical_control_path->poses.end(), replay.control_prefix.begin(),
+      [](const auto & lhs, const auto & rhs) {
+        return lhs.x_m == rhs.x_m && lhs.y_m == rhs.y_m &&
+               lhs.yaw_rad == rhs.yaw_rad;
+      });
+    if (
+      !canonical_control_path.has_value() || !same_control_prefix)
+    {
+      return;
+    }
+    replay.control_prefix_elapsed_sec =
+      canonical_control_path->elapsed_sec;
+    replay.physical_footprint = physical_snapshot.footprint;
     replay.wall_grid_fingerprint = physical_snapshot.wall_grid_fingerprint;
     replay.hard_wall_clearance_m =
       physical_snapshot.hard_wall_clearance_m;

@@ -322,6 +322,18 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_execution_source
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof STATIC
+  src/mpcc_rate_resolved_dynamic_proof.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof
+  ${PROJECT_NAME}_recovery_footprint
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation STATIC
   src/mpcc_rate_resolved_retained_revalidation.cpp
 )
@@ -335,9 +347,39 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
+  ${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof
   ${PROJECT_NAME}_mpc_stage_geometry
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_recovery_footprint
+)
+
+add_library(${PROJECT_NAME}_mpcc_architecture_comparison STATIC
+  src/mpcc_architecture_comparison.cpp
+)
+target_include_directories(${PROJECT_NAME}_mpcc_architecture_comparison PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_architecture_comparison
+  ${PROJECT_NAME}_mpcc_architecture_snapshot
+  ${PROJECT_NAME}_mpcc_stateless_maneuver
+  ${PROJECT_NAME}_mpcc_rate_resolved_shadow
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
+  ${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof
+  ${PROJECT_NAME}_mpc_stage_geometry
+  ${PROJECT_NAME}_mpcc_execution_contract
+)
+
+add_executable(mpcc_architecture_compare
+  src/mpcc_architecture_compare.cpp
+)
+target_link_libraries(mpcc_architecture_compare
+  ${PROJECT_NAME}_mpcc_architecture_comparison
+)
+install(TARGETS mpcc_architecture_compare
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_command_candidate STATIC
@@ -519,6 +561,18 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_stateless_maneuver
       ${PROJECT_NAME}_mpcc_stateless_maneuver
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_architecture_comparison
+    test/test_mpcc_architecture_comparison.cpp
+  )
+  if(TARGET test_mpcc_architecture_comparison)
+    target_include_directories(test_mpcc_architecture_comparison PRIVATE
+      ${EIGEN3_INCLUDE_DIRS}
+    )
+    target_link_libraries(test_mpcc_architecture_comparison
+      ${PROJECT_NAME}_mpcc_architecture_comparison
     )
   endif()
 

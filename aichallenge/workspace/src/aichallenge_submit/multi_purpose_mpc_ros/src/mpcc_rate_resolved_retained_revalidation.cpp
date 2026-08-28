@@ -6,10 +6,10 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <unordered_set>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
 {
+namespace dynamic_proof = mpcc_rate_resolved_dynamic_proof;
 namespace
 {
 
@@ -261,42 +261,6 @@ double wrap_to_pi(const double angle) noexcept
   return std::atan2(std::sin(angle), std::cos(angle));
 }
 
-struct DynamicPathResult
-{
-  bool valid{true};
-  bool clear{true};
-  std::string blocking_obstacle_id;
-  std::size_t checked_pose_count{};
-  double minimum_clearance_m{std::numeric_limits<double>::infinity()};
-  std::vector<recovery::DynamicClearanceSequence> obstacle_clearance;
-};
-
-bool dynamic_observation_valid(
-  const DynamicWorldObservation & observation) noexcept
-{
-  if (
-    observation.generation == 0U || !std::isfinite(observation.observed_sec) ||
-    observation.observed_sec < 0.0)
-  {
-    return false;
-  }
-  std::unordered_set<std::string> ids;
-  for (const auto & obstacle : observation.obstacles) {
-    if (
-      obstacle.id.empty() || !ids.emplace(obstacle.id).second ||
-      !std::isfinite(obstacle.circle.x_m) ||
-      !std::isfinite(obstacle.circle.y_m) ||
-      !std::isfinite(obstacle.circle.velocity_x_mps) ||
-      !std::isfinite(obstacle.circle.velocity_y_mps) ||
-      !std::isfinite(obstacle.circle.radius_m) ||
-      obstacle.circle.radius_m < 0.0)
-    {
-      return false;
-    }
-  }
-  return true;
-}
-
 bool follow_target_observation_valid(
   const FollowTargetObservation & observation) noexcept
 {
@@ -384,167 +348,6 @@ std::optional<double> sample_follow_target_progress(
     observation.target_progress_from_current_origin_m[upper_index] -
     observation.target_progress_from_current_origin_m[lower_index]);
   return std::isfinite(sampled) ? std::optional<double>{sampled} : std::nullopt;
-}
-
-void evaluate_dynamic_pose(
-  const recovery::FootprintExtents & footprint,
-  const recovery::Pose2D & pose, const double elapsed_time_sec,
-  const DynamicWorldObservation & observation,
-  DynamicPathResult & result)
-{
-  if (!result.valid || !result.clear) {
-    return;
-  }
-  if (result.obstacle_clearance.empty()) {
-    result.obstacle_clearance.resize(observation.obstacles.size());
-  } else if (result.obstacle_clearance.size() != observation.obstacles.size()) {
-    result.valid = false;
-    result.clear = false;
-    return;
-  }
-  for (std::size_t index = 0U; index < observation.obstacles.size(); ++index) {
-    const auto & obstacle = observation.obstacles[index];
-    const auto clearance = recovery::circle_obstacle_clearance_at_time(
-      footprint, pose, obstacle.circle, elapsed_time_sec);
-    if (!clearance.has_value()) {
-      result.valid = false;
-      result.clear = false;
-      result.blocking_obstacle_id = obstacle.id;
-      return;
-    }
-    ++result.checked_pose_count;
-    result.minimum_clearance_m = std::min(
-      result.minimum_clearance_m, clearance.value());
-    const auto clearance_reason = recovery::observe_dynamic_clearance(
-      result.obstacle_clearance[index], clearance.value());
-    if (clearance_reason != recovery::DynamicClearanceRejectReason::None) {
-      result.clear = false;
-      result.blocking_obstacle_id = obstacle.id;
-      return;
-    }
-  }
-}
-
-void finalize_dynamic_path(
-  const DynamicWorldObservation & observation, DynamicPathResult & result)
-{
-  if (!result.valid || !result.clear) {
-    return;
-  }
-  if (result.obstacle_clearance.size() != observation.obstacles.size()) {
-    result.valid = false;
-    result.clear = false;
-    return;
-  }
-  for (std::size_t index = 0U; index < observation.obstacles.size(); ++index) {
-    const auto reason = recovery::finalize_dynamic_clearance(
-      result.obstacle_clearance[index]);
-    if (reason != recovery::DynamicClearanceRejectReason::None) {
-      result.clear = false;
-      result.blocking_obstacle_id = observation.obstacles[index].id;
-      return;
-    }
-  }
-}
-
-void evaluate_dynamic_segment(
-  const recovery::FootprintExtents & footprint,
-  const recovery::Pose2D & start, const recovery::Pose2D & end,
-  const double start_time_sec, const double end_time_sec,
-  const double swept_step_m, const DynamicWorldObservation & observation,
-  DynamicPathResult & result)
-{
-  // A preceding segment owns the first failure.  Do not reinterpret an
-  // already proven physical overlap as malformed geometry when a caller
-  // evaluates the next portion of the joined path.
-  if (!result.valid || !result.clear) {
-    return;
-  }
-  if (
-    !finite_pose(start) || !finite_pose(end) || !std::isfinite(start_time_sec) ||
-    !std::isfinite(end_time_sec) || end_time_sec < start_time_sec ||
-    !std::isfinite(swept_step_m) || swept_step_m <= 0.0)
-  {
-    result.valid = false;
-    result.clear = false;
-    return;
-  }
-  const double yaw_delta = wrap_to_pi(end.yaw_rad - start.yaw_rad);
-  const double corner_radius_m = std::hypot(
-    std::max(footprint.front_extent_m, footprint.rear_extent_m) +
-    footprint.margin_m,
-    std::max(footprint.left_extent_m, footprint.right_extent_m) +
-    footprint.margin_m);
-  double maximum_obstacle_motion_m = 0.0;
-  const double duration_sec = end_time_sec - start_time_sec;
-  for (const auto & obstacle : observation.obstacles) {
-    maximum_obstacle_motion_m = std::max(
-      maximum_obstacle_motion_m,
-      std::hypot(
-        obstacle.circle.velocity_x_mps,
-        obstacle.circle.velocity_y_mps) * duration_sec);
-  }
-  const double relative_motion_bound_m =
-    std::hypot(end.x_m - start.x_m, end.y_m - start.y_m) +
-    corner_radius_m * std::abs(yaw_delta) + maximum_obstacle_motion_m;
-  const double raw_subdivisions = std::ceil(
-    relative_motion_bound_m / swept_step_m);
-  if (!std::isfinite(raw_subdivisions) || raw_subdivisions > 1000000.0) {
-    result.valid = false;
-    result.clear = false;
-    return;
-  }
-  const std::size_t subdivisions = std::max<std::size_t>(
-    1U, static_cast<std::size_t>(raw_subdivisions));
-  for (std::size_t index = 0U; index <= subdivisions; ++index) {
-    const double fraction =
-      static_cast<double>(index) / static_cast<double>(subdivisions);
-    const recovery::Pose2D pose{
-      start.x_m + fraction * (end.x_m - start.x_m),
-      start.y_m + fraction * (end.y_m - start.y_m),
-      start.yaw_rad + fraction * yaw_delta};
-    const double elapsed_time_sec =
-      start_time_sec + fraction * duration_sec;
-    evaluate_dynamic_pose(
-      footprint, pose, elapsed_time_sec, observation, result);
-    if (!result.valid || !result.clear) {
-      return;
-    }
-  }
-}
-
-void evaluate_timed_dynamic_path(
-  const recovery::FootprintExtents & footprint,
-  const std::vector<recovery::Pose2D> & path,
-  const std::vector<double> & elapsed_sec, const double swept_step_m,
-  const DynamicWorldObservation & observation, DynamicPathResult & result)
-{
-  if (!result.valid || !result.clear) {
-    return;
-  }
-  if (
-    path.empty() || path.size() != elapsed_sec.size() ||
-    !std::isfinite(elapsed_sec.front()) ||
-    std::abs(elapsed_sec.front()) > kIdentityTolerance)
-  {
-    result.valid = false;
-    result.clear = false;
-    return;
-  }
-  if (path.size() == 1U) {
-    evaluate_dynamic_pose(
-      footprint, path.front(), elapsed_sec.front(), observation, result);
-    return;
-  }
-  for (std::size_t index = 1U; index < path.size(); ++index) {
-    evaluate_dynamic_segment(
-      footprint, path[index - 1U], path[index],
-      elapsed_sec[index - 1U], elapsed_sec[index],
-      swept_step_m, observation, result);
-    if (!result.valid || !result.clear) {
-      return;
-    }
-  }
 }
 
 }  // namespace
@@ -717,7 +520,7 @@ Result evaluate(const Request & request)
     result.reason = Reason::DynamicObservationUnavailable;
     return result;
   }
-  if (!dynamic_observation_valid(request.obstacles) ||
+  if (!dynamic_proof::observation_valid(request.obstacles) ||
     request.obstacles.observed_sec > request.now_sec + kIdentityTolerance)
   {
     result.reason = Reason::DynamicObservationInvalid;
@@ -1060,8 +863,8 @@ Result evaluate(const Request & request)
     cursor.stage_elapsed_sec;
   std::size_t current_stage_last_path_index{};
 
-  DynamicPathResult dynamic;
-  evaluate_timed_dynamic_path(
+  dynamic_proof::Result dynamic;
+  dynamic_proof::observe_timed_path(
     source.footprint, request.measured_to_control_path,
     request.measured_to_control_elapsed_sec, source.swept_step_m,
     request.obstacles, dynamic);
@@ -1069,7 +872,7 @@ Result evaluate(const Request & request)
   // published now.  The full suffix still owns diagnostics and future
   // replanning, but a collision in a later stage must not erase a clear
   // current-stage authority interval.
-  DynamicPathResult current_stage_dynamic = dynamic;
+  dynamic_proof::Result current_stage_dynamic = dynamic;
   auto previous_dynamic_pose = request.control_pose;
   double dynamic_time_sec = prediction_delay_sec;
   for (
@@ -1117,12 +920,12 @@ Result evaluate(const Request & request)
       sample_elapsed_sec <= current_stage_remaining_sec +
       execution.physical_global_tolerance)
     {
-      evaluate_dynamic_segment(
+      dynamic_proof::observe_segment(
         source.footprint, previous_dynamic_pose, endpoint_pose.value(),
         dynamic_time_sec, endpoint_time_sec,
         source.swept_step_m, request.obstacles, current_stage_dynamic);
     }
-    evaluate_dynamic_segment(
+    dynamic_proof::observe_segment(
       source.footprint, previous_dynamic_pose, endpoint_pose.value(),
       dynamic_time_sec, endpoint_time_sec,
       source.swept_step_m, request.obstacles, dynamic);
@@ -1132,8 +935,8 @@ Result evaluate(const Request & request)
       break;
     }
   }
-  finalize_dynamic_path(request.obstacles, current_stage_dynamic);
-  finalize_dynamic_path(request.obstacles, dynamic);
+  dynamic_proof::finalize(request.obstacles, current_stage_dynamic);
+  dynamic_proof::finalize(request.obstacles, dynamic);
   const auto continuation_clearance =
     recovery::evaluate_clear_footprint_path(
     *source.wall_grid, clearance_footprint.value(), continuation_path,

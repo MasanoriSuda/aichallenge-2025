@@ -84,7 +84,7 @@
     },
     {
       "experiment_id": "20260828-slice7-horizon-16",
-      "baseline_commit": "b273d56d",
+      "baseline_commit": "b273d56d62af717c906fcc9a50e018c325532f9f",
       "snapshot_ids": [],
       "hypothesis": "reducing the canonical horizon from 20 to 16 stages lowers the mandatory solve tail without losing complete Overtake execution",
       "changed_dimension": "canonical_horizon_stage_count",
@@ -96,7 +96,7 @@
     },
     {
       "experiment_id": "20260828-slice7-horizon-18",
-      "baseline_commit": "b273d56d",
+      "baseline_commit": "b273d56d62af717c906fcc9a50e018c325532f9f",
       "snapshot_ids": [],
       "hypothesis": "an 18-stage horizon retains terminal successor viability while reducing the solve tail",
       "changed_dimension": "canonical_horizon_stage_count",
@@ -108,7 +108,7 @@
     },
     {
       "experiment_id": "20260828-slice7-production-solve-cadence-20hz",
-      "baseline_commit": "b273d56d",
+      "baseline_commit": "b273d56d62af717c906fcc9a50e018c325532f9f",
       "snapshot_ids": [],
       "hypothesis": "a 20 Hz production solve cadence with 40 Hz current-world revalidation preserves certified authority while reducing callback contention",
       "changed_dimension": "production_solve_submission_cadence",
@@ -124,7 +124,7 @@
     },
     {
       "experiment_id": "20260828-slice7-bounded-tuning-closure",
-      "baseline_commit": "b273d56d",
+      "baseline_commit": "b273d56d62af717c906fcc9a50e018c325532f9f",
       "snapshot_ids": [],
       "hypothesis": "at least one isolated parameter family improves compute performance without weakening dynamic Overtake completion",
       "changed_dimension": "tuning_campaign_decision",
@@ -142,7 +142,7 @@
       ],
       "hypothesis": "the persistent Mission and a fresh stateless receding candidate can be compared on one active Overtake world with the same seven-state SQP",
       "changed_dimension": "candidate_lifecycle_isolation",
-      "result": "blocked",
+      "result": "inconclusive",
       "reason": "after adapting the observation-only A arm to the valid frozen runtime Mission, all 18 final active ShiftOut observations still lacked an independently generated receding B candidate, so no same-world solver pair existed",
       "production_impact": "none; observation-only live instrumentation and unused audit API were removed after evidence capture",
       "deleted_code": [
@@ -154,10 +154,8 @@
     },
     {
       "experiment_id": "20260828-interaction-snapshot-replay-contract",
-      "baseline_commit": "ce78f928",
-      "snapshot_ids": [
-        "im1-unit-interaction-roundtrip"
-      ],
+      "baseline_commit": "ce78f928e69a7082f4ac75dda48623046f803d0e",
+      "snapshot_ids": [],
       "hypothesis": "the existing failure artifact can support A/B/C/D comparison without reconstructing current-world or physical-proof inputs",
       "changed_dimension": "immutable_replay_input_contract",
       "result": "accepted",
@@ -168,7 +166,7 @@
     },
     {
       "experiment_id": "20260828-stateless-maneuver-seed",
-      "baseline_commit": "fa063748",
+      "baseline_commit": "fa063748e8f9c227aa75748311a865dad3b0c0f2",
       "snapshot_ids": [],
       "hypothesis": "either Overtake homotopy can be rebuilt from one immutable current-world snapshot without persistent Mission geometry or phase lifecycle",
       "changed_dimension": "candidate_lifecycle_isolation",
@@ -177,6 +175,20 @@
       "production_impact": "none; the pure producer is linked only by an offline replay CLI and tests and does not run a solver or publish commands",
       "deleted_code": [],
       "revisit_condition": "IM-3 shows that the produced seed cannot be evaluated by the unchanged seven-state SQP and exact proof pipeline without lifecycle-dependent reconstruction"
+    },
+    {
+      "experiment_id": "20260828-same-snapshot-ab-proof",
+      "baseline_commit": "99dfb7466aa9b20b6f222bfc88843698c9f02e63",
+      "snapshot_ids": [],
+      "hypothesis": "persistent and stateless Overtake candidates can be compared from one immutable world through independent unchanged seven-state SQP and identical exact physical proofs",
+      "changed_dimension": "architecture_comparison_execution",
+      "result": "accepted",
+      "reason": "all three arms independently solve and pass the common exact wall, timed dynamic-obstacle and successor gates in deterministic evidence, while every downstream rejection prevents ManeuverBundle construction",
+      "production_impact": "none; comparison and bundles are offline data only, while live code only records the missing exact prefix timing and raw footprint provenance",
+      "deleted_code": [
+        "duplicate retained-only dynamic path proof implementation"
+      ],
+      "revisit_condition": "a native replay-ready Overtake failure snapshot produces a comparison result or exposes additional unsealed physical input"
     }
   ]
 }

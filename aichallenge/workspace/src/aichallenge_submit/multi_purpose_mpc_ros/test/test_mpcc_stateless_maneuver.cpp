@@ -106,6 +106,11 @@ mpcc_rate_resolved_shadow::Snapshot make_source()
   world.current = true;
   world.current_pose = {0.0, 0.0, 0.0};
   world.control_prefix = {{0.0, 0.0, 0.0}, {0.1, 0.0, 0.0}};
+  world.control_prefix_elapsed_sec = {0.0, 0.1};
+  world.physical_footprint.front_extent_m = 1.0;
+  world.physical_footprint.rear_extent_m = 1.0;
+  world.physical_footprint.left_extent_m = 0.525;
+  world.physical_footprint.right_extent_m = 0.525;
   world.wall_grid_fingerprint =
     recovery_footprint::occupancy_grid_fingerprint(*grid);
   world.hard_wall_clearance_m = 0.2;

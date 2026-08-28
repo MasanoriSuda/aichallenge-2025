@@ -53,6 +53,13 @@ struct ReplayWorld
   bool current{false};
   recovery_footprint::Pose2D current_pose;
   std::vector<recovery_footprint::Pose2D> control_prefix;
+  /// Exact age of every measured-to-control pose from observed_sec.  Dynamic
+  /// obstacle replay must not infer timing from spatial samples.
+  std::vector<double> control_prefix_elapsed_sec;
+  /// Raw ego body used by the exact physical proof before hard wall
+  /// clearance is added.  Snapshot::wall_footprint is the already expanded
+  /// QP refinement footprint and has a different meaning.
+  recovery_footprint::FootprintExtents physical_footprint;
   std::uint64_t wall_grid_fingerprint{};
   double hard_wall_clearance_m{};
   double bound_tolerance_m{};

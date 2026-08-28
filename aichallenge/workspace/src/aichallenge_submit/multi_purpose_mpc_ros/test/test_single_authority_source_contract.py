@@ -2009,10 +2009,16 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     retained_source = (
         package / "src" / "mpcc_rate_resolved_retained_revalidation.cpp"
     ).read_text(encoding="utf-8")
+    dynamic_proof_source = (
+        package / "src" / "mpcc_rate_resolved_dynamic_proof.cpp"
+    ).read_text(encoding="utf-8")
     assert "std::optional<Proof> proof" in retained_header
     assert "artifact::extract_actuation(execution, cursor)" in retained_source
     assert "recovery::evaluate_clear_footprint_path(" in retained_source
-    assert "recovery::circle_obstacle_clearance_at_time(" in retained_source
+    assert "dynamic_proof::observe_timed_path(" in retained_source
+    assert "dynamic_proof::observe_segment(" in retained_source
+    assert "dynamic_proof::finalize(" in retained_source
+    assert "recovery::circle_obstacle_clearance_at_time(" in dynamic_proof_source
     assert "source.wall_grid_fingerprint != 0U" in retained_source
     assert "request.current_wall_grid.get() == source.wall_grid.get()" in retained_source
     assert "recovery::occupancy_grid_fingerprint(*request.current_wall_grid)" in retained_source

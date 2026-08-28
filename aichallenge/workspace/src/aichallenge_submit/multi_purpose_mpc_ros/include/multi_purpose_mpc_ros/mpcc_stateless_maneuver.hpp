@@ -50,6 +50,22 @@ struct ContingencyStopIntent
     std::numeric_limits<double>::quiet_NaN()};
 };
 
+struct TerminalResolution
+{
+  bool accepted{false};
+  TerminalSuccessor successor{TerminalSuccessor::None};
+  ContingencyStopIntent stop_suffix;
+  std::size_t predicted_encounter_stage_count{};
+  std::size_t last_encounter_state{};
+  std::string detail{"not-evaluated"};
+};
+
+/// Resolve the common terminal successor contract without changing candidate
+/// geometry.  Persistent and stateless A/B arms must consume this one rule so
+/// successor viability cannot explain an architecture comparison result.
+TerminalResolution resolve_terminal_successor(
+  const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
+
 /// Stateless pre-solve input for the existing seven-state SQP.  This type has
 /// no authority surface: it owns data only and cannot publish or retain a
 /// command.  Exact trajectory and physical certificates are deliberately

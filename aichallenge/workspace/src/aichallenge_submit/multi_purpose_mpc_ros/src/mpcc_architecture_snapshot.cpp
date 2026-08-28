@@ -471,6 +471,19 @@ YAML::Node source_node(
       control_prefix.push_back(item);
     }
     replay_world["control_prefix"] = control_prefix;
+    replay_world["control_prefix_elapsed_sec"] =
+      std_vector_node(world.control_prefix_elapsed_sec);
+    YAML::Node physical_footprint;
+    physical_footprint["front_extent_m"] =
+      world.physical_footprint.front_extent_m;
+    physical_footprint["rear_extent_m"] =
+      world.physical_footprint.rear_extent_m;
+    physical_footprint["left_extent_m"] =
+      world.physical_footprint.left_extent_m;
+    physical_footprint["right_extent_m"] =
+      world.physical_footprint.right_extent_m;
+    physical_footprint["margin_m"] = world.physical_footprint.margin_m;
+    replay_world["physical_footprint"] = physical_footprint;
     replay_world["wall_grid_fingerprint"] = world.wall_grid_fingerprint;
     replay_world["hard_wall_clearance_m"] = world.hard_wall_clearance_m;
     replay_world["bound_tolerance_m"] = world.bound_tolerance_m;
@@ -876,6 +889,26 @@ std::optional<shadow::Snapshot> load_source_snapshot(
       }
       world.control_prefix.push_back(pose.value());
     }
+    const auto prefix_elapsed = load_std_vector(
+      replay["control_prefix_elapsed_sec"]);
+    if (!prefix_elapsed.has_value()) {
+      return std::nullopt;
+    }
+    world.control_prefix_elapsed_sec = prefix_elapsed.value();
+    const auto physical_footprint = replay["physical_footprint"];
+    if (!physical_footprint || !physical_footprint.IsMap()) {
+      return std::nullopt;
+    }
+    world.physical_footprint.front_extent_m =
+      physical_footprint["front_extent_m"].as<double>();
+    world.physical_footprint.rear_extent_m =
+      physical_footprint["rear_extent_m"].as<double>();
+    world.physical_footprint.left_extent_m =
+      physical_footprint["left_extent_m"].as<double>();
+    world.physical_footprint.right_extent_m =
+      physical_footprint["right_extent_m"].as<double>();
+    world.physical_footprint.margin_m =
+      physical_footprint["margin_m"].as<double>();
     world.wall_grid_fingerprint =
       replay["wall_grid_fingerprint"].as<std::uint64_t>();
     world.hard_wall_clearance_m = replay["hard_wall_clearance_m"].as<double>();
@@ -1150,9 +1183,19 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
       source.identity.source_context.observation_generation ||
       !std::isfinite(world.observed_sec) || !finite_pose(world.current_pose) ||
       world.control_prefix.empty() ||
+      world.control_prefix.size() != world.control_prefix_elapsed_sec.size() ||
+      !world.physical_footprint.valid() ||
       std::any_of(
         world.control_prefix.begin(), world.control_prefix.end(),
         [](const auto & pose) {return !finite_pose(pose);}) ||
+      std::any_of(
+        world.control_prefix_elapsed_sec.begin(),
+        world.control_prefix_elapsed_sec.end(),
+        [](const double elapsed_sec) {return !std::isfinite(elapsed_sec);}) ||
+      std::abs(world.control_prefix_elapsed_sec.front()) > 1e-9 ||
+      std::abs(
+        world.control_prefix_elapsed_sec.back() -
+        (source.control_prediction_origin_sec - world.observed_sec)) > 1e-9 ||
       std::abs(world.control_prefix.front().x_m - world.current_pose.x_m) > 1e-9 ||
       std::abs(world.control_prefix.front().y_m - world.current_pose.y_m) > 1e-9 ||
       std::abs(world.control_prefix.front().yaw_rad - world.current_pose.yaw_rad) > 1e-9 ||
@@ -1161,10 +1204,37 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
       recovery_footprint::occupancy_grid_fingerprint(*source.wall_grid) ||
       !std::isfinite(world.hard_wall_clearance_m) ||
       world.hard_wall_clearance_m < 0.0 ||
+      std::abs(
+        world.physical_footprint.front_extent_m -
+        source.wall_footprint.front_extent_m) > 1e-9 ||
+      std::abs(
+        world.physical_footprint.rear_extent_m -
+        source.wall_footprint.rear_extent_m) > 1e-9 ||
+      std::abs(
+        world.physical_footprint.left_extent_m +
+        world.hard_wall_clearance_m -
+        source.wall_footprint.left_extent_m) > 1e-9 ||
+      std::abs(
+        world.physical_footprint.right_extent_m +
+        world.hard_wall_clearance_m -
+        source.wall_footprint.right_extent_m) > 1e-9 ||
+      std::abs(
+        world.physical_footprint.margin_m -
+        source.wall_footprint.margin_m) > 1e-9 ||
       !std::isfinite(world.bound_tolerance_m) || world.bound_tolerance_m < 0.0 ||
       !std::isfinite(world.swept_step_m) || world.swept_step_m <= 0.0)
     {
       return false;
+    }
+    for (std::size_t index = 1U;
+      index < world.control_prefix_elapsed_sec.size(); ++index)
+    {
+      if (
+        world.control_prefix_elapsed_sec[index] <=
+        world.control_prefix_elapsed_sec[index - 1U])
+      {
+        return false;
+      }
     }
     std::set<std::string> obstacle_ids;
     bool target_present = source.identity.source_context.target_id.empty();
@@ -1201,7 +1271,7 @@ std::uint64_t fingerprint_interaction_snapshot(
     return 0U;
   }
   InteractionFingerprintBuilder builder;
-  builder.append_string("mpcc-interaction-snapshot-v1");
+  builder.append_string("mpcc-interaction-snapshot-v2");
   builder.append_u64(source.identity.sequence);
   builder.append_u64(source.identity.source_context.fingerprint);
   builder.append_double(source.identity.snapshot_sec);
@@ -1287,6 +1357,12 @@ std::uint64_t fingerprint_interaction_snapshot(
     builder.append_double(pose.y_m);
     builder.append_double(pose.yaw_rad);
   }
+  builder.append_vector(world.control_prefix_elapsed_sec);
+  builder.append_double(world.physical_footprint.front_extent_m);
+  builder.append_double(world.physical_footprint.rear_extent_m);
+  builder.append_double(world.physical_footprint.left_extent_m);
+  builder.append_double(world.physical_footprint.right_extent_m);
+  builder.append_double(world.physical_footprint.margin_m);
   builder.append_u64(world.wall_grid_fingerprint);
   builder.append_double(world.hard_wall_clearance_m);
   builder.append_double(world.bound_tolerance_m);

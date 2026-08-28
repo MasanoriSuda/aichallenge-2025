@@ -109,6 +109,11 @@ mpcc_rate_resolved_shadow::Snapshot make_interaction_snapshot(
   snapshot.replay_world->control_prefix = {
     recovery_footprint::Pose2D{0.0, 0.0, 0.0},
     recovery_footprint::Pose2D{0.1, 0.0, 0.0}};
+  snapshot.replay_world->control_prefix_elapsed_sec = {0.0, 0.1};
+  snapshot.replay_world->physical_footprint.front_extent_m = 1.0;
+  snapshot.replay_world->physical_footprint.rear_extent_m = 1.0;
+  snapshot.replay_world->physical_footprint.left_extent_m = 0.525;
+  snapshot.replay_world->physical_footprint.right_extent_m = 0.525;
   snapshot.replay_world->wall_grid_fingerprint =
     recovery_footprint::occupancy_grid_fingerprint(*grid);
   snapshot.replay_world->hard_wall_clearance_m = 0.2;
@@ -232,6 +237,11 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   ASSERT_TRUE(loaded->source.replay_world.has_value());
   EXPECT_EQ(loaded->source.identity.source_context.target_id, "d2");
   EXPECT_EQ(loaded->source.replay_world->observation_generation, 3U);
+  EXPECT_EQ(
+    loaded->source.replay_world->control_prefix_elapsed_sec,
+    (std::vector<double>{0.0, 0.1}));
+  EXPECT_DOUBLE_EQ(
+    loaded->source.replay_world->physical_footprint.left_extent_m, 0.525);
   ASSERT_EQ(loaded->source.replay_world->obstacles.size(), 1U);
   EXPECT_EQ(loaded->source.replay_world->obstacles.front().id, "d2");
   EXPECT_EQ(loaded->source.wall_grid->cells.size(), 4U);
@@ -247,6 +257,18 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   EXPECT_FALSE(
     interaction_snapshot_matches_fingerprint(
       wall_mutated, loaded->interaction_fingerprint));
+
+  auto timing_mutated = loaded->source;
+  timing_mutated.replay_world->control_prefix_elapsed_sec.back() += 0.01;
+  EXPECT_FALSE(
+    interaction_snapshot_matches_fingerprint(
+      timing_mutated, loaded->interaction_fingerprint));
+
+  auto footprint_mutated = loaded->source;
+  footprint_mutated.replay_world->physical_footprint.left_extent_m += 0.01;
+  EXPECT_FALSE(
+    interaction_snapshot_matches_fingerprint(
+      footprint_mutated, loaded->interaction_fingerprint));
 
   auto identity_mutated = loaded->source;
   ++identity_mutated.identity.source_context.decision_id;

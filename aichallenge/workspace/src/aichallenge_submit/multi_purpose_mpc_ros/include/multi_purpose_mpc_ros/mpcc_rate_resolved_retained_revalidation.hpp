@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_RETAINED_REVALIDATION_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 
 #include <cstdint>
@@ -21,19 +22,8 @@ namespace physical = mpcc_rate_resolved_physical_wall;
 namespace recovery = recovery_footprint;
 namespace race = race_mpcc_foundation;
 
-struct DynamicObstacle
-{
-  std::string id;
-  recovery::CircleObstacle circle;
-};
-
-struct DynamicWorldObservation
-{
-  std::uint64_t generation{};
-  double observed_sec{};
-  std::vector<DynamicObstacle> obstacles;
-  bool current{false};
-};
+using DynamicObstacle = mpcc_rate_resolved_dynamic_proof::DynamicObstacle;
+using DynamicWorldObservation = mpcc_rate_resolved_dynamic_proof::WorldObservation;
 
 /// Convert the V2X planner's forbidden ego-center distance into the radius of
 /// the peer-only circle consumed by the physical footprint verifier.  The

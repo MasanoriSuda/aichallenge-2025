@@ -41,6 +41,85 @@ Result reject(const RejectReason reason, std::string detail)
 
 }  // namespace
 
+TerminalResolution resolve_terminal_successor(
+  const mpcc_rate_resolved_shadow::Snapshot & source) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  TerminalResolution resolution;
+  const int horizon = source.request.horizon_steps;
+  if (
+    horizon <= 0 || source.dynamic_obstacle_stages.size() !=
+    static_cast<std::size_t>(horizon) ||
+    source.nominal_path_distance_m.size() !=
+    static_cast<std::size_t>(horizon + 1) ||
+    source.request.states.size() != static_cast<std::size_t>(horizon + 1) ||
+    source.request.inputs.size() != static_cast<std::size_t>(horizon))
+  {
+    resolution.detail = "terminal horizon unavailable";
+    return resolution;
+  }
+  bool target_stage_available = false;
+  for (int stage = 1; stage <= horizon; ++stage) {
+    const auto & target = source.dynamic_obstacle_stages[
+      static_cast<std::size_t>(stage - 1)];
+    if (!target.valid) {
+      continue;
+    }
+    target_stage_available = true;
+    const double ego_progress_m = source.nominal_path_distance_m[
+      static_cast<std::size_t>(stage)];
+    const bool encounter =
+      std::abs(target.target_progress_m - ego_progress_m) <=
+      target.longitudinal_overlap_m + kNumericalTolerance;
+    if (encounter) {
+      ++resolution.predicted_encounter_stage_count;
+      resolution.last_encounter_state = static_cast<std::size_t>(stage);
+    }
+  }
+  if (!target_stage_available) {
+    resolution.detail = "no valid target prediction stage";
+    return resolution;
+  }
+  const auto & terminal = source.request.states.back();
+  const bool return_visible =
+    resolution.predicted_encounter_stage_count > 0U &&
+    resolution.last_encounter_state < static_cast<std::size_t>(horizon) &&
+    contains_zero(
+      terminal.lower[model::kLateralIndex],
+      terminal.upper[model::kLateralIndex]);
+  if (return_visible) {
+    resolution.accepted = true;
+    resolution.successor = TerminalSuccessor::Return;
+    resolution.detail = "return-visible";
+    return resolution;
+  }
+  double maximum_deceleration_mps2 = 0.0;
+  for (const auto & input : source.request.inputs) {
+    maximum_deceleration_mps2 = std::min(
+      maximum_deceleration_mps2,
+      input.lower[model::kAccelerationIndex]);
+  }
+  const bool stop_available =
+    maximum_deceleration_mps2 < -kNumericalTolerance &&
+    contains_zero(
+      terminal.lower[model::kVelocityIndex],
+      terminal.upper[model::kVelocityIndex]);
+  if (!stop_available) {
+    resolution.detail = "neither Return nor semantic Stop suffix is available";
+    return resolution;
+  }
+  resolution.accepted = true;
+  resolution.successor = TerminalSuccessor::Stop;
+  resolution.stop_suffix.available = true;
+  resolution.stop_suffix.hold_lateral_m =
+    terminal.reference[model::kLateralIndex];
+  resolution.stop_suffix.target_velocity_mps = 0.0;
+  resolution.stop_suffix.maximum_deceleration_mps2 =
+    maximum_deceleration_mps2;
+  resolution.detail = "stop-visible";
+  return resolution;
+}
+
 const char * to_string(const RejectReason reason) noexcept
 {
   switch (reason) {
@@ -138,30 +217,16 @@ Result build(
     seed.lateral_reference_m.push_back(
       initial.reference[model::kLateralIndex]);
 
-    bool target_stage_available = false;
-    std::size_t last_encounter_state = 0U;
-    for (int stage = 1; stage <= horizon; ++stage) {
-      const auto & target = source.dynamic_obstacle_stages[
-        static_cast<std::size_t>(stage - 1)];
-      if (!target.valid) {
-        continue;
-      }
-      target_stage_available = true;
-      const double ego_progress_m = source.nominal_path_distance_m[
-        static_cast<std::size_t>(stage)];
-      const bool encounter =
-        std::abs(target.target_progress_m - ego_progress_m) <=
-        target.longitudinal_overlap_m + kNumericalTolerance;
-      if (encounter) {
-        ++seed.predicted_encounter_stage_count;
-        last_encounter_state = static_cast<std::size_t>(stage);
-      }
-    }
-    if (!target_stage_available) {
+    const auto terminal = resolve_terminal_successor(source);
+    if (!terminal.accepted &&
+      terminal.detail == "no valid target prediction stage")
+    {
       return reject(
         RejectReason::DynamicTargetUnavailable,
-        "no valid target prediction stage");
+        terminal.detail);
     }
+    seed.predicted_encounter_stage_count =
+      terminal.predicted_encounter_stage_count;
 
     for (int stage = 1; stage <= horizon; ++stage) {
       auto & state = candidate.request.states[static_cast<std::size_t>(stage)];
@@ -180,7 +245,7 @@ Result build(
       double desired_lateral_m = 0.0;
       const bool side_reference_active = target.valid &&
         (seed.predicted_encounter_stage_count == 0U ||
-        static_cast<std::size_t>(stage) <= last_encounter_state);
+        static_cast<std::size_t>(stage) <= terminal.last_encounter_state);
       if (side_reference_active) {
         desired_lateral_m = target.target_lateral_m +
           static_cast<double>(pass_side_sign) *
@@ -192,40 +257,12 @@ Result build(
       state.reference[model::kHeadingIndex] = 0.0;
       seed.lateral_reference_m.push_back(desired_lateral_m);
     }
-    const auto & terminal = candidate.request.states.back();
-    const double terminal_lower = terminal.lower[model::kLateralIndex];
-    const double terminal_upper = terminal.upper[model::kLateralIndex];
-    const bool return_visible =
-      seed.predicted_encounter_stage_count > 0U &&
-      last_encounter_state < static_cast<std::size_t>(horizon) &&
-      contains_zero(terminal_lower, terminal_upper);
-    if (return_visible) {
-      seed.terminal_successor = TerminalSuccessor::Return;
-    } else {
-      double maximum_deceleration_mps2 = 0.0;
-      for (const auto & input : candidate.request.inputs) {
-        maximum_deceleration_mps2 = std::min(
-          maximum_deceleration_mps2,
-          input.lower[model::kAccelerationIndex]);
-      }
-      const bool stop_available =
-        maximum_deceleration_mps2 < -kNumericalTolerance &&
-        contains_zero(
-          terminal.lower[model::kVelocityIndex],
-          terminal.upper[model::kVelocityIndex]);
-      if (!stop_available) {
-        return reject(
-          RejectReason::TerminalSuccessorUnavailable,
-          "neither Return nor semantic Stop suffix is available");
-      }
-      seed.terminal_successor = TerminalSuccessor::Stop;
-      seed.stop_suffix.available = true;
-      seed.stop_suffix.hold_lateral_m =
-        terminal.reference[model::kLateralIndex];
-      seed.stop_suffix.target_velocity_mps = 0.0;
-      seed.stop_suffix.maximum_deceleration_mps2 =
-        maximum_deceleration_mps2;
+    if (!terminal.accepted) {
+      return reject(
+        RejectReason::TerminalSuccessorUnavailable, terminal.detail);
     }
+    seed.terminal_successor = terminal.successor;
+    seed.stop_suffix = terminal.stop_suffix;
 
     if (!architecture::interaction_snapshot_complete(candidate)) {
       return reject(

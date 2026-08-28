@@ -6484,6 +6484,48 @@ evaluate_rate_resolved_follow_escape_population(
   return result;
 }
 
+RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
+  const rate_resolved_shadow::Snapshot & source,
+  std::optional<rate_resolved_physical_wall::Snapshot> physical_source,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> & solver_context,
+  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
+{
+  const auto intent = source.identity.source_context.intent;
+  if (
+    intent == mpcc_contract::ControlIntent::Follow &&
+    physical_source.has_value())
+  {
+    return evaluate_rate_resolved_follow_escape_population(
+      source, physical_source.value(), solver_context,
+      certified_plan_store).pipeline;
+  }
+  if (mpcc_contract::canonical_normal_intent_requires_execution_side(intent)) {
+    if (!physical_source.has_value()) {
+      RateResolvedPipelineEvaluation rejected;
+      rejected.solver.identity = source.identity;
+      rejected.solver.outcome = rate_resolved_shadow::Outcome::BuildRejected;
+      rejected.solver.detail =
+        "current-world Overtake population requires physical snapshot";
+      return rejected;
+    }
+    const int pass_side_sign =
+      source.identity.source_context.execution_side_sign;
+    auto population = evaluate_rate_resolved_current_world_population(
+      source, physical_source.value(), pass_side_sign, solver_context,
+      certified_plan_store);
+    population.pipeline.solver.detail =
+      std::string{"current-world-overtake/source="} +
+      population.candidate_source + "/count=" +
+      std::to_string(population.candidate_count) + "/result=" +
+      population.detail + ", pipeline=" +
+      population.pipeline.solver.detail;
+    return std::move(population.pipeline);
+  }
+  return evaluate_rate_resolved_pipeline(
+    source, std::move(physical_source), solver_context,
+    certified_plan_store);
+}
+
 void bind_rate_resolved_physical_wall_refinement(
   rate_resolved_shadow::Snapshot & solver_snapshot,
   const rate_resolved_physical_wall::Snapshot & physical_snapshot) noexcept
@@ -23258,16 +23300,9 @@ struct MPC
         if (!physical_registered) {
           physical_snapshot.reset();
         }
-        auto evaluation =
-          snapshot.identity.source_context.intent ==
-          mpcc_contract::ControlIntent::Follow &&
-          physical_snapshot.has_value() ?
-          evaluate_rate_resolved_follow_escape_population(
-            snapshot, physical_snapshot.value(), solver_context,
-            certified_plan_store).pipeline :
-          evaluate_rate_resolved_pipeline(
-            snapshot, std::move(physical_snapshot), solver_context,
-            certified_plan_store);
+        auto evaluation = evaluate_rate_resolved_normal_population(
+          snapshot, std::move(physical_snapshot), solver_context,
+          certified_plan_store);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
           static_cast<void>(physical_mailbox->publish(

@@ -1030,11 +1030,34 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         normal_submit_start,
     )
     normal_submit = SOURCE[normal_submit_start:normal_submit_end]
-    assert "ControlIntent::Follow" in normal_submit
-    assert "evaluate_rate_resolved_follow_escape_population(" in normal_submit
+    assert "evaluate_rate_resolved_normal_population(" in normal_submit
     assert normal_submit.count(
         "rate_resolved_track_cruise_shadow_worker_->submit_latest("
     ) == 1
+
+    normal_population_start = SOURCE.index(
+        "RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population("
+    )
+    normal_population_end = SOURCE.index(
+        "void bind_rate_resolved_physical_wall_refinement(",
+        normal_population_start,
+    )
+    normal_population = SOURCE[normal_population_start:normal_population_end]
+    assert "ControlIntent::Follow" in normal_population
+    assert "evaluate_rate_resolved_follow_escape_population(" in normal_population
+    assert "canonical_normal_intent_requires_execution_side(intent)" in normal_population
+    assert "evaluate_rate_resolved_current_world_population(" in normal_population
+    assert "current-world Overtake population requires physical snapshot" in normal_population
+    assert "source.identity.source_context.execution_side_sign" in normal_population
+    overtake_start = normal_population.index(
+        "canonical_normal_intent_requires_execution_side(intent)"
+    )
+    persistent_start = normal_population.index(
+        "return evaluate_rate_resolved_pipeline(", overtake_start
+    )
+    overtake_branch = normal_population[overtake_start:persistent_start]
+    assert "return std::move(population.pipeline);" in overtake_branch
+    assert "evaluate_rate_resolved_pipeline(" not in overtake_branch
 
     isolated_start = SOURCE.index(
         "ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch("
@@ -1943,7 +1966,8 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
     ) < shared_pipeline.index(
         "certified_plan_store->certify_and_replace("
     )
-    assert "evaluate_rate_resolved_pipeline(" in pipeline
+    assert "evaluate_rate_resolved_normal_population(" in pipeline
+    assert "evaluate_rate_resolved_pipeline(" in shared_pipeline
     assert pipeline.count(
         "rate_resolved_track_cruise_shadow_worker_->submit_latest("
     ) == 1

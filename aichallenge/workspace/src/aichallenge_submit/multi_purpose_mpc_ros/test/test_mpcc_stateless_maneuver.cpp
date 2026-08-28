@@ -218,6 +218,60 @@ TEST(MpccStatelessManeuver, SealsPhysicalDiagonalReplayGeometry)
   EXPECT_NE(physical.seed->candidate_fingerprint, source_fingerprint);
 }
 
+TEST(MpccStatelessManeuver, BuildsBoundedCurrentWorldProductionPopulation)
+{
+  const auto source = make_source();
+  const auto result = build_bounded_candidates(source, -1);
+
+  ASSERT_EQ(result.reason, RejectReason::Accepted) << result.detail;
+  ASSERT_EQ(result.candidates.size(), 2U);
+  EXPECT_EQ(result.candidates[0].kind, CandidateKind::DirectSide);
+  EXPECT_EQ(
+    result.candidates[1].kind,
+    CandidateKind::EarliestPhysicalDiagonal);
+  EXPECT_EQ(result.candidates[0].seed.pass_side_sign, -1);
+  EXPECT_EQ(result.candidates[1].seed.pass_side_sign, -1);
+  EXPECT_EQ(
+    result.candidates[1].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_start_stage, 0);
+  EXPECT_EQ(
+    result.candidates[1].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_full_side_stage, 2);
+  EXPECT_TRUE(
+    result.candidates[1].seed.solver_snapshot.
+    dynamic_obstacle_forced_physical_diagonal);
+  EXPECT_NE(
+    result.candidates[0].seed.candidate_fingerprint,
+    result.candidates[1].seed.candidate_fingerprint);
+}
+
+TEST(MpccStatelessManeuver, BoundsPopulationWhenDiagonalDoesNotFit)
+{
+  auto source = make_source();
+  source.request.horizon_steps = 2;
+  source.request.states.resize(3U);
+  source.request.inputs.resize(2U);
+  source.identity.source_context.horizon_steps = 2U;
+  source.identity.source_context.fingerprint = 0U;
+  source.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
+  source.execution_prefix_steps = 2;
+  source.nominal_path_distance_m.resize(3U);
+  source.wall_reference_progress_m.resize(3U);
+  source.wall_lower_m.resize(3U);
+  source.wall_upper_m.resize(3U);
+  // Keep the captured interaction model internally complete while shortening
+  // the horizon.  With the first target stage at zero, the earliest physical
+  // diagonal needs stage two and therefore cannot fit in a two-input horizon.
+  source.dynamic_obstacle_stages.resize(2U);
+
+  const auto result = build_bounded_candidates(source, 1);
+
+  ASSERT_EQ(result.reason, RejectReason::Accepted) << result.detail;
+  ASSERT_EQ(result.candidates.size(), 1U);
+  EXPECT_EQ(result.candidates.front().kind, CandidateKind::DirectSide);
+}
+
 TEST(MpccStatelessManeuver, SealsContinuationWithoutChangingStatelessReference)
 {
   const auto source = make_source();

@@ -48,6 +48,8 @@ int main(int argc, char ** argv)
               << " continuation_steps=" <<
       arm.continuation_solved_step_count
               << " continuation_ms=" << arm.continuation_compute_ms
+              << " candidate_source=" << arm.candidate_source
+              << " candidate_count=" << arm.candidate_count
               << " bundle=" << arm.bundle.has_value()
               << " detail=" << arm.detail << '\n';
   }

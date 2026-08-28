@@ -332,6 +332,16 @@ const char * to_string(const TerminalSuccessor successor) noexcept
   return "unknown";
 }
 
+const char * to_string(const CandidateKind kind) noexcept
+{
+  switch (kind) {
+    case CandidateKind::DirectSide: return "direct-side";
+    case CandidateKind::EarliestPhysicalDiagonal:
+      return "earliest-physical-diagonal";
+  }
+  return "unknown";
+}
+
 Result build(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,
@@ -708,6 +718,66 @@ Result build_physical_diagonal_schedule(
   }
   result.reason = RejectReason::Accepted;
   result.detail = "accepted";
+  return result;
+}
+
+CandidateSet build_bounded_candidates(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const int pass_side_sign) noexcept
+{
+  namespace architecture = mpcc_architecture_snapshot;
+  CandidateSet result;
+  const auto source_fingerprint =
+    architecture::fingerprint_interaction_snapshot(source);
+  result.source_interaction_fingerprint = source_fingerprint;
+  if (source_fingerprint == 0U) {
+    result.reason = RejectReason::IncompleteSnapshot;
+    result.detail = "current-world interaction fingerprint unavailable";
+    return result;
+  }
+
+  auto direct = build(source, source_fingerprint, pass_side_sign);
+  if (!direct.seed.has_value()) {
+    result.reason = direct.reason;
+    result.detail = direct.detail;
+    return result;
+  }
+  result.candidates.push_back(
+    Candidate{CandidateKind::DirectSide, std::move(direct.seed.value())});
+
+  const auto & direct_snapshot = result.candidates.front().seed.solver_snapshot;
+  int first_valid_stage = -1;
+  for (int stage = 0; stage < direct_snapshot.request.horizon_steps; ++stage) {
+    if (
+      static_cast<std::size_t>(stage) <
+      direct_snapshot.dynamic_obstacle_stages.size() &&
+      direct_snapshot.dynamic_obstacle_stages[
+        static_cast<std::size_t>(stage)].valid)
+    {
+      first_valid_stage = stage;
+      break;
+    }
+  }
+  const int full_side_stage = first_valid_stage + 2;
+  if (
+    first_valid_stage >= 0 &&
+    full_side_stage < direct_snapshot.request.horizon_steps)
+  {
+    auto diagonal = build_physical_diagonal_schedule(
+      source, source_fingerprint, pass_side_sign,
+      first_valid_stage, full_side_stage);
+    if (diagonal.seed.has_value()) {
+      result.candidates.push_back(
+        Candidate{
+          CandidateKind::EarliestPhysicalDiagonal,
+          std::move(diagonal.seed.value())});
+    }
+  }
+
+  result.reason = RejectReason::Accepted;
+  result.detail = result.candidates.size() == 2U ?
+    "direct and earliest physical diagonal candidates" :
+    "direct candidate only";
   return result;
 }
 

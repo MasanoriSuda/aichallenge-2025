@@ -140,9 +140,9 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
   const auto report = compare(recorded(source_snapshot()));
   ASSERT_TRUE(report.source_accepted) << report.detail;
   // A + A2 + two B arms + C and D over two homotopies and every valid pair,
-  // plus one diagonal E and one physical-diagonal F schedule per homotopy for
-  // N=3.
-  ASSERT_EQ(report.arms.size(), 32U);
+  // plus one diagonal E, one physical-diagonal F and one bounded production G
+  // result per homotopy for N=3.
+  ASSERT_EQ(report.arms.size(), 34U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::PersistentTargetBoundA2);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessLeftB);
@@ -192,13 +192,22 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
     EXPECT_EQ(arm.lattice_transition_stage, 0);
     EXPECT_EQ(arm.lattice_ahead_stage, 2);
   }
-  for (std::size_t index = 30U; index < report.arms.size(); ++index) {
+  for (std::size_t index = 30U; index < 32U; ++index) {
     const auto & arm = report.arms[index];
     EXPECT_TRUE(
       arm.arm == Arm::PhysicalDiagonalLeftF ||
       arm.arm == Arm::PhysicalDiagonalRightF);
     EXPECT_EQ(arm.lattice_transition_stage, 0);
     EXPECT_EQ(arm.lattice_ahead_stage, 2);
+  }
+  for (std::size_t index = 32U; index < report.arms.size(); ++index) {
+    const auto & arm = report.arms[index];
+    EXPECT_TRUE(
+      arm.arm == Arm::ProductionLeftG ||
+      arm.arm == Arm::ProductionRightG);
+    EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
+    EXPECT_EQ(arm.candidate_source, "direct-side");
+    EXPECT_EQ(arm.candidate_count, 1U);
   }
   EXPECT_NE(
     report.arms[2].candidate_fingerprint,
@@ -270,7 +279,7 @@ TEST(MpccArchitectureComparison, FingerprintMismatchRejectsEveryArm)
   ++input.interaction_fingerprint;
   const auto report = compare(input);
   EXPECT_FALSE(report.source_accepted);
-  ASSERT_EQ(report.arms.size(), 12U);
+  ASSERT_EQ(report.arms.size(), 14U);
   for (const auto & arm : report.arms) {
     EXPECT_EQ(arm.stage, Stage::SourceRejected);
     EXPECT_FALSE(arm.bundle.has_value());

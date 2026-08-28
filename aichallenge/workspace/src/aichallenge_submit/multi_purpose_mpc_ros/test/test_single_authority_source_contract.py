@@ -969,7 +969,7 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "const mpcc_contract::ControlIntent prospective_intent" in shadow
     assert "current_control_intent()" not in shadow
     assert "Formulation::VelocitySteeringYawResponseProgress7State" in shadow
-    assert "evaluate_rate_resolved_pipeline(" in shadow
+    assert "evaluate_rate_resolved_current_world_population(" in shadow
     assert "validate_frenet_dp_target_bound_horizon(" in shadow
     assert "rate_resolved_track_cruise_certified_plan_store_" not in shadow
     assert "canonical_normal_command" not in shadow
@@ -977,6 +977,18 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "last_rate_resolved_serialized_predecessor_.value()" in shadow
     assert "current_physical_steering_state_->committed_steering_rad" not in shadow
     assert "BoundRateResolvedTrackCruiseSubmission bound_submission;" not in shadow
+
+    population_start = SOURCE.index(
+        "evaluate_rate_resolved_current_world_population("
+    )
+    population_end = SOURCE.index(
+        "void bind_rate_resolved_physical_wall_refinement(", population_start
+    )
+    population = SOURCE[population_start:population_end]
+    assert "stateless_maneuver::build_bounded_candidates(" in population
+    assert "evaluate_rate_resolved_pipeline(" in population
+    assert "population.candidates" in population
+    assert "OvertakeMissionCandidate" not in population
 
     isolated_start = SOURCE.index(
         "ExtendedMpccBranchArtifact evaluate_isolated_extended_mpcc_branch("
@@ -1220,6 +1232,7 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     )
     worker = submit[queued:]
     assert "planner->build_prospective_extended_branch_problem(" in worker
+    assert "evaluate_rate_resolved_current_world_population(" in worker
     assert "planner->seal_problem_context_for_problem(" in worker
     assert "bind_rate_resolved_track_cruise_submission(" in submit
     assert "RateResolvedSerializedPredecessor predecessor" in submit

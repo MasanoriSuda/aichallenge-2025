@@ -106,6 +106,31 @@ struct Result
   std::string detail{"not-evaluated"};
 };
 
+enum class CandidateKind
+{
+  DirectSide,
+  EarliestPhysicalDiagonal,
+};
+
+const char * to_string(CandidateKind kind) noexcept;
+
+struct Candidate
+{
+  CandidateKind kind{CandidateKind::DirectSide};
+  Seed seed;
+};
+
+/// Bounded production-facing candidate population.  It contains no publisher
+/// or retained lifecycle state.  Both members are derived from one immutable
+/// current-world fingerprint and the population size never exceeds two.
+struct CandidateSet
+{
+  RejectReason reason{RejectReason::IncompleteSnapshot};
+  std::uint64_t source_interaction_fingerprint{};
+  std::vector<Candidate> candidates;
+  std::string detail{"not-evaluated"};
+};
+
 /// Rebuild one pass-side reference from an immutable current-world snapshot.
 /// Persistent Mission geometry, phase state, retained candidates and runtime
 /// clocks are not inputs.  The returned snapshot is suitable only for the
@@ -156,6 +181,15 @@ Result build_physical_diagonal_schedule(
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign, int diagonal_start_stage,
   int full_side_stage) noexcept;
+
+/// Build the bounded current-world topology population consumed by the
+/// asynchronous production worker.  Candidate zero is the direct side
+/// homotopy.  When the prediction horizon permits, candidate one is the
+/// earliest complete physical behind-to-side diagonal.  Final authority still
+/// requires the unchanged SQP and exact physical proofs.
+CandidateSet build_bounded_candidates(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  int pass_side_sign) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver
 

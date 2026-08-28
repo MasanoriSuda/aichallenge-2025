@@ -432,6 +432,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_source
   ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+  ${PROJECT_NAME}_mpcc_stateless_maneuver
   ${PROJECT_NAME}_mpcc_rate_resolved_command_candidate
   ${PROJECT_NAME}_mpcc_rate_resolved_production_adapter
   ${PROJECT_NAME}_mpcc_execution_contract

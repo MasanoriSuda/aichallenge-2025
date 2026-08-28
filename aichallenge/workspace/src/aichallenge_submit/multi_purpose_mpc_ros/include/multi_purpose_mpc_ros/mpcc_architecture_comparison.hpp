@@ -28,6 +28,8 @@ enum class Arm
   DiagonalRightE,
   PhysicalDiagonalLeftF,
   PhysicalDiagonalRightF,
+  ProductionLeftG,
+  ProductionRightG,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -81,6 +83,8 @@ struct ArmResult
   bool continuation_attempted{false};
   std::size_t continuation_solved_step_count{};
   double continuation_compute_ms{};
+  std::string candidate_source{"none"};
+  std::size_t candidate_count{};
   std::optional<ManeuverBundle> bundle;
   std::string detail{"not-evaluated"};
 };

@@ -24,6 +24,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
+#include <multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp>
 #include <multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
@@ -153,6 +154,8 @@ namespace rate_resolved_production =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
 namespace rate_resolved_retained =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation;
+namespace stateless_maneuver =
+  ::multi_purpose_mpc_ros::mpcc_stateless_maneuver;
 namespace steering_state_contract =
   ::multi_purpose_mpc_ros::mpcc_steering_state_contract;
 namespace recovery_footprint = ::multi_purpose_mpc_ros::recovery_footprint;
@@ -2264,6 +2267,8 @@ struct RateResolvedPreentryShadowEvaluation
   int dynamic_obstacle_first_pass_side_stage{-1};
   race_mpcc::TargetProvenance target_provenance;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> certified_plan;
+  std::string candidate_source{"none"};
+  std::size_t candidate_count{};
   std::string detail{"not-attempted"};
 };
 
@@ -2450,7 +2455,7 @@ mpcc_progress::ExtendedBranchEvaluation rate_resolved_preentry_branch_evaluation
   result.side_sign = source.side_sign;
   result.attempted = source.attempted;
   result.feasible = source.complete && source.certified_plan != nullptr;
-  result.candidate_source = "six-state-preentry";
+  result.candidate_source = source.candidate_source;
   result.objective = source.objective;
   result.minimum_lateral_bound_reserve_m =
     source.minimum_lateral_bound_reserve_m;
@@ -6109,6 +6114,8 @@ struct RateResolvedPreentryExecutionShadowResult
   double snapshot_ms{};
   double build_ms{};
   double worker_ms{};
+  std::string candidate_source{"none"};
+  std::size_t candidate_count{};
   std::string build_detail{"not-evaluated"};
   RateResolvedPipelineEvaluation pipeline;
 };
@@ -6272,6 +6279,73 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
   }
   evaluation.physical = std::move(physical_result);
   return evaluation;
+}
+
+struct RateResolvedCurrentWorldPopulationEvaluation
+{
+  RateResolvedPipelineEvaluation pipeline;
+  std::string candidate_source{"none"};
+  std::size_t candidate_count{};
+  std::string detail{"not-evaluated"};
+};
+
+RateResolvedCurrentWorldPopulationEvaluation
+evaluate_rate_resolved_current_world_population(
+  const rate_resolved_shadow::Snapshot & source,
+  const rate_resolved_physical_wall::Snapshot & physical_source,
+  const int pass_side_sign,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> & solver_context,
+  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
+{
+  RateResolvedCurrentWorldPopulationEvaluation result;
+  const auto population = stateless_maneuver::build_bounded_candidates(
+    source, pass_side_sign);
+  result.detail = population.detail;
+  if (
+    population.reason != stateless_maneuver::RejectReason::Accepted ||
+    population.candidates.empty() || solver_context == nullptr)
+  {
+    result.pipeline.solver.identity = source.identity;
+    result.pipeline.solver.outcome = rate_resolved_shadow::Outcome::BuildRejected;
+    result.pipeline.solver.detail =
+      std::string{"stateless current-world population rejected/"} +
+      stateless_maneuver::to_string(population.reason) + "/" +
+      population.detail;
+    return result;
+  }
+
+  int best_rank = -1;
+  for (const auto & candidate : population.candidates) {
+    ++result.candidate_count;
+    auto physical = physical_source;
+    physical.identity.artifact = candidate.seed.solver_snapshot.identity;
+    auto evaluation = evaluate_rate_resolved_pipeline(
+      candidate.seed.solver_snapshot,
+      std::optional<rate_resolved_physical_wall::Snapshot>{std::move(physical)},
+      solver_context, certified_plan_store);
+    const bool certified =
+      evaluation.solver.outcome == rate_resolved_shadow::Outcome::Solved &&
+      evaluation.physical.has_value() &&
+      evaluation.physical->outcome ==
+      rate_resolved_physical_wall::Outcome::Accepted &&
+      evaluation.certified_plan.plan != nullptr;
+    const int rank = certified ? 4 :
+      evaluation.physical.has_value() ? 3 :
+      evaluation.solver.solved ? 2 :
+      evaluation.solver.solve_attempted ? 1 : 0;
+    if (rank > best_rank) {
+      best_rank = rank;
+      result.pipeline = std::move(evaluation);
+      result.candidate_source = stateless_maneuver::to_string(candidate.kind);
+    }
+    if (certified) {
+      result.detail = std::string{"accepted/"} + result.candidate_source;
+      return result;
+    }
+  }
+  result.detail = std::string{"no certified current-world candidate/best="} +
+    result.candidate_source;
+  return result;
 }
 
 void bind_rate_resolved_physical_wall_refinement(
@@ -8397,10 +8471,13 @@ struct MPC
 
     const std::shared_ptr<rate_resolved_certified::Store>
     observation_only_certified_store;
-    auto evaluation = evaluate_rate_resolved_pipeline(
-      snapshot.value(), std::move(physical_snapshot),
+    auto population = evaluate_rate_resolved_current_world_population(
+      snapshot.value(), physical_snapshot.value(), assessment.side,
       active_rate_resolved_preentry_solver_context_,
       observation_only_certified_store);
+    result.candidate_source = population.candidate_source;
+    result.candidate_count = population.candidate_count;
+    auto evaluation = std::move(population.pipeline);
     result.solver_outcome = evaluation.solver.outcome;
     result.solve_ms = evaluation.solver.compute_ms;
     result.iterations = evaluation.solver.solver.iterations;
@@ -22912,14 +22989,17 @@ struct MPC
                 planner->bind_rate_resolved_replay_world(
                   solver_snapshot.value(), physical_snapshot.value(),
                   draft.snapshot_sec);
-                finish_build("accepted");
                 const std::shared_ptr<rate_resolved_certified::Store>
                 observation_only_store;
-                result.pipeline = evaluate_rate_resolved_pipeline(
-                  solver_snapshot.value(),
-                  std::optional<rate_resolved_physical_wall::Snapshot>{
-                    std::move(physical_snapshot.value())},
-                  solver_context, observation_only_store);
+                auto population =
+                  evaluate_rate_resolved_current_world_population(
+                  solver_snapshot.value(), physical_snapshot.value(),
+                  draft.selected_side_sign, solver_context,
+                  observation_only_store);
+                result.candidate_source = population.candidate_source;
+                result.candidate_count = population.candidate_count;
+                result.pipeline = std::move(population.pipeline);
+                finish_build(population.detail);
               }
             }
           }
@@ -23089,7 +23169,7 @@ struct MPC
         "sequence=%lu, epoch=%lu/%lu, tactical=%lu, decision=%lu, "
         "target=%s/%d, side=%d/%d, "
         "generation=%lu/%lu, age=%.3f s, snapshot=%.3f ms, build=%.3f ms, "
-        "worker=%.3f ms, build_detail=%s, "
+        "worker=%.3f ms, build_detail=%s, candidate=%s/%zu, "
         "solver=%s, physical=%s, complete=%d, "
         "mission=%d/feasible:%d/proposal_identity:%d, "
         "target_join=%d/%s/%lu->%lu, "
@@ -23113,6 +23193,7 @@ struct MPC
           current_prospective_generation),
         std::max(0.0, now_sec - result->snapshot_sec), result->snapshot_ms,
         result->build_ms, result->worker_ms, result->build_detail.c_str(),
+        result->candidate_source.c_str(), result->candidate_count,
         rate_resolved_shadow::to_string(result->pipeline.solver.outcome),
         result->pipeline.physical.has_value() ?
         rate_resolved_physical_wall::to_string(

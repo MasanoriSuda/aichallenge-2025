@@ -586,6 +586,79 @@ ArmResult evaluate_offline_continuation(
   return continued;
 }
 
+int evidence_rank(const Stage stage) noexcept
+{
+  switch (stage) {
+    case Stage::Accepted: return 6;
+    case Stage::DynamicProofRejected: return 5;
+    case Stage::WallProofRejected: return 4;
+    case Stage::ExactTrajectoryRejected: return 3;
+    case Stage::SolverRejected: return 2;
+    case Stage::TerminalSuccessorRejected:
+    case Stage::CandidateRejected: return 1;
+    case Stage::SourceRejected: return 0;
+  }
+  return -1;
+}
+
+ArmResult evaluate_production_population(
+  const Arm arm, const shadow::Snapshot & source,
+  const std::uint64_t source_fingerprint, const int side)
+{
+  const auto population = maneuver::build_bounded_candidates(source, side);
+  if (
+    population.reason != maneuver::RejectReason::Accepted ||
+    population.candidates.empty())
+  {
+    const auto stage =
+      population.reason == maneuver::RejectReason::TerminalSuccessorUnavailable ?
+      Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+    return rejected_arm(
+      arm, stage, source_fingerprint,
+      std::string{maneuver::to_string(population.reason)} + ": " +
+      population.detail);
+  }
+
+  // Match the production worker: candidates from one immutable world are
+  // evaluated in a bounded order and may share only their private SQP warm
+  // start.  The first fully certified candidate wins; no command authority is
+  // present in this audit path.
+  shadow::SolverContext solver_context;
+  ArmResult best = rejected_arm(
+    arm, Stage::CandidateRejected, source_fingerprint,
+    "bounded current-world population was not evaluated");
+  int best_rank = -1;
+  std::size_t attempted = 0U;
+  for (const auto & candidate : population.candidates) {
+    ++attempted;
+    const auto successor = maneuver::resolve_terminal_successor(
+      candidate.seed.solver_snapshot);
+    auto evaluated = evaluate_arm(
+      arm, candidate.seed.solver_snapshot, source_fingerprint,
+      candidate.seed.candidate_fingerprint, successor,
+      candidate.seed.solver_snapshot.
+      dynamic_obstacle_forced_diagonal_start_stage,
+      candidate.seed.solver_snapshot.
+      dynamic_obstacle_forced_diagonal_full_side_stage,
+      &solver_context);
+    evaluated.candidate_source = maneuver::to_string(candidate.kind);
+    evaluated.candidate_count = attempted;
+    const int rank = evidence_rank(evaluated.stage);
+    if (rank > best_rank) {
+      best_rank = rank;
+      best = std::move(evaluated);
+    }
+    if (best.stage == Stage::Accepted) {
+      best.detail = std::string{"accepted/"} + best.candidate_source;
+      return best;
+    }
+  }
+  best.candidate_count = attempted;
+  best.detail = std::string{"no certified current-world candidate/best="} +
+    best.candidate_source + "/" + best.detail;
+  return best;
+}
+
 }  // namespace
 
 const char * to_string(const Arm arm) noexcept
@@ -604,6 +677,8 @@ const char * to_string(const Arm arm) noexcept
     case Arm::DiagonalRightE: return "diagonal-right-e";
     case Arm::PhysicalDiagonalLeftF: return "physical-diagonal-left-f";
     case Arm::PhysicalDiagonalRightF: return "physical-diagonal-right-f";
+    case Arm::ProductionLeftG: return "production-left-g";
+    case Arm::ProductionRightG: return "production-right-g";
   }
   return "unknown";
 }
@@ -644,7 +719,8 @@ Report compare(
          Arm::RoughLeftC, Arm::RoughRightC,
          Arm::OfflineLeftD, Arm::OfflineRightD,
          Arm::DiagonalLeftE, Arm::DiagonalRightE,
-         Arm::PhysicalDiagonalLeftF, Arm::PhysicalDiagonalRightF})
+         Arm::PhysicalDiagonalLeftF, Arm::PhysicalDiagonalRightF,
+         Arm::ProductionLeftG, Arm::ProductionRightG})
       {
         report.arms.push_back(rejected_arm(
           arm, Stage::SourceRejected, source_fingerprint, report.detail));
@@ -823,6 +899,14 @@ Report compare(
             diagonal_start_stage, full_side_stage));
         }
       }
+    }
+
+    for (const auto & [arm, side] :
+      {std::pair{Arm::ProductionLeftG, 1},
+       std::pair{Arm::ProductionRightG, -1}})
+    {
+      report.arms.push_back(evaluate_production_population(
+        arm, source, source_fingerprint, side));
     }
   } catch (const std::exception & exception) {
     report.source_accepted = false;

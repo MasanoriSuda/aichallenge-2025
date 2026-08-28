@@ -59,7 +59,7 @@ TEST(
 
 TEST(
   OvertakeExecutionOrchestrator,
-  DynamicObstacleContractPrefersStageCorridorAndReleasesAfterExclusion)
+  DynamicObstacleContractPrefersStageCorridorForPassingIntent)
 {
   orchestrator::DynamicObstacleContractRequest request;
   request.canonical_normal_scope_active = true;
@@ -74,10 +74,28 @@ TEST(
     result.source,
     orchestrator::DynamicObstacleContractSource::StageCorridor);
 
-  request.target_exclusion_certified = true;
   result = orchestrator::resolve_dynamic_obstacle_contract(request);
-  EXPECT_FALSE(result.active);
-  EXPECT_EQ(result.source, orchestrator::DynamicObstacleContractSource::None);
+  EXPECT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::DynamicObstacleContractSource::StageCorridor);
+}
+
+TEST(
+  OvertakeExecutionOrchestrator,
+  DynamicObstacleContractKeepsCurrentTargetTubeForPassingIntent)
+{
+  orchestrator::DynamicObstacleContractRequest request;
+  request.canonical_normal_scope_active = true;
+  request.intent = contract::ControlIntent::Pass;
+  request.current_target_tube_complete = true;
+
+  const auto result = orchestrator::resolve_dynamic_obstacle_contract(request);
+
+  EXPECT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::DynamicObstacleContractSource::CurrentTargetTube);
 }
 
 TEST(

@@ -1568,7 +1568,7 @@ def test_dynamic_wait_target_tube_is_independent_of_legacy_stage_corridor() -> N
     resolver = OVERTAKE_ORCHESTRATOR_SOURCE[resolver_start:resolver_end]
     assert "stage_corridor_target_bound_effective" in resolver
     assert "current_target_tube_complete" in resolver
-    assert "target_exclusion_certified" in resolver
+    assert "target_exclusion_certified" not in resolver
 
 
 def test_extended_first_stage_linearization_is_anchored_to_the_execution_state() -> None:

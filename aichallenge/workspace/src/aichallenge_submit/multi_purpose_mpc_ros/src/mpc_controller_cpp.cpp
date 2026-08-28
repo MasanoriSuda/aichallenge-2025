@@ -20006,10 +20006,6 @@ struct MPC
       current_target_tube.prediction_valid.begin(),
       current_target_tube.prediction_valid.end(),
       [](const bool valid) {return valid;});
-    const bool target_exclusion_physically_certified =
-      behavior_output.locked_target_current_body_footprints_separated &&
-      behavior_output.locked_target_footprint_prediction_valid &&
-      behavior_output.locked_target_predicted_body_footprint_sweep_separated;
     const auto dynamic_obstacle_contract =
       overtake_orchestrator::resolve_dynamic_obstacle_contract(
       overtake_orchestrator::DynamicObstacleContractRequest{
@@ -20017,7 +20013,6 @@ struct MPC
         progress_execution_wall_progress_m.size() ==
         static_cast<std::size_t>(N + 1),
         problem_intent,
-        target_exclusion_physically_certified,
         stage_corridor_target_bound_effective,
         stage_corridor_target_contract_complete,
         current_target_tube_complete});

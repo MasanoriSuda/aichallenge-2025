@@ -374,7 +374,6 @@ struct DynamicObstacleContractRequest {
   bool canonical_normal_scope_active{false};
   mpcc_execution_contract::ControlIntent intent{
     mpcc_execution_contract::ControlIntent::Unknown};
-  bool target_exclusion_certified{false};
   bool stage_corridor_target_bound_effective{false};
   bool stage_corridor_contract_complete{false};
   bool current_target_tube_complete{false};
@@ -389,7 +388,9 @@ struct DynamicObstacleContractResolution {
 /// corridor owner.  Cruise/Follow use a stay-behind disjunction, while
 /// ShiftOut/Pass can switch to the selected lateral side.  In both cases the
 /// obstacle belongs to the canonical QP before current-world certification;
-/// the verifier must not be the first layer that discovers the opponent.
+/// an upstream Mission-path exclusion certificate cannot certify the
+/// independently optimized MPCC trajectory, and the verifier must not be the
+/// first layer that discovers the opponent.
 DynamicObstacleContractResolution resolve_dynamic_obstacle_contract(
   const DynamicObstacleContractRequest & request) noexcept;
 

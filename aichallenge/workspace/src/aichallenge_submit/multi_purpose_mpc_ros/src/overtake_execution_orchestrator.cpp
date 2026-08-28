@@ -63,8 +63,7 @@ DynamicObstacleContractResolution resolve_dynamic_obstacle_contract(
     request.intent == mpcc_execution_contract::ControlIntent::Follow;
   if (
     !request.canonical_normal_scope_active ||
-    (!passing_intent && !stay_behind_intent) ||
-    request.target_exclusion_certified)
+    (!passing_intent && !stay_behind_intent))
   {
     return resolution;
   }

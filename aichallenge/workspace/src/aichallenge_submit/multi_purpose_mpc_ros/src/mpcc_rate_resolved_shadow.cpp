@@ -773,6 +773,12 @@ bool result_valid(const Result & result) noexcept
          artifact::RejectReason::None;
 }
 
+persistent_osqp::PhysicalConstraintTolerance
+SolverContext::physical_constraint_tolerance() const noexcept
+{
+  return solver_.physical_constraint_tolerance();
+}
+
 Result SolverContext::evaluate(const Snapshot & snapshot)
 {
   const auto started = SteadyClock::now();

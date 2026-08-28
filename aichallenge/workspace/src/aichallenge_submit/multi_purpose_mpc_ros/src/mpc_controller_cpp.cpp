@@ -19521,6 +19521,22 @@ struct MPC
         overtake_core::is_v2x_receipt_age_fresh(
         raw_target_age_sec, cfg.v2x_gap.timeout_sec,
         kV2XReceiptFutureToleranceSec);
+      double executable_braking_deceleration_mps2 =
+        std::numeric_limits<double>::quiet_NaN();
+      if (rate_resolved_track_cruise_shadow_solver_context_ != nullptr) {
+        const auto acceleration_bounds =
+          mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+          cfg.a_min, cfg.a_max,
+          rate_resolved_track_cruise_shadow_solver_context_->
+          physical_constraint_tolerance());
+        if (
+          acceleration_bounds.has_value() &&
+          acceleration_bounds->lower < 0.0)
+        {
+          executable_braking_deceleration_mps2 =
+            -acceleration_bounds->lower;
+        }
+      }
       follow_longitudinal_contract =
         race_mpcc::build_follow_longitudinal_contract(
         race_mpcc::FollowLongitudinalContractRequest{
@@ -19532,7 +19548,7 @@ struct MPC
           cfg.v2x_gap.timeout_sec,
           behavior_output.front_distance,
           follow_ego_progress_offset_m,
-          std::max(0.0, current_speed_mps_),
+          std::max(0.0, control_origin_speed_mps_),
           behavior_output.front_speed,
           cfg.v2x_behavior.moving_front_speed_threshold,
           cfg.v2x_behavior.moving_follow_target_distance,
@@ -19541,7 +19557,7 @@ struct MPC
           cfg.v2x_behavior.moving_follow_recovery_speed_margin,
           cfg.v2x_behavior.moving_follow_distance_gain,
           cfg.v2x_behavior.follow_velocity,
-          std::max(kEps, std::abs(cfg.a_min)),
+          executable_braking_deceleration_mps2,
           cfg.v_max,
           progress_stage_dt_sec,
           std::move(base_progress_reference_m),

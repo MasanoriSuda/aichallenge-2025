@@ -465,6 +465,10 @@ TEST(RaceMpccFoundation, BuildsStoppedTargetContractThatStopsAtDesiredGap)
 TEST(RaceMpccFoundation, RampsFollowVelocityCapByReachableBrakingEnvelope)
 {
   auto request = follow_contract_request();
+  // This is the exact executable lower input resolved by the canonical
+  // adapter for the production physical boundary, not the raw -3.0 m/s^2
+  // actuator limit.
+  request.braking_deceleration_mps2 = 2.95959595959596;
   request.current_target_relative_progress_m = 24.0;
   request.current_ego_speed_mps = 9.0;
   request.target_speed_mps = 0.0;
@@ -479,9 +483,13 @@ TEST(RaceMpccFoundation, RampsFollowVelocityCapByReachableBrakingEnvelope)
   ASSERT_TRUE(result.valid);
   ASSERT_EQ(result.velocity_upper_mps.size(), 3U);
   ASSERT_EQ(result.velocity_reference_mps.size(), 3U);
-  EXPECT_NEAR(result.velocity_upper_mps[0], 8.7, 1e-9);
-  EXPECT_NEAR(result.velocity_upper_mps[1], 8.4, 1e-9);
-  EXPECT_NEAR(result.velocity_upper_mps[2], 8.1, 1e-9);
+  double reachable_velocity_mps = request.current_ego_speed_mps;
+  for (std::size_t stage = 0U; stage < result.velocity_upper_mps.size(); ++stage) {
+    reachable_velocity_mps -=
+      request.braking_deceleration_mps2 * request.stage_dt_sec[stage];
+    EXPECT_NEAR(
+      result.velocity_upper_mps[stage], reachable_velocity_mps, 1e-9);
+  }
   EXPECT_NEAR(result.velocity_reference_mps[0], 5.0, 1e-9);
   EXPECT_NEAR(result.velocity_reference_mps[1], 5.0, 1e-9);
   EXPECT_NEAR(result.velocity_reference_mps[2], 5.0, 1e-9);

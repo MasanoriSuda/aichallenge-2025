@@ -90,6 +90,21 @@ struct Result
   double first_steering_rate_certificate_margin_radps{};
 };
 
+/// Solver-coordinate interval whose accepted residual still lies inside the
+/// exact physical boundary.  Any temporal reachability envelope derived from
+/// an optimized input must use this interval, not the uninset actuator limit.
+struct ExactPhysicalBoundaryBounds
+{
+  double lower{};
+  double upper{};
+  double certificate_margin{};
+};
+
+std::optional<ExactPhysicalBoundaryBounds>
+resolve_exact_physical_boundary_bounds(
+  double physical_lower, double physical_upper,
+  const persistent_osqp::PhysicalConstraintTolerance & tolerance) noexcept;
+
 enum class RejectReason
 {
   None,

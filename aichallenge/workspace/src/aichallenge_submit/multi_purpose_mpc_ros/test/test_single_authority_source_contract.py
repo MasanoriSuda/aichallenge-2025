@@ -208,6 +208,20 @@ def test_follow_qp_keeps_planning_and_physical_gap_contracts_separate() -> None:
     assert "Reason::FollowStageGapViolation" in retained_source
 
 
+def test_follow_reachable_speed_uses_the_qp_control_origin() -> None:
+    """The Follow envelope and state-zero velocity must share one timestamp."""
+
+    assignment = SOURCE.index("follow_longitudinal_contract =")
+    build_start = SOURCE.rindex(
+        "const auto target_provenance =", 0, assignment
+    )
+    build_end = SOURCE.index("Eigen::MatrixXd A_dense", assignment)
+    build = SOURCE[build_start:build_end]
+    assert "std::max(0.0, control_origin_speed_mps_)" in build
+    assert "std::max(0.0, current_speed_mps_)" not in build
+    assert "resolve_exact_physical_boundary_bounds(" in build
+
+
 def test_follow_current_world_observation_survives_a_new_intent_proposal() -> None:
     """Current Follow owns its projection; prior Follow can rejoin all V2X."""
 

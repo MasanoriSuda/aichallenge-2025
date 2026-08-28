@@ -65,18 +65,10 @@ double curvature_jacobian(
   return yaw_response_gain / (wheelbase_m * cosine * cosine);
 }
 
-struct SolverInsetBounds
-{
-  double lower{};
-  double upper{};
-  double margin{};
-};
+}  // namespace
 
-/// OSQP's certified solution may lie outside a solver row by its accepted
-/// residual.  A command/publisher boundary, however, must satisfy the physical
-/// actuator envelope exactly.  Inset the solver row by the maximum certified
-/// residual instead of clamping a solved command after certification.
-std::optional<SolverInsetBounds> inset_for_exact_physical_boundary(
+std::optional<ExactPhysicalBoundaryBounds>
+resolve_exact_physical_boundary_bounds(
   const double physical_lower, const double physical_upper,
   const persistent_osqp::PhysicalConstraintTolerance & tolerance) noexcept
 {
@@ -115,10 +107,8 @@ std::optional<SolverInsetBounds> inset_for_exact_physical_boundary(
   {
     return std::nullopt;
   }
-  return SolverInsetBounds{solver_lower, solver_upper, margin};
+  return ExactPhysicalBoundaryBounds{solver_lower, solver_upper, margin};
 }
-
-}  // namespace
 
 const char * to_string(const RejectReason reason) noexcept
 {
@@ -285,7 +275,7 @@ std::optional<Result> build(
     -request.maximum_abs_steering_rad - request.current_steering_rad;
   const double physical_prefix_upper =
     request.maximum_abs_steering_rad - request.current_steering_rad;
-  const auto solver_prefix_bounds = inset_for_exact_physical_boundary(
+  const auto solver_prefix_bounds = resolve_exact_physical_boundary_bounds(
     physical_prefix_lower, physical_prefix_upper, solver_tolerance);
   if (!solver_prefix_bounds.has_value()) {
     return reject(
@@ -447,7 +437,7 @@ std::optional<Result> build(
     problem.input_reference[
       input_offset + model::kVirtualProgressSpeedIndex] =
       legacy_input.reference[2];
-    const auto acceleration_bounds = inset_for_exact_physical_boundary(
+    const auto acceleration_bounds = resolve_exact_physical_boundary_bounds(
       legacy_input.lower[0], legacy_input.upper[0], solver_tolerance);
     const double physical_rate_lower = stage == 0 ? std::max(
         -request.maximum_abs_steering_rate_radps,
@@ -457,7 +447,7 @@ std::optional<Result> build(
         request.maximum_abs_steering_rate_radps,
         (request.maximum_abs_steering_rad - request.current_steering_rad) /
         legacy_input.stage_dt_sec) : request.maximum_abs_steering_rate_radps;
-    const auto steering_rate_bounds = inset_for_exact_physical_boundary(
+    const auto steering_rate_bounds = resolve_exact_physical_boundary_bounds(
       physical_rate_lower, physical_rate_upper, solver_tolerance);
     if (!acceleration_bounds.has_value()) {
       return reject(
@@ -485,7 +475,7 @@ std::optional<Result> build(
       result.first_steering_rate_solver_lower_radps = steering_rate_bounds->lower;
       result.first_steering_rate_solver_upper_radps = steering_rate_bounds->upper;
       result.first_steering_rate_certificate_margin_radps =
-        steering_rate_bounds->margin;
+      steering_rate_bounds->certificate_margin;
     }
     // Virtual progress speed is an internal contouring state transition, not
     // a command crossing the publisher boundary.  A valid hold stage may

@@ -63,6 +63,17 @@ adapter::Request curved_request(const int horizon = 4)
 
 }  // namespace
 
+TEST(MpccRateResolvedAdapter, ExposesExactExecutablePhysicalBoundary)
+{
+  const auto bounds = adapter::resolve_exact_physical_boundary_bounds(
+    -3.0, 1.37, kSolverTolerance);
+  ASSERT_TRUE(bounds.has_value());
+  const double expected_margin = exact_inset_margin(3.0);
+  EXPECT_NEAR(bounds->lower, -3.0 + expected_margin, 1e-12);
+  EXPECT_NEAR(bounds->upper, 1.37 - expected_margin, 1e-12);
+  EXPECT_NEAR(bounds->certificate_margin, expected_margin, 1e-12);
+}
+
 TEST(MpccRateResolvedAdapter, PreservesSemanticFieldsAndMovesCurvatureOwnership)
 {
   const auto request = curved_request();

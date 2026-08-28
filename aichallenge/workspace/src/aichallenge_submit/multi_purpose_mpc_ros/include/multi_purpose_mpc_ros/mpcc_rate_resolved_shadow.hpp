@@ -317,6 +317,8 @@ class SolverContext
 {
 public:
   Result evaluate(const Snapshot & snapshot);
+  persistent_osqp::PhysicalConstraintTolerance
+  physical_constraint_tolerance() const noexcept;
 
 private:
   std::mutex mutex_;

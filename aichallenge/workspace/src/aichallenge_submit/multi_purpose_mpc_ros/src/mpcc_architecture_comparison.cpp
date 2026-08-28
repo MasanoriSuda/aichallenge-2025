@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <exception>
 #include <limits>
 #include <sstream>
@@ -22,9 +23,225 @@ namespace contract = mpcc_execution_contract;
 namespace dynamic = mpcc_rate_resolved_dynamic_proof;
 namespace maneuver = mpcc_stateless_maneuver;
 namespace physical = mpcc_rate_resolved_physical_adapter;
+namespace problem = mpcc_rate_resolved_problem;
 namespace shadow = mpcc_rate_resolved_shadow;
 namespace wall = mpcc_rate_resolved_physical_wall;
 namespace recovery = recovery_footprint;
+namespace artifact = mpcc_rate_resolved_execution_artifact;
+namespace osqp = persistent_osqp;
+
+void append_fingerprint_u64(
+  std::uint64_t & fingerprint, const std::uint64_t value) noexcept
+{
+  constexpr std::uint64_t prime = 1099511628211ULL;
+  for (std::size_t byte = 0U; byte < sizeof(value); ++byte) {
+    fingerprint ^= (value >> (8U * byte)) & 0xffU;
+    fingerprint *= prime;
+  }
+}
+
+void append_fingerprint_double(
+  std::uint64_t & fingerprint, const double value) noexcept
+{
+  std::uint64_t bits = 0U;
+  static_assert(sizeof(bits) == sizeof(value));
+  std::memcpy(&bits, &value, sizeof(bits));
+  append_fingerprint_u64(fingerprint, bits);
+}
+
+std::uint64_t exact_problem_fingerprint(
+  const problem::Problem & qp, const std::uint64_t source_fingerprint) noexcept
+{
+  std::uint64_t fingerprint = 1469598103934665603ULL;
+  append_fingerprint_u64(fingerprint, source_fingerprint);
+  append_fingerprint_u64(
+    fingerprint, static_cast<std::uint64_t>(qp.horizon_steps));
+  const auto append_vector = [&fingerprint](const Eigen::VectorXd & values) {
+      append_fingerprint_u64(
+        fingerprint, static_cast<std::uint64_t>(values.size()));
+      for (Eigen::Index index = 0; index < values.size(); ++index) {
+        append_fingerprint_double(fingerprint, values[index]);
+      }
+    };
+  const auto append_sparse = [&fingerprint](
+      const Eigen::SparseMatrix<double> & matrix) {
+      append_fingerprint_u64(
+        fingerprint, static_cast<std::uint64_t>(matrix.rows()));
+      append_fingerprint_u64(
+        fingerprint, static_cast<std::uint64_t>(matrix.cols()));
+      append_fingerprint_u64(
+        fingerprint, static_cast<std::uint64_t>(matrix.nonZeros()));
+      for (int outer = 0; outer < matrix.outerSize(); ++outer) {
+        for (Eigen::SparseMatrix<double>::InnerIterator item(matrix, outer);
+          item; ++item)
+        {
+          append_fingerprint_u64(
+            fingerprint, static_cast<std::uint64_t>(item.row()));
+          append_fingerprint_u64(
+            fingerprint, static_cast<std::uint64_t>(item.col()));
+          append_fingerprint_double(fingerprint, item.value());
+        }
+      }
+    };
+  append_vector(qp.linear_cost);
+  append_vector(qp.lower_bound);
+  append_vector(qp.upper_bound);
+  append_sparse(qp.quadratic_cost);
+  append_sparse(qp.constraints);
+  append_vector(qp.variable_scaling.physical_units_per_solver_unit);
+  return fingerprint == 0U ? 1U : fingerprint;
+}
+
+struct ExternalArtifactBuild
+{
+  std::optional<artifact::ExecutionArtifact> value;
+  artifact::RejectReason reject_reason{artifact::RejectReason::InvalidCertificate};
+  double maximum_absolute_violation{};
+  double maximum_normalized_violation{};
+  int maximum_normalized_row{-1};
+  std::string detail{"not-evaluated"};
+};
+
+ExternalArtifactBuild build_external_artifact(
+  const shadow::Snapshot & snapshot, const problem::Problem & qp,
+  const Eigen::VectorXd & primal) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  ExternalArtifactBuild result;
+  const int horizon = snapshot.request.horizon_steps;
+  const int execution_horizon = snapshot.execution_prefix_steps;
+  const int state_values = model::kStateDimension * (horizon + 1);
+  const int variable_count = state_values + model::kInputDimension * horizon;
+  const int state_box_row = state_values;
+  if (
+    horizon <= 0 || execution_horizon <= 0 || execution_horizon > horizon ||
+    qp.horizon_steps != horizon || qp.constraints.cols() != variable_count ||
+    qp.constraints.rows() != qp.lower_bound.size() ||
+    qp.lower_bound.size() != qp.upper_bound.size() ||
+    state_box_row + state_values > qp.lower_bound.size() ||
+    primal.size() != variable_count || !primal.allFinite() ||
+    snapshot.nominal_path_distance_m.size() <
+    static_cast<std::size_t>(execution_horizon + 1) ||
+    snapshot.request.inputs.size() < static_cast<std::size_t>(execution_horizon))
+  {
+    result.detail = "external-primal-dimension-contract-mismatch";
+    return result;
+  }
+
+  shadow::SolverContext tolerance_owner;
+  const auto tolerance = tolerance_owner.physical_constraint_tolerance();
+  const auto residual = osqp::evaluate_constraint_residuals(
+    qp.constraints, primal, qp.lower_bound, qp.upper_bound,
+    tolerance.absolute, tolerance.relative);
+  if (!residual.has_value()) {
+    result.detail = "external-primal-residual-evaluation-rejected";
+    return result;
+  }
+  result.maximum_absolute_violation = residual->maximum_absolute_violation;
+  result.maximum_normalized_violation = residual->maximum_normalized_violation;
+  result.maximum_normalized_row = residual->maximum_normalized_row;
+  if (residual->maximum_normalized_violation > 1.0) {
+    std::ostringstream detail;
+    detail << "external-primal-constraint-rejected/row="
+           << residual->maximum_normalized_row
+           << "/absolute=" << residual->maximum_absolute_violation
+           << "/normalized=" << residual->maximum_normalized_violation;
+    result.detail = detail.str();
+    return result;
+  }
+
+  const Eigen::VectorXd values = qp.constraints * primal;
+  double maximum_projected_absolute = 0.0;
+  for (Eigen::Index row = 0; row < values.size(); ++row) {
+    double projected = values[row];
+    if (std::isfinite(qp.lower_bound[row])) {
+      projected = std::max(projected, qp.lower_bound[row]);
+    }
+    if (std::isfinite(qp.upper_bound[row])) {
+      projected = std::min(projected, qp.upper_bound[row]);
+    }
+    maximum_projected_absolute = std::max(
+      maximum_projected_absolute, std::abs(projected));
+  }
+  const double physical_scale = std::max(
+    values.cwiseAbs().maxCoeff(), maximum_projected_absolute);
+
+  artifact::ExecutionArtifact execution;
+  execution.identity = snapshot.identity;
+  execution.prediction_origin_sec = snapshot.control_prediction_origin_sec;
+  execution.publication_interval_sec = snapshot.publication_interval_sec;
+  execution.completed_sec = std::max(
+    snapshot.identity.snapshot_sec, snapshot.control_prediction_origin_sec);
+  execution.course_progress_origin_m = snapshot.course_progress_origin_m;
+  execution.semantic_initial_steering_rad =
+    snapshot.request.current_steering_rad;
+  execution.semantic_initial_response_steering_rad =
+    snapshot.request.current_response_steering_rad;
+  execution.wheelbase_m = snapshot.request.wheelbase_m;
+  execution.yaw_response_gain = snapshot.request.yaw_response_gain;
+  execution.yaw_response_time_constant_sec =
+    snapshot.request.yaw_response_time_constant_sec;
+  execution.minimum_frenet_denominator =
+    snapshot.request.minimum_frenet_denominator;
+  execution.maximum_abs_steering_rad =
+    snapshot.request.maximum_abs_steering_rad;
+  execution.maximum_abs_steering_rate_radps =
+    snapshot.request.maximum_abs_steering_rate_radps;
+  execution.physical_global_tolerance =
+    tolerance.absolute + tolerance.relative * physical_scale;
+  execution.maximum_constraint_violation =
+    residual->maximum_absolute_violation;
+  execution.maximum_normalized_constraint_violation =
+    residual->maximum_normalized_violation;
+  execution.nominal_path_distance_m.assign(
+    snapshot.nominal_path_distance_m.begin(),
+    snapshot.nominal_path_distance_m.begin() + execution_horizon + 1);
+  execution.predicted_states.reserve(
+    static_cast<std::size_t>(execution_horizon + 1));
+  execution.lateral_lower_m.reserve(
+    static_cast<std::size_t>(execution_horizon + 1));
+  execution.lateral_upper_m.reserve(
+    static_cast<std::size_t>(execution_horizon + 1));
+  for (int stage = 0; stage <= execution_horizon; ++stage) {
+    const int state = model::kStateDimension * stage;
+    execution.predicted_states.push_back(artifact::PredictedState{
+      primal[state + model::kLateralIndex],
+      primal[state + model::kLagIndex],
+      primal[state + model::kHeadingIndex],
+      primal[state + model::kVelocityIndex],
+      primal[state + model::kProgressIndex],
+      primal[state + model::kSteeringIndex],
+      primal[state + model::kResponseSteeringIndex]});
+    const int lateral_row = state_box_row + state + model::kLateralIndex;
+    execution.lateral_lower_m.push_back(qp.lower_bound[lateral_row]);
+    execution.lateral_upper_m.push_back(qp.upper_bound[lateral_row]);
+  }
+  execution.control_stages.reserve(
+    static_cast<std::size_t>(execution_horizon));
+  for (int stage = 0; stage < execution_horizon; ++stage) {
+    const int input = state_values + model::kInputDimension * stage;
+    const auto & semantic = snapshot.request.inputs[static_cast<std::size_t>(stage)];
+    execution.control_stages.push_back(artifact::ControlStage{
+      primal[input + model::kAccelerationIndex],
+      primal[input + model::kSteeringRateIndex],
+      primal[input + model::kVirtualProgressSpeedIndex],
+      semantic.stage_dt_sec,
+      semantic.lower[model::kVirtualProgressSpeedIndex],
+      semantic.upper[model::kVirtualProgressSpeedIndex],
+      semantic.lower[model::kAccelerationIndex],
+      semantic.upper[model::kAccelerationIndex],
+      semantic.path_curvature_radpm});
+  }
+  result.reject_reason = artifact::validate(execution);
+  if (result.reject_reason != artifact::RejectReason::None) {
+    result.detail = std::string{"external-artifact-validation-rejected/"} +
+      artifact::to_string(result.reject_reason);
+    return result;
+  }
+  result.detail = "accepted";
+  result.value = std::move(execution);
+  return result;
+}
 
 struct DynamicModelDiagnostic
 {
@@ -307,7 +524,8 @@ ArmResult evaluate_arm(
   const maneuver::TerminalResolution & successor,
   const int lattice_transition_stage = -1,
   const int lattice_ahead_stage = -1,
-  shadow::SolverContext * solver_context = nullptr)
+  shadow::SolverContext * solver_context = nullptr,
+  const bool wall_restoration_audit = false)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
@@ -330,7 +548,9 @@ ArmResult evaluate_arm(
   // passes one private context only across its bounded offline continuation.
   shadow::SolverContext local_solver;
   auto & solver = solver_context == nullptr ? local_solver : *solver_context;
-  const auto solved = solver.evaluate(candidate);
+  const auto solved = wall_restoration_audit ?
+    solver.evaluate_wall_feasibility_restoration_audit(candidate) :
+    solver.evaluate(candidate);
   arm_result.solver_outcome = solved.outcome;
   arm_result.solver_compute_ms = solved.compute_ms;
   arm_result.terminal_progress_m = solved.terminal_progress_m;
@@ -461,7 +681,7 @@ ArmResult evaluate_arm(
   bundle.terminal_successor = successor.successor;
   bundle.stop_suffix = successor.stop_suffix;
   arm_result.stage = Stage::Accepted;
-  arm_result.detail = "accepted";
+  arm_result.detail = wall_restoration_audit ? solved.detail : "accepted";
   arm_result.bundle = std::move(bundle);
   return arm_result;
 }
@@ -682,6 +902,8 @@ const char * to_string(const Arm arm) noexcept
     case Arm::PhysicalDiagonalRightF: return "physical-diagonal-right-f";
     case Arm::ProductionLeftG: return "production-left-g";
     case Arm::ProductionRightG: return "production-right-g";
+    case Arm::WallRestorationH: return "wall-restoration-h";
+    case Arm::ExternalPrimalI: return "external-primal-i";
   }
   return "unknown";
 }
@@ -723,7 +945,8 @@ Report compare(
          Arm::OfflineLeftD, Arm::OfflineRightD,
          Arm::DiagonalLeftE, Arm::DiagonalRightE,
          Arm::PhysicalDiagonalLeftF, Arm::PhysicalDiagonalRightF,
-         Arm::ProductionLeftG, Arm::ProductionRightG})
+         Arm::ProductionLeftG, Arm::ProductionRightG,
+         Arm::WallRestorationH})
       {
         report.arms.push_back(rejected_arm(
           arm, Stage::SourceRejected, source_fingerprint, report.detail));
@@ -946,12 +1169,193 @@ Report compare(
       report.arms.push_back(evaluate_production_population(
         arm, source, source_fingerprint, side));
     }
+
+    // This final arm shares the exact immutable source and all downstream
+    // proof gates with A. Its only difference is an explicitly audit-only
+    // numerical restoration seed after an affine-infeasible wall refinement.
+    // It owns no publisher/store and cannot alter production authority.
+    report.arms.push_back(evaluate_arm(
+      Arm::WallRestorationH, source, source_fingerprint, source_fingerprint,
+      persistent_successor, -1, -1, nullptr, true));
   } catch (const std::exception & exception) {
     report.source_accepted = false;
     report.detail = exception.what();
   } catch (...) {
     report.source_accepted = false;
     report.detail = "unknown architecture comparison exception";
+  }
+  return report;
+}
+
+Report compare_wall_restoration(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  Report report;
+  try {
+    const auto & source = recorded.source;
+    const auto source_fingerprint = recorded.interaction_fingerprint;
+    report.source_interaction_fingerprint = source_fingerprint;
+    if (
+      !architecture::interaction_snapshot_complete(source) ||
+      !architecture::interaction_snapshot_matches_fingerprint(
+        source, source_fingerprint))
+    {
+      report.detail = "source interaction snapshot rejected";
+      report.arms.push_back(rejected_arm(
+        Arm::WallRestorationH, Stage::SourceRejected, source_fingerprint,
+        report.detail));
+      return report;
+    }
+    report.source_accepted = true;
+    report.detail = "accepted/wall-restoration-only";
+    const auto successor = maneuver::resolve_terminal_successor(source);
+    report.arms.push_back(evaluate_arm(
+      Arm::WallRestorationH, source, source_fingerprint, source_fingerprint,
+      successor, -1, -1, nullptr, true));
+  } catch (const std::exception & exception) {
+    report.source_accepted = false;
+    report.detail = exception.what();
+  } catch (...) {
+    report.source_accepted = false;
+    report.detail = "unknown wall restoration comparison exception";
+  }
+  return report;
+}
+
+Report verify_external_primal(
+  const architecture::RecordedInteractionSnapshot & recorded,
+  const Eigen::VectorXd & primal) noexcept
+{
+  Report report;
+  const auto source_fingerprint = recorded.interaction_fingerprint;
+  report.source_interaction_fingerprint = source_fingerprint;
+  const auto reject_source = [&report, source_fingerprint](
+      const Stage stage, const std::string & detail) {
+      report.detail = detail;
+      report.arms.push_back(rejected_arm(
+        Arm::ExternalPrimalI, stage, source_fingerprint, detail));
+      return report;
+    };
+  try {
+    const auto & source = recorded.source;
+    if (
+      !architecture::interaction_snapshot_complete(source) ||
+      !architecture::interaction_snapshot_matches_fingerprint(
+        source, source_fingerprint))
+    {
+      return reject_source(
+        Stage::SourceRejected, "source interaction snapshot rejected");
+    }
+    report.source_accepted = true;
+    report.detail = "accepted/external-primal-proof-only";
+    const auto candidate_fingerprint = exact_problem_fingerprint(
+      recorded.recorded_qp.problem, source_fingerprint);
+    const auto successor = maneuver::resolve_terminal_successor(source);
+    if (!successor.accepted) {
+      auto rejected = rejected_arm(
+        Arm::ExternalPrimalI, Stage::TerminalSuccessorRejected,
+        source_fingerprint, successor.detail);
+      rejected.candidate_fingerprint = candidate_fingerprint;
+      report.arms.push_back(std::move(rejected));
+      return report;
+    }
+    if (!source.replay_world.has_value()) {
+      auto rejected = rejected_arm(
+        Arm::ExternalPrimalI, Stage::SourceRejected, source_fingerprint,
+        "replay world unavailable");
+      rejected.candidate_fingerprint = candidate_fingerprint;
+      report.arms.push_back(std::move(rejected));
+      return report;
+    }
+
+    ArmResult arm_result;
+    arm_result.arm = Arm::ExternalPrimalI;
+    arm_result.source_interaction_fingerprint = source_fingerprint;
+    arm_result.candidate_fingerprint = candidate_fingerprint;
+    const auto built = build_external_artifact(
+      source, recorded.recorded_qp.problem, primal);
+    if (!built.value.has_value()) {
+      arm_result.stage = Stage::SolverRejected;
+      arm_result.detail = built.detail;
+      report.arms.push_back(std::move(arm_result));
+      return report;
+    }
+    arm_result.solver_outcome = shadow::Outcome::Solved;
+    arm_result.maximum_external_constraint_violation =
+      built.maximum_absolute_violation;
+    arm_result.maximum_external_normalized_constraint_violation =
+      built.maximum_normalized_violation;
+    arm_result.maximum_external_normalized_constraint_row =
+      built.maximum_normalized_row;
+    arm_result.terminal_progress_m =
+      built.value->predicted_states.back().progress_m;
+    arm_result.terminal_velocity_mps =
+      built.value->predicted_states.back().velocity_mps;
+
+    const auto adapted = physical::build(
+      built.value.value(), source.identity.source_context.intent,
+      source.identity.source_context.stage_geometry_id);
+    if (!adapted.exact_trajectory.has_value()) {
+      arm_result.stage = Stage::ExactTrajectoryRejected;
+      std::ostringstream detail;
+      detail << "adapter=" << physical::to_string(adapted.reason)
+             << "/stage=" << adapted.rejected_stage;
+      arm_result.detail = detail.str();
+      report.arms.push_back(std::move(arm_result));
+      return report;
+    }
+    auto exact = adapted.exact_trajectory.value();
+    arm_result.minimum_lateral_bound_reserve_m =
+      exact.minimum_lateral_bound_reserve_m;
+    auto physical_snapshot = wall_snapshot(
+      source, source.replay_world.value(), exact);
+    auto wall_result = wall::evaluate(physical_snapshot);
+    if (wall_result.outcome != wall::Outcome::Accepted) {
+      arm_result.stage = Stage::WallProofRejected;
+      arm_result.detail = wall_result.detail;
+      report.arms.push_back(std::move(arm_result));
+      return report;
+    }
+    auto dynamic_result = prove_dynamic(
+      source, source.replay_world.value(), exact);
+    if (!dynamic_result.valid || !dynamic_result.clear) {
+      arm_result.stage = Stage::DynamicProofRejected;
+      std::ostringstream detail;
+      detail << "obstacle=" << dynamic_result.blocking_obstacle_id
+             << "/reason="
+             << recovery::to_string(dynamic_result.rejection_reason)
+             << "/rejected_t=" << dynamic_result.rejected_elapsed_sec
+             << "/rejected_clearance="
+             << dynamic_result.rejected_clearance_m
+             << "/minimum_clearance=" << dynamic_result.minimum_clearance_m;
+      arm_result.detail = detail.str();
+      report.arms.push_back(std::move(arm_result));
+      return report;
+    }
+
+    ManeuverBundle bundle;
+    bundle.target_id = source.identity.source_context.target_id;
+    bundle.pass_side_sign =
+      source.identity.source_context.execution_side_sign != 0 ?
+      source.identity.source_context.execution_side_sign :
+      source.dynamic_obstacle_pass_side_sign;
+    bundle.source_interaction_fingerprint = source_fingerprint;
+    bundle.candidate_fingerprint = candidate_fingerprint;
+    bundle.exact_trajectory = std::move(exact);
+    bundle.wall_certificate = std::move(wall_result);
+    bundle.dynamic_certificate = std::move(dynamic_result);
+    bundle.terminal_successor = successor.successor;
+    bundle.stop_suffix = successor.stop_suffix;
+    arm_result.stage = Stage::Accepted;
+    arm_result.detail = "accepted/external-primal-exact-proofs";
+    arm_result.bundle = std::move(bundle);
+    report.arms.push_back(std::move(arm_result));
+  } catch (const std::exception & exception) {
+    report.source_accepted = false;
+    report.detail = exception.what();
+  } catch (...) {
+    report.source_accepted = false;
+    report.detail = "unknown external primal verification exception";
   }
   return report;
 }

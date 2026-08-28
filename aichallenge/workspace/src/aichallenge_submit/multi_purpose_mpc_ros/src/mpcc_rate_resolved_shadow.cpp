@@ -24,6 +24,9 @@ using SteadyClock = std::chrono::steady_clock;
 // current-problem SQP corrections are allowed before failing closed.  This is
 // a deterministic certification budget, not a fallback or a lease extension.
 constexpr std::size_t kMaximumPhysicalProofSqpCorrections = 3U;
+// Architecture-audit budget only. These iterates cannot publish and exist to
+// distinguish a one-shot wall tangent defect from physical infeasibility.
+constexpr std::size_t kMaximumWallRestorationSqpCorrections = 3U;
 
 struct ProgressWallRefinement
 {
@@ -781,9 +784,24 @@ SolverContext::physical_constraint_tolerance() const noexcept
 
 Result SolverContext::evaluate(const Snapshot & snapshot)
 {
+  return evaluate_impl(snapshot, false);
+}
+
+Result SolverContext::evaluate_wall_feasibility_restoration_audit(
+  const Snapshot & snapshot)
+{
+  return evaluate_impl(snapshot, true);
+}
+
+Result SolverContext::evaluate_impl(
+  const Snapshot & snapshot,
+  const bool wall_feasibility_restoration_audit)
+{
   const auto started = SteadyClock::now();
   Result result;
   result.identity = snapshot.identity;
+  result.wall_feasibility_restoration_requested =
+    wall_feasibility_restoration_audit;
   const auto capture_failure = [&result, &snapshot](
       const mpcc_architecture_snapshot::PipelineStage pipeline_stage,
       const mpcc_rate_resolved_problem::AssemblyRequest & request,
@@ -1195,15 +1213,195 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       refined_assembled->upper_bound, warm_start,
       refined_assembled->variable_scaling);
     result.solver = refined_outcome.telemetry;
+    if (
+      !refined_outcome.result.has_value() &&
+      wall_feasibility_restoration_audit)
+    {
+      result.wall_feasibility_restoration_attempted = true;
+      // This problem retains the selected physical lateral interval and every
+      // wall/actuation row, but restores only the heading state bounds owned
+      // by the post-hoc wall trust bucket. The resulting trajectory is not a
+      // certificate: its wall interval was proved at the old heading bucket.
+      // It is used only to construct a new nonlinear tangent and fresh wall
+      // refinement below.
+      auto restoration_problem = refinement.request.value();
+      for (int stage = 1; stage <= snapshot.request.horizon_steps; ++stage) {
+        const int state = stage * mpcc_rate_resolved::kStateDimension;
+        restoration_problem.state_lower[
+          state + mpcc_rate_resolved::kHeadingIndex] =
+          adapted->problem.state_lower[
+          state + mpcc_rate_resolved::kHeadingIndex];
+        restoration_problem.state_upper[
+          state + mpcc_rate_resolved::kHeadingIndex] =
+          adapted->problem.state_upper[
+          state + mpcc_rate_resolved::kHeadingIndex];
+      }
+
+      persistent_osqp::SolveOutcome restoration_outcome;
+      Eigen::VectorXd restoration_primal = outcome.result->primal;
+      bool restoration_failed = false;
+      for (std::size_t correction = 0U;
+        correction < kMaximumWallRestorationSqpCorrections; ++correction)
+      {
+        if (correction > 0U) {
+          const auto tangent =
+            mpcc_rate_resolved_adapter::relinearize_around_primal(
+            snapshot.request, restoration_primal, restoration_problem);
+          if (!tangent.applied) {
+            result.wall_feasibility_restoration_detail =
+              std::string{"restoration-tangent-rejected/"} +
+              mpcc_rate_resolved_adapter::to_string(tangent.reason) +
+              "/stage=" + std::to_string(tangent.stage);
+            restoration_failed = true;
+            break;
+          }
+        }
+        auto restoration_assembled =
+          mpcc_rate_resolved_problem::assemble(restoration_problem);
+        if (!restoration_assembled.has_value()) {
+          result.wall_feasibility_restoration_detail =
+            "restoration-assembly-rejected";
+          restoration_failed = true;
+          break;
+        }
+        // Phase-I owns feasibility, not racing performance. Reusing the
+        // original objective made an already affine-feasible seed hit OSQP's
+        // dual iteration limit. Project the preceding seed onto the unchanged
+        // affine constraints with a strictly convex identity objective. This
+        // changes no bound or row and the projected result is still forbidden
+        // from becoming an artifact.
+        restoration_assembled->quadratic_cost.setIdentity();
+        restoration_assembled->linear_cost = -restoration_primal;
+        auto restoration_warm_start = build_current_problem_bootstrap(
+          restoration_problem,
+          static_cast<std::size_t>(
+            restoration_assembled->lower_bound.size()),
+          &restoration_primal);
+        if (!restoration_warm_start.has_value()) {
+          result.wall_feasibility_restoration_detail =
+            "restoration-bootstrap-rejected";
+          restoration_failed = true;
+          break;
+        }
+        restoration_outcome = solver_.solve(
+          restoration_assembled->quadratic_cost,
+          restoration_assembled->constraints,
+          restoration_assembled->linear_cost,
+          restoration_assembled->lower_bound,
+          restoration_assembled->upper_bound,
+          restoration_warm_start,
+          restoration_assembled->variable_scaling);
+        result.solver = restoration_outcome.telemetry;
+        if (
+          !restoration_outcome.result.has_value() ||
+          !restoration_outcome.result->primal.allFinite())
+        {
+          result.wall_feasibility_restoration_detail =
+            std::string{"restoration-solve-rejected/"} +
+            restoration_outcome.failure_detail;
+          restoration_failed = true;
+          break;
+        }
+        restoration_primal = restoration_outcome.result->primal;
+        ++result.wall_feasibility_restoration_sqp_count;
+        result.wall_feasibility_restoration_seed_solved = true;
+      }
+
+      if (!restoration_failed &&
+        result.wall_feasibility_restoration_seed_solved)
+      {
+        // Rebuild from the broad semantic problem so none of the relaxed
+        // seed's old wall buckets survive. Only its tangent is transported.
+        auto restored_tangent_problem = adapted->problem;
+        const auto restored_tangent =
+          mpcc_rate_resolved_adapter::relinearize_around_primal(
+          snapshot.request, restoration_primal, restored_tangent_problem);
+        if (!restored_tangent.applied) {
+          result.wall_feasibility_restoration_detail =
+            std::string{"final-tangent-rejected/"} +
+            mpcc_rate_resolved_adapter::to_string(restored_tangent.reason) +
+            "/stage=" + std::to_string(restored_tangent.stage);
+        } else {
+          auto final_refinement = build_progress_wall_refinement(
+            snapshot, restored_tangent_problem, restoration_primal,
+            solver_.physical_constraint_tolerance());
+          result.wall_feasibility_restoration_final_refinement_built =
+            final_refinement.request.has_value();
+          if (!final_refinement.request.has_value()) {
+            result.wall_feasibility_restoration_detail =
+              std::string{"final-wall-refinement-rejected/progress="} +
+              mpcc_progress::progress_aligned_wall_bounds_reason_name(
+              final_refinement.resolution.reason) +
+              "/physical=" +
+              mpcc_rate_resolved_wall_refinement::to_string(
+              final_refinement.physical.reason);
+          } else {
+            auto final_assembled = mpcc_rate_resolved_problem::assemble(
+              final_refinement.request.value());
+            if (!final_assembled.has_value()) {
+              result.wall_feasibility_restoration_detail =
+                "final-restored-assembly-rejected";
+            } else {
+              auto final_warm_start = build_current_problem_bootstrap(
+                final_refinement.request.value(),
+                static_cast<std::size_t>(
+                  final_assembled->lower_bound.size()),
+                &restoration_primal);
+              if (!final_warm_start.has_value()) {
+                result.wall_feasibility_restoration_detail =
+                  "final-restored-bootstrap-rejected";
+              } else {
+                auto final_outcome = solver_.solve(
+                  final_assembled->quadratic_cost,
+                  final_assembled->constraints,
+                  final_assembled->linear_cost,
+                  final_assembled->lower_bound,
+                  final_assembled->upper_bound,
+                  final_warm_start,
+                  final_assembled->variable_scaling);
+                result.solver = final_outcome.telemetry;
+                result.wall_feasibility_restoration_final_solved =
+                  final_outcome.result.has_value() &&
+                  final_outcome.result->primal.allFinite();
+                if (result.wall_feasibility_restoration_final_solved) {
+                  result.wall_feasibility_restoration_detail =
+                    "accepted-as-seed-and-full-refinement-solved";
+                  refinement = std::move(final_refinement);
+                  refined_assembled = std::move(final_assembled);
+                  refined_outcome = std::move(final_outcome);
+                  warm_start = std::move(final_warm_start);
+                } else {
+                  result.wall_feasibility_restoration_detail =
+                    std::string{"final-restored-solve-rejected/"} +
+                    final_outcome.failure_detail;
+                  refinement = std::move(final_refinement);
+                  refined_assembled = std::move(final_assembled);
+                  refined_outcome = std::move(final_outcome);
+                  warm_start = std::move(final_warm_start);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     if (!refined_outcome.result.has_value()) {
       result.outcome = Outcome::SolveRejected;
       result.solved = false;
       result.detail = std::string{"rate-resolved wall-refined QP rejected: "} +
         refined_outcome.failure_detail;
+      if (result.wall_feasibility_restoration_attempted) {
+        result.detail += std::string{", wall_restoration="} +
+          result.wall_feasibility_restoration_detail +
+          "/sqp_count=" +
+          std::to_string(result.wall_feasibility_restoration_sqp_count);
+      }
       capture_failure(
         mpcc_architecture_snapshot::PipelineStage::WallRefinement,
         refinement.request.value(), refined_assembled.value(), warm_start,
-        refined_outcome, "solve-rejected");
+        refined_outcome,
+        result.wall_feasibility_restoration_attempted ?
+        "restored-solve-rejected" : "solve-rejected");
       return finish();
     }
     if (!refined_outcome.result->primal.allFinite()) {
@@ -1912,6 +2110,21 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       "/proof=" +
       (result.post_refinement_physical_proof_checked ? "1" : "0") + "/" +
       (result.post_refinement_physical_proof_accepted ? "1" : "0");
+  }
+  if (result.wall_feasibility_restoration_requested) {
+    result.detail += std::string{", wall_restoration="} +
+      (result.wall_feasibility_restoration_attempted ? "attempted" :
+      "not-needed") +
+      "/seed=" +
+      (result.wall_feasibility_restoration_seed_solved ? "1" : "0") +
+      "/sqp_count=" +
+      std::to_string(result.wall_feasibility_restoration_sqp_count) +
+      "/final_built=" +
+      (result.wall_feasibility_restoration_final_refinement_built ? "1" :
+      "0") +
+      "/final_solved=" +
+      (result.wall_feasibility_restoration_final_solved ? "1" : "0") +
+      "/detail=" + result.wall_feasibility_restoration_detail;
   }
   return finish();
 }

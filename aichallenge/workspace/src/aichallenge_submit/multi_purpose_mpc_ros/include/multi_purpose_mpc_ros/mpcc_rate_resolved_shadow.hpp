@@ -233,6 +233,13 @@ struct Result
       mpcc_rate_resolved_wall_refinement::Reason::NotRequested};
   int physical_wall_refinement_first_failure_stage{-1};
   std::size_t physical_wall_refinement_checked_pose_count{};
+  bool wall_feasibility_restoration_requested{false};
+  bool wall_feasibility_restoration_attempted{false};
+  bool wall_feasibility_restoration_seed_solved{false};
+  bool wall_feasibility_restoration_final_refinement_built{false};
+  bool wall_feasibility_restoration_final_solved{false};
+  std::size_t wall_feasibility_restoration_sqp_count{};
+  std::string wall_feasibility_restoration_detail{"not-requested"};
   RecedingWarmStartReason receding_warm_start_reason{
     RecedingWarmStartReason::EmptyCache};
   std::string receding_warm_start_diagnostic{"empty-cache"};
@@ -317,10 +324,18 @@ class SolverContext
 {
 public:
   Result evaluate(const Snapshot & snapshot);
+  /// Offline architecture comparison only. A relaxed wall-directed QP may
+  /// generate a numerical tangent, but it can never become an artifact: the
+  /// unchanged full QP and all physical proofs are rebuilt before acceptance.
+  /// Production callers must use evaluate().
+  Result evaluate_wall_feasibility_restoration_audit(
+    const Snapshot & snapshot);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;
 
 private:
+  Result evaluate_impl(
+    const Snapshot & snapshot, bool wall_feasibility_restoration_audit);
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
   persistent_osqp::PersistentOsqpSolver solver_{

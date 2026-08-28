@@ -1,6 +1,9 @@
 #include "multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp"
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
+#include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
 #include <gtest/gtest.h>
 
@@ -135,14 +138,41 @@ architecture::RecordedInteractionSnapshot recorded(
   return value;
 }
 
+std::pair<architecture::RecordedInteractionSnapshot, Eigen::VectorXd>
+recorded_with_solved_qp(shadow::Snapshot source)
+{
+  persistent_osqp::PersistentOsqpSolver solver{
+    persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};
+  const auto adapted = mpcc_rate_resolved_adapter::build(
+    source.request, solver.physical_constraint_tolerance());
+  EXPECT_TRUE(adapted.has_value());
+  const auto qp = adapted.has_value() ?
+    mpcc_rate_resolved_problem::assemble(adapted->problem) : std::nullopt;
+  EXPECT_TRUE(qp.has_value());
+  const auto outcome = qp.has_value() ? solver.solve(
+    qp->quadratic_cost, qp->constraints, qp->linear_cost,
+    qp->lower_bound, qp->upper_bound, std::nullopt, qp->variable_scaling) :
+    persistent_osqp::SolveOutcome{};
+  EXPECT_TRUE(outcome.result.has_value()) << outcome.failure_detail;
+
+  auto value = recorded(std::move(source));
+  if (qp.has_value()) {
+    value.recorded_qp.problem = qp.value();
+  }
+  return {
+    std::move(value), outcome.result.has_value() ?
+    outcome.result->primal : Eigen::VectorXd{}};
+}
+
 TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
 {
   const auto report = compare(recorded(source_snapshot()));
   ASSERT_TRUE(report.source_accepted) << report.detail;
   // A + A2 + two B arms + C and D over two homotopies and every valid pair,
   // plus one diagonal E, one physical-diagonal F and one bounded production G
-  // result per homotopy for N=3.
-  ASSERT_EQ(report.arms.size(), 34U);
+  // result per homotopy for N=3, followed by one audit-only wall-restoration
+  // arm over the immutable persistent source.
+  ASSERT_EQ(report.arms.size(), 35U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::PersistentTargetBoundA2);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessLeftB);
@@ -200,7 +230,7 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
     EXPECT_EQ(arm.lattice_transition_stage, 0);
     EXPECT_EQ(arm.lattice_ahead_stage, 2);
   }
-  for (std::size_t index = 32U; index < report.arms.size(); ++index) {
+  for (std::size_t index = 32U; index < 34U; ++index) {
     const auto & arm = report.arms[index];
     EXPECT_TRUE(
       arm.arm == Arm::ProductionLeftG ||
@@ -209,6 +239,11 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
     EXPECT_EQ(arm.candidate_source, "direct-side");
     EXPECT_EQ(arm.candidate_count, 1U);
   }
+  const auto & restoration = report.arms[34U];
+  EXPECT_EQ(restoration.arm, Arm::WallRestorationH);
+  EXPECT_EQ(restoration.stage, Stage::Accepted) << restoration.detail;
+  EXPECT_NE(restoration.detail.find("wall_restoration=not-needed"),
+    std::string::npos);
   EXPECT_NE(
     report.arms[2].candidate_fingerprint,
     report.arms[3].candidate_fingerprint);
@@ -301,11 +336,78 @@ TEST(MpccArchitectureComparison, FingerprintMismatchRejectsEveryArm)
   ++input.interaction_fingerprint;
   const auto report = compare(input);
   EXPECT_FALSE(report.source_accepted);
-  ASSERT_EQ(report.arms.size(), 14U);
+  ASSERT_EQ(report.arms.size(), 15U);
   for (const auto & arm : report.arms) {
     EXPECT_EQ(arm.stage, Stage::SourceRejected);
     EXPECT_FALSE(arm.bundle.has_value());
   }
+}
+
+TEST(MpccArchitectureComparison, WallRestorationOnlyDoesNotEnumerateOtherArms)
+{
+  const auto report = compare_wall_restoration(recorded(source_snapshot()));
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 1U);
+  EXPECT_EQ(report.arms.front().arm, Arm::WallRestorationH);
+  EXPECT_EQ(report.arms.front().stage, Stage::Accepted) <<
+    report.arms.front().detail;
+  EXPECT_TRUE(report.arms.front().bundle.has_value());
+  EXPECT_NE(report.arms.front().detail.find("wall_restoration=not-needed"),
+    std::string::npos);
+}
+
+TEST(MpccArchitectureComparison, WallRestorationOnlyRejectsChangedWorld)
+{
+  auto input = recorded(source_snapshot());
+  ++input.interaction_fingerprint;
+  const auto report = compare_wall_restoration(input);
+  EXPECT_FALSE(report.source_accepted);
+  ASSERT_EQ(report.arms.size(), 1U);
+  EXPECT_EQ(report.arms.front().arm, Arm::WallRestorationH);
+  EXPECT_EQ(report.arms.front().stage, Stage::SourceRejected);
+  EXPECT_FALSE(report.arms.front().bundle.has_value());
+}
+
+TEST(MpccArchitectureComparison, ExternalPrimalNeedsExactRecordedProblem)
+{
+  const auto report = verify_external_primal(
+    recorded(source_snapshot()), Eigen::VectorXd::Zero(1));
+  ASSERT_TRUE(report.source_accepted);
+  ASSERT_EQ(report.arms.size(), 1U);
+  EXPECT_EQ(report.arms.front().arm, Arm::ExternalPrimalI);
+  EXPECT_EQ(report.arms.front().stage, Stage::SolverRejected);
+  EXPECT_FALSE(report.arms.front().bundle.has_value());
+  EXPECT_NE(
+    report.arms.front().detail.find("dimension-contract-mismatch"),
+    std::string::npos);
+}
+
+TEST(MpccArchitectureComparison, ExternalPrimalUsesExactPhysicalProofChain)
+{
+  auto [input, primal] = recorded_with_solved_qp(source_snapshot());
+  const auto report = verify_external_primal(input, primal);
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 1U);
+  const auto & arm = report.arms.front();
+  EXPECT_EQ(arm.arm, Arm::ExternalPrimalI);
+  EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
+  EXPECT_TRUE(arm.bundle.has_value());
+  EXPECT_LE(arm.maximum_external_normalized_constraint_violation, 1.0);
+  EXPECT_NE(arm.candidate_fingerprint, 0U);
+}
+
+TEST(MpccArchitectureComparison, ExternalPrimalCannotBypassExactQpRows)
+{
+  auto [input, primal] = recorded_with_solved_qp(source_snapshot());
+  ASSERT_GT(primal.size(), 0);
+  primal[0] += 10.0;
+  const auto report = verify_external_primal(input, primal);
+  ASSERT_TRUE(report.source_accepted);
+  ASSERT_EQ(report.arms.size(), 1U);
+  const auto & arm = report.arms.front();
+  EXPECT_EQ(arm.stage, Stage::SolverRejected);
+  EXPECT_FALSE(arm.bundle.has_value());
+  EXPECT_NE(arm.detail.find("constraint-rejected"), std::string::npos);
 }
 
 }  // namespace

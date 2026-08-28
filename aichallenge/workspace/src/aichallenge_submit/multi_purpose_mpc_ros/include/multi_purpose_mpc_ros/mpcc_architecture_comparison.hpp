@@ -6,6 +6,8 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
 #include "multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp"
 
+#include <Eigen/Dense>
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -30,6 +32,8 @@ enum class Arm
   PhysicalDiagonalRightF,
   ProductionLeftG,
   ProductionRightG,
+  WallRestorationH,
+  ExternalPrimalI,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -76,6 +80,9 @@ struct ArmResult
   double terminal_progress_m{};
   double terminal_velocity_mps{};
   double minimum_lateral_bound_reserve_m{};
+  double maximum_external_constraint_violation{};
+  double maximum_external_normalized_constraint_violation{};
+  int maximum_external_normalized_constraint_row{-1};
   int lattice_transition_stage{-1};
   int lattice_ahead_stage{-1};
   bool direct_final_attempted{false};
@@ -102,6 +109,19 @@ struct Report
 Report compare(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
   noexcept;
+
+/// Replay only the audit-only wall feasibility restoration arm. This avoids
+/// enumerating the full A--G lattice when iterating on a frozen wall failure.
+Report compare_wall_restoration(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
+  noexcept;
+
+/// Certify an independently solved primal against the exact recorded QP and
+/// the unchanged physical wall, dynamic-obstacle and terminal-successor
+/// proofs. This audit has no solver, store, mailbox, command or publisher.
+Report verify_external_primal(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded,
+  const Eigen::VectorXd & primal) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_architecture_comparison
 

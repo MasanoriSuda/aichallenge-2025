@@ -152,7 +152,6 @@ TEST(MpccRateResolvedDynamicObstacle, FollowClassifiesStayBehindByEffectiveProgr
   EXPECT_EQ(result.first_pass_side_stage, -1);
   EXPECT_EQ(result.stay_behind_row_count, 4U);
   EXPECT_EQ(result.pass_side_row_count, 0U);
-  EXPECT_EQ(result.partial_escape_row_count, 0U);
   for (const auto & constraint : result.problem->dynamic_obstacle_constraints) {
     EXPECT_EQ(
       constraint.axis,
@@ -246,7 +245,7 @@ TEST(MpccRateResolvedDynamicObstacle, CruisePreservesCurrentSideWhenRacingLineCr
   }
 }
 
-TEST(MpccRateResolvedDynamicObstacle, CruiseRejectsUnreachableStayBehindAndKeepsPartialSide)
+TEST(MpccRateResolvedDynamicObstacle, CruiseDoesNotWeakenUnreachableDisjunctWithoutGeometry)
 {
   auto request = request_with_lateral_suffix();
   request.pass_side_sign = 0;
@@ -277,19 +276,18 @@ TEST(MpccRateResolvedDynamicObstacle, CruiseRejectsUnreachableStayBehindAndKeeps
   EXPECT_LT(result.first_stay_behind_margin_m, 0.0);
   EXPECT_LT(result.first_positive_side_margin_m, 0.0);
   EXPECT_EQ(result.resolved_side_sign, 1);
-  EXPECT_EQ(result.first_pass_side_stage, 0);
-  EXPECT_EQ(result.stay_behind_row_count, 0U);
-  EXPECT_EQ(result.pass_side_row_count, 4U);
-  EXPECT_EQ(result.partial_escape_row_count, 4U);
+  EXPECT_EQ(result.first_pass_side_stage, -1);
+  EXPECT_EQ(result.stay_behind_row_count, 4U);
+  EXPECT_EQ(result.pass_side_row_count, 0U);
   for (const auto & constraint : result.problem->dynamic_obstacle_constraints) {
     EXPECT_EQ(
       constraint.axis,
-      problem::DynamicObstacleConstraintAxis::Lateral);
-    EXPECT_DOUBLE_EQ(constraint.lower, 0.70);
+      problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+    EXPECT_DOUBLE_EQ(constraint.upper, -0.8);
   }
 }
 
-TEST(MpccRateResolvedDynamicObstacle, TacticalSideUsesTheSamePartialEscapeContract)
+TEST(MpccRateResolvedDynamicObstacle, TacticalSideUsesOnlyCompleteDisjuncts)
 {
   auto request = request_with_lateral_suffix();
   request.pass_side_sign = 1;
@@ -319,22 +317,23 @@ TEST(MpccRateResolvedDynamicObstacle, TacticalSideUsesTheSamePartialEscapeContra
   ASSERT_TRUE(result.applied);
   ASSERT_TRUE(result.problem.has_value());
   EXPECT_EQ(result.resolved_side_sign, 1);
-  EXPECT_EQ(result.first_pass_side_stage, 0);
-  EXPECT_EQ(result.stay_behind_row_count, 0U);
-  EXPECT_EQ(result.pass_side_row_count, 4U);
-  EXPECT_EQ(result.partial_escape_row_count, 2U);
-  const std::array<double, 4> expected_lower{{0.72, 0.74, 0.75, 0.75}};
-  for (std::size_t index = 0U; index < expected_lower.size(); ++index) {
-    EXPECT_EQ(
-      result.problem->dynamic_obstacle_constraints[index].axis,
-      problem::DynamicObstacleConstraintAxis::Lateral);
-    EXPECT_DOUBLE_EQ(
-      result.problem->dynamic_obstacle_constraints[index].lower,
-      expected_lower[index]);
-  }
+  EXPECT_EQ(result.first_pass_side_stage, 2);
+  EXPECT_EQ(result.stay_behind_row_count, 2U);
+  EXPECT_EQ(result.pass_side_row_count, 2U);
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  EXPECT_EQ(
+    result.problem->dynamic_obstacle_constraints[0].axis,
+    problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+  EXPECT_DOUBLE_EQ(
+    result.problem->dynamic_obstacle_constraints[0].upper, -0.8);
+  EXPECT_EQ(
+    result.problem->dynamic_obstacle_constraints[2].axis,
+    problem::DynamicObstacleConstraintAxis::Lateral);
+  EXPECT_DOUBLE_EQ(
+    result.problem->dynamic_obstacle_constraints[2].lower, 0.75);
 }
 
-TEST(MpccRateResolvedDynamicObstacle, PartialEscapeNeverExceedsWallOnlyWitness)
+TEST(MpccRateResolvedDynamicObstacle, UnreachedSideNeverBorrowsWallOnlyWitness)
 {
   auto request = request_with_lateral_suffix();
   request.pass_side_sign = 1;
@@ -365,21 +364,22 @@ TEST(MpccRateResolvedDynamicObstacle, PartialEscapeNeverExceedsWallOnlyWitness)
   ASSERT_TRUE(result.applied);
   ASSERT_TRUE(result.problem.has_value());
   ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
-  EXPECT_EQ(result.partial_escape_row_count, 3U);
-  const std::array<double, 4> expected_lower{{0.66, 0.68, 0.72, 0.75}};
-  for (std::size_t index = 0U; index < expected_lower.size(); ++index) {
+  EXPECT_EQ(result.first_pass_side_stage, 3);
+  EXPECT_EQ(result.stay_behind_row_count, 3U);
+  EXPECT_EQ(result.pass_side_row_count, 1U);
+  for (std::size_t index = 0U; index < 3U; ++index) {
     const auto & constraint =
       result.problem->dynamic_obstacle_constraints[index];
     EXPECT_EQ(
       constraint.axis,
-      problem::DynamicObstacleConstraintAxis::Lateral);
-    EXPECT_DOUBLE_EQ(constraint.lower, expected_lower[index]);
-    EXPECT_LE(
-      constraint.lower,
-      request.wall_only_primal[
-        static_cast<int>(index + 1U) * model::kStateDimension +
-        model::kLateralIndex]);
+      problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+    EXPECT_DOUBLE_EQ(constraint.upper, -0.8);
   }
+  EXPECT_EQ(
+    result.problem->dynamic_obstacle_constraints[3].axis,
+    problem::DynamicObstacleConstraintAxis::Lateral);
+  EXPECT_DOUBLE_EQ(
+    result.problem->dynamic_obstacle_constraints[3].lower, 0.75);
 }
 
 TEST(MpccRateResolvedDynamicObstacle, ForcedTransitionUsesOnlyCompleteDisjuncts)
@@ -418,7 +418,6 @@ TEST(MpccRateResolvedDynamicObstacle, ForcedTransitionUsesOnlyCompleteDisjuncts)
   EXPECT_EQ(result.stay_behind_row_count, 2U);
   EXPECT_EQ(result.pass_side_row_count, 1U);
   EXPECT_EQ(result.ahead_row_count, 1U);
-  EXPECT_EQ(result.partial_escape_row_count, 0U);
   ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
   EXPECT_EQ(
     result.problem->dynamic_obstacle_constraints[0].axis,
@@ -454,7 +453,6 @@ TEST(MpccRateResolvedDynamicObstacle, DiagonalScheduleConnectsExactEndpoints)
   EXPECT_EQ(result.stay_behind_row_count, 1U);
   EXPECT_EQ(result.diagonal_row_count, 2U);
   EXPECT_EQ(result.pass_side_row_count, 1U);
-  EXPECT_EQ(result.partial_escape_row_count, 0U);
   ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
   const auto & behind = result.problem->dynamic_obstacle_constraints[0];
   EXPECT_EQ(
@@ -546,6 +544,51 @@ TEST(MpccRateResolvedDynamicObstacle, RejectsPhysicalGeometryWithoutDiagonal)
 
   EXPECT_EQ(result.reason, dynamic_obstacle::Reason::InvalidInput);
   EXPECT_FALSE(result.problem.has_value());
+}
+
+TEST(MpccRateResolvedDynamicObstacle, InitialOverlapUsesDerivedPhysicalDiagonal)
+{
+  auto request = request_with_lateral_suffix();
+  request.pass_side_sign = 1;
+  const int state_count = model::kStateDimension * 5;
+  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(
+    state_count, -std::numeric_limits<double>::infinity());
+  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(
+    state_count, std::numeric_limits<double>::infinity());
+  for (int stage = 1; stage <= 4; ++stage) {
+    const int state = stage * model::kStateDimension;
+    request.wall_only_problem.state_lower[state + model::kProgressIndex] = 2.0;
+    request.wall_only_problem.state_upper[state + model::kProgressIndex] = 4.0;
+    request.wall_only_problem.state_lower[state + model::kLagIndex] = 0.0;
+    request.wall_only_problem.state_upper[state + model::kLagIndex] = 0.0;
+    request.wall_only_problem.state_lower[state + model::kLateralIndex] = -2.0;
+    request.wall_only_problem.state_upper[state + model::kLateralIndex] = 2.0;
+  }
+  request.wall_only_primal[model::kLateralIndex] = 0.1;
+  request.physical_separation_geometry =
+    dynamic_obstacle::PhysicalSeparationGeometry{
+    1.4, 0.5, 0.7, 0.6, 0.1, 0.8};
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_TRUE(result.physical_diagonal_guidance_applied);
+  EXPECT_FALSE(result.forced_transition_applied);
+  EXPECT_EQ(result.first_pass_side_stage, 3);
+  EXPECT_EQ(result.stay_behind_row_count, 1U);
+  EXPECT_EQ(result.diagonal_row_count, 2U);
+  EXPECT_EQ(result.pass_side_row_count, 1U);
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  EXPECT_EQ(
+    result.problem->dynamic_obstacle_constraints[0].axis,
+    problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+  EXPECT_EQ(
+    result.problem->dynamic_obstacle_constraints[1].axis,
+    problem::DynamicObstacleConstraintAxis::CoupledLateralProgress);
+  EXPECT_EQ(
+    result.problem->dynamic_obstacle_constraints[3].axis,
+    problem::DynamicObstacleConstraintAxis::Lateral);
 }
 
 TEST(MpccRateResolvedDynamicObstacle, OfflineContinuationEndsAtExactDisjunction)
@@ -649,7 +692,6 @@ TEST(
   EXPECT_EQ(result.first_pass_side_stage, 0);
   EXPECT_EQ(result.stay_behind_row_count, 0U);
   EXPECT_EQ(result.pass_side_row_count, 4U);
-  EXPECT_EQ(result.partial_escape_row_count, 0U);
   ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
   for (std::size_t index = 0U; index < 4U; ++index) {
     const auto & constraint =

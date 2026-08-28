@@ -213,8 +213,8 @@ struct Result
   std::size_t dynamic_obstacle_stay_behind_row_count{};
   std::size_t dynamic_obstacle_pass_side_row_count{};
   std::size_t dynamic_obstacle_ahead_row_count{};
-  std::size_t dynamic_obstacle_partial_escape_row_count{};
   std::size_t dynamic_obstacle_diagonal_row_count{};
+  bool dynamic_obstacle_physical_diagonal_guidance_applied{false};
   double dynamic_obstacle_forced_constraint_fraction{1.0};
   int dynamic_obstacle_first_valid_stage{-1};
   double dynamic_obstacle_first_wall_only_progress_m{};

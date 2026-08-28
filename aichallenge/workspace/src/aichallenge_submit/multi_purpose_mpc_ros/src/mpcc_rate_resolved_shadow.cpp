@@ -1242,15 +1242,21 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       dynamic_request.forced_diagonal_full_side_stage =
         snapshot.dynamic_obstacle_forced_diagonal_full_side_stage;
     }
-    if (snapshot.dynamic_obstacle_forced_physical_diagonal) {
-      if (!snapshot.replay_world.has_value()) {
+    if (snapshot.replay_world.has_value()) {
+      const auto & world = snapshot.replay_world.value();
+      const auto & source_context = snapshot.identity.source_context;
+      if (
+        !world.current || world.observation_generation == 0U ||
+        source_context.target_id.empty() ||
+        world.observation_generation !=
+        source_context.target_obstacle_generation)
+      {
         result.outcome = Outcome::AssemblyRejected;
         result.solved = false;
         result.detail =
-          "physical diagonal guidance requires immutable replay world";
+          "physical obstacle world does not match problem identity";
         return finish();
       }
-      const auto & world = snapshot.replay_world.value();
       const auto target = std::find_if(
         world.obstacles.begin(), world.obstacles.end(),
         [&snapshot](const ReplayDynamicObstacle & obstacle) {
@@ -1260,15 +1266,36 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
         result.outcome = Outcome::AssemblyRejected;
         result.solved = false;
         result.detail =
-          "physical diagonal guidance target is absent from replay world";
+          "physical obstacle guidance target is absent from replay world";
+        return finish();
+      }
+      if (
+        target->observation_generation != world.observation_generation ||
+        !world.physical_footprint.valid() || !std::isfinite(target->radius_m) ||
+        target->radius_m < 0.0)
+      {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.detail = "physical obstacle geometry provenance is invalid";
         return finish();
       }
       const auto & footprint = world.physical_footprint;
-      dynamic_request.forced_physical_separation_geometry =
+      const auto geometry =
         mpcc_rate_resolved_dynamic_obstacle::PhysicalSeparationGeometry{
         footprint.front_extent_m, footprint.rear_extent_m,
         footprint.left_extent_m, footprint.right_extent_m,
         footprint.margin_m, target->radius_m};
+      dynamic_request.physical_separation_geometry = geometry;
+      if (snapshot.dynamic_obstacle_forced_physical_diagonal) {
+        dynamic_request.forced_physical_separation_geometry = geometry;
+        dynamic_request.physical_separation_geometry.reset();
+      }
+    } else if (snapshot.dynamic_obstacle_forced_physical_diagonal) {
+      result.outcome = Outcome::AssemblyRejected;
+      result.solved = false;
+      result.detail =
+        "physical obstacle guidance requires immutable replay world";
+      return finish();
     }
     dynamic_request.stages = snapshot.dynamic_obstacle_stages;
     dynamic_request.wall_only_problem = adapted->problem;
@@ -1290,10 +1317,10 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     result.dynamic_obstacle_pass_side_row_count =
       refinement.pass_side_row_count;
     result.dynamic_obstacle_ahead_row_count = refinement.ahead_row_count;
-    result.dynamic_obstacle_partial_escape_row_count =
-      refinement.partial_escape_row_count;
     result.dynamic_obstacle_diagonal_row_count =
       refinement.diagonal_row_count;
+    result.dynamic_obstacle_physical_diagonal_guidance_applied =
+      refinement.physical_diagonal_guidance_applied;
     result.dynamic_obstacle_forced_constraint_fraction =
       refinement.forced_constraint_fraction;
     result.dynamic_obstacle_first_valid_stage =

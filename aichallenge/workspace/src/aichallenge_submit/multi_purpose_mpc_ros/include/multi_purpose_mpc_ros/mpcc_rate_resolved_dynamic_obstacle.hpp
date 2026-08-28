@@ -56,6 +56,13 @@ struct Request
   std::optional<int> forced_diagonal_full_side_stage;
   std::optional<PhysicalSeparationGeometry>
     forced_physical_separation_geometry;
+  /// Current-world physical geometry used by production to derive a complete
+  /// behind-to-side separating diagonal when neither axis-aligned disjunct is
+  /// initially reachable. Without this certificate source, refinement keeps
+  /// only complete axis-aligned disjuncts and must not weaken them to the
+  /// obstacle-free wall witness.
+  std::optional<PhysicalSeparationGeometry>
+    physical_separation_geometry;
   std::vector<StagePrediction> stages;
   /// Physically solved witness used only to classify the reachable convex
   /// obstacle branch. Its progress trust buckets must not implicitly become
@@ -91,7 +98,6 @@ struct Result
   std::size_t stay_behind_row_count{};
   std::size_t pass_side_row_count{};
   std::size_t ahead_row_count{};
-  std::size_t partial_escape_row_count{};
   std::size_t diagonal_row_count{};
   bool physical_diagonal_guidance_applied{false};
   int first_valid_stage{-1};

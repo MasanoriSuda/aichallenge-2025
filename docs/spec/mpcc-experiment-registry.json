@@ -249,6 +249,22 @@
       "production_impact": "none; physical support geometry, schedules and F arms are sealed offline architecture-comparison inputs and are not connected to command authority",
       "deleted_code": [],
       "revisit_condition": "a production Slice atomically promotes current-world physical diagonal generation, deletes partial_side_escape and demonstrates frozen replay plus dynamic Pass-to-Return acceptance"
+    },
+    {
+      "experiment_id": "20260828-production-physical-diagonal",
+      "baseline_commit": "0bc2b8a285595c10127fa6ad510817547a38ffb3",
+      "snapshot_ids": [],
+      "hypothesis": "the certified physical diagonal can replace partial_side_escape in the canonical stateless current-world pipeline without tuning or lifecycle fallback",
+      "changed_dimension": "production_dynamic_obstacle_candidate_representation",
+      "result": "inconclusive",
+      "reason": "frozen decision 1566 now accepts stateless-left B with terminal progress 19.8243 m, velocity 4.62416 m/s and wall reserve 0.0532911 m, exactly reproducing candidate F metrics; all 52 package tests pass, but live Pass-to-Return acceptance is still pending",
+      "production_impact": "all production solver entries bind immutable ReplayWorld; initial overlap may derive a physical behind-to-side diagonal; mismatched world generations fail closed; partial_side_escape is deleted",
+      "deleted_code": [
+        "wall-only partial_side_escape obstacle rows",
+        "partial escape counters and telemetry",
+        "partial separation safety contract tests"
+      ],
+      "revisit_condition": "a bounded dynamic Gate exercises physical_diagonal=1 and either completes Pass-to-Return or freezes the first exact proof, identity, solver or successor rejection"
     }
   ]
 }

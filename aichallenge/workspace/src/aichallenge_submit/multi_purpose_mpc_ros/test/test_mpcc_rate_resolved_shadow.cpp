@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace shadow =
   multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
@@ -306,6 +307,36 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   invalid.first_steering_rate_certificate_margin_radps =
     std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(shadow::result_valid(invalid));
+}
+
+TEST(MpccRateResolvedShadow, RejectsDynamicWorldFromDifferentObservationEpoch)
+{
+  shadow::SolverContext context;
+  auto input = snapshot();
+  auto problem_context = input.identity.source_context;
+  problem_context.intent = contract::ControlIntent::Pass;
+  problem_context.intent_generation = 3U;
+  problem_context.target_id = "d2";
+  problem_context.target_obstacle_generation = 7U;
+  problem_context.execution_side_sign = 1;
+  input.identity.source_context =
+    contract::seal_problem_context(std::move(problem_context));
+  input.dynamic_obstacle_refinement_active = true;
+  input.dynamic_obstacle_pass_side_sign = 1;
+  input.dynamic_obstacle_stages.assign(
+    static_cast<std::size_t>(input.request.horizon_steps),
+    multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_obstacle::StagePrediction{
+      true, 1.0, 0.0, 0.8, 0.75});
+  shadow::ReplayWorld world;
+  world.current = true;
+  world.observation_generation = 8U;
+  input.replay_world = std::move(world);
+
+  const auto result = context.evaluate(input);
+
+  EXPECT_EQ(result.outcome, shadow::Outcome::AssemblyRejected);
+  EXPECT_EQ(
+    result.detail, "physical obstacle world does not match problem identity");
 }
 
 TEST(MpccRateResolvedShadow, CurrentProblemBootstrapOwnsCurrentAffineDynamics)

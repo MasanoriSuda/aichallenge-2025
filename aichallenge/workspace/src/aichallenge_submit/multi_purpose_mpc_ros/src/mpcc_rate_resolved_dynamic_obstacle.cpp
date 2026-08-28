@@ -70,6 +70,9 @@ Result refine(const Request & request) noexcept
     (!request.forced_diagonal_start_stage.has_value() ||
     !physical_geometry_valid(
       request.forced_physical_separation_geometry.value()))) ||
+    (request.physical_separation_geometry.has_value() &&
+    (request.forced_physical_separation_geometry.has_value() ||
+    !physical_geometry_valid(request.physical_separation_geometry.value()))) ||
     (request.forced_diagonal_start_stage.has_value() &&
     (request.pass_side_sign == 0 ||
     request.forced_first_pass_side_stage.has_value() ||
@@ -140,7 +143,9 @@ Result refine(const Request & request) noexcept
   // stay-behind remains the only convex branch this refinement can prove.
   int resolved_side_sign = request.pass_side_sign;
   bool preserve_current_side = false;
-  bool partial_side_escape = false;
+  bool automatic_physical_diagonal = false;
+  int automatic_diagonal_start_stage = -1;
+  int automatic_diagonal_full_side_stage = -1;
   double initial_signed_side_separation_m = 0.0;
   if (resolved_side_sign == 0) {
     bool behind_every_stage = true;
@@ -258,15 +263,7 @@ Result refine(const Request & request) noexcept
         initial_relative_lateral_m > request.separation_tolerance_m &&
         positive_side_box_feasible_every_stage)
       {
-        // The current relative side is already the physical homotopy, even
-        // though the conservative footprint has not quite cleared yet.  If
-        // stay-behind has an empty intersection with the state box, emitting
-        // that row can only create an infeasible QP.  Complete separation on
-        // the current side instead; dynamics and the same wall box still
-        // decide whether that motion is reachable.
         resolved_side_sign = 1;
-        preserve_current_side = true;
-        partial_side_escape = true;
         initial_signed_side_separation_m = initial_relative_lateral_m;
       } else if (
         state_box_available &&
@@ -275,8 +272,6 @@ Result refine(const Request & request) noexcept
         negative_side_box_feasible_every_stage)
       {
         resolved_side_sign = -1;
-        preserve_current_side = true;
-        partial_side_escape = true;
         initial_signed_side_separation_m = -initial_relative_lateral_m;
       }
     }
@@ -377,12 +372,14 @@ Result refine(const Request & request) noexcept
     }
   }
 
-  // A selected tactical side can meet the same initial-overlap condition as
-  // automatic Cruise/Follow.  If a pre-pass stay-behind row has an empty
-  // intersection with the canonical state box, retain the current physical
-  // side and require a non-worsening, wall-only-demonstrated escape envelope
-  // instead of demanding complete lateral separation in one stage.
-  if (!partial_side_escape && resolved_side_sign != 0) {
+  // Initial overlap makes both an immediate full-side row and a stay-behind
+  // row infeasible.  The old implementation weakened the side row to the
+  // obstacle-free wall witness.  That witness was not a collision proof.  If
+  // exact current-world geometry is available, instead derive the earliest
+  // causal behind-to-side physical diagonal: stage zero remains immutable,
+  // then two stages connect the complete disjunct endpoints.  If the horizon
+  // cannot contain it, no unsafe partial row is emitted.
+  if (resolved_side_sign != 0) {
     const bool state_box_available =
       request.wall_only_problem.state_lower.size() == state_values &&
       request.wall_only_problem.state_upper.size() == state_values;
@@ -439,11 +436,14 @@ Result refine(const Request & request) noexcept
         first_target_lateral_m);
       if (
         !prepass_stay_behind_box_feasible && selected_side_box_feasible &&
-        initial_signed_side_separation_m > request.separation_tolerance_m)
+        initial_signed_side_separation_m > request.separation_tolerance_m &&
+        request.physical_separation_geometry.has_value())
       {
-        partial_side_escape = true;
-        preserve_current_side = true;
-        first_pass_side_stage = first_valid_stage;
+        automatic_diagonal_start_stage = first_valid_stage + 1;
+        automatic_diagonal_full_side_stage =
+          automatic_diagonal_start_stage + 2;
+        automatic_physical_diagonal =
+          automatic_diagonal_full_side_stage < horizon;
       }
     }
   }
@@ -453,7 +453,7 @@ Result refine(const Request & request) noexcept
     // may not borrow a partial lateral witness: every stage must prove either
     // complete longitudinal-behind or complete selected-side separation.
     first_pass_side_stage = request.forced_first_pass_side_stage.value();
-    partial_side_escape = false;
+    automatic_physical_diagonal = false;
     result.forced_transition_applied = true;
   }
   const double forced_constraint_fraction =
@@ -464,12 +464,19 @@ Result refine(const Request & request) noexcept
   const bool forced_physical_diagonal =
     request.forced_physical_separation_geometry.has_value();
   if (forced_diagonal) {
-    partial_side_escape = false;
+    automatic_physical_diagonal = false;
     first_pass_side_stage =
       request.forced_diagonal_full_side_stage.value();
     result.forced_transition_applied = true;
     result.physical_diagonal_guidance_applied = forced_physical_diagonal;
   }
+  if (automatic_physical_diagonal) {
+    first_pass_side_stage = automatic_diagonal_full_side_stage;
+    result.physical_diagonal_guidance_applied = true;
+  }
+  const bool physical_diagonal =
+    forced_physical_diagonal || automatic_physical_diagonal;
+  const bool diagonal = forced_diagonal || automatic_physical_diagonal;
 
   // Support of the exact asymmetric ego rectangle plus the peer circle in a
   // course-frame direction.  The body orientation is frozen at the solved
@@ -478,8 +485,9 @@ Result refine(const Request & request) noexcept
   const auto physical_support = [&] (
       const int stage, const double course_longitudinal_normal,
       const double course_lateral_normal) {
-      const auto & geometry =
-        request.forced_physical_separation_geometry.value();
+      const auto & geometry = forced_physical_diagonal ?
+        request.forced_physical_separation_geometry.value() :
+        request.physical_separation_geometry.value();
       const int state = (stage + 1) * model::kStateDimension;
       const double heading_offset =
         request.wall_only_primal[state + model::kHeadingIndex];
@@ -516,22 +524,24 @@ Result refine(const Request & request) noexcept
     }
     problem::DynamicObstacleConstraint constraint;
     constraint.state_stage = stage + 1;
-    if (forced_diagonal) {
-      const int diagonal_start =
-        request.forced_diagonal_start_stage.value();
-      const int full_side =
-        request.forced_diagonal_full_side_stage.value();
+    if (diagonal) {
+      const int diagonal_start = forced_diagonal ?
+        request.forced_diagonal_start_stage.value() :
+        automatic_diagonal_start_stage;
+      const int full_side = forced_diagonal ?
+        request.forced_diagonal_full_side_stage.value() :
+        automatic_diagonal_full_side_stage;
       if (stage < diagonal_start) {
         constraint.axis =
           problem::DynamicObstacleConstraintAxis::EffectiveProgress;
-        const double separation_m = forced_physical_diagonal ?
+        const double separation_m = physical_diagonal ?
           physical_support(stage, 1.0, 0.0) :
           prediction.longitudinal_overlap_m;
         constraint.upper = prediction.target_progress_m - separation_m;
         ++result.stay_behind_row_count;
       } else if (stage >= full_side) {
         constraint.axis = problem::DynamicObstacleConstraintAxis::Lateral;
-        const double separation_m = forced_physical_diagonal ?
+        const double separation_m = physical_diagonal ?
           physical_support(
           stage, 0.0, -static_cast<double>(resolved_side_sign)) :
           prediction.lateral_center_separation_m;
@@ -552,16 +562,16 @@ Result refine(const Request & request) noexcept
         const double cosine = std::cos(alpha);
         const double signed_sine =
           std::sin(alpha) * static_cast<double>(resolved_side_sign);
-        const double progress_coefficient = forced_physical_diagonal ?
+        const double progress_coefficient = physical_diagonal ?
           -cosine : -cosine / prediction.longitudinal_overlap_m;
-        const double lateral_coefficient = forced_physical_diagonal ?
+        const double lateral_coefficient = physical_diagonal ?
           signed_sine :
           signed_sine / prediction.lateral_center_separation_m;
         constraint.axis = problem::DynamicObstacleConstraintAxis::
           CoupledLateralProgress;
         constraint.effective_progress_coefficient = progress_coefficient;
         constraint.lateral_coefficient = lateral_coefficient;
-        constraint.lower = forced_physical_diagonal ?
+        constraint.lower = physical_diagonal ?
           physical_support(stage, cosine, -signed_sine) -
           cosine * prediction.target_progress_m +
           signed_sine * prediction.target_lateral_m :
@@ -593,32 +603,8 @@ Result refine(const Request & request) noexcept
       ++result.ahead_row_count;
     } else if (first_pass_side_stage >= 0 && stage >= first_pass_side_stage) {
       constraint.axis = problem::DynamicObstacleConstraintAxis::Lateral;
-      double required_signed_separation_m =
+      const double required_signed_separation_m =
         prediction.lateral_center_separation_m;
-      if (partial_side_escape) {
-        const int state = (stage + 1) * model::kStateDimension;
-        const double wall_only_signed_separation_m =
-          static_cast<double>(resolved_side_sign) *
-          (request.wall_only_primal[state + model::kLateralIndex] -
-          prediction.target_lateral_m);
-        // The wall-only solution is the reachability witness for this
-        // convexification.  Do not silently strengthen it with the measured
-        // stage-zero separation: steering and yaw-response lag can make a
-        // short, bounded decrease unavoidable even though the certified
-        // trajectory subsequently separates.  Requiring an instantaneous
-        // non-decrease creates a hard row which neither the witness nor the
-        // physical model can satisfy.  Full separation remains mandatory as
-        // soon as the demonstrated trajectory reaches it.
-        required_signed_separation_m = std::min(
-          prediction.lateral_center_separation_m,
-          wall_only_signed_separation_m);
-        if (
-          required_signed_separation_m + request.separation_tolerance_m <
-          prediction.lateral_center_separation_m)
-        {
-          ++result.partial_escape_row_count;
-        }
-      }
       const double boundary = prediction.target_lateral_m +
         static_cast<double>(resolved_side_sign) *
         required_signed_separation_m;

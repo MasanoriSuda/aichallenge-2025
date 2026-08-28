@@ -406,10 +406,10 @@ ArmResult evaluate_arm(
            << solved.dynamic_obstacle_stay_behind_row_count
            << "/side_rows=" << solved.dynamic_obstacle_pass_side_row_count
            << "/ahead_rows=" << solved.dynamic_obstacle_ahead_row_count
-           << "/partial_rows="
-           << solved.dynamic_obstacle_partial_escape_row_count
            << "/diagonal_rows="
            << solved.dynamic_obstacle_diagonal_row_count
+           << "/physical_diagonal="
+           << (solved.dynamic_obstacle_physical_diagonal_guidance_applied ? 1 : 0)
            << "/reason=" << recovery::to_string(dynamic_result.rejection_reason)
            << "/scope=" << (prefix_scope ? "control-prefix" : "candidate")
            << "/qp_stage=" << qp_stage

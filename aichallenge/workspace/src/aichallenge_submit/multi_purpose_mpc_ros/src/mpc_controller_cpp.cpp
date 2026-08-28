@@ -20334,34 +20334,15 @@ struct MPC
       N = tracking_horizon.horizon_steps;
     }
 
-    // The legacy path supplies a fixed spatial horizon.  A temporal MPCC must
-    // not reinterpret all of that distance as an executable low-speed horizon:
-    // at standstill the legacy schedule expands to almost five seconds and its
-    // sparse state boxes force progress well beyond what the acceleration and
-    // lag states can physically reach.  Keep only the contiguous prefix whose
-    // spatial reference is reachable by this very formulation.  The horizon
-    // grows naturally as the vehicle accelerates; no alternate controller or
-    // grace period is introduced.
-    const auto reachable_horizon =
-      mpcc_progress::resolve_reachable_temporal_horizon(
-      mpcc_progress::ReachableHorizonRequest{
-        legacy.progress_control_origin_speed_mps,
-        std::max(0.0, cfg.a_max),
-        cfg.progress_contouring.extended_lag_state_bound_m,
-        legacy.progress_stage_distance_m,
-        legacy.progress_stage_dt_sec});
-    if (!reachable_horizon.valid) {
-      std::ostringstream reason;
-      reason << "extended MPCC temporal horizon unavailable, reason="
-             << mpcc_progress::reachable_horizon_reason_name(
-        reachable_horizon.reason)
-             << ", first_unreachable="
-             << reachable_horizon.first_unreachable_stage;
-      reject_reason = reason.str();
-      return std::nullopt;
-    }
-    N = std::min(N, reachable_horizon.horizon_steps);
-
+    // The configured stage periods are the temporal discretization. Progress
+    // is an optimized state and may remain behind the soft spatial reference;
+    // the first solve uses the wall-profile union, then current solved progress
+    // rebuilds the progress-aligned and physical wall rows. Shortening N from
+    // current speed re-couples temporal stage index to the legacy spatial
+    // sample and can collapse Return to a sub-second terminal problem. Keep the
+    // complete temporal horizon (or the independently proven lateral-tracking
+    // prefix above) and let theta/lag express reachable progress.
+    //
     // Every stage in this planning horizon is constrained by the same QP wall
     // and dynamic-obstacle rows and is checked again by the exact physical
     // validator.  Keep that complete proof in the immutable execution

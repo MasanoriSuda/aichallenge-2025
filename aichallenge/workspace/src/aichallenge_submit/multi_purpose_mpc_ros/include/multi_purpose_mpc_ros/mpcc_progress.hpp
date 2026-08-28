@@ -108,45 +108,6 @@ struct StageDistanceResolution
 std::optional<StageDistanceResolution> resolve_stage_distances(
   const std::vector<double> & raw_stage_distance_m, const Config & config) noexcept;
 
-enum class ReachableHorizonReason
-{
-  InvalidInput,
-  NoReachableStage,
-  ReachabilityLimited,
-  CompleteHorizon,
-};
-
-struct ReachableHorizonRequest
-{
-  double initial_speed_mps{};
-  double maximum_acceleration_mps2{};
-  double maximum_lag_m{};
-  std::vector<double> stage_distance_m;
-  std::vector<double> stage_dt_sec;
-};
-
-struct ReachableHorizonResolution
-{
-  bool valid{false};
-  int horizon_steps{};
-  int first_unreachable_stage{-1};
-  double horizon_duration_sec{};
-  double horizon_reference_distance_m{};
-  double maximum_reachable_distance_m{};
-  ReachableHorizonReason reason{ReachableHorizonReason::InvalidInput};
-};
-
-/// Keep the temporal MPCC horizon inside the distance that its physical
-/// velocity state can reach while respecting the lag-state bound.  The source
-/// path is spatially sampled, so a stopped vehicle otherwise inherits the
-/// complete 20 m legacy horizon with 0.25 s stages.  That makes a sparse QP
-/// claim authority over several seconds of nonlinear motion and is not the
-/// same discretization contract as a receding temporal controller.
-ReachableHorizonResolution resolve_reachable_temporal_horizon(
-  const ReachableHorizonRequest & request) noexcept;
-
-const char * reachable_horizon_reason_name(ReachableHorizonReason reason) noexcept;
-
 /// Detect a course-progress discontinuity that makes an earlier MPCC warm-start
 /// unsafe to reinterpret, notably the positive-to-zero wrap at a lap boundary.
 bool progress_origin_discontinuous(

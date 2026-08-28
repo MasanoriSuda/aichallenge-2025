@@ -533,57 +533,6 @@ TEST(MpccProgress, RejectsCorruptStageDistanceInsteadOfRepairingIt)
   EXPECT_FALSE(result.has_value());
 }
 
-TEST(MpccProgress, LimitsStoppedTemporalHorizonToPhysicallyReachablePrefix)
-{
-  const auto result =
-    multi_purpose_mpc_ros::mpcc_progress::resolve_reachable_temporal_horizon(
-    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonRequest{
-      0.0, 1.37, 3.0,
-      std::vector<double>(20U, 1.2),
-      std::vector<double>(20U, 0.24)});
-  ASSERT_TRUE(result.valid);
-  EXPECT_EQ(result.horizon_steps, 2);
-  EXPECT_EQ(result.first_unreachable_stage, 2);
-  EXPECT_EQ(
-    result.reason,
-    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonReason::
-    ReachabilityLimited);
-  EXPECT_NEAR(result.horizon_duration_sec, 0.48, 1e-12);
-  EXPECT_NEAR(result.horizon_reference_distance_m, 2.4, 1e-12);
-  EXPECT_NEAR(result.maximum_reachable_distance_m, 3.157824, 1e-12);
-}
-
-TEST(MpccProgress, KeepsCompleteTemporalHorizonAtReachableRaceSpeed)
-{
-  const auto result =
-    multi_purpose_mpc_ros::mpcc_progress::resolve_reachable_temporal_horizon(
-    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonRequest{
-      10.0, 1.0, 3.0,
-      std::vector<double>(20U, 1.0),
-      std::vector<double>(20U, 0.10)});
-  ASSERT_TRUE(result.valid);
-  EXPECT_EQ(result.horizon_steps, 20);
-  EXPECT_EQ(result.first_unreachable_stage, -1);
-  EXPECT_EQ(
-    result.reason,
-    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonReason::
-    CompleteHorizon);
-}
-
-TEST(MpccProgress, RejectsTemporalHorizonWithoutOneReachableStage)
-{
-  const auto result =
-    multi_purpose_mpc_ros::mpcc_progress::resolve_reachable_temporal_horizon(
-    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonRequest{
-      0.0, 0.0, 0.1, {1.0}, {0.1}});
-  EXPECT_FALSE(result.valid);
-  EXPECT_EQ(result.horizon_steps, 0);
-  EXPECT_EQ(
-    result.reason,
-    multi_purpose_mpc_ros::mpcc_progress::ReachableHorizonReason::
-    NoReachableStage);
-}
-
 TEST(MpccProgress, DetectsLapProgressWrapForWarmStartReset)
 {
   EXPECT_TRUE(multi_purpose_mpc_ros::mpcc_progress::progress_origin_discontinuous(

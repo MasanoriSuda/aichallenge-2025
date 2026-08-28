@@ -310,6 +310,15 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_DOUBLE_EQ(
     result.execution_artifact->control_stages.front().steering_rate_radps,
     result.first_steering_rate_radps);
+  ASSERT_NE(result.latest_state_feedback_preparation, nullptr);
+  EXPECT_EQ(
+    result.latest_state_feedback_preparation->snapshot.identity.sequence,
+    input.identity.sequence);
+  EXPECT_EQ(
+    result.latest_state_feedback_preparation->prepared_primal.size(),
+    static_cast<Eigen::Index>(
+      model::kStateDimension * (input.request.horizon_steps + 1) +
+      model::kInputDimension * input.request.horizon_steps));
   const auto physical_result = physical::build(
     *result.execution_artifact, contract::ControlIntent::Track,
     input.identity.source_context.stage_geometry_id);
@@ -320,6 +329,87 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   invalid.first_steering_rate_certificate_margin_radps =
     std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(shadow::result_valid(invalid));
+}
+
+TEST(MpccRateResolvedShadow, LatestStateFeedbackResolvesOneConsistentArtifact)
+{
+  shadow::SolverContext preparation_context;
+  shadow::LatestStateFeedbackSolverContext feedback_context;
+  const auto input = snapshot();
+  const auto prepared = preparation_context.evaluate(input);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+
+  execution::PredictedState latest_state{
+    0.02, 0.0, 0.0, 2.0, 0.10, 0.12, 0.09};
+  Eigen::Matrix<double, model::kInputDimension, 1> previous_input;
+  previous_input << 0.05, 0.20, 2.0;
+  const auto result = feedback_context.evaluate(
+    shadow::LatestStateFeedbackRequest{
+      prepared.latest_state_feedback_preparation,
+      input.control_prediction_origin_sec + 0.20,
+      input.control_prediction_origin_sec + 0.07,
+      latest_state,
+      previous_input});
+  ASSERT_EQ(result.reason, shadow::LatestStateFeedbackReason::Accepted)
+    << result.detail;
+  EXPECT_TRUE(result.assembled);
+  EXPECT_TRUE(result.solve_attempted);
+  EXPECT_TRUE(result.solved);
+  EXPECT_TRUE(result.finite);
+  EXPECT_TRUE(result.constraints_satisfied);
+  ASSERT_NE(result.execution_artifact, nullptr);
+  EXPECT_EQ(
+    execution::validate(*result.execution_artifact),
+    execution::RejectReason::None);
+  ASSERT_FALSE(result.execution_artifact->predicted_states.empty());
+  const auto & solved_initial = result.execution_artifact->predicted_states.front();
+  const double state_tolerance =
+    result.execution_artifact->physical_global_tolerance;
+  EXPECT_NEAR(solved_initial.lateral_m, latest_state.lateral_m, state_tolerance);
+  EXPECT_NEAR(solved_initial.lag_m, latest_state.lag_m, state_tolerance);
+  EXPECT_NEAR(
+    solved_initial.heading_offset_rad,
+    latest_state.heading_offset_rad, state_tolerance);
+  EXPECT_NEAR(
+    solved_initial.velocity_mps, latest_state.velocity_mps, state_tolerance);
+  EXPECT_NEAR(
+    solved_initial.progress_m, latest_state.progress_m, state_tolerance);
+  EXPECT_NEAR(
+    solved_initial.steering_rad, latest_state.steering_rad, state_tolerance);
+  EXPECT_NEAR(
+    solved_initial.response_steering_rad,
+    latest_state.response_steering_rad, state_tolerance);
+  EXPECT_DOUBLE_EQ(
+    result.execution_artifact->prediction_origin_sec,
+    input.control_prediction_origin_sec + 0.20);
+  const auto exact = physical::build(
+    *result.execution_artifact, contract::ControlIntent::Track,
+    input.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(exact.reason, physical::RejectReason::None);
+  EXPECT_TRUE(exact.exact_trajectory.has_value());
+}
+
+TEST(MpccRateResolvedShadow, LatestStateFeedbackRejectsInvalidLatestState)
+{
+  shadow::SolverContext preparation_context;
+  shadow::LatestStateFeedbackSolverContext feedback_context;
+  const auto input = snapshot();
+  const auto prepared = preparation_context.evaluate(input);
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  execution::PredictedState invalid_state{
+    0.0, 0.0, 0.0, 2.0, 0.0,
+    input.request.maximum_abs_steering_rad + 0.01, 0.0};
+  const auto result = feedback_context.evaluate(
+    shadow::LatestStateFeedbackRequest{
+      prepared.latest_state_feedback_preparation,
+      input.control_prediction_origin_sec + 0.20,
+      input.control_prediction_origin_sec + 0.07,
+      invalid_state,
+      Eigen::Matrix<double, model::kInputDimension, 1>::Zero()});
+  EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::InvalidRequest);
+  EXPECT_FALSE(result.solve_attempted);
+  EXPECT_EQ(result.execution_artifact, nullptr);
 }
 
 TEST(MpccRateResolvedShadow, RejectsDynamicWorldFromDifferentObservationEpoch)

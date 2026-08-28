@@ -761,6 +761,8 @@ Result evaluate(const Request & request)
     expected.progress_m,
     request.current_steering_rad,
     request.current_response_steering_rad};
+  result.current_control_state = current_control_state;
+  result.current_control_state_available = true;
   const double prediction_delay_sec =
     request.control_origin_sec - request.now_sec;
   if (

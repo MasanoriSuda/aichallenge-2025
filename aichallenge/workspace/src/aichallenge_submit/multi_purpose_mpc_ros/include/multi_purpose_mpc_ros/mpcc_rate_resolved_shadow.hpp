@@ -6,6 +6,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp"
 #include "multi_purpose_mpc_ros/mpcc_progress.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
@@ -107,6 +108,65 @@ struct Snapshot
   double wall_boundary_guard_m{0.001};
   std::optional<ReplayWorld> replay_world;
   double publication_interval_sec{};
+};
+
+/// Immutable output of the asynchronous preparation phase.  It is numerical
+/// provenance, not an execution certificate: the final refined QP and its
+/// solution still belong to the captured state in `snapshot` until a latest-
+/// state feedback solve rebuilds and certifies them.
+struct LatestStateFeedbackPreparation
+{
+  Snapshot snapshot;
+  mpcc_rate_resolved_problem::AssemblyRequest final_problem;
+  Eigen::VectorXd prepared_primal;
+};
+
+enum class LatestStateFeedbackReason
+{
+  InvalidRequest,
+  AssemblyRejected,
+  BootstrapRejected,
+  SolveRejected,
+  ArtifactRejected,
+  PhysicalAdapterRejected,
+  Accepted,
+  Exception,
+  Count,
+};
+
+const char * to_string(LatestStateFeedbackReason reason) noexcept;
+
+struct LatestStateFeedbackRequest
+{
+  std::shared_ptr<const LatestStateFeedbackPreparation> preparation;
+  /// Latest control-origin timestamp.  It becomes the origin of the newly
+  /// solved artifact and must not precede the preparation capture.
+  double control_prediction_origin_sec{};
+  /// Wall-clock completion anchor used by the artifact timing contract.
+  double observation_sec{};
+  artifact::PredictedState initial_state;
+  Eigen::Matrix<double, mpcc_rate_resolved::kInputDimension, 1>
+  previous_input{
+    Eigen::Matrix<double, mpcc_rate_resolved::kInputDimension, 1>::Zero()};
+};
+
+struct LatestStateFeedbackResult
+{
+  Identity identity;
+  LatestStateFeedbackReason reason{LatestStateFeedbackReason::InvalidRequest};
+  double compute_ms{};
+  bool assembled{false};
+  bool solve_attempted{false};
+  bool solved{false};
+  bool finite{false};
+  bool constraints_satisfied{false};
+  persistent_osqp::SolveTelemetry solver;
+  artifact::RejectReason artifact_reject_reason{
+    artifact::RejectReason::None};
+  mpcc_rate_resolved_physical_adapter::RejectReason physical_adapter_reason{
+    mpcc_rate_resolved_physical_adapter::RejectReason::InvalidArtifact};
+  std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact;
+  std::string detail{"not-evaluated"};
 };
 
 enum class Outcome
@@ -268,6 +328,8 @@ struct Result
   artifact::RejectReason execution_artifact_reject_reason{
     artifact::RejectReason::None};
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact;
+  std::shared_ptr<const LatestStateFeedbackPreparation>
+  latest_state_feedback_preparation;
   std::string detail;
 };
 
@@ -338,6 +400,23 @@ private:
     const Snapshot & snapshot, bool wall_feasibility_restoration_audit);
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
+  persistent_osqp::PersistentOsqpSolver solver_{
+    persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};
+};
+
+/// Observation-only latest-state feedback owner.  It has deliberately no
+/// plan-store, mailbox or authority API.  Calls are serialized so persistent
+/// OSQP reuse cannot cross concurrent controller callbacks.
+class LatestStateFeedbackSolverContext
+{
+public:
+  LatestStateFeedbackResult evaluate(
+    const LatestStateFeedbackRequest & request);
+  persistent_osqp::PhysicalConstraintTolerance
+  physical_constraint_tolerance() const noexcept;
+
+private:
+  std::mutex mutex_;
   persistent_osqp::PersistentOsqpSolver solver_{
     persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};
 };

@@ -6844,6 +6844,8 @@ struct RateResolvedRetainedShadowEvaluation
   double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double current_response_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  bool current_control_state_available{false};
+  rate_resolved_artifact::PredictedState current_control_state;
   double previous_published_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
   double expected_steering_rad{std::numeric_limits<double>::quiet_NaN()};
@@ -24143,6 +24145,9 @@ struct MPC
     evaluation.current_steering_rad = result.current_steering_rad;
     evaluation.current_response_steering_rad =
       result.current_response_steering_rad;
+    evaluation.current_control_state_available =
+      result.current_control_state_available;
+    evaluation.current_control_state = result.current_control_state;
     evaluation.current_time_steering_rad = result.current_time_steering_rad;
     evaluation.previous_published_steering_rad =
       result.previous_published_steering_rad;

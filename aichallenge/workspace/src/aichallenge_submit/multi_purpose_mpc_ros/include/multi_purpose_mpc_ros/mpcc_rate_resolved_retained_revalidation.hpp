@@ -302,6 +302,8 @@ struct Result
   double current_steering_rad{std::numeric_limits<double>::quiet_NaN()};
   double current_response_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  bool current_control_state_available{false};
+  artifact::PredictedState current_control_state;
   double previous_published_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
   double expected_steering_rad{std::numeric_limits<double>::quiet_NaN()};

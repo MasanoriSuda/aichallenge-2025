@@ -366,6 +366,31 @@ const char * to_string(const Outcome outcome) noexcept
   return "unknown";
 }
 
+const char * to_string(const LatestStateFeedbackReason reason) noexcept
+{
+  switch (reason) {
+    case LatestStateFeedbackReason::InvalidRequest:
+      return "invalid-request";
+    case LatestStateFeedbackReason::AssemblyRejected:
+      return "assembly-rejected";
+    case LatestStateFeedbackReason::BootstrapRejected:
+      return "bootstrap-rejected";
+    case LatestStateFeedbackReason::SolveRejected:
+      return "solve-rejected";
+    case LatestStateFeedbackReason::ArtifactRejected:
+      return "artifact-rejected";
+    case LatestStateFeedbackReason::PhysicalAdapterRejected:
+      return "physical-adapter-rejected";
+    case LatestStateFeedbackReason::Accepted:
+      return "accepted";
+    case LatestStateFeedbackReason::Exception:
+      return "exception";
+    case LatestStateFeedbackReason::Count:
+      return "count";
+  }
+  return "unknown";
+}
+
 const char * to_string(const RecedingWarmStartReason reason) noexcept
 {
   switch (reason) {
@@ -801,6 +826,214 @@ persistent_osqp::PhysicalConstraintTolerance
 SolverContext::physical_constraint_tolerance() const noexcept
 {
   return solver_.physical_constraint_tolerance();
+}
+
+persistent_osqp::PhysicalConstraintTolerance
+LatestStateFeedbackSolverContext::physical_constraint_tolerance() const noexcept
+{
+  return solver_.physical_constraint_tolerance();
+}
+
+LatestStateFeedbackResult LatestStateFeedbackSolverContext::evaluate(
+  const LatestStateFeedbackRequest & request)
+{
+  namespace model = mpcc_rate_resolved;
+  const auto started = SteadyClock::now();
+  LatestStateFeedbackResult result;
+  if (request.preparation != nullptr) {
+    result.identity = request.preparation->snapshot.identity;
+  }
+  const auto finish = [&]() {
+      result.compute_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - started).count();
+      return result;
+    };
+  try {
+    if (
+      request.preparation == nullptr ||
+      !mpcc_rate_resolved_shadow::identity_valid(
+        request.preparation->snapshot.identity) ||
+      !std::isfinite(request.control_prediction_origin_sec) ||
+      !std::isfinite(request.observation_sec) ||
+      request.observation_sec < request.preparation->snapshot.identity.snapshot_sec ||
+      request.control_prediction_origin_sec < request.observation_sec ||
+      !request.previous_input.allFinite())
+    {
+      result.detail = "invalid feedback timing, identity or previous input";
+      return finish();
+    }
+    const auto & state = request.initial_state;
+    Eigen::Matrix<double, model::kStateDimension, 1> initial_state;
+    initial_state << state.lateral_m, state.lag_m, state.heading_offset_rad,
+      state.velocity_mps, state.progress_m, state.steering_rad,
+      state.response_steering_rad;
+    const auto & source = request.preparation->snapshot;
+    if (
+      !initial_state.allFinite() || state.velocity_mps < 0.0 ||
+      std::abs(state.steering_rad) >
+      source.request.maximum_abs_steering_rad ||
+      std::abs(state.response_steering_rad) >
+      source.request.maximum_abs_steering_rad ||
+      source.request.horizon_steps <= 0 ||
+      source.request.inputs.empty())
+    {
+      result.detail = "invalid latest seven-state feedback state";
+      return finish();
+    }
+
+    auto feedback_snapshot = source;
+    auto feedback_problem = request.preparation->final_problem;
+    feedback_snapshot.control_prediction_origin_sec =
+      request.control_prediction_origin_sec;
+    feedback_snapshot.request.initial_state <<
+      state.lateral_m, state.lag_m, state.heading_offset_rad,
+      state.velocity_mps, state.progress_m;
+    feedback_snapshot.request.current_steering_rad = state.steering_rad;
+    feedback_snapshot.request.current_response_steering_rad =
+      state.response_steering_rad;
+    feedback_problem.initial_state = initial_state;
+    feedback_problem.previous_input = request.previous_input;
+
+    const int horizon = feedback_problem.horizon_steps;
+    const int state_values = model::kStateDimension * (horizon + 1);
+    const int input_values = model::kInputDimension * horizon;
+    if (
+      horizon != feedback_snapshot.request.horizon_steps ||
+      feedback_problem.state_reference.size() != state_values ||
+      feedback_problem.state_lower.size() != state_values ||
+      feedback_problem.state_upper.size() != state_values ||
+      feedback_problem.input_lower.size() != input_values ||
+      feedback_problem.input_upper.size() != input_values ||
+      request.preparation->prepared_primal.size() !=
+      state_values + input_values)
+    {
+      result.detail = "feedback preparation dimension mismatch";
+      return finish();
+    }
+    feedback_problem.state_reference.head<model::kStateDimension>() =
+      initial_state;
+    feedback_problem.state_lower.head<model::kStateDimension>() = initial_state;
+    feedback_problem.state_upper.head<model::kStateDimension>() = initial_state;
+
+    const auto tolerance = solver_.physical_constraint_tolerance();
+    const auto prefix_bounds =
+      mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+      -source.request.maximum_abs_steering_rad - state.steering_rad,
+      source.request.maximum_abs_steering_rad - state.steering_rad,
+      tolerance);
+    const double first_dt =
+      feedback_snapshot.request.inputs.front().stage_dt_sec;
+    if (!prefix_bounds.has_value() || !std::isfinite(first_dt) || first_dt <= 0.0) {
+      result.detail = "latest-state steering prefix unavailable";
+      return finish();
+    }
+    feedback_problem.steering_rate_prefix_bounds =
+      mpcc_rate_resolved_problem::SteeringRatePrefixBounds{
+      prefix_bounds->lower, prefix_bounds->upper};
+    const double physical_rate_lower = std::max(
+      -source.request.maximum_abs_steering_rate_radps,
+      (-source.request.maximum_abs_steering_rad - state.steering_rad) /
+      first_dt);
+    const double physical_rate_upper = std::min(
+      source.request.maximum_abs_steering_rate_radps,
+      (source.request.maximum_abs_steering_rad - state.steering_rad) /
+      first_dt);
+    const auto rate_bounds =
+      mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+      physical_rate_lower, physical_rate_upper, tolerance);
+    if (!rate_bounds.has_value()) {
+      result.detail = "latest-state first steering-rate bounds unavailable";
+      return finish();
+    }
+    feedback_problem.input_lower[model::kSteeringRateIndex] =
+      rate_bounds->lower;
+    feedback_problem.input_upper[model::kSteeringRateIndex] =
+      rate_bounds->upper;
+
+    auto assembled = mpcc_rate_resolved_problem::assemble(feedback_problem);
+    if (!assembled.has_value()) {
+      result.reason = LatestStateFeedbackReason::AssemblyRejected;
+      result.detail = "latest-state feedback QP assembly rejected";
+      return finish();
+    }
+    result.assembled = true;
+    auto bootstrap = build_current_problem_bootstrap(
+      feedback_problem,
+      static_cast<std::size_t>(assembled->lower_bound.size()),
+      &request.preparation->prepared_primal);
+    if (!bootstrap.has_value()) {
+      result.reason = LatestStateFeedbackReason::BootstrapRejected;
+      result.detail = "latest-state feedback bootstrap rejected";
+      return finish();
+    }
+
+    result.solve_attempted = true;
+    persistent_osqp::SolveOutcome outcome;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      outcome = solver_.solve(
+        assembled->quadratic_cost, assembled->constraints,
+        assembled->linear_cost, assembled->lower_bound,
+        assembled->upper_bound, bootstrap, assembled->variable_scaling);
+    }
+    result.solver = outcome.telemetry;
+    if (!outcome.result.has_value()) {
+      result.reason = LatestStateFeedbackReason::SolveRejected;
+      result.detail = outcome.failure_detail.empty() ?
+        "latest-state feedback solve rejected" : outcome.failure_detail;
+      return finish();
+    }
+    result.solved = true;
+    result.finite = outcome.result->primal.allFinite();
+    // PersistentOsqp exposes a SolveResult only after the original physical
+    // constraint rows have passed its residual certificate.
+    result.constraints_satisfied = true;
+    if (!result.finite || !result.constraints_satisfied) {
+      result.reason = LatestStateFeedbackReason::SolveRejected;
+      result.detail = "latest-state feedback result not executable";
+      return finish();
+    }
+
+    const double completed_sec = request.observation_sec +
+      std::chrono::duration<double>(SteadyClock::now() - started).count();
+    auto artifact_build = build_execution_artifact(
+      feedback_snapshot, feedback_problem, outcome, completed_sec);
+    result.artifact_reject_reason = artifact_build.reject_reason;
+    if (!artifact_build.execution_artifact.has_value()) {
+      result.reason = LatestStateFeedbackReason::ArtifactRejected;
+      result.detail = artifact_build.detail;
+      return finish();
+    }
+    auto execution_artifact =
+      std::move(artifact_build.execution_artifact.value());
+    result.physical_adapter_reason =
+      mpcc_rate_resolved_physical_adapter::build(
+      execution_artifact,
+      execution_artifact.identity.source_context.intent,
+      execution_artifact.identity.source_context.stage_geometry_id).reason;
+    if (
+      result.physical_adapter_reason !=
+      mpcc_rate_resolved_physical_adapter::RejectReason::None)
+    {
+      result.reason = LatestStateFeedbackReason::PhysicalAdapterRejected;
+      result.detail = "latest-state nonlinear physical adapter rejected";
+      return finish();
+    }
+    result.execution_artifact =
+      std::make_shared<const artifact::ExecutionArtifact>(
+      std::move(execution_artifact));
+    result.reason = LatestStateFeedbackReason::Accepted;
+    result.detail = "latest-state feedback QP and physical adapter accepted";
+    return finish();
+  } catch (const std::exception & error) {
+    result.reason = LatestStateFeedbackReason::Exception;
+    result.detail = error.what();
+    return finish();
+  } catch (...) {
+    result.reason = LatestStateFeedbackReason::Exception;
+    result.detail = "unknown latest-state feedback exception";
+    return finish();
+  }
 }
 
 Result SolverContext::evaluate(const Snapshot & snapshot)
@@ -2074,6 +2307,12 @@ Result SolverContext::evaluate_impl(
   result.execution_artifact =
     std::make_shared<const artifact::ExecutionArtifact>(
     std::move(execution_artifact.value()));
+  auto feedback_preparation =
+    std::make_shared<LatestStateFeedbackPreparation>();
+  feedback_preparation->snapshot = snapshot;
+  feedback_preparation->final_problem = adapted->problem;
+  feedback_preparation->prepared_primal = outcome.result->primal;
+  result.latest_state_feedback_preparation = std::move(feedback_preparation);
   RecedingWarmStartSeed next_warm_start;
   next_warm_start.identity = snapshot.identity;
   next_warm_start.control_prediction_origin_sec =

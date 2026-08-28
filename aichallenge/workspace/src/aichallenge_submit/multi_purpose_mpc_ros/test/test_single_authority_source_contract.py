@@ -2651,10 +2651,21 @@ def test_latest_state_feedback_ab_cannot_create_authority() -> None:
     feedback_call = retained_source.index(
         "mpcc_latest_state_feedback::solve(", steering_reject
     )
-    production_reject = retained_source.index(
-        "result.reason = Reason::SteeringUnreachable;", feedback_call
+    shadow_mode = retained_source.index(
+        "feedback_shadow_mode = true;", feedback_call
     )
-    assert feedback_call < production_reject
-    assert "feedback_shadow_continuation_available" in retained_source[
-        feedback_call:production_reject
-    ]
+    restore_production_reject = retained_source.index(
+        "result.reason = Reason::SteeringUnreachable;", shadow_mode
+    )
+    observation_success = retained_source.index(
+        "return complete_continuation_proof(Reason::Accepted);",
+        restore_production_reject,
+    )
+    proof_authority = retained_source.index("result.proof = std::move(proof);")
+    assert feedback_call < shadow_mode < restore_production_reject
+    assert observation_success < proof_authority
+
+    controller = SOURCE
+    assert "feedback_shadow_proof_available" in controller
+    assert "feedback_shadow_proof_available ?" in controller
+    assert "if (retained.feedback_shadow_proof_available)" not in controller

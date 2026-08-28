@@ -318,6 +318,18 @@
       "production_impact": "none; production still returns steering-unreachable and the feedback module cannot construct authority, publish a command or mark an artifact executed",
       "deleted_code": [],
       "revisit_condition": "the corrected trajectory passes unchanged current wall, timed dynamic-obstacle and terminal-successor proofs in observation-only runtime evidence, after which promotion creates one feedback-certified artifact and deletes elapsed-suffix-only candidate adoption atomically"
+    },
+    {
+      "experiment_id": "20260829-latest-state-feedback-physical-proof",
+      "baseline_commit": "4b1a980a",
+      "snapshot_ids": [],
+      "hypothesis": "a latest-state steering correction that yields an exact nonlinear continuation will pass the same current-world physical proof as an ordinarily reachable retained candidate",
+      "changed_dimension": "observation_only_feedback_continuation_physical_proof",
+      "result": "accepted",
+      "reason": "run 20260829-033033 evaluated 1727 corrected candidates; all projected into the unchanged actuator envelope, 1358 produced an exact nonlinear continuation and all 1358 passed the shared wall, timed dynamic-obstacle and Follow proof; the other 369 failed before physical proof because projecting only the first steering command left the prepared state/input sequence actuator- or initial-bound-inconsistent",
+      "production_impact": "none; corrected observations still return steering-unreachable, construct no Proof and cannot publish or mark an artifact executed",
+      "deleted_code": [],
+      "revisit_condition": "an observation-only latest-state feedback QP produces a new exact trajectory from the measured state and published predecessor, then passes the unchanged physical proof within the live runtime budget"
     }
   ]
 }

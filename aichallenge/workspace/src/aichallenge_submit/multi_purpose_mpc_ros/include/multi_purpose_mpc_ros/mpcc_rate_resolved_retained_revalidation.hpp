@@ -330,6 +330,8 @@ struct Result
   feedback_shadow_exact_reason{
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
   bool feedback_shadow_continuation_available{false};
+  Reason feedback_shadow_proof_reason{Reason::MissingPlan};
+  bool feedback_shadow_proof_available{false};
   double velocity_difference_mps{
     std::numeric_limits<double>::quiet_NaN()};
   double reachable_velocity_lower_mps{

@@ -6866,6 +6866,9 @@ struct RateResolvedRetainedShadowEvaluation
   feedback_shadow_exact_reason{
     race_mpcc::ExactPhysicalExecutionTrajectoryReason::Accepted};
   bool feedback_shadow_continuation_available{false};
+  rate_resolved_retained::Reason feedback_shadow_proof_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  bool feedback_shadow_proof_available{false};
   double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double control_origin_speed_mps{
     std::numeric_limits<double>::quiet_NaN()};
@@ -7028,6 +7031,11 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   std::uint64_t feedback_shadow_attempt_count{};
   std::uint64_t feedback_shadow_projected_count{};
   std::uint64_t feedback_shadow_continuation_accept_count{};
+  std::uint64_t feedback_shadow_proof_attempt_count{};
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(rate_resolved_retained::Reason::Count)>
+  feedback_shadow_proof_outcome_count{};
   double total_retained_ms{};
   double maximum_retained_ms{};
   RateResolvedRetainedShadowEvaluation last_retained;
@@ -24161,6 +24169,10 @@ struct MPC
       result.feedback_shadow_exact_reason;
     evaluation.feedback_shadow_continuation_available =
       result.feedback_shadow_continuation_available;
+    evaluation.feedback_shadow_proof_reason =
+      result.feedback_shadow_proof_reason;
+    evaluation.feedback_shadow_proof_available =
+      result.feedback_shadow_proof_available;
     evaluation.current_speed_mps = result.current_speed_mps;
     evaluation.control_origin_speed_mps = result.control_origin_speed_mps;
     evaluation.expected_speed_mps = result.expected_speed_mps;
@@ -24361,6 +24373,10 @@ struct MPC
         final_evaluation.feedback_shadow_exact_reason;
       const bool candidate_feedback_shadow_continuation_available =
         final_evaluation.feedback_shadow_continuation_available;
+      const auto candidate_feedback_shadow_proof_reason =
+        final_evaluation.feedback_shadow_proof_reason;
+      const bool candidate_feedback_shadow_proof_available =
+        final_evaluation.feedback_shadow_proof_available;
       const auto candidate_continuation_reason =
         final_evaluation.candidate_continuation_reason;
       const auto candidate_continuation_exact_reason =
@@ -24405,6 +24421,10 @@ struct MPC
         candidate_feedback_shadow_exact_reason;
       executed_evaluation.feedback_shadow_continuation_available =
         candidate_feedback_shadow_continuation_available;
+      executed_evaluation.feedback_shadow_proof_reason =
+        candidate_feedback_shadow_proof_reason;
+      executed_evaluation.feedback_shadow_proof_available =
+        candidate_feedback_shadow_proof_available;
       executed_evaluation.candidate_continuation_reason =
         candidate_continuation_reason;
       executed_evaluation.candidate_continuation_exact_reason =
@@ -24462,6 +24482,20 @@ struct MPC
       }
       if (retained.feedback_shadow_continuation_available) {
         ++window.feedback_shadow_continuation_accept_count;
+      }
+      if (
+        retained.feedback_shadow_proof_reason !=
+        rate_resolved_retained::Reason::MissingPlan)
+      {
+        ++window.feedback_shadow_proof_attempt_count;
+        const auto proof_reason_index = static_cast<std::size_t>(
+          retained.feedback_shadow_proof_reason);
+        if (
+          proof_reason_index <
+          window.feedback_shadow_proof_outcome_count.size())
+        {
+          ++window.feedback_shadow_proof_outcome_count[proof_reason_index];
+        }
       }
     }
     window.total_retained_ms += retained.elapsed_ms;
@@ -25002,6 +25036,12 @@ struct MPC
     const auto retained_count = [&](const rate_resolved_retained::Reason reason) {
         return window.retained_outcome_count[static_cast<std::size_t>(reason)];
       };
+    const auto feedback_proof_count = [&] (
+      const rate_resolved_retained::Reason reason)
+      {
+        return window.feedback_shadow_proof_outcome_count[
+          static_cast<std::size_t>(reason)];
+      };
     const double retained_denominator = static_cast<double>(
       std::max<std::uint64_t>(1U, window.retained_attempt_count));
     RCLCPP_INFO(
@@ -25041,7 +25081,11 @@ struct MPC
       "lateral_delta:%.6f/progress_delta:%.6f/steering_delta:%.6f, "
       "feedback_shadow=attempted:%lu/projected:%lu/continuation:%lu/"
       "last_attempted:%d/reason:%s/steering:%.6f/correction:%.6f/"
-      "continuation_reason:%s/exact:%s/available:%d, "
+      "continuation_reason:%s/exact:%s/available:%d/"
+      "proof=attempted:%lu/accepted:%lu/continuation:%lu/"
+      "control_path:%lu/delay:%lu/course:%lu/follow_horizon:%lu/"
+      "follow_stage:%lu/wall:%lu/dynamic_invalid:%lu/dynamic_blocked:%lu/"
+      "last_reason:%s/available:%d, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.retained_attempt_count),
       static_cast<unsigned long>(retained_count(
@@ -25200,7 +25244,32 @@ struct MPC
         window.last_retained.feedback_shadow_continuation_reason),
       race_mpcc::exact_physical_execution_trajectory_reason_name(
         window.last_retained.feedback_shadow_exact_reason),
-      window.last_retained.feedback_shadow_continuation_available ? 1 : 0);
+      window.last_retained.feedback_shadow_continuation_available ? 1 : 0,
+      static_cast<unsigned long>(
+        window.feedback_shadow_proof_attempt_count),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::Accepted)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::ContinuationRejected)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::ControlPathInvalid)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::DelayPrefixBlocked)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::CourseFrameUnavailable)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::FollowTargetHorizonUnavailable)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::FollowStageGapViolation)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::ContinuationWallBlocked)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::DynamicPathInvalid)),
+      static_cast<unsigned long>(feedback_proof_count(
+        rate_resolved_retained::Reason::DynamicPathBlocked)),
+      rate_resolved_retained::to_string(
+        window.last_retained.feedback_shadow_proof_reason),
+      window.last_retained.feedback_shadow_proof_available ? 1 : 0);
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(

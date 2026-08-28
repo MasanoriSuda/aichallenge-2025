@@ -852,6 +852,9 @@ Result evaluate(const Request & request)
   result.reachable_steering_upper_rad = reachable_steering_upper_rad;
   result.steering_reachability_duration_sec =
     steering_reachability_duration_sec;
+  bool feedback_shadow_mode = false;
+  double continuation_initial_steering_rad =
+    actuation.actuation->steering_rad;
   if (
     actuation.actuation->steering_rad < reachable_steering_lower_rad ||
     actuation.actuation->steering_rad > reachable_steering_upper_rad)
@@ -868,27 +871,23 @@ Result evaluate(const Request & request)
     result.feedback_shadow_reason = feedback.reason;
     result.feedback_shadow_steering_rad = feedback.feedback_steering_rad;
     result.feedback_shadow_correction_rad = feedback.correction_rad;
-    if (feedback.available()) {
-      const auto feedback_continuation =
-        mpcc_rate_resolved_physical_adapter::build_continuation(
-        execution, cursor,
-        mpcc_rate_resolved_physical_adapter::ContinuationInitialState{
-          current_control_state.lateral_m,
-          current_control_state.lag_m,
-          current_control_state.heading_offset_rad,
-          current_control_state.velocity_mps,
-          current_control_state.progress_m,
-          feedback.feedback_steering_rad,
-          request.current_response_steering_rad});
-      result.feedback_shadow_continuation_reason =
-        feedback_continuation.reason;
-      result.feedback_shadow_exact_reason = feedback_continuation.exact_reason;
-      result.feedback_shadow_continuation_available =
-        feedback_continuation.exact_trajectory.has_value();
+    if (!feedback.available()) {
+      result.reason = Reason::SteeringUnreachable;
+      return result;
     }
-    result.reason = Reason::SteeringUnreachable;
-    return result;
+    feedback_shadow_mode = true;
+    continuation_initial_steering_rad = feedback.feedback_steering_rad;
   }
+  const auto complete_continuation_proof = [&] (const Reason reason) {
+      if (feedback_shadow_mode) {
+        result.feedback_shadow_proof_reason = reason;
+        result.feedback_shadow_proof_available = reason == Reason::Accepted;
+        result.reason = Reason::SteeringUnreachable;
+      } else {
+        result.reason = reason;
+      }
+      return result;
+    };
   const double velocity_reachability_duration_sec =
     request.control_origin_sec - request.now_sec;
   const double velocity_lower_mps = std::max(
@@ -916,6 +915,10 @@ Result evaluate(const Request & request)
   auto current_world_actuation = actuation.actuation.value();
   current_world_actuation.predicted_speed_mps =
     request.control_origin_speed_mps;
+  if (feedback_shadow_mode) {
+    current_world_actuation.steering_rad =
+      continuation_initial_steering_rad;
+  }
 
   const auto continuation =
     mpcc_rate_resolved_physical_adapter::build_continuation(
@@ -926,14 +929,19 @@ Result evaluate(const Request & request)
       current_control_state.heading_offset_rad,
       current_control_state.velocity_mps,
       current_control_state.progress_m,
-      actuation.actuation->steering_rad,
+      continuation_initial_steering_rad,
       request.current_response_steering_rad});
   result.continuation_reason = continuation.reason;
   result.continuation_scope = continuation.scope;
   result.continuation_exact_reason = continuation.exact_reason;
+  if (feedback_shadow_mode) {
+    result.feedback_shadow_continuation_reason = continuation.reason;
+    result.feedback_shadow_exact_reason = continuation.exact_reason;
+    result.feedback_shadow_continuation_available =
+      continuation.exact_trajectory.has_value();
+  }
   if (!continuation.exact_trajectory.has_value()) {
-    result.reason = Reason::ContinuationRejected;
-    return result;
+    return complete_continuation_proof(Reason::ContinuationRejected);
   }
   const auto & continuation_trajectory =
     continuation.exact_trajectory.value();
@@ -952,20 +960,17 @@ Result evaluate(const Request & request)
   const auto clearance_footprint = physical::resolve_clearance_footprint(
     source.footprint, source.hard_wall_clearance_m);
   if (!clearance_footprint.has_value()) {
-    result.reason = Reason::StaticWorldMismatch;
-    return result;
+    return complete_continuation_proof(Reason::StaticWorldMismatch);
   }
   const auto delay = recovery::evaluate_clear_footprint_path(
     *source.wall_grid, clearance_footprint.value(),
     request.measured_to_control_path, source.swept_step_m);
   result.delay_path_clearance = delay;
   if (!delay.valid) {
-    result.reason = Reason::ControlPathInvalid;
-    return result;
+    return complete_continuation_proof(Reason::ControlPathInvalid);
   }
   if (!delay.clear) {
-    result.reason = Reason::DelayPrefixBlocked;
-    return result;
+    return complete_continuation_proof(Reason::DelayPrefixBlocked);
   }
 
   std::vector<recovery::Pose2D> continuation_path;
@@ -1002,8 +1007,7 @@ Result evaluate(const Request & request)
       execution.course_progress_origin_m);
     const auto endpoint_pose = reconstruct_pose(source, endpoint_state);
     if (!endpoint_pose.has_value()) {
-      result.reason = Reason::CourseFrameUnavailable;
-      return result;
+      return complete_continuation_proof(Reason::CourseFrameUnavailable);
     }
     continuation_path.push_back(endpoint_pose.value());
     if (
@@ -1018,15 +1022,14 @@ Result evaluate(const Request & request)
       const auto stage_gap = evaluate_follow_gap(
         endpoint_state, endpoint_time_sec);
       if (!stage_gap.has_value()) {
-        result.reason = Reason::FollowTargetHorizonUnavailable;
-        return result;
+        return complete_continuation_proof(
+          Reason::FollowTargetHorizonUnavailable);
       }
       ++result.follow_checked_state_count;
       result.follow_minimum_gap_m = std::min(
         result.follow_minimum_gap_m, stage_gap.value());
       if (stage_gap.value() + kIdentityTolerance < follow_target->hard_gap_m) {
-        result.reason = Reason::FollowStageGapViolation;
-        return result;
+        return complete_continuation_proof(Reason::FollowStageGapViolation);
       }
     }
     if (
@@ -1056,16 +1059,14 @@ Result evaluate(const Request & request)
     source.swept_step_m);
   result.continuation_path_clearance = continuation_clearance;
   if (!continuation_clearance.valid) {
-    result.reason = Reason::ControlPathInvalid;
-    return result;
+    return complete_continuation_proof(Reason::ControlPathInvalid);
   }
   if (!continuation_clearance.clear) {
     if (
       current_stage_last_path_index < 1U ||
       current_stage_last_path_index >= continuation_path.size())
     {
-      result.reason = Reason::ContinuationRejected;
-      return result;
+      return complete_continuation_proof(Reason::ContinuationRejected);
     }
     const std::vector<recovery::Pose2D> current_stage_path{
       continuation_path.begin(),
@@ -1076,12 +1077,10 @@ Result evaluate(const Request & request)
       source.swept_step_m);
     result.current_stage_path_clearance = current_stage_clearance;
     if (!current_stage_clearance.valid) {
-      result.reason = Reason::ControlPathInvalid;
-      return result;
+      return complete_continuation_proof(Reason::ControlPathInvalid);
     }
     if (!current_stage_clearance.clear) {
-      result.reason = Reason::ContinuationWallBlocked;
-      return result;
+      return complete_continuation_proof(Reason::ContinuationWallBlocked);
     }
     result.static_wall_scope = StaticWallProofScope::CurrentStagePrefix;
     result.proved_control_stage_count = 1U;
@@ -1090,17 +1089,14 @@ Result evaluate(const Request & request)
   result.dynamic_checked_pose_count = dynamic.checked_pose_count;
   result.minimum_dynamic_clearance_m = dynamic.minimum_clearance_m;
   if (!dynamic.valid) {
-    result.reason = Reason::DynamicPathInvalid;
-    return result;
+    return complete_continuation_proof(Reason::DynamicPathInvalid);
   }
   if (!dynamic.clear) {
     if (!current_stage_dynamic.valid) {
-      result.reason = Reason::DynamicPathInvalid;
-      return result;
+      return complete_continuation_proof(Reason::DynamicPathInvalid);
     }
     if (!current_stage_dynamic.clear) {
-      result.reason = Reason::DynamicPathBlocked;
-      return result;
+      return complete_continuation_proof(Reason::DynamicPathBlocked);
     }
     result.dynamic_obstacle_scope =
       DynamicObstacleProofScope::CurrentStagePrefix;
@@ -1141,6 +1137,10 @@ Result evaluate(const Request & request)
     }
     proved_stage_end_velocity_mps.resize(1U);
     proved_stage_end_steering_rad.resize(1U);
+  }
+
+  if (feedback_shadow_mode) {
+    return complete_continuation_proof(Reason::Accepted);
   }
 
   Proof proof;

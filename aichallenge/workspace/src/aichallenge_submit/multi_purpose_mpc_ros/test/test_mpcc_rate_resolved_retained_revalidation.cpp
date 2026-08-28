@@ -705,6 +705,10 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
     multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::
     ContinuationRejectReason::None);
   EXPECT_TRUE(result.feedback_shadow_continuation_available);
+  EXPECT_EQ(
+    result.feedback_shadow_proof_reason, retained::Reason::Accepted);
+  EXPECT_TRUE(result.feedback_shadow_proof_available);
+  EXPECT_FALSE(result.proof.has_value());
 }
 
 TEST(
@@ -941,6 +945,33 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsBlockedCurrentContinuation)
   EXPECT_EQ(
     retained::evaluate(request).reason,
     retained::Reason::ContinuationWallBlocked);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  FeedbackShadowUsesSameBlockedContinuationProofWithoutAuthority)
+{
+  auto grid = free_grid();
+  const auto occupied = grid->world_to_grid(50.20, 0.05);
+  ASSERT_TRUE(occupied.has_value());
+  grid->cells[occupied->row * grid->width + occupied->column] =
+    recovery::CellState::Occupied;
+  const auto plan = certified_plan(grid);
+  ASSERT_NE(plan, nullptr);
+  auto request = accepted_request(plan);
+  request.current_time_steering_rad = -0.10;
+  request.previous_published_steering_rad = -0.10;
+  request.previous_published_command_age_sec = 0.0;
+
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::SteeringUnreachable);
+  EXPECT_TRUE(result.feedback_shadow_attempted);
+  EXPECT_TRUE(result.feedback_shadow_continuation_available);
+  EXPECT_EQ(
+    result.feedback_shadow_proof_reason,
+    retained::Reason::ContinuationWallBlocked);
+  EXPECT_FALSE(result.feedback_shadow_proof_available);
+  EXPECT_FALSE(result.proof.has_value());
 }
 
 TEST(

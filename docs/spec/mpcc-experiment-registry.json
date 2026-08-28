@@ -257,14 +257,31 @@
       "hypothesis": "the certified physical diagonal can replace partial_side_escape in the canonical stateless current-world pipeline without tuning or lifecycle fallback",
       "changed_dimension": "production_dynamic_obstacle_candidate_representation",
       "result": "inconclusive",
-      "reason": "frozen decision 1566 now accepts stateless-left B with terminal progress 19.8243 m, velocity 4.62416 m/s and wall reserve 0.0532911 m, exactly reproducing candidate F metrics; all 52 package tests pass, but live Pass-to-Return acceptance is still pending",
+      "reason": "frozen decision 1566 accepts stateless-left B with terminal progress 19.8243 m, velocity 4.62416 m/s and wall reserve 0.0532911 m, exactly reproducing candidate F metrics; live run 20260828-132039 exercised physical_diagonal twice but both QPs were solver-rejected, and a separate ordinary Pass exposed a downstream lifecycle defect before Return",
       "production_impact": "all production solver entries bind immutable ReplayWorld; initial overlap may derive a physical behind-to-side diagonal; mismatched world generations fail closed; partial_side_escape is deleted",
       "deleted_code": [
         "wall-only partial_side_escape obstacle rows",
         "partial escape counters and telemetry",
         "partial separation safety contract tests"
       ],
-      "revisit_condition": "a bounded dynamic Gate exercises physical_diagonal=1 and either completes Pass-to-Return or freezes the first exact proof, identity, solver or successor rejection"
+      "revisit_condition": "a bounded dynamic Gate publishes a physically certified diagonal artifact and either completes Pass-to-Return or freezes its first exact proof, identity, solver or successor rejection"
+    },
+    {
+      "experiment_id": "20260828-target-bound-current-world-proof",
+      "baseline_commit": "990192b3cab64cff188a7288e1aca73d1c0c90e8",
+      "snapshot_ids": [],
+      "hypothesis": "the late Pass collision is caused by target-bound repair retaining Mission or warm-start geometry after its current dynamic certificate becomes unsafe",
+      "changed_dimension": "execution_certificate_provenance",
+      "result": "accepted",
+      "reason": "run 20260828-132039 retained an old path for 1.80 s and 9.51 m after its target sweep became unsafe; after deleting those geometry sources and requiring current sweep proof, run 20260828-133920 revoked the measured-lateral hold in 0.02 s and 0.12 m when sweep_clear changed to zero",
+      "production_impact": "target-bound repair retains only measured lateral state with current wall and target-sweep proof; latest, last-feasible and aligned warm-start geometry no longer gain authority from Mission persistence",
+      "deleted_code": [
+        "target-bound solved-prefix lifecycle state",
+        "target-bound solved-prefix budget parameters",
+        "target-bound latest/last-feasible trajectory import",
+        "target-bound aligned warm-start trajectory import"
+      ],
+      "revisit_condition": "a live trace shows target-bound execution authority persisting more than one control interval after its current target sweep becomes invalid or unsafe"
     }
   ]
 }

@@ -4598,6 +4598,8 @@ TEST(V2XOvertakeCoreSpeed, HoldsCommittedExecutionPrefixAcrossTargetOnlyConflict
   request.physical_hold_path_feasible = true;
   request.target_progress_continuous = true;
   request.current_body_footprints_separated = true;
+  request.predicted_sweep_valid = true;
+  request.predicted_sweep_separated = true;
   request.hold_elapsed_sec = 0.20;
   request.hold_traveled_m = 1.0;
   request.maximum_hold_sec = 0.30;
@@ -4676,7 +4678,7 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldCannotBypassHardFaults)
   EXPECT_FALSE(can_hold_target_bound_execution_for_replan(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, SolvedTargetBoundPrefixRequiresFreshSeparatedPrediction)
+TEST(V2XOvertakeCoreSpeed, TargetBoundPrefixRequiresFreshSeparatedPrediction)
 {
   TargetBoundExecutionHoldRequest request;
   request.enabled = true;
@@ -4686,7 +4688,6 @@ TEST(V2XOvertakeCoreSpeed, SolvedTargetBoundPrefixRequiresFreshSeparatedPredicti
   request.physical_hold_path_feasible = true;
   request.target_progress_continuous = true;
   request.current_body_footprints_separated = true;
-  request.require_predicted_sweep_separation = true;
   request.predicted_sweep_valid = true;
   request.predicted_sweep_separated = true;
   request.hold_elapsed_sec = 0.20;
@@ -4722,6 +4723,8 @@ TEST(V2XOvertakeCoreSpeed, HoldsFrozenShiftOutPrefixOnlyInsideShortBudget)
   request.physical_hold_path_feasible = true;
   request.target_progress_continuous = true;
   request.current_body_footprints_separated = true;
+  request.predicted_sweep_valid = true;
+  request.predicted_sweep_separated = true;
   request.hold_elapsed_sec = 0.20;
   request.hold_traveled_m = 1.0;
   request.maximum_hold_sec = 0.35;
@@ -4756,6 +4759,8 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionHoldExtendsOnlyWithFreshPassProgr
   request.physical_hold_path_feasible = true;
   request.target_progress_continuous = true;
   request.current_body_footprints_separated = true;
+  request.predicted_sweep_valid = true;
+  request.predicted_sweep_separated = true;
   request.hold_elapsed_sec = 1.50;
   request.hold_traveled_m = 8.0;
   request.maximum_hold_sec = 1.50;
@@ -4797,6 +4802,8 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressContinuesAcrossPreplanWar
   request.physical_hold_path_feasible = true;
   request.target_progress_continuous = true;
   request.current_body_footprints_separated = true;
+  request.predicted_sweep_valid = true;
+  request.predicted_sweep_separated = true;
   request.hold_elapsed_sec = 1.50;
   request.hold_traveled_m = 8.0;
   request.maximum_hold_sec = 1.50;
@@ -4814,8 +4821,8 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressContinuesAcrossPreplanWar
   EXPECT_TRUE(target_bound_execution_hold_budget_available(request));
   EXPECT_TRUE(can_hold_target_bound_execution_for_replan(request));
 
-  // The warning requests a new path, while the separately revalidated
-  // physical prefix and actual hard wall guard continue to own execution.
+  // The warning requests a new path, while the current measured-lateral
+  // prefix remains revalidated against both wall and target sweep.
   request.hold_elapsed_sec = 0.20;
   request.hold_traveled_m = 1.0;
   EXPECT_TRUE(target_bound_execution_hold_budget_available(request));
@@ -4844,7 +4851,7 @@ TEST(V2XOvertakeCoreSpeed, TargetBoundExecutionProgressCannotRearmConsumedGenera
   EXPECT_FALSE(target_bound_execution_hold_budget_available(request));
 }
 
-TEST(V2XOvertakeCoreSpeed, LatchedPassRetainsPhysicalPrefixAcrossFutureTargetWallConflict)
+TEST(V2XOvertakeCoreSpeed, LatchedPassRetainsCurrentWorldPrefixAcrossFutureConflict)
 {
   TargetBoundExecutionHoldRequest request;
   request.enabled = true;
@@ -4855,6 +4862,8 @@ TEST(V2XOvertakeCoreSpeed, LatchedPassRetainsPhysicalPrefixAcrossFutureTargetWal
   request.wall_preplan_warning = true;
   request.target_progress_continuous = true;
   request.current_body_footprints_separated = true;
+  request.predicted_sweep_valid = true;
+  request.predicted_sweep_separated = true;
   request.hold_elapsed_sec = 2.0;
   request.hold_traveled_m = 9.0;
   request.maximum_hold_sec = 1.50;

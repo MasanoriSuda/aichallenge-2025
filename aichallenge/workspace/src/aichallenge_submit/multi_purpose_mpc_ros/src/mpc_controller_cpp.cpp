@@ -1314,8 +1314,6 @@ struct OvertakeLineConfig
   double receding_horizon_target_bound_shiftout_prefix_max_sec{0.35};
   double receding_horizon_target_bound_shiftout_prefix_max_distance{2.0};
   double receding_horizon_last_solved_prefix_max_age_sec{0.75};
-  double receding_horizon_target_bound_solved_prefix_max_sec{0.75};
-  double receding_horizon_target_bound_solved_prefix_max_distance{4.0};
   double receding_horizon_target_bound_prefix_clear_stable_sec{0.20};
   bool receding_horizon_target_bound_prefix_progress_extension_enabled{true};
   double receding_horizon_target_bound_prefix_progress_fresh_sec{0.75};
@@ -3070,7 +3068,6 @@ struct OvertakeLineState
   double pass_horizon_fallback_start_distance{0.0};
   bool target_bound_execution_replan_hold_active{false};
   bool target_bound_execution_replan_prefix_executing{false};
-  bool target_bound_execution_replan_solved_prefix_active{false};
   double target_bound_execution_replan_hold_start_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double target_bound_execution_replan_hold_start_distance{0.0};
@@ -26866,7 +26863,6 @@ private:
       overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
       overtake_line_state_.target_bound_execution_replan_hold_active = false;
       overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
-      overtake_line_state_.target_bound_execution_replan_solved_prefix_active = false;
       overtake_line_state_.target_bound_execution_replan_hold_start_sec =
         std::numeric_limits<double>::quiet_NaN();
       overtake_line_state_.target_bound_execution_replan_hold_start_distance = 0.0;
@@ -39935,27 +39931,19 @@ private:
     const bool target_bound_shiftout_freeze =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
       !shiftout_complete;
-    const bool target_bound_shiftout_solved_prefix_active =
-      target_bound_shiftout_freeze &&
-      overtake_line_state_.target_bound_execution_replan_solved_prefix_active;
     double target_bound_hold_max_sec = std::max(
       0.0,
-      target_bound_shiftout_solved_prefix_active ?
-      line_cfg.receding_horizon_target_bound_solved_prefix_max_sec :
       target_bound_shiftout_freeze ?
       line_cfg.receding_horizon_target_bound_shiftout_prefix_max_sec :
       line_cfg.receding_horizon_target_bound_prefix_max_sec);
     double target_bound_hold_max_distance = std::max(
       0.0,
-      target_bound_shiftout_solved_prefix_active ?
-      line_cfg.receding_horizon_target_bound_solved_prefix_max_distance :
       target_bound_shiftout_freeze ?
       line_cfg.receding_horizon_target_bound_shiftout_prefix_max_distance :
       line_cfg.receding_horizon_target_bound_prefix_max_distance);
     const auto clear_target_bound_execution_prefix_state = [this]() {
         overtake_line_state_.target_bound_execution_replan_hold_active = false;
         overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
-        overtake_line_state_.target_bound_execution_replan_solved_prefix_active = false;
         overtake_line_state_.target_bound_execution_replan_hold_start_sec =
           std::numeric_limits<double>::quiet_NaN();
         overtake_line_state_.target_bound_execution_replan_hold_start_distance = 0.0;
@@ -40001,47 +39989,7 @@ private:
       }
       std::vector<double> physical_hold_targets(
         static_cast<std::size_t>(N), current_ey);
-      bool target_bound_solved_prefix_used = false;
-      bool target_bound_last_feasible_prefix_used = false;
-      std::string target_bound_solved_prefix_reason = "not evaluated";
-      const bool target_bound_solved_prefix_context_safe =
-        locked_target_matches && locked_target_progress_continuous &&
-        !behavior_output.locked_target_position_jump &&
-        !locked_target_progress_rejected &&
-        behavior_output.locked_target_footprint_prediction_valid &&
-        (behavior_output.locked_target_current_body_footprints_separated ||
-        behavior_output.recoverable_side_contact_active) &&
-        (behavior_output.locked_target_predicted_body_footprint_sweep_separated ||
-        behavior_output.recoverable_side_contact_active) &&
-        !actual_wall_physical_contact && !actual_wall_margin_blocked &&
-        !actual_wall_sample_unavailable &&
-        behavior_output.front_risk_level != FrontRiskLevel::EmergencyBrake &&
-        !overtake_solver_recovery_active_ &&
-        !behavior_output.overtake_forbidden_wp;
-      if (target_bound_solved_prefix_context_safe) {
-        const auto validated_execution =
-          resolve_physically_validated_mpcc_execution_trajectory(
-          execution_horizon_distances, physical_hold_targets,
-          ref_wp_id, N, lb, ub, min_wall_clearance, now_sec,
-          target_bound_solved_prefix_reason);
-        if (validated_execution.has_value()) {
-          physical_hold_targets = validated_execution->trajectory.lateral_m;
-          target_bound_solved_prefix_used = true;
-          target_bound_last_feasible_prefix_used =
-            validated_execution->last_feasible_used;
-          if (target_bound_shiftout_freeze) {
-            target_bound_hold_max_sec = std::max(
-              0.0,
-              line_cfg.receding_horizon_target_bound_solved_prefix_max_sec);
-            target_bound_hold_max_distance = std::max(
-              0.0,
-              line_cfg.receding_horizon_target_bound_solved_prefix_max_distance);
-          }
-        }
-      } else {
-        target_bound_solved_prefix_reason = "runtime context hard guard";
-      }
-      if (target_bound_shiftout_freeze && !target_bound_solved_prefix_used) {
+      if (target_bound_shiftout_freeze) {
         target_bound_hold_max_sec = std::max(
           0.0,
           line_cfg.receding_horizon_target_bound_shiftout_prefix_max_sec);
@@ -40049,41 +39997,10 @@ private:
           0.0,
           line_cfg.receding_horizon_target_bound_shiftout_prefix_max_distance);
       }
-      const bool previous_horizon_matches =
-        overtake_receding_horizon_warm_start_.size() == static_cast<std::size_t>(N) &&
-        overtake_receding_horizon_path_distances_.size() == static_cast<std::size_t>(N) &&
-        overtake_receding_horizon_generation_ == overtake_line_state_.mission_generation &&
-        overtake_receding_horizon_side_sign_ == overtake_line_state_.pass_side_sign &&
-        overtake_receding_horizon_phase_ == overtake_line_state_.phase &&
-        std::isfinite(overtake_receding_horizon_phase_traveled_m_) &&
-        horizon_phase_traveled_m + kEps >= overtake_receding_horizon_phase_traveled_m_;
-      // Prefer a recently solved and physically revalidated trajectory. If it
-      // is unavailable, an incomplete ShiftOut must not continue a stale
-      // lateral ramp toward the newly predicted target: freeze measured e_y
-      // for a short repair window. A Pass/completed ShiftOut may retain its
-      // aligned same-side warm start because separation is already committed.
-      if (
-        previous_horizon_matches && !target_bound_solved_prefix_used &&
-        !target_bound_shiftout_freeze)
-      {
-        const auto aligned_hold =
-          overtake_core::resample_receding_horizon_warm_start(
-          overtake_core::RecedingHorizonWarmStartRequest{
-            std::max(
-              0.0,
-              horizon_phase_traveled_m -
-              overtake_receding_horizon_phase_traveled_m_),
-            overtake_receding_horizon_path_distances_,
-            overtake_receding_horizon_warm_start_,
-            horizon_evaluation.path_distances,
-            physical_hold_targets});
-        if (
-          aligned_hold.valid && aligned_hold.used_previous_solution &&
-          aligned_hold.lateral_targets_m.size() == static_cast<std::size_t>(N))
-        {
-          physical_hold_targets = aligned_hold.lateral_targets_m;
-        }
-      }
+      // A target-bound failure invalidates the old lateral path.  Retain only
+      // the measured lateral state while the current world is re-planned;
+      // importing solved/warm-start samples here would give Mission history
+      // geometry authority without a current dynamic-obstacle certificate.
       const bool hold_was_active =
         overtake_line_state_.target_bound_execution_replan_hold_active;
       const double execution_traveled_now =
@@ -40161,7 +40078,6 @@ private:
           locked_target_progress_rejected,
           behavior_output.locked_target_current_body_footprints_separated,
           behavior_output.recoverable_side_contact_active,
-          target_bound_solved_prefix_used,
           behavior_output.locked_target_footprint_prediction_valid,
           behavior_output.locked_target_predicted_body_footprint_sweep_separated,
           actual_wall_physical_contact,
@@ -40233,8 +40149,6 @@ private:
         } else {
           overtake_line_state_.target_bound_execution_replan_hold_active = true;
           overtake_line_state_.target_bound_execution_replan_prefix_executing = true;
-          overtake_line_state_.target_bound_execution_replan_solved_prefix_active =
-            target_bound_solved_prefix_used;
           overtake_line_state_.target_bound_execution_replan_clear_since_sec =
             lifecycle.clear_since_sec;
         }
@@ -40263,34 +40177,30 @@ private:
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "OvertakeLine target-bound execution hold started: "
-            "target=%s, side=%d, phase=%s, mode=%s, failure=%s[%d], speed=%.2f, "
+            "target=%s, side=%d, phase=%s, mode=current-lateral, "
+            "failure=%s[%d], speed=%.2f, "
             "limit=%.2f s/%.2f m, tactical_replan=immediate, "
-            "budget=%s, prefix_source=%s, prefix_reason=%s, "
+            "budget=%s, prefix_source=current-world-freeze, "
             "encounter_samples=%zu, encounter_last=%.2f m, "
             "prediction_truncated=%zu, horizon_time=%.2f s, wp_id=%d",
             overtake_line_state_.target_vehicle_id.c_str(),
             overtake_line_state_.pass_side_sign,
             to_string(overtake_line_state_.phase),
-            target_bound_solved_prefix_used ? "solved-prefix" :
-            target_bound_shiftout_freeze ? "freeze-current" : "last-feasible",
             overtake_receding_horizon_failure_kind_name(
               receding_horizon.hard_failure_kind),
             receding_horizon.hard_bound_failure_index, current_speed_mps_,
             target_bound_hold_max_sec,
             target_bound_hold_max_distance,
             repair_budget.expanded ? "dynamic-prefix" : "configured",
-            target_bound_solved_prefix_used ?
-            (target_bound_last_feasible_prefix_used ? "last-feasible" : "latest") :
-            "current-freeze",
-            target_bound_solved_prefix_reason.c_str(),
             receding_horizon.target_constraint_sample_count,
             receding_horizon.last_target_constraint_distance_m,
             receding_horizon.target_prediction_truncated_sample_count,
             receding_horizon.maximum_sample_arrival_time_sec, model->wp_id);
         }
         // The target-only conflict is a replan trigger, not a phase change.
-        // Keep the previous physical prefix and retain execution speed ownership,
-        // and keep any SafeSeparation lifecycle cumulative while the optimizer
+        // Keep only the current measured-lateral prefix proven against this
+        // cycle's wall and target sweep, retain execution speed ownership, and
+        // keep any SafeSeparation lifecycle cumulative while the optimizer
         // tries again on the next control cycle.
         receding_horizon.active = true;
         receding_horizon.fallback = true;
@@ -40299,11 +40209,9 @@ private:
         receding_horizon.velocity_limit_mps =
           std::numeric_limits<double>::infinity();
         receding_horizon.fallback_reason =
-          target_bound_solved_prefix_used ?
-          "target-bound solved execution prefix while replan pending" :
           target_bound_shiftout_freeze ?
           "target-bound ShiftOut freeze while replan pending" :
-          "target-bound physical execution hold while replan pending";
+          "target-bound current-lateral hold while replan pending";
         receding_horizon.horizon = std::move(physical_hold_horizon);
       } else {
         if (hold_was_active) {
@@ -45583,18 +45491,6 @@ Config load_config(const std::string & path)
     mpc["v2x_overtake_receding_horizon_last_solved_prefix_max_age_sec"]
     .as<double>() : 0.75);
   cfg.mpc.v2x_behavior.overtake_line
-    .receding_horizon_target_bound_solved_prefix_max_sec = std::max(
-    0.0,
-    mpc["v2x_overtake_receding_horizon_target_bound_solved_prefix_max_sec"] ?
-    mpc["v2x_overtake_receding_horizon_target_bound_solved_prefix_max_sec"]
-    .as<double>() : 0.75);
-  cfg.mpc.v2x_behavior.overtake_line
-    .receding_horizon_target_bound_solved_prefix_max_distance = std::max(
-    0.0,
-    mpc["v2x_overtake_receding_horizon_target_bound_solved_prefix_max_distance"] ?
-    mpc["v2x_overtake_receding_horizon_target_bound_solved_prefix_max_distance"]
-    .as<double>() : 4.0);
-  cfg.mpc.v2x_behavior.overtake_line
     .receding_horizon_target_bound_prefix_clear_stable_sec = std::max(
     0.0,
     mpc["v2x_overtake_receding_horizon_target_bound_prefix_clear_stable_sec"] ?
@@ -48384,7 +48280,7 @@ public:
         get_logger(),
         "V2X target-bound execution prefix: %s, Pass=%.2f s/%.2f m, "
         "ShiftOut-freeze=%.2f s/%.2f m, "
-        "solved<=%.2f s/hold=%.2f s/%.2f m, fresh_clear>=%.2f s, "
+        "solved-source-age<=%.2f s, fresh_clear>=%.2f s, "
         "Pass-progress-extension=%s/fresh<=%.2f s",
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_enabled ? "enabled" : "disabled",
@@ -48398,10 +48294,6 @@ public:
         .receding_horizon_target_bound_shiftout_prefix_max_distance,
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_last_solved_prefix_max_age_sec,
-        mpc_cfg_.v2x_behavior.overtake_line
-        .receding_horizon_target_bound_solved_prefix_max_sec,
-        mpc_cfg_.v2x_behavior.overtake_line
-        .receding_horizon_target_bound_solved_prefix_max_distance,
         mpc_cfg_.v2x_behavior.overtake_line
         .receding_horizon_target_bound_prefix_clear_stable_sec,
         mpc_cfg_.v2x_behavior.overtake_line

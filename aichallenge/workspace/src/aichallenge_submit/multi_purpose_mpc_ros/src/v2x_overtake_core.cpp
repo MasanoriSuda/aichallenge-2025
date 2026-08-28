@@ -2786,7 +2786,6 @@ bool can_hold_target_bound_execution_for_replan(
     request.current_body_footprints_separated ||
     request.recoverable_side_contact_active;
   const bool retained_sweep_safe =
-    !request.require_predicted_sweep_separation ||
     request.recoverable_side_contact_active ||
     (request.predicted_sweep_valid && request.predicted_sweep_separated);
   if (

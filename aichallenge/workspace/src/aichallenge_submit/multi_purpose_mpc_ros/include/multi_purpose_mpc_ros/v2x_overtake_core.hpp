@@ -1661,10 +1661,10 @@ double resolve_async_execution_lease_duration_sec(
 struct TargetBoundExecutionHoldRequest
 {
   bool enabled{false};
-  /// The caller has produced a wall-validated prefix which is safe to hold.
-  /// This may be a committed Pass/completed ShiftOut prefix, a recently
-  /// solved ShiftOut prefix which is physically revalidated each cycle, or a
-  /// bounded current-lateral freeze while an incomplete ShiftOut is replanned.
+  /// The caller has produced a current-world wall-validated prefix which is
+  /// safe to hold. Target-bound repair may retain the measured lateral state,
+  /// but never imports lateral samples solely because an older Mission or
+  /// warm start produced them.
   bool safe_execution_prefix_available{false};
   bool mission_path_frozen{false};
   bool target_bound_failure{false};
@@ -1678,10 +1678,9 @@ struct TargetBoundExecutionHoldRequest
   bool target_course_progress_rejected{false};
   bool current_body_footprints_separated{false};
   bool recoverable_side_contact_active{false};
-  /// A retained solved trajectory, unlike a measured-lateral freeze, keeps
-  /// moving laterally. Require the caller's current short-horizon opponent
-  /// sweep to remain valid and separated on every reuse cycle.
-  bool require_predicted_sweep_separation{false};
+  /// Every retained prefix, including a measured-lateral freeze, continues
+  /// advancing longitudinally. Its current short-horizon opponent sweep must
+  /// therefore remain valid and separated on every reuse cycle.
   bool predicted_sweep_valid{false};
   bool predicted_sweep_separated{false};
   bool actual_wall_contact{false};
@@ -1747,17 +1746,18 @@ struct TargetBoundExecutionRepairBudgetResolution
 TargetBoundExecutionRepairBudgetResolution resolve_target_bound_execution_repair_budget(
   const TargetBoundExecutionRepairBudgetRequest & request) noexcept;
 
-/// Keep a physically feasible same-side execution prefix while a target-only
-/// receding-horizon conflict is re-optimized. Callers may admit Pass or a
-/// completed ShiftOut. An incomplete ShiftOut may admit a recently solved and
-/// physically revalidated lateral prefix inside a separate short,
-/// non-extendable budget; otherwise it freezes the measured lateral position.
-/// This is deliberately narrower than the generic continuity lease: predicted
-/// target overlap may trigger the hold, but non-recoverable body overlap and
-/// every wall/front hard fault stay closed. A separately qualified recoverable
-/// side contact may continue. The normal limit is a short optimizer-repair
-/// deadline. A Pass can outlive that deadline only through fresh measured
-/// progress and only inside the immutable Mission-wide time/distance limits.
+/// Keep a current-world, physically feasible measured-lateral prefix while a
+/// target-only receding-horizon conflict is re-optimized. Callers may admit
+/// Pass or ShiftOut only when both wall feasibility and the current predicted
+/// target sweep prove that advancing at that lateral state remains separated.
+/// This is deliberately narrower than the generic continuity lease: Mission
+/// history and warm-start samples have no execution authority here.
+/// Non-recoverable body overlap and every wall/front hard fault stay closed; a
+/// separately qualified recoverable side contact may continue. The normal
+/// limit is a short optimizer-repair deadline. A Pass can outlive that
+/// deadline only through fresh measured progress and inside the immutable
+/// Mission-wide time/distance limits, while repeating the same proof each
+/// cycle.
 bool target_bound_execution_hold_budget_available(
   const TargetBoundExecutionHoldRequest & request) noexcept;
 

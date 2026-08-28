@@ -122,3 +122,14 @@ subject to the unchanged nonlinear wall/dynamic/terminal proofs.
 - complete `multi_purpose_mpc_ros` CTest: 52/52 passed;
 - experiment registry: 3 snapshots and 19 experiments valid;
 - `git diff --check`: passed.
+
+## Dynamic Gate result
+
+Run `output/20260828-132039` exercised the automatic physical diagonal twice,
+confirming that the production binding is active. Both diagonal QPs were
+solver-rejected and no diagonal artifact was published. A separate ordinary
+Pass reached `ShiftOut -> Pass`, but then retained a target-bound path after
+its current dynamic certificate became unsafe and ended in SafetyBrake rather
+than Return. The diagonal Slice therefore remains statically accepted but
+dynamically inconclusive; the downstream lifecycle defect is handled in
+`20260828-target-bound-current-world-proof` without tuning this topology.

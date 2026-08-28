@@ -13,4 +13,6 @@
 - [x] Run focused and full package tests.
 - [x] Run `make autoware-build`.
 - [x] Commit the coherent production Slice.
-- [ ] Request/execute dynamic Pass -> Return acceptance before tuning.
+- [x] Execute dynamic Pass -> Return Gate before tuning (Gate failed; evidence
+      transferred to `20260828-target-bound-current-world-proof`).
+- [ ] Obtain dynamic Pass -> Return acceptance after the lifecycle repair.

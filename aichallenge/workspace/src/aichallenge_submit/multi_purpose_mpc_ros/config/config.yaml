@@ -920,19 +920,19 @@ mpc:
   # Immediate entries remain protected by the first-feasible RTI policy.
   v2x_overtake_receding_horizon_prearm_wall_cache_enabled: true
   v2x_overtake_receding_horizon_prearm_wall_cache_samples_per_cycle: 4
-  # If only the moving-target bounds reject a Pass horizon, retain the live
-  # physically validated same-side prefix while re-optimizing. The cumulative
-  # budget is not rearmed by a one-cycle feasible result.
+  # If only the moving-target bounds reject a horizon, retain measured lateral
+  # position only while the current wall and target-sweep proofs remain valid.
+  # Old Mission/warm-start path samples have no authority here, and the
+  # cumulative budget is not rearmed by a one-cycle feasible result.
   v2x_overtake_receding_horizon_target_bound_prefix_enabled: true
   v2x_overtake_receding_horizon_target_bound_prefix_max_sec: 1.50 # [s]
   v2x_overtake_receding_horizon_target_bound_prefix_max_distance: 8.0 # [m]
   v2x_overtake_receding_horizon_target_bound_shiftout_prefix_max_sec: 0.35 # [s]
   v2x_overtake_receding_horizon_target_bound_shiftout_prefix_max_distance: 2.0 # [m]
-  # A previously solved MPCC path may bridge more than one async tactical
-  # cycle, but is advanced and physically revalidated on every control cycle.
+  # Solved execution paths may be reused by the ordinary current-world
+  # handoff, but target-bound repair freezes measured lateral state instead of
+  # retaining old path samples.
   v2x_overtake_receding_horizon_last_solved_prefix_max_age_sec: 0.75 # [s]
-  v2x_overtake_receding_horizon_target_bound_solved_prefix_max_sec: 0.75 # [s]
-  v2x_overtake_receding_horizon_target_bound_solved_prefix_max_distance: 4.0 # [m]
   v2x_overtake_receding_horizon_target_bound_prefix_clear_stable_sec: 0.20 # [s]
   v2x_overtake_receding_horizon_target_bound_prefix_progress_extension_enabled: true
   v2x_overtake_receding_horizon_target_bound_prefix_progress_fresh_sec: 0.75 # [s]

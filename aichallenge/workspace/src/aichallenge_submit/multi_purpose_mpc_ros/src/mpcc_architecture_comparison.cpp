@@ -525,7 +525,9 @@ ArmResult evaluate_arm(
   const int lattice_transition_stage = -1,
   const int lattice_ahead_stage = -1,
   shadow::SolverContext * solver_context = nullptr,
-  const bool wall_restoration_audit = false)
+  const bool wall_restoration_audit = false,
+  const std::optional<shadow::SolverContext::WallBucketAuditMode>
+  wall_bucket_audit_mode = std::nullopt)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
@@ -548,9 +550,12 @@ ArmResult evaluate_arm(
   // passes one private context only across its bounded offline continuation.
   shadow::SolverContext local_solver;
   auto & solver = solver_context == nullptr ? local_solver : *solver_context;
-  const auto solved = wall_restoration_audit ?
+  const auto solved = wall_bucket_audit_mode.has_value() ?
+    solver.evaluate_wall_bucket_audit(
+      candidate, wall_bucket_audit_mode.value()) :
+    (wall_restoration_audit ?
     solver.evaluate_wall_feasibility_restoration_audit(candidate) :
-    solver.evaluate(candidate);
+    solver.evaluate(candidate));
   arm_result.solver_outcome = solved.outcome;
   arm_result.solver_compute_ms = solved.compute_ms;
   arm_result.terminal_progress_m = solved.terminal_progress_m;
@@ -681,7 +686,15 @@ ArmResult evaluate_arm(
   bundle.terminal_successor = successor.successor;
   bundle.stop_suffix = successor.stop_suffix;
   arm_result.stage = Stage::Accepted;
-  arm_result.detail = wall_restoration_audit ? solved.detail : "accepted";
+  if (wall_bucket_audit_mode.has_value()) {
+    arm_result.detail =
+      wall_bucket_audit_mode.value() ==
+      shadow::SolverContext::WallBucketAuditMode::OmitHeading ?
+      "accepted/wall-bucket-audit=omit-heading" :
+      "accepted/wall-bucket-audit=omit-lag";
+  } else {
+    arm_result.detail = wall_restoration_audit ? solved.detail : "accepted";
+  }
   arm_result.bundle = std::move(bundle);
   return arm_result;
 }
@@ -904,6 +917,8 @@ const char * to_string(const Arm arm) noexcept
     case Arm::ProductionRightG: return "production-right-g";
     case Arm::WallRestorationH: return "wall-restoration-h";
     case Arm::ExternalPrimalI: return "external-primal-i";
+    case Arm::WallOmitHeadingJ: return "wall-omit-heading-j";
+    case Arm::WallOmitLagK: return "wall-omit-lag-k";
   }
   return "unknown";
 }
@@ -1218,6 +1233,49 @@ Report compare_wall_restoration(
   } catch (...) {
     report.source_accepted = false;
     report.detail = "unknown wall restoration comparison exception";
+  }
+  return report;
+}
+
+Report compare_wall_buckets(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  Report report;
+  try {
+    const auto & source = recorded.source;
+    const auto source_fingerprint = recorded.interaction_fingerprint;
+    report.source_interaction_fingerprint = source_fingerprint;
+    if (
+      !architecture::interaction_snapshot_complete(source) ||
+      !architecture::interaction_snapshot_matches_fingerprint(
+        source, source_fingerprint))
+    {
+      report.detail = "source interaction snapshot rejected";
+      for (const auto arm :
+        {Arm::WallOmitHeadingJ, Arm::WallOmitLagK})
+      {
+        report.arms.push_back(rejected_arm(
+          arm, Stage::SourceRejected, source_fingerprint, report.detail));
+      }
+      return report;
+    }
+    report.source_accepted = true;
+    report.detail = "accepted/wall-bucket-audit-only";
+    const auto successor = maneuver::resolve_terminal_successor(source);
+    report.arms.push_back(evaluate_arm(
+      Arm::WallOmitHeadingJ, source, source_fingerprint,
+      source_fingerprint, successor, -1, -1, nullptr, false,
+      shadow::SolverContext::WallBucketAuditMode::OmitHeading));
+    report.arms.push_back(evaluate_arm(
+      Arm::WallOmitLagK, source, source_fingerprint,
+      source_fingerprint, successor, -1, -1, nullptr, false,
+      shadow::SolverContext::WallBucketAuditMode::OmitLag));
+  } catch (const std::exception & exception) {
+    report.source_accepted = false;
+    report.detail = exception.what();
+  } catch (...) {
+    report.source_accepted = false;
+    report.detail = "unknown wall bucket comparison exception";
   }
   return report;
 }

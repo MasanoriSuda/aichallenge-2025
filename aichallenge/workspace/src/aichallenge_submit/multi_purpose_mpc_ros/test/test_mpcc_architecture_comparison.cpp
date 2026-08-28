@@ -378,6 +378,24 @@ TEST(MpccArchitectureComparison, WallRestorationOnlyRejectsChangedWorld)
   EXPECT_FALSE(report.arms.front().bundle.has_value());
 }
 
+TEST(MpccArchitectureComparison, WallBucketAuditKeepsExactProofChain)
+{
+  const auto report = compare_wall_buckets(recorded(source_snapshot()));
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 2U);
+  EXPECT_EQ(report.arms[0].arm, Arm::WallOmitHeadingJ);
+  EXPECT_EQ(report.arms[1].arm, Arm::WallOmitLagK);
+  for (const auto & arm : report.arms) {
+    EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
+    ASSERT_TRUE(arm.bundle.has_value());
+    EXPECT_EQ(
+      arm.bundle->wall_certificate.outcome,
+      mpcc_rate_resolved_physical_wall::Outcome::Accepted);
+    EXPECT_TRUE(arm.bundle->dynamic_certificate.clear);
+    EXPECT_NE(arm.detail.find("wall-bucket-audit=omit-"), std::string::npos);
+  }
+}
+
 TEST(MpccArchitectureComparison, ExternalPrimalNeedsExactRecordedProblem)
 {
   const auto report = verify_external_primal(

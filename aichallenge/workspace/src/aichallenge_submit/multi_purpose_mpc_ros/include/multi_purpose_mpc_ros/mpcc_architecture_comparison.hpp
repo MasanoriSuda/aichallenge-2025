@@ -34,6 +34,8 @@ enum class Arm
   ProductionRightG,
   WallRestorationH,
   ExternalPrimalI,
+  WallOmitHeadingJ,
+  WallOmitLagK,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -113,6 +115,13 @@ Report compare(
 /// Replay only the audit-only wall feasibility restoration arm. This avoids
 /// enumerating the full A--G lattice when iterating on a frozen wall failure.
 Report compare_wall_restoration(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
+  noexcept;
+
+/// Replay only the two observation-only artificial wall-bucket variants.
+/// Physical wall, dynamic-obstacle and terminal-successor proof is identical
+/// to production and neither arm has a command/publication path.
+Report compare_wall_buckets(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
   noexcept;
 

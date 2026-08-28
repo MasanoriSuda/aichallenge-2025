@@ -479,6 +479,15 @@ std::optional<persistent_osqp::WarmStart> build_current_problem_bootstrap(
 class SolverContext
 {
 public:
+  /// Observation-only choice for removing one artificial pose bucket from
+  /// physical wall refinement. Physical wall/opponent proof remains
+  /// unchanged and these modes have no production authority path.
+  enum class WallBucketAuditMode
+  {
+    OmitHeading,
+    OmitLag,
+  };
+
   Result evaluate(const Snapshot & snapshot);
   /// Offline architecture comparison only. A relaxed wall-directed QP may
   /// generate a numerical tangent, but it can never become an artifact: the
@@ -486,12 +495,15 @@ public:
   /// Production callers must use evaluate().
   Result evaluate_wall_feasibility_restoration_audit(
     const Snapshot & snapshot);
+  Result evaluate_wall_bucket_audit(
+    const Snapshot & snapshot, WallBucketAuditMode mode);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;
 
 private:
   Result evaluate_impl(
-    const Snapshot & snapshot, bool wall_feasibility_restoration_audit);
+    const Snapshot & snapshot, bool wall_feasibility_restoration_audit,
+    std::optional<WallBucketAuditMode> wall_bucket_audit_mode);
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
   persistent_osqp::PersistentOsqpSolver solver_{

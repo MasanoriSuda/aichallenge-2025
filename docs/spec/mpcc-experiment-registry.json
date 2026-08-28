@@ -358,6 +358,18 @@
       "production_impact": "none; production authority, solver settings, wall/opponent clearance, timeout, lease and fallback are unchanged",
       "deleted_code": [],
       "revisit_condition": "an audit-only elastic or virtual-control feasibility restoration, or genuinely nonlinear oracle, produces a trajectory that passes the unchanged exact wall, dynamic-obstacle and terminal-successor certificates on fingerprint a6f7c37f1de517c1"
+    },
+    {
+      "experiment_id": "20260829-wall-bucket-proof-ab",
+      "baseline_commit": "816f7fc8482e3006397cb7baec49bd71dbdaad45",
+      "snapshot_ids": [],
+      "hypothesis": "removing exactly one artificial wall-refinement pose bucket yields a physically certified ShiftOut racing trajectory under the unchanged seven-state SQP",
+      "changed_dimension": "observation_only_wall_bucket_and_racing_objective_separation",
+      "result": "inconclusive",
+      "reason": "two independent ShiftOut fingerprints solved hard-row Phase-I and produced physically certifiable feasible witnesses when one bucket was omitted, proving the simultaneous lag/heading buckets can empty the affine problem; restoring the exact racing objective still reached OSQP maximum iterations from those feasible primals, while a Follow wall snapshot solved and a separate dynamic-obstacle failure remained unaffected",
+      "production_impact": "none; bucket omission and Phase-I are available only through the offline architecture comparison, with no store, worker, publisher or command authority path",
+      "deleted_code": [],
+      "revisit_condition": "objective/KKT-aware explicit conditioning or an independent structured or active-set backend solves the unchanged racing objective on both ShiftOut fingerprints and the resulting trajectory passes every existing exact physical and terminal certificate"
     }
   ]
 }

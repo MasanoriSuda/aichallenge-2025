@@ -41,7 +41,9 @@ ProgressWallRefinement build_progress_wall_refinement(
   const mpcc_rate_resolved_problem::AssemblyRequest & initial_request,
   const Eigen::VectorXd & primal,
   const persistent_osqp::PhysicalConstraintTolerance &
-  physical_constraint_tolerance) noexcept
+  physical_constraint_tolerance,
+  const std::optional<SolverContext::WallBucketAuditMode> &
+  wall_bucket_audit_mode = std::nullopt) noexcept
 {
   namespace model = mpcc_rate_resolved;
   ProgressWallRefinement result;
@@ -183,12 +185,22 @@ ProgressWallRefinement build_progress_wall_refinement(
         bounds.lateral_lower_m;
       refined.state_upper[state + model::kLateralIndex] =
         bounds.lateral_upper_m;
-      refined.state_lower[state + model::kLagIndex] = bounds.lag_lower_m;
-      refined.state_upper[state + model::kLagIndex] = bounds.lag_upper_m;
-      refined.state_lower[state + model::kHeadingIndex] =
-        bounds.heading_lower_rad;
-      refined.state_upper[state + model::kHeadingIndex] =
-        bounds.heading_upper_rad;
+      if (
+        wall_bucket_audit_mode !=
+        SolverContext::WallBucketAuditMode::OmitLag)
+      {
+        refined.state_lower[state + model::kLagIndex] = bounds.lag_lower_m;
+        refined.state_upper[state + model::kLagIndex] = bounds.lag_upper_m;
+      }
+      if (
+        wall_bucket_audit_mode !=
+        SolverContext::WallBucketAuditMode::OmitHeading)
+      {
+        refined.state_lower[state + model::kHeadingIndex] =
+          bounds.heading_lower_rad;
+        refined.state_upper[state + model::kHeadingIndex] =
+          bounds.heading_upper_rad;
+      }
       refined.state_lower[state + model::kProgressIndex] =
         bounds.progress_lower_m;
       refined.state_upper[state + model::kProgressIndex] =
@@ -1631,18 +1643,25 @@ LatestStateFeedbackResult LatestStateFeedbackSolverContext::evaluate(
 
 Result SolverContext::evaluate(const Snapshot & snapshot)
 {
-  return evaluate_impl(snapshot, false);
+  return evaluate_impl(snapshot, false, std::nullopt);
 }
 
 Result SolverContext::evaluate_wall_feasibility_restoration_audit(
   const Snapshot & snapshot)
 {
-  return evaluate_impl(snapshot, true);
+  return evaluate_impl(snapshot, true, std::nullopt);
+}
+
+Result SolverContext::evaluate_wall_bucket_audit(
+  const Snapshot & snapshot, const WallBucketAuditMode mode)
+{
+  return evaluate_impl(snapshot, false, mode);
 }
 
 Result SolverContext::evaluate_impl(
   const Snapshot & snapshot,
-  const bool wall_feasibility_restoration_audit)
+  const bool wall_feasibility_restoration_audit,
+  const std::optional<WallBucketAuditMode> wall_bucket_audit_mode)
 {
   const auto started = SteadyClock::now();
   Result result;
@@ -2006,7 +2025,7 @@ Result SolverContext::evaluate_impl(
   if (snapshot.progress_aligned_wall_refinement_active) {
     auto refinement = build_progress_wall_refinement(
       snapshot, adapted->problem, outcome.result->primal,
-      solver_.physical_constraint_tolerance());
+      solver_.physical_constraint_tolerance(), wall_bucket_audit_mode);
     result.progress_wall_refinement_reason = refinement.resolution.reason;
     result.progress_wall_refinement_aligned_stage_count =
       refinement.resolution.aligned_stage_count;
@@ -2054,11 +2073,41 @@ Result SolverContext::evaluate_impl(
     std::optional<persistent_osqp::WarmStart> warm_start{
       persistent_osqp::WarmStart{
         outcome.result->primal, outcome.result->dual}};
+    const auto racing_quadratic_cost = refined_assembled->quadratic_cost;
+    const auto racing_linear_cost = refined_assembled->linear_cost;
+    if (wall_bucket_audit_mode.has_value()) {
+      // Architecture Phase-I asks whether the bucket-relaxed affine set can
+      // produce a physically certifiable trajectory. The racing Hessian can
+      // remain badly conditioned even after independent LP feasibility has
+      // been established, so project the preceding current-problem iterate
+      // with a strictly convex identity objective. No row, bound, tolerance
+      // or production solve is changed.
+      refined_assembled->quadratic_cost.setIdentity();
+      refined_assembled->linear_cost = -outcome.result->primal;
+    }
     auto refined_outcome = solver_.solve(
       refined_assembled->quadratic_cost, refined_assembled->constraints,
       refined_assembled->linear_cost, refined_assembled->lower_bound,
       refined_assembled->upper_bound, warm_start,
       refined_assembled->variable_scaling);
+    bool bucket_phase_one_solved = false;
+    if (
+      wall_bucket_audit_mode.has_value() &&
+      refined_outcome.result.has_value() &&
+      refined_outcome.result->primal.allFinite())
+    {
+      bucket_phase_one_solved = true;
+      refined_assembled->quadratic_cost = racing_quadratic_cost;
+      refined_assembled->linear_cost = racing_linear_cost;
+      warm_start = persistent_osqp::WarmStart{
+        refined_outcome.result->primal,
+        Eigen::VectorXd::Zero(refined_assembled->lower_bound.size())};
+      refined_outcome = solver_.solve(
+        refined_assembled->quadratic_cost, refined_assembled->constraints,
+        refined_assembled->linear_cost, refined_assembled->lower_bound,
+        refined_assembled->upper_bound, warm_start,
+        refined_assembled->variable_scaling);
+    }
     result.solver = refined_outcome.telemetry;
     if (
       !refined_outcome.result.has_value() &&
@@ -2181,7 +2230,7 @@ Result SolverContext::evaluate_impl(
         } else {
           auto final_refinement = build_progress_wall_refinement(
             snapshot, restored_tangent_problem, restoration_primal,
-            solver_.physical_constraint_tolerance());
+            solver_.physical_constraint_tolerance(), wall_bucket_audit_mode);
           result.wall_feasibility_restoration_final_refinement_built =
             final_refinement.request.has_value();
           if (!final_refinement.request.has_value()) {
@@ -2247,6 +2296,10 @@ Result SolverContext::evaluate_impl(
       result.solved = false;
       result.detail = std::string{"rate-resolved wall-refined QP rejected: "} +
         refined_outcome.failure_detail;
+      if (wall_bucket_audit_mode.has_value()) {
+        result.detail += std::string{", wall_bucket_phase_one="} +
+          (bucket_phase_one_solved ? "solved" : "rejected");
+      }
       if (result.wall_feasibility_restoration_attempted) {
         result.detail += std::string{", wall_restoration="} +
           result.wall_feasibility_restoration_detail +
@@ -2511,7 +2564,7 @@ Result SolverContext::evaluate_impl(
       // will be certified for publication.
       auto joint_refinement = build_progress_wall_refinement(
         snapshot, adapted->problem, outcome.result->primal,
-        solver_.physical_constraint_tolerance());
+        solver_.physical_constraint_tolerance(), wall_bucket_audit_mode);
       result.progress_wall_refinement_reason =
         joint_refinement.resolution.reason;
       result.progress_wall_refinement_aligned_stage_count =
@@ -2559,11 +2612,47 @@ Result SolverContext::evaluate_impl(
           "rate-resolved coupled wall/obstacle bootstrap rejected";
         return finish();
       }
+      if (wall_bucket_audit_mode.has_value()) {
+        // Preserve the Phase-I meaning through the final coupled
+        // wall/obstacle refinement. The unchanged hard rows and exact proofs,
+        // not the racing objective's dual convergence, decide feasibility.
+        joint_assembled->quadratic_cost.setIdentity();
+        joint_assembled->linear_cost = -outcome.result->primal;
+      }
       auto joint_outcome = solver_.solve(
         joint_assembled->quadratic_cost, joint_assembled->constraints,
         joint_assembled->linear_cost, joint_assembled->lower_bound,
         joint_assembled->upper_bound, joint_warm_start,
         joint_assembled->variable_scaling);
+      bool joint_bucket_phase_one_solved = false;
+      if (
+        wall_bucket_audit_mode.has_value() &&
+        joint_outcome.result.has_value() &&
+        joint_outcome.result->primal.allFinite())
+      {
+        joint_bucket_phase_one_solved = true;
+        // The Phase-I matrices were installed immediately above. Reassemble
+        // the same immutable candidate to restore its racing objective while
+        // retaining the Phase-I feasible primal as a cold-dual warm start.
+        joint_assembled = mpcc_rate_resolved_problem::assemble(
+          joint_refinement.request.value());
+        if (joint_assembled.has_value()) {
+          joint_warm_start = persistent_osqp::WarmStart{
+            joint_outcome.result->primal,
+            Eigen::VectorXd::Zero(joint_assembled->lower_bound.size())};
+          joint_outcome = solver_.solve(
+            joint_assembled->quadratic_cost, joint_assembled->constraints,
+            joint_assembled->linear_cost, joint_assembled->lower_bound,
+            joint_assembled->upper_bound, joint_warm_start,
+            joint_assembled->variable_scaling);
+        } else {
+          result.outcome = Outcome::AssemblyRejected;
+          result.solved = false;
+          result.detail =
+            "rate-resolved coupled racing QP reassembly rejected";
+          return finish();
+        }
+      }
       result.solver = joint_outcome.telemetry;
       if (!joint_outcome.result.has_value()) {
         result.outcome = Outcome::SolveRejected;
@@ -2571,6 +2660,10 @@ Result SolverContext::evaluate_impl(
         result.detail =
           std::string{"rate-resolved coupled wall/obstacle QP rejected: "} +
           joint_outcome.failure_detail;
+        if (wall_bucket_audit_mode.has_value()) {
+          result.detail += std::string{", wall_bucket_phase_one="} +
+            (joint_bucket_phase_one_solved ? "solved" : "rejected");
+        }
         if (joint_outcome.constraint_failure.has_value()) {
           const auto semantic = mpcc_rate_resolved_problem::decode_row(
             joint_outcome.constraint_failure->row,

@@ -17,13 +17,17 @@ int main(int argc, char ** argv)
 {
   const bool wall_restoration_only =
     argc == 3 && std::string{argv[2]} == "--wall-restoration-only";
+  const bool wall_buckets_only =
+    argc == 3 && std::string{argv[2]} == "--wall-buckets-only";
   const bool external_primal =
     argc == 4 && std::string{argv[2]} == "--external-primal";
   if (
-    argc != 2 && !wall_restoration_only && !external_primal)
+    argc != 2 && !wall_restoration_only && !wall_buckets_only &&
+    !external_primal)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
-                 "[--wall-restoration-only | --external-primal <values.txt>]\n";
+                 "[--wall-restoration-only | --wall-buckets-only | "
+                 "--external-primal <values.txt>]\n";
     return 2;
   }
   std::string detail;
@@ -52,6 +56,8 @@ int main(int argc, char ** argv)
     report = comparison::verify_external_primal(recorded.value(), primal);
   } else if (wall_restoration_only) {
     report = comparison::compare_wall_restoration(recorded.value());
+  } else if (wall_buckets_only) {
+    report = comparison::compare_wall_buckets(recorded.value());
   } else {
     report = comparison::compare(recorded.value());
   }

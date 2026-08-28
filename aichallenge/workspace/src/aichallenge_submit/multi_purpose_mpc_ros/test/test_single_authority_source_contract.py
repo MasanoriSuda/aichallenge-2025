@@ -64,6 +64,9 @@ CLOUD_CONFIG = (
 ).read_text(encoding="utf-8")
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 CMAKE = (PACKAGE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+MPCC_ARCHITECTURE_COMPARISON_SOURCE = (
+    PACKAGE_ROOT / "src" / "mpcc_architecture_comparison.cpp"
+).read_text(encoding="utf-8")
 LEGACY_BOOST_SURFACE = "\n".join(
     path.read_text(encoding="utf-8")
     for path in (
@@ -77,6 +80,12 @@ LEGACY_BOOST_SURFACE = "\n".join(
         PACKAGE_ROOT.parent / "multi_purpose_mpc_ros_msgs" / "CMakeLists.txt",
     )
 )
+
+
+def test_wall_bucket_relaxation_is_architecture_audit_only() -> None:
+    audit_entry = "evaluate_wall_bucket_audit("
+    assert audit_entry not in SOURCE
+    assert MPCC_ARCHITECTURE_COMPARISON_SOURCE.count(audit_entry) == 1
 
 
 def test_canonical_normal_owner_has_no_runtime_migration_availability_switch() -> None:

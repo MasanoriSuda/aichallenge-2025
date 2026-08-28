@@ -132,6 +132,15 @@ enum class RejectReason
 };
 
 const char * to_string(RejectReason reason) noexcept;
+
+/// Metric tolerance used only for lateral corridor geometry. The global QP
+/// tolerance can be dominated by progress or another differently-scaled row
+/// and must not become wall clearance. This resolver mirrors the final
+/// current-world proof: accept the measured row residual plus a numerical
+/// guard, with a small geometry floor.
+double physical_lateral_bound_tolerance_m(
+  const ExecutionArtifact & artifact) noexcept;
+
 RejectReason validate(const ExecutionArtifact & artifact) noexcept;
 
 enum class CursorReason

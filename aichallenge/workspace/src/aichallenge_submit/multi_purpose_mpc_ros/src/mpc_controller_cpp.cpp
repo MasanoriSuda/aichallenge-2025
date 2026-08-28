@@ -6179,8 +6179,9 @@ RateResolvedPhysicalSolutionEvaluation evaluate_rate_resolved_physical_solution(
     } else {
       evaluation.snapshot.trajectory =
         std::move(adapted.exact_trajectory.value());
-      evaluation.snapshot.bound_tolerance_m = std::max(
-        1e-5, solver.execution_artifact->maximum_constraint_violation + 1e-6);
+      evaluation.snapshot.bound_tolerance_m =
+        rate_resolved_shadow::artifact::physical_lateral_bound_tolerance_m(
+        *solver.execution_artifact);
       evaluation.result = rate_resolved_physical_wall::evaluate(
         evaluation.snapshot);
     }

@@ -171,7 +171,8 @@ Result build(
     std::numeric_limits<double>::infinity();
   const double residual_bound_m = artifact.maximum_constraint_violation + 1e-9;
   exact.velocity_lower_bound_tolerance_mps = residual_bound_m;
-  exact.lateral_bound_tolerance_m = artifact.physical_global_tolerance;
+  exact.lateral_bound_tolerance_m =
+    execution::physical_lateral_bound_tolerance_m(artifact);
   // Preserve the solver certificate diagnostics, but never use its affine
   // state samples as physical wall evidence.  They only prove the assembled
   // QP; the exact command sequence below is independently replayed through
@@ -290,7 +291,10 @@ ContinuationResult build_continuation(
     result.reason = ContinuationRejectReason::InvalidCursor;
     return result;
   }
-  const double tolerance = std::max(1e-9, artifact.physical_global_tolerance);
+  const double global_tolerance =
+    std::max(1e-9, artifact.physical_global_tolerance);
+  const double lateral_tolerance_m =
+    execution::physical_lateral_bound_tolerance_m(artifact);
   NonlinearState nonlinear{
     initial_state.lateral_m,
     initial_state.lag_m,
@@ -300,11 +304,12 @@ ContinuationResult build_continuation(
     initial_state.steering_rad,
     initial_state.response_steering_rad};
   if (
-    !finite(nonlinear) || nonlinear.velocity_mps < -tolerance ||
+    !finite(nonlinear) || !std::isfinite(lateral_tolerance_m) ||
+    nonlinear.velocity_mps < -global_tolerance ||
     std::abs(nonlinear.steering_rad) >
-    artifact.maximum_abs_steering_rad + tolerance ||
+    artifact.maximum_abs_steering_rad + global_tolerance ||
     std::abs(nonlinear.response_steering_rad) >
-    artifact.maximum_abs_steering_rad + tolerance)
+    artifact.maximum_abs_steering_rad + global_tolerance)
   {
     result.reason = ContinuationRejectReason::InvalidInitialState;
     return result;
@@ -329,8 +334,8 @@ ContinuationResult build_continuation(
     artifact.lateral_upper_m[first_stage],
     artifact.lateral_upper_m[first_stage + 1U], first_fraction);
   if (
-    nonlinear.lateral_m < initial_lower_m - tolerance ||
-    nonlinear.lateral_m > initial_upper_m + tolerance)
+    nonlinear.lateral_m < initial_lower_m - lateral_tolerance_m ||
+    nonlinear.lateral_m > initial_upper_m + lateral_tolerance_m)
   {
     result.reason =
       ContinuationRejectReason::InitialLateralBoundRejected;
@@ -363,7 +368,7 @@ ContinuationResult build_continuation(
     std::numeric_limits<double>::infinity();
   const double residual_bound_m = artifact.maximum_constraint_violation + 1e-9;
   exact.velocity_lower_bound_tolerance_mps = residual_bound_m;
-  exact.lateral_bound_tolerance_m = artifact.physical_global_tolerance;
+  exact.lateral_bound_tolerance_m = lateral_tolerance_m;
   double elapsed_sec{};
   std::size_t current_stage_sample_count{};
   for (std::size_t stage = first_stage;
@@ -402,9 +407,9 @@ ContinuationResult build_continuation(
       if (
         nonlinear.velocity_mps < -residual_bound_m ||
         std::abs(nonlinear.steering_rad) >
-        artifact.maximum_abs_steering_rad + tolerance ||
+        artifact.maximum_abs_steering_rad + global_tolerance ||
         std::abs(nonlinear.response_steering_rad) >
-        artifact.maximum_abs_steering_rad + tolerance)
+        artifact.maximum_abs_steering_rad + global_tolerance)
       {
         result.reason = ContinuationRejectReason::ActuatorEnvelopeRejected;
         result.rejected_stage = static_cast<int>(exact.path_distance_m.size());

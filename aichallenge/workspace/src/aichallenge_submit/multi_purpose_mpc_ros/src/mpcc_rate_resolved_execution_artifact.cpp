@@ -1,5 +1,6 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -8,6 +9,9 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact
 {
 namespace
 {
+
+constexpr double kMinimumPhysicalLateralBoundToleranceM = 1e-5;
+constexpr double kPhysicalLateralResidualGuardM = 1e-6;
 
 bool finite_state(const PredictedState & state) noexcept
 {
@@ -164,6 +168,20 @@ const char * to_string(const RejectReason reason) noexcept
   return "unknown";
 }
 
+double physical_lateral_bound_tolerance_m(
+  const ExecutionArtifact & artifact) noexcept
+{
+  if (
+    !std::isfinite(artifact.maximum_constraint_violation) ||
+    artifact.maximum_constraint_violation < 0.0)
+  {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  return std::max(
+    kMinimumPhysicalLateralBoundToleranceM,
+    artifact.maximum_constraint_violation + kPhysicalLateralResidualGuardM);
+}
+
 RejectReason validate(const ExecutionArtifact & artifact) noexcept
 {
   constexpr double half_pi = 1.57079632679489661923;
@@ -217,6 +235,11 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   {
     return RejectReason::InvalidCertificate;
   }
+  const double lateral_tolerance_m =
+    physical_lateral_bound_tolerance_m(artifact);
+  if (!std::isfinite(lateral_tolerance_m) || lateral_tolerance_m < 0.0) {
+    return RejectReason::InvalidCertificate;
+  }
   if (artifact.control_stages.empty()) {
     return RejectReason::EmptyHorizon;
   }
@@ -257,8 +280,8 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     const double upper = artifact.lateral_upper_m[index];
     if (
       !std::isfinite(lower) || !std::isfinite(upper) || upper < lower ||
-      state.lateral_m < lower - tolerance ||
-      state.lateral_m > upper + tolerance)
+      state.lateral_m < lower - lateral_tolerance_m ||
+      state.lateral_m > upper + lateral_tolerance_m)
     {
       return RejectReason::InvalidLateralCorridor;
     }

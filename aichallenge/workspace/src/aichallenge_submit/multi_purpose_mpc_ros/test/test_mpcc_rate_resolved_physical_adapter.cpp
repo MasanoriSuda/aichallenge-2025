@@ -80,12 +80,46 @@ TEST(MpccRateResolvedPhysicalAdapter, ReplaysControlsThroughNonlinearModel)
   EXPECT_GT(exact.minimum_lateral_bound_reserve_m, 0.0);
   EXPECT_LT(exact.minimum_lateral_bound_reserve_m, 1.0);
   EXPECT_DOUBLE_EQ(
-    exact.lateral_bound_tolerance_m, source.physical_global_tolerance);
+    exact.lateral_bound_tolerance_m,
+    execution::physical_lateral_bound_tolerance_m(source));
   EXPECT_EQ(result.minimum_progress_transition_state, 1);
   EXPECT_DOUBLE_EQ(result.minimum_progress_delta_m, 0.2);
   EXPECT_DOUBLE_EQ(result.transition_virtual_progress_speed_mps, 2.0);
   EXPECT_DOUBLE_EQ(result.transition_duration_sec, 0.10);
   EXPECT_NEAR(result.progress_dynamics_defect_m, 0.0, 1e-12);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  MixedUnitGlobalToleranceCannotMaskLateralCorridorViolation)
+{
+  auto source = artifact();
+  source.physical_global_tolerance = 0.10;
+  source.maximum_constraint_violation = 1e-8;
+  auto result = adapter::build(
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
+  ASSERT_EQ(result.reason, adapter::RejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  EXPECT_DOUBLE_EQ(
+    result.exact_trajectory->lateral_bound_tolerance_m, 1e-5);
+
+  source.lateral_upper_m[1] =
+    source.predicted_states[1].lateral_m - 1e-4;
+
+  EXPECT_DOUBLE_EQ(
+    execution::physical_lateral_bound_tolerance_m(source), 1e-5);
+  result = adapter::build(
+    source, contract::ControlIntent::Track,
+    source.identity.source_context.stage_geometry_id);
+  EXPECT_EQ(result.reason, adapter::RejectReason::InvalidArtifact);
+  EXPECT_EQ(
+    result.artifact_reason, execution::RejectReason::InvalidLateralCorridor);
+
+  source = artifact();
+  source.maximum_constraint_violation = 2e-5;
+  EXPECT_NEAR(
+    execution::physical_lateral_bound_tolerance_m(source), 2.1e-5, 1e-15);
 }
 
 TEST(

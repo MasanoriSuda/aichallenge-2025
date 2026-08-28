@@ -17,6 +17,7 @@ namespace multi_purpose_mpc_ros::mpcc_architecture_comparison
 enum class Arm
 {
   PersistentA,
+  PersistentTargetBoundA2,
   StatelessLeftB,
   StatelessRightB,
   RoughLeftC,

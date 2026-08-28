@@ -290,6 +290,42 @@ TEST(MpccStatelessManeuver, RebuildsTargetHorizonWithoutMissionTargetStages)
   EXPECT_EQ(result.seed->solver_snapshot.dynamic_obstacle_stages.size(), 3U);
 }
 
+TEST(MpccStatelessManeuver, BindsCurrentTargetWithoutChangingCapturedGeometry)
+{
+  auto source = make_source();
+  source.dynamic_obstacle_refinement_active = false;
+  source.dynamic_obstacle_pass_side_sign = 0;
+  source.dynamic_obstacle_stages.clear();
+  const auto source_fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+
+  const auto result = bind_current_world_target_preserving_geometry(
+    source, source_fingerprint);
+
+  ASSERT_TRUE(result.seed.has_value()) << result.detail;
+  const auto & candidate = result.seed->solver_snapshot;
+  EXPECT_EQ(candidate.identity.sequence, source.identity.sequence);
+  EXPECT_EQ(
+    candidate.identity.source_context.fingerprint,
+    source.identity.source_context.fingerprint);
+  ASSERT_EQ(candidate.request.states.size(), source.request.states.size());
+  ASSERT_EQ(candidate.request.inputs.size(), source.request.inputs.size());
+  for (std::size_t index = 0U; index < source.request.states.size(); ++index) {
+    EXPECT_TRUE(candidate.request.states[index].reference.isApprox(
+      source.request.states[index].reference, 0.0));
+    EXPECT_TRUE(candidate.request.states[index].lower.isApprox(
+      source.request.states[index].lower, 0.0));
+    EXPECT_TRUE(candidate.request.states[index].upper.isApprox(
+      source.request.states[index].upper, 0.0));
+  }
+  EXPECT_TRUE(candidate.dynamic_obstacle_refinement_active);
+  EXPECT_EQ(
+    candidate.dynamic_obstacle_pass_side_sign,
+    source.identity.source_context.execution_side_sign);
+  EXPECT_EQ(candidate.dynamic_obstacle_stages.size(), 3U);
+  EXPECT_NE(result.seed->candidate_fingerprint, source_fingerprint);
+}
+
 TEST(MpccStatelessManeuver, IgnoresPersistentMissionTargetStages)
 {
   const auto source = make_source();

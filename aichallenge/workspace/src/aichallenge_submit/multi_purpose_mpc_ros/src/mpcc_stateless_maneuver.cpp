@@ -470,6 +470,45 @@ Result build(
   }
 }
 
+Result bind_current_world_target_preserving_geometry(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const std::uint64_t source_interaction_fingerprint) noexcept
+{
+  namespace architecture = mpcc_architecture_snapshot;
+  namespace model = mpcc_rate_resolved;
+  const int source_side = source.identity.source_context.execution_side_sign;
+  auto result = build(source, source_interaction_fingerprint, source_side);
+  if (!result.seed.has_value()) {
+    return result;
+  }
+
+  auto & seed = result.seed.value();
+  auto & candidate = seed.solver_snapshot;
+  candidate.identity = source.identity;
+  candidate.request = source.request;
+  seed.lateral_reference_m.clear();
+  seed.lateral_reference_m.reserve(source.request.states.size());
+  for (const auto & state : source.request.states) {
+    seed.lateral_reference_m.push_back(
+      state.reference[model::kLateralIndex]);
+  }
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "target-bound persistent candidate is incomplete");
+  }
+  seed.candidate_fingerprint =
+    architecture::fingerprint_interaction_snapshot(candidate);
+  if (seed.candidate_fingerprint == 0U) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "target-bound persistent candidate fingerprint unavailable");
+  }
+  result.reason = RejectReason::Accepted;
+  result.detail = "accepted";
+  return result;
+}
+
 Result build_disjunction_schedule(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,

@@ -115,6 +115,14 @@ Result build(
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
 
+/// Audit-only A2 candidate.  Rebuild the current-world target binding through
+/// the same stateless producer, then restore the captured identity and SQP
+/// request byte-for-byte.  This isolates target ownership from reference and
+/// Mission-geometry changes and has no production authority surface.
+Result bind_current_world_target_preserving_geometry(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint) noexcept;
+
 /// Shadow-only exact disjunction schedule used by candidate D.  Geometry and
 /// costs stay stateless-B-identical; only the complete branch timing and an
 /// offline continuation fraction are sealed into the candidate.

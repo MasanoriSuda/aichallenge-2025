@@ -592,6 +592,8 @@ const char * to_string(const Arm arm) noexcept
 {
   switch (arm) {
     case Arm::PersistentA: return "persistent-a";
+    case Arm::PersistentTargetBoundA2:
+      return "persistent-target-bound-a2";
     case Arm::StatelessLeftB: return "stateless-left-b";
     case Arm::StatelessRightB: return "stateless-right-b";
     case Arm::RoughLeftC: return "rough-left-c";
@@ -637,7 +639,8 @@ Report compare(
     {
       report.detail = "source interaction snapshot rejected";
       for (const auto arm :
-        {Arm::PersistentA, Arm::StatelessLeftB, Arm::StatelessRightB,
+        {Arm::PersistentA, Arm::PersistentTargetBoundA2,
+         Arm::StatelessLeftB, Arm::StatelessRightB,
          Arm::RoughLeftC, Arm::RoughRightC,
          Arm::OfflineLeftD, Arm::OfflineRightD,
          Arm::DiagonalLeftE, Arm::DiagonalRightE,
@@ -654,6 +657,27 @@ Report compare(
     report.arms.push_back(evaluate_arm(
       Arm::PersistentA, source, source_fingerprint, source_fingerprint,
       persistent_successor));
+
+    const auto target_bound =
+      maneuver::bind_current_world_target_preserving_geometry(
+      source, source_fingerprint);
+    if (!target_bound.seed.has_value()) {
+      const auto stage =
+        target_bound.reason ==
+        maneuver::RejectReason::TerminalSuccessorUnavailable ?
+        Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+      report.arms.push_back(rejected_arm(
+        Arm::PersistentTargetBoundA2, stage, source_fingerprint,
+        std::string{maneuver::to_string(target_bound.reason)} + ": " +
+        target_bound.detail));
+    } else {
+      const auto target_bound_successor = maneuver::resolve_terminal_successor(
+        target_bound.seed->solver_snapshot);
+      report.arms.push_back(evaluate_arm(
+        Arm::PersistentTargetBoundA2,
+        target_bound.seed->solver_snapshot, source_fingerprint,
+        target_bound.seed->candidate_fingerprint, target_bound_successor));
+    }
 
     for (const auto & [arm, side] :
       {std::pair{Arm::StatelessLeftB, 1},

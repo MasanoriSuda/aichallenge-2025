@@ -1815,7 +1815,15 @@ RecordResult record_failure(
 
     std::ostringstream sequence;
     sequence << std::setw(12) << std::setfill('0') << source.identity.sequence;
-    const std::string directory_name = sequence.str() + '-' +
+    const std::uint64_t interaction_fingerprint =
+      fingerprint_interaction_snapshot(source);
+    std::ostringstream interaction_identity;
+    if (interaction_fingerprint != 0U) {
+      interaction_identity << '-' << std::hex << std::setw(16) <<
+        std::setfill('0') << interaction_fingerprint;
+    }
+    const std::string directory_name = sequence.str() +
+      interaction_identity.str() + '-' +
       safe_component(contract::to_string(intent)) + '-' +
       safe_component(to_string(pipeline_stage)) + '-' +
       safe_component(failure_outcome);

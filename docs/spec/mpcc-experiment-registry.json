@@ -285,7 +285,7 @@
     },
     {
       "experiment_id": "20260828-return-live-target-contract",
-      "baseline_commit": "39010cb0",
+      "baseline_commit": "39010cb0b7488aef673a6e1db1ffbd1c3a0142dd",
       "snapshot_ids": [],
       "hypothesis": "fresh Return production stops after rear-clear because stable encounter identity is incorrectly conflated with a current tactical target-observation generation",
       "changed_dimension": "return_semantic_identity_contract",
@@ -309,7 +309,7 @@
     },
     {
       "experiment_id": "20260829-latest-state-feedback-steering-ab",
-      "baseline_commit": "12b1273f",
+      "baseline_commit": "12b1273f656748a37b19dfbc488dddf3184d547c",
       "snapshot_ids": [],
       "hypothesis": "a bounded latest-state steering feedback phase can reconnect asynchronous seven-state candidates rejected by the publication-to-publication slew proof without weakening the physical envelope",
       "changed_dimension": "observation_only_latest_state_feedback_connector",
@@ -321,7 +321,7 @@
     },
     {
       "experiment_id": "20260829-latest-state-feedback-physical-proof",
-      "baseline_commit": "4b1a980a",
+      "baseline_commit": "4b1a980a6640d2ae6317cb9a2040f0ab56a57191",
       "snapshot_ids": [],
       "hypothesis": "a latest-state steering correction that yields an exact nonlinear continuation will pass the same current-world physical proof as an ordinarily reachable retained candidate",
       "changed_dimension": "observation_only_feedback_continuation_physical_proof",
@@ -330,6 +330,34 @@
       "production_impact": "none; corrected observations still return steering-unreachable, construct no Proof and cannot publish or mark an artifact executed",
       "deleted_code": [],
       "revisit_condition": "an observation-only latest-state feedback QP produces a new exact trajectory from the measured state and published predecessor, then passes the unchanged physical proof within the live runtime budget"
+    },
+    {
+      "experiment_id": "20260829-direct-receding-cursor-zero-ab",
+      "baseline_commit": "3e46f198583ec75902a26a85b8a42f896a71f15e",
+      "snapshot_ids": [],
+      "hypothesis": "a freshly certified asynchronous candidate can replace persistent-plan suffix execution by evaluating the same artifact directly from cursor zero",
+      "changed_dimension": "observation_only_execution_clock_interpretation",
+      "result": "rejected",
+      "reason": "run 20260829-065458 showed that moving TimeAligned A remained accepted while cursor-zero B was normally rejected by current-state proof; representative windows were A 49/50 versus B 0/50 at about 70 ms result age and 0.351 m pose residual, and A 20/22 versus B 1/22 at about 123 ms result age and 0.436 m pose residual",
+      "production_impact": "none; the cursor-zero clock was observation-only and production rejected it unconditionally",
+      "deleted_code": [
+        "DirectRecedingCandidateObservation execution clock",
+        "direct-receding observation cache and telemetry",
+        "observation-only production rejection branch and tests"
+      ],
+      "revisit_condition": "a candidate is actually rebuilt from a state predicted for its publication or feedback instant, as in an AS-RTI preparation/feedback split; resetting the cursor of an older asynchronous artifact is not a revisit"
+    },
+    {
+      "experiment_id": "20260829-shiftout-wall-bucket-feasibility",
+      "baseline_commit": "3e46f198583ec75902a26a85b8a42f896a71f15e",
+      "snapshot_ids": [],
+      "hypothesis": "the current ShiftOut loss is a persistent Mission lifecycle defect rather than an empty current-world convex subproblem",
+      "changed_dimension": "same_world_architecture_comparison_and_independent_lp_feasibility",
+      "result": "inconclusive",
+      "reason": "run 20260829-070314 froze replay-ready fingerprint a6f7c37f1de517c1; persistent A, stateless B, lattice C, current offline continuation D and production direct-side arms produced no certified bundle. Independent HiGHS feasibility checks proved the recorded wall, coupled wall-obstacle and dynamic-obstacle convex problems infeasible. Removing all trailing wall rows remained infeasible, while removing either physical-refinement heading state boxes or lag state boxes restored feasibility. Existing D is not independent: its continuation cannot pass fraction zero because it invokes the same infeasible single-SQP first",
+      "production_impact": "none; production authority, solver settings, wall/opponent clearance, timeout, lease and fallback are unchanged",
+      "deleted_code": [],
+      "revisit_condition": "an audit-only elastic or virtual-control feasibility restoration, or genuinely nonlinear oracle, produces a trajectory that passes the unchanged exact wall, dynamic-obstacle and terminal-successor certificates on fingerprint a6f7c37f1de517c1"
     }
   ]
 }

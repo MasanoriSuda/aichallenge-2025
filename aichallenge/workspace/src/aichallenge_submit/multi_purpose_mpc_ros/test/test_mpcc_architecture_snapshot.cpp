@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <optional>
 #include <sstream>
@@ -241,6 +242,14 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
     persistent_osqp::SolveOutcome{}, PipelineStage::Initial,
     "unit-interaction-roundtrip", "intentional replay-ready evidence", root);
   ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+
+  std::ostringstream expected_identity;
+  expected_identity << std::hex << std::setw(16) << std::setfill('0') <<
+    fingerprint_interaction_snapshot(snapshot);
+  EXPECT_NE(
+    written.snapshot_file.parent_path().filename().string().find(
+      expected_identity.str()),
+    std::string::npos);
 
   std::string detail;
   const auto loaded = load_recorded_interaction_snapshot(

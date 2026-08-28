@@ -429,6 +429,7 @@ const char * to_string(const Reason reason) noexcept
     case Reason::Accepted: return "accepted";
     case Reason::MissingPlan: return "missing-plan";
     case Reason::InvalidPlan: return "invalid-plan";
+    case Reason::ExecutionClockInvalid: return "execution-clock-invalid";
     case Reason::CursorUnavailable: return "cursor-unavailable";
     case Reason::IntentMismatch: return "intent-mismatch";
     case Reason::DynamicObservationUnavailable:
@@ -466,6 +467,54 @@ const char * to_string(const Reason reason) noexcept
   return "unknown";
 }
 
+const char * to_string(const ExecutionClockKind kind) noexcept
+{
+  switch (kind) {
+    case ExecutionClockKind::Unknown:
+      return "unknown";
+    case ExecutionClockKind::UnpublishedCandidate:
+      return "unpublished-candidate";
+    case ExecutionClockKind::PublishedPlan:
+      return "published-plan";
+  }
+  return "unknown";
+}
+
+artifact::Cursor resolve_execution_cursor(
+  const artifact::ExecutionArtifact & execution,
+  const double current_control_origin_sec,
+  const ExecutionClock & clock) noexcept
+{
+  if (!std::isfinite(current_control_origin_sec) ||
+    current_control_origin_sec < 0.0)
+  {
+    return artifact::Cursor{};
+  }
+  double elapsed_sec{};
+  switch (clock.kind) {
+    case ExecutionClockKind::UnpublishedCandidate:
+      elapsed_sec = 0.0;
+      break;
+    case ExecutionClockKind::PublishedPlan:
+      if (!std::isfinite(clock.first_published_control_origin_sec) ||
+        clock.first_published_control_origin_sec < 0.0 ||
+        current_control_origin_sec + kIdentityTolerance <
+        clock.first_published_control_origin_sec)
+      {
+        return artifact::Cursor{};
+      }
+      elapsed_sec = std::max(
+        0.0,
+        current_control_origin_sec -
+        clock.first_published_control_origin_sec);
+      break;
+    case ExecutionClockKind::Unknown:
+      return artifact::Cursor{};
+  }
+  return artifact::resolve_cursor(
+    execution, execution.prediction_origin_sec + elapsed_sec);
+}
+
 const char * to_string(const StaticWallProofScope scope) noexcept
 {
   switch (scope) {
@@ -491,6 +540,9 @@ const char * to_string(const DynamicObstacleProofScope scope) noexcept
 Result evaluate(const Request & request)
 {
   Result result;
+  result.execution_clock_kind = request.execution_clock.kind;
+  result.first_published_control_origin_sec =
+    request.execution_clock.first_published_control_origin_sec;
   if (request.plan == nullptr) {
     return result;
   }
@@ -500,8 +552,23 @@ Result evaluate(const Request & request)
   }
   const auto & execution = *request.plan->execution_artifact;
   const auto & source = *request.plan->physical_snapshot;
-  const auto cursor = artifact::resolve_cursor(
-    execution, request.control_origin_sec);
+  const bool published_clock_invalid =
+    request.execution_clock.kind == ExecutionClockKind::PublishedPlan &&
+    (!std::isfinite(
+      request.execution_clock.first_published_control_origin_sec) ||
+    request.execution_clock.first_published_control_origin_sec < 0.0 ||
+    !std::isfinite(request.control_origin_sec) ||
+    request.control_origin_sec + kIdentityTolerance <
+    request.execution_clock.first_published_control_origin_sec);
+  if (
+    request.execution_clock.kind == ExecutionClockKind::Unknown ||
+    published_clock_invalid)
+  {
+    result.reason = Reason::ExecutionClockInvalid;
+    return result;
+  }
+  const auto cursor = resolve_execution_cursor(
+    execution, request.control_origin_sec, request.execution_clock);
   result.cursor_reason = cursor.reason;
   if (cursor.available) {
     result.cursor_elapsed_sec = cursor.elapsed_sec;

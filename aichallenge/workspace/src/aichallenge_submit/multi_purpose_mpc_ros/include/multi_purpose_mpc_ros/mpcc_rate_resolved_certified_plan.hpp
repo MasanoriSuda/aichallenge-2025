@@ -5,6 +5,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 
@@ -81,6 +82,19 @@ struct StoreState
   StoreReason last_reason{StoreReason::InvalidPlan};
   bool candidate_available{false};
   bool executed_plan_available{false};
+  double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Atomic publication ledger entry.  The certificate records when a plan was
+/// solved; this entry records when its first command was actually scheduled at
+/// the actuator control origin.  Those clocks are deliberately not
+/// interchangeable.
+struct ExecutedPlanSnapshot
+{
+  std::shared_ptr<const CertifiedPlan> plan;
+  double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct AdmissionResult
@@ -118,9 +132,13 @@ public:
   /// Publication decision identity is therefore the sole execution ledger.
   StoreReason mark_executed(
     std::shared_ptr<const CertifiedPlan> plan,
-    std::uint64_t publication_decision_id);
+    std::uint64_t publication_decision_id,
+    double publication_control_origin_sec);
   /// Last plan whose command was successfully published.
   std::shared_ptr<const CertifiedPlan> snapshot() const;
+  /// Last plan and the control-time origin of its first published command,
+  /// read under one lock so a consumer cannot join mismatched lifecycle data.
+  ExecutedPlanSnapshot executed_snapshot() const;
   StoreState state() const;
   bool clear();
   bool clear_if_sequence(std::uint64_t expected_sequence);
@@ -137,6 +155,8 @@ private:
   std::uint64_t invalid_plan_count_{};
   std::uint64_t stale_sequence_count_{};
   std::uint64_t certification_reject_count_{};
+  double first_published_control_origin_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
   RejectReason last_certification_reason_{RejectReason::MissingArtifact};
   StoreReason last_reason_{StoreReason::InvalidPlan};
 };

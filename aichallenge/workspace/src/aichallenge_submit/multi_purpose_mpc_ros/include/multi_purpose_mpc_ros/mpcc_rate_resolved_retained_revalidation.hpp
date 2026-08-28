@@ -70,12 +70,37 @@ struct FollowTargetObservationBuildRequest
 std::optional<FollowTargetObservation> build_follow_target_observation(
   const FollowTargetObservationBuildRequest & request) noexcept;
 
+enum class ExecutionClockKind
+{
+  Unknown,
+  UnpublishedCandidate,
+  PublishedPlan,
+};
+
+const char * to_string(ExecutionClockKind kind) noexcept;
+
+/// Causal execution time is not certificate age.  A candidate has executed no
+/// prefix; a published plan advances from the control origin recorded at its
+/// first exact publisher join.
+struct ExecutionClock
+{
+  ExecutionClockKind kind{ExecutionClockKind::Unknown};
+  double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+};
+
+artifact::Cursor resolve_execution_cursor(
+  const artifact::ExecutionArtifact & execution,
+  double current_control_origin_sec,
+  const ExecutionClock & clock) noexcept;
+
 struct Request
 {
   std::shared_ptr<const certified::CertifiedPlan> plan;
   std::uint64_t decision_id{};
   double now_sec{};
   double control_origin_sec{};
+  ExecutionClock execution_clock;
   contract::ControlIntent current_intent{contract::ControlIntent::Unknown};
   double measured_course_progress_m{};
   double path_length_m{};
@@ -119,6 +144,7 @@ enum class Reason
   Accepted,
   MissingPlan,
   InvalidPlan,
+  ExecutionClockInvalid,
   CursorUnavailable,
   IntentMismatch,
   DynamicObservationUnavailable,
@@ -231,6 +257,9 @@ struct Result
   artifact::CursorReason cursor_reason{artifact::CursorReason::InvalidArtifact};
   artifact::ActuationReason actuation_reason{
     artifact::ActuationReason::InvalidArtifact};
+  ExecutionClockKind execution_clock_kind{ExecutionClockKind::Unknown};
+  double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double cursor_elapsed_sec{std::numeric_limits<double>::quiet_NaN()};
   std::string blocking_obstacle_id;
   std::size_t dynamic_checked_pose_count{};

@@ -159,6 +159,8 @@ retained::Request accepted_request(
   request.decision_id = 100U;
   request.now_sec = 1.05;
   request.control_origin_sec = 1.05;
+  request.execution_clock = {
+    retained::ExecutionClockKind::PublishedPlan, 1.0};
   request.current_intent = contract::ControlIntent::Track;
   request.measured_course_progress_m = 50.10;
   request.path_length_m = 100.0;
@@ -691,6 +693,65 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
   EXPECT_NEAR(result.reachable_steering_lower_rad, -0.100001, 1e-9);
   EXPECT_NEAR(result.reachable_steering_upper_rad, -0.099999, 1e-9);
   EXPECT_NEAR(result.steering_reachability_duration_sec, 0.0, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  UnpublishedCandidateDoesNotInheritCertificateAgeAsExecutedPrefix)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.previous_published_steering_rad = 0.079;
+  request.previous_published_command_age_sec = 0.025;
+
+  // With a published origin at 1.0, the command cursor has executed 50 ms and
+  // asks for steering 0.105.  That is not reachable from the actual last
+  // serialized command in one 25 ms publication interval.
+  request.execution_clock = {
+    retained::ExecutionClockKind::PublishedPlan, 1.0};
+  const auto fictitiously_aged = retained::evaluate(request);
+  EXPECT_EQ(
+    fictitiously_aged.reason, retained::Reason::SteeringUnreachable);
+  EXPECT_NEAR(fictitiously_aged.cursor_elapsed_sec, 0.05, 1e-9);
+
+  // A certified candidate which never crossed the publisher has executed no
+  // prefix.  Its cursor-zero command is replayed from the current state and is
+  // accepted only after the unchanged current-world physical proofs pass.
+  request.execution_clock = {
+    retained::ExecutionClockKind::UnpublishedCandidate,
+    std::numeric_limits<double>::quiet_NaN()};
+  const auto candidate = retained::evaluate(request);
+  EXPECT_EQ(candidate.reason, retained::Reason::Accepted);
+  EXPECT_NEAR(candidate.cursor_elapsed_sec, 0.0, 1e-9);
+  ASSERT_TRUE(candidate.proof.has_value());
+  EXPECT_EQ(
+    candidate.proof->cursor.control_stage_index, 0U);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsMissingExecutionClockOwnership)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.execution_clock = {};
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::ExecutionClockInvalid);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsPublishedExecutionClockWithoutCausalOrigin)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.execution_clock = {
+    retained::ExecutionClockKind::PublishedPlan,
+    std::numeric_limits<double>::quiet_NaN()};
+  EXPECT_EQ(
+    retained::evaluate(request).reason,
+    retained::Reason::ExecutionClockInvalid);
 }
 
 TEST(

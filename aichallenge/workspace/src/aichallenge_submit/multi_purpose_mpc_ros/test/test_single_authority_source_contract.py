@@ -766,7 +766,7 @@ def test_published_overtake_identity_is_replenished_before_problem_assembly() ->
         init_start,
     )
     init = SOURCE[init_start:init_end]
-    cursor = init.index("rate_resolved_artifact::resolve_cursor(")
+    cursor = init.index("rate_resolved_retained::resolve_execution_cursor(")
     identity = init.index("resolve_canonical_execution_identity(")
     phase = init.index(
         "authority_request.phase = canonical_execution_identity.active"
@@ -2021,11 +2021,16 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
         "void record_rate_resolved_track_cruise_shadow(", evaluate_start
     )
     evaluate = SOURCE[evaluate_start:record_start]
-    assert "rate_resolved_track_cruise_certified_plan_store_->snapshot()" in evaluate
+    assert (
+        "rate_resolved_track_cruise_certified_plan_store_->executed_snapshot()"
+        in evaluate
+    )
     assert (
         "rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot()"
         in evaluate
     )
+    assert "rate_resolved_shadow::artifact::same_identity(" in evaluate
+    assert "candidate_sequence == executed_sequence" not in evaluate
     assert "evaluate_rate_resolved_track_cruise_plan(" in evaluate
     request_start = SOURCE.index(
         "build_rate_resolved_current_world_request("

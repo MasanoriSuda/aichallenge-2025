@@ -6787,6 +6787,10 @@ struct RateResolvedRetainedShadowEvaluation
   double cursor_elapsed_sec{};
   double observation_origin_sec{};
   double control_origin_sec{};
+  rate_resolved_retained::ExecutionClockKind execution_clock_kind{
+    rate_resolved_retained::ExecutionClockKind::Unknown};
+  double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double prediction_delay_sec{};
   double measured_course_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
@@ -6970,6 +6974,8 @@ struct CanonicalNormalPendingActuation
   std::uint64_t decision_id{};
   mpcc_contract::CanonicalNormalCommand command;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
+  double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   bool promote_to_executed{false};
 };
 
@@ -8283,7 +8289,8 @@ struct MPC
         rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
         pending.selected_plan == nullptr ||
         rate_resolved_track_cruise_certified_plan_store_->mark_executed(
-          pending.selected_plan, decision_id) !=
+          pending.selected_plan, decision_id,
+          pending.first_published_control_origin_sec) !=
         rate_resolved_certified::StoreReason::Accepted)
       {
         ++window.rejected_count;
@@ -19020,8 +19027,9 @@ struct MPC
     rate_resolved_artifact::CursorReason retained_execution_cursor_reason =
       rate_resolved_artifact::CursorReason::InvalidArtifact;
     if (rate_resolved_track_cruise_certified_plan_store_ != nullptr) {
-      const auto retained_plan =
-        rate_resolved_track_cruise_certified_plan_store_->snapshot();
+      const auto retained_entry =
+        rate_resolved_track_cruise_certified_plan_store_->executed_snapshot();
+      const auto & retained_plan = retained_entry.plan;
       if (
         retained_plan != nullptr &&
         rate_resolved_certified::validate(*retained_plan) ==
@@ -19032,8 +19040,12 @@ struct MPC
         const auto & source_context = artifact.identity.source_context;
         const auto retained_phase = overtake_phase_for_intent(
           source_context.intent);
-        const auto cursor = rate_resolved_artifact::resolve_cursor(
-          artifact, now_sec + std::max(0.0, execution_prediction_delay_sec_));
+        const auto cursor = rate_resolved_retained::resolve_execution_cursor(
+          artifact,
+          now_sec + std::max(0.0, execution_prediction_delay_sec_),
+          rate_resolved_retained::ExecutionClock{
+            rate_resolved_retained::ExecutionClockKind::PublishedPlan,
+            retained_entry.first_published_control_origin_sec});
         retained_execution_sequence = artifact.identity.sequence;
         retained_execution_cursor_reason = cursor.reason;
         if (
@@ -23217,7 +23229,10 @@ struct MPC
         plan->execution_artifact->identity.source_context.intent;
       const auto request = build_rate_resolved_current_world_request(
         plan, intent, model != nullptr ? model->s :
-        std::numeric_limits<double>::quiet_NaN(), now_sec);
+        std::numeric_limits<double>::quiet_NaN(), now_sec,
+        rate_resolved_retained::ExecutionClock{
+          rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+          std::numeric_limits<double>::quiet_NaN()});
       if (request.has_value()) {
         const auto joined = rate_resolved_retained::evaluate(request.value());
         join_reason = joined.reason;
@@ -23367,7 +23382,8 @@ struct MPC
     std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan,
     const mpcc_contract::ControlIntent intent,
     const double measured_course_progress_m,
-    const double now_sec) const
+    const double now_sec,
+    const rate_resolved_retained::ExecutionClock execution_clock) const
   {
     if (
       model == nullptr || model->reference_path == nullptr ||
@@ -23388,6 +23404,7 @@ struct MPC
     request.decision_id = active_control_decision_id_;
     request.now_sec = now_sec;
     request.control_origin_sec = now_sec + control_path->duration_sec;
+    request.execution_clock = execution_clock;
     request.current_intent = intent;
     request.measured_course_progress_m = measured_course_progress_m;
     request.path_length_m = model->reference_path->length;
@@ -23668,7 +23685,10 @@ struct MPC
     }
     const auto request = build_rate_resolved_current_world_request(
       plan, evaluation.intent, model != nullptr ? model->s :
-      std::numeric_limits<double>::quiet_NaN(), now_sec);
+      std::numeric_limits<double>::quiet_NaN(), now_sec,
+      rate_resolved_retained::ExecutionClock{
+        rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+        std::numeric_limits<double>::quiet_NaN()});
     if (!request.has_value()) {
       evaluation.reason =
         RateResolvedPreentryAdoptionShadowReason::CurrentWorldRequestUnavailable;
@@ -23724,7 +23744,8 @@ struct MPC
   RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan(
     const MpcProblem & problem, const double now_sec,
     const mpcc_contract::ControlIntent evaluation_intent,
-    std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan) const
+    std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan,
+    const rate_resolved_retained::ExecutionClock execution_clock) const
   {
     const auto started = SteadyClock::now();
     RateResolvedRetainedShadowEvaluation evaluation;
@@ -23746,7 +23767,8 @@ struct MPC
     }
     evaluation.selected_plan = plan;
     auto request = build_rate_resolved_current_world_request(
-      plan, evaluation_intent, problem.progress_origin_m, now_sec);
+      plan, evaluation_intent, problem.progress_origin_m, now_sec,
+      execution_clock);
     if (!request.has_value()) {
       evaluation.reason =
         rate_resolved_retained::Reason::InvalidCurrentState;
@@ -23761,6 +23783,9 @@ struct MPC
     evaluation.decision_id = request->decision_id;
     evaluation.observation_origin_sec = request->now_sec;
     evaluation.control_origin_sec = request->control_origin_sec;
+    evaluation.execution_clock_kind = result.execution_clock_kind;
+    evaluation.first_published_control_origin_sec =
+      result.first_published_control_origin_sec;
     evaluation.prediction_delay_sec =
       request->control_origin_sec - request->now_sec;
     evaluation.measured_course_progress_m =
@@ -23873,8 +23898,9 @@ struct MPC
 
     const auto candidate_plan =
       rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot();
-    const auto executed_plan =
-      rate_resolved_track_cruise_certified_plan_store_->snapshot();
+    const auto executed_entry =
+      rate_resolved_track_cruise_certified_plan_store_->executed_snapshot();
+    const auto & executed_plan = executed_entry.plan;
     const auto sequence_of =
       [](const std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
         & plan) {
@@ -23884,10 +23910,22 @@ struct MPC
       };
     const std::uint64_t candidate_sequence = sequence_of(candidate_plan);
     const std::uint64_t executed_sequence = sequence_of(executed_plan);
+    const bool candidate_is_executed =
+      candidate_plan != nullptr && executed_plan != nullptr &&
+      rate_resolved_shadow::artifact::same_identity(
+        candidate_plan->execution_artifact->identity,
+        executed_plan->execution_artifact->identity);
 
     if (candidate_plan != nullptr) {
       final_evaluation = evaluate_rate_resolved_track_cruise_plan(
-        problem, now_sec, evaluation_intent, candidate_plan);
+        problem, now_sec, evaluation_intent, candidate_plan,
+        candidate_is_executed ?
+        rate_resolved_retained::ExecutionClock{
+          rate_resolved_retained::ExecutionClockKind::PublishedPlan,
+          executed_entry.first_published_control_origin_sec} :
+        rate_resolved_retained::ExecutionClock{
+          rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+          std::numeric_limits<double>::quiet_NaN()});
       final_evaluation.candidate_attempted = true;
       final_evaluation.candidate_reason = final_evaluation.reason;
       final_evaluation.candidate_blocking_obstacle_id =
@@ -23898,7 +23936,7 @@ struct MPC
       final_evaluation.executed_sequence = executed_sequence;
       if (final_evaluation.production_authority.has_value()) {
         final_evaluation.selected_from_executed =
-          candidate_sequence == executed_sequence && executed_sequence != 0U;
+          candidate_is_executed;
         final_evaluation.elapsed_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started)
           .count();
@@ -23906,8 +23944,7 @@ struct MPC
       }
     }
 
-    if (executed_plan != nullptr && (candidate_plan == nullptr ||
-      executed_sequence != candidate_sequence))
+    if (executed_plan != nullptr && !candidate_is_executed)
     {
       const auto candidate_reason = final_evaluation.candidate_reason;
       const auto candidate_blocking_obstacle_id =
@@ -23916,7 +23953,10 @@ struct MPC
         final_evaluation.candidate_minimum_dynamic_clearance_m;
       const bool candidate_attempted = final_evaluation.candidate_attempted;
       auto executed_evaluation = evaluate_rate_resolved_track_cruise_plan(
-        problem, now_sec, evaluation_intent, executed_plan);
+        problem, now_sec, evaluation_intent, executed_plan,
+        rate_resolved_retained::ExecutionClock{
+          rate_resolved_retained::ExecutionClockKind::PublishedPlan,
+          executed_entry.first_published_control_origin_sec});
       executed_evaluation.candidate_attempted = candidate_attempted;
       executed_evaluation.candidate_reason = candidate_reason;
       executed_evaluation.candidate_blocking_obstacle_id =
@@ -23983,7 +24023,8 @@ struct MPC
           rclcpp::get_logger("mpc_controller"),
           "Rate-resolved retained reason transition: decision=%lu, "
           "previous=%s, current=%s, suppressed=%lu, sequence=%lu, stage=%lu, "
-          "time=observation:%.6f/control:%.6f/delay:%.6f/cursor:%.6f, "
+          "time=observation:%.6f/control:%.6f/delay:%.6f/cursor:%.6f/"
+          "clock:%s/first_publish:%.6f, "
           "physical_join=position:%.6f/yaw:%.6f/"
           "control:(%.3f,%.3f,%.3f)/expected:(%.3f,%.3f,%.3f)/"
           "frenet:(%.3f,%.3f,%.3f), "
@@ -24013,6 +24054,8 @@ struct MPC
           static_cast<unsigned long>(retained.stage_index),
           retained.observation_origin_sec, retained.control_origin_sec,
           retained.prediction_delay_sec, retained.cursor_elapsed_sec,
+          rate_resolved_retained::to_string(retained.execution_clock_kind),
+          retained.first_published_control_origin_sec,
           retained.control_pose_error_m, retained.control_yaw_error_rad,
           retained.control_pose.x_m, retained.control_pose.y_m,
           retained.control_pose.yaw_rad,
@@ -25638,6 +25681,7 @@ struct MPC
     last_control_was_fallback_ = false;
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id, command, retained.selected_plan,
+      retained.control_origin_sec,
       !retained.selected_from_executed};
     last_control_resolution_reason_ =
       std::string{"canonical-rate-resolved-"} +
@@ -25747,7 +25791,10 @@ struct MPC
         if (gate_a_identity_matches) {
           gate_a_plan_attempted = true;
           retained = evaluate_rate_resolved_track_cruise_plan(
-            problem, now_sec, intent, gate_a_proposal->certified_plan);
+            problem, now_sec, intent, gate_a_proposal->certified_plan,
+            rate_resolved_retained::ExecutionClock{
+              rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+              std::numeric_limits<double>::quiet_NaN()});
           gate_a_plan_joined = retained.production_authority.has_value();
         }
       }

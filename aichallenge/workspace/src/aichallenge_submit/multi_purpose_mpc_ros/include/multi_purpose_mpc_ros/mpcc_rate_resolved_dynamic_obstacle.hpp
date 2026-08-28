@@ -31,6 +31,10 @@ struct Request
   /// Optional first stage whose physical disjunct is longitudinally ahead.
   /// It must follow a forced side stage; `horizon` means no ahead row yet.
   std::optional<int> forced_first_ahead_stage;
+  /// Offline candidate-D continuation only.  Zero places each forced row on
+  /// the wall-only witness and one restores the exact physical disjunct.
+  /// Production leaves it absent, which is identical to one.
+  std::optional<double> forced_constraint_fraction;
   std::vector<StagePrediction> stages;
   /// Physically solved witness used only to classify the reachable convex
   /// obstacle branch. Its progress trust buckets must not implicitly become
@@ -60,6 +64,7 @@ struct Result
   Reason reason{Reason::NotRequested};
   bool applied{false};
   bool forced_transition_applied{false};
+  double forced_constraint_fraction{1.0};
   int resolved_side_sign{};
   int first_pass_side_stage{-1};
   std::size_t stay_behind_row_count{};

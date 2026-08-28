@@ -169,6 +169,38 @@ TEST(MpccStatelessManeuver, BuildsDistinctSmoothLatticeTransition)
     delayed.seed->candidate_fingerprint);
 }
 
+TEST(MpccStatelessManeuver, SealsContinuationWithoutChangingStatelessReference)
+{
+  const auto source = make_source();
+  const auto source_fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  const auto witness = build_disjunction_schedule(
+    source, source_fingerprint, 1, 0, 3, 0.0);
+  const auto middle = build_disjunction_schedule(
+    source, source_fingerprint, 1, 0, 3, 0.5);
+  const auto exact = build_disjunction_schedule(
+    source, source_fingerprint, 1, 0, 3, 1.0);
+  ASSERT_TRUE(witness.seed.has_value()) << witness.detail;
+  ASSERT_TRUE(middle.seed.has_value()) << middle.detail;
+  ASSERT_TRUE(exact.seed.has_value()) << exact.detail;
+  EXPECT_EQ(witness.seed->lateral_reference_m, exact.seed->lateral_reference_m);
+  EXPECT_DOUBLE_EQ(
+    witness.seed->solver_snapshot.
+    dynamic_obstacle_forced_constraint_fraction, 0.0);
+  EXPECT_DOUBLE_EQ(
+    middle.seed->solver_snapshot.
+    dynamic_obstacle_forced_constraint_fraction, 0.5);
+  EXPECT_DOUBLE_EQ(
+    exact.seed->solver_snapshot.
+    dynamic_obstacle_forced_constraint_fraction, 1.0);
+  EXPECT_NE(
+    witness.seed->candidate_fingerprint,
+    middle.seed->candidate_fingerprint);
+  EXPECT_NE(
+    middle.seed->candidate_fingerprint,
+    exact.seed->candidate_fingerprint);
+}
+
 TEST(MpccStatelessManeuver, IgnoresPersistentMissionLateralAndHeadingReference)
 {
   const auto source = make_source();

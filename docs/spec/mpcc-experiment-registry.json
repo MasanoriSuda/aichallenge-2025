@@ -213,6 +213,18 @@
       "production_impact": "none; forced transition stages, rough references and C arms exist only in the offline shadow comparison",
       "deleted_code": [],
       "revisit_condition": "bounded offline D succeeds on the same immutable world/problem fingerprint, or a materially different candidate family supplies a new completeness argument"
+    },
+    {
+      "experiment_id": "20260828-native-pass-1566-offline-continuation-d",
+      "baseline_commit": "e9323a1b",
+      "snapshot_ids": [],
+      "hypothesis": "a bounded obstacle-constraint continuation can reach a certified exact behind-side-ahead solution when the cold seven-state SQP cannot",
+      "changed_dimension": "offline_convex_continuation_path",
+      "result": "inconclusive",
+      "reason": "fingerprint 7246006054995400977 evaluated all 420 schedules directly and through fractions 0.00, 0.25, 0.50, 0.75 and 1.00; all direct solves failed, all 210 right schedules failed at the wall-only fraction, and all 210 left schedules solved the wall-only fraction but failed while strengthening dynamic effective-progress rows before the exact final problem; local solver failure is not a physical infeasibility certificate",
+      "production_impact": "none; continuation is sealed into offline-only snapshots and no intermediate or final D artifact is connected to production authority",
+      "deleted_code": [],
+      "revisit_condition": "an independent nonlinear or bounded kinematic feasibility audit separates omitted candidate geometry, single-SQP basin limitation and bounded physical infeasibility on the same fingerprint"
     }
   ]
 }

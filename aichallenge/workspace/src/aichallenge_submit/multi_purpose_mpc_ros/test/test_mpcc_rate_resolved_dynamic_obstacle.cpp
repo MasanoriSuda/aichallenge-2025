@@ -438,6 +438,80 @@ TEST(MpccRateResolvedDynamicObstacle, ForcedTransitionUsesOnlyCompleteDisjuncts)
     result.problem->dynamic_obstacle_constraints[3].lower, 0.8);
 }
 
+TEST(MpccRateResolvedDynamicObstacle, OfflineContinuationEndsAtExactDisjunction)
+{
+  auto make_request = []() {
+      auto request = request_with_lateral_suffix();
+      request.pass_side_sign = 1;
+      request.forced_first_pass_side_stage = 2;
+      request.forced_first_ahead_stage = 3;
+      const int state_count = model::kStateDimension * 5;
+      request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(
+        state_count, -std::numeric_limits<double>::infinity());
+      request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(
+        state_count, std::numeric_limits<double>::infinity());
+      for (int stage = 0; stage <= 4; ++stage) {
+        const int state = stage * model::kStateDimension;
+        request.wall_only_primal[state + model::kProgressIndex] =
+          0.5 * static_cast<double>(stage);
+        request.wall_only_primal[state + model::kLateralIndex] =
+          0.66 + 0.02 * static_cast<double>(stage);
+        request.wall_only_problem.state_lower[
+          state + model::kProgressIndex] = 0.0;
+        request.wall_only_problem.state_upper[
+          state + model::kProgressIndex] = 4.0;
+        request.wall_only_problem.state_lower[state + model::kLagIndex] = 0.0;
+        request.wall_only_problem.state_upper[state + model::kLagIndex] = 0.0;
+        request.wall_only_problem.state_lower[
+          state + model::kLateralIndex] = -2.0;
+        request.wall_only_problem.state_upper[
+          state + model::kLateralIndex] = 2.0;
+      }
+      request.stages.assign(4, dynamic_obstacle::StagePrediction{
+        true, 0.0, 0.0, 0.8, 0.75});
+      return request;
+    };
+
+  auto witness_request = make_request();
+  witness_request.forced_constraint_fraction = 0.0;
+  const auto witness = dynamic_obstacle::refine(witness_request);
+  ASSERT_TRUE(witness.problem.has_value());
+  EXPECT_DOUBLE_EQ(
+    witness.problem->dynamic_obstacle_constraints[0].upper, 0.5);
+  EXPECT_DOUBLE_EQ(
+    witness.problem->dynamic_obstacle_constraints[1].upper, 1.0);
+  EXPECT_DOUBLE_EQ(
+    witness.problem->dynamic_obstacle_constraints[2].lower, 0.72);
+  EXPECT_DOUBLE_EQ(
+    witness.problem->dynamic_obstacle_constraints[3].lower, 2.0);
+
+  auto middle_request = make_request();
+  middle_request.forced_constraint_fraction = 0.5;
+  const auto middle = dynamic_obstacle::refine(middle_request);
+  ASSERT_TRUE(middle.problem.has_value());
+  EXPECT_NEAR(
+    middle.problem->dynamic_obstacle_constraints[0].upper, -0.15, 1e-12);
+  EXPECT_NEAR(
+    middle.problem->dynamic_obstacle_constraints[1].upper, 0.10, 1e-12);
+  EXPECT_NEAR(
+    middle.problem->dynamic_obstacle_constraints[2].lower, 0.735, 1e-12);
+  EXPECT_NEAR(
+    middle.problem->dynamic_obstacle_constraints[3].lower, 1.40, 1e-12);
+
+  auto exact_request = make_request();
+  exact_request.forced_constraint_fraction = 1.0;
+  const auto exact = dynamic_obstacle::refine(exact_request);
+  ASSERT_TRUE(exact.problem.has_value());
+  EXPECT_DOUBLE_EQ(
+    exact.problem->dynamic_obstacle_constraints[0].upper, -0.8);
+  EXPECT_DOUBLE_EQ(
+    exact.problem->dynamic_obstacle_constraints[1].upper, -0.8);
+  EXPECT_DOUBLE_EQ(
+    exact.problem->dynamic_obstacle_constraints[2].lower, 0.75);
+  EXPECT_DOUBLE_EQ(
+    exact.problem->dynamic_obstacle_constraints[3].lower, 0.8);
+}
+
 TEST(
   MpccRateResolvedDynamicObstacle,
   TacticalSidePreservesAcquiredSeparationWhenWallWitnessReturns)

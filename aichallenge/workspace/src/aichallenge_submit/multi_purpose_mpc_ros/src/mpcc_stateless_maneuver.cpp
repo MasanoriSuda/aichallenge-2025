@@ -470,14 +470,13 @@ Result build(
   }
 }
 
-Result build_lattice(
+Result build_disjunction_schedule(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,
   const int pass_side_sign, const int first_pass_side_stage,
-  const int first_ahead_stage) noexcept
+  const int first_ahead_stage, const double constraint_fraction) noexcept
 {
   namespace architecture = mpcc_architecture_snapshot;
-  namespace model = mpcc_rate_resolved;
   auto result = build(source, source_interaction_fingerprint, pass_side_sign);
   if (!result.seed.has_value()) {
     return result;
@@ -486,12 +485,52 @@ Result build_lattice(
   if (
     first_pass_side_stage < 0 || first_pass_side_stage >= horizon ||
     first_ahead_stage <= first_pass_side_stage ||
-    first_ahead_stage > horizon)
+    first_ahead_stage > horizon || !std::isfinite(constraint_fraction) ||
+    constraint_fraction < 0.0 || constraint_fraction > 1.0)
   {
     return reject(
       RejectReason::InvalidTransitionStage,
       "lattice transition stage is outside the planning horizon");
   }
+  auto & seed = result.seed.value();
+  auto & candidate = seed.solver_snapshot;
+  candidate.dynamic_obstacle_forced_first_pass_side_stage =
+    first_pass_side_stage;
+  candidate.dynamic_obstacle_forced_first_ahead_stage = first_ahead_stage;
+  candidate.dynamic_obstacle_forced_constraint_fraction =
+    constraint_fraction;
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "exact disjunction candidate is incomplete");
+  }
+  seed.candidate_fingerprint =
+    architecture::fingerprint_interaction_snapshot(candidate);
+  if (seed.candidate_fingerprint == 0U) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "exact disjunction candidate fingerprint unavailable");
+  }
+  result.reason = RejectReason::Accepted;
+  result.detail = "accepted";
+  return result;
+}
+
+Result build_lattice(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const std::uint64_t source_interaction_fingerprint,
+  const int pass_side_sign, const int first_pass_side_stage,
+  const int first_ahead_stage) noexcept
+{
+  namespace architecture = mpcc_architecture_snapshot;
+  namespace model = mpcc_rate_resolved;
+  auto result = build_disjunction_schedule(
+    source, source_interaction_fingerprint, pass_side_sign,
+    first_pass_side_stage, first_ahead_stage, 1.0);
+  if (!result.seed.has_value()) {
+    return result;
+  }
+  const int horizon = source.request.horizon_steps;
   const auto target_horizon = rebuild_target_horizon(source);
   if (
     !target_horizon.accepted ||
@@ -503,9 +542,6 @@ Result build_lattice(
 
   auto & seed = result.seed.value();
   auto & candidate = seed.solver_snapshot;
-  candidate.dynamic_obstacle_forced_first_pass_side_stage =
-    first_pass_side_stage;
-  candidate.dynamic_obstacle_forced_first_ahead_stage = first_ahead_stage;
   seed.lateral_reference_m.clear();
   seed.lateral_reference_m.reserve(static_cast<std::size_t>(horizon + 1));
   const double initial_lateral_m =

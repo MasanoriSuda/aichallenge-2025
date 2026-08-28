@@ -21,6 +21,8 @@ enum class Arm
   StatelessRightB,
   RoughLeftC,
   RoughRightC,
+  OfflineLeftD,
+  OfflineRightD,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -69,6 +71,11 @@ struct ArmResult
   double minimum_lateral_bound_reserve_m{};
   int lattice_transition_stage{-1};
   int lattice_ahead_stage{-1};
+  bool direct_final_attempted{false};
+  Stage direct_final_stage{Stage::SourceRejected};
+  bool continuation_attempted{false};
+  std::size_t continuation_solved_step_count{};
+  double continuation_compute_ms{};
   std::optional<ManeuverBundle> bundle;
   std::string detail{"not-evaluated"};
 };

@@ -41,6 +41,13 @@ int main(int argc, char ** argv)
               << " lateral_reserve=" << arm.minimum_lateral_bound_reserve_m
               << " lattice_transition=" << arm.lattice_transition_stage
               << " lattice_ahead=" << arm.lattice_ahead_stage
+              << " direct_final=" << arm.direct_final_attempted
+              << " direct_stage=" << comparison::to_string(
+        arm.direct_final_stage)
+              << " continuation=" << arm.continuation_attempted
+              << " continuation_steps=" <<
+      arm.continuation_solved_step_count
+              << " continuation_ms=" << arm.continuation_compute_ms
               << " bundle=" << arm.bundle.has_value()
               << " detail=" << arm.detail << '\n';
   }

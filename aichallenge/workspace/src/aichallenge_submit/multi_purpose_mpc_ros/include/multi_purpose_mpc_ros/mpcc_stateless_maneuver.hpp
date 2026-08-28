@@ -115,6 +115,15 @@ Result build(
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
 
+/// Shadow-only exact disjunction schedule used by candidate D.  Geometry and
+/// costs stay stateless-B-identical; only the complete branch timing and an
+/// offline continuation fraction are sealed into the candidate.
+Result build_disjunction_schedule(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint,
+  int pass_side_sign, int first_pass_side_stage,
+  int first_ahead_stage, double constraint_fraction) noexcept;
+
 /// Candidate-C rough lattice member.  It explicitly selects the stage-wise
 /// complete obstacle disjunct and shapes a smooth current-world reference;
 /// the unchanged seven-state SQP and exact proofs retain final authority.

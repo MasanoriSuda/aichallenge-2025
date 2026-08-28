@@ -44,6 +44,11 @@ Result refine(const Request & request) noexcept
     request.forced_first_ahead_stage.value() <=
     request.forced_first_pass_side_stage.value() ||
     request.forced_first_ahead_stage.value() > horizon)) ||
+    (request.forced_constraint_fraction.has_value() &&
+    (!request.forced_first_pass_side_stage.has_value() ||
+    !std::isfinite(request.forced_constraint_fraction.value()) ||
+    request.forced_constraint_fraction.value() < 0.0 ||
+    request.forced_constraint_fraction.value() > 1.0)) ||
     request.stages.size() != static_cast<std::size_t>(horizon) ||
     request.wall_only_primal.size() != variable_count ||
     !request.wall_only_primal.allFinite() ||
@@ -421,6 +426,9 @@ Result refine(const Request & request) noexcept
     partial_side_escape = false;
     result.forced_transition_applied = true;
   }
+  const double forced_constraint_fraction =
+    request.forced_constraint_fraction.value_or(1.0);
+  result.forced_constraint_fraction = forced_constraint_fraction;
 
   auto refined = request.constraint_target_problem.has_value() ?
     request.constraint_target_problem.value() : request.wall_only_problem;
@@ -439,8 +447,15 @@ Result refine(const Request & request) noexcept
     if (forced_ahead) {
       constraint.axis =
         problem::DynamicObstacleConstraintAxis::EffectiveProgress;
-      constraint.lower =
+      const int state = (stage + 1) * model::kStateDimension;
+      const double witness_effective_progress_m =
+        request.wall_only_primal[state + model::kProgressIndex] +
+        request.wall_only_primal[state + model::kLagIndex];
+      const double final_lower_m =
         prediction.target_progress_m + prediction.longitudinal_overlap_m;
+      constraint.lower = witness_effective_progress_m +
+        forced_constraint_fraction *
+        (final_lower_m - witness_effective_progress_m);
       ++result.ahead_row_count;
     } else if (first_pass_side_stage >= 0 && stage >= first_pass_side_stage) {
       constraint.axis = problem::DynamicObstacleConstraintAxis::Lateral;
@@ -473,17 +488,29 @@ Result refine(const Request & request) noexcept
       const double boundary = prediction.target_lateral_m +
         static_cast<double>(resolved_side_sign) *
         required_signed_separation_m;
+      const int state = (stage + 1) * model::kStateDimension;
+      const double witness_lateral_m =
+        request.wall_only_primal[state + model::kLateralIndex];
+      const double continued_boundary = witness_lateral_m +
+        forced_constraint_fraction * (boundary - witness_lateral_m);
       if (resolved_side_sign > 0) {
-        constraint.lower = boundary;
+        constraint.lower = continued_boundary;
       } else {
-        constraint.upper = boundary;
+        constraint.upper = continued_boundary;
       }
       ++result.pass_side_row_count;
     } else {
       constraint.axis =
         problem::DynamicObstacleConstraintAxis::EffectiveProgress;
-      constraint.upper =
+      const int state = (stage + 1) * model::kStateDimension;
+      const double witness_effective_progress_m =
+        request.wall_only_primal[state + model::kProgressIndex] +
+        request.wall_only_primal[state + model::kLagIndex];
+      const double final_upper_m =
         prediction.target_progress_m - prediction.longitudinal_overlap_m;
+      constraint.upper = witness_effective_progress_m +
+        forced_constraint_fraction *
+        (final_upper_m - witness_effective_progress_m);
       ++result.stay_behind_row_count;
     }
     refined.dynamic_obstacle_constraints.push_back(constraint);

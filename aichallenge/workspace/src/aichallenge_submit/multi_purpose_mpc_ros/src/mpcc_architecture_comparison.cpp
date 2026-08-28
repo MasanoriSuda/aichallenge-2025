@@ -5,6 +5,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <exception>
 #include <limits>
@@ -305,7 +306,8 @@ ArmResult evaluate_arm(
   const std::uint64_t candidate_fingerprint,
   const maneuver::TerminalResolution & successor,
   const int lattice_transition_stage = -1,
-  const int lattice_ahead_stage = -1)
+  const int lattice_ahead_stage = -1,
+  shadow::SolverContext * solver_context = nullptr)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
@@ -324,9 +326,10 @@ ArmResult evaluate_arm(
     return arm_result;
   }
 
-  // A local context is intentional: architecture arms may not share a
-  // receding warm start or any solver lifecycle state.
-  shadow::SolverContext solver;
+  // A/B/C use a local context and never share lifecycle state. Candidate D
+  // passes one private context only across its bounded offline continuation.
+  shadow::SolverContext local_solver;
+  auto & solver = solver_context == nullptr ? local_solver : *solver_context;
   const auto solved = solver.evaluate(candidate);
   arm_result.solver_outcome = solved.outcome;
   arm_result.solver_compute_ms = solved.compute_ms;
@@ -470,6 +473,117 @@ ArmResult rejected_arm(
   return result;
 }
 
+ArmResult evaluate_offline_continuation(
+  const Arm arm, const shadow::Snapshot & source,
+  const std::uint64_t source_fingerprint, const int side,
+  const int transition_stage, const int ahead_stage)
+{
+  const auto exact_candidate = maneuver::build_disjunction_schedule(
+    source, source_fingerprint, side, transition_stage, ahead_stage, 1.0);
+  if (!exact_candidate.seed.has_value()) {
+    const auto stage =
+      exact_candidate.reason ==
+      maneuver::RejectReason::TerminalSuccessorUnavailable ?
+      Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+    auto rejected = rejected_arm(
+      arm, stage, source_fingerprint,
+      std::string{maneuver::to_string(exact_candidate.reason)} + ": " +
+      exact_candidate.detail);
+    rejected.lattice_transition_stage = transition_stage;
+    rejected.lattice_ahead_stage = ahead_stage;
+    return rejected;
+  }
+  const auto successor = maneuver::resolve_terminal_successor(
+    exact_candidate.seed->solver_snapshot);
+  auto direct = evaluate_arm(
+    arm, exact_candidate.seed->solver_snapshot, source_fingerprint,
+    exact_candidate.seed->candidate_fingerprint, successor,
+    transition_stage, ahead_stage);
+  direct.direct_final_attempted = true;
+  direct.direct_final_stage = direct.stage;
+  if (direct.bundle.has_value()) {
+    direct.detail = "direct-final accepted";
+    return direct;
+  }
+
+  constexpr std::array<double, 4> kContinuationFractions{
+    0.0, 0.25, 0.50, 0.75};
+  shadow::SolverContext continuation_solver;
+  std::size_t solved_step_count = 0U;
+  double continuation_compute_ms = 0.0;
+  for (const double fraction : kContinuationFractions) {
+    const auto intermediate = maneuver::build_disjunction_schedule(
+      source, source_fingerprint, side, transition_stage, ahead_stage,
+      fraction);
+    if (!intermediate.seed.has_value()) {
+      auto rejected = rejected_arm(
+        arm, Stage::CandidateRejected, source_fingerprint,
+        std::string{"continuation candidate rejected at fraction="} +
+        std::to_string(fraction) + ": " +
+        maneuver::to_string(intermediate.reason) + ": " +
+        intermediate.detail);
+      rejected.candidate_fingerprint =
+        exact_candidate.seed->candidate_fingerprint;
+      rejected.lattice_transition_stage = transition_stage;
+      rejected.lattice_ahead_stage = ahead_stage;
+      rejected.direct_final_attempted = true;
+      rejected.direct_final_stage = direct.stage;
+      rejected.continuation_attempted = true;
+      rejected.continuation_solved_step_count = solved_step_count;
+      rejected.continuation_compute_ms = continuation_compute_ms;
+      return rejected;
+    }
+    const auto solved = continuation_solver.evaluate(
+      intermediate.seed->solver_snapshot);
+    continuation_compute_ms += solved.compute_ms;
+    if (
+      solved.outcome != shadow::Outcome::Solved ||
+      solved.execution_artifact == nullptr)
+    {
+      ArmResult rejected;
+      rejected.arm = arm;
+      rejected.stage = Stage::SolverRejected;
+      rejected.source_interaction_fingerprint = source_fingerprint;
+      rejected.candidate_fingerprint =
+        exact_candidate.seed->candidate_fingerprint;
+      rejected.solver_outcome = solved.outcome;
+      rejected.solver_compute_ms = solved.compute_ms;
+      rejected.lattice_transition_stage = transition_stage;
+      rejected.lattice_ahead_stage = ahead_stage;
+      rejected.direct_final_attempted = true;
+      rejected.direct_final_stage = direct.stage;
+      rejected.continuation_attempted = true;
+      rejected.continuation_solved_step_count = solved_step_count;
+      rejected.continuation_compute_ms = continuation_compute_ms;
+      std::ostringstream detail;
+      detail << "direct=" << to_string(direct.stage)
+             << "/continuation_fraction=" << fraction
+             << "/continuation=" << solved.detail;
+      rejected.detail = detail.str();
+      return rejected;
+    }
+    ++solved_step_count;
+  }
+
+  auto continued = evaluate_arm(
+    arm, exact_candidate.seed->solver_snapshot, source_fingerprint,
+    exact_candidate.seed->candidate_fingerprint, successor,
+    transition_stage, ahead_stage, &continuation_solver);
+  continuation_compute_ms += continued.solver_compute_ms;
+  continued.direct_final_attempted = true;
+  continued.direct_final_stage = direct.stage;
+  continued.continuation_attempted = true;
+  continued.continuation_solved_step_count = solved_step_count;
+  continued.continuation_compute_ms = continuation_compute_ms;
+  const auto final_detail = continued.detail;
+  std::ostringstream detail;
+  detail << "direct=" << to_string(direct.stage)
+         << "/continuation_steps=" << solved_step_count
+         << "/final=" << final_detail;
+  continued.detail = detail.str();
+  return continued;
+}
+
 }  // namespace
 
 const char * to_string(const Arm arm) noexcept
@@ -480,6 +594,8 @@ const char * to_string(const Arm arm) noexcept
     case Arm::StatelessRightB: return "stateless-right-b";
     case Arm::RoughLeftC: return "rough-left-c";
     case Arm::RoughRightC: return "rough-right-c";
+    case Arm::OfflineLeftD: return "offline-left-d";
+    case Arm::OfflineRightD: return "offline-right-d";
   }
   return "unknown";
 }
@@ -516,7 +632,8 @@ Report compare(
       report.detail = "source interaction snapshot rejected";
       for (const auto arm :
         {Arm::PersistentA, Arm::StatelessLeftB, Arm::StatelessRightB,
-         Arm::RoughLeftC, Arm::RoughRightC})
+         Arm::RoughLeftC, Arm::RoughRightC,
+         Arm::OfflineLeftD, Arm::OfflineRightD})
       {
         report.arms.push_back(rejected_arm(
           arm, Stage::SourceRejected, source_fingerprint, report.detail));
@@ -580,6 +697,23 @@ Report compare(
           report.arms.push_back(evaluate_arm(
             arm, built.seed->solver_snapshot, source_fingerprint,
             built.seed->candidate_fingerprint, successor, transition_stage,
+            ahead_stage));
+        }
+      }
+    }
+
+    for (const auto & [arm, side] :
+      {std::pair{Arm::OfflineLeftD, 1},
+       std::pair{Arm::OfflineRightD, -1}})
+    {
+      for (int transition_stage = 0;
+        transition_stage < source.request.horizon_steps; ++transition_stage)
+      {
+        for (int ahead_stage = transition_stage + 1;
+          ahead_stage <= source.request.horizon_steps; ++ahead_stage)
+        {
+          report.arms.push_back(evaluate_offline_continuation(
+            arm, source, source_fingerprint, side, transition_stage,
             ahead_stage));
         }
       }

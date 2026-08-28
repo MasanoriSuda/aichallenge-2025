@@ -422,6 +422,8 @@ YAML::Node source_node(
     source.dynamic_obstacle_forced_first_pass_side_stage;
   node["dynamic_obstacle_forced_first_ahead_stage"] =
     source.dynamic_obstacle_forced_first_ahead_stage;
+  node["dynamic_obstacle_forced_constraint_fraction"] =
+    source.dynamic_obstacle_forced_constraint_fraction;
   YAML::Node obstacle_stages(YAML::NodeType::Sequence);
   for (const auto & stage : source.dynamic_obstacle_stages) {
     YAML::Node item;
@@ -872,6 +874,10 @@ std::optional<shadow::Snapshot> load_source_snapshot(
     source.dynamic_obstacle_forced_first_ahead_stage =
       node["dynamic_obstacle_forced_first_ahead_stage"].as<int>();
   }
+  if (node["dynamic_obstacle_forced_constraint_fraction"]) {
+    source.dynamic_obstacle_forced_constraint_fraction =
+      node["dynamic_obstacle_forced_constraint_fraction"].as<double>();
+  }
   const auto stages = node["dynamic_obstacle_stages"];
   if (!stages || !stages.IsSequence()) {
     return std::nullopt;
@@ -1230,6 +1236,15 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     {
       return false;
     }
+    if (
+      !std::isfinite(source.dynamic_obstacle_forced_constraint_fraction) ||
+      source.dynamic_obstacle_forced_constraint_fraction < 0.0 ||
+      source.dynamic_obstacle_forced_constraint_fraction > 1.0 ||
+      (source.dynamic_obstacle_forced_first_pass_side_stage < 0 &&
+      source.dynamic_obstacle_forced_constraint_fraction != 1.0))
+    {
+      return false;
+    }
     for (const auto & stage : source.dynamic_obstacle_stages) {
       if (
         !std::isfinite(stage.target_progress_m) ||
@@ -1396,6 +1411,8 @@ std::uint64_t fingerprint_interaction_snapshot(
     builder.append_bool(true);
     builder.append_i64(source.dynamic_obstacle_forced_first_pass_side_stage);
     builder.append_i64(source.dynamic_obstacle_forced_first_ahead_stage);
+    builder.append_double(
+      source.dynamic_obstacle_forced_constraint_fraction);
   }
   builder.append_u64(
     static_cast<std::uint64_t>(source.dynamic_obstacle_stages.size()));

@@ -89,6 +89,7 @@ struct Snapshot
   /// snapshots leave this absent (`-1`) and retain witness-based refinement.
   int dynamic_obstacle_forced_first_pass_side_stage{-1};
   int dynamic_obstacle_forced_first_ahead_stage{-1};
+  double dynamic_obstacle_forced_constraint_fraction{1.0};
   std::vector<mpcc_rate_resolved_dynamic_obstacle::StagePrediction>
     dynamic_obstacle_stages;
   bool physical_wall_refinement_active{false};
@@ -208,6 +209,7 @@ struct Result
   std::size_t dynamic_obstacle_pass_side_row_count{};
   std::size_t dynamic_obstacle_ahead_row_count{};
   std::size_t dynamic_obstacle_partial_escape_row_count{};
+  double dynamic_obstacle_forced_constraint_fraction{1.0};
   int dynamic_obstacle_first_valid_stage{-1};
   double dynamic_obstacle_first_wall_only_progress_m{};
   double dynamic_obstacle_first_wall_only_effective_progress_m{};

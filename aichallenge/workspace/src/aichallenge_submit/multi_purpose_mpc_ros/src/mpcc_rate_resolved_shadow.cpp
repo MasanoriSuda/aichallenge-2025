@@ -1097,6 +1097,330 @@ TimeAlignedSuffixResult resolve_time_aligned_suffix(
   }
 }
 
+const char * to_string(const TimeAlignedFeedbackProblemReason reason) noexcept
+{
+  switch (reason) {
+    case TimeAlignedFeedbackProblemReason::Accepted:
+      return "accepted";
+    case TimeAlignedFeedbackProblemReason::InvalidRequest:
+      return "invalid-request";
+    case TimeAlignedFeedbackProblemReason::SuffixRejected:
+      return "suffix-rejected";
+    case TimeAlignedFeedbackProblemReason::PreparationDimensionMismatch:
+      return "preparation-dimension-mismatch";
+    case TimeAlignedFeedbackProblemReason::SemanticAdapterRejected:
+      return "semantic-adapter-rejected";
+    case TimeAlignedFeedbackProblemReason::RefinementProvenanceMismatch:
+      return "refinement-provenance-mismatch";
+    case TimeAlignedFeedbackProblemReason::RelinearizationRejected:
+      return "relinearization-rejected";
+    case TimeAlignedFeedbackProblemReason::Count:
+      return "count";
+  }
+  return "unknown";
+}
+
+TimeAlignedFeedbackProblemResult build_time_aligned_feedback_problem(
+  const TimeAlignedFeedbackProblemRequest & request) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  namespace problem = mpcc_rate_resolved_problem;
+  TimeAlignedFeedbackProblemResult result;
+  const auto reject = [&result](
+      const TimeAlignedFeedbackProblemReason reason,
+      const std::string & detail) {
+      result.reason = reason;
+      result.detail = detail;
+      result.problem.reset();
+      return result;
+    };
+  try {
+    if (
+      request.preparation == nullptr || !request.previous_input.allFinite() ||
+      !std::isfinite(request.physical_constraint_tolerance.absolute) ||
+      request.physical_constraint_tolerance.absolute < 0.0 ||
+      !std::isfinite(request.physical_constraint_tolerance.relative) ||
+      request.physical_constraint_tolerance.relative < 0.0)
+    {
+      return reject(
+        TimeAlignedFeedbackProblemReason::InvalidRequest,
+        "invalid preparation, previous input or physical tolerance");
+    }
+
+    const auto & preparation = *request.preparation;
+    result.suffix = resolve_time_aligned_suffix(
+      TimeAlignedSuffixRequest{
+        &preparation.snapshot, request.control_prediction_origin_sec,
+        request.initial_state, request.previous_input});
+    if (
+      result.suffix.reason != TimeAlignedSuffixReason::Accepted ||
+      !result.suffix.snapshot.has_value())
+    {
+      return reject(
+        TimeAlignedFeedbackProblemReason::SuffixRejected,
+        std::string{"semantic suffix rejected: "} + result.suffix.detail);
+    }
+
+    const int old_horizon = preparation.snapshot.request.horizon_steps;
+    const int new_horizon =
+      result.suffix.snapshot->request.horizon_steps;
+    const int consumed = static_cast<int>(result.suffix.consumed_stage_count);
+    constexpr int nx = model::kStateDimension;
+    constexpr int nu = model::kInputDimension;
+    const int old_state_values = nx * (old_horizon + 1);
+    const int old_input_values = nu * old_horizon;
+    const int old_variable_count = old_state_values + old_input_values;
+    const int new_state_values = nx * (new_horizon + 1);
+    const int new_input_values = nu * new_horizon;
+    const int new_variable_count = new_state_values + new_input_values;
+    const auto & final_problem = preparation.final_problem;
+    const bool valid_dimensions =
+      old_horizon > 0 && new_horizon > 0 && consumed >= 0 &&
+      consumed < old_horizon && new_horizon == old_horizon - consumed &&
+      final_problem.horizon_steps == old_horizon &&
+      final_problem.linearizations.size() ==
+      static_cast<std::size_t>(old_horizon) &&
+      final_problem.state_reference.size() == old_state_values &&
+      final_problem.state_lower.size() == old_state_values &&
+      final_problem.state_upper.size() == old_state_values &&
+      final_problem.state_weight.size() == old_state_values &&
+      final_problem.input_reference.size() == old_input_values &&
+      final_problem.input_lower.size() == old_input_values &&
+      final_problem.input_upper.size() == old_input_values &&
+      final_problem.input_weight.size() == old_input_values &&
+      (final_problem.additional_linear_cost.size() == 0 ||
+      final_problem.additional_linear_cost.size() == old_variable_count) &&
+      preparation.prepared_primal.size() == old_variable_count &&
+      preparation.prepared_primal.allFinite();
+    if (!valid_dimensions) {
+      return reject(
+        TimeAlignedFeedbackProblemReason::PreparationDimensionMismatch,
+        "prepared final problem does not match its semantic horizon");
+    }
+
+    const auto semantic = mpcc_rate_resolved_adapter::build(
+      result.suffix.snapshot->request,
+      request.physical_constraint_tolerance);
+    if (!semantic.has_value()) {
+      return reject(
+        TimeAlignedFeedbackProblemReason::SemanticAdapterRejected,
+        "latest semantic suffix cannot build the physical input envelope");
+    }
+
+    // Validate every refinement row against the old problem before deciding
+    // whether it belongs to the unconsumed suffix.  Otherwise an invalid stage
+    // can look elapsed and be silently dropped, hiding producer corruption.
+    if (final_problem.progress_aligned_wall_constraints.has_value()) {
+      const auto & wall =
+        final_problem.progress_aligned_wall_constraints.value();
+      if (
+        wall.lower_slope.size() != static_cast<std::size_t>(old_horizon) ||
+        wall.lower_intercept.size() !=
+        static_cast<std::size_t>(old_horizon) ||
+        wall.upper_slope.size() != static_cast<std::size_t>(old_horizon) ||
+        wall.upper_intercept.size() !=
+        static_cast<std::size_t>(old_horizon))
+      {
+        return reject(
+          TimeAlignedFeedbackProblemReason::RefinementProvenanceMismatch,
+          "progress-wall rows do not match preparation horizon");
+      }
+    }
+    for (const auto & wall : final_problem.swept_lateral_wall_constraints) {
+      if (
+        wall.transition_stage < 0 ||
+        wall.transition_stage >= old_horizon ||
+        !std::isfinite(wall.destination_ratio) ||
+        wall.destination_ratio <= 0.0 || wall.destination_ratio >= 1.0 ||
+        std::isnan(wall.lower_m) || std::isnan(wall.upper_m) ||
+        wall.lower_m > wall.upper_m)
+      {
+        return reject(
+          TimeAlignedFeedbackProblemReason::RefinementProvenanceMismatch,
+          "swept-wall row has invalid preparation-stage provenance");
+      }
+    }
+    for (const auto & obstacle : final_problem.dynamic_obstacle_constraints) {
+      const bool supported_axis =
+        obstacle.axis == problem::DynamicObstacleConstraintAxis::Lateral ||
+        obstacle.axis ==
+        problem::DynamicObstacleConstraintAxis::EffectiveProgress ||
+        obstacle.axis ==
+        problem::DynamicObstacleConstraintAxis::CoupledLateralProgress;
+      const bool valid_coupled =
+        obstacle.axis !=
+        problem::DynamicObstacleConstraintAxis::CoupledLateralProgress ||
+        (std::isfinite(obstacle.lateral_coefficient) &&
+        std::isfinite(obstacle.effective_progress_coefficient) &&
+        (obstacle.lateral_coefficient != 0.0 ||
+        obstacle.effective_progress_coefficient != 0.0));
+      if (
+        obstacle.state_stage <= 0 ||
+        obstacle.state_stage > old_horizon || !supported_axis ||
+        !valid_coupled || std::isnan(obstacle.lower) ||
+        std::isnan(obstacle.upper) || obstacle.lower > obstacle.upper)
+      {
+        return reject(
+          TimeAlignedFeedbackProblemReason::RefinementProvenanceMismatch,
+          "dynamic-obstacle row has invalid preparation-stage provenance");
+      }
+    }
+
+    problem::AssemblyRequest feedback;
+    feedback.horizon_steps = new_horizon;
+    feedback.initial_state = semantic->problem.initial_state;
+    feedback.linearizations.assign(
+      final_problem.linearizations.begin() + consumed,
+      final_problem.linearizations.end());
+    const int old_state_offset = consumed * nx;
+    const int old_input_offset = consumed * nu;
+    feedback.state_reference = final_problem.state_reference.segment(
+      old_state_offset, new_state_values);
+    feedback.state_lower = final_problem.state_lower.segment(
+      old_state_offset, new_state_values);
+    feedback.state_upper = final_problem.state_upper.segment(
+      old_state_offset, new_state_values);
+    feedback.state_weight = final_problem.state_weight.segment(
+      old_state_offset, new_state_values);
+    feedback.input_reference = final_problem.input_reference.segment(
+      old_input_offset, new_input_values);
+    feedback.input_lower = final_problem.input_lower.segment(
+      old_input_offset, new_input_values);
+    feedback.input_upper = final_problem.input_upper.segment(
+      old_input_offset, new_input_values);
+    feedback.input_weight = final_problem.input_weight.segment(
+      old_input_offset, new_input_values);
+    if (final_problem.additional_linear_cost.size() == old_variable_count) {
+      feedback.additional_linear_cost =
+        Eigen::VectorXd::Zero(new_variable_count);
+      feedback.additional_linear_cost.head(new_state_values) =
+        final_problem.additional_linear_cost.segment(
+        old_state_offset, new_state_values);
+      feedback.additional_linear_cost.tail(new_input_values) =
+        final_problem.additional_linear_cost.segment(
+        old_state_values + old_input_offset, new_input_values);
+    }
+    feedback.previous_input = request.previous_input;
+    feedback.input_delta_weight = final_problem.input_delta_weight;
+    feedback.steering_rate_prefix_bounds =
+      semantic->problem.steering_rate_prefix_bounds;
+
+    // x0 and the steering-response chain have changed control origins.  The
+    // remaining five-state future boxes still carry the final physical wall
+    // and obstacle refinement from preparation and must not be replaced.
+    feedback.state_reference.head(nx) =
+      semantic->problem.state_reference.head(nx);
+    feedback.state_lower.head(nx) = semantic->problem.state_lower.head(nx);
+    feedback.state_upper.head(nx) = semantic->problem.state_upper.head(nx);
+    feedback.state_weight.head(nx) = semantic->problem.state_weight.head(nx);
+    if (feedback.additional_linear_cost.size() == new_variable_count) {
+      feedback.additional_linear_cost.head(nx) =
+        semantic->problem.additional_linear_cost.head(nx);
+    }
+    for (int stage = 1; stage <= new_horizon; ++stage) {
+      const int state = stage * nx;
+      for (const int element :
+        {model::kSteeringIndex, model::kResponseSteeringIndex})
+      {
+        feedback.state_reference[state + element] =
+          semantic->problem.state_reference[state + element];
+        feedback.state_lower[state + element] =
+          semantic->problem.state_lower[state + element];
+        feedback.state_upper[state + element] =
+          semantic->problem.state_upper[state + element];
+        feedback.state_weight[state + element] =
+          semantic->problem.state_weight[state + element];
+        if (feedback.additional_linear_cost.size() == new_variable_count) {
+          feedback.additional_linear_cost[state + element] =
+            semantic->problem.additional_linear_cost[state + element];
+        }
+      }
+    }
+    feedback.input_reference.head(nu) =
+      semantic->problem.input_reference.head(nu);
+    feedback.input_lower.head(nu) = semantic->problem.input_lower.head(nu);
+    feedback.input_upper.head(nu) = semantic->problem.input_upper.head(nu);
+    feedback.input_weight.head(nu) = semantic->problem.input_weight.head(nu);
+    if (feedback.additional_linear_cost.size() == new_variable_count) {
+      feedback.additional_linear_cost.segment(new_state_values, nu) =
+        semantic->problem.additional_linear_cost.segment(new_state_values, nu);
+    }
+
+    if (final_problem.progress_aligned_wall_constraints.has_value()) {
+      const auto & source_wall =
+        final_problem.progress_aligned_wall_constraints.value();
+      problem::ProgressAlignedWallConstraints wall;
+      wall.lower_slope.assign(
+        source_wall.lower_slope.begin() + consumed,
+        source_wall.lower_slope.end());
+      wall.lower_intercept.assign(
+        source_wall.lower_intercept.begin() + consumed,
+        source_wall.lower_intercept.end());
+      wall.upper_slope.assign(
+        source_wall.upper_slope.begin() + consumed,
+        source_wall.upper_slope.end());
+      wall.upper_intercept.assign(
+        source_wall.upper_intercept.begin() + consumed,
+        source_wall.upper_intercept.end());
+      feedback.progress_aligned_wall_constraints = std::move(wall);
+    }
+    for (auto wall : final_problem.swept_lateral_wall_constraints) {
+      if (wall.transition_stage >= consumed) {
+        wall.transition_stage -= consumed;
+        feedback.swept_lateral_wall_constraints.push_back(std::move(wall));
+      }
+    }
+    for (auto obstacle : final_problem.dynamic_obstacle_constraints) {
+      // state_stage == consumed is the newly observed immutable x0. Exact
+      // current-world proof owns it; future QP rows start at suffix stage 1.
+      if (obstacle.state_stage > consumed) {
+        obstacle.state_stage -= consumed;
+        feedback.dynamic_obstacle_constraints.push_back(
+          std::move(obstacle));
+      }
+    }
+
+    result.linearization_primal = Eigen::VectorXd::Zero(new_variable_count);
+    result.linearization_primal.head(nx) = feedback.initial_state;
+    if (new_horizon > 0) {
+      result.linearization_primal.segment(nx, new_horizon * nx) =
+        preparation.prepared_primal.segment(
+        (consumed + 1) * nx, new_horizon * nx);
+      result.linearization_primal.tail(new_input_values) =
+        preparation.prepared_primal.segment(
+        old_state_values + old_input_offset, new_input_values);
+    }
+    const auto relinearization =
+      mpcc_rate_resolved_adapter::relinearize_around_primal(
+      result.suffix.snapshot->request, result.linearization_primal, feedback);
+    if (!relinearization.applied) {
+      return reject(
+        TimeAlignedFeedbackProblemReason::RelinearizationRejected,
+        std::string{"suffix relinearization rejected: "} +
+        mpcc_rate_resolved_adapter::to_string(relinearization.reason) +
+        "/stage=" + std::to_string(relinearization.stage));
+    }
+    if (!problem::assemble(feedback).has_value()) {
+      return reject(
+        TimeAlignedFeedbackProblemReason::PreparationDimensionMismatch,
+        "time-aligned refined feedback problem failed assembly validation");
+    }
+
+    result.reason = TimeAlignedFeedbackProblemReason::Accepted;
+    result.problem = std::move(feedback);
+    result.detail = "time-aligned prepared-QP suffix rebuilt";
+    return result;
+  } catch (const std::exception & error) {
+    return reject(
+      TimeAlignedFeedbackProblemReason::InvalidRequest,
+      std::string{"feedback problem rebuild exception: "} + error.what());
+  } catch (...) {
+    return reject(
+      TimeAlignedFeedbackProblemReason::InvalidRequest,
+      "feedback problem rebuild unknown exception");
+  }
+}
+
 persistent_osqp::PhysicalConstraintTolerance
 LatestStateFeedbackSolverContext::physical_constraint_tolerance() const noexcept
 {

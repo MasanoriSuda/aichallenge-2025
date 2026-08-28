@@ -594,6 +594,154 @@ TEST(MpccRateResolvedShadow, TimeAlignedSuffixRejectsSubminimumRemainder)
   EXPECT_FALSE(suffix.snapshot.has_value());
 }
 
+TEST(
+  MpccRateResolvedShadow,
+  TimeAlignedPreparedProblemSolvesTheMixedOriginFeedbackCounterexample)
+{
+  shadow::SolverContext preparation_context;
+  shadow::LatestStateFeedbackSolverContext old_feedback_context;
+  auto old_origin = snapshot();
+  old_origin.request = narrow_progress_request();
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.40, 0.10, 0.08};
+  const double feedback_origin_sec =
+    old_origin.control_prediction_origin_sec + 0.20;
+  const auto mixed_origin = old_feedback_context.evaluate(
+    shadow::LatestStateFeedbackRequest{
+      prepared.latest_state_feedback_preparation, feedback_origin_sec,
+      old_origin.control_prediction_origin_sec + 0.07, latest_state,
+      old_origin.request.previous_input});
+  ASSERT_EQ(
+    mixed_origin.reason, shadow::LatestStateFeedbackReason::SolveRejected)
+    << mixed_origin.detail;
+
+  const auto feedback = shadow::build_time_aligned_feedback_problem(
+    shadow::TimeAlignedFeedbackProblemRequest{
+      prepared.latest_state_feedback_preparation.get(), feedback_origin_sec,
+      latest_state, old_origin.request.previous_input,
+      preparation_context.physical_constraint_tolerance()});
+  ASSERT_EQ(
+    feedback.reason,
+    shadow::TimeAlignedFeedbackProblemReason::Accepted) << feedback.detail;
+  ASSERT_TRUE(feedback.problem.has_value());
+  ASSERT_TRUE(feedback.suffix.snapshot.has_value());
+  EXPECT_EQ(feedback.suffix.consumed_stage_count, 2U);
+  EXPECT_EQ(feedback.problem->horizon_steps, 1);
+  EXPECT_EQ(feedback.linearization_primal.size(), 17);
+  EXPECT_NEAR(
+    feedback.problem->initial_state[model::kProgressIndex],
+    latest_state.progress_m, 1e-12);
+
+  const auto assembled = problem::assemble(feedback.problem.value());
+  ASSERT_TRUE(assembled.has_value());
+  solver::PersistentOsqpSolver feedback_solver(
+    solver::ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto solved = feedback_solver.solve(
+    assembled->quadratic_cost, assembled->constraints,
+    assembled->linear_cost, assembled->lower_bound, assembled->upper_bound,
+    std::nullopt, assembled->variable_scaling);
+  EXPECT_TRUE(solved.result.has_value()) << solved.failure_detail;
+  if (solved.result.has_value()) {
+    EXPECT_TRUE(solved.result->primal.allFinite());
+    EXPECT_LE(solved.result->maximum_normalized_constraint_violation, 1.0);
+    EXPECT_NEAR(
+      solved.result->primal[model::kProgressIndex], latest_state.progress_m,
+      solved.telemetry.physical_global_tolerance);
+  }
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  TimeAlignedPreparedProblemMovesEveryRefinementRowWithOneClock)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto evaluated = preparation_context.evaluate(source);
+  ASSERT_EQ(evaluated.outcome, shadow::Outcome::Solved) << evaluated.detail;
+  ASSERT_NE(evaluated.latest_state_feedback_preparation, nullptr);
+  auto preparation = *evaluated.latest_state_feedback_preparation;
+  problem::ProgressAlignedWallConstraints progress_wall;
+  progress_wall.lower_slope = {0.0, 0.0, 0.0};
+  progress_wall.lower_intercept = {-1.0, -0.9, -0.8};
+  progress_wall.upper_slope = {0.0, 0.0, 0.0};
+  progress_wall.upper_intercept = {1.0, 0.9, 0.8};
+  preparation.final_problem.progress_aligned_wall_constraints =
+    std::move(progress_wall);
+  preparation.final_problem.swept_lateral_wall_constraints = {
+    {0, 0.5, -1.0, 1.0},
+    {1, 0.5, -0.9, 0.9},
+    {2, 0.5, -0.8, 0.8}};
+  preparation.final_problem.dynamic_obstacle_constraints = {
+    {1, problem::DynamicObstacleConstraintAxis::EffectiveProgress,
+      -1.0, 4.0, 0.0, 0.0},
+    {2, problem::DynamicObstacleConstraintAxis::EffectiveProgress,
+      -0.5, 4.0, 0.0, 0.0},
+    {3, problem::DynamicObstacleConstraintAxis::EffectiveProgress,
+      0.0, 4.0, 0.0, 0.0}};
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.22, 0.10, 0.08};
+
+  const auto feedback = shadow::build_time_aligned_feedback_problem(
+    shadow::TimeAlignedFeedbackProblemRequest{
+      &preparation, source.control_prediction_origin_sec + 0.11,
+      latest_state, source.request.previous_input,
+      preparation_context.physical_constraint_tolerance()});
+
+  ASSERT_EQ(
+    feedback.reason,
+    shadow::TimeAlignedFeedbackProblemReason::Accepted) << feedback.detail;
+  ASSERT_TRUE(feedback.problem.has_value());
+  ASSERT_TRUE(
+    feedback.problem->progress_aligned_wall_constraints.has_value());
+  const auto & wall =
+    feedback.problem->progress_aligned_wall_constraints.value();
+  ASSERT_EQ(wall.lower_intercept.size(), 2U);
+  EXPECT_DOUBLE_EQ(wall.lower_intercept[0], -0.9);
+  EXPECT_DOUBLE_EQ(wall.lower_intercept[1], -0.8);
+  ASSERT_EQ(feedback.problem->swept_lateral_wall_constraints.size(), 2U);
+  EXPECT_EQ(
+    feedback.problem->swept_lateral_wall_constraints[0].transition_stage, 0);
+  EXPECT_EQ(
+    feedback.problem->swept_lateral_wall_constraints[1].transition_stage, 1);
+  ASSERT_EQ(feedback.problem->dynamic_obstacle_constraints.size(), 2U);
+  EXPECT_EQ(
+    feedback.problem->dynamic_obstacle_constraints[0].state_stage, 1);
+  EXPECT_EQ(
+    feedback.problem->dynamic_obstacle_constraints[1].state_stage, 2);
+  EXPECT_TRUE(problem::assemble(feedback.problem.value()).has_value());
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  TimeAlignedPreparedProblemRejectsMalformedRefinementProvenance)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto evaluated = preparation_context.evaluate(source);
+  ASSERT_EQ(evaluated.outcome, shadow::Outcome::Solved) << evaluated.detail;
+  ASSERT_NE(evaluated.latest_state_feedback_preparation, nullptr);
+  auto preparation = *evaluated.latest_state_feedback_preparation;
+  preparation.final_problem.swept_lateral_wall_constraints.push_back(
+    {source.request.horizon_steps, 0.5, -1.0, 1.0});
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.22, 0.10, 0.08};
+
+  const auto feedback = shadow::build_time_aligned_feedback_problem(
+    shadow::TimeAlignedFeedbackProblemRequest{
+      &preparation, source.control_prediction_origin_sec + 0.11,
+      latest_state, source.request.previous_input,
+      preparation_context.physical_constraint_tolerance()});
+
+  EXPECT_EQ(
+    feedback.reason,
+    shadow::TimeAlignedFeedbackProblemReason::RefinementProvenanceMismatch);
+  EXPECT_FALSE(feedback.problem.has_value());
+}
+
 TEST(MpccRateResolvedShadow, RejectsDynamicWorldFromDifferentObservationEpoch)
 {
   shadow::SolverContext context;

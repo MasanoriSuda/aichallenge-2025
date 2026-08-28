@@ -167,6 +167,54 @@ struct TimeAlignedSuffixResult
 TimeAlignedSuffixResult resolve_time_aligned_suffix(
   const TimeAlignedSuffixRequest & request) noexcept;
 
+/// Observation-only result of transporting the immutable final refined QP to
+/// the same absolute-time suffix as `resolve_time_aligned_suffix`.  This is a
+/// formulation artifact only: it has no Store, mailbox or publisher API and
+/// therefore cannot acquire production authority.
+enum class TimeAlignedFeedbackProblemReason
+{
+  Accepted,
+  InvalidRequest,
+  SuffixRejected,
+  PreparationDimensionMismatch,
+  SemanticAdapterRejected,
+  RefinementProvenanceMismatch,
+  RelinearizationRejected,
+  Count,
+};
+
+const char * to_string(TimeAlignedFeedbackProblemReason reason) noexcept;
+
+struct TimeAlignedFeedbackProblemRequest
+{
+  const LatestStateFeedbackPreparation * preparation{};
+  double control_prediction_origin_sec{};
+  artifact::PredictedState initial_state;
+  Eigen::Matrix<double, mpcc_rate_resolved::kInputDimension, 1>
+  previous_input{
+    Eigen::Matrix<double, mpcc_rate_resolved::kInputDimension, 1>::Zero()};
+  persistent_osqp::PhysicalConstraintTolerance physical_constraint_tolerance;
+};
+
+struct TimeAlignedFeedbackProblemResult
+{
+  TimeAlignedFeedbackProblemReason reason{
+    TimeAlignedFeedbackProblemReason::InvalidRequest};
+  TimeAlignedSuffixResult suffix;
+  std::optional<mpcc_rate_resolved_problem::AssemblyRequest> problem;
+  /// Sliced former solution with latest x0.  It is used only as the tangent
+  /// selector for relinearization; it is not a certified warm start.
+  Eigen::VectorXd linearization_primal;
+  std::string detail{"not-evaluated"};
+};
+
+/// Move a prepared refined QP to the latest semantic suffix without changing
+/// the absolute timestamp of any surviving stage. Every retained affine
+/// dynamics row is rebuilt around a suffix-owned tangent, and malformed wall
+/// or obstacle row provenance is rejected instead of silently discarded.
+TimeAlignedFeedbackProblemResult build_time_aligned_feedback_problem(
+  const TimeAlignedFeedbackProblemRequest & request) noexcept;
+
 enum class LatestStateFeedbackReason
 {
   InvalidRequest,

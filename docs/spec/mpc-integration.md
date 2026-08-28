@@ -2823,6 +2823,29 @@ callback tail、maximum iteration、canonical Emergencyおよび複数条件で�
 parameter tuningで隠さずarchitecture/integration backlogとして再分類する。実験の再開条件は
 `docs/spec/mpcc-experiment-registry.json`を正本とする。
 
+#### Overtake live wall-proof ownership（2026-08-28、2025由来の暫定）
+
+`output/20260828-212704`で、`ShiftOut`中の`update_overtake_line()`が
+22.431--38.599 msを要した周期をdecision単位で分解した。基準horizon評価は
+0.269--0.946 ms、solved trajectory再検証は0--4.025 msだったのに対し、live
+receding lateral最適化が21.425--38.041 msを所有した。同処理は`N=20`の各stageで
+hard／preferredのheading-dependent footprint wall intervalを2回要求し、1 decisionで
+19--32 cache miss、2563--4308 pose scanを同期実行していた。
+
+これはcache bucketやwall marginの調整問題ではない。live OvertakeLineはその後に
+canonical seven-state latest-only workerへ問題を渡し、workerは同一のimmutable wall mapと
+clearance-expanded footprintからphysical hard rowを再構成し、さらにexact swept-footprint
+certificateを通ったartifactだけをcertified storeへ入れる。したがってcontrol callback内の
+footprint corridor生成は、publishされない1次元referenceと最終trajectoryの双方が物理壁証明を
+所有する重複だった。
+
+live receding optimizerの責務をscalar course support、target予測、homotopy、横到達可能性、
+soft reference生成へ限定する。生成referenceそのものに対する既存のexact physical viability
+checkはfail-closed判定として維持するが、stage wall boundsをphysical certificateとは扱わない。
+progress profileのprovenanceは`overtake-scalar-support-with-physical-anchor`とし、footprint-aware
+hard constraint、SQP refinement、最終exact proofはlatest-only seven-state workerだけが所有する。
+clearance、solver tolerance、cadence、lease、fallback、production authorityは変更しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

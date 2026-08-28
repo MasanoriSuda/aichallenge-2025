@@ -2011,6 +2011,42 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
         assert forbidden not in certified_header
 
 
+def test_live_overtake_reference_does_not_own_physical_wall_corridor() -> None:
+    """The 40 Hz reference planner cannot duplicate worker wall refinement."""
+
+    optimizer_start = SOURCE.index(
+        "OvertakeRecedingHorizonEvaluation optimize_live_overtake_line_horizon("
+    )
+    optimizer_end = SOURCE.index(
+        "std::vector<overtake_core::OvertakeKinematicSpeedCapSample>",
+        optimizer_start,
+    )
+    optimizer = SOURCE[optimizer_start:optimizer_end]
+    assert "find_cached_physical_wall_envelope(" not in optimizer
+    assert "preferred_wall_lower_bounds" in optimizer
+    assert "hard_wall_lower_bounds" in optimizer
+    assert "evaluate_overtake_line_horizon(" in optimizer
+
+    assert "overtake-scalar-support-with-physical-anchor" in SOURCE
+    binder_start = SOURCE.index("void bind_rate_resolved_physical_wall_refinement(")
+    binder_end = SOURCE.index("struct CanonicalCurrentControlPath", binder_start)
+    binder = SOURCE[binder_start:binder_end]
+    assert "solver_snapshot.wall_grid = physical_snapshot.wall_grid;" in binder
+    assert "solver_snapshot.wall_footprint = clearance_footprint.value();" in binder
+    assert "solver_snapshot.physical_wall_refinement_active = true;" in binder
+
+    evaluator_start = SOURCE.index(
+        "RateResolvedPhysicalSolutionEvaluation "
+        "evaluate_rate_resolved_physical_solution("
+    )
+    evaluator_end = SOURCE.index(
+        "RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(",
+        evaluator_start,
+    )
+    evaluator = SOURCE[evaluator_start:evaluator_end]
+    assert "rate_resolved_physical_wall::evaluate(" in evaluator
+
+
 def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
     """Retained proof evaluation may observe the world but cannot publish."""
 

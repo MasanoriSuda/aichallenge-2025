@@ -20119,9 +20119,14 @@ struct MPC
           progress_execution_wall_lateral_upper_m.push_back(
             overtake_line_output.stage_wall_corridor_upper_ey[index]);
         }
-        progress_aligned_wall_contract_source = "overtake-physical-envelope";
+        // OvertakeLine owns only the scalar progress support and the current
+        // measured-pose anchor.  The latest-only seven-state worker turns
+        // this support into footprint-aware hard rows from the immutable map,
+        // then exact swept-footprint proof gates publication.
+        progress_aligned_wall_contract_source =
+          "overtake-scalar-support-with-physical-anchor";
         progress_aligned_wall_contract_diagnostic =
-          "overtake-physical-envelope-complete";
+          "overtake-scalar-support-complete/worker-physical-proof-required";
       }
       for (int i = 0; i < N; ++i) {
         progress_execution_path_distance_m.push_back(
@@ -20131,12 +20136,12 @@ struct MPC
         progress_execution_lateral_upper_m.push_back(ub[i]);
       }
 
-      // Every canonical seven-state intent needs a progress-indexed physical
-      // wall profile.  OvertakeLine already supplies one for its horizon; for
+      // Every canonical seven-state intent needs progress-indexed wall
+      // support.  OvertakeLine supplies scalar support for its horizon; for
       // Track/Cruise, Follow, Rejoin and Dynamic Escape build the missing
-      // wall-only profile from the same footprint/map used by final
-      // certification.  Keeping this contract Overtake-only made a low-speed
-      // solve apply the nominal stage wall at a physically different progress.
+      // footprint-aware profile from the same map used by final
+      // certification.  In either case the worker-side physical refinement
+      // and exact proof remain mandatory publication gates.
       if (
         !overtake_wall_profile_available &&
         overtake_static_wall_grid_ != nullptr &&
@@ -30089,34 +30094,20 @@ private:
     };
     std::vector<RecedingHorizonTargetExecutionConstraint> target_execution_constraints;
     target_execution_constraints.reserve(static_cast<std::size_t>(N));
-    std::vector<double> preferred_physical_wall_lower_bounds;
-    std::vector<double> preferred_physical_wall_upper_bounds;
-    std::vector<double> hard_physical_wall_lower_bounds;
-    std::vector<double> hard_physical_wall_upper_bounds;
-    preferred_physical_wall_lower_bounds.reserve(static_cast<std::size_t>(N));
-    preferred_physical_wall_upper_bounds.reserve(static_cast<std::size_t>(N));
-    hard_physical_wall_lower_bounds.reserve(static_cast<std::size_t>(N));
-    hard_physical_wall_upper_bounds.reserve(static_cast<std::size_t>(N));
-    const bool physical_wall_envelope_available =
-      overtake_static_wall_grid_ != nullptr &&
-      overtake_static_wall_footprint_.valid();
-    const double physical_wall_envelope_sample_step =
-      physical_wall_envelope_available ?
-      std::clamp(0.5 * overtake_static_wall_grid_->resolution_m, 0.02, 0.10) : 0.05;
-    const auto baseline_profile_heading_offset = [&] (const std::size_t index) {
-        const double previous_lateral = index == 0U ?
-          current_ey : baseline_horizon.target_ey[index - 1U];
-        const double previous_distance = index == 0U ?
-          0.0 : baseline_horizon.path_distances[index - 1U];
-        const double delta_s =
-          baseline_horizon.path_distances[index] - previous_distance;
-        const auto & waypoint = model->reference_path->get_waypoint(
-          ref_wp_id + static_cast<int>(index));
-        return overtake_core::resolve_overtake_line_heading_reference(
-          overtake_core::OvertakeLineHeadingReferenceRequest{
-            previous_lateral, baseline_horizon.target_ey[index], delta_s,
-            waypoint.kappa});
-      };
+    // These are scalar course-support bounds for the reference generator.
+    // Footprint-aware bounds are owned by the canonical seven-state worker,
+    // which receives the immutable wall map and clearance-expanded footprint
+    // and must pass exact swept-footprint proof before publication.  Building
+    // a second heading-dependent physical corridor here performed 40 map
+    // searches in the 40 Hz callback for N=20 and duplicated that authority.
+    std::vector<double> preferred_wall_lower_bounds;
+    std::vector<double> preferred_wall_upper_bounds;
+    std::vector<double> hard_wall_lower_bounds;
+    std::vector<double> hard_wall_upper_bounds;
+    preferred_wall_lower_bounds.reserve(static_cast<std::size_t>(N));
+    preferred_wall_upper_bounds.reserve(static_cast<std::size_t>(N));
+    hard_wall_lower_bounds.reserve(static_cast<std::size_t>(N));
+    hard_wall_upper_bounds.reserve(static_cast<std::size_t>(N));
 
     overtake_core::RecedingHorizonLateralRequest request;
     request.enabled = true;
@@ -30186,85 +30177,16 @@ private:
         wall_upper = hard_wall_upper;
         result.hard_wall_clearance_used = true;
       }
-      if (physical_wall_envelope_available) {
-        const auto & waypoint = model->reference_path->get_waypoint(ref_wp_id + i);
-        const recovery_footprint::Pose2D reference_pose{
-          waypoint.x, waypoint.y, waypoint.psi};
-        const double heading_offset = baseline_profile_heading_offset(index);
-        const auto resolve_local_physical_interval = [&] (
-            const double scalar_lower, const double scalar_upper,
-            const double clearance) {
-            const double local_lower = std::max(
-              scalar_lower, baseline_target - maximum_adjustment);
-            const double local_upper = std::min(
-              scalar_upper, baseline_target + maximum_adjustment);
-            auto interval =
-              find_cached_physical_wall_envelope(
-              ref_wp_id + i,
-              reference_pose, scalar_lower, scalar_upper,
-              local_lower, local_upper, baseline_target,
-              heading_offset, clearance, physical_wall_envelope_sample_step);
-            bool trust_region_expanded = false;
-            if (
-              (!interval.valid || !interval.feasible) &&
-              (local_lower > scalar_lower + kEps || local_upper < scalar_upper - kEps))
-            {
-              interval = find_cached_physical_wall_envelope(
-                ref_wp_id + i,
-                reference_pose, scalar_lower, scalar_upper,
-                scalar_lower, scalar_upper, baseline_target,
-                heading_offset, clearance, physical_wall_envelope_sample_step);
-              trust_region_expanded = interval.valid && interval.feasible;
-            }
-            return std::make_pair(interval, trust_region_expanded);
-          };
-        const auto [hard_interval, hard_interval_expanded] =
-          resolve_local_physical_interval(
-          hard_wall_lower, hard_wall_upper, hard_wall_clearance);
-        if (!hard_interval.valid || !hard_interval.feasible) {
-          fail(
-            "physical wall envelope unavailable", true,
-            OvertakeRecedingHorizonFailureKind::Physical, i);
-          return result;
-        }
-        hard_wall_lower = std::max(
-          hard_wall_lower, hard_interval.lower_lateral_offset_m);
-        hard_wall_upper = std::min(
-          hard_wall_upper, hard_interval.upper_lateral_offset_m);
-        target_trust_region_expanded =
-          target_trust_region_expanded || hard_interval_expanded;
-
-        const auto [preferred_interval, preferred_interval_expanded] =
-          resolve_local_physical_interval(
-          wall_lower, wall_upper, planning_wall_clearance);
-        if (preferred_interval.valid && preferred_interval.feasible) {
-          wall_lower = std::max(
-            wall_lower, preferred_interval.lower_lateral_offset_m);
-          wall_upper = std::min(
-            wall_upper, preferred_interval.upper_lateral_offset_m);
-          target_trust_region_expanded =
-            target_trust_region_expanded || preferred_interval_expanded;
-        } else if (elastic_clearance_enabled) {
-          wall_lower = hard_wall_lower;
-          wall_upper = hard_wall_upper;
-          result.hard_wall_clearance_used = true;
-        } else {
-          fail(
-            "preferred physical wall envelope unavailable", true,
-            OvertakeRecedingHorizonFailureKind::Physical, i);
-          return result;
-        }
-      }
       if (hard_wall_upper < hard_wall_lower || wall_upper < wall_lower) {
         fail(
-          "physical wall envelope collapsed", true,
-          OvertakeRecedingHorizonFailureKind::Physical, i);
+          "scalar wall support collapsed", true,
+          OvertakeRecedingHorizonFailureKind::Wall, i);
         return result;
       }
-      hard_physical_wall_lower_bounds.push_back(hard_wall_lower);
-      hard_physical_wall_upper_bounds.push_back(hard_wall_upper);
-      preferred_physical_wall_lower_bounds.push_back(wall_lower);
-      preferred_physical_wall_upper_bounds.push_back(wall_upper);
+      hard_wall_lower_bounds.push_back(hard_wall_lower);
+      hard_wall_upper_bounds.push_back(hard_wall_upper);
+      preferred_wall_lower_bounds.push_back(wall_lower);
+      preferred_wall_upper_bounds.push_back(wall_upper);
       double lower = std::max(wall_lower, baseline_target - maximum_adjustment);
       double upper = std::min(wall_upper, baseline_target + maximum_adjustment);
 
@@ -30477,8 +30399,8 @@ private:
               overtake_core::resolve_receding_horizon_execution_bounds(
               overtake_core::RecedingHorizonExecutionBoundsRequest{
                 overtake_line_state_.pass_side_sign,
-                hard_physical_wall_lower_bounds[i],
-                hard_physical_wall_upper_bounds[i],
+                hard_wall_lower_bounds[i],
+                hard_wall_upper_bounds[i],
                 target_constraint.active,
                 target_constraint.target_lateral_m,
                 target_constraint.hard_center_separation_m});
@@ -30513,8 +30435,8 @@ private:
                 overtake_core::resolve_receding_horizon_execution_bounds(
                 overtake_core::RecedingHorizonExecutionBoundsRequest{
                   overtake_line_state_.pass_side_sign,
-                  hard_physical_wall_lower_bounds[i],
-                  hard_physical_wall_upper_bounds[i],
+                  hard_wall_lower_bounds[i],
+                  hard_wall_upper_bounds[i],
                   target_constraint.active,
                   target_constraint.target_lateral_m,
                   target_constraint.hard_center_separation_m});
@@ -30553,11 +30475,11 @@ private:
             return constraint.active;
           });
         retained_horizon.stage_wall_corridor_lower_ey =
-          elastic_clearance_enabled ? hard_physical_wall_lower_bounds :
-          preferred_physical_wall_lower_bounds;
+          elastic_clearance_enabled ? hard_wall_lower_bounds :
+          preferred_wall_lower_bounds;
         retained_horizon.stage_wall_corridor_upper_ey =
-          elastic_clearance_enabled ? hard_physical_wall_upper_bounds :
-          preferred_physical_wall_upper_bounds;
+          elastic_clearance_enabled ? hard_wall_upper_bounds :
+          preferred_wall_upper_bounds;
         retained_horizon.stage_corridor_lower_ey = std::move(retained_stage_lower);
         retained_horizon.stage_corridor_upper_ey = std::move(retained_stage_upper);
         attach_dynamic_obstacle_contract(
@@ -30780,11 +30702,11 @@ private:
         const bool candidate_uses_hard_wall_envelope =
           candidate_wall_clearance + 1e-6 < planning_wall_clearance;
         const auto & candidate_wall_lower_bounds =
-          candidate_uses_hard_wall_envelope ? hard_physical_wall_lower_bounds :
-          preferred_physical_wall_lower_bounds;
+          candidate_uses_hard_wall_envelope ? hard_wall_lower_bounds :
+          preferred_wall_lower_bounds;
         const auto & candidate_wall_upper_bounds =
-          candidate_uses_hard_wall_envelope ? hard_physical_wall_upper_bounds :
-          preferred_physical_wall_upper_bounds;
+          candidate_uses_hard_wall_envelope ? hard_wall_upper_bounds :
+          preferred_wall_upper_bounds;
         std::vector<double> validation_targets = optimized.lateral_targets_m;
         for (int repair_iteration = 0; repair_iteration < 3; ++repair_iteration) {
           ++result.physical_validation_attempt_count;
@@ -30968,8 +30890,8 @@ private:
         const auto baseline_target_constraints =
           build_validation_target_constraints(speed_for_time);
         const auto baseline_execution_bounds = check_execution_bounds(
-          baseline_horizon, hard_physical_wall_lower_bounds,
-          hard_physical_wall_upper_bounds, baseline_target_constraints);
+          baseline_horizon, hard_wall_lower_bounds,
+          hard_wall_upper_bounds, baseline_target_constraints);
         if (baseline_execution_bounds.valid) {
           result.active = true;
           result.fallback = true;
@@ -30988,9 +30910,9 @@ private:
               return constraint.active;
             });
           result.horizon.stage_wall_corridor_lower_ey =
-            hard_physical_wall_lower_bounds;
+            hard_wall_lower_bounds;
           result.horizon.stage_wall_corridor_upper_ey =
-            hard_physical_wall_upper_bounds;
+            hard_wall_upper_bounds;
           result.horizon.stage_corridor_lower_ey =
             baseline_execution_bounds.lower_bounds_m;
           result.horizon.stage_corridor_upper_ey =

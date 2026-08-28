@@ -438,6 +438,54 @@ TEST(MpccRateResolvedDynamicObstacle, ForcedTransitionUsesOnlyCompleteDisjuncts)
     result.problem->dynamic_obstacle_constraints[3].lower, 0.8);
 }
 
+TEST(MpccRateResolvedDynamicObstacle, DiagonalScheduleConnectsExactEndpoints)
+{
+  auto request = request_with_lateral_suffix();
+  request.pass_side_sign = 1;
+  request.forced_diagonal_start_stage = 1;
+  request.forced_diagonal_full_side_stage = 3;
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_TRUE(result.forced_transition_applied);
+  EXPECT_EQ(result.first_pass_side_stage, 3);
+  EXPECT_EQ(result.stay_behind_row_count, 1U);
+  EXPECT_EQ(result.diagonal_row_count, 2U);
+  EXPECT_EQ(result.pass_side_row_count, 1U);
+  EXPECT_EQ(result.partial_escape_row_count, 0U);
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  const auto & behind = result.problem->dynamic_obstacle_constraints[0];
+  EXPECT_EQ(
+    behind.axis,
+    problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+  EXPECT_DOUBLE_EQ(behind.upper, 1.2);
+
+  const auto & diagonal_start =
+    result.problem->dynamic_obstacle_constraints[1];
+  EXPECT_EQ(
+    diagonal_start.axis,
+    problem::DynamicObstacleConstraintAxis::CoupledLateralProgress);
+  EXPECT_NEAR(diagonal_start.lateral_coefficient, 0.0, 1e-12);
+  EXPECT_NEAR(diagonal_start.effective_progress_coefficient, -1.25, 1e-12);
+  EXPECT_NEAR(diagonal_start.lower, -1.5, 1e-12);
+
+  const auto & diagonal_middle =
+    result.problem->dynamic_obstacle_constraints[2];
+  EXPECT_EQ(
+    diagonal_middle.axis,
+    problem::DynamicObstacleConstraintAxis::CoupledLateralProgress);
+  EXPECT_GT(diagonal_middle.lateral_coefficient, 0.0);
+  EXPECT_LT(diagonal_middle.effective_progress_coefficient, 0.0);
+
+  const auto & full_side =
+    result.problem->dynamic_obstacle_constraints[3];
+  EXPECT_EQ(
+    full_side.axis, problem::DynamicObstacleConstraintAxis::Lateral);
+  EXPECT_DOUBLE_EQ(full_side.lower, 0.75);
+}
+
 TEST(MpccRateResolvedDynamicObstacle, OfflineContinuationEndsAtExactDisjunction)
 {
   auto make_request = []() {

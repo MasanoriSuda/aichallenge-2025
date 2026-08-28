@@ -49,6 +49,17 @@ Result refine(const Request & request) noexcept
     !std::isfinite(request.forced_constraint_fraction.value()) ||
     request.forced_constraint_fraction.value() < 0.0 ||
     request.forced_constraint_fraction.value() > 1.0)) ||
+    (request.forced_diagonal_start_stage.has_value() !=
+    request.forced_diagonal_full_side_stage.has_value()) ||
+    (request.forced_diagonal_start_stage.has_value() &&
+    (request.pass_side_sign == 0 ||
+    request.forced_first_pass_side_stage.has_value() ||
+    request.forced_first_ahead_stage.has_value() ||
+    request.forced_constraint_fraction.has_value() ||
+    request.forced_diagonal_start_stage.value() < 0 ||
+    request.forced_diagonal_full_side_stage.value() >= horizon ||
+    request.forced_diagonal_full_side_stage.value() <
+    request.forced_diagonal_start_stage.value() + 2)) ||
     request.stages.size() != static_cast<std::size_t>(horizon) ||
     request.wall_only_primal.size() != variable_count ||
     !request.wall_only_primal.allFinite() ||
@@ -429,6 +440,14 @@ Result refine(const Request & request) noexcept
   const double forced_constraint_fraction =
     request.forced_constraint_fraction.value_or(1.0);
   result.forced_constraint_fraction = forced_constraint_fraction;
+  const bool forced_diagonal =
+    request.forced_diagonal_start_stage.has_value();
+  if (forced_diagonal) {
+    partial_side_escape = false;
+    first_pass_side_stage =
+      request.forced_diagonal_full_side_stage.value();
+    result.forced_transition_applied = true;
+  }
 
   auto refined = request.constraint_target_problem.has_value() ?
     request.constraint_target_problem.value() : request.wall_only_problem;
@@ -441,6 +460,53 @@ Result refine(const Request & request) noexcept
     }
     problem::DynamicObstacleConstraint constraint;
     constraint.state_stage = stage + 1;
+    if (forced_diagonal) {
+      const int diagonal_start =
+        request.forced_diagonal_start_stage.value();
+      const int full_side =
+        request.forced_diagonal_full_side_stage.value();
+      if (stage < diagonal_start) {
+        constraint.axis =
+          problem::DynamicObstacleConstraintAxis::EffectiveProgress;
+        constraint.upper = prediction.target_progress_m -
+          prediction.longitudinal_overlap_m;
+        ++result.stay_behind_row_count;
+      } else if (stage >= full_side) {
+        constraint.axis = problem::DynamicObstacleConstraintAxis::Lateral;
+        const double boundary = prediction.target_lateral_m +
+          static_cast<double>(resolved_side_sign) *
+          prediction.lateral_center_separation_m;
+        if (resolved_side_sign > 0) {
+          constraint.lower = boundary;
+        } else {
+          constraint.upper = boundary;
+        }
+        ++result.pass_side_row_count;
+      } else {
+        constexpr double kHalfPi = 1.57079632679489661923;
+        const double fraction = static_cast<double>(stage - diagonal_start) /
+          static_cast<double>(full_side - diagonal_start);
+        const double alpha = kHalfPi * fraction;
+        const double progress_coefficient =
+          -std::cos(alpha) / prediction.longitudinal_overlap_m;
+        const double lateral_coefficient =
+          std::sin(alpha) * static_cast<double>(resolved_side_sign) /
+          prediction.lateral_center_separation_m;
+        constraint.axis = problem::DynamicObstacleConstraintAxis::
+          CoupledLateralProgress;
+        constraint.effective_progress_coefficient = progress_coefficient;
+        constraint.lateral_coefficient = lateral_coefficient;
+        constraint.lower = 1.0 -
+          std::cos(alpha) * prediction.target_progress_m /
+          prediction.longitudinal_overlap_m +
+          std::sin(alpha) * static_cast<double>(resolved_side_sign) *
+          prediction.target_lateral_m /
+          prediction.lateral_center_separation_m;
+        ++result.diagonal_row_count;
+      }
+      refined.dynamic_obstacle_constraints.push_back(constraint);
+      continue;
+    }
     const bool forced_ahead =
       request.forced_first_ahead_stage.has_value() &&
       stage >= request.forced_first_ahead_stage.value();

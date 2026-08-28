@@ -35,6 +35,11 @@ struct Request
   /// the wall-only witness and one restores the exact physical disjunct.
   /// Production leaves it absent, which is identical to one.
   std::optional<double> forced_constraint_fraction;
+  /// Shadow/offline candidate-E only. Stages before start use the exact
+  /// stay-behind row, stages start..full interpolate a coupled diagonal
+  /// supporting row, and later stages use exact selected-side separation.
+  std::optional<int> forced_diagonal_start_stage;
+  std::optional<int> forced_diagonal_full_side_stage;
   std::vector<StagePrediction> stages;
   /// Physically solved witness used only to classify the reachable convex
   /// obstacle branch. Its progress trust buckets must not implicitly become
@@ -71,6 +76,7 @@ struct Result
   std::size_t pass_side_row_count{};
   std::size_t ahead_row_count{};
   std::size_t partial_escape_row_count{};
+  std::size_t diagonal_row_count{};
   int first_valid_stage{-1};
   double first_wall_only_progress_m{};
   double first_wall_only_effective_progress_m{};

@@ -408,6 +408,8 @@ ArmResult evaluate_arm(
            << "/ahead_rows=" << solved.dynamic_obstacle_ahead_row_count
            << "/partial_rows="
            << solved.dynamic_obstacle_partial_escape_row_count
+           << "/diagonal_rows="
+           << solved.dynamic_obstacle_diagonal_row_count
            << "/reason=" << recovery::to_string(dynamic_result.rejection_reason)
            << "/scope=" << (prefix_scope ? "control-prefix" : "candidate")
            << "/qp_stage=" << qp_stage
@@ -596,6 +598,8 @@ const char * to_string(const Arm arm) noexcept
     case Arm::RoughRightC: return "rough-right-c";
     case Arm::OfflineLeftD: return "offline-left-d";
     case Arm::OfflineRightD: return "offline-right-d";
+    case Arm::DiagonalLeftE: return "diagonal-left-e";
+    case Arm::DiagonalRightE: return "diagonal-right-e";
   }
   return "unknown";
 }
@@ -633,7 +637,8 @@ Report compare(
       for (const auto arm :
         {Arm::PersistentA, Arm::StatelessLeftB, Arm::StatelessRightB,
          Arm::RoughLeftC, Arm::RoughRightC,
-         Arm::OfflineLeftD, Arm::OfflineRightD})
+         Arm::OfflineLeftD, Arm::OfflineRightD,
+         Arm::DiagonalLeftE, Arm::DiagonalRightE})
       {
         report.arms.push_back(rejected_arm(
           arm, Stage::SourceRejected, source_fingerprint, report.detail));
@@ -715,6 +720,43 @@ Report compare(
           report.arms.push_back(evaluate_offline_continuation(
             arm, source, source_fingerprint, side, transition_stage,
             ahead_stage));
+        }
+      }
+    }
+
+    for (const auto & [arm, side] :
+      {std::pair{Arm::DiagonalLeftE, 1},
+       std::pair{Arm::DiagonalRightE, -1}})
+    {
+      for (int diagonal_start_stage = 0;
+        diagonal_start_stage + 2 < source.request.horizon_steps;
+        ++diagonal_start_stage)
+      {
+        for (int full_side_stage = diagonal_start_stage + 2;
+          full_side_stage < source.request.horizon_steps; ++full_side_stage)
+        {
+          const auto built = maneuver::build_diagonal_schedule(
+            source, source_fingerprint, side, diagonal_start_stage,
+            full_side_stage);
+          if (!built.seed.has_value()) {
+            const auto stage =
+              built.reason == maneuver::RejectReason::TerminalSuccessorUnavailable ?
+              Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+            auto rejected = rejected_arm(
+              arm, stage, source_fingerprint,
+              std::string{maneuver::to_string(built.reason)} + ": " +
+              built.detail);
+            rejected.lattice_transition_stage = diagonal_start_stage;
+            rejected.lattice_ahead_stage = full_side_stage;
+            report.arms.push_back(std::move(rejected));
+            continue;
+          }
+          const auto successor = maneuver::resolve_terminal_successor(
+            built.seed->solver_snapshot);
+          report.arms.push_back(evaluate_arm(
+            arm, built.seed->solver_snapshot, source_fingerprint,
+            built.seed->candidate_fingerprint, successor,
+            diagonal_start_stage, full_side_stage));
         }
       }
     }

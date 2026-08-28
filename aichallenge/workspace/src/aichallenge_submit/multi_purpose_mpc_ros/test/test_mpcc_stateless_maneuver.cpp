@@ -169,6 +169,32 @@ TEST(MpccStatelessManeuver, BuildsDistinctSmoothLatticeTransition)
     delayed.seed->candidate_fingerprint);
 }
 
+TEST(MpccStatelessManeuver, SealsDiagonalScheduleWithoutMissionGeometry)
+{
+  const auto source = make_source();
+  const auto source_fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  const auto early = build_diagonal_schedule(
+    source, source_fingerprint, 1, 0, 2);
+  const auto opposite = build_diagonal_schedule(
+    source, source_fingerprint, -1, 0, 2);
+  ASSERT_TRUE(early.seed.has_value()) << early.detail;
+  ASSERT_TRUE(opposite.seed.has_value()) << opposite.detail;
+  EXPECT_EQ(
+    early.seed->solver_snapshot.dynamic_obstacle_forced_diagonal_start_stage,
+    0);
+  EXPECT_EQ(
+    early.seed->solver_snapshot.
+    dynamic_obstacle_forced_diagonal_full_side_stage, 2);
+  EXPECT_EQ(
+    early.seed->lateral_reference_m,
+    build(source, source_fingerprint, 1).seed->lateral_reference_m);
+  EXPECT_NE(
+    early.seed->candidate_fingerprint,
+    opposite.seed->candidate_fingerprint);
+  EXPECT_NE(early.seed->candidate_fingerprint, source_fingerprint);
+}
+
 TEST(MpccStatelessManeuver, SealsContinuationWithoutChangingStatelessReference)
 {
   const auto source = make_source();

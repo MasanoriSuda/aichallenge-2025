@@ -84,10 +84,19 @@ bool valid_dynamic_obstacle_constraints(
   for (const auto & constraint : constraints) {
     const bool supported_axis =
       constraint.axis == DynamicObstacleConstraintAxis::Lateral ||
-      constraint.axis == DynamicObstacleConstraintAxis::EffectiveProgress;
+      constraint.axis == DynamicObstacleConstraintAxis::EffectiveProgress ||
+      constraint.axis ==
+      DynamicObstacleConstraintAxis::CoupledLateralProgress;
+    const bool valid_coupled_coefficients =
+      constraint.axis !=
+      DynamicObstacleConstraintAxis::CoupledLateralProgress ||
+      (std::isfinite(constraint.lateral_coefficient) &&
+      std::isfinite(constraint.effective_progress_coefficient) &&
+      (constraint.lateral_coefficient != 0.0 ||
+      constraint.effective_progress_coefficient != 0.0));
     if (
       constraint.state_stage <= 0 || constraint.state_stage > horizon ||
-      !supported_axis ||
+      !supported_axis || !valid_coupled_coefficients ||
       std::isnan(constraint.lower) || std::isnan(constraint.upper) ||
       constraint.lower > constraint.upper)
     {
@@ -296,7 +305,9 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
     if (obstacle.axis == DynamicObstacleConstraintAxis::Lateral) {
       constraint_triplets.emplace_back(
         row, state + model::kLateralIndex, 1.0);
-    } else {
+    } else if (
+      obstacle.axis == DynamicObstacleConstraintAxis::EffectiveProgress)
+    {
       // Physical along-track position is theta + e_lag.  A theta-only row
       // disagrees with the canonical Follow gap certificate and can turn a
       // safe negative-lag state into a false longitudinal collision.
@@ -304,6 +315,16 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
         row, state + model::kProgressIndex, 1.0);
       constraint_triplets.emplace_back(
         row, state + model::kLagIndex, 1.0);
+    } else {
+      constraint_triplets.emplace_back(
+        row, state + model::kLateralIndex,
+        obstacle.lateral_coefficient);
+      constraint_triplets.emplace_back(
+        row, state + model::kProgressIndex,
+        obstacle.effective_progress_coefficient);
+      constraint_triplets.emplace_back(
+        row, state + model::kLagIndex,
+        obstacle.effective_progress_coefficient);
     }
   }
   Eigen::SparseMatrix<double> constraints(
@@ -485,14 +506,18 @@ RowSemantic decode_row(
   {
     const auto & obstacle = (*dynamic_obstacle_constraints)[
       static_cast<std::size_t>(trailing_row)];
-    return RowSemantic{
-      true,
-      obstacle.axis == DynamicObstacleConstraintAxis::Lateral ?
-      RowKind::DynamicObstacleLateral :
-      RowKind::DynamicObstacleEffectiveProgress,
-      obstacle.state_stage,
-      obstacle.axis == DynamicObstacleConstraintAxis::Lateral ?
-      model::kLateralIndex : model::kProgressIndex};
+    RowKind kind = RowKind::DynamicObstacleCoupledLateralProgress;
+    int element = -1;
+    if (obstacle.axis == DynamicObstacleConstraintAxis::Lateral) {
+      kind = RowKind::DynamicObstacleLateral;
+      element = model::kLateralIndex;
+    } else if (
+      obstacle.axis == DynamicObstacleConstraintAxis::EffectiveProgress)
+    {
+      kind = RowKind::DynamicObstacleEffectiveProgress;
+      element = model::kProgressIndex;
+    }
+    return RowSemantic{true, kind, obstacle.state_stage, element};
   }
   return {};
 }
@@ -514,6 +539,8 @@ const char * row_kind_name(const RowKind kind) noexcept
       return "dynamic-obstacle-lateral";
     case RowKind::DynamicObstacleEffectiveProgress:
       return "dynamic-obstacle-effective-progress";
+    case RowKind::DynamicObstacleCoupledLateralProgress:
+      return "dynamic-obstacle-coupled-lateral-progress";
   }
   return "unknown";
 }

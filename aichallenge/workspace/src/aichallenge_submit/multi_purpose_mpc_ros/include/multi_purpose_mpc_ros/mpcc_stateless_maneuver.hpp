@@ -133,6 +133,14 @@ Result build_lattice(
   int pass_side_sign, int first_pass_side_stage,
   int first_ahead_stage) noexcept;
 
+/// Shadow-only candidate-E member. It keeps the stateless-B reference and
+/// seals a monotone diagonal supporting-row schedule into the candidate.
+Result build_diagonal_schedule(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint,
+  int pass_side_sign, int diagonal_start_stage,
+  int full_side_stage) noexcept;
+
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver
 
 #endif  // MULTI_PURPOSE_MPC_ROS__MPCC_STATELESS_MANEUVER_HPP_

@@ -211,11 +211,23 @@ YAML::Node assembly_request_node(const problem::AssemblyRequest & request)
   for (const auto & constraint : request.dynamic_obstacle_constraints) {
     YAML::Node item;
     item["state_stage"] = constraint.state_stage;
-    item["axis"] = constraint.axis ==
-      problem::DynamicObstacleConstraintAxis::Lateral ?
-      "lateral" : "effective-progress";
+    if (
+      constraint.axis == problem::DynamicObstacleConstraintAxis::Lateral)
+    {
+      item["axis"] = "lateral";
+    } else if (
+      constraint.axis ==
+      problem::DynamicObstacleConstraintAxis::EffectiveProgress)
+    {
+      item["axis"] = "effective-progress";
+    } else {
+      item["axis"] = "coupled-lateral-progress";
+    }
     item["lower"] = constraint.lower;
     item["upper"] = constraint.upper;
+    item["lateral_coefficient"] = constraint.lateral_coefficient;
+    item["effective_progress_coefficient"] =
+      constraint.effective_progress_coefficient;
     obstacles.push_back(item);
   }
   node["dynamic_obstacle_constraints"] = obstacles;
@@ -424,6 +436,10 @@ YAML::Node source_node(
     source.dynamic_obstacle_forced_first_ahead_stage;
   node["dynamic_obstacle_forced_constraint_fraction"] =
     source.dynamic_obstacle_forced_constraint_fraction;
+  node["dynamic_obstacle_forced_diagonal_start_stage"] =
+    source.dynamic_obstacle_forced_diagonal_start_stage;
+  node["dynamic_obstacle_forced_diagonal_full_side_stage"] =
+    source.dynamic_obstacle_forced_diagonal_full_side_stage;
   YAML::Node obstacle_stages(YAML::NodeType::Sequence);
   for (const auto & stage : source.dynamic_obstacle_stages) {
     YAML::Node item;
@@ -878,6 +894,14 @@ std::optional<shadow::Snapshot> load_source_snapshot(
     source.dynamic_obstacle_forced_constraint_fraction =
       node["dynamic_obstacle_forced_constraint_fraction"].as<double>();
   }
+  if (node["dynamic_obstacle_forced_diagonal_start_stage"]) {
+    source.dynamic_obstacle_forced_diagonal_start_stage =
+      node["dynamic_obstacle_forced_diagonal_start_stage"].as<int>();
+  }
+  if (node["dynamic_obstacle_forced_diagonal_full_side_stage"]) {
+    source.dynamic_obstacle_forced_diagonal_full_side_stage =
+      node["dynamic_obstacle_forced_diagonal_full_side_stage"].as<int>();
+  }
   const auto stages = node["dynamic_obstacle_stages"];
   if (!stages || !stages.IsSequence()) {
     return std::nullopt;
@@ -1245,6 +1269,25 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     {
       return false;
     }
+    const bool diagonal_start_present =
+      source.dynamic_obstacle_forced_diagonal_start_stage >= 0;
+    const bool diagonal_full_present =
+      source.dynamic_obstacle_forced_diagonal_full_side_stage >= 0;
+    if (
+      source.dynamic_obstacle_forced_diagonal_start_stage < -1 ||
+      source.dynamic_obstacle_forced_diagonal_full_side_stage < -1 ||
+      diagonal_start_present != diagonal_full_present ||
+      (diagonal_start_present &&
+      (!source.dynamic_obstacle_refinement_active ||
+      source.dynamic_obstacle_pass_side_sign == 0 ||
+      source.dynamic_obstacle_forced_first_pass_side_stage >= 0 ||
+      source.dynamic_obstacle_forced_diagonal_full_side_stage >=
+      request.horizon_steps ||
+      source.dynamic_obstacle_forced_diagonal_full_side_stage <
+      source.dynamic_obstacle_forced_diagonal_start_stage + 2)))
+    {
+      return false;
+    }
     for (const auto & stage : source.dynamic_obstacle_stages) {
       if (
         !std::isfinite(stage.target_progress_m) ||
@@ -1413,6 +1456,12 @@ std::uint64_t fingerprint_interaction_snapshot(
     builder.append_i64(source.dynamic_obstacle_forced_first_ahead_stage);
     builder.append_double(
       source.dynamic_obstacle_forced_constraint_fraction);
+  }
+  if (source.dynamic_obstacle_forced_diagonal_start_stage >= 0) {
+    builder.append_u64(0x444941474f4e414cULL);
+    builder.append_i64(source.dynamic_obstacle_forced_diagonal_start_stage);
+    builder.append_i64(
+      source.dynamic_obstacle_forced_diagonal_full_side_stage);
   }
   builder.append_u64(
     static_cast<std::uint64_t>(source.dynamic_obstacle_stages.size()));

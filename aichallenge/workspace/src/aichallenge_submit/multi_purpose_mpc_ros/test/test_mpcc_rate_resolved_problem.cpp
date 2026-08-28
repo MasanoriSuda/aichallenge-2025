@@ -291,6 +291,48 @@ TEST(MpccRateResolvedProblem, KeepsDynamicObstacleRowsOutOfStateBoxes)
   EXPECT_EQ(semantic.stage, 1);
 }
 
+TEST(MpccRateResolvedProblem, AssemblesCoupledDynamicObstacleGuidanceRow)
+{
+  auto request = straight_request();
+  problem::DynamicObstacleConstraint coupled;
+  coupled.state_stage = 1;
+  coupled.axis = problem::DynamicObstacleConstraintAxis::
+    CoupledLateralProgress;
+  coupled.lower = 0.7;
+  coupled.lateral_coefficient = 2.0;
+  coupled.effective_progress_coefficient = -0.5;
+  request.dynamic_obstacle_constraints = {coupled};
+
+  const auto assembled = problem::assemble(request);
+  ASSERT_TRUE(assembled.has_value());
+  constexpr int horizon = 3;
+  constexpr int nx = model::kStateDimension;
+  constexpr int state_values = nx * (horizon + 1);
+  constexpr int input_values = model::kInputDimension * horizon;
+  constexpr int variable_count = state_values + input_values;
+  const int obstacle_row = state_values + variable_count;
+  EXPECT_DOUBLE_EQ(
+    assembled->constraints.coeff(
+      obstacle_row, nx + model::kLateralIndex), 2.0);
+  EXPECT_DOUBLE_EQ(
+    assembled->constraints.coeff(
+      obstacle_row, nx + model::kProgressIndex), -0.5);
+  EXPECT_DOUBLE_EQ(
+    assembled->constraints.coeff(
+      obstacle_row, nx + model::kLagIndex), -0.5);
+  EXPECT_DOUBLE_EQ(assembled->lower_bound[obstacle_row], 0.7);
+  const auto semantic = problem::decode_row(
+    obstacle_row, horizon, false, false, 0,
+    &request.dynamic_obstacle_constraints);
+  ASSERT_TRUE(semantic.valid);
+  EXPECT_EQ(
+    semantic.kind,
+    problem::RowKind::DynamicObstacleCoupledLateralProgress);
+  EXPECT_EQ(
+    problem::row_kind_name(semantic.kind),
+    std::string{"dynamic-obstacle-coupled-lateral-progress"});
+}
+
 TEST(MpccRateResolvedProblem, StateZeroEqualityAndSteeringOwnersAreExplicit)
 {
   const auto request = straight_request();

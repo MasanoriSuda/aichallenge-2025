@@ -75,6 +75,10 @@ enum class DynamicObstacleConstraintAxis
 {
   Lateral,
   EffectiveProgress,
+  /// Shadow/offline topology-guidance row containing both physical progress
+  /// (theta + e_lag) and lateral position. Production obstacle refinement
+  /// does not emit this axis.
+  CoupledLateralProgress,
 };
 
 struct DynamicObstacleConstraint
@@ -83,6 +87,8 @@ struct DynamicObstacleConstraint
   DynamicObstacleConstraintAxis axis{DynamicObstacleConstraintAxis::Lateral};
   double lower{-std::numeric_limits<double>::infinity()};
   double upper{std::numeric_limits<double>::infinity()};
+  double lateral_coefficient{};
+  double effective_progress_coefficient{};
 };
 
 struct AssemblyRequest
@@ -136,6 +142,7 @@ enum class RowKind
   SweptLateralWall,
   DynamicObstacleLateral,
   DynamicObstacleEffectiveProgress,
+  DynamicObstacleCoupledLateralProgress,
 };
 
 struct RowSemantic

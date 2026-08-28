@@ -596,4 +596,47 @@ Result build_lattice(
   return result;
 }
 
+Result build_diagonal_schedule(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const std::uint64_t source_interaction_fingerprint,
+  const int pass_side_sign, const int diagonal_start_stage,
+  const int full_side_stage) noexcept
+{
+  namespace architecture = mpcc_architecture_snapshot;
+  auto result = build(source, source_interaction_fingerprint, pass_side_sign);
+  if (!result.seed.has_value()) {
+    return result;
+  }
+  const int horizon = source.request.horizon_steps;
+  if (
+    diagonal_start_stage < 0 || full_side_stage >= horizon ||
+    full_side_stage < diagonal_start_stage + 2)
+  {
+    return reject(
+      RejectReason::InvalidTransitionStage,
+      "diagonal guidance schedule is outside the planning horizon");
+  }
+  auto & seed = result.seed.value();
+  auto & candidate = seed.solver_snapshot;
+  candidate.dynamic_obstacle_forced_diagonal_start_stage =
+    diagonal_start_stage;
+  candidate.dynamic_obstacle_forced_diagonal_full_side_stage =
+    full_side_stage;
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "diagonal guidance candidate is incomplete");
+  }
+  seed.candidate_fingerprint =
+    architecture::fingerprint_interaction_snapshot(candidate);
+  if (seed.candidate_fingerprint == 0U) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "diagonal guidance candidate fingerprint unavailable");
+  }
+  result.reason = RejectReason::Accepted;
+  result.detail = "accepted";
+  return result;
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver

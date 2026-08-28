@@ -139,9 +139,9 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
 {
   const auto report = compare(recorded(source_snapshot()));
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  // A + two B arms + C and D over two homotopies and every valid pair.
-  // For N=3 each homotopy has 3 + 2 + 1 = 6 members per architecture.
-  ASSERT_EQ(report.arms.size(), 27U);
+  // A + two B arms + C and D over two homotopies and every valid pair,
+  // plus one diagonal E schedule per homotopy for N=3.
+  ASSERT_EQ(report.arms.size(), 29U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
@@ -171,6 +171,13 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
   }
   for (std::size_t index = 15U; index < report.arms.size(); ++index) {
     const auto & arm = report.arms[index];
+    if (index >= 27U) {
+      EXPECT_TRUE(
+        arm.arm == Arm::DiagonalLeftE || arm.arm == Arm::DiagonalRightE);
+      EXPECT_EQ(arm.lattice_transition_stage, 0);
+      EXPECT_EQ(arm.lattice_ahead_stage, 2);
+      continue;
+    }
     EXPECT_TRUE(arm.arm == Arm::OfflineLeftD || arm.arm == Arm::OfflineRightD);
     EXPECT_GE(arm.lattice_transition_stage, 0);
     EXPECT_GT(arm.lattice_ahead_stage, arm.lattice_transition_stage);
@@ -228,7 +235,7 @@ TEST(MpccArchitectureComparison, FingerprintMismatchRejectsEveryArm)
   ++input.interaction_fingerprint;
   const auto report = compare(input);
   EXPECT_FALSE(report.source_accepted);
-  ASSERT_EQ(report.arms.size(), 7U);
+  ASSERT_EQ(report.arms.size(), 9U);
   for (const auto & arm : report.arms) {
     EXPECT_EQ(arm.stage, Stage::SourceRejected);
     EXPECT_FALSE(arm.bundle.has_value());

@@ -204,7 +204,7 @@
     },
     {
       "experiment_id": "20260828-native-pass-1566-rough-lattice-c",
-      "baseline_commit": "5c81bd38",
+      "baseline_commit": "5c81bd38bcbced1e62e2a6ac76ecc608ab0bc436",
       "snapshot_ids": [],
       "hypothesis": "an independently generated behind-to-side-to-ahead rough lattice can produce a physically certified ManeuverBundle when refined by the unchanged seven-state SQP",
       "changed_dimension": "candidate_generation_and_disjunction_timing",
@@ -216,7 +216,7 @@
     },
     {
       "experiment_id": "20260828-native-pass-1566-offline-continuation-d",
-      "baseline_commit": "e9323a1b",
+      "baseline_commit": "e9323a1bd7718a07ff82e99bd27802e4afbf8c8d",
       "snapshot_ids": [],
       "hypothesis": "a bounded obstacle-constraint continuation can reach a certified exact behind-side-ahead solution when the cold seven-state SQP cannot",
       "changed_dimension": "offline_convex_continuation_path",
@@ -225,6 +225,18 @@
       "production_impact": "none; continuation is sealed into offline-only snapshots and no intermediate or final D artifact is connected to production authority",
       "deleted_code": [],
       "revisit_condition": "an independent nonlinear or bounded kinematic feasibility audit separates omitted candidate geometry, single-SQP basin limitation and bounded physical infeasibility on the same fingerprint"
+    },
+    {
+      "experiment_id": "20260828-native-pass-1566-diagonal-guidance-e",
+      "baseline_commit": "ae474be37bc8e8f9ea90953fa68a61366a388035",
+      "snapshot_ids": [],
+      "hypothesis": "the strict behind-side-ahead axis disjunction omits a physically certifiable diagonal pass topology in the frozen Pass failure",
+      "changed_dimension": "offline_diagonal_obstacle_candidate_representation",
+      "result": "accepted",
+      "reason": "fingerprint 7246006054995400977 evaluated 342 shadow-only diagonal schedules; left schedules 0-to-3 and 1-to-3 passed the unchanged seven-state SQP, exact nonlinear wall proof, dense timed dynamic-obstacle proof and terminal successor proof, while A through D formed no bundle",
+      "production_impact": "none; the coupled row, schedules and E arms are sealed offline architecture-comparison inputs and are not connected to command authority",
+      "deleted_code": [],
+      "revisit_condition": "a production Slice derives the diagonal separating plane from the same physical footprint model, deletes wall-only partial_side_escape, and reproduces the frozen certificates plus dynamic Pass-to-Return acceptance"
     }
   ]
 }

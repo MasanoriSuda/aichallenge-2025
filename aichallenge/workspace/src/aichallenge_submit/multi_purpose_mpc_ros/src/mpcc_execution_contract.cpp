@@ -312,6 +312,14 @@ bool canonical_normal_intent_requires_target(const ControlIntent intent) noexcep
     intent == ControlIntent::Pass || intent == ControlIntent::Return;
 }
 
+bool canonical_normal_intent_requires_target_observation(
+  const ControlIntent intent) noexcept
+{
+  return
+    intent == ControlIntent::Follow || intent == ControlIntent::ShiftOut ||
+    intent == ControlIntent::Pass;
+}
+
 bool canonical_normal_intent_requires_execution_side(
   const ControlIntent intent) noexcept
 {
@@ -551,7 +559,7 @@ bool problem_context_complete(const MpccProblemContext & context) noexcept
     !canonical_normal_intent_requires_target(context.intent) ||
     !context.target_id.empty();
   const bool target_generation_complete =
-    context.target_id.empty() ||
+    !canonical_normal_intent_requires_target_observation(context.intent) ||
     (context.observation_generation > 0U && context.target_obstacle_generation > 0U);
   const bool execution_side_complete =
     canonical_normal_intent_requires_execution_side(context.intent) ?

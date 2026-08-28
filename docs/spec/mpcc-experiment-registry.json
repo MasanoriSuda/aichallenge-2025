@@ -282,6 +282,18 @@
         "target-bound aligned warm-start trajectory import"
       ],
       "revisit_condition": "a live trace shows target-bound execution authority persisting more than one control interval after its current target sweep becomes invalid or unsafe"
+    },
+    {
+      "experiment_id": "20260828-return-live-target-contract",
+      "baseline_commit": "39010cb0",
+      "snapshot_ids": [],
+      "hypothesis": "fresh Return production stops after rear-clear because stable encounter identity is incorrectly conflated with a current tactical target-observation generation",
+      "changed_dimension": "return_semantic_identity_contract",
+      "result": "inconclusive",
+      "reason": "the contract and 52/52 tests now permit Return with a stable encounter target and zero live target generation while Follow, ShiftOut and Pass still require current provenance; run 20260828-135832 exercised six Overtake episodes but none reached Pass-to-Return, so the repaired live path was not dynamically exercised",
+      "production_impact": "Return problem construction may continue after the completed target leaves the active tactical set; current wall and all currently observed peer proofs remain mandatory; solver, clearance, horizon, lease, timeout, fallback and authority arbitration are unchanged",
+      "deleted_code": [],
+      "revisit_condition": "a two-vehicle run reaches rear-clear and either shows fresh intent=return submissions through target deselection followed by Return-to-Idle, or freezes the first new exact rejection"
     }
   ]
 }

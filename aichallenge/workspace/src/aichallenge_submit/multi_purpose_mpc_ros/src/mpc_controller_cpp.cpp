@@ -26135,13 +26135,16 @@ struct MPC
     // obstacle observation below.
     context.observation_generation = active_control_decision_id_;
     context.intent = intent_override.value_or(current_control_intent());
-    const bool target_required =
+    const bool encounter_identity_required =
       mpcc_contract::canonical_normal_intent_requires_target(context.intent);
     if (last_overtake_authority_trace_.has_value()) {
       context.intent_generation =
         last_overtake_authority_trace_->request.mission_generation;
     }
-    if (target_required && last_overtake_authority_trace_.has_value()) {
+    if (
+      encounter_identity_required &&
+      last_overtake_authority_trace_.has_value())
+    {
       context.target_id = last_overtake_authority_trace_->request.target_id;
     }
     if (mpcc_contract::canonical_normal_intent_requires_execution_side(
@@ -26154,7 +26157,7 @@ struct MPC
     }
     const auto provenance = selected_target_provenance(last_v2x_behavior_output_);
     if (
-      target_required && provenance.valid &&
+      encounter_identity_required && provenance.valid &&
       (context.target_id.empty() || provenance.target_id == context.target_id))
     {
       context.target_obstacle_generation = provenance.observation_generation;

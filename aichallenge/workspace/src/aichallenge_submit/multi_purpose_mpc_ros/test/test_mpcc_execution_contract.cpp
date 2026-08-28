@@ -305,15 +305,16 @@ TEST(MpccExecutionContract, RejoinCanonicalIdentityDoesNotBorrowPassProvenance)
   EXPECT_TRUE(contract::problem_context_complete(context));
 }
 
-TEST(MpccExecutionContract, CanonicalOvertakeIntentsRequireTargetProvenance)
+TEST(MpccExecutionContract, CanonicalTargetBoundIntentsRequireLiveTargetProvenance)
 {
   for (const auto intent : {
       contract::ControlIntent::Follow,
       contract::ControlIntent::ShiftOut,
-      contract::ControlIntent::Pass,
-      contract::ControlIntent::Return})
+      contract::ControlIntent::Pass})
   {
     EXPECT_TRUE(contract::canonical_normal_intent_requires_target(intent));
+    EXPECT_TRUE(
+      contract::canonical_normal_intent_requires_target_observation(intent));
     auto context = make_context();
     context.intent = intent;
     context.target_id.clear();
@@ -328,6 +329,30 @@ TEST(MpccExecutionContract, CanonicalOvertakeIntentsRequireTargetProvenance)
   EXPECT_FALSE(
     contract::canonical_normal_intent_requires_target(
       contract::ControlIntent::Cruise));
+}
+
+TEST(
+  MpccExecutionContract,
+  CanonicalReturnRequiresEncounterIdentityButNotLiveTargetObservation)
+{
+  EXPECT_TRUE(
+    contract::canonical_normal_intent_requires_target(
+      contract::ControlIntent::Return));
+  EXPECT_FALSE(
+    contract::canonical_normal_intent_requires_target_observation(
+      contract::ControlIntent::Return));
+
+  auto rear_clear_return = make_context();
+  rear_clear_return.intent = contract::ControlIntent::Return;
+  rear_clear_return.target_obstacle_generation = 0U;
+  rear_clear_return = contract::seal_problem_context(
+    std::move(rear_clear_return));
+  EXPECT_TRUE(contract::problem_context_complete(rear_clear_return));
+
+  rear_clear_return.target_id.clear();
+  rear_clear_return = contract::seal_problem_context(
+    std::move(rear_clear_return));
+  EXPECT_FALSE(contract::problem_context_complete(rear_clear_return));
 }
 
 TEST(MpccExecutionContract, CanonicalOvertakeIdentityRequiresExactSide)

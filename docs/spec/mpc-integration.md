@@ -2280,9 +2280,16 @@ horizonは従来からsemantic problemへ含まれており、Rejoinだけ別の
 
 Rejoinはtargetless intentである。shared request builderが前周期のovertake targetを無条件にコピーすると、
 target generationを持たない正当なRejoin identityが不完全になり、六状態requestが拒否される。このため、
-target ID／provenanceは`canonical_normal_intent_requires_target()`がtrueのintentだけに構成する。
+encounter target IDは`canonical_normal_intent_requires_target()`がtrueのintentだけに構成する。
 Track／Cruiseも同じ規則に従うため、終了済みOvertake targetを借用しない。mission generationはtarget identityと
 分離して維持する。
+
+rear-clear後のReturnは例外的に、完了したencounter target IDとsideをsemantic identityとして保持する一方、
+そのtargetのlive observation generationを必須にしない。Follow／ShiftOut／Passは
+`canonical_normal_intent_requires_target_observation()`によりcurrent target provenanceを引き続き必須とする。
+Returnのcurrent-world証明はtarget labelではなく、現在観測される全V2X車両のdynamic footprintとwall、course、
+actuationを毎回再検証する。これにより追い抜いたtargetがactive setから外れた正常事象でfresh Return solveが止まり、
+有限artifactのcursor exhaustionからEmergency Stopへ落ちる不整合を防ぐ。
 
 retained Rejoinはartifact ageだけでは許可しない。共有current-world proofにより、現在poseからcontrol poseまでの
 到達性、course progress、steering／velocity到達性、現在のstatic wall gridとyawed footprint、現在観測される全V2X

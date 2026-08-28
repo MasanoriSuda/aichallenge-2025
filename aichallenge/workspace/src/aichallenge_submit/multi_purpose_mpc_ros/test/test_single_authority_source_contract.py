@@ -361,8 +361,8 @@ def test_rejoin_uses_the_shared_rate_resolved_normal_owner() -> None:
     assert "VelocityProgress5State" not in dispatch
 
 
-def test_targetless_normal_intents_do_not_borrow_stale_target_provenance() -> None:
-    """Track/Cruise/Rejoin identity must not inherit a prior pass target."""
+def test_encounter_identity_is_copied_only_for_target_owned_intents() -> None:
+    """Track/Cruise/Rejoin must not borrow an encounter target."""
 
     context_start = SOURCE.index("mpcc_contract::MpccProblemContext make_problem_context(")
     context_end = SOURCE.index(
@@ -370,10 +370,17 @@ def test_targetless_normal_intents_do_not_borrow_stale_target_provenance() -> No
         context_start,
     )
     context = SOURCE[context_start:context_end]
-    assert "const bool target_required =" in context
+    assert "const bool encounter_identity_required =" in context
     assert "canonical_normal_intent_requires_target(context.intent)" in context
-    assert "if (target_required && last_overtake_authority_trace_.has_value())" in context
-    assert re.search(r"if\s*\(\s*target_required\s*&&\s*provenance\.valid", context)
+    assert re.search(
+        r"if\s*\(\s*encounter_identity_required\s*&&\s*"
+        r"last_overtake_authority_trace_\.has_value\(\)",
+        context,
+    )
+    assert re.search(
+        r"if\s*\(\s*encounter_identity_required\s*&&\s*provenance\.valid",
+        context,
+    )
 
 
 def test_five_state_rejoin_owner_is_physically_deleted() -> None:

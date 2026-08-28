@@ -76,9 +76,17 @@ struct AtomicIntentAdmissionResolution
 AtomicIntentAdmissionResolution resolve_atomic_intent_admission(
   const AtomicIntentAdmissionRequest & request) noexcept;
 
-/// Canonical normal intents whose identity is incomplete without the observed
-/// target vehicle and its observation generation.
+/// Canonical normal intents whose semantic identity is incomplete without the
+/// stable encounter target. Return keeps this identity after rear-clear even
+/// when that completed target is no longer the live tactical obstacle.
 bool canonical_normal_intent_requires_target(ControlIntent intent) noexcept;
+
+/// Canonical normal intents which additionally require a current observation
+/// generation for the semantic target. Return is intentionally excluded: its
+/// current-world proof checks all observed peers, while the completed target
+/// may legitimately leave the active target set after rear-clear.
+bool canonical_normal_intent_requires_target_observation(
+  ControlIntent intent) noexcept;
 
 /// Overtake intents whose exact problem identity is incomplete without the
 /// selected left/right homotopy.

@@ -41,6 +41,27 @@ bool is_overtake(const contract::ControlIntent intent) noexcept
          intent == contract::ControlIntent::Return;
 }
 
+template<typename LowerDerived, typename UpperDerived>
+bool valid_semantic_bounds(
+  const Eigen::MatrixBase<LowerDerived> & lower,
+  const Eigen::MatrixBase<UpperDerived> & upper) noexcept
+{
+  if (lower.size() != upper.size()) {
+    return false;
+  }
+  for (Eigen::Index index = 0; index < lower.size(); ++index) {
+    if (
+      std::isnan(lower(index)) || std::isnan(upper(index)) ||
+      lower(index) == std::numeric_limits<double>::infinity() ||
+      upper(index) == -std::numeric_limits<double>::infinity() ||
+      lower(index) > upper(index))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 std::string safe_component(std::string value)
 {
   std::transform(
@@ -575,6 +596,22 @@ bool load_fixed_vector(
   return value.allFinite();
 }
 
+template<int Size>
+bool load_bound_vector(
+  const YAML::Node & node, Eigen::Matrix<double, Size, 1> & value)
+{
+  if (!node || !node.IsSequence() || node.size() != static_cast<std::size_t>(Size)) {
+    return false;
+  }
+  for (int index = 0; index < Size; ++index) {
+    value[index] = node[static_cast<std::size_t>(index)].as<double>();
+    if (std::isnan(value[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 std::optional<std::vector<double>> load_std_vector(const YAML::Node & node)
 {
   if (!node || !node.IsSequence()) {
@@ -666,8 +703,8 @@ std::optional<mpcc_rate_resolved_adapter::Request> load_semantic_request(
     adapter::StateStage stage;
     if (
       !load_fixed_vector(item["reference"], stage.reference) ||
-      !load_fixed_vector(item["lower"], stage.lower) ||
-      !load_fixed_vector(item["upper"], stage.upper) ||
+      !load_bound_vector(item["lower"], stage.lower) ||
+      !load_bound_vector(item["upper"], stage.upper) ||
       !load_fixed_vector(item["weight"], stage.weight) ||
       !load_fixed_vector(item["linear_cost"], stage.linear_cost))
     {
@@ -680,8 +717,8 @@ std::optional<mpcc_rate_resolved_adapter::Request> load_semantic_request(
     adapter::InputStage stage;
     if (
       !load_fixed_vector(item["reference"], stage.reference) ||
-      !load_fixed_vector(item["lower"], stage.lower) ||
-      !load_fixed_vector(item["upper"], stage.upper) ||
+      !load_bound_vector(item["lower"], stage.lower) ||
+      !load_bound_vector(item["upper"], stage.upper) ||
       !load_fixed_vector(item["weight"], stage.weight) ||
       !load_fixed_vector(item["linear_cost"], stage.linear_cost))
     {
@@ -1090,20 +1127,22 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     }
     for (const auto & stage : request.states) {
       if (
-        !stage.reference.allFinite() || !stage.lower.allFinite() ||
-        !stage.upper.allFinite() || !stage.weight.allFinite() ||
+        !stage.reference.allFinite() ||
+        !valid_semantic_bounds(stage.lower, stage.upper) ||
+        !stage.weight.allFinite() ||
         !stage.linear_cost.allFinite() ||
-        (stage.lower.array() > stage.upper.array()).any())
+        (stage.weight.array() < 0.0).any())
       {
         return false;
       }
     }
     for (const auto & stage : request.inputs) {
       if (
-        !stage.reference.allFinite() || !stage.lower.allFinite() ||
-        !stage.upper.allFinite() || !stage.weight.allFinite() ||
+        !stage.reference.allFinite() ||
+        !valid_semantic_bounds(stage.lower, stage.upper) ||
+        !stage.weight.allFinite() ||
         !stage.linear_cost.allFinite() ||
-        (stage.lower.array() > stage.upper.array()).any() ||
+        (stage.weight.array() < 0.0).any() ||
         !std::isfinite(stage.path_curvature_radpm) ||
         !std::isfinite(stage.stage_dt_sec) || stage.stage_dt_sec <= 0.0)
       {
@@ -1180,7 +1219,7 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     if (
       !world.current || world.observation_generation == 0U ||
       world.observation_generation !=
-      source.identity.source_context.observation_generation ||
+      source.identity.source_context.target_obstacle_generation ||
       !std::isfinite(world.observed_sec) || !finite_pose(world.current_pose) ||
       world.control_prefix.empty() ||
       world.control_prefix.size() != world.control_prefix_elapsed_sec.size() ||

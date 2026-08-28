@@ -160,6 +160,7 @@ target_include_directories(${PROJECT_NAME}_mpcc_stateless_maneuver PUBLIC
 target_link_libraries(${PROJECT_NAME}_mpcc_stateless_maneuver
   ${PROJECT_NAME}_mpcc_architecture_snapshot
   ${PROJECT_NAME}_mpcc_execution_contract
+  ${PROJECT_NAME}_mpc_stage_geometry
 )
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_shadow STATIC

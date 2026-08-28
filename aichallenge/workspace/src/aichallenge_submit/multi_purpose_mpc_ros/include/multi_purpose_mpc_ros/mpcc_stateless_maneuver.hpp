@@ -32,15 +32,16 @@ enum class TerminalSuccessor
 {
   None,
   Return,
+  Replan,
   Stop,
 };
 
 const char * to_string(TerminalSuccessor successor) noexcept;
 
-/// Non-authoritative description of the Stop problem which must follow the
-/// candidate if no Return suffix is visible.  It is intentionally not a
-/// trajectory or certificate; the common seven-state solver must still
-/// produce and prove the exact suffix before a ManeuverBundle can execute.
+/// Non-authoritative description of the Stop contingency which remains
+/// available after Return or another receding bundle.  It is intentionally
+/// not a trajectory or certificate; the common seven-state solver must still
+/// produce and prove the exact suffix before it can execute.
 struct ContingencyStopIntent
 {
   bool available{false};
@@ -59,6 +60,19 @@ struct TerminalResolution
   std::size_t last_encounter_state{};
   std::string detail{"not-evaluated"};
 };
+
+/// Current-world target tube rebuilt without persistent Mission products.
+/// Stage predictions use the same immutable ReplayWorld observation consumed
+/// by the final exact dynamic proof.
+struct TargetHorizon
+{
+  bool accepted{false};
+  std::vector<mpcc_rate_resolved_dynamic_obstacle::StagePrediction> stages;
+  std::string detail{"not-evaluated"};
+};
+
+TargetHorizon rebuild_target_horizon(
+  const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
 
 /// Resolve the common terminal successor contract without changing candidate
 /// geometry.  Persistent and stateless A/B arms must consume this one rule so

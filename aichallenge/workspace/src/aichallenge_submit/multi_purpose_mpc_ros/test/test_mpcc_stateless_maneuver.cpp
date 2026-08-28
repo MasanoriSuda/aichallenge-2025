@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -101,7 +102,7 @@ mpcc_rate_resolved_shadow::Snapshot make_source()
 
   source.replay_world.emplace();
   auto & world = source.replay_world.value();
-  world.observation_generation = 11U;
+  world.observation_generation = 13U;
   world.observed_sec = 20.0;
   world.current = true;
   world.current_pose = {0.0, 0.0, 0.0};
@@ -118,7 +119,7 @@ mpcc_rate_resolved_shadow::Snapshot make_source()
   world.swept_step_m = 0.1;
   world.obstacles.push_back(
     shadow::ReplayDynamicObstacle{
-      "d2", 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.8, 11U});
+      "d2", 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.8, 13U});
   EXPECT_TRUE(mpcc_architecture_snapshot::interaction_snapshot_complete(source));
   return source;
 }
@@ -165,17 +166,86 @@ TEST(MpccStatelessManeuver, IgnoresPersistentMissionLateralAndHeadingReference)
       mpcc_rate_resolved::kHeadingIndex], 0.0);
 }
 
-TEST(MpccStatelessManeuver, UsesStopOnlyAsExplicitTerminalSuccessor)
+TEST(MpccStatelessManeuver, RebuildsTargetHorizonWithoutMissionTargetStages)
 {
   auto source = make_source();
-  source.dynamic_obstacle_stages.back().target_progress_m = 3.0;
+  source.dynamic_obstacle_refinement_active = false;
+  source.dynamic_obstacle_stages.clear();
+  source.replay_world->obstacles.front().x_m = 2.0;
   const auto result = build(
     source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
   ASSERT_TRUE(result.seed.has_value()) << result.detail;
-  EXPECT_EQ(result.seed->terminal_successor, TerminalSuccessor::Stop);
+  EXPECT_EQ(result.reason, RejectReason::Accepted);
+  EXPECT_EQ(result.seed->terminal_successor, TerminalSuccessor::Replan);
+  EXPECT_TRUE(result.seed->stop_suffix.available);
+  EXPECT_TRUE(result.seed->solver_snapshot.dynamic_obstacle_refinement_active);
+  EXPECT_EQ(result.seed->solver_snapshot.dynamic_obstacle_stages.size(), 3U);
+}
+
+TEST(MpccStatelessManeuver, IgnoresPersistentMissionTargetStages)
+{
+  const auto source = make_source();
+  auto changed_mission = source;
+  for (auto & stage : changed_mission.dynamic_obstacle_stages) {
+    stage.target_progress_m += 20.0;
+    stage.target_lateral_m -= 4.0;
+    stage.longitudinal_overlap_m += 3.0;
+    stage.lateral_center_separation_m += 2.0;
+  }
+  const auto original = build(
+    source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
+  const auto changed = build(
+    changed_mission,
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(changed_mission), 1);
+  ASSERT_TRUE(original.seed.has_value()) << original.detail;
+  ASSERT_TRUE(changed.seed.has_value()) << changed.detail;
+  EXPECT_EQ(original.seed->lateral_reference_m, changed.seed->lateral_reference_m);
+  const auto & original_stages =
+    original.seed->solver_snapshot.dynamic_obstacle_stages;
+  const auto & changed_stages =
+    changed.seed->solver_snapshot.dynamic_obstacle_stages;
+  ASSERT_EQ(original_stages.size(), changed_stages.size());
+  for (std::size_t index = 0U; index < original_stages.size(); ++index) {
+    EXPECT_EQ(original_stages[index].valid, changed_stages[index].valid);
+    EXPECT_DOUBLE_EQ(
+      original_stages[index].target_progress_m,
+      changed_stages[index].target_progress_m);
+    EXPECT_DOUBLE_EQ(
+      original_stages[index].target_lateral_m,
+      changed_stages[index].target_lateral_m);
+    EXPECT_DOUBLE_EQ(
+      original_stages[index].longitudinal_overlap_m,
+      changed_stages[index].longitudinal_overlap_m);
+    EXPECT_DOUBLE_EQ(
+      original_stages[index].lateral_center_separation_m,
+      changed_stages[index].lateral_center_separation_m);
+  }
+}
+
+TEST(MpccStatelessManeuver, UsesReplanWithExplicitContingencyStop)
+{
+  auto source = make_source();
+  source.replay_world->obstacles.front().x_m = 2.0;
+  const auto result = build(
+    source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
+  ASSERT_TRUE(result.seed.has_value()) << result.detail;
+  EXPECT_EQ(result.seed->terminal_successor, TerminalSuccessor::Replan);
   EXPECT_TRUE(result.seed->stop_suffix.available);
   EXPECT_EQ(result.seed->stop_suffix.target_velocity_mps, 0.0);
   EXPECT_LT(result.seed->stop_suffix.maximum_deceleration_mps2, 0.0);
+}
+
+TEST(MpccStatelessManeuver, ReturnAllowsSemanticallyUnboundedLateralInterval)
+{
+  auto source = make_source();
+  source.request.states.back().lower[mpcc_rate_resolved::kLateralIndex] =
+    -std::numeric_limits<double>::infinity();
+  source.request.states.back().upper[mpcc_rate_resolved::kLateralIndex] =
+    std::numeric_limits<double>::infinity();
+  const auto result = build(
+    source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
+  ASSERT_TRUE(result.seed.has_value()) << result.detail;
+  EXPECT_EQ(result.seed->terminal_successor, TerminalSuccessor::Return);
 }
 
 TEST(MpccStatelessManeuver, RejectsInvalidSideAndMixedObservation)

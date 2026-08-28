@@ -83,9 +83,9 @@ shadow::Snapshot source_snapshot()
   source.dynamic_obstacle_refinement_active = true;
   source.dynamic_obstacle_pass_side_sign = 1;
   source.dynamic_obstacle_stages = {
-    {true, 0.4, 0.0, 0.15, 0.8},
-    {true, 0.8, 0.0, 0.15, 0.8},
-    {true, 2.0, 0.0, 0.15, 0.8}};
+    {true, 3.0, 5.0, 0.15, 0.8},
+    {true, 3.0, 5.0, 0.15, 0.8},
+    {true, 3.0, 5.0, 0.15, 0.8}};
   source.physical_wall_refinement_active = true;
   auto grid = std::make_shared<recovery::OccupancyGrid>();
   grid->width = 400U;
@@ -105,7 +105,7 @@ shadow::Snapshot source_snapshot()
 
   source.replay_world.emplace();
   auto & world = source.replay_world.value();
-  world.observation_generation = 11U;
+  world.observation_generation = 13U;
   world.observed_sec = 20.0;
   world.current = true;
   world.current_pose = {0.0, 0.0, 0.0};
@@ -120,7 +120,7 @@ shadow::Snapshot source_snapshot()
   // its identity still seals the same target/world used by every arm.
   world.obstacles.push_back(
     shadow::ReplayDynamicObstacle{
-      "d2", 1.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.2, 11U});
+      "d2", 3.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.2, 13U});
   EXPECT_TRUE(architecture::interaction_snapshot_complete(source));
   return source;
 }
@@ -164,10 +164,12 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
 TEST(MpccArchitectureComparison, PhysicalDynamicRejectionCannotCreateBundle)
 {
   auto source = source_snapshot();
-  // Initially clear, then intersected by the measured-to-control prefix.  An
-  // initial-overlap escape is intentionally a different production contract.
-  source.replay_world->obstacles.front().x_m = 1.3;
-  source.replay_world->obstacles.front().y_m = 0.0;
+  // The selected target remains feasible and clear to the QP.  A non-target
+  // intruder intersects the measured-to-control prefix, which only the common
+  // all-obstacle physical proof owns.
+  source.replay_world->obstacles.push_back(
+    shadow::ReplayDynamicObstacle{
+      "d3", 1.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.2, 13U});
   const auto report = compare(recorded(std::move(source)));
   ASSERT_TRUE(report.source_accepted);
   for (const auto & arm : report.arms) {

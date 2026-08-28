@@ -189,6 +189,18 @@
         "duplicate retained-only dynamic path proof implementation"
       ],
       "revisit_condition": "a native replay-ready Overtake failure snapshot produces a comparison result or exposes additional unsealed physical input"
+    },
+    {
+      "experiment_id": "20260828-native-pass-1566-ab-classification",
+      "baseline_commit": "6e2cd25add73f0160cbfc02d33e1af0e4266ffe1",
+      "snapshot_ids": [],
+      "hypothesis": "the first native replay-ready Pass failure discriminates persistent Mission lifecycle from a stateless current-world candidate under the same seven-state SQP and exact proofs",
+      "changed_dimension": "candidate_lifecycle_isolation",
+      "result": "inconclusive",
+      "reason": "run 20260828-094214 domain 1 fingerprint 7246006054995400977 reproduced A solver failure; positive-side B solved but exact dynamic proof found -0.007975 m clearance, so the registered outcome is model-certificate mismatch rather than a certified lifecycle win",
+      "production_impact": "none; comparison contracts and immutable observation capture changed, while normal command authority, solver policy, clearances, leases and fallbacks are unchanged",
+      "deleted_code": [],
+      "revisit_condition": "the sparse convex opponent model and dense swept physical proof share one discretization and footprint contract, after which the identical fingerprint is rerun before candidate C or offline D"
     }
   ]
 }

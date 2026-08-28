@@ -7,6 +7,7 @@
 #include <Eigen/Sparse>
 
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -69,6 +70,10 @@ mpcc_rate_resolved_shadow::Snapshot make_interaction_snapshot(
   snapshot.request.states[0].upper.setConstant(10.0);
   snapshot.request.states[1].lower.setConstant(-10.0);
   snapshot.request.states[1].upper.setConstant(10.0);
+  snapshot.request.states[0].lower[2] =
+    -std::numeric_limits<double>::infinity();
+  snapshot.request.states[0].upper[2] =
+    std::numeric_limits<double>::infinity();
   snapshot.request.inputs[0].lower.setConstant(-2.0);
   snapshot.request.inputs[0].upper.setConstant(2.0);
   snapshot.request.inputs[0].stage_dt_sec = 0.1;
@@ -102,7 +107,11 @@ mpcc_rate_resolved_shadow::Snapshot make_interaction_snapshot(
     mpcc_rate_resolved_dynamic_obstacle::StagePrediction{
       true, 4.0, 0.5, 2.0, 1.5}};
   snapshot.replay_world.emplace();
-  snapshot.replay_world->observation_generation = 3U;
+  // Vehicle-state decisions and V2X obstacle observations are independent
+  // streams in production.  Keep their generations distinct so replay
+  // completeness cannot accidentally bind the dynamic world to the ego
+  // decision generation.
+  snapshot.replay_world->observation_generation = 5U;
   snapshot.replay_world->observed_sec = 12.5;
   snapshot.replay_world->current = true;
   snapshot.replay_world->current_pose = {0.0, 0.0, 0.0};
@@ -121,7 +130,7 @@ mpcc_rate_resolved_shadow::Snapshot make_interaction_snapshot(
   snapshot.replay_world->swept_step_m = 0.1;
   snapshot.replay_world->obstacles.push_back(
     mpcc_rate_resolved_shadow::ReplayDynamicObstacle{
-      "d2", 4.0, 0.5, 1.0, 0.0, 0.1, 0.0, 0.02, 0.03, 0.8, 3U});
+      "d2", 4.0, 0.5, 1.0, 0.0, 0.1, 0.0, 0.02, 0.03, 0.8, 5U});
   return snapshot;
 }
 
@@ -236,7 +245,7 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
       loaded->source, loaded->interaction_fingerprint));
   ASSERT_TRUE(loaded->source.replay_world.has_value());
   EXPECT_EQ(loaded->source.identity.source_context.target_id, "d2");
-  EXPECT_EQ(loaded->source.replay_world->observation_generation, 3U);
+  EXPECT_EQ(loaded->source.replay_world->observation_generation, 5U);
   EXPECT_EQ(
     loaded->source.replay_world->control_prefix_elapsed_sec,
     (std::vector<double>{0.0, 0.1}));

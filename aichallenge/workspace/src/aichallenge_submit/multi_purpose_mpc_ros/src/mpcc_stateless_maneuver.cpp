@@ -348,6 +348,8 @@ const char * to_string(const CandidateKind kind) noexcept
     case CandidateKind::DirectSide: return "direct-side";
     case CandidateKind::EarliestPhysicalDiagonal:
       return "earliest-physical-diagonal";
+    case CandidateKind::LatePhysicalDiagonal:
+      return "late-physical-diagonal";
   }
   return "unknown";
 }
@@ -833,10 +835,31 @@ CandidateSet build_bounded_candidates(
     }
   }
 
+  // The direct and earliest candidates cover immediate avoidance, but they
+  // cannot represent a physically valid wait-then-shift maneuver.  Sample one
+  // additional temporal homotopy at a normalized late knot.  This remains bounded
+  // and current-world-only; the unchanged solver and nonlinear proofs decide
+  // whether the candidate can be published.
+  const int terminal_side_stage = direct_snapshot.request.horizon_steps - 1;
+  if (first_valid_stage >= 0 && terminal_side_stage > first_valid_stage + 1) {
+    const int stage_span = terminal_side_stage - first_valid_stage;
+    const int late_start_stage =
+      first_valid_stage + (2 * stage_span + 2) / 3;
+    if (late_start_stage + 1 < terminal_side_stage) {
+      auto late_diagonal = build_physical_diagonal_schedule(
+        source, source_fingerprint, pass_side_sign,
+        late_start_stage, terminal_side_stage);
+      if (late_diagonal.seed.has_value()) {
+        result.candidates.push_back(
+          Candidate{
+            CandidateKind::LatePhysicalDiagonal,
+            std::move(late_diagonal.seed.value())});
+      }
+    }
+  }
+
   result.reason = RejectReason::Accepted;
-  result.detail = result.candidates.size() == 2U ?
-    "direct and earliest physical diagonal candidates" :
-    "direct candidate only";
+  result.detail = "bounded current-world candidate population";
   return result;
 }
 

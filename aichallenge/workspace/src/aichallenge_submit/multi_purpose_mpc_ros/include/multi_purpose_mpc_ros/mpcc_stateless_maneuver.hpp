@@ -110,6 +110,7 @@ enum class CandidateKind
 {
   DirectSide,
   EarliestPhysicalDiagonal,
+  LatePhysicalDiagonal,
 };
 
 const char * to_string(CandidateKind kind) noexcept;
@@ -121,8 +122,8 @@ struct Candidate
 };
 
 /// Bounded production-facing candidate population.  It contains no publisher
-/// or retained lifecycle state.  Both members are derived from one immutable
-/// current-world fingerprint and the population size never exceeds two.
+/// or retained lifecycle state.  All members are derived from one immutable
+/// current-world fingerprint and the population size never exceeds three.
 struct CandidateSet
 {
   RejectReason reason{RejectReason::IncompleteSnapshot};

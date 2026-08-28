@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <limits>
 
 namespace steering =
@@ -117,6 +118,49 @@ TEST(MpccSteeringStateContract, RejectsNonfiniteCommittedInput)
 {
   auto request = valid_request();
   request.committed_steering_rad = std::numeric_limits<double>::infinity();
+
+  const auto result = steering::resolve(request);
+
+  EXPECT_EQ(result.reason, steering::Reason::InvalidMeasurement);
+  EXPECT_FALSE(result.state.has_value());
+}
+
+TEST(
+  MpccSteeringStateContract,
+  NormalizesTheFloat32SerializationOfTheConfiguredModelLimit)
+{
+  auto request = valid_request();
+  request.maximum_abs_steering_rad = 21.0 * std::acos(-1.0) / 180.0;
+  const double serialized_limit = static_cast<double>(
+    static_cast<float>(request.maximum_abs_steering_rad));
+  ASSERT_GT(serialized_limit, request.maximum_abs_steering_rad);
+  request.measured_steering_rad = -serialized_limit;
+  request.committed_steering_rad = -serialized_limit;
+
+  const auto result = steering::resolve(request);
+
+  ASSERT_EQ(result.reason, steering::Reason::Available);
+  ASSERT_TRUE(result.state.has_value());
+  EXPECT_DOUBLE_EQ(
+    result.state->measured_steering_rad,
+    -request.maximum_abs_steering_rad);
+  EXPECT_DOUBLE_EQ(
+    result.state->committed_steering_rad,
+    -request.maximum_abs_steering_rad);
+  EXPECT_TRUE(result.state->measured_steering_serialization_projected);
+  EXPECT_TRUE(result.state->committed_steering_serialization_projected);
+}
+
+TEST(
+  MpccSteeringStateContract,
+  RejectsSteeringBeyondTheFloat32SerializationEnvelope)
+{
+  auto request = valid_request();
+  request.maximum_abs_steering_rad = 21.0 * std::acos(-1.0) / 180.0;
+  const float serialized_limit =
+    static_cast<float>(request.maximum_abs_steering_rad);
+  request.measured_steering_rad = static_cast<double>(
+    std::nextafter(serialized_limit, std::numeric_limits<float>::infinity()));
 
   const auto result = steering::resolve(request);
 

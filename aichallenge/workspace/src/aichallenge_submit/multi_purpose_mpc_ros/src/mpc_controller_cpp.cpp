@@ -6814,6 +6814,8 @@ struct RateResolvedRetainedShadowEvaluation
     rate_resolved_retained::ExecutionClockKind::Unknown};
   double first_published_control_origin_sec{
     std::numeric_limits<double>::quiet_NaN()};
+  double first_published_artifact_elapsed_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   double prediction_delay_sec{};
   double measured_course_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
@@ -6886,6 +6888,25 @@ struct RateResolvedRetainedShadowEvaluation
   bool selected_from_executed{false};
   rate_resolved_retained::Reason candidate_reason{
     rate_resolved_retained::Reason::MissingPlan};
+  rate_resolved_shadow::artifact::CursorReason candidate_cursor_reason{
+    rate_resolved_shadow::artifact::CursorReason::InvalidArtifact};
+  double candidate_cursor_elapsed_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double candidate_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double candidate_progress_difference_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double candidate_steering_difference_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double candidate_maximum_steering_step_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  rate_resolved_physical::ContinuationRejectReason
+  candidate_continuation_reason{
+    rate_resolved_physical::ContinuationRejectReason::InvalidArtifact};
+  race_mpcc::ExactPhysicalExecutionTrajectoryReason
+  candidate_continuation_exact_reason{
+    race_mpcc::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  std::size_t candidate_proved_control_stage_count{};
   std::string candidate_blocking_obstacle_id;
   double candidate_minimum_dynamic_clearance_m{
     std::numeric_limits<double>::infinity()};
@@ -6998,6 +7019,8 @@ struct CanonicalNormalPendingActuation
   mpcc_contract::CanonicalNormalCommand command;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
   double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_published_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
   bool promote_to_executed{false};
 };
@@ -8246,7 +8269,6 @@ struct MPC
         submission_reject_count;
       return;
     }
-
     if (pending.normal_draft.has_value()) {
       const auto bound_submission =
         bind_rate_resolved_track_cruise_submission(
@@ -8313,7 +8335,8 @@ struct MPC
         pending.selected_plan == nullptr ||
         rate_resolved_track_cruise_certified_plan_store_->mark_executed(
           pending.selected_plan, decision_id,
-          pending.first_published_control_origin_sec) !=
+          pending.first_published_control_origin_sec,
+          pending.first_published_artifact_elapsed_sec) !=
         rate_resolved_certified::StoreReason::Accepted)
       {
         ++window.rejected_count;
@@ -19147,7 +19170,8 @@ struct MPC
           now_sec + std::max(0.0, execution_prediction_delay_sec_),
           rate_resolved_retained::ExecutionClock{
             rate_resolved_retained::ExecutionClockKind::PublishedPlan,
-            retained_entry.first_published_control_origin_sec});
+            retained_entry.first_published_control_origin_sec,
+            retained_entry.first_published_artifact_elapsed_sec});
         retained_execution_sequence = artifact.identity.sequence;
         retained_execution_cursor_reason = cursor.reason;
         if (
@@ -21693,6 +21717,7 @@ struct MPC
           overtake_line_state_.pass_side_sign},
         now_sec + std::max(0.0, execution_prediction_delay_sec_),
         executed_entry.first_published_control_origin_sec,
+        executed_entry.first_published_artifact_elapsed_sec,
         model->s, model->reference_path->length,
         model->reference_path->circular});
     alignment.cursor_reason = published.published.cursor.reason;
@@ -22865,8 +22890,15 @@ struct MPC
   std::optional<BoundRateResolvedTrackCruiseSubmission>
   bind_rate_resolved_track_cruise_submission(
     const RateResolvedTrackCruiseSubmissionDraft & draft,
-    const RateResolvedSerializedPredecessor & predecessor) const noexcept
+    const RateResolvedSerializedPredecessor & predecessor,
+    const char ** reject_reason = nullptr) const noexcept
   {
+    const auto reject = [reject_reason](const char * reason) {
+        if (reject_reason != nullptr) {
+          *reject_reason = reason;
+        }
+        return std::optional<BoundRateResolvedTrackCruiseSubmission>{};
+      };
     if (
       draft.horizon_steps <= 0 ||
       draft.request.horizon_steps != draft.horizon_steps ||
@@ -22876,20 +22908,31 @@ struct MPC
       static_cast<std::size_t>(draft.horizon_steps) ||
       !std::isfinite(draft.control_prediction_origin_sec) ||
       !std::isfinite(draft.course_progress_origin_m) ||
-      !mpcc_contract::problem_context_complete(draft.source_context) ||
+      !mpcc_contract::problem_context_complete(draft.source_context))
+    {
+      return reject("invalid-draft-contract");
+    }
+    if (
       predecessor.decision_id == 0U ||
       !std::isfinite(predecessor.publication_sec) ||
       !std::isfinite(predecessor.physical_steering_rad) ||
       !std::isfinite(predecessor.wire_steering_rad) ||
-      !predecessor.previous_input.allFinite() ||
+      !predecessor.previous_input.allFinite())
+    {
+      return reject("invalid-predecessor-contract");
+    }
+    if (
       !mpcc_contract::physical_steering_matches_serialized_actuation(
         predecessor.physical_steering_rad, predecessor.wire_steering_rad,
-        cfg.steering_tire_angle_gain_var) ||
-      !physical_control_origin_response_steering_rad_.has_value() ||
-      !std::isfinite(
-      physical_control_origin_response_steering_rad_.value()))
+        cfg.steering_tire_angle_gain_var))
     {
-      return std::nullopt;
+      return reject("predecessor-wire-physical-mismatch");
+    }
+    if (
+      !physical_control_origin_response_steering_rad_.has_value() ||
+      !std::isfinite(physical_control_origin_response_steering_rad_.value()))
+    {
+      return reject("response-steering-unavailable");
     }
     BoundRateResolvedTrackCruiseSubmission bound;
     bound.request = draft.request;
@@ -22908,6 +22951,9 @@ struct MPC
       predecessor.physical_steering_rad;
     bound.physical_control_origin_response_steering_rad =
       physical_control_origin_response_steering_rad_.value();
+    if (reject_reason != nullptr) {
+      *reject_reason = "accepted";
+    }
     return bound;
   }
 
@@ -23470,6 +23516,7 @@ struct MPC
         std::numeric_limits<double>::quiet_NaN(), now_sec,
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+          std::numeric_limits<double>::quiet_NaN(),
           std::numeric_limits<double>::quiet_NaN()});
       if (request.has_value()) {
         const auto joined = rate_resolved_retained::evaluate(request.value());
@@ -23926,6 +23973,7 @@ struct MPC
       std::numeric_limits<double>::quiet_NaN(), now_sec,
       rate_resolved_retained::ExecutionClock{
         rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+        std::numeric_limits<double>::quiet_NaN(),
         std::numeric_limits<double>::quiet_NaN()});
     if (!request.has_value()) {
       evaluation.reason =
@@ -24024,6 +24072,8 @@ struct MPC
     evaluation.execution_clock_kind = result.execution_clock_kind;
     evaluation.first_published_control_origin_sec =
       result.first_published_control_origin_sec;
+    evaluation.first_published_artifact_elapsed_sec =
+      result.first_published_artifact_elapsed_sec;
     evaluation.prediction_delay_sec =
       request->control_origin_sec - request->now_sec;
     evaluation.measured_course_progress_m =
@@ -24160,12 +24210,32 @@ struct MPC
         candidate_is_executed ?
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::PublishedPlan,
-          executed_entry.first_published_control_origin_sec} :
+          executed_entry.first_published_control_origin_sec,
+          executed_entry.first_published_artifact_elapsed_sec} :
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+          std::numeric_limits<double>::quiet_NaN(),
           std::numeric_limits<double>::quiet_NaN()});
       final_evaluation.candidate_attempted = true;
       final_evaluation.candidate_reason = final_evaluation.reason;
+      final_evaluation.candidate_cursor_reason =
+        final_evaluation.cursor_reason;
+      final_evaluation.candidate_cursor_elapsed_sec =
+        final_evaluation.cursor_elapsed_sec;
+      final_evaluation.candidate_control_origin_sec =
+        final_evaluation.control_origin_sec;
+      final_evaluation.candidate_progress_difference_m =
+        final_evaluation.progress_difference_m;
+      final_evaluation.candidate_steering_difference_rad =
+        final_evaluation.steering_difference_rad;
+      final_evaluation.candidate_maximum_steering_step_rad =
+        final_evaluation.maximum_steering_step_rad;
+      final_evaluation.candidate_continuation_reason =
+        final_evaluation.continuation_reason;
+      final_evaluation.candidate_continuation_exact_reason =
+        final_evaluation.continuation_exact_reason;
+      final_evaluation.candidate_proved_control_stage_count =
+        final_evaluation.proved_control_stage_count;
       final_evaluation.candidate_blocking_obstacle_id =
         final_evaluation.blocking_obstacle_id;
       final_evaluation.candidate_minimum_dynamic_clearance_m =
@@ -24185,6 +24255,24 @@ struct MPC
     if (executed_plan != nullptr && !candidate_is_executed)
     {
       const auto candidate_reason = final_evaluation.candidate_reason;
+      const auto candidate_cursor_reason =
+        final_evaluation.candidate_cursor_reason;
+      const double candidate_cursor_elapsed_sec =
+        final_evaluation.candidate_cursor_elapsed_sec;
+      const double candidate_control_origin_sec =
+        final_evaluation.candidate_control_origin_sec;
+      const double candidate_progress_difference_m =
+        final_evaluation.candidate_progress_difference_m;
+      const double candidate_steering_difference_rad =
+        final_evaluation.candidate_steering_difference_rad;
+      const double candidate_maximum_steering_step_rad =
+        final_evaluation.candidate_maximum_steering_step_rad;
+      const auto candidate_continuation_reason =
+        final_evaluation.candidate_continuation_reason;
+      const auto candidate_continuation_exact_reason =
+        final_evaluation.candidate_continuation_exact_reason;
+      const std::size_t candidate_proved_control_stage_count =
+        final_evaluation.candidate_proved_control_stage_count;
       const auto candidate_blocking_obstacle_id =
         final_evaluation.candidate_blocking_obstacle_id;
       const double candidate_minimum_dynamic_clearance_m =
@@ -24194,9 +24282,27 @@ struct MPC
         problem, now_sec, evaluation_intent, executed_plan,
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::PublishedPlan,
-          executed_entry.first_published_control_origin_sec});
+          executed_entry.first_published_control_origin_sec,
+          executed_entry.first_published_artifact_elapsed_sec});
       executed_evaluation.candidate_attempted = candidate_attempted;
       executed_evaluation.candidate_reason = candidate_reason;
+      executed_evaluation.candidate_cursor_reason = candidate_cursor_reason;
+      executed_evaluation.candidate_cursor_elapsed_sec =
+        candidate_cursor_elapsed_sec;
+      executed_evaluation.candidate_control_origin_sec =
+        candidate_control_origin_sec;
+      executed_evaluation.candidate_progress_difference_m =
+        candidate_progress_difference_m;
+      executed_evaluation.candidate_steering_difference_rad =
+        candidate_steering_difference_rad;
+      executed_evaluation.candidate_maximum_steering_step_rad =
+        candidate_maximum_steering_step_rad;
+      executed_evaluation.candidate_continuation_reason =
+        candidate_continuation_reason;
+      executed_evaluation.candidate_continuation_exact_reason =
+        candidate_continuation_exact_reason;
+      executed_evaluation.candidate_proved_control_stage_count =
+        candidate_proved_control_stage_count;
       executed_evaluation.candidate_blocking_obstacle_id =
         candidate_blocking_obstacle_id;
       executed_evaluation.candidate_minimum_dynamic_clearance_m =
@@ -24262,7 +24368,7 @@ struct MPC
           "Rate-resolved retained reason transition: decision=%lu, "
           "previous=%s, current=%s, suppressed=%lu, sequence=%lu, stage=%lu, "
           "time=observation:%.6f/control:%.6f/delay:%.6f/cursor:%.6f/"
-          "clock:%s/first_publish:%.6f, "
+          "clock:%s/first_publish:%.6f/first_cursor:%.6f, "
           "physical_join=position:%.6f/yaw:%.6f/"
           "control:(%.3f,%.3f,%.3f)/expected:(%.3f,%.3f,%.3f)/"
           "frenet:(%.3f,%.3f,%.3f), "
@@ -24294,6 +24400,7 @@ struct MPC
           retained.prediction_delay_sec, retained.cursor_elapsed_sec,
           rate_resolved_retained::to_string(retained.execution_clock_kind),
           retained.first_published_control_origin_sec,
+          retained.first_published_artifact_elapsed_sec,
           retained.control_pose_error_m, retained.control_yaw_error_rad,
           retained.control_pose.x_m, retained.control_pose.y_m,
           retained.control_pose.yaw_rad,
@@ -24803,7 +24910,10 @@ struct MPC
       "blocked_by:%s/continuation_model:%s/scope:%s/exact:%s/"
       "proved_stages:%lu/"
       "follow_generation:%lu/follow_states:%lu/min_follow_gap:%.3f, "
-      "selection=candidate:%d/seq:%lu/reason:%s/blocked_by:%s/"
+      "selection=candidate:%d/seq:%lu/reason:%s/cursor:%s/"
+      "cursor_elapsed:%.6f/control:%.6f/progress_delta:%.6f/"
+      "steering_delta:%.6f/steering_step:%.6f/"
+      "continuation:%s/exact:%s/proved_stages:%lu/blocked_by:%s/"
       "min_dynamic_clearance:%.3f/executed:%d/seq:%lu/"
       "reason:%s/source:%s, "
       "authority=shadow, selected=0",
@@ -24920,6 +25030,19 @@ struct MPC
       static_cast<unsigned long>(window.last_retained.candidate_sequence),
       rate_resolved_retained::to_string(
         window.last_retained.candidate_reason),
+      rate_resolved_shadow::artifact::to_string(
+        window.last_retained.candidate_cursor_reason),
+      window.last_retained.candidate_cursor_elapsed_sec,
+      window.last_retained.candidate_control_origin_sec,
+      window.last_retained.candidate_progress_difference_m,
+      window.last_retained.candidate_steering_difference_rad,
+      window.last_retained.candidate_maximum_steering_step_rad,
+      rate_resolved_physical::to_string(
+        window.last_retained.candidate_continuation_reason),
+      race_mpcc::exact_physical_execution_trajectory_reason_name(
+        window.last_retained.candidate_continuation_exact_reason),
+      static_cast<unsigned long>(
+        window.last_retained.candidate_proved_control_stage_count),
       window.last_retained.candidate_blocking_obstacle_id.empty() ?
       "none" : window.last_retained.candidate_blocking_obstacle_id.c_str(),
       window.last_retained.candidate_minimum_dynamic_clearance_m,
@@ -25929,7 +26052,7 @@ struct MPC
     last_control_was_fallback_ = false;
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id, command, retained.selected_plan,
-      retained.control_origin_sec,
+      retained.control_origin_sec, retained.cursor_elapsed_sec,
       !retained.selected_from_executed};
     last_control_resolution_reason_ =
       std::string{"canonical-rate-resolved-"} +
@@ -25992,9 +26115,9 @@ struct MPC
       problem, intent, now_sec, draft_reject_reason);
     const auto submission_draft_finished = SteadyClock::now();
     // Consume the retained artifact against the predecessor which entered
-    // this cycle.  The next asynchronous problem is bound only after the
+    // this cycle. The next asynchronous problem is bound only after the
     // current command is committed, so all intents share one causal steering
-    // origin and one six-state actuation time base.
+    // origin and one seven-state actuation time base.
     auto effective_intent = intent;
     bool published_stop_retained = false;
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
@@ -26005,12 +26128,9 @@ struct MPC
       mpcc_contract::ControlIntent::Unknown &&
       last_published_authority_intent_ != intent)
     {
-      // Gate A already solved and physically certified the exact seven-state
-      // ShiftOut/Pass plan before mutating the FSM. Re-solving that same
-      // problem synchronously here duplicated the proof inside the 25 ms
-      // control callback and left a normal-authority hole after the phase
-      // switch. Revalidate the immutable Gate A evidence against the current
-      // world instead; it becomes retained evidence only after publication.
+      // Gate A may bridge an intent transition before the background normal
+      // worker has completed the next homotopy. It is immutable tactical
+      // evidence and becomes retained normal evidence only after publication.
       const auto previous_intent = last_published_authority_intent_;
       bool gate_a_plan_attempted = false;
       bool gate_a_plan_joined = false;
@@ -26045,6 +26165,7 @@ struct MPC
             problem, now_sec, intent, gate_a_proposal->certified_plan,
             rate_resolved_retained::ExecutionClock{
               rate_resolved_retained::ExecutionClockKind::UnpublishedCandidate,
+              std::numeric_limits<double>::quiet_NaN(),
               std::numeric_limits<double>::quiet_NaN()});
           gate_a_plan_joined = retained.production_authority.has_value();
         }
@@ -26150,10 +26271,9 @@ struct MPC
         preentry_execution_draft_reject_reason.c_str());
     }
     // Do not bind or enqueue the next solve yet. The complete predecessor
-    // input (acceleration, realized steering rate and progress speed) for this
-    // decision does not exist until the ROS command has been serialized
-    // successfully. Moving the source problem retains the exact observation
-    // without copying its sparse matrices.
+    // input for this decision does not exist until the ROS command has been
+    // serialized successfully. Moving the source problem retains the exact
+    // observation without copying its sparse matrices.
     pending_rate_resolved_publication_successor_ =
       PendingRateResolvedPublicationSuccessor{
       active_control_decision_id_, now_sec, std::move(problem),
@@ -26259,9 +26379,11 @@ struct MPC
         auto output = canonical_normal_emergency_stop(
           problem, control_intent, "safety-brake-stop-authority");
         if (problem.stop_shadow_requested) {
+          const auto stop_shadow_intent = problem.problem_intent;
+          const auto stop_shadow_reason = problem.stop_shadow_reason;
           prepare_rate_resolved_stop_shadow_successor(
-            std::move(problem), problem.problem_intent, now_sec,
-            problem.stop_shadow_reason);
+            std::move(problem), stop_shadow_intent, now_sec,
+            stop_shadow_reason);
         }
         return output;
       }
@@ -54170,13 +54292,21 @@ private:
       const bool committed_command_reached =
         physical_steering_resolution.state.has_value() &&
         physical_steering_resolution.state->committed_command_reached;
+      const bool measured_serialization_projected =
+        physical_steering_resolution.state.has_value() &&
+        physical_steering_resolution.state
+        ->measured_steering_serialization_projected;
+      const bool committed_serialization_projected =
+        physical_steering_resolution.state.has_value() &&
+        physical_steering_resolution.state
+        ->committed_steering_serialization_projected;
       RCLCPP_INFO_THROTTLE(
         get_logger(), *get_clock(), 1000,
         "Steering debug: wp_id=%d, speed=%.3f, yaw_rate=%.3f, raw=%.4f, "
         "output=%.4f, measured_steering=%.4f, physical_origin=%.4f, "
         "committed_input=%.4f, reachable_step=%.4f, command_reached=%d, "
         "observation_age=%.4f, committed_projection=%.4f, "
-        "committed_control_age=%.4f, "
+        "committed_control_age=%.4f, serialization_projection=%d/%d, "
         "predicted_kappa=%.5f, measured_kappa=%.5f, "
         "error=%.5f, ratio=%.3f, valid=%d, ref_kappa=%.5f, "
         "solver_fallback=%d, recovery=%d",
@@ -54187,6 +54317,8 @@ private:
         steering_observation_age_sec,
         committed_projection_duration_sec,
         committed_control_age_sec,
+        measured_serialization_projected ? 1 : 0,
+        committed_serialization_projected ? 1 : 0,
         predicted_curvature, measured_curvature, curvature_error, curvature_ratio,
         measured_curvature_valid ? 1 : 0, reference_curvature,
         mpc_fallback_active ? 1 : 0, recovery_command_active ? 1 : 0);

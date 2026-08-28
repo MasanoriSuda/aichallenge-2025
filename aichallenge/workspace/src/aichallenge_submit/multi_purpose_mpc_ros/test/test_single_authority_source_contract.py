@@ -731,7 +731,7 @@ def test_problem_intent_is_resolved_after_current_cycle_authority_trace() -> Non
     )
     assert problem < production_intent
     assert "const auto control_intent = current_control_intent();" not in control
-    assert "problem.problem_intent" in control
+    assert "const auto stop_shadow_intent = problem.problem_intent;" in control
 
 
 def test_dynamic_escape_materializes_one_canonical_overtake_identity() -> None:
@@ -1796,7 +1796,7 @@ def test_runtime_wall_preplanner_cannot_destroy_canonical_mission() -> None:
 
 
 def test_rate_resolved_worker_is_observation_only_but_retained_proof_owns_control() -> None:
-    """Only a current-world-qualified retained six-state proof may own control."""
+    """Only a current-world-qualified retained seven-state proof may own control."""
 
     submit_start = SOURCE.index(
         "bool submit_rate_resolved_track_cruise_shadow("

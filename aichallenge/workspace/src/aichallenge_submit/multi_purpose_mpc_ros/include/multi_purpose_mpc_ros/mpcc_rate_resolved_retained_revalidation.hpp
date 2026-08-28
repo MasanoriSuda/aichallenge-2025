@@ -79,13 +79,19 @@ enum class ExecutionClockKind
 
 const char * to_string(ExecutionClockKind kind) noexcept;
 
-/// Causal execution time is not certificate age.  A candidate has executed no
-/// prefix; a published plan advances from the control origin recorded at its
-/// first exact publisher join.
+/// Causal execution time is not certificate age.  An unpublished candidate is
+/// spliced at the suffix corresponding to the current control origin; its
+/// skipped prefix receives no authority and the suffix must still pass the
+/// current physical-state, actuator, wall and dynamic-world connector proofs.
+/// A published plan instead advances from the artifact-local cursor at its
+/// first exact publisher join.  Publication time alone is insufficient when
+/// the first command came from a time-aligned candidate suffix.
 struct ExecutionClock
 {
   ExecutionClockKind kind{ExecutionClockKind::Unknown};
   double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_published_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
 };
 
@@ -259,6 +265,8 @@ struct Result
     artifact::ActuationReason::InvalidArtifact};
   ExecutionClockKind execution_clock_kind{ExecutionClockKind::Unknown};
   double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_published_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double cursor_elapsed_sec{std::numeric_limits<double>::quiet_NaN()};
   std::string blocking_obstacle_id;

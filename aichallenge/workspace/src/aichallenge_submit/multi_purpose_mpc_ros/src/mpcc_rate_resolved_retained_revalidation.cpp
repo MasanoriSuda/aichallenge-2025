@@ -493,17 +493,28 @@ artifact::Cursor resolve_execution_cursor(
   double elapsed_sec{};
   switch (clock.kind) {
     case ExecutionClockKind::UnpublishedCandidate:
-      elapsed_sec = 0.0;
+      // The solver labels state zero with prediction_origin_sec, not with the
+      // later instant at which its asynchronous result is consumed.  Keeping
+      // every unpublished result at cursor zero compares the current vehicle
+      // with a past lateral cross-section and makes a moving candidate
+      // joinable only after the vehicle stops.  Select the time-aligned suffix
+      // here; evaluate() subsequently rebuilds that suffix from the current
+      // physical state and proves actuator, wall and obstacle continuity.  No
+      // authority is inherited from the skipped, never-published prefix.
+      elapsed_sec = std::max(
+        0.0, current_control_origin_sec - execution.prediction_origin_sec);
       break;
     case ExecutionClockKind::PublishedPlan:
       if (!std::isfinite(clock.first_published_control_origin_sec) ||
         clock.first_published_control_origin_sec < 0.0 ||
+        !std::isfinite(clock.first_published_artifact_elapsed_sec) ||
+        clock.first_published_artifact_elapsed_sec < 0.0 ||
         current_control_origin_sec + kIdentityTolerance <
         clock.first_published_control_origin_sec)
       {
         return artifact::Cursor{};
       }
-      elapsed_sec = std::max(
+      elapsed_sec = clock.first_published_artifact_elapsed_sec + std::max(
         0.0,
         current_control_origin_sec -
         clock.first_published_control_origin_sec);
@@ -543,6 +554,8 @@ Result evaluate(const Request & request)
   result.execution_clock_kind = request.execution_clock.kind;
   result.first_published_control_origin_sec =
     request.execution_clock.first_published_control_origin_sec;
+  result.first_published_artifact_elapsed_sec =
+    request.execution_clock.first_published_artifact_elapsed_sec;
   if (request.plan == nullptr) {
     return result;
   }
@@ -557,6 +570,9 @@ Result evaluate(const Request & request)
     (!std::isfinite(
       request.execution_clock.first_published_control_origin_sec) ||
     request.execution_clock.first_published_control_origin_sec < 0.0 ||
+    !std::isfinite(
+      request.execution_clock.first_published_artifact_elapsed_sec) ||
+    request.execution_clock.first_published_artifact_elapsed_sec < 0.0 ||
     !std::isfinite(request.control_origin_sec) ||
     request.control_origin_sec + kIdentityTolerance <
     request.execution_clock.first_published_control_origin_sec);

@@ -40,6 +40,11 @@ struct Request
 
 struct PhysicalState
 {
+  /// Finite float32 steering values are normalized back onto the double
+  /// model envelope when their only excess comes from ROS serialization of
+  /// the configured limit.
+  bool measured_steering_serialization_projected{false};
+  bool committed_steering_serialization_projected{false};
   double measured_steering_rad{};
   double committed_steering_rad{};
   double observation_age_sec{};

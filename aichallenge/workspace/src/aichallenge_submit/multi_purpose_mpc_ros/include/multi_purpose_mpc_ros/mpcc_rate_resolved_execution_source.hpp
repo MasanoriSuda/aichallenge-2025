@@ -81,6 +81,7 @@ struct PublishedRequest
   Request identity;
   double current_control_origin_sec{};
   double first_published_control_origin_sec{};
+  double first_published_artifact_elapsed_sec{};
   double measured_course_progress_m{};
   double path_length_m{};
   bool circular{false};

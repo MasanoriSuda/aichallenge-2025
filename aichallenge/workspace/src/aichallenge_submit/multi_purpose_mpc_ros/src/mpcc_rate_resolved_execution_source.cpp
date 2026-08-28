@@ -118,6 +118,8 @@ PublishedResult build_published(const PublishedRequest & request)
     request.current_control_origin_sec < 0.0 ||
     !std::isfinite(request.first_published_control_origin_sec) ||
     request.first_published_control_origin_sec < 0.0 ||
+    !std::isfinite(request.first_published_artifact_elapsed_sec) ||
+    request.first_published_artifact_elapsed_sec < 0.0 ||
     request.current_control_origin_sec + 1e-9 <
     request.first_published_control_origin_sec)
   {
@@ -129,7 +131,8 @@ PublishedResult build_published(const PublishedRequest & request)
     artifact, request.current_control_origin_sec,
     retained::ExecutionClock{
       retained::ExecutionClockKind::PublishedPlan,
-      request.first_published_control_origin_sec});
+      request.first_published_control_origin_sec,
+      request.first_published_artifact_elapsed_sec});
   if (!cursor.available) {
     result.reason = PublishedRejectReason::CursorUnavailable;
     result.published.cursor = cursor;

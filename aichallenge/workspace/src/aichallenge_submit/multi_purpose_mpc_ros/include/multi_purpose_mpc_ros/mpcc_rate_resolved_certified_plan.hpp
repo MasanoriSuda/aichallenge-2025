@@ -84,6 +84,8 @@ struct StoreState
   bool executed_plan_available{false};
   double first_published_control_origin_sec{
     std::numeric_limits<double>::quiet_NaN()};
+  double first_published_artifact_elapsed_sec{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 /// Atomic publication ledger entry.  The certificate records when a plan was
@@ -94,6 +96,11 @@ struct ExecutedPlanSnapshot
 {
   std::shared_ptr<const CertifiedPlan> plan;
   double first_published_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  /// Artifact-local cursor whose command first crossed the publisher.  A
+  /// candidate may be adopted from a time-aligned suffix, so execution cannot
+  /// be reconstructed from publication time alone.
+  double first_published_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
 };
 
@@ -133,7 +140,8 @@ public:
   StoreReason mark_executed(
     std::shared_ptr<const CertifiedPlan> plan,
     std::uint64_t publication_decision_id,
-    double publication_control_origin_sec);
+    double publication_control_origin_sec,
+    double publication_artifact_elapsed_sec);
   /// Last plan whose command was successfully published.
   std::shared_ptr<const CertifiedPlan> snapshot() const;
   /// Last plan and the control-time origin of its first published command,
@@ -156,6 +164,8 @@ private:
   std::uint64_t stale_sequence_count_{};
   std::uint64_t certification_reject_count_{};
   double first_published_control_origin_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double first_published_artifact_elapsed_sec_{
     std::numeric_limits<double>::quiet_NaN()};
   RejectReason last_certification_reason_{RejectReason::MissingArtifact};
   StoreReason last_reason_{StoreReason::InvalidPlan};

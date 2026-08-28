@@ -182,13 +182,16 @@ std::shared_ptr<const CertifiedPlan> Store::candidate_snapshot() const
 StoreReason Store::mark_executed(
   std::shared_ptr<const CertifiedPlan> plan,
   const std::uint64_t publication_decision_id,
-  const double publication_control_origin_sec)
+  const double publication_control_origin_sec,
+  const double publication_artifact_elapsed_sec)
 {
   if (
     plan == nullptr || validate(*plan) != RejectReason::None ||
     publication_decision_id == 0U ||
     !std::isfinite(publication_control_origin_sec) ||
-    publication_control_origin_sec < 0.0)
+    publication_control_origin_sec < 0.0 ||
+    !std::isfinite(publication_artifact_elapsed_sec) ||
+    publication_artifact_elapsed_sec < 0.0)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     ++invalid_plan_count_;
@@ -212,7 +215,10 @@ StoreReason Store::mark_executed(
       same_executed_identity &&
       std::abs(
         first_published_control_origin_sec_ -
-        publication_control_origin_sec) <= 1e-9)
+        publication_control_origin_sec) <= 1e-9 &&
+      std::abs(
+        first_published_artifact_elapsed_sec_ -
+        publication_artifact_elapsed_sec) <= 1e-9)
     {
       last_reason_ = StoreReason::Accepted;
       return StoreReason::Accepted;
@@ -235,6 +241,8 @@ StoreReason Store::mark_executed(
   latest_execution_decision_id_ = publication_decision_id;
   if (!same_executed_identity) {
     first_published_control_origin_sec_ = publication_control_origin_sec;
+    first_published_artifact_elapsed_sec_ =
+      publication_artifact_elapsed_sec;
   }
   ++executed_count_;
   last_reason_ = StoreReason::Accepted;
@@ -251,7 +259,8 @@ ExecutedPlanSnapshot Store::executed_snapshot() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
   return ExecutedPlanSnapshot{
-    executed_plan_, first_published_control_origin_sec_};
+    executed_plan_, first_published_control_origin_sec_,
+    first_published_artifact_elapsed_sec_};
 }
 
 StoreState Store::state() const
@@ -272,6 +281,8 @@ StoreState Store::state() const
   state.executed_plan_available = static_cast<bool>(executed_plan_);
   state.first_published_control_origin_sec =
     first_published_control_origin_sec_;
+  state.first_published_artifact_elapsed_sec =
+    first_published_artifact_elapsed_sec_;
   return state;
 }
 
@@ -281,6 +292,8 @@ bool Store::clear()
   const bool had_plan = static_cast<bool>(executed_plan_);
   executed_plan_.reset();
   first_published_control_origin_sec_ =
+    std::numeric_limits<double>::quiet_NaN();
+  first_published_artifact_elapsed_sec_ =
     std::numeric_limits<double>::quiet_NaN();
   return had_plan;
 }
@@ -295,6 +308,8 @@ bool Store::clear_if_sequence(const std::uint64_t expected_sequence)
   }
   executed_plan_.reset();
   first_published_control_origin_sec_ =
+    std::numeric_limits<double>::quiet_NaN();
+  first_published_artifact_elapsed_sec_ =
     std::numeric_limits<double>::quiet_NaN();
   return true;
 }

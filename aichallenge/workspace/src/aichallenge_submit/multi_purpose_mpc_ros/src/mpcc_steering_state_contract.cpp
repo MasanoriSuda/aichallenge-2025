@@ -5,6 +5,21 @@
 
 namespace multi_purpose_mpc_ros::mpcc_steering_state_contract
 {
+namespace
+{
+
+double serialized_float32_limit(const double model_limit) noexcept
+{
+  // AckermannControlCommand and SteeringReport carry float32 angles. A
+  // command clipped to a double model limit can round one float32 ULP outside
+  // that same limit. Accept exactly the envelope reachable by serialization;
+  // larger finite values remain physical-limit violations.
+  return std::max(
+    model_limit,
+    std::abs(static_cast<double>(static_cast<float>(model_limit))));
+}
+
+}  // namespace
 
 const char * to_string(const Reason reason) noexcept
 {
@@ -57,11 +72,11 @@ Result resolve(const Request & request) noexcept
     result.reason = Reason::InvalidLimits;
     return result;
   }
+  const double serialized_limit =
+    serialized_float32_limit(request.maximum_abs_steering_rad);
   if (
-    std::abs(request.measured_steering_rad) >
-    request.maximum_abs_steering_rad ||
-    std::abs(request.committed_steering_rad.value()) >
-    request.maximum_abs_steering_rad)
+    std::abs(request.measured_steering_rad) > serialized_limit ||
+    std::abs(request.committed_steering_rad.value()) > serialized_limit)
   {
     return result;
   }
@@ -71,8 +86,19 @@ Result resolve(const Request & request) noexcept
   }
 
   PhysicalState state;
-  state.measured_steering_rad = request.measured_steering_rad;
-  state.committed_steering_rad = request.committed_steering_rad.value();
+  state.measured_steering_serialization_projected =
+    std::abs(request.measured_steering_rad) >
+    request.maximum_abs_steering_rad;
+  state.committed_steering_serialization_projected =
+    std::abs(request.committed_steering_rad.value()) >
+    request.maximum_abs_steering_rad;
+  state.measured_steering_rad = std::clamp(
+    request.measured_steering_rad, -request.maximum_abs_steering_rad,
+    request.maximum_abs_steering_rad);
+  state.committed_steering_rad = std::clamp(
+    request.committed_steering_rad.value(),
+    -request.maximum_abs_steering_rad,
+    request.maximum_abs_steering_rad);
   state.observation_age_sec = request.observation_age_sec;
   state.committed_command_age_sec = request.committed_command_age_sec;
   state.committed_command_control_age_sec =

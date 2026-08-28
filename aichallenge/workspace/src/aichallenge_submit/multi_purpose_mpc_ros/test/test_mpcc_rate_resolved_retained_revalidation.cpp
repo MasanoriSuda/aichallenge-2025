@@ -160,7 +160,7 @@ retained::Request accepted_request(
   request.now_sec = 1.05;
   request.control_origin_sec = 1.05;
   request.execution_clock = {
-    retained::ExecutionClockKind::PublishedPlan, 1.0};
+    retained::ExecutionClockKind::PublishedPlan, 1.0, 0.0};
   request.current_intent = contract::ControlIntent::Track;
   request.measured_course_progress_m = 50.10;
   request.path_length_m = 100.0;
@@ -697,7 +697,7 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  UnpublishedCandidateDoesNotInheritCertificateAgeAsExecutedPrefix)
+  UnpublishedCandidateSplicesAtCurrentControlOriginWithoutPrefixAuthority)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
@@ -708,24 +708,77 @@ TEST(
   // asks for steering 0.105.  That is not reachable from the actual last
   // serialized command in one 25 ms publication interval.
   request.execution_clock = {
-    retained::ExecutionClockKind::PublishedPlan, 1.0};
+    retained::ExecutionClockKind::PublishedPlan, 1.0, 0.0};
   const auto fictitiously_aged = retained::evaluate(request);
   EXPECT_EQ(
     fictitiously_aged.reason, retained::Reason::SteeringUnreachable);
   EXPECT_NEAR(fictitiously_aged.cursor_elapsed_sec, 0.05, 1e-9);
 
-  // A certified candidate which never crossed the publisher has executed no
-  // prefix.  Its cursor-zero command is replayed from the current state and is
-  // accepted only after the unchanged current-world physical proofs pass.
+  // A certified candidate which never crossed the publisher receives no
+  // authority for its skipped prefix.  It is nevertheless joined at the
+  // time-aligned suffix, where the same current-world actuator proof correctly
+  // rejects this deliberately unreachable command.
   request.execution_clock = {
     retained::ExecutionClockKind::UnpublishedCandidate,
+    std::numeric_limits<double>::quiet_NaN(),
     std::numeric_limits<double>::quiet_NaN()};
   const auto candidate = retained::evaluate(request);
-  EXPECT_EQ(candidate.reason, retained::Reason::Accepted);
-  EXPECT_NEAR(candidate.cursor_elapsed_sec, 0.0, 1e-9);
-  ASSERT_TRUE(candidate.proof.has_value());
-  EXPECT_EQ(
-    candidate.proof->cursor.control_stage_index, 0U);
+  EXPECT_EQ(candidate.reason, retained::Reason::SteeringUnreachable);
+  EXPECT_NEAR(candidate.cursor_elapsed_sec, 0.05, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  MovingUnpublishedCandidateUsesReachableSuffixCrossSection)
+{
+  auto execution = execution_artifact();
+  // State zero is a narrow physical cross-section at the old prediction
+  // origin.  The later suffix is deliberately broad.  A cursor-zero join from
+  // y=0.05 would be rejected even though the candidate has a currently
+  // reachable, fully revalidated suffix.
+  execution.lateral_lower_m = {-0.001, -1.0, -1.0};
+  execution.lateral_upper_m = {0.001, 1.0, 1.0};
+  auto execution_owner =
+    std::make_shared<const artifact::ExecutionArtifact>(execution);
+  const auto snapshot = source_snapshot(execution_owner->identity);
+  const auto built = certified::build(
+    execution_owner, snapshot, accepted_result(snapshot));
+  ASSERT_EQ(built.reason, certified::RejectReason::None);
+  ASSERT_NE(built.plan, nullptr);
+
+  auto request = accepted_request(built.plan);
+  request.execution_clock = {
+    retained::ExecutionClockKind::UnpublishedCandidate,
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN()};
+
+  const auto result = retained::evaluate(request);
+
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_NEAR(result.cursor_elapsed_sec, 0.05, 1e-9);
+  EXPECT_EQ(result.proof->cursor.control_stage_index, 0U);
+  EXPECT_NEAR(result.proof->cursor.stage_elapsed_sec, 0.05, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  PublishedPlanContinuesFromTheCandidateSuffixThatActuallyCrossedThePublisher)
+{
+  const auto plan = certified_plan();
+  ASSERT_NE(plan, nullptr);
+
+  const auto cursor = retained::resolve_execution_cursor(
+    *plan->execution_artifact, 1.115,
+    retained::ExecutionClock{
+      retained::ExecutionClockKind::PublishedPlan,
+      1.10,
+      0.05});
+
+  ASSERT_TRUE(cursor.available);
+  EXPECT_NEAR(cursor.elapsed_sec, 0.065, 1e-9);
+  EXPECT_EQ(cursor.control_stage_index, 0U);
+  EXPECT_NEAR(cursor.stage_elapsed_sec, 0.065, 1e-9);
 }
 
 TEST(
@@ -748,7 +801,7 @@ TEST(
   auto request = accepted_request(plan);
   request.execution_clock = {
     retained::ExecutionClockKind::PublishedPlan,
-    std::numeric_limits<double>::quiet_NaN()};
+    std::numeric_limits<double>::quiet_NaN(), 0.0};
   EXPECT_EQ(
     retained::evaluate(request).reason,
     retained::Reason::ExecutionClockInvalid);

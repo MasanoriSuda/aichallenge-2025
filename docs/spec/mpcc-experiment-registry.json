@@ -201,6 +201,18 @@
       "production_impact": "none; comparison contracts and immutable observation capture changed, while normal command authority, solver policy, clearances, leases and fallbacks are unchanged",
       "deleted_code": [],
       "revisit_condition": "candidate C supplies a rough path whose nodes satisfy the complete behind-or-side physical disjunction without partial-escape relaxation, then the identical fingerprint is rerun through the unchanged seven-state refinement and exact proof before offline D"
+    },
+    {
+      "experiment_id": "20260828-native-pass-1566-rough-lattice-c",
+      "baseline_commit": "5c81bd38",
+      "snapshot_ids": [],
+      "hypothesis": "an independently generated behind-to-side-to-ahead rough lattice can produce a physically certified ManeuverBundle when refined by the unchanged seven-state SQP",
+      "changed_dimension": "candidate_generation_and_disjunction_timing",
+      "result": "inconclusive",
+      "reason": "fingerprint 7246006054995400977 evaluated all 420 side/ahead transition pairs across both homotopies with complete behind, side and ahead disjuncts; every member was rejected by the first SQP solve before exact proof, so the tested candidate family failed but physical infeasibility is not certified",
+      "production_impact": "none; forced transition stages, rough references and C arms exist only in the offline shadow comparison",
+      "deleted_code": [],
+      "revisit_condition": "bounded offline D succeeds on the same immutable world/problem fingerprint, or a materially different candidate family supplies a new completeness argument"
     }
   ]
 }

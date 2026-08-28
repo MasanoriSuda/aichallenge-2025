@@ -418,6 +418,10 @@ YAML::Node source_node(
     source.dynamic_obstacle_refinement_active;
   node["dynamic_obstacle_pass_side_sign"] =
     source.dynamic_obstacle_pass_side_sign;
+  node["dynamic_obstacle_forced_first_pass_side_stage"] =
+    source.dynamic_obstacle_forced_first_pass_side_stage;
+  node["dynamic_obstacle_forced_first_ahead_stage"] =
+    source.dynamic_obstacle_forced_first_ahead_stage;
   YAML::Node obstacle_stages(YAML::NodeType::Sequence);
   for (const auto & stage : source.dynamic_obstacle_stages) {
     YAML::Node item;
@@ -860,6 +864,14 @@ std::optional<shadow::Snapshot> load_source_snapshot(
     node["dynamic_obstacle_refinement_active"].as<bool>();
   source.dynamic_obstacle_pass_side_sign =
     node["dynamic_obstacle_pass_side_sign"].as<int>();
+  if (node["dynamic_obstacle_forced_first_pass_side_stage"]) {
+    source.dynamic_obstacle_forced_first_pass_side_stage =
+      node["dynamic_obstacle_forced_first_pass_side_stage"].as<int>();
+  }
+  if (node["dynamic_obstacle_forced_first_ahead_stage"]) {
+    source.dynamic_obstacle_forced_first_ahead_stage =
+      node["dynamic_obstacle_forced_first_ahead_stage"].as<int>();
+  }
   const auto stages = node["dynamic_obstacle_stages"];
   if (!stages || !stages.IsSequence()) {
     return std::nullopt;
@@ -1197,6 +1209,27 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     {
       return false;
     }
+    if (
+      source.dynamic_obstacle_forced_first_pass_side_stage < -1 ||
+      source.dynamic_obstacle_forced_first_pass_side_stage >=
+      request.horizon_steps ||
+      (source.dynamic_obstacle_forced_first_pass_side_stage >= 0 &&
+      (!source.dynamic_obstacle_refinement_active ||
+      source.dynamic_obstacle_pass_side_sign == 0)))
+    {
+      return false;
+    }
+    if (
+      source.dynamic_obstacle_forced_first_ahead_stage < -1 ||
+      source.dynamic_obstacle_forced_first_ahead_stage >
+      request.horizon_steps ||
+      (source.dynamic_obstacle_forced_first_ahead_stage >= 0 &&
+      (source.dynamic_obstacle_forced_first_pass_side_stage < 0 ||
+      source.dynamic_obstacle_forced_first_ahead_stage <=
+      source.dynamic_obstacle_forced_first_pass_side_stage)))
+    {
+      return false;
+    }
     for (const auto & stage : source.dynamic_obstacle_stages) {
       if (
         !std::isfinite(stage.target_progress_m) ||
@@ -1357,6 +1390,13 @@ std::uint64_t fingerprint_interaction_snapshot(
   builder.append_vector(source.wall_upper_m);
   builder.append_bool(source.dynamic_obstacle_refinement_active);
   builder.append_i64(source.dynamic_obstacle_pass_side_sign);
+  // Preserve fingerprints of every frozen production snapshot.  The optional
+  // lattice member is appended only when candidate C explicitly selects one.
+  if (source.dynamic_obstacle_forced_first_pass_side_stage >= 0) {
+    builder.append_bool(true);
+    builder.append_i64(source.dynamic_obstacle_forced_first_pass_side_stage);
+    builder.append_i64(source.dynamic_obstacle_forced_first_ahead_stage);
+  }
   builder.append_u64(
     static_cast<std::uint64_t>(source.dynamic_obstacle_stages.size()));
   for (const auto & stage : source.dynamic_obstacle_stages) {

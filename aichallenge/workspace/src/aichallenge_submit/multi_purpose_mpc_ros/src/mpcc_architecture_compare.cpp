@@ -39,6 +39,8 @@ int main(int argc, char ** argv)
               << " terminal_progress=" << arm.terminal_progress_m
               << " terminal_velocity=" << arm.terminal_velocity_mps
               << " lateral_reserve=" << arm.minimum_lateral_bound_reserve_m
+              << " lattice_transition=" << arm.lattice_transition_stage
+              << " lattice_ahead=" << arm.lattice_ahead_stage
               << " bundle=" << arm.bundle.has_value()
               << " detail=" << arm.detail << '\n';
   }

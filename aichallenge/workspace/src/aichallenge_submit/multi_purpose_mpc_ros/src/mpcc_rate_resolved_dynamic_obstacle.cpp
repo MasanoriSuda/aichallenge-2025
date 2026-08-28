@@ -35,6 +35,15 @@ Result refine(const Request & request) noexcept
   if (
     horizon <= 0 || request.pass_side_sign < -1 ||
     request.pass_side_sign > 1 ||
+    (request.forced_first_pass_side_stage.has_value() &&
+    (request.pass_side_sign == 0 ||
+    request.forced_first_pass_side_stage.value() < 0 ||
+    request.forced_first_pass_side_stage.value() >= horizon)) ||
+    (request.forced_first_ahead_stage.has_value() &&
+    (!request.forced_first_pass_side_stage.has_value() ||
+    request.forced_first_ahead_stage.value() <=
+    request.forced_first_pass_side_stage.value() ||
+    request.forced_first_ahead_stage.value() > horizon)) ||
     request.stages.size() != static_cast<std::size_t>(horizon) ||
     request.wall_only_primal.size() != variable_count ||
     !request.wall_only_primal.allFinite() ||
@@ -404,6 +413,15 @@ Result refine(const Request & request) noexcept
     }
   }
 
+  if (request.forced_first_pass_side_stage.has_value()) {
+    // Candidate C chooses the disjunct sequence before SQP refinement.  It
+    // may not borrow a partial lateral witness: every stage must prove either
+    // complete longitudinal-behind or complete selected-side separation.
+    first_pass_side_stage = request.forced_first_pass_side_stage.value();
+    partial_side_escape = false;
+    result.forced_transition_applied = true;
+  }
+
   auto refined = request.constraint_target_problem.has_value() ?
     request.constraint_target_problem.value() : request.wall_only_problem;
   refined.dynamic_obstacle_constraints.clear();
@@ -415,7 +433,16 @@ Result refine(const Request & request) noexcept
     }
     problem::DynamicObstacleConstraint constraint;
     constraint.state_stage = stage + 1;
-    if (first_pass_side_stage >= 0 && stage >= first_pass_side_stage) {
+    const bool forced_ahead =
+      request.forced_first_ahead_stage.has_value() &&
+      stage >= request.forced_first_ahead_stage.value();
+    if (forced_ahead) {
+      constraint.axis =
+        problem::DynamicObstacleConstraintAxis::EffectiveProgress;
+      constraint.lower =
+        prediction.target_progress_m + prediction.longitudinal_overlap_m;
+      ++result.ahead_row_count;
+    } else if (first_pass_side_stage >= 0 && stage >= first_pass_side_stage) {
       constraint.axis = problem::DynamicObstacleConstraintAxis::Lateral;
       double required_signed_separation_m =
         prediction.lateral_center_separation_m;

@@ -20,6 +20,7 @@ enum class RejectReason
   SourceFingerprintMismatch,
   InvalidSide,
   UnsupportedIntent,
+  InvalidTransitionStage,
   DynamicTargetUnavailable,
   LateralIntervalUnavailable,
   TerminalSuccessorUnavailable,
@@ -113,6 +114,15 @@ Result build(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
+
+/// Candidate-C rough lattice member.  It explicitly selects the stage-wise
+/// complete obstacle disjunct and shapes a smooth current-world reference;
+/// the unchanged seven-state SQP and exact proofs retain final authority.
+Result build_lattice(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint,
+  int pass_side_sign, int first_pass_side_stage,
+  int first_ahead_stage) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver
 

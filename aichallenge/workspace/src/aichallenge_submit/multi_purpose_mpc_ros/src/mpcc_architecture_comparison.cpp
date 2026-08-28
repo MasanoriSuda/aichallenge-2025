@@ -303,12 +303,16 @@ ArmResult evaluate_arm(
   shadow::Snapshot candidate,
   const std::uint64_t source_fingerprint,
   const std::uint64_t candidate_fingerprint,
-  const maneuver::TerminalResolution & successor)
+  const maneuver::TerminalResolution & successor,
+  const int lattice_transition_stage = -1,
+  const int lattice_ahead_stage = -1)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
   arm_result.source_interaction_fingerprint = source_fingerprint;
   arm_result.candidate_fingerprint = candidate_fingerprint;
+  arm_result.lattice_transition_stage = lattice_transition_stage;
+  arm_result.lattice_ahead_stage = lattice_ahead_stage;
   if (!successor.accepted) {
     arm_result.stage = Stage::TerminalSuccessorRejected;
     arm_result.detail = successor.detail;
@@ -398,6 +402,7 @@ ArmResult evaluate_arm(
            << "/behind_rows="
            << solved.dynamic_obstacle_stay_behind_row_count
            << "/side_rows=" << solved.dynamic_obstacle_pass_side_row_count
+           << "/ahead_rows=" << solved.dynamic_obstacle_ahead_row_count
            << "/partial_rows="
            << solved.dynamic_obstacle_partial_escape_row_count
            << "/reason=" << recovery::to_string(dynamic_result.rejection_reason)
@@ -473,6 +478,8 @@ const char * to_string(const Arm arm) noexcept
     case Arm::PersistentA: return "persistent-a";
     case Arm::StatelessLeftB: return "stateless-left-b";
     case Arm::StatelessRightB: return "stateless-right-b";
+    case Arm::RoughLeftC: return "rough-left-c";
+    case Arm::RoughRightC: return "rough-right-c";
   }
   return "unknown";
 }
@@ -508,7 +515,8 @@ Report compare(
     {
       report.detail = "source interaction snapshot rejected";
       for (const auto arm :
-        {Arm::PersistentA, Arm::StatelessLeftB, Arm::StatelessRightB})
+        {Arm::PersistentA, Arm::StatelessLeftB, Arm::StatelessRightB,
+         Arm::RoughLeftC, Arm::RoughRightC})
       {
         report.arms.push_back(rejected_arm(
           arm, Stage::SourceRejected, source_fingerprint, report.detail));
@@ -541,6 +549,40 @@ Report compare(
       report.arms.push_back(evaluate_arm(
         arm, built.seed->solver_snapshot, source_fingerprint,
         built.seed->candidate_fingerprint, successor));
+    }
+
+    for (const auto & [arm, side] :
+      {std::pair{Arm::RoughLeftC, 1},
+       std::pair{Arm::RoughRightC, -1}})
+    {
+      for (int transition_stage = 0;
+        transition_stage < source.request.horizon_steps; ++transition_stage)
+      {
+        for (int ahead_stage = transition_stage + 1;
+          ahead_stage <= source.request.horizon_steps; ++ahead_stage)
+        {
+          const auto built = maneuver::build_lattice(
+            source, source_fingerprint, side, transition_stage, ahead_stage);
+          if (!built.seed.has_value()) {
+            const auto stage =
+              built.reason == maneuver::RejectReason::TerminalSuccessorUnavailable ?
+              Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+            auto rejected = rejected_arm(
+              arm, stage, source_fingerprint,
+              std::string{maneuver::to_string(built.reason)} + ": " + built.detail);
+            rejected.lattice_transition_stage = transition_stage;
+            rejected.lattice_ahead_stage = ahead_stage;
+            report.arms.push_back(std::move(rejected));
+            continue;
+          }
+          const auto successor = maneuver::resolve_terminal_successor(
+            built.seed->solver_snapshot);
+          report.arms.push_back(evaluate_arm(
+            arm, built.seed->solver_snapshot, source_fingerprint,
+            built.seed->candidate_fingerprint, successor, transition_stage,
+            ahead_stage));
+        }
+      }
     }
   } catch (const std::exception & exception) {
     report.source_accepted = false;

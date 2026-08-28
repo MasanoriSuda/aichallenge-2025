@@ -85,6 +85,10 @@ struct Snapshot
   std::string progress_wall_profile_diagnostic{"not-provided"};
   bool dynamic_obstacle_refinement_active{false};
   int dynamic_obstacle_pass_side_sign{0};
+  /// Optional architecture-candidate lattice transition.  Live production
+  /// snapshots leave this absent (`-1`) and retain witness-based refinement.
+  int dynamic_obstacle_forced_first_pass_side_stage{-1};
+  int dynamic_obstacle_forced_first_ahead_stage{-1};
   std::vector<mpcc_rate_resolved_dynamic_obstacle::StagePrediction>
     dynamic_obstacle_stages;
   bool physical_wall_refinement_active{false};
@@ -202,6 +206,7 @@ struct Result
   int dynamic_obstacle_first_pass_side_stage{-1};
   std::size_t dynamic_obstacle_stay_behind_row_count{};
   std::size_t dynamic_obstacle_pass_side_row_count{};
+  std::size_t dynamic_obstacle_ahead_row_count{};
   std::size_t dynamic_obstacle_partial_escape_row_count{};
   int dynamic_obstacle_first_valid_stage{-1};
   double dynamic_obstacle_first_wall_only_progress_m{};

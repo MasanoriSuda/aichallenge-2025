@@ -24,6 +24,13 @@ struct Request
 {
   bool active{false};
   int pass_side_sign{};
+  /// Shadow/offline candidate-C contract.  When present, stages before this
+  /// index use the complete stay-behind disjunct and this stage onward uses
+  /// the complete selected-side disjunct.  Production leaves it absent.
+  std::optional<int> forced_first_pass_side_stage;
+  /// Optional first stage whose physical disjunct is longitudinally ahead.
+  /// It must follow a forced side stage; `horizon` means no ahead row yet.
+  std::optional<int> forced_first_ahead_stage;
   std::vector<StagePrediction> stages;
   /// Physically solved witness used only to classify the reachable convex
   /// obstacle branch. Its progress trust buckets must not implicitly become
@@ -52,10 +59,12 @@ struct Result
 {
   Reason reason{Reason::NotRequested};
   bool applied{false};
+  bool forced_transition_applied{false};
   int resolved_side_sign{};
   int first_pass_side_stage{-1};
   std::size_t stay_behind_row_count{};
   std::size_t pass_side_row_count{};
+  std::size_t ahead_row_count{};
   std::size_t partial_escape_row_count{};
   int first_valid_stage{-1};
   double first_wall_only_progress_m{};

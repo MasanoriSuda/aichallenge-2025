@@ -1224,6 +1224,14 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
     dynamic_request.active = true;
     dynamic_request.pass_side_sign =
       snapshot.dynamic_obstacle_pass_side_sign;
+    if (snapshot.dynamic_obstacle_forced_first_pass_side_stage >= 0) {
+      dynamic_request.forced_first_pass_side_stage =
+        snapshot.dynamic_obstacle_forced_first_pass_side_stage;
+    }
+    if (snapshot.dynamic_obstacle_forced_first_ahead_stage >= 0) {
+      dynamic_request.forced_first_ahead_stage =
+        snapshot.dynamic_obstacle_forced_first_ahead_stage;
+    }
     dynamic_request.stages = snapshot.dynamic_obstacle_stages;
     dynamic_request.wall_only_problem = adapted->problem;
     dynamic_request.wall_only_primal = outcome.result->primal;
@@ -1243,6 +1251,7 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       refinement.stay_behind_row_count;
     result.dynamic_obstacle_pass_side_row_count =
       refinement.pass_side_row_count;
+    result.dynamic_obstacle_ahead_row_count = refinement.ahead_row_count;
     result.dynamic_obstacle_partial_escape_row_count =
       refinement.partial_escape_row_count;
     result.dynamic_obstacle_first_valid_stage =

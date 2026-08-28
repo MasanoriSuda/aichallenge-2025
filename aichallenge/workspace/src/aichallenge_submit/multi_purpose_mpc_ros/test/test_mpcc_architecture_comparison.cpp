@@ -139,11 +139,14 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
 {
   const auto report = compare(recorded(source_snapshot()));
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 3U);
+  // A + two B arms + two C homotopies times every (side, ahead) pair.
+  // For N=3 each homotopy has 3 + 2 + 1 = 6 lattice members.
+  ASSERT_EQ(report.arms.size(), 15U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
-  for (const auto & arm : report.arms) {
+  for (std::size_t index = 0U; index < 3U; ++index) {
+    const auto & arm = report.arms[index];
     EXPECT_EQ(arm.source_interaction_fingerprint,
       report.source_interaction_fingerprint);
     ASSERT_EQ(arm.stage, Stage::Accepted) << arm.detail;
@@ -155,6 +158,16 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
       arm.bundle->wall_certificate.outcome,
       mpcc_rate_resolved_physical_wall::Outcome::Accepted);
     EXPECT_TRUE(arm.bundle->dynamic_certificate.clear);
+  }
+  for (std::size_t index = 3U; index < report.arms.size(); ++index) {
+    const auto & arm = report.arms[index];
+    EXPECT_TRUE(arm.arm == Arm::RoughLeftC || arm.arm == Arm::RoughRightC);
+    EXPECT_GE(arm.lattice_transition_stage, 0);
+    EXPECT_GT(arm.lattice_ahead_stage, arm.lattice_transition_stage);
+    EXPECT_LE(arm.lattice_ahead_stage, 3);
+    EXPECT_EQ(
+      arm.source_interaction_fingerprint,
+      report.source_interaction_fingerprint);
   }
   EXPECT_NE(
     report.arms[1].candidate_fingerprint,
@@ -172,7 +185,9 @@ TEST(MpccArchitectureComparison, PhysicalDynamicRejectionCannotCreateBundle)
       "d3", 1.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.2, 13U});
   const auto report = compare(recorded(std::move(source)));
   ASSERT_TRUE(report.source_accepted);
-  for (const auto & arm : report.arms) {
+  ASSERT_GE(report.arms.size(), 3U);
+  for (std::size_t index = 0U; index < 3U; ++index) {
+    const auto & arm = report.arms[index];
     EXPECT_EQ(arm.stage, Stage::DynamicProofRejected) << arm.detail;
     EXPECT_FALSE(arm.bundle.has_value());
   }
@@ -199,7 +214,7 @@ TEST(MpccArchitectureComparison, FingerprintMismatchRejectsEveryArm)
   ++input.interaction_fingerprint;
   const auto report = compare(input);
   EXPECT_FALSE(report.source_accepted);
-  ASSERT_EQ(report.arms.size(), 3U);
+  ASSERT_EQ(report.arms.size(), 5U);
   for (const auto & arm : report.arms) {
     EXPECT_EQ(arm.stage, Stage::SourceRejected);
     EXPECT_FALSE(arm.bundle.has_value());

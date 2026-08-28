@@ -19,6 +19,8 @@ enum class Arm
   PersistentA,
   StatelessLeftB,
   StatelessRightB,
+  RoughLeftC,
+  RoughRightC,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -65,6 +67,8 @@ struct ArmResult
   double terminal_progress_m{};
   double terminal_velocity_mps{};
   double minimum_lateral_bound_reserve_m{};
+  int lattice_transition_stage{-1};
+  int lattice_ahead_stage{-1};
   std::optional<ManeuverBundle> bundle;
   std::string detail{"not-evaluated"};
 };

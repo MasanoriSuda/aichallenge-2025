@@ -142,6 +142,33 @@ TEST(MpccStatelessManeuver, BuildsBothSidesWithoutMissionGeometry)
   EXPECT_NE(left.seed->candidate_fingerprint, right.seed->candidate_fingerprint);
 }
 
+TEST(MpccStatelessManeuver, BuildsDistinctSmoothLatticeTransition)
+{
+  const auto source = make_source();
+  const auto source_fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  const auto immediate = build_lattice(source, source_fingerprint, 1, 0, 3);
+  const auto delayed = build_lattice(source, source_fingerprint, 1, 2, 3);
+  ASSERT_TRUE(immediate.seed.has_value()) << immediate.detail;
+  ASSERT_TRUE(delayed.seed.has_value()) << delayed.detail;
+  EXPECT_EQ(
+    delayed.seed->solver_snapshot.dynamic_obstacle_forced_first_pass_side_stage,
+    2);
+  EXPECT_EQ(
+    delayed.seed->solver_snapshot.dynamic_obstacle_forced_first_ahead_stage,
+    3);
+  EXPECT_GT(delayed.seed->lateral_reference_m[1], 0.0);
+  EXPECT_LT(
+    delayed.seed->lateral_reference_m[1],
+    immediate.seed->lateral_reference_m[1]);
+  EXPECT_DOUBLE_EQ(
+    delayed.seed->lateral_reference_m[3],
+    immediate.seed->lateral_reference_m[3]);
+  EXPECT_NE(
+    immediate.seed->candidate_fingerprint,
+    delayed.seed->candidate_fingerprint);
+}
+
 TEST(MpccStatelessManeuver, IgnoresPersistentMissionLateralAndHeadingReference)
 {
   const auto source = make_source();

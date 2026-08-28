@@ -1242,6 +1242,34 @@ Result SolverContext::evaluate(const Snapshot & snapshot)
       dynamic_request.forced_diagonal_full_side_stage =
         snapshot.dynamic_obstacle_forced_diagonal_full_side_stage;
     }
+    if (snapshot.dynamic_obstacle_forced_physical_diagonal) {
+      if (!snapshot.replay_world.has_value()) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.detail =
+          "physical diagonal guidance requires immutable replay world";
+        return finish();
+      }
+      const auto & world = snapshot.replay_world.value();
+      const auto target = std::find_if(
+        world.obstacles.begin(), world.obstacles.end(),
+        [&snapshot](const ReplayDynamicObstacle & obstacle) {
+          return obstacle.id == snapshot.identity.source_context.target_id;
+        });
+      if (target == world.obstacles.end()) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.detail =
+          "physical diagonal guidance target is absent from replay world";
+        return finish();
+      }
+      const auto & footprint = world.physical_footprint;
+      dynamic_request.forced_physical_separation_geometry =
+        mpcc_rate_resolved_dynamic_obstacle::PhysicalSeparationGeometry{
+        footprint.front_extent_m, footprint.rear_extent_m,
+        footprint.left_extent_m, footprint.right_extent_m,
+        footprint.margin_m, target->radius_m};
+    }
     dynamic_request.stages = snapshot.dynamic_obstacle_stages;
     dynamic_request.wall_only_problem = adapted->problem;
     dynamic_request.wall_only_primal = outcome.result->primal;

@@ -440,6 +440,8 @@ YAML::Node source_node(
     source.dynamic_obstacle_forced_diagonal_start_stage;
   node["dynamic_obstacle_forced_diagonal_full_side_stage"] =
     source.dynamic_obstacle_forced_diagonal_full_side_stage;
+  node["dynamic_obstacle_forced_physical_diagonal"] =
+    source.dynamic_obstacle_forced_physical_diagonal;
   YAML::Node obstacle_stages(YAML::NodeType::Sequence);
   for (const auto & stage : source.dynamic_obstacle_stages) {
     YAML::Node item;
@@ -902,6 +904,10 @@ std::optional<shadow::Snapshot> load_source_snapshot(
     source.dynamic_obstacle_forced_diagonal_full_side_stage =
       node["dynamic_obstacle_forced_diagonal_full_side_stage"].as<int>();
   }
+  if (node["dynamic_obstacle_forced_physical_diagonal"]) {
+    source.dynamic_obstacle_forced_physical_diagonal =
+      node["dynamic_obstacle_forced_physical_diagonal"].as<bool>();
+  }
   const auto stages = node["dynamic_obstacle_stages"];
   if (!stages || !stages.IsSequence()) {
     return std::nullopt;
@@ -1288,6 +1294,12 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     {
       return false;
     }
+    if (
+      source.dynamic_obstacle_forced_physical_diagonal &&
+      !diagonal_start_present)
+    {
+      return false;
+    }
     for (const auto & stage : source.dynamic_obstacle_stages) {
       if (
         !std::isfinite(stage.target_progress_m) ||
@@ -1462,6 +1474,9 @@ std::uint64_t fingerprint_interaction_snapshot(
     builder.append_i64(source.dynamic_obstacle_forced_diagonal_start_stage);
     builder.append_i64(
       source.dynamic_obstacle_forced_diagonal_full_side_stage);
+  }
+  if (source.dynamic_obstacle_forced_physical_diagonal) {
+    builder.append_u64(0x5048595344494147ULL);
   }
   builder.append_u64(
     static_cast<std::uint64_t>(source.dynamic_obstacle_stages.size()));

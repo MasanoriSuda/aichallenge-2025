@@ -486,6 +486,68 @@ TEST(MpccRateResolvedDynamicObstacle, DiagonalScheduleConnectsExactEndpoints)
   EXPECT_DOUBLE_EQ(full_side.lower, 0.75);
 }
 
+TEST(MpccRateResolvedDynamicObstacle, PhysicalDiagonalUsesBodySupportFunction)
+{
+  auto request = request_with_lateral_suffix();
+  request.pass_side_sign = 1;
+  request.forced_diagonal_start_stage = 1;
+  request.forced_diagonal_full_side_stage = 3;
+  request.forced_physical_separation_geometry =
+    dynamic_obstacle::PhysicalSeparationGeometry{
+    1.4, 0.5, 0.7, 0.6, 0.1, 0.8};
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_TRUE(result.physical_diagonal_guidance_applied);
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  const auto & behind = result.problem->dynamic_obstacle_constraints[0];
+  EXPECT_EQ(
+    behind.axis,
+    problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+  EXPECT_NEAR(behind.upper, -0.3, 1e-12);
+
+  const auto & diagonal_start =
+    result.problem->dynamic_obstacle_constraints[1];
+  EXPECT_EQ(
+    diagonal_start.axis,
+    problem::DynamicObstacleConstraintAxis::CoupledLateralProgress);
+  EXPECT_NEAR(diagonal_start.effective_progress_coefficient, -1.0, 1e-12);
+  EXPECT_NEAR(diagonal_start.lateral_coefficient, 0.0, 1e-12);
+  EXPECT_NEAR(diagonal_start.lower, 0.3, 1e-12);
+
+  const auto & diagonal_middle =
+    result.problem->dynamic_obstacle_constraints[2];
+  constexpr double kSqrtHalf = 0.70710678118654752440;
+  EXPECT_NEAR(
+    diagonal_middle.effective_progress_coefficient, -kSqrtHalf, 1e-12);
+  EXPECT_NEAR(diagonal_middle.lateral_coefficient, kSqrtHalf, 1e-12);
+  EXPECT_NEAR(
+    diagonal_middle.lower,
+    (1.5 + 0.7) * kSqrtHalf + 0.8 - 2.0 * kSqrtHalf,
+    1e-12);
+
+  const auto & full_side =
+    result.problem->dynamic_obstacle_constraints[3];
+  EXPECT_EQ(
+    full_side.axis, problem::DynamicObstacleConstraintAxis::Lateral);
+  EXPECT_NEAR(full_side.lower, 1.5, 1e-12);
+}
+
+TEST(MpccRateResolvedDynamicObstacle, RejectsPhysicalGeometryWithoutDiagonal)
+{
+  auto request = request_with_lateral_suffix();
+  request.forced_physical_separation_geometry =
+    dynamic_obstacle::PhysicalSeparationGeometry{
+    1.4, 0.5, 0.7, 0.6, 0.1, 0.8};
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  EXPECT_EQ(result.reason, dynamic_obstacle::Reason::InvalidInput);
+  EXPECT_FALSE(result.problem.has_value());
+}
+
 TEST(MpccRateResolvedDynamicObstacle, OfflineContinuationEndsAtExactDisjunction)
 {
   auto make_request = []() {

@@ -32,6 +32,21 @@ Result refine(const Request & request) noexcept
   const int horizon = request.wall_only_problem.horizon_steps;
   const int state_values = model::kStateDimension * (horizon + 1);
   const int variable_count = state_values + model::kInputDimension * horizon;
+  const auto physical_geometry_valid = [](const auto & geometry) {
+      return
+        std::isfinite(geometry.ego_front_extent_m) &&
+        std::isfinite(geometry.ego_rear_extent_m) &&
+        std::isfinite(geometry.ego_left_extent_m) &&
+        std::isfinite(geometry.ego_right_extent_m) &&
+        std::isfinite(geometry.ego_margin_m) &&
+        std::isfinite(geometry.opponent_radius_m) &&
+        geometry.ego_front_extent_m > 0.0 &&
+        geometry.ego_rear_extent_m > 0.0 &&
+        geometry.ego_left_extent_m > 0.0 &&
+        geometry.ego_right_extent_m > 0.0 &&
+        geometry.ego_margin_m >= 0.0 &&
+        geometry.opponent_radius_m >= 0.0;
+    };
   if (
     horizon <= 0 || request.pass_side_sign < -1 ||
     request.pass_side_sign > 1 ||
@@ -51,6 +66,10 @@ Result refine(const Request & request) noexcept
     request.forced_constraint_fraction.value() > 1.0)) ||
     (request.forced_diagonal_start_stage.has_value() !=
     request.forced_diagonal_full_side_stage.has_value()) ||
+    (request.forced_physical_separation_geometry.has_value() &&
+    (!request.forced_diagonal_start_stage.has_value() ||
+    !physical_geometry_valid(
+      request.forced_physical_separation_geometry.value()))) ||
     (request.forced_diagonal_start_stage.has_value() &&
     (request.pass_side_sign == 0 ||
     request.forced_first_pass_side_stage.has_value() ||
@@ -442,12 +461,49 @@ Result refine(const Request & request) noexcept
   result.forced_constraint_fraction = forced_constraint_fraction;
   const bool forced_diagonal =
     request.forced_diagonal_start_stage.has_value();
+  const bool forced_physical_diagonal =
+    request.forced_physical_separation_geometry.has_value();
   if (forced_diagonal) {
     partial_side_escape = false;
     first_pass_side_stage =
       request.forced_diagonal_full_side_stage.value();
     result.forced_transition_applied = true;
+    result.physical_diagonal_guidance_applied = forced_physical_diagonal;
   }
+
+  // Support of the exact asymmetric ego rectangle plus the peer circle in a
+  // course-frame direction.  The body orientation is frozen at the solved
+  // wall-only witness for this SQP convexification; unchanged nonlinear proof
+  // still owns final acceptance when the refined heading changes.
+  const auto physical_support = [&] (
+      const int stage, const double course_longitudinal_normal,
+      const double course_lateral_normal) {
+      const auto & geometry =
+        request.forced_physical_separation_geometry.value();
+      const int state = (stage + 1) * model::kStateDimension;
+      const double heading_offset =
+        request.wall_only_primal[state + model::kHeadingIndex];
+      const double cosine = std::cos(heading_offset);
+      const double sine = std::sin(heading_offset);
+      const double body_forward_normal =
+        course_longitudinal_normal * cosine +
+        course_lateral_normal * sine;
+      const double body_left_normal =
+        -course_longitudinal_normal * sine +
+        course_lateral_normal * cosine;
+      const double longitudinal_support = body_forward_normal >= 0.0 ?
+        body_forward_normal *
+        (geometry.ego_front_extent_m + geometry.ego_margin_m) :
+        -body_forward_normal *
+        (geometry.ego_rear_extent_m + geometry.ego_margin_m);
+      const double lateral_support = body_left_normal >= 0.0 ?
+        body_left_normal *
+        (geometry.ego_left_extent_m + geometry.ego_margin_m) :
+        -body_left_normal *
+        (geometry.ego_right_extent_m + geometry.ego_margin_m);
+      return longitudinal_support + lateral_support +
+        geometry.opponent_radius_m;
+    };
 
   auto refined = request.constraint_target_problem.has_value() ?
     request.constraint_target_problem.value() : request.wall_only_problem;
@@ -468,14 +524,20 @@ Result refine(const Request & request) noexcept
       if (stage < diagonal_start) {
         constraint.axis =
           problem::DynamicObstacleConstraintAxis::EffectiveProgress;
-        constraint.upper = prediction.target_progress_m -
+        const double separation_m = forced_physical_diagonal ?
+          physical_support(stage, 1.0, 0.0) :
           prediction.longitudinal_overlap_m;
+        constraint.upper = prediction.target_progress_m - separation_m;
         ++result.stay_behind_row_count;
       } else if (stage >= full_side) {
         constraint.axis = problem::DynamicObstacleConstraintAxis::Lateral;
+        const double separation_m = forced_physical_diagonal ?
+          physical_support(
+          stage, 0.0, -static_cast<double>(resolved_side_sign)) :
+          prediction.lateral_center_separation_m;
         const double boundary = prediction.target_lateral_m +
           static_cast<double>(resolved_side_sign) *
-          prediction.lateral_center_separation_m;
+          separation_m;
         if (resolved_side_sign > 0) {
           constraint.lower = boundary;
         } else {
@@ -487,20 +549,26 @@ Result refine(const Request & request) noexcept
         const double fraction = static_cast<double>(stage - diagonal_start) /
           static_cast<double>(full_side - diagonal_start);
         const double alpha = kHalfPi * fraction;
-        const double progress_coefficient =
-          -std::cos(alpha) / prediction.longitudinal_overlap_m;
-        const double lateral_coefficient =
-          std::sin(alpha) * static_cast<double>(resolved_side_sign) /
-          prediction.lateral_center_separation_m;
+        const double cosine = std::cos(alpha);
+        const double signed_sine =
+          std::sin(alpha) * static_cast<double>(resolved_side_sign);
+        const double progress_coefficient = forced_physical_diagonal ?
+          -cosine : -cosine / prediction.longitudinal_overlap_m;
+        const double lateral_coefficient = forced_physical_diagonal ?
+          signed_sine :
+          signed_sine / prediction.lateral_center_separation_m;
         constraint.axis = problem::DynamicObstacleConstraintAxis::
           CoupledLateralProgress;
         constraint.effective_progress_coefficient = progress_coefficient;
         constraint.lateral_coefficient = lateral_coefficient;
-        constraint.lower = 1.0 -
-          std::cos(alpha) * prediction.target_progress_m /
+        constraint.lower = forced_physical_diagonal ?
+          physical_support(stage, cosine, -signed_sine) -
+          cosine * prediction.target_progress_m +
+          signed_sine * prediction.target_lateral_m :
+          1.0 -
+          cosine * prediction.target_progress_m /
           prediction.longitudinal_overlap_m +
-          std::sin(alpha) * static_cast<double>(resolved_side_sign) *
-          prediction.target_lateral_m /
+          signed_sine * prediction.target_lateral_m /
           prediction.lateral_center_separation_m;
         ++result.diagonal_row_count;
       }

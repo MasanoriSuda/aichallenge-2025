@@ -237,6 +237,18 @@
       "production_impact": "none; the coupled row, schedules and E arms are sealed offline architecture-comparison inputs and are not connected to command authority",
       "deleted_code": [],
       "revisit_condition": "a production Slice derives the diagonal separating plane from the same physical footprint model, deletes wall-only partial_side_escape, and reproduces the frozen certificates plus dynamic Pass-to-Return acceptance"
+    },
+    {
+      "experiment_id": "20260828-native-pass-1566-physical-diagonal-f",
+      "baseline_commit": "43daa303a591fd7575a2532b32c6f2b20c70a6ee",
+      "snapshot_ids": [],
+      "hypothesis": "the certified normalized diagonal topology can be reproduced by a separating half-space derived from the exact asymmetric ego footprint and replay-world peer radius",
+      "changed_dimension": "offline_physical_support_obstacle_candidate_representation",
+      "result": "accepted",
+      "reason": "fingerprint 7246006054995400977 evaluated 342 physical diagonal schedules; left schedule 1-to-3 formed candidate 16820872117393555423 and passed the unchanged seven-state SQP, exact swept wall proof, dense timed dynamic-obstacle proof and terminal successor proof; eleven other numerical solves were correctly rejected by the exact dynamic proof",
+      "production_impact": "none; physical support geometry, schedules and F arms are sealed offline architecture-comparison inputs and are not connected to command authority",
+      "deleted_code": [],
+      "revisit_condition": "a production Slice atomically promotes current-world physical diagonal generation, deletes partial_side_escape and demonstrates frozen replay plus dynamic Pass-to-Return acceptance"
     }
   ]
 }

@@ -92,6 +92,9 @@ struct Snapshot
   double dynamic_obstacle_forced_constraint_fraction{1.0};
   int dynamic_obstacle_forced_diagonal_start_stage{-1};
   int dynamic_obstacle_forced_diagonal_full_side_stage{-1};
+  /// Candidate-F shadow comparison only.  Geometry is reconstructed from the
+  /// immutable ReplayWorld and target identity, never from a retained path.
+  bool dynamic_obstacle_forced_physical_diagonal{false};
   std::vector<mpcc_rate_resolved_dynamic_obstacle::StagePrediction>
     dynamic_obstacle_stages;
   bool physical_wall_refinement_active{false};

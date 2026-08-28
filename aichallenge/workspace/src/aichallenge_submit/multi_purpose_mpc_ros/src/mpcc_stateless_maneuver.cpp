@@ -639,4 +639,37 @@ Result build_diagonal_schedule(
   return result;
 }
 
+Result build_physical_diagonal_schedule(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const std::uint64_t source_interaction_fingerprint,
+  const int pass_side_sign, const int diagonal_start_stage,
+  const int full_side_stage) noexcept
+{
+  namespace architecture = mpcc_architecture_snapshot;
+  auto result = build_diagonal_schedule(
+    source, source_interaction_fingerprint, pass_side_sign,
+    diagonal_start_stage, full_side_stage);
+  if (!result.seed.has_value()) {
+    return result;
+  }
+  auto & seed = result.seed.value();
+  auto & candidate = seed.solver_snapshot;
+  candidate.dynamic_obstacle_forced_physical_diagonal = true;
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "physical diagonal guidance candidate is incomplete");
+  }
+  seed.candidate_fingerprint =
+    architecture::fingerprint_interaction_snapshot(candidate);
+  if (seed.candidate_fingerprint == 0U) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "physical diagonal guidance candidate fingerprint unavailable");
+  }
+  result.reason = RejectReason::Accepted;
+  result.detail = "accepted";
+  return result;
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver

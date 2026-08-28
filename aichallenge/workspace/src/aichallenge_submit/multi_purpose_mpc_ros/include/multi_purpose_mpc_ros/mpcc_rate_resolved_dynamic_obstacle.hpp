@@ -20,6 +20,20 @@ struct StagePrediction
   double lateral_center_separation_m{};
 };
 
+/// Exact asymmetric ego body and peer circle used by the nonlinear dynamic
+/// certificate.  Shadow architecture candidates may use this geometry to
+/// form a physical support half-space instead of the normalized candidate-E
+/// approximation.  Live production does not populate it yet.
+struct PhysicalSeparationGeometry
+{
+  double ego_front_extent_m{};
+  double ego_rear_extent_m{};
+  double ego_left_extent_m{};
+  double ego_right_extent_m{};
+  double ego_margin_m{};
+  double opponent_radius_m{};
+};
+
 struct Request
 {
   bool active{false};
@@ -40,6 +54,8 @@ struct Request
   /// supporting row, and later stages use exact selected-side separation.
   std::optional<int> forced_diagonal_start_stage;
   std::optional<int> forced_diagonal_full_side_stage;
+  std::optional<PhysicalSeparationGeometry>
+    forced_physical_separation_geometry;
   std::vector<StagePrediction> stages;
   /// Physically solved witness used only to classify the reachable convex
   /// obstacle branch. Its progress trust buckets must not implicitly become
@@ -77,6 +93,7 @@ struct Result
   std::size_t ahead_row_count{};
   std::size_t partial_escape_row_count{};
   std::size_t diagonal_row_count{};
+  bool physical_diagonal_guidance_applied{false};
   int first_valid_stage{-1};
   double first_wall_only_progress_m{};
   double first_wall_only_effective_progress_m{};

@@ -25,6 +25,8 @@ enum class Arm
   OfflineRightD,
   DiagonalLeftE,
   DiagonalRightE,
+  PhysicalDiagonalLeftF,
+  PhysicalDiagonalRightF,
 };
 
 const char * to_string(Arm arm) noexcept;

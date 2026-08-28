@@ -195,6 +195,29 @@ TEST(MpccStatelessManeuver, SealsDiagonalScheduleWithoutMissionGeometry)
   EXPECT_NE(early.seed->candidate_fingerprint, source_fingerprint);
 }
 
+TEST(MpccStatelessManeuver, SealsPhysicalDiagonalReplayGeometry)
+{
+  const auto source = make_source();
+  const auto source_fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  const auto normalized = build_diagonal_schedule(
+    source, source_fingerprint, 1, 0, 2);
+  const auto physical = build_physical_diagonal_schedule(
+    source, source_fingerprint, 1, 0, 2);
+  ASSERT_TRUE(normalized.seed.has_value()) << normalized.detail;
+  ASSERT_TRUE(physical.seed.has_value()) << physical.detail;
+  EXPECT_TRUE(
+    physical.seed->solver_snapshot.
+    dynamic_obstacle_forced_physical_diagonal);
+  EXPECT_EQ(
+    physical.seed->lateral_reference_m,
+    normalized.seed->lateral_reference_m);
+  EXPECT_NE(
+    physical.seed->candidate_fingerprint,
+    normalized.seed->candidate_fingerprint);
+  EXPECT_NE(physical.seed->candidate_fingerprint, source_fingerprint);
+}
+
 TEST(MpccStatelessManeuver, SealsContinuationWithoutChangingStatelessReference)
 {
   const auto source = make_source();

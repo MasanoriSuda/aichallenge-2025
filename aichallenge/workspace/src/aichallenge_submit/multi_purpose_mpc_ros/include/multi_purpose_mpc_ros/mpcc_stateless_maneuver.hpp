@@ -141,6 +141,14 @@ Result build_diagonal_schedule(
   int pass_side_sign, int diagonal_start_stage,
   int full_side_stage) noexcept;
 
+/// Candidate-F member.  It uses the same schedule as candidate E but seals a
+/// request to derive every separating row from ReplayWorld body geometry.
+Result build_physical_diagonal_schedule(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint,
+  int pass_side_sign, int diagonal_start_stage,
+  int full_side_stage) noexcept;
+
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver
 
 #endif  // MULTI_PURPOSE_MPC_ROS__MPCC_STATELESS_MANEUVER_HPP_

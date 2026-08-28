@@ -449,7 +449,10 @@ ArmResult evaluate_arm(
 
   ManeuverBundle bundle;
   bundle.target_id = candidate.identity.source_context.target_id;
-  bundle.pass_side_sign = candidate.identity.source_context.execution_side_sign;
+  bundle.pass_side_sign =
+    candidate.identity.source_context.execution_side_sign != 0 ?
+    candidate.identity.source_context.execution_side_sign :
+    candidate.dynamic_obstacle_pass_side_sign;
   bundle.source_interaction_fingerprint = source_fingerprint;
   bundle.candidate_fingerprint = candidate_fingerprint;
   bundle.exact_trajectory = std::move(exact);
@@ -733,6 +736,41 @@ Report compare(
     report.arms.push_back(evaluate_arm(
       Arm::PersistentA, source, source_fingerprint, source_fingerprint,
       persistent_successor));
+
+    // Follow owns no tactical pass side in production. When its longitudinal
+    // stay-behind branch is already infeasible, compare two independently
+    // rebuilt current-world side candidates before attributing the failure to
+    // physics. This is audit-only: it has no store, mailbox or publisher and
+    // intentionally does not enumerate Overtake-specific C--G candidates.
+    if (
+      source.identity.source_context.intent ==
+      contract::ControlIntent::Follow)
+    {
+      for (const auto & [arm, side] :
+        {std::pair{Arm::StatelessLeftB, 1},
+         std::pair{Arm::StatelessRightB, -1}})
+      {
+        const auto rebuilt = maneuver::build_follow_escape_audit(
+          source, source_fingerprint, side);
+        if (!rebuilt.seed.has_value()) {
+          const auto stage =
+            rebuilt.reason ==
+            maneuver::RejectReason::TerminalSuccessorUnavailable ?
+            Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+          report.arms.push_back(rejected_arm(
+            arm, stage, source_fingerprint,
+            std::string{maneuver::to_string(rebuilt.reason)} + ": " +
+            rebuilt.detail));
+          continue;
+        }
+        const auto successor = maneuver::resolve_terminal_successor(
+          rebuilt.seed->solver_snapshot);
+        report.arms.push_back(evaluate_arm(
+          arm, rebuilt.seed->solver_snapshot, source_fingerprint,
+          rebuilt.seed->candidate_fingerprint, successor));
+      }
+      return report;
+    }
 
     const auto target_bound =
       maneuver::bind_current_world_target_preserving_geometry(

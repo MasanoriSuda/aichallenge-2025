@@ -446,6 +446,32 @@ TEST(MpccStatelessManeuver, ReturnAllowsSemanticallyUnboundedLateralInterval)
   EXPECT_EQ(result.seed->terminal_successor, TerminalSuccessor::Return);
 }
 
+TEST(MpccStatelessManeuver, FollowEscapeIsAvailableOnlyThroughAuditEntryPoint)
+{
+  auto source = make_source();
+  source.identity.source_context.intent =
+    mpcc_execution_contract::ControlIntent::Follow;
+  source.identity.source_context.execution_side_sign = 0;
+  source.identity.source_context.fingerprint = 0U;
+  source.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
+  const auto fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  ASSERT_NE(fingerprint, 0U);
+
+  const auto production = build(source, fingerprint, 1);
+  EXPECT_EQ(production.reason, RejectReason::UnsupportedIntent);
+  EXPECT_FALSE(production.seed.has_value());
+
+  const auto audit = build_follow_escape_audit(source, fingerprint, 1);
+  EXPECT_EQ(audit.reason, RejectReason::Accepted) << audit.detail;
+  ASSERT_TRUE(audit.seed.has_value());
+  EXPECT_EQ(audit.seed->pass_side_sign, 1);
+  EXPECT_EQ(
+    audit.seed->solver_snapshot.identity.source_context.intent,
+    mpcc_execution_contract::ControlIntent::Follow);
+}
+
 TEST(MpccStatelessManeuver, RejectsInvalidSideAndMixedObservation)
 {
   auto source = make_source();

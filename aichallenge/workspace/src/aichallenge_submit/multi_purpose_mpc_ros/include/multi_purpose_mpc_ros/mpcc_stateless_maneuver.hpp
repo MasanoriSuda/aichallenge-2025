@@ -140,6 +140,14 @@ Result build(
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
 
+/// Audit-only normal-intent escape candidate. This deliberately accepts only
+/// Follow and has no authority surface. Production Overtake callers continue
+/// to use build(), whose intent contract remains unchanged.
+Result build_follow_escape_audit(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint,
+  int pass_side_sign) noexcept;
+
 /// Audit-only A2 candidate.  Rebuild the current-world target binding through
 /// the same stateless producer, then restore the captured identity and SQP
 /// request byte-for-byte.  This isolates target ownership from reference and

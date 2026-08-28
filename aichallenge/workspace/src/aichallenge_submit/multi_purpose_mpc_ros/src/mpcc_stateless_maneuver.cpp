@@ -342,10 +342,10 @@ const char * to_string(const CandidateKind kind) noexcept
   return "unknown";
 }
 
-Result build(
+static Result build_with_intent_policy(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,
-  const int pass_side_sign) noexcept
+  const int pass_side_sign, const bool allow_follow_audit) noexcept
 {
   namespace architecture = mpcc_architecture_snapshot;
   namespace contract = mpcc_execution_contract;
@@ -366,7 +366,11 @@ Result build(
     if (pass_side_sign != -1 && pass_side_sign != 1) {
       return reject(RejectReason::InvalidSide, "pass side must be -1 or +1");
     }
-    if (!supported_intent(source.identity.source_context.intent)) {
+    const bool follow_audit =
+      allow_follow_audit &&
+      source.identity.source_context.intent ==
+      mpcc_execution_contract::ControlIntent::Follow;
+    if (!supported_intent(source.identity.source_context.intent) && !follow_audit) {
       return reject(
         RejectReason::UnsupportedIntent,
         "stateless producer is restricted to Overtake intents");
@@ -391,10 +395,12 @@ Result build(
     seed.lateral_reference_m.reserve(static_cast<std::size_t>(horizon + 1));
     seed.solver_snapshot = source;
     auto & candidate = seed.solver_snapshot;
-    candidate.identity.source_context.execution_side_sign = pass_side_sign;
-    candidate.identity.source_context.fingerprint = 0U;
-    candidate.identity.source_context = contract::seal_problem_context(
-      candidate.identity.source_context);
+    if (!follow_audit) {
+      candidate.identity.source_context.execution_side_sign = pass_side_sign;
+      candidate.identity.source_context.fingerprint = 0U;
+      candidate.identity.source_context = contract::seal_problem_context(
+        candidate.identity.source_context);
+    }
     candidate.dynamic_obstacle_pass_side_sign = pass_side_sign;
     candidate.dynamic_obstacle_refinement_active = true;
     candidate.dynamic_obstacle_stages = target_horizon.stages;
@@ -478,6 +484,32 @@ Result build(
       RejectReason::CandidateSealUnavailable,
       "unknown stateless producer exception");
   }
+}
+
+Result build(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const std::uint64_t source_interaction_fingerprint,
+  const int pass_side_sign) noexcept
+{
+  return build_with_intent_policy(
+    source, source_interaction_fingerprint, pass_side_sign, false);
+}
+
+Result build_follow_escape_audit(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const std::uint64_t source_interaction_fingerprint,
+  const int pass_side_sign) noexcept
+{
+  if (
+    source.identity.source_context.intent !=
+    mpcc_execution_contract::ControlIntent::Follow)
+  {
+    return reject(
+      RejectReason::UnsupportedIntent,
+      "Follow escape audit accepts only Follow intent");
+  }
+  return build_with_intent_policy(
+    source, source_interaction_fingerprint, pass_side_sign, true);
 }
 
 Result bind_current_world_target_preserving_geometry(

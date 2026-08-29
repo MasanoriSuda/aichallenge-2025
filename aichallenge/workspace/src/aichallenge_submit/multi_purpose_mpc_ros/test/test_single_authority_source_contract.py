@@ -1030,7 +1030,7 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     )
     follow_population = SOURCE[follow_population_start:follow_population_end]
     assert "build_follow_escape_candidates(" in follow_population
-    assert "persistent-follow" in follow_population
+    assert "persistent-follow" not in follow_population
     assert "negative_solver_context" in follow_population
     assert "positive_solver_context" in follow_population
     assert "RateResolvedFollowHomotopyOwner" in follow_population
@@ -1048,9 +1048,10 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     )
     assert "observation_only_store" in follow_population
     assert "certified_plan_store->replace(" in follow_population
-    assert follow_population.index("persistent-follow") < follow_population.index(
-        "build_follow_escape_candidates("
-    )
+    assert "evaluation.dynamic.has_value()" in follow_population
+    assert "evaluation.dynamic->valid" in follow_population
+    assert "evaluation.dynamic->clear" in follow_population
+    assert "&candidate.seed.solver_snapshot" in follow_population
     assert "source_context.execution_side_sign =" not in follow_population
 
     normal_submit_start = SOURCE.index(

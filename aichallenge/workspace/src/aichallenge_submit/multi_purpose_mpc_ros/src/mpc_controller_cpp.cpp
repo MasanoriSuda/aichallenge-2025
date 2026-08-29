@@ -6505,7 +6505,6 @@ RateResolvedCurrentWorldPopulationEvaluation
 evaluate_rate_resolved_follow_escape_population(
   const rate_resolved_shadow::Snapshot & source,
   const rate_resolved_physical_wall::Snapshot & physical_source,
-  const std::shared_ptr<rate_resolved_shadow::SolverContext> & solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
@@ -6519,11 +6518,16 @@ evaluate_rate_resolved_follow_escape_population(
         evaluation.physical.has_value() &&
         evaluation.physical->outcome ==
         rate_resolved_physical_wall::Outcome::Accepted &&
+        evaluation.dynamic.has_value() && evaluation.dynamic->valid &&
+        evaluation.dynamic->clear &&
         evaluation.certified_plan.plan != nullptr;
     };
   const auto evidence_rank = [&certified](
       const RateResolvedPipelineEvaluation & evaluation) {
       if (certified(evaluation)) {
+        return 5;
+      }
+      if (evaluation.dynamic.has_value() && evaluation.dynamic->valid) {
         return 4;
       }
       if (evaluation.physical.has_value()) {
@@ -6536,33 +6540,21 @@ evaluate_rate_resolved_follow_escape_population(
     };
 
   RateResolvedCurrentWorldPopulationEvaluation result;
-  result.candidate_source = "persistent-follow";
-  auto persistent_physical = physical_source;
-  auto persistent = evaluate_rate_resolved_pipeline(
-    source,
-    std::optional<rate_resolved_physical_wall::Snapshot>{
-      std::move(persistent_physical)},
-    solver_context, certified_plan_store);
-  if (certified(persistent)) {
-    result.pipeline = std::move(persistent);
-    result.detail = "accepted/persistent-follow";
-    return result;
-  }
-
-  int best_rank = evidence_rank(persistent);
-  result.pipeline = std::move(persistent);
+  int best_rank = -1;
   const auto population = stateless_maneuver::build_follow_escape_candidates(
     source);
   if (
     population.reason != stateless_maneuver::RejectReason::Accepted ||
     population.candidates.empty())
   {
+    result.pipeline.solver.identity = source.identity;
+    result.pipeline.solver.outcome =
+      rate_resolved_shadow::Outcome::BuildRejected;
     result.detail =
       std::string{"Follow escape population rejected/"} +
       stateless_maneuver::to_string(population.reason) + "/" +
       population.detail;
-    result.pipeline.solver.detail =
-      result.detail + ", persistent=" + result.pipeline.solver.detail;
+    result.pipeline.solver.detail = result.detail;
     return result;
   }
 
@@ -6605,7 +6597,8 @@ evaluate_rate_resolved_follow_escape_population(
       candidate.seed.solver_snapshot,
       std::optional<rate_resolved_physical_wall::Snapshot>{
         std::move(physical)},
-      candidate_solver_context, observation_only_store);
+      candidate_solver_context, observation_only_store,
+      &candidate.seed.solver_snapshot);
     const bool candidate_certified = certified(evaluation);
     const int rank = evidence_rank(evaluation);
     if (candidate_certified) {
@@ -6662,7 +6655,7 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
     physical_source.has_value())
   {
     return evaluate_rate_resolved_follow_escape_population(
-      source, physical_source.value(), solver_context,
+      source, physical_source.value(),
       follow_negative_solver_context, follow_positive_solver_context,
       follow_homotopy_owner,
       certified_plan_store).pipeline;

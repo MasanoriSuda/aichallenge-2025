@@ -69,6 +69,15 @@ race::StopPathTrackingPolicy stop_lateral_policy()
     2.0, 0.60, 1.0, 6.0, 1.5, 0.4, 1.3};
 }
 
+adapter::StopCourseGeometry stop_course_geometry()
+{
+  return adapter::StopCourseGeometry{
+    {0.0, 0.2, 0.4, 1.0, 2.0, 3.0},
+    {0.0, 0.0, 0.0, 0.0, 0.0},
+    {-1.0, -1.0, -1.0, -1.0, -1.0, -1.0},
+    {1.0, 1.0, 1.0, 1.0, 1.0, 1.0}};
+}
+
 }  // namespace
 
 TEST(MpccRateResolvedPhysicalAdapter, ReplaysControlsThroughNonlinearModel)
@@ -189,6 +198,7 @@ TEST(
     source, cursor, actuation.actuation.value(),
     adapter::ContinuationInitialState{
       -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    stop_course_geometry(),
     stop_lateral_policy(),
     -3.0);
 
@@ -213,6 +223,65 @@ TEST(
   EXPECT_TRUE(
     multi_purpose_mpc_ros::race_mpcc_foundation::
     exact_physical_execution_trajectory_complete(exact));
+  EXPECT_GT(
+    exact.progress_m.back() - source.course_progress_origin_m,
+    source.predicted_states.back().progress_m);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RejectsTerminalStopWhenPhysicalCourseHorizonEndsBeforeBraking)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.05);
+  ASSERT_TRUE(cursor.available);
+  const auto actuation = execution::extract_actuation(source, cursor);
+  ASSERT_TRUE(actuation.actuation.has_value());
+  auto geometry = stop_course_geometry();
+  geometry.progress_m.resize(3U);
+  geometry.curvature_radpm.resize(2U);
+  geometry.lateral_lower_m.resize(3U);
+  geometry.lateral_upper_m.resize(3U);
+
+  const auto result = adapter::build_stop_contingency(
+    source, cursor, actuation.actuation.value(),
+    adapter::ContinuationInitialState{
+      -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    geometry, stop_lateral_policy(), -3.0);
+
+  EXPECT_EQ(
+    result.reason,
+    adapter::StopContingencyRejectReason::CourseGeometryUnavailable);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RejectsTerminalStopOutsideFullPhysicalLateralSupport)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.05);
+  ASSERT_TRUE(cursor.available);
+  const auto actuation = execution::extract_actuation(source, cursor);
+  ASSERT_TRUE(actuation.actuation.has_value());
+  auto geometry = stop_course_geometry();
+  std::fill(
+    geometry.lateral_upper_m.begin(), geometry.lateral_upper_m.end(),
+    -0.595);
+
+  const auto result = adapter::build_stop_contingency(
+    source, cursor, actuation.actuation.value(),
+    adapter::ContinuationInitialState{
+      -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    geometry, stop_lateral_policy(), -3.0);
+
+  EXPECT_EQ(
+    result.reason,
+    adapter::StopContingencyRejectReason::ExactTrajectoryRejected);
+  EXPECT_EQ(
+    result.exact_reason,
+    race::ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
 }
 
 TEST(
@@ -232,6 +301,7 @@ TEST(
     source, cursor, actuation,
     adapter::ContinuationInitialState{
       -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    stop_course_geometry(),
     stop_lateral_policy(),
     -3.0);
 
@@ -254,6 +324,7 @@ TEST(
     source, cursor, actuation.actuation.value(),
     adapter::ContinuationInitialState{
       -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    stop_course_geometry(),
     stop_lateral_policy(),
     -4.0);
 

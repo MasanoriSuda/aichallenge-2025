@@ -73,6 +73,9 @@ wall::Snapshot snapshot()
     {0.0, 0.0, 0.0, 0.0, 0},
     {3.0, 3.0, 0.0, 0.0, 3},
   };
+  value.terminal_stop_course_geometry = {
+    {0.0, 1.0, 2.0}, {0.0, 0.0},
+    {-1.0, -1.0, -1.0}, {1.0, 1.0, 1.0}};
   value.bound_tolerance_m = 1.0e-6;
   value.swept_step_m = 0.05;
   return value;
@@ -177,6 +180,16 @@ TEST(MpccRateResolvedPhysicalWall, RejectsUnsealedWorldIdentity)
   auto value = snapshot();
   value.identity.pose_snapshot_id = 0U;
   const auto result = wall::evaluate(value);
+  EXPECT_EQ(result.outcome, wall::Outcome::InvalidInput);
+}
+
+TEST(MpccRateResolvedPhysicalWall, RejectsIncompleteTerminalStopCourseGeometry)
+{
+  auto value = snapshot();
+  value.terminal_stop_course_geometry.curvature_radpm.clear();
+
+  const auto result = wall::evaluate(value);
+
   EXPECT_EQ(result.outcome, wall::Outcome::InvalidInput);
 }
 

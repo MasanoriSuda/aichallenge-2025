@@ -2977,3 +2977,33 @@ def test_normal_candidate_clock_separates_bootstrap_from_moving_successor() -> N
     # Gate-A and pre-entry proposals are successors to live normal authority;
     # they must never acquire cold-bootstrap cursor semantics.
     assert SOURCE.count("ExecutionClockKind::BootstrapCandidate") == 1
+
+
+def test_terminal_stop_does_not_extrapolate_executable_prefix_geometry() -> None:
+    """A long braking suffix owns full physical course support, not Mission prefix boxes."""
+
+    adapter_header = (
+        PACKAGE_ROOT
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_physical_adapter.hpp"
+    ).read_text(encoding="utf-8")
+    adapter_source = (
+        PACKAGE_ROOT / "src" / "mpcc_rate_resolved_physical_adapter.cpp"
+    ).read_text(encoding="utf-8")
+    wall_header = (
+        PACKAGE_ROOT
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_physical_wall.hpp"
+    ).read_text(encoding="utf-8")
+    retained_source = (
+        PACKAGE_ROOT / "src" / "mpcc_rate_resolved_retained_revalidation.cpp"
+    ).read_text(encoding="utf-8")
+
+    assert "struct StopCourseGeometry" in adapter_header
+    assert "const StopCourseGeometry & course_geometry" in adapter_header
+    assert "local_progress_m > course_geometry.progress_m.back()" in adapter_source
+    assert "artifact.predicted_states[stage + 1U].progress_m" not in adapter_source
+    assert "terminal_stop_course_geometry" in wall_header
+    assert "source.terminal_stop_course_geometry" in retained_source

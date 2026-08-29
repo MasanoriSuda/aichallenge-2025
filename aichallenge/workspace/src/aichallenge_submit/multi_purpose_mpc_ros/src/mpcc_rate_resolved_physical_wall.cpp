@@ -209,6 +209,8 @@ bool snapshot_valid(const Snapshot & snapshot) noexcept
          finite_pose(snapshot.current_pose) && control_prefix_valid &&
          trajectory_validation.complete &&
          snapshot.course_frame_knots.size() >= 2U &&
+         mpcc_rate_resolved_physical_adapter::stop_course_geometry_valid(
+           snapshot.terminal_stop_course_geometry) &&
          std::isfinite(snapshot.hard_wall_clearance_m) &&
          snapshot.hard_wall_clearance_m >= 0.0 &&
          std::isfinite(snapshot.bound_tolerance_m) &&

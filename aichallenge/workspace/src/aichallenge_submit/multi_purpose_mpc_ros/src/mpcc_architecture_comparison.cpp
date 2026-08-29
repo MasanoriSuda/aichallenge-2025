@@ -484,6 +484,22 @@ wall::Snapshot wall_snapshot(
   result.control_prefix = replay.control_prefix;
   result.trajectory = trajectory;
   result.course_frame_knots = candidate.wall_course_frame_knots;
+  // The comparison arms must prove the same terminal successor as production.
+  // Keep this geometry independent from the short executable artifact: it is
+  // reconstructed only from the immutable, full-horizon source problem that
+  // every arm shares.
+  result.terminal_stop_course_geometry.progress_m =
+    candidate.wall_reference_progress_m;
+  result.terminal_stop_course_geometry.lateral_lower_m =
+    candidate.wall_lower_m;
+  result.terminal_stop_course_geometry.lateral_upper_m =
+    candidate.wall_upper_m;
+  result.terminal_stop_course_geometry.curvature_radpm.reserve(
+    candidate.request.inputs.size());
+  for (const auto & input : candidate.request.inputs) {
+    result.terminal_stop_course_geometry.curvature_radpm.push_back(
+      input.path_curvature_radpm);
+  }
   result.hard_wall_clearance_m = replay.hard_wall_clearance_m;
   result.bound_tolerance_m = replay.bound_tolerance_m;
   result.swept_step_m = replay.swept_step_m;

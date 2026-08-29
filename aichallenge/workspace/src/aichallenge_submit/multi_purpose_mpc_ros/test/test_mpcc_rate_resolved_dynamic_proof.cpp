@@ -82,6 +82,9 @@ wall::Snapshot physical_snapshot()
     {0.0, 0.0, 0.0, 0.0, 0},
     {3.0, 3.0, 0.0, 0.0, 3},
   };
+  value.terminal_stop_course_geometry = {
+    {0.0, 1.0, 2.0}, {0.0, 0.0},
+    {-1.0, -1.0, -1.0}, {1.0, 1.0, 1.0}};
   value.bound_tolerance_m = 1.0e-6;
   value.swept_step_m = 0.05;
   return value;

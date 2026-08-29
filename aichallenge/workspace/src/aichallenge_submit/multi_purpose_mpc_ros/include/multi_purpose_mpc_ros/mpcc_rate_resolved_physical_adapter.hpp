@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 #include "multi_purpose_mpc_ros/race_mpcc_foundation.hpp"
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -140,6 +141,54 @@ enum class StopContingencyRejectReason
 
 const char * to_string(StopContingencyRejectReason reason) noexcept;
 
+/// Complete static course support for a synthesized terminal Stop.  This is
+/// deliberately distinct from ExecutionArtifact's short executable prefix:
+/// braking may continue after that prefix ends, but it may never extrapolate
+/// the prefix's final curvature or tactical lateral corridor.
+struct StopCourseGeometry
+{
+  /// Local theta/progress coordinates relative to the execution artifact's
+  /// course_progress_origin_m.  Knots are finite and strictly increasing.
+  std::vector<double> progress_m;
+  /// Piecewise-constant course curvature for every knot interval.
+  std::vector<double> curvature_radpm;
+  /// Physical lateral support at every knot.  These are not retained Mission
+  /// corridor bounds; exact footprint wall proof remains the final authority.
+  std::vector<double> lateral_lower_m;
+  std::vector<double> lateral_upper_m;
+};
+
+inline bool stop_course_geometry_valid(
+  const StopCourseGeometry & geometry) noexcept
+{
+  if (
+    geometry.progress_m.size() < 2U ||
+    geometry.curvature_radpm.size() + 1U != geometry.progress_m.size() ||
+    geometry.lateral_lower_m.size() != geometry.progress_m.size() ||
+    geometry.lateral_upper_m.size() != geometry.progress_m.size())
+  {
+    return false;
+  }
+  for (std::size_t knot = 0U; knot < geometry.progress_m.size(); ++knot) {
+    if (
+      !std::isfinite(geometry.progress_m[knot]) ||
+      !std::isfinite(geometry.lateral_lower_m[knot]) ||
+      !std::isfinite(geometry.lateral_upper_m[knot]) ||
+      geometry.lateral_lower_m[knot] > geometry.lateral_upper_m[knot] ||
+      (knot > 0U &&
+      geometry.progress_m[knot] <= geometry.progress_m[knot - 1U]))
+    {
+      return false;
+    }
+  }
+  for (const double curvature_radpm : geometry.curvature_radpm) {
+    if (!std::isfinite(curvature_radpm)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 struct StopContingencyResult
 {
   StopContingencyRejectReason reason{
@@ -171,6 +220,7 @@ StopContingencyResult build_stop_contingency(
   const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
   const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
   const ContinuationInitialState & initial_state,
+  const StopCourseGeometry & course_geometry,
   const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
   double minimum_acceleration_mps2) noexcept;
 

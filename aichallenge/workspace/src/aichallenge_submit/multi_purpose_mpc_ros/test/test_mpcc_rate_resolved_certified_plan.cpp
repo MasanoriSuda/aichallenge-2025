@@ -118,6 +118,9 @@ physical::Snapshot physical_snapshot(const execution::Identity & identity)
     {49.0, 49.0, 0.0, 0.0, 0},
     {52.0, 52.0, 0.0, 0.0, 3},
   };
+  snapshot.terminal_stop_course_geometry = {
+    {0.0, 1.0, 2.0}, {0.0, 0.0},
+    {-1.0, -1.0, -1.0}, {1.0, 1.0, 1.0}};
   snapshot.bound_tolerance_m = 1e-6;
   snapshot.swept_step_m = 0.05;
   return snapshot;

@@ -1210,6 +1210,7 @@ Result evaluate(const Request & request)
         current_control_state.progress_m,
         continuation_initial_steering_rad,
         request.current_response_steering_rad},
+      source.terminal_stop_course_geometry,
       request.stop_lateral_policy,
       request.minimum_acceleration_mps2);
     result.terminal_stop_reason = terminal_stop.reason;

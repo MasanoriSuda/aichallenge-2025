@@ -23171,6 +23171,54 @@ struct MPC
     snapshot.bound_tolerance_m = 1e-5;
     snapshot.swept_step_m = std::max(
       1e-3, std::min(0.10, 0.5 * snapshot.wall_grid->resolution_m));
+    const auto terminal_geometry_size =
+      solver_snapshot.nominal_path_distance_m.size();
+    if (
+      terminal_geometry_size !=
+      static_cast<std::size_t>(solver_snapshot.request.horizon_steps) + 1U ||
+      solver_snapshot.request.inputs.size() + 1U != terminal_geometry_size ||
+      solver_snapshot.wall_reference_progress_m.size() != terminal_geometry_size ||
+      solver_snapshot.wall_lower_m.size() != terminal_geometry_size ||
+      solver_snapshot.wall_upper_m.size() != terminal_geometry_size)
+    {
+      rejection.outcome =
+        RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
+      rejection.detail = "terminal Stop course geometry unavailable";
+      return std::nullopt;
+    }
+    auto & terminal_geometry = snapshot.terminal_stop_course_geometry;
+    terminal_geometry.progress_m = solver_snapshot.wall_reference_progress_m;
+    terminal_geometry.lateral_lower_m = solver_snapshot.wall_lower_m;
+    terminal_geometry.lateral_upper_m = solver_snapshot.wall_upper_m;
+    terminal_geometry.curvature_radpm.reserve(
+      solver_snapshot.request.inputs.size());
+    for (std::size_t stage = 0U;
+      stage < solver_snapshot.request.inputs.size(); ++stage)
+    {
+      if (
+        std::abs(
+          solver_snapshot.nominal_path_distance_m[stage] -
+          terminal_geometry.progress_m[stage]) > 1e-9)
+      {
+        rejection.outcome =
+          RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
+        rejection.detail = "terminal Stop progress profile mismatch";
+        return std::nullopt;
+      }
+      terminal_geometry.curvature_radpm.push_back(
+        solver_snapshot.request.inputs[stage].path_curvature_radpm);
+    }
+    if (
+      std::abs(
+        solver_snapshot.nominal_path_distance_m.back() -
+        terminal_geometry.progress_m.back()) > 1e-9 ||
+      !rate_resolved_physical::stop_course_geometry_valid(terminal_geometry))
+    {
+      rejection.outcome =
+        RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
+      rejection.detail = "terminal Stop course geometry invalid";
+      return std::nullopt;
+    }
     if (!rate_resolved_physical_wall::identity_valid(snapshot.identity)) {
       rejection.detail = "physical wall pipeline identity invalid";
       return std::nullopt;

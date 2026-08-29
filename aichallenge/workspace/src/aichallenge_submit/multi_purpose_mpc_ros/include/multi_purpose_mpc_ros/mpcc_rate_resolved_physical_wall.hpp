@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/mpc_stage_geometry.hpp"
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 #include "multi_purpose_mpc_ros/race_mpcc_foundation.hpp"
 #include "multi_purpose_mpc_ros/recovery_footprint.hpp"
 
@@ -78,6 +79,11 @@ struct Snapshot
   std::vector<recovery::Pose2D> control_prefix;
   race::ExactPhysicalExecutionTrajectory trajectory;
   std::vector<mpc_stage_geometry::CourseFrameKnot> course_frame_knots;
+  /// Full planning-horizon physical course support used only to synthesize a
+  /// terminal maximum-braking successor.  The normal command artifact remains
+  /// a short executable prefix.
+  mpcc_rate_resolved_physical_adapter::StopCourseGeometry
+    terminal_stop_course_geometry;
   double hard_wall_clearance_m{};
   double bound_tolerance_m{};
   double swept_step_m{};

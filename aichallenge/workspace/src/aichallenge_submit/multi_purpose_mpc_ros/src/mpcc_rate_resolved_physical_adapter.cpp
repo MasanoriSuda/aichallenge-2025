@@ -82,49 +82,46 @@ struct SampledCourseGeometry
 };
 
 std::optional<SampledCourseGeometry> sample_course_geometry(
-  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const StopCourseGeometry & course_geometry,
+  const double query_tolerance_m,
   const double local_progress_m) noexcept
 {
   if (
-    artifact.predicted_states.size() < 2U ||
-    artifact.control_stages.empty() ||
-    artifact.lateral_lower_m.size() != artifact.predicted_states.size() ||
-    artifact.lateral_upper_m.size() != artifact.predicted_states.size() ||
-    !std::isfinite(local_progress_m))
+    !stop_course_geometry_valid(course_geometry) ||
+    !std::isfinite(query_tolerance_m) || query_tolerance_m < 0.0 ||
+    !std::isfinite(local_progress_m) ||
+    local_progress_m < course_geometry.progress_m.front() - query_tolerance_m ||
+    local_progress_m > course_geometry.progress_m.back() + query_tolerance_m)
   {
     return std::nullopt;
   }
   std::size_t stage{};
   while (
-    stage + 1U < artifact.control_stages.size() &&
-    local_progress_m > artifact.predicted_states[stage + 1U].progress_m)
+    stage + 1U < course_geometry.curvature_radpm.size() &&
+    local_progress_m > course_geometry.progress_m[stage + 1U] +
+    query_tolerance_m)
   {
     ++stage;
   }
   const double start_progress_m =
-    artifact.predicted_states[stage].progress_m;
+    course_geometry.progress_m[stage];
   const double end_progress_m =
-    artifact.predicted_states[stage + 1U].progress_m;
-  double fraction{};
-  if (end_progress_m > start_progress_m + artifact.physical_global_tolerance) {
-    fraction = std::clamp(
-      (local_progress_m - start_progress_m) /
-      (end_progress_m - start_progress_m), 0.0, 1.0);
-  } else if (
-    local_progress_m > end_progress_m + artifact.physical_global_tolerance)
-  {
-    return std::nullopt;
-  }
+    course_geometry.progress_m[stage + 1U];
+  const double fraction = std::clamp(
+    (local_progress_m - start_progress_m) /
+    (end_progress_m - start_progress_m), 0.0, 1.0);
   const auto interpolate = [fraction](const double start, const double end) {
       return start + fraction * (end - start);
     };
   SampledCourseGeometry geometry;
   geometry.curvature_radpm =
-    artifact.control_stages[stage].path_curvature_radpm;
+    course_geometry.curvature_radpm[stage];
   geometry.lateral_lower_m = interpolate(
-    artifact.lateral_lower_m[stage], artifact.lateral_lower_m[stage + 1U]);
+    course_geometry.lateral_lower_m[stage],
+    course_geometry.lateral_lower_m[stage + 1U]);
   geometry.lateral_upper_m = interpolate(
-    artifact.lateral_upper_m[stage], artifact.lateral_upper_m[stage + 1U]);
+    course_geometry.lateral_upper_m[stage],
+    course_geometry.lateral_upper_m[stage + 1U]);
   if (
     !std::isfinite(geometry.curvature_radpm) ||
     !std::isfinite(geometry.lateral_lower_m) ||
@@ -673,6 +670,7 @@ StopContingencyResult build_stop_contingency(
   const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
   const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
   const ContinuationInitialState & initial_state,
+  const StopCourseGeometry & course_geometry,
   const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
   const double minimum_acceleration_mps2) noexcept
 {
@@ -680,6 +678,10 @@ StopContingencyResult build_stop_contingency(
   namespace race = race_mpcc_foundation;
   StopContingencyResult result;
   if (execution::validate(artifact) != execution::RejectReason::None) {
+    return result;
+  }
+  if (!stop_course_geometry_valid(course_geometry)) {
+    result.reason = StopContingencyRejectReason::CourseGeometryUnavailable;
     return result;
   }
   if (
@@ -798,7 +800,7 @@ StopContingencyResult build_stop_contingency(
           return false;
         }
         const auto geometry = sample_course_geometry(
-          artifact, nonlinear.progress_m);
+          course_geometry, tolerance, nonlinear.progress_m);
         if (!geometry.has_value()) {
           result.reason =
             StopContingencyRejectReason::CourseGeometryUnavailable;
@@ -847,7 +849,7 @@ StopContingencyResult build_stop_contingency(
           nonlinear.velocity_mps = 0.0;
         }
         const auto endpoint_geometry = sample_course_geometry(
-          artifact, nonlinear.progress_m);
+          course_geometry, tolerance, nonlinear.progress_m);
         if (!endpoint_geometry.has_value()) {
           result.reason =
             StopContingencyRejectReason::CourseGeometryUnavailable;
@@ -892,7 +894,7 @@ StopContingencyResult build_stop_contingency(
   result.publisher_interval_end_steering_rad = nonlinear.steering_rad;
   while (nonlinear.velocity_mps > tolerance) {
     const auto geometry = sample_course_geometry(
-      artifact, nonlinear.progress_m);
+      course_geometry, tolerance, nonlinear.progress_m);
     if (!geometry.has_value()) {
       result.reason = StopContingencyRejectReason::CourseGeometryUnavailable;
       return result;

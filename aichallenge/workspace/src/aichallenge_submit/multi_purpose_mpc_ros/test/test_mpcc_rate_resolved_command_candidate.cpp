@@ -252,7 +252,7 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
 
 TEST(
   RateResolvedProductionAdapter,
-  PublishesOnlyTheCurrentStageCertifiedByPrefixProof)
+  RejectsCurrentStagePrefixWithoutCertifiedTerminalSuffix)
 {
   auto retained_result = accepted_result();
   retained_result.proof->cursor.control_stage_index = 0U;
@@ -273,10 +273,8 @@ TEST(
 
   const auto result = production::build(retained_result);
 
-  ASSERT_EQ(result.reason, production::Reason::Available);
-  ASSERT_TRUE(result.authority.has_value());
-  EXPECT_EQ(result.authority->target_speed_horizon_mps.size(), 1U);
-  EXPECT_EQ(result.authority->steering_horizon_rad.size(), 1U);
+  EXPECT_EQ(result.reason, production::Reason::InvalidCursor);
+  EXPECT_FALSE(result.authority.has_value());
 }
 
 TEST(

@@ -510,7 +510,7 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsFutureCrossingObstacle)
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  RetainsClearCurrentStageWhenOnlyLaterDynamicSuffixNeedsReplanning)
+  RejectsClearCurrentStageWithoutCertifiedDynamicStopSuffix)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
@@ -524,11 +524,11 @@ TEST(
 
   const auto result = retained::evaluate(request);
 
-  EXPECT_EQ(result.reason, retained::Reason::Accepted);
-  ASSERT_TRUE(result.proof.has_value());
-  EXPECT_EQ(result.proof->proved_control_stage_count, 1U);
   EXPECT_EQ(
-    result.proof->dynamic_obstacle_scope,
+    result.reason, retained::Reason::TerminalContingencyUnavailable);
+  EXPECT_FALSE(result.proof.has_value());
+  EXPECT_EQ(
+    result.dynamic_obstacle_scope,
     retained::DynamicObstacleProofScope::CurrentStagePrefix);
   EXPECT_EQ(result.blocking_obstacle_id, "later-peer");
   EXPECT_LT(result.minimum_dynamic_clearance_m, 0.0);
@@ -998,7 +998,7 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  RetainsClearCurrentStageWhenOnlyLaterSuffixNeedsReplanning)
+  RejectsClearCurrentStageWithoutCertifiedWallStopSuffix)
 {
   auto grid = free_grid();
   // The first continuation endpoint is at approximately (50.20, 0.10) and
@@ -1015,17 +1015,12 @@ TEST(
   auto request = accepted_request(plan);
 
   const auto result = retained::evaluate(request);
-  EXPECT_EQ(result.reason, retained::Reason::Accepted);
-  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(
+    result.reason, retained::Reason::TerminalContingencyUnavailable);
+  EXPECT_FALSE(result.proof.has_value());
   EXPECT_EQ(
     result.static_wall_scope,
     retained::StaticWallProofScope::CurrentStagePrefix);
-  EXPECT_EQ(
-    result.proof->static_wall_scope,
-    retained::StaticWallProofScope::CurrentStagePrefix);
-  EXPECT_EQ(result.proof->proved_control_stage_count, 1U);
-  EXPECT_EQ(
-    result.proof->continuation_stage_end_velocity_mps.size(), 1U);
   EXPECT_TRUE(result.current_stage_path_clearance.valid);
   EXPECT_TRUE(result.current_stage_path_clearance.clear);
   EXPECT_TRUE(result.continuation_path_clearance.valid);

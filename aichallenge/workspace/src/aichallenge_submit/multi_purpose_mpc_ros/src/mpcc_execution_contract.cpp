@@ -722,8 +722,7 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
   if (
     candidate.executable_control_stage_count >
     remaining_control_stage_count ||
-    (require_current_decision &&
-    candidate.executable_control_stage_count != remaining_control_stage_count))
+    candidate.executable_control_stage_count != remaining_control_stage_count)
   {
     return CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon;
   }

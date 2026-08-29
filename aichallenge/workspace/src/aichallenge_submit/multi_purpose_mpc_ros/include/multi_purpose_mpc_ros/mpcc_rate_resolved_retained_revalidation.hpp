@@ -177,16 +177,15 @@ enum class Reason
   ConnectorBlocked,
   ContinuationRejected,
   ContinuationWallBlocked,
+  TerminalContingencyUnavailable,
   Count,
 };
 
 const char * to_string(Reason reason) noexcept;
 
-/// Static-wall extent proven for this retained publication.  A retained
-/// artifact is re-evaluated every control cycle, so authority may certify the
-/// exact remainder of the current control stage while requiring a successor
-/// before a later stage.  This never weakens the delay path, current-stage
-/// dynamic-obstacle, Follow-gap, or actuator-reachability proofs.
+/// Static-wall extent observed while revalidating a retained artifact. A
+/// current-stage-only result is diagnostic until an exact certified stop or
+/// successor suffix exists; it must not receive production authority.
 enum class StaticWallProofScope
 {
   FullSuffix,
@@ -195,10 +194,9 @@ enum class StaticWallProofScope
 
 const char * to_string(StaticWallProofScope scope) noexcept;
 
-/// Dynamic-world extent proven for this publication.  A future obstacle in a
-/// later stage is a replanning obligation, not proof that the exact current
-/// stage is unsafe.  Delay-prefix and current-stage intersections remain hard
-/// rejections.
+/// Dynamic-world extent observed while revalidating a retained artifact. A
+/// future obstacle is a replanning obligation, but the current stage alone is
+/// not an executable safety certificate without a certified terminal suffix.
 enum class DynamicObstacleProofScope
 {
   FullSuffix,

@@ -141,7 +141,14 @@ Result build(const retained::Result & retained_result) noexcept
     proof.cursor.control_stage_index >= execution.control_stages.size() ||
     proof.proved_control_stage_count == 0U ||
     proof.proved_control_stage_count >
-    proof.cursor.remaining_control_stage_count)
+    proof.cursor.remaining_control_stage_count ||
+    proof.proved_control_stage_count !=
+    proof.cursor.remaining_control_stage_count ||
+    proof.static_wall_scope != retained::StaticWallProofScope::FullSuffix ||
+    proof.dynamic_obstacle_scope !=
+    retained::DynamicObstacleProofScope::FullSuffix ||
+    proof.continuation_scope !=
+    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix)
   {
     result.reason = Reason::InvalidCursor;
     return result;

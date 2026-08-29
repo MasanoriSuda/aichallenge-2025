@@ -462,6 +462,8 @@ const char * to_string(const Reason reason) noexcept
     case Reason::ContinuationRejected: return "continuation-rejected";
     case Reason::ContinuationWallBlocked:
       return "continuation-wall-blocked";
+    case Reason::TerminalContingencyUnavailable:
+      return "terminal-contingency-unavailable";
     case Reason::Count: break;
   }
   return "unknown";
@@ -1110,6 +1112,25 @@ Result evaluate(const Request & request)
     result.dynamic_obstacle_scope =
       DynamicObstacleProofScope::CurrentStagePrefix;
     result.proved_control_stage_count = 1U;
+  }
+
+  // A clear current control stage is not by itself an executable safety
+  // certificate. The very next stage is already known to be blocked, while
+  // the command extracted below may still accelerate through the clear
+  // prefix. Without an exact stop or certified successor suffix, authority
+  // can reach the blocked stage with no remaining braking distance. Keep the
+  // bounded prefix as diagnostic evidence, but do not manufacture a
+  // production proof from it.
+  if (
+    continuation.scope ==
+    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
+    CurrentStagePrefix ||
+    result.static_wall_scope == StaticWallProofScope::CurrentStagePrefix ||
+    result.dynamic_obstacle_scope ==
+    DynamicObstacleProofScope::CurrentStagePrefix)
+  {
+    return complete_continuation_proof(
+      Reason::TerminalContingencyUnavailable);
   }
 
   auto proved_continuation_trajectory = continuation_trajectory;

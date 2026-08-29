@@ -719,10 +719,13 @@ CanonicalNormalCandidateRejectReason qualify_canonical_normal_candidate(
   const std::size_t remaining_control_stage_count =
     solution.prediction_stage_count -
     candidate.execution_first_control_stage_index;
+  const bool complete_horizon =
+    candidate.executable_control_stage_count == remaining_control_stage_count;
   if (
     candidate.executable_control_stage_count >
     remaining_control_stage_count ||
-    candidate.executable_control_stage_count != remaining_control_stage_count)
+    (!complete_horizon &&
+    (require_current_decision || !candidate.terminal_contingency_certified)))
   {
     return CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon;
   }

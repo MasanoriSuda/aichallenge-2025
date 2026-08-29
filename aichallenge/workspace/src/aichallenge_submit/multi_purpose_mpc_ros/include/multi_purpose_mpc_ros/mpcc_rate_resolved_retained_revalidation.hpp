@@ -252,8 +252,17 @@ struct Proof
   std::uint64_t follow_target_observation_generation{};
   std::size_t follow_checked_state_count{};
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
+  /// A partial normal prefix may own exactly one publisher interval only when
+  /// this current-decision Stop trajectory is independently certified.
+  bool terminal_stop_certified{false};
+  std::size_t terminal_stop_static_checked_pose_count{};
+  std::size_t terminal_stop_dynamic_checked_pose_count{};
+  double terminal_stop_minimum_dynamic_clearance_m{
+    std::numeric_limits<double>::infinity()};
   race_mpcc_foundation::ExactPhysicalExecutionTrajectory
   continuation_trajectory;
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory
+  terminal_stop_trajectory;
   std::vector<double> continuation_stage_end_velocity_mps;
   std::vector<double> continuation_stage_end_steering_rad;
 };
@@ -277,6 +286,23 @@ struct Result
   std::uint64_t follow_target_observation_generation{};
   std::size_t follow_checked_state_count{};
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
+  bool terminal_stop_attempted{false};
+  bool terminal_stop_certified{false};
+  mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason
+  terminal_stop_reason{
+    mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason::
+    InvalidArtifact};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason
+  terminal_stop_exact_reason{
+    race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  recovery::PathClearanceResult terminal_stop_path_clearance;
+  std::string terminal_stop_blocking_obstacle_id;
+  std::size_t terminal_stop_dynamic_checked_pose_count{};
+  double terminal_stop_minimum_dynamic_clearance_m{
+    std::numeric_limits<double>::infinity()};
+  std::size_t terminal_stop_follow_checked_state_count{};
+  double terminal_stop_follow_minimum_gap_m{
+    std::numeric_limits<double>::infinity()};
   double expected_absolute_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
   double expected_lateral_m{std::numeric_limits<double>::quiet_NaN()};

@@ -141,15 +141,25 @@ Result build(const retained::Result & retained_result) noexcept
     proof.cursor.control_stage_index >= execution.control_stages.size() ||
     proof.proved_control_stage_count == 0U ||
     proof.proved_control_stage_count >
-    proof.cursor.remaining_control_stage_count ||
-    proof.proved_control_stage_count !=
-    proof.cursor.remaining_control_stage_count ||
-    proof.static_wall_scope != retained::StaticWallProofScope::FullSuffix ||
-    proof.dynamic_obstacle_scope !=
-    retained::DynamicObstacleProofScope::FullSuffix ||
-    proof.continuation_scope !=
-    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix)
+    proof.cursor.remaining_control_stage_count)
   {
+    result.reason = Reason::InvalidCursor;
+    return result;
+  }
+  const bool full_suffix =
+    proof.proved_control_stage_count ==
+    proof.cursor.remaining_control_stage_count &&
+    proof.static_wall_scope == retained::StaticWallProofScope::FullSuffix &&
+    proof.dynamic_obstacle_scope ==
+    retained::DynamicObstacleProofScope::FullSuffix &&
+    proof.continuation_scope ==
+    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix;
+  const bool bounded_prefix =
+    proof.proved_control_stage_count == 1U &&
+    proof.terminal_stop_certified &&
+    race_mpcc_foundation::exact_physical_execution_trajectory_complete(
+      proof.terminal_stop_trajectory);
+  if (!full_suffix && !bounded_prefix) {
     result.reason = Reason::InvalidCursor;
     return result;
   }
@@ -230,6 +240,8 @@ Result build(const retained::Result & retained_result) noexcept
   retained_candidate.execution_certificate_decision_id = proof.decision_id;
   retained_candidate.execution_first_control_stage_index =
     proof.cursor.control_stage_index;
+  retained_candidate.terminal_contingency_certified =
+    proof.terminal_stop_certified;
   retained_candidate.execution_physical = solution.physical;
   const auto authority_resolution =
     contract::resolve_canonical_normal_authority(

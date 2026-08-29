@@ -536,6 +536,41 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
+  AcceptsClearCurrentStageWithCurrentWorldCertifiedDynamicStopSuffix)
+{
+  auto execution = std::make_shared<const artifact::ExecutionArtifact>(
+    execution_artifact());
+  auto snapshot = source_snapshot(execution->identity);
+  snapshot.footprint = {0.001, 0.001, 0.001, 0.001, 0.0};
+  const auto built = certified::build(
+    execution, snapshot, accepted_result(snapshot));
+  ASSERT_EQ(built.reason, certified::RejectReason::None);
+  ASSERT_NE(built.plan, nullptr);
+  auto request = accepted_request(built.plan);
+  request.current_footprint = snapshot.footprint;
+  // The fast crossing peer reaches the old second-stage endpoint, but has
+  // already crossed the short maximum-braking path when ego arrives there.
+  request.obstacles.obstacles.push_back(
+    {"later-crossing", {51.1187, 0.0527, -5.0, 0.0, 0.001}});
+
+  const auto result = retained::evaluate(request);
+
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(
+    result.dynamic_obstacle_scope,
+    retained::DynamicObstacleProofScope::CurrentStagePrefix);
+  EXPECT_TRUE(result.terminal_stop_attempted);
+  EXPECT_TRUE(result.terminal_stop_certified);
+  EXPECT_TRUE(result.proof->terminal_stop_certified);
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    exact_physical_execution_trajectory_complete(
+      result.proof->terminal_stop_trajectory));
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
   DoesNotReuseOldCertifiedStateSuffixAfterTheStateOriginMoves)
 {
   auto execution = std::make_shared<const artifact::ExecutionArtifact>(

@@ -369,6 +369,10 @@ struct CanonicalNormalCandidate
   std::uint64_t execution_plan_id{};
   std::uint64_t execution_certificate_decision_id{};
   std::size_t execution_first_control_stage_index{};
+  /// True only when a current-decision exact publisher-period plus braking
+  /// trajectory certifies rest if the unproved retained suffix is discarded.
+  /// Fresh authority never uses this escape hatch.
+  bool terminal_contingency_certified{false};
   PhysicalCertificate execution_physical;
 };
 

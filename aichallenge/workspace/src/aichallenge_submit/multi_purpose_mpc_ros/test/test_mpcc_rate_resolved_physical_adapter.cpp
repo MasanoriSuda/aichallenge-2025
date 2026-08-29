@@ -171,6 +171,58 @@ TEST(
 
 TEST(
   MpccRateResolvedPhysicalAdapter,
+  BuildsPublisherPeriodThenMaximumBrakingStopFromCurrentState)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.05);
+  ASSERT_TRUE(cursor.available);
+  const auto actuation = execution::extract_actuation(source, cursor);
+  ASSERT_TRUE(actuation.actuation.has_value());
+
+  const auto result = adapter::build_stop_contingency(
+    source, cursor, actuation.actuation.value(),
+    adapter::ContinuationInitialState{
+      -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    -3.0);
+
+  ASSERT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  const auto & exact = result.exact_trajectory.value();
+  ASSERT_FALSE(exact.velocity_mps.empty());
+  EXPECT_NEAR(exact.velocity_mps.back(), 0.0, 1e-9);
+  EXPECT_GT(exact.elapsed_time_sec.back(), source.publication_interval_sec);
+  EXPECT_NEAR(
+    exact.velocity_mps.front(),
+    2.05 + actuation.actuation->acceleration_mps2 * 0.01, 1e-9);
+  EXPECT_TRUE(
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    exact_physical_execution_trajectory_complete(exact));
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RejectsStopWhenConfiguredBrakingExceedsPhysicalEnvelope)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.05);
+  ASSERT_TRUE(cursor.available);
+  const auto actuation = execution::extract_actuation(source, cursor);
+  ASSERT_TRUE(actuation.actuation.has_value());
+
+  const auto result = adapter::build_stop_contingency(
+    source, cursor, actuation.actuation.value(),
+    adapter::ContinuationInitialState{
+      -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    -4.0);
+
+  EXPECT_EQ(
+    result.reason,
+    adapter::StopContingencyRejectReason::InvalidBrakingEnvelope);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
   RejectsContinuationOutsideCertifiedLateralCorridor)
 {
   const auto source = artifact();

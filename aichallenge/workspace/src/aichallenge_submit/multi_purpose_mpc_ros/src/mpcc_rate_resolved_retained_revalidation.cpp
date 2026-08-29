@@ -1114,23 +1114,117 @@ Result evaluate(const Request & request)
     result.proved_control_stage_count = 1U;
   }
 
-  // A clear current control stage is not by itself an executable safety
-  // certificate. The very next stage is already known to be blocked, while
-  // the command extracted below may still accelerate through the clear
-  // prefix. Without an exact stop or certified successor suffix, authority
-  // can reach the blocked stage with no remaining braking distance. Keep the
-  // bounded prefix as diagnostic evidence, but do not manufacture a
-  // production proof from it.
-  if (
+  const bool partial_normal_proof =
     continuation.scope ==
     mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
     CurrentStagePrefix ||
     result.static_wall_scope == StaticWallProofScope::CurrentStagePrefix ||
     result.dynamic_obstacle_scope ==
-    DynamicObstacleProofScope::CurrentStagePrefix)
-  {
-    return complete_continuation_proof(
-      Reason::TerminalContingencyUnavailable);
+    DynamicObstacleProofScope::CurrentStagePrefix;
+
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory
+  terminal_stop_trajectory;
+  recovery::PathClearanceResult terminal_stop_clearance;
+  dynamic_proof::Result terminal_stop_dynamic;
+  if (partial_normal_proof) {
+    // Publication is causal: the current serialized command can remain on the
+    // actuator for one publisher interval even if the next solve fails. A
+    // partial normal prefix therefore receives authority only when that exact
+    // interval followed by the real max-braking/hold-steering Emergency
+    // sequence is rebuilt from the current state and proved against this same
+    // immutable world observation.
+    result.terminal_stop_attempted = true;
+    const auto terminal_stop =
+      mpcc_rate_resolved_physical_adapter::build_stop_contingency(
+      execution, cursor, current_world_actuation,
+      mpcc_rate_resolved_physical_adapter::ContinuationInitialState{
+        current_control_state.lateral_m,
+        current_control_state.lag_m,
+        current_control_state.heading_offset_rad,
+        current_control_state.velocity_mps,
+        current_control_state.progress_m,
+        continuation_initial_steering_rad,
+        request.current_response_steering_rad},
+      request.minimum_acceleration_mps2);
+    result.terminal_stop_reason = terminal_stop.reason;
+    result.terminal_stop_exact_reason = terminal_stop.exact_reason;
+    if (!terminal_stop.exact_trajectory.has_value()) {
+      return complete_continuation_proof(
+        Reason::TerminalContingencyUnavailable);
+    }
+    terminal_stop_trajectory = terminal_stop.exact_trajectory.value();
+    std::vector<recovery::Pose2D> terminal_stop_path;
+    terminal_stop_path.reserve(
+      terminal_stop_trajectory.progress_m.size() + 1U);
+    terminal_stop_path.push_back(request.control_pose);
+    auto previous_stop_pose = request.control_pose;
+    double previous_stop_time_sec = prediction_delay_sec;
+    dynamic_proof::observe_timed_path(
+      source.footprint, request.measured_to_control_path,
+      request.measured_to_control_elapsed_sec, source.swept_step_m,
+      request.obstacles, terminal_stop_dynamic);
+    for (std::size_t sample_index = 0U;
+      sample_index < terminal_stop_trajectory.elapsed_time_sec.size();
+      ++sample_index)
+    {
+      const auto physical_endpoint = exact_physical_state_at(
+        terminal_stop_trajectory, sample_index);
+      const auto endpoint_state = as_predicted_state(
+        physical_endpoint, current_control_state,
+        execution.course_progress_origin_m);
+      const auto endpoint_pose = reconstruct_pose(source, endpoint_state);
+      if (!endpoint_pose.has_value()) {
+        return complete_continuation_proof(
+          Reason::TerminalContingencyUnavailable);
+      }
+      const double endpoint_time_sec = prediction_delay_sec +
+        terminal_stop_trajectory.elapsed_time_sec[sample_index];
+      if (follow_target != nullptr) {
+        const auto stage_gap = evaluate_follow_gap(
+          endpoint_state, endpoint_time_sec);
+        if (!stage_gap.has_value()) {
+          return complete_continuation_proof(
+            Reason::TerminalContingencyUnavailable);
+        }
+        ++result.terminal_stop_follow_checked_state_count;
+        result.terminal_stop_follow_minimum_gap_m = std::min(
+          result.terminal_stop_follow_minimum_gap_m, stage_gap.value());
+        if (stage_gap.value() + kIdentityTolerance < follow_target->hard_gap_m) {
+          return complete_continuation_proof(
+            Reason::TerminalContingencyUnavailable);
+        }
+      }
+      dynamic_proof::observe_segment(
+        source.footprint, previous_stop_pose, endpoint_pose.value(),
+        previous_stop_time_sec, endpoint_time_sec, source.swept_step_m,
+        request.obstacles, terminal_stop_dynamic);
+      terminal_stop_path.push_back(endpoint_pose.value());
+      previous_stop_pose = endpoint_pose.value();
+      previous_stop_time_sec = endpoint_time_sec;
+      if (!terminal_stop_dynamic.valid || !terminal_stop_dynamic.clear) {
+        break;
+      }
+    }
+    dynamic_proof::finalize(request.obstacles, terminal_stop_dynamic);
+    result.terminal_stop_blocking_obstacle_id =
+      terminal_stop_dynamic.blocking_obstacle_id;
+    result.terminal_stop_dynamic_checked_pose_count =
+      terminal_stop_dynamic.checked_pose_count;
+    result.terminal_stop_minimum_dynamic_clearance_m =
+      terminal_stop_dynamic.minimum_clearance_m;
+    if (!terminal_stop_dynamic.valid || !terminal_stop_dynamic.clear) {
+      return complete_continuation_proof(
+        Reason::TerminalContingencyUnavailable);
+    }
+    terminal_stop_clearance = recovery::evaluate_clear_footprint_path(
+      *source.wall_grid, clearance_footprint.value(), terminal_stop_path,
+      source.swept_step_m);
+    result.terminal_stop_path_clearance = terminal_stop_clearance;
+    if (!terminal_stop_clearance.valid || !terminal_stop_clearance.clear) {
+      return complete_continuation_proof(
+        Reason::TerminalContingencyUnavailable);
+    }
+    result.terminal_stop_certified = true;
   }
 
   auto proved_continuation_trajectory = continuation_trajectory;
@@ -1222,8 +1316,16 @@ Result evaluate(const Request & request)
     result.follow_target_observation_generation;
   proof.follow_checked_state_count = result.follow_checked_state_count;
   proof.follow_minimum_gap_m = result.follow_minimum_gap_m;
+  proof.terminal_stop_certified = result.terminal_stop_certified;
+  proof.terminal_stop_static_checked_pose_count =
+    terminal_stop_clearance.checked_pose_count;
+  proof.terminal_stop_dynamic_checked_pose_count =
+    terminal_stop_dynamic.checked_pose_count;
+  proof.terminal_stop_minimum_dynamic_clearance_m =
+    terminal_stop_dynamic.minimum_clearance_m;
   proof.continuation_trajectory =
     std::move(proved_continuation_trajectory);
+  proof.terminal_stop_trajectory = std::move(terminal_stop_trajectory);
   proof.continuation_stage_end_velocity_mps =
     std::move(proved_stage_end_velocity_mps);
   proof.continuation_stage_end_steering_rad =

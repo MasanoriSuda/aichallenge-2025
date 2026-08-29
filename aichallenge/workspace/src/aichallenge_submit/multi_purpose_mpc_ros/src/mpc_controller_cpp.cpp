@@ -7089,6 +7089,17 @@ struct RateResolvedRetainedShadowEvaluation
   std::uint64_t follow_target_observation_generation{};
   std::size_t follow_checked_state_count{};
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
+  bool terminal_stop_attempted{false};
+  bool terminal_stop_certified{false};
+  rate_resolved_physical::StopContingencyRejectReason terminal_stop_reason{
+    rate_resolved_physical::StopContingencyRejectReason::InvalidArtifact};
+  race_mpcc::ExactPhysicalExecutionTrajectoryReason terminal_stop_exact_reason{
+    race_mpcc::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  recovery_footprint::PathClearanceResult terminal_stop_path_clearance;
+  std::string terminal_stop_blocking_obstacle_id;
+  std::size_t terminal_stop_dynamic_checked_pose_count{};
+  double terminal_stop_minimum_dynamic_clearance_m{
+    std::numeric_limits<double>::infinity()};
   std::string blocking_obstacle_id;
   recovery_footprint::PathClearanceResult delay_path_clearance;
   recovery_footprint::PathClearanceResult connector_path_clearance;
@@ -24419,6 +24430,19 @@ struct MPC
     evaluation.follow_checked_state_count =
       result.follow_checked_state_count;
     evaluation.follow_minimum_gap_m = result.follow_minimum_gap_m;
+    evaluation.terminal_stop_attempted = result.terminal_stop_attempted;
+    evaluation.terminal_stop_certified = result.terminal_stop_certified;
+    evaluation.terminal_stop_reason = result.terminal_stop_reason;
+    evaluation.terminal_stop_exact_reason =
+      result.terminal_stop_exact_reason;
+    evaluation.terminal_stop_path_clearance =
+      result.terminal_stop_path_clearance;
+    evaluation.terminal_stop_blocking_obstacle_id =
+      result.terminal_stop_blocking_obstacle_id;
+    evaluation.terminal_stop_dynamic_checked_pose_count =
+      result.terminal_stop_dynamic_checked_pose_count;
+    evaluation.terminal_stop_minimum_dynamic_clearance_m =
+      result.terminal_stop_minimum_dynamic_clearance_m;
     evaluation.blocking_obstacle_id = result.blocking_obstacle_id;
     evaluation.delay_path_clearance = result.delay_path_clearance;
     evaluation.connector_path_clearance = result.connector_path_clearance;
@@ -24734,7 +24758,11 @@ struct MPC
     window.last_retained = retained;
     const bool retained_reason_changed =
       !rate_resolved_track_cruise_retained_trace_initialized_ ||
-      retained.reason != rate_resolved_track_cruise_last_retained_reason_;
+      retained.reason != rate_resolved_track_cruise_last_retained_reason_ ||
+      retained.terminal_stop_attempted !=
+      rate_resolved_track_cruise_last_terminal_stop_attempted_ ||
+      retained.terminal_stop_certified !=
+      rate_resolved_track_cruise_last_terminal_stop_certified_;
     if (retained_reason_changed) {
       ++rate_resolved_track_cruise_retained_suppressed_transition_count_;
       const bool first_transition =
@@ -24747,6 +24775,7 @@ struct MPC
         const auto & delay = retained.delay_path_clearance;
         const auto & current_stage = retained.current_stage_path_clearance;
         const auto & continuation = retained.continuation_path_clearance;
+        const auto & terminal_stop = retained.terminal_stop_path_clearance;
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
           "Rate-resolved retained reason transition: decision=%lu, "
@@ -24768,7 +24797,10 @@ struct MPC
           "dynamic_scope:%s, "
           "continuation=model:%s/scope:%s/exact:%s/proved_stages:%lu/"
           "valid:%d/clear:%d/reason:%s/checked:%lu/"
-          "reject_index:%lu/reject_pose:%d/(%.3f,%.3f,%.3f)",
+          "reject_index:%lu/reject_pose:%d/(%.3f,%.3f,%.3f), "
+          "terminal_stop=attempted:%d/certified:%d/model:%s/exact:%s/"
+          "wall_valid:%d/wall_clear:%d/wall_reason:%s/wall_checked:%lu/"
+          "dynamic_checked:%lu/dynamic_clearance:%.3f/blocker:%s",
           static_cast<unsigned long>(retained.decision_id),
           rate_resolved_track_cruise_retained_trace_initialized_ ?
           rate_resolved_retained::to_string(
@@ -24827,11 +24859,28 @@ struct MPC
           static_cast<unsigned long>(continuation.rejected_path_index),
           continuation.rejected_pose_available ? 1 : 0,
           continuation.rejected_pose.x_m, continuation.rejected_pose.y_m,
-          continuation.rejected_pose.yaw_rad);
+          continuation.rejected_pose.yaw_rad,
+          retained.terminal_stop_attempted ? 1 : 0,
+          retained.terminal_stop_certified ? 1 : 0,
+          rate_resolved_physical::to_string(retained.terminal_stop_reason),
+          race_mpcc::exact_physical_execution_trajectory_reason_name(
+            retained.terminal_stop_exact_reason),
+          terminal_stop.valid ? 1 : 0, terminal_stop.clear ? 1 : 0,
+          recovery_footprint::to_string(terminal_stop.reason),
+          static_cast<unsigned long>(terminal_stop.checked_pose_count),
+          static_cast<unsigned long>(
+            retained.terminal_stop_dynamic_checked_pose_count),
+          retained.terminal_stop_minimum_dynamic_clearance_m,
+          retained.terminal_stop_blocking_obstacle_id.empty() ?
+          "none" : retained.terminal_stop_blocking_obstacle_id.c_str());
         rate_resolved_track_cruise_retained_last_trace_sec_ = now_sec;
         rate_resolved_track_cruise_retained_suppressed_transition_count_ = 0U;
       }
       rate_resolved_track_cruise_last_retained_reason_ = retained.reason;
+      rate_resolved_track_cruise_last_terminal_stop_attempted_ =
+        retained.terminal_stop_attempted;
+      rate_resolved_track_cruise_last_terminal_stop_certified_ =
+        retained.terminal_stop_certified;
       rate_resolved_track_cruise_retained_trace_initialized_ = true;
     }
     if (rate_resolved_track_cruise_physical_wall_mailbox_ != nullptr) {
@@ -27461,6 +27510,8 @@ struct MPC
     rate_resolved_track_cruise_last_retained_reason_{
     rate_resolved_retained::Reason::MissingPlan};
   bool rate_resolved_track_cruise_retained_trace_initialized_{false};
+  bool rate_resolved_track_cruise_last_terminal_stop_attempted_{false};
+  bool rate_resolved_track_cruise_last_terminal_stop_certified_{false};
   double rate_resolved_track_cruise_retained_last_trace_sec_{
     -std::numeric_limits<double>::infinity()};
   std::uint64_t

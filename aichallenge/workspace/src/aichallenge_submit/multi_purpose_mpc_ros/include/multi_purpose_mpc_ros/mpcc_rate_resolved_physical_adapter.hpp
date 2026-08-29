@@ -120,6 +120,47 @@ ContinuationResult build_continuation(
   const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
   const ContinuationInitialState & initial_state) noexcept;
 
+enum class StopContingencyRejectReason
+{
+  None,
+  InvalidArtifact,
+  InvalidCursor,
+  InvalidInitialState,
+  InvalidActuation,
+  InvalidBrakingEnvelope,
+  CourseGeometryUnavailable,
+  NonlinearModelRejected,
+  ActuatorEnvelopeRejected,
+  ExactTrajectoryRejected,
+  Count,
+};
+
+const char * to_string(StopContingencyRejectReason reason) noexcept;
+
+struct StopContingencyResult
+{
+  StopContingencyRejectReason reason{
+    StopContingencyRejectReason::InvalidArtifact};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason exact_reason{
+    race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  int rejected_sample{-1};
+  std::optional<race_mpcc_foundation::ExactPhysicalExecutionTrajectory>
+  exact_trajectory;
+};
+
+/// Prove the causal command sequence which the publisher can actually
+/// execute when no next canonical solution arrives: hold the current
+/// serialized steering and current acceleration for exactly one publication
+/// interval, then hold that steering while applying the configured physical
+/// maximum braking until rest. This is rebuilt from the current physical
+/// state and is not retained Mission geometry.
+StopContingencyResult build_stop_contingency(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
+  const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
+  const ContinuationInitialState & initial_state,
+  double minimum_acceleration_mps2) noexcept;
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter
 
 #endif  // MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_PHYSICAL_ADAPTER_HPP_

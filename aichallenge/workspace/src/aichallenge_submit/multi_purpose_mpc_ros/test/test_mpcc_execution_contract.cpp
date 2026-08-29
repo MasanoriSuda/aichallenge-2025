@@ -1251,6 +1251,26 @@ TEST(MpccExecutionContract, RetainedAuthorityRejectsUncertifiedTerminalSuffix)
     contract::CanonicalNormalCandidateRejectReason::InvalidExecutableHorizon);
 }
 
+TEST(MpccExecutionContract, RetainedAuthorityAcceptsCertifiedStopSuffix)
+{
+  auto fresh = make_canonical_candidate();
+  fresh.solution->physical.wall_clear = false;
+  auto retained = make_canonical_candidate(41U, 1U, 42U);
+  retained.terminal_contingency_certified = true;
+
+  const auto resolution = contract::resolve_canonical_normal_authority(
+    contract::CanonicalNormalAuthorityRequest{
+      42U, 12.0, fresh, retained, contract::ControlIntent::Track});
+
+  EXPECT_EQ(
+    resolution.source,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified);
+  EXPECT_EQ(
+    resolution.retained_reject_reason,
+    contract::CanonicalNormalCandidateRejectReason::None);
+  EXPECT_EQ(resolution.executable_control_stage_count, 1U);
+}
+
 TEST(MpccExecutionContract, FreshAuthorityStillRequiresCompleteHorizon)
 {
   const auto fresh = make_canonical_candidate(42U, 1U);

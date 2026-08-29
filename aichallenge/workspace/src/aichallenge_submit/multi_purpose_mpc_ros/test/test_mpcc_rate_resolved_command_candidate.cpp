@@ -279,6 +279,29 @@ TEST(
 
 TEST(
   RateResolvedProductionAdapter,
+  BuildsCurrentStageAuthorityWithCertifiedTerminalStopSuffix)
+{
+  auto retained_result = accepted_result();
+  retained_result.proof->cursor.control_stage_index = 0U;
+  retained_result.proof->cursor.remaining_control_stage_count = 2U;
+  retained_result.proof->actuation.control_stage_index = 0U;
+  retained_result.proof->proved_control_stage_count = 1U;
+  retained_result.proof->dynamic_obstacle_scope =
+    retained::DynamicObstacleProofScope::CurrentStagePrefix;
+  retained_result.proof->terminal_stop_certified = true;
+  retained_result.proof->terminal_stop_trajectory =
+    retained_result.proof->continuation_trajectory;
+
+  const auto result = production::build(retained_result);
+
+  ASSERT_EQ(result.reason, production::Reason::Available);
+  ASSERT_TRUE(result.authority.has_value());
+  EXPECT_EQ(result.authority->target_speed_horizon_mps.size(), 1U);
+  EXPECT_TRUE(result.authority->command.retained_solution);
+}
+
+TEST(
+  RateResolvedProductionAdapter,
   ProjectsCertifiedLowerBoundResidualsAtPhysicalCommandBoundary)
 {
   auto retained_result = accepted_result();

@@ -189,23 +189,24 @@ enum class Reason
 const char * to_string(Reason reason) noexcept;
 
 /// Static-wall extent observed while revalidating a retained artifact. A
-/// current-stage-only result is diagnostic until an exact certified stop or
-/// successor suffix exists; it must not receive production authority.
+/// publisher-interval-only result is diagnostic until an exact certified stop
+/// or successor suffix exists; it must not receive production authority.
 enum class StaticWallProofScope
 {
   FullSuffix,
-  CurrentStagePrefix,
+  PublisherIntervalPrefix,
 };
 
 const char * to_string(StaticWallProofScope scope) noexcept;
 
 /// Dynamic-world extent observed while revalidating a retained artifact. A
-/// future obstacle is a replanning obligation, but the current stage alone is
-/// not an executable safety certificate without a certified terminal suffix.
+/// future obstacle is a replanning obligation, but one publisher interval
+/// alone is not an executable safety certificate without a certified terminal
+/// suffix.
 enum class DynamicObstacleProofScope
 {
   FullSuffix,
-  CurrentStagePrefix,
+  PublisherIntervalPrefix,
 };
 
 const char * to_string(DynamicObstacleProofScope scope) noexcept;
@@ -395,7 +396,7 @@ struct Result
   continuation_exact_reason{
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
   std::size_t proved_control_stage_count{};
-  recovery::PathClearanceResult current_stage_path_clearance;
+  recovery::PathClearanceResult publisher_interval_path_clearance;
   recovery::PathClearanceResult continuation_path_clearance;
   mpcc_rate_resolved_physical_adapter::ContinuationRejectReason
   continuation_reason{

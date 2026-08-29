@@ -7143,7 +7143,8 @@ struct RateResolvedRetainedShadowEvaluation
   race_mpcc::ExactPhysicalExecutionTrajectoryReason continuation_exact_reason{
     race_mpcc::ExactPhysicalExecutionTrajectoryReason::Accepted};
   std::size_t proved_control_stage_count{};
-  recovery_footprint::PathClearanceResult current_stage_path_clearance;
+  recovery_footprint::PathClearanceResult
+  publisher_interval_path_clearance;
   recovery_footprint::PathClearanceResult continuation_path_clearance;
   rate_resolved_physical::ContinuationRejectReason continuation_reason{
     rate_resolved_physical::ContinuationRejectReason::InvalidArtifact};
@@ -7274,7 +7275,7 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   retained_outcome_count{};
   std::uint64_t retained_attempt_count{};
   std::uint64_t retained_full_suffix_accept_count{};
-  std::uint64_t retained_current_stage_prefix_accept_count{};
+  std::uint64_t retained_publisher_interval_prefix_accept_count{};
   std::uint64_t feedback_shadow_attempt_count{};
   std::uint64_t feedback_shadow_projected_count{};
   std::uint64_t feedback_shadow_continuation_accept_count{};
@@ -24502,8 +24503,8 @@ struct MPC
     evaluation.continuation_scope = result.continuation_scope;
     evaluation.continuation_exact_reason = result.continuation_exact_reason;
     evaluation.proved_control_stage_count = result.proved_control_stage_count;
-    evaluation.current_stage_path_clearance =
-      result.current_stage_path_clearance;
+    evaluation.publisher_interval_path_clearance =
+      result.publisher_interval_path_clearance;
     evaluation.continuation_path_clearance =
       result.continuation_path_clearance;
     evaluation.continuation_reason = result.continuation_reason;
@@ -24769,11 +24770,13 @@ struct MPC
     if (retained.reason == rate_resolved_retained::Reason::Accepted) {
       if (
         retained.static_wall_scope ==
-        rate_resolved_retained::StaticWallProofScope::CurrentStagePrefix ||
+        rate_resolved_retained::StaticWallProofScope::
+        PublisherIntervalPrefix ||
         retained.dynamic_obstacle_scope ==
-        rate_resolved_retained::DynamicObstacleProofScope::CurrentStagePrefix)
+        rate_resolved_retained::DynamicObstacleProofScope::
+        PublisherIntervalPrefix)
       {
-        ++window.retained_current_stage_prefix_accept_count;
+        ++window.retained_publisher_interval_prefix_accept_count;
       } else {
         ++window.retained_full_suffix_accept_count;
       }
@@ -24824,7 +24827,8 @@ struct MPC
         now_sec - rate_resolved_track_cruise_retained_last_trace_sec_ >= 0.25;
       if (cfg.v2x_behavior.debug_log_enabled && trace_due) {
         const auto & delay = retained.delay_path_clearance;
-        const auto & current_stage = retained.current_stage_path_clearance;
+        const auto & publisher_interval =
+          retained.publisher_interval_path_clearance;
         const auto & continuation = retained.continuation_path_clearance;
         const auto & terminal_stop = retained.terminal_stop_path_clearance;
         RCLCPP_WARN(
@@ -24846,7 +24850,7 @@ struct MPC
           "bounds:[%.6f,%.6f]/duration:%.6f, "
           "delay_path=valid:%d/clear:%d/reason:%s/checked:%lu/"
           "reject_index:%lu/reject_pose:%d/(%.3f,%.3f,%.3f), "
-          "static_wall=scope:%s/current_stage_valid:%d/clear:%d/"
+          "static_wall=scope:%s/publisher_interval_valid:%d/clear:%d/"
           "reason:%s/checked:%lu, "
           "dynamic_scope:%s, "
           "continuation=model:%s/scope:%s/exact:%s/proved_stages:%lu/"
@@ -24906,9 +24910,11 @@ struct MPC
           delay.rejected_pose_available ? 1 : 0, delay.rejected_pose.x_m,
           delay.rejected_pose.y_m, delay.rejected_pose.yaw_rad,
           rate_resolved_retained::to_string(retained.static_wall_scope),
-          current_stage.valid ? 1 : 0, current_stage.clear ? 1 : 0,
-          recovery_footprint::to_string(current_stage.reason),
-          static_cast<unsigned long>(current_stage.checked_pose_count),
+          publisher_interval.valid ? 1 : 0,
+          publisher_interval.clear ? 1 : 0,
+          recovery_footprint::to_string(publisher_interval.reason),
+          static_cast<unsigned long>(
+            publisher_interval.checked_pose_count),
           rate_resolved_retained::to_string(
             retained.dynamic_obstacle_scope),
           rate_resolved_physical::to_string(retained.continuation_reason),
@@ -25403,7 +25409,7 @@ struct MPC
       "dynamic_blocked:%lu/static_world:%lu/current_state:%lu/"
       "progress:%lu/course:%lu/actuation:%lu/steering:%lu/"
       "control_path:%lu/delay:%lu/connector:%lu/continuation:%lu/"
-      "continuation_wall:%lu, proof_scope=full:%lu/current_stage:%lu/"
+      "continuation_wall:%lu, proof_scope=full:%lu/publisher_interval:%lu/"
       "last_wall:%s/last_dynamic:%s, "
       "time=%.3f/%.3fms(avg/max), "
       "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
@@ -25492,7 +25498,7 @@ struct MPC
         rate_resolved_retained::Reason::ContinuationWallBlocked)),
       static_cast<unsigned long>(window.retained_full_suffix_accept_count),
       static_cast<unsigned long>(
-        window.retained_current_stage_prefix_accept_count),
+        window.retained_publisher_interval_prefix_accept_count),
       rate_resolved_retained::to_string(
         window.last_retained.static_wall_scope),
       rate_resolved_retained::to_string(

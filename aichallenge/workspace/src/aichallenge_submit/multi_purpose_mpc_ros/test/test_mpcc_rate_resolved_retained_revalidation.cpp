@@ -512,7 +512,9 @@ TEST(
   EXPECT_EQ(result.blocking_obstacle_id, "worsening-overlap");
 }
 
-TEST(MpccRateResolvedRetainedRevalidation, RejectsFutureCrossingObstacle)
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RequiresCertifiedStopWhenObstacleCrossesAfterPublisherInterval)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
@@ -522,18 +524,18 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsFutureCrossingObstacle)
     {"crossing", {50.20, 0.30, 0.0, -1.0, 0.15}});
   EXPECT_EQ(
     retained::evaluate(request).reason,
-    retained::Reason::DynamicPathBlocked);
+    retained::Reason::TerminalContingencyUnavailable);
 }
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  RejectsClearCurrentStageWithoutCertifiedDynamicStopSuffix)
+  RejectsClearPublisherIntervalWithoutCertifiedDynamicStopSuffix)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
-  // The first continuation endpoint is clear.  The peer intersects only the
-  // second control stage.  Receding-horizon authority must certify the exact
-  // clear stage which can be published now and require a successor plan,
+  // The publisher interval is clear. The peer intersects the continuation
+  // later. Receding-horizon authority must certify the exact clear interval
+  // which can be published now and require a successor plan,
   // rather than converting a future replanning obligation into an immediate
   // Emergency stop.
   request.obstacles.obstacles.push_back(
@@ -546,14 +548,14 @@ TEST(
   EXPECT_FALSE(result.proof.has_value());
   EXPECT_EQ(
     result.dynamic_obstacle_scope,
-    retained::DynamicObstacleProofScope::CurrentStagePrefix);
+    retained::DynamicObstacleProofScope::PublisherIntervalPrefix);
   EXPECT_EQ(result.blocking_obstacle_id, "later-peer");
   EXPECT_LT(result.minimum_dynamic_clearance_m, 0.0);
 }
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  AcceptsClearCurrentStageWithCurrentWorldCertifiedDynamicStopSuffix)
+  AcceptsClearPublisherIntervalWithCurrentWorldCertifiedDynamicStopSuffix)
 {
   auto execution = std::make_shared<const artifact::ExecutionArtifact>(
     execution_artifact());
@@ -576,7 +578,7 @@ TEST(
   ASSERT_TRUE(result.proof.has_value());
   EXPECT_EQ(
     result.dynamic_obstacle_scope,
-    retained::DynamicObstacleProofScope::CurrentStagePrefix);
+    retained::DynamicObstacleProofScope::PublisherIntervalPrefix);
   EXPECT_TRUE(result.terminal_stop_attempted);
   EXPECT_TRUE(result.terminal_stop_certified);
   EXPECT_TRUE(result.proof->terminal_stop_certified);
@@ -994,8 +996,9 @@ TEST(
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
-  request.now_sec = 1.05;
-  request.control_origin_sec = 1.18;
+  request.now_sec = 1.02;
+  request.control_origin_sec = 1.15;
+  request.obstacles.observed_sec = request.now_sec;
   request.measured_to_control_path = {
     request.control_pose, request.control_pose};
   request.measured_to_control_elapsed_sec = {0.0, 0.13};
@@ -1035,7 +1038,9 @@ TEST(
   EXPECT_EQ(retained::evaluate(request).reason, retained::Reason::Accepted);
 }
 
-TEST(MpccRateResolvedRetainedRevalidation, RejectsBlockedCurrentContinuation)
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RequiresCertifiedStopWhenWallBlocksAfterPublisherInterval)
 {
   auto grid = free_grid();
   const auto occupied = grid->world_to_grid(50.20, 0.05);
@@ -1048,15 +1053,15 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsBlockedCurrentContinuation)
 
   EXPECT_EQ(
     retained::evaluate(request).reason,
-    retained::Reason::ContinuationWallBlocked);
+    retained::Reason::TerminalContingencyUnavailable);
 }
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  FeedbackShadowUsesSameBlockedContinuationProofWithoutAuthority)
+  FeedbackShadowUsesSamePublisherIntervalWallBlockWithoutAuthority)
 {
   auto grid = free_grid();
-  const auto occupied = grid->world_to_grid(50.20, 0.05);
+  const auto occupied = grid->world_to_grid(50.15, 0.05);
   ASSERT_TRUE(occupied.has_value());
   grid->cells[occupied->row * grid->width + occupied->column] =
     recovery::CellState::Occupied;
@@ -1080,13 +1085,13 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  RejectsClearCurrentStageWithoutCertifiedWallStopSuffix)
+  RejectsClearPublisherIntervalWithoutCertifiedWallStopSuffix)
 {
   auto grid = free_grid();
   // The first continuation endpoint is at approximately (50.20, 0.10) and
   // the second is at approximately (50.41, 0.10).  Block only the second
   // endpoint.  Receding-horizon authority owns the
-  // current execution stage, not an assertion that an old open-loop suffix
+  // current publisher interval, not an assertion that an old open-loop suffix
   // will remain executable after the next solve.
   const auto occupied = grid->world_to_grid(50.40, 0.10);
   ASSERT_TRUE(occupied.has_value());
@@ -1102,9 +1107,9 @@ TEST(
   EXPECT_FALSE(result.proof.has_value());
   EXPECT_EQ(
     result.static_wall_scope,
-    retained::StaticWallProofScope::CurrentStagePrefix);
-  EXPECT_TRUE(result.current_stage_path_clearance.valid);
-  EXPECT_TRUE(result.current_stage_path_clearance.clear);
+    retained::StaticWallProofScope::PublisherIntervalPrefix);
+  EXPECT_TRUE(result.publisher_interval_path_clearance.valid);
+  EXPECT_TRUE(result.publisher_interval_path_clearance.clear);
   EXPECT_TRUE(result.continuation_path_clearance.valid);
   EXPECT_FALSE(result.continuation_path_clearance.clear);
 }
@@ -1122,7 +1127,7 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsExhaustedArtifact)
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  AcceptsOneRemainingExecutableEndpoint)
+  RejectsRemainingSuffixShorterThanPublisherInterval)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
@@ -1140,10 +1145,8 @@ TEST(
   request.previous_published_steering_rad = 0.1195;
 
   const auto result = retained::evaluate(request);
-  EXPECT_EQ(result.reason, retained::Reason::Accepted);
-  ASSERT_TRUE(result.proof.has_value());
-  EXPECT_EQ(result.proof->proved_control_stage_count, 1U);
-  EXPECT_EQ(result.proof->continuation_trajectory.elapsed_time_sec.size(), 1U);
+  EXPECT_EQ(result.reason, retained::Reason::ContinuationRejected);
+  EXPECT_FALSE(result.proof.has_value());
 }
 
 }  // namespace

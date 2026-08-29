@@ -199,8 +199,8 @@ const char * to_string(const ContinuationProofScope scope) noexcept
 {
   switch (scope) {
     case ContinuationProofScope::FullSuffix: return "full-suffix";
-    case ContinuationProofScope::CurrentStagePrefix:
-      return "current-stage-prefix";
+    case ContinuationProofScope::PublisherIntervalPrefix:
+      return "publisher-interval-prefix";
   }
   return "unknown";
 }
@@ -431,6 +431,20 @@ ContinuationResult build_continuation(
     result.reason = ContinuationRejectReason::InvalidCursor;
     return result;
   }
+  const double first_stage_remaining_sec =
+    first_control.duration_sec - cursor.stage_elapsed_sec;
+  if (
+    first_stage_remaining_sec + artifact.physical_global_tolerance <
+    artifact.publication_interval_sec)
+  {
+    // The current serialized command is held until the next publication.  A
+    // piecewise solver suffix which switches control stages before that point
+    // is not evidence for the command which can actually be placed on the
+    // wire.  Fail closed and let a fresh artifact or Emergency Stop own this
+    // boundary cycle.
+    result.reason = ContinuationRejectReason::InvalidCursor;
+    return result;
+  }
   const double first_fraction = std::clamp(
     cursor.stage_elapsed_sec / first_control.duration_sec, 0.0, 1.0);
   const auto interpolate = [](const double start, const double end,
@@ -480,7 +494,50 @@ ContinuationResult build_continuation(
   exact.velocity_lower_bound_tolerance_mps = residual_bound_m;
   exact.lateral_bound_tolerance_m = lateral_tolerance_m;
   double elapsed_sec{};
-  std::size_t current_stage_sample_count{};
+  std::size_t publisher_interval_sample_count{};
+  const auto retain_publisher_interval_prefix = [&] () -> bool {
+      if (publisher_interval_sample_count < 1U) {
+        return false;
+      }
+      const auto retain_prefix = [publisher_interval_sample_count](auto & values) {
+          values.resize(publisher_interval_sample_count);
+        };
+      retain_prefix(exact.elapsed_time_sec);
+      retain_prefix(exact.path_distance_m);
+      retain_prefix(exact.lateral_m);
+      retain_prefix(exact.lag_m);
+      retain_prefix(exact.heading_offset_rad);
+      retain_prefix(exact.velocity_mps);
+      retain_prefix(exact.progress_m);
+      retain_prefix(exact.lateral_lower_m);
+      retain_prefix(exact.lateral_upper_m);
+      exact.minimum_lateral_bound_reserve_m =
+        std::numeric_limits<double>::infinity();
+      for (std::size_t index = 0U;
+        index < publisher_interval_sample_count; ++index)
+      {
+        exact.minimum_lateral_bound_reserve_m = std::min(
+          exact.minimum_lateral_bound_reserve_m,
+          std::min(
+            exact.lateral_m[index] - exact.lateral_lower_m[index],
+            exact.lateral_upper_m[index] - exact.lateral_m[index]));
+      }
+      const auto prefix_validation =
+        race::validate_exact_physical_execution_trajectory(exact);
+      if (!prefix_validation.complete) {
+        return false;
+      }
+      result.scope = ContinuationProofScope::PublisherIntervalPrefix;
+      result.stage_end_velocity_mps = {exact.velocity_mps.back()};
+      // Steering is not stored per dense trajectory sample. Recover the exact
+      // command state at the publication boundary from the immutable ramp.
+      result.stage_end_steering_rad = {
+        initial_state.steering_rad +
+        first_control.steering_rate_radps * artifact.publication_interval_sec};
+      result.reason = ContinuationRejectReason::None;
+      result.exact_trajectory = std::move(exact);
+      return true;
+    };
   for (std::size_t stage = first_stage;
     stage < artifact.control_stages.size(); ++stage)
   {
@@ -492,9 +549,6 @@ ContinuationResult build_continuation(
       result.reason = ContinuationRejectReason::InvalidCursor;
       return result;
     }
-    const auto substep_count = static_cast<std::size_t>(std::max(
-      1.0, std::ceil(duration_sec / kMaximumNonlinearRolloutStepSec)));
-    const double step_sec = duration_sec / static_cast<double>(substep_count);
     const double consumed_fraction = consumed_sec / control.duration_sec;
     const double path_start_m = interpolate(
       artifact.nominal_path_distance_m[stage],
@@ -508,10 +562,31 @@ ContinuationResult build_continuation(
       artifact.lateral_upper_m[stage],
       artifact.lateral_upper_m[stage + 1U], consumed_fraction);
     const double upper_end_m = artifact.lateral_upper_m[stage + 1U];
-    for (std::size_t substep = 0U; substep < substep_count; ++substep) {
+    double stage_rollout_sec{};
+    while (stage_rollout_sec < duration_sec - 1e-12) {
+      double step_sec = std::min(
+        kMaximumNonlinearRolloutStepSec,
+        duration_sec - stage_rollout_sec);
+      if (
+        elapsed_sec < artifact.publication_interval_sec - 1e-12 &&
+        elapsed_sec + step_sec > artifact.publication_interval_sec)
+      {
+        step_sec = artifact.publication_interval_sec - elapsed_sec;
+      }
+      if (!std::isfinite(step_sec) || step_sec <= 0.0) {
+        result.reason = ContinuationRejectReason::NonlinearModelRejected;
+        result.rejected_stage = static_cast<int>(exact.path_distance_m.size());
+        if (retain_publisher_interval_prefix()) {
+          return result;
+        }
+        return result;
+      }
       if (!advance_nonlinear_state(nonlinear, control, artifact, step_sec)) {
         result.reason = ContinuationRejectReason::NonlinearModelRejected;
         result.rejected_stage = static_cast<int>(exact.path_distance_m.size());
+        if (retain_publisher_interval_prefix()) {
+          return result;
+        }
         return result;
       }
       if (
@@ -523,12 +598,14 @@ ContinuationResult build_continuation(
       {
         result.reason = ContinuationRejectReason::ActuatorEnvelopeRejected;
         result.rejected_stage = static_cast<int>(exact.path_distance_m.size());
+        if (retain_publisher_interval_prefix()) {
+          return result;
+        }
         return result;
       }
+      stage_rollout_sec += step_sec;
       elapsed_sec += step_sec;
-      const double fraction =
-        static_cast<double>(substep + 1U) /
-        static_cast<double>(substep_count);
+      const double fraction = stage_rollout_sec / duration_sec;
       const double lower_m = interpolate(lower_start_m, lower_end_m, fraction);
       const double upper_m = interpolate(upper_start_m, upper_end_m, fraction);
       exact.elapsed_time_sec.push_back(elapsed_sec);
@@ -547,12 +624,16 @@ ContinuationResult build_continuation(
         std::min(
           nonlinear.lateral_m - lower_m,
           upper_m - nonlinear.lateral_m));
+      if (
+        std::abs(
+          elapsed_sec - artifact.publication_interval_sec) <=
+        artifact.physical_global_tolerance)
+      {
+        publisher_interval_sample_count = exact.path_distance_m.size();
+      }
     }
     result.stage_end_velocity_mps.push_back(nonlinear.velocity_mps);
     result.stage_end_steering_rad.push_back(nonlinear.steering_rad);
-    if (stage == first_stage) {
-      current_stage_sample_count = exact.path_distance_m.size();
-    }
     exact.progress_regression_tolerance_m = std::max(
       exact.progress_regression_tolerance_m,
       std::max(
@@ -568,40 +649,11 @@ ContinuationResult build_continuation(
   result.exact_reason = validation.reason;
   if (!validation.complete) {
     if (
-      current_stage_sample_count >= 1U && validation.stage >= 0 &&
+      publisher_interval_sample_count >= 1U && validation.stage >= 0 &&
       static_cast<std::size_t>(validation.stage) >=
-      current_stage_sample_count)
+      publisher_interval_sample_count)
     {
-      const auto retain_current_stage_prefix =
-        [current_stage_sample_count](auto & values) {
-          values.resize(current_stage_sample_count);
-        };
-      retain_current_stage_prefix(exact.elapsed_time_sec);
-      retain_current_stage_prefix(exact.path_distance_m);
-      retain_current_stage_prefix(exact.lateral_m);
-      retain_current_stage_prefix(exact.lag_m);
-      retain_current_stage_prefix(exact.heading_offset_rad);
-      retain_current_stage_prefix(exact.velocity_mps);
-      retain_current_stage_prefix(exact.progress_m);
-      retain_current_stage_prefix(exact.lateral_lower_m);
-      retain_current_stage_prefix(exact.lateral_upper_m);
-      exact.minimum_lateral_bound_reserve_m =
-        std::numeric_limits<double>::infinity();
-      for (std::size_t index = 0U; index < current_stage_sample_count; ++index) {
-        exact.minimum_lateral_bound_reserve_m = std::min(
-          exact.minimum_lateral_bound_reserve_m,
-          std::min(
-            exact.lateral_m[index] - exact.lateral_lower_m[index],
-            exact.lateral_upper_m[index] - exact.lateral_m[index]));
-      }
-      const auto prefix_validation =
-        race::validate_exact_physical_execution_trajectory(exact);
-      if (prefix_validation.complete) {
-        result.scope = ContinuationProofScope::CurrentStagePrefix;
-        result.stage_end_velocity_mps.resize(1U);
-        result.stage_end_steering_rad.resize(1U);
-        result.reason = ContinuationRejectReason::None;
-        result.exact_trajectory = std::move(exact);
+      if (retain_publisher_interval_prefix()) {
         return result;
       }
     }

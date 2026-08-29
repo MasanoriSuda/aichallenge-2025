@@ -89,7 +89,7 @@ const char * to_string(ContinuationRejectReason reason) noexcept;
 enum class ContinuationProofScope
 {
   FullSuffix,
-  CurrentStagePrefix,
+  PublisherIntervalPrefix,
 };
 
 const char * to_string(ContinuationProofScope scope) noexcept;
@@ -104,7 +104,9 @@ struct ContinuationResult
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
   std::optional<race_mpcc_foundation::ExactPhysicalExecutionTrajectory>
   exact_trajectory;
-  /// Nonlinear stage-end states on the shortened suffix.  These are kept
+  /// Nonlinear stage-end states on the shortened suffix. For a publisher
+  /// interval prefix these contain exactly the state at the publication
+  /// boundary, independent of solver-stage duration. These are kept
   /// beside the dense physical trajectory so a production adapter never
   /// rebuilds a different command/speed horizon from the old affine states.
   std::vector<double> stage_end_velocity_mps;

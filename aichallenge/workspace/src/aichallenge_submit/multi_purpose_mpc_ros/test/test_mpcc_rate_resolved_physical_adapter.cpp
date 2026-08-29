@@ -159,7 +159,7 @@ TEST(
 
 TEST(
   MpccRateResolvedPhysicalAdapter,
-  CertifiesTheLastExecutableEndpointNearArtifactExhaustion)
+  RejectsSuffixShorterThanOnePublisherIntervalNearArtifactExhaustion)
 {
   const auto source = artifact();
   const auto cursor = execution::resolve_cursor(source, 10.195);
@@ -171,11 +171,8 @@ TEST(
     adapter::ContinuationInitialState{
       0.19, 0.0, 0.019, 2.195, 0.39, 0.1195, 0.109});
 
-  ASSERT_EQ(result.reason, adapter::ContinuationRejectReason::None);
-  ASSERT_TRUE(result.exact_trajectory.has_value());
-  EXPECT_EQ(result.exact_trajectory->elapsed_time_sec.size(), 1U);
-  EXPECT_EQ(result.stage_end_velocity_mps.size(), 1U);
-  EXPECT_EQ(result.stage_end_steering_rad.size(), 1U);
+  EXPECT_EQ(result.reason, adapter::ContinuationRejectReason::InvalidCursor);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
 }
 
 TEST(
@@ -287,7 +284,7 @@ TEST(
 
 TEST(
   MpccRateResolvedPhysicalAdapter,
-  RetainsCurrentStageWhenOnlyLaterContinuationLeavesCorridor)
+  RetainsPublisherIntervalWhenLaterStageLeavesCorridor)
 {
   auto source = artifact();
   source.semantic_initial_steering_rad = 0.35;
@@ -315,11 +312,83 @@ TEST(
   ASSERT_EQ(result.reason, adapter::ContinuationRejectReason::None);
   ASSERT_TRUE(result.exact_trajectory.has_value());
   EXPECT_EQ(
-    result.scope, adapter::ContinuationProofScope::CurrentStagePrefix);
+    result.scope,
+    adapter::ContinuationProofScope::PublisherIntervalPrefix);
   EXPECT_EQ(result.stage_end_velocity_mps.size(), 1U);
   EXPECT_EQ(result.stage_end_steering_rad.size(), 1U);
   EXPECT_LT(result.exact_trajectory->elapsed_time_sec.back(), 0.05);
   EXPECT_LE(result.exact_trajectory->lateral_m.back(), 0.03);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RetainsPublisherIntervalWhenLongSolverStageLeavesCorridorLater)
+{
+  auto source = artifact();
+  source.semantic_initial_steering_rad = 0.35;
+  source.semantic_initial_response_steering_rad = 0.35;
+  source.predicted_states = {
+    {0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 0.8, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 1.2, 0.35, 0.35},
+  };
+  source.control_stages = {
+    {0.0, 0.0, 8.0, 0.10, 0.0, 10.0, -3.0, 1.37},
+    {0.0, 0.0, 8.0, 0.05, 0.0, 10.0, -3.0, 1.37},
+  };
+  source.nominal_path_distance_m = {0.0, 0.8, 1.2};
+  source.lateral_lower_m = {-0.03, -0.03, -0.03};
+  source.lateral_upper_m = {0.03, 0.03, 0.03};
+  const auto cursor = execution::resolve_cursor(source, 10.001);
+  ASSERT_TRUE(cursor.available);
+
+  const auto result = adapter::build_continuation(
+    source, cursor,
+    adapter::ContinuationInitialState{
+      0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35});
+
+  ASSERT_EQ(result.reason, adapter::ContinuationRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  EXPECT_EQ(
+    result.scope,
+    adapter::ContinuationProofScope::PublisherIntervalPrefix);
+  EXPECT_NEAR(
+    result.exact_trajectory->elapsed_time_sec.back(),
+    source.publication_interval_sec, 1e-12);
+  EXPECT_LE(result.exact_trajectory->lateral_m.back(), 0.03);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RejectsWhenLongSolverStageLeavesCorridorInsidePublisherInterval)
+{
+  auto source = artifact();
+  source.semantic_initial_steering_rad = 0.35;
+  source.semantic_initial_response_steering_rad = 0.35;
+  source.predicted_states = {
+    {0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 0.8, 0.35, 0.35},
+    {0.0, 0.0, 0.0, 8.0, 1.2, 0.35, 0.35},
+  };
+  source.control_stages = {
+    {0.0, 0.0, 8.0, 0.10, 0.0, 10.0, -3.0, 1.37},
+    {0.0, 0.0, 8.0, 0.05, 0.0, 10.0, -3.0, 1.37},
+  };
+  source.nominal_path_distance_m = {0.0, 0.8, 1.2};
+  source.lateral_lower_m = {-0.001, -0.001, -0.001};
+  source.lateral_upper_m = {0.001, 0.001, 0.001};
+  const auto cursor = execution::resolve_cursor(source, 10.001);
+  ASSERT_TRUE(cursor.available);
+
+  const auto result = adapter::build_continuation(
+    source, cursor,
+    adapter::ContinuationInitialState{
+      0.0, 0.0, 0.0, 8.0, 0.0, 0.35, 0.35});
+
+  EXPECT_EQ(
+    result.reason,
+    adapter::ContinuationRejectReason::ExactTrajectoryRejected);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
 }
 
 TEST(MpccRateResolvedPhysicalAdapter, RejectsLinearizedStatesThatHideNonlinearWallDeparture)

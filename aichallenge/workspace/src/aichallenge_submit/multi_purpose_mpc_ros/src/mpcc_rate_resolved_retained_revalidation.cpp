@@ -540,8 +540,8 @@ const char * to_string(const StaticWallProofScope scope) noexcept
   switch (scope) {
     case StaticWallProofScope::FullSuffix:
       return "full-suffix";
-    case StaticWallProofScope::CurrentStagePrefix:
-      return "current-stage-prefix";
+    case StaticWallProofScope::PublisherIntervalPrefix:
+      return "publisher-interval-prefix";
   }
   return "unknown";
 }
@@ -551,8 +551,8 @@ const char * to_string(const DynamicObstacleProofScope scope) noexcept
   switch (scope) {
     case DynamicObstacleProofScope::FullSuffix:
       return "full-suffix";
-    case DynamicObstacleProofScope::CurrentStagePrefix:
-      return "current-stage-prefix";
+    case DynamicObstacleProofScope::PublisherIntervalPrefix:
+      return "publisher-interval-prefix";
   }
   return "unknown";
 }
@@ -962,14 +962,16 @@ Result evaluate(const Request & request)
     continuation.exact_trajectory.value();
   result.proved_control_stage_count = continuation.scope ==
       mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
-      CurrentStagePrefix ?
+      PublisherIntervalPrefix ?
     1U : cursor.remaining_control_stage_count;
   if (
     continuation.scope ==
     mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
-    CurrentStagePrefix)
+    PublisherIntervalPrefix)
   {
-    result.static_wall_scope = StaticWallProofScope::CurrentStagePrefix;
+    result.static_wall_scope = StaticWallProofScope::PublisherIntervalPrefix;
+    result.dynamic_obstacle_scope =
+      DynamicObstacleProofScope::PublisherIntervalPrefix;
   }
 
   const auto clearance_footprint = physical::resolve_clearance_footprint(
@@ -991,21 +993,18 @@ Result evaluate(const Request & request)
   std::vector<recovery::Pose2D> continuation_path;
   continuation_path.reserve(continuation_trajectory.progress_m.size() + 1U);
   continuation_path.push_back(request.control_pose);
-  const double current_stage_remaining_sec =
-    execution.control_stages[cursor.control_stage_index].duration_sec -
-    cursor.stage_elapsed_sec;
-  std::size_t current_stage_last_path_index{};
+  const double publisher_interval_sec = execution.publication_interval_sec;
+  std::size_t publisher_interval_last_path_index{};
 
   dynamic_proof::Result dynamic;
   dynamic_proof::observe_timed_path(
     source.footprint, request.measured_to_control_path,
     request.measured_to_control_elapsed_sec, source.swept_step_m,
     request.obstacles, dynamic);
-  // Keep an independent proof for exactly the control stage which can be
-  // published now.  The full suffix still owns diagnostics and future
-  // replanning, but a collision in a later stage must not erase a clear
-  // current-stage authority interval.
-  dynamic_proof::Result current_stage_dynamic = dynamic;
+  // Keep an independent proof for exactly the serialized command interval.
+  // Solver-stage duration is planning discretization and must not extend the
+  // minimum authority proof horizon.
+  dynamic_proof::Result publisher_interval_dynamic = dynamic;
   auto previous_dynamic_pose = request.control_pose;
   double dynamic_time_sec = prediction_delay_sec;
   for (
@@ -1026,10 +1025,10 @@ Result evaluate(const Request & request)
     }
     continuation_path.push_back(endpoint_pose.value());
     if (
-      sample_elapsed_sec <= current_stage_remaining_sec +
+      sample_elapsed_sec <= publisher_interval_sec +
       execution.physical_global_tolerance)
     {
-      current_stage_last_path_index = continuation_path.size() - 1U;
+      publisher_interval_last_path_index = continuation_path.size() - 1U;
     }
     const double endpoint_time_sec = prediction_delay_sec +
       sample_elapsed_sec;
@@ -1048,13 +1047,14 @@ Result evaluate(const Request & request)
       }
     }
     if (
-      sample_elapsed_sec <= current_stage_remaining_sec +
+      sample_elapsed_sec <= publisher_interval_sec +
       execution.physical_global_tolerance)
     {
       dynamic_proof::observe_segment(
         source.footprint, previous_dynamic_pose, endpoint_pose.value(),
         dynamic_time_sec, endpoint_time_sec,
-        source.swept_step_m, request.obstacles, current_stage_dynamic);
+        source.swept_step_m, request.obstacles,
+        publisher_interval_dynamic);
     }
     dynamic_proof::observe_segment(
       source.footprint, previous_dynamic_pose, endpoint_pose.value(),
@@ -1066,7 +1066,7 @@ Result evaluate(const Request & request)
       break;
     }
   }
-  dynamic_proof::finalize(request.obstacles, current_stage_dynamic);
+  dynamic_proof::finalize(request.obstacles, publisher_interval_dynamic);
   dynamic_proof::finalize(request.obstacles, dynamic);
   const auto continuation_clearance =
     recovery::evaluate_clear_footprint_path(
@@ -1078,27 +1078,37 @@ Result evaluate(const Request & request)
   }
   if (!continuation_clearance.clear) {
     if (
-      current_stage_last_path_index < 1U ||
-      current_stage_last_path_index >= continuation_path.size())
+      publisher_interval_last_path_index < 1U ||
+      publisher_interval_last_path_index >= continuation_path.size())
     {
       return complete_continuation_proof(Reason::ContinuationRejected);
     }
-    const std::vector<recovery::Pose2D> current_stage_path{
+    const std::vector<recovery::Pose2D> publisher_interval_path{
       continuation_path.begin(),
-      continuation_path.begin() + current_stage_last_path_index + 1U};
-    const auto current_stage_clearance =
+      continuation_path.begin() + publisher_interval_last_path_index + 1U};
+    const auto publisher_interval_clearance =
       recovery::evaluate_clear_footprint_path(
-      *source.wall_grid, clearance_footprint.value(), current_stage_path,
+      *source.wall_grid, clearance_footprint.value(),
+      publisher_interval_path,
       source.swept_step_m);
-    result.current_stage_path_clearance = current_stage_clearance;
-    if (!current_stage_clearance.valid) {
+    result.publisher_interval_path_clearance =
+      publisher_interval_clearance;
+    if (!publisher_interval_clearance.valid) {
       return complete_continuation_proof(Reason::ControlPathInvalid);
     }
-    if (!current_stage_clearance.clear) {
+    if (!publisher_interval_clearance.clear) {
       return complete_continuation_proof(Reason::ContinuationWallBlocked);
     }
-    result.static_wall_scope = StaticWallProofScope::CurrentStagePrefix;
+    result.static_wall_scope =
+      StaticWallProofScope::PublisherIntervalPrefix;
     result.proved_control_stage_count = 1U;
+  }
+  if (
+    continuation.scope ==
+    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
+    PublisherIntervalPrefix)
+  {
+    result.publisher_interval_path_clearance = continuation_clearance;
   }
   result.blocking_obstacle_id = dynamic.blocking_obstacle_id;
   result.dynamic_checked_pose_count = dynamic.checked_pose_count;
@@ -1107,24 +1117,25 @@ Result evaluate(const Request & request)
     return complete_continuation_proof(Reason::DynamicPathInvalid);
   }
   if (!dynamic.clear) {
-    if (!current_stage_dynamic.valid) {
+    if (!publisher_interval_dynamic.valid) {
       return complete_continuation_proof(Reason::DynamicPathInvalid);
     }
-    if (!current_stage_dynamic.clear) {
+    if (!publisher_interval_dynamic.clear) {
       return complete_continuation_proof(Reason::DynamicPathBlocked);
     }
     result.dynamic_obstacle_scope =
-      DynamicObstacleProofScope::CurrentStagePrefix;
+      DynamicObstacleProofScope::PublisherIntervalPrefix;
     result.proved_control_stage_count = 1U;
   }
 
   const bool partial_normal_proof =
     continuation.scope ==
     mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
-    CurrentStagePrefix ||
-    result.static_wall_scope == StaticWallProofScope::CurrentStagePrefix ||
+    PublisherIntervalPrefix ||
+    result.static_wall_scope ==
+    StaticWallProofScope::PublisherIntervalPrefix ||
     result.dynamic_obstacle_scope ==
-    DynamicObstacleProofScope::CurrentStagePrefix;
+    DynamicObstacleProofScope::PublisherIntervalPrefix;
 
   race_mpcc_foundation::ExactPhysicalExecutionTrajectory
   terminal_stop_trajectory;
@@ -1242,7 +1253,8 @@ Result evaluate(const Request & request)
   auto proved_stage_end_velocity_mps = continuation.stage_end_velocity_mps;
   auto proved_stage_end_steering_rad = continuation.stage_end_steering_rad;
   if (result.proved_control_stage_count == 1U) {
-    const std::size_t proved_sample_count = current_stage_last_path_index;
+    const std::size_t proved_sample_count =
+      publisher_interval_last_path_index;
     const auto retain_proved_samples =
       [proved_sample_count](auto & values) {
         if (values.size() > proved_sample_count) {
@@ -1317,11 +1329,11 @@ Result evaluate(const Request & request)
   proof.static_wall_checked_pose_count =
     result.static_wall_scope == StaticWallProofScope::FullSuffix ?
     continuation_clearance.checked_pose_count :
-    result.current_stage_path_clearance.checked_pose_count;
+    result.publisher_interval_path_clearance.checked_pose_count;
   const auto & proved_dynamic =
     result.dynamic_obstacle_scope ==
-    DynamicObstacleProofScope::CurrentStagePrefix ?
-    current_stage_dynamic : dynamic;
+    DynamicObstacleProofScope::PublisherIntervalPrefix ?
+    publisher_interval_dynamic : dynamic;
   proof.dynamic_checked_pose_count = proved_dynamic.checked_pose_count;
   proof.minimum_dynamic_clearance_m = proved_dynamic.minimum_clearance_m;
   proof.follow_target_observation_generation =

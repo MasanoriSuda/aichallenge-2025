@@ -252,7 +252,7 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
 
 TEST(
   RateResolvedProductionAdapter,
-  RejectsCurrentStagePrefixWithoutCertifiedTerminalSuffix)
+  RejectsPublisherIntervalPrefixWithoutCertifiedTerminalSuffix)
 {
   auto retained_result = accepted_result();
   retained_result.proof->cursor.control_stage_index = 0U;
@@ -260,7 +260,7 @@ TEST(
   retained_result.proof->actuation.control_stage_index = 0U;
   retained_result.proof->proved_control_stage_count = 1U;
   retained_result.proof->continuation_scope =
-    physical_adapter::ContinuationProofScope::CurrentStagePrefix;
+    physical_adapter::ContinuationProofScope::PublisherIntervalPrefix;
   retained_result.proof->continuation_trajectory.elapsed_time_sec.resize(2U);
   retained_result.proof->continuation_trajectory.path_distance_m.resize(2U);
   retained_result.proof->continuation_trajectory.lateral_m.resize(2U);
@@ -279,7 +279,7 @@ TEST(
 
 TEST(
   RateResolvedProductionAdapter,
-  BuildsCurrentStageAuthorityWithCertifiedTerminalStopSuffix)
+  BuildsPublisherIntervalAuthorityWithCertifiedTerminalStopSuffix)
 {
   auto retained_result = accepted_result();
   retained_result.proof->cursor.control_stage_index = 0U;
@@ -287,7 +287,7 @@ TEST(
   retained_result.proof->actuation.control_stage_index = 0U;
   retained_result.proof->proved_control_stage_count = 1U;
   retained_result.proof->dynamic_obstacle_scope =
-    retained::DynamicObstacleProofScope::CurrentStagePrefix;
+    retained::DynamicObstacleProofScope::PublisherIntervalPrefix;
   retained_result.proof->terminal_stop_certified = true;
   retained_result.proof->terminal_stop_trajectory =
     retained_result.proof->continuation_trajectory;

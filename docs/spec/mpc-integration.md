@@ -1,6 +1,6 @@
 # multi_purpose_mpc_ros インテグレーション設計
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-27。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-29。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-02-10
 
@@ -2732,21 +2732,29 @@ fresh／retained command抽出の正本とする。実測舵角／yaw-rateから
 系列の一方だけを物理証明していたproducer／consumer契約の修正である。全46 package test target、1,869 testが
 error／failure／skip 0で合格した。Track/Cruiseの六周動的Gateは未完であり、合格前にSlice 7 tuningへ進まない。
 
-#### Retained receding-prefix authority（2026-08-27、2025由来の暫定）
+#### Retained receding-prefix authority（2026-08-29、2025由来の暫定）
 
 retained artifactはcurrent-world physical stateからdelay pathと残りtrajectoryを再生して再証明する。再生後の
-非線形trajectoryまたはstatic-wall suffixが後段で不成立でも、現在の実行stage全体が同じhard constraintで成立する場合、
-その一stageだけを`CurrentStagePrefix`として実行できる。全suffix成立時は`FullSuffix`とする。
+非線形trajectory、static-wall suffixまたはdynamic-obstacle suffixが後段で不成立でも、次のcommand
+publication intervalだけが同じhard constraintで成立する場合、その一区間を
+`PublisherIntervalPrefix`として再証明できる。全suffix成立時は`FullSuffix`とする。
 
-`CurrentStagePrefix`はtimeout、grace、hold commandまたは第二controllerではない。immutable artifactの同じfirst actuationを
-publishする有限のcurrent-world authority transactionであり、trajectory、stage-end velocity／steering trace、
-`executable_control_stage_count`を同じ一stage境界へ切り詰める。次周期はfresh solveまたは新しいretained再証明を必須とし、
-artifact ageだけで権限を延長しない。
+solver stage長はoptimizationの離散化単位であり、publisherがwireへ出す指令の不変期間ではない。
+そのため、partial authorityの証明境界をremaining current stageで定義してはならない。非線形rolloutは
+artifactがsealしたpublication interval境界で必ず分割し、physical trajectory、static wall、dynamic
+obstacleの三者を同じ境界で評価する。
 
-fresh current-decision artifactは従来どおり残り全horizonを証明しなければならない。current stage自体の非線形trajectory、
-actuator reachability、wall、dynamic obstacle、Follow hard gap、identity／freshness不成立はfail closedを維持する。
-したがって「後段suffixは次のreceding solveが必要」と「現在commandが危険」を同一視せず、現在安全なMPCC commandを
-Emergencyで分断しない一方、未証明のsuffixを実行権限として広告しない。
+`PublisherIntervalPrefix`はtimeout、grace、hold commandまたは第二controllerではない。immutable artifactの
+同じfirst actuationを1 publication intervalだけpublishする有限のcurrent-world authority transactionである。
+実行権限を得るには、その不可避のpublisher intervalと、その終点から開始するcurrent-world-certified
+terminal Stop suffixの両方が必要である。Stop suffixなしのprefix単独はproduction authorityを持たない。
+次周期はfresh solveまたは新しいretained再証明を必須とし、artifact ageだけで権限を延長しない。
+
+current serialized commandの到達可能性、非線形trajectory、wall、dynamic obstacle、Follow hard gap、
+identity／freshnessがpublication interval内で不成立な場合はfail closedを維持する。現在のsolver stageの
+残りがpublication intervalより短く、wire上のcurrent command holdを証明できない場合も拒否する。
+したがって「後段suffixは次のreceding solveが必要」と「次のpublication commandが危険」を同一視せず、
+安全なMPCC commandをEmergencyで不必要に分断しない一方、未証明のsuffixを実行権限として広告しない。
 
 #### 動的障害物の物理進捗座標統一（2026-08-27、2025由来の暫定）
 

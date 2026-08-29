@@ -154,12 +154,12 @@ Result build(const retained::Result & retained_result) noexcept
     retained::DynamicObstacleProofScope::FullSuffix &&
     proof.continuation_scope ==
     mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix;
-  const bool bounded_prefix =
+  const bool bounded_publisher_interval =
     proof.proved_control_stage_count == 1U &&
     proof.terminal_stop_certified &&
     race_mpcc_foundation::exact_physical_execution_trajectory_complete(
       proof.terminal_stop_trajectory);
-  if (!full_suffix && !bounded_prefix) {
+  if (!full_suffix && !bounded_publisher_interval) {
     result.reason = Reason::InvalidCursor;
     return result;
   }

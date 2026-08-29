@@ -79,6 +79,76 @@ const char * to_string(const ExtendedMpccBranchCandidateSource source) noexcept
   return "unknown";
 }
 
+const char * to_string(const RateResolvedGateATacticalInputSource source) noexcept
+{
+  switch (source) {
+    case RateResolvedGateATacticalInputSource::None:
+      return "none";
+    case RateResolvedGateATacticalInputSource::PreentrySelection:
+      return "preentry-selection";
+    case RateResolvedGateATacticalInputSource::ActiveSameSideReplacement:
+      return "active-same-side";
+    case RateResolvedGateATacticalInputSource::ActiveCrossSideReplacement:
+      return "active-cross-side";
+  }
+  return "unknown";
+}
+
+RateResolvedGateATacticalInputResolution
+resolve_rate_resolved_gate_a_tactical_input(
+  const RateResolvedGateATacticalInputRequest & request) noexcept
+{
+  RateResolvedGateATacticalInputResolution resolution;
+  const auto candidate_matches = [](
+      const std::optional<OvertakeMissionCandidate> & candidate,
+      const int side_sign) {
+      return (side_sign == -1 || side_sign == 1) && candidate.has_value() &&
+             candidate->feasible && candidate->pass_side_sign == side_sign;
+    };
+
+  if (request.active_execution) {
+    if (request.active_side_sign != -1 && request.active_side_sign != 1) {
+      return resolution;
+    }
+    // This order is the execution layer's order. If both are present, the
+    // same-side update owns this observation and cross-side is reconsidered
+    // from a later current-world snapshot.
+    if (candidate_matches(
+        request.active_same_side_mission, request.active_side_sign))
+    {
+      resolution.valid = true;
+      resolution.selected_side_sign = request.active_side_sign;
+      resolution.source =
+        RateResolvedGateATacticalInputSource::ActiveSameSideReplacement;
+      resolution.mission = request.active_same_side_mission;
+      return resolution;
+    }
+    const int opposite_side_sign = -request.active_side_sign;
+    if (candidate_matches(
+        request.active_cross_side_mission, opposite_side_sign))
+    {
+      resolution.valid = true;
+      resolution.selected_side_sign = opposite_side_sign;
+      resolution.source =
+        RateResolvedGateATacticalInputSource::ActiveCrossSideReplacement;
+      resolution.mission = request.active_cross_side_mission;
+    }
+    return resolution;
+  }
+
+  if (candidate_matches(
+      request.preentry_selected_mission,
+      request.preentry_selected_side_sign))
+  {
+    resolution.valid = true;
+    resolution.selected_side_sign = request.preentry_selected_side_sign;
+    resolution.source =
+      RateResolvedGateATacticalInputSource::PreentrySelection;
+    resolution.mission = request.preentry_selected_mission;
+  }
+  return resolution;
+}
+
 ExtendedMpccBranchCandidateResolution resolve_extended_mpcc_branch_candidate(
   const ExtendedMpccBranchCandidateRequest & request) noexcept
 {

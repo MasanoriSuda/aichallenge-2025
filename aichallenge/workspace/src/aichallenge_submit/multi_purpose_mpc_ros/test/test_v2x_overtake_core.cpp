@@ -18479,6 +18479,107 @@ TEST(V2XOvertakeCoreMpccLite, ExtendedBranchPrefersCompleteMission)
   EXPECT_DOUBLE_EQ(resolution.candidate->goal_lateral_m, 0.7);
 }
 
+TEST(V2XOvertakeCoreMpccLite, GateATacticalInputUsesPreentryOnlyWhenIdle)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RateResolvedGateATacticalInputRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RateResolvedGateATacticalInputSource;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_rate_resolved_gate_a_tactical_input;
+
+  OvertakeMissionCandidate preentry;
+  preentry.feasible = true;
+  preentry.pass_side_sign = -1;
+  OvertakeMissionCandidate runtime = preentry;
+  runtime.pass_side_sign = 1;
+
+  const auto resolution = resolve_rate_resolved_gate_a_tactical_input(
+    RateResolvedGateATacticalInputRequest{
+      false, 0, -1, preentry, std::nullopt, runtime});
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.mission.has_value());
+  EXPECT_EQ(resolution.selected_side_sign, -1);
+  EXPECT_EQ(
+    resolution.source,
+    RateResolvedGateATacticalInputSource::PreentrySelection);
+}
+
+TEST(V2XOvertakeCoreMpccLite, GateATacticalInputMirrorsActiveExecutionOrder)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RateResolvedGateATacticalInputRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RateResolvedGateATacticalInputSource;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_rate_resolved_gate_a_tactical_input;
+
+  OvertakeMissionCandidate same_side;
+  same_side.feasible = true;
+  same_side.pass_side_sign = -1;
+  OvertakeMissionCandidate cross_side = same_side;
+  cross_side.pass_side_sign = 1;
+
+  const auto resolution = resolve_rate_resolved_gate_a_tactical_input(
+    RateResolvedGateATacticalInputRequest{
+      true, -1, 1, cross_side, same_side, cross_side});
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.mission.has_value());
+  EXPECT_EQ(resolution.selected_side_sign, -1);
+  EXPECT_EQ(
+    resolution.source,
+    RateResolvedGateATacticalInputSource::ActiveSameSideReplacement);
+}
+
+TEST(V2XOvertakeCoreMpccLite, GateATacticalInputCertifiesActiveCrossSideRequest)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RateResolvedGateATacticalInputRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RateResolvedGateATacticalInputSource;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_rate_resolved_gate_a_tactical_input;
+
+  OvertakeMissionCandidate old_preentry;
+  old_preentry.feasible = true;
+  old_preentry.pass_side_sign = -1;
+  OvertakeMissionCandidate cross_side = old_preentry;
+  cross_side.pass_side_sign = 1;
+
+  const auto resolution = resolve_rate_resolved_gate_a_tactical_input(
+    RateResolvedGateATacticalInputRequest{
+      true, -1, -1, old_preentry, std::nullopt, cross_side});
+  ASSERT_TRUE(resolution.valid);
+  ASSERT_TRUE(resolution.mission.has_value());
+  EXPECT_EQ(resolution.selected_side_sign, 1);
+  EXPECT_EQ(
+    resolution.source,
+    RateResolvedGateATacticalInputSource::ActiveCrossSideReplacement);
+}
+
+TEST(V2XOvertakeCoreMpccLite, GateATacticalInputNeverFallsBackToPreentryWhenActive)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RateResolvedGateATacticalInputRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_rate_resolved_gate_a_tactical_input;
+
+  OvertakeMissionCandidate preentry;
+  preentry.feasible = true;
+  preentry.pass_side_sign = -1;
+
+  const auto resolution = resolve_rate_resolved_gate_a_tactical_input(
+    RateResolvedGateATacticalInputRequest{
+      true, -1, -1, preentry, std::nullopt, std::nullopt});
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.mission.has_value());
+  EXPECT_EQ(resolution.selected_side_sign, 0);
+}
+
 TEST(V2XOvertakeCoreMpccLite, ExtendedBranchUsesFreshRecedingPrefix)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::

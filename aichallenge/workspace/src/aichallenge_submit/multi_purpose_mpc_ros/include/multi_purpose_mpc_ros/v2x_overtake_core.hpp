@@ -4500,6 +4500,43 @@ struct OvertakeMissionCandidate
     std::numeric_limits<double>::quiet_NaN()};
 };
 
+enum class RateResolvedGateATacticalInputSource
+{
+  None,
+  PreentrySelection,
+  ActiveSameSideReplacement,
+  ActiveCrossSideReplacement,
+};
+
+const char * to_string(RateResolvedGateATacticalInputSource source) noexcept;
+
+struct RateResolvedGateATacticalInputRequest
+{
+  bool active_execution{false};
+  int active_side_sign{};
+  int preentry_selected_side_sign{};
+  std::optional<OvertakeMissionCandidate> preentry_selected_mission;
+  std::optional<OvertakeMissionCandidate> active_same_side_mission;
+  std::optional<OvertakeMissionCandidate> active_cross_side_mission;
+};
+
+struct RateResolvedGateATacticalInputResolution
+{
+  bool valid{false};
+  int selected_side_sign{};
+  RateResolvedGateATacticalInputSource source{
+    RateResolvedGateATacticalInputSource::None};
+  std::optional<OvertakeMissionCandidate> mission;
+};
+
+/// Resolve the sole tactical input owner for the causal seven-state Gate A
+/// worker. New entry consumes the pre-entry branch selection. Active execution
+/// consumes the same runtime replacement request that the execution layer will
+/// attempt, and deliberately cannot fall back to new-entry geometry.
+RateResolvedGateATacticalInputResolution
+resolve_rate_resolved_gate_a_tactical_input(
+  const RateResolvedGateATacticalInputRequest & request) noexcept;
+
 enum class ExtendedMpccBranchCandidateSource
 {
   None,

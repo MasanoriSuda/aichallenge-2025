@@ -6096,6 +6096,8 @@ struct RateResolvedPreentryExecutionDraft
   std::uint64_t target_obstacle_generation{};
   race_mpcc::TargetProvenance target_provenance;
   std::uint64_t tactical_source_sequence{};
+  overtake_core::RateResolvedGateATacticalInputSource tactical_input_source{
+    overtake_core::RateResolvedGateATacticalInputSource::None};
   std::uint64_t prospective_mission_generation{};
   std::string target_id;
   int selected_side_sign{};
@@ -6149,6 +6151,8 @@ struct RateResolvedPreentryExecutionShadowResult
   std::uint64_t context_epoch{};
   std::uint64_t decision_id{};
   std::uint64_t tactical_source_sequence{};
+  overtake_core::RateResolvedGateATacticalInputSource tactical_input_source{
+    overtake_core::RateResolvedGateATacticalInputSource::None};
   std::uint64_t prospective_mission_generation{};
   race_mpcc::TargetProvenance target_provenance;
   std::string target_id;
@@ -9371,16 +9375,27 @@ struct MPC
       live_behavior.rate_resolved_preentry_branch_selection;
     const auto & hint =
       live_behavior.rate_resolved_preentry_selected_mission_hint;
+    const bool active_execution =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ||
+      overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
+    const auto tactical_input =
+      overtake_core::resolve_rate_resolved_gate_a_tactical_input(
+      overtake_core::RateResolvedGateATacticalInputRequest{
+        active_execution,
+        overtake_line_state_.pass_side_sign,
+        selection.valid ? selection.selected_side_sign : 0,
+        hint,
+        live_behavior.mpcc_lite_same_side_replan_mission,
+        live_behavior.mpcc_lite_cross_side_replan_mission});
     if (
-      !selection.valid ||
-      (selection.selected_side_sign != -1 &&
-      selection.selected_side_sign != 1) ||
-      !hint.has_value() ||
-      hint->pass_side_sign != selection.selected_side_sign ||
+      !tactical_input.valid || !tactical_input.mission.has_value() ||
       live_behavior.rate_resolved_preentry_tactical_source_sequence == 0U ||
       live_behavior.target_vehicle_id.empty())
     {
-      reject_reason = "causal pre-entry homotopy unavailable";
+      reject_reason = active_execution ?
+        "causal active replacement homotopy unavailable" :
+        "causal pre-entry homotopy unavailable";
       return std::nullopt;
     }
     auto owned_snapshot = make_owned_tactical_snapshot();
@@ -9389,11 +9404,27 @@ struct MPC
       return std::nullopt;
     }
     V2XTacticalSideAssessment assessment;
-    assessment.side = selection.selected_side_sign;
+    assessment.side = tactical_input.selected_side_sign;
     assessment.gap_available = true;
-    assessment.selected_mission = hint;
-    assessment.mpcc_receding_mission = hint;
-    assessment.corridor_center_ey = hint->goal_lateral_m;
+    auto selected_mission = tactical_input.mission.value();
+    // Tactical candidates carry geometry only across this boundary. Any
+    // certificate from their producer is deliberately discarded; the causal
+    // worker below must bind the current serialized predecessor and reproduce
+    // exact wall/opponent proof before Gate A exists.
+    selected_mission.physical_execution_certificate_valid = false;
+    selected_mission.physical_execution_certificate_source_sec =
+      -std::numeric_limits<double>::infinity();
+    selected_mission.physical_execution_certificate_source_course_progress_m =
+      std::numeric_limits<double>::quiet_NaN();
+    selected_mission.physical_execution_certificate_required_wall_clearance_m =
+      std::numeric_limits<double>::quiet_NaN();
+    selected_mission.physical_execution_certificate_path_distances_m.clear();
+    selected_mission.physical_execution_certificate_lateral_path_m.clear();
+    selected_mission.physical_execution_certificate_exact_trajectory = {};
+    selected_mission.physical_execution_certificate_target_provenance = {};
+    assessment.selected_mission = selected_mission;
+    assessment.mpcc_receding_mission = selected_mission;
+    assessment.corridor_center_ey = selected_mission.goal_lateral_m;
     const OvertakeArtifactIdentitySeed artifact_identity{
       overtake_line_state_.mission_generation,
       overtake_line_state_.phase,
@@ -9415,10 +9446,11 @@ struct MPC
     draft.target_provenance = target_provenance;
     draft.tactical_source_sequence =
       live_behavior.rate_resolved_preentry_tactical_source_sequence;
+    draft.tactical_input_source = tactical_input.source;
     draft.prospective_mission_generation = std::max<std::uint64_t>(
       1U, overtake_line_state_.mission_generation + 1U);
     draft.target_id = live_behavior.target_vehicle_id;
-    draft.selected_side_sign = selection.selected_side_sign;
+    draft.selected_side_sign = tactical_input.selected_side_sign;
     draft.horizon_size = cfg.N;
     draft.snapshot_sec = now_sec;
     draft.snapshot_ms = std::chrono::duration<double, std::milli>(
@@ -23707,6 +23739,7 @@ struct MPC
     result.context_epoch = draft.context_epoch;
     result.decision_id = draft.decision_id;
     result.tactical_source_sequence = draft.tactical_source_sequence;
+    result.tactical_input_source = draft.tactical_input_source;
     result.prospective_mission_generation =
       draft.prospective_mission_generation;
     result.target_id = draft.target_id;
@@ -23996,7 +24029,7 @@ struct MPC
         rclcpp::get_logger("mpc_controller"),
         "Rate-resolved pre-entry causal execution shadow: "
         "sequence=%lu, epoch=%lu/%lu, tactical=%lu, decision=%lu, "
-        "target=%s/%d, side=%d/%d, "
+        "target=%s/%d, side=%d/%d, tactical_input=%s, "
         "generation=%lu/%lu, age=%.3f s, snapshot=%.3f ms, build=%.3f ms, "
         "worker=%.3f ms, build_detail=%s, candidate=%s/%zu, "
         "solver=%s, physical=%s, dynamic=%s/%s/%.3f/sqp:%zu, complete=%d, "
@@ -24017,6 +24050,7 @@ struct MPC
         result->target_id == live_behavior.target_vehicle_id ? 1 : 0,
         result->selected_side_sign,
         live_behavior.rate_resolved_preentry_branch_selection.selected_side_sign,
+        overtake_core::to_string(result->tactical_input_source),
         static_cast<unsigned long>(result->prospective_mission_generation),
         static_cast<unsigned long>(
           current_prospective_generation),

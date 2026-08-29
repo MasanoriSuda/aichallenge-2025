@@ -2149,6 +2149,15 @@ NonlinearInteriorWallProblemResult build_nonlinear_interior_wall_problem(
     snapshot, assembly_request, linearization_primal, samples);
 }
 
+LatestStateFeedbackSolverContext::LatestStateFeedbackSolverContext(
+  const persistent_osqp::ConstraintPreconditioningPolicy solver_policy)
+: solver_uses_internal_equilibration_(
+    solver_policy == persistent_osqp::ConstraintPreconditioningPolicy::
+    RowToleranceNormalizedWithInternalEquilibration),
+  solver_(solver_policy)
+{
+}
+
 persistent_osqp::PhysicalConstraintTolerance
 LatestStateFeedbackSolverContext::physical_constraint_tolerance() const noexcept
 {
@@ -2397,6 +2406,17 @@ evaluate_reachable_bridge_nonlinear_interior_wall_audit(
 
 LatestStateFeedbackResult
 LatestStateFeedbackSolverContext::
+evaluate_reachable_bridge_equilibrated_dense_wall_audit(
+  const LatestStateFeedbackRequest & request,
+  const std::size_t iteration_limit)
+{
+  return evaluate_time_aligned_impl(
+    request, true, iteration_limit,
+    InteriorWallAuditMode::DenseEquilibrated);
+}
+
+LatestStateFeedbackResult
+LatestStateFeedbackSolverContext::
 evaluate_reachable_bridge_structured_interior_wall_audit(
   const LatestStateFeedbackRequest & request,
   const std::size_t iteration_limit)
@@ -2431,7 +2451,10 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
   result.latest_state_multi_sqp_iteration_limit =
     multi_sqp_iteration_limit;
   result.nonlinear_interior_wall_audit_requested =
-    interior_wall_audit_mode == InteriorWallAuditMode::Dense;
+    interior_wall_audit_mode == InteriorWallAuditMode::Dense ||
+    interior_wall_audit_mode == InteriorWallAuditMode::DenseEquilibrated;
+  result.equilibrated_dense_wall_audit_requested =
+    interior_wall_audit_mode == InteriorWallAuditMode::DenseEquilibrated;
   result.structured_interior_wall_audit_requested =
     interior_wall_audit_mode == InteriorWallAuditMode::Structured;
   result.physical_proof_cut_plane_audit_requested =
@@ -2445,6 +2468,14 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
       return result;
     };
   try {
+    if (
+      interior_wall_audit_mode == InteriorWallAuditMode::DenseEquilibrated &&
+      !solver_uses_internal_equilibration_)
+    {
+      result.detail =
+        "equilibrated dense audit requires a preselected equilibrated owner";
+      return finish();
+    }
     if (
       request.preparation == nullptr ||
       !mpcc_rate_resolved_shadow::identity_valid(
@@ -2539,6 +2570,7 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
     std::vector<NonlinearInteriorWallSample> proof_guided_cuts;
     if (
       interior_wall_audit_mode == InteriorWallAuditMode::Dense ||
+      interior_wall_audit_mode == InteriorWallAuditMode::DenseEquilibrated ||
       interior_wall_audit_mode == InteriorWallAuditMode::Structured)
     {
       const auto interior =
@@ -2564,7 +2596,10 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
         return finish();
       }
       result.nonlinear_interior_wall_audit_applied =
-        interior_wall_audit_mode == InteriorWallAuditMode::Dense;
+        interior_wall_audit_mode == InteriorWallAuditMode::Dense ||
+        interior_wall_audit_mode == InteriorWallAuditMode::DenseEquilibrated;
+      result.equilibrated_dense_wall_audit_applied =
+        interior_wall_audit_mode == InteriorWallAuditMode::DenseEquilibrated;
       result.structured_interior_wall_audit_applied =
         interior_wall_audit_mode == InteriorWallAuditMode::Structured;
       assembled = std::move(interior.problem.value());
@@ -2716,6 +2751,7 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
       }
       if (
         interior_wall_audit_mode == InteriorWallAuditMode::Dense ||
+        interior_wall_audit_mode == InteriorWallAuditMode::DenseEquilibrated ||
         interior_wall_audit_mode == InteriorWallAuditMode::Structured)
       {
         const auto interior =
@@ -2745,6 +2781,8 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
         }
         result.structured_interior_wall_audit_applied =
           interior_wall_audit_mode == InteriorWallAuditMode::Structured;
+        result.equilibrated_dense_wall_audit_applied =
+          interior_wall_audit_mode == InteriorWallAuditMode::DenseEquilibrated;
         assembled = std::move(interior.problem.value());
       } else if (
         interior_wall_audit_mode == InteriorWallAuditMode::ProofGuided)

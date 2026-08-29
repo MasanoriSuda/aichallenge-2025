@@ -407,6 +407,8 @@ struct LatestStateFeedbackResult
   std::size_t latest_state_multi_sqp_solve_count{};
   bool nonlinear_interior_wall_audit_requested{false};
   bool nonlinear_interior_wall_audit_applied{false};
+  bool equilibrated_dense_wall_audit_requested{false};
+  bool equilibrated_dense_wall_audit_applied{false};
   bool structured_interior_wall_audit_requested{false};
   bool structured_interior_wall_audit_applied{false};
   NonlinearInteriorWallReason nonlinear_interior_wall_reason{
@@ -731,6 +733,9 @@ private:
 class LatestStateFeedbackSolverContext
 {
 public:
+  explicit LatestStateFeedbackSolverContext(
+    persistent_osqp::ConstraintPreconditioningPolicy solver_policy =
+    persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized);
   /// Historical A arm: replace x0 in the old final QP. Kept only so frozen
   /// mixed-origin regressions remain explicit; production must not call it.
   LatestStateFeedbackResult evaluate(
@@ -757,6 +762,13 @@ public:
   evaluate_reachable_bridge_nonlinear_interior_wall_audit(
     const LatestStateFeedbackRequest & request,
     std::size_t iteration_limit);
+  /// Observation-only dense E arm using a separate internally equilibrated
+  /// solver owner. Problem matrices, tolerances and physical proofs are
+  /// unchanged from evaluate_reachable_bridge_nonlinear_interior_wall_audit.
+  LatestStateFeedbackResult
+  evaluate_reachable_bridge_equilibrated_dense_wall_audit(
+    const LatestStateFeedbackRequest & request,
+    std::size_t iteration_limit);
   /// Observation-only structured arm. It replaces the existing affine swept
   /// rows with at most four nonlinear partial-transition rows per stage.
   LatestStateFeedbackResult
@@ -778,6 +790,7 @@ private:
     None,
     Structured,
     Dense,
+    DenseEquilibrated,
     ProofGuided,
   };
   LatestStateFeedbackResult evaluate_time_aligned_impl(
@@ -786,8 +799,8 @@ private:
     std::size_t multi_sqp_iteration_limit,
     InteriorWallAuditMode interior_wall_audit_mode);
   std::mutex mutex_;
-  persistent_osqp::PersistentOsqpSolver solver_{
-    persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};
+  bool solver_uses_internal_equilibration_{};
+  persistent_osqp::PersistentOsqpSolver solver_;
 };
 
 enum class PublishReason

@@ -96,6 +96,7 @@ const char * suffix_comparison_classification(
   const shadow::LatestStateFeedbackResult & multi_sqp,
   const shadow::LatestStateFeedbackResult & structured_interior,
   const shadow::LatestStateFeedbackResult & nonlinear_interior,
+  const shadow::LatestStateFeedbackResult & equilibrated_dense,
   const shadow::LatestStateFeedbackResult & proof_guided) noexcept
 {
   const auto accepted = [](const shadow::LatestStateFeedbackResult & value) {
@@ -109,6 +110,12 @@ const char * suffix_comparison_classification(
              multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::
              RejectReason::ExactTrajectoryRejected;
     };
+  if (!accepted(nonlinear_interior) && accepted(equilibrated_dense)) {
+    return "dense-wall-solver-owner-conditioning-defect";
+  }
+  if (accepted(nonlinear_interior) && !accepted(equilibrated_dense)) {
+    return "equilibrated-dense-wall-regression";
+  }
   if (!accepted(old_origin) && accepted(time_aligned)) {
     return "old-origin-clock-defect";
   }
@@ -153,6 +160,7 @@ const char * suffix_comparison_classification(
     model_proof_rejected(reachable) || model_proof_rejected(multi_sqp) ||
     model_proof_rejected(structured_interior) ||
     model_proof_rejected(nonlinear_interior) ||
+    model_proof_rejected(equilibrated_dense) ||
     model_proof_rejected(proof_guided))
   {
     return "solve-proof-model-mismatch";
@@ -160,12 +168,39 @@ const char * suffix_comparison_classification(
   if (
     !accepted(old_origin) && !accepted(time_aligned) && !accepted(reachable) &&
     !accepted(multi_sqp) && !accepted(structured_interior) &&
-    !accepted(nonlinear_interior) &&
+    !accepted(nonlinear_interior) && !accepted(equilibrated_dense) &&
     !accepted(proof_guided))
   {
     return "suffix-family-unresolved";
   }
   return "all-suffix-arms-accepted";
+}
+
+const char * dense_solver_owner_classification(
+  const shadow::LatestStateFeedbackResult & normalized,
+  const shadow::LatestStateFeedbackResult & equilibrated) noexcept
+{
+  const auto accepted = [](const shadow::LatestStateFeedbackResult & value) {
+      return value.reason == shadow::LatestStateFeedbackReason::Accepted;
+    };
+  if (!accepted(normalized) && accepted(equilibrated)) {
+    return "dense-wall-solver-owner-conditioning-defect";
+  }
+  if (accepted(normalized) && !accepted(equilibrated)) {
+    return "equilibrated-dense-wall-regression";
+  }
+  if (accepted(normalized) && accepted(equilibrated)) {
+    return "both-dense-arms-accepted";
+  }
+  if (
+    normalized.reason ==
+      shadow::LatestStateFeedbackReason::PhysicalAdapterRejected ||
+    equilibrated.reason ==
+      shadow::LatestStateFeedbackReason::PhysicalAdapterRejected)
+  {
+    return "dense-solve-proof-model-mismatch";
+  }
+  return "dense-solver-owner-not-causal";
 }
 
 }  // namespace
@@ -247,6 +282,9 @@ int main(int argc, char ** argv)
   shadow::LatestStateFeedbackSolverContext multi_sqp_solver;
   shadow::LatestStateFeedbackSolverContext structured_interior_solver;
   shadow::LatestStateFeedbackSolverContext nonlinear_interior_solver;
+  shadow::LatestStateFeedbackSolverContext equilibrated_dense_solver{
+    solver::ConstraintPreconditioningPolicy::
+    RowToleranceNormalizedWithInternalEquilibration};
   shadow::LatestStateFeedbackSolverContext proof_guided_solver;
   const shadow::LatestStateFeedbackRequest latest_state_request{
     std::make_shared<const shadow::LatestStateFeedbackPreparation>(
@@ -268,6 +306,9 @@ int main(int argc, char ** argv)
     latest_state_request, 4U);
   const auto nonlinear_interior = nonlinear_interior_solver.
     evaluate_reachable_bridge_nonlinear_interior_wall_audit(
+    latest_state_request, 4U);
+  const auto equilibrated_dense = equilibrated_dense_solver.
+    evaluate_reachable_bridge_equilibrated_dense_wall_audit(
     latest_state_request, 4U);
   const auto proof_guided = proof_guided_solver.
     evaluate_reachable_bridge_physical_proof_cut_plane_audit(
@@ -430,6 +471,7 @@ int main(int argc, char ** argv)
     structured_interior.physical_lateral_bound_tolerance_m <<
     " suffix_nonlinear_interior_reason=" <<
     shadow::to_string(nonlinear_interior.reason) <<
+    " suffix_nonlinear_interior_policy=row-normalized" <<
     " suffix_nonlinear_interior_rows=" <<
     nonlinear_interior.nonlinear_interior_wall_row_count <<
     " suffix_nonlinear_interior_problem=" << shadow::to_string(
@@ -459,6 +501,42 @@ int main(int argc, char ** argv)
     nonlinear_interior.physical_lateral_violation_m <<
     " suffix_nonlinear_interior_exact_tolerance=" <<
     nonlinear_interior.physical_lateral_bound_tolerance_m <<
+    " suffix_equilibrated_dense_reason=" <<
+    shadow::to_string(equilibrated_dense.reason) <<
+    " suffix_equilibrated_dense_policy=" <<
+    "row-normalized-internal-equilibration" <<
+    " suffix_equilibrated_dense_rows=" <<
+    equilibrated_dense.nonlinear_interior_wall_row_count <<
+    " suffix_equilibrated_dense_problem=" << shadow::to_string(
+    equilibrated_dense.nonlinear_interior_wall_reason) <<
+    " suffix_equilibrated_dense_attempts=" <<
+    equilibrated_dense.latest_state_multi_sqp_attempt_count <<
+    " suffix_equilibrated_dense_solves=" <<
+    equilibrated_dense.latest_state_multi_sqp_solve_count <<
+    " suffix_equilibrated_dense_status=" <<
+    equilibrated_dense.solver.status <<
+    " suffix_equilibrated_dense_iterations=" <<
+    equilibrated_dense.solver.iterations <<
+    " suffix_equilibrated_dense_solve_ms=" <<
+    equilibrated_dense.solver.total_ms <<
+    " suffix_equilibrated_dense_candidate_violation=" <<
+    equilibrated_dense.nonlinear_interior_wall_maximum_candidate_violation_m <<
+    " suffix_equilibrated_dense_physical=" <<
+    multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::to_string(
+    equilibrated_dense.physical_adapter_reason) <<
+    " suffix_equilibrated_dense_exact=" <<
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    exact_physical_execution_trajectory_reason_name(
+    equilibrated_dense.physical_exact_reason) <<
+    " suffix_equilibrated_dense_exact_stage=" <<
+    equilibrated_dense.physical_rejected_stage <<
+    " suffix_equilibrated_dense_exact_violation=" <<
+    equilibrated_dense.physical_lateral_violation_m <<
+    " suffix_equilibrated_dense_exact_tolerance=" <<
+    equilibrated_dense.physical_lateral_bound_tolerance_m <<
+    " suffix_dense_owner_classification=" <<
+    dense_solver_owner_classification(
+      nonlinear_interior, equilibrated_dense) <<
     " suffix_proof_guided_reason=" <<
     shadow::to_string(proof_guided.reason) <<
     " suffix_proof_guided_cuts=" <<
@@ -489,7 +567,7 @@ int main(int argc, char ** argv)
     proof_guided.physical_lateral_bound_tolerance_m <<
     " suffix_classification=" << suffix_comparison_classification(
     old_origin, time_aligned, reachable, multi_sqp, structured_interior,
-    nonlinear_interior,
+    nonlinear_interior, equilibrated_dense,
     proof_guided) <<
     " full_outcome=" << shadow::to_string(full.outcome) <<
     " full_compute_ms=" << full.compute_ms <<

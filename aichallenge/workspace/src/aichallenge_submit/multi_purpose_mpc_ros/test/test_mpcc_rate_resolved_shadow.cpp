@@ -1166,6 +1166,54 @@ TEST(
     request, 4U);
   EXPECT_TRUE(result.nonlinear_interior_wall_audit_requested);
   EXPECT_TRUE(result.nonlinear_interior_wall_audit_applied);
+  EXPECT_FALSE(result.equilibrated_dense_wall_audit_requested);
+  EXPECT_FALSE(result.equilibrated_dense_wall_audit_applied);
+  EXPECT_EQ(
+    result.nonlinear_interior_wall_reason,
+    shadow::NonlinearInteriorWallReason::Accepted);
+  EXPECT_GT(result.nonlinear_interior_wall_row_count, 0U);
+  EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::Accepted)
+    << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+  EXPECT_EQ(
+    execution::validate(*result.execution_artifact),
+    execution::RejectReason::None);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  EquilibratedDenseWallAuditRemainsObservationOnlyAndExactlyProved)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto prepared = preparation_context.evaluate(source);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation,
+    source.control_prediction_origin_sec + 0.02,
+    source.control_prediction_origin_sec + 0.01,
+    execution::PredictedState{0.0, 0.0, 0.0, 2.0, 0.04, 0.10, 0.08},
+    source.request.previous_input};
+  shadow::LatestStateFeedbackSolverContext context{
+    solver::ConstraintPreconditioningPolicy::
+    RowToleranceNormalizedWithInternalEquilibration};
+
+  const auto result =
+    context.evaluate_reachable_bridge_equilibrated_dense_wall_audit(
+    request, 4U);
+  EXPECT_TRUE(result.nonlinear_interior_wall_audit_requested);
+  EXPECT_TRUE(result.nonlinear_interior_wall_audit_applied);
+  EXPECT_TRUE(result.equilibrated_dense_wall_audit_requested);
+  EXPECT_TRUE(result.equilibrated_dense_wall_audit_applied);
+  shadow::LatestStateFeedbackSolverContext wrong_owner_context;
+  const auto wrong_owner = wrong_owner_context.
+    evaluate_reachable_bridge_equilibrated_dense_wall_audit(request, 4U);
+  EXPECT_TRUE(wrong_owner.equilibrated_dense_wall_audit_requested);
+  EXPECT_FALSE(wrong_owner.equilibrated_dense_wall_audit_applied);
+  EXPECT_FALSE(wrong_owner.solve_attempted);
+  EXPECT_EQ(
+    wrong_owner.reason, shadow::LatestStateFeedbackReason::InvalidRequest);
   EXPECT_EQ(
     result.nonlinear_interior_wall_reason,
     shadow::NonlinearInteriorWallReason::Accepted);

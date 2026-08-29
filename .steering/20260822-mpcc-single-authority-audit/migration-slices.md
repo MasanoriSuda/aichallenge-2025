@@ -1259,6 +1259,18 @@ Finish the architecture simplification instead of leaving permanent dual control
   footprint wall-margin violation occurred. This is an accepted structural
   prerequisite for Slice 7, not parameter tuning.
 
+- `.steering/20260829-dense-wall-solver-owner-ab` closes the OSQP-local
+  conditioning escape hatch without changing production authority.  The same
+  proof-equivalent dense QP is solved by independent, preselected normalized
+  and internally equilibrated owners.  Equilibration reduces the frozen
+  feasible Follow case from 2650 iterations / about 45 ms to 450 iterations /
+  about 8.5 ms, but both ShiftOut and Cruise still reach 4000 iterations with
+  no artifact under both owners.  Therefore conditioning is a secondary
+  runtime factor, not the root cause of the remaining failures.  OSQP scaling,
+  iteration-limit and local wall-row experiments stop here; the next audit
+  boundary is an independent structure-exploiting or nonlinear feasibility
+  oracle on the same immutable problems.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

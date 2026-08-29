@@ -1164,10 +1164,17 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "positive_solver_context" in normal_avoidance_population
     assert "RateResolvedNormalHomotopyOwner" in normal_avoidance_population
     assert "homotopy_owner->preferred_side(source)" in normal_avoidance_population
-    assert "homotopy_owner->select(source, candidate.seed.pass_side_sign)" in (
+    assert "homotopy_owner->select(source, selected->side_sign)" in (
         normal_avoidance_population
     )
-    assert "ordered_candidates" in normal_avoidance_population
+    assert "ordered_candidates" not in normal_avoidance_population
+    assert "std::async(" in normal_avoidance_population
+    assert "negative_future.get()" in normal_avoidance_population
+    assert "branch_bank->replace(source, negative_plan, positive_plan)" in (
+        normal_avoidance_population
+    )
+    assert "select_certified(preferred_side)" in normal_avoidance_population
+    assert "select_certified(-preferred_side)" in normal_avoidance_population
     assert '"/evaluated="' in normal_avoidance_population
     assert "selected_terminal_progress_m" not in normal_avoidance_population
     assert "selected_terminal_velocity_mps" not in normal_avoidance_population
@@ -1180,8 +1187,21 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "evaluation.dynamic.has_value()" in normal_avoidance_population
     assert "evaluation.dynamic->valid" in normal_avoidance_population
     assert "evaluation.dynamic->clear" in normal_avoidance_population
-    assert "&candidate.seed.solver_snapshot" in normal_avoidance_population
+    assert "&candidate->seed.solver_snapshot" in normal_avoidance_population
     assert "source_context.execution_side_sign =" not in normal_avoidance_population
+
+    retained_start = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow("
+    )
+    retained_end = SOURCE.index(
+        "void record_rate_resolved_track_cruise_shadow(", retained_start
+    )
+    retained = SOURCE[retained_start:retained_end]
+    assert "rate_resolved_normal_branch_bank_->snapshot()" in retained
+    assert "branches.plan_for_side(side_sign)" in retained
+    assert "evaluate_rate_resolved_track_cruise_plan(" in retained
+    assert "branch_evaluation.stateless_current_world_bundle" in retained
+    assert "normal_branch_selected_side_sign = side_sign" in retained
 
     normal_submit_start = SOURCE.index(
         "bool submit_rate_resolved_track_cruise_shadow("
@@ -1217,6 +1237,17 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "dynamic_obstacle_refinement_active" in normal_population
     assert "dynamic_obstacle_constraint_active" in normal_population
     assert "evaluate_rate_resolved_normal_avoidance_population(" in normal_population
+    missing_physical_start = normal_population.index(
+        "if (!physical_source.has_value())"
+    )
+    missing_physical_end = normal_population.index(
+        "return rejected;", missing_physical_start
+    )
+    missing_physical = normal_population[
+        missing_physical_start:missing_physical_end
+    ]
+    assert "normal_branch_bank->replace(" in missing_physical
+    assert "source, nullptr, nullptr" in missing_physical
     assert "canonical_normal_intent_requires_execution_side(intent)" in normal_population
     assert "evaluate_rate_resolved_current_world_population(" in normal_population
     assert "current-world Overtake population requires physical snapshot" in normal_population

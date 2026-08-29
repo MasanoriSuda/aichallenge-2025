@@ -21,6 +21,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp>
@@ -151,6 +152,8 @@ namespace rate_resolved_physical_wall =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
 namespace rate_resolved_certified =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
+namespace rate_resolved_normal_branch_bank =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_normal_branch_bank;
 namespace rate_resolved_command =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate;
 namespace rate_resolved_dynamic =
@@ -6542,7 +6545,8 @@ evaluate_rate_resolved_normal_avoidance_population(
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   positive_solver_context,
   const std::shared_ptr<RateResolvedNormalHomotopyOwner> & homotopy_owner,
-  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
+  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
+  const std::shared_ptr<rate_resolved_normal_branch_bank::Bank> & branch_bank)
 {
   const auto certified = [](const RateResolvedPipelineEvaluation & evaluation) {
       return
@@ -6571,14 +6575,31 @@ evaluate_rate_resolved_normal_avoidance_population(
       return evaluation.solver.solve_attempted ? 1 : 0;
     };
 
+  struct BranchEvaluation
+  {
+    int side_sign{};
+    RateResolvedPipelineEvaluation pipeline;
+    int rank{};
+    bool certified{false};
+    std::string source{"none"};
+  };
+
   RateResolvedCurrentWorldPopulationEvaluation result;
-  int best_rank = -1;
   const auto population = stateless_maneuver::build_normal_avoidance_candidates(
     source);
   if (
     population.reason != stateless_maneuver::RejectReason::Accepted ||
     population.candidates.empty())
   {
+    if (branch_bank != nullptr) {
+      const auto bank_reason = branch_bank->replace(source, nullptr, nullptr);
+      if (
+        bank_reason != rate_resolved_normal_branch_bank::ReplaceReason::Accepted &&
+        bank_reason != rate_resolved_normal_branch_bank::ReplaceReason::StaleSource)
+      {
+        branch_bank->clear();
+      }
+    }
     result.pipeline.solver.identity = source.identity;
     result.pipeline.solver.outcome =
       rate_resolved_shadow::Outcome::BuildRejected;
@@ -6593,77 +6614,132 @@ evaluate_rate_resolved_normal_avoidance_population(
   const int preferred_side = homotopy_owner != nullptr ?
     homotopy_owner->preferred_side(source) :
     source.identity.source_context.dynamic_obstacle_side_sign;
-  std::vector<const stateless_maneuver::Candidate *> ordered_candidates;
-  ordered_candidates.reserve(population.candidates.size());
-  if (preferred_side == -1 || preferred_side == 1) {
-    for (const auto & candidate : population.candidates) {
-      if (candidate.seed.pass_side_sign == preferred_side) {
-        ordered_candidates.push_back(&candidate);
-      }
-    }
-  }
+  const stateless_maneuver::Candidate * negative_candidate = nullptr;
+  const stateless_maneuver::Candidate * positive_candidate = nullptr;
   for (const auto & candidate : population.candidates) {
-    if (candidate.seed.pass_side_sign != preferred_side) {
-      ordered_candidates.push_back(&candidate);
+    if (candidate.seed.pass_side_sign < 0) {
+      negative_candidate = &candidate;
+    } else if (candidate.seed.pass_side_sign > 0) {
+      positive_candidate = &candidate;
     }
   }
+  result.candidate_count =
+    static_cast<std::size_t>(negative_candidate != nullptr) +
+    static_cast<std::size_t>(positive_candidate != nullptr);
 
-  for (const auto * candidate_ptr : ordered_candidates) {
-    const auto & candidate = *candidate_ptr;
-    ++result.candidate_count;
-    auto physical = physical_source;
-    physical.identity.artifact = candidate.seed.solver_snapshot.identity;
-    // Cruise/Follow identity is deliberately side-free. The normal worker therefore
-    // owns one persistent numerical context per physical homotopy; sharing the
-    // primary context would mix side provenance, while constructing a context
-    // here would discard the selected side's continuation every cycle.
-    const auto & candidate_solver_context =
-      candidate.seed.pass_side_sign < 0 ? negative_solver_context :
-      positive_solver_context;
-    if (candidate_solver_context == nullptr) {
-      continue;
-    }
-    const std::shared_ptr<rate_resolved_certified::Store>
-    observation_only_store;
-    auto evaluation = evaluate_rate_resolved_pipeline(
-      candidate.seed.solver_snapshot,
-      std::optional<rate_resolved_physical_wall::Snapshot>{
-        std::move(physical)},
-      candidate_solver_context, observation_only_store,
-      &candidate.seed.solver_snapshot);
-    const bool candidate_certified = certified(evaluation);
-    const int rank = evidence_rank(evaluation);
-    if (candidate_certified) {
-      result.pipeline = std::move(evaluation);
-      result.candidate_source = candidate.seed.pass_side_sign > 0 ?
-        "normal-avoidance-positive" : "normal-avoidance-negative";
-      if (homotopy_owner != nullptr) {
-        homotopy_owner->select(source, candidate.seed.pass_side_sign);
+  // Both homotopies are evaluated from one immutable source epoch. This
+  // function runs inside LatestOnlyWorker; joining the child future cannot
+  // block the 40 Hz callback. Separate persistent contexts preserve numerical
+  // provenance and prevent cross-side warm-start contamination.
+  const auto evaluate_branch = [&](
+      const stateless_maneuver::Candidate * candidate,
+      const std::shared_ptr<rate_resolved_shadow::SolverContext> & context)
+    -> std::optional<BranchEvaluation>
+    {
+      if (candidate == nullptr || context == nullptr) {
+        return std::nullopt;
       }
-      const std::string store_detail = certified_plan_store != nullptr ?
-        rate_resolved_certified::to_string(
-        certified_plan_store->replace(result.pipeline.certified_plan.plan)) :
-        "not-requested";
-      result.detail = std::string{"selected/"} + result.candidate_source +
-        "/preferred=" + std::to_string(preferred_side) +
-        "/evaluated=" + std::to_string(result.candidate_count) +
-        "/store=" + store_detail;
-      result.pipeline.solver.detail =
-        result.detail + ", pipeline=" + result.pipeline.solver.detail;
-      return result;
-    }
-    if (rank > best_rank) {
-      best_rank = rank;
-      result.pipeline = std::move(evaluation);
-      result.candidate_source = candidate.seed.pass_side_sign > 0 ?
+      auto physical = physical_source;
+      physical.identity.artifact = candidate->seed.solver_snapshot.identity;
+      const std::shared_ptr<rate_resolved_certified::Store>
+      observation_only_store;
+      BranchEvaluation branch;
+      branch.side_sign = candidate->seed.pass_side_sign;
+      branch.pipeline = evaluate_rate_resolved_pipeline(
+        candidate->seed.solver_snapshot,
+        std::optional<rate_resolved_physical_wall::Snapshot>{
+          std::move(physical)},
+        context, observation_only_store,
+        &candidate->seed.solver_snapshot);
+      branch.certified = certified(branch.pipeline);
+      branch.rank = evidence_rank(branch.pipeline);
+      branch.source = branch.side_sign > 0 ?
         "normal-avoidance-positive" : "normal-avoidance-negative";
-    }
+      return branch;
+    };
+
+  std::optional<BranchEvaluation> negative;
+  std::optional<BranchEvaluation> positive;
+  if (negative_candidate != nullptr && positive_candidate != nullptr) {
+    auto negative_future = std::async(
+      std::launch::async,
+      [&]() {
+        return evaluate_branch(
+          negative_candidate, negative_solver_context);
+      });
+    positive = evaluate_branch(positive_candidate, positive_solver_context);
+    negative = negative_future.get();
+  } else {
+    negative = evaluate_branch(negative_candidate, negative_solver_context);
+    positive = evaluate_branch(positive_candidate, positive_solver_context);
   }
 
-  result.detail = std::string{"no certified normal avoidance/best="} +
-    result.candidate_source + "/preferred=" +
-    std::to_string(preferred_side) + "/evaluated=" +
-    std::to_string(result.candidate_count);
+  const auto certified_plan = [](
+      const std::optional<BranchEvaluation> & branch)
+    -> std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
+    {
+      return branch.has_value() && branch->certified ?
+        branch->pipeline.certified_plan.plan : nullptr;
+    };
+  const auto negative_plan = certified_plan(negative);
+  const auto positive_plan = certified_plan(positive);
+  const std::string bank_detail = branch_bank != nullptr ?
+    rate_resolved_normal_branch_bank::to_string(
+    branch_bank->replace(source, negative_plan, positive_plan)) :
+    "not-requested";
+
+  BranchEvaluation * selected = nullptr;
+  const auto select_certified = [&](const int side_sign) {
+      auto & branch = side_sign < 0 ? negative : positive;
+      if (selected == nullptr && branch.has_value() && branch->certified) {
+        selected = &branch.value();
+      }
+    };
+  if (preferred_side == -1 || preferred_side == 1) {
+    select_certified(preferred_side);
+    select_certified(-preferred_side);
+  } else {
+    select_certified(1);
+    select_certified(-1);
+  }
+  if (selected == nullptr) {
+    const auto consider_evidence = [&](std::optional<BranchEvaluation> & branch) {
+        if (
+          branch.has_value() &&
+          (selected == nullptr || branch->rank > selected->rank))
+        {
+          selected = &branch.value();
+        }
+      };
+    consider_evidence(positive);
+    consider_evidence(negative);
+  }
+  if (selected != nullptr) {
+    result.pipeline = std::move(selected->pipeline);
+    result.candidate_source = selected->source;
+  }
+
+  if (selected != nullptr && selected->certified) {
+    if (homotopy_owner != nullptr) {
+      homotopy_owner->select(source, selected->side_sign);
+    }
+    const std::string store_detail = certified_plan_store != nullptr ?
+      rate_resolved_certified::to_string(
+      certified_plan_store->replace(result.pipeline.certified_plan.plan)) :
+      "not-requested";
+    result.detail = std::string{"selected/"} + result.candidate_source +
+      "/preferred=" + std::to_string(preferred_side) +
+      "/evaluated=" + std::to_string(result.candidate_count) +
+      "/negative=" + (negative_plan != nullptr ? "certified" : "rejected") +
+      "/positive=" + (positive_plan != nullptr ? "certified" : "rejected") +
+      "/bank=" + bank_detail + "/store=" + store_detail;
+  } else {
+    result.detail = std::string{"no certified normal avoidance/best="} +
+      result.candidate_source + "/preferred=" +
+      std::to_string(preferred_side) + "/evaluated=" +
+      std::to_string(result.candidate_count) +
+      "/bank=" + bank_detail;
+  }
   result.pipeline.solver.detail =
     result.detail + ", pipeline=" + result.pipeline.solver.detail;
   return result;
@@ -6679,7 +6755,9 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   normal_positive_solver_context,
   const std::shared_ptr<RateResolvedNormalHomotopyOwner> &
   normal_homotopy_owner,
-  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
+  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
+  const std::shared_ptr<rate_resolved_normal_branch_bank::Bank> &
+  normal_branch_bank)
 {
   const auto intent = source.identity.source_context.intent;
   const bool normal_dynamic_avoidance =
@@ -6690,6 +6768,18 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   if (normal_dynamic_avoidance)
   {
     if (!physical_source.has_value()) {
+      if (normal_branch_bank != nullptr) {
+        const auto bank_reason = normal_branch_bank->replace(
+          source, nullptr, nullptr);
+        if (
+          bank_reason !=
+          rate_resolved_normal_branch_bank::ReplaceReason::Accepted &&
+          bank_reason !=
+          rate_resolved_normal_branch_bank::ReplaceReason::StaleSource)
+        {
+          normal_branch_bank->clear();
+        }
+      }
       RateResolvedPipelineEvaluation rejected;
       rejected.solver.identity = source.identity;
       rejected.solver.outcome = rate_resolved_shadow::Outcome::BuildRejected;
@@ -6701,7 +6791,14 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
       source, physical_source.value(),
       normal_negative_solver_context, normal_positive_solver_context,
       normal_homotopy_owner,
-      certified_plan_store).pipeline;
+      certified_plan_store, normal_branch_bank).pipeline;
+  }
+  if (
+    normal_branch_bank != nullptr &&
+    (intent == mpcc_contract::ControlIntent::Cruise ||
+    intent == mpcc_contract::ControlIntent::Follow))
+  {
+    normal_branch_bank->clear();
   }
   if (mpcc_contract::canonical_normal_intent_requires_execution_side(intent)) {
     if (!physical_source.has_value()) {
@@ -7228,6 +7325,15 @@ struct RateResolvedRetainedShadowEvaluation
   bool candidate_attempted{false};
   bool published_bundle_source_attempted{false};
   bool executed_attempted{false};
+  bool normal_branch_bank_inspected{false};
+  std::uint64_t normal_branch_bank_source_sequence{};
+  bool normal_branch_negative_attempted{false};
+  bool normal_branch_positive_attempted{false};
+  rate_resolved_retained::Reason normal_branch_negative_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  rate_resolved_retained::Reason normal_branch_positive_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  int normal_branch_selected_side_sign{};
   double elapsed_ms{};
 };
 
@@ -7397,6 +7503,8 @@ struct MPC
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_normal_homotopy_owner_ =
         std::make_shared<RateResolvedNormalHomotopyOwner>();
+      rate_resolved_normal_branch_bank_ =
+        std::make_shared<rate_resolved_normal_branch_bank::Bank>();
       rate_resolved_track_cruise_shadow_mailbox_ =
         std::make_shared<rate_resolved_shadow::Mailbox>();
       rate_resolved_track_cruise_shadow_worker_ =
@@ -23688,6 +23796,7 @@ struct MPC
       rate_resolved_normal_avoidance_negative_solver_context_ == nullptr ||
       rate_resolved_normal_avoidance_positive_solver_context_ == nullptr ||
       rate_resolved_normal_homotopy_owner_ == nullptr ||
+      rate_resolved_normal_branch_bank_ == nullptr ||
       rate_resolved_track_cruise_shadow_next_sequence_ ==
       std::numeric_limits<std::uint64_t>::max())
     {
@@ -23757,13 +23866,14 @@ struct MPC
       rate_resolved_normal_avoidance_positive_solver_context_;
     const auto normal_homotopy_owner =
       rate_resolved_normal_homotopy_owner_;
+    const auto normal_branch_bank = rate_resolved_normal_branch_bank_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
       [snapshot = std::move(snapshot.value()), mailbox, solver_context,
         normal_negative_solver_context, normal_positive_solver_context,
-        normal_homotopy_owner,
+        normal_homotopy_owner, normal_branch_bank,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
         physical_registered, certified_plan_store]() mutable {
         if (!physical_registered) {
@@ -23773,7 +23883,7 @@ struct MPC
           snapshot, std::move(physical_snapshot), solver_context,
           normal_negative_solver_context, normal_positive_solver_context,
           normal_homotopy_owner,
-          certified_plan_store);
+          certified_plan_store, normal_branch_bank);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
           static_cast<void>(physical_mailbox->publish(
@@ -24920,6 +25030,10 @@ struct MPC
         destination.feedback_shadow_proof_available =
           source.feedback_shadow_proof_available;
       };
+    const auto new_candidate_execution_clock_kind =
+      executed_plan == nullptr ?
+      rate_resolved_retained::ExecutionClockKind::BootstrapCandidate :
+      rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate;
 
     if (candidate_plan != nullptr) {
       final_evaluation = evaluate_rate_resolved_track_cruise_plan(
@@ -24935,9 +25049,7 @@ struct MPC
           executed_entry.first_published_control_origin_sec,
           executed_entry.first_published_artifact_elapsed_sec} :
         rate_resolved_retained::ExecutionClock{
-          executed_plan == nullptr ?
-          rate_resolved_retained::ExecutionClockKind::BootstrapCandidate :
-          rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
+          new_candidate_execution_clock_kind,
           std::numeric_limits<double>::quiet_NaN(),
           std::numeric_limits<double>::quiet_NaN()});
       final_evaluation.candidate_attempted = true;
@@ -25123,6 +25235,115 @@ struct MPC
       executed_evaluation.selected_from_executed =
         executed_evaluation.production_authority.has_value();
       final_evaluation = std::move(executed_evaluation);
+    }
+
+    const bool normal_avoidance_intent =
+      evaluation_intent == mpcc_contract::ControlIntent::Cruise ||
+      evaluation_intent == mpcc_contract::ControlIntent::Follow;
+    if (
+      !final_evaluation.production_authority.has_value() &&
+      normal_avoidance_intent &&
+      problem.progress_execution_dynamic_obstacle_contract_active &&
+      rate_resolved_normal_branch_bank_ != nullptr)
+    {
+      const auto branches = rate_resolved_normal_branch_bank_->snapshot();
+      final_evaluation.normal_branch_bank_inspected = true;
+      final_evaluation.normal_branch_bank_source_sequence =
+        branches.source_identity.sequence;
+      const auto side_of = [](
+          const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> &
+          plan) {
+          if (plan == nullptr || plan->execution_artifact == nullptr) {
+            return 0;
+          }
+          const int side = plan->execution_artifact->identity.source_context.
+            dynamic_obstacle_side_sign;
+          return side == -1 || side == 1 ? side : 0;
+        };
+      int ordinary_side = side_of(candidate_plan);
+      if (ordinary_side == 0) {
+        ordinary_side = side_of(published_bundle_plan);
+      }
+      if (ordinary_side == 0) {
+        ordinary_side = side_of(executed_plan);
+      }
+      if (ordinary_side == 0 && branches.source_identity.sequence > 0U) {
+        rate_resolved_shadow::Snapshot source_identity_only;
+        source_identity_only.identity = branches.source_identity;
+        ordinary_side = rate_resolved_normal_homotopy_owner_ != nullptr ?
+          rate_resolved_normal_homotopy_owner_->preferred_side(
+          source_identity_only) : 0;
+      }
+      const std::array<int, 2> branch_order =
+        ordinary_side == -1 || ordinary_side == 1 ?
+        std::array<int, 2>{-ordinary_side, ordinary_side} :
+        std::array<int, 2>{1, -1};
+      for (const int side_sign : branch_order) {
+        const auto plan = branches.plan_for_side(side_sign);
+        if (
+          plan == nullptr || same_plan_identity(plan, candidate_plan) ||
+          same_plan_identity(plan, published_bundle_plan) ||
+          same_plan_identity(plan, executed_plan))
+        {
+          continue;
+        }
+        auto branch_evaluation = evaluate_rate_resolved_track_cruise_plan(
+          problem, now_sec, evaluation_intent, plan,
+          rate_resolved_retained::ExecutionClock{
+            new_candidate_execution_clock_kind,
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN()});
+        if (side_sign < 0) {
+          final_evaluation.normal_branch_negative_attempted = true;
+          final_evaluation.normal_branch_negative_reason =
+            branch_evaluation.reason;
+        } else {
+          final_evaluation.normal_branch_positive_attempted = true;
+          final_evaluation.normal_branch_positive_reason =
+            branch_evaluation.reason;
+        }
+        if (
+          !branch_evaluation.production_authority.has_value() ||
+          !branch_evaluation.stateless_current_world_bundle)
+        {
+          continue;
+        }
+        copy_candidate_diagnostics(final_evaluation, branch_evaluation);
+        branch_evaluation.published_bundle_source_attempted =
+          final_evaluation.published_bundle_source_attempted;
+        branch_evaluation.published_bundle_source_reason =
+          final_evaluation.published_bundle_source_reason;
+        branch_evaluation.published_bundle_source_sequence =
+          final_evaluation.published_bundle_source_sequence;
+        branch_evaluation.executed_attempted =
+          final_evaluation.executed_attempted;
+        branch_evaluation.executed_reason = final_evaluation.executed_reason;
+        branch_evaluation.executed_sequence =
+          final_evaluation.executed_sequence;
+        branch_evaluation.normal_branch_bank_inspected = true;
+        branch_evaluation.normal_branch_bank_source_sequence =
+          branches.source_identity.sequence;
+        branch_evaluation.normal_branch_negative_attempted =
+          final_evaluation.normal_branch_negative_attempted;
+        branch_evaluation.normal_branch_positive_attempted =
+          final_evaluation.normal_branch_positive_attempted;
+        branch_evaluation.normal_branch_negative_reason =
+          final_evaluation.normal_branch_negative_reason;
+        branch_evaluation.normal_branch_positive_reason =
+          final_evaluation.normal_branch_positive_reason;
+        branch_evaluation.normal_branch_selected_side_sign = side_sign;
+        if (rate_resolved_normal_homotopy_owner_ != nullptr) {
+          rate_resolved_shadow::Snapshot source_identity_only;
+          source_identity_only.identity = branches.source_identity;
+          rate_resolved_normal_homotopy_owner_->select(
+            source_identity_only, side_sign);
+        }
+        attach_connector(branch_evaluation);
+        branch_evaluation.elapsed_ms =
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return branch_evaluation;
+      }
     }
     attach_connector(final_evaluation);
     final_evaluation.elapsed_ms =
@@ -25820,6 +26041,8 @@ struct MPC
       "min_dynamic_clearance:%.3f/published_bundle:%d/seq:%lu/reason:%s/"
       "executed:%d/seq:%lu/"
       "reason:%s/source:%s, "
+      "normal_branches=inspected:%d/seq:%lu/negative:%d:%s/"
+      "positive:%d:%s/selected_side:%d, "
       "on_trajectory=attempted:%d/reason:%s/"
       "parent_elapsed:%.6f/candidate_elapsed:%.6f/"
       "lateral_delta:%.6f/progress_delta:%.6f/steering_delta:%.6f, "
@@ -25982,6 +26205,16 @@ struct MPC
       window.last_retained.selected_from_published_bundle_source ?
       "published-bundle" : "candidate") :
       "none",
+      window.last_retained.normal_branch_bank_inspected ? 1 : 0,
+      static_cast<unsigned long>(
+        window.last_retained.normal_branch_bank_source_sequence),
+      window.last_retained.normal_branch_negative_attempted ? 1 : 0,
+      rate_resolved_retained::to_string(
+        window.last_retained.normal_branch_negative_reason),
+      window.last_retained.normal_branch_positive_attempted ? 1 : 0,
+      rate_resolved_retained::to_string(
+        window.last_retained.normal_branch_positive_reason),
+      window.last_retained.normal_branch_selected_side_sign,
       window.last_retained.on_trajectory_connector_attempted ? 1 : 0,
       on_trajectory_connector::to_string(
         window.last_retained.on_trajectory_connector_reason),
@@ -27991,6 +28224,8 @@ struct MPC
   rate_resolved_normal_avoidance_positive_solver_context_;
   std::shared_ptr<RateResolvedNormalHomotopyOwner>
   rate_resolved_normal_homotopy_owner_;
+  std::shared_ptr<rate_resolved_normal_branch_bank::Bank>
+  rate_resolved_normal_branch_bank_;
   std::shared_ptr<rate_resolved_shadow::Mailbox>
   rate_resolved_track_cruise_shadow_mailbox_;
   std::unique_ptr<LatestOnlyWorker>

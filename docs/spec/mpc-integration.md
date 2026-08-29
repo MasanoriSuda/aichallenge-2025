@@ -3142,6 +3142,39 @@ Mission execution activationも維持されている。
 semantic handoff、ordinary Cruise authority gap、Pass完遂、solver rejectionは別failure familyである。この統合を
 根拠にlease、grace、timeout、retry、fallback、solver tolerance、weightまたはclearanceを追加・変更してはならない。
 
+#### Cruise／Follow normal avoidanceの同一world左右branch保持（2026-08-30、2025由来の暫定）
+
+Cruise／Followのnormal dynamic avoidanceは、同一のimmutable source epochから負側・正側の物理homotopyを両方評価する。
+以前は前回選択sideを先に評価し、最初のcertified candidateでpopulation loopからreturnしていたため、反対sideは
+async producer境界を越えなかった。選択candidateが後でexact current-world revalidationに失敗すると、同じworldで
+物理的に成立していた反対sideを試せず、Emergencyだけが正当なauthorityとして残っていた。
+
+現在は独立solver contextで左右をbackground並列評価し、join後に同一source sequence、source identity、side別sealed
+fingerprint、complete physical certificateを検証してdata-only branch bankへ原子的に置換する。新しいepochで両sideが
+不成立または物理snapshot欠落ならempty pairを置換し、古いcertified branchを失効させる。bank自体はStore、Mission、
+publisherまたはcommand authorityを持たない。
+
+通常どおりpreferred certified branchだけをStoreへ渡す。後段でcandidate、published Bundle source、executed planが
+すべてcurrent-world証明を得られなかった場合に限り、まだ試していないbank branchを既存のexact wall、timed obstacle、
+actuation、recursive terminal Stopおよびproduction authority chainへ投入する。homotopy ownerはこのproduction証明の
+成功後だけ、bankから採用したalternate sideへ更新する。通常producerでpreferred candidateを選ぶ既存ownership契約は
+変更しない。
+
+decision 3149の凍結snapshotではpersistent branchとstateless leftが不成立、stateless rightが同じseven-state SQPで
+terminal progress 7.557 m、terminal velocity 1.858 m/s、minimum lateral reserve 0.805 mとして成立した。これは
+`A fails, B succeeds`であり、clearanceやsolver toleranceではなくpersistent Mission lifecycle／candidate retention defect
+に分類する。
+
+`output/20260830-052104`ではnormal avoidance選択18件、両side不成立8件を観測し、preferred負側が不成立でも正側を
+certified選択するproducer動作を確認した。retained evaluatorによるbank inspectは6件あったが、いずれも新しいsource
+epochがempty pairへ置換済みで、自然発生したalternate exact adoptionは未観測である。旧world branchを使わなかった
+ことは正しいfail-closed動作であり、live alternate adoptionは後続のdynamic acceptance項目として残す。
+
+同runのbackground計算は平均window 36.684 ms、最大298.750 msであり、40 Hz callback外であってもlong-tailは残る。
+上位ログは主GMPCCとは別の子プロセスで左右戦術計算を扱っているため、必要になればscheduler／process isolationを
+独立failure familyとして監査する。この結果を根拠にlease、grace、timeout、retry、fallback、solver tolerance、weight、
+clearanceまたはproduction authorityを変更してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

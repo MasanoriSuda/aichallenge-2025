@@ -415,6 +415,23 @@
       "production_impact": "none; rejected primals remain diagnostic-only, SolveOutcome::result stays empty, and no solver setting, clearance, fallback, timeout, lease, authority or command path changed",
       "deleted_code": [],
       "revisit_condition": "a bounded canonical coordinate-formulation Slice replaces rather than retries the current normal solve and passes the frozen corpus plus dynamic ShiftOut/Pass acceptance under unchanged exact proofs"
+    },
+    {
+      "experiment_id": "20260829-canonical-kkt-scaling-audit",
+      "baseline_commit": "1810e82f",
+      "snapshot_ids": [
+        "9845010060330222052",
+        "7896913873338064473",
+        "5862539731343104692",
+        "follow-sequence-5575"
+      ],
+      "hypothesis": "one numerical scaling policy can replace the current solver globally, or the numerical mismatch can be bounded to a specific QP problem class",
+      "changed_dimension": "observation_only_kkt_equilibration_ownership",
+      "result": "accepted",
+      "reason": "global raw or fixed-Ruiz formulations regressed the Follow counterexample, while row-tolerance normalization followed by OSQP internal equilibration certified both latest ShiftOut wall-refinement problems in 39.49 and 22.39 ms and continued to reject the physically infeasible dynamic-only problem",
+      "production_impact": "none; the new policy and CLI arm are architecture-audit only and a source contract forbids controller use",
+      "deleted_code": [],
+      "revisit_condition": "a production Slice assigns each wall-refinement QP to exactly one equilibrated solver workspace, removes its old solver ownership atomically, and passes frozen plus dynamic ShiftOut/Pass acceptance without retries"
     }
   ]
 }

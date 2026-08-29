@@ -972,6 +972,7 @@ const char * to_string(const Arm arm) noexcept
     case Arm::WallOmitPoseN: return "wall-omit-pose-n";
     case Arm::WallOmitPoseDirectO: return "wall-omit-pose-direct-o";
     case Arm::WallProductionP: return "wall-production-p";
+    case Arm::KktEquilibratedQ: return "kkt-equilibrated-q";
     case Arm::DynamicSqpPersistentL: return "dynamic-sqp-persistent-l";
     case Arm::DynamicSqpProductionLeftL:
       return "dynamic-sqp-production-left-l";
@@ -1621,6 +1622,64 @@ Report verify_external_primal(
     report.detail = "unknown external primal verification exception";
   }
   return report;
+}
+
+Report compare_kkt_equilibration(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  const auto source_fingerprint = recorded.interaction_fingerprint;
+  const auto reject = [source_fingerprint](const std::string & detail) {
+      Report report;
+      report.source_accepted = true;
+      report.source_interaction_fingerprint = source_fingerprint;
+      report.detail = "rejected/kkt-equilibration-audit-only";
+      report.arms.push_back(rejected_arm(
+        Arm::KktEquilibratedQ, Stage::SolverRejected,
+        source_fingerprint, detail));
+      return report;
+    };
+  try {
+    if (
+      !architecture::interaction_snapshot_complete(recorded.source) ||
+      !architecture::interaction_snapshot_matches_fingerprint(
+        recorded.source, source_fingerprint))
+    {
+      auto report = reject("source interaction snapshot rejected");
+      report.source_accepted = false;
+      report.detail = "source interaction snapshot rejected";
+      report.arms.front().stage = Stage::SourceRejected;
+      return report;
+    }
+    osqp::PersistentOsqpSolver solver{
+      osqp::ConstraintPreconditioningPolicy::
+        RowToleranceNormalizedWithInternalEquilibration};
+    const auto & qp = recorded.recorded_qp.problem;
+    const auto outcome = solver.solve(
+      qp.quadratic_cost, qp.constraints, qp.linear_cost,
+      qp.lower_bound, qp.upper_bound, recorded.recorded_qp.warm_start,
+      qp.variable_scaling);
+    if (!outcome.result.has_value()) {
+      return reject(outcome.failure_detail);
+    }
+    auto report = verify_external_primal(
+      recorded, outcome.result->primal,
+      ExternalPrimalConstraintPolicy::ExactRecorded);
+    report.detail = report.arms.size() == 1U &&
+      report.arms.front().bundle.has_value() ?
+      "accepted/kkt-equilibration-audit-only" :
+      "rejected/kkt-equilibration-exact-proof";
+    if (report.arms.size() == 1U) {
+      report.arms.front().arm = Arm::KktEquilibratedQ;
+      report.arms.front().solver_compute_ms = outcome.telemetry.total_ms;
+      report.arms.front().detail =
+        "kkt-equilibrated/" + report.arms.front().detail;
+    }
+    return report;
+  } catch (const std::exception & exception) {
+    return reject(exception.what());
+  } catch (...) {
+    return reject("unknown kkt equilibration comparison exception");
+  }
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_architecture_comparison

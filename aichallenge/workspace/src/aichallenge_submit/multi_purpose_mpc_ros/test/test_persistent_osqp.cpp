@@ -435,6 +435,25 @@ TEST(PersistentOsqpSolver, RowToleranceNormalizationUsesDimensionlessRows)
   EXPECT_DOUBLE_EQ(outcome.telemetry.relative_tolerance, 0.0);
 }
 
+TEST(PersistentOsqpSolver, AuditEquilibrationPreservesRowToleranceContract)
+{
+  PersistentOsqpSolver solver(
+    ConstraintPreconditioningPolicy::
+      RowToleranceNormalizedWithInternalEquilibration);
+  const auto outcome = solver.solve(
+    diagonal_matrix({1.0}), identity_constraints(1),
+    Eigen::VectorXd::Constant(1, -1.0),
+    Eigen::VectorXd::Constant(1, 0.0),
+    Eigen::VectorXd::Constant(1, 2.0));
+
+  ASSERT_TRUE(outcome.result.has_value()) << outcome.failure_detail;
+  EXPECT_TRUE(outcome.telemetry.row_tolerance_preconditioned);
+  EXPECT_EQ(outcome.telemetry.scaling_iterations, 10);
+  EXPECT_DOUBLE_EQ(outcome.telemetry.relative_tolerance, 0.0);
+  EXPECT_LE(
+    outcome.result->maximum_normalized_constraint_violation, 1.0);
+}
+
 TEST(PersistentOsqpSolver, RowToleranceNormalizationUsesStrictAsymmetricSide)
 {
   const auto quadratic = diagonal_matrix({1.0, 1.0});

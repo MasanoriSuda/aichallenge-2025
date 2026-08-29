@@ -39,6 +39,7 @@ enum class Arm
   WallOmitPoseN,
   WallOmitPoseDirectO,
   WallProductionP,
+  KktEquilibratedQ,
   DynamicSqpPersistentL,
   DynamicSqpProductionLeftL,
   DynamicSqpProductionRightL,
@@ -131,6 +132,13 @@ Report compare_wall_restoration(
 /// Physical wall, dynamic-obstacle and terminal-successor proof is identical
 /// to production and neither arm has a command/publication path.
 Report compare_wall_buckets(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
+  noexcept;
+
+/// Replay the exact recorded QP once with the explicit physical row contract
+/// followed by OSQP's standard internal equilibration, then pass a converged
+/// primal through the unchanged exact proof chain. Observation-only.
+Report compare_kkt_equilibration(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
   noexcept;
 

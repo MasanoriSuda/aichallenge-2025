@@ -88,6 +88,12 @@ def test_wall_bucket_relaxation_is_architecture_audit_only() -> None:
     assert MPCC_ARCHITECTURE_COMPARISON_SOURCE.count(audit_entry) == 1
 
 
+def test_internal_equilibration_policy_is_architecture_audit_only() -> None:
+    policy = "RowToleranceNormalizedWithInternalEquilibration"
+    assert policy not in SOURCE
+    assert MPCC_ARCHITECTURE_COMPARISON_SOURCE.count(policy) == 1
+
+
 def test_canonical_normal_owner_has_no_runtime_migration_availability_switch() -> None:
     """The sole normal owner cannot be disabled after legacy authority deletion."""
 

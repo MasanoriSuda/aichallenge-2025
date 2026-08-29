@@ -8,11 +8,15 @@ import importlib.util
 from pathlib import Path
 import time
 
-import casadi as ca
 import numpy as np
 import osqp
 import scipy.optimize
 import scipy.sparse
+
+try:
+    import casadi as ca
+except ImportError:  # Optional independent conic backends are image-specific.
+    ca = None
 
 
 ABSOLUTE_TOLERANCE = 1.0e-3
@@ -37,6 +41,8 @@ def load_audit_module():
 def relaxed_bounds(payload, lower, upper, bucket: str):
     result_lower = lower.copy()
     result_upper = upper.copy()
+    if bucket == "none":
+        return result_lower, result_upper, []
     horizon = int(payload["assembly_request"]["horizon_steps"])
     state_values = STATE_DIMENSION * (horizon + 1)
     state_index = LAG_INDEX if bucket == "lag" else HEADING_INDEX
@@ -107,6 +113,8 @@ def solve_osqp(
 
 
 def solve_conic(label, P, q, A, lower, upper):
+    if ca is None:
+        raise RuntimeError("casadi unavailable")
     structure = {"h": ca.DM(P).sparsity(), "a": ca.DM(A.toarray()).sparsity()}
     options = {"print_time": False}
     if label == "qpoases":
@@ -129,7 +137,9 @@ def solve_conic(label, P, q, A, lower, upper):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("snapshot", type=Path)
-    parser.add_argument("--bucket", choices=("lag", "heading"), default="lag")
+    parser.add_argument(
+        "--bucket", choices=("none", "lag", "heading"), default="none"
+    )
     parser.add_argument("--output-dir", type=Path)
     arguments = parser.parse_args()
 

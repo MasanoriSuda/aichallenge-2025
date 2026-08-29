@@ -178,6 +178,10 @@ enum class ConstraintPreconditioningPolicy
 {
   None,
   RowToleranceNormalized,
+  /// Observation-only numerical comparison: preserve the identical explicit
+  /// physical row contract, then let OSQP apply its standard modified-Ruiz
+  /// equilibration. No production SolverContext selects this policy.
+  RowToleranceNormalizedWithInternalEquilibration,
 };
 
 /// Physical-unit tolerances used to certify every original constraint row.

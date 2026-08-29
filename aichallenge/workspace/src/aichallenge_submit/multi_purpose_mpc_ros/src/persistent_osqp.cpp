@@ -18,6 +18,14 @@ namespace
 
 using SteadyClock = std::chrono::steady_clock;
 
+bool row_tolerance_normalized(
+  const ConstraintPreconditioningPolicy policy) noexcept
+{
+  return policy == ConstraintPreconditioningPolicy::RowToleranceNormalized ||
+         policy == ConstraintPreconditioningPolicy::
+    RowToleranceNormalizedWithInternalEquilibration;
+}
+
 double elapsed_ms(const SteadyClock::time_point start)
 {
   return std::chrono::duration<double, std::milli>(SteadyClock::now() - start)
@@ -206,8 +214,7 @@ std::optional<PreparedProblem> prepare_problem(
       return std::nullopt;
     }
   }
-  if (preconditioning_policy ==
-    ConstraintPreconditioningPolicy::RowToleranceNormalized)
+  if (row_tolerance_normalized(preconditioning_policy))
   {
     if (!std::isfinite(absolute_tolerance) || absolute_tolerance < 0.0 ||
       !std::isfinite(relative_tolerance) || relative_tolerance < 0.0)
@@ -643,8 +650,7 @@ struct PersistentOsqpSolver::Impl
     // row scale. Leaving OSQP's global relative stopping term enabled would
     // apply relative tolerance a second time using the largest transformed
     // row, recreating the mixed-unit leak the policy is meant to remove.
-    if (preconditioning_policy ==
-      ConstraintPreconditioningPolicy::RowToleranceNormalized)
+    if (row_tolerance_normalized(preconditioning_policy))
     {
       settings.eps_rel = 0.0;
       // This policy already owns both transformations presented to OSQP:
@@ -652,8 +658,15 @@ struct PersistentOsqpSolver::Impl
       // physical tolerance normalization. Applying OSQP's opaque Ruiz
       // scaling a second time breaks that single numerical provenance and can
       // make an otherwise feasible rate-resolved QP stall at the iteration
-      // limit. Keep OSQP's internal scaling only for the unconditioned policy.
-      settings.scaling = 0;
+      // limit. The canonical policy therefore disables it. The explicitly
+      // named architecture-audit policy is the only isolated comparison arm
+      // which retains OSQP's internal equilibration after this transform.
+      if (
+        preconditioning_policy ==
+        ConstraintPreconditioningPolicy::RowToleranceNormalized)
+      {
+        settings.scaling = 0;
+      }
     }
     settings.verbose = false;
     settings.warm_start = true;
@@ -829,8 +842,7 @@ SolveOutcome PersistentOsqpSolver::solve(
   outcome.telemetry.scaled_termination =
     impl_->settings.scaled_termination != 0;
   outcome.telemetry.row_tolerance_preconditioned =
-    impl_->preconditioning_policy ==
-    ConstraintPreconditioningPolicy::RowToleranceNormalized;
+    row_tolerance_normalized(impl_->preconditioning_policy);
   std::string preparation_failure;
   auto prepared = prepare_problem(
     std::move(quadratic_cost), std::move(constraints), linear_cost,
@@ -1116,8 +1128,7 @@ SolveOutcome PersistentOsqpSolver::solve(
   outcome.telemetry.physical_constraint_scale = constraint_scale;
   outcome.telemetry.physical_global_tolerance = tolerance;
   const bool constraint_rejected =
-    impl_->preconditioning_policy ==
-      ConstraintPreconditioningPolicy::RowToleranceNormalized ?
+    row_tolerance_normalized(impl_->preconditioning_policy) ?
     residual_report->maximum_normalized_violation > 1.0 :
     residual_report->maximum_absolute_violation > tolerance;
   if (constraint_rejected) {

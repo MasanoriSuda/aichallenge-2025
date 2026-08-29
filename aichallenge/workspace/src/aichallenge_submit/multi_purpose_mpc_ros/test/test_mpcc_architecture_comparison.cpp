@@ -463,6 +463,19 @@ TEST(MpccArchitectureComparison, ExternalPrimalNeedsExactRecordedProblem)
     std::string::npos);
 }
 
+TEST(MpccArchitectureComparison, KktEquilibrationKeepsExactProofChain)
+{
+  auto input = recorded_with_solved_qp(source_snapshot()).first;
+  const auto report = compare_kkt_equilibration(input);
+
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 1U);
+  EXPECT_EQ(report.arms.front().arm, Arm::KktEquilibratedQ);
+  EXPECT_EQ(report.arms.front().stage, Stage::Accepted)
+    << report.arms.front().detail;
+  EXPECT_TRUE(report.arms.front().bundle.has_value());
+}
+
 TEST(MpccArchitectureComparison, ExternalPrimalUsesExactPhysicalProofChain)
 {
   auto [input, primal] = recorded_with_solved_qp(source_snapshot());

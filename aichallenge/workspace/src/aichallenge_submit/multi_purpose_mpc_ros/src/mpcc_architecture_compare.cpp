@@ -37,12 +37,14 @@ int main(int argc, char ** argv)
     "--external-primal-physical-nonlinear-oracle";
   const bool rejected_primal_only =
     argc == 3 && std::string{argv[2]} == "--rejected-primal-only";
+  const bool kkt_equilibration_only =
+    argc == 3 && std::string{argv[2]} == "--kkt-equilibration-only";
   if (
     argc != 2 && !wall_restoration_only && !wall_buckets_only &&
     !physical_dynamic_sqp_only && !proof_guided_dynamic_sqp_only &&
     !external_primal && !external_primal_omit_heading &&
     !external_primal_omit_lag && !external_primal_physical_only &&
-    !rejected_primal_only)
+    !rejected_primal_only && !kkt_equilibration_only)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
                  "[--wall-restoration-only | --wall-buckets-only | "
@@ -52,7 +54,8 @@ int main(int argc, char ** argv)
                  "--external-primal-omit-wall-heading-bucket <values.txt> | "
                  "--external-primal-omit-wall-lag-bucket <values.txt> | "
                  "--external-primal-physical-nonlinear-oracle "
-                 "<values.txt> | --rejected-primal-only]\n";
+                 "<values.txt> | --rejected-primal-only | "
+                 "--kkt-equilibration-only]\n";
     return 2;
   }
   std::string detail;
@@ -63,7 +66,9 @@ int main(int argc, char ** argv)
     return 3;
   }
   comparison::Report report;
-  if (rejected_primal_only) {
+  if (kkt_equilibration_only) {
+    report = comparison::compare_kkt_equilibration(recorded.value());
+  } else if (rejected_primal_only) {
     auto primal = recorded->recorded_qp.rejected_primal;
     if (!primal.has_value()) {
       // Older snapshots did not serialize the rejected iterate.  Replaying

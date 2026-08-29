@@ -903,6 +903,12 @@ TEST(
   EXPECT_EQ(result.reachable_bridge_reason, shadow::ReachableBridgeReason::Accepted);
   EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::Accepted)
     << result.detail;
+  EXPECT_EQ(
+    result.physical_exact_reason,
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    ExactPhysicalExecutionTrajectoryReason::Accepted);
+  EXPECT_EQ(result.physical_rejected_stage, -1);
+  EXPECT_DOUBLE_EQ(result.physical_lateral_violation_m, 0.0);
   ASSERT_NE(result.execution_artifact, nullptr);
   EXPECT_EQ(
     execution::validate(*result.execution_artifact),
@@ -1036,6 +1042,11 @@ TEST(
   EXPECT_EQ(
     bridge.physical_adapter_reason,
     physical::RejectReason::ExactTrajectoryRejected);
+  EXPECT_NE(
+    bridge.physical_exact_reason,
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    ExactPhysicalExecutionTrajectoryReason::Accepted);
+  EXPECT_GE(bridge.physical_rejected_stage, 0);
   EXPECT_TRUE(multi_sqp.latest_state_multi_sqp_audit_requested);
   EXPECT_EQ(multi_sqp.latest_state_multi_sqp_attempt_count, 2U);
   EXPECT_EQ(multi_sqp.latest_state_multi_sqp_solve_count, 1U);

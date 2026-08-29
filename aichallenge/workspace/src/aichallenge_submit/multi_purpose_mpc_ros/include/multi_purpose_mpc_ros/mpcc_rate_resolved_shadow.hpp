@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -322,6 +323,18 @@ struct LatestStateFeedbackResult
     artifact::RejectReason::None};
   mpcc_rate_resolved_physical_adapter::RejectReason physical_adapter_reason{
     mpcc_rate_resolved_physical_adapter::RejectReason::InvalidArtifact};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason
+  physical_exact_reason{
+    race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::TooFewStages};
+  int physical_rejected_stage{-1};
+  double physical_rejected_lateral_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double physical_rejected_lateral_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double physical_rejected_lateral_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double physical_lateral_bound_tolerance_m{};
+  double physical_lateral_violation_m{};
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact;
   std::string detail{"not-evaluated"};
 };

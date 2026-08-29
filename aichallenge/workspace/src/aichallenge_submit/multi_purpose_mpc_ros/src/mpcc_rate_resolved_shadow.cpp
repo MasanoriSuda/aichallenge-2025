@@ -29,6 +29,30 @@ constexpr std::size_t kMaximumPhysicalProofSqpCorrections = 3U;
 // distinguish a one-shot wall tangent defect from physical infeasibility.
 constexpr std::size_t kMaximumWallRestorationSqpCorrections = 3U;
 
+void retain_physical_adapter_diagnostic(
+  LatestStateFeedbackResult & destination,
+  const mpcc_rate_resolved_physical_adapter::Result & source) noexcept
+{
+  destination.physical_adapter_reason = source.reason;
+  destination.physical_exact_reason = source.exact_reason;
+  destination.physical_rejected_stage = source.rejected_stage;
+  destination.physical_rejected_lateral_m = source.rejected_lateral_m;
+  destination.physical_rejected_lateral_lower_m =
+    source.rejected_lateral_lower_m;
+  destination.physical_rejected_lateral_upper_m =
+    source.rejected_lateral_upper_m;
+  if (
+    std::isfinite(source.rejected_lateral_m) &&
+    std::isfinite(source.rejected_lateral_lower_m) &&
+    std::isfinite(source.rejected_lateral_upper_m))
+  {
+    destination.physical_lateral_violation_m = std::max(
+      {0.0,
+        source.rejected_lateral_lower_m - source.rejected_lateral_m,
+        source.rejected_lateral_m - source.rejected_lateral_upper_m});
+  }
+}
+
 struct ProgressWallRefinement
 {
   mpcc_progress::ProgressAlignedWallBoundsResolution resolution;
@@ -1851,11 +1875,14 @@ LatestStateFeedbackResult LatestStateFeedbackSolverContext::evaluate(
     }
     auto execution_artifact =
       std::move(artifact_build.execution_artifact.value());
-    result.physical_adapter_reason =
+    result.physical_lateral_bound_tolerance_m =
+      artifact::physical_lateral_bound_tolerance_m(execution_artifact);
+    const auto physical_adapter =
       mpcc_rate_resolved_physical_adapter::build(
       execution_artifact,
       execution_artifact.identity.source_context.intent,
-      execution_artifact.identity.source_context.stage_geometry_id).reason;
+      execution_artifact.identity.source_context.stage_geometry_id);
+    retain_physical_adapter_diagnostic(result, physical_adapter);
     if (
       result.physical_adapter_reason !=
       mpcc_rate_resolved_physical_adapter::RejectReason::None)
@@ -2075,11 +2102,14 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
       }
       auto execution_artifact =
         std::move(artifact_build.execution_artifact.value());
-      result.physical_adapter_reason =
+      result.physical_lateral_bound_tolerance_m =
+        artifact::physical_lateral_bound_tolerance_m(execution_artifact);
+      const auto physical_adapter =
         mpcc_rate_resolved_physical_adapter::build(
         execution_artifact,
         execution_artifact.identity.source_context.intent,
-        execution_artifact.identity.source_context.stage_geometry_id).reason;
+        execution_artifact.identity.source_context.stage_geometry_id);
+      retain_physical_adapter_diagnostic(result, physical_adapter);
       if (
         result.physical_adapter_reason ==
         mpcc_rate_resolved_physical_adapter::RejectReason::None)

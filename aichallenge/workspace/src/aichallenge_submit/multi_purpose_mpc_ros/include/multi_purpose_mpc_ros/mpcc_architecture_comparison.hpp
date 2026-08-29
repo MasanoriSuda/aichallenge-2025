@@ -145,12 +145,22 @@ Report compare_proof_guided_dynamic_sqp(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
   noexcept;
 
+enum class ExternalPrimalConstraintPolicy
+{
+  ExactRecorded,
+  OmitWallHeadingBucket,
+  OmitWallLagBucket,
+  PhysicalNonlinearOracle,
+};
+
 /// Certify an independently solved primal against the exact recorded QP and
 /// the unchanged physical wall, dynamic-obstacle and terminal-successor
 /// proofs. This audit has no solver, store, mailbox, command or publisher.
 Report verify_external_primal(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded,
-  const Eigen::VectorXd & primal) noexcept;
+  const Eigen::VectorXd & primal,
+  ExternalPrimalConstraintPolicy policy =
+  ExternalPrimalConstraintPolicy::ExactRecorded) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_architecture_comparison
 

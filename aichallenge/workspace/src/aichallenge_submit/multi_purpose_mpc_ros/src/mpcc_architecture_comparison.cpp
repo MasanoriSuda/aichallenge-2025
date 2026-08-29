@@ -92,6 +92,42 @@ std::uint64_t exact_problem_fingerprint(
   return fingerprint == 0U ? 1U : fingerprint;
 }
 
+std::optional<problem::Problem> external_primal_problem(
+  const architecture::RecordedInteractionSnapshot & recorded,
+  const ExternalPrimalConstraintPolicy policy) noexcept
+{
+  auto qp = recorded.recorded_qp.problem;
+  if (
+    policy == ExternalPrimalConstraintPolicy::ExactRecorded ||
+    policy == ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle)
+  {
+    return qp;
+  }
+  const int horizon = recorded.source.request.horizon_steps;
+  constexpr int state_dimension = mpcc_rate_resolved::kStateDimension;
+  const int state_values = state_dimension * (horizon + 1);
+  if (
+    horizon <= 0 || qp.lower_bound.size() != qp.upper_bound.size() ||
+    qp.lower_bound.size() < state_values + state_values)
+  {
+    return std::nullopt;
+  }
+  const int state_element =
+    policy == ExternalPrimalConstraintPolicy::OmitWallHeadingBucket ?
+    mpcc_rate_resolved::kHeadingIndex : mpcc_rate_resolved::kLagIndex;
+  // The recorded QP state-box block starts after the initial-state equality
+  // rows. Only the selected artificial post-hoc wall pose bucket is removed;
+  // dynamics, actuator, progress/lateral wall and opponent rows are retained.
+  // This problem exists only for the architecture oracle below and has no
+  // production authority API.
+  for (int stage = 0; stage <= horizon; ++stage) {
+    const int row = state_values + stage * state_dimension + state_element;
+    qp.lower_bound[row] = -std::numeric_limits<double>::infinity();
+    qp.upper_bound[row] = std::numeric_limits<double>::infinity();
+  }
+  return qp;
+}
+
 struct ExternalArtifactBuild
 {
   std::optional<artifact::ExecutionArtifact> value;
@@ -104,7 +140,7 @@ struct ExternalArtifactBuild
 
 ExternalArtifactBuild build_external_artifact(
   const shadow::Snapshot & snapshot, const problem::Problem & qp,
-  const Eigen::VectorXd & primal) noexcept
+  const Eigen::VectorXd & primal, const bool enforce_affine_rows) noexcept
 {
   namespace model = mpcc_rate_resolved;
   ExternalArtifactBuild result;
@@ -130,41 +166,44 @@ ExternalArtifactBuild build_external_artifact(
 
   shadow::SolverContext tolerance_owner;
   const auto tolerance = tolerance_owner.physical_constraint_tolerance();
-  const auto residual = osqp::evaluate_constraint_residuals(
-    qp.constraints, primal, qp.lower_bound, qp.upper_bound,
-    tolerance.absolute, tolerance.relative);
-  if (!residual.has_value()) {
-    result.detail = "external-primal-residual-evaluation-rejected";
-    return result;
-  }
-  result.maximum_absolute_violation = residual->maximum_absolute_violation;
-  result.maximum_normalized_violation = residual->maximum_normalized_violation;
-  result.maximum_normalized_row = residual->maximum_normalized_row;
-  if (residual->maximum_normalized_violation > 1.0) {
-    std::ostringstream detail;
-    detail << "external-primal-constraint-rejected/row="
-           << residual->maximum_normalized_row
-           << "/absolute=" << residual->maximum_absolute_violation
-           << "/normalized=" << residual->maximum_normalized_violation;
-    result.detail = detail.str();
-    return result;
-  }
+  double physical_scale = std::max(1.0, primal.cwiseAbs().maxCoeff());
+  if (enforce_affine_rows) {
+    const auto residual = osqp::evaluate_constraint_residuals(
+      qp.constraints, primal, qp.lower_bound, qp.upper_bound,
+      tolerance.absolute, tolerance.relative);
+    if (!residual.has_value()) {
+      result.detail = "external-primal-residual-evaluation-rejected";
+      return result;
+    }
+    result.maximum_absolute_violation = residual->maximum_absolute_violation;
+    result.maximum_normalized_violation = residual->maximum_normalized_violation;
+    result.maximum_normalized_row = residual->maximum_normalized_row;
+    if (residual->maximum_normalized_violation > 1.0) {
+      std::ostringstream detail;
+      detail << "external-primal-constraint-rejected/row="
+             << residual->maximum_normalized_row
+             << "/absolute=" << residual->maximum_absolute_violation
+             << "/normalized=" << residual->maximum_normalized_violation;
+      result.detail = detail.str();
+      return result;
+    }
 
-  const Eigen::VectorXd values = qp.constraints * primal;
-  double maximum_projected_absolute = 0.0;
-  for (Eigen::Index row = 0; row < values.size(); ++row) {
-    double projected = values[row];
-    if (std::isfinite(qp.lower_bound[row])) {
-      projected = std::max(projected, qp.lower_bound[row]);
+    const Eigen::VectorXd values = qp.constraints * primal;
+    double maximum_projected_absolute = 0.0;
+    for (Eigen::Index row = 0; row < values.size(); ++row) {
+      double projected = values[row];
+      if (std::isfinite(qp.lower_bound[row])) {
+        projected = std::max(projected, qp.lower_bound[row]);
+      }
+      if (std::isfinite(qp.upper_bound[row])) {
+        projected = std::min(projected, qp.upper_bound[row]);
+      }
+      maximum_projected_absolute = std::max(
+        maximum_projected_absolute, std::abs(projected));
     }
-    if (std::isfinite(qp.upper_bound[row])) {
-      projected = std::min(projected, qp.upper_bound[row]);
-    }
-    maximum_projected_absolute = std::max(
-      maximum_projected_absolute, std::abs(projected));
+    physical_scale = std::max(
+      values.cwiseAbs().maxCoeff(), maximum_projected_absolute);
   }
-  const double physical_scale = std::max(
-    values.cwiseAbs().maxCoeff(), maximum_projected_absolute);
 
   artifact::ExecutionArtifact execution;
   execution.identity = snapshot.identity;
@@ -190,9 +229,9 @@ ExternalArtifactBuild build_external_artifact(
   execution.physical_global_tolerance =
     tolerance.absolute + tolerance.relative * physical_scale;
   execution.maximum_constraint_violation =
-    residual->maximum_absolute_violation;
+    result.maximum_absolute_violation;
   execution.maximum_normalized_constraint_violation =
-    residual->maximum_normalized_violation;
+    result.maximum_normalized_violation;
   execution.nominal_path_distance_m.assign(
     snapshot.nominal_path_distance_m.begin(),
     snapshot.nominal_path_distance_m.begin() + execution_horizon + 1);
@@ -1394,7 +1433,8 @@ Report compare_wall_buckets(
 
 Report verify_external_primal(
   const architecture::RecordedInteractionSnapshot & recorded,
-  const Eigen::VectorXd & primal) noexcept
+  const Eigen::VectorXd & primal,
+  const ExternalPrimalConstraintPolicy policy) noexcept
 {
   Report report;
   const auto source_fingerprint = recorded.interaction_fingerprint;
@@ -1418,8 +1458,13 @@ Report verify_external_primal(
     }
     report.source_accepted = true;
     report.detail = "accepted/external-primal-proof-only";
+    const auto verification_problem = external_primal_problem(recorded, policy);
+    if (!verification_problem.has_value()) {
+      return reject_source(
+        Stage::SourceRejected, "external primal policy problem rejected");
+    }
     const auto candidate_fingerprint = exact_problem_fingerprint(
-      recorded.recorded_qp.problem, source_fingerprint);
+      verification_problem.value(), source_fingerprint);
     const auto successor = maneuver::resolve_terminal_successor(source);
     if (!successor.accepted) {
       auto rejected = rejected_arm(
@@ -1443,7 +1488,8 @@ Report verify_external_primal(
     arm_result.source_interaction_fingerprint = source_fingerprint;
     arm_result.candidate_fingerprint = candidate_fingerprint;
     const auto built = build_external_artifact(
-      source, recorded.recorded_qp.problem, primal);
+      source, verification_problem.value(), primal,
+      policy != ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle);
     if (!built.value.has_value()) {
       arm_result.stage = Stage::SolverRejected;
       arm_result.detail = built.detail;
@@ -1469,7 +1515,14 @@ Report verify_external_primal(
       arm_result.stage = Stage::ExactTrajectoryRejected;
       std::ostringstream detail;
       detail << "adapter=" << physical::to_string(adapted.reason)
-             << "/stage=" << adapted.rejected_stage;
+             << "/exact=" <<
+        race_mpcc_foundation::exact_physical_execution_trajectory_reason_name(
+        adapted.exact_reason)
+             << "/stage=" << adapted.rejected_stage
+             << "/lateral=" << adapted.rejected_lateral_m
+             << "/bounds=[" << adapted.rejected_lateral_lower_m
+             << ',' << adapted.rejected_lateral_upper_m << ']'
+             << "/progress_defect=" << adapted.progress_dynamics_defect_m;
       arm_result.detail = detail.str();
       report.arms.push_back(std::move(arm_result));
       return report;
@@ -1517,7 +1570,23 @@ Report verify_external_primal(
     bundle.terminal_successor = successor.successor;
     bundle.stop_suffix = successor.stop_suffix;
     arm_result.stage = Stage::Accepted;
-    arm_result.detail = "accepted/external-primal-exact-proofs";
+    switch (policy) {
+      case ExternalPrimalConstraintPolicy::ExactRecorded:
+        arm_result.detail = "accepted/external-primal-exact-proofs";
+        break;
+      case ExternalPrimalConstraintPolicy::OmitWallHeadingBucket:
+        arm_result.detail =
+          "accepted/external-primal-omit-wall-heading-bucket/exact-proofs";
+        break;
+      case ExternalPrimalConstraintPolicy::OmitWallLagBucket:
+        arm_result.detail =
+          "accepted/external-primal-omit-wall-lag-bucket/exact-proofs";
+        break;
+      case ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle:
+        arm_result.detail =
+          "accepted/external-primal-physical-nonlinear-oracle/exact-proofs";
+        break;
+    }
     arm_result.bundle = std::move(bundle);
     report.arms.push_back(std::move(arm_result));
   } catch (const std::exception & exception) {

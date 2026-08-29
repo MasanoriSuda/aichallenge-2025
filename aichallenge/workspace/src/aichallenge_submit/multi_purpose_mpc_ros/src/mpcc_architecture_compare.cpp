@@ -26,16 +26,30 @@ int main(int argc, char ** argv)
     "--proof-guided-dynamic-sqp-only";
   const bool external_primal =
     argc == 4 && std::string{argv[2]} == "--external-primal";
+  const bool external_primal_omit_heading =
+    argc == 4 && std::string{argv[2]} ==
+    "--external-primal-omit-wall-heading-bucket";
+  const bool external_primal_omit_lag =
+    argc == 4 && std::string{argv[2]} ==
+    "--external-primal-omit-wall-lag-bucket";
+  const bool external_primal_physical_only =
+    argc == 4 && std::string{argv[2]} ==
+    "--external-primal-physical-nonlinear-oracle";
   if (
     argc != 2 && !wall_restoration_only && !wall_buckets_only &&
     !physical_dynamic_sqp_only && !proof_guided_dynamic_sqp_only &&
-    !external_primal)
+    !external_primal && !external_primal_omit_heading &&
+    !external_primal_omit_lag && !external_primal_physical_only)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
                  "[--wall-restoration-only | --wall-buckets-only | "
                  "--physical-dynamic-sqp-only | "
                  "--proof-guided-dynamic-sqp-only | "
-                 "--external-primal <values.txt>]\n";
+                 "--external-primal <values.txt> | "
+                 "--external-primal-omit-wall-heading-bucket <values.txt> | "
+                 "--external-primal-omit-wall-lag-bucket <values.txt> | "
+                 "--external-primal-physical-nonlinear-oracle "
+                 "<values.txt>]\n";
     return 2;
   }
   std::string detail;
@@ -46,7 +60,10 @@ int main(int argc, char ** argv)
     return 3;
   }
   comparison::Report report;
-  if (external_primal) {
+  if (
+    external_primal || external_primal_omit_heading ||
+    external_primal_omit_lag || external_primal_physical_only)
+  {
     std::ifstream input{argv[3]};
     std::vector<double> values;
     double value = 0.0;
@@ -61,7 +78,17 @@ int main(int argc, char ** argv)
     for (std::size_t index = 0U; index < values.size(); ++index) {
       primal[static_cast<Eigen::Index>(index)] = values[index];
     }
-    report = comparison::verify_external_primal(recorded.value(), primal);
+    auto policy = comparison::ExternalPrimalConstraintPolicy::ExactRecorded;
+    if (external_primal_omit_heading) {
+      policy = comparison::ExternalPrimalConstraintPolicy::
+        OmitWallHeadingBucket;
+    } else if (external_primal_omit_lag) {
+      policy = comparison::ExternalPrimalConstraintPolicy::OmitWallLagBucket;
+    } else if (external_primal_physical_only) {
+      policy = comparison::ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle;
+    }
+    report = comparison::verify_external_primal(
+      recorded.value(), primal, policy);
   } else if (wall_restoration_only) {
     report = comparison::compare_wall_restoration(recorded.value());
   } else if (wall_buckets_only) {

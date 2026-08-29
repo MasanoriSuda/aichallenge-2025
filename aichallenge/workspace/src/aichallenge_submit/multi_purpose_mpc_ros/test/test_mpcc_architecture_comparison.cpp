@@ -483,5 +483,48 @@ TEST(MpccArchitectureComparison, ExternalPrimalCannotBypassExactQpRows)
   EXPECT_NE(arm.detail.find("constraint-rejected"), std::string::npos);
 }
 
+TEST(MpccArchitectureComparison, ExternalPrimalBucketOracleKeepsPhysicalProofs)
+{
+  auto [input, primal] = recorded_with_solved_qp(source_snapshot());
+  for (const auto policy : {
+      ExternalPrimalConstraintPolicy::OmitWallHeadingBucket,
+      ExternalPrimalConstraintPolicy::OmitWallLagBucket})
+  {
+    const auto report = verify_external_primal(input, primal, policy);
+    ASSERT_TRUE(report.source_accepted) << report.detail;
+    ASSERT_EQ(report.arms.size(), 1U);
+    const auto & arm = report.arms.front();
+    EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
+    ASSERT_TRUE(arm.bundle.has_value());
+    EXPECT_EQ(
+      arm.bundle->wall_certificate.outcome,
+      mpcc_rate_resolved_physical_wall::Outcome::Accepted);
+    EXPECT_TRUE(arm.bundle->dynamic_certificate.clear);
+    EXPECT_NE(arm.detail.find("exact-proofs"), std::string::npos);
+  }
+}
+
+TEST(MpccArchitectureComparison, PhysicalNonlinearOracleCannotBypassExactProofs)
+{
+  auto [input, primal] = recorded_with_solved_qp(source_snapshot());
+  const auto accepted = verify_external_primal(
+    input, primal, ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle);
+  ASSERT_TRUE(accepted.source_accepted) << accepted.detail;
+  ASSERT_EQ(accepted.arms.size(), 1U);
+  EXPECT_EQ(accepted.arms.front().stage, Stage::Accepted)
+    << accepted.arms.front().detail;
+  EXPECT_TRUE(accepted.arms.front().bundle.has_value());
+
+  ASSERT_GT(primal.size(), mpcc_rate_resolved::kStateDimension);
+  primal[mpcc_rate_resolved::kStateDimension +
+    mpcc_rate_resolved::kLateralIndex] += 10.0;
+  const auto rejected = verify_external_primal(
+    input, primal, ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle);
+  ASSERT_TRUE(rejected.source_accepted) << rejected.detail;
+  ASSERT_EQ(rejected.arms.size(), 1U);
+  EXPECT_NE(rejected.arms.front().stage, Stage::Accepted);
+  EXPECT_FALSE(rejected.arms.front().bundle.has_value());
+}
+
 }  // namespace
 }  // namespace multi_purpose_mpc_ros::mpcc_architecture_comparison

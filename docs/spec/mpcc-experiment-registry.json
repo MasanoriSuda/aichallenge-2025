@@ -520,6 +520,20 @@
         "last-third coupled physical-diagonal production candidate"
       ],
       "revisit_condition": "the same-world candidate fails an unchanged exact proof, a failed proof gains normal authority, repeated late-side deferral prevents progress, or isolated timing evidence shows the replacement regresses the existing async worker budget"
+    },
+    {
+      "experiment_id": "20260830-dynamic-wait-prefix-owner",
+      "baseline_commit": "e864829e",
+      "snapshot_ids": [],
+      "hypothesis": "the optional legacy dynamic-wait forward prefix incorrectly owns a second tactical transition and creates Recovery while a current-world certified seven-state ShiftOut artifact still owns the published command",
+      "changed_dimension": "production_dynamic_wait_optional_prefix_ownership",
+      "result": "accepted",
+      "reason": "baseline 20260829-235457 recorded five FollowPrepare-to-Recovery transitions including four obsolete prefix-failure reasons; run 20260830-001650 observed three Dynamic Mission waits with zero such Recovery transitions, zero obsolete reasons and three existing-budget releases to fresh search, while all 54 package tests and 76 source-contract tests passed",
+      "production_impact": "DynamicMissionWaitAction::Hold is now a no-transition result and the optional legacy prefix cannot create Recovery authority; canonical current-world admission remains the only normal command owner and existing hard-fault Recovery plus Emergency Stop remain unchanged",
+      "deleted_code": [
+        "optional dynamic-wait prefix failure to Recovery production edge"
+      ],
+      "revisit_condition": "a hard DynamicMissionWait Recovery fault is suppressed, an uncertified prefix gains normal authority, no-proof admission fails to stop, or the obsolete prefix-failure Recovery reason reappears"
     }
   ]
 }

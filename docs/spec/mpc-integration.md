@@ -3048,6 +3048,23 @@ decision 2970から凍結したdynamic-obstacleおよびcoupled-wall snapshotで
 `progress-lift-rejected`、callback overrunは別failure familyであり、clearance、solver tolerance、lease、grace、
 retryまたはfallbackの変更で混在させない。
 
+#### Dynamic Mission waitのoptional prefix ownership（2026-08-30、2025由来の暫定）
+
+`DynamicMissionWaitAction::Hold`は戦術上のno-transitionである。legacy
+`publish_dynamic_wait_forward_prefix()`は参照候補を供給できるがnormal command authorityではなく、prefixが
+生成できないことだけを理由に`FollowPrepare`から`Recovery`へphaseを変更してはならない。現在worldに対する
+canonical admissionが、証明済みShiftOut／Pass artifactの継続、fresh artifactへの置換、または証明不能時の
+Emergency Stopを一意に所有する。hard wall fault等がwait resolverで明示的に`Recovery`を返す経路は維持する。
+
+baseline `output/20260829-235457`では`FollowPrepare -> Recovery`が5件あり、そのうち4件が
+`dynamic Mission wait has no wall-feasible lateral authority`というoptional prefix失敗だった。同edgeを削除した
+`output/20260830-001650`ではDynamic Mission waitを3件観測し、同Recovery遷移および旧reasonは0件、3件すべてが
+既存budgetによるfresh-search解放へ進んだ。全54 package testと76 source-contract testも合格した。
+
+同runには別系統のPass実footprint wall violation、Emergency authority gap、callback overrunが残る。したがって
+この結果はsplit ownershipだけを閉じるものであり、Overtake完遂または統合品質Gateの合格を意味しない。
+prefix retry、lease、grace、timeout、solver tolerance、clearanceまたはnormal fallbackを追加してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -36429,14 +36429,14 @@ private:
             return DynamicMissionWaitExecution::Handled;
           }
           case overtake_core::DynamicMissionWaitAction::Hold:
-            if (!publish_dynamic_wait_forward_prefix(
-                dynamic_wait_hard_fault, mission_side_sign))
-            {
-              transition_overtake_line_phase(
-                OvertakeLinePhase::Recovery, now_sec, current_ey,
-                mission_side_sign,
-                "dynamic Mission wait has no wall-feasible lateral authority");
-            }
+            // Hold is a tactical no-transition result. The optional legacy
+            // prefix may provide a reference, but it is not a command owner:
+            // its absence must not rewrite FollowPrepare to Recovery while a
+            // current-world seven-state ShiftOut/Pass artifact is still being
+            // certified. Canonical admission below either publishes a proved
+            // artifact or fails closed through the Emergency supervisor.
+            (void)publish_dynamic_wait_forward_prefix(
+              dynamic_wait_hard_fault, mission_side_sign);
             return DynamicMissionWaitExecution::Handled;
           case overtake_core::DynamicMissionWaitAction::ResumeCurrent:
             overtake_line_state_.dynamic_mission_wait_active = false;

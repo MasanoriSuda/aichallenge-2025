@@ -1929,6 +1929,26 @@ def test_runtime_wall_preplanner_cannot_destroy_canonical_mission() -> None:
     assert "canonical-reference-only" in prefix_failure
 
 
+def test_dynamic_wait_optional_prefix_cannot_create_recovery_authority() -> None:
+    """A Hold result remains a hold even when its legacy prefix is absent."""
+
+    hold_start = SOURCE.index(
+        "case overtake_core::DynamicMissionWaitAction::Hold:"
+    )
+    hold_end = SOURCE.index(
+        "case overtake_core::DynamicMissionWaitAction::ResumeCurrent:",
+        hold_start,
+    )
+    hold = SOURCE[hold_start:hold_end]
+
+    assert "publish_dynamic_wait_forward_prefix(" in hold
+    assert "transition_overtake_line_phase" not in hold
+    assert "OvertakeLinePhase::Recovery" not in hold
+    assert "reset_overtake_line_state" not in hold
+    assert "arm_overtake_line_side_retry_block" not in hold
+    assert "Emergency supervisor" in hold
+
+
 def test_rate_resolved_worker_is_observation_only_but_retained_proof_owns_control() -> None:
     """Only a current-world-qualified retained seven-state proof may own control."""
 

@@ -9589,6 +9589,32 @@ PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
   return resolution;
 }
 
+PassEntryCertificatePolicyResolution resolve_pass_entry_certificate_policy(
+  const PassEntryCertificatePolicyRequest & request) noexcept
+{
+  PassEntryCertificatePolicyResolution resolution;
+  if (
+    request.canonical_published_execution_available &&
+    !request.canonical_published_identity_expected)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  if (request.canonical_published_identity_expected) {
+    if (request.canonical_published_execution_available) {
+      resolution.transition_certificate_available = true;
+      resolution.owner =
+        PassEntryCertificateOwner::CanonicalPublishedExecution;
+    }
+    return resolution;
+  }
+
+  resolution.projected_preflight_required = true;
+  resolution.owner = PassEntryCertificateOwner::ProjectedExecutionPreflight;
+  return resolution;
+}
+
 PassEntryExecutionProfileResolution resolve_pass_entry_execution_profile(
   const PassEntryExecutionProfileRequest & request) noexcept
 {

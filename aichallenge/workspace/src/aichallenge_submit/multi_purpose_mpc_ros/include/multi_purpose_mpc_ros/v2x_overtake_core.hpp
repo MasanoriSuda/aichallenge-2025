@@ -5306,6 +5306,40 @@ struct PassEntryPhysicalGateResolution
 PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
   const PassEntryPhysicalGateRequest & request) noexcept;
 
+enum class PassEntryCertificateOwner
+{
+  Unavailable,
+  CanonicalPublishedExecution,
+  ProjectedExecutionPreflight,
+};
+
+struct PassEntryCertificatePolicyRequest
+{
+  /// A matching ShiftOut identity exists in the actually-published canonical
+  /// execution ledger.  When true, weaker migration sources may not replace it.
+  bool canonical_published_identity_expected{false};
+  /// The published artifact cursor is available and its exact physically
+  /// certified trajectory can be aligned with the current horizon.
+  bool canonical_published_execution_available{false};
+};
+
+struct PassEntryCertificatePolicyResolution
+{
+  bool valid{false};
+  bool transition_certificate_available{false};
+  bool projected_preflight_required{false};
+  PassEntryCertificateOwner owner{PassEntryCertificateOwner::Unavailable};
+};
+
+/// Select one Pass-entry certificate owner before any legacy geometry is
+/// evaluated.  An actually-published canonical seven-state artifact already
+/// owns exact wall certification; projecting it through the legacy horizon
+/// would create a second, inconsistent certificate.  If that canonical
+/// identity is expected but its cursor/profile is unavailable, fail closed
+/// rather than falling through to a weaker DP or nominal projection.
+PassEntryCertificatePolicyResolution resolve_pass_entry_certificate_policy(
+  const PassEntryCertificatePolicyRequest & request) noexcept;
+
 enum class PassEntryExecutionProfileStatus
 {
   Invalid,

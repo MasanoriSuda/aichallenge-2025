@@ -37985,118 +37985,129 @@ private:
         entry_nominal_lateral.push_back(feasible_goal_for_phase);
       }
 
-      std::optional<std::vector<double>> entry_execution_override;
-      bool authoritative_execution_profile_expected = false;
-      if (published_shiftout_execution_alignment.identity_expected) {
-        authoritative_execution_profile_expected = true;
-        if (published_shiftout_execution_profile_active) {
+      const auto certificate_policy =
+        overtake_core::resolve_pass_entry_certificate_policy(
+          overtake_core::PassEntryCertificatePolicyRequest{
+            published_shiftout_execution_alignment.identity_expected,
+            published_shiftout_execution_profile_active});
+      if (!certificate_policy.valid) {
+        pass_entry_execution_horizon_available = false;
+        pass_entry_execution_horizon_reason =
+          "invalid canonical Pass entry certificate identity";
+      } else if (
+        certificate_policy.owner ==
+        overtake_core::PassEntryCertificateOwner::CanonicalPublishedExecution)
+      {
+        // This exact ShiftOut trajectory already crossed the publisher after
+        // canonical physical/current-world proof. Reprojecting it through the
+        // legacy horizon creates a second, inconsistent certificate owner.
+        // Atomic intent admission retains ShiftOut until Pass proof joins.
+        pass_entry_execution_horizon_available = true;
+        pass_entry_execution_horizon_reason =
+          "canonical published seven-state execution certificate";
+      } else if (!certificate_policy.projected_preflight_required) {
+        // A matching canonical identity exists, so a weaker migration source
+        // may not replace it when its execution cursor is unavailable.
+        pass_entry_execution_horizon_available = false;
+        pass_entry_execution_horizon_reason =
+          published_shiftout_execution_alignment.reason;
+      } else {
+        std::optional<std::vector<double>> entry_execution_override;
+        bool projected_execution_profile_expected = false;
+        if (dp_execution_authority_active) {
+          projected_execution_profile_expected = true;
+          auto execution_reference =
+            overtake_core::resolve_frenet_dp_execution_reference(
+            overtake_core::FrenetDpExecutionReferenceRequest{
+              overtake_line_state_.mission_frenet_dp_execution_active &&
+              overtake_line_state_.mission_frenet_dp_side_sign ==
+              overtake_line_state_.pass_side_sign,
+              overtake_line_state_.mission_frenet_dp_execution_traveled_m,
+              2U,
+              overtake_line_state_.mission_frenet_dp_path_distances_m,
+              overtake_line_state_.mission_frenet_dp_lateral_path_m,
+              entry_path_distances, entry_nominal_lateral});
           const auto trust_envelope =
             overtake_core::resolve_frenet_dp_execution_trust_envelope(
             overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
-              published_shiftout_execution_alignment.trajectory->lateral_m.size() ==
+              execution_reference.valid && execution_reference.active,
+              line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
+              execution_reference.lateral_targets_m,
+              entry_nominal_lateral});
+          if (trust_envelope.valid && trust_envelope.active) {
+            entry_execution_override = trust_envelope.lateral_targets_m;
+          }
+        } else if (
+          solved_execution_bridge_active && aligned_solved_execution.has_value())
+        {
+          projected_execution_profile_expected = true;
+          const auto trust_envelope =
+            overtake_core::resolve_frenet_dp_execution_trust_envelope(
+            overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
+              aligned_solved_execution->lateral_m.size() ==
               static_cast<std::size_t>(N),
               line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
-              published_shiftout_execution_alignment.trajectory->lateral_m,
+              aligned_solved_execution->lateral_m,
               entry_nominal_lateral});
           if (trust_envelope.valid && trust_envelope.active) {
             entry_execution_override = trust_envelope.lateral_targets_m;
           }
         }
-      } else if (dp_execution_authority_active) {
-        authoritative_execution_profile_expected = true;
-        auto execution_reference =
-          overtake_core::resolve_frenet_dp_execution_reference(
-          overtake_core::FrenetDpExecutionReferenceRequest{
-            overtake_line_state_.mission_frenet_dp_execution_active &&
-            overtake_line_state_.mission_frenet_dp_side_sign ==
-            overtake_line_state_.pass_side_sign,
-            overtake_line_state_.mission_frenet_dp_execution_traveled_m,
-            2U,
-            overtake_line_state_.mission_frenet_dp_path_distances_m,
-            overtake_line_state_.mission_frenet_dp_lateral_path_m,
-            entry_path_distances, entry_nominal_lateral});
-        const auto trust_envelope =
-          overtake_core::resolve_frenet_dp_execution_trust_envelope(
-          overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
-            execution_reference.valid && execution_reference.active,
-            line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
-            execution_reference.lateral_targets_m,
-            entry_nominal_lateral});
-        if (trust_envelope.valid && trust_envelope.active) {
-          entry_execution_override = trust_envelope.lateral_targets_m;
-        }
-      } else if (
-        solved_execution_bridge_active && aligned_solved_execution.has_value())
-      {
-        authoritative_execution_profile_expected = true;
-        const auto trust_envelope =
-          overtake_core::resolve_frenet_dp_execution_trust_envelope(
-          overtake_core::FrenetDpExecutionTrustEnvelopeRequest{
-            aligned_solved_execution->lateral_m.size() ==
-            static_cast<std::size_t>(N),
-            line_cfg.mpcc_lite_same_side_max_lateral_adjustment,
-            aligned_solved_execution->lateral_m,
-            entry_nominal_lateral});
-        if (trust_envelope.valid && trust_envelope.active) {
-          entry_execution_override = trust_envelope.lateral_targets_m;
-        }
-      }
 
-      if (authoritative_execution_profile_expected && !entry_execution_override) {
-        pass_entry_execution_horizon_available = false;
-        pass_entry_execution_horizon_reason =
-          published_shiftout_execution_alignment.identity_expected ?
-          published_shiftout_execution_alignment.reason :
-          "authoritative execution profile unavailable";
-      } else {
-        const auto execution_horizon = evaluate_overtake_line_horizon(
-          ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
-          std::max(0.5, line_cfg.pass_horizon_hold_max_distance),
-          feasible_goal_for_phase, planning_wall_clearance,
-          std::max(0.0, line_cfg.max_lateral_accel),
-          std::max(1.0, current_speed_mps_), true, std::nullopt,
-          entry_execution_override);
-        pass_entry_execution_max_lateral_accel_mps2 =
-          execution_horizon.max_required_lateral_accel;
-        const auto execution_profile =
-          overtake_core::resolve_pass_entry_execution_profile(
-          overtake_core::PassEntryExecutionProfileRequest{
-            execution_horizon.execution_feasible(),
-            execution_horizon.lateral_accel_limited,
-            execution_horizon.wall_clearance_limited,
-            execution_horizon.static_map_wall_limited,
-            execution_horizon.max_required_lateral_accel,
-            std::max(0.0, line_cfg.max_lateral_accel)});
-        pass_entry_execution_horizon_available =
-          execution_profile.valid && execution_profile.available;
-        if (
-          execution_profile.status ==
-          overtake_core::PassEntryExecutionProfileStatus::
-          ProjectionRequiresSuccessorReplan)
-        {
+        if (projected_execution_profile_expected && !entry_execution_override) {
+          pass_entry_execution_horizon_available = false;
           pass_entry_execution_horizon_reason =
-            "projected execution prefix requires exact Pass successor replan";
-        } else if (pass_entry_execution_horizon_available) {
-          pass_entry_execution_horizon_reason = "execution horizon feasible";
-        } else if (
-          execution_profile.status ==
-          overtake_core::PassEntryExecutionProfileStatus::
-          LateralAccelerationInfeasible)
-        {
-          pass_entry_execution_horizon_reason =
-            "execution horizon exceeds lateral acceleration limit";
-        } else if (
-          execution_profile.status ==
-          overtake_core::PassEntryExecutionProfileStatus::RequiresWallAdjustment)
-        {
-          pass_entry_execution_horizon_reason =
-            "execution horizon requires wall clamp";
+            "projected execution profile unavailable";
         } else {
-          pass_entry_execution_horizon_reason =
-            overtake_line_horizon_failure_reason(execution_horizon);
-          if (pass_entry_execution_horizon_reason.empty()) {
+          const auto execution_horizon = evaluate_overtake_line_horizon(
+            ref_wp_id, N, lb, ub, current_ey, current_ey, 0.0, true,
+            std::max(0.5, line_cfg.pass_horizon_hold_max_distance),
+            feasible_goal_for_phase, planning_wall_clearance,
+            std::max(0.0, line_cfg.max_lateral_accel),
+            std::max(1.0, current_speed_mps_), true, std::nullopt,
+            entry_execution_override);
+          pass_entry_execution_max_lateral_accel_mps2 =
+            execution_horizon.max_required_lateral_accel;
+          const auto execution_profile =
+            overtake_core::resolve_pass_entry_execution_profile(
+            overtake_core::PassEntryExecutionProfileRequest{
+              execution_horizon.execution_feasible(),
+              execution_horizon.lateral_accel_limited,
+              execution_horizon.wall_clearance_limited,
+              execution_horizon.static_map_wall_limited,
+              execution_horizon.max_required_lateral_accel,
+              std::max(0.0, line_cfg.max_lateral_accel)});
+          pass_entry_execution_horizon_available =
+            execution_profile.valid && execution_profile.available;
+          if (
+            execution_profile.status ==
+            overtake_core::PassEntryExecutionProfileStatus::
+            ProjectionRequiresSuccessorReplan)
+          {
             pass_entry_execution_horizon_reason =
-              "execution horizon physical preflight failed";
+              "projected execution prefix requires exact Pass successor replan";
+          } else if (pass_entry_execution_horizon_available) {
+            pass_entry_execution_horizon_reason = "execution horizon feasible";
+          } else if (
+            execution_profile.status ==
+            overtake_core::PassEntryExecutionProfileStatus::
+            LateralAccelerationInfeasible)
+          {
+            pass_entry_execution_horizon_reason =
+              "execution horizon exceeds lateral acceleration limit";
+          } else if (
+            execution_profile.status ==
+            overtake_core::PassEntryExecutionProfileStatus::RequiresWallAdjustment)
+          {
+            pass_entry_execution_horizon_reason =
+              "execution horizon requires wall clamp";
+          } else {
+            pass_entry_execution_horizon_reason =
+              overtake_line_horizon_failure_reason(execution_horizon);
+            if (pass_entry_execution_horizon_reason.empty()) {
+              pass_entry_execution_horizon_reason =
+                "execution horizon physical preflight failed";
+            }
           }
         }
       }

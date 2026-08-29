@@ -925,6 +925,26 @@ def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     assert "rate_resolved_track_cruise_shadow_solver_context_" not in owner
 
 
+def test_pass_entry_does_not_recertify_published_canonical_execution() -> None:
+    """Published seven-state proof owns Pass entry; legacy projection is fallback-only."""
+
+    start = SOURCE.index("const auto certificate_policy =")
+    end = SOURCE.index("bool pass_entry_physical_hold_active", start)
+    owner = SOURCE[start:end]
+    policy = owner.index("resolve_pass_entry_certificate_policy(")
+    canonical = owner.index(
+        "PassEntryCertificateOwner::CanonicalPublishedExecution"
+    )
+    projection = owner.index("evaluate_overtake_line_horizon(")
+    assert policy < canonical < projection
+    assert "certificate_policy.projected_preflight_required" in owner
+    assert "canonical published seven-state execution certificate" in owner
+    assert "Atomic intent admission retains ShiftOut until Pass proof joins" in owner
+    assert (
+        "published_shiftout_execution_alignment.trajectory->lateral_m" not in owner
+    )
+
+
 def test_last_published_intent_is_a_publication_ledger() -> None:
     """Solver selection may not advance the actually-published intent ledger."""
 

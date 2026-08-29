@@ -270,6 +270,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallPreplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallCenterContractionGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryCertificateOwner;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryCertificatePolicyRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryExecutionProfileRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryExecutionProfileStatus;
 using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_entry_execution_profile;
@@ -10319,6 +10321,57 @@ TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateRequiresExecutableHorizon)
   resolution = resolve_pass_entry_physical_gate(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryCanonicalPublishedArtifactOwnsCertificate)
+{
+  PassEntryCertificatePolicyRequest request;
+  request.canonical_published_identity_expected = true;
+  request.canonical_published_execution_available = true;
+
+  const auto resolution = resolve_pass_entry_certificate_policy(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.transition_certificate_available);
+  EXPECT_FALSE(resolution.projected_preflight_required);
+  EXPECT_EQ(
+    resolution.owner,
+    PassEntryCertificateOwner::CanonicalPublishedExecution);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryMissingCanonicalArtifactFailsClosed)
+{
+  PassEntryCertificatePolicyRequest request;
+  request.canonical_published_identity_expected = true;
+
+  const auto resolution = resolve_pass_entry_certificate_policy(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.transition_certificate_available);
+  EXPECT_FALSE(resolution.projected_preflight_required);
+  EXPECT_EQ(resolution.owner, PassEntryCertificateOwner::Unavailable);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryLegacyProjectionIsOnlyMigrationPreflight)
+{
+  const auto resolution = resolve_pass_entry_certificate_policy(
+    PassEntryCertificatePolicyRequest{});
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.transition_certificate_available);
+  EXPECT_TRUE(resolution.projected_preflight_required);
+  EXPECT_EQ(
+    resolution.owner,
+    PassEntryCertificateOwner::ProjectedExecutionPreflight);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryRejectsCanonicalProfileWithoutIdentity)
+{
+  PassEntryCertificatePolicyRequest request;
+  request.canonical_published_execution_available = true;
+
+  const auto resolution = resolve_pass_entry_certificate_policy(request);
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.transition_certificate_available);
+  EXPECT_FALSE(resolution.projected_preflight_required);
+  EXPECT_EQ(resolution.owner, PassEntryCertificateOwner::Unavailable);
 }
 
 TEST(V2XOvertakeCoreWall, PassEntryProjectedPrefixRequiresExactSuccessorReplan)

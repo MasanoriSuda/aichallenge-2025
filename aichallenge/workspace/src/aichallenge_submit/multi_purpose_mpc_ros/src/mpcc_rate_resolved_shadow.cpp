@@ -1787,11 +1787,12 @@ PhysicalProofSampleResult locate_physical_proof_sample(
 }
 
 NonlinearInteriorWallProblemResult
-build_selected_nonlinear_interior_wall_problem(
+build_selected_nonlinear_interior_wall_problem_impl(
   const Snapshot & snapshot,
   const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,
   const Eigen::VectorXd & linearization_primal,
-  const std::vector<NonlinearInteriorWallSample> & samples) noexcept
+  const std::vector<NonlinearInteriorWallSample> & samples,
+  const bool replace_swept_wall_rows) noexcept
 {
   namespace model = mpcc_rate_resolved;
   namespace problem = mpcc_rate_resolved_problem;
@@ -1819,7 +1820,18 @@ build_selected_nonlinear_interior_wall_problem(
         NonlinearInteriorWallReason::DimensionMismatch,
         "snapshot, assembly request and tangent dimensions disagree");
     }
-    const auto base = problem::assemble(assembly_request);
+    auto base_request = assembly_request;
+    if (replace_swept_wall_rows) {
+      result.replaced_row_count =
+        base_request.swept_lateral_wall_constraints.size();
+      base_request.swept_lateral_wall_constraints.clear();
+      if (samples.size() > result.replaced_row_count) {
+        return reject(
+          NonlinearInteriorWallReason::InvalidRequest,
+          "structured nonlinear rows exceed the replaced swept-row budget");
+      }
+    }
+    const auto base = problem::assemble(base_request);
     if (!base.has_value()) {
       return reject(
         NonlinearInteriorWallReason::BaseAssemblyRejected,
@@ -2012,7 +2024,9 @@ build_selected_nonlinear_interior_wall_problem(
     }
     result.reason = NonlinearInteriorWallReason::Accepted;
     result.problem = std::move(augmented);
-    result.detail = "nonlinear interior wall rows appended";
+    result.detail = replace_swept_wall_rows ?
+      "structured nonlinear interior wall rows replaced affine swept rows" :
+      "nonlinear interior wall rows appended";
     return result;
   } catch (const std::exception & error) {
     return reject(
@@ -2023,6 +2037,78 @@ build_selected_nonlinear_interior_wall_problem(
       NonlinearInteriorWallReason::Exception,
       "nonlinear interior wall unknown exception");
   }
+}
+
+NonlinearInteriorWallProblemResult
+build_selected_nonlinear_interior_wall_problem(
+  const Snapshot & snapshot,
+  const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,
+  const Eigen::VectorXd & linearization_primal,
+  const std::vector<NonlinearInteriorWallSample> & samples) noexcept
+{
+  return build_selected_nonlinear_interior_wall_problem_impl(
+    snapshot, assembly_request, linearization_primal, samples, false);
+}
+
+NonlinearInteriorWallProblemResult
+build_structured_nonlinear_interior_wall_problem(
+  const Snapshot & snapshot,
+  const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,
+  const Eigen::VectorXd & linearization_primal) noexcept
+{
+  constexpr std::size_t kSamplesPerTransition = 4U;
+  std::vector<NonlinearInteriorWallSample> samples;
+  if (
+    snapshot.request.horizon_steps <= 0 ||
+    snapshot.request.inputs.size() !=
+    static_cast<std::size_t>(snapshot.request.horizon_steps) ||
+    assembly_request.swept_lateral_wall_constraints.empty())
+  {
+    NonlinearInteriorWallProblemResult result;
+    result.reason = NonlinearInteriorWallReason::InvalidRequest;
+    result.detail = "structured interior wall request has no swept-row budget";
+    return result;
+  }
+  samples.reserve(
+    static_cast<std::size_t>(snapshot.request.horizon_steps) *
+    kSamplesPerTransition);
+  for (int stage = 0; stage < snapshot.request.horizon_steps; ++stage) {
+    const double duration_sec =
+      snapshot.request.inputs[static_cast<std::size_t>(stage)].stage_dt_sec;
+    if (!std::isfinite(duration_sec) || duration_sec <= 0.0) {
+      NonlinearInteriorWallProblemResult result;
+      result.reason = NonlinearInteriorWallReason::InvalidRequest;
+      result.detail = "structured interior wall stage duration is invalid";
+      return result;
+    }
+    const auto substep_count = static_cast<std::size_t>(std::max(
+      1.0, std::ceil(
+        duration_sec /
+        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec)));
+    if (substep_count <= 1U) {
+      continue;
+    }
+    for (std::size_t sample = 1U; sample <= kSamplesPerTransition; ++sample) {
+      const auto substep = static_cast<std::size_t>(std::clamp(
+        std::llround(
+          static_cast<double>(sample * substep_count) /
+          static_cast<double>(kSamplesPerTransition + 1U)),
+        1LL, static_cast<long long>(substep_count) - 1LL));
+      const NonlinearInteriorWallSample selected{
+        stage, substep, substep_count};
+      if (std::find(samples.begin(), samples.end(), selected) == samples.end()) {
+        samples.push_back(selected);
+      }
+    }
+  }
+  if (samples.empty()) {
+    NonlinearInteriorWallProblemResult result;
+    result.reason = NonlinearInteriorWallReason::InvalidRequest;
+    result.detail = "structured interior wall produced no interior samples";
+    return result;
+  }
+  return build_selected_nonlinear_interior_wall_problem_impl(
+    snapshot, assembly_request, linearization_primal, samples, true);
 }
 
 NonlinearInteriorWallProblemResult build_nonlinear_interior_wall_problem(
@@ -2311,6 +2397,16 @@ evaluate_reachable_bridge_nonlinear_interior_wall_audit(
 
 LatestStateFeedbackResult
 LatestStateFeedbackSolverContext::
+evaluate_reachable_bridge_structured_interior_wall_audit(
+  const LatestStateFeedbackRequest & request,
+  const std::size_t iteration_limit)
+{
+  return evaluate_time_aligned_impl(
+    request, true, iteration_limit, InteriorWallAuditMode::Structured);
+}
+
+LatestStateFeedbackResult
+LatestStateFeedbackSolverContext::
 evaluate_reachable_bridge_physical_proof_cut_plane_audit(
   const LatestStateFeedbackRequest & request,
   const std::size_t iteration_limit)
@@ -2336,6 +2432,8 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
     multi_sqp_iteration_limit;
   result.nonlinear_interior_wall_audit_requested =
     interior_wall_audit_mode == InteriorWallAuditMode::Dense;
+  result.structured_interior_wall_audit_requested =
+    interior_wall_audit_mode == InteriorWallAuditMode::Structured;
   result.physical_proof_cut_plane_audit_requested =
     interior_wall_audit_mode == InteriorWallAuditMode::ProofGuided;
   if (request.preparation != nullptr) {
@@ -2439,10 +2537,19 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
     }
     std::optional<mpcc_rate_resolved_problem::Problem> assembled;
     std::vector<NonlinearInteriorWallSample> proof_guided_cuts;
-    if (interior_wall_audit_mode == InteriorWallAuditMode::Dense) {
-      const auto interior = build_nonlinear_interior_wall_problem(
+    if (
+      interior_wall_audit_mode == InteriorWallAuditMode::Dense ||
+      interior_wall_audit_mode == InteriorWallAuditMode::Structured)
+    {
+      const auto interior =
+        interior_wall_audit_mode == InteriorWallAuditMode::Structured ?
+        build_structured_nonlinear_interior_wall_problem(
+        feedback_snapshot, feedback_problem, linearization_primal) :
+        build_nonlinear_interior_wall_problem(
         feedback_snapshot, feedback_problem, linearization_primal);
       result.nonlinear_interior_wall_reason = interior.reason;
+      result.nonlinear_interior_wall_replaced_row_count =
+        interior.replaced_row_count;
       result.nonlinear_interior_wall_row_count =
         interior.appended_row_count;
       result.nonlinear_interior_wall_maximum_candidate_violation_m =
@@ -2456,7 +2563,10 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
           to_string(interior.reason) + "/" + interior.detail;
         return finish();
       }
-      result.nonlinear_interior_wall_audit_applied = true;
+      result.nonlinear_interior_wall_audit_applied =
+        interior_wall_audit_mode == InteriorWallAuditMode::Dense;
+      result.structured_interior_wall_audit_applied =
+        interior_wall_audit_mode == InteriorWallAuditMode::Structured;
       assembled = std::move(interior.problem.value());
     } else {
       assembled = mpcc_rate_resolved_problem::assemble(feedback_problem);
@@ -2604,10 +2714,19 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
           "/stage=" + std::to_string(relinearization.stage);
         return finish();
       }
-      if (interior_wall_audit_mode == InteriorWallAuditMode::Dense) {
-        const auto interior = build_nonlinear_interior_wall_problem(
+      if (
+        interior_wall_audit_mode == InteriorWallAuditMode::Dense ||
+        interior_wall_audit_mode == InteriorWallAuditMode::Structured)
+      {
+        const auto interior =
+          interior_wall_audit_mode == InteriorWallAuditMode::Structured ?
+          build_structured_nonlinear_interior_wall_problem(
+          feedback_snapshot, feedback_problem, outcome.result->primal) :
+          build_nonlinear_interior_wall_problem(
           feedback_snapshot, feedback_problem, outcome.result->primal);
         result.nonlinear_interior_wall_reason = interior.reason;
+        result.nonlinear_interior_wall_replaced_row_count =
+          interior.replaced_row_count;
         result.nonlinear_interior_wall_row_count =
           interior.appended_row_count;
         result.nonlinear_interior_wall_maximum_candidate_violation_m =
@@ -2624,6 +2743,8 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
             to_string(interior.reason) + "/" + interior.detail;
           return finish();
         }
+        result.structured_interior_wall_audit_applied =
+          interior_wall_audit_mode == InteriorWallAuditMode::Structured;
         assembled = std::move(interior.problem.value());
       } else if (
         interior_wall_audit_mode == InteriorWallAuditMode::ProofGuided)

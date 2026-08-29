@@ -432,6 +432,22 @@
       "production_impact": "none; the new policy and CLI arm are architecture-audit only and a source contract forbids controller use",
       "deleted_code": [],
       "revisit_condition": "a production Slice assigns each wall-refinement QP to exactly one equilibrated solver workspace, removes its old solver ownership atomically, and passes frozen plus dynamic ShiftOut/Pass acceptance without retries"
+    },
+    {
+      "experiment_id": "20260829-structured-interior-wall-audit",
+      "baseline_commit": "66b3739d",
+      "snapshot_ids": [
+        "000000001266-145d1159f38a6ea9-shiftout-side-negative-physical-proof-physical-proof-rejected",
+        "000000000531-0b8a2fc7bb136829-follow-side-positive-physical-proof-physical-proof-rejected",
+        "000000000601-92df63438ac7ffd7-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected"
+      ],
+      "hypothesis": "replacing the four affine swept-wall rows per transition with the same bounded number of partial nonlinear transition tangents closes the exact interior-wall proof gap without dense-row cost",
+      "changed_dimension": "observation_only_same_budget_nonlinear_interior_wall_representation",
+      "result": "rejected",
+      "reason": "the 80-for-80 structured replacement still reached 4000 iterations for frozen ShiftOut and Cruise; Follow completed four solves but moved the exact violation to a later interior sample, while only the 478-row dense oracle passed the unchanged proof",
+      "production_impact": "none; the structured builder and solver entry point are offline observation-only and have no Store, worker, publisher, authority, command, fallback or configuration path",
+      "deleted_code": [],
+      "revisit_condition": "an independently equilibrated owner solves the identical dense proof-equivalent QP under unchanged tolerances and proofs, or a structure-exploiting nonlinear backend demonstrates the same certificate with bounded runtime"
     }
   ]
 }

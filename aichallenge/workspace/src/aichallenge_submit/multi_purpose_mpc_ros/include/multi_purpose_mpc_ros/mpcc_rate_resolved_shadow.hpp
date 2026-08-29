@@ -278,6 +278,7 @@ struct NonlinearInteriorWallProblemResult
     NonlinearInteriorWallReason::InvalidRequest};
   std::optional<mpcc_rate_resolved_problem::Problem> problem;
   std::size_t original_row_count{};
+  std::size_t replaced_row_count{};
   std::size_t appended_row_count{};
   double maximum_candidate_violation_m{};
   std::string detail{"not-evaluated"};
@@ -339,6 +340,15 @@ build_selected_nonlinear_interior_wall_problem(
   const Eigen::VectorXd & linearization_primal,
   const std::vector<NonlinearInteriorWallSample> & samples) noexcept;
 
+/// Observation-only same-budget alternative to the affine swept-wall rows.
+/// Up to four true nonlinear partial-transition tangents replace, rather than
+/// augment, the existing swept row family for every transition.
+NonlinearInteriorWallProblemResult
+build_structured_nonlinear_interior_wall_problem(
+  const Snapshot & snapshot,
+  const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,
+  const Eigen::VectorXd & linearization_primal) noexcept;
+
 enum class LatestStateFeedbackReason
 {
   InvalidRequest,
@@ -397,8 +407,11 @@ struct LatestStateFeedbackResult
   std::size_t latest_state_multi_sqp_solve_count{};
   bool nonlinear_interior_wall_audit_requested{false};
   bool nonlinear_interior_wall_audit_applied{false};
+  bool structured_interior_wall_audit_requested{false};
+  bool structured_interior_wall_audit_applied{false};
   NonlinearInteriorWallReason nonlinear_interior_wall_reason{
     NonlinearInteriorWallReason::InvalidRequest};
+  std::size_t nonlinear_interior_wall_replaced_row_count{};
   std::size_t nonlinear_interior_wall_row_count{};
   double nonlinear_interior_wall_maximum_candidate_violation_m{};
   bool physical_proof_cut_plane_audit_requested{false};
@@ -744,6 +757,12 @@ public:
   evaluate_reachable_bridge_nonlinear_interior_wall_audit(
     const LatestStateFeedbackRequest & request,
     std::size_t iteration_limit);
+  /// Observation-only structured arm. It replaces the existing affine swept
+  /// rows with at most four nonlinear partial-transition rows per stage.
+  LatestStateFeedbackResult
+  evaluate_reachable_bridge_structured_interior_wall_audit(
+    const LatestStateFeedbackRequest & request,
+    std::size_t iteration_limit);
   /// Observation-only F arm: add only exact physical proof rejection samples
   /// as retained cuts, with a bounded number of SQP corrections.
   LatestStateFeedbackResult
@@ -757,6 +776,7 @@ private:
   enum class InteriorWallAuditMode
   {
     None,
+    Structured,
     Dense,
     ProofGuided,
   };

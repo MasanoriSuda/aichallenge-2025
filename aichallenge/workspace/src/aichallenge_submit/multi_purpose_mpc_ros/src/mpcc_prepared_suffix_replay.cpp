@@ -94,6 +94,7 @@ const char * suffix_comparison_classification(
   const shadow::LatestStateFeedbackResult & time_aligned,
   const shadow::LatestStateFeedbackResult & reachable,
   const shadow::LatestStateFeedbackResult & multi_sqp,
+  const shadow::LatestStateFeedbackResult & structured_interior,
   const shadow::LatestStateFeedbackResult & nonlinear_interior,
   const shadow::LatestStateFeedbackResult & proof_guided) noexcept
 {
@@ -120,8 +121,14 @@ const char * suffix_comparison_classification(
   {
     return "single-sqp-limitation";
   }
-  if (!accepted(multi_sqp) && accepted(nonlinear_interior)) {
-    return "nonlinear-interior-wall-representation-defect";
+  if (!accepted(multi_sqp) && accepted(structured_interior)) {
+    return "structured-interior-wall-representation-defect";
+  }
+  if (!accepted(structured_interior) && accepted(nonlinear_interior)) {
+    return "dense-only-interior-wall-representation-defect";
+  }
+  if (accepted(structured_interior) && !accepted(nonlinear_interior)) {
+    return "dense-interior-wall-regression";
   }
   if (!accepted(nonlinear_interior) && accepted(proof_guided)) {
     return "proof-guided-interior-wall-candidate-generation-defect";
@@ -135,8 +142,8 @@ const char * suffix_comparison_classification(
   if (accepted(reachable) && !accepted(multi_sqp)) {
     return "multi-sqp-regression";
   }
-  if (accepted(multi_sqp) && !accepted(nonlinear_interior)) {
-    return "nonlinear-interior-wall-regression";
+  if (accepted(multi_sqp) && !accepted(structured_interior)) {
+    return "structured-interior-wall-regression";
   }
   if (accepted(nonlinear_interior) && !accepted(proof_guided)) {
     return "proof-guided-interior-wall-regression";
@@ -144,6 +151,7 @@ const char * suffix_comparison_classification(
   if (
     model_proof_rejected(old_origin) || model_proof_rejected(time_aligned) ||
     model_proof_rejected(reachable) || model_proof_rejected(multi_sqp) ||
+    model_proof_rejected(structured_interior) ||
     model_proof_rejected(nonlinear_interior) ||
     model_proof_rejected(proof_guided))
   {
@@ -151,7 +159,8 @@ const char * suffix_comparison_classification(
   }
   if (
     !accepted(old_origin) && !accepted(time_aligned) && !accepted(reachable) &&
-    !accepted(multi_sqp) && !accepted(nonlinear_interior) &&
+    !accepted(multi_sqp) && !accepted(structured_interior) &&
+    !accepted(nonlinear_interior) &&
     !accepted(proof_guided))
   {
     return "suffix-family-unresolved";
@@ -236,6 +245,7 @@ int main(int argc, char ** argv)
   shadow::LatestStateFeedbackSolverContext old_origin_solver;
   shadow::LatestStateFeedbackSolverContext reachable_solver;
   shadow::LatestStateFeedbackSolverContext multi_sqp_solver;
+  shadow::LatestStateFeedbackSolverContext structured_interior_solver;
   shadow::LatestStateFeedbackSolverContext nonlinear_interior_solver;
   shadow::LatestStateFeedbackSolverContext proof_guided_solver;
   const shadow::LatestStateFeedbackRequest latest_state_request{
@@ -252,6 +262,9 @@ int main(int argc, char ** argv)
     latest_state_request);
   const auto multi_sqp =
     multi_sqp_solver.evaluate_reachable_bridge_multi_sqp_audit(
+    latest_state_request, 4U);
+  const auto structured_interior = structured_interior_solver.
+    evaluate_reachable_bridge_structured_interior_wall_audit(
     latest_state_request, 4U);
   const auto nonlinear_interior = nonlinear_interior_solver.
     evaluate_reachable_bridge_nonlinear_interior_wall_audit(
@@ -382,6 +395,39 @@ int main(int argc, char ** argv)
     multi_sqp.physical_lateral_violation_m <<
     " suffix_multi_sqp_exact_tolerance=" <<
     multi_sqp.physical_lateral_bound_tolerance_m <<
+    " suffix_structured_interior_reason=" <<
+    shadow::to_string(structured_interior.reason) <<
+    " suffix_structured_interior_replaced_rows=" <<
+    structured_interior.nonlinear_interior_wall_replaced_row_count <<
+    " suffix_structured_interior_rows=" <<
+    structured_interior.nonlinear_interior_wall_row_count <<
+    " suffix_structured_interior_problem=" << shadow::to_string(
+    structured_interior.nonlinear_interior_wall_reason) <<
+    " suffix_structured_interior_attempts=" <<
+    structured_interior.latest_state_multi_sqp_attempt_count <<
+    " suffix_structured_interior_solves=" <<
+    structured_interior.latest_state_multi_sqp_solve_count <<
+    " suffix_structured_interior_status=" <<
+    structured_interior.solver.status <<
+    " suffix_structured_interior_iterations=" <<
+    structured_interior.solver.iterations <<
+    " suffix_structured_interior_solve_ms=" <<
+    structured_interior.solver.total_ms <<
+    " suffix_structured_interior_candidate_violation=" <<
+    structured_interior.nonlinear_interior_wall_maximum_candidate_violation_m <<
+    " suffix_structured_interior_physical=" <<
+    multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::to_string(
+    structured_interior.physical_adapter_reason) <<
+    " suffix_structured_interior_exact=" <<
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    exact_physical_execution_trajectory_reason_name(
+    structured_interior.physical_exact_reason) <<
+    " suffix_structured_interior_exact_stage=" <<
+    structured_interior.physical_rejected_stage <<
+    " suffix_structured_interior_exact_violation=" <<
+    structured_interior.physical_lateral_violation_m <<
+    " suffix_structured_interior_exact_tolerance=" <<
+    structured_interior.physical_lateral_bound_tolerance_m <<
     " suffix_nonlinear_interior_reason=" <<
     shadow::to_string(nonlinear_interior.reason) <<
     " suffix_nonlinear_interior_rows=" <<
@@ -442,7 +488,8 @@ int main(int argc, char ** argv)
     " suffix_proof_guided_exact_tolerance=" <<
     proof_guided.physical_lateral_bound_tolerance_m <<
     " suffix_classification=" << suffix_comparison_classification(
-    old_origin, time_aligned, reachable, multi_sqp, nonlinear_interior,
+    old_origin, time_aligned, reachable, multi_sqp, structured_interior,
+    nonlinear_interior,
     proof_guided) <<
     " full_outcome=" << shadow::to_string(full.outcome) <<
     " full_compute_ms=" << full.compute_ms <<

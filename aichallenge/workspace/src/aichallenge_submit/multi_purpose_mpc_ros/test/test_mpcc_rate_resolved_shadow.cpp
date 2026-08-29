@@ -1031,6 +1031,70 @@ TEST(
 
 TEST(
   MpccRateResolvedShadow,
+  StructuredInteriorWallRowsReplaceTheAffineSweptRowsWithinTheirBudget)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto prepared = preparation_context.evaluate(source);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  const shadow::TimeAlignedFeedbackProblemRequest request{
+    prepared.latest_state_feedback_preparation.get(),
+    source.control_prediction_origin_sec + 0.02,
+    execution::PredictedState{0.0, 0.0, 0.0, 2.0, 0.04, 0.10, 0.08},
+    source.request.previous_input,
+    solver::PersistentOsqpSolver{}.physical_constraint_tolerance()};
+  auto bridge = shadow::build_reachable_bridge_feedback_problem(request);
+  ASSERT_EQ(bridge.reason, shadow::ReachableBridgeReason::Accepted)
+    << bridge.detail;
+  ASSERT_TRUE(bridge.problem.has_value());
+  ASSERT_TRUE(bridge.suffix.snapshot.has_value());
+  constexpr std::size_t kSweptRowsPerTransition = 4U;
+  for (int stage = 0; stage < bridge.problem->horizon_steps; ++stage) {
+    for (std::size_t sample = 1U;
+      sample <= kSweptRowsPerTransition; ++sample)
+    {
+      bridge.problem->swept_lateral_wall_constraints.push_back(
+        problem::SweptLateralWallConstraint{
+          stage,
+          static_cast<double>(sample) /
+          static_cast<double>(kSweptRowsPerTransition + 1U),
+          -std::numeric_limits<double>::infinity(),
+          std::numeric_limits<double>::infinity()});
+    }
+  }
+  const auto original = problem::assemble(bridge.problem.value());
+  ASSERT_TRUE(original.has_value());
+  const auto old_swept_rows =
+    bridge.problem->swept_lateral_wall_constraints.size();
+  ASSERT_GT(old_swept_rows, 0U);
+
+  const auto structured =
+    shadow::build_structured_nonlinear_interior_wall_problem(
+    bridge.suffix.snapshot.value(), bridge.problem.value(),
+    bridge.linearization_primal);
+  ASSERT_EQ(
+    structured.reason, shadow::NonlinearInteriorWallReason::Accepted)
+    << structured.detail;
+  ASSERT_TRUE(structured.problem.has_value());
+  EXPECT_EQ(structured.replaced_row_count, old_swept_rows);
+  EXPECT_GT(structured.appended_row_count, 0U);
+  EXPECT_LE(structured.appended_row_count, old_swept_rows);
+  EXPECT_EQ(
+    structured.problem->constraints.rows(),
+    original->constraints.rows() - static_cast<int>(old_swept_rows) +
+    static_cast<int>(structured.appended_row_count));
+  EXPECT_EQ(
+    structured.problem->constraints.cols(), original->constraints.cols());
+  EXPECT_EQ(
+    structured.problem->quadratic_cost.nonZeros(),
+    original->quadratic_cost.nonZeros());
+  EXPECT_TRUE(
+    structured.problem->linear_cost.isApprox(original->linear_cost, 0.0));
+}
+
+TEST(
+  MpccRateResolvedShadow,
   SelectedNonlinearInteriorWallCutPreservesTheOriginalProblemAsExactPrefix)
 {
   shadow::SolverContext preparation_context;
@@ -1112,6 +1176,39 @@ TEST(
   EXPECT_EQ(
     execution::validate(*result.execution_artifact),
     execution::RejectReason::None);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  StructuredInteriorWallAuditRejectsSnapshotsWithoutSweptWallOwnership)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto prepared = preparation_context.evaluate(source);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation,
+    source.control_prediction_origin_sec + 0.02,
+    source.control_prediction_origin_sec + 0.01,
+    execution::PredictedState{0.0, 0.0, 0.0, 2.0, 0.04, 0.10, 0.08},
+    source.request.previous_input};
+  shadow::LatestStateFeedbackSolverContext context;
+
+  const auto result =
+    context.evaluate_reachable_bridge_structured_interior_wall_audit(
+    request, 4U);
+  EXPECT_TRUE(result.structured_interior_wall_audit_requested);
+  EXPECT_FALSE(result.structured_interior_wall_audit_applied);
+  EXPECT_FALSE(result.nonlinear_interior_wall_audit_requested);
+  EXPECT_FALSE(result.nonlinear_interior_wall_audit_applied);
+  EXPECT_EQ(
+    result.nonlinear_interior_wall_reason,
+    shadow::NonlinearInteriorWallReason::InvalidRequest);
+  EXPECT_EQ(result.nonlinear_interior_wall_row_count, 0U);
+  EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::AssemblyRejected)
+    << result.detail;
+  EXPECT_EQ(result.execution_artifact, nullptr);
 }
 
 TEST(

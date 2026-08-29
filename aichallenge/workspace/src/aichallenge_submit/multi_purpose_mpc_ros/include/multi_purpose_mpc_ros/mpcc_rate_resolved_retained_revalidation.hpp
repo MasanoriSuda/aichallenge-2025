@@ -111,7 +111,10 @@ struct Request
   double control_origin_sec{};
   ExecutionClock execution_clock;
   contract::ControlIntent current_intent{contract::ControlIntent::Unknown};
-  double measured_course_progress_m{};
+  /// Continuous physical along-course position projected to control_origin_sec.
+  /// This is theta + lag, not the cumulative progress of a discrete associated
+  /// waypoint.
+  double control_origin_physical_progress_m{};
   double path_length_m{};
   double progress_continuity_tolerance_m{};
   bool circular{false};
@@ -222,8 +225,11 @@ struct Proof
   artifact::Actuation actuation;
   artifact::PredictedState expected_current_state;
   recovery::Pose2D expected_current_pose;
+  /// Course-frame progress state (theta) from the immutable artifact.
   double expected_absolute_progress_m{};
-  double lifted_measured_progress_m{};
+  /// Physical along-course position (theta + lag) from the artifact.
+  double expected_physical_progress_m{};
+  double lifted_control_origin_physical_progress_m{};
   long lap_offset{};
   double current_time_steering_rad{};
   double previous_published_steering_rad{};
@@ -305,6 +311,8 @@ struct Result
     std::numeric_limits<double>::infinity()};
   double expected_absolute_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
+  double expected_physical_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
   double expected_lateral_m{std::numeric_limits<double>::quiet_NaN()};
   double expected_lag_m{std::numeric_limits<double>::quiet_NaN()};
   double expected_heading_offset_rad{
@@ -313,7 +321,7 @@ struct Result
   recovery::Pose2D expected_current_pose;
   double control_pose_error_m{std::numeric_limits<double>::quiet_NaN()};
   double control_yaw_error_rad{std::numeric_limits<double>::quiet_NaN()};
-  double lifted_measured_progress_m{
+  double lifted_control_origin_physical_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
   double progress_difference_m{
     std::numeric_limits<double>::quiet_NaN()};

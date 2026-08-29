@@ -151,6 +151,20 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   return built.plan;
 }
 
+std::shared_ptr<const certified::CertifiedPlan>
+certified_plan_with_physical_lag(const double lag_m)
+{
+  auto execution = std::make_shared<const artifact::ExecutionArtifact>(
+    execution_artifact());
+  auto snapshot = source_snapshot(execution->identity);
+  snapshot.trajectory.lag_m.assign(
+    snapshot.trajectory.lag_m.size(), lag_m);
+  const auto built = certified::build(
+    execution, snapshot, accepted_result(snapshot));
+  EXPECT_EQ(built.reason, certified::RejectReason::None);
+  return built.plan;
+}
+
 retained::Request accepted_request(
   const std::shared_ptr<const certified::CertifiedPlan> & plan)
 {
@@ -162,7 +176,7 @@ retained::Request accepted_request(
   request.execution_clock = {
     retained::ExecutionClockKind::PublishedPlan, 1.0, 0.0};
   request.current_intent = contract::ControlIntent::Track;
-  request.measured_course_progress_m = 50.10;
+  request.control_origin_physical_progress_m = 50.10;
   request.path_length_m = 100.0;
   request.progress_continuity_tolerance_m = 0.20;
   request.circular = true;
@@ -285,6 +299,7 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
   EXPECT_EQ(result.proof->cursor.control_stage_index, 0U);
   EXPECT_NEAR(result.cursor_elapsed_sec, 0.05, 1e-9);
   EXPECT_NEAR(result.proof->expected_absolute_progress_m, 50.10, 1e-9);
+  EXPECT_NEAR(result.proof->expected_physical_progress_m, 50.15, 1e-9);
   EXPECT_EQ(result.proof->obstacle_generation, 7U);
 }
 
@@ -697,15 +712,45 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsProgressDiscontinuity)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
-  request.measured_course_progress_m = 60.0;
+  request.control_origin_physical_progress_m = 60.0;
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::ProgressLiftRejected);
   EXPECT_NEAR(result.expected_absolute_progress_m, 50.10, 1e-9);
-  EXPECT_NEAR(result.lifted_measured_progress_m, 60.0, 1e-9);
-  EXPECT_NEAR(result.progress_difference_m, 9.90, 1e-9);
+  EXPECT_NEAR(result.expected_physical_progress_m, 50.15, 1e-9);
+  EXPECT_NEAR(
+    result.lifted_control_origin_physical_progress_m, 60.0, 1e-9);
+  EXPECT_NEAR(result.progress_difference_m, 9.85, 1e-9);
   EXPECT_NEAR(result.progress_continuity_tolerance_m, 0.20, 1e-9);
   EXPECT_NEAR(result.current_speed_mps, 2.05, 1e-9);
   EXPECT_NEAR(result.current_steering_rad, 0.105, 1e-9);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  ComparesPhysicalProgressInsteadOfDiscreteCourseFrameProgress)
+{
+  const auto plan = certified_plan_with_physical_lag(0.80);
+  ASSERT_NE(plan, nullptr);
+  auto request = accepted_request(plan);
+  request.now_sec = 1.10;
+  request.control_origin_sec = 1.10;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 51.0;
+  request.control_pose = {51.0, 0.10, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.current_speed_mps = 2.10;
+  request.control_origin_speed_mps = 2.10;
+  request.current_time_steering_rad = 0.11;
+  request.current_steering_rad = 0.11;
+  request.current_response_steering_rad = 0.103;
+  request.previous_published_steering_rad = 0.11;
+
+  const auto result = retained::evaluate(request);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_NEAR(result.expected_absolute_progress_m, 50.20, 1e-9);
+  EXPECT_NEAR(result.expected_physical_progress_m, 51.0, 1e-9);
+  EXPECT_NEAR(result.progress_difference_m, 0.0, 1e-9);
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
@@ -952,7 +997,7 @@ TEST(
   request.measured_to_control_path = {
     request.control_pose, request.control_pose};
   request.measured_to_control_elapsed_sec = {0.0, 0.13};
-  request.measured_course_progress_m = 50.20;
+  request.control_origin_physical_progress_m = 50.20;
   request.current_speed_mps = 1.8;
   request.control_origin_speed_mps = 1.7;
 
@@ -1082,7 +1127,7 @@ TEST(
   request.now_sec = 1.195;
   request.control_origin_sec = 1.195;
   request.obstacles.observed_sec = request.now_sec;
-  request.measured_course_progress_m = 50.39;
+  request.control_origin_physical_progress_m = 50.39;
   request.control_pose = {50.39, 0.195, 0.0};
   request.measured_to_control_path = {request.control_pose};
   request.current_speed_mps = 2.195;

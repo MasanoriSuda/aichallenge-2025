@@ -1037,6 +1037,28 @@ struct BicycleModel
     return state;
   }
 
+  std::optional<double> physical_course_progress(
+    const TemporalState & state) const noexcept
+  {
+    if (
+      current_waypoint == nullptr || !std::isfinite(s) ||
+      !std::isfinite(state.x) || !std::isfinite(state.y) ||
+      !std::isfinite(current_waypoint->x) ||
+      !std::isfinite(current_waypoint->y) ||
+      !std::isfinite(current_waypoint->psi))
+    {
+      return std::nullopt;
+    }
+    const double delta_x_m = state.x - current_waypoint->x;
+    const double delta_y_m = state.y - current_waypoint->y;
+    const double lag_m =
+      std::cos(current_waypoint->psi) * delta_x_m +
+      std::sin(current_waypoint->psi) * delta_y_m;
+    const double progress_m = s + lag_m;
+    return std::isfinite(progress_m) ?
+      std::optional<double>{progress_m} : std::nullopt;
+  }
+
   void drive(const Eigen::Vector2d & u)
   {
     const double v = u[0];
@@ -2340,11 +2362,13 @@ struct RateResolvedPreentryAdoptionShadowEvaluation
   rate_resolved_artifact::CursorReason cursor_reason{
     rate_resolved_artifact::CursorReason::InvalidArtifact};
   double cursor_elapsed_sec{std::numeric_limits<double>::quiet_NaN()};
-  double measured_course_progress_m{
+  double control_origin_physical_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
   double expected_absolute_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
-  double lifted_measured_progress_m{
+  double expected_physical_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double lifted_control_origin_physical_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
   double progress_difference_m{
     std::numeric_limits<double>::quiet_NaN()};
@@ -7025,11 +7049,13 @@ struct RateResolvedRetainedShadowEvaluation
   double first_published_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double prediction_delay_sec{};
-  double measured_course_progress_m{
+  double control_origin_physical_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
   double expected_absolute_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
-  double lifted_measured_progress_m{
+  double expected_physical_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double lifted_control_origin_physical_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
   double progress_difference_m{
     std::numeric_limits<double>::quiet_NaN()};
@@ -16303,7 +16329,8 @@ struct MPC
             "adoption=%d/%d/%s/%s/target:%s/seq:%lu/intent:%s/"
             "time:snapshot:%.3f/prediction:%.3f/control:%.3f/age:%.3f/"
             "cursor:%s@%.3f,"
-            "progress:measured:%.3f/lifted:%.3f/expected:%.3f/"
+            "progress=control_physical:%.3f/lifted:%.3f/"
+            "expected_physical:%.3f/expected_theta:%.3f/"
             "delta:%.3f/tolerance:%.3f,"
             "steering:now:%.4f/held_projection:%.4f/expected:%.4f/"
             "delta_from_now:%.4f/bounds:[%.4f,%.4f]/duration:%.3f,"
@@ -16361,8 +16388,9 @@ struct MPC
             six_adoption.artifact_age_sec,
             rate_resolved_artifact::to_string(six_adoption.cursor_reason),
             six_adoption.cursor_elapsed_sec,
-            six_adoption.measured_course_progress_m,
-            six_adoption.lifted_measured_progress_m,
+            six_adoption.control_origin_physical_progress_m,
+            six_adoption.lifted_control_origin_physical_progress_m,
+            six_adoption.expected_physical_progress_m,
             six_adoption.expected_absolute_progress_m,
             six_adoption.progress_difference_m,
             six_adoption.progress_continuity_tolerance_m,
@@ -23783,8 +23811,7 @@ struct MPC
       const auto intent =
         plan->execution_artifact->identity.source_context.intent;
       const auto request = build_rate_resolved_current_world_request(
-        plan, intent, model != nullptr ? model->s :
-        std::numeric_limits<double>::quiet_NaN(), now_sec,
+        plan, intent, now_sec,
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
           std::numeric_limits<double>::quiet_NaN(),
@@ -23945,7 +23972,6 @@ struct MPC
   build_rate_resolved_current_world_request(
     std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan,
     const mpcc_contract::ControlIntent intent,
-    const double measured_course_progress_m,
     const double now_sec,
     const rate_resolved_retained::ExecutionClock execution_clock) const
   {
@@ -23962,6 +23988,15 @@ struct MPC
     if (!control_path.has_value() || !predicted_execution_pose_.has_value()) {
       return std::nullopt;
     }
+    const auto control_origin_physical_progress_m =
+      model->physical_course_progress(
+      TemporalState{
+        predicted_execution_pose_->x_m,
+        predicted_execution_pose_->y_m,
+        predicted_execution_pose_->yaw_rad});
+    if (!control_origin_physical_progress_m.has_value()) {
+      return std::nullopt;
+    }
     const auto dynamic_world = gap_planner->dynamic_world_observation(now_sec);
     rate_resolved_retained::Request request;
     request.plan = std::move(plan);
@@ -23970,7 +24005,8 @@ struct MPC
     request.control_origin_sec = now_sec + control_path->duration_sec;
     request.execution_clock = execution_clock;
     request.current_intent = intent;
-    request.measured_course_progress_m = measured_course_progress_m;
+    request.control_origin_physical_progress_m =
+      control_origin_physical_progress_m.value();
     request.path_length_m = model->reference_path->length;
     request.progress_continuity_tolerance_m =
       kV2XCourseProgressContinuityToleranceM;
@@ -24248,8 +24284,7 @@ struct MPC
       return finish();
     }
     const auto request = build_rate_resolved_current_world_request(
-      plan, evaluation.intent, model != nullptr ? model->s :
-      std::numeric_limits<double>::quiet_NaN(), now_sec,
+      plan, evaluation.intent, now_sec,
       rate_resolved_retained::ExecutionClock{
         rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
         std::numeric_limits<double>::quiet_NaN(),
@@ -24264,12 +24299,14 @@ struct MPC
     evaluation.control_origin_sec = request->control_origin_sec;
     evaluation.cursor_reason = result.cursor_reason;
     evaluation.cursor_elapsed_sec = result.cursor_elapsed_sec;
-    evaluation.measured_course_progress_m =
-      request->measured_course_progress_m;
+    evaluation.control_origin_physical_progress_m =
+      request->control_origin_physical_progress_m;
     evaluation.expected_absolute_progress_m =
       result.expected_absolute_progress_m;
-    evaluation.lifted_measured_progress_m =
-      result.lifted_measured_progress_m;
+    evaluation.expected_physical_progress_m =
+      result.expected_physical_progress_m;
+    evaluation.lifted_control_origin_physical_progress_m =
+      result.lifted_control_origin_physical_progress_m;
     evaluation.progress_difference_m = result.progress_difference_m;
     evaluation.progress_continuity_tolerance_m =
       result.progress_continuity_tolerance_m;
@@ -24332,7 +24369,7 @@ struct MPC
     }
     evaluation.selected_plan = plan;
     auto request = build_rate_resolved_current_world_request(
-      plan, evaluation_intent, problem.progress_origin_m, now_sec,
+      plan, evaluation_intent, now_sec,
       execution_clock);
     if (!request.has_value()) {
       evaluation.reason =
@@ -24355,13 +24392,15 @@ struct MPC
       result.first_published_artifact_elapsed_sec;
     evaluation.prediction_delay_sec =
       request->control_origin_sec - request->now_sec;
-    evaluation.measured_course_progress_m =
-      request->measured_course_progress_m;
+    evaluation.control_origin_physical_progress_m =
+      request->control_origin_physical_progress_m;
     evaluation.cursor_elapsed_sec = result.cursor_elapsed_sec;
     evaluation.expected_absolute_progress_m =
       result.expected_absolute_progress_m;
-    evaluation.lifted_measured_progress_m =
-      result.lifted_measured_progress_m;
+    evaluation.expected_physical_progress_m =
+      result.expected_physical_progress_m;
+    evaluation.lifted_control_origin_physical_progress_m =
+      result.lifted_control_origin_physical_progress_m;
     evaluation.progress_difference_m = result.progress_difference_m;
     evaluation.progress_continuity_tolerance_m =
       result.progress_continuity_tolerance_m;
@@ -24782,6 +24821,9 @@ struct MPC
           "previous=%s, current=%s, suppressed=%lu, sequence=%lu, stage=%lu, "
           "time=observation:%.6f/control:%.6f/delay:%.6f/cursor:%.6f/"
           "clock:%s/first_publish:%.6f/first_cursor:%.6f, "
+          "progress=control_physical:%.6f/lifted:%.6f/"
+          "expected_physical:%.6f/expected_theta:%.6f/delta:%.6f/"
+          "tolerance:%.6f, "
           "physical_join=position:%.6f/yaw:%.6f/"
           "control:(%.3f,%.3f,%.3f)/expected:(%.3f,%.3f,%.3f)/"
           "frenet:(%.3f,%.3f,%.3f), "
@@ -24817,6 +24859,12 @@ struct MPC
           rate_resolved_retained::to_string(retained.execution_clock_kind),
           retained.first_published_control_origin_sec,
           retained.first_published_artifact_elapsed_sec,
+          retained.control_origin_physical_progress_m,
+          retained.lifted_control_origin_physical_progress_m,
+          retained.expected_physical_progress_m,
+          retained.expected_absolute_progress_m,
+          retained.progress_difference_m,
+          retained.progress_continuity_tolerance_m,
           retained.control_pose_error_m, retained.control_yaw_error_rad,
           retained.control_pose.x_m, retained.control_pose.y_m,
           retained.control_pose.yaw_rad,
@@ -25338,7 +25386,8 @@ struct MPC
       "time=%.3f/%.3fms(avg/max), "
       "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
       "time=observation:%.6f/control:%.6f/delay:%.6f/cursor_elapsed:%.6f/"
-      "progress=measured:%.6f/lifted:%.6f/expected:%.6f/delta:%.6f/"
+      "progress=control_physical:%.6f/lifted:%.6f/"
+      "expected_physical:%.6f/expected_theta:%.6f/delta:%.6f/"
       "tolerance:%.6f/"
       "steering=physical_now:%.6f/command_control_origin:%.6f/"
       "previous_published:%.6f/expected:%.6f/"
@@ -25439,8 +25488,9 @@ struct MPC
       window.last_retained.control_origin_sec,
       window.last_retained.prediction_delay_sec,
       window.last_retained.cursor_elapsed_sec,
-      window.last_retained.measured_course_progress_m,
-      window.last_retained.lifted_measured_progress_m,
+      window.last_retained.control_origin_physical_progress_m,
+      window.last_retained.lifted_control_origin_physical_progress_m,
+      window.last_retained.expected_physical_progress_m,
       window.last_retained.expected_absolute_progress_m,
       window.last_retained.progress_difference_m,
       window.last_retained.progress_continuity_tolerance_m,

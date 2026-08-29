@@ -708,7 +708,10 @@ Result evaluate(const Request & request)
     execution.course_progress_origin_m);
   const double expected_absolute_progress_m =
     exact_physical_state->absolute_progress_m;
+  const double expected_physical_progress_m =
+    expected_absolute_progress_m + exact_physical_state->lag_m;
   result.expected_absolute_progress_m = expected_absolute_progress_m;
+  result.expected_physical_progress_m = expected_physical_progress_m;
   result.progress_continuity_tolerance_m =
     request.progress_continuity_tolerance_m;
   result.current_speed_mps = request.current_speed_mps;
@@ -720,10 +723,11 @@ Result evaluate(const Request & request)
   result.previous_published_steering_rad =
     request.previous_published_steering_rad;
   const auto lift = lift_progress(
-    request.measured_course_progress_m, expected_absolute_progress_m,
+    request.control_origin_physical_progress_m,
+    expected_physical_progress_m,
     request.path_length_m, request.progress_continuity_tolerance_m,
     request.circular);
-  result.lifted_measured_progress_m = lift.progress_m;
+  result.lifted_control_origin_physical_progress_m = lift.progress_m;
   result.progress_difference_m = lift.difference_m;
   if (!lift.accepted) {
     result.reason = Reason::ProgressLiftRejected;
@@ -1280,7 +1284,8 @@ Result evaluate(const Request & request)
   proof.expected_current_state = expected;
   proof.expected_current_pose = expected_pose.value();
   proof.expected_absolute_progress_m = expected_absolute_progress_m;
-  proof.lifted_measured_progress_m = lift.progress_m;
+  proof.expected_physical_progress_m = expected_physical_progress_m;
+  proof.lifted_control_origin_physical_progress_m = lift.progress_m;
   proof.lap_offset = lift.lap_offset;
   proof.current_time_steering_rad = request.current_time_steering_rad;
   proof.previous_published_steering_rad =

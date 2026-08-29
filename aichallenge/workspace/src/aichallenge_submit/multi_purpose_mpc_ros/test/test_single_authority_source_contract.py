@@ -1283,7 +1283,8 @@ def test_six_state_preentry_adoption_reuses_current_world_proof_without_authorit
     ):
         assert evidence in adoption
 
-    assert "progress:measured:%.3f/lifted:%.3f/expected:%.3f/" in SOURCE
+    assert "progress=control_physical:%.3f/lifted:%.3f/" in SOURCE
+    assert "expected_physical:%.3f/expected_theta:%.3f/" in SOURCE
     assert "steering:now:%.4f/held_projection:%.4f/expected:%.4f/" in SOURCE
     assert "delta_from_now:%.4f/bounds:[%.4f,%.4f]/duration:%.3f" in SOURCE
     assert "velocity:current:%.3f/expected:%.3f/delta:%.3f/" in SOURCE

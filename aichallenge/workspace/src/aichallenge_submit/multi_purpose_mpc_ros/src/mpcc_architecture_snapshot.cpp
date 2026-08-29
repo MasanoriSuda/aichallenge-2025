@@ -1295,12 +1295,26 @@ private:
   std::uint64_t value_{14695981039346656037ULL};
 };
 
+int physical_homotopy_side(const shadow::Snapshot & source) noexcept
+{
+  const auto & context = source.identity.source_context;
+  return context.execution_side_sign != 0 ? context.execution_side_sign :
+         source.dynamic_obstacle_pass_side_sign;
+}
+
+const char * physical_homotopy_component(const int side_sign) noexcept
+{
+  return side_sign > 0 ? "side-positive" :
+         side_sign < 0 ? "side-negative" : "side-neutral";
+}
+
 std::string failure_key(
   const shadow::Snapshot & source, const PipelineStage stage,
   const std::string & failure_outcome)
 {
   return std::string{contract::to_string(source.identity.source_context.intent)} +
-    '|' + to_string(stage) + '|' + failure_outcome;
+    "|side=" + std::to_string(physical_homotopy_side(source)) + '|' +
+    to_string(stage) + '|' + failure_outcome;
 }
 
 }  // namespace
@@ -1829,6 +1843,7 @@ RecordResult record_failure(
     const std::string directory_name = sequence.str() +
       interaction_identity.str() + '-' +
       safe_component(contract::to_string(intent)) + '-' +
+      physical_homotopy_component(physical_homotopy_side(source)) + '-' +
       safe_component(to_string(pipeline_stage)) + '-' +
       safe_component(failure_outcome);
     const auto final_directory = output_root / directory_name;

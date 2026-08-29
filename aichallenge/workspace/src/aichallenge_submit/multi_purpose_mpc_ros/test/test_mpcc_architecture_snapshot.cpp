@@ -423,6 +423,39 @@ TEST(MpccArchitectureSnapshot, DeduplicatesFailureFamilyPerProcess)
   EXPECT_EQ(second.status, RecordStatus::Duplicate) << second.detail;
 }
 
+TEST(MpccArchitectureSnapshot, KeepsOppositeFollowHomotopyFailuresDistinct)
+{
+  const auto root = output_root("follow-homotopy-dedup");
+  std::filesystem::remove_all(root);
+  auto positive = make_snapshot(
+    mpcc_execution_contract::ControlIntent::Follow);
+  positive.identity.source_context.execution_side_sign = 0;
+  positive.dynamic_obstacle_pass_side_sign = 1;
+  auto negative = positive;
+  negative.dynamic_obstacle_pass_side_sign = -1;
+  const auto problem = make_valid_problem();
+  const auto request = make_assembly_request();
+  const persistent_osqp::SolveOutcome outcome;
+
+  const auto positive_result = record_failure(
+    positive, request, problem, std::nullopt, outcome,
+    PipelineStage::PhysicalProof, "unit-follow-homotopy", "positive", root);
+  const auto negative_result = record_failure(
+    negative, request, problem, std::nullopt, outcome,
+    PipelineStage::PhysicalProof, "unit-follow-homotopy", "negative", root);
+  const auto negative_duplicate = record_failure(
+    negative, request, problem, std::nullopt, outcome,
+    PipelineStage::PhysicalProof, "unit-follow-homotopy", "negative-again", root);
+
+  EXPECT_EQ(positive_result.status, RecordStatus::Written)
+    << positive_result.detail;
+  EXPECT_EQ(negative_result.status, RecordStatus::Written)
+    << negative_result.detail;
+  EXPECT_EQ(negative_duplicate.status, RecordStatus::Duplicate)
+    << negative_duplicate.detail;
+  EXPECT_NE(positive_result.snapshot_file, negative_result.snapshot_file);
+}
+
 TEST(MpccArchitectureSnapshot, WritesExactQpForFollowFailure)
 {
   const auto root = output_root("follow-exact-qp");

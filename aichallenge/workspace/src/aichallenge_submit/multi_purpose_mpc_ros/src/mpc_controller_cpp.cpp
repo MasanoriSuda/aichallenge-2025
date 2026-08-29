@@ -41296,100 +41296,23 @@ private:
       return_preflight_execution_reference.active ?
       std::optional<std::vector<double>>{
       return_preflight_execution_reference.lateral_targets_m} : std::nullopt;
-    OvertakeLineHorizonEvaluation horizon_evaluation;
+    // The seven-state MPCC is the sole continuous optimiser and normal
+    // command authority. OvertakeLine supplies its tactical reference and
+    // stage-wise physical corridor, but must not synchronously run the former
+    // receding optimiser over the same lateral decision variables. That
+    // duplicate solve was already demoted to reference-only after migration,
+    // yet still consumed 20 ms-class callback time and delayed fresh canonical
+    // artifacts until retained actuation/terminal proofs expired.
+    OvertakeLineHorizonEvaluation horizon_evaluation =
+      evaluate_overtake_line_horizon(
+      ref_wp_id, N, lb, ub, current_ey,
+      horizon_phase_start_ey,
+      horizon_phase_traveled_m,
+      hold_pass_goal,
+      phase_distance, goal_ey, planning_wall_clearance, max_lateral_accel,
+      speed_for_time, generating_execution_horizon, std::nullopt,
+      execution_lateral_override);
     OvertakeRecedingHorizonEvaluation receding_horizon;
-    const auto nearly_equal = [](const double lhs, const double rhs) {
-        return std::isfinite(lhs) && std::isfinite(rhs) &&
-               std::abs(lhs - rhs) <= 1e-6;
-      };
-    const bool target_pose_within_refresh_cell =
-      std::isfinite(behavior_output.locked_target_longitudinal) &&
-      std::isfinite(behavior_output.locked_target_lateral) &&
-      std::isfinite(
-        overtake_receding_horizon_scheduled_cache_target_longitudinal_m_) &&
-      std::isfinite(overtake_receding_horizon_scheduled_cache_target_lateral_m_) &&
-      std::abs(
-        behavior_output.locked_target_longitudinal -
-        overtake_receding_horizon_scheduled_cache_target_longitudinal_m_) <= 0.25 &&
-      std::abs(
-        behavior_output.locked_target_lateral -
-        overtake_receding_horizon_scheduled_cache_target_lateral_m_) <= 0.15;
-    const bool refresh_context_matches =
-      overtake_receding_horizon_scheduled_cache_.has_value() &&
-      overtake_receding_horizon_scheduled_cache_horizon_size_ == N &&
-      overtake_receding_horizon_generation_ == overtake_line_state_.mission_generation &&
-      overtake_receding_horizon_side_sign_ == overtake_line_state_.pass_side_sign &&
-      overtake_receding_horizon_phase_ == overtake_line_state_.phase &&
-      overtake_receding_horizon_scheduled_cache_hold_pass_goal_ == hold_pass_goal &&
-      nearly_equal(overtake_receding_horizon_scheduled_cache_goal_ey_, goal_ey) &&
-      nearly_equal(
-        overtake_receding_horizon_scheduled_cache_phase_distance_m_, phase_distance) &&
-      nearly_equal(
-        overtake_receding_horizon_scheduled_cache_wall_clearance_m_,
-        planning_wall_clearance) &&
-      nearly_equal(
-        overtake_receding_horizon_scheduled_cache_target_separation_m_,
-        target_center_separation) &&
-      nearly_equal(
-        overtake_receding_horizon_scheduled_cache_max_lateral_accel_mps2_,
-        max_lateral_accel) &&
-      target_pose_within_refresh_cell;
-    const double refresh_target_age_sec = std::isfinite(
-      overtake_line_state_.target_last_seen_sec) ?
-      std::max(0.0, now_sec - overtake_line_state_.target_last_seen_sec) :
-      std::numeric_limits<double>::infinity();
-    const bool refresh_continuity_lease_active =
-      receding_horizon_execution_lease_active(
-      now_sec,
-      locked_target_progress_continuous ||
-      refresh_target_age_sec <= line_cfg.receding_horizon_continuity_lease_sec + kEps,
-      behavior_output.locked_target_position_jump,
-      locked_target_progress_rejected,
-      behavior_output.overtake_execution_corridor_blocked,
-      behavior_output.overtake_forbidden_wp,
-      behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake,
-      actual_wall_physical_contact || actual_wall_margin_blocked ||
-      actual_wall_sample_unavailable);
-    const bool force_horizon_refresh =
-      lateral_execution_hold_active || predicted_overlap_replan_required ||
-      behavior_output.recoverable_side_contact_active ||
-      behavior_output.locked_target_position_jump || locked_target_progress_rejected ||
-      behavior_output.overtake_execution_corridor_blocked ||
-      behavior_output.overtake_forbidden_wp ||
-      behavior_output.front_risk_level == FrontRiskLevel::EmergencyBrake ||
-      actual_wall_physical_contact || actual_wall_margin_blocked ||
-      actual_wall_sample_unavailable || overtake_solver_recovery_active_;
-    const auto refresh_resolution = overtake_core::resolve_receding_horizon_refresh(
-      overtake_core::RecedingHorizonRefreshRequest{
-        line_cfg.receding_horizon_refresh_interval_sec > 0.0,
-        overtake_receding_horizon_scheduled_cache_.has_value(),
-        refresh_context_matches,
-        overtake_receding_horizon_scheduled_cache_ref_wp_id_ == ref_wp_id,
-        refresh_continuity_lease_active,
-        force_horizon_refresh,
-        now_sec,
-        overtake_receding_horizon_last_feasible_sec_,
-        line_cfg.receding_horizon_refresh_interval_sec});
-    const bool scheduled_horizon_reuse =
-      !pass_entry_physical_hold_active &&
-      refresh_resolution.reuse_cached_evaluation;
-    if (scheduled_horizon_reuse) {
-      ++overtake_receding_horizon_reuse_count_;
-      receding_horizon = overtake_receding_horizon_scheduled_cache_.value();
-      receding_horizon.last_feasible_hold_active = true;
-      receding_horizon.fallback_reason = "scheduled exact-context horizon hold";
-      horizon_evaluation = receding_horizon.horizon;
-    } else {
-      ++overtake_receding_horizon_refresh_count_;
-      horizon_evaluation = evaluate_overtake_line_horizon(
-        ref_wp_id, N, lb, ub, current_ey,
-        horizon_phase_start_ey,
-        horizon_phase_traveled_m,
-        hold_pass_goal,
-        phase_distance, goal_ey, planning_wall_clearance, max_lateral_accel,
-        speed_for_time, generating_execution_horizon, std::nullopt,
-        execution_lateral_override);
-    }
     if (pass_entry_physical_hold_active) {
       bool hard_wall_clearance_used = false;
       if (
@@ -41424,41 +41347,6 @@ private:
       receding_horizon.fallback_reason =
         "Pass entry physical gate retained current-side prefix";
       receding_horizon.horizon = horizon_evaluation;
-    } else if (!scheduled_horizon_reuse) {
-      receding_horizon = optimize_live_overtake_line_horizon(
-        behavior_output, horizon_evaluation, ref_wp_id, N, lb, ub, current_ey,
-        horizon_phase_start_ey, horizon_phase_traveled_m, hold_pass_goal,
-        phase_distance, goal_ey, planning_wall_clearance,
-        target_center_separation, max_lateral_accel, speed_for_time,
-        generating_execution_horizon, predicted_overlap_replan_required,
-        rear_clear_confirmed, now_sec);
-      if (
-        !receding_horizon.active || receding_horizon.fallback ||
-        receding_horizon.hard_infeasible)
-      {
-        overtake_receding_horizon_scheduled_cache_.reset();
-      }
-    }
-    if (
-      std::isfinite(now_sec) &&
-      (!std::isfinite(overtake_receding_horizon_refresh_telemetry_last_log_sec_) ||
-      now_sec < overtake_receding_horizon_refresh_telemetry_last_log_sec_ ||
-      now_sec - overtake_receding_horizon_refresh_telemetry_last_log_sec_ >= 1.0))
-    {
-      if (line_cfg.debug_log_enabled) {
-        RCLCPP_INFO(
-          rclcpp::get_logger("mpc_controller"),
-          "Overtake horizon schedule: fresh=%zu, reused=%zu, interval=%.3f s, "
-          "cache=%d, wp_id=%d",
-          static_cast<std::size_t>(overtake_receding_horizon_refresh_count_),
-          static_cast<std::size_t>(overtake_receding_horizon_reuse_count_),
-          line_cfg.receding_horizon_refresh_interval_sec,
-          overtake_receding_horizon_scheduled_cache_.has_value() ? 1 : 0,
-          ref_wp_id);
-      }
-      overtake_receding_horizon_refresh_count_ = 0U;
-      overtake_receding_horizon_reuse_count_ = 0U;
-      overtake_receding_horizon_refresh_telemetry_last_log_sec_ = now_sec;
     }
     const bool optimized_target_bound_failure =
       receding_horizon.hard_infeasible &&

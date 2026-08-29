@@ -3007,3 +3007,19 @@ def test_terminal_stop_does_not_extrapolate_executable_prefix_geometry() -> None
     assert "artifact.predicted_states[stage + 1U].progress_m" not in adapter_source
     assert "terminal_stop_course_geometry" in wall_header
     assert "source.terminal_stop_course_geometry" in retained_source
+
+
+def test_canonical_overtake_problem_has_no_legacy_receding_optimizer_edge() -> None:
+    """The tactical layer builds a reference; only seven-state MPCC optimises it."""
+
+    problem_start = SOURCE.index("  OvertakeLineOutput update_overtake_line(")
+    problem_end = SOURCE.index(
+        "  bool is_overtake_forbidden_wp(",
+        problem_start,
+    )
+    problem_builder = SOURCE[problem_start:problem_end]
+
+    assert "evaluate_overtake_line_horizon(" in problem_builder
+    assert "seven-state MPCC is the sole continuous" in problem_builder
+    assert "optimize_live_overtake_line_horizon(" not in problem_builder
+    assert "Overtake horizon schedule:" not in problem_builder

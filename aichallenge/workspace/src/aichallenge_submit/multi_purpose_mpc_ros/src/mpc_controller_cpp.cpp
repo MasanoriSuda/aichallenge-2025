@@ -26398,40 +26398,37 @@ struct MPC
   }
 
   MpcControlCycleResult canonical_normal_emergency_stop(
-    const MpcProblem & problem, const mpcc_contract::ControlIntent intent,
+    const MpcProblem & problem,
+    const mpcc_contract::ControlIntent requested_intent,
     const std::string & reason)
   {
+    const auto emergency_intent = mpcc_contract::ControlIntent::Stop;
     record_problem_context(
-      problem, mpcc_contract::Formulation::Unresolved, intent);
+      problem, mpcc_contract::Formulation::Unresolved, emergency_intent);
     const double maximum_steering = std::isfinite(cfg.delta_max) ?
       std::max(0.0, std::abs(cfg.delta_max)) : 0.0;
     double steering = std::isfinite(previous_steering) ?
       clip(previous_steering, -maximum_steering, maximum_steering) : 0.0;
-    auto stop_lateral_action = race_mpcc::StopLateralAction::HoldAtRest;
-    if (intent == mpcc_contract::ControlIntent::Stop) {
-      const double current_speed = std::isfinite(current_speed_mps_) ?
-        std::max(0.0, current_speed_mps_) :
-        std::numeric_limits<double>::quiet_NaN();
-      const auto path_target = solver_fallback_path_steering_target(
-        current_speed, maximum_steering);
-      stop_lateral_action = race_mpcc::resolve_stop_lateral_action(
-        race_mpcc::StopLateralActionRequest{
-          current_speed, path_target.has_value()});
-      if (
-        stop_lateral_action != race_mpcc::StopLateralAction::HoldAtRest)
-      {
-        const double target =
-          stop_lateral_action ==
-          race_mpcc::StopLateralAction::TrackReferencePath ?
-          path_target.value() : 0.0;
-        const double time_step = model != nullptr && std::isfinite(model->Ts) ?
-          std::max(0.0, model->Ts) : 0.0;
-        steering = v2x_overtake_core::
-          rate_limit_solver_fallback_steering_toward_target(
-          v2x_overtake_core::SolverFallbackSteeringRequest{
-            steering, target, maximum_steering,
-            std::max(0.0, cfg.steer_rate_max), time_step});
-      }
+    const double current_speed = std::isfinite(current_speed_mps_) ?
+      std::max(0.0, current_speed_mps_) :
+      std::numeric_limits<double>::quiet_NaN();
+    const auto path_target = solver_fallback_path_steering_target(
+      current_speed, maximum_steering);
+    const auto stop_lateral_action = race_mpcc::resolve_stop_lateral_action(
+      race_mpcc::StopLateralActionRequest{
+        current_speed, path_target.has_value()});
+    if (stop_lateral_action != race_mpcc::StopLateralAction::HoldAtRest) {
+      const double target =
+        stop_lateral_action ==
+        race_mpcc::StopLateralAction::TrackReferencePath ?
+        path_target.value() : 0.0;
+      const double time_step = model != nullptr && std::isfinite(model->Ts) ?
+        std::max(0.0, model->Ts) : 0.0;
+      steering = v2x_overtake_core::
+        rate_limit_solver_fallback_steering_toward_target(
+        v2x_overtake_core::SolverFallbackSteeringRequest{
+          steering, target, maximum_steering,
+          std::max(0.0, cfg.steer_rate_max), time_step});
     }
     current_control = Eigen::VectorXd::Zero(2 * std::max(0, problem.N));
     for (int stage = 0; stage < problem.N; ++stage) {
@@ -26445,16 +26442,12 @@ struct MPC
     failure_fallback_speed_.reset();
     last_control_was_fallback_ = true;
     last_control_resolution_reason_ =
-      std::string{"canonical-"} + mpcc_contract::to_string(intent) +
-      "-emergency/" + reason +
-      (intent == mpcc_contract::ControlIntent::Stop ?
-      std::string{"/lateral="} +
-      race_mpcc::stop_lateral_action_name(stop_lateral_action) : "");
+      std::string{"canonical-stop-emergency/requested="} +
+      mpcc_contract::to_string(requested_intent) + '/' + reason +
+      "/lateral=" + race_mpcc::stop_lateral_action_name(stop_lateral_action);
     MpcControlCycleResult output{Eigen::Vector2d(0.0, steering), std::abs(steering)};
     output.canonical_emergency_stop = true;
-    if (intent == mpcc_contract::ControlIntent::Stop) {
-      output.published_authority_intent = intent;
-    }
+    output.published_authority_intent = emergency_intent;
     return output;
   }
 
@@ -50397,7 +50390,9 @@ private:
     const bool published, const std::string & solver_reason,
     const std::string & output_reason,
     const std::optional<mpcc_contract::CanonicalNormalCommand> &
-    canonical_normal_command = std::nullopt)
+    canonical_normal_command = std::nullopt,
+    const mpcc_contract::ControlIntent emergency_authority_intent =
+    mpcc_contract::ControlIntent::Unknown)
   {
     overtake_orchestrator::FinalControlTrace trace;
     trace.decision_id = active_control_decision_id_;
@@ -50417,9 +50412,10 @@ private:
         overtake_orchestrator::FinalControlSource::MpcSolution,
         certified_solution_available,
         canonical_normal_command.has_value()});
-    auto supervisor_intent = mpcc_contract::ControlIntent::Unknown;
+    auto supervisor_intent = emergency_authority_intent;
     if (
       final_authority == mpcc_contract::FinalAuthorityClass::EmergencyOverride &&
+      supervisor_intent == mpcc_contract::ControlIntent::Unknown &&
       trace.authority.has_value())
     {
       const auto resolution =
@@ -54742,7 +54738,8 @@ private:
     emit_final_control_trace(
       current_time.seconds(), actual_v, u, acc, published_steering_rad,
       final_source_request, true, mpc_->last_control_resolution_reason(),
-      output_reason, canonical_normal_command);
+      output_reason, canonical_normal_command,
+      mpc_cycle.published_authority_intent);
     maybe_emit_dynamic_escape_wall_handoff_trace(
       current_time.seconds(), steady_now, pose, actual_v, yaw_rate, u,
       published_steering_rad, final_source_request);

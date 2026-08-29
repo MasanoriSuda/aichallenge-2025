@@ -745,6 +745,35 @@ def test_moving_stop_uses_emergency_path_tracking_without_normal_authority() -> 
     assert "output.canonical_normal_command" not in emergency
 
 
+def test_every_canonical_emergency_is_published_as_stop_authority() -> None:
+    """A failed normal intent may not keep steering under its old authority."""
+
+    emergency_start = SOURCE.index(
+        "MpcControlCycleResult canonical_normal_emergency_stop("
+    )
+    emergency_end = SOURCE.index(
+        "void prepare_rate_resolved_stop_shadow_successor(", emergency_start
+    )
+    emergency = SOURCE[emergency_start:emergency_end]
+    assert "const auto emergency_intent =" in emergency
+    assert "mpcc_contract::ControlIntent::Stop" in emergency
+    assert (
+        "record_problem_context(\n"
+        "      problem, mpcc_contract::Formulation::Unresolved, emergency_intent)"
+        in emergency
+    )
+    assert "resolve_stop_lateral_action(" in emergency
+    assert "if (intent == mpcc_contract::ControlIntent::Stop)" not in emergency
+    assert "output.published_authority_intent = emergency_intent;" in emergency
+
+    publish_start = SOURCE.index(
+        "emit_final_control_trace(\n      current_time.seconds()"
+    )
+    publish_end = SOURCE.index(");", publish_start)
+    publish = SOURCE[publish_start:publish_end]
+    assert "mpc_cycle.published_authority_intent" in publish
+
+
 def test_problem_intent_is_resolved_after_current_cycle_authority_trace() -> None:
     """A reset trace must not stamp Follow/Overtake artifacts as Cruise."""
 

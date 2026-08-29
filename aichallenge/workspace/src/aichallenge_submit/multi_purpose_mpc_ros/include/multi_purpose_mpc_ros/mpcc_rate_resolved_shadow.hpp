@@ -283,6 +283,44 @@ struct NonlinearInteriorWallProblemResult
   std::string detail{"not-evaluated"};
 };
 
+struct NonlinearInteriorWallSample
+{
+  int transition_stage{-1};
+  std::size_t substep_index{};
+  std::size_t substep_count{};
+
+  bool operator==(const NonlinearInteriorWallSample & other) const noexcept
+  {
+    return transition_stage == other.transition_stage &&
+           substep_index == other.substep_index &&
+           substep_count == other.substep_count;
+  }
+};
+
+enum class PhysicalProofSampleReason
+{
+  Accepted,
+  InvalidRequest,
+  OutOfRange,
+  EndpointSample,
+  Count,
+};
+
+const char * to_string(PhysicalProofSampleReason reason) noexcept;
+
+struct PhysicalProofSampleResult
+{
+  PhysicalProofSampleReason reason{PhysicalProofSampleReason::InvalidRequest};
+  std::optional<NonlinearInteriorWallSample> sample;
+  std::string detail{"not-evaluated"};
+};
+
+/// Map the zero-based exact physical trajectory sample index back to the
+/// transition/substep identity that generated it. Endpoint samples are
+/// reported explicitly because state boxes already own those constraints.
+PhysicalProofSampleResult locate_physical_proof_sample(
+  const Snapshot & snapshot, int dense_sample_index) noexcept;
+
 /// Observation-only augmentation used to test the representation gap between
 /// affine endpoint interpolation and exact nonlinear substage wall proof. The
 /// returned Problem preserves the original assembled rows as an exact prefix.
@@ -290,6 +328,16 @@ NonlinearInteriorWallProblemResult build_nonlinear_interior_wall_problem(
   const Snapshot & snapshot,
   const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,
   const Eigen::VectorXd & linearization_primal) noexcept;
+
+/// Selected-row form used by the proof-guided cut-plane audit. Existing rows
+/// and bounds remain an exact prefix; only the requested physical samples are
+/// appended.
+NonlinearInteriorWallProblemResult
+build_selected_nonlinear_interior_wall_problem(
+  const Snapshot & snapshot,
+  const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,
+  const Eigen::VectorXd & linearization_primal,
+  const std::vector<NonlinearInteriorWallSample> & samples) noexcept;
 
 enum class LatestStateFeedbackReason
 {
@@ -353,6 +401,11 @@ struct LatestStateFeedbackResult
     NonlinearInteriorWallReason::InvalidRequest};
   std::size_t nonlinear_interior_wall_row_count{};
   double nonlinear_interior_wall_maximum_candidate_violation_m{};
+  bool physical_proof_cut_plane_audit_requested{false};
+  bool physical_proof_cut_plane_audit_applied{false};
+  PhysicalProofSampleReason physical_proof_sample_reason{
+    PhysicalProofSampleReason::InvalidRequest};
+  std::size_t physical_proof_cut_count{};
   TimeAlignedFeedbackProblemReason time_aligned_problem_reason{
     TimeAlignedFeedbackProblemReason::InvalidRequest};
   std::size_t consumed_stage_count{};
@@ -691,15 +744,27 @@ public:
   evaluate_reachable_bridge_nonlinear_interior_wall_audit(
     const LatestStateFeedbackRequest & request,
     std::size_t iteration_limit);
+  /// Observation-only F arm: add only exact physical proof rejection samples
+  /// as retained cuts, with a bounded number of SQP corrections.
+  LatestStateFeedbackResult
+  evaluate_reachable_bridge_physical_proof_cut_plane_audit(
+    const LatestStateFeedbackRequest & request,
+    std::size_t iteration_limit);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;
 
 private:
+  enum class InteriorWallAuditMode
+  {
+    None,
+    Dense,
+    ProofGuided,
+  };
   LatestStateFeedbackResult evaluate_time_aligned_impl(
     const LatestStateFeedbackRequest & request,
     bool reachable_bridge_candidate,
     std::size_t multi_sqp_iteration_limit,
-    bool nonlinear_interior_wall_audit);
+    InteriorWallAuditMode interior_wall_audit_mode);
   std::mutex mutex_;
   persistent_osqp::PersistentOsqpSolver solver_{
     persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};

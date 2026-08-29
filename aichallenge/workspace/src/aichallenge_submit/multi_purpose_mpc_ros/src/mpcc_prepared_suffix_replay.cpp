@@ -94,7 +94,8 @@ const char * suffix_comparison_classification(
   const shadow::LatestStateFeedbackResult & time_aligned,
   const shadow::LatestStateFeedbackResult & reachable,
   const shadow::LatestStateFeedbackResult & multi_sqp,
-  const shadow::LatestStateFeedbackResult & nonlinear_interior) noexcept
+  const shadow::LatestStateFeedbackResult & nonlinear_interior,
+  const shadow::LatestStateFeedbackResult & proof_guided) noexcept
 {
   const auto accepted = [](const shadow::LatestStateFeedbackResult & value) {
       return value.reason == shadow::LatestStateFeedbackReason::Accepted;
@@ -122,6 +123,9 @@ const char * suffix_comparison_classification(
   if (!accepted(multi_sqp) && accepted(nonlinear_interior)) {
     return "nonlinear-interior-wall-representation-defect";
   }
+  if (!accepted(nonlinear_interior) && accepted(proof_guided)) {
+    return "proof-guided-interior-wall-candidate-generation-defect";
+  }
   if (accepted(old_origin) && !accepted(time_aligned)) {
     return "time-aligned-suffix-regression";
   }
@@ -134,16 +138,21 @@ const char * suffix_comparison_classification(
   if (accepted(multi_sqp) && !accepted(nonlinear_interior)) {
     return "nonlinear-interior-wall-regression";
   }
+  if (accepted(nonlinear_interior) && !accepted(proof_guided)) {
+    return "proof-guided-interior-wall-regression";
+  }
   if (
     model_proof_rejected(old_origin) || model_proof_rejected(time_aligned) ||
     model_proof_rejected(reachable) || model_proof_rejected(multi_sqp) ||
-    model_proof_rejected(nonlinear_interior))
+    model_proof_rejected(nonlinear_interior) ||
+    model_proof_rejected(proof_guided))
   {
     return "solve-proof-model-mismatch";
   }
   if (
     !accepted(old_origin) && !accepted(time_aligned) && !accepted(reachable) &&
-    !accepted(multi_sqp) && !accepted(nonlinear_interior))
+    !accepted(multi_sqp) && !accepted(nonlinear_interior) &&
+    !accepted(proof_guided))
   {
     return "suffix-family-unresolved";
   }
@@ -228,6 +237,7 @@ int main(int argc, char ** argv)
   shadow::LatestStateFeedbackSolverContext reachable_solver;
   shadow::LatestStateFeedbackSolverContext multi_sqp_solver;
   shadow::LatestStateFeedbackSolverContext nonlinear_interior_solver;
+  shadow::LatestStateFeedbackSolverContext proof_guided_solver;
   const shadow::LatestStateFeedbackRequest latest_state_request{
     std::make_shared<const shadow::LatestStateFeedbackPreparation>(
       preparation),
@@ -246,6 +256,9 @@ int main(int argc, char ** argv)
   const auto nonlinear_interior = nonlinear_interior_solver.
     evaluate_reachable_bridge_nonlinear_interior_wall_audit(
     latest_state_request, 4U);
+  const auto proof_guided = proof_guided_solver.
+    evaluate_reachable_bridge_physical_proof_cut_plane_audit(
+    latest_state_request, 8U);
   shadow::LatestStateFeedbackResult current_preparation_time_aligned;
   bool current_preparation_probe_available = false;
   if (full.latest_state_feedback_preparation != nullptr) {
@@ -400,8 +413,37 @@ int main(int argc, char ** argv)
     nonlinear_interior.physical_lateral_violation_m <<
     " suffix_nonlinear_interior_exact_tolerance=" <<
     nonlinear_interior.physical_lateral_bound_tolerance_m <<
+    " suffix_proof_guided_reason=" <<
+    shadow::to_string(proof_guided.reason) <<
+    " suffix_proof_guided_cuts=" <<
+    proof_guided.physical_proof_cut_count <<
+    " suffix_proof_guided_rows=" <<
+    proof_guided.nonlinear_interior_wall_row_count <<
+    " suffix_proof_guided_sample=" <<
+    shadow::to_string(proof_guided.physical_proof_sample_reason) <<
+    " suffix_proof_guided_attempts=" <<
+    proof_guided.latest_state_multi_sqp_attempt_count <<
+    " suffix_proof_guided_solves=" <<
+    proof_guided.latest_state_multi_sqp_solve_count <<
+    " suffix_proof_guided_status=" << proof_guided.solver.status <<
+    " suffix_proof_guided_iterations=" << proof_guided.solver.iterations <<
+    " suffix_proof_guided_solve_ms=" << proof_guided.solver.total_ms <<
+    " suffix_proof_guided_physical=" <<
+    multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::to_string(
+    proof_guided.physical_adapter_reason) <<
+    " suffix_proof_guided_exact=" <<
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    exact_physical_execution_trajectory_reason_name(
+    proof_guided.physical_exact_reason) <<
+    " suffix_proof_guided_exact_stage=" <<
+    proof_guided.physical_rejected_stage <<
+    " suffix_proof_guided_exact_violation=" <<
+    proof_guided.physical_lateral_violation_m <<
+    " suffix_proof_guided_exact_tolerance=" <<
+    proof_guided.physical_lateral_bound_tolerance_m <<
     " suffix_classification=" << suffix_comparison_classification(
-    old_origin, time_aligned, reachable, multi_sqp, nonlinear_interior) <<
+    old_origin, time_aligned, reachable, multi_sqp, nonlinear_interior,
+    proof_guided) <<
     " full_outcome=" << shadow::to_string(full.outcome) <<
     " full_compute_ms=" << full.compute_ms <<
     " probe=recorded-primal-linear-interpolation" <<

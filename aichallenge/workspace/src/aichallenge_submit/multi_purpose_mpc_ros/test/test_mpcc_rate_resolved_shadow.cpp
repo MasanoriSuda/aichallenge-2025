@@ -984,6 +984,104 @@ TEST(
 
 TEST(
   MpccRateResolvedShadow,
+  PhysicalProofDenseSampleMappingDistinguishesInteriorAndEndpointSamples)
+{
+  auto source = snapshot();
+  source.request.horizon_steps = 2;
+  source.request.inputs.resize(2U);
+  source.request.inputs[0].stage_dt_sec = 0.025;
+  source.request.inputs[1].stage_dt_sec = 0.01;
+
+  const auto first = shadow::locate_physical_proof_sample(source, 0);
+  ASSERT_EQ(first.reason, shadow::PhysicalProofSampleReason::Accepted);
+  ASSERT_TRUE(first.sample.has_value());
+  EXPECT_EQ(first.sample->transition_stage, 0);
+  EXPECT_EQ(first.sample->substep_index, 1U);
+  EXPECT_EQ(first.sample->substep_count, 3U);
+
+  const auto second = shadow::locate_physical_proof_sample(source, 1);
+  ASSERT_EQ(second.reason, shadow::PhysicalProofSampleReason::Accepted);
+  ASSERT_TRUE(second.sample.has_value());
+  EXPECT_EQ(second.sample->transition_stage, 0);
+  EXPECT_EQ(second.sample->substep_index, 2U);
+
+  const auto first_endpoint =
+    shadow::locate_physical_proof_sample(source, 2);
+  EXPECT_EQ(
+    first_endpoint.reason, shadow::PhysicalProofSampleReason::EndpointSample);
+  ASSERT_TRUE(first_endpoint.sample.has_value());
+  EXPECT_EQ(first_endpoint.sample->transition_stage, 0);
+  EXPECT_EQ(first_endpoint.sample->substep_index, 3U);
+
+  const auto second_endpoint =
+    shadow::locate_physical_proof_sample(source, 3);
+  EXPECT_EQ(
+    second_endpoint.reason, shadow::PhysicalProofSampleReason::EndpointSample);
+  ASSERT_TRUE(second_endpoint.sample.has_value());
+  EXPECT_EQ(second_endpoint.sample->transition_stage, 1);
+  EXPECT_EQ(second_endpoint.sample->substep_index, 1U);
+
+  EXPECT_EQ(
+    shadow::locate_physical_proof_sample(source, 4).reason,
+    shadow::PhysicalProofSampleReason::OutOfRange);
+  EXPECT_EQ(
+    shadow::locate_physical_proof_sample(source, -1).reason,
+    shadow::PhysicalProofSampleReason::InvalidRequest);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  SelectedNonlinearInteriorWallCutPreservesTheOriginalProblemAsExactPrefix)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto prepared = preparation_context.evaluate(source);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  const shadow::TimeAlignedFeedbackProblemRequest request{
+    prepared.latest_state_feedback_preparation.get(),
+    source.control_prediction_origin_sec + 0.02,
+    execution::PredictedState{0.0, 0.0, 0.0, 2.0, 0.04, 0.10, 0.08},
+    source.request.previous_input,
+    solver::PersistentOsqpSolver{}.physical_constraint_tolerance()};
+  const auto bridge = shadow::build_reachable_bridge_feedback_problem(request);
+  ASSERT_EQ(bridge.reason, shadow::ReachableBridgeReason::Accepted)
+    << bridge.detail;
+  ASSERT_TRUE(bridge.problem.has_value());
+  ASSERT_TRUE(bridge.suffix.snapshot.has_value());
+  const auto original = problem::assemble(bridge.problem.value());
+  ASSERT_TRUE(original.has_value());
+  const double duration_sec =
+    bridge.suffix.snapshot->request.inputs.front().stage_dt_sec;
+  const auto substep_count = static_cast<std::size_t>(std::max(
+    1.0, std::ceil(
+      duration_sec / model::kMaximumPhysicalIntegrationStepSec)));
+  ASSERT_GT(substep_count, 1U);
+
+  const auto augmented =
+    shadow::build_selected_nonlinear_interior_wall_problem(
+    bridge.suffix.snapshot.value(), bridge.problem.value(),
+    bridge.linearization_primal,
+    {shadow::NonlinearInteriorWallSample{0, 1U, substep_count}});
+  ASSERT_EQ(
+    augmented.reason, shadow::NonlinearInteriorWallReason::Accepted)
+    << augmented.detail;
+  ASSERT_TRUE(augmented.problem.has_value());
+  EXPECT_EQ(augmented.appended_row_count, 1U);
+  EXPECT_TRUE(
+    Eigen::MatrixXd(augmented.problem->constraints).
+    topRows(original->constraints.rows()).isApprox(
+      Eigen::MatrixXd(original->constraints), 0.0));
+  EXPECT_TRUE(
+    augmented.problem->lower_bound.head(original->lower_bound.size()).isApprox(
+      original->lower_bound, 0.0));
+  EXPECT_TRUE(
+    augmented.problem->upper_bound.head(original->upper_bound.size()).isApprox(
+      original->upper_bound, 0.0));
+}
+
+TEST(
+  MpccRateResolvedShadow,
   NonlinearInteriorWallAuditRemainsObservationOnlyAndExactlyProved)
 {
   shadow::SolverContext preparation_context;
@@ -1008,6 +1106,37 @@ TEST(
     result.nonlinear_interior_wall_reason,
     shadow::NonlinearInteriorWallReason::Accepted);
   EXPECT_GT(result.nonlinear_interior_wall_row_count, 0U);
+  EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::Accepted)
+    << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+  EXPECT_EQ(
+    execution::validate(*result.execution_artifact),
+    execution::RejectReason::None);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  PhysicalProofCutPlaneAuditDoesNotAddCutsWhenBaseProofIsAccepted)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto prepared = preparation_context.evaluate(source);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation,
+    source.control_prediction_origin_sec + 0.02,
+    source.control_prediction_origin_sec + 0.01,
+    execution::PredictedState{0.0, 0.0, 0.0, 2.0, 0.04, 0.10, 0.08},
+    source.request.previous_input};
+  shadow::LatestStateFeedbackSolverContext context;
+
+  const auto result =
+    context.evaluate_reachable_bridge_physical_proof_cut_plane_audit(
+    request, 4U);
+  EXPECT_TRUE(result.physical_proof_cut_plane_audit_requested);
+  EXPECT_FALSE(result.physical_proof_cut_plane_audit_applied);
+  EXPECT_EQ(result.physical_proof_cut_count, 0U);
   EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::Accepted)
     << result.detail;
   ASSERT_NE(result.execution_artifact, nullptr);

@@ -1271,6 +1271,22 @@ Finish the architecture simplification instead of leaving permanent dual control
   boundary is an independent structure-exploiting or nonlinear feasibility
   oracle on the same immutable problems.
 
+- `.steering/20260829-independent-nonlinear-feasibility-oracle` separates two
+  failures which the dense owner A/B could not classify.  ShiftOut sequence
+  1266 is physically feasible: a deterministic exact nonlinear seven-state
+  solve passes every unchanged C++ execution proof, so the remaining failure
+  is at the single-SQP/convexification boundary.  Cruise sequence 601 is a
+  different producer defect.  Its captured neutral automatic branch requires
+  about 0.506597 m of physical slack because dynamic lateral and wall rows
+  conflict, while independently rebuilt positive and negative current-world
+  candidates both pass the same SQP and exact proof chain.  The architecture
+  comparison had previously rejected Cruise alternatives as unsupported
+  before constructing them; an audit-only entry point now closes that
+  detection gap.  Production remains unchanged.  The next vertical Slice is
+  to replace the single neutral automatic branch with a bounded current-world
+  candidate population and delete the old producer atomically; ShiftOut
+  successive-convexification work remains separate.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

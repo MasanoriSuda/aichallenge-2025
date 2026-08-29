@@ -151,6 +151,16 @@ Result build_follow_escape(
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
 
+/// Audit-only current-world avoidance candidate for a neutral normal intent.
+/// Cruise and Follow do not acquire Overtake authority or a tactical side;
+/// this entry point exists only so architecture comparison can falsify the
+/// captured automatic obstacle branch against independently rebuilt left and
+/// right homotopies.  It has no Store, mailbox or publisher caller.
+Result build_normal_avoidance_audit(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint,
+  int pass_side_sign) noexcept;
+
 /// Audit-only A2 candidate.  Rebuild the current-world target binding through
 /// the same stateless producer, then restore the captured identity and SQP
 /// request byte-for-byte.  This isolates target ownership from reference and

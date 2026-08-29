@@ -448,6 +448,18 @@
       "production_impact": "none; the structured builder and solver entry point are offline observation-only and have no Store, worker, publisher, authority, command, fallback or configuration path",
       "deleted_code": [],
       "revisit_condition": "an independently equilibrated owner solves the identical dense proof-equivalent QP under unchanged tolerances and proofs, or a structure-exploiting nonlinear backend demonstrates the same certificate with bounded runtime"
+    },
+    {
+      "experiment_id": "20260829-independent-nonlinear-feasibility-oracle",
+      "baseline_commit": "6884807f",
+      "snapshot_ids": [],
+      "hypothesis": "the remaining ShiftOut and Cruise failures are physical infeasibility rather than a single-SQP or candidate-generation limitation",
+      "changed_dimension": "observation_only_exact_nonlinear_feasibility_and_cruise_homotopy_comparison",
+      "result": "rejected",
+      "reason": "ShiftOut sequence 1266 produced a zero-violation exact nonlinear seven-state primal which passed every unchanged C++ physical and terminal proof. Cruise sequence 601 required 0.506597 m slack for its captured neutral branch, but explicit positive and negative current-world candidates both solved and passed the unchanged exact proofs. The scene is not generally blocked; ShiftOut is a single-SQP/model limitation and Cruise is a neutral candidate-generation defect.",
+      "production_impact": "none; the nonlinear oracle and Cruise side comparison have no Store, mailbox, publisher or production caller, and no solver, clearance, timeout, lease, fallback or configuration changed",
+      "deleted_code": [],
+      "revisit_condition": "a production Slice atomically replaces the neutral Cruise/Follow automatic branch with a bounded current-world candidate population and deletes the old producer, or a separate ShiftOut successive-convexification Slice passes the frozen exact proof without changing physical constraints"
     }
   ]
 }

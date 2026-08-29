@@ -1038,20 +1038,23 @@ Report compare(
       Arm::PersistentA, source, source_fingerprint, source_fingerprint,
       persistent_successor));
 
-    // Follow owns no tactical pass side in production. When its longitudinal
-    // stay-behind branch is already infeasible, compare two independently
-    // rebuilt current-world side candidates before attributing the failure to
-    // physics. This is audit-only: it has no store, mailbox or publisher and
-    // intentionally does not enumerate Overtake-specific C--G candidates.
+    // Cruise/Follow own no tactical pass side in production. When their
+    // automatically selected obstacle branch is infeasible, compare two
+    // independently rebuilt current-world side candidates before attributing
+    // the failure to physics. This is audit-only: it has no store, mailbox or
+    // publisher and intentionally does not enumerate Overtake-specific C--G
+    // candidates.
     if (
       source.identity.source_context.intent ==
-      contract::ControlIntent::Follow)
+      contract::ControlIntent::Follow ||
+      source.identity.source_context.intent ==
+      contract::ControlIntent::Cruise)
     {
       for (const auto & [arm, side] :
         {std::pair{Arm::StatelessLeftB, 1},
          std::pair{Arm::StatelessRightB, -1}})
       {
-        const auto rebuilt = maneuver::build_follow_escape(
+        const auto rebuilt = maneuver::build_normal_avoidance_audit(
           source, source_fingerprint, side);
         if (!rebuilt.seed.has_value()) {
           const auto stage =

@@ -38058,19 +38058,36 @@ private:
           entry_execution_override);
         pass_entry_execution_max_lateral_accel_mps2 =
           execution_horizon.max_required_lateral_accel;
+        const auto execution_profile =
+          overtake_core::resolve_pass_entry_execution_profile(
+          overtake_core::PassEntryExecutionProfileRequest{
+            execution_horizon.execution_feasible(),
+            execution_horizon.lateral_accel_limited,
+            execution_horizon.wall_clearance_limited,
+            execution_horizon.static_map_wall_limited,
+            execution_horizon.max_required_lateral_accel,
+            std::max(0.0, line_cfg.max_lateral_accel)});
         pass_entry_execution_horizon_available =
-          execution_horizon.execution_feasible() &&
-          !execution_horizon.lateral_accel_limited &&
-          !execution_horizon.wall_clearance_limited &&
-          !execution_horizon.static_map_wall_limited;
-        if (pass_entry_execution_horizon_available) {
+          execution_profile.valid && execution_profile.available;
+        if (
+          execution_profile.status ==
+          overtake_core::PassEntryExecutionProfileStatus::
+          ProjectionRequiresSuccessorReplan)
+        {
+          pass_entry_execution_horizon_reason =
+            "projected execution prefix requires exact Pass successor replan";
+        } else if (pass_entry_execution_horizon_available) {
           pass_entry_execution_horizon_reason = "execution horizon feasible";
-        } else if (execution_horizon.lateral_accel_limited) {
+        } else if (
+          execution_profile.status ==
+          overtake_core::PassEntryExecutionProfileStatus::
+          LateralAccelerationInfeasible)
+        {
           pass_entry_execution_horizon_reason =
             "execution horizon exceeds lateral acceleration limit";
         } else if (
-          execution_horizon.wall_clearance_limited ||
-          execution_horizon.static_map_wall_limited)
+          execution_profile.status ==
+          overtake_core::PassEntryExecutionProfileStatus::RequiresWallAdjustment)
         {
           pass_entry_execution_horizon_reason =
             "execution horizon requires wall clamp";

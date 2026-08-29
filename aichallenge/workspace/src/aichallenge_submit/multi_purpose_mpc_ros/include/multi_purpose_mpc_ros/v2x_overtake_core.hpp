@@ -5306,6 +5306,44 @@ struct PassEntryPhysicalGateResolution
 PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
   const PassEntryPhysicalGateRequest & request) noexcept;
 
+enum class PassEntryExecutionProfileStatus
+{
+  Invalid,
+  PhysicalInfeasible,
+  LateralAccelerationInfeasible,
+  RequiresWallAdjustment,
+  ExecutableUnmodified,
+  ProjectionRequiresSuccessorReplan,
+};
+
+struct PassEntryExecutionProfileRequest
+{
+  bool physical_execution_feasible{false};
+  bool lateral_acceleration_projection_used{false};
+  bool wall_clearance_adjusted{false};
+  bool static_map_wall_adjusted{false};
+  double accepted_maximum_lateral_accel_mps2{};
+  double maximum_lateral_accel_mps2{};
+};
+
+struct PassEntryExecutionProfileResolution
+{
+  bool valid{false};
+  bool available{false};
+  bool projection_used{false};
+  PassEntryExecutionProfileStatus status{
+    PassEntryExecutionProfileStatus::Invalid};
+};
+
+/// Classify the profile that the full physical horizon evaluation actually
+/// accepted.  A projection of the nominal lateral request is not an
+/// acceleration violation when the accepted prefix remains inside the bound,
+/// but that prefix does not certify the Pass/Return successor and therefore
+/// cannot authorize the phase transition.  Wall-adjusted profiles likewise
+/// remain unavailable at this strict ShiftOut-to-Pass boundary.
+PassEntryExecutionProfileResolution resolve_pass_entry_execution_profile(
+  const PassEntryExecutionProfileRequest & request) noexcept;
+
 struct CrossSideReplacementRetryThrottleRequest
 {
   bool side_changed{false};

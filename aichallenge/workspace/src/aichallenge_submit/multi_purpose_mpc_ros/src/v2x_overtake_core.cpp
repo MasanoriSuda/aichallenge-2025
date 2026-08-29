@@ -9589,6 +9589,50 @@ PassEntryPhysicalGateResolution resolve_pass_entry_physical_gate(
   return resolution;
 }
 
+PassEntryExecutionProfileResolution resolve_pass_entry_execution_profile(
+  const PassEntryExecutionProfileRequest & request) noexcept
+{
+  PassEntryExecutionProfileResolution resolution;
+  if (
+    !std::isfinite(request.accepted_maximum_lateral_accel_mps2) ||
+    request.accepted_maximum_lateral_accel_mps2 < 0.0 ||
+    !std::isfinite(request.maximum_lateral_accel_mps2) ||
+    request.maximum_lateral_accel_mps2 < 0.0)
+  {
+    return resolution;
+  }
+
+  resolution.valid = true;
+  resolution.projection_used = request.lateral_acceleration_projection_used;
+  if (!request.physical_execution_feasible) {
+    resolution.status = PassEntryExecutionProfileStatus::PhysicalInfeasible;
+    return resolution;
+  }
+  if (
+    request.maximum_lateral_accel_mps2 > 1e-9 &&
+    request.accepted_maximum_lateral_accel_mps2 >
+    request.maximum_lateral_accel_mps2 + 1e-6)
+  {
+    resolution.status =
+      PassEntryExecutionProfileStatus::LateralAccelerationInfeasible;
+    return resolution;
+  }
+  if (request.wall_clearance_adjusted || request.static_map_wall_adjusted) {
+    resolution.status = PassEntryExecutionProfileStatus::RequiresWallAdjustment;
+    return resolution;
+  }
+
+  if (request.lateral_acceleration_projection_used) {
+    resolution.status =
+      PassEntryExecutionProfileStatus::ProjectionRequiresSuccessorReplan;
+    return resolution;
+  }
+
+  resolution.available = true;
+  resolution.status = PassEntryExecutionProfileStatus::ExecutableUnmodified;
+  return resolution;
+}
+
 bool should_throttle_cross_side_replacement_retry(
   const CrossSideReplacementRetryThrottleRequest & request) noexcept
 {

@@ -270,6 +270,9 @@ using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallPreplanRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::RuntimeWallCenterContractionGoalRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateAction;
 using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryPhysicalGateRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryExecutionProfileRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::PassEntryExecutionProfileStatus;
+using multi_purpose_mpc_ros::v2x_overtake_core::resolve_pass_entry_execution_profile;
 using multi_purpose_mpc_ros::v2x_overtake_core::CrossSideReplacementRetryThrottleRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeSideRetryFailureClass;
 using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -10316,6 +10319,70 @@ TEST(V2XOvertakeCoreWall, PassEntryPhysicalGateRequiresExecutableHorizon)
   resolution = resolve_pass_entry_physical_gate(request);
   ASSERT_TRUE(resolution.valid);
   EXPECT_EQ(resolution.action, PassEntryPhysicalGateAction::Inactive);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryProjectedPrefixRequiresExactSuccessorReplan)
+{
+  PassEntryExecutionProfileRequest request;
+  request.physical_execution_feasible = true;
+  request.lateral_acceleration_projection_used = true;
+  request.accepted_maximum_lateral_accel_mps2 = 4.73;
+  request.maximum_lateral_accel_mps2 = 6.0;
+
+  const auto resolution = resolve_pass_entry_execution_profile(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.available);
+  EXPECT_TRUE(resolution.projection_used);
+  EXPECT_EQ(
+    resolution.status,
+    PassEntryExecutionProfileStatus::ProjectionRequiresSuccessorReplan);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryAcceptsExactPhysicallyExecutableSuccessor)
+{
+  PassEntryExecutionProfileRequest request;
+  request.physical_execution_feasible = true;
+  request.accepted_maximum_lateral_accel_mps2 = 5.87;
+  request.maximum_lateral_accel_mps2 = 6.0;
+
+  const auto resolution = resolve_pass_entry_execution_profile(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_TRUE(resolution.available);
+  EXPECT_FALSE(resolution.projection_used);
+  EXPECT_EQ(
+    resolution.status, PassEntryExecutionProfileStatus::ExecutableUnmodified);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryRejectsAcceptedProfileAboveAccelerationLimit)
+{
+  PassEntryExecutionProfileRequest request;
+  request.physical_execution_feasible = true;
+  request.lateral_acceleration_projection_used = true;
+  request.accepted_maximum_lateral_accel_mps2 = 8.15;
+  request.maximum_lateral_accel_mps2 = 6.0;
+
+  const auto resolution = resolve_pass_entry_execution_profile(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.available);
+  EXPECT_EQ(
+    resolution.status,
+    PassEntryExecutionProfileStatus::LateralAccelerationInfeasible);
+}
+
+TEST(V2XOvertakeCoreWall, PassEntryKeepsStrictWallAdjustmentRejection)
+{
+  PassEntryExecutionProfileRequest request;
+  request.physical_execution_feasible = true;
+  request.lateral_acceleration_projection_used = true;
+  request.wall_clearance_adjusted = true;
+  request.accepted_maximum_lateral_accel_mps2 = 4.73;
+  request.maximum_lateral_accel_mps2 = 6.0;
+
+  const auto resolution = resolve_pass_entry_execution_profile(request);
+  ASSERT_TRUE(resolution.valid);
+  EXPECT_FALSE(resolution.available);
+  EXPECT_EQ(
+    resolution.status, PassEntryExecutionProfileStatus::RequiresWallAdjustment);
 }
 
 TEST(V2XOvertakeCoreWall, ThrottlesOnlyUnchangedRejectedCrossSideCandidate)

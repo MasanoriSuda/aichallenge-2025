@@ -5894,8 +5894,6 @@ struct MpcProblem
   race_mpcc::RejoinShadowEligibilityReason rejoin_shadow_eligibility_reason{
     race_mpcc::RejoinShadowEligibilityReason::IntentNotRejoin};
   std::string progress_metadata_reject_reason;
-  mpcc_progress::ActivationSource progress_contouring_activation_source{
-    mpcc_progress::ActivationSource::NormalIntent};
   double progress_origin_m{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> progress_stage_distance_m;
   std::vector<double> progress_path_curvature_radpm;
@@ -19945,8 +19943,7 @@ struct MPC
       canonical_execution_identity.active;
     const auto progress_contouring_activation = mpcc_progress::resolve_activation(
       mpcc_progress::ActivationRequest{
-        progress_contouring_execution_phase,
-        behavior_output.dynamic_obstacle_lateral_escape_active});
+        progress_contouring_execution_phase});
     const bool progress_contouring_requested =
       progress_contouring_activation.requested;
     // The current-cycle authority trace is materialized above. Both the wire
@@ -20800,7 +20797,6 @@ struct MPC
       rejoin_shadow_requested,
       rejoin_shadow_eligibility.reason,
       progress_contouring_reject_reason,
-      progress_contouring_activation.source,
       progress_metadata_available ? model->s : std::numeric_limits<double>::quiet_NaN(),
       progress_metadata_available ? progress_preparation->stage_distance_m :
       std::vector<double>{},

@@ -12,24 +12,13 @@ namespace
 using multi_purpose_mpc_ros::mpcc_progress::Config;
 using multi_purpose_mpc_ros::mpcc_progress::LinearizationRequest;
 
-TEST(MpccProgress, ActivatesForDynamicEscapeOutsideOvertakeLinePhase)
-{
-  using multi_purpose_mpc_ros::mpcc_progress::ActivationRequest;
-  using multi_purpose_mpc_ros::mpcc_progress::ActivationSource;
-  using multi_purpose_mpc_ros::mpcc_progress::resolve_activation;
-  const auto resolution = resolve_activation(
-    ActivationRequest{false, true});
-  EXPECT_TRUE(resolution.requested);
-  EXPECT_EQ(resolution.source, ActivationSource::DynamicObstacleEscape);
-}
-
 TEST(MpccProgress, LeavesOrdinaryIntentToItsCanonicalIntentOwner)
 {
   using multi_purpose_mpc_ros::mpcc_progress::ActivationRequest;
   using multi_purpose_mpc_ros::mpcc_progress::ActivationSource;
   using multi_purpose_mpc_ros::mpcc_progress::resolve_activation;
   const auto resolution = resolve_activation(
-    ActivationRequest{false, false});
+    ActivationRequest{false});
   EXPECT_FALSE(resolution.requested);
   EXPECT_EQ(resolution.source, ActivationSource::NormalIntent);
 }
@@ -40,7 +29,7 @@ TEST(MpccProgress, ActivatesForOvertakeExecution)
   using multi_purpose_mpc_ros::mpcc_progress::ActivationSource;
   using multi_purpose_mpc_ros::mpcc_progress::resolve_activation;
   const auto resolution = resolve_activation(
-    ActivationRequest{true, false});
+    ActivationRequest{true});
   EXPECT_TRUE(resolution.requested);
   EXPECT_EQ(resolution.source, ActivationSource::OvertakeExecution);
 }

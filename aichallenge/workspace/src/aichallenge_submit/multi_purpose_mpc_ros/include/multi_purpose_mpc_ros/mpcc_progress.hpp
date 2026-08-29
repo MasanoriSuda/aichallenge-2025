@@ -18,13 +18,11 @@ enum class ActivationSource
 {
   NormalIntent,
   OvertakeExecution,
-  DynamicObstacleEscape,
 };
 
 struct ActivationRequest
 {
   bool overtake_execution_phase{false};
-  bool dynamic_obstacle_escape_active{false};
 };
 
 struct ActivationResolution
@@ -33,10 +31,9 @@ struct ActivationResolution
   ActivationSource source{ActivationSource::NormalIntent};
 };
 
-/// Keep formulation ownership in one place. Dynamic-obstacle escape is a
-/// lateral/longitudinal race-control action even while the high-level
-/// OvertakeLine phase is Idle, so it must not silently fall back to the legacy
-/// elapsed-time MPC solely because of that phase label.
+/// Keep Overtake execution-formulation ownership in one place.  Tactical
+/// dynamic-obstacle avoidance is a normal Track/Cruise problem; only a
+/// coherent canonical ShiftOut/Pass/Return identity may activate this scope.
 ActivationResolution resolve_activation(const ActivationRequest & request) noexcept;
 const char * activation_source_name(ActivationSource source) noexcept;
 

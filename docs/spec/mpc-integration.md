@@ -3119,6 +3119,29 @@ decision 2974／2975はsemantic intentは成立したがcurrent-world admission�
 Recovery、terminal successor、progress-liftは別failure familyであり、この変更を理由にprefix authority、lease、
 grace、timeout、retry、fallback、solver toleranceまたはclearanceを追加してはならない。
 
+#### pre-Mission DynamicEscapeのnormal scope統合（2026-08-30、2025由来の暫定）
+
+pre-Mission `Action::DynamicEscape`は、動的障害物に対するTrack/Cruise normal avoidanceであり、
+Overtake execution formulationのactivation sourceではない。canonical identityだけをCruiseへ降格しても、古い
+`mpcc_progress::ActivationSource::DynamicObstacleEscape`が残っているとTrack/Cruise populationは
+`live-progress-already-active`で拒否される。一方で正式なOvertake Mission identityがないためexecution populationも
+作れず、normal authorityが空になる。
+
+現在は`mpcc_progress::resolve_activation()`をcoherent canonical ShiftOut／Pass／Return identity専用に限定し、
+DynamicEscape activation source、request field、resolver branch、unused storageを物理削除した。DynamicEscapeの
+stage-wise lateral contract、current target tube、preferred sideはnormal Track/Cruise requestへ残り、左右候補、
+seven-state SQP、wall、timed obstacle、terminal successor、certified Store、publisherの既存証明を通る。
+
+baseline `output/20260830-005711`では53 decisionが
+`track=0/follow=0/execution=0/rejoin=0`となった。candidate `output/20260830-011957`では
+DynamicEscape 13 decisionで旧signatureとEmergency authorityがともに0、13件すべてがcertified normal
+seven-state solutionをpublishした。正式な`Idle -> ShiftOut`を5件、`ShiftOut -> Pass`を1件観測しており、
+Mission execution activationも維持されている。
+
+この結果はscope欠落だけを閉じる。trace上のCruise intentに対してretained ShiftOut／Follow artifactがpublishされた
+semantic handoff、ordinary Cruise authority gap、Pass完遂、solver rejectionは別failure familyである。この統合を
+根拠にlease、grace、timeout、retry、fallback、solver tolerance、weightまたはclearanceを追加・変更してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

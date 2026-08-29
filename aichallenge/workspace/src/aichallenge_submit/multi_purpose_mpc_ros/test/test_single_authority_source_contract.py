@@ -841,6 +841,38 @@ def test_dynamic_escape_is_normal_obstacle_avoidance_not_overtake_identity() -> 
     assert "target_id_" not in normal_owner
 
 
+def test_dynamic_escape_cannot_activate_overtake_execution_scope() -> None:
+    """Tactical avoidance must use Track/Cruise, never a second progress owner."""
+
+    for retired_symbol in (
+        "ActivationSource::DynamicObstacleEscape",
+        "dynamic_obstacle_escape_active{false}",
+        "request.dynamic_obstacle_escape_active",
+    ):
+        assert retired_symbol not in MPCC_PROGRESS_HEADER
+        assert retired_symbol not in MPCC_PROGRESS_SOURCE
+
+    activation_start = SOURCE.index(
+        "const auto progress_contouring_activation = mpcc_progress::resolve_activation("
+    )
+    activation_end = SOURCE.index(
+        "const bool progress_contouring_requested", activation_start
+    )
+    activation = SOURCE[activation_start:activation_end]
+    assert "progress_contouring_execution_phase" in activation
+    assert "dynamic_obstacle_lateral_escape_active" not in activation
+
+    eligibility_start = SOURCE.index(
+        "const auto track_cruise_shadow_eligibility ="
+    )
+    eligibility_end = SOURCE.index(
+        "const bool track_cruise_shadow_requested", eligibility_start
+    )
+    eligibility = SOURCE[eligibility_start:eligibility_end]
+    assert "progress_contouring_requested" in eligibility
+    assert "problem_intent" in eligibility
+
+
 def test_published_overtake_identity_is_replenished_before_problem_assembly() -> None:
     """Executed intent, not a transient tactical label, owns its successor QP."""
 

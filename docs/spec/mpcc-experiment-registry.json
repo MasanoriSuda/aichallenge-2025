@@ -570,6 +570,24 @@
         "prefix-dependent DynamicWait canonical-intent reasons and conflict"
       ],
       "revisit_condition": "a wait without coherent target, generation, side and origin identity gains normal intent, an optional prefix publishes without current-world proof, the old Unknown-intent signature returns, or a hard DynamicWait failure no longer stops"
+    },
+    {
+      "experiment_id": "20260830-dynamic-escape-normal-scope",
+      "baseline_commit": "d890c0a9",
+      "snapshot_ids": [
+        "20260830-005711-decision-2725"
+      ],
+      "hypothesis": "the post-demotion DynamicEscape authority hole is caused by the retired progress activation source still disabling Track/Cruise while no coherent Overtake execution identity exists",
+      "changed_dimension": "production_dynamic_escape_normal_scope_ownership",
+      "result": "accepted",
+      "reason": "baseline 20260830-005711 recorded 53 DynamicEscape decisions with track, follow, execution and rejoin all unavailable; candidate 20260830-011957 recorded 13 DynamicEscape decisions with zero old signatures, zero Emergency authority and 13 certified normal seven-state publications while preserving five real Idle-to-ShiftOut and one ShiftOut-to-Pass transitions",
+      "production_impact": "DynamicEscape can no longer activate the Overtake execution formulation and instead uses the existing Track/Cruise normal dynamic-obstacle population; only coherent canonical ShiftOut, Pass or Return identity activates execution scope and all physical, terminal, Store and publisher proofs are unchanged",
+      "deleted_code": [
+        "DynamicObstacleEscape progress activation source",
+        "dynamic_obstacle_escape_active activation request field",
+        "unused progress activation source storage"
+      ],
+      "revisit_condition": "a pre-Mission DynamicEscape again suppresses all normal populations, an uncertified normal candidate publishes, a real Mission cannot activate Overtake execution, or the same old missing-scope signature returns"
     }
   ]
 }

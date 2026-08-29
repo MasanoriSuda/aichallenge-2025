@@ -96,11 +96,6 @@ ActivationResolution resolve_activation(const ActivationRequest & request) noexc
     resolution.source = ActivationSource::OvertakeExecution;
     return resolution;
   }
-  if (request.dynamic_obstacle_escape_active) {
-    resolution.requested = true;
-    resolution.source = ActivationSource::DynamicObstacleEscape;
-    return resolution;
-  }
   resolution.source = ActivationSource::NormalIntent;
   return resolution;
 }
@@ -112,8 +107,6 @@ const char * activation_source_name(const ActivationSource source) noexcept
       return "normal-intent";
     case ActivationSource::OvertakeExecution:
       return "overtake-execution";
-    case ActivationSource::DynamicObstacleEscape:
-      return "dynamic-obstacle-escape";
   }
   return "unknown";
 }

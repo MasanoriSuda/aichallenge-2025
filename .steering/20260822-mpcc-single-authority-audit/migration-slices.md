@@ -1287,6 +1287,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   candidate population and delete the old producer atomically; ShiftOut
   successive-convexification work remains separate.
 
+- `.steering/20260829-cruise-current-world-population` performs that atomic
+  producer replacement.  Dynamic-obstacle Cruise and Follow now share the
+  existing two-side current-world population, per-side solver continuity,
+  exact physical proof chain, certified Store and latest-only normal worker.
+  Intent and execution side remain normal and neutral, so no Overtake Mission,
+  publisher or authority was added.  The Follow-only producer/API and the
+  production Cruise fallthrough to the single neutral automatic branch were
+  deleted.  On frozen Cruise sequence 601 the captured arm remains rejected,
+  while both rebuilt side arms pass every unchanged proof; 25-package build,
+  54/54 CTest targets and 75 source-contract tests pass.  ShiftOut sequence
+  1266 remains the separate single-SQP/convexification Slice and is not hidden
+  by a fallback or parameter change.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

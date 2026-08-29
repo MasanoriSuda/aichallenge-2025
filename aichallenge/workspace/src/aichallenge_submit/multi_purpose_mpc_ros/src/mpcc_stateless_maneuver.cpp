@@ -357,7 +357,7 @@ const char * to_string(const CandidateKind kind) noexcept
 static Result build_with_intent_policy(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,
-  const int pass_side_sign, const bool allow_normal_avoidance_audit) noexcept
+  const int pass_side_sign, const bool allow_normal_avoidance) noexcept
 {
   namespace architecture = mpcc_architecture_snapshot;
   namespace contract = mpcc_execution_contract;
@@ -378,15 +378,15 @@ static Result build_with_intent_policy(
     if (pass_side_sign != -1 && pass_side_sign != 1) {
       return reject(RejectReason::InvalidSide, "pass side must be -1 or +1");
     }
-    const bool normal_avoidance_audit =
-      allow_normal_avoidance_audit &&
+    const bool normal_avoidance =
+      allow_normal_avoidance &&
       (source.identity.source_context.intent ==
       mpcc_execution_contract::ControlIntent::Follow ||
       source.identity.source_context.intent ==
       mpcc_execution_contract::ControlIntent::Cruise);
     if (
       !supported_intent(source.identity.source_context.intent) &&
-      !normal_avoidance_audit)
+      !normal_avoidance)
     {
       return reject(
         RejectReason::UnsupportedIntent,
@@ -420,7 +420,7 @@ static Result build_with_intent_policy(
     seed.lateral_reference_m.reserve(static_cast<std::size_t>(horizon + 1));
     seed.solver_snapshot = source;
     auto & candidate = seed.solver_snapshot;
-    if (!normal_avoidance_audit) {
+    if (!normal_avoidance) {
       candidate.identity.source_context.execution_side_sign = pass_side_sign;
     }
     candidate.identity.source_context.dynamic_obstacle_constraint_active = true;
@@ -526,24 +526,7 @@ Result build(
     source, source_interaction_fingerprint, pass_side_sign, false);
 }
 
-Result build_follow_escape(
-  const mpcc_rate_resolved_shadow::Snapshot & source,
-  const std::uint64_t source_interaction_fingerprint,
-  const int pass_side_sign) noexcept
-{
-  if (
-    source.identity.source_context.intent !=
-    mpcc_execution_contract::ControlIntent::Follow)
-  {
-    return reject(
-      RejectReason::UnsupportedIntent,
-      "Follow escape audit accepts only Follow intent");
-  }
-  return build_with_intent_policy(
-    source, source_interaction_fingerprint, pass_side_sign, true);
-}
-
-Result build_normal_avoidance_audit(
+Result build_normal_avoidance(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,
   const int pass_side_sign) noexcept
@@ -555,7 +538,7 @@ Result build_normal_avoidance_audit(
   {
     return reject(
       RejectReason::UnsupportedIntent,
-      "normal avoidance audit accepts only Cruise or Follow intent");
+      "normal avoidance accepts only Cruise or Follow intent");
   }
   return build_with_intent_policy(
     source, source_interaction_fingerprint, pass_side_sign, true);
@@ -893,29 +876,33 @@ CandidateSet build_bounded_candidates(
   return result;
 }
 
-CandidateSet build_follow_escape_candidates(
+CandidateSet build_normal_avoidance_candidates(
   const mpcc_rate_resolved_shadow::Snapshot & source) noexcept
 {
   namespace architecture = mpcc_architecture_snapshot;
   CandidateSet population;
   if (
     source.identity.source_context.intent !=
-    mpcc_execution_contract::ControlIntent::Follow)
+    mpcc_execution_contract::ControlIntent::Follow &&
+    source.identity.source_context.intent !=
+    mpcc_execution_contract::ControlIntent::Cruise)
   {
     population.reason = RejectReason::UnsupportedIntent;
-    population.detail = "Follow escape population accepts only Follow intent";
+    population.detail =
+      "normal avoidance population accepts only Cruise or Follow intent";
     return population;
   }
   population.source_interaction_fingerprint =
     architecture::fingerprint_interaction_snapshot(source);
   if (population.source_interaction_fingerprint == 0U) {
     population.reason = RejectReason::IncompleteSnapshot;
-    population.detail = "Follow escape source fingerprint unavailable";
+    population.detail =
+      "normal avoidance source fingerprint unavailable";
     return population;
   }
   std::ostringstream rejected;
   for (const int side : {1, -1}) {
-    auto built = build_follow_escape(
+    auto built = build_normal_avoidance(
       source, population.source_interaction_fingerprint, side);
     if (!built.seed.has_value()) {
       rejected << (side > 0 ? "positive" : "negative") << '='
@@ -928,7 +915,7 @@ CandidateSet build_follow_escape_candidates(
   if (population.candidates.empty()) {
     population.reason = RejectReason::CandidateSealUnavailable;
     population.detail =
-      std::string{"no Follow escape candidate/"} + rejected.str();
+      std::string{"no normal avoidance candidate/"} + rejected.str();
     return population;
   }
   population.reason = RejectReason::Accepted;

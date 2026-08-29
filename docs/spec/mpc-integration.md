@@ -2932,6 +2932,34 @@ raw async resultをpreparation evidenceとして扱い、同じsource resultに�
 suffix adoptionを同時に残さない単一ownerへ原子的に置換する。in-flight ownershipと最新world identityで
 投入をboundedにし、retry lease、grace、timeout、solver toleranceまたはclearance変更で隠さない。
 
+#### Cruise／Follow current-world動的回避population（2026-08-29、2025由来の暫定）
+
+動的障害物制約を持つ通常走行は、CruiseとFollowの両intentで同じbounded current-world
+populationを用いる。単一の中立referenceから自動的に左右を決める処理をproduction候補の唯一の
+生成元にはしない。現在worldから正側・負側をそれぞれ再構築し、各候補についてcomplete homotopy、
+seven-state dynamics、progress-dependent wall、timed obstacle disjunction、terminal successorを同じ
+問題として解く。その後、既存のexact nonlinear／swept-wall／dynamic／successor証明をすべて通過した
+artifactだけをnormal certified Storeへ置く。
+
+このpopulationはOvertake Missionを生成しない。artifactのintentはCruiseまたはFollow、
+`execution_side_sign`は0を維持し、物理sideはcandidate provenanceとdynamic obstacle rowだけに保持する。
+数値continuationは正負それぞれ一つのpersistent solver contextが所有し、同じtarget、intent generation、
+intent内では最後にcertifyしたsideを先に評価する。worker、publisher、normal authorityは従来の
+Track／Cruise latest-only系を共有し、追加しない。
+
+凍結Cruise sequence 601では、従来の中立候補はsolver rejectとなり、独立非線形oracleでも約
+0.506597 mのslackが必要だった。一方、同じworldから再構築した正負候補はterminal progress
+9.41925／9.47662 m、terminal velocity 5.90443 m/sで全exact proofを通過した。したがって原因は
+物理的な両側閉塞やsolver設定ではなく、Cruiseだけが完全なside populationへ入らないproducerの
+非対称だった。修正ではFollow専用producer/APIをCruise／Follow共通ownerへ置換し、動的障害物Cruiseが
+中立自動branchへfall throughするproduction経路を削除した。solver、clearance、weight、timeout、lease、
+retry、fallbackは変更していない。
+
+この修正はShiftOut sequence 1266のsingle-SQP／convexification制限を扱わない。そちらは別Sliceで、
+同じ凍結worldと不変のphysical proofを用いて修正する。通常走行の動的Gateでは、certified sourceが
+`normal-avoidance-positive`または`normal-avoidance-negative`となり、Emergency tailやcallback overrunを
+増やさないことを確認する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

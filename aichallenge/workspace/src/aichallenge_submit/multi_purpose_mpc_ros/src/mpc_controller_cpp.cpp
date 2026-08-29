@@ -6359,7 +6359,7 @@ struct RateResolvedCurrentWorldPopulationEvaluation
   std::string detail{"not-evaluated"};
 };
 
-class RateResolvedFollowHomotopyOwner
+class RateResolvedNormalHomotopyOwner
 {
 public:
   int preferred_side(
@@ -6394,18 +6394,21 @@ private:
     const auto & context = source.identity.source_context;
     if (
       target_id_ == context.target_id &&
-      intent_generation_ == context.intent_generation)
+      intent_generation_ == context.intent_generation &&
+      intent_ == context.intent)
     {
       return;
     }
     target_id_ = context.target_id;
     intent_generation_ = context.intent_generation;
+    intent_ = context.intent;
     selected_side_sign_ = 0;
   }
 
   std::mutex mutex_;
   std::string target_id_;
   std::uint64_t intent_generation_{};
+  mpcc_contract::ControlIntent intent_{mpcc_contract::ControlIntent::Cruise};
   int selected_side_sign_{};
 };
 
@@ -6526,14 +6529,14 @@ evaluate_rate_resolved_current_world_population(
 }
 
 RateResolvedCurrentWorldPopulationEvaluation
-evaluate_rate_resolved_follow_escape_population(
+evaluate_rate_resolved_normal_avoidance_population(
   const rate_resolved_shadow::Snapshot & source,
   const rate_resolved_physical_wall::Snapshot & physical_source,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   positive_solver_context,
-  const std::shared_ptr<RateResolvedFollowHomotopyOwner> & homotopy_owner,
+  const std::shared_ptr<RateResolvedNormalHomotopyOwner> & homotopy_owner,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
 {
   const auto certified = [](const RateResolvedPipelineEvaluation & evaluation) {
@@ -6565,7 +6568,7 @@ evaluate_rate_resolved_follow_escape_population(
 
   RateResolvedCurrentWorldPopulationEvaluation result;
   int best_rank = -1;
-  const auto population = stateless_maneuver::build_follow_escape_candidates(
+  const auto population = stateless_maneuver::build_normal_avoidance_candidates(
     source);
   if (
     population.reason != stateless_maneuver::RejectReason::Accepted ||
@@ -6575,7 +6578,7 @@ evaluate_rate_resolved_follow_escape_population(
     result.pipeline.solver.outcome =
       rate_resolved_shadow::Outcome::BuildRejected;
     result.detail =
-      std::string{"Follow escape population rejected/"} +
+      std::string{"normal avoidance population rejected/"} +
       stateless_maneuver::to_string(population.reason) + "/" +
       population.detail;
     result.pipeline.solver.detail = result.detail;
@@ -6605,7 +6608,7 @@ evaluate_rate_resolved_follow_escape_population(
     ++result.candidate_count;
     auto physical = physical_source;
     physical.identity.artifact = candidate.seed.solver_snapshot.identity;
-    // Follow identity is deliberately side-free. The normal worker therefore
+    // Cruise/Follow identity is deliberately side-free. The normal worker therefore
     // owns one persistent numerical context per physical homotopy; sharing the
     // primary context would mix side provenance, while constructing a context
     // here would discard the selected side's continuation every cycle.
@@ -6628,7 +6631,7 @@ evaluate_rate_resolved_follow_escape_population(
     if (candidate_certified) {
       result.pipeline = std::move(evaluation);
       result.candidate_source = candidate.seed.pass_side_sign > 0 ?
-        "follow-escape-positive" : "follow-escape-negative";
+        "normal-avoidance-positive" : "normal-avoidance-negative";
       if (homotopy_owner != nullptr) {
         homotopy_owner->select(source, candidate.seed.pass_side_sign);
       }
@@ -6648,11 +6651,11 @@ evaluate_rate_resolved_follow_escape_population(
       best_rank = rank;
       result.pipeline = std::move(evaluation);
       result.candidate_source = candidate.seed.pass_side_sign > 0 ?
-        "follow-escape-positive" : "follow-escape-negative";
+        "normal-avoidance-positive" : "normal-avoidance-negative";
     }
   }
 
-  result.detail = std::string{"no certified Follow escape/best="} +
+  result.detail = std::string{"no certified normal avoidance/best="} +
     result.candidate_source + "/preferred=" +
     std::to_string(preferred_side) + "/evaluated=" +
     std::to_string(result.candidate_count);
@@ -6666,22 +6669,33 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   std::optional<rate_resolved_physical_wall::Snapshot> physical_source,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> & solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
-  follow_negative_solver_context,
+  normal_negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
-  follow_positive_solver_context,
-  const std::shared_ptr<RateResolvedFollowHomotopyOwner> &
-  follow_homotopy_owner,
+  normal_positive_solver_context,
+  const std::shared_ptr<RateResolvedNormalHomotopyOwner> &
+  normal_homotopy_owner,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
 {
   const auto intent = source.identity.source_context.intent;
-  if (
-    intent == mpcc_contract::ControlIntent::Follow &&
-    physical_source.has_value())
+  const bool normal_dynamic_avoidance =
+    (intent == mpcc_contract::ControlIntent::Cruise ||
+    intent == mpcc_contract::ControlIntent::Follow) &&
+    source.dynamic_obstacle_refinement_active &&
+    source.identity.source_context.dynamic_obstacle_constraint_active;
+  if (normal_dynamic_avoidance)
   {
-    return evaluate_rate_resolved_follow_escape_population(
+    if (!physical_source.has_value()) {
+      RateResolvedPipelineEvaluation rejected;
+      rejected.solver.identity = source.identity;
+      rejected.solver.outcome = rate_resolved_shadow::Outcome::BuildRejected;
+      rejected.solver.detail =
+        "current-world normal avoidance requires physical snapshot";
+      return rejected;
+    }
+    return evaluate_rate_resolved_normal_avoidance_population(
       source, physical_source.value(),
-      follow_negative_solver_context, follow_positive_solver_context,
-      follow_homotopy_owner,
+      normal_negative_solver_context, normal_positive_solver_context,
+      normal_homotopy_owner,
       certified_plan_store).pipeline;
   }
   if (mpcc_contract::canonical_normal_intent_requires_execution_side(intent)) {
@@ -7358,12 +7372,12 @@ struct MPC
     if (enable_async_tactical_worker) {
       rate_resolved_track_cruise_shadow_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
-      rate_resolved_follow_escape_negative_solver_context_ =
+      rate_resolved_normal_avoidance_negative_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
-      rate_resolved_follow_escape_positive_solver_context_ =
+      rate_resolved_normal_avoidance_positive_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
-      rate_resolved_follow_homotopy_owner_ =
-        std::make_shared<RateResolvedFollowHomotopyOwner>();
+      rate_resolved_normal_homotopy_owner_ =
+        std::make_shared<RateResolvedNormalHomotopyOwner>();
       rate_resolved_track_cruise_shadow_mailbox_ =
         std::make_shared<rate_resolved_shadow::Mailbox>();
       rate_resolved_track_cruise_shadow_worker_ =
@@ -23439,9 +23453,9 @@ struct MPC
       rate_resolved_track_cruise_shadow_worker_ == nullptr ||
       rate_resolved_track_cruise_shadow_mailbox_ == nullptr ||
       rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
-      rate_resolved_follow_escape_negative_solver_context_ == nullptr ||
-      rate_resolved_follow_escape_positive_solver_context_ == nullptr ||
-      rate_resolved_follow_homotopy_owner_ == nullptr ||
+      rate_resolved_normal_avoidance_negative_solver_context_ == nullptr ||
+      rate_resolved_normal_avoidance_positive_solver_context_ == nullptr ||
+      rate_resolved_normal_homotopy_owner_ == nullptr ||
       rate_resolved_track_cruise_shadow_next_sequence_ ==
       std::numeric_limits<std::uint64_t>::max())
     {
@@ -23505,19 +23519,19 @@ struct MPC
     const auto mailbox = rate_resolved_track_cruise_shadow_mailbox_;
     const auto solver_context =
       rate_resolved_track_cruise_shadow_solver_context_;
-    const auto follow_negative_solver_context =
-      rate_resolved_follow_escape_negative_solver_context_;
-    const auto follow_positive_solver_context =
-      rate_resolved_follow_escape_positive_solver_context_;
-    const auto follow_homotopy_owner =
-      rate_resolved_follow_homotopy_owner_;
+    const auto normal_negative_solver_context =
+      rate_resolved_normal_avoidance_negative_solver_context_;
+    const auto normal_positive_solver_context =
+      rate_resolved_normal_avoidance_positive_solver_context_;
+    const auto normal_homotopy_owner =
+      rate_resolved_normal_homotopy_owner_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
       [snapshot = std::move(snapshot.value()), mailbox, solver_context,
-        follow_negative_solver_context, follow_positive_solver_context,
-        follow_homotopy_owner,
+        normal_negative_solver_context, normal_positive_solver_context,
+        normal_homotopy_owner,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
         physical_registered, certified_plan_store]() mutable {
         if (!physical_registered) {
@@ -23525,8 +23539,8 @@ struct MPC
         }
         auto evaluation = evaluate_rate_resolved_normal_population(
           snapshot, std::move(physical_snapshot), solver_context,
-          follow_negative_solver_context, follow_positive_solver_context,
-          follow_homotopy_owner,
+          normal_negative_solver_context, normal_positive_solver_context,
+          normal_homotopy_owner,
           certified_plan_store);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
@@ -27573,11 +27587,11 @@ struct MPC
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_track_cruise_shadow_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
-  rate_resolved_follow_escape_negative_solver_context_;
+  rate_resolved_normal_avoidance_negative_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
-  rate_resolved_follow_escape_positive_solver_context_;
-  std::shared_ptr<RateResolvedFollowHomotopyOwner>
-  rate_resolved_follow_homotopy_owner_;
+  rate_resolved_normal_avoidance_positive_solver_context_;
+  std::shared_ptr<RateResolvedNormalHomotopyOwner>
+  rate_resolved_normal_homotopy_owner_;
   std::shared_ptr<rate_resolved_shadow::Mailbox>
   rate_resolved_track_cruise_shadow_mailbox_;
   std::unique_ptr<LatestOnlyWorker>

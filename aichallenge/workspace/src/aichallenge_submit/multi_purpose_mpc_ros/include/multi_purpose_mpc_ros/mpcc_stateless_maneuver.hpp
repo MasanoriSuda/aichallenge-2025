@@ -141,22 +141,12 @@ Result build(
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
 
-/// Data-only normal-intent escape candidate. This deliberately accepts only
-/// Follow and has no authority surface. Production Overtake callers continue
-/// to use build(), whose intent contract remains unchanged. A candidate needs
-/// the common SQP, exact proofs, retained revalidation and publication join
-/// before it can affect execution.
-Result build_follow_escape(
-  const mpcc_rate_resolved_shadow::Snapshot & source,
-  std::uint64_t source_interaction_fingerprint,
-  int pass_side_sign) noexcept;
-
-/// Audit-only current-world avoidance candidate for a neutral normal intent.
-/// Cruise and Follow do not acquire Overtake authority or a tactical side;
-/// this entry point exists only so architecture comparison can falsify the
-/// captured automatic obstacle branch against independently rebuilt left and
-/// right homotopies.  It has no Store, mailbox or publisher caller.
-Result build_normal_avoidance_audit(
+/// Data-only current-world avoidance candidate for a neutral normal intent.
+/// Cruise and Follow do not acquire Overtake authority or a tactical side.
+/// The candidate must pass the common SQP and exact proof chain before the
+/// existing normal Store may select it; this producer has no authority or
+/// publisher surface of its own.
+Result build_normal_avoidance(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign) noexcept;
@@ -213,9 +203,10 @@ CandidateSet build_bounded_candidates(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   int pass_side_sign) noexcept;
 
-/// Bounded current-world Follow escape population. It contains at most one
-/// direct candidate per side and does not solve, certify, retain or publish.
-CandidateSet build_follow_escape_candidates(
+/// Bounded current-world Cruise/Follow avoidance population. It contains at
+/// most one direct candidate per side and does not solve, certify, retain or
+/// publish.
+CandidateSet build_normal_avoidance_candidates(
   const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_stateless_maneuver

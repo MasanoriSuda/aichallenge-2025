@@ -385,12 +385,8 @@
     },
     {
       "experiment_id": "20260829-proof-authoritative-wall-pose-production",
-      "baseline_commit": "4c357c78",
-      "snapshot_ids": [
-        "11478535197026802675",
-        "12107242968934788374",
-        "9845010060330222052"
-      ],
+      "baseline_commit": "4c357c78c019cd1d03bcad5742652c545c51396e",
+      "snapshot_ids": [],
       "hypothesis": "sampled lag and heading wall-pose bucket intervals are nonphysical trust-region artifacts and can be deleted from production while exact current-world proofs remain the sole physical authority",
       "changed_dimension": "production_wall_refinement_pose_bucket_authority",
       "result": "accepted",
@@ -405,9 +401,7 @@
     {
       "experiment_id": "20260829-shiftout-rejected-iterate-proof",
       "baseline_commit": "cd044edc40b54ac4c936b9cfafed2de6d4c9c0f3",
-      "snapshot_ids": [
-        "9845010060330222052"
-      ],
+      "snapshot_ids": [],
       "hypothesis": "the live ShiftOut maximum-iteration failure contains a physically certifiable finite primal that is discarded by the numerical convergence contract",
       "changed_dimension": "diagnostic_rejected_primal_and_offline_coordinate_equilibration",
       "result": "accepted",
@@ -418,13 +412,8 @@
     },
     {
       "experiment_id": "20260829-canonical-kkt-scaling-audit",
-      "baseline_commit": "1810e82f",
-      "snapshot_ids": [
-        "9845010060330222052",
-        "7896913873338064473",
-        "5862539731343104692",
-        "follow-sequence-5575"
-      ],
+      "baseline_commit": "1810e82f80551e6c36edde210bf9e195ed264fd4",
+      "snapshot_ids": [],
       "hypothesis": "one numerical scaling policy can replace the current solver globally, or the numerical mismatch can be bounded to a specific QP problem class",
       "changed_dimension": "observation_only_kkt_equilibration_ownership",
       "result": "accepted",
@@ -435,12 +424,8 @@
     },
     {
       "experiment_id": "20260829-structured-interior-wall-audit",
-      "baseline_commit": "66b3739d",
-      "snapshot_ids": [
-        "000000001266-145d1159f38a6ea9-shiftout-side-negative-physical-proof-physical-proof-rejected",
-        "000000000531-0b8a2fc7bb136829-follow-side-positive-physical-proof-physical-proof-rejected",
-        "000000000601-92df63438ac7ffd7-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected"
-      ],
+      "baseline_commit": "66b3739d0e3cc3df5bad45546d08057dca54281a",
+      "snapshot_ids": [],
       "hypothesis": "replacing the four affine swept-wall rows per transition with the same bounded number of partial nonlinear transition tangents closes the exact interior-wall proof gap without dense-row cost",
       "changed_dimension": "observation_only_same_budget_nonlinear_interior_wall_representation",
       "result": "rejected",
@@ -451,7 +436,7 @@
     },
     {
       "experiment_id": "20260829-independent-nonlinear-feasibility-oracle",
-      "baseline_commit": "6884807f",
+      "baseline_commit": "6884807fac2d74902c7525228288703f23f636e5",
       "snapshot_ids": [],
       "hypothesis": "the remaining ShiftOut and Cruise failures are physical infeasibility rather than a single-SQP or candidate-generation limitation",
       "changed_dimension": "observation_only_exact_nonlinear_feasibility_and_cruise_homotopy_comparison",
@@ -460,6 +445,21 @@
       "production_impact": "none; the nonlinear oracle and Cruise side comparison have no Store, mailbox, publisher or production caller, and no solver, clearance, timeout, lease, fallback or configuration changed",
       "deleted_code": [],
       "revisit_condition": "a production Slice atomically replaces the neutral Cruise/Follow automatic branch with a bounded current-world candidate population and deletes the old producer, or a separate ShiftOut successive-convexification Slice passes the frozen exact proof without changing physical constraints"
+    },
+    {
+      "experiment_id": "20260829-cruise-current-world-population",
+      "baseline_commit": "00f5f97bcaad618299cadf4319d05f7304227940",
+      "snapshot_ids": [],
+      "hypothesis": "the frozen Cruise failure is caused by production evaluating only the neutral automatic obstacle topology while feasible complete side candidates exist in the same immutable world",
+      "changed_dimension": "production_cruise_follow_current_world_candidate_population",
+      "result": "accepted",
+      "reason": "the captured neutral arm remains solver rejected, while the rebuilt positive and negative arms pass every unchanged exact proof at 9.41925 and 9.47662 m terminal progress; production now routes active Cruise and Follow dynamic-obstacle contracts through the same bounded two-side population, and all 54 package test targets plus 75 source-contract tests pass",
+      "production_impact": "the existing latest-only normal worker and certified Store evaluate the Cruise/Follow two-side population; normal intent and execution_side_sign=0 remain unchanged, and no publisher, authority, solver setting, clearance, timeout, lease, retry, fallback or configuration was added",
+      "deleted_code": [
+        "Follow-only normal-avoidance producer and ownership API",
+        "dynamic-obstacle Cruise production fallthrough to the single neutral automatic branch"
+      ],
+      "revisit_condition": "a same-world replay disproves either rebuilt side certificate, or a dynamic run shows the shared population introduces new Emergency tails, callback overruns or identity mismatches; do not restore the neutral branch without such evidence"
     }
   ]
 }

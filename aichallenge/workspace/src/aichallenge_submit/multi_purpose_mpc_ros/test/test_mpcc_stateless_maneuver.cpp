@@ -524,7 +524,7 @@ TEST(MpccStatelessManeuver, ReturnAllowsSemanticallyUnboundedLateralInterval)
   EXPECT_EQ(result.seed->terminal_successor, TerminalSuccessor::Return);
 }
 
-TEST(MpccStatelessManeuver, FollowEscapeIsAvailableOnlyThroughAuditEntryPoint)
+TEST(MpccStatelessManeuver, FollowAvoidanceKeepsNormalIntentAndIdentity)
 {
   auto source = make_source();
   source.identity.source_context.intent =
@@ -541,15 +541,15 @@ TEST(MpccStatelessManeuver, FollowEscapeIsAvailableOnlyThroughAuditEntryPoint)
   EXPECT_EQ(production.reason, RejectReason::UnsupportedIntent);
   EXPECT_FALSE(production.seed.has_value());
 
-  const auto audit = build_follow_escape(source, fingerprint, 1);
-  EXPECT_EQ(audit.reason, RejectReason::Accepted) << audit.detail;
-  ASSERT_TRUE(audit.seed.has_value());
-  EXPECT_EQ(audit.seed->pass_side_sign, 1);
+  const auto avoidance = build_normal_avoidance(source, fingerprint, 1);
+  EXPECT_EQ(avoidance.reason, RejectReason::Accepted) << avoidance.detail;
+  ASSERT_TRUE(avoidance.seed.has_value());
+  EXPECT_EQ(avoidance.seed->pass_side_sign, 1);
   EXPECT_EQ(
-    audit.seed->solver_snapshot.identity.source_context.intent,
+    avoidance.seed->solver_snapshot.identity.source_context.intent,
     mpcc_execution_contract::ControlIntent::Follow);
 
-  const auto population = build_follow_escape_candidates(source);
+  const auto population = build_normal_avoidance_candidates(source);
   EXPECT_EQ(population.reason, RejectReason::Accepted) << population.detail;
   ASSERT_EQ(population.candidates.size(), 2U);
   EXPECT_EQ(population.candidates[0].seed.pass_side_sign, 1);
@@ -564,7 +564,7 @@ TEST(MpccStatelessManeuver, FollowEscapeIsAvailableOnlyThroughAuditEntryPoint)
   }
 }
 
-TEST(MpccStatelessManeuver, CruiseAvoidanceIsAvailableOnlyThroughAuditEntryPoint)
+TEST(MpccStatelessManeuver, CruiseAvoidanceKeepsNormalIntentAndIdentity)
 {
   auto source = make_source();
   source.identity.source_context.intent =
@@ -581,17 +581,48 @@ TEST(MpccStatelessManeuver, CruiseAvoidanceIsAvailableOnlyThroughAuditEntryPoint
   EXPECT_EQ(production.reason, RejectReason::UnsupportedIntent);
   EXPECT_FALSE(production.seed.has_value());
 
-  const auto audit = build_normal_avoidance_audit(
+  const auto avoidance = build_normal_avoidance(
     source, fingerprint, -1);
-  EXPECT_EQ(audit.reason, RejectReason::Accepted) << audit.detail;
-  ASSERT_TRUE(audit.seed.has_value());
-  EXPECT_EQ(audit.seed->pass_side_sign, -1);
+  EXPECT_EQ(avoidance.reason, RejectReason::Accepted) << avoidance.detail;
+  ASSERT_TRUE(avoidance.seed.has_value());
+  EXPECT_EQ(avoidance.seed->pass_side_sign, -1);
   EXPECT_EQ(
-    audit.seed->solver_snapshot.identity.source_context.intent,
+    avoidance.seed->solver_snapshot.identity.source_context.intent,
     mpcc_execution_contract::ControlIntent::Cruise);
   EXPECT_EQ(
-    audit.seed->solver_snapshot.identity.source_context.execution_side_sign,
+    avoidance.seed->solver_snapshot.identity.source_context.execution_side_sign,
     0);
+}
+
+TEST(MpccStatelessManeuver, NormalAvoidancePopulationSupportsCruiseAndFollow)
+{
+  for (const auto intent : {
+      mpcc_execution_contract::ControlIntent::Cruise,
+      mpcc_execution_contract::ControlIntent::Follow})
+  {
+    auto source = make_source();
+    source.identity.source_context.intent = intent;
+    source.identity.source_context.execution_side_sign = 0;
+    source.identity.source_context.fingerprint = 0U;
+    source.identity.source_context =
+      mpcc_execution_contract::seal_problem_context(
+      source.identity.source_context);
+
+    const auto population = build_normal_avoidance_candidates(source);
+
+    EXPECT_EQ(population.reason, RejectReason::Accepted) << population.detail;
+    ASSERT_EQ(population.candidates.size(), 2U);
+    EXPECT_EQ(population.candidates[0].seed.pass_side_sign, 1);
+    EXPECT_EQ(population.candidates[1].seed.pass_side_sign, -1);
+    for (const auto & candidate : population.candidates) {
+      EXPECT_EQ(
+        candidate.seed.solver_snapshot.identity.source_context.intent,
+        intent);
+      EXPECT_EQ(
+        candidate.seed.solver_snapshot.identity.source_context.execution_side_sign,
+        0);
+    }
+  }
 }
 
 TEST(MpccStatelessManeuver, RejectsInvalidSideAndMixedObservation)

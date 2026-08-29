@@ -1082,38 +1082,40 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         "certified_plan_store->replace("
     )
 
-    follow_population_start = SOURCE.index(
-        "evaluate_rate_resolved_follow_escape_population("
+    normal_avoidance_population_start = SOURCE.index(
+        "evaluate_rate_resolved_normal_avoidance_population("
     )
-    follow_population_end = SOURCE.index(
+    normal_avoidance_population_end = SOURCE.index(
         "void bind_rate_resolved_physical_wall_refinement(",
-        follow_population_start,
+        normal_avoidance_population_start,
     )
-    follow_population = SOURCE[follow_population_start:follow_population_end]
-    assert "build_follow_escape_candidates(" in follow_population
-    assert "persistent-follow" not in follow_population
-    assert "negative_solver_context" in follow_population
-    assert "positive_solver_context" in follow_population
-    assert "RateResolvedFollowHomotopyOwner" in follow_population
-    assert "homotopy_owner->preferred_side(source)" in follow_population
+    normal_avoidance_population = SOURCE[
+        normal_avoidance_population_start:normal_avoidance_population_end
+    ]
+    assert "build_normal_avoidance_candidates(" in normal_avoidance_population
+    assert "persistent-follow" not in normal_avoidance_population
+    assert "negative_solver_context" in normal_avoidance_population
+    assert "positive_solver_context" in normal_avoidance_population
+    assert "RateResolvedNormalHomotopyOwner" in normal_avoidance_population
+    assert "homotopy_owner->preferred_side(source)" in normal_avoidance_population
     assert "homotopy_owner->select(source, candidate.seed.pass_side_sign)" in (
-        follow_population
+        normal_avoidance_population
     )
-    assert "ordered_candidates" in follow_population
-    assert '"/evaluated="' in follow_population
-    assert "selected_terminal_progress_m" not in follow_population
-    assert "selected_terminal_velocity_mps" not in follow_population
-    assert "better_certified" not in follow_population
+    assert "ordered_candidates" in normal_avoidance_population
+    assert '"/evaluated="' in normal_avoidance_population
+    assert "selected_terminal_progress_m" not in normal_avoidance_population
+    assert "selected_terminal_velocity_mps" not in normal_avoidance_population
+    assert "better_certified" not in normal_avoidance_population
     assert "std::make_shared<rate_resolved_shadow::SolverContext>()" not in (
-        follow_population
+        normal_avoidance_population
     )
-    assert "observation_only_store" in follow_population
-    assert "certified_plan_store->replace(" in follow_population
-    assert "evaluation.dynamic.has_value()" in follow_population
-    assert "evaluation.dynamic->valid" in follow_population
-    assert "evaluation.dynamic->clear" in follow_population
-    assert "&candidate.seed.solver_snapshot" in follow_population
-    assert "source_context.execution_side_sign =" not in follow_population
+    assert "observation_only_store" in normal_avoidance_population
+    assert "certified_plan_store->replace(" in normal_avoidance_population
+    assert "evaluation.dynamic.has_value()" in normal_avoidance_population
+    assert "evaluation.dynamic->valid" in normal_avoidance_population
+    assert "evaluation.dynamic->clear" in normal_avoidance_population
+    assert "&candidate.seed.solver_snapshot" in normal_avoidance_population
+    assert "source_context.execution_side_sign =" not in normal_avoidance_population
 
     normal_submit_start = SOURCE.index(
         "bool submit_rate_resolved_track_cruise_shadow("
@@ -1123,13 +1125,13 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         normal_submit_start,
     )
     normal_submit = SOURCE[normal_submit_start:normal_submit_end]
-    assert "rate_resolved_follow_escape_negative_solver_context_" in normal_submit
-    assert "rate_resolved_follow_escape_positive_solver_context_" in normal_submit
-    assert "rate_resolved_follow_homotopy_owner_" in normal_submit
-    assert "follow_negative_solver_context, follow_positive_solver_context" in (
+    assert "rate_resolved_normal_avoidance_negative_solver_context_" in normal_submit
+    assert "rate_resolved_normal_avoidance_positive_solver_context_" in normal_submit
+    assert "rate_resolved_normal_homotopy_owner_" in normal_submit
+    assert "normal_negative_solver_context, normal_positive_solver_context" in (
         normal_submit
     )
-    assert "follow_homotopy_owner" in normal_submit
+    assert "normal_homotopy_owner" in normal_submit
 
     assert "evaluate_rate_resolved_normal_population(" in normal_submit
     assert normal_submit.count(
@@ -1144,15 +1146,22 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         normal_population_start,
     )
     normal_population = SOURCE[normal_population_start:normal_population_end]
+    assert "ControlIntent::Cruise" in normal_population
     assert "ControlIntent::Follow" in normal_population
-    assert "evaluate_rate_resolved_follow_escape_population(" in normal_population
+    assert "dynamic_obstacle_refinement_active" in normal_population
+    assert "dynamic_obstacle_constraint_active" in normal_population
+    assert "evaluate_rate_resolved_normal_avoidance_population(" in normal_population
     assert "canonical_normal_intent_requires_execution_side(intent)" in normal_population
     assert "evaluate_rate_resolved_current_world_population(" in normal_population
     assert "current-world Overtake population requires physical snapshot" in normal_population
     assert "source.identity.source_context.execution_side_sign" in normal_population
+    avoidance_start = normal_population.index("const bool normal_dynamic_avoidance")
     overtake_start = normal_population.index(
         "canonical_normal_intent_requires_execution_side(intent)"
     )
+    avoidance_branch = normal_population[avoidance_start:overtake_start]
+    assert "evaluate_rate_resolved_normal_avoidance_population(" in avoidance_branch
+    assert "evaluate_rate_resolved_pipeline(" not in avoidance_branch
     persistent_start = normal_population.index(
         "return evaluate_rate_resolved_pipeline(", overtake_start
     )
@@ -2147,7 +2156,7 @@ def test_overtake_candidate_store_requires_joined_current_world_proof() -> None:
         "evaluate_rate_resolved_current_world_population(", pipeline_start
     )
     population_end = SOURCE.index(
-        "evaluate_rate_resolved_follow_escape_population(", population_start
+        "evaluate_rate_resolved_normal_avoidance_population(", population_start
     )
     pipeline = SOURCE[pipeline_start:population_start]
     population = SOURCE[population_start:population_end]

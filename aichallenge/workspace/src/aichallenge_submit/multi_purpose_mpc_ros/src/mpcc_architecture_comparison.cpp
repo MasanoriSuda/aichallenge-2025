@@ -1054,7 +1054,7 @@ Report compare(
         {std::pair{Arm::StatelessLeftB, 1},
          std::pair{Arm::StatelessRightB, -1}})
       {
-        const auto rebuilt = maneuver::build_normal_avoidance_audit(
+        const auto rebuilt = maneuver::build_normal_avoidance(
           source, source_fingerprint, side);
         if (!rebuilt.seed.has_value()) {
           const auto stage =

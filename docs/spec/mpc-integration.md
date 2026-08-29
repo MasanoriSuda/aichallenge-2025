@@ -3005,6 +3005,27 @@ baseline `output/20260829-220933`のD1はレース開始後に`invalid-cursor`�
 unusableなstage残余だけを飛ばす設計と整合する。残るEmergencyとOvertake失敗はwall／entry feasibility等の
 別failure familyであり、このSliceの合格をOvertake統合Gate合格とは扱わない。
 
+#### last-published Bundle source ledger（2026-08-29、2025由来の暫定）
+
+stateless current-world Bundleは変更後commandをpublishするため、immutable source planをexact executionとして
+`mark_executed()`してはならない。しかしsource planを完全に忘れると、次の25 ms周期でfresh worker結果がまだ
+なく、Storeが古い別intentのexact executionへ戻る。物理証明へ到達する前にidentity mismatchとなり、直前の
+Bundleが有効だったにもかかわらずnormal authorityが1周期で途切れる。
+
+このためStoreはexact executed planとは別に、最後にwireへjoinしたBundleのimmutable source identity、
+publication decision、control origin、artifact-local cursorだけを記録する。記録は最終serialized commandとの
+一致確認後にだけ行い、proof失敗またはjoin失敗では更新しない。次周期のsource順序はfresh candidate、
+last-published Bundle source、古いexact executed planとし、同一identityを重複評価しない。Bundle sourceは
+age／leaseによるauthorityを持たず、毎周期、現在worldからnonlinear continuation、static wall、timed obstacle、
+Follow hard gap、terminal successorをすべて再証明する。exact planが実際にpublishされた時点でBundle ledgerを
+supersedeする。
+
+baseline `output/20260829-223720`では、確認したGate A ShiftOut Bundle 3件がすべて次decisionでEmergencyへ
+落ちた。修正後`output/20260829-230250`では同じ分類のGate A ShiftOut 3件すべてが次decisionでもnormal authorityを
+維持し、Bundle record rejectは0だった。周期ログでもsource sequence 964、2736、2894の`published-bundle`が
+current-world再証明を通過した。これは`A fails, B succeeds`のpublication lifecycle defectを閉じる証拠であり、
+後段に残る`terminal-contingency-unavailable`、`continuation-wall-blocked`、`delay-prefix-blocked`は別Sliceで扱う。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -488,6 +488,20 @@
         "normal-authority hole caused by sending a sub-publication residual stage directly to the physical adapter"
       ],
       "revisit_condition": "a stage-advanced command differs from the command covered by its exact physical proof, a final exhausted artifact gains authority, or the source artifact is marked executed"
+    },
+    {
+      "experiment_id": "20260829-last-published-bundle-source",
+      "baseline_commit": "16a4abec",
+      "snapshot_ids": [],
+      "hypothesis": "the immediate Emergency after an accepted Gate A current-world Bundle is caused by losing the immutable source whose modified command actually crossed the wire, then falling back to an older exact-execution intent",
+      "changed_dimension": "production_last_published_bundle_source_provenance_and_current_world_reproof",
+      "result": "accepted",
+      "reason": "all three inspected baseline Gate A ShiftOut Bundle admissions entered Emergency on the next decision, while all three candidate admissions retained normal authority; periodic telemetry observed accepted published-bundle sources and Bundle record rejection remained zero",
+      "production_impact": "the certified Store records a separate immutable source and publication mapping only after serialized Bundle join, evaluates it before older exact execution, and clears it after a later exact publication; every command still requires all unchanged current-world physical and terminal proofs",
+      "deleted_code": [
+        "next-cycle normal-authority hole caused by discarding the only source whose stateless Bundle command crossed the wire"
+      ],
+      "revisit_condition": "a failed or non-joined Bundle updates the ledger, a Bundle source gains age-based authority, an exact publication fails to supersede it, or current-world reproof differs from the command sent to the publisher"
     }
   ]
 }

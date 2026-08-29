@@ -82,6 +82,8 @@ struct StoreState
   StoreReason last_reason{StoreReason::InvalidPlan};
   bool candidate_available{false};
   bool executed_plan_available{false};
+  bool published_bundle_source_available{false};
+  std::uint64_t latest_published_bundle_decision_id{};
   double first_published_control_origin_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double first_published_artifact_elapsed_sec{
@@ -101,6 +103,20 @@ struct ExecutedPlanSnapshot
   /// candidate may be adopted from a time-aligned suffix, so execution cannot
   /// be reconstructed from publication time alone.
   double first_published_artifact_elapsed_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Immutable source identity and source-local cursor of the last stateless
+/// current-world Bundle which actually crossed the publisher.  This is not an
+/// assertion that the unmodified source plan was executed: every later command
+/// must rebuild and prove a new current-world Bundle from this clock.
+struct PublishedBundleSourceSnapshot
+{
+  std::shared_ptr<const CertifiedPlan> plan;
+  std::uint64_t publication_decision_id{};
+  double publication_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double publication_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
 };
 
@@ -142,11 +158,21 @@ public:
     std::uint64_t publication_decision_id,
     double publication_control_origin_sec,
     double publication_artifact_elapsed_sec);
+  StoreReason record_published_bundle_source(
+    std::shared_ptr<const CertifiedPlan> plan,
+    std::uint64_t publication_decision_id,
+    double publication_control_origin_sec,
+    double publication_artifact_elapsed_sec);
+  /// A later exact-plan publication supersedes any Bundle source without
+  /// changing exact execution identity or pretending that a new solve ran.
+  void supersede_published_bundle_source(
+    std::uint64_t publication_decision_id);
   /// Last plan whose command was successfully published.
   std::shared_ptr<const CertifiedPlan> snapshot() const;
   /// Last plan and the control-time origin of its first published command,
   /// read under one lock so a consumer cannot join mismatched lifecycle data.
   ExecutedPlanSnapshot executed_snapshot() const;
+  PublishedBundleSourceSnapshot published_bundle_source_snapshot() const;
   StoreState state() const;
   bool clear();
   bool clear_if_sequence(std::uint64_t expected_sequence);
@@ -157,6 +183,12 @@ private:
   std::shared_ptr<const CertifiedPlan> executed_plan_;
   std::uint64_t latest_executed_sequence_{};
   std::uint64_t latest_execution_decision_id_{};
+  std::shared_ptr<const CertifiedPlan> published_bundle_source_plan_;
+  std::uint64_t latest_published_bundle_decision_id_{};
+  double published_bundle_control_origin_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
+  double published_bundle_artifact_elapsed_sec_{
+    std::numeric_limits<double>::quiet_NaN()};
   std::uint64_t executed_count_{};
   std::uint64_t latest_certified_sequence_{};
   std::uint64_t accepted_count_{};

@@ -244,6 +244,83 @@ TEST(MpccRateResolvedCertifiedPlan, NewerCandidateDoesNotReplaceExecutedPlan)
   EXPECT_EQ(store.snapshot()->execution_artifact->identity.sequence, 5U);
 }
 
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  PublishedBundleSourceDoesNotPretendSourcePlanWasExecuted)
+{
+  certified::Store store;
+  const auto exact = build_plan(5U);
+  const auto bundle_source = build_plan(2U);
+  ASSERT_NE(exact.plan, nullptr);
+  ASSERT_NE(bundle_source.plan, nullptr);
+  ASSERT_EQ(store.replace(exact.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.mark_executed(exact.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+
+  ASSERT_EQ(
+    store.record_published_bundle_source(
+      bundle_source.plan, 101U, 10.1, 0.10),
+    certified::StoreReason::Accepted);
+
+  const auto bundle = store.published_bundle_source_snapshot();
+  ASSERT_EQ(bundle.plan, bundle_source.plan);
+  EXPECT_EQ(bundle.publication_decision_id, 101U);
+  EXPECT_DOUBLE_EQ(bundle.publication_control_origin_sec, 10.1);
+  EXPECT_DOUBLE_EQ(bundle.publication_artifact_elapsed_sec, 0.10);
+  ASSERT_EQ(store.snapshot(), exact.plan);
+  EXPECT_EQ(store.state().latest_executed_sequence, 5U);
+  EXPECT_EQ(store.state().latest_execution_decision_id, 100U);
+  EXPECT_TRUE(store.state().published_bundle_source_available);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  ExactPublicationSupersedesPublishedBundleSource)
+{
+  certified::Store store;
+  const auto exact = build_plan(5U);
+  const auto bundle_source = build_plan(2U);
+  ASSERT_NE(exact.plan, nullptr);
+  ASSERT_NE(bundle_source.plan, nullptr);
+  ASSERT_EQ(store.replace(exact.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.mark_executed(exact.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.record_published_bundle_source(
+      bundle_source.plan, 101U, 10.1, 0.10),
+    certified::StoreReason::Accepted);
+
+  store.supersede_published_bundle_source(100U);
+  EXPECT_NE(store.published_bundle_source_snapshot().plan, nullptr);
+  store.supersede_published_bundle_source(102U);
+  EXPECT_EQ(store.published_bundle_source_snapshot().plan, nullptr);
+  EXPECT_FALSE(store.state().published_bundle_source_available);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  OlderPublicationCannotReplacePublishedBundleSource)
+{
+  certified::Store store;
+  const auto exact = build_plan(5U);
+  const auto bundle_source = build_plan(2U);
+  ASSERT_NE(exact.plan, nullptr);
+  ASSERT_NE(bundle_source.plan, nullptr);
+  ASSERT_EQ(store.replace(exact.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.record_published_bundle_source(
+      bundle_source.plan, 101U, 10.1, 0.10),
+    certified::StoreReason::Accepted);
+
+  EXPECT_EQ(
+    store.mark_executed(exact.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::StaleSequence);
+  EXPECT_EQ(
+    store.published_bundle_source_snapshot().plan, bundle_source.plan);
+}
+
 TEST(MpccRateResolvedCertifiedPlan, PublishedOriginBelongsToPlanNotDecision)
 {
   certified::Store store;

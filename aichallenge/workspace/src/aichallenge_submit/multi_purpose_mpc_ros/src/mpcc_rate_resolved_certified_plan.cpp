@@ -200,6 +200,11 @@ StoreReason Store::mark_executed(
   }
   const auto sequence = plan->execution_artifact->identity.sequence;
   std::lock_guard<std::mutex> lock(mutex_);
+  if (publication_decision_id < latest_published_bundle_decision_id_) {
+    ++stale_sequence_count_;
+    last_reason_ = StoreReason::StaleSequence;
+    return StoreReason::StaleSequence;
+  }
   const bool same_executed_identity =
     executed_plan_ != nullptr &&
     artifact::same_identity(
@@ -239,6 +244,14 @@ StoreReason Store::mark_executed(
   executed_plan_ = std::move(plan);
   latest_executed_sequence_ = sequence;
   latest_execution_decision_id_ = publication_decision_id;
+  if (publication_decision_id >= latest_published_bundle_decision_id_) {
+    published_bundle_source_plan_.reset();
+    latest_published_bundle_decision_id_ = 0U;
+    published_bundle_control_origin_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    published_bundle_artifact_elapsed_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+  }
   if (!same_executed_identity) {
     first_published_control_origin_sec_ = publication_control_origin_sec;
     first_published_artifact_elapsed_sec_ =
@@ -247,6 +260,82 @@ StoreReason Store::mark_executed(
   ++executed_count_;
   last_reason_ = StoreReason::Accepted;
   return StoreReason::Accepted;
+}
+
+StoreReason Store::record_published_bundle_source(
+  std::shared_ptr<const CertifiedPlan> plan,
+  const std::uint64_t publication_decision_id,
+  const double publication_control_origin_sec,
+  const double publication_artifact_elapsed_sec)
+{
+  if (
+    plan == nullptr || validate(*plan) != RejectReason::None ||
+    publication_decision_id == 0U ||
+    !std::isfinite(publication_control_origin_sec) ||
+    publication_control_origin_sec < 0.0 ||
+    !std::isfinite(publication_artifact_elapsed_sec) ||
+    publication_artifact_elapsed_sec < 0.0)
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++invalid_plan_count_;
+    last_reason_ = StoreReason::InvalidPlan;
+    return StoreReason::InvalidPlan;
+  }
+
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (
+    publication_decision_id < latest_execution_decision_id_ ||
+    publication_decision_id < latest_published_bundle_decision_id_)
+  {
+    ++stale_sequence_count_;
+    last_reason_ = StoreReason::StaleSequence;
+    return StoreReason::StaleSequence;
+  }
+  if (publication_decision_id == latest_published_bundle_decision_id_) {
+    const bool same_source =
+      published_bundle_source_plan_ != nullptr &&
+      artifact::same_identity(
+      published_bundle_source_plan_->execution_artifact->identity,
+      plan->execution_artifact->identity);
+    if (
+      same_source &&
+      std::abs(
+        published_bundle_control_origin_sec_ -
+        publication_control_origin_sec) <= 1e-9 &&
+      std::abs(
+        published_bundle_artifact_elapsed_sec_ -
+        publication_artifact_elapsed_sec) <= 1e-9)
+    {
+      last_reason_ = StoreReason::Accepted;
+      return StoreReason::Accepted;
+    }
+    ++stale_sequence_count_;
+    last_reason_ = StoreReason::StaleSequence;
+    return StoreReason::StaleSequence;
+  }
+
+  published_bundle_source_plan_ = std::move(plan);
+  latest_published_bundle_decision_id_ = publication_decision_id;
+  published_bundle_control_origin_sec_ = publication_control_origin_sec;
+  published_bundle_artifact_elapsed_sec_ =
+    publication_artifact_elapsed_sec;
+  last_reason_ = StoreReason::Accepted;
+  return StoreReason::Accepted;
+}
+
+void Store::supersede_published_bundle_source(
+  const std::uint64_t publication_decision_id)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (publication_decision_id < latest_published_bundle_decision_id_) {
+    return;
+  }
+  published_bundle_source_plan_.reset();
+  latest_published_bundle_decision_id_ = 0U;
+  published_bundle_control_origin_sec_ =
+    std::numeric_limits<double>::quiet_NaN();
+  published_bundle_artifact_elapsed_sec_ =
+    std::numeric_limits<double>::quiet_NaN();
 }
 
 std::shared_ptr<const CertifiedPlan> Store::snapshot() const
@@ -261,6 +350,15 @@ ExecutedPlanSnapshot Store::executed_snapshot() const
   return ExecutedPlanSnapshot{
     executed_plan_, first_published_control_origin_sec_,
     first_published_artifact_elapsed_sec_};
+}
+
+PublishedBundleSourceSnapshot Store::published_bundle_source_snapshot() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return PublishedBundleSourceSnapshot{
+    published_bundle_source_plan_, latest_published_bundle_decision_id_,
+    published_bundle_control_origin_sec_,
+    published_bundle_artifact_elapsed_sec_};
 }
 
 StoreState Store::state() const
@@ -279,6 +377,10 @@ StoreState Store::state() const
   state.last_reason = last_reason_;
   state.candidate_available = static_cast<bool>(candidate_plan_);
   state.executed_plan_available = static_cast<bool>(executed_plan_);
+  state.published_bundle_source_available =
+    static_cast<bool>(published_bundle_source_plan_);
+  state.latest_published_bundle_decision_id =
+    latest_published_bundle_decision_id_;
   state.first_published_control_origin_sec =
     first_published_control_origin_sec_;
   state.first_published_artifact_elapsed_sec =
@@ -289,8 +391,15 @@ StoreState Store::state() const
 bool Store::clear()
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  const bool had_plan = static_cast<bool>(executed_plan_);
+  const bool had_plan = static_cast<bool>(executed_plan_) ||
+    static_cast<bool>(published_bundle_source_plan_);
   executed_plan_.reset();
+  published_bundle_source_plan_.reset();
+  latest_published_bundle_decision_id_ = 0U;
+  published_bundle_control_origin_sec_ =
+    std::numeric_limits<double>::quiet_NaN();
+  published_bundle_artifact_elapsed_sec_ =
+    std::numeric_limits<double>::quiet_NaN();
   first_published_control_origin_sec_ =
     std::numeric_limits<double>::quiet_NaN();
   first_published_artifact_elapsed_sec_ =
@@ -301,17 +410,32 @@ bool Store::clear()
 bool Store::clear_if_sequence(const std::uint64_t expected_sequence)
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (executed_plan_ == nullptr ||
-    executed_plan_->execution_artifact->identity.sequence != expected_sequence)
+  bool cleared = false;
+  if (
+    executed_plan_ != nullptr &&
+    executed_plan_->execution_artifact->identity.sequence == expected_sequence)
   {
-    return false;
+    executed_plan_.reset();
+    first_published_control_origin_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    first_published_artifact_elapsed_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    cleared = true;
   }
-  executed_plan_.reset();
-  first_published_control_origin_sec_ =
-    std::numeric_limits<double>::quiet_NaN();
-  first_published_artifact_elapsed_sec_ =
-    std::numeric_limits<double>::quiet_NaN();
-  return true;
+  if (
+    published_bundle_source_plan_ != nullptr &&
+    published_bundle_source_plan_->execution_artifact->identity.sequence ==
+    expected_sequence)
+  {
+    published_bundle_source_plan_.reset();
+    latest_published_bundle_decision_id_ = 0U;
+    published_bundle_control_origin_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    published_bundle_artifact_elapsed_sec_ =
+      std::numeric_limits<double>::quiet_NaN();
+    cleared = true;
+  }
+  return cleared;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan

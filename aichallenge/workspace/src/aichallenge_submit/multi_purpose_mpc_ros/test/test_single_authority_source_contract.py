@@ -2645,9 +2645,15 @@ def test_certified_candidate_becomes_retained_only_after_exact_publication() -> 
     assert "canonical_normal_command_matches_serialized_actuation(" in record
     assert "pending.promote_to_executed" in record
     assert "mark_executed(" in record
+    assert "pending.record_published_bundle_source" in record
+    assert "record_published_bundle_source(" in record
+    assert "supersede_published_bundle_source(" in record
     assert record.index(
         "canonical_normal_command_matches_serialized_actuation("
     ) < record.index("mark_executed(")
+    assert record.index(
+        "canonical_normal_command_matches_serialized_actuation("
+    ) < record.index("record_published_bundle_source(")
 
     control_start = SOURCE.index("void control()")
     control_end = SOURCE.index("void publish_zero_command()", control_start)

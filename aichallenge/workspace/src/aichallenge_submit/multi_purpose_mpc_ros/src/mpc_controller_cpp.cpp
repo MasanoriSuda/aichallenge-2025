@@ -7170,6 +7170,7 @@ struct RateResolvedRetainedShadowEvaluation
   std::optional<rate_resolved_production::Authority> production_authority;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
   bool selected_from_executed{false};
+  bool selected_from_published_bundle_source{false};
   bool stateless_current_world_bundle{false};
   bool publication_stage_advanced{false};
   std::size_t source_control_stage_index{};
@@ -7214,9 +7215,13 @@ struct RateResolvedRetainedShadowEvaluation
     std::numeric_limits<double>::infinity()};
   rate_resolved_retained::Reason executed_reason{
     rate_resolved_retained::Reason::MissingPlan};
+  rate_resolved_retained::Reason published_bundle_source_reason{
+    rate_resolved_retained::Reason::MissingPlan};
   std::uint64_t candidate_sequence{};
+  std::uint64_t published_bundle_source_sequence{};
   std::uint64_t executed_sequence{};
   bool candidate_attempted{false};
+  bool published_bundle_source_attempted{false};
   bool executed_attempted{false};
   double elapsed_ms{};
 };
@@ -7335,6 +7340,7 @@ struct CanonicalNormalPendingActuation
   double first_published_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
   bool promote_to_executed{false};
+  bool record_published_bundle_source{false};
 };
 
 struct CanonicalNormalFinalActuationTelemetryWindow
@@ -7344,6 +7350,7 @@ struct CanonicalNormalFinalActuationTelemetryWindow
   std::uint64_t identity_rejected_count{};
   std::uint64_t serialized_actuation_rejected_count{};
   std::uint64_t execution_promotion_rejected_count{};
+  std::uint64_t bundle_source_record_rejected_count{};
   double total_predicted_speed_vs_final_target_difference_mps{};
   double maximum_predicted_speed_vs_final_target_difference_mps{};
   double total_optimized_acceleration_vs_final_difference_mps2{};
@@ -8647,7 +8654,28 @@ struct MPC
       return;
     }
 
-    if (pending.promote_to_executed) {
+    if (pending.record_published_bundle_source) {
+      if (
+        rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
+        pending.selected_plan == nullptr ||
+        rate_resolved_track_cruise_certified_plan_store_->
+        record_published_bundle_source(
+          pending.selected_plan, decision_id,
+          pending.first_published_control_origin_sec,
+          pending.first_published_artifact_elapsed_sec) !=
+        rate_resolved_certified::StoreReason::Accepted)
+      {
+        ++window.rejected_count;
+        ++window.bundle_source_record_rejected_count;
+        RCLCPP_ERROR(
+          rclcpp::get_logger("mpc_controller"),
+          "Canonical MPCC published Bundle source record rejected: "
+          "decision=%lu, solution=%lu",
+          static_cast<unsigned long>(decision_id),
+          static_cast<unsigned long>(pending.command.solution_id));
+        return;
+      }
+    } else if (pending.promote_to_executed) {
       if (
         rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
         pending.selected_plan == nullptr ||
@@ -8667,6 +8695,13 @@ struct MPC
           static_cast<unsigned long>(pending.command.solution_id));
         return;
       }
+    }
+    if (
+      !pending.record_published_bundle_source &&
+      rate_resolved_track_cruise_certified_plan_store_ != nullptr)
+    {
+      rate_resolved_track_cruise_certified_plan_store_->
+      supersede_published_bundle_source(decision_id);
     }
 
     // The tactical proposal and solver selection are not publication events.
@@ -8724,7 +8759,8 @@ struct MPC
     RCLCPP_INFO(
       rclcpp::get_logger("mpc_controller"),
       "Canonical MPCC production actuation join: joined=%zu, rejected=%zu, "
-      "reject_reason=identity:%zu/serialized:%zu/promotion:%zu, "
+      "reject_reason=identity:%zu/serialized:%zu/promotion:%zu/"
+      "bundle_source:%zu, "
       "predicted_speed_vs_final_target=%.3f/%.3f(avg/max)mps, "
       "optimized_acceleration_vs_final=%.3f/%.3f(avg/max)mps2, "
       "serialized_steering_vs_final=%.4f/%.4f(avg/max)rad, "
@@ -8739,6 +8775,8 @@ struct MPC
         window.serialized_actuation_rejected_count),
       static_cast<std::size_t>(
         window.execution_promotion_rejected_count),
+      static_cast<std::size_t>(
+        window.bundle_source_record_rejected_count),
       window.total_predicted_speed_vs_final_target_difference_mps / joined,
       window.maximum_predicted_speed_vs_final_target_difference_mps,
       window.total_optimized_acceleration_vs_final_difference_mps2 / joined,
@@ -24581,6 +24619,10 @@ struct MPC
 
     const auto candidate_plan =
       rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot();
+    const auto published_bundle_entry =
+      rate_resolved_track_cruise_certified_plan_store_->
+      published_bundle_source_snapshot();
+    const auto & published_bundle_plan = published_bundle_entry.plan;
     const auto executed_entry =
       rate_resolved_track_cruise_certified_plan_store_->executed_snapshot();
     const auto & executed_plan = executed_entry.plan;
@@ -24592,12 +24634,26 @@ struct MPC
                0U;
       };
     const std::uint64_t candidate_sequence = sequence_of(candidate_plan);
+    const std::uint64_t published_bundle_sequence =
+      sequence_of(published_bundle_plan);
     const std::uint64_t executed_sequence = sequence_of(executed_plan);
+    const auto same_plan_identity = [](
+      const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & lhs,
+      const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & rhs)
+      {
+        return lhs != nullptr && rhs != nullptr &&
+               lhs->execution_artifact != nullptr &&
+               rhs->execution_artifact != nullptr &&
+               rate_resolved_shadow::artifact::same_identity(
+          lhs->execution_artifact->identity,
+          rhs->execution_artifact->identity);
+      };
     const bool candidate_is_executed =
-      candidate_plan != nullptr && executed_plan != nullptr &&
-      rate_resolved_shadow::artifact::same_identity(
-        candidate_plan->execution_artifact->identity,
-        executed_plan->execution_artifact->identity);
+      same_plan_identity(candidate_plan, executed_plan);
+    const bool candidate_is_published_bundle =
+      same_plan_identity(candidate_plan, published_bundle_plan);
+    const bool published_bundle_is_executed =
+      same_plan_identity(published_bundle_plan, executed_plan);
     on_trajectory_connector::Result connector_result;
     const bool connector_attempted =
       candidate_plan != nullptr && executed_plan != nullptr &&
@@ -24629,10 +24685,61 @@ struct MPC
         evaluation.on_trajectory_steering_difference_rad =
           connector_result.steering_difference_rad;
       };
+    const auto copy_candidate_diagnostics = [](
+      const RateResolvedRetainedShadowEvaluation & source,
+      RateResolvedRetainedShadowEvaluation & destination)
+      {
+        destination.candidate_attempted = source.candidate_attempted;
+        destination.candidate_reason = source.candidate_reason;
+        destination.candidate_cursor_reason = source.candidate_cursor_reason;
+        destination.candidate_cursor_elapsed_sec =
+          source.candidate_cursor_elapsed_sec;
+        destination.candidate_control_origin_sec =
+          source.candidate_control_origin_sec;
+        destination.candidate_progress_difference_m =
+          source.candidate_progress_difference_m;
+        destination.candidate_steering_difference_rad =
+          source.candidate_steering_difference_rad;
+        destination.candidate_maximum_steering_step_rad =
+          source.candidate_maximum_steering_step_rad;
+        destination.candidate_continuation_reason =
+          source.candidate_continuation_reason;
+        destination.candidate_continuation_exact_reason =
+          source.candidate_continuation_exact_reason;
+        destination.candidate_proved_control_stage_count =
+          source.candidate_proved_control_stage_count;
+        destination.candidate_blocking_obstacle_id =
+          source.candidate_blocking_obstacle_id;
+        destination.candidate_minimum_dynamic_clearance_m =
+          source.candidate_minimum_dynamic_clearance_m;
+        destination.candidate_sequence = source.candidate_sequence;
+        destination.feedback_shadow_attempted =
+          source.feedback_shadow_attempted;
+        destination.feedback_shadow_reason = source.feedback_shadow_reason;
+        destination.feedback_shadow_steering_rad =
+          source.feedback_shadow_steering_rad;
+        destination.feedback_shadow_correction_rad =
+          source.feedback_shadow_correction_rad;
+        destination.feedback_shadow_continuation_reason =
+          source.feedback_shadow_continuation_reason;
+        destination.feedback_shadow_exact_reason =
+          source.feedback_shadow_exact_reason;
+        destination.feedback_shadow_continuation_available =
+          source.feedback_shadow_continuation_available;
+        destination.feedback_shadow_proof_reason =
+          source.feedback_shadow_proof_reason;
+        destination.feedback_shadow_proof_available =
+          source.feedback_shadow_proof_available;
+      };
 
     if (candidate_plan != nullptr) {
       final_evaluation = evaluate_rate_resolved_track_cruise_plan(
         problem, now_sec, evaluation_intent, candidate_plan,
+        candidate_is_published_bundle ?
+        rate_resolved_retained::ExecutionClock{
+          rate_resolved_retained::ExecutionClockKind::PublishedPlan,
+          published_bundle_entry.publication_control_origin_sec,
+          published_bundle_entry.publication_artifact_elapsed_sec} :
         candidate_is_executed ?
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::PublishedPlan,
@@ -24669,11 +24776,20 @@ struct MPC
       final_evaluation.candidate_minimum_dynamic_clearance_m =
         final_evaluation.minimum_dynamic_clearance_m;
       final_evaluation.candidate_sequence = candidate_sequence;
+      if (candidate_is_published_bundle) {
+        final_evaluation.published_bundle_source_attempted = true;
+        final_evaluation.published_bundle_source_reason =
+          final_evaluation.reason;
+        final_evaluation.published_bundle_source_sequence =
+          published_bundle_sequence;
+      }
       final_evaluation.executed_sequence = executed_sequence;
       attach_connector(final_evaluation);
       if (final_evaluation.production_authority.has_value()) {
         final_evaluation.selected_from_executed =
-          candidate_is_executed;
+          candidate_is_executed && !candidate_is_published_bundle;
+        final_evaluation.selected_from_published_bundle_source =
+          candidate_is_published_bundle;
         final_evaluation.elapsed_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started)
           .count();
@@ -24681,7 +24797,40 @@ struct MPC
       }
     }
 
-    if (executed_plan != nullptr && !candidate_is_executed)
+    if (
+      published_bundle_plan != nullptr &&
+      !candidate_is_published_bundle)
+    {
+      auto published_bundle_evaluation =
+        evaluate_rate_resolved_track_cruise_plan(
+        problem, now_sec, evaluation_intent, published_bundle_plan,
+        rate_resolved_retained::ExecutionClock{
+          rate_resolved_retained::ExecutionClockKind::PublishedPlan,
+          published_bundle_entry.publication_control_origin_sec,
+          published_bundle_entry.publication_artifact_elapsed_sec});
+      copy_candidate_diagnostics(
+        final_evaluation, published_bundle_evaluation);
+      published_bundle_evaluation.published_bundle_source_attempted = true;
+      published_bundle_evaluation.published_bundle_source_reason =
+        published_bundle_evaluation.reason;
+      published_bundle_evaluation.published_bundle_source_sequence =
+        published_bundle_sequence;
+      published_bundle_evaluation.executed_sequence = executed_sequence;
+      if (published_bundle_evaluation.production_authority.has_value()) {
+        published_bundle_evaluation.selected_from_published_bundle_source =
+          true;
+        attach_connector(published_bundle_evaluation);
+        published_bundle_evaluation.elapsed_ms =
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return published_bundle_evaluation;
+      }
+      final_evaluation = std::move(published_bundle_evaluation);
+    }
+
+    if (
+      executed_plan != nullptr && !candidate_is_executed &&
+      !published_bundle_is_executed)
     {
       const auto candidate_reason = final_evaluation.candidate_reason;
       const auto candidate_cursor_reason =
@@ -24773,6 +24922,12 @@ struct MPC
       executed_evaluation.candidate_minimum_dynamic_clearance_m =
         candidate_minimum_dynamic_clearance_m;
       executed_evaluation.candidate_sequence = candidate_sequence;
+      executed_evaluation.published_bundle_source_attempted =
+        final_evaluation.published_bundle_source_attempted;
+      executed_evaluation.published_bundle_source_reason =
+        final_evaluation.published_bundle_source_reason;
+      executed_evaluation.published_bundle_source_sequence =
+        final_evaluation.published_bundle_source_sequence;
       executed_evaluation.executed_attempted = true;
       executed_evaluation.executed_reason = executed_evaluation.reason;
       executed_evaluation.executed_sequence = executed_sequence;
@@ -25381,6 +25536,7 @@ struct MPC
       "stale_semantic=%lu/worker_reject=%lu, outcome=%s, time=%.3f/%.3fms"
       "(avg/max), certified_store=candidate:%d/sequence:%lu/certified:%lu/"
       "executed:%d/sequence:%lu@decision:%lu/executions:%lu/"
+      "published_bundle:%d@decision:%lu/"
       "invalid:%lu/stale:%lu/cert_reject:%lu/cert_reason:%s/last:%s, "
       "authority=shadow, selected=0",
       static_cast<unsigned long>(window.physical_submission_count),
@@ -25417,6 +25573,9 @@ struct MPC
       static_cast<unsigned long>(
         certified_plan_store_state.latest_execution_decision_id),
       static_cast<unsigned long>(certified_plan_store_state.executed_count),
+      certified_plan_store_state.published_bundle_source_available ? 1 : 0,
+      static_cast<unsigned long>(
+        certified_plan_store_state.latest_published_bundle_decision_id),
       static_cast<unsigned long>(certified_plan_store_state.invalid_plan_count),
       static_cast<unsigned long>(certified_plan_store_state.stale_sequence_count),
       static_cast<unsigned long>(
@@ -25469,7 +25628,8 @@ struct MPC
       "cursor_elapsed:%.6f/control:%.6f/progress_delta:%.6f/"
       "steering_delta:%.6f/steering_step:%.6f/"
       "continuation:%s/exact:%s/proved_stages:%lu/blocked_by:%s/"
-      "min_dynamic_clearance:%.3f/executed:%d/seq:%lu/"
+      "min_dynamic_clearance:%.3f/published_bundle:%d/seq:%lu/reason:%s/"
+      "executed:%d/seq:%lu/"
       "reason:%s/source:%s, "
       "on_trajectory=attempted:%d/reason:%s/"
       "parent_elapsed:%.6f/candidate_elapsed:%.6f/"
@@ -25620,12 +25780,18 @@ struct MPC
       window.last_retained.candidate_blocking_obstacle_id.empty() ?
       "none" : window.last_retained.candidate_blocking_obstacle_id.c_str(),
       window.last_retained.candidate_minimum_dynamic_clearance_m,
+      window.last_retained.published_bundle_source_attempted ? 1 : 0,
+      static_cast<unsigned long>(
+        window.last_retained.published_bundle_source_sequence),
+      rate_resolved_retained::to_string(
+        window.last_retained.published_bundle_source_reason),
       window.last_retained.executed_attempted ? 1 : 0,
       static_cast<unsigned long>(window.last_retained.executed_sequence),
       rate_resolved_retained::to_string(window.last_retained.executed_reason),
       window.last_retained.production_authority.has_value() ?
       (window.last_retained.selected_from_executed ? "executed" :
-      "candidate") :
+      window.last_retained.selected_from_published_bundle_source ?
+      "published-bundle" : "candidate") :
       "none",
       window.last_retained.on_trajectory_connector_attempted ? 1 : 0,
       on_trajectory_connector::to_string(
@@ -26706,12 +26872,14 @@ struct MPC
       command.decision_id, command, retained.selected_plan,
       retained.control_origin_sec, retained.cursor_elapsed_sec,
       !retained.selected_from_executed &&
-      !retained.stateless_current_world_bundle};
+      !retained.stateless_current_world_bundle,
+      retained.stateless_current_world_bundle};
     last_control_resolution_reason_ =
       std::string{"canonical-rate-resolved-"} +
       mpcc_contract::to_string(intent) +
       (retained.stateless_current_world_bundle ?
-      "-current-world-bundle" :
+      (retained.selected_from_published_bundle_source ?
+      "-published-bundle-reproved" : "-current-world-bundle") :
       retained.selected_from_executed ? "-executed-retained" :
       "-certified-candidate");
     last_solved_wp_id = problem.tracking_wp_id;

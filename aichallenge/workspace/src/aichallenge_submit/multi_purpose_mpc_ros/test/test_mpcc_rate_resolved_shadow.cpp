@@ -917,6 +917,107 @@ TEST(
 
 TEST(
   MpccRateResolvedShadow,
+  NonlinearInteriorWallRowsPreserveTheOriginalProblemAsAnExactPrefix)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto prepared = preparation_context.evaluate(source);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  const shadow::TimeAlignedFeedbackProblemRequest request{
+    prepared.latest_state_feedback_preparation.get(),
+    source.control_prediction_origin_sec + 0.02,
+    execution::PredictedState{0.0, 0.0, 0.0, 2.0, 0.04, 0.10, 0.08},
+    source.request.previous_input,
+    solver::PersistentOsqpSolver{}.physical_constraint_tolerance()};
+  const auto bridge = shadow::build_reachable_bridge_feedback_problem(request);
+  ASSERT_EQ(bridge.reason, shadow::ReachableBridgeReason::Accepted)
+    << bridge.detail;
+  ASSERT_TRUE(bridge.problem.has_value());
+  const auto original = problem::assemble(bridge.problem.value());
+  ASSERT_TRUE(original.has_value());
+
+  const auto augmented = shadow::build_nonlinear_interior_wall_problem(
+    bridge.suffix.snapshot.value(), bridge.problem.value(),
+    bridge.linearization_primal);
+  ASSERT_EQ(
+    augmented.reason, shadow::NonlinearInteriorWallReason::Accepted)
+    << augmented.detail;
+  ASSERT_TRUE(augmented.problem.has_value());
+  EXPECT_EQ(
+    augmented.original_row_count,
+    static_cast<std::size_t>(original->constraints.rows()));
+  std::size_t expected_interior_rows{};
+  for (const auto & input : bridge.suffix.snapshot->request.inputs) {
+    expected_interior_rows += static_cast<std::size_t>(std::max(
+      1.0, std::ceil(
+        input.stage_dt_sec /
+        model::kMaximumPhysicalIntegrationStepSec))) - 1U;
+  }
+  EXPECT_EQ(augmented.appended_row_count, expected_interior_rows);
+  EXPECT_EQ(
+    augmented.problem->constraints.rows(),
+    original->constraints.rows() +
+    static_cast<int>(augmented.appended_row_count));
+  EXPECT_TRUE(
+    Eigen::MatrixXd(augmented.problem->constraints).
+    topRows(original->constraints.rows()).isApprox(
+      Eigen::MatrixXd(original->constraints), 0.0));
+  EXPECT_TRUE(
+    augmented.problem->lower_bound.head(original->lower_bound.size()).isApprox(
+      original->lower_bound, 0.0));
+  EXPECT_TRUE(
+    augmented.problem->upper_bound.head(original->upper_bound.size()).isApprox(
+      original->upper_bound, 0.0));
+  const Eigen::VectorXd row_values =
+    augmented.problem->constraints * bridge.linearization_primal;
+  const auto appended_values = row_values.tail(
+    static_cast<Eigen::Index>(augmented.appended_row_count));
+  const auto appended_lower = augmented.problem->lower_bound.tail(
+    static_cast<Eigen::Index>(augmented.appended_row_count));
+  const auto appended_upper = augmented.problem->upper_bound.tail(
+    static_cast<Eigen::Index>(augmented.appended_row_count));
+  EXPECT_TRUE((appended_values.array() >= appended_lower.array()).all());
+  EXPECT_TRUE((appended_values.array() <= appended_upper.array()).all());
+  EXPECT_DOUBLE_EQ(augmented.maximum_candidate_violation_m, 0.0);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  NonlinearInteriorWallAuditRemainsObservationOnlyAndExactlyProved)
+{
+  shadow::SolverContext preparation_context;
+  const auto source = snapshot();
+  const auto prepared = preparation_context.evaluate(source);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation,
+    source.control_prediction_origin_sec + 0.02,
+    source.control_prediction_origin_sec + 0.01,
+    execution::PredictedState{0.0, 0.0, 0.0, 2.0, 0.04, 0.10, 0.08},
+    source.request.previous_input};
+  shadow::LatestStateFeedbackSolverContext context;
+
+  const auto result =
+    context.evaluate_reachable_bridge_nonlinear_interior_wall_audit(
+    request, 4U);
+  EXPECT_TRUE(result.nonlinear_interior_wall_audit_requested);
+  EXPECT_TRUE(result.nonlinear_interior_wall_audit_applied);
+  EXPECT_EQ(
+    result.nonlinear_interior_wall_reason,
+    shadow::NonlinearInteriorWallReason::Accepted);
+  EXPECT_GT(result.nonlinear_interior_wall_row_count, 0U);
+  EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::Accepted)
+    << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+  EXPECT_EQ(
+    execution::validate(*result.execution_artifact),
+    execution::RejectReason::None);
+}
+
+TEST(
+  MpccRateResolvedShadow,
   ReachableBridgeMultiSqpOneIterationIsTheSameCandidateAsC)
 {
   shadow::SolverContext preparation_context;

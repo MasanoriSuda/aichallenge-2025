@@ -22,6 +22,9 @@ inline constexpr int kResponseSteeringIndex = 6;
 inline constexpr int kAccelerationIndex = 0;
 inline constexpr int kSteeringRateIndex = 1;
 inline constexpr int kVirtualProgressSpeedIndex = 2;
+/// Numerical dynamics contract shared by SQP tangent construction and exact
+/// physical publication proof.
+inline constexpr double kMaximumPhysicalIntegrationStepSec = 0.01;
 
 using StateVector = Eigen::Matrix<double, kStateDimension, 1>;
 using InputVector = Eigen::Matrix<double, kInputDimension, 1>;

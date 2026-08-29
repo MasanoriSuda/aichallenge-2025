@@ -9,8 +9,6 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter
 namespace
 {
 
-constexpr double kMaximumNonlinearRolloutStepSec = 0.01;
-
 struct NonlinearState
 {
   double lateral_m{};
@@ -264,7 +262,8 @@ Result build(
   for (const auto & control : artifact.control_stages) {
     rollout_sample_count += static_cast<std::size_t>(std::max(
       1.0, std::ceil(
-        control.duration_sec / kMaximumNonlinearRolloutStepSec)));
+        control.duration_sec /
+        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec)));
   }
   race::ExactPhysicalExecutionTrajectory exact;
   exact.progress_origin_m = artifact.course_progress_origin_m;
@@ -318,7 +317,8 @@ Result build(
     const auto & control = artifact.control_stages[stage];
     const auto substep_count = static_cast<std::size_t>(std::max(
       1.0, std::ceil(
-        control.duration_sec / kMaximumNonlinearRolloutStepSec)));
+        control.duration_sec /
+        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec)));
     const double step_sec =
       control.duration_sec / static_cast<double>(substep_count);
     const double path_start_m = artifact.nominal_path_distance_m[stage];
@@ -474,7 +474,9 @@ ContinuationResult build_continuation(
       artifact.control_stages[stage].duration_sec - cursor.stage_elapsed_sec :
       artifact.control_stages[stage].duration_sec;
     rollout_sample_count += static_cast<std::size_t>(std::max(
-      1.0, std::ceil(duration_sec / kMaximumNonlinearRolloutStepSec)));
+      1.0, std::ceil(
+        duration_sec /
+        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec)));
   }
 
   race::ExactPhysicalExecutionTrajectory exact;
@@ -565,7 +567,7 @@ ContinuationResult build_continuation(
     double stage_rollout_sec{};
     while (stage_rollout_sec < duration_sec - 1e-12) {
       double step_sec = std::min(
-        kMaximumNonlinearRolloutStepSec,
+        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec,
         duration_sec - stage_rollout_sec);
       if (
         elapsed_sec < artifact.publication_interval_sec - 1e-12 &&
@@ -752,7 +754,7 @@ StopContingencyResult build_stop_contingency(
   const std::size_t reserve_count = static_cast<std::size_t>(std::max(
       1.0, std::ceil(
         (artifact.publication_interval_sec + braking_duration_sec) /
-        kMaximumNonlinearRolloutStepSec))) + 1U;
+        mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec))) + 1U;
   race::ExactPhysicalExecutionTrajectory exact;
   exact.progress_origin_m = artifact.course_progress_origin_m;
   exact.elapsed_time_sec.reserve(reserve_count);
@@ -781,7 +783,8 @@ StopContingencyResult build_stop_contingency(
       double remaining_sec = requested_duration_sec;
       while (remaining_sec > 1e-12) {
         double step_sec = std::min(
-          kMaximumNonlinearRolloutStepSec, remaining_sec);
+          mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec,
+          remaining_sec);
         double acceleration_mps2 = requested_acceleration_mps2;
         if (nonlinear.velocity_mps <= tolerance && acceleration_mps2 < 0.0) {
           acceleration_mps2 = 0.0;

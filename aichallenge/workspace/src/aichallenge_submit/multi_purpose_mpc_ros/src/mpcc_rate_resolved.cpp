@@ -8,7 +8,6 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved
 namespace
 {
 
-constexpr double kMaximumNonlinearIntegrationStepSec = 0.01;
 constexpr double kNumericalDerivativeRelativeStep = 1.0e-6;
 
 bool transition_request_valid(const LinearizationRequest & request) noexcept
@@ -106,7 +105,7 @@ std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
   }
   const auto substep_count = static_cast<std::size_t>(std::max(
       1.0, std::ceil(
-        request.stage_dt_sec / kMaximumNonlinearIntegrationStepSec)));
+        request.stage_dt_sec / kMaximumPhysicalIntegrationStepSec)));
   const double step_sec =
     request.stage_dt_sec / static_cast<double>(substep_count);
   StateVector state = request_state(request);

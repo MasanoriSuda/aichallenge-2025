@@ -258,6 +258,39 @@ ReachableBridgeFeedbackProblemResult
 build_reachable_bridge_feedback_problem(
   const TimeAlignedFeedbackProblemRequest & request) noexcept;
 
+enum class NonlinearInteriorWallReason
+{
+  Accepted,
+  InvalidRequest,
+  BaseAssemblyRejected,
+  DimensionMismatch,
+  TransitionLinearizationRejected,
+  AugmentedProblemInvalid,
+  Exception,
+  Count,
+};
+
+const char * to_string(NonlinearInteriorWallReason reason) noexcept;
+
+struct NonlinearInteriorWallProblemResult
+{
+  NonlinearInteriorWallReason reason{
+    NonlinearInteriorWallReason::InvalidRequest};
+  std::optional<mpcc_rate_resolved_problem::Problem> problem;
+  std::size_t original_row_count{};
+  std::size_t appended_row_count{};
+  double maximum_candidate_violation_m{};
+  std::string detail{"not-evaluated"};
+};
+
+/// Observation-only augmentation used to test the representation gap between
+/// affine endpoint interpolation and exact nonlinear substage wall proof. The
+/// returned Problem preserves the original assembled rows as an exact prefix.
+NonlinearInteriorWallProblemResult build_nonlinear_interior_wall_problem(
+  const Snapshot & snapshot,
+  const mpcc_rate_resolved_problem::AssemblyRequest & assembly_request,
+  const Eigen::VectorXd & linearization_primal) noexcept;
+
 enum class LatestStateFeedbackReason
 {
   InvalidRequest,
@@ -314,6 +347,12 @@ struct LatestStateFeedbackResult
   std::size_t latest_state_multi_sqp_iteration_limit{1U};
   std::size_t latest_state_multi_sqp_attempt_count{};
   std::size_t latest_state_multi_sqp_solve_count{};
+  bool nonlinear_interior_wall_audit_requested{false};
+  bool nonlinear_interior_wall_audit_applied{false};
+  NonlinearInteriorWallReason nonlinear_interior_wall_reason{
+    NonlinearInteriorWallReason::InvalidRequest};
+  std::size_t nonlinear_interior_wall_row_count{};
+  double nonlinear_interior_wall_maximum_candidate_violation_m{};
   TimeAlignedFeedbackProblemReason time_aligned_problem_reason{
     TimeAlignedFeedbackProblemReason::InvalidRequest};
   std::size_t consumed_stage_count{};
@@ -646,6 +685,12 @@ public:
   LatestStateFeedbackResult evaluate_reachable_bridge_multi_sqp_audit(
     const LatestStateFeedbackRequest & request,
     std::size_t iteration_limit);
+  /// Observation-only E arm: add true nonlinear substage lateral wall
+  /// tangents to C/D while retaining the unchanged exact physical proof.
+  LatestStateFeedbackResult
+  evaluate_reachable_bridge_nonlinear_interior_wall_audit(
+    const LatestStateFeedbackRequest & request,
+    std::size_t iteration_limit);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;
 
@@ -653,7 +698,8 @@ private:
   LatestStateFeedbackResult evaluate_time_aligned_impl(
     const LatestStateFeedbackRequest & request,
     bool reachable_bridge_candidate,
-    std::size_t multi_sqp_iteration_limit);
+    std::size_t multi_sqp_iteration_limit,
+    bool nonlinear_interior_wall_audit);
   std::mutex mutex_;
   persistent_osqp::PersistentOsqpSolver solver_{
     persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};

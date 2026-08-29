@@ -93,7 +93,8 @@ const char * suffix_comparison_classification(
   const shadow::LatestStateFeedbackResult & old_origin,
   const shadow::LatestStateFeedbackResult & time_aligned,
   const shadow::LatestStateFeedbackResult & reachable,
-  const shadow::LatestStateFeedbackResult & multi_sqp) noexcept
+  const shadow::LatestStateFeedbackResult & multi_sqp,
+  const shadow::LatestStateFeedbackResult & nonlinear_interior) noexcept
 {
   const auto accepted = [](const shadow::LatestStateFeedbackResult & value) {
       return value.reason == shadow::LatestStateFeedbackReason::Accepted;
@@ -118,6 +119,9 @@ const char * suffix_comparison_classification(
   {
     return "single-sqp-limitation";
   }
+  if (!accepted(multi_sqp) && accepted(nonlinear_interior)) {
+    return "nonlinear-interior-wall-representation-defect";
+  }
   if (accepted(old_origin) && !accepted(time_aligned)) {
     return "time-aligned-suffix-regression";
   }
@@ -127,15 +131,19 @@ const char * suffix_comparison_classification(
   if (accepted(reachable) && !accepted(multi_sqp)) {
     return "multi-sqp-regression";
   }
+  if (accepted(multi_sqp) && !accepted(nonlinear_interior)) {
+    return "nonlinear-interior-wall-regression";
+  }
   if (
     model_proof_rejected(old_origin) || model_proof_rejected(time_aligned) ||
-    model_proof_rejected(reachable) || model_proof_rejected(multi_sqp))
+    model_proof_rejected(reachable) || model_proof_rejected(multi_sqp) ||
+    model_proof_rejected(nonlinear_interior))
   {
     return "solve-proof-model-mismatch";
   }
   if (
     !accepted(old_origin) && !accepted(time_aligned) && !accepted(reachable) &&
-    !accepted(multi_sqp))
+    !accepted(multi_sqp) && !accepted(nonlinear_interior))
   {
     return "suffix-family-unresolved";
   }
@@ -219,6 +227,7 @@ int main(int argc, char ** argv)
   shadow::LatestStateFeedbackSolverContext old_origin_solver;
   shadow::LatestStateFeedbackSolverContext reachable_solver;
   shadow::LatestStateFeedbackSolverContext multi_sqp_solver;
+  shadow::LatestStateFeedbackSolverContext nonlinear_interior_solver;
   const shadow::LatestStateFeedbackRequest latest_state_request{
     std::make_shared<const shadow::LatestStateFeedbackPreparation>(
       preparation),
@@ -233,6 +242,9 @@ int main(int argc, char ** argv)
     latest_state_request);
   const auto multi_sqp =
     multi_sqp_solver.evaluate_reachable_bridge_multi_sqp_audit(
+    latest_state_request, 4U);
+  const auto nonlinear_interior = nonlinear_interior_solver.
+    evaluate_reachable_bridge_nonlinear_interior_wall_audit(
     latest_state_request, 4U);
   shadow::LatestStateFeedbackResult current_preparation_time_aligned;
   bool current_preparation_probe_available = false;
@@ -357,8 +369,39 @@ int main(int argc, char ** argv)
     multi_sqp.physical_lateral_violation_m <<
     " suffix_multi_sqp_exact_tolerance=" <<
     multi_sqp.physical_lateral_bound_tolerance_m <<
+    " suffix_nonlinear_interior_reason=" <<
+    shadow::to_string(nonlinear_interior.reason) <<
+    " suffix_nonlinear_interior_rows=" <<
+    nonlinear_interior.nonlinear_interior_wall_row_count <<
+    " suffix_nonlinear_interior_problem=" << shadow::to_string(
+    nonlinear_interior.nonlinear_interior_wall_reason) <<
+    " suffix_nonlinear_interior_attempts=" <<
+    nonlinear_interior.latest_state_multi_sqp_attempt_count <<
+    " suffix_nonlinear_interior_solves=" <<
+    nonlinear_interior.latest_state_multi_sqp_solve_count <<
+    " suffix_nonlinear_interior_status=" <<
+    nonlinear_interior.solver.status <<
+    " suffix_nonlinear_interior_iterations=" <<
+    nonlinear_interior.solver.iterations <<
+    " suffix_nonlinear_interior_solve_ms=" <<
+    nonlinear_interior.solver.total_ms <<
+    " suffix_nonlinear_interior_candidate_violation=" <<
+    nonlinear_interior.nonlinear_interior_wall_maximum_candidate_violation_m <<
+    " suffix_nonlinear_interior_physical=" <<
+    multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::to_string(
+    nonlinear_interior.physical_adapter_reason) <<
+    " suffix_nonlinear_interior_exact=" <<
+    multi_purpose_mpc_ros::race_mpcc_foundation::
+    exact_physical_execution_trajectory_reason_name(
+    nonlinear_interior.physical_exact_reason) <<
+    " suffix_nonlinear_interior_exact_stage=" <<
+    nonlinear_interior.physical_rejected_stage <<
+    " suffix_nonlinear_interior_exact_violation=" <<
+    nonlinear_interior.physical_lateral_violation_m <<
+    " suffix_nonlinear_interior_exact_tolerance=" <<
+    nonlinear_interior.physical_lateral_bound_tolerance_m <<
     " suffix_classification=" << suffix_comparison_classification(
-    old_origin, time_aligned, reachable, multi_sqp) <<
+    old_origin, time_aligned, reachable, multi_sqp, nonlinear_interior) <<
     " full_outcome=" << shadow::to_string(full.outcome) <<
     " full_compute_ms=" << full.compute_ms <<
     " probe=recorded-primal-linear-interpolation" <<

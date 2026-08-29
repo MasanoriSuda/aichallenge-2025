@@ -42,17 +42,24 @@ Classification: `suffix-family-unresolved`.
 ## Root-cause consequence
 
 The two exact-proof cases are not fixed by a common clock, a reachable initial
-candidate or four SQP corrections. The QP stage model advances one complete
-stage per temporal Frenet transition, while the exact certificate replays the
-same held command in substeps of at most 10 ms. Repeating SQP around the coarse
-stage map therefore does not make it identical to the certificate's finer
-discrete map.
+candidate or four SQP corrections. Inspection initially suggested different
+stage integration, but that hypothesis is refuted: both the full-stage SQP
+transition and the exact proof use the same midpoint integration with substeps
+no longer than 10 ms.
 
-This is a stronger hypothesis than "increase tolerance": the optimizer and
-certificate currently prove two different numerical dynamics. The next audit
-must compare a substep-consistent transition inside the same immutable QP and
-physical rows. It remains observation-only until it demonstrates exact proof
-closure without changing clearances or tolerances.
+The remaining representation gap is inside each stage's wall certificate.
+The QP constrains stage endpoints plus four rows whose lateral state is the
+affine interpolation of the two optimized endpoints. The exact proof instead
+checks the true nonlinear lateral state every 10 ms against interpolated wall
+bounds. Repeating SQP improves endpoint dynamics but does not add those true
+nonlinear interior wall constraints, so the same substage proof failure can
+remain after four solves.
+
+This is still stronger evidence than "increase tolerance". The next audit must
+compare a candidate whose SQP contains linearized nonlinear interior-wall
+states, while keeping the exact same wall intervals, dynamics, clearances and
+physical proof. It remains observation-only until it closes the proof without
+loosening a bound.
 
 ## Limitation
 

@@ -15,6 +15,41 @@
       "snapshot_id": "0287d193-live-mission-lifecycle-ab",
       "manifest": ".steering/20260828-mission-lifecycle-ab-comparison/snapshots/0287d193-live-mission-lifecycle-ab.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260830-pass-entry-1799",
+      "manifest": ".steering/20260830-pass-entry-architecture-ab/snapshots/20260830-pass-entry-1799.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260830-pass-entry-2033",
+      "manifest": ".steering/20260830-pass-entry-architecture-ab/snapshots/20260830-pass-entry-2033.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "000000002970-shiftout-dynamic-obstacle-refinement-solve-rejected",
+      "manifest": ".steering/20260829-late-exact-disjunction-candidate/snapshots/000000002970-shiftout-dynamic-obstacle-refinement-solve-rejected.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "000000002970-shiftout-wall-refinement-coupled-solve-rejected",
+      "manifest": ".steering/20260829-late-exact-disjunction-candidate/snapshots/000000002970-shiftout-wall-refinement-coupled-solve-rejected.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260830-001650-decisions-1777-1815",
+      "manifest": ".steering/20260830-dynamic-escape-normal-authority/snapshots/20260830-001650-decisions-1777-1815.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260830-004030-decision-1473",
+      "manifest": ".steering/20260830-dynamic-wait-canonical-intent/snapshots/20260830-004030-decision-1473.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260830-005711-decision-2725",
+      "manifest": ".steering/20260830-dynamic-escape-normal-scope/snapshots/20260830-005711-decision-2725.json",
+      "replay_ready": false
     }
   ],
   "experiments": [
@@ -477,7 +512,7 @@
     },
     {
       "experiment_id": "20260829-publication-aligned-stage-bundle",
-      "baseline_commit": "29562adf",
+      "baseline_commit": "29562adf3c77adcf8d507339431a32e431907b9b",
       "snapshot_ids": [],
       "hypothesis": "the repeated retained invalid-cursor Emergency holes are caused by asynchronous artifact stages having less than one full publisher interval remaining, while a following sealed stage can be rebuilt and proved from the current world",
       "changed_dimension": "production_publication_stage_selection_and_current_world_reproof",
@@ -491,7 +526,7 @@
     },
     {
       "experiment_id": "20260829-last-published-bundle-source",
-      "baseline_commit": "16a4abec",
+      "baseline_commit": "16a4abecb6e3ba1468d10cbe8b739219becdaee6",
       "snapshot_ids": [],
       "hypothesis": "the immediate Emergency after an accepted Gate A current-world Bundle is caused by losing the immutable source whose modified command actually crossed the wire, then falling back to an older exact-execution intent",
       "changed_dimension": "production_last_published_bundle_source_provenance_and_current_world_reproof",
@@ -505,7 +540,7 @@
     },
     {
       "experiment_id": "20260830-late-exact-disjunction-candidate",
-      "baseline_commit": "c302bf31",
+      "baseline_commit": "c302bf313e81cdf9115907bbb27302e94c436574",
       "snapshot_ids": [
         "000000002970-shiftout-dynamic-obstacle-refinement-solve-rejected",
         "000000002970-shiftout-wall-refinement-coupled-solve-rejected"
@@ -523,7 +558,7 @@
     },
     {
       "experiment_id": "20260830-dynamic-wait-prefix-owner",
-      "baseline_commit": "e864829e",
+      "baseline_commit": "e864829ed374cb7270983a900bb900e6e805dd85",
       "snapshot_ids": [],
       "hypothesis": "the optional legacy dynamic-wait forward prefix incorrectly owns a second tactical transition and creates Recovery while a current-world certified seven-state ShiftOut artifact still owns the published command",
       "changed_dimension": "production_dynamic_wait_optional_prefix_ownership",
@@ -537,7 +572,7 @@
     },
     {
       "experiment_id": "20260830-dynamic-escape-normal-authority",
-      "baseline_commit": "e3ac36e4",
+      "baseline_commit": "e3ac36e4db485c39860913c0878c9b018fe85a4f",
       "snapshot_ids": [
         "20260830-001650-decisions-1777-1815"
       ],
@@ -555,7 +590,7 @@
     },
     {
       "experiment_id": "20260830-dynamic-wait-canonical-intent",
-      "baseline_commit": "bfaf7333",
+      "baseline_commit": "bfaf733315ce97a175491c47c66ace18614ca01f",
       "snapshot_ids": [
         "20260830-004030-decision-1473"
       ],
@@ -573,7 +608,7 @@
     },
     {
       "experiment_id": "20260830-dynamic-escape-normal-scope",
-      "baseline_commit": "d890c0a9",
+      "baseline_commit": "d890c0a95524a82c872e03036e6d650cef5ebd5a",
       "snapshot_ids": [
         "20260830-005711-decision-2725"
       ],
@@ -588,6 +623,21 @@
         "unused progress activation source storage"
       ],
       "revisit_condition": "a pre-Mission DynamicEscape again suppresses all normal populations, an uncertified normal candidate publishes, a real Mission cannot activate Overtake execution, or the same old missing-scope signature returns"
+    },
+    {
+      "experiment_id": "20260830-pass-entry-scheduling-lifecycle-ab",
+      "baseline_commit": "1d9c8c088233523cf53e0482b54de226d0a66876",
+      "snapshot_ids": [
+        "20260830-pass-entry-1799",
+        "20260830-pass-entry-2033"
+      ],
+      "hypothesis": "the repeated certified ShiftOut-to-DynamicMissionWait failure is physical wall infeasibility rather than a live producer and adoption lifecycle defect",
+      "changed_dimension": "observation_only_same_snapshot_architecture_and_scheduling_comparison",
+      "result": "rejected",
+      "reason": "the frozen live worlds failed in A persistent and B stateless arms, but the unchanged seven-state solver and exact certificate produced bounded certified physical-diagonal Bundles; snapshot 1799 also certified the production-right late-exact-disjunction candidate, while live telemetry replaced 73-76 of about 80 submissions per window because population compute required 115-135 ms average and 194-220 ms maximum",
+      "production_impact": "none; production authority, runtime configuration, solver, weights, clearance, Mission lifecycle and publisher were frozen for this audit; the next Slice is restricted to structurally separating sustainable candidate production from 40 Hz certified command publication and retaining all exact current-world admission proofs",
+      "deleted_code": [],
+      "revisit_condition": "a live current-world population adopts the same certified candidate before the Pass-entry gate while preserving exact compatibility and proofs, a same-snapshot replay no longer certifies the bounded candidate, or evidence shows candidate production is not being invalidated by the faster request lifecycle"
     }
   ]
 }

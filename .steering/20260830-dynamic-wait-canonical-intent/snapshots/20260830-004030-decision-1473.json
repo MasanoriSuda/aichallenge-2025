@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260830-004030-decision-1473",
+  "baseline_commit": "bfaf733315ce97a175491c47c66ace18614ca01f",
+  "evidence_type": "simulation-log-decision",
+  "run_id": "20260830-004030",
+  "domain_id": 1,
+  "decision_id": 1473,
+  "replay_ready": false,
+  "incomplete_reason": "semantic authority evidence; no sealed numerical problem was required for the canonical-intent ownership deletion"
+}

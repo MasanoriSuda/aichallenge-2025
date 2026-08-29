@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260830-001650-decisions-1777-1815",
+  "baseline_commit": "e3ac36e4db485c39860913c0878c9b018fe85a4f",
+  "evidence_type": "simulation-log-window",
+  "run_id": "20260830-001650",
+  "domain_id": 1,
+  "decision_range": [1777, 1815],
+  "replay_ready": false,
+  "incomplete_reason": "authority-window evidence; no sealed numerical problem was required for the producer-identity deletion"
+}

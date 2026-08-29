@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260830-005711-decision-2725",
+  "baseline_commit": "d890c0a95524a82c872e03036e6d650cef5ebd5a",
+  "evidence_type": "simulation-log-decision",
+  "run_id": "20260830-005711",
+  "domain_id": 1,
+  "decision_id": 2725,
+  "replay_ready": false,
+  "incomplete_reason": "activation-scope evidence; no sealed numerical problem was required for the obsolete activation-source deletion"
+}

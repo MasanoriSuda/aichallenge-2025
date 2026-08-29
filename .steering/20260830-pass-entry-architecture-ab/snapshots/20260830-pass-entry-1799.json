@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260830-pass-entry-1799",
+  "baseline_commit": "1d9c8c088233523cf53e0482b54de226d0a66876",
+  "run_id": "20260830-024504",
+  "domain_id": 1,
+  "decision_id": 2408,
+  "source_sequence": 1799,
+  "problem_fingerprint": "6833516978660140820",
+  "failure_family": "shiftout-pass-entry-wall-refinement-solve-rejected",
+  "replay_ready": true,
+  "production_authority_changed": false,
+  "payloads": {
+    "snapshot": {
+      "path": "output/20260830-024504/d1/mpcc_architecture_snapshots/000000001799-5ed5877c8fa36714-shiftout-side-positive-wall-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "7ec91ef997e22d582dbff801919e1b4959036c3618af14d670d39998bbbdd98f",
+      "size_bytes": 286606
+    },
+    "wall_grid": {
+      "path": "output/20260830-024504/d1/mpcc_architecture_snapshots/000000001799-5ed5877c8fa36714-shiftout-side-positive-wall-refinement-solve-rejected/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "size_bytes": 570009
+    }
+  }
+}

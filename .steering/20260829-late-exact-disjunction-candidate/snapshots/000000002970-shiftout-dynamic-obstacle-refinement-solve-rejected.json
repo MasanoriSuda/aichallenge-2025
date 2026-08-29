@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "000000002970-shiftout-dynamic-obstacle-refinement-solve-rejected",
+  "baseline_commit": "c302bf313e81cdf9115907bbb27302e94c436574",
+  "source_sequence": 2970,
+  "replay_ready": true,
+  "production_authority_changed": false,
+  "payloads": {
+    "snapshot": {
+      "path": "mpcc_architecture_snapshots/000000002970-shiftout-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "be130112a5654a080d720b20ea7796865383ab342ade4c1cf1da5f1ab91def9d",
+      "size_bytes": 250727
+    },
+    "wall_grid": {
+      "path": "mpcc_architecture_snapshots/000000002970-shiftout-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "size_bytes": 570009
+    }
+  }
+}

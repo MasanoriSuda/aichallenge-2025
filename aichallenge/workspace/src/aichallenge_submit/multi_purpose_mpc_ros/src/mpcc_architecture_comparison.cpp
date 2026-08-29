@@ -527,7 +527,8 @@ ArmResult evaluate_arm(
   shadow::SolverContext * solver_context = nullptr,
   const bool wall_restoration_audit = false,
   const std::optional<shadow::SolverContext::WallBucketAuditMode>
-  wall_bucket_audit_mode = std::nullopt)
+  wall_bucket_audit_mode = std::nullopt,
+  const bool physical_dynamic_sqp_audit = false)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
@@ -550,12 +551,14 @@ ArmResult evaluate_arm(
   // passes one private context only across its bounded offline continuation.
   shadow::SolverContext local_solver;
   auto & solver = solver_context == nullptr ? local_solver : *solver_context;
-  const auto solved = wall_bucket_audit_mode.has_value() ?
+  const auto solved = physical_dynamic_sqp_audit ?
+    solver.evaluate_physical_dynamic_sqp_audit(candidate) :
+    (wall_bucket_audit_mode.has_value() ?
     solver.evaluate_wall_bucket_audit(
       candidate, wall_bucket_audit_mode.value()) :
     (wall_restoration_audit ?
     solver.evaluate_wall_feasibility_restoration_audit(candidate) :
-    solver.evaluate(candidate));
+    solver.evaluate(candidate)));
   arm_result.solver_outcome = solved.outcome;
   arm_result.solver_compute_ms = solved.compute_ms;
   arm_result.terminal_progress_m = solved.terminal_progress_m;
@@ -695,7 +698,9 @@ ArmResult evaluate_arm(
       "accepted/wall-bucket-audit=omit-heading" :
       "accepted/wall-bucket-audit=omit-lag";
   } else {
-    arm_result.detail = wall_restoration_audit ? solved.detail : "accepted";
+    arm_result.detail =
+      (wall_restoration_audit || physical_dynamic_sqp_audit) ?
+      solved.detail : "accepted";
   }
   arm_result.bundle = std::move(bundle);
   return arm_result;
@@ -841,7 +846,8 @@ int evidence_rank(const Stage stage) noexcept
 
 ArmResult evaluate_production_population(
   const Arm arm, const shadow::Snapshot & source,
-  const std::uint64_t source_fingerprint, const int side)
+  const std::uint64_t source_fingerprint, const int side,
+  const bool physical_dynamic_sqp_audit = false)
 {
   const auto population = maneuver::build_bounded_candidates(source, side);
   if (
@@ -878,7 +884,7 @@ ArmResult evaluate_production_population(
       dynamic_obstacle_forced_diagonal_start_stage,
       candidate.seed.solver_snapshot.
       dynamic_obstacle_forced_diagonal_full_side_stage,
-      &solver_context);
+      &solver_context, false, std::nullopt, physical_dynamic_sqp_audit);
     evaluated.candidate_source = maneuver::to_string(candidate.kind);
     evaluated.candidate_count = attempted;
     const int rank = evidence_rank(evaluated.stage);
@@ -921,6 +927,11 @@ const char * to_string(const Arm arm) noexcept
     case Arm::ExternalPrimalI: return "external-primal-i";
     case Arm::WallOmitHeadingJ: return "wall-omit-heading-j";
     case Arm::WallOmitLagK: return "wall-omit-lag-k";
+    case Arm::DynamicSqpPersistentL: return "dynamic-sqp-persistent-l";
+    case Arm::DynamicSqpProductionLeftL:
+      return "dynamic-sqp-production-left-l";
+    case Arm::DynamicSqpProductionRightL:
+      return "dynamic-sqp-production-right-l";
   }
   return "unknown";
 }
@@ -1235,6 +1246,61 @@ Report compare_wall_restoration(
   } catch (...) {
     report.source_accepted = false;
     report.detail = "unknown wall restoration comparison exception";
+  }
+  return report;
+}
+
+Report compare_physical_dynamic_sqp(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  Report report;
+  try {
+    const auto & source = recorded.source;
+    const auto source_fingerprint = recorded.interaction_fingerprint;
+    report.source_interaction_fingerprint = source_fingerprint;
+    if (
+      !architecture::interaction_snapshot_complete(source) ||
+      !architecture::interaction_snapshot_matches_fingerprint(
+        source, source_fingerprint))
+    {
+      report.detail = "source interaction snapshot rejected";
+      for (const auto arm :
+        {Arm::PersistentA, Arm::DynamicSqpPersistentL,
+         Arm::ProductionLeftG, Arm::DynamicSqpProductionLeftL,
+         Arm::ProductionRightG, Arm::DynamicSqpProductionRightL})
+      {
+        report.arms.push_back(rejected_arm(
+          arm, Stage::SourceRejected, source_fingerprint, report.detail));
+      }
+      return report;
+    }
+    report.source_accepted = true;
+    report.detail = "accepted/physical-dynamic-sqp-only";
+    const auto persistent_successor =
+      maneuver::resolve_terminal_successor(source);
+    report.arms.push_back(evaluate_arm(
+      Arm::PersistentA, source, source_fingerprint, source_fingerprint,
+      persistent_successor));
+    report.arms.push_back(evaluate_arm(
+      Arm::DynamicSqpPersistentL, source, source_fingerprint,
+      source_fingerprint, persistent_successor, -1, -1, nullptr, false,
+      std::nullopt, true));
+
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProductionLeftG, source, source_fingerprint, 1));
+    report.arms.push_back(evaluate_production_population(
+      Arm::DynamicSqpProductionLeftL, source, source_fingerprint, 1, true));
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProductionRightG, source, source_fingerprint, -1));
+    report.arms.push_back(evaluate_production_population(
+      Arm::DynamicSqpProductionRightL, source, source_fingerprint, -1,
+      true));
+  } catch (const std::exception & exception) {
+    report.source_accepted = false;
+    report.detail = exception.what();
+  } catch (...) {
+    report.source_accepted = false;
+    report.detail = "unknown physical dynamic SQP comparison exception";
   }
   return report;
 }

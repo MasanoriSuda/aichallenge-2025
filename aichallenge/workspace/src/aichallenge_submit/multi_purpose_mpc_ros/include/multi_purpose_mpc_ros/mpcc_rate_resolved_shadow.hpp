@@ -419,6 +419,14 @@ struct Result
     post_refinement_linearization_reason{
       mpcc_rate_resolved_adapter::RelinearizationReason::InvalidRequest};
   int post_refinement_linearization_failure_stage{-1};
+  /// Observation-only outer SQP which rebuilds dynamics, physical obstacle
+  /// supports and wall rows around one common latest primal.  It has no
+  /// Store/mailbox/publisher path and is never requested by evaluate().
+  bool physical_dynamic_sqp_audit_requested{false};
+  bool physical_dynamic_sqp_audit_applied{false};
+  bool physical_dynamic_sqp_audit_solved{false};
+  std::size_t physical_dynamic_sqp_audit_count{};
+  std::string physical_dynamic_sqp_audit_detail{"not-requested"};
   persistent_osqp::SolveTelemetry solver;
   artifact::RejectReason execution_artifact_reject_reason{
     artifact::RejectReason::None};
@@ -498,13 +506,17 @@ public:
     const Snapshot & snapshot);
   Result evaluate_wall_bucket_audit(
     const Snapshot & snapshot, WallBucketAuditMode mode);
+  /// Observation-only comparison arm.  The existing exact proof chain still
+  /// owns acceptance, and this entry point cannot publish an artifact.
+  Result evaluate_physical_dynamic_sqp_audit(const Snapshot & snapshot);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;
 
 private:
   Result evaluate_impl(
     const Snapshot & snapshot, bool wall_feasibility_restoration_audit,
-    std::optional<WallBucketAuditMode> wall_bucket_audit_mode);
+    std::optional<WallBucketAuditMode> wall_bucket_audit_mode,
+    bool physical_dynamic_sqp_audit);
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
   persistent_osqp::PersistentOsqpSolver solver_{

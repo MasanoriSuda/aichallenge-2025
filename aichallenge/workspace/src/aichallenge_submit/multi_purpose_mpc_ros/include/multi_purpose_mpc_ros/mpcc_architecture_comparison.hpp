@@ -36,6 +36,9 @@ enum class Arm
   ExternalPrimalI,
   WallOmitHeadingJ,
   WallOmitLagK,
+  DynamicSqpPersistentL,
+  DynamicSqpProductionLeftL,
+  DynamicSqpProductionRightL,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -122,6 +125,13 @@ Report compare_wall_restoration(
 /// Physical wall, dynamic-obstacle and terminal-successor proof is identical
 /// to production and neither arm has a command/publication path.
 Report compare_wall_buckets(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
+  noexcept;
+
+/// Compare the normal single-SQP persistent/production candidates with an
+/// observation-only bounded outer SQP which refreshes dynamics, physical
+/// obstacle supports and wall rows together.  No arm has authority APIs.
+Report compare_physical_dynamic_sqp(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
   noexcept;
 

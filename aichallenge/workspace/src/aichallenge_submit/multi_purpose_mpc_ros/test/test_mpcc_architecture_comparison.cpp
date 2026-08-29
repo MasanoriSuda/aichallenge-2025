@@ -255,6 +255,26 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
 
 TEST(
   MpccArchitectureComparison,
+  PhysicalDynamicSqpAuditRemainsASeparateObservationArm)
+{
+  const auto report = compare_physical_dynamic_sqp(
+    recorded(source_snapshot()));
+
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 6U);
+  EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
+  EXPECT_EQ(report.arms[1].arm, Arm::DynamicSqpPersistentL);
+  EXPECT_EQ(report.arms[2].arm, Arm::ProductionLeftG);
+  EXPECT_EQ(report.arms[3].arm, Arm::DynamicSqpProductionLeftL);
+  EXPECT_EQ(report.arms[4].arm, Arm::ProductionRightG);
+  EXPECT_EQ(report.arms[5].arm, Arm::DynamicSqpProductionRightL);
+  EXPECT_NE(
+    report.arms[1].detail.find("physical_dynamic_sqp_audit="),
+    std::string::npos);
+}
+
+TEST(
+  MpccArchitectureComparison,
   PersistentTargetBoundArmRestoresOnlyCurrentWorldTargetConstraint)
 {
   auto source = source_snapshot();

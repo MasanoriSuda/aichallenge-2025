@@ -269,6 +269,10 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_FALSE(result.post_refinement_physical_proof_checked);
   EXPECT_FALSE(result.post_refinement_physical_proof_accepted);
   EXPECT_EQ(result.post_refinement_linearization_count, 0U);
+  EXPECT_FALSE(result.physical_dynamic_sqp_audit_requested);
+  EXPECT_FALSE(result.physical_dynamic_sqp_audit_applied);
+  EXPECT_FALSE(result.physical_dynamic_sqp_audit_solved);
+  EXPECT_EQ(result.physical_dynamic_sqp_audit_count, 0U);
   EXPECT_NE(
     result.receding_warm_start_diagnostic.find("previous=empty-cache"),
     std::string::npos);

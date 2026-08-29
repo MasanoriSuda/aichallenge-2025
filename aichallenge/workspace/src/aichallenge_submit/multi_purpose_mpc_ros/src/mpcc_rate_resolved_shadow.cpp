@@ -828,6 +828,11 @@ bool result_valid(const Result & result) noexcept
          result.post_refinement_linearization_count > 0U &&
          result.post_refinement_linearization_reason ==
          mpcc_rate_resolved_adapter::RelinearizationReason::Accepted)) &&
+         (!result.physical_dynamic_sqp_audit_requested ||
+         (result.physical_dynamic_sqp_audit_applied &&
+         result.physical_dynamic_sqp_audit_solved &&
+         result.physical_dynamic_sqp_audit_count ==
+         kMaximumPhysicalProofSqpCorrections)) &&
          result.execution_artifact_reject_reason ==
          artifact::RejectReason::None &&
          result.execution_artifact != nullptr &&
@@ -1643,31 +1648,40 @@ LatestStateFeedbackResult LatestStateFeedbackSolverContext::evaluate(
 
 Result SolverContext::evaluate(const Snapshot & snapshot)
 {
-  return evaluate_impl(snapshot, false, std::nullopt);
+  return evaluate_impl(snapshot, false, std::nullopt, false);
 }
 
 Result SolverContext::evaluate_wall_feasibility_restoration_audit(
   const Snapshot & snapshot)
 {
-  return evaluate_impl(snapshot, true, std::nullopt);
+  return evaluate_impl(snapshot, true, std::nullopt, false);
 }
 
 Result SolverContext::evaluate_wall_bucket_audit(
   const Snapshot & snapshot, const WallBucketAuditMode mode)
 {
-  return evaluate_impl(snapshot, false, mode);
+  return evaluate_impl(snapshot, false, mode, false);
+}
+
+Result SolverContext::evaluate_physical_dynamic_sqp_audit(
+  const Snapshot & snapshot)
+{
+  return evaluate_impl(snapshot, false, std::nullopt, true);
 }
 
 Result SolverContext::evaluate_impl(
   const Snapshot & snapshot,
   const bool wall_feasibility_restoration_audit,
-  const std::optional<WallBucketAuditMode> wall_bucket_audit_mode)
+  const std::optional<WallBucketAuditMode> wall_bucket_audit_mode,
+  const bool physical_dynamic_sqp_audit)
 {
   const auto started = SteadyClock::now();
   Result result;
   result.identity = snapshot.identity;
   result.wall_feasibility_restoration_requested =
     wall_feasibility_restoration_audit;
+  result.physical_dynamic_sqp_audit_requested =
+    physical_dynamic_sqp_audit;
   const auto capture_failure = [&result, &snapshot](
       const mpcc_architecture_snapshot::PipelineStage pipeline_stage,
       const mpcc_rate_resolved_problem::AssemblyRequest & request,
@@ -2333,6 +2347,8 @@ Result SolverContext::evaluate_impl(
   }
   result.dynamic_obstacle_refinement_requested =
     snapshot.dynamic_obstacle_refinement_active;
+  std::optional<mpcc_rate_resolved_dynamic_obstacle::Request>
+    physical_dynamic_sqp_request_template;
   if (snapshot.dynamic_obstacle_refinement_active) {
     const auto & source_context = snapshot.identity.source_context;
     if (
@@ -2441,6 +2457,7 @@ Result SolverContext::evaluate_impl(
     dynamic_request.constraint_target_problem = broad_problem_before_wall;
     dynamic_request.separation_tolerance_m =
       solver_.physical_constraint_tolerance().absolute;
+    physical_dynamic_sqp_request_template = dynamic_request;
     const auto refinement =
       mpcc_rate_resolved_dynamic_obstacle::refine(
       dynamic_request);
@@ -2705,6 +2722,192 @@ Result SolverContext::evaluate_impl(
         !snapshot.physical_wall_refinement_active ||
         result.physical_wall_refinement_applied;
     }
+  }
+
+  // Architecture audit only: the normal path above performs one obstacle
+  // convexification and its later physical correction rebuilds vehicle
+  // dynamics only.  This bounded outer loop tests the missing formulation:
+  // dynamics, oriented obstacle support and wall rows are rebuilt around one
+  // common latest primal before every solve.  evaluate() can never request
+  // this branch, so it has no production authority or fallback semantics.
+  if (physical_dynamic_sqp_audit) {
+    if (
+      !snapshot.dynamic_obstacle_refinement_active ||
+      !result.dynamic_obstacle_refinement_solved ||
+      !snapshot.replay_world.has_value() ||
+      !physical_dynamic_sqp_request_template.has_value() ||
+      (!physical_dynamic_sqp_request_template->
+      physical_separation_geometry.has_value() &&
+      !physical_dynamic_sqp_request_template->
+      forced_physical_separation_geometry.has_value()))
+    {
+      result.outcome = Outcome::AssemblyRejected;
+      result.solved = false;
+      result.physical_dynamic_sqp_audit_detail =
+        "physical dynamic SQP audit requires a solved dynamic candidate";
+      result.detail = result.physical_dynamic_sqp_audit_detail;
+      return finish();
+    }
+    result.physical_dynamic_sqp_audit_applied = true;
+    for (std::size_t iteration = 0U;
+      iteration < kMaximumPhysicalProofSqpCorrections; ++iteration)
+    {
+      // Rebuild from the same broad semantic problem on every iteration.
+      // Reusing adapted->problem here would carry the preceding narrow wall
+      // buckets and swept rows into the next tangent, turning successive
+      // convexification into cumulative constraint intersection.
+      auto iteration_problem = broad_problem_before_wall.has_value() ?
+        broad_problem_before_wall.value() : adapted->problem;
+      const auto dynamics =
+        mpcc_rate_resolved_adapter::relinearize_around_primal(
+        snapshot.request, outcome.result->primal, iteration_problem);
+      if (!dynamics.applied) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.physical_dynamic_sqp_audit_detail =
+          std::string{"dynamic-sqp dynamics rejected/"} +
+          mpcc_rate_resolved_adapter::to_string(dynamics.reason) +
+          "/stage=" + std::to_string(dynamics.stage);
+        result.detail = result.physical_dynamic_sqp_audit_detail;
+        return finish();
+      }
+
+      auto dynamic_request =
+        physical_dynamic_sqp_request_template.value();
+      dynamic_request.wall_only_problem = iteration_problem;
+      dynamic_request.constraint_target_problem = iteration_problem;
+      dynamic_request.wall_only_primal = outcome.result->primal;
+      const auto dynamic_refinement =
+        mpcc_rate_resolved_dynamic_obstacle::refine(dynamic_request);
+      if (!dynamic_refinement.problem.has_value()) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.physical_dynamic_sqp_audit_detail =
+          std::string{"dynamic-sqp obstacle rows rejected/"} +
+          mpcc_rate_resolved_dynamic_obstacle::to_string(
+          dynamic_refinement.reason);
+        result.detail = result.physical_dynamic_sqp_audit_detail;
+        return finish();
+      }
+      iteration_problem = dynamic_refinement.problem.value();
+      result.dynamic_obstacle_resolved_side_sign =
+        dynamic_refinement.resolved_side_sign;
+      result.dynamic_obstacle_first_pass_side_stage =
+        dynamic_refinement.first_pass_side_stage;
+      result.dynamic_obstacle_stay_behind_row_count =
+        dynamic_refinement.stay_behind_row_count;
+      result.dynamic_obstacle_pass_side_row_count =
+        dynamic_refinement.pass_side_row_count;
+      result.dynamic_obstacle_ahead_row_count =
+        dynamic_refinement.ahead_row_count;
+      result.dynamic_obstacle_diagonal_row_count =
+        dynamic_refinement.diagonal_row_count;
+      result.dynamic_obstacle_physical_axis_support_applied =
+        dynamic_refinement.physical_axis_support_applied;
+      result.dynamic_obstacle_physical_diagonal_guidance_applied =
+        dynamic_refinement.physical_diagonal_guidance_applied;
+
+      if (snapshot.progress_aligned_wall_refinement_active) {
+        auto wall_refinement = build_progress_wall_refinement(
+          snapshot, iteration_problem, outcome.result->primal,
+          solver_.physical_constraint_tolerance());
+        if (!wall_refinement.request.has_value()) {
+          result.outcome = Outcome::AssemblyRejected;
+          result.solved = false;
+          result.physical_dynamic_sqp_audit_detail =
+            std::string{"dynamic-sqp wall rows rejected/progress="} +
+            mpcc_progress::progress_aligned_wall_bounds_reason_name(
+            wall_refinement.resolution.reason) + "/physical=" +
+            mpcc_rate_resolved_wall_refinement::to_string(
+            wall_refinement.physical.reason);
+          result.detail = result.physical_dynamic_sqp_audit_detail;
+          return finish();
+        }
+        iteration_problem = std::move(wall_refinement.request.value());
+      }
+
+      auto iteration_assembled =
+        mpcc_rate_resolved_problem::assemble(iteration_problem);
+      if (!iteration_assembled.has_value()) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.physical_dynamic_sqp_audit_detail =
+          "dynamic-sqp assembly rejected";
+        result.detail = result.physical_dynamic_sqp_audit_detail;
+        return finish();
+      }
+      auto iteration_warm_start = build_current_problem_bootstrap(
+        iteration_problem,
+        static_cast<std::size_t>(
+          iteration_assembled->lower_bound.size()),
+        &outcome.result->primal);
+      if (!iteration_warm_start.has_value()) {
+        result.outcome = Outcome::AssemblyRejected;
+        result.solved = false;
+        result.physical_dynamic_sqp_audit_detail =
+          "dynamic-sqp current-problem bootstrap rejected";
+        result.detail = result.physical_dynamic_sqp_audit_detail;
+        return finish();
+      }
+      auto iteration_outcome = solver_.solve(
+        iteration_assembled->quadratic_cost,
+        iteration_assembled->constraints,
+        iteration_assembled->linear_cost,
+        iteration_assembled->lower_bound,
+        iteration_assembled->upper_bound,
+        iteration_warm_start,
+        iteration_assembled->variable_scaling);
+      result.solver = iteration_outcome.telemetry;
+      if (!iteration_outcome.result.has_value()) {
+        result.outcome = Outcome::SolveRejected;
+        result.solved = false;
+        result.physical_dynamic_sqp_audit_detail =
+          std::string{"dynamic-sqp solve rejected/"} +
+          iteration_outcome.failure_detail;
+        if (iteration_outcome.constraint_failure.has_value()) {
+          const auto semantic = mpcc_rate_resolved_problem::decode_row(
+            iteration_outcome.constraint_failure->row,
+            snapshot.request.horizon_steps,
+            iteration_problem.steering_rate_prefix_bounds.has_value(),
+            iteration_problem.progress_aligned_wall_constraints.has_value(),
+            static_cast<int>(
+              iteration_problem.swept_lateral_wall_constraints.size()),
+            &iteration_problem.dynamic_obstacle_constraints);
+          if (semantic.valid) {
+            result.physical_dynamic_sqp_audit_detail +=
+              std::string{"/row="} +
+              mpcc_rate_resolved_problem::row_kind_name(semantic.kind) +
+              "/stage=" + std::to_string(semantic.stage) +
+              "/element=" + std::to_string(semantic.element);
+          }
+        }
+        result.detail = result.physical_dynamic_sqp_audit_detail;
+        capture_failure(
+          mpcc_architecture_snapshot::PipelineStage::
+          PostRefinementLinearization,
+          iteration_problem, iteration_assembled.value(),
+          iteration_warm_start, iteration_outcome,
+          "physical-dynamic-sqp-audit-solve-rejected");
+        return finish();
+      }
+      if (!iteration_outcome.result->primal.allFinite()) {
+        result.outcome = Outcome::NonfiniteResult;
+        result.solved = false;
+        result.finite = false;
+        result.physical_dynamic_sqp_audit_detail =
+          "dynamic-sqp solver returned non-finite primal";
+        result.detail = result.physical_dynamic_sqp_audit_detail;
+        return finish();
+      }
+      adapted->problem = std::move(iteration_problem);
+      assembled = std::move(iteration_assembled);
+      outcome = std::move(iteration_outcome);
+      last_refinement_warm_start = std::move(iteration_warm_start);
+      ++result.physical_dynamic_sqp_audit_count;
+    }
+    result.physical_dynamic_sqp_audit_solved = true;
+    result.physical_dynamic_sqp_audit_detail =
+      "bounded dynamics/obstacle/wall SQP solved";
   }
 
   // Physical refinements can move the final primal away from the nonlinear
@@ -3107,6 +3310,16 @@ Result SolverContext::evaluate_impl(
       "/final_solved=" +
       (result.wall_feasibility_restoration_final_solved ? "1" : "0") +
       "/detail=" + result.wall_feasibility_restoration_detail;
+  }
+  if (result.physical_dynamic_sqp_audit_requested) {
+    result.detail += std::string{", physical_dynamic_sqp_audit="} +
+      (result.physical_dynamic_sqp_audit_applied ? "applied" :
+      "not-applied") +
+      "/solved=" +
+      (result.physical_dynamic_sqp_audit_solved ? "1" : "0") +
+      "/count=" +
+      std::to_string(result.physical_dynamic_sqp_audit_count) +
+      "/detail=" + result.physical_dynamic_sqp_audit_detail;
   }
   return finish();
 }

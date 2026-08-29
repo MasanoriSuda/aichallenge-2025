@@ -272,6 +272,7 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_FALSE(result.physical_dynamic_sqp_audit_requested);
   EXPECT_FALSE(result.physical_dynamic_sqp_audit_applied);
   EXPECT_FALSE(result.physical_dynamic_sqp_audit_solved);
+  EXPECT_EQ(result.physical_dynamic_sqp_audit_iteration_limit, 0U);
   EXPECT_EQ(result.physical_dynamic_sqp_audit_count, 0U);
   EXPECT_NE(
     result.receding_warm_start_diagnostic.find("previous=empty-cache"),
@@ -348,6 +349,20 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   invalid.first_steering_rate_certificate_margin_radps =
     std::numeric_limits<double>::quiet_NaN();
   EXPECT_FALSE(shadow::result_valid(invalid));
+}
+
+TEST(MpccRateResolvedShadow, DynamicSqpAuditRejectsDepthBeyondFixedBudget)
+{
+  shadow::SolverContext context;
+  const auto result = context.evaluate_physical_dynamic_sqp_audit(
+    snapshot(), 4U);
+
+  EXPECT_EQ(result.outcome, shadow::Outcome::BuildRejected);
+  EXPECT_TRUE(result.physical_dynamic_sqp_audit_requested);
+  EXPECT_FALSE(result.physical_dynamic_sqp_audit_applied);
+  EXPECT_FALSE(result.physical_dynamic_sqp_audit_solved);
+  EXPECT_EQ(result.physical_dynamic_sqp_audit_iteration_limit, 4U);
+  EXPECT_NE(result.detail.find("exceeds fixed budget"), std::string::npos);
 }
 
 TEST(MpccRateResolvedShadow, LatestStateFeedbackResolvesOneConsistentArtifact)

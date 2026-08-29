@@ -832,7 +832,7 @@ bool result_valid(const Result & result) noexcept
          (result.physical_dynamic_sqp_audit_applied &&
          result.physical_dynamic_sqp_audit_solved &&
          result.physical_dynamic_sqp_audit_count ==
-         kMaximumPhysicalProofSqpCorrections)) &&
+         result.physical_dynamic_sqp_audit_iteration_limit)) &&
          result.execution_artifact_reject_reason ==
          artifact::RejectReason::None &&
          result.execution_artifact != nullptr &&
@@ -1648,32 +1648,32 @@ LatestStateFeedbackResult LatestStateFeedbackSolverContext::evaluate(
 
 Result SolverContext::evaluate(const Snapshot & snapshot)
 {
-  return evaluate_impl(snapshot, false, std::nullopt, false);
+  return evaluate_impl(snapshot, false, std::nullopt, 0U);
 }
 
 Result SolverContext::evaluate_wall_feasibility_restoration_audit(
   const Snapshot & snapshot)
 {
-  return evaluate_impl(snapshot, true, std::nullopt, false);
+  return evaluate_impl(snapshot, true, std::nullopt, 0U);
 }
 
 Result SolverContext::evaluate_wall_bucket_audit(
   const Snapshot & snapshot, const WallBucketAuditMode mode)
 {
-  return evaluate_impl(snapshot, false, mode, false);
+  return evaluate_impl(snapshot, false, mode, 0U);
 }
 
 Result SolverContext::evaluate_physical_dynamic_sqp_audit(
-  const Snapshot & snapshot)
+  const Snapshot & snapshot, const std::size_t iteration_count)
 {
-  return evaluate_impl(snapshot, false, std::nullopt, true);
+  return evaluate_impl(snapshot, false, std::nullopt, iteration_count);
 }
 
 Result SolverContext::evaluate_impl(
   const Snapshot & snapshot,
   const bool wall_feasibility_restoration_audit,
   const std::optional<WallBucketAuditMode> wall_bucket_audit_mode,
-  const bool physical_dynamic_sqp_audit)
+  const std::size_t physical_dynamic_sqp_audit_iteration_count)
 {
   const auto started = SteadyClock::now();
   Result result;
@@ -1681,7 +1681,9 @@ Result SolverContext::evaluate_impl(
   result.wall_feasibility_restoration_requested =
     wall_feasibility_restoration_audit;
   result.physical_dynamic_sqp_audit_requested =
-    physical_dynamic_sqp_audit;
+    physical_dynamic_sqp_audit_iteration_count > 0U;
+  result.physical_dynamic_sqp_audit_iteration_limit =
+    physical_dynamic_sqp_audit_iteration_count;
   const auto capture_failure = [&result, &snapshot](
       const mpcc_architecture_snapshot::PipelineStage pipeline_stage,
       const mpcc_rate_resolved_problem::AssemblyRequest & request,
@@ -1710,6 +1712,13 @@ Result SolverContext::evaluate_impl(
         result.compute_ms * 1.0e-3;
       return result;
     };
+  if (
+    physical_dynamic_sqp_audit_iteration_count >
+    kMaximumPhysicalProofSqpCorrections)
+  {
+    result.detail = "physical dynamic SQP audit depth exceeds fixed budget";
+    return finish();
+  }
   if (
     !artifact::identity_valid(snapshot.identity) ||
     !std::isfinite(snapshot.control_prediction_origin_sec) ||
@@ -2730,7 +2739,7 @@ Result SolverContext::evaluate_impl(
   // dynamics, oriented obstacle support and wall rows are rebuilt around one
   // common latest primal before every solve.  evaluate() can never request
   // this branch, so it has no production authority or fallback semantics.
-  if (physical_dynamic_sqp_audit) {
+  if (physical_dynamic_sqp_audit_iteration_count > 0U) {
     if (
       !snapshot.dynamic_obstacle_refinement_active ||
       !result.dynamic_obstacle_refinement_solved ||
@@ -2750,7 +2759,7 @@ Result SolverContext::evaluate_impl(
     }
     result.physical_dynamic_sqp_audit_applied = true;
     for (std::size_t iteration = 0U;
-      iteration < kMaximumPhysicalProofSqpCorrections; ++iteration)
+      iteration < physical_dynamic_sqp_audit_iteration_count; ++iteration)
     {
       // Rebuild from the same broad semantic problem on every iteration.
       // Reusing adapted->problem here would carry the preceding narrow wall
@@ -3317,6 +3326,8 @@ Result SolverContext::evaluate_impl(
       "not-applied") +
       "/solved=" +
       (result.physical_dynamic_sqp_audit_solved ? "1" : "0") +
+      "/limit=" +
+      std::to_string(result.physical_dynamic_sqp_audit_iteration_limit) +
       "/count=" +
       std::to_string(result.physical_dynamic_sqp_audit_count) +
       "/detail=" + result.physical_dynamic_sqp_audit_detail;

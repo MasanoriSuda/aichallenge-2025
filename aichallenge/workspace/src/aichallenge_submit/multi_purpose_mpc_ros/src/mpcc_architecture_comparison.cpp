@@ -528,7 +528,7 @@ ArmResult evaluate_arm(
   const bool wall_restoration_audit = false,
   const std::optional<shadow::SolverContext::WallBucketAuditMode>
   wall_bucket_audit_mode = std::nullopt,
-  const bool physical_dynamic_sqp_audit = false)
+  const std::size_t physical_dynamic_sqp_audit_iteration_count = 0U)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
@@ -536,6 +536,8 @@ ArmResult evaluate_arm(
   arm_result.candidate_fingerprint = candidate_fingerprint;
   arm_result.lattice_transition_stage = lattice_transition_stage;
   arm_result.lattice_ahead_stage = lattice_ahead_stage;
+  arm_result.dynamic_sqp_depth =
+    physical_dynamic_sqp_audit_iteration_count;
   if (!successor.accepted) {
     arm_result.stage = Stage::TerminalSuccessorRejected;
     arm_result.detail = successor.detail;
@@ -551,8 +553,9 @@ ArmResult evaluate_arm(
   // passes one private context only across its bounded offline continuation.
   shadow::SolverContext local_solver;
   auto & solver = solver_context == nullptr ? local_solver : *solver_context;
-  const auto solved = physical_dynamic_sqp_audit ?
-    solver.evaluate_physical_dynamic_sqp_audit(candidate) :
+  const auto solved = physical_dynamic_sqp_audit_iteration_count > 0U ?
+    solver.evaluate_physical_dynamic_sqp_audit(
+      candidate, physical_dynamic_sqp_audit_iteration_count) :
     (wall_bucket_audit_mode.has_value() ?
     solver.evaluate_wall_bucket_audit(
       candidate, wall_bucket_audit_mode.value()) :
@@ -699,7 +702,8 @@ ArmResult evaluate_arm(
       "accepted/wall-bucket-audit=omit-lag";
   } else {
     arm_result.detail =
-      (wall_restoration_audit || physical_dynamic_sqp_audit) ?
+      (wall_restoration_audit ||
+      physical_dynamic_sqp_audit_iteration_count > 0U) ?
       solved.detail : "accepted";
   }
   arm_result.bundle = std::move(bundle);
@@ -844,10 +848,59 @@ int evidence_rank(const Stage stage) noexcept
   return -1;
 }
 
+ArmResult evaluate_proof_guided_candidate(
+  const Arm arm, const shadow::Snapshot & candidate,
+  const std::uint64_t source_fingerprint,
+  const std::uint64_t candidate_fingerprint,
+  const maneuver::TerminalResolution & successor,
+  const int lattice_transition_stage,
+  const int lattice_ahead_stage)
+{
+  auto baseline = evaluate_arm(
+    arm, candidate, source_fingerprint, candidate_fingerprint, successor,
+    lattice_transition_stage, lattice_ahead_stage);
+  const auto baseline_stage = baseline.stage;
+  if (baseline.bundle.has_value()) {
+    baseline.detail = "accepted/proof-guided-depth=0";
+    return baseline;
+  }
+
+  auto best = std::move(baseline);
+  int best_rank = evidence_rank(best.stage);
+  constexpr std::size_t kMaximumAuditDepth = 3U;
+  for (std::size_t depth = 1U; depth <= kMaximumAuditDepth; ++depth) {
+    auto evaluated = evaluate_arm(
+      arm, candidate, source_fingerprint, candidate_fingerprint, successor,
+      lattice_transition_stage, lattice_ahead_stage, nullptr, false,
+      std::nullopt, depth);
+    if (evaluated.bundle.has_value()) {
+      evaluated.detail = std::string{"accepted/proof-guided-depth="} +
+        std::to_string(depth) + "/baseline=" + to_string(baseline_stage);
+      return evaluated;
+    }
+    const int rank = evidence_rank(evaluated.stage);
+    if (rank > best_rank) {
+      best_rank = rank;
+      best = std::move(evaluated);
+    }
+  }
+  best.detail = std::string{"no certified proof-guided iterate/baseline="} +
+    to_string(baseline_stage) + "/best_depth=" +
+    std::to_string(best.dynamic_sqp_depth) + '/' + best.detail;
+  return best;
+}
+
+enum class ProductionEvaluationMode
+{
+  SingleSqp,
+  FixedDynamicSqp,
+  ProofGuidedDynamicSqp,
+};
+
 ArmResult evaluate_production_population(
   const Arm arm, const shadow::Snapshot & source,
   const std::uint64_t source_fingerprint, const int side,
-  const bool physical_dynamic_sqp_audit = false)
+  const ProductionEvaluationMode mode = ProductionEvaluationMode::SingleSqp)
 {
   const auto population = maneuver::build_bounded_candidates(source, side);
   if (
@@ -877,14 +930,20 @@ ArmResult evaluate_production_population(
     ++attempted;
     const auto successor = maneuver::resolve_terminal_successor(
       candidate.seed.solver_snapshot);
-    auto evaluated = evaluate_arm(
+    const int transition_stage = candidate.seed.solver_snapshot.
+      dynamic_obstacle_forced_diagonal_start_stage;
+    const int ahead_stage = candidate.seed.solver_snapshot.
+      dynamic_obstacle_forced_diagonal_full_side_stage;
+    auto evaluated = mode == ProductionEvaluationMode::ProofGuidedDynamicSqp ?
+      evaluate_proof_guided_candidate(
       arm, candidate.seed.solver_snapshot, source_fingerprint,
-      candidate.seed.candidate_fingerprint, successor,
-      candidate.seed.solver_snapshot.
-      dynamic_obstacle_forced_diagonal_start_stage,
-      candidate.seed.solver_snapshot.
-      dynamic_obstacle_forced_diagonal_full_side_stage,
-      &solver_context, false, std::nullopt, physical_dynamic_sqp_audit);
+      candidate.seed.candidate_fingerprint, successor, transition_stage,
+      ahead_stage) :
+      evaluate_arm(
+      arm, candidate.seed.solver_snapshot, source_fingerprint,
+      candidate.seed.candidate_fingerprint, successor, transition_stage,
+      ahead_stage, &solver_context, false, std::nullopt,
+      mode == ProductionEvaluationMode::FixedDynamicSqp ? 3U : 0U);
     evaluated.candidate_source = maneuver::to_string(candidate.kind);
     evaluated.candidate_count = attempted;
     const int rank = evidence_rank(evaluated.stage);
@@ -893,7 +952,7 @@ ArmResult evaluate_production_population(
       best = std::move(evaluated);
     }
     if (best.stage == Stage::Accepted) {
-      best.detail = std::string{"accepted/"} + best.candidate_source;
+      best.detail += std::string{"/candidate="} + best.candidate_source;
       return best;
     }
   }
@@ -932,6 +991,10 @@ const char * to_string(const Arm arm) noexcept
       return "dynamic-sqp-production-left-l";
     case Arm::DynamicSqpProductionRightL:
       return "dynamic-sqp-production-right-l";
+    case Arm::ProofGuidedProductionLeftM:
+      return "proof-guided-production-left-m";
+    case Arm::ProofGuidedProductionRightM:
+      return "proof-guided-production-right-m";
   }
   return "unknown";
 }
@@ -1284,23 +1347,69 @@ Report compare_physical_dynamic_sqp(
     report.arms.push_back(evaluate_arm(
       Arm::DynamicSqpPersistentL, source, source_fingerprint,
       source_fingerprint, persistent_successor, -1, -1, nullptr, false,
-      std::nullopt, true));
+      std::nullopt, 3U));
 
     report.arms.push_back(evaluate_production_population(
       Arm::ProductionLeftG, source, source_fingerprint, 1));
     report.arms.push_back(evaluate_production_population(
-      Arm::DynamicSqpProductionLeftL, source, source_fingerprint, 1, true));
+      Arm::DynamicSqpProductionLeftL, source, source_fingerprint, 1,
+      ProductionEvaluationMode::FixedDynamicSqp));
     report.arms.push_back(evaluate_production_population(
       Arm::ProductionRightG, source, source_fingerprint, -1));
     report.arms.push_back(evaluate_production_population(
       Arm::DynamicSqpProductionRightL, source, source_fingerprint, -1,
-      true));
+      ProductionEvaluationMode::FixedDynamicSqp));
   } catch (const std::exception & exception) {
     report.source_accepted = false;
     report.detail = exception.what();
   } catch (...) {
     report.source_accepted = false;
     report.detail = "unknown physical dynamic SQP comparison exception";
+  }
+  return report;
+}
+
+Report compare_proof_guided_dynamic_sqp(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  Report report;
+  try {
+    const auto & source = recorded.source;
+    const auto source_fingerprint = recorded.interaction_fingerprint;
+    report.source_interaction_fingerprint = source_fingerprint;
+    if (
+      !architecture::interaction_snapshot_complete(source) ||
+      !architecture::interaction_snapshot_matches_fingerprint(
+        source, source_fingerprint))
+    {
+      report.detail = "source interaction snapshot rejected";
+      for (const auto arm :
+        {Arm::ProductionLeftG, Arm::ProofGuidedProductionLeftM,
+         Arm::ProductionRightG, Arm::ProofGuidedProductionRightM})
+      {
+        report.arms.push_back(rejected_arm(
+          arm, Stage::SourceRejected, source_fingerprint, report.detail));
+      }
+      return report;
+    }
+    report.source_accepted = true;
+    report.detail = "accepted/proof-guided-dynamic-sqp-only";
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProductionLeftG, source, source_fingerprint, 1));
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProofGuidedProductionLeftM, source, source_fingerprint, 1,
+      ProductionEvaluationMode::ProofGuidedDynamicSqp));
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProductionRightG, source, source_fingerprint, -1));
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProofGuidedProductionRightM, source, source_fingerprint, -1,
+      ProductionEvaluationMode::ProofGuidedDynamicSqp));
+  } catch (const std::exception & exception) {
+    report.source_accepted = false;
+    report.detail = exception.what();
+  } catch (...) {
+    report.source_accepted = false;
+    report.detail = "unknown proof-guided dynamic SQP comparison exception";
   }
   return report;
 }

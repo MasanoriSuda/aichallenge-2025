@@ -39,6 +39,8 @@ enum class Arm
   DynamicSqpPersistentL,
   DynamicSqpProductionLeftL,
   DynamicSqpProductionRightL,
+  ProofGuidedProductionLeftM,
+  ProofGuidedProductionRightM,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -97,6 +99,7 @@ struct ArmResult
   double continuation_compute_ms{};
   std::string candidate_source{"none"};
   std::size_t candidate_count{};
+  std::size_t dynamic_sqp_depth{};
   std::optional<ManeuverBundle> bundle;
   std::string detail{"not-evaluated"};
 };
@@ -132,6 +135,13 @@ Report compare_wall_buckets(
 /// observation-only bounded outer SQP which refreshes dynamics, physical
 /// obstacle supports and wall rows together.  No arm has authority APIs.
 Report compare_physical_dynamic_sqp(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
+  noexcept;
+
+/// For every bounded production candidate, certify depth zero first and then
+/// depths one through three. The first certified depth wins; later numerical
+/// iterates cannot replace it. Observation-only with no authority API.
+Report compare_proof_guided_dynamic_sqp(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
   noexcept;
 

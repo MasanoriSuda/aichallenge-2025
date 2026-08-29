@@ -21,15 +21,20 @@ int main(int argc, char ** argv)
     argc == 3 && std::string{argv[2]} == "--wall-buckets-only";
   const bool physical_dynamic_sqp_only =
     argc == 3 && std::string{argv[2]} == "--physical-dynamic-sqp-only";
+  const bool proof_guided_dynamic_sqp_only =
+    argc == 3 && std::string{argv[2]} ==
+    "--proof-guided-dynamic-sqp-only";
   const bool external_primal =
     argc == 4 && std::string{argv[2]} == "--external-primal";
   if (
     argc != 2 && !wall_restoration_only && !wall_buckets_only &&
-    !physical_dynamic_sqp_only && !external_primal)
+    !physical_dynamic_sqp_only && !proof_guided_dynamic_sqp_only &&
+    !external_primal)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
                  "[--wall-restoration-only | --wall-buckets-only | "
                  "--physical-dynamic-sqp-only | "
+                 "--proof-guided-dynamic-sqp-only | "
                  "--external-primal <values.txt>]\n";
     return 2;
   }
@@ -63,6 +68,8 @@ int main(int argc, char ** argv)
     report = comparison::compare_wall_buckets(recorded.value());
   } else if (physical_dynamic_sqp_only) {
     report = comparison::compare_physical_dynamic_sqp(recorded.value());
+  } else if (proof_guided_dynamic_sqp_only) {
+    report = comparison::compare_proof_guided_dynamic_sqp(recorded.value());
   } else {
     report = comparison::compare(recorded.value());
   }
@@ -99,6 +106,7 @@ int main(int argc, char ** argv)
               << " continuation_ms=" << arm.continuation_compute_ms
               << " candidate_source=" << arm.candidate_source
               << " candidate_count=" << arm.candidate_count
+              << " sqp_depth=" << arm.dynamic_sqp_depth
               << " bundle=" << arm.bundle.has_value()
               << " detail=" << arm.detail << '\n';
   }

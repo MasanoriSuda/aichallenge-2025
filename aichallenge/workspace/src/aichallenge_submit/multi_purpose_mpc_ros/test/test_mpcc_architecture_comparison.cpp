@@ -275,6 +275,31 @@ TEST(
 
 TEST(
   MpccArchitectureComparison,
+  ProofGuidedSqpRetainsCertifiedDepthZeroCandidate)
+{
+  const auto report = compare_proof_guided_dynamic_sqp(
+    recorded(source_snapshot()));
+
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 4U);
+  EXPECT_EQ(report.arms[0].arm, Arm::ProductionLeftG);
+  EXPECT_EQ(report.arms[1].arm, Arm::ProofGuidedProductionLeftM);
+  EXPECT_EQ(report.arms[2].arm, Arm::ProductionRightG);
+  EXPECT_EQ(report.arms[3].arm, Arm::ProofGuidedProductionRightM);
+  ASSERT_TRUE(report.arms[1].bundle.has_value()) << report.arms[1].detail;
+  ASSERT_TRUE(report.arms[3].bundle.has_value()) << report.arms[3].detail;
+  EXPECT_EQ(report.arms[1].dynamic_sqp_depth, 0U);
+  EXPECT_EQ(report.arms[3].dynamic_sqp_depth, 0U);
+  EXPECT_NE(
+    report.arms[1].detail.find("proof-guided-depth=0"),
+    std::string::npos);
+  EXPECT_NE(
+    report.arms[3].detail.find("proof-guided-depth=0"),
+    std::string::npos);
+}
+
+TEST(
+  MpccArchitectureComparison,
   PersistentTargetBoundArmRestoresOnlyCurrentWorldTargetConstraint)
 {
   auto source = source_snapshot();

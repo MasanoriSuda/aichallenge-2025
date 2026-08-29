@@ -425,6 +425,7 @@ struct Result
   bool physical_dynamic_sqp_audit_requested{false};
   bool physical_dynamic_sqp_audit_applied{false};
   bool physical_dynamic_sqp_audit_solved{false};
+  std::size_t physical_dynamic_sqp_audit_iteration_limit{};
   std::size_t physical_dynamic_sqp_audit_count{};
   std::string physical_dynamic_sqp_audit_detail{"not-requested"};
   persistent_osqp::SolveTelemetry solver;
@@ -508,7 +509,8 @@ public:
     const Snapshot & snapshot, WallBucketAuditMode mode);
   /// Observation-only comparison arm.  The existing exact proof chain still
   /// owns acceptance, and this entry point cannot publish an artifact.
-  Result evaluate_physical_dynamic_sqp_audit(const Snapshot & snapshot);
+  Result evaluate_physical_dynamic_sqp_audit(
+    const Snapshot & snapshot, std::size_t iteration_count);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;
 
@@ -516,7 +518,7 @@ private:
   Result evaluate_impl(
     const Snapshot & snapshot, bool wall_feasibility_restoration_audit,
     std::optional<WallBucketAuditMode> wall_bucket_audit_mode,
-    bool physical_dynamic_sqp_audit);
+    std::size_t physical_dynamic_sqp_audit_iteration_count);
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
   persistent_osqp::PersistentOsqpSolver solver_{

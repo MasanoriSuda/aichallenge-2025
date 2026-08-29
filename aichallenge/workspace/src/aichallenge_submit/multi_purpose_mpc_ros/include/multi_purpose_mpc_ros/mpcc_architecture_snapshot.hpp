@@ -64,6 +64,18 @@ RecordResult record_failure(
   const std::filesystem::path & output_root =
   std::filesystem::path{"mpcc_architecture_snapshots"}) noexcept;
 
+/// Persist a complete immutable interaction at a physical-proof failure
+/// boundary which has no rejected QP in the current callback.  This is the
+/// canonical capture path for retained terminal-contingency failures.  It has
+/// no solver, Store, mailbox or publisher side effect.
+RecordResult record_proof_failure(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  PipelineStage pipeline_stage,
+  const std::string & failure_outcome,
+  const std::string & failure_detail,
+  const std::filesystem::path & output_root =
+  std::filesystem::path{"mpcc_architecture_snapshots"}) noexcept;
+
 struct RecordedQp
 {
   mpcc_rate_resolved_problem::Problem problem;
@@ -81,8 +93,8 @@ struct RecordedQp
 struct RecordedInteractionSnapshot
 {
   mpcc_rate_resolved_shadow::Snapshot source;
-  mpcc_rate_resolved_problem::AssemblyRequest assembly_request;
-  RecordedQp recorded_qp;
+  std::optional<mpcc_rate_resolved_problem::AssemblyRequest> assembly_request;
+  std::optional<RecordedQp> recorded_qp;
   std::uint64_t interaction_fingerprint{};
 };
 

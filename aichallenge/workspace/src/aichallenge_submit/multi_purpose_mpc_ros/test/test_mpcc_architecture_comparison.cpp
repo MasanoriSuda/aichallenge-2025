@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <memory>
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_comparison
@@ -123,6 +124,12 @@ shadow::Snapshot source_snapshot()
   world.hard_wall_clearance_m = 0.2;
   world.bound_tolerance_m = 1e-5;
   world.swept_step_m = 0.1;
+  world.terminal_stop_contract_available = true;
+  world.terminal_stop_lateral_policy =
+    race_mpcc_foundation::StopPathTrackingPolicy{
+    source.request.wheelbase_m, source.request.maximum_abs_steering_rad,
+    source.request.maximum_abs_steering_rate_radps, 6.0, 1.0, 0.8, 1.2};
+  world.terminal_stop_minimum_acceleration_mps2 = -2.0;
   // The replay obstacle is deliberately clear in this infrastructure test;
   // its identity still seals the same target/world used by every arm.
   world.obstacles.push_back(
@@ -161,7 +168,8 @@ recorded_with_solved_qp(shadow::Snapshot source)
 
   auto value = recorded(std::move(source));
   if (qp.has_value()) {
-    value.recorded_qp.problem = qp.value();
+    value.recorded_qp.emplace();
+    value.recorded_qp->problem = qp.value();
   }
   return {
     std::move(value), outcome.result.has_value() ?
@@ -363,6 +371,25 @@ TEST(MpccArchitectureComparison, MissingSuccessorRejectsBeforeAuthorityData)
   }
 }
 
+TEST(MpccArchitectureComparison, MissingImmutableStopContractRejectsAllArms)
+{
+  auto source = source_snapshot();
+  source.replay_world->terminal_stop_contract_available = false;
+  source.replay_world->terminal_stop_minimum_acceleration_mps2 =
+    std::numeric_limits<double>::quiet_NaN();
+  const auto report = compare(recorded(std::move(source)));
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_GE(report.arms.size(), 4U);
+  for (std::size_t index = 0U; index < 4U; ++index) {
+    const auto & arm = report.arms[index];
+    EXPECT_EQ(arm.stage, Stage::TerminalSuccessorRejected) << arm.detail;
+    EXPECT_FALSE(arm.bundle.has_value());
+  }
+  for (const auto & arm : report.arms) {
+    EXPECT_FALSE(arm.bundle.has_value());
+  }
+}
+
 TEST(MpccArchitectureComparison, FollowComparesOnlyPersistentAndStatelessSides)
 {
   auto source = source_snapshot();
@@ -478,10 +505,10 @@ TEST(MpccArchitectureComparison, ExternalPrimalNeedsExactRecordedProblem)
   ASSERT_TRUE(report.source_accepted);
   ASSERT_EQ(report.arms.size(), 1U);
   EXPECT_EQ(report.arms.front().arm, Arm::ExternalPrimalI);
-  EXPECT_EQ(report.arms.front().stage, Stage::SolverRejected);
+  EXPECT_EQ(report.arms.front().stage, Stage::SourceRejected);
   EXPECT_FALSE(report.arms.front().bundle.has_value());
   EXPECT_NE(
-    report.arms.front().detail.find("dimension-contract-mismatch"),
+    report.arms.front().detail.find("requires an exact recorded QP"),
     std::string::npos);
 }
 

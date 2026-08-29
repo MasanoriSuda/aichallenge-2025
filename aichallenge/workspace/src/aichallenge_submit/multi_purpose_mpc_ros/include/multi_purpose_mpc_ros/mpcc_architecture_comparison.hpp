@@ -74,6 +74,10 @@ struct ManeuverBundle
   race_mpcc_foundation::ExactPhysicalExecutionTrajectory exact_trajectory;
   mpcc_rate_resolved_physical_wall::Result wall_certificate;
   mpcc_rate_resolved_dynamic_proof::Result dynamic_certificate;
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory
+  terminal_stop_trajectory;
+  mpcc_rate_resolved_physical_wall::Result terminal_stop_wall_certificate;
+  mpcc_rate_resolved_dynamic_proof::Result terminal_stop_dynamic_certificate;
   mpcc_stateless_maneuver::TerminalSuccessor terminal_successor{
     mpcc_stateless_maneuver::TerminalSuccessor::None};
   mpcc_stateless_maneuver::ContingencyStopIntent stop_suffix;

@@ -225,16 +225,19 @@ int main(int argc, char ** argv)
   auto recorded = architecture::load_recorded_interaction_snapshot(
     std::filesystem::path{argv[1]}, &load_detail);
   if (!recorded.has_value() ||
-    !recorded->recorded_qp.warm_start.has_value())
+    !recorded->assembly_request.has_value() ||
+    !recorded->recorded_qp.has_value() ||
+    !recorded->recorded_qp->warm_start.has_value())
   {
     std::cerr << "load failed: " << load_detail <<
       ", warm_available=" <<
       (recorded.has_value() &&
-      recorded->recorded_qp.warm_start.has_value()) << '\n';
+      recorded->recorded_qp.has_value() &&
+      recorded->recorded_qp->warm_start.has_value()) << '\n';
     return 2;
   }
   const auto & recorded_primal =
-    recorded->recorded_qp.warm_start->primal;
+    recorded->recorded_qp->warm_start->primal;
   const auto latest = interpolate_recorded_state(
     recorded->source, recorded_primal, elapsed_sec);
   const auto previous_input = active_recorded_input(
@@ -246,7 +249,7 @@ int main(int argc, char ** argv)
 
   shadow::LatestStateFeedbackPreparation preparation;
   preparation.snapshot = recorded->source;
-  preparation.final_problem = recorded->assembly_request;
+  preparation.final_problem = recorded->assembly_request.value();
   preparation.prepared_primal = recorded_primal;
   solver::PersistentOsqpSolver feedback_solver(
     solver::ConstraintPreconditioningPolicy::RowToleranceNormalized);
@@ -336,8 +339,8 @@ int main(int argc, char ** argv)
   }
   std::cout <<
     "snapshot=" << std::filesystem::path{argv[1]}.generic_string() <<
-    " intent=" << recorded->recorded_qp.intent <<
-    " pipeline=" << recorded->recorded_qp.pipeline_stage <<
+    " intent=" << recorded->recorded_qp->intent <<
+    " pipeline=" << recorded->recorded_qp->pipeline_stage <<
     " elapsed_sec=" << elapsed_sec <<
     " source_horizon=" << recorded->source.request.horizon_steps <<
     " suffix_horizon=" <<

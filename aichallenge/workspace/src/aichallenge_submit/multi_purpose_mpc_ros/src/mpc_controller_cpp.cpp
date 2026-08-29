@@ -13,6 +13,7 @@
 #include <multi_purpose_mpc_ros/awsim_control_mode_guard.hpp>
 #include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
+#include <multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
@@ -23533,6 +23534,9 @@ struct MPC
       physical_snapshot.hard_wall_clearance_m;
     replay.bound_tolerance_m = physical_snapshot.bound_tolerance_m;
     replay.swept_step_m = physical_snapshot.swept_step_m;
+    replay.terminal_stop_contract_available = true;
+    replay.terminal_stop_lateral_policy = stop_path_tracking_policy();
+    replay.terminal_stop_minimum_acceleration_mps2 = cfg.a_min;
     replay.obstacles.reserve(dynamic_world.vehicles.size());
     for (const auto & vehicle : dynamic_world.vehicles) {
       const auto radius_m = rate_resolved_retained::resolve_peer_circle_radius(
@@ -23562,6 +23566,114 @@ struct MPC
         return lhs.id < rhs.id;
       });
     solver_snapshot.replay_world = std::move(replay);
+  }
+
+  void record_rate_resolved_terminal_contingency_failure_snapshot(
+    const MpcProblem & problem,
+    const std::optional<RateResolvedTrackCruiseSubmissionDraft> &
+    submission_draft,
+    const double now_sec,
+    const mpcc_contract::ControlIntent intent,
+    const RateResolvedRetainedShadowEvaluation & retained)
+  {
+    const bool terminal_failure =
+      retained.reason ==
+      rate_resolved_retained::Reason::TerminalContingencyUnavailable ||
+      retained.candidate_reason ==
+      rate_resolved_retained::Reason::TerminalContingencyUnavailable ||
+      retained.executed_reason ==
+      rate_resolved_retained::Reason::TerminalContingencyUnavailable;
+    if (!terminal_failure) {
+      return;
+    }
+
+    const auto reject = [intent, &retained](const std::string & reason) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Rate-resolved terminal proof snapshot unavailable: decision=%lu, "
+          "intent=%s, reason=%s",
+          static_cast<unsigned long>(retained.decision_id),
+          mpcc_contract::to_string(intent), reason.c_str());
+      };
+    if (!submission_draft.has_value()) {
+      reject("current-world submission draft unavailable");
+      return;
+    }
+    if (!last_rate_resolved_serialized_predecessor_.has_value()) {
+      reject("current-cycle serialized predecessor unavailable");
+      return;
+    }
+    const char * binding_reason = "not-evaluated";
+    const auto bound_submission = bind_rate_resolved_track_cruise_submission(
+      submission_draft.value(),
+      last_rate_resolved_serialized_predecessor_.value(), &binding_reason);
+    if (!bound_submission.has_value()) {
+      reject(std::string{"current-cycle predecessor binding rejected/"} +
+        binding_reason);
+      return;
+    }
+    auto source = build_rate_resolved_submission_snapshot(
+      problem, bound_submission.value(), now_sec,
+      std::max<std::uint64_t>(1U, active_control_decision_id_));
+    if (!source.has_value()) {
+      reject("current-world interaction snapshot unavailable");
+      return;
+    }
+    RateResolvedPhysicalShadowEvaluation physical_rejection;
+    const auto physical = build_rate_resolved_track_cruise_physical_snapshot(
+      source.value(), problem, now_sec, physical_rejection);
+    if (!physical.has_value()) {
+      reject(std::string{"current-world physical snapshot rejected/"} +
+        physical_rejection.detail);
+      return;
+    }
+    bind_rate_resolved_physical_wall_refinement(
+      source.value(), physical.value());
+    bind_rate_resolved_replay_world(source.value(), physical.value(), now_sec);
+
+    const auto & terminal_wall = retained.terminal_stop_path_clearance;
+    std::ostringstream detail;
+    detail << "retained="
+           << rate_resolved_retained::to_string(retained.reason)
+           << "/candidate="
+           << rate_resolved_retained::to_string(retained.candidate_reason)
+           << "/executed="
+           << rate_resolved_retained::to_string(retained.executed_reason)
+           << "/stop_model="
+           << rate_resolved_physical::to_string(retained.terminal_stop_reason)
+           << "/stop_exact="
+           << race_mpcc::exact_physical_execution_trajectory_reason_name(
+             retained.terminal_stop_exact_reason)
+           << "/stop_rejected_sample="
+           << retained.terminal_stop_rejected_sample
+           << "/wall_valid=" << (terminal_wall.valid ? 1 : 0)
+           << "/wall_clear=" << (terminal_wall.clear ? 1 : 0)
+           << "/wall_reason="
+           << recovery_footprint::to_string(terminal_wall.reason)
+           << "/wall_rejected_path_index="
+           << terminal_wall.rejected_path_index
+           << "/dynamic_clearance="
+           << retained.terminal_stop_minimum_dynamic_clearance_m
+           << "/dynamic_blocker="
+           << (retained.terminal_stop_blocking_obstacle_id.empty() ?
+             "none" : retained.terminal_stop_blocking_obstacle_id);
+    const auto recorded = mpcc_architecture_snapshot::record_proof_failure(
+      source.value(), mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
+      "terminal-contingency-unavailable", detail.str());
+    if (recorded.status == mpcc_architecture_snapshot::RecordStatus::Written) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Rate-resolved terminal proof snapshot recorded: decision=%lu, "
+        "intent=%s, file=%s",
+        static_cast<unsigned long>(retained.decision_id),
+        mpcc_contract::to_string(intent),
+        recorded.snapshot_file.string().c_str());
+    } else if (
+      recorded.status == mpcc_architecture_snapshot::RecordStatus::IoFailure ||
+      recorded.status == mpcc_architecture_snapshot::RecordStatus::InvalidInput)
+    {
+      reject(std::string{"snapshot recorder rejected/"} + recorded.detail);
+    }
   }
 
   bool submit_rate_resolved_track_cruise_shadow(
@@ -27022,6 +27134,12 @@ struct MPC
     bool published_stop_retained = false;
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
       problem, now_sec, intent);
+    // Observation only: capture the immutable current-world problem at the
+    // proof boundary before atomic intent bridging can replace the rejected
+    // proposed intent.  This never solves, stores, publishes or changes
+    // production authority.
+    record_rate_resolved_terminal_contingency_failure_snapshot(
+      problem, submission_draft, now_sec, intent, retained);
     if (
       !retained.production_authority.has_value() &&
       last_published_authority_intent_ !=

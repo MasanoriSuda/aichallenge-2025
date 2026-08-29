@@ -279,12 +279,13 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   ASSERT_EQ(loaded->source.replay_world->obstacles.size(), 1U);
   EXPECT_EQ(loaded->source.replay_world->obstacles.front().id, "d2");
   EXPECT_EQ(loaded->source.wall_grid->cells.size(), 4U);
-  EXPECT_EQ(loaded->assembly_request.horizon_steps, 1);
+  ASSERT_TRUE(loaded->assembly_request.has_value());
+  EXPECT_EQ(loaded->assembly_request->horizon_steps, 1);
   EXPECT_TRUE(
-    loaded->assembly_request.state_reference.isApprox(
+    loaded->assembly_request->state_reference.isApprox(
       make_assembly_request().state_reference));
   EXPECT_TRUE(
-    loaded->assembly_request.input_reference.isApprox(
+    loaded->assembly_request->input_reference.isApprox(
       make_assembly_request().input_reference));
 
   auto vehicle_mutated = loaded->source;
@@ -322,6 +323,52 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   EXPECT_FALSE(
     interaction_snapshot_matches_fingerprint(
       semantic_mutated, loaded->interaction_fingerprint));
+}
+
+TEST(MpccArchitectureSnapshot, RecordsSourceOnlyTerminalProofBoundary)
+{
+  const auto root = output_root("terminal-proof-boundary");
+  std::filesystem::remove_all(root);
+  auto snapshot = make_interaction_snapshot(
+    mpcc_execution_contract::ControlIntent::Pass);
+  ASSERT_TRUE(snapshot.replay_world.has_value());
+  auto & world = snapshot.replay_world.value();
+  world.terminal_stop_contract_available = true;
+  world.terminal_stop_lateral_policy.wheelbase_m = 1.0;
+  world.terminal_stop_lateral_policy.maximum_abs_steering_rad = 0.5;
+  world.terminal_stop_lateral_policy.maximum_abs_steering_rate_radps = 1.0;
+  world.terminal_stop_lateral_policy.maximum_lateral_acceleration_mps2 = 4.0;
+  world.terminal_stop_lateral_policy.steering_command_gain = 1.0;
+  world.terminal_stop_lateral_policy.lateral_gain = 0.8;
+  world.terminal_stop_lateral_policy.heading_gain = 1.2;
+  world.terminal_stop_minimum_acceleration_mps2 = -2.0;
+
+  const auto written = record_proof_failure(
+    snapshot, PipelineStage::PhysicalProof,
+    "terminal-contingency-unavailable",
+    "unit terminal Stop wall rejection", root);
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+
+  std::string detail;
+  const auto loaded = load_recorded_interaction_snapshot(
+    written.snapshot_file, &detail);
+  ASSERT_TRUE(loaded.has_value()) << detail;
+  EXPECT_TRUE(interaction_snapshot_complete(loaded->source));
+  EXPECT_FALSE(loaded->assembly_request.has_value());
+  EXPECT_FALSE(loaded->recorded_qp.has_value());
+  ASSERT_TRUE(loaded->source.replay_world.has_value());
+  EXPECT_TRUE(
+    loaded->source.replay_world->terminal_stop_contract_available);
+  EXPECT_DOUBLE_EQ(
+    loaded->source.replay_world->terminal_stop_minimum_acceleration_mps2,
+    -2.0);
+  EXPECT_TRUE(
+    interaction_snapshot_matches_fingerprint(
+      loaded->source, loaded->interaction_fingerprint));
+
+  EXPECT_FALSE(load_recorded_qp(written.snapshot_file, &detail).has_value());
+  EXPECT_EQ(
+    detail, "source-only proof-boundary snapshot has no exact QP");
 }
 
 TEST(MpccArchitectureSnapshot, RejectsMalformedRecordedAssemblyRequest)

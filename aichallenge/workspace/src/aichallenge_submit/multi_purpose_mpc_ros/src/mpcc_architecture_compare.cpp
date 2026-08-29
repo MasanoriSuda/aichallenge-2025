@@ -69,7 +69,9 @@ int main(int argc, char ** argv)
   if (kkt_equilibration_only) {
     report = comparison::compare_kkt_equilibration(recorded.value());
   } else if (rejected_primal_only) {
-    auto primal = recorded->recorded_qp.rejected_primal;
+    auto primal = recorded->recorded_qp.has_value() ?
+      recorded->recorded_qp->rejected_primal :
+      std::optional<Eigen::VectorXd>{};
     if (!primal.has_value()) {
       // Older snapshots did not serialize the rejected iterate.  Replaying
       // the immutable exact problem from a cold state is observation-only and

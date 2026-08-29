@@ -96,7 +96,10 @@ std::optional<problem::Problem> external_primal_problem(
   const architecture::RecordedInteractionSnapshot & recorded,
   const ExternalPrimalConstraintPolicy policy) noexcept
 {
-  auto qp = recorded.recorded_qp.problem;
+  if (!recorded.recorded_qp.has_value()) {
+    return std::nullopt;
+  }
+  auto qp = recorded.recorded_qp->problem;
   if (
     policy == ExternalPrimalConstraintPolicy::ExactRecorded ||
     policy == ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle)
@@ -506,6 +509,96 @@ wall::Snapshot wall_snapshot(
   return result;
 }
 
+struct TerminalStopCertificate
+{
+  bool accepted{false};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory trajectory;
+  wall::Result wall_certificate;
+  dynamic::Result dynamic_certificate;
+  std::string detail{"not-evaluated"};
+};
+
+TerminalStopCertificate certify_terminal_stop(
+  const shadow::Snapshot & candidate,
+  const artifact::ExecutionArtifact & execution,
+  const wall::Snapshot & normal_wall_snapshot)
+{
+  TerminalStopCertificate result;
+  if (!candidate.replay_world.has_value() ||
+    !candidate.replay_world->terminal_stop_contract_available)
+  {
+    result.detail =
+      "terminal Stop contract absent from immutable interaction snapshot";
+    return result;
+  }
+  if (execution.predicted_states.empty()) {
+    result.detail = "terminal Stop initial state unavailable";
+    return result;
+  }
+  const auto cursor = artifact::resolve_cursor(
+    execution, execution.prediction_origin_sec);
+  const auto actuation = artifact::extract_actuation(execution, cursor);
+  if (!cursor.available || !actuation.actuation.has_value()) {
+    std::ostringstream detail;
+    detail << "terminal Stop first actuation unavailable/cursor="
+           << artifact::to_string(cursor.reason) << "/actuation="
+           << artifact::to_string(actuation.reason);
+    result.detail = detail.str();
+    return result;
+  }
+  const auto & initial = execution.predicted_states.front();
+  const auto & world = candidate.replay_world.value();
+  const auto terminal = physical::build_stop_contingency(
+    execution, cursor, actuation.actuation.value(),
+    physical::ContinuationInitialState{
+      initial.lateral_m, initial.lag_m, initial.heading_offset_rad,
+      initial.velocity_mps, initial.progress_m, initial.steering_rad,
+      initial.response_steering_rad},
+    normal_wall_snapshot.terminal_stop_course_geometry,
+    world.terminal_stop_lateral_policy,
+    world.terminal_stop_minimum_acceleration_mps2);
+  if (!terminal.exact_trajectory.has_value()) {
+    std::ostringstream detail;
+    detail << "terminal Stop synthesis rejected/reason="
+           << physical::to_string(terminal.reason)
+           << "/exact=" << static_cast<int>(terminal.exact_reason)
+           << "/sample=" << terminal.rejected_sample;
+    result.detail = detail.str();
+    return result;
+  }
+  auto terminal_wall_snapshot = normal_wall_snapshot;
+  terminal_wall_snapshot.trajectory = terminal.exact_trajectory.value();
+  result.wall_certificate = wall::evaluate(terminal_wall_snapshot);
+  if (result.wall_certificate.outcome != wall::Outcome::Accepted) {
+    std::ostringstream detail;
+    detail << "terminal Stop wall rejected/outcome="
+           << wall::to_string(result.wall_certificate.outcome)
+           << "/detail=" << result.wall_certificate.detail;
+    result.detail = detail.str();
+    return result;
+  }
+  result.dynamic_certificate = dynamic::evaluate_current_world(
+    candidate, terminal_wall_snapshot);
+  if (!result.dynamic_certificate.valid ||
+    !result.dynamic_certificate.clear)
+  {
+    std::ostringstream detail;
+    detail << "terminal Stop dynamic rejected/valid="
+           << (result.dynamic_certificate.valid ? 1 : 0)
+           << "/clear=" << (result.dynamic_certificate.clear ? 1 : 0)
+           << "/obstacle="
+           << result.dynamic_certificate.blocking_obstacle_id
+           << "/minimum="
+           << result.dynamic_certificate.minimum_clearance_m;
+    result.detail = detail.str();
+    return result;
+  }
+  result.trajectory = terminal.exact_trajectory.value();
+  result.accepted = true;
+  result.detail = "accepted";
+  return result;
+}
+
 ArmResult evaluate_arm(
   const Arm arm,
   shadow::Snapshot candidate,
@@ -670,6 +763,14 @@ ArmResult evaluate_arm(
     return arm_result;
   }
 
+  const auto terminal_stop = certify_terminal_stop(
+    candidate, *solved.execution_artifact, physical_snapshot);
+  if (!terminal_stop.accepted) {
+    arm_result.stage = Stage::TerminalSuccessorRejected;
+    arm_result.detail = terminal_stop.detail;
+    return arm_result;
+  }
+
   ManeuverBundle bundle;
   bundle.target_id = candidate.identity.source_context.target_id;
   bundle.pass_side_sign =
@@ -681,6 +782,9 @@ ArmResult evaluate_arm(
   bundle.exact_trajectory = std::move(exact);
   bundle.wall_certificate = std::move(wall_result);
   bundle.dynamic_certificate = std::move(dynamic_result);
+  bundle.terminal_stop_trajectory = terminal_stop.trajectory;
+  bundle.terminal_stop_wall_certificate = terminal_stop.wall_certificate;
+  bundle.terminal_stop_dynamic_certificate = terminal_stop.dynamic_certificate;
   bundle.terminal_successor = successor.successor;
   bundle.stop_suffix = successor.stop_suffix;
   arm_result.stage = Stage::Accepted;
@@ -1502,6 +1606,12 @@ Report verify_external_primal(
     }
     report.source_accepted = true;
     report.detail = "accepted/external-primal-proof-only";
+    if (!recorded.recorded_qp.has_value()) {
+      return reject_source(
+        Stage::SourceRejected,
+        "external primal requires an exact recorded QP; source-only "
+        "proof-boundary evidence supports architecture arms only");
+    }
     const auto verification_problem = external_primal_problem(recorded, policy);
     if (!verification_problem.has_value()) {
       return reject_source(
@@ -1600,6 +1710,15 @@ Report verify_external_primal(
       return report;
     }
 
+    const auto terminal_stop = certify_terminal_stop(
+      source, built.value.value(), physical_snapshot);
+    if (!terminal_stop.accepted) {
+      arm_result.stage = Stage::TerminalSuccessorRejected;
+      arm_result.detail = terminal_stop.detail;
+      report.arms.push_back(std::move(arm_result));
+      return report;
+    }
+
     ManeuverBundle bundle;
     bundle.target_id = source.identity.source_context.target_id;
     bundle.pass_side_sign =
@@ -1611,6 +1730,9 @@ Report verify_external_primal(
     bundle.exact_trajectory = std::move(exact);
     bundle.wall_certificate = std::move(wall_result);
     bundle.dynamic_certificate = std::move(dynamic_result);
+    bundle.terminal_stop_trajectory = terminal_stop.trajectory;
+    bundle.terminal_stop_wall_certificate = terminal_stop.wall_certificate;
+    bundle.terminal_stop_dynamic_certificate = terminal_stop.dynamic_certificate;
     bundle.terminal_successor = successor.successor;
     bundle.stop_suffix = successor.stop_suffix;
     arm_result.stage = Stage::Accepted;
@@ -1672,10 +1794,13 @@ Report compare_kkt_equilibration(
     osqp::PersistentOsqpSolver solver{
       osqp::ConstraintPreconditioningPolicy::
         RowToleranceNormalizedWithInternalEquilibration};
-    const auto & qp = recorded.recorded_qp.problem;
+    if (!recorded.recorded_qp.has_value()) {
+      return reject("source-only snapshot has no exact QP");
+    }
+    const auto & qp = recorded.recorded_qp->problem;
     const auto outcome = solver.solve(
       qp.quadratic_cost, qp.constraints, qp.linear_cost,
-      qp.lower_bound, qp.upper_bound, recorded.recorded_qp.warm_start,
+      qp.lower_bound, qp.upper_bound, recorded.recorded_qp->warm_start,
       qp.variable_scaling);
     if (!outcome.result.has_value()) {
       return reject(outcome.failure_detail);

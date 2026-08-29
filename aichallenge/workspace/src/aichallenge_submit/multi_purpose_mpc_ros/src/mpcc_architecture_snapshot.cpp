@@ -38,11 +38,14 @@ constexpr const char * kExactQpSnapshotSchemaV1 =
   "mpcc-architecture-failure-snapshot/v1";
 constexpr const char * kInteractionSnapshotSchemaV2 =
   "mpcc-architecture-failure-snapshot/v2";
+constexpr const char * kInteractionSnapshotSchemaV3 =
+  "mpcc-architecture-failure-snapshot/v3";
 
 bool supported_exact_qp_schema(const std::string & schema) noexcept
 {
   return schema == kExactQpSnapshotSchemaV1 ||
-         schema == kInteractionSnapshotSchemaV2;
+         schema == kInteractionSnapshotSchemaV2 ||
+         schema == kInteractionSnapshotSchemaV3;
 }
 
 template<typename LowerDerived, typename UpperDerived>
@@ -548,6 +551,25 @@ YAML::Node source_node(
     replay_world["hard_wall_clearance_m"] = world.hard_wall_clearance_m;
     replay_world["bound_tolerance_m"] = world.bound_tolerance_m;
     replay_world["swept_step_m"] = world.swept_step_m;
+    replay_world["terminal_stop_contract_available"] =
+      world.terminal_stop_contract_available;
+    if (world.terminal_stop_contract_available) {
+      const auto & policy = world.terminal_stop_lateral_policy;
+      YAML::Node stop_policy;
+      stop_policy["wheelbase_m"] = policy.wheelbase_m;
+      stop_policy["maximum_abs_steering_rad"] =
+        policy.maximum_abs_steering_rad;
+      stop_policy["maximum_abs_steering_rate_radps"] =
+        policy.maximum_abs_steering_rate_radps;
+      stop_policy["maximum_lateral_acceleration_mps2"] =
+        policy.maximum_lateral_acceleration_mps2;
+      stop_policy["steering_command_gain"] = policy.steering_command_gain;
+      stop_policy["lateral_gain"] = policy.lateral_gain;
+      stop_policy["heading_gain"] = policy.heading_gain;
+      replay_world["terminal_stop_lateral_policy"] = stop_policy;
+      replay_world["terminal_stop_minimum_acceleration_mps2"] =
+        world.terminal_stop_minimum_acceleration_mps2;
+    }
     auto obstacles = world.obstacles;
     std::sort(
       obstacles.begin(), obstacles.end(),
@@ -1204,6 +1226,28 @@ std::optional<shadow::Snapshot> load_source_snapshot(
     world.hard_wall_clearance_m = replay["hard_wall_clearance_m"].as<double>();
     world.bound_tolerance_m = replay["bound_tolerance_m"].as<double>();
     world.swept_step_m = replay["swept_step_m"].as<double>();
+    world.terminal_stop_contract_available =
+      replay["terminal_stop_contract_available"] &&
+      replay["terminal_stop_contract_available"].as<bool>();
+    if (world.terminal_stop_contract_available) {
+      const auto policy = replay["terminal_stop_lateral_policy"];
+      if (!policy || !policy.IsMap() ||
+        !replay["terminal_stop_minimum_acceleration_mps2"])
+      {
+        return std::nullopt;
+      }
+      world.terminal_stop_lateral_policy =
+        race_mpcc_foundation::StopPathTrackingPolicy{
+        policy["wheelbase_m"].as<double>(),
+        policy["maximum_abs_steering_rad"].as<double>(),
+        policy["maximum_abs_steering_rate_radps"].as<double>(),
+        policy["maximum_lateral_acceleration_mps2"].as<double>(),
+        policy["steering_command_gain"].as<double>(),
+        policy["lateral_gain"].as<double>(),
+        policy["heading_gain"].as<double>()};
+      world.terminal_stop_minimum_acceleration_mps2 =
+        replay["terminal_stop_minimum_acceleration_mps2"].as<double>();
+    }
     const auto obstacles = replay["obstacles"];
     if (!obstacles || !obstacles.IsSequence()) {
       return std::nullopt;
@@ -1598,6 +1642,26 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
     {
       return false;
     }
+    if (world.terminal_stop_contract_available) {
+      const auto & policy = world.terminal_stop_lateral_policy;
+      if (
+        !std::isfinite(policy.wheelbase_m) || policy.wheelbase_m <= 0.0 ||
+        !std::isfinite(policy.maximum_abs_steering_rad) ||
+        policy.maximum_abs_steering_rad <= 0.0 ||
+        !std::isfinite(policy.maximum_abs_steering_rate_radps) ||
+        policy.maximum_abs_steering_rate_radps <= 0.0 ||
+        !std::isfinite(policy.maximum_lateral_acceleration_mps2) ||
+        policy.maximum_lateral_acceleration_mps2 <= 0.0 ||
+        !std::isfinite(policy.steering_command_gain) ||
+        policy.steering_command_gain <= 0.0 ||
+        !std::isfinite(policy.lateral_gain) ||
+        !std::isfinite(policy.heading_gain) ||
+        !std::isfinite(world.terminal_stop_minimum_acceleration_mps2) ||
+        world.terminal_stop_minimum_acceleration_mps2 >= 0.0)
+      {
+        return false;
+      }
+    }
     for (std::size_t index = 1U;
       index < world.control_prefix_elapsed_sec.size(); ++index)
     {
@@ -1644,7 +1708,9 @@ std::uint64_t fingerprint_interaction_snapshot(
     return 0U;
   }
   InteractionFingerprintBuilder builder;
-  builder.append_string("mpcc-interaction-snapshot-v2");
+  builder.append_string(
+    source.replay_world->terminal_stop_contract_available ?
+    "mpcc-interaction-snapshot-v3" : "mpcc-interaction-snapshot-v2");
   builder.append_u64(source.identity.sequence);
   builder.append_u64(source.identity.source_context.fingerprint);
   builder.append_double(source.identity.snapshot_sec);
@@ -1758,6 +1824,18 @@ std::uint64_t fingerprint_interaction_snapshot(
   builder.append_double(world.hard_wall_clearance_m);
   builder.append_double(world.bound_tolerance_m);
   builder.append_double(world.swept_step_m);
+  if (world.terminal_stop_contract_available) {
+    const auto & policy = world.terminal_stop_lateral_policy;
+    builder.append_u64(0x53544f5053554646ULL);
+    builder.append_double(policy.wheelbase_m);
+    builder.append_double(policy.maximum_abs_steering_rad);
+    builder.append_double(policy.maximum_abs_steering_rate_radps);
+    builder.append_double(policy.maximum_lateral_acceleration_mps2);
+    builder.append_double(policy.steering_command_gain);
+    builder.append_double(policy.lateral_gain);
+    builder.append_double(policy.heading_gain);
+    builder.append_double(world.terminal_stop_minimum_acceleration_mps2);
+  }
   auto obstacles = world.obstacles;
   std::sort(
     obstacles.begin(), obstacles.end(),
@@ -1788,12 +1866,12 @@ bool interaction_snapshot_matches_fingerprint(
          fingerprint_interaction_snapshot(source) == expected_fingerprint;
 }
 
-RecordResult record_failure(
+static RecordResult record_snapshot(
   const shadow::Snapshot & source,
-  const problem::AssemblyRequest & assembly_request,
-  const problem::Problem & exact_problem,
-  const std::optional<persistent_osqp::WarmStart> & warm_start,
-  const persistent_osqp::SolveOutcome & outcome,
+  const problem::AssemblyRequest * const assembly_request,
+  const problem::Problem * const exact_problem,
+  const std::optional<persistent_osqp::WarmStart> * const warm_start,
+  const persistent_osqp::SolveOutcome * const outcome,
   const PipelineStage pipeline_stage,
   const std::string & failure_outcome,
   const std::string & failure_detail,
@@ -1809,13 +1887,17 @@ RecordResult record_failure(
     }
     if (
       failure_outcome.empty() || output_root.empty() ||
-      exact_problem.horizon_steps <= 0 ||
-      exact_problem.linear_cost.size() <= 0 ||
-      exact_problem.quadratic_cost.rows() != exact_problem.linear_cost.size() ||
-      exact_problem.quadratic_cost.cols() != exact_problem.linear_cost.size() ||
-      exact_problem.constraints.cols() != exact_problem.linear_cost.size() ||
-      exact_problem.constraints.rows() != exact_problem.lower_bound.size() ||
-      exact_problem.lower_bound.size() != exact_problem.upper_bound.size())
+      ((exact_problem == nullptr) != (assembly_request == nullptr)) ||
+      ((exact_problem == nullptr) != (warm_start == nullptr)) ||
+      ((exact_problem == nullptr) != (outcome == nullptr)) ||
+      (exact_problem != nullptr &&
+      (exact_problem->horizon_steps <= 0 ||
+      exact_problem->linear_cost.size() <= 0 ||
+      exact_problem->quadratic_cost.rows() != exact_problem->linear_cost.size() ||
+      exact_problem->quadratic_cost.cols() != exact_problem->linear_cost.size() ||
+      exact_problem->constraints.cols() != exact_problem->linear_cost.size() ||
+      exact_problem->constraints.rows() != exact_problem->lower_bound.size() ||
+      exact_problem->lower_bound.size() != exact_problem->upper_bound.size())))
     {
       result.status = RecordStatus::InvalidInput;
       result.detail = "invalid exact QP capture request";
@@ -1888,11 +1970,13 @@ RecordResult record_failure(
     }
 
     YAML::Node root;
-    // v2 makes the stage-wise dynamic-obstacle constraint identity part of
-    // the immutable interaction snapshot.  A v1 artifact still contains an
-    // exact QP, but it cannot be upgraded for physical A/B/C/D replay without
-    // guessing which obstacle generation produced its constraint rows.
-    root["schema"] = kInteractionSnapshotSchemaV2;
+    // v3 additionally seals the exact moving-Stop policy and braking envelope
+    // required to prove recursive terminal viability. Older v2 interactions
+    // remain loadable but cannot claim that certificate.
+    root["schema"] = source.replay_world.has_value() &&
+      source.replay_world->terminal_stop_contract_available ?
+      kInteractionSnapshotSchemaV3 : kInteractionSnapshotSchemaV2;
+    root["exact_qp_available"] = exact_problem != nullptr;
     root["pipeline_stage"] = to_string(pipeline_stage);
     root["failure_outcome"] = failure_outcome;
     root["failure_detail"] = failure_detail;
@@ -1900,10 +1984,12 @@ RecordResult record_failure(
       source, source.wall_grid != nullptr ? grid_payload : "");
     root["interaction_fingerprint"] =
       fingerprint_interaction_snapshot(source);
-    root["assembly_request"] = assembly_request_node(assembly_request);
-    root["exact_qp"] = exact_problem_node(exact_problem);
-    root["warm_start"] = warm_start_node(warm_start);
-    root["production_outcome"] = outcome_node(outcome);
+    if (exact_problem != nullptr) {
+      root["assembly_request"] = assembly_request_node(*assembly_request);
+      root["exact_qp"] = exact_problem_node(*exact_problem);
+      root["warm_start"] = warm_start_node(*warm_start);
+      root["production_outcome"] = outcome_node(*outcome);
+    }
 
     YAML::Emitter emitter;
     emitter.SetDoublePrecision(std::numeric_limits<double>::max_digits10);
@@ -1951,6 +2037,40 @@ RecordResult record_failure(
   }
 }
 
+RecordResult record_failure(
+  const shadow::Snapshot & source,
+  const problem::AssemblyRequest & assembly_request,
+  const problem::Problem & exact_problem,
+  const std::optional<persistent_osqp::WarmStart> & warm_start,
+  const persistent_osqp::SolveOutcome & outcome,
+  const PipelineStage pipeline_stage,
+  const std::string & failure_outcome,
+  const std::string & failure_detail,
+  const std::filesystem::path & output_root) noexcept
+{
+  return record_snapshot(
+    source, &assembly_request, &exact_problem, &warm_start, &outcome,
+    pipeline_stage, failure_outcome, failure_detail, output_root);
+}
+
+RecordResult record_proof_failure(
+  const shadow::Snapshot & source,
+  const PipelineStage pipeline_stage,
+  const std::string & failure_outcome,
+  const std::string & failure_detail,
+  const std::filesystem::path & output_root) noexcept
+{
+  if (fingerprint_interaction_snapshot(source) == 0U) {
+    RecordResult result;
+    result.status = RecordStatus::InvalidInput;
+    result.detail = "incomplete source-only interaction snapshot";
+    return result;
+  }
+  return record_snapshot(
+    source, nullptr, nullptr, nullptr, nullptr, pipeline_stage,
+    failure_outcome, failure_detail, output_root);
+}
+
 std::optional<RecordedQp> load_recorded_qp(
   const std::filesystem::path & snapshot_file, std::string * detail) noexcept
 {
@@ -1961,6 +2081,15 @@ std::optional<RecordedQp> load_recorded_qp(
     {
       if (detail != nullptr) {
         *detail = "unsupported snapshot schema";
+      }
+      return std::nullopt;
+    }
+    if (
+      root["exact_qp_available"] &&
+      !root["exact_qp_available"].as<bool>())
+    {
+      if (detail != nullptr) {
+        *detail = "source-only proof-boundary snapshot has no exact QP";
       }
       return std::nullopt;
     }
@@ -2057,18 +2186,16 @@ std::optional<RecordedInteractionSnapshot> load_recorded_interaction_snapshot(
       }
       return std::nullopt;
     }
-    if (schema != kInteractionSnapshotSchemaV2) {
+    if (
+      schema != kInteractionSnapshotSchemaV2 &&
+      schema != kInteractionSnapshotSchemaV3)
+    {
       if (detail != nullptr) *detail = "unsupported snapshot schema";
       return std::nullopt;
     }
     auto source = load_source_snapshot(root, snapshot_file);
     if (!source.has_value() || !interaction_snapshot_complete(source.value())) {
       if (detail != nullptr) *detail = "interaction snapshot incomplete";
-      return std::nullopt;
-    }
-    auto assembly_request = load_assembly_request(root["assembly_request"]);
-    if (!assembly_request.has_value()) {
-      if (detail != nullptr) *detail = "assembly request unavailable";
       return std::nullopt;
     }
     if (!root["interaction_fingerprint"]) {
@@ -2081,16 +2208,25 @@ std::optional<RecordedInteractionSnapshot> load_recorded_interaction_snapshot(
       if (detail != nullptr) *detail = "interaction fingerprint mismatch";
       return std::nullopt;
     }
-    std::string qp_detail;
-    auto recorded_qp = load_recorded_qp(snapshot_file, &qp_detail);
-    if (!recorded_qp.has_value()) {
-      if (detail != nullptr) *detail = "exact QP unavailable: " + qp_detail;
-      return std::nullopt;
-    }
     RecordedInteractionSnapshot recorded;
     recorded.source = std::move(source.value());
-    recorded.assembly_request = std::move(assembly_request.value());
-    recorded.recorded_qp = std::move(recorded_qp.value());
+    const bool exact_qp_available = !root["exact_qp_available"] ||
+      root["exact_qp_available"].as<bool>();
+    if (exact_qp_available) {
+      auto assembly_request = load_assembly_request(root["assembly_request"]);
+      if (!assembly_request.has_value()) {
+        if (detail != nullptr) *detail = "assembly request unavailable";
+        return std::nullopt;
+      }
+      std::string qp_detail;
+      auto recorded_qp = load_recorded_qp(snapshot_file, &qp_detail);
+      if (!recorded_qp.has_value()) {
+        if (detail != nullptr) *detail = "exact QP unavailable: " + qp_detail;
+        return std::nullopt;
+      }
+      recorded.assembly_request = std::move(assembly_request.value());
+      recorded.recorded_qp = std::move(recorded_qp.value());
+    }
     recorded.interaction_fingerprint = fingerprint;
     if (detail != nullptr) *detail = "loaded";
     return recorded;

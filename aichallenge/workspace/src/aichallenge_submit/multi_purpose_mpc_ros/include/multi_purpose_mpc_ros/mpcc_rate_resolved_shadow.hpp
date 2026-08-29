@@ -66,6 +66,14 @@ struct ReplayWorld
   double hard_wall_clearance_m{};
   double bound_tolerance_m{};
   double swept_step_m{};
+  /// Exact moving-Stop contract in force when this world was observed.  An
+  /// architecture arm may claim recursive terminal viability only when this
+  /// policy is sealed beside the wall/obstacle evidence.  Older snapshots
+  /// deliberately leave it unavailable instead of borrowing current config.
+  bool terminal_stop_contract_available{false};
+  race_mpcc_foundation::StopPathTrackingPolicy terminal_stop_lateral_policy;
+  double terminal_stop_minimum_acceleration_mps2{
+    std::numeric_limits<double>::quiet_NaN()};
   std::vector<ReplayDynamicObstacle> obstacles;
 };
 

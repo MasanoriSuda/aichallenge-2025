@@ -592,13 +592,15 @@ Result evaluate(const Request & request)
     result.reason = Reason::ExecutionClockInvalid;
     return result;
   }
-  const auto cursor = resolve_execution_cursor(
+  const auto source_cursor = resolve_execution_cursor(
     execution, request.control_origin_sec, request.execution_clock);
-  result.cursor_reason = cursor.reason;
-  if (cursor.available) {
-    result.cursor_elapsed_sec = cursor.elapsed_sec;
+  result.cursor_reason = source_cursor.reason;
+  if (source_cursor.available) {
+    result.cursor_elapsed_sec = source_cursor.elapsed_sec;
+    result.source_control_stage_index = source_cursor.control_stage_index;
+    result.command_control_stage_index = source_cursor.control_stage_index;
   }
-  if (!cursor.available) {
+  if (!source_cursor.available) {
     result.reason = Reason::CursorUnavailable;
     return result;
   }
@@ -693,9 +695,10 @@ Result evaluate(const Request & request)
     return result;
   }
 
-  const auto affine_command_state = interpolate_expected_state(execution, cursor);
+  const auto affine_command_state = interpolate_expected_state(
+    execution, source_cursor);
   const auto exact_physical_state = sample_exact_physical_state(
-    execution, source, cursor.elapsed_sec);
+    execution, source, source_cursor.elapsed_sec);
   if (!exact_physical_state.has_value()) {
     result.reason = Reason::InvalidPlan;
     return result;
@@ -833,7 +836,53 @@ Result evaluate(const Request & request)
       return result;
     }
   }
-  const auto actuation = artifact::extract_actuation(execution, cursor);
+  // A serialized command must remain constant until the next publication.
+  // An asynchronously adopted artifact is not phase-aligned with that clock,
+  // so its exact-time source stage can have less than one publication interval
+  // remaining.  Such a residual has no publisher authority.  Advance to the
+  // next sealed stage and prove that command from the same fresh physical
+  // state.  This is a stateless Bundle; skipped source time is never claimed
+  // as executed artifact history.
+  auto command_cursor = source_cursor;
+  const double cursor_tolerance = std::max(
+    kIdentityTolerance, execution.physical_global_tolerance);
+  while (
+    command_cursor.control_stage_index < execution.control_stages.size())
+  {
+    const auto & stage =
+      execution.control_stages[command_cursor.control_stage_index];
+    const double remaining_sec = stage.duration_sec -
+      command_cursor.stage_elapsed_sec;
+    if (
+      std::isfinite(remaining_sec) &&
+      remaining_sec + cursor_tolerance >= execution.publication_interval_sec)
+    {
+      break;
+    }
+    if (
+      !std::isfinite(remaining_sec) || remaining_sec <= 0.0 ||
+      command_cursor.control_stage_index + 1U >=
+      execution.control_stages.size())
+    {
+      result.continuation_reason =
+        mpcc_rate_resolved_physical_adapter::ContinuationRejectReason::
+        InvalidCursor;
+      result.reason = Reason::ContinuationRejected;
+      return result;
+    }
+    command_cursor.elapsed_sec += remaining_sec;
+    ++command_cursor.control_stage_index;
+    command_cursor.remaining_control_stage_count =
+      execution.control_stages.size() - command_cursor.control_stage_index;
+    command_cursor.stage_elapsed_sec = 0.0;
+    result.publication_stage_advanced = true;
+  }
+  result.command_control_stage_index = command_cursor.control_stage_index;
+  result.publication_stage_advance_sec =
+    command_cursor.elapsed_sec - source_cursor.elapsed_sec;
+
+  const auto actuation = artifact::extract_actuation(
+    execution, command_cursor);
   result.actuation_reason = actuation.reason;
   if (!actuation.actuation.has_value()) {
     result.reason = Reason::ActuationRejected;
@@ -937,7 +986,7 @@ Result evaluate(const Request & request)
 
   const auto continuation =
     mpcc_rate_resolved_physical_adapter::build_continuation(
-    execution, cursor,
+    execution, command_cursor,
     mpcc_rate_resolved_physical_adapter::ContinuationInitialState{
       current_control_state.lateral_m,
       current_control_state.lag_m,
@@ -963,7 +1012,7 @@ Result evaluate(const Request & request)
   result.proved_control_stage_count = continuation.scope ==
       mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
       PublisherIntervalPrefix ?
-    1U : cursor.remaining_control_stage_count;
+    1U : command_cursor.remaining_control_stage_count;
   if (
     continuation.scope ==
     mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
@@ -1152,7 +1201,7 @@ Result evaluate(const Request & request)
     result.terminal_stop_attempted = true;
     const auto terminal_stop =
       mpcc_rate_resolved_physical_adapter::build_stop_contingency(
-      execution, cursor, current_world_actuation,
+      execution, command_cursor, current_world_actuation,
       mpcc_rate_resolved_physical_adapter::ContinuationInitialState{
         current_control_state.lateral_m,
         current_control_state.lag_m,
@@ -1300,13 +1349,14 @@ Result evaluate(const Request & request)
   Proof proof;
   proof.plan = request.plan;
   proof.latest_state_feedback_bundle = feedback_shadow_mode;
+  proof.publication_stage_advanced = result.publication_stage_advanced;
   proof.decision_id = request.decision_id;
   proof.obstacle_generation = request.obstacles.generation;
   proof.observed_sec = request.obstacles.observed_sec;
   proof.observation_origin_sec = request.now_sec;
   proof.control_origin_sec = request.control_origin_sec;
   proof.prediction_delay_sec = prediction_delay_sec;
-  proof.cursor = cursor;
+  proof.cursor = command_cursor;
   proof.actuation = current_world_actuation;
   proof.expected_current_state = expected;
   proof.expected_current_pose = expected_pose.value();

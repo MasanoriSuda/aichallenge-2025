@@ -915,6 +915,73 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
+  AdvancesToPublisherCompleteStageAndReprovesCurrentWorldBundle)
+{
+  const auto plan = certified_plan();
+  ASSERT_NE(plan, nullptr);
+  auto request = accepted_request(plan);
+  request.now_sec = 1.085;
+  request.control_origin_sec = 1.085;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.17;
+  request.progress_continuity_tolerance_m = 0.50;
+  request.control_pose = {50.17, 0.085, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.current_speed_mps = 2.085;
+  request.control_origin_speed_mps = 2.085;
+  request.current_time_steering_rad = 0.1085;
+  request.current_steering_rad = 0.1085;
+  request.current_response_steering_rad = 0.1025;
+  request.previous_published_steering_rad = 0.11;
+
+  const auto result = retained::evaluate(request);
+
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_TRUE(result.publication_stage_advanced);
+  EXPECT_EQ(result.source_control_stage_index, 0U);
+  EXPECT_EQ(result.command_control_stage_index, 1U);
+  EXPECT_NEAR(result.publication_stage_advance_sec, 0.015, 1e-9);
+  EXPECT_EQ(result.proof->cursor.control_stage_index, 1U);
+  EXPECT_NEAR(result.proof->cursor.stage_elapsed_sec, 0.0, 1e-9);
+  EXPECT_TRUE(result.proof->publication_stage_advanced);
+  EXPECT_TRUE(result.proof->stateless_current_world_bundle());
+  EXPECT_FALSE(result.proof->latest_state_feedback_bundle);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  KeepsFinalArtifactExhaustionFailClosed)
+{
+  const auto plan = certified_plan();
+  ASSERT_NE(plan, nullptr);
+  auto request = accepted_request(plan);
+  request.now_sec = 1.195;
+  request.control_origin_sec = 1.195;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.39;
+  request.progress_continuity_tolerance_m = 0.50;
+  request.control_pose = {50.39, 0.195, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.current_speed_mps = 2.195;
+  request.control_origin_speed_mps = 2.195;
+  request.current_time_steering_rad = 0.1195;
+  request.current_steering_rad = 0.1195;
+  request.current_response_steering_rad = 0.109;
+  request.previous_published_steering_rad = 0.1195;
+
+  const auto result = retained::evaluate(request);
+
+  EXPECT_EQ(result.reason, retained::Reason::ContinuationRejected);
+  EXPECT_EQ(
+    result.continuation_reason,
+    multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::
+    ContinuationRejectReason::InvalidCursor);
+  EXPECT_FALSE(result.proof.has_value());
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
   RejectsMissingExecutionClockOwnership)
 {
   const auto plan = certified_plan();

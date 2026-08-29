@@ -2984,6 +2984,27 @@ Bundle publicationに伴うStore execution-promotion rejectは0で、全54 packa
 合格を意味しない。失敗したwall／dynamic／terminal proofは従来どおり`steering-unreachable`へ閉じ、
 Emergency Stop以外のnormal fallbackを追加しない。
 
+#### publication stage境界のstateless Bundle（2026-08-29、2025由来の暫定）
+
+非同期に採用したseven-state artifactのcontrol stageは約100 ms、publisherは25 ms周期であり、両者の
+位相は一致しない。exactなsource cursorがstage終端の15 ms以内へ入ると、そのstage commandを次の25 ms
+全体へ保持する証明は構造上成立しない。従来はphysical adapterがこの残余を`invalid-cursor`として正しく
+拒否する一方、上流が次のseal済みstageを選ばなかったため、物理的に実行可能な後続stageがあってもnormal
+authorityが途切れてEmergencyを発生させていた。
+
+current-world revalidationはsource cursorとcommand cursorを分離する。source cursorはimmutable artifactの
+course/progress cross-section照合だけを所有する。残余stageが1 publication interval未満なら、command cursorを
+publisher-completeな次のseal済みstageへ進め、そのcommandを現在の物理stateとlast actually published commandへ
+接続する。接続後は従来と同じnonlinear continuation、static wall、timed dynamic-obstacle、Follow hard gap、
+terminal Stop suffixを再証明する。合格した1 decisionはstateless current-world Bundleであり、source artifactを
+実行済みに昇格しない。後続stageがないfinal artifact exhaustionは従来どおりfail closedとする。
+
+baseline `output/20260829-220933`のD1はレース開始後に`invalid-cursor`を129件、retained continuation拒否を
+127件、走行中normal Emergencyを246件記録した。修正後`output/20260829-223720`では各値が0件、0件、
+26件となり、D1は69集約窓で合計698回のstage advanceを使用した。観測された最大advanceは15 ms未満で、
+unusableなstage残余だけを飛ばす設計と整合する。残るEmergencyとOvertake失敗はwall／entry feasibility等の
+別failure familyであり、このSliceの合格をOvertake統合Gate合格とは扱わない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

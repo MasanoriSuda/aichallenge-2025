@@ -220,6 +220,16 @@ struct Proof
   /// current-world bundle: it may command the proved actuation, but it must
   /// never claim that the unmodified source artifact was published.
   bool latest_state_feedback_bundle{false};
+  /// True when the exact artifact-time stage did not contain one complete
+  /// publisher interval and the proof instead joined the immediately
+  /// following sealed control stage from the current physical state.  The
+  /// skipped residual is never executed and the source artifact must not be
+  /// promoted as an unmodified executed plan.
+  bool publication_stage_advanced{false};
+  bool stateless_current_world_bundle() const noexcept
+  {
+    return latest_state_feedback_bundle || publication_stage_advanced;
+  }
   std::uint64_t decision_id{};
   std::uint64_t obstacle_generation{};
   double observed_sec{};
@@ -294,6 +304,10 @@ struct Result
   double first_published_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double cursor_elapsed_sec{std::numeric_limits<double>::quiet_NaN()};
+  bool publication_stage_advanced{false};
+  std::size_t source_control_stage_index{};
+  std::size_t command_control_stage_index{};
+  double publication_stage_advance_sec{};
   std::string blocking_obstacle_id;
   std::size_t dynamic_checked_pose_count{};
   double minimum_dynamic_clearance_m{

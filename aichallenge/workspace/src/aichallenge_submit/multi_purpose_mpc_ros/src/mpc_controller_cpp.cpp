@@ -7171,6 +7171,10 @@ struct RateResolvedRetainedShadowEvaluation
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
   bool selected_from_executed{false};
   bool stateless_current_world_bundle{false};
+  bool publication_stage_advanced{false};
+  std::size_t source_control_stage_index{};
+  std::size_t command_control_stage_index{};
+  double publication_stage_advance_sec{};
   bool on_trajectory_connector_attempted{false};
   on_trajectory_connector::Reason on_trajectory_connector_reason{
     on_trajectory_connector::Reason::InvalidRequest};
@@ -7291,6 +7295,8 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   std::uint64_t retained_attempt_count{};
   std::uint64_t retained_full_suffix_accept_count{};
   std::uint64_t retained_publisher_interval_prefix_accept_count{};
+  std::uint64_t publication_stage_advance_count{};
+  double maximum_publication_stage_advance_sec{};
   std::uint64_t feedback_shadow_attempt_count{};
   std::uint64_t feedback_shadow_projected_count{};
   std::uint64_t feedback_shadow_continuation_accept_count{};
@@ -24523,6 +24529,14 @@ struct MPC
     evaluation.continuation_path_clearance =
       result.continuation_path_clearance;
     evaluation.continuation_reason = result.continuation_reason;
+    evaluation.publication_stage_advanced =
+      result.publication_stage_advanced;
+    evaluation.source_control_stage_index =
+      result.source_control_stage_index;
+    evaluation.command_control_stage_index =
+      result.command_control_stage_index;
+    evaluation.publication_stage_advance_sec =
+      result.publication_stage_advance_sec;
     const auto command = rate_resolved_command::build(result);
     evaluation.command_reason = command.reason;
     evaluation.command_candidate = command.candidate;
@@ -24549,7 +24563,7 @@ struct MPC
       evaluation.follow_minimum_gap_m =
         result.proof->follow_minimum_gap_m;
       evaluation.stateless_current_world_bundle =
-        result.proof->latest_state_feedback_bundle;
+        result.proof->stateless_current_world_bundle();
     }
     return finish();
   }
@@ -24797,6 +24811,12 @@ struct MPC
       } else {
         ++window.retained_full_suffix_accept_count;
       }
+    }
+    if (retained.publication_stage_advanced) {
+      ++window.publication_stage_advance_count;
+      window.maximum_publication_stage_advance_sec = std::max(
+        window.maximum_publication_stage_advance_sec,
+        retained.publication_stage_advance_sec);
     }
     if (retained.feedback_shadow_attempted) {
       ++window.feedback_shadow_attempt_count;
@@ -25428,6 +25448,8 @@ struct MPC
       "control_path:%lu/delay:%lu/connector:%lu/continuation:%lu/"
       "continuation_wall:%lu, proof_scope=full:%lu/publisher_interval:%lu/"
       "last_wall:%s/last_dynamic:%s, "
+      "publication_stage=advanced:%lu/max_advance:%.6f/"
+      "last:%d/source:%lu/command:%lu/advance:%.6f, "
       "time=%.3f/%.3fms(avg/max), "
       "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
       "time=observation:%.6f/control:%.6f/delay:%.6f/cursor_elapsed:%.6f/"
@@ -25520,6 +25542,14 @@ struct MPC
         window.last_retained.static_wall_scope),
       rate_resolved_retained::to_string(
         window.last_retained.dynamic_obstacle_scope),
+      static_cast<unsigned long>(window.publication_stage_advance_count),
+      window.maximum_publication_stage_advance_sec,
+      window.last_retained.publication_stage_advanced ? 1 : 0,
+      static_cast<unsigned long>(
+        window.last_retained.source_control_stage_index),
+      static_cast<unsigned long>(
+        window.last_retained.command_control_stage_index),
+      window.last_retained.publication_stage_advance_sec,
       window.total_retained_ms / retained_denominator,
       window.maximum_retained_ms,
       static_cast<unsigned long>(window.last_retained.sequence),

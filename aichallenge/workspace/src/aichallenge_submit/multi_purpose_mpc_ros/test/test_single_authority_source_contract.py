@@ -2284,7 +2284,13 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
         package / "src" / "mpcc_rate_resolved_dynamic_proof.cpp"
     ).read_text(encoding="utf-8")
     assert "std::optional<Proof> proof" in retained_header
-    assert "artifact::extract_actuation(execution, cursor)" in retained_source
+    assert (
+        "artifact::extract_actuation(\n    execution, command_cursor)"
+        in retained_source
+    )
+    assert "auto command_cursor = source_cursor;" in retained_source
+    assert "result.publication_stage_advanced = true;" in retained_source
+    assert "proof.cursor = command_cursor;" in retained_source
     assert "recovery::evaluate_clear_footprint_path(" in retained_source
     assert "dynamic_proof::observe_timed_path(" in retained_source
     assert "dynamic_proof::observe_segment(" in retained_source

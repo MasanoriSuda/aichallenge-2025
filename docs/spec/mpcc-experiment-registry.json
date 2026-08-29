@@ -474,6 +474,20 @@
         "diagnostic-only discard of a successful latest-state nonlinear and physical proof"
       ],
       "revisit_condition": "a same-world replay shows the published Bundle differs from its physical certificate, a failed proof produces normal authority, or production marks the unmodified source plan executed"
+    },
+    {
+      "experiment_id": "20260829-publication-aligned-stage-bundle",
+      "baseline_commit": "29562adf",
+      "snapshot_ids": [],
+      "hypothesis": "the repeated retained invalid-cursor Emergency holes are caused by asynchronous artifact stages having less than one full publisher interval remaining, while a following sealed stage can be rebuilt and proved from the current world",
+      "changed_dimension": "production_publication_stage_selection_and_current_world_reproof",
+      "result": "accepted",
+      "reason": "after race start the baseline D1 recorded 129 invalid-cursor events, 127 continuation rejections and 246 moving normal Emergency decisions; run 20260829-223720 recorded zero invalid-cursor and zero continuation rejection while using 698 publication-stage advances across 69 aggregate windows, and moving normal Emergency fell to 26",
+      "production_impact": "retained revalidation separates immutable source-time identity from publisher-complete command-stage selection and re-proves an advanced command as a stateless current-world Bundle; failed wall, dynamic, Follow and terminal proofs remain fail-closed and the source artifact is never marked executed",
+      "deleted_code": [
+        "normal-authority hole caused by sending a sub-publication residual stage directly to the physical adapter"
+      ],
+      "revisit_condition": "a stage-advanced command differs from the command covered by its exact physical proof, a final exhausted artifact gains authority, or the source artifact is marked executed"
     }
   ]
 }

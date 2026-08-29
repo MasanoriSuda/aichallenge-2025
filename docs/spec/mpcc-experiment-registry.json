@@ -382,6 +382,25 @@
       "production_impact": "none; joint bucket omission is available only through the offline architecture comparison and has no Store, worker, publisher or command authority path",
       "deleted_code": [],
       "revisit_condition": "a production Slice atomically removes hard post-hoc lag/heading pose-box authority, retains every exact physical and terminal proof, and demonstrates frozen replay plus dynamic ShiftOut/Pass acceptance without introducing a fallback or parameter change"
+    },
+    {
+      "experiment_id": "20260829-proof-authoritative-wall-pose-production",
+      "baseline_commit": "4c357c78",
+      "snapshot_ids": [
+        "11478535197026802675",
+        "12107242968934788374",
+        "9845010060330222052"
+      ],
+      "hypothesis": "sampled lag and heading wall-pose bucket intervals are nonphysical trust-region artifacts and can be deleted from production while exact current-world proofs remain the sole physical authority",
+      "changed_dimension": "production_wall_refinement_pose_bucket_authority",
+      "result": "accepted",
+      "reason": "on fingerprint 11478535197026802675 the direct racing solve without both pose boxes matched the Phase-I result and passed every unchanged exact proof; four of six wall snapshots certified, the unsafe wall case and independent dynamic counterexample remained rejected, and dynamic run 20260829-133704 reproduced the same pre-existing source-stale/progress-lift Emergency chain seen before the change rather than a new pose-box regression",
+      "production_impact": "normal seven-state wall refinement no longer hard-applies sampled lag or heading pose buckets; lateral/progress wall rows plus exact nonlinear, swept-wall, timed-obstacle and terminal-successor proofs remain mandatory; no solver, clearance, timeout, lease, fallback or authority change",
+      "deleted_code": [
+        "normal-authority lag wall-pose bucket state box",
+        "normal-authority heading wall-pose bucket state box"
+      ],
+      "revisit_condition": "only if an exact physical proof accepts a trajectory that production now publishes unsafely, or a same-world replay proves the removed sampled boxes encode a physical constraint not represented by the unchanged exact proofs"
     }
   ]
 }

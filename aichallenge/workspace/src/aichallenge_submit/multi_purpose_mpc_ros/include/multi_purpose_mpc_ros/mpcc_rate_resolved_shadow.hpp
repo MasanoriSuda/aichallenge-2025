@@ -383,6 +383,8 @@ struct Result
   bool physical_wall_refinement_requested{false};
   bool physical_wall_refinement_applied{false};
   bool physical_wall_refinement_solved{false};
+  bool physical_wall_lag_pose_box_applied{false};
+  bool physical_wall_heading_pose_box_applied{false};
   mpcc_rate_resolved_wall_refinement::Reason
     physical_wall_refinement_reason{
       mpcc_rate_resolved_wall_refinement::Reason::NotRequested};
@@ -500,6 +502,7 @@ public:
     OmitHeading,
     OmitLag,
     OmitPose,
+    OmitPoseDirect,
   };
 
   Result evaluate(const Snapshot & snapshot);

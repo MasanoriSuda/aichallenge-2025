@@ -679,6 +679,9 @@ ArmResult evaluate_arm(
       case shadow::SolverContext::WallBucketAuditMode::OmitPose:
         arm_result.detail = "accepted/wall-bucket-audit=omit-pose";
         break;
+      case shadow::SolverContext::WallBucketAuditMode::OmitPoseDirect:
+        arm_result.detail = "accepted/wall-bucket-audit=omit-pose-direct";
+        break;
     }
   } else {
     arm_result.detail =
@@ -967,6 +970,8 @@ const char * to_string(const Arm arm) noexcept
     case Arm::WallOmitHeadingJ: return "wall-omit-heading-j";
     case Arm::WallOmitLagK: return "wall-omit-lag-k";
     case Arm::WallOmitPoseN: return "wall-omit-pose-n";
+    case Arm::WallOmitPoseDirectO: return "wall-omit-pose-direct-o";
+    case Arm::WallProductionP: return "wall-production-p";
     case Arm::DynamicSqpPersistentL: return "dynamic-sqp-persistent-l";
     case Arm::DynamicSqpProductionLeftL:
       return "dynamic-sqp-production-left-l";
@@ -1410,7 +1415,8 @@ Report compare_wall_buckets(
     {
       report.detail = "source interaction snapshot rejected";
       for (const auto arm :
-        {Arm::WallOmitHeadingJ, Arm::WallOmitLagK, Arm::WallOmitPoseN})
+        {Arm::WallOmitHeadingJ, Arm::WallOmitLagK, Arm::WallOmitPoseN,
+          Arm::WallOmitPoseDirectO, Arm::WallProductionP})
       {
         report.arms.push_back(rejected_arm(
           arm, Stage::SourceRejected, source_fingerprint, report.detail));
@@ -1432,6 +1438,13 @@ Report compare_wall_buckets(
       Arm::WallOmitPoseN, source, source_fingerprint,
       source_fingerprint, successor, -1, -1, nullptr, false,
       shadow::SolverContext::WallBucketAuditMode::OmitPose));
+    report.arms.push_back(evaluate_arm(
+      Arm::WallOmitPoseDirectO, source, source_fingerprint,
+      source_fingerprint, successor, -1, -1, nullptr, false,
+      shadow::SolverContext::WallBucketAuditMode::OmitPoseDirect));
+    report.arms.push_back(evaluate_arm(
+      Arm::WallProductionP, source, source_fingerprint,
+      source_fingerprint, successor));
   } catch (const std::exception & exception) {
     report.source_accepted = false;
     report.detail = exception.what();

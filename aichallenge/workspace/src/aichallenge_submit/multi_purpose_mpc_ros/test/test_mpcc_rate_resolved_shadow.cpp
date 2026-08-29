@@ -228,6 +228,8 @@ TEST(MpccRateResolvedShadow, DoesNotBindFutureWallSampleBeforeProgressSolve)
   EXPECT_DOUBLE_EQ(result.pre_refinement_lateral_support_upper_m, 1.9);
   EXPECT_TRUE(result.progress_wall_refinement_applied);
   EXPECT_TRUE(result.progress_wall_refinement_solved);
+  EXPECT_FALSE(result.physical_wall_lag_pose_box_applied);
+  EXPECT_FALSE(result.physical_wall_heading_pose_box_applied);
   EXPECT_TRUE(result.post_refinement_physical_proof_checked);
   EXPECT_TRUE(result.post_refinement_physical_proof_accepted);
   EXPECT_EQ(

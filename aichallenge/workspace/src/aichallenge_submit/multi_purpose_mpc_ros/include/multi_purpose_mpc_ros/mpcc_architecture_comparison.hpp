@@ -37,6 +37,8 @@ enum class Arm
   WallOmitHeadingJ,
   WallOmitLagK,
   WallOmitPoseN,
+  WallOmitPoseDirectO,
+  WallProductionP,
   DynamicSqpPersistentL,
   DynamicSqpProductionLeftL,
   DynamicSqpProductionRightL,

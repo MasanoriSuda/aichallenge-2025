@@ -190,20 +190,33 @@ ProgressWallRefinement build_progress_wall_refinement(
         bounds.lateral_lower_m;
       refined.state_upper[state + model::kLateralIndex] =
         bounds.lateral_upper_m;
+      // The lateral/progress rows describe the convex wall corridor.  Lag
+      // and heading intervals only describe the sampled pose bucket used to
+      // construct that approximation; making both hard in production can
+      // empty the affine subproblem even when the immutable-world exact
+      // proof accepts a trajectory.  They remain available solely for the
+      // historical offline A/B arms below.  Production acceptance is owned
+      // by the exact nonlinear trajectory and swept physical-wall proof.
       if (
+        wall_bucket_audit_mode.has_value() &&
         wall_bucket_audit_mode !=
         SolverContext::WallBucketAuditMode::OmitLag &&
         wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitPose)
+        SolverContext::WallBucketAuditMode::OmitPose &&
+        wall_bucket_audit_mode !=
+        SolverContext::WallBucketAuditMode::OmitPoseDirect)
       {
         refined.state_lower[state + model::kLagIndex] = bounds.lag_lower_m;
         refined.state_upper[state + model::kLagIndex] = bounds.lag_upper_m;
       }
       if (
+        wall_bucket_audit_mode.has_value() &&
         wall_bucket_audit_mode !=
         SolverContext::WallBucketAuditMode::OmitHeading &&
         wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitPose)
+        SolverContext::WallBucketAuditMode::OmitPose &&
+        wall_bucket_audit_mode !=
+        SolverContext::WallBucketAuditMode::OmitPoseDirect)
       {
         refined.state_lower[state + model::kHeadingIndex] =
           bounds.heading_lower_rad;
@@ -1693,6 +1706,10 @@ Result SolverContext::evaluate_impl(
     physical_dynamic_sqp_audit_iteration_count > 0U;
   result.physical_dynamic_sqp_audit_iteration_limit =
     physical_dynamic_sqp_audit_iteration_count;
+  const bool wall_bucket_phase_one_enabled =
+    wall_bucket_audit_mode.has_value() &&
+    wall_bucket_audit_mode.value() !=
+    WallBucketAuditMode::OmitPoseDirect;
   const auto accumulate_wall_cache = [&result](
       const mpcc_rate_resolved_wall_refinement::Result & refinement) {
       result.physical_wall_refinement_cache_hit_count +=
@@ -2081,6 +2098,16 @@ Result SolverContext::evaluate_impl(
     result.progress_wall_refinement_applied = refinement.request.has_value();
     result.physical_wall_refinement_reason = refinement.physical.reason;
     result.physical_wall_refinement_applied = refinement.physical.applied;
+    result.physical_wall_lag_pose_box_applied =
+      wall_bucket_audit_mode.has_value() &&
+      wall_bucket_audit_mode != WallBucketAuditMode::OmitLag &&
+      wall_bucket_audit_mode != WallBucketAuditMode::OmitPose &&
+      wall_bucket_audit_mode != WallBucketAuditMode::OmitPoseDirect;
+    result.physical_wall_heading_pose_box_applied =
+      wall_bucket_audit_mode.has_value() &&
+      wall_bucket_audit_mode != WallBucketAuditMode::OmitHeading &&
+      wall_bucket_audit_mode != WallBucketAuditMode::OmitPose &&
+      wall_bucket_audit_mode != WallBucketAuditMode::OmitPoseDirect;
     result.physical_wall_refinement_first_failure_stage =
       refinement.physical.first_failure_stage;
     result.physical_wall_refinement_checked_pose_count =
@@ -2118,7 +2145,7 @@ Result SolverContext::evaluate_impl(
         outcome.result->primal, outcome.result->dual}};
     const auto racing_quadratic_cost = refined_assembled->quadratic_cost;
     const auto racing_linear_cost = refined_assembled->linear_cost;
-    if (wall_bucket_audit_mode.has_value()) {
+    if (wall_bucket_phase_one_enabled) {
       // Architecture Phase-I asks whether the bucket-relaxed affine set can
       // produce a physically certifiable trajectory. The racing Hessian can
       // remain badly conditioned even after independent LP feasibility has
@@ -2135,7 +2162,7 @@ Result SolverContext::evaluate_impl(
       refined_assembled->variable_scaling);
     bool bucket_phase_one_solved = false;
     if (
-      wall_bucket_audit_mode.has_value() &&
+      wall_bucket_phase_one_enabled &&
       refined_outcome.result.has_value() &&
       refined_outcome.result->primal.allFinite())
     {
@@ -2343,7 +2370,8 @@ Result SolverContext::evaluate_impl(
         refined_outcome.failure_detail;
       if (wall_bucket_audit_mode.has_value()) {
         result.detail += std::string{", wall_bucket_phase_one="} +
-          (bucket_phase_one_solved ? "solved" : "rejected");
+          (wall_bucket_phase_one_enabled ?
+          (bucket_phase_one_solved ? "solved" : "rejected") : "disabled");
       }
       if (result.wall_feasibility_restoration_attempted) {
         result.detail += std::string{", wall_restoration="} +
@@ -2664,7 +2692,7 @@ Result SolverContext::evaluate_impl(
           "rate-resolved coupled wall/obstacle bootstrap rejected";
         return finish();
       }
-      if (wall_bucket_audit_mode.has_value()) {
+      if (wall_bucket_phase_one_enabled) {
         // Preserve the Phase-I meaning through the final coupled
         // wall/obstacle refinement. The unchanged hard rows and exact proofs,
         // not the racing objective's dual convergence, decide feasibility.
@@ -2678,7 +2706,7 @@ Result SolverContext::evaluate_impl(
         joint_assembled->variable_scaling);
       bool joint_bucket_phase_one_solved = false;
       if (
-        wall_bucket_audit_mode.has_value() &&
+        wall_bucket_phase_one_enabled &&
         joint_outcome.result.has_value() &&
         joint_outcome.result->primal.allFinite())
       {
@@ -2714,7 +2742,9 @@ Result SolverContext::evaluate_impl(
           joint_outcome.failure_detail;
         if (wall_bucket_audit_mode.has_value()) {
           result.detail += std::string{", wall_bucket_phase_one="} +
-            (joint_bucket_phase_one_solved ? "solved" : "rejected");
+            (wall_bucket_phase_one_enabled ?
+            (joint_bucket_phase_one_solved ? "solved" : "rejected") :
+            "disabled");
         }
         if (joint_outcome.constraint_failure.has_value()) {
           const auto semantic = mpcc_rate_resolved_problem::decode_row(
@@ -3280,7 +3310,11 @@ Result SolverContext::evaluate_impl(
              << "/cache_misses=" <<
         result.physical_wall_refinement_cache_miss_count
              << "/cache_scanned=" <<
-        result.physical_wall_refinement_cache_scanned_pose_count;
+        result.physical_wall_refinement_cache_scanned_pose_count
+             << "/lag_pose_box=" <<
+        (result.physical_wall_lag_pose_box_applied ? 1 : 0)
+             << "/heading_pose_box=" <<
+        (result.physical_wall_heading_pose_box_applied ? 1 : 0);
     }
     detail << ", successive_linearization="
            << mpcc_rate_resolved_adapter::to_string(

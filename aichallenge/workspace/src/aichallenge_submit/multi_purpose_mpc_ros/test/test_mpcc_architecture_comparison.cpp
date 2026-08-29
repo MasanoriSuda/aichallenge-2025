@@ -281,7 +281,7 @@ TEST(
     recorded(source_snapshot()));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 4U);
+  ASSERT_EQ(report.arms.size(), 5U);
   EXPECT_EQ(report.arms[0].arm, Arm::ProductionLeftG);
   EXPECT_EQ(report.arms[1].arm, Arm::ProofGuidedProductionLeftM);
   EXPECT_EQ(report.arms[2].arm, Arm::ProductionRightG);
@@ -375,7 +375,7 @@ TEST(MpccArchitectureComparison, FollowComparesOnlyPersistentAndStatelessSides)
   const auto report = compare(recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 3U);
+  ASSERT_EQ(report.arms.size(), 4U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
@@ -431,6 +431,8 @@ TEST(MpccArchitectureComparison, WallBucketAuditKeepsExactProofChain)
   EXPECT_EQ(report.arms[0].arm, Arm::WallOmitHeadingJ);
   EXPECT_EQ(report.arms[1].arm, Arm::WallOmitLagK);
   EXPECT_EQ(report.arms[2].arm, Arm::WallOmitPoseN);
+  EXPECT_EQ(report.arms[3].arm, Arm::WallOmitPoseDirectO);
+  EXPECT_EQ(report.arms[4].arm, Arm::WallProductionP);
   for (const auto & arm : report.arms) {
     EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
     ASSERT_TRUE(arm.bundle.has_value());

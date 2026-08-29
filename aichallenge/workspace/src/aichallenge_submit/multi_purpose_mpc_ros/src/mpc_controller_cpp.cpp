@@ -21,6 +21,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp>
@@ -151,6 +152,8 @@ namespace rate_resolved_certified =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
 namespace rate_resolved_command =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate;
+namespace rate_resolved_dynamic =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_proof;
 namespace rate_resolved_artifact =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
 namespace rate_resolved_execution_source =
@@ -6113,7 +6116,9 @@ struct RateResolvedPipelineEvaluation
 {
   rate_resolved_shadow::Result solver;
   std::optional<rate_resolved_physical_wall::Result> physical;
+  std::optional<rate_resolved_dynamic::Result> dynamic;
   rate_resolved_certified::BuildResult certified_plan;
+  std::size_t dynamic_sqp_depth{};
 };
 
 struct RateResolvedPreentryExecutionShadowResult
@@ -6230,12 +6235,17 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
   const rate_resolved_shadow::Snapshot & snapshot,
   std::optional<rate_resolved_physical_wall::Snapshot> physical_snapshot,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> & solver_context,
-  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
+  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
+  const rate_resolved_shadow::Snapshot * current_world_dynamic_source = nullptr,
+  const std::size_t dynamic_sqp_depth = 0U)
 {
   RateResolvedPipelineEvaluation evaluation;
+  evaluation.dynamic_sqp_depth = dynamic_sqp_depth;
   const auto solver_started = SteadyClock::now();
   try {
-    evaluation.solver = solver_context->evaluate(snapshot);
+    evaluation.solver = dynamic_sqp_depth > 0U ?
+      solver_context->evaluate_physical_dynamic_sqp_audit(
+      snapshot, dynamic_sqp_depth) : solver_context->evaluate(snapshot);
   } catch (const std::exception & error) {
     evaluation.solver.identity = snapshot.identity;
     evaluation.solver.outcome = rate_resolved_shadow::Outcome::Exception;
@@ -6286,6 +6296,24 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
     physical_result.outcome ==
     rate_resolved_physical_wall::Outcome::Accepted)
   {
+    if (current_world_dynamic_source != nullptr) {
+      evaluation.dynamic = rate_resolved_dynamic::evaluate_current_world(
+        *current_world_dynamic_source, physical_snapshot.value());
+      std::ostringstream detail;
+      detail << evaluation.solver.detail
+             << ", exact_dynamic_final="
+             << (evaluation.dynamic->valid ? "valid" : "invalid") << '/'
+             << (evaluation.dynamic->clear ? "clear" : "blocked")
+             << "/obstacle=" << evaluation.dynamic->blocking_obstacle_id
+             << "/minimum_clearance="
+             << evaluation.dynamic->minimum_clearance_m
+             << "/sqp_depth=" << dynamic_sqp_depth;
+      evaluation.solver.detail = detail.str();
+      if (!evaluation.dynamic->valid || !evaluation.dynamic->clear) {
+        evaluation.physical = std::move(physical_result);
+        return evaluation;
+      }
+    }
     evaluation.certified_plan = rate_resolved_certified::build(
       evaluation.solver.execution_artifact, physical_snapshot.value(),
       physical_result);
@@ -6332,32 +6360,89 @@ evaluate_rate_resolved_current_world_population(
     return result;
   }
 
+  const auto certified = [](const RateResolvedPipelineEvaluation & evaluation) {
+      return
+        evaluation.solver.outcome == rate_resolved_shadow::Outcome::Solved &&
+        evaluation.physical.has_value() &&
+        evaluation.physical->outcome ==
+        rate_resolved_physical_wall::Outcome::Accepted &&
+        evaluation.dynamic.has_value() && evaluation.dynamic->valid &&
+        evaluation.dynamic->clear && evaluation.certified_plan.plan != nullptr;
+    };
+  const auto evidence_rank = [&certified](
+      const RateResolvedPipelineEvaluation & evaluation) {
+      if (certified(evaluation)) {
+        return 5;
+      }
+      if (evaluation.dynamic.has_value() && evaluation.dynamic->valid) {
+        return 4;
+      }
+      if (evaluation.physical.has_value()) {
+        return 3;
+      }
+      if (evaluation.solver.solved) {
+        return 2;
+      }
+      return evaluation.solver.solve_attempted ? 1 : 0;
+    };
+  const std::shared_ptr<rate_resolved_certified::Store> observation_only_store;
   int best_rank = -1;
   for (const auto & candidate : population.candidates) {
     ++result.candidate_count;
-    auto physical = physical_source;
-    physical.identity.artifact = candidate.seed.solver_snapshot.identity;
-    auto evaluation = evaluate_rate_resolved_pipeline(
-      candidate.seed.solver_snapshot,
-      std::optional<rate_resolved_physical_wall::Snapshot>{std::move(physical)},
-      solver_context, certified_plan_store);
-    const bool certified =
+    const auto evaluate_depth = [&](const std::size_t depth) {
+        auto physical = physical_source;
+        physical.identity.artifact = candidate.seed.solver_snapshot.identity;
+        const auto context = depth == 0U ? solver_context :
+          std::make_shared<rate_resolved_shadow::SolverContext>();
+        return evaluate_rate_resolved_pipeline(
+          candidate.seed.solver_snapshot,
+          std::optional<rate_resolved_physical_wall::Snapshot>{
+            std::move(physical)},
+          context, observation_only_store,
+          &candidate.seed.solver_snapshot, depth);
+      };
+
+    auto evaluation = evaluate_depth(0U);
+    int candidate_rank = evidence_rank(evaluation);
+    const bool exact_physical_rejected =
       evaluation.solver.outcome == rate_resolved_shadow::Outcome::Solved &&
       evaluation.physical.has_value() &&
-      evaluation.physical->outcome ==
-      rate_resolved_physical_wall::Outcome::Accepted &&
-      evaluation.certified_plan.plan != nullptr;
-    const int rank = certified ? 4 :
-      evaluation.physical.has_value() ? 3 :
-      evaluation.solver.solved ? 2 :
-      evaluation.solver.solve_attempted ? 1 : 0;
+      (evaluation.physical->outcome !=
+      rate_resolved_physical_wall::Outcome::Accepted ||
+      (evaluation.dynamic.has_value() && evaluation.dynamic->valid &&
+      !evaluation.dynamic->clear));
+    if (!certified(evaluation) && exact_physical_rejected) {
+      constexpr std::size_t kMaximumProofGuidedSqpDepth = 3U;
+      for (
+        std::size_t depth = 1U;
+        depth <= kMaximumProofGuidedSqpDepth; ++depth)
+      {
+        auto refined = evaluate_depth(depth);
+        const int refined_rank = evidence_rank(refined);
+        if (certified(refined) || refined_rank > candidate_rank) {
+          candidate_rank = refined_rank;
+          evaluation = std::move(refined);
+        }
+        if (certified(evaluation)) {
+          break;
+        }
+      }
+    }
+    const int rank = evidence_rank(evaluation);
     if (rank > best_rank) {
       best_rank = rank;
       result.pipeline = std::move(evaluation);
       result.candidate_source = stateless_maneuver::to_string(candidate.kind);
     }
-    if (certified) {
-      result.detail = std::string{"accepted/"} + result.candidate_source;
+    if (certified(result.pipeline)) {
+      const std::string store_detail = certified_plan_store != nullptr ?
+        rate_resolved_certified::to_string(
+        certified_plan_store->replace(result.pipeline.certified_plan.plan)) :
+        "not-requested";
+      result.detail = std::string{"accepted/"} + result.candidate_source +
+        "/sqp_depth=" +
+        std::to_string(result.pipeline.dynamic_sqp_depth) +
+        "/store=" + store_detail;
       return result;
     }
   }
@@ -23673,7 +23758,7 @@ struct MPC
         "target=%s/%d, side=%d/%d, "
         "generation=%lu/%lu, age=%.3f s, snapshot=%.3f ms, build=%.3f ms, "
         "worker=%.3f ms, build_detail=%s, candidate=%s/%zu, "
-        "solver=%s, physical=%s, complete=%d, "
+        "solver=%s, physical=%s, dynamic=%s/%s/%.3f/sqp:%zu, complete=%d, "
         "mission=%d/feasible:%d/proposal_identity:%d, "
         "target_join=%d/%s/%lu->%lu, "
         "identity=%s/exact:%d/authority:%d/live_tactical:%lu, "
@@ -23701,6 +23786,14 @@ struct MPC
         result->pipeline.physical.has_value() ?
         rate_resolved_physical_wall::to_string(
           result->pipeline.physical->outcome) : "missing",
+        result->pipeline.dynamic.has_value() &&
+        result->pipeline.dynamic->valid ? "valid" : "invalid",
+        result->pipeline.dynamic.has_value() &&
+        result->pipeline.dynamic->clear ? "clear" : "blocked",
+        result->pipeline.dynamic.has_value() ?
+        result->pipeline.dynamic->minimum_clearance_m :
+        std::numeric_limits<double>::quiet_NaN(),
+        result->pipeline.dynamic_sqp_depth,
         complete ? 1 : 0,
         result->selected_mission.has_value() ? 1 : 0,
         result->selected_mission.has_value() &&

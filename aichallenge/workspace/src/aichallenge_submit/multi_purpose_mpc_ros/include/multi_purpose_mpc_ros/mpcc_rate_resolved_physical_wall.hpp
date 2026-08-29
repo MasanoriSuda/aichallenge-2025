@@ -46,6 +46,21 @@ std::optional<recovery::FootprintExtents> resolve_clearance_footprint(
   const recovery::FootprintExtents & footprint,
   double hard_wall_clearance_m) noexcept;
 
+struct Snapshot;
+
+struct ReconstructedStagePose
+{
+  recovery::Pose2D pose;
+  int waypoint_id{-1};
+};
+
+/// Reconstruct one exact nonlinear horizon pose from the immutable course
+/// frame and Frenet trajectory.  Wall and dynamic-obstacle certificates must
+/// use this same transform so their physical verdicts cannot diverge by
+/// coordinate implementation.
+std::optional<ReconstructedStagePose> reconstruct_stage_pose(
+  const Snapshot & snapshot, std::size_t stage) noexcept;
+
 /// Immutable input for a complete current-world footprint proof. The shared
 /// grid owner is required because this object crosses the control-thread
 /// lifetime boundary.

@@ -153,6 +153,42 @@ std::optional<recovery::FootprintExtents> resolve_clearance_footprint(
     std::optional<recovery::FootprintExtents>{result} : std::nullopt;
 }
 
+std::optional<ReconstructedStagePose> reconstruct_stage_pose(
+  const Snapshot & snapshot, const std::size_t stage) noexcept
+{
+  if (
+    stage >= snapshot.trajectory.progress_m.size() ||
+    stage >= snapshot.trajectory.lateral_m.size() ||
+    stage >= snapshot.trajectory.lag_m.size() ||
+    stage >= snapshot.trajectory.heading_offset_rad.size() ||
+    snapshot.course_frame_knots.size() < 2U ||
+    !std::isfinite(snapshot.bound_tolerance_m) ||
+    snapshot.bound_tolerance_m < 0.0)
+  {
+    return std::nullopt;
+  }
+  const auto course_frame = mpc_stage_geometry::sample_course_frame(
+    snapshot.course_frame_knots, snapshot.trajectory.progress_m[stage],
+    snapshot.bound_tolerance_m);
+  if (!course_frame.has_value()) {
+    return std::nullopt;
+  }
+  const auto pose = contract::reconstruct_planar_pose_from_frenet(
+    contract::PlanarPose{
+      course_frame->x_m, course_frame->y_m, course_frame->heading_rad},
+    contract::FrenetPose{
+      snapshot.trajectory.lateral_m[stage],
+      snapshot.trajectory.lag_m[stage],
+      snapshot.trajectory.heading_offset_rad[stage]});
+  if (!pose.has_value()) {
+    return std::nullopt;
+  }
+  return ReconstructedStagePose{
+    recovery::Pose2D{pose->x_m, pose->y_m, pose->yaw_rad},
+    course_frame->interpolation_ratio < 0.5 ?
+    course_frame->lower_waypoint : course_frame->upper_waypoint};
+}
+
 bool snapshot_valid(const Snapshot & snapshot) noexcept
 {
   const auto trajectory_validation =
@@ -338,32 +374,16 @@ Result evaluate(const Snapshot & snapshot)
         "current wall bounds rejected rate-resolved solution");
     }
 
-    const auto course_frame = mpc_stage_geometry::sample_course_frame(
-      snapshot.course_frame_knots, snapshot.trajectory.progress_m[stage],
-      snapshot.bound_tolerance_m);
-    if (!course_frame.has_value()) {
+    const auto reconstructed = reconstruct_stage_pose(snapshot, stage);
+    if (!reconstructed.has_value()) {
       return reject(
         Outcome::CourseFrameRejected,
         contract::PhysicalWallCertificateReason::CourseFrameUnavailable,
         "rate-resolved progress course frame unavailable");
     }
-    const int waypoint_id = course_frame->interpolation_ratio < 0.5 ?
-      course_frame->lower_waypoint : course_frame->upper_waypoint;
+    const int waypoint_id = reconstructed->waypoint_id;
     result.diagnostic.waypoint_id = waypoint_id;
-    const auto pose = contract::reconstruct_planar_pose_from_frenet(
-      contract::PlanarPose{
-        course_frame->x_m, course_frame->y_m, course_frame->heading_rad},
-      contract::FrenetPose{
-        lateral_m, lag_m,
-        snapshot.trajectory.heading_offset_rad[stage]});
-    if (!pose.has_value()) {
-      return reject(
-        Outcome::InvalidInput,
-        contract::PhysicalWallCertificateReason::InvalidInput,
-        "rate-resolved Frenet pose reconstruction invalid");
-    }
-    const recovery::Pose2D world_pose{
-      pose->x_m, pose->y_m, pose->yaw_rad};
+    const auto world_pose = reconstructed->pose;
     result.diagnostic.pose_x_m = world_pose.x_m;
     result.diagnostic.pose_y_m = world_pose.y_m;
     result.diagnostic.pose_yaw_rad = world_pose.yaw_rad;

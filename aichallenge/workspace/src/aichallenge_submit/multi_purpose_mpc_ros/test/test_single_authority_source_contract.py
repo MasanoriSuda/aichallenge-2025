@@ -1012,6 +1012,14 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "evaluate_rate_resolved_pipeline(" in population
     assert "population.candidates" in population
     assert "OvertakeMissionCandidate" not in population
+    assert "observation_only_store" in population
+    assert "&candidate.seed.solver_snapshot, depth" in population
+    assert "kMaximumProofGuidedSqpDepth = 3U" in population
+    assert "certified_plan_store->replace(" in population
+    assert '"not-requested"' in population
+    assert population.index("evaluate_depth(0U)") < population.index(
+        "certified_plan_store->replace("
+    )
 
     follow_population_start = SOURCE.index(
         "evaluate_rate_resolved_follow_escape_population("
@@ -2042,6 +2050,35 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
         "rclcpp",
     ):
         assert forbidden not in certified_header
+
+
+def test_overtake_candidate_store_requires_joined_current_world_proof() -> None:
+    """An Overtake plan cannot enter Store on wall proof alone."""
+
+    pipeline_start = SOURCE.index(
+        "RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline("
+    )
+    population_start = SOURCE.index(
+        "evaluate_rate_resolved_current_world_population(", pipeline_start
+    )
+    population_end = SOURCE.index(
+        "evaluate_rate_resolved_follow_escape_population(", population_start
+    )
+    pipeline = SOURCE[pipeline_start:population_start]
+    population = SOURCE[population_start:population_end]
+    assert "rate_resolved_dynamic::evaluate_current_world(" in pipeline
+    assert pipeline.index("rate_resolved_physical_wall::Outcome::Accepted") < (
+        pipeline.index("rate_resolved_dynamic::evaluate_current_world(")
+    )
+    assert pipeline.index("rate_resolved_dynamic::evaluate_current_world(") < (
+        pipeline.index("rate_resolved_certified::build(")
+    )
+    assert "!evaluation.dynamic->valid || !evaluation.dynamic->clear" in pipeline
+    assert "evaluation.dynamic.has_value() && evaluation.dynamic->valid" in population
+    assert "evaluation.dynamic->clear" in population
+    assert "observation_only_store" in population
+    assert "certified_plan_store->replace(" in population
+    assert "dynamic=%s/%s/%.3f/sqp:%zu" in SOURCE
 
 
 def test_live_overtake_reference_does_not_own_physical_wall_corridor() -> None:

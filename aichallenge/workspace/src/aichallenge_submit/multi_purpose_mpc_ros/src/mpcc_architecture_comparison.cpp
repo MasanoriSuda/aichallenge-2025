@@ -261,24 +261,6 @@ struct DynamicModelDiagnostic
   int following_node_clearance_stage{-1};
 };
 
-dynamic::WorldObservation dynamic_world(
-  const shadow::ReplayWorld & replay)
-{
-  dynamic::WorldObservation observation;
-  observation.generation = replay.observation_generation;
-  observation.observed_sec = replay.observed_sec;
-  observation.current = replay.current;
-  observation.obstacles.reserve(replay.obstacles.size());
-  for (const auto & source : replay.obstacles) {
-    observation.obstacles.push_back(dynamic::DynamicObstacle{
-      source.id,
-      recovery::CircleObstacle{
-        source.x_m, source.y_m, source.velocity_x_mps,
-        source.velocity_y_mps, source.radius_m}});
-  }
-  return observation;
-}
-
 std::optional<recovery::Pose2D> reconstruct_pose(
   const std::vector<mpc_stage_geometry::CourseFrameKnot> & knots,
   const race_mpcc_foundation::ExactPhysicalExecutionTrajectory & trajectory,
@@ -469,53 +451,6 @@ wall::Snapshot wall_snapshot(
   return result;
 }
 
-dynamic::Result prove_dynamic(
-  const shadow::Snapshot & candidate,
-  const shadow::ReplayWorld & replay,
-  const race_mpcc_foundation::ExactPhysicalExecutionTrajectory & trajectory)
-{
-  dynamic::Result result;
-  const auto observation = dynamic_world(replay);
-  if (!dynamic::observation_valid(observation) || !observation.current) {
-    result.valid = false;
-    result.clear = false;
-    return result;
-  }
-  dynamic::observe_timed_path(
-    replay.physical_footprint, replay.control_prefix,
-    replay.control_prefix_elapsed_sec, replay.swept_step_m,
-    observation, result);
-  if (!result.valid || !result.clear) {
-    return result;
-  }
-  auto previous_pose = replay.control_prefix.back();
-  double previous_time_sec = replay.control_prefix_elapsed_sec.back();
-  for (std::size_t index = 0U; index < trajectory.elapsed_time_sec.size(); ++index) {
-    const auto pose = reconstruct_pose(
-      candidate.wall_course_frame_knots, trajectory, index,
-      replay.bound_tolerance_m);
-    if (!pose.has_value()) {
-      result.valid = false;
-      result.clear = false;
-      return result;
-    }
-    const double time_sec =
-      candidate.control_prediction_origin_sec - replay.observed_sec +
-      trajectory.elapsed_time_sec[index];
-    dynamic::observe_segment(
-      replay.physical_footprint, previous_pose, pose.value(),
-      previous_time_sec, time_sec, replay.swept_step_m,
-      observation, result);
-    if (!result.valid || !result.clear) {
-      return result;
-    }
-    previous_pose = pose.value();
-    previous_time_sec = time_sec;
-  }
-  dynamic::finalize(observation, result);
-  return result;
-}
-
 ArmResult evaluate_arm(
   const Arm arm,
   shadow::Snapshot candidate,
@@ -597,8 +532,8 @@ ArmResult evaluate_arm(
     arm_result.detail = wall_result.detail;
     return arm_result;
   }
-  auto dynamic_result = prove_dynamic(
-    candidate, candidate.replay_world.value(), exact);
+  auto dynamic_result = dynamic::evaluate_current_world(
+    candidate, physical_snapshot);
   if (!dynamic_result.valid || !dynamic_result.clear) {
     arm_result.stage = Stage::DynamicProofRejected;
     const auto & replay = candidate.replay_world.value();
@@ -1551,8 +1486,8 @@ Report verify_external_primal(
       report.arms.push_back(std::move(arm_result));
       return report;
     }
-    auto dynamic_result = prove_dynamic(
-      source, source.replay_world.value(), exact);
+    auto dynamic_result = dynamic::evaluate_current_world(
+      source, physical_snapshot);
     if (!dynamic_result.valid || !dynamic_result.clear) {
       arm_result.stage = Stage::DynamicProofRejected;
       std::ostringstream detail;

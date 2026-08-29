@@ -1,5 +1,9 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp"
 
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <unordered_set>
@@ -226,6 +230,114 @@ void finalize(
       return;
     }
   }
+}
+
+Result evaluate_current_world(
+  const mpcc_rate_resolved_shadow::Snapshot & solver_snapshot,
+  const mpcc_rate_resolved_physical_wall::Snapshot & physical_snapshot)
+{
+  namespace artifact = mpcc_rate_resolved_execution_artifact;
+  namespace physical_wall = mpcc_rate_resolved_physical_wall;
+  namespace shadow = mpcc_rate_resolved_shadow;
+
+  Result result;
+  const auto reject_invalid = [&result]() {
+      result.valid = false;
+      result.clear = false;
+      return result;
+    };
+  if (
+    !solver_snapshot.replay_world.has_value() ||
+    !artifact::same_identity(
+      solver_snapshot.identity, physical_snapshot.identity.artifact) ||
+    !physical_wall::snapshot_valid(physical_snapshot))
+  {
+    return reject_invalid();
+  }
+  const auto & replay = solver_snapshot.replay_world.value();
+  const auto same_pose = [](const recovery::Pose2D & lhs,
+      const recovery::Pose2D & rhs) {
+      return lhs.x_m == rhs.x_m && lhs.y_m == rhs.y_m &&
+             lhs.yaw_rad == rhs.yaw_rad;
+    };
+  const auto same_footprint = [](const recovery::FootprintExtents & lhs,
+      const recovery::FootprintExtents & rhs) {
+      return lhs.front_extent_m == rhs.front_extent_m &&
+             lhs.rear_extent_m == rhs.rear_extent_m &&
+             lhs.left_extent_m == rhs.left_extent_m &&
+             lhs.right_extent_m == rhs.right_extent_m &&
+             lhs.margin_m == rhs.margin_m;
+    };
+  if (
+    !replay.current || replay.observation_generation == 0U ||
+    replay.control_prefix.empty() ||
+    replay.control_prefix.size() != replay.control_prefix_elapsed_sec.size() ||
+    replay.control_prefix.size() != physical_snapshot.control_prefix.size() ||
+    !std::equal(
+      replay.control_prefix.begin(), replay.control_prefix.end(),
+      physical_snapshot.control_prefix.begin(), same_pose) ||
+    !same_pose(replay.current_pose, physical_snapshot.current_pose) ||
+    !same_footprint(replay.physical_footprint, physical_snapshot.footprint) ||
+    replay.swept_step_m != physical_snapshot.swept_step_m ||
+    replay.bound_tolerance_m != physical_snapshot.bound_tolerance_m ||
+    replay.wall_grid_fingerprint != physical_snapshot.wall_grid_fingerprint ||
+    !std::isfinite(solver_snapshot.control_prediction_origin_sec) ||
+    solver_snapshot.control_prediction_origin_sec < replay.observed_sec ||
+    physical_snapshot.trajectory.elapsed_time_sec.empty())
+  {
+    return reject_invalid();
+  }
+
+  WorldObservation observation;
+  observation.generation = replay.observation_generation;
+  observation.observed_sec = replay.observed_sec;
+  observation.current = replay.current;
+  observation.obstacles.reserve(replay.obstacles.size());
+  for (const shadow::ReplayDynamicObstacle & source : replay.obstacles) {
+    observation.obstacles.push_back(DynamicObstacle{
+      source.id,
+      recovery::CircleObstacle{
+        source.x_m, source.y_m, source.velocity_x_mps,
+        source.velocity_y_mps, source.radius_m}});
+  }
+  if (!observation_valid(observation)) {
+    return reject_invalid();
+  }
+
+  observe_timed_path(
+    replay.physical_footprint, replay.control_prefix,
+    replay.control_prefix_elapsed_sec, replay.swept_step_m,
+    observation, result);
+  if (!result.valid || !result.clear) {
+    return result;
+  }
+  auto previous_pose = replay.control_prefix.back();
+  double previous_time_sec = replay.control_prefix_elapsed_sec.back();
+  const double control_origin_age_sec =
+    solver_snapshot.control_prediction_origin_sec - replay.observed_sec;
+  for (
+    std::size_t stage = 0U;
+    stage < physical_snapshot.trajectory.elapsed_time_sec.size(); ++stage)
+  {
+    const auto reconstructed =
+      physical_wall::reconstruct_stage_pose(physical_snapshot, stage);
+    if (!reconstructed.has_value()) {
+      return reject_invalid();
+    }
+    const double time_sec = control_origin_age_sec +
+      physical_snapshot.trajectory.elapsed_time_sec[stage];
+    observe_segment(
+      replay.physical_footprint, previous_pose, reconstructed->pose,
+      previous_time_sec, time_sec, replay.swept_step_m,
+      observation, result);
+    if (!result.valid || !result.clear) {
+      return result;
+    }
+    previous_pose = reconstructed->pose;
+    previous_time_sec = time_sec;
+  }
+  finalize(observation, result);
+  return result;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_proof

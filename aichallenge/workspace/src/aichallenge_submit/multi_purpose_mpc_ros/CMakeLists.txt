@@ -373,6 +373,8 @@ target_include_directories(
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof
   ${PROJECT_NAME}_recovery_footprint
+  ${PROJECT_NAME}_mpcc_rate_resolved_shadow
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
 )
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation STATIC
@@ -474,6 +476,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_on_trajectory_connector
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_source
   ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+  ${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof
   ${PROJECT_NAME}_mpcc_stateless_maneuver
   ${PROJECT_NAME}_mpcc_rate_resolved_command_candidate
   ${PROJECT_NAME}_mpcc_rate_resolved_production_adapter

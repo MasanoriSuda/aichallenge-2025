@@ -9,6 +9,16 @@
 #include <string>
 #include <vector>
 
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
+{
+struct Snapshot;
+}
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall
+{
+struct Snapshot;
+}
+
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_proof
 {
 
@@ -86,6 +96,14 @@ void observe_timed_path(
 void finalize(
   const WorldObservation & observation,
   Result & result);
+
+/// Prove the exact measured-to-control prefix and nonlinear execution horizon
+/// against the immutable ReplayWorld attached to the same solver snapshot.
+/// World-pose reconstruction is delegated to the physical-wall component, so
+/// wall and opponent certificates consume one coordinate implementation.
+Result evaluate_current_world(
+  const mpcc_rate_resolved_shadow::Snapshot & solver_snapshot,
+  const mpcc_rate_resolved_physical_wall::Snapshot & physical_snapshot);
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_proof
 

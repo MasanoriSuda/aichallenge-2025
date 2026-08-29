@@ -215,6 +215,48 @@ struct TimeAlignedFeedbackProblemResult
 TimeAlignedFeedbackProblemResult build_time_aligned_feedback_problem(
   const TimeAlignedFeedbackProblemRequest & request) noexcept;
 
+/// Candidate-C outcome.  The immutable B-arm problem remains the source of
+/// every cost and hard row; only its SQP tangent is rebuilt by rolling the
+/// canonical nonlinear seven-state model from the latest exact x0.
+enum class ReachableBridgeReason
+{
+  Accepted,
+  TimeAlignedProblemRejected,
+  DimensionMismatch,
+  InputPrefixInfeasible,
+  NonlinearTransitionRejected,
+  RelinearizationRejected,
+  AssemblyRejected,
+  Exception,
+  Count,
+};
+
+const char * to_string(ReachableBridgeReason reason) noexcept;
+
+struct ReachableBridgeFeedbackProblemResult
+{
+  ReachableBridgeReason reason{
+    ReachableBridgeReason::TimeAlignedProblemRejected};
+  TimeAlignedFeedbackProblemReason time_aligned_problem_reason{
+    TimeAlignedFeedbackProblemReason::InvalidRequest};
+  TimeAlignedSuffixResult suffix;
+  std::optional<mpcc_rate_resolved_problem::AssemblyRequest> problem;
+  /// Exact nonlinear rollout used only as tangent and primal bootstrap.
+  Eigen::VectorXd linearization_primal;
+  std::size_t rollout_stage_count{};
+  double maximum_direct_successor_gap{};
+  double maximum_state_box_violation{};
+  std::string detail{"not-evaluated"};
+};
+
+/// Build candidate C without Store/mailbox/publisher authority.  Prepared
+/// suffix inputs are projected only into the B problem's existing certified
+/// input and cumulative steering-prefix intervals, then propagated through
+/// the canonical nonlinear model.  No state or final result is clamped.
+ReachableBridgeFeedbackProblemResult
+build_reachable_bridge_feedback_problem(
+  const TimeAlignedFeedbackProblemRequest & request) noexcept;
+
 enum class LatestStateFeedbackReason
 {
   InvalidRequest,
@@ -244,6 +286,11 @@ struct LatestStateFeedbackRequest
     Eigen::Matrix<double, mpcc_rate_resolved::kInputDimension, 1>::Zero()};
 };
 
+/// Offline architecture-audit ceiling.  More corrections would turn this
+/// diagnostic into an unbounded runtime fallback and obscure the exit
+/// classification it is intended to produce.
+inline constexpr std::size_t kMaximumLatestStateMultiSqpAuditIterations{8U};
+
 struct LatestStateFeedbackResult
 {
   Identity identity;
@@ -255,6 +302,17 @@ struct LatestStateFeedbackResult
   bool finite{false};
   bool constraints_satisfied{false};
   bool time_aligned_suffix_attempted{false};
+  bool reachable_bridge_attempted{false};
+  bool reachable_bridge_applied{false};
+  ReachableBridgeReason reachable_bridge_reason{
+    ReachableBridgeReason::TimeAlignedProblemRejected};
+  std::size_t reachable_bridge_rollout_stage_count{};
+  double reachable_bridge_maximum_direct_successor_gap{};
+  double reachable_bridge_maximum_state_box_violation{};
+  bool latest_state_multi_sqp_audit_requested{false};
+  std::size_t latest_state_multi_sqp_iteration_limit{1U};
+  std::size_t latest_state_multi_sqp_attempt_count{};
+  std::size_t latest_state_multi_sqp_solve_count{};
   TimeAlignedFeedbackProblemReason time_aligned_problem_reason{
     TimeAlignedFeedbackProblemReason::InvalidRequest};
   std::size_t consumed_stage_count{};
@@ -564,10 +622,25 @@ public:
   /// from the latest serialized predecessor.
   LatestStateFeedbackResult evaluate_time_aligned(
     const LatestStateFeedbackRequest & request);
+  /// Observation-only C arm: replace the joined old-state tangent with a
+  /// dynamically reachable nonlinear rollout, then solve the unchanged B
+  /// problem.  This method cannot acquire production authority.
+  LatestStateFeedbackResult evaluate_reachable_bridge_time_aligned(
+    const LatestStateFeedbackRequest & request);
+  /// Observation-only D arm. Repeatedly relinearize and solve the exact same
+  /// C problem, stopping on accepted exact nonlinear proof or the explicit
+  /// audit limit. It has no production authority path.
+  LatestStateFeedbackResult evaluate_reachable_bridge_multi_sqp_audit(
+    const LatestStateFeedbackRequest & request,
+    std::size_t iteration_limit);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;
 
 private:
+  LatestStateFeedbackResult evaluate_time_aligned_impl(
+    const LatestStateFeedbackRequest & request,
+    bool reachable_bridge_candidate,
+    std::size_t multi_sqp_iteration_limit);
   std::mutex mutex_;
   persistent_osqp::PersistentOsqpSolver solver_{
     persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};

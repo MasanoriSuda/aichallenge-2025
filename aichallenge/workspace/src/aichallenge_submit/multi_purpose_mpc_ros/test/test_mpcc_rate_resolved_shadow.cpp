@@ -735,6 +735,318 @@ TEST(
 
 TEST(
   MpccRateResolvedShadow,
+  ReachableBridgeRebuildsTheTangentByCanonicalNonlinearRollout)
+{
+  shadow::SolverContext preparation_context;
+  auto old_origin = snapshot();
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  auto preparation = *prepared.latest_state_feedback_preparation;
+  problem::ProgressAlignedWallConstraints progress_wall;
+  progress_wall.lower_slope = {0.0, 0.0, 0.0};
+  progress_wall.lower_intercept = {-5.0, -5.0, -5.0};
+  progress_wall.upper_slope = {0.0, 0.0, 0.0};
+  progress_wall.upper_intercept = {5.0, 5.0, 5.0};
+  preparation.final_problem.progress_aligned_wall_constraints =
+    std::move(progress_wall);
+  preparation.final_problem.swept_lateral_wall_constraints = {
+    {0, 0.5, -5.0, 5.0}, {1, 0.5, -5.0, 5.0},
+    {2, 0.5, -5.0, 5.0}};
+  preparation.final_problem.dynamic_obstacle_constraints = {
+    {1, problem::DynamicObstacleConstraintAxis::EffectiveProgress,
+      -5.0, 5.0, 0.0, 0.0},
+    {2, problem::DynamicObstacleConstraintAxis::EffectiveProgress,
+      -5.0, 5.0, 0.0, 0.0},
+    {3, problem::DynamicObstacleConstraintAxis::EffectiveProgress,
+      -5.0, 5.0, 0.0, 0.0}};
+
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.04, 0.32, 0.26};
+  const double feedback_origin_sec =
+    old_origin.control_prediction_origin_sec + 0.02;
+  const shadow::TimeAlignedFeedbackProblemRequest request{
+    &preparation, feedback_origin_sec,
+    latest_state, old_origin.request.previous_input,
+    preparation_context.physical_constraint_tolerance()};
+
+  const auto direct = shadow::build_time_aligned_feedback_problem(request);
+  ASSERT_EQ(
+    direct.reason, shadow::TimeAlignedFeedbackProblemReason::Accepted)
+    << direct.detail;
+  ASSERT_TRUE(direct.problem.has_value());
+  ASSERT_TRUE(direct.suffix.snapshot.has_value());
+  const auto bridge =
+    shadow::build_reachable_bridge_feedback_problem(request);
+  ASSERT_EQ(bridge.reason, shadow::ReachableBridgeReason::Accepted)
+    << bridge.detail;
+  ASSERT_TRUE(bridge.problem.has_value());
+  ASSERT_TRUE(bridge.suffix.snapshot.has_value());
+  EXPECT_EQ(
+    bridge.rollout_stage_count,
+    static_cast<std::size_t>(bridge.problem->horizon_steps));
+  EXPECT_GT(bridge.maximum_direct_successor_gap, 0.05);
+
+  const auto & direct_problem = direct.problem.value();
+  const auto & bridge_problem = bridge.problem.value();
+  EXPECT_TRUE(
+    bridge_problem.state_reference.isApprox(
+      direct_problem.state_reference, 0.0));
+  EXPECT_TRUE(
+    bridge_problem.state_lower.isApprox(direct_problem.state_lower, 0.0));
+  EXPECT_TRUE(
+    bridge_problem.state_upper.isApprox(direct_problem.state_upper, 0.0));
+  EXPECT_TRUE(
+    bridge_problem.input_reference.isApprox(
+      direct_problem.input_reference, 0.0));
+  EXPECT_TRUE(
+    bridge_problem.input_lower.isApprox(direct_problem.input_lower, 0.0));
+  EXPECT_TRUE(
+    bridge_problem.input_upper.isApprox(direct_problem.input_upper, 0.0));
+  EXPECT_EQ(
+    bridge_problem.swept_lateral_wall_constraints.size(),
+    direct_problem.swept_lateral_wall_constraints.size());
+  EXPECT_EQ(
+    bridge_problem.dynamic_obstacle_constraints.size(),
+    direct_problem.dynamic_obstacle_constraints.size());
+  ASSERT_TRUE(
+    bridge_problem.progress_aligned_wall_constraints.has_value());
+  ASSERT_TRUE(
+    direct_problem.progress_aligned_wall_constraints.has_value());
+  EXPECT_EQ(
+    bridge_problem.progress_aligned_wall_constraints->lower_intercept,
+    direct_problem.progress_aligned_wall_constraints->lower_intercept);
+  EXPECT_EQ(
+    bridge_problem.progress_aligned_wall_constraints->upper_intercept,
+    direct_problem.progress_aligned_wall_constraints->upper_intercept);
+  for (std::size_t index = 0U;
+    index < bridge_problem.swept_lateral_wall_constraints.size(); ++index)
+  {
+    const auto & lhs = bridge_problem.swept_lateral_wall_constraints[index];
+    const auto & rhs = direct_problem.swept_lateral_wall_constraints[index];
+    EXPECT_EQ(lhs.transition_stage, rhs.transition_stage);
+    EXPECT_DOUBLE_EQ(lhs.destination_ratio, rhs.destination_ratio);
+    EXPECT_DOUBLE_EQ(lhs.lower_m, rhs.lower_m);
+    EXPECT_DOUBLE_EQ(lhs.upper_m, rhs.upper_m);
+  }
+  for (std::size_t index = 0U;
+    index < bridge_problem.dynamic_obstacle_constraints.size(); ++index)
+  {
+    const auto & lhs = bridge_problem.dynamic_obstacle_constraints[index];
+    const auto & rhs = direct_problem.dynamic_obstacle_constraints[index];
+    EXPECT_EQ(lhs.state_stage, rhs.state_stage);
+    EXPECT_EQ(lhs.axis, rhs.axis);
+    EXPECT_DOUBLE_EQ(lhs.lower, rhs.lower);
+    EXPECT_DOUBLE_EQ(lhs.upper, rhs.upper);
+  }
+
+  constexpr int nx = model::kStateDimension;
+  constexpr int nu = model::kInputDimension;
+  const int horizon = bridge_problem.horizon_steps;
+  const int state_values = nx * (horizon + 1);
+  for (int stage = 0; stage < horizon; ++stage) {
+    const auto state =
+      bridge.linearization_primal.segment<nx>(stage * nx);
+    const auto input = bridge.linearization_primal.segment<nu>(
+      state_values + stage * nu);
+    const auto & semantic_input =
+      bridge.suffix.snapshot->request.inputs[static_cast<std::size_t>(stage)];
+    const auto transition = model::evaluate_temporal_frenet_transition(
+      model::LinearizationRequest{
+        state[model::kLateralIndex], state[model::kLagIndex],
+        state[model::kHeadingIndex], state[model::kVelocityIndex],
+        state[model::kProgressIndex], state[model::kSteeringIndex],
+        state[model::kResponseSteeringIndex],
+        input[model::kAccelerationIndex],
+        input[model::kSteeringRateIndex],
+        input[model::kVirtualProgressSpeedIndex],
+        semantic_input.path_curvature_radpm,
+        bridge.suffix.snapshot->request.wheelbase_m,
+        bridge.suffix.snapshot->request.yaw_response_gain,
+        bridge.suffix.snapshot->request.yaw_response_time_constant_sec,
+        semantic_input.stage_dt_sec,
+        bridge.suffix.snapshot->request.minimum_frenet_denominator,
+        bridge.suffix.snapshot->request.minimum_stage_dt_sec,
+        bridge.suffix.snapshot->request.maximum_stage_dt_sec});
+    ASSERT_TRUE(transition.has_value());
+    EXPECT_TRUE(
+      transition->next_state.isApprox(
+        bridge.linearization_primal.segment<nx>((stage + 1) * nx),
+        1.0e-12));
+  }
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  ReachableBridgeEvaluatorRemainsObservationOnlyAndProducesAnArtifact)
+{
+  shadow::SolverContext preparation_context;
+  shadow::LatestStateFeedbackSolverContext feedback_context;
+  auto old_origin = snapshot();
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.04, 0.32, 0.26};
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation,
+    old_origin.control_prediction_origin_sec + 0.02,
+    old_origin.control_prediction_origin_sec + 0.01,
+    latest_state, old_origin.request.previous_input};
+
+  const auto result =
+    feedback_context.evaluate_reachable_bridge_time_aligned(request);
+  EXPECT_TRUE(result.time_aligned_suffix_attempted);
+  EXPECT_TRUE(result.reachable_bridge_attempted);
+  EXPECT_TRUE(result.reachable_bridge_applied);
+  EXPECT_EQ(result.reachable_bridge_reason, shadow::ReachableBridgeReason::Accepted);
+  EXPECT_EQ(result.reason, shadow::LatestStateFeedbackReason::Accepted)
+    << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+  EXPECT_EQ(
+    execution::validate(*result.execution_artifact),
+    execution::RejectReason::None);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  ReachableBridgeMultiSqpOneIterationIsTheSameCandidateAsC)
+{
+  shadow::SolverContext preparation_context;
+  auto old_origin = snapshot();
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.04, 0.32, 0.26};
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation,
+    old_origin.control_prediction_origin_sec + 0.02,
+    old_origin.control_prediction_origin_sec + 0.01,
+    latest_state, old_origin.request.previous_input};
+  shadow::LatestStateFeedbackSolverContext c_context;
+  shadow::LatestStateFeedbackSolverContext d_context;
+  const auto c = c_context.evaluate_reachable_bridge_time_aligned(request);
+  const auto d =
+    d_context.evaluate_reachable_bridge_multi_sqp_audit(request, 1U);
+
+  ASSERT_EQ(c.reason, shadow::LatestStateFeedbackReason::Accepted) << c.detail;
+  ASSERT_EQ(d.reason, c.reason) << d.detail;
+  EXPECT_EQ(d.latest_state_multi_sqp_attempt_count, 1U);
+  EXPECT_EQ(d.latest_state_multi_sqp_solve_count, 1U);
+  EXPECT_EQ(d.physical_adapter_reason, c.physical_adapter_reason);
+  ASSERT_NE(c.execution_artifact, nullptr);
+  ASSERT_NE(d.execution_artifact, nullptr);
+  ASSERT_EQ(
+    d.execution_artifact->predicted_states.size(),
+    c.execution_artifact->predicted_states.size());
+  for (std::size_t stage = 0U;
+    stage < c.execution_artifact->predicted_states.size(); ++stage)
+  {
+    const auto & lhs = c.execution_artifact->predicted_states[stage];
+    const auto & rhs = d.execution_artifact->predicted_states[stage];
+    EXPECT_DOUBLE_EQ(rhs.lateral_m, lhs.lateral_m);
+    EXPECT_DOUBLE_EQ(rhs.lag_m, lhs.lag_m);
+    EXPECT_DOUBLE_EQ(rhs.heading_offset_rad, lhs.heading_offset_rad);
+    EXPECT_DOUBLE_EQ(rhs.velocity_mps, lhs.velocity_mps);
+    EXPECT_DOUBLE_EQ(rhs.progress_m, lhs.progress_m);
+    EXPECT_DOUBLE_EQ(rhs.steering_rad, lhs.steering_rad);
+    EXPECT_DOUBLE_EQ(
+      rhs.response_steering_rad, lhs.response_steering_rad);
+  }
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  ReachableBridgeMultiSqpRejectsAnUnboundedAuditRequest)
+{
+  shadow::SolverContext preparation_context;
+  const auto old_origin = snapshot();
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation,
+    old_origin.control_prediction_origin_sec + 0.02,
+    old_origin.control_prediction_origin_sec + 0.01,
+    execution::PredictedState{0.0, 0.0, 0.0, 2.0, 0.04, 0.10, 0.08},
+    old_origin.request.previous_input};
+  shadow::LatestStateFeedbackSolverContext context;
+
+  const auto zero =
+    context.evaluate_reachable_bridge_multi_sqp_audit(request, 0U);
+  const auto excessive = context.evaluate_reachable_bridge_multi_sqp_audit(
+    request, shadow::kMaximumLatestStateMultiSqpAuditIterations + 1U);
+  EXPECT_EQ(zero.reason, shadow::LatestStateFeedbackReason::InvalidRequest);
+  EXPECT_FALSE(zero.solve_attempted);
+  EXPECT_EQ(
+    excessive.reason, shadow::LatestStateFeedbackReason::InvalidRequest);
+  EXPECT_FALSE(excessive.solve_attempted);
+}
+
+TEST(
+  MpccRateResolvedShadow,
+  ReachableBridgeSeparatesDirectSuffixFailureFromPhysicalProof)
+{
+  shadow::SolverContext preparation_context;
+  auto old_origin = snapshot();
+  old_origin.request = straight_request(20);
+  old_origin.execution_prefix_steps = old_origin.request.horizon_steps;
+  old_origin.nominal_path_distance_m.resize(21U);
+  for (std::size_t stage = 0U;
+    stage < old_origin.nominal_path_distance_m.size(); ++stage)
+  {
+    old_origin.nominal_path_distance_m[stage] =
+      0.2 * static_cast<double>(stage);
+  }
+  auto context = old_origin.identity.source_context;
+  context.horizon_steps = 20U;
+  old_origin.identity.source_context =
+    contract::seal_problem_context(std::move(context));
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+
+  const execution::PredictedState latest_state{
+    0.0, 0.0, -0.35, 2.0, 0.04, -0.55, -0.44};
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation,
+    old_origin.control_prediction_origin_sec + 0.02,
+    old_origin.control_prediction_origin_sec + 0.01,
+    latest_state, old_origin.request.previous_input};
+  shadow::LatestStateFeedbackSolverContext direct_context;
+  shadow::LatestStateFeedbackSolverContext bridge_context;
+  shadow::LatestStateFeedbackSolverContext multi_sqp_context;
+  const auto direct = direct_context.evaluate_time_aligned(request);
+  const auto bridge =
+    bridge_context.evaluate_reachable_bridge_time_aligned(request);
+  const auto multi_sqp =
+    multi_sqp_context.evaluate_reachable_bridge_multi_sqp_audit(request, 4U);
+
+  EXPECT_EQ(direct.reason, shadow::LatestStateFeedbackReason::SolveRejected)
+    << direct.detail;
+  EXPECT_TRUE(bridge.reachable_bridge_applied) << bridge.detail;
+  EXPECT_TRUE(bridge.solved) << bridge.detail;
+  EXPECT_EQ(
+    bridge.reason,
+    shadow::LatestStateFeedbackReason::PhysicalAdapterRejected)
+    << bridge.detail;
+  EXPECT_EQ(
+    bridge.physical_adapter_reason,
+    physical::RejectReason::ExactTrajectoryRejected);
+  EXPECT_TRUE(multi_sqp.latest_state_multi_sqp_audit_requested);
+  EXPECT_EQ(multi_sqp.latest_state_multi_sqp_attempt_count, 2U);
+  EXPECT_EQ(multi_sqp.latest_state_multi_sqp_solve_count, 1U);
+  EXPECT_EQ(multi_sqp.reason, shadow::LatestStateFeedbackReason::SolveRejected)
+    << multi_sqp.detail;
+  EXPECT_NE(multi_sqp.detail.find("primal infeasible"), std::string::npos);
+  EXPECT_EQ(multi_sqp.execution_artifact, nullptr);
+}
+
+TEST(
+  MpccRateResolvedShadow,
   TimeAlignedPreparedProblemMovesEveryRefinementRowWithOneClock)
 {
   shadow::SolverContext preparation_context;

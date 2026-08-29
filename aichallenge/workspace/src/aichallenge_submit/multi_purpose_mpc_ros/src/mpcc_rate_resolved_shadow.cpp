@@ -1460,6 +1460,219 @@ TimeAlignedFeedbackProblemResult build_time_aligned_feedback_problem(
   }
 }
 
+const char * to_string(const ReachableBridgeReason reason) noexcept
+{
+  switch (reason) {
+    case ReachableBridgeReason::Accepted:
+      return "accepted";
+    case ReachableBridgeReason::TimeAlignedProblemRejected:
+      return "time-aligned-problem-rejected";
+    case ReachableBridgeReason::DimensionMismatch:
+      return "dimension-mismatch";
+    case ReachableBridgeReason::InputPrefixInfeasible:
+      return "input-prefix-infeasible";
+    case ReachableBridgeReason::NonlinearTransitionRejected:
+      return "nonlinear-transition-rejected";
+    case ReachableBridgeReason::RelinearizationRejected:
+      return "relinearization-rejected";
+    case ReachableBridgeReason::AssemblyRejected:
+      return "assembly-rejected";
+    case ReachableBridgeReason::Exception:
+      return "exception";
+    case ReachableBridgeReason::Count:
+      return "count";
+  }
+  return "unknown";
+}
+
+ReachableBridgeFeedbackProblemResult
+build_reachable_bridge_feedback_problem(
+  const TimeAlignedFeedbackProblemRequest & request) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  namespace problem = mpcc_rate_resolved_problem;
+  ReachableBridgeFeedbackProblemResult result;
+  const auto reject = [&result](
+      const ReachableBridgeReason reason, const std::string & detail) {
+      result.reason = reason;
+      result.detail = detail;
+      result.problem.reset();
+      return result;
+    };
+  try {
+    auto base = build_time_aligned_feedback_problem(request);
+    result.time_aligned_problem_reason = base.reason;
+    result.suffix = std::move(base.suffix);
+    if (
+      base.reason != TimeAlignedFeedbackProblemReason::Accepted ||
+      !base.problem.has_value() || !result.suffix.snapshot.has_value())
+    {
+      return reject(
+        ReachableBridgeReason::TimeAlignedProblemRejected,
+        std::string{"B-arm rejected: "} + to_string(base.reason) + "/" +
+        base.detail);
+    }
+
+    auto feedback = std::move(base.problem.value());
+    const auto & semantic = result.suffix.snapshot->request;
+    const int horizon = feedback.horizon_steps;
+    constexpr int nx = model::kStateDimension;
+    constexpr int nu = model::kInputDimension;
+    const int state_values = nx * (horizon + 1);
+    const int input_values = nu * horizon;
+    const int variable_count = state_values + input_values;
+    if (
+      horizon <= 0 || semantic.horizon_steps != horizon ||
+      semantic.inputs.size() != static_cast<std::size_t>(horizon) ||
+      feedback.initial_state.size() != nx ||
+      feedback.state_lower.size() != state_values ||
+      feedback.state_upper.size() != state_values ||
+      feedback.input_lower.size() != input_values ||
+      feedback.input_upper.size() != input_values ||
+      base.linearization_primal.size() != variable_count ||
+      !base.linearization_primal.allFinite())
+    {
+      return reject(
+        ReachableBridgeReason::DimensionMismatch,
+        "B-arm problem, semantic suffix and direct primal disagree");
+    }
+
+    Eigen::VectorXd reachable = Eigen::VectorXd::Zero(variable_count);
+    reachable.head(nx) = feedback.initial_state;
+    double cumulative_steering_delta_rad = 0.0;
+    for (int stage = 0; stage < horizon; ++stage) {
+      const int state_offset = stage * nx;
+      const int next_state_offset = (stage + 1) * nx;
+      const int input_offset = stage * nu;
+      const int primal_input_offset = state_values + input_offset;
+      const auto & semantic_input =
+        semantic.inputs[static_cast<std::size_t>(stage)];
+      const double dt_sec = semantic_input.stage_dt_sec;
+      if (!std::isfinite(dt_sec) || dt_sec <= 0.0) {
+        return reject(
+          ReachableBridgeReason::DimensionMismatch,
+          "semantic suffix contains an invalid stage duration");
+      }
+
+      Eigen::Matrix<double, nu, 1> input =
+        base.linearization_primal.segment<nu>(primal_input_offset);
+      for (int element = 0; element < nu; ++element) {
+        const double lower = feedback.input_lower[input_offset + element];
+        const double upper = feedback.input_upper[input_offset + element];
+        if (
+          !std::isfinite(lower) || !std::isfinite(upper) || lower > upper)
+        {
+          return reject(
+            ReachableBridgeReason::DimensionMismatch,
+            "B-arm input box is invalid");
+        }
+        input[element] = std::clamp(input[element], lower, upper);
+      }
+      if (feedback.steering_rate_prefix_bounds.has_value()) {
+        const auto & prefix = feedback.steering_rate_prefix_bounds.value();
+        const double prefix_rate_lower =
+          (prefix.minimum_cumulative_delta_rad -
+          cumulative_steering_delta_rad) / dt_sec;
+        const double prefix_rate_upper =
+          (prefix.maximum_cumulative_delta_rad -
+          cumulative_steering_delta_rad) / dt_sec;
+        const double rate_lower = std::max(
+          feedback.input_lower[
+            input_offset + model::kSteeringRateIndex],
+          prefix_rate_lower);
+        const double rate_upper = std::min(
+          feedback.input_upper[
+            input_offset + model::kSteeringRateIndex],
+          prefix_rate_upper);
+        if (
+          !std::isfinite(rate_lower) || !std::isfinite(rate_upper) ||
+          rate_lower > rate_upper)
+        {
+          return reject(
+            ReachableBridgeReason::InputPrefixInfeasible,
+            "existing steering-rate box and cumulative prefix do not intersect");
+        }
+        input[model::kSteeringRateIndex] = std::clamp(
+          input[model::kSteeringRateIndex], rate_lower, rate_upper);
+      }
+      cumulative_steering_delta_rad +=
+        input[model::kSteeringRateIndex] * dt_sec;
+      reachable.segment<nu>(primal_input_offset) = input;
+
+      const Eigen::Matrix<double, nx, 1> state =
+        reachable.segment<nx>(state_offset);
+      const auto transition = model::evaluate_temporal_frenet_transition(
+        model::LinearizationRequest{
+          state[model::kLateralIndex], state[model::kLagIndex],
+          state[model::kHeadingIndex], state[model::kVelocityIndex],
+          state[model::kProgressIndex], state[model::kSteeringIndex],
+          state[model::kResponseSteeringIndex],
+          input[model::kAccelerationIndex],
+          input[model::kSteeringRateIndex],
+          input[model::kVirtualProgressSpeedIndex],
+          semantic_input.path_curvature_radpm, semantic.wheelbase_m,
+          semantic.yaw_response_gain,
+          semantic.yaw_response_time_constant_sec, dt_sec,
+          semantic.minimum_frenet_denominator,
+          semantic.minimum_stage_dt_sec, semantic.maximum_stage_dt_sec});
+      if (!transition.has_value()) {
+        return reject(
+          ReachableBridgeReason::NonlinearTransitionRejected,
+          "canonical nonlinear bridge transition rejected at stage=" +
+          std::to_string(stage));
+      }
+      reachable.segment<nx>(next_state_offset) = transition->next_state;
+      const auto direct_successor =
+        base.linearization_primal.segment<nx>(next_state_offset);
+      result.maximum_direct_successor_gap = std::max(
+        result.maximum_direct_successor_gap,
+        (direct_successor - transition->next_state).
+        lpNorm<Eigen::Infinity>());
+      for (int element = 0; element < nx; ++element) {
+        const double value = transition->next_state[element];
+        const double lower = feedback.state_lower[next_state_offset + element];
+        const double upper = feedback.state_upper[next_state_offset + element];
+        const double violation = std::max(
+          std::isfinite(lower) ? lower - value : 0.0,
+          std::isfinite(upper) ? value - upper : 0.0);
+        result.maximum_state_box_violation = std::max(
+          result.maximum_state_box_violation, std::max(0.0, violation));
+      }
+      ++result.rollout_stage_count;
+    }
+
+    const auto relinearization =
+      mpcc_rate_resolved_adapter::relinearize_around_primal(
+      semantic, reachable, feedback);
+    if (!relinearization.applied) {
+      return reject(
+        ReachableBridgeReason::RelinearizationRejected,
+        std::string{"reachable bridge relinearization rejected: "} +
+        mpcc_rate_resolved_adapter::to_string(relinearization.reason) +
+        "/stage=" + std::to_string(relinearization.stage));
+    }
+    if (!problem::assemble(feedback).has_value()) {
+      return reject(
+        ReachableBridgeReason::AssemblyRejected,
+        "reachable bridge problem failed unchanged assembly validation");
+    }
+
+    result.reason = ReachableBridgeReason::Accepted;
+    result.problem = std::move(feedback);
+    result.linearization_primal = std::move(reachable);
+    result.detail = "reachable nonlinear bridge tangent rebuilt";
+    return result;
+  } catch (const std::exception & error) {
+    return reject(
+      ReachableBridgeReason::Exception,
+      std::string{"reachable bridge exception: "} + error.what());
+  } catch (...) {
+    return reject(
+      ReachableBridgeReason::Exception,
+      "reachable bridge unknown exception");
+  }
+}
+
 persistent_osqp::PhysicalConstraintTolerance
 LatestStateFeedbackSolverContext::physical_constraint_tolerance() const noexcept
 {
@@ -1672,9 +1885,38 @@ LatestStateFeedbackResult
 LatestStateFeedbackSolverContext::evaluate_time_aligned(
   const LatestStateFeedbackRequest & request)
 {
+  return evaluate_time_aligned_impl(request, false, 1U);
+}
+
+LatestStateFeedbackResult
+LatestStateFeedbackSolverContext::evaluate_reachable_bridge_time_aligned(
+  const LatestStateFeedbackRequest & request)
+{
+  return evaluate_time_aligned_impl(request, true, 1U);
+}
+
+LatestStateFeedbackResult
+LatestStateFeedbackSolverContext::evaluate_reachable_bridge_multi_sqp_audit(
+  const LatestStateFeedbackRequest & request,
+  const std::size_t iteration_limit)
+{
+  return evaluate_time_aligned_impl(request, true, iteration_limit);
+}
+
+LatestStateFeedbackResult
+LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
+  const LatestStateFeedbackRequest & request,
+  const bool reachable_bridge_candidate,
+  const std::size_t multi_sqp_iteration_limit)
+{
   const auto started = SteadyClock::now();
   LatestStateFeedbackResult result;
   result.time_aligned_suffix_attempted = true;
+  result.reachable_bridge_attempted = reachable_bridge_candidate;
+  result.latest_state_multi_sqp_audit_requested =
+    reachable_bridge_candidate && multi_sqp_iteration_limit > 1U;
+  result.latest_state_multi_sqp_iteration_limit =
+    multi_sqp_iteration_limit;
   if (request.preparation != nullptr) {
     result.identity = request.preparation->snapshot.identity;
   }
@@ -1693,7 +1935,10 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned(
       request.observation_sec <
       request.preparation->snapshot.identity.snapshot_sec ||
       request.control_prediction_origin_sec < request.observation_sec ||
-      !request.previous_input.allFinite())
+      !request.previous_input.allFinite() || multi_sqp_iteration_limit == 0U ||
+      multi_sqp_iteration_limit >
+      kMaximumLatestStateMultiSqpAuditIterations ||
+      (!reachable_bridge_candidate && multi_sqp_iteration_limit != 1U))
     {
       result.detail =
         "invalid time-aligned feedback timing, identity or previous input";
@@ -1717,28 +1962,60 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned(
       return finish();
     }
 
-    auto feedback = build_time_aligned_feedback_problem(
-      TimeAlignedFeedbackProblemRequest{
-        request.preparation.get(), request.control_prediction_origin_sec,
-        request.initial_state, request.previous_input,
-        solver_.physical_constraint_tolerance()});
-    result.time_aligned_problem_reason = feedback.reason;
-    result.consumed_stage_count = feedback.suffix.consumed_stage_count;
-    result.first_remaining_stage_duration_sec =
-      feedback.suffix.first_remaining_stage_duration_sec;
-    if (
-      feedback.reason != TimeAlignedFeedbackProblemReason::Accepted ||
-      !feedback.problem.has_value() ||
-      !feedback.suffix.snapshot.has_value())
-    {
-      result.reason = LatestStateFeedbackReason::AssemblyRejected;
-      result.detail = std::string{"time-aligned feedback problem rejected: "} +
-        to_string(feedback.reason) + "/" + feedback.detail;
-      return finish();
+    const TimeAlignedFeedbackProblemRequest problem_request{
+      request.preparation.get(), request.control_prediction_origin_sec,
+      request.initial_state, request.previous_input,
+      solver_.physical_constraint_tolerance()};
+    mpcc_rate_resolved_problem::AssemblyRequest feedback_problem;
+    Snapshot feedback_snapshot;
+    Eigen::VectorXd linearization_primal;
+    if (reachable_bridge_candidate) {
+      auto bridge = build_reachable_bridge_feedback_problem(problem_request);
+      result.time_aligned_problem_reason =
+        bridge.time_aligned_problem_reason;
+      result.reachable_bridge_reason = bridge.reason;
+      result.reachable_bridge_rollout_stage_count =
+        bridge.rollout_stage_count;
+      result.reachable_bridge_maximum_direct_successor_gap =
+        bridge.maximum_direct_successor_gap;
+      result.reachable_bridge_maximum_state_box_violation =
+        bridge.maximum_state_box_violation;
+      result.consumed_stage_count = bridge.suffix.consumed_stage_count;
+      result.first_remaining_stage_duration_sec =
+        bridge.suffix.first_remaining_stage_duration_sec;
+      if (
+        bridge.reason != ReachableBridgeReason::Accepted ||
+        !bridge.problem.has_value() || !bridge.suffix.snapshot.has_value())
+      {
+        result.reason = LatestStateFeedbackReason::AssemblyRejected;
+        result.detail = std::string{"reachable bridge problem rejected: "} +
+          to_string(bridge.reason) + "/" + bridge.detail;
+        return finish();
+      }
+      result.reachable_bridge_applied = true;
+      feedback_problem = std::move(bridge.problem.value());
+      feedback_snapshot = std::move(bridge.suffix.snapshot.value());
+      linearization_primal = std::move(bridge.linearization_primal);
+    } else {
+      auto feedback = build_time_aligned_feedback_problem(problem_request);
+      result.time_aligned_problem_reason = feedback.reason;
+      result.consumed_stage_count = feedback.suffix.consumed_stage_count;
+      result.first_remaining_stage_duration_sec =
+        feedback.suffix.first_remaining_stage_duration_sec;
+      if (
+        feedback.reason != TimeAlignedFeedbackProblemReason::Accepted ||
+        !feedback.problem.has_value() ||
+        !feedback.suffix.snapshot.has_value())
+      {
+        result.reason = LatestStateFeedbackReason::AssemblyRejected;
+        result.detail = std::string{"time-aligned feedback problem rejected: "} +
+          to_string(feedback.reason) + "/" + feedback.detail;
+        return finish();
+      }
+      feedback_problem = std::move(feedback.problem.value());
+      feedback_snapshot = std::move(feedback.suffix.snapshot.value());
+      linearization_primal = std::move(feedback.linearization_primal);
     }
-
-    auto feedback_problem = std::move(feedback.problem.value());
-    auto feedback_snapshot = std::move(feedback.suffix.snapshot.value());
     auto assembled = mpcc_rate_resolved_problem::assemble(feedback_problem);
     if (!assembled.has_value()) {
       result.reason = LatestStateFeedbackReason::AssemblyRejected;
@@ -1749,7 +2026,7 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned(
     auto bootstrap = build_current_problem_bootstrap(
       feedback_problem,
       static_cast<std::size_t>(assembled->lower_bound.size()),
-      &feedback.linearization_primal);
+      &linearization_primal);
     if (!bootstrap.has_value()) {
       result.reason = LatestStateFeedbackReason::BootstrapRejected;
       result.detail = "time-aligned feedback bootstrap rejected";
@@ -1757,62 +2034,109 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned(
     }
 
     result.solve_attempted = true;
-    persistent_osqp::SolveOutcome outcome;
+    for (std::size_t iteration = 0U;
+      iteration < multi_sqp_iteration_limit; ++iteration)
     {
-      std::lock_guard<std::mutex> lock(mutex_);
-      outcome = solver_.solve(
-        assembled->quadratic_cost, assembled->constraints,
-        assembled->linear_cost, assembled->lower_bound,
-        assembled->upper_bound, bootstrap, assembled->variable_scaling);
-    }
-    result.solver = outcome.telemetry;
-    if (!outcome.result.has_value()) {
-      result.reason = LatestStateFeedbackReason::SolveRejected;
-      result.detail = outcome.failure_detail.empty() ?
-        "time-aligned feedback solve rejected" : outcome.failure_detail;
-      return finish();
-    }
-    result.solved = true;
-    result.finite = outcome.result->primal.allFinite();
-    result.constraints_satisfied = result.finite;
-    if (!result.finite) {
-      result.reason = LatestStateFeedbackReason::SolveRejected;
-      result.detail = "time-aligned feedback result is nonfinite";
-      return finish();
-    }
+      ++result.latest_state_multi_sqp_attempt_count;
+      persistent_osqp::SolveOutcome outcome;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        outcome = solver_.solve(
+          assembled->quadratic_cost, assembled->constraints,
+          assembled->linear_cost, assembled->lower_bound,
+          assembled->upper_bound, bootstrap, assembled->variable_scaling);
+      }
+      result.solver = outcome.telemetry;
+      if (!outcome.result.has_value()) {
+        result.reason = LatestStateFeedbackReason::SolveRejected;
+        result.detail = outcome.failure_detail.empty() ?
+          "time-aligned feedback solve rejected" : outcome.failure_detail;
+        return finish();
+      }
+      ++result.latest_state_multi_sqp_solve_count;
+      result.solved = true;
+      result.finite = outcome.result->primal.allFinite();
+      result.constraints_satisfied = result.finite;
+      if (!result.finite) {
+        result.reason = LatestStateFeedbackReason::SolveRejected;
+        result.detail = "time-aligned feedback result is nonfinite";
+        return finish();
+      }
 
-    const double completed_sec = request.observation_sec +
-      std::chrono::duration<double>(SteadyClock::now() - started).count();
-    auto artifact_build = build_execution_artifact(
-      feedback_snapshot, feedback_problem, outcome, completed_sec);
-    result.artifact_reject_reason = artifact_build.reject_reason;
-    if (!artifact_build.execution_artifact.has_value()) {
-      result.reason = LatestStateFeedbackReason::ArtifactRejected;
-      result.detail = artifact_build.detail;
-      return finish();
+      const double completed_sec = request.observation_sec +
+        std::chrono::duration<double>(SteadyClock::now() - started).count();
+      auto artifact_build = build_execution_artifact(
+        feedback_snapshot, feedback_problem, outcome, completed_sec);
+      result.artifact_reject_reason = artifact_build.reject_reason;
+      if (!artifact_build.execution_artifact.has_value()) {
+        result.reason = LatestStateFeedbackReason::ArtifactRejected;
+        result.detail = artifact_build.detail;
+        return finish();
+      }
+      auto execution_artifact =
+        std::move(artifact_build.execution_artifact.value());
+      result.physical_adapter_reason =
+        mpcc_rate_resolved_physical_adapter::build(
+        execution_artifact,
+        execution_artifact.identity.source_context.intent,
+        execution_artifact.identity.source_context.stage_geometry_id).reason;
+      if (
+        result.physical_adapter_reason ==
+        mpcc_rate_resolved_physical_adapter::RejectReason::None)
+      {
+        result.execution_artifact =
+          std::make_shared<const artifact::ExecutionArtifact>(
+          std::move(execution_artifact));
+        result.reason = LatestStateFeedbackReason::Accepted;
+        result.detail =
+          "time-aligned feedback QP and physical adapter accepted";
+        return finish();
+      }
+      if (
+        result.physical_adapter_reason !=
+        mpcc_rate_resolved_physical_adapter::RejectReason::ExactTrajectoryRejected)
+      {
+        result.reason = LatestStateFeedbackReason::PhysicalAdapterRejected;
+        result.detail =
+          "time-aligned feedback structural physical adapter rejected";
+        return finish();
+      }
+      if (iteration + 1U >= multi_sqp_iteration_limit) {
+        result.reason = LatestStateFeedbackReason::PhysicalAdapterRejected;
+        result.detail =
+          "time-aligned feedback nonlinear physical adapter rejected";
+        return finish();
+      }
+
+      const auto relinearization =
+        mpcc_rate_resolved_adapter::relinearize_around_primal(
+        feedback_snapshot.request, outcome.result->primal, feedback_problem);
+      if (!relinearization.applied) {
+        result.reason = LatestStateFeedbackReason::AssemblyRejected;
+        result.detail =
+          std::string{"multi-SQP relinearization rejected: "} +
+          mpcc_rate_resolved_adapter::to_string(relinearization.reason) +
+          "/stage=" + std::to_string(relinearization.stage);
+        return finish();
+      }
+      assembled = mpcc_rate_resolved_problem::assemble(feedback_problem);
+      if (!assembled.has_value()) {
+        result.reason = LatestStateFeedbackReason::AssemblyRejected;
+        result.detail = "multi-SQP problem assembly rejected";
+        return finish();
+      }
+      bootstrap = build_current_problem_bootstrap(
+        feedback_problem,
+        static_cast<std::size_t>(assembled->lower_bound.size()),
+        &outcome.result->primal);
+      if (!bootstrap.has_value()) {
+        result.reason = LatestStateFeedbackReason::BootstrapRejected;
+        result.detail = "multi-SQP bootstrap rejected";
+        return finish();
+      }
     }
-    auto execution_artifact =
-      std::move(artifact_build.execution_artifact.value());
-    result.physical_adapter_reason =
-      mpcc_rate_resolved_physical_adapter::build(
-      execution_artifact,
-      execution_artifact.identity.source_context.intent,
-      execution_artifact.identity.source_context.stage_geometry_id).reason;
-    if (
-      result.physical_adapter_reason !=
-      mpcc_rate_resolved_physical_adapter::RejectReason::None)
-    {
-      result.reason = LatestStateFeedbackReason::PhysicalAdapterRejected;
-      result.detail =
-        "time-aligned feedback nonlinear physical adapter rejected";
-      return finish();
-    }
-    result.execution_artifact =
-      std::make_shared<const artifact::ExecutionArtifact>(
-      std::move(execution_artifact));
-    result.reason = LatestStateFeedbackReason::Accepted;
-    result.detail =
-      "time-aligned feedback QP and physical adapter accepted";
+    result.reason = LatestStateFeedbackReason::Exception;
+    result.detail = "multi-SQP loop exited without classification";
     return finish();
   } catch (const std::exception & error) {
     result.reason = LatestStateFeedbackReason::Exception;

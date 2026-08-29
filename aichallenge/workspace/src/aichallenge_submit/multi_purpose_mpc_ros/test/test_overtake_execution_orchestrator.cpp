@@ -569,6 +569,7 @@ TEST(OvertakeExecutionOrchestrator, FollowIntentRequiresCurrentFrontEvidence)
   request.race_session_active = true;
   request.target_id = "d2";
   request.behavior = orchestrator::Behavior::Follow;
+  request.follow_cap_active = true;
 
   const auto authority = orchestrator::resolve_authority(request);
   ASSERT_EQ(authority.action, orchestrator::Action::Follow);
@@ -589,6 +590,52 @@ TEST(OvertakeExecutionOrchestrator, FollowIntentRequiresCurrentFrontEvidence)
   EXPECT_EQ(with_front.intent, contract::ControlIntent::Follow);
   EXPECT_EQ(
     with_front.reason,
+    orchestrator::CanonicalControlIntentReason::ResolvedAction);
+}
+
+TEST(OvertakeExecutionOrchestrator, TacticalFollowWithoutCapKeepsCruiseOwner)
+{
+  orchestrator::AuthorityRequest request;
+  request.race_session_active = true;
+  request.target_id = "d2";
+  request.behavior = orchestrator::Behavior::Follow;
+  request.coherent_follow_front_observation = true;
+
+  const auto authority = orchestrator::resolve_authority(request);
+  EXPECT_EQ(authority.action, orchestrator::Action::Cruise);
+  EXPECT_EQ(
+    authority.longitudinal_owner,
+    orchestrator::LongitudinalOwner::RacingLine);
+
+  const auto intent =
+    orchestrator::resolve_canonical_control_intent(request, authority);
+  ASSERT_TRUE(intent.valid);
+  EXPECT_EQ(intent.intent, contract::ControlIntent::Cruise);
+  EXPECT_EQ(
+    intent.reason,
+    orchestrator::CanonicalControlIntentReason::CruiseDuringRaceSession);
+}
+
+TEST(OvertakeExecutionOrchestrator, FollowCapOwnsFollowWithoutBehaviorLabel)
+{
+  orchestrator::AuthorityRequest request;
+  request.race_session_active = true;
+  request.target_id = "d2";
+  request.follow_cap_active = true;
+  request.coherent_follow_front_observation = true;
+
+  const auto authority = orchestrator::resolve_authority(request);
+  EXPECT_EQ(authority.action, orchestrator::Action::Follow);
+  EXPECT_EQ(
+    authority.longitudinal_owner,
+    orchestrator::LongitudinalOwner::FollowCap);
+
+  const auto intent =
+    orchestrator::resolve_canonical_control_intent(request, authority);
+  ASSERT_TRUE(intent.valid);
+  EXPECT_EQ(intent.intent, contract::ControlIntent::Follow);
+  EXPECT_EQ(
+    intent.reason,
     orchestrator::CanonicalControlIntentReason::ResolvedAction);
 }
 

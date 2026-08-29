@@ -465,9 +465,9 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
   } else if (request.dynamic_obstacle_escape_active) {
     result.action = Action::DynamicEscape;
     result.reason = "dynamic-obstacle-escape";
-  } else if (request.behavior == Behavior::Follow || request.follow_cap_active) {
+  } else if (request.follow_cap_active) {
     result.action = Action::Follow;
-    result.reason = "follow";
+    result.reason = "follow-cap-owner";
   }
 
   if (request.line_active) {

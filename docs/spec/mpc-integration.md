@@ -3026,6 +3026,28 @@ baseline `output/20260829-223720`では、確認したGate A ShiftOut Bundle 3�
 current-world再証明を通過した。これは`A fails, B succeeds`のpublication lifecycle defectを閉じる証拠であり、
 後段に残る`terminal-contingency-unavailable`、`continuation-wall-blocked`、`delay-prefix-blocked`は別Sliceで扱う。
 
+#### ShiftOutのbounded late exact-disjunction候補（2026-08-30、2025由来の暫定）
+
+ShiftOutのcurrent-world populationは、各選択sideについて最大3候補を維持する。第3候補は、以前の
+last-third coupled physical diagonalではなく、有限horizon末尾3 stageだけcomplete selected-side disjunct、
+それ以前をcomplete stay-behind disjunctとするlate exact-disjunctionである。20-stage問題ではstage 0--16が
+stay-behind、17--19がselected-side、first-aheadは20となりhorizon内にahead rowを置かない。terminal successor
+証明がhorizon後の安全な継続を所有する。
+
+これは横移動をstage 17まで禁止する設計ではない。selected-side soft referenceは全horizonで保持され、MPCCは
+stage 17のcomplete side制約へ滑らかに到達する軌道を選べる。削除したcoupled diagonalはstage 13--18へ固定の
+separating half-spaceを課し、同じimmutable worldでexact disjunctionなら存在する可行領域を消していた。
+
+decision 2970から凍結したdynamic-obstacleおよびcoupled-wall snapshotでは、置換候補が同一fingerprint
+`8757027856347829556`、terminal progress 6.77068 m、terminal velocity 1.35623 m/s、minimum lateral reserve
+1.34242 mで、従来と同じsingle SQP、swept-wall、timed obstacle、terminal successor証明を通過した。
+`output/20260829-235457`ではartifact 3371と7648がStoreからproduction commandへ到達し、decision 3996と8694で
+`emergency=0`となった。反対sideまたはproof不合格候補は従来どおりfail closedである。
+
+この変更はcandidate-generation defectだけを閉じる。Pass完遂、legacy Mission wall gate、retained
+`progress-lift-rejected`、callback overrunは別failure familyであり、clearance、solver tolerance、lease、grace、
+retryまたはfallbackの変更で混在させない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

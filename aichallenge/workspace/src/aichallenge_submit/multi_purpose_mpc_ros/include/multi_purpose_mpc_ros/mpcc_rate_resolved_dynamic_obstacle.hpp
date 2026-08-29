@@ -41,16 +41,17 @@ struct Request
 {
   bool active{false};
   int pass_side_sign{};
-  /// Shadow/offline candidate-C contract.  When present, stages before this
-  /// index use the complete stay-behind disjunct and this stage onward uses
-  /// the complete selected-side disjunct.  Production leaves it absent.
+  /// Exact disjunction contract. When present, stages before this index use
+  /// the complete stay-behind disjunct and this stage onward uses the complete
+  /// selected-side disjunct. Audit candidates and the bounded late production
+  /// member use this same representation.
   std::optional<int> forced_first_pass_side_stage;
   /// Optional first stage whose physical disjunct is longitudinally ahead.
   /// It must follow a forced side stage; `horizon` means no ahead row yet.
   std::optional<int> forced_first_ahead_stage;
-  /// Offline candidate-D continuation only.  Zero places each forced row on
-  /// the wall-only witness and one restores the exact physical disjunct.
-  /// Production leaves it absent, which is identical to one.
+  /// Candidate-D continuation only. Zero places each forced row on the
+  /// wall-only witness and one restores the exact physical disjunct. The
+  /// bounded production member always uses one.
   std::optional<double> forced_constraint_fraction;
   /// Shadow/offline candidate-E only. Stages before start use the exact
   /// stay-behind row, stages start..full interpolate a coupled diagonal

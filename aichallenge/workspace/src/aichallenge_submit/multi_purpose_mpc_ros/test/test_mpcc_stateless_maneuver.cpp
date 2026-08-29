@@ -249,7 +249,7 @@ TEST(MpccStatelessManeuver, BuildsMidHorizonPhysicalDiagonalPopulation)
     result.candidates[1].seed.candidate_fingerprint);
 }
 
-TEST(MpccStatelessManeuver, AddsLatePhysicalDiagonalForLongHorizon)
+TEST(MpccStatelessManeuver, AddsLateExactDisjunctionForLongHorizon)
 {
   auto source = make_source();
   constexpr int horizon = 20;
@@ -293,15 +293,24 @@ TEST(MpccStatelessManeuver, AddsLatePhysicalDiagonalForLongHorizon)
   EXPECT_EQ(
     result.candidates[1].seed.solver_snapshot.
     dynamic_obstacle_forced_diagonal_full_side_stage, 9);
-  EXPECT_EQ(result.candidates[2].kind, CandidateKind::LatePhysicalDiagonal);
+  EXPECT_EQ(result.candidates[2].kind, CandidateKind::LateExactDisjunction);
   EXPECT_EQ(result.candidates[2].seed.pass_side_sign, -1);
   EXPECT_EQ(
     result.candidates[2].seed.solver_snapshot.
-    dynamic_obstacle_forced_diagonal_start_stage, 13);
+    dynamic_obstacle_forced_first_pass_side_stage, 17);
   EXPECT_EQ(
     result.candidates[2].seed.solver_snapshot.
-    dynamic_obstacle_forced_diagonal_full_side_stage, 19);
-  EXPECT_TRUE(
+    dynamic_obstacle_forced_first_ahead_stage, 20);
+  EXPECT_DOUBLE_EQ(
+    result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_constraint_fraction, 1.0);
+  EXPECT_EQ(
+    result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_start_stage, -1);
+  EXPECT_EQ(
+    result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_full_side_stage, -1);
+  EXPECT_FALSE(
     result.candidates[2].seed.solver_snapshot.
     dynamic_obstacle_forced_physical_diagonal);
   EXPECT_NE(

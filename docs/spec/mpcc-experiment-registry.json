@@ -502,6 +502,24 @@
         "next-cycle normal-authority hole caused by discarding the only source whose stateless Bundle command crossed the wire"
       ],
       "revisit_condition": "a failed or non-joined Bundle updates the ledger, a Bundle source gains age-based authority, an exact publication fails to supersede it, or current-world reproof differs from the command sent to the publisher"
+    },
+    {
+      "experiment_id": "20260830-late-exact-disjunction-candidate",
+      "baseline_commit": "c302bf31",
+      "snapshot_ids": [
+        "000000002970-shiftout-dynamic-obstacle-refinement-solve-rejected",
+        "000000002970-shiftout-wall-refinement-coupled-solve-rejected"
+      ],
+      "hypothesis": "the late coupled physical-diagonal producer removes a feasible complete behind-to-side topology that the unchanged seven-state SQP and exact proof chain can certify",
+      "changed_dimension": "production_bounded_late_candidate_topology",
+      "result": "accepted",
+      "reason": "both frozen decision-2970 snapshots certified the same late exact-disjunction candidate with fingerprint 8757027856347829556, and live artifacts 3371 and 7648 crossed the unchanged exact proof, certified Store and production publisher at decisions 3996 and 8694 with emergency=0",
+      "production_impact": "the third member of the existing at-most-three ShiftOut population is replaced atomically; worker, Store, authority, publisher, solver settings, clearance, weights, timeout, lease, retry, fallback and configuration are unchanged",
+      "deleted_code": [
+        "LatePhysicalDiagonal candidate identity",
+        "last-third coupled physical-diagonal production candidate"
+      ],
+      "revisit_condition": "the same-world candidate fails an unchanged exact proof, a failed proof gains normal authority, repeated late-side deferral prevents progress, or isolated timing evidence shows the replacement regresses the existing async worker budget"
     }
   ]
 }

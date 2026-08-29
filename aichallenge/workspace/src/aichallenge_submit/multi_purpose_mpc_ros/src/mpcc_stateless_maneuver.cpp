@@ -348,8 +348,8 @@ const char * to_string(const CandidateKind kind) noexcept
     case CandidateKind::DirectSide: return "direct-side";
     case CandidateKind::MidPhysicalDiagonal:
       return "mid-physical-diagonal";
-    case CandidateKind::LatePhysicalDiagonal:
-      return "late-physical-diagonal";
+    case CandidateKind::LateExactDisjunction:
+      return "late-exact-disjunction";
   }
   return "unknown";
 }
@@ -850,24 +850,25 @@ CandidateSet build_bounded_candidates(
     }
   }
 
-  // The direct and mid-horizon candidates do not represent a physically valid
-  // wait-then-shift maneuver. Sample one additional temporal homotopy at a
-  // normalized late knot. This remains bounded and current-world-only; the
-  // unchanged solver and nonlinear proofs decide whether it can be published.
-  if (first_valid_stage >= 0 && terminal_side_stage > first_valid_stage + 1) {
-    const int stage_span = terminal_side_stage - first_valid_stage;
-    const int late_start_stage =
-      first_valid_stage + (2 * stage_span + 2) / 3;
-    if (late_start_stage + 1 < terminal_side_stage) {
-      auto late_diagonal = build_physical_diagonal_schedule(
-        source, source_fingerprint, pass_side_sign,
-        late_start_stage, terminal_side_stage);
-      if (late_diagonal.seed.has_value()) {
-        result.candidates.push_back(
-          Candidate{
-            CandidateKind::LatePhysicalDiagonal,
-            std::move(late_diagonal.seed.value())});
-      }
+  // The coupled late diagonal fixes one separating half-space throughout the
+  // transition. Frozen current-world evidence shows that this can remove a
+  // feasible trajectory even though the complete behind and side disjuncts
+  // are individually feasible. Keep the population bounded by replacing that
+  // member with the latest complete side suffix represented by the certified
+  // audit schedule. The side reference remains active throughout, so MPCC is
+  // free to move laterally before the side constraint becomes mandatory.
+  constexpr int kLateSideSuffixStageCount = 3;
+  const int horizon = direct_snapshot.request.horizon_steps;
+  const int late_side_stage = horizon - kLateSideSuffixStageCount;
+  if (first_valid_stage >= 0 && late_side_stage > first_valid_stage) {
+    auto late_exact = build_disjunction_schedule(
+      source, source_fingerprint, pass_side_sign,
+      late_side_stage, horizon, 1.0);
+    if (late_exact.seed.has_value()) {
+      result.candidates.push_back(
+        Candidate{
+          CandidateKind::LateExactDisjunction,
+          std::move(late_exact.seed.value())});
     }
   }
 

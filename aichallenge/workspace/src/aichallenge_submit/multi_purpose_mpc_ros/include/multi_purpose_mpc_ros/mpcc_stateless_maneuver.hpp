@@ -110,7 +110,7 @@ enum class CandidateKind
 {
   DirectSide,
   MidPhysicalDiagonal,
-  LatePhysicalDiagonal,
+  LateExactDisjunction,
 };
 
 const char * to_string(CandidateKind kind) noexcept;
@@ -159,9 +159,10 @@ Result bind_current_world_target_preserving_geometry(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   std::uint64_t source_interaction_fingerprint) noexcept;
 
-/// Shadow-only exact disjunction schedule used by candidate D.  Geometry and
-/// costs stay stateless-B-identical; only the complete branch timing and an
-/// offline continuation fraction are sealed into the candidate.
+/// Exact disjunction schedule used by candidate D and by the bounded late
+/// production member. Geometry and costs stay stateless-B-identical; only the
+/// complete branch timing and an optional audit continuation fraction are
+/// sealed into the candidate.
 Result build_disjunction_schedule(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   std::uint64_t source_interaction_fingerprint,
@@ -196,9 +197,9 @@ Result build_physical_diagonal_schedule(
 /// Build the bounded current-world topology population consumed by the
 /// asynchronous production worker. Candidate zero is the direct side
 /// homotopy. When the prediction horizon permits, candidate one spans the
-/// first half of the active encounter and candidate two samples a late
-/// wait-then-shift homotopy. Final authority still requires the unchanged SQP
-/// and exact physical proofs.
+/// first half of the active encounter and candidate two samples a late exact
+/// behind-to-side disjunction. Final authority still requires the unchanged
+/// SQP and exact physical proofs.
 CandidateSet build_bounded_candidates(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   int pass_side_sign) noexcept;

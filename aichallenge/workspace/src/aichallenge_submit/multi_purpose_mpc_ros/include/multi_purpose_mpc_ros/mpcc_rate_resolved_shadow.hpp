@@ -87,8 +87,8 @@ struct Snapshot
   std::string progress_wall_profile_diagnostic{"not-provided"};
   bool dynamic_obstacle_refinement_active{false};
   int dynamic_obstacle_pass_side_sign{0};
-  /// Optional architecture-candidate lattice transition.  Live production
-  /// snapshots leave this absent (`-1`) and retain witness-based refinement.
+  /// Optional exact disjunction transition. Raw live snapshots leave this
+  /// absent (`-1`); bounded current-world candidates may seal it before solve.
   int dynamic_obstacle_forced_first_pass_side_stage{-1};
   int dynamic_obstacle_forced_first_ahead_stage{-1};
   double dynamic_obstacle_forced_constraint_fraction{1.0};

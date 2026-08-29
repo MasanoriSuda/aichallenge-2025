@@ -1134,9 +1134,10 @@ Result evaluate(const Request & request)
     // Publication is causal: the current serialized command can remain on the
     // actuator for one publisher interval even if the next solve fails. A
     // partial normal prefix therefore receives authority only when that exact
-    // interval followed by the real max-braking/hold-steering Emergency
+    // interval followed by a max-braking/path-tracking terminal
     // sequence is rebuilt from the current state and proved against this same
-    // immutable world observation.
+    // immutable world observation. The first interval must replay both the
+    // acceleration and steering-rate components of the serialized command.
     result.terminal_stop_attempted = true;
     const auto terminal_stop =
       mpcc_rate_resolved_physical_adapter::build_stop_contingency(
@@ -1149,9 +1150,15 @@ Result evaluate(const Request & request)
         current_control_state.progress_m,
         continuation_initial_steering_rad,
         request.current_response_steering_rad},
+      request.stop_lateral_policy,
       request.minimum_acceleration_mps2);
     result.terminal_stop_reason = terminal_stop.reason;
     result.terminal_stop_exact_reason = terminal_stop.exact_reason;
+    result.terminal_stop_rejected_sample = terminal_stop.rejected_sample;
+    result.terminal_stop_publisher_interval_end_steering_rad =
+      terminal_stop.publisher_interval_end_steering_rad;
+    result.terminal_stop_final_steering_rad =
+      terminal_stop.braking_suffix_final_steering_rad;
     if (!terminal_stop.exact_trajectory.has_value()) {
       return complete_continuation_proof(
         Reason::TerminalContingencyUnavailable);

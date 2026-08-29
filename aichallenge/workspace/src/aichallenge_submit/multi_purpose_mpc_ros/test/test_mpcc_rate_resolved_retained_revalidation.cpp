@@ -195,6 +195,8 @@ retained::Request accepted_request(
   request.current_response_steering_rad = 0.105;
   request.previous_published_steering_rad = 0.105;
   request.previous_published_command_age_sec = 0.025;
+  request.stop_lateral_policy = {
+    2.0, 0.60, 1.0, 6.0, 1.5, 0.4, 1.3};
   request.minimum_acceleration_mps2 = -3.0;
   request.maximum_acceleration_mps2 = 1.0;
   return request;

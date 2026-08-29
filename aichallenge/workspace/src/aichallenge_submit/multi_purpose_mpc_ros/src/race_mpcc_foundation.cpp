@@ -617,6 +617,84 @@ const char * stop_lateral_action_name(const StopLateralAction action) noexcept
   return "unknown";
 }
 
+std::optional<StopPathTrackingCommand> resolve_stop_path_tracking_command(
+  const StopPathTrackingCommandRequest & request) noexcept
+{
+  const auto & policy = request.policy;
+  if (
+    !std::isfinite(policy.wheelbase_m) || policy.wheelbase_m <= 0.0 ||
+    !std::isfinite(policy.maximum_abs_steering_rad) ||
+    policy.maximum_abs_steering_rad < 0.0 ||
+    !std::isfinite(policy.maximum_abs_steering_rate_radps) ||
+    policy.maximum_abs_steering_rate_radps < 0.0 ||
+    !std::isfinite(policy.maximum_lateral_acceleration_mps2) ||
+    policy.maximum_lateral_acceleration_mps2 < 0.0 ||
+    !std::isfinite(policy.steering_command_gain) ||
+    policy.steering_command_gain <= 0.0 ||
+    !std::isfinite(policy.lateral_gain) || policy.lateral_gain < 0.0 ||
+    !std::isfinite(policy.heading_gain) || policy.heading_gain < 0.0 ||
+    !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.current_heading_error_rad) ||
+    !std::isfinite(request.reference_curvature_radpm) ||
+    !std::isfinite(request.current_speed_mps) ||
+    request.current_speed_mps < 0.0 ||
+    !std::isfinite(request.current_steering_rad) ||
+    !std::isfinite(request.step_sec) || request.step_sec <= 0.0)
+  {
+    return std::nullopt;
+  }
+
+  const double target_curvature_radpm =
+    request.reference_curvature_radpm -
+    policy.lateral_gain * request.current_lateral_m -
+    policy.heading_gain * request.current_heading_error_rad;
+  if (!std::isfinite(target_curvature_radpm)) {
+    return std::nullopt;
+  }
+  const double unconstrained_target_steering_rad =
+    std::atan(policy.wheelbase_m * target_curvature_radpm);
+  double target_steering_rad = std::clamp(
+    unconstrained_target_steering_rad,
+    -policy.maximum_abs_steering_rad,
+    policy.maximum_abs_steering_rad);
+  if (request.current_speed_mps > std::numeric_limits<double>::epsilon()) {
+    const double maximum_tire_angle_rad = std::atan(
+      policy.wheelbase_m * policy.maximum_lateral_acceleration_mps2 /
+      (request.current_speed_mps * request.current_speed_mps));
+    const double maximum_controller_angle_rad =
+      maximum_tire_angle_rad / policy.steering_command_gain;
+    target_steering_rad = std::clamp(
+      target_steering_rad,
+      -maximum_controller_angle_rad,
+      maximum_controller_angle_rad);
+  }
+
+  const double current_steering_rad = std::clamp(
+    request.current_steering_rad,
+    -policy.maximum_abs_steering_rad,
+    policy.maximum_abs_steering_rad);
+  const double maximum_step_rad =
+    policy.maximum_abs_steering_rate_radps * request.step_sec;
+  if (!std::isfinite(maximum_step_rad)) {
+    return std::nullopt;
+  }
+  const double steering_delta_rad =
+    target_steering_rad - current_steering_rad;
+  const double steering_rad =
+    std::abs(steering_delta_rad) <= maximum_step_rad ?
+    target_steering_rad :
+    current_steering_rad + std::copysign(
+      maximum_step_rad, steering_delta_rad);
+  const double steering_rate_radps =
+    (steering_rad - current_steering_rad) / request.step_sec;
+  if (!std::isfinite(steering_rad) || !std::isfinite(steering_rate_radps)) {
+    return std::nullopt;
+  }
+  return StopPathTrackingCommand{
+    unconstrained_target_steering_rad, target_steering_rad, steering_rad,
+    steering_rate_radps};
+}
+
 const char * stop_shadow_intent_reason_name(
   const StopShadowIntentReason reason) noexcept
 {

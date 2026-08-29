@@ -292,6 +292,28 @@ TEST(RaceMpccFoundation, MovingStopNeverOwnsAConstantSteeringHold)
     race::StopLateralAction::HoldAtRest);
 }
 
+TEST(RaceMpccFoundation, MovingStopPathFeedbackIsRateAndAccelerationBounded)
+{
+  race::StopPathTrackingCommandRequest request;
+  request.policy = race::StopPathTrackingPolicy{
+    2.0, 0.60, 1.0, 6.0, 1.5, 0.4, 1.3};
+  request.current_lateral_m = 0.5;
+  request.current_heading_error_rad = 0.1;
+  request.reference_curvature_radpm = 0.05;
+  request.current_speed_mps = 5.0;
+  request.current_steering_rad = 0.10;
+  request.step_sec = 0.025;
+
+  const auto command = race::resolve_stop_path_tracking_command(request);
+  ASSERT_TRUE(command.has_value());
+  EXPECT_NEAR(command->steering_rad, 0.075, 1e-12);
+  EXPECT_NEAR(command->steering_rate_radps, -1.0, 1e-12);
+  EXPECT_LT(command->target_steering_rad, 0.0);
+
+  request.policy.wheelbase_m = 0.0;
+  EXPECT_FALSE(race::resolve_stop_path_tracking_command(request).has_value());
+}
+
 TEST(RaceMpccFoundation, StopKeepsOnlyTheLatentNormalShadowWarm)
 {
   const auto not_stop = race::resolve_stop_shadow_intent(

@@ -128,6 +128,7 @@ enum class StopContingencyRejectReason
   InvalidInitialState,
   InvalidActuation,
   InvalidBrakingEnvelope,
+  InvalidLateralPolicy,
   CourseGeometryUnavailable,
   NonlinearModelRejected,
   ActuatorEnvelopeRejected,
@@ -144,21 +145,31 @@ struct StopContingencyResult
   race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason exact_reason{
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
   int rejected_sample{-1};
+  /// Steering state after replaying the already selected publisher command
+  /// for one publication interval.  This makes the causal hand-off into the
+  /// braking suffix observable and testable.
+  double publisher_interval_end_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  /// Final steering reached by the path-tracking maximum-braking suffix.
+  double braking_suffix_final_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   std::optional<race_mpcc_foundation::ExactPhysicalExecutionTrajectory>
   exact_trajectory;
 };
 
 /// Prove the causal command sequence which the publisher can actually
-/// execute when no next canonical solution arrives: hold the current
-/// serialized steering and current acceleration for exactly one publication
-/// interval, then hold that steering while applying the configured physical
-/// maximum braking until rest. This is rebuilt from the current physical
-/// state and is not retained Mission geometry.
+/// execute when no next canonical solution arrives: replay the current
+/// serialized acceleration and steering-rate command for exactly one
+/// publication interval, then execute the same rate-limited path-feedback law
+/// as the Emergency Stop publisher while applying the configured physical
+/// maximum braking until rest. This is rebuilt from the current physical state
+/// and is not retained Mission geometry.
 StopContingencyResult build_stop_contingency(
   const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
   const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
   const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
   const ContinuationInitialState & initial_state,
+  const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
   double minimum_acceleration_mps2) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter

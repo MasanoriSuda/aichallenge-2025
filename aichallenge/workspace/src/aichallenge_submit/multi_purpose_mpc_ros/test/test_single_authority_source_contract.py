@@ -736,7 +736,8 @@ def test_moving_stop_uses_emergency_path_tracking_without_normal_authority() -> 
     )
     emergency = SOURCE[emergency_start:emergency_end]
     assert "resolve_stop_lateral_action(" in emergency
-    assert "solver_fallback_path_steering_target(" in emergency
+    assert "stop_path_tracking_command(" in emergency
+    assert "path_command->steering_rad" in emergency
     assert "rate_limit_solver_fallback_steering_toward_target(" in emergency
     assert "StopLateralAction::HoldAtRest" in emergency
     assert "StopLateralAction::TrackReferencePath" in emergency

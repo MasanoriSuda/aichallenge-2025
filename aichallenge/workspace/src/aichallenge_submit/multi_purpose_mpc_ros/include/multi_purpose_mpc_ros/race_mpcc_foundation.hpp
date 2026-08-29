@@ -389,6 +389,47 @@ StopLateralAction resolve_stop_lateral_action(
 
 const char * stop_lateral_action_name(StopLateralAction action) noexcept;
 
+/// One immutable moving-Stop lateral policy shared by the retained terminal
+/// certificate and the emergency publisher.  Values are expressed in the raw
+/// controller steering coordinates used by the seven-state model; the final
+/// wire gain is applied only at publication.
+struct StopPathTrackingPolicy
+{
+  double wheelbase_m{};
+  double maximum_abs_steering_rad{};
+  double maximum_abs_steering_rate_radps{};
+  double maximum_lateral_acceleration_mps2{};
+  double steering_command_gain{};
+  double lateral_gain{};
+  double heading_gain{};
+};
+
+struct StopPathTrackingCommandRequest
+{
+  StopPathTrackingPolicy policy;
+  double current_lateral_m{};
+  double current_heading_error_rad{};
+  double reference_curvature_radpm{};
+  double current_speed_mps{};
+  double current_steering_rad{};
+  double step_sec{};
+};
+
+struct StopPathTrackingCommand
+{
+  double unconstrained_target_steering_rad{};
+  double target_steering_rad{};
+  double steering_rad{};
+  double steering_rate_radps{};
+};
+
+/// Resolve the exact rate-limited path-feedback command used while a moving
+/// vehicle executes Emergency Stop. Returning nullopt is a policy/input
+/// contract failure; callers must not substitute a different lateral law and
+/// still claim the same terminal certificate.
+std::optional<StopPathTrackingCommand> resolve_stop_path_tracking_command(
+  const StopPathTrackingCommandRequest & request) noexcept;
+
 enum class StopShadowIntentReason
 {
   NotStop,

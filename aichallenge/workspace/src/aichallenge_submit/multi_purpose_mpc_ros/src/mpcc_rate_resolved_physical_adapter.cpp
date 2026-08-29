@@ -219,6 +219,8 @@ const char * to_string(const StopContingencyRejectReason reason) noexcept
       return "invalid-actuation";
     case StopContingencyRejectReason::InvalidBrakingEnvelope:
       return "invalid-braking-envelope";
+    case StopContingencyRejectReason::InvalidLateralPolicy:
+      return "invalid-lateral-policy";
     case StopContingencyRejectReason::CourseGeometryUnavailable:
       return "course-geometry-unavailable";
     case StopContingencyRejectReason::NonlinearModelRejected:
@@ -617,6 +619,7 @@ StopContingencyResult build_stop_contingency(
   const mpcc_rate_resolved_execution_artifact::Cursor & cursor,
   const mpcc_rate_resolved_execution_artifact::Actuation & current_actuation,
   const ContinuationInitialState & initial_state,
+  const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
   const double minimum_acceleration_mps2) noexcept
 {
   namespace execution = mpcc_rate_resolved_execution_artifact;
@@ -653,9 +656,12 @@ StopContingencyResult build_stop_contingency(
     current_actuation.sequence != artifact.identity.sequence ||
     current_actuation.control_stage_index != cursor.control_stage_index ||
     !std::isfinite(current_actuation.acceleration_mps2) ||
+    !std::isfinite(current_actuation.steering_rate_radps) ||
     !std::isfinite(current_actuation.steering_rad) ||
     std::abs(current_actuation.steering_rad - nonlinear.steering_rad) >
     tolerance ||
+    std::abs(current_actuation.steering_rate_radps) >
+    artifact.maximum_abs_steering_rate_radps + tolerance ||
     std::abs(current_actuation.steering_rad) >
     artifact.maximum_abs_steering_rad + tolerance)
   {
@@ -717,7 +723,8 @@ StopContingencyResult build_stop_contingency(
 
   const auto append_duration = [&] (
       const double requested_duration_sec,
-      const double requested_acceleration_mps2) -> bool
+      const double requested_acceleration_mps2,
+      const double requested_steering_rate_radps) -> bool
     {
       double remaining_sec = requested_duration_sec;
       while (remaining_sec > 1e-12) {
@@ -752,7 +759,7 @@ StopContingencyResult build_stop_contingency(
         }
         execution::ControlStage control;
         control.acceleration_mps2 = acceleration_mps2;
-        control.steering_rate_radps = 0.0;
+        control.steering_rate_radps = requested_steering_rate_radps;
         control.virtual_progress_speed_mps = progress_speed.value();
         control.duration_sec = step_sec;
         control.virtual_progress_lower_mps = 0.0;
@@ -819,24 +826,48 @@ StopContingencyResult build_stop_contingency(
 
   if (!append_duration(
       artifact.publication_interval_sec,
-      current_actuation.acceleration_mps2))
+      current_actuation.acceleration_mps2,
+      current_actuation.steering_rate_radps))
   {
     if (result.reason == StopContingencyRejectReason::InvalidArtifact) {
       result.reason = StopContingencyRejectReason::NonlinearModelRejected;
     }
     return result;
   }
-  const double stop_duration_sec = nonlinear.velocity_mps /
-    -minimum_acceleration_mps2;
-  if (
-    stop_duration_sec > 1e-12 &&
-    !append_duration(stop_duration_sec, minimum_acceleration_mps2))
-  {
-    if (result.reason == StopContingencyRejectReason::InvalidArtifact) {
-      result.reason = StopContingencyRejectReason::NonlinearModelRejected;
+  result.publisher_interval_end_steering_rad = nonlinear.steering_rad;
+  while (nonlinear.velocity_mps > tolerance) {
+    const auto geometry = sample_course_geometry(
+      artifact, nonlinear.progress_m);
+    if (!geometry.has_value()) {
+      result.reason = StopContingencyRejectReason::CourseGeometryUnavailable;
+      return result;
     }
-    return result;
+    const auto lateral_command =
+      race::resolve_stop_path_tracking_command(
+      race::StopPathTrackingCommandRequest{
+        lateral_policy, nonlinear.lateral_m,
+        nonlinear.heading_offset_rad, geometry->curvature_radpm,
+        nonlinear.velocity_mps, nonlinear.steering_rad,
+        artifact.publication_interval_sec});
+    if (!lateral_command.has_value()) {
+      result.reason = StopContingencyRejectReason::InvalidLateralPolicy;
+      return result;
+    }
+    const double stop_duration_sec = nonlinear.velocity_mps /
+      -minimum_acceleration_mps2;
+    const double command_duration_sec = std::min(
+      artifact.publication_interval_sec, stop_duration_sec);
+    if (!append_duration(
+        command_duration_sec, minimum_acceleration_mps2,
+        lateral_command->steering_rate_radps))
+    {
+      if (result.reason == StopContingencyRejectReason::InvalidArtifact) {
+        result.reason = StopContingencyRejectReason::NonlinearModelRejected;
+      }
+      return result;
+    }
   }
+  result.braking_suffix_final_steering_rad = nonlinear.steering_rad;
   if (exact.elapsed_time_sec.empty() || nonlinear.velocity_mps > tolerance) {
     result.reason = StopContingencyRejectReason::ExactTrajectoryRejected;
     return result;

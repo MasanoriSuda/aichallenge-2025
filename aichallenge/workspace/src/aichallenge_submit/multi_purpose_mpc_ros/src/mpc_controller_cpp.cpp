@@ -7121,6 +7121,11 @@ struct RateResolvedRetainedShadowEvaluation
     rate_resolved_physical::StopContingencyRejectReason::InvalidArtifact};
   race_mpcc::ExactPhysicalExecutionTrajectoryReason terminal_stop_exact_reason{
     race_mpcc::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  int terminal_stop_rejected_sample{-1};
+  double terminal_stop_publisher_interval_end_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double terminal_stop_final_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   recovery_footprint::PathClearanceResult terminal_stop_path_clearance;
   std::string terminal_stop_blocking_obstacle_id;
   std::size_t terminal_stop_dynamic_checked_pose_count{};
@@ -24051,6 +24056,7 @@ struct MPC
       current_physical_steering_state_->committed_steering_rad;
     request.previous_published_command_age_sec =
       current_physical_steering_state_->committed_command_control_age_sec;
+    request.stop_lateral_policy = stop_path_tracking_policy();
     request.minimum_acceleration_mps2 = cfg.a_min;
     request.maximum_acceleration_mps2 = cfg.a_max;
     return request;
@@ -24474,6 +24480,12 @@ struct MPC
     evaluation.terminal_stop_reason = result.terminal_stop_reason;
     evaluation.terminal_stop_exact_reason =
       result.terminal_stop_exact_reason;
+    evaluation.terminal_stop_rejected_sample =
+      result.terminal_stop_rejected_sample;
+    evaluation.terminal_stop_publisher_interval_end_steering_rad =
+      result.terminal_stop_publisher_interval_end_steering_rad;
+    evaluation.terminal_stop_final_steering_rad =
+      result.terminal_stop_final_steering_rad;
     evaluation.terminal_stop_path_clearance =
       result.terminal_stop_path_clearance;
     evaluation.terminal_stop_blocking_obstacle_id =
@@ -24841,7 +24853,10 @@ struct MPC
           "valid:%d/clear:%d/reason:%s/checked:%lu/"
           "reject_index:%lu/reject_pose:%d/(%.3f,%.3f,%.3f), "
           "terminal_stop=attempted:%d/certified:%d/model:%s/exact:%s/"
+          "policy:track-reference-path/exact_reject_sample:%d/"
+          "steering_handoff:%.6f/steering_final:%.6f/"
           "wall_valid:%d/wall_clear:%d/wall_reason:%s/wall_checked:%lu/"
+          "wall_reject_index:%lu/wall_reject_pose:%d/(%.3f,%.3f,%.3f)/"
           "dynamic_checked:%lu/dynamic_clearance:%.3f/blocker:%s",
           static_cast<unsigned long>(retained.decision_id),
           rate_resolved_track_cruise_retained_trace_initialized_ ?
@@ -24913,9 +24928,16 @@ struct MPC
           rate_resolved_physical::to_string(retained.terminal_stop_reason),
           race_mpcc::exact_physical_execution_trajectory_reason_name(
             retained.terminal_stop_exact_reason),
+          retained.terminal_stop_rejected_sample,
+          retained.terminal_stop_publisher_interval_end_steering_rad,
+          retained.terminal_stop_final_steering_rad,
           terminal_stop.valid ? 1 : 0, terminal_stop.clear ? 1 : 0,
           recovery_footprint::to_string(terminal_stop.reason),
           static_cast<unsigned long>(terminal_stop.checked_pose_count),
+          static_cast<unsigned long>(terminal_stop.rejected_path_index),
+          terminal_stop.rejected_pose_available ? 1 : 0,
+          terminal_stop.rejected_pose.x_m, terminal_stop.rejected_pose.y_m,
+          terminal_stop.rejected_pose.yaw_rad,
           static_cast<unsigned long>(
             retained.terminal_stop_dynamic_checked_pose_count),
           retained.terminal_stop_minimum_dynamic_clearance_m,
@@ -26110,6 +26132,40 @@ struct MPC
       cfg.steering_tire_angle_gain_var);
   }
 
+  race_mpcc::StopPathTrackingPolicy stop_path_tracking_policy() const
+  {
+    return race_mpcc::StopPathTrackingPolicy{
+      model != nullptr ? model->length :
+      std::numeric_limits<double>::quiet_NaN(),
+      std::isfinite(cfg.delta_max) ? std::abs(cfg.delta_max) :
+      std::numeric_limits<double>::quiet_NaN(),
+      std::isfinite(cfg.steer_rate_max) ? std::abs(cfg.steer_rate_max) :
+      std::numeric_limits<double>::quiet_NaN(),
+      cfg.ay_max, cfg.steering_tire_angle_gain_var,
+      cfg.v2x_behavior.low_speed_avoidance_shift_lateral_gain,
+      cfg.v2x_behavior.low_speed_avoidance_shift_heading_gain};
+  }
+
+  std::optional<race_mpcc::StopPathTrackingCommand>
+  stop_path_tracking_command(
+    const double current_speed_mps, const double current_steering_rad,
+    const double step_sec) const
+  {
+    if (
+      model == nullptr || model->current_waypoint == nullptr ||
+      !std::isfinite(model->spatial_state.e_y) ||
+      !std::isfinite(model->spatial_state.e_psi) ||
+      !std::isfinite(model->current_waypoint->kappa))
+    {
+      return std::nullopt;
+    }
+    return race_mpcc::resolve_stop_path_tracking_command(
+      race_mpcc::StopPathTrackingCommandRequest{
+        stop_path_tracking_policy(), model->spatial_state.e_y,
+        model->spatial_state.e_psi, model->current_waypoint->kappa,
+        current_speed_mps, current_steering_rad, step_sec});
+  }
+
   void populate_dynamic_escape_tracking_context(
     overtake_decision_trace::TrackingTrace & trace) const
   {
@@ -26462,23 +26518,26 @@ struct MPC
     const double current_speed = std::isfinite(current_speed_mps_) ?
       std::max(0.0, current_speed_mps_) :
       std::numeric_limits<double>::quiet_NaN();
-    const auto path_target = solver_fallback_path_steering_target(
-      current_speed, maximum_steering);
+    const double time_step = model != nullptr && std::isfinite(model->Ts) ?
+      std::max(0.0, model->Ts) : 0.0;
+    const auto path_command = stop_path_tracking_command(
+      current_speed, steering, time_step);
     const auto stop_lateral_action = race_mpcc::resolve_stop_lateral_action(
       race_mpcc::StopLateralActionRequest{
-        current_speed, path_target.has_value()});
+        current_speed, path_command.has_value()});
     if (stop_lateral_action != race_mpcc::StopLateralAction::HoldAtRest) {
-      const double target =
+      if (
         stop_lateral_action ==
-        race_mpcc::StopLateralAction::TrackReferencePath ?
-        path_target.value() : 0.0;
-      const double time_step = model != nullptr && std::isfinite(model->Ts) ?
-        std::max(0.0, model->Ts) : 0.0;
-      steering = v2x_overtake_core::
-        rate_limit_solver_fallback_steering_toward_target(
-        v2x_overtake_core::SolverFallbackSteeringRequest{
-          steering, target, maximum_steering,
-          std::max(0.0, cfg.steer_rate_max), time_step});
+        race_mpcc::StopLateralAction::TrackReferencePath)
+      {
+        steering = path_command->steering_rad;
+      } else {
+        steering = v2x_overtake_core::
+          rate_limit_solver_fallback_steering_toward_target(
+          v2x_overtake_core::SolverFallbackSteeringRequest{
+            steering, 0.0, maximum_steering,
+            std::max(0.0, cfg.steer_rate_max), time_step});
+      }
     }
     current_control = Eigen::VectorXd::Zero(2 * std::max(0, problem.N));
     for (int stage = 0; stage < problem.N; ++stage) {

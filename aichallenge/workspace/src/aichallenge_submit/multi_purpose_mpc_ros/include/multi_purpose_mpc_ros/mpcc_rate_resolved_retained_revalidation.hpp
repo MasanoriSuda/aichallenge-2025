@@ -147,6 +147,8 @@ struct Request
   /// Callback overrun and asynchronous solve time make the nominal controller
   /// period an invalid substitute for this causal publication duration.
   double previous_published_command_age_sec{};
+  /// Exact moving-Stop lateral law used by both terminal proof and publisher.
+  race_mpcc_foundation::StopPathTrackingPolicy stop_lateral_policy;
   double minimum_acceleration_mps2{};
   double maximum_acceleration_mps2{};
 };
@@ -301,6 +303,11 @@ struct Result
   race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason
   terminal_stop_exact_reason{
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  int terminal_stop_rejected_sample{-1};
+  double terminal_stop_publisher_interval_end_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double terminal_stop_final_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   recovery::PathClearanceResult terminal_stop_path_clearance;
   std::string terminal_stop_blocking_obstacle_id;
   std::size_t terminal_stop_dynamic_checked_pose_count{};

@@ -2,11 +2,14 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 namespace adapter =
   multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
 namespace execution =
   multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
+namespace race = multi_purpose_mpc_ros::race_mpcc_foundation;
 
 namespace
 {
@@ -58,6 +61,12 @@ execution::ExecutionArtifact artifact()
   value.lateral_lower_m = {-1.0, -1.0, -1.0};
   value.lateral_upper_m = {1.0, 1.0, 1.0};
   return value;
+}
+
+race::StopPathTrackingPolicy stop_lateral_policy()
+{
+  return race::StopPathTrackingPolicy{
+    2.0, 0.60, 1.0, 6.0, 1.5, 0.4, 1.3};
 }
 
 }  // namespace
@@ -183,6 +192,7 @@ TEST(
     source, cursor, actuation.actuation.value(),
     adapter::ContinuationInitialState{
       -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    stop_lateral_policy(),
     -3.0);
 
   ASSERT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
@@ -194,9 +204,43 @@ TEST(
   EXPECT_NEAR(
     exact.velocity_mps.front(),
     2.05 + actuation.actuation->acceleration_mps2 * 0.01, 1e-9);
+  EXPECT_NEAR(
+    result.publisher_interval_end_steering_rad,
+    0.105 + actuation.actuation->steering_rate_radps *
+    source.publication_interval_sec,
+    1e-12);
+  EXPECT_TRUE(std::isfinite(result.braking_suffix_final_steering_rad));
+  EXPECT_GT(
+    result.braking_suffix_final_steering_rad,
+    result.publisher_interval_end_steering_rad);
   EXPECT_TRUE(
     multi_purpose_mpc_ros::race_mpcc_foundation::
     exact_physical_execution_trajectory_complete(exact));
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RejectsNonfinitePublisherSteeringRateInStopContingency)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.05);
+  ASSERT_TRUE(cursor.available);
+  const auto extracted = execution::extract_actuation(source, cursor);
+  ASSERT_TRUE(extracted.actuation.has_value());
+  auto actuation = extracted.actuation.value();
+  actuation.steering_rate_radps =
+    std::numeric_limits<double>::quiet_NaN();
+
+  const auto result = adapter::build_stop_contingency(
+    source, cursor, actuation,
+    adapter::ContinuationInitialState{
+      -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    stop_lateral_policy(),
+    -3.0);
+
+  EXPECT_EQ(
+    result.reason, adapter::StopContingencyRejectReason::InvalidActuation);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
 }
 
 TEST(
@@ -213,6 +257,7 @@ TEST(
     source, cursor, actuation.actuation.value(),
     adapter::ContinuationInitialState{
       -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    stop_lateral_policy(),
     -4.0);
 
   EXPECT_EQ(

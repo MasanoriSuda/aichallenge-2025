@@ -5,12 +5,44 @@
 #include "multi_purpose_mpc_ros/recovery_footprint.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_wall_refinement
 {
+
+struct Request;
+struct Result;
+
+/// Bounded numerical cache for immutable static-wall scan evidence.
+///
+/// The cache is deliberately owned by one SolverContext.  It contains no
+/// trajectory, Mission or authority state: a hit only returns the exact clear
+/// runs produced by a previous query with an identical grid and geometry key.
+class Cache
+{
+public:
+  explicit Cache(std::size_t maximum_entries = 4096U);
+  ~Cache();
+
+  Cache(const Cache &) = delete;
+  Cache & operator=(const Cache &) = delete;
+  Cache(Cache &&) = delete;
+  Cache & operator=(Cache &&) = delete;
+
+  void clear() noexcept;
+  std::size_t size() const noexcept;
+  std::size_t maximum_entries() const noexcept;
+
+private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+
+  friend Result resolve(const Request & request, Cache * cache) noexcept;
+};
 
 enum class PreRefinementLateralSupportReason
 {
@@ -69,6 +101,9 @@ struct Request
 {
   bool active{false};
   const recovery_footprint::OccupancyGrid * wall_grid{};
+  /// Immutable content identity for wall_grid.  Zero asks resolve() to derive
+  /// it from the grid before using the cache.
+  std::uint64_t wall_grid_fingerprint{};
   recovery_footprint::FootprintExtents footprint;
   std::vector<mpc_stage_geometry::CourseFrameKnot> course_frame_knots;
   double course_progress_origin_m{};
@@ -122,6 +157,11 @@ struct Result
   bool applied{false};
   Reason reason{Reason::NotRequested};
   int first_failure_stage{-1};
+  std::size_t cache_hit_count{};
+  std::size_t cache_miss_count{};
+  /// New footprint poses evaluated in this call. checked_pose_count retains
+  /// the proof-equivalent count even when the clear runs came from cache.
+  std::size_t cache_scanned_pose_count{};
   std::size_t checked_pose_count{};
   std::vector<StageBounds> stages;
   std::vector<SweptLateralConstraint> swept_lateral_constraints;
@@ -136,7 +176,7 @@ struct Result
 /// the same physical wall evidence. This closes the former contract gap where
 /// a lateral interval certified at a nominal heading was used by an optimizer
 /// whose heading and lag states remained unconstrained.
-Result resolve(const Request & request) noexcept;
+Result resolve(const Request & request, Cache * cache = nullptr) noexcept;
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_wall_refinement
 

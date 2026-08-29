@@ -1,12 +1,170 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstring>
+#include <list>
 #include <limits>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_wall_refinement
 {
+
+struct Cache::Impl
+{
+  struct Key
+  {
+    std::uint64_t wall_grid_fingerprint{};
+    // Lateral scan bounds deliberately do not belong to the geometric key.
+    // One entry owns clear-run evidence for the widest range evaluated so
+    // far; a later subset query is proof-equivalent and an expansion causes
+    // a scan of the union.  This matches the controller-side static-wall
+    // cache instead of turning every receding bound change into a miss.
+    std::array<double, 11U> geometry{};
+
+    bool operator==(const Key & other) const noexcept
+    {
+      return
+        wall_grid_fingerprint == other.wall_grid_fingerprint &&
+        geometry == other.geometry;
+    }
+  };
+
+  struct KeyHash
+  {
+    std::size_t operator()(const Key & key) const noexcept
+    {
+      std::uint64_t hash = 1469598103934665603ULL;
+      const auto append = [&hash](const std::uint64_t value) {
+          constexpr std::uint64_t prime = 1099511628211ULL;
+          for (std::size_t byte = 0U; byte < sizeof(value); ++byte) {
+            hash ^= (value >> (8U * byte)) & 0xffU;
+            hash *= prime;
+          }
+        };
+      append(key.wall_grid_fingerprint);
+      for (const double value : key.geometry) {
+        std::uint64_t bits{};
+        static_assert(sizeof(bits) == sizeof(value));
+        std::memcpy(&bits, &value, sizeof(bits));
+        append(bits);
+      }
+      return static_cast<std::size_t>(hash);
+    }
+  };
+
+  struct Entry
+  {
+    double searched_lower_m{};
+    double searched_upper_m{};
+    recovery_footprint::LateralClearRunsResult runs;
+    std::list<Key>::iterator lru;
+  };
+
+  struct Lookup
+  {
+    std::optional<recovery_footprint::LateralClearRunsResult> runs;
+    double evaluation_lower_m{};
+    double evaluation_upper_m{};
+  };
+
+  explicit Impl(const std::size_t requested_maximum_entries)
+  : maximum_entries(std::max<std::size_t>(1U, requested_maximum_entries))
+  {
+  }
+
+  Lookup lookup(
+    const Key & key, const double requested_lower_m,
+    const double requested_upper_m)
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    const auto found = entries.find(key);
+    if (found == entries.end()) {
+      return Lookup{std::nullopt, requested_lower_m, requested_upper_m};
+    }
+    constexpr double tolerance_m = 1e-12;
+    const double evaluation_lower_m = std::min(
+      requested_lower_m, found->second.searched_lower_m);
+    const double evaluation_upper_m = std::max(
+      requested_upper_m, found->second.searched_upper_m);
+    if (
+      found->second.searched_lower_m <= requested_lower_m + tolerance_m &&
+      found->second.searched_upper_m + tolerance_m >= requested_upper_m)
+    {
+      lru.splice(lru.end(), lru, found->second.lru);
+      return Lookup{
+        found->second.runs, evaluation_lower_m, evaluation_upper_m};
+    }
+    return Lookup{std::nullopt, evaluation_lower_m, evaluation_upper_m};
+  }
+
+  void store(
+    const Key & key, const double searched_lower_m,
+    const double searched_upper_m,
+    const recovery_footprint::LateralClearRunsResult & runs)
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    const auto existing = entries.find(key);
+    if (existing != entries.end()) {
+      // A concurrent wider result, if one ever exists, must not be narrowed.
+      if (
+        existing->second.searched_lower_m <= searched_lower_m &&
+        existing->second.searched_upper_m >= searched_upper_m)
+      {
+        lru.splice(lru.end(), lru, existing->second.lru);
+        return;
+      }
+      existing->second.searched_lower_m = searched_lower_m;
+      existing->second.searched_upper_m = searched_upper_m;
+      existing->second.runs = runs;
+      lru.splice(lru.end(), lru, existing->second.lru);
+      return;
+    }
+    if (entries.size() >= maximum_entries && !lru.empty()) {
+      entries.erase(lru.front());
+      lru.pop_front();
+    }
+    lru.push_back(key);
+    auto position = lru.end();
+    --position;
+    entries.emplace(
+      key, Entry{searched_lower_m, searched_upper_m, runs, position});
+  }
+
+  mutable std::mutex mutex;
+  std::size_t maximum_entries{};
+  std::list<Key> lru;
+  std::unordered_map<Key, Entry, KeyHash> entries;
+};
+
+Cache::Cache(const std::size_t maximum_entries)
+: impl_(std::make_unique<Impl>(maximum_entries))
+{
+}
+
+Cache::~Cache() = default;
+
+void Cache::clear() noexcept
+{
+  std::lock_guard<std::mutex> lock(impl_->mutex);
+  impl_->entries.clear();
+  impl_->lru.clear();
+}
+
+std::size_t Cache::size() const noexcept
+{
+  std::lock_guard<std::mutex> lock(impl_->mutex);
+  return impl_->entries.size();
+}
+
+std::size_t Cache::maximum_entries() const noexcept
+{
+  return impl_->maximum_entries;
+}
+
 namespace
 {
 
@@ -123,7 +281,7 @@ const char * to_string(const Reason reason) noexcept
   return "unknown";
 }
 
-Result resolve(const Request & request) noexcept
+Result resolve(const Request & request, Cache * cache) noexcept
 {
   Result result;
   if (!request.active) {
@@ -149,6 +307,11 @@ Result resolve(const Request & request) noexcept
   }
   result.valid = true;
   result.stages.reserve(request.stages.size());
+  std::uint64_t wall_grid_fingerprint = request.wall_grid_fingerprint;
+  if (cache != nullptr && wall_grid_fingerprint == 0U) {
+    wall_grid_fingerprint =
+      recovery_footprint::occupancy_grid_fingerprint(*request.wall_grid);
+  }
   for (std::size_t index = 0U; index < request.stages.size(); ++index) {
     const auto & stage = request.stages[index];
     if (!finite_stage(stage)) {
@@ -228,11 +391,44 @@ Result resolve(const Request & request) noexcept
     guarded_footprint.margin_m +=
       request.translation_bucket_width_m + heading_guard_m;
 
-    const auto runs = recovery_footprint::find_clear_lateral_runs_with_heading(
-      *request.wall_grid, guarded_footprint, reference_pose,
-      stage.lateral_lower_m, stage.lateral_upper_m,
-      bounds.heading_bucket_center_rad, 0.0,
-      request.lateral_sample_step_m);
+    Cache::Impl::Lookup cache_lookup{
+      std::nullopt, stage.lateral_lower_m, stage.lateral_upper_m};
+    Cache::Impl::Key cache_key;
+    if (cache != nullptr && wall_grid_fingerprint != 0U) {
+      cache_key.wall_grid_fingerprint = wall_grid_fingerprint;
+      cache_key.geometry = {
+        guarded_footprint.front_extent_m,
+        guarded_footprint.rear_extent_m,
+        guarded_footprint.left_extent_m,
+        guarded_footprint.right_extent_m,
+        guarded_footprint.margin_m,
+        reference_pose.x_m,
+        reference_pose.y_m,
+        reference_pose.yaw_rad,
+        bounds.heading_bucket_center_rad,
+        0.0,
+        request.lateral_sample_step_m};
+      cache_lookup = cache->impl_->lookup(
+        cache_key, stage.lateral_lower_m, stage.lateral_upper_m);
+    }
+    recovery_footprint::LateralClearRunsResult runs;
+    if (cache_lookup.runs.has_value()) {
+      runs = std::move(cache_lookup.runs.value());
+      ++result.cache_hit_count;
+    } else {
+      runs = recovery_footprint::find_clear_lateral_runs_with_heading(
+        *request.wall_grid, guarded_footprint, reference_pose,
+        cache_lookup.evaluation_lower_m, cache_lookup.evaluation_upper_m,
+        bounds.heading_bucket_center_rad, 0.0,
+        request.lateral_sample_step_m);
+      ++result.cache_miss_count;
+      result.cache_scanned_pose_count += runs.checked_pose_count;
+      if (cache != nullptr && wall_grid_fingerprint != 0U && runs.valid) {
+        cache->impl_->store(
+          cache_key, cache_lookup.evaluation_lower_m,
+          cache_lookup.evaluation_upper_m, runs);
+      }
+    }
     const auto interval = recovery_footprint::select_lateral_clear_interval(
       runs, stage.lateral_lower_m, stage.lateral_upper_m,
       stage.solved_lateral_m, request.boundary_guard_m);

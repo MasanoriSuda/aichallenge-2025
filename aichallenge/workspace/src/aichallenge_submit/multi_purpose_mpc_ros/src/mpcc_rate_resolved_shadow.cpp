@@ -42,6 +42,7 @@ ProgressWallRefinement build_progress_wall_refinement(
   const Eigen::VectorXd & primal,
   const persistent_osqp::PhysicalConstraintTolerance &
   physical_constraint_tolerance,
+  mpcc_rate_resolved_wall_refinement::Cache * wall_refinement_cache,
   const std::optional<SolverContext::WallBucketAuditMode> &
   wall_bucket_audit_mode = std::nullopt) noexcept
 {
@@ -114,6 +115,9 @@ ProgressWallRefinement build_progress_wall_refinement(
   mpcc_rate_resolved_wall_refinement::Request physical_request;
   physical_request.active = snapshot.physical_wall_refinement_active;
   physical_request.wall_grid = snapshot.wall_grid.get();
+  physical_request.wall_grid_fingerprint =
+    snapshot.replay_world.has_value() ?
+    snapshot.replay_world->wall_grid_fingerprint : 0U;
   physical_request.footprint = snapshot.wall_footprint;
   physical_request.course_frame_knots = snapshot.wall_course_frame_knots;
   physical_request.course_progress_origin_m = snapshot.course_progress_origin_m;
@@ -170,7 +174,8 @@ ProgressWallRefinement build_progress_wall_refinement(
         result.resolution.progress_upper_m[index]});
   }
   result.physical =
-    mpcc_rate_resolved_wall_refinement::resolve(physical_request);
+    mpcc_rate_resolved_wall_refinement::resolve(
+    physical_request, wall_refinement_cache);
   if (snapshot.physical_wall_refinement_active) {
     if (!result.physical.applied ||
       result.physical.stages.size() != static_cast<std::size_t>(horizon))
@@ -1684,6 +1689,15 @@ Result SolverContext::evaluate_impl(
     physical_dynamic_sqp_audit_iteration_count > 0U;
   result.physical_dynamic_sqp_audit_iteration_limit =
     physical_dynamic_sqp_audit_iteration_count;
+  const auto accumulate_wall_cache = [&result](
+      const mpcc_rate_resolved_wall_refinement::Result & refinement) {
+      result.physical_wall_refinement_cache_hit_count +=
+        refinement.cache_hit_count;
+      result.physical_wall_refinement_cache_miss_count +=
+        refinement.cache_miss_count;
+      result.physical_wall_refinement_cache_scanned_pose_count +=
+        refinement.cache_scanned_pose_count;
+    };
   const auto capture_failure = [&result, &snapshot](
       const mpcc_architecture_snapshot::PipelineStage pipeline_stage,
       const mpcc_rate_resolved_problem::AssemblyRequest & request,
@@ -2048,7 +2062,9 @@ Result SolverContext::evaluate_impl(
   if (snapshot.progress_aligned_wall_refinement_active) {
     auto refinement = build_progress_wall_refinement(
       snapshot, adapted->problem, outcome.result->primal,
-      solver_.physical_constraint_tolerance(), wall_bucket_audit_mode);
+      solver_.physical_constraint_tolerance(), &wall_refinement_cache_,
+      wall_bucket_audit_mode);
+    accumulate_wall_cache(refinement.physical);
     result.progress_wall_refinement_reason = refinement.resolution.reason;
     result.progress_wall_refinement_aligned_stage_count =
       refinement.resolution.aligned_stage_count;
@@ -2253,7 +2269,9 @@ Result SolverContext::evaluate_impl(
         } else {
           auto final_refinement = build_progress_wall_refinement(
             snapshot, restored_tangent_problem, restoration_primal,
-            solver_.physical_constraint_tolerance(), wall_bucket_audit_mode);
+            solver_.physical_constraint_tolerance(), &wall_refinement_cache_,
+            wall_bucket_audit_mode);
+          accumulate_wall_cache(final_refinement.physical);
           result.wall_feasibility_restoration_final_refinement_built =
             final_refinement.request.has_value();
           if (!final_refinement.request.has_value()) {
@@ -2592,7 +2610,9 @@ Result SolverContext::evaluate_impl(
       // will be certified for publication.
       auto joint_refinement = build_progress_wall_refinement(
         snapshot, adapted->problem, outcome.result->primal,
-        solver_.physical_constraint_tolerance(), wall_bucket_audit_mode);
+        solver_.physical_constraint_tolerance(), &wall_refinement_cache_,
+        wall_bucket_audit_mode);
+      accumulate_wall_cache(joint_refinement.physical);
       result.progress_wall_refinement_reason =
         joint_refinement.resolution.reason;
       result.progress_wall_refinement_aligned_stage_count =
@@ -2819,7 +2839,8 @@ Result SolverContext::evaluate_impl(
       if (snapshot.progress_aligned_wall_refinement_active) {
         auto wall_refinement = build_progress_wall_refinement(
           snapshot, iteration_problem, outcome.result->primal,
-          solver_.physical_constraint_tolerance());
+          solver_.physical_constraint_tolerance(), &wall_refinement_cache_);
+        accumulate_wall_cache(wall_refinement.physical);
         if (!wall_refinement.request.has_value()) {
           result.outcome = Outcome::AssemblyRejected;
           result.solved = false;
@@ -3249,7 +3270,13 @@ Result SolverContext::evaluate_impl(
              << "/failure_stage=" <<
         result.physical_wall_refinement_first_failure_stage
              << "/samples=" <<
-        result.physical_wall_refinement_checked_pose_count;
+        result.physical_wall_refinement_checked_pose_count
+             << "/cache_hits=" <<
+        result.physical_wall_refinement_cache_hit_count
+             << "/cache_misses=" <<
+        result.physical_wall_refinement_cache_miss_count
+             << "/cache_scanned=" <<
+        result.physical_wall_refinement_cache_scanned_pose_count;
     }
     detail << ", successive_linearization="
            << mpcc_rate_resolved_adapter::to_string(

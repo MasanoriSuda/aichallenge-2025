@@ -388,6 +388,9 @@ struct Result
       mpcc_rate_resolved_wall_refinement::Reason::NotRequested};
   int physical_wall_refinement_first_failure_stage{-1};
   std::size_t physical_wall_refinement_checked_pose_count{};
+  std::size_t physical_wall_refinement_cache_hit_count{};
+  std::size_t physical_wall_refinement_cache_miss_count{};
+  std::size_t physical_wall_refinement_cache_scanned_pose_count{};
   bool wall_feasibility_restoration_requested{false};
   bool wall_feasibility_restoration_attempted{false};
   bool wall_feasibility_restoration_seed_solved{false};
@@ -521,6 +524,7 @@ private:
     std::size_t physical_dynamic_sqp_audit_iteration_count);
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
+  mpcc_rate_resolved_wall_refinement::Cache wall_refinement_cache_;
   persistent_osqp::PersistentOsqpSolver solver_{
     persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};
 };

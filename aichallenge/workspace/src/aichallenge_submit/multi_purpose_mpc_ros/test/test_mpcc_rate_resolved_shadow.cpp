@@ -1373,6 +1373,87 @@ TEST(MpccRateResolvedShadow, PhysicalWallRefinementRetainsHeadingInCertificate)
     0.051);
 }
 
+TEST(MpccRateResolvedWallRefinement, ReusesCoveringStaticWallScanEvidence)
+{
+  const auto grid = corridor_grid();
+  const auto request = wall_request(grid, 0.25);
+  wall_refinement::Cache cache;
+
+  const auto cold = wall_refinement::resolve(request, &cache);
+  const auto warm = wall_refinement::resolve(request, &cache);
+
+  ASSERT_TRUE(cold.applied) << cold.detail;
+  ASSERT_TRUE(warm.applied) << warm.detail;
+  EXPECT_EQ(cold.cache_hit_count, 0U);
+  EXPECT_EQ(cold.cache_miss_count, 1U);
+  EXPECT_GT(cold.cache_scanned_pose_count, 0U);
+  EXPECT_EQ(warm.cache_hit_count, 1U);
+  EXPECT_EQ(warm.cache_miss_count, 0U);
+  EXPECT_EQ(warm.cache_scanned_pose_count, 0U);
+  EXPECT_EQ(warm.checked_pose_count, cold.checked_pose_count);
+  ASSERT_EQ(warm.stages.size(), cold.stages.size());
+  EXPECT_DOUBLE_EQ(
+    warm.stages.front().lateral_lower_m,
+    cold.stages.front().lateral_lower_m);
+  EXPECT_DOUBLE_EQ(
+    warm.stages.front().lateral_upper_m,
+    cold.stages.front().lateral_upper_m);
+  ASSERT_EQ(
+    warm.swept_lateral_constraints.size(),
+    cold.swept_lateral_constraints.size());
+  for (std::size_t index = 0U;
+    index < warm.swept_lateral_constraints.size(); ++index)
+  {
+    EXPECT_DOUBLE_EQ(
+      warm.swept_lateral_constraints[index].lateral_lower_m,
+      cold.swept_lateral_constraints[index].lateral_lower_m);
+    EXPECT_DOUBLE_EQ(
+      warm.swept_lateral_constraints[index].lateral_upper_m,
+      cold.swept_lateral_constraints[index].lateral_upper_m);
+  }
+
+  auto subset = request;
+  subset.stages.front().lateral_lower_m += 0.05;
+  subset.stages.front().lateral_upper_m -= 0.05;
+  const auto subset_hit = wall_refinement::resolve(subset, &cache);
+  ASSERT_TRUE(subset_hit.applied) << subset_hit.detail;
+  EXPECT_EQ(subset_hit.cache_hit_count, 1U);
+  EXPECT_EQ(subset_hit.cache_miss_count, 0U);
+  EXPECT_EQ(subset_hit.cache_scanned_pose_count, 0U);
+
+  auto expansion = request;
+  expansion.stages.front().lateral_lower_m -= 0.05;
+  expansion.stages.front().lateral_upper_m += 0.05;
+  const auto expanded = wall_refinement::resolve(expansion, &cache);
+  ASSERT_TRUE(expanded.applied) << expanded.detail;
+  EXPECT_EQ(expanded.cache_hit_count, 0U);
+  EXPECT_EQ(expanded.cache_miss_count, 1U);
+  EXPECT_GT(expanded.cache_scanned_pose_count, 0U);
+
+  const auto covered_again = wall_refinement::resolve(request, &cache);
+  ASSERT_TRUE(covered_again.applied) << covered_again.detail;
+  EXPECT_EQ(covered_again.cache_hit_count, 1U);
+  EXPECT_EQ(covered_again.cache_miss_count, 0U);
+  EXPECT_EQ(covered_again.cache_scanned_pose_count, 0U);
+}
+
+TEST(MpccRateResolvedWallRefinement, BoundsStaticWallScanEvidenceCache)
+{
+  const auto grid = corridor_grid();
+  wall_refinement::Cache cache(1U);
+  const auto first = wall_refinement::resolve(
+    wall_request(grid, 0.0), &cache);
+  const auto second = wall_refinement::resolve(
+    wall_request(grid, 0.25), &cache);
+
+  ASSERT_TRUE(first.applied) << first.detail;
+  ASSERT_TRUE(second.applied) << second.detail;
+  EXPECT_EQ(cache.maximum_entries(), 1U);
+  EXPECT_EQ(cache.size(), 1U);
+  EXPECT_EQ(second.cache_hit_count, 0U);
+  EXPECT_EQ(second.cache_miss_count, 1U);
+}
+
 TEST(MpccRateResolvedShadow, RejectsNoncanonicalProblemIdentity)
 {
   shadow::SolverContext context;

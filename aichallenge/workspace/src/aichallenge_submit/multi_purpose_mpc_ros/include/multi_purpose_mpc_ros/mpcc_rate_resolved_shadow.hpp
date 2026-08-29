@@ -254,6 +254,11 @@ struct LatestStateFeedbackResult
   bool solved{false};
   bool finite{false};
   bool constraints_satisfied{false};
+  bool time_aligned_suffix_attempted{false};
+  TimeAlignedFeedbackProblemReason time_aligned_problem_reason{
+    TimeAlignedFeedbackProblemReason::InvalidRequest};
+  std::size_t consumed_stage_count{};
+  double first_remaining_stage_duration_sec{};
   persistent_osqp::SolveTelemetry solver;
   artifact::RejectReason artifact_reject_reason{
     artifact::RejectReason::None};
@@ -550,7 +555,14 @@ private:
 class LatestStateFeedbackSolverContext
 {
 public:
+  /// Historical A arm: replace x0 in the old final QP. Kept only so frozen
+  /// mixed-origin regressions remain explicit; production must not call it.
   LatestStateFeedbackResult evaluate(
+    const LatestStateFeedbackRequest & request);
+  /// Observation-only B arm: advance every stage-indexed object with one
+  /// absolute clock, relinearize the surviving prepared suffix and solve it
+  /// from the latest serialized predecessor.
+  LatestStateFeedbackResult evaluate_time_aligned(
     const LatestStateFeedbackRequest & request);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;

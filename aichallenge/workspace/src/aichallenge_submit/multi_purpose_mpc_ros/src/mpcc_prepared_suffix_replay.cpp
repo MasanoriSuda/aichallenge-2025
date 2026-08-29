@@ -162,6 +162,35 @@ int main(int argc, char ** argv)
 
   shadow::SolverContext full_solver;
   const auto full = full_solver.evaluate(recorded->source);
+  shadow::LatestStateFeedbackSolverContext time_aligned_solver;
+  const auto time_aligned = time_aligned_solver.evaluate_time_aligned(
+    shadow::LatestStateFeedbackRequest{
+      std::make_shared<const shadow::LatestStateFeedbackPreparation>(
+        preparation),
+      recorded->source.control_prediction_origin_sec + elapsed_sec,
+      recorded->source.identity.snapshot_sec + elapsed_sec,
+      latest.value(), previous_input.value()});
+  shadow::LatestStateFeedbackResult current_preparation_time_aligned;
+  bool current_preparation_probe_available = false;
+  if (full.latest_state_feedback_preparation != nullptr) {
+    const auto current_latest = interpolate_recorded_state(
+      recorded->source,
+      full.latest_state_feedback_preparation->prepared_primal, elapsed_sec);
+    const auto current_previous_input = active_recorded_input(
+      recorded->source,
+      full.latest_state_feedback_preparation->prepared_primal, elapsed_sec);
+    if (current_latest.has_value() && current_previous_input.has_value()) {
+      shadow::LatestStateFeedbackSolverContext current_preparation_solver;
+      current_preparation_time_aligned =
+        current_preparation_solver.evaluate_time_aligned(
+        shadow::LatestStateFeedbackRequest{
+          full.latest_state_feedback_preparation,
+          recorded->source.control_prediction_origin_sec + elapsed_sec,
+          recorded->source.identity.snapshot_sec + elapsed_sec,
+          current_latest.value(), current_previous_input.value()});
+      current_preparation_probe_available = true;
+    }
+  }
   std::cout <<
     "intent=" << recorded->recorded_qp.intent <<
     " pipeline=" << recorded->recorded_qp.pipeline_stage <<
@@ -177,6 +206,24 @@ int main(int argc, char ** argv)
     " feedback_status=" << feedback_outcome.telemetry.status <<
     " feedback_iterations=" << feedback_outcome.telemetry.iterations <<
     " feedback_solve_ms=" << feedback_outcome.telemetry.total_ms <<
+    " bootstrap_feedback_reason=" << shadow::to_string(time_aligned.reason) <<
+    " bootstrap_feedback_problem=" <<
+    shadow::to_string(time_aligned.time_aligned_problem_reason) <<
+    " bootstrap_feedback_iterations=" <<
+    time_aligned.solver.iterations <<
+    " bootstrap_feedback_solve_ms=" << time_aligned.solver.total_ms <<
+    " bootstrap_feedback_compute_ms=" << time_aligned.compute_ms <<
+    " current_preparation_probe=" << current_preparation_probe_available <<
+    " current_preparation_reason=" <<
+    shadow::to_string(current_preparation_time_aligned.reason) <<
+    " current_preparation_problem=" << shadow::to_string(
+    current_preparation_time_aligned.time_aligned_problem_reason) <<
+    " current_preparation_iterations=" <<
+    current_preparation_time_aligned.solver.iterations <<
+    " current_preparation_solve_ms=" <<
+    current_preparation_time_aligned.solver.total_ms <<
+    " current_preparation_compute_ms=" <<
+    current_preparation_time_aligned.compute_ms <<
     " full_outcome=" << shadow::to_string(full.outcome) <<
     " full_compute_ms=" << full.compute_ms <<
     " probe=recorded-primal-linear-interpolation" <<

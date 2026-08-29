@@ -2904,6 +2904,34 @@ ShiftOutでもcertified／executed-retainedのseven-state normal commandを観�
 constraint identity修正の合格条件に含めない。Mission lifecycle／intent引き渡しの別Sliceで扱い、
 clearance、timeout、fallbackまたはsolver toleranceの変更で混在させない。
 
+#### 非同期結果のcommon-clock suffix再接続（2026-08-29、2025由来の暫定）
+
+latest-only seven-state workerのsolve中にも40 Hz publisherはStopまたは直前のnormal commandを
+配信する。このため、solve開始時の軌道先頭を完了後のserialized predecessorへ直接接続すると、
+同じ物理的に可行な候補でも`steering-unreachable`となる。古いQPのx0とprevious inputだけを
+置換する方法は、将来state tube、linearization、wall row、dynamic rowが古い時刻のまま残るため
+mixed-origin problemとしてproductionへ使用しない。
+
+準備済みQPから、elapsed absolute timeに基づき全stage-indexed objectを同時に進める
+common-clock suffixを構築する。state、input、path、wall、dynamic obstacle、phase timingを同じ
+stage数だけ消費し、途中stageは残り時間へ短縮する。latest seven-state stateとlast actually
+serialized inputをbindし、残存suffixを再linearize／再solveして新しいimmutable artifactを作る。
+solver合格だけでは不十分で、従来と同じnonlinear physical、wall、dynamic、current-world、
+terminal successor証明を必須とする。
+
+`output/20260829-182105`のobservation-only A/Bでは、D1の1,469結果中671件がsuffix QPとphysical
+proof、241件がdynamic proof、122件がcurrent-world authority-readyまで到達した。D2でも165結果中
+35件がauthority-readyだった。したがって対象の`steering-unreachable`は物理的不成立ではなく、
+古いasync trajectoryと新しいwire predecessorを直接joinするscheduling／lifecycle defectが主因である。
+代表的offline suffix solveは8.294 msと22.404 msで、対応するfull current-world solve約46.80 msと
+99.96 msより小さかった。
+
+ただし無制限のobservation投入はD1だけで約1,300 jobを発生させ、computeは平均24.22 ms、最大
+108.11 msとなった。この一時live配線は検証後に物理削除する。productionへ接続する場合は、
+raw async resultをpreparation evidenceとして扱い、同じsource resultに対するdirect stale adoptionと
+suffix adoptionを同時に残さない単一ownerへ原子的に置換する。in-flight ownershipと最新world identityで
+投入をboundedにし、retry lease、grace、timeout、solver toleranceまたはclearance変更で隠さない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

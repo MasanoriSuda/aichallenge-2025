@@ -679,6 +679,62 @@ TEST(
 
 TEST(
   MpccRateResolvedShadow,
+  TimeAlignedFeedbackSolverProducesOneConsistentSuffixArtifact)
+{
+  shadow::SolverContext preparation_context;
+  shadow::LatestStateFeedbackSolverContext feedback_context;
+  auto old_origin = snapshot();
+  old_origin.request = narrow_progress_request();
+  const auto prepared = preparation_context.evaluate(old_origin);
+  ASSERT_EQ(prepared.outcome, shadow::Outcome::Solved) << prepared.detail;
+  ASSERT_NE(prepared.latest_state_feedback_preparation, nullptr);
+
+  const execution::PredictedState latest_state{
+    0.0, 0.0, 0.0, 2.0, 0.40, 0.10, 0.08};
+  const double feedback_origin_sec =
+    old_origin.control_prediction_origin_sec + 0.20;
+  const shadow::LatestStateFeedbackRequest request{
+    prepared.latest_state_feedback_preparation, feedback_origin_sec,
+    old_origin.control_prediction_origin_sec + 0.07, latest_state,
+    old_origin.request.previous_input};
+
+  const auto mixed_origin = feedback_context.evaluate(request);
+  ASSERT_EQ(
+    mixed_origin.reason, shadow::LatestStateFeedbackReason::SolveRejected)
+    << mixed_origin.detail;
+
+  const auto time_aligned = feedback_context.evaluate_time_aligned(request);
+  ASSERT_EQ(
+    time_aligned.reason, shadow::LatestStateFeedbackReason::Accepted)
+    << time_aligned.detail;
+  EXPECT_TRUE(time_aligned.time_aligned_suffix_attempted);
+  EXPECT_EQ(
+    time_aligned.time_aligned_problem_reason,
+    shadow::TimeAlignedFeedbackProblemReason::Accepted);
+  EXPECT_EQ(time_aligned.consumed_stage_count, 2U);
+  EXPECT_NEAR(
+    time_aligned.first_remaining_stage_duration_sec, 0.10, 1e-12);
+  ASSERT_NE(time_aligned.execution_artifact, nullptr);
+  EXPECT_EQ(
+    execution::validate(*time_aligned.execution_artifact),
+    execution::RejectReason::None);
+  EXPECT_EQ(time_aligned.execution_artifact->control_stages.size(), 1U);
+  EXPECT_NEAR(
+    time_aligned.execution_artifact->predicted_states.front().progress_m,
+    latest_state.progress_m,
+    time_aligned.execution_artifact->physical_global_tolerance);
+  EXPECT_DOUBLE_EQ(
+    time_aligned.execution_artifact->prediction_origin_sec,
+    feedback_origin_sec);
+  const auto exact = physical::build(
+    *time_aligned.execution_artifact, contract::ControlIntent::Track,
+    time_aligned.execution_artifact->identity.source_context.stage_geometry_id);
+  EXPECT_EQ(exact.reason, physical::RejectReason::None);
+  EXPECT_TRUE(exact.exact_trajectory.has_value());
+}
+
+TEST(
+  MpccRateResolvedShadow,
   TimeAlignedPreparedProblemMovesEveryRefinementRowWithOneClock)
 {
   shadow::SolverContext preparation_context;

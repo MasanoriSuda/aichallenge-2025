@@ -1668,6 +1668,163 @@ LatestStateFeedbackResult LatestStateFeedbackSolverContext::evaluate(
   }
 }
 
+LatestStateFeedbackResult
+LatestStateFeedbackSolverContext::evaluate_time_aligned(
+  const LatestStateFeedbackRequest & request)
+{
+  const auto started = SteadyClock::now();
+  LatestStateFeedbackResult result;
+  result.time_aligned_suffix_attempted = true;
+  if (request.preparation != nullptr) {
+    result.identity = request.preparation->snapshot.identity;
+  }
+  const auto finish = [&]() {
+      result.compute_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - started).count();
+      return result;
+    };
+  try {
+    if (
+      request.preparation == nullptr ||
+      !mpcc_rate_resolved_shadow::identity_valid(
+      request.preparation->snapshot.identity) ||
+      !std::isfinite(request.control_prediction_origin_sec) ||
+      !std::isfinite(request.observation_sec) ||
+      request.observation_sec <
+      request.preparation->snapshot.identity.snapshot_sec ||
+      request.control_prediction_origin_sec < request.observation_sec ||
+      !request.previous_input.allFinite())
+    {
+      result.detail =
+        "invalid time-aligned feedback timing, identity or previous input";
+      return finish();
+    }
+    const auto & state = request.initial_state;
+    const auto & source = request.preparation->snapshot;
+    if (
+      !std::isfinite(state.lateral_m) || !std::isfinite(state.lag_m) ||
+      !std::isfinite(state.heading_offset_rad) ||
+      !std::isfinite(state.velocity_mps) || state.velocity_mps < 0.0 ||
+      !std::isfinite(state.progress_m) ||
+      !std::isfinite(state.steering_rad) ||
+      !std::isfinite(state.response_steering_rad) ||
+      std::abs(state.steering_rad) >
+      source.request.maximum_abs_steering_rad ||
+      std::abs(state.response_steering_rad) >
+      source.request.maximum_abs_steering_rad)
+    {
+      result.detail = "invalid latest seven-state time-aligned state";
+      return finish();
+    }
+
+    auto feedback = build_time_aligned_feedback_problem(
+      TimeAlignedFeedbackProblemRequest{
+        request.preparation.get(), request.control_prediction_origin_sec,
+        request.initial_state, request.previous_input,
+        solver_.physical_constraint_tolerance()});
+    result.time_aligned_problem_reason = feedback.reason;
+    result.consumed_stage_count = feedback.suffix.consumed_stage_count;
+    result.first_remaining_stage_duration_sec =
+      feedback.suffix.first_remaining_stage_duration_sec;
+    if (
+      feedback.reason != TimeAlignedFeedbackProblemReason::Accepted ||
+      !feedback.problem.has_value() ||
+      !feedback.suffix.snapshot.has_value())
+    {
+      result.reason = LatestStateFeedbackReason::AssemblyRejected;
+      result.detail = std::string{"time-aligned feedback problem rejected: "} +
+        to_string(feedback.reason) + "/" + feedback.detail;
+      return finish();
+    }
+
+    auto feedback_problem = std::move(feedback.problem.value());
+    auto feedback_snapshot = std::move(feedback.suffix.snapshot.value());
+    auto assembled = mpcc_rate_resolved_problem::assemble(feedback_problem);
+    if (!assembled.has_value()) {
+      result.reason = LatestStateFeedbackReason::AssemblyRejected;
+      result.detail = "time-aligned feedback QP assembly rejected";
+      return finish();
+    }
+    result.assembled = true;
+    auto bootstrap = build_current_problem_bootstrap(
+      feedback_problem,
+      static_cast<std::size_t>(assembled->lower_bound.size()),
+      &feedback.linearization_primal);
+    if (!bootstrap.has_value()) {
+      result.reason = LatestStateFeedbackReason::BootstrapRejected;
+      result.detail = "time-aligned feedback bootstrap rejected";
+      return finish();
+    }
+
+    result.solve_attempted = true;
+    persistent_osqp::SolveOutcome outcome;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      outcome = solver_.solve(
+        assembled->quadratic_cost, assembled->constraints,
+        assembled->linear_cost, assembled->lower_bound,
+        assembled->upper_bound, bootstrap, assembled->variable_scaling);
+    }
+    result.solver = outcome.telemetry;
+    if (!outcome.result.has_value()) {
+      result.reason = LatestStateFeedbackReason::SolveRejected;
+      result.detail = outcome.failure_detail.empty() ?
+        "time-aligned feedback solve rejected" : outcome.failure_detail;
+      return finish();
+    }
+    result.solved = true;
+    result.finite = outcome.result->primal.allFinite();
+    result.constraints_satisfied = result.finite;
+    if (!result.finite) {
+      result.reason = LatestStateFeedbackReason::SolveRejected;
+      result.detail = "time-aligned feedback result is nonfinite";
+      return finish();
+    }
+
+    const double completed_sec = request.observation_sec +
+      std::chrono::duration<double>(SteadyClock::now() - started).count();
+    auto artifact_build = build_execution_artifact(
+      feedback_snapshot, feedback_problem, outcome, completed_sec);
+    result.artifact_reject_reason = artifact_build.reject_reason;
+    if (!artifact_build.execution_artifact.has_value()) {
+      result.reason = LatestStateFeedbackReason::ArtifactRejected;
+      result.detail = artifact_build.detail;
+      return finish();
+    }
+    auto execution_artifact =
+      std::move(artifact_build.execution_artifact.value());
+    result.physical_adapter_reason =
+      mpcc_rate_resolved_physical_adapter::build(
+      execution_artifact,
+      execution_artifact.identity.source_context.intent,
+      execution_artifact.identity.source_context.stage_geometry_id).reason;
+    if (
+      result.physical_adapter_reason !=
+      mpcc_rate_resolved_physical_adapter::RejectReason::None)
+    {
+      result.reason = LatestStateFeedbackReason::PhysicalAdapterRejected;
+      result.detail =
+        "time-aligned feedback nonlinear physical adapter rejected";
+      return finish();
+    }
+    result.execution_artifact =
+      std::make_shared<const artifact::ExecutionArtifact>(
+      std::move(execution_artifact));
+    result.reason = LatestStateFeedbackReason::Accepted;
+    result.detail =
+      "time-aligned feedback QP and physical adapter accepted";
+    return finish();
+  } catch (const std::exception & error) {
+    result.reason = LatestStateFeedbackReason::Exception;
+    result.detail = error.what();
+    return finish();
+  } catch (...) {
+    result.reason = LatestStateFeedbackReason::Exception;
+    result.detail = "unknown time-aligned feedback exception";
+    return finish();
+  }
+}
+
 Result SolverContext::evaluate(const Snapshot & snapshot)
 {
   return evaluate_impl(snapshot, false, std::nullopt, 0U);

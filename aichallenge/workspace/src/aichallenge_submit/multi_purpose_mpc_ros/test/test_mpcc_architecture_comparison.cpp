@@ -427,9 +427,10 @@ TEST(MpccArchitectureComparison, WallBucketAuditKeepsExactProofChain)
 {
   const auto report = compare_wall_buckets(recorded(source_snapshot()));
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 2U);
+  ASSERT_EQ(report.arms.size(), 3U);
   EXPECT_EQ(report.arms[0].arm, Arm::WallOmitHeadingJ);
   EXPECT_EQ(report.arms[1].arm, Arm::WallOmitLagK);
+  EXPECT_EQ(report.arms[2].arm, Arm::WallOmitPoseN);
   for (const auto & arm : report.arms) {
     EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
     ASSERT_TRUE(arm.bundle.has_value());

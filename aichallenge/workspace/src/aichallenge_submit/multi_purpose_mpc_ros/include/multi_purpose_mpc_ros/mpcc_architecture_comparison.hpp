@@ -36,6 +36,7 @@ enum class Arm
   ExternalPrimalI,
   WallOmitHeadingJ,
   WallOmitLagK,
+  WallOmitPoseN,
   DynamicSqpPersistentL,
   DynamicSqpProductionLeftL,
   DynamicSqpProductionRightL,

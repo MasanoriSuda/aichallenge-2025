@@ -192,14 +192,18 @@ ProgressWallRefinement build_progress_wall_refinement(
         bounds.lateral_upper_m;
       if (
         wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitLag)
+        SolverContext::WallBucketAuditMode::OmitLag &&
+        wall_bucket_audit_mode !=
+        SolverContext::WallBucketAuditMode::OmitPose)
       {
         refined.state_lower[state + model::kLagIndex] = bounds.lag_lower_m;
         refined.state_upper[state + model::kLagIndex] = bounds.lag_upper_m;
       }
       if (
         wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitHeading)
+        SolverContext::WallBucketAuditMode::OmitHeading &&
+        wall_bucket_audit_mode !=
+        SolverContext::WallBucketAuditMode::OmitPose)
       {
         refined.state_lower[state + model::kHeadingIndex] =
           bounds.heading_lower_rad;

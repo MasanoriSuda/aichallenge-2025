@@ -499,6 +499,7 @@ public:
   {
     OmitHeading,
     OmitLag,
+    OmitPose,
   };
 
   Result evaluate(const Snapshot & snapshot);

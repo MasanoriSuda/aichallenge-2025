@@ -669,11 +669,17 @@ ArmResult evaluate_arm(
   bundle.stop_suffix = successor.stop_suffix;
   arm_result.stage = Stage::Accepted;
   if (wall_bucket_audit_mode.has_value()) {
-    arm_result.detail =
-      wall_bucket_audit_mode.value() ==
-      shadow::SolverContext::WallBucketAuditMode::OmitHeading ?
-      "accepted/wall-bucket-audit=omit-heading" :
-      "accepted/wall-bucket-audit=omit-lag";
+    switch (wall_bucket_audit_mode.value()) {
+      case shadow::SolverContext::WallBucketAuditMode::OmitHeading:
+        arm_result.detail = "accepted/wall-bucket-audit=omit-heading";
+        break;
+      case shadow::SolverContext::WallBucketAuditMode::OmitLag:
+        arm_result.detail = "accepted/wall-bucket-audit=omit-lag";
+        break;
+      case shadow::SolverContext::WallBucketAuditMode::OmitPose:
+        arm_result.detail = "accepted/wall-bucket-audit=omit-pose";
+        break;
+    }
   } else {
     arm_result.detail =
       (wall_restoration_audit ||
@@ -960,6 +966,7 @@ const char * to_string(const Arm arm) noexcept
     case Arm::ExternalPrimalI: return "external-primal-i";
     case Arm::WallOmitHeadingJ: return "wall-omit-heading-j";
     case Arm::WallOmitLagK: return "wall-omit-lag-k";
+    case Arm::WallOmitPoseN: return "wall-omit-pose-n";
     case Arm::DynamicSqpPersistentL: return "dynamic-sqp-persistent-l";
     case Arm::DynamicSqpProductionLeftL:
       return "dynamic-sqp-production-left-l";
@@ -1403,7 +1410,7 @@ Report compare_wall_buckets(
     {
       report.detail = "source interaction snapshot rejected";
       for (const auto arm :
-        {Arm::WallOmitHeadingJ, Arm::WallOmitLagK})
+        {Arm::WallOmitHeadingJ, Arm::WallOmitLagK, Arm::WallOmitPoseN})
       {
         report.arms.push_back(rejected_arm(
           arm, Stage::SourceRejected, source_fingerprint, report.detail));
@@ -1421,6 +1428,10 @@ Report compare_wall_buckets(
       Arm::WallOmitLagK, source, source_fingerprint,
       source_fingerprint, successor, -1, -1, nullptr, false,
       shadow::SolverContext::WallBucketAuditMode::OmitLag));
+    report.arms.push_back(evaluate_arm(
+      Arm::WallOmitPoseN, source, source_fingerprint,
+      source_fingerprint, successor, -1, -1, nullptr, false,
+      shadow::SolverContext::WallBucketAuditMode::OmitPose));
   } catch (const std::exception & exception) {
     report.source_accepted = false;
     report.detail = exception.what();

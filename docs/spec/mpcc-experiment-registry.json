@@ -370,6 +370,18 @@
       "production_impact": "none; bucket omission and Phase-I are available only through the offline architecture comparison, with no store, worker, publisher or command authority path",
       "deleted_code": [],
       "revisit_condition": "objective/KKT-aware explicit conditioning or an independent structured or active-set backend solves the unchanged racing objective on both ShiftOut fingerprints and the resulting trajectory passes every existing exact physical and terminal certificate"
+    },
+    {
+      "experiment_id": "20260829-joint-wall-pose-bucket-proof",
+      "baseline_commit": "0a77c6f32fde42577ca4a95efb6b977e09cea95d",
+      "snapshot_ids": [],
+      "hypothesis": "the simultaneous hard lag and heading wall-pose buckets, rather than the immutable physical world, exclude certifiable ShiftOut trajectories from the first convex subproblem",
+      "changed_dimension": "observation_only_joint_wall_pose_trust_region",
+      "result": "accepted",
+      "reason": "the joint-pose arm produced exact certified ManeuverBundles for four of six frozen ShiftOut wall failures, including fingerprint 11478535197026802675 at 14.875 m progress and 7.07755 m/s; one unsafe trajectory was rejected by exact wall proof, one racing QP remained numerically rejected, and an independent dynamic counterexample was rejected by the unchanged timed obstacle proof",
+      "production_impact": "none; joint bucket omission is available only through the offline architecture comparison and has no Store, worker, publisher or command authority path",
+      "deleted_code": [],
+      "revisit_condition": "a production Slice atomically removes hard post-hoc lag/heading pose-box authority, retains every exact physical and terminal proof, and demonstrates frozen replay plus dynamic ShiftOut/Pass acceptance without introducing a fallback or parameter change"
     }
   ]
 }

@@ -3065,6 +3065,36 @@ baseline `output/20260829-235457`では`FollowPrepare -> Recovery`が5件あり�
 この結果はsplit ownershipだけを閉じるものであり、Overtake完遂または統合品質Gateの合格を意味しない。
 prefix retry、lease、grace、timeout、solver tolerance、clearanceまたはnormal fallbackを追加してはならない。
 
+#### pre-Mission DynamicEscapeのnormal authority統合（2026-08-30、2025由来の暫定）
+
+`Action::DynamicEscape`は、前方の動的障害物に対して横回避が必要であるというtactical provenanceであり、
+OvertakeLine Missionそのものではない。従来はこのactionからtarget、attempt、sideを使ってcanonical
+`ShiftOut` execution identityを合成していた。一方、Cruise／Followには同じcurrent worldを左右2候補で評価する
+normal dynamic-obstacle populationが後から追加されており、一つのencounterを古いShiftOut producerと新しい
+Cruise producerが異なるintentで所有していた。
+
+baseline `output/20260830-001650`では、実Mission開始前の
+`canonical_intent=shiftout/resolved-action`かつ
+`lateral_owner=dynamic-obstacle-escape`を30 decision観測した。normal workerの証明済みCruise候補は
+`intent-mismatch`で破棄され、まだOvertakeLine MissionがないためGate Aも実行できず、古いCruise継続の失効後に
+normal authorityが空になった。
+
+現在はpre-Mission DynamicEscapeを、レース前はTrack、レース中はCruiseとして既存のbounded normal
+current-world populationへ統合する。左右の選択sideは候補順序のhintとして利用できるが、両sideを解いて
+current-world wall、timed obstacle、terminal successorを証明する契約は変えない。normal homotopy ownerはMission
+targetではなくactiveな`dynamic_obstacle_id`でencounterを識別し、障害物が変わった時点でside ownershipを
+リセットする。
+
+同時に`DynamicObstacleEscape` canonical execution identity、そのrequest field、resolver branchおよびpromotion
+testを物理削除した。正式なShiftOut／Pass／Return identityは、従来どおりOvertakeLine MissionとGate Aだけが
+生成する。candidate `output/20260830-004030`では旧signatureは0件で、正式な`Idle -> ShiftOut`を6件、
+`ShiftOut -> Pass`を1件観測した。candidateではpre-Mission DynamicEscape action自体が発生しなかったため、
+Track/Cruise mappingのlive acceptanceは未観測であり、focused unit/source-contract testで保証している。
+
+同runに残る`terminal-contingency-unavailable`、`progress-lift-rejected`、DynamicWait lateral authority gap、
+SafetyBrakeは別failure familyである。この統合を根拠にlease、grace、timeout、retry、fallback、solver tolerance、
+clearanceを変更してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

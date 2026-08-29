@@ -804,27 +804,41 @@ def test_problem_intent_is_resolved_after_current_cycle_authority_trace() -> Non
     assert "const auto stop_shadow_intent = problem.problem_intent;" in control
 
 
-def test_dynamic_escape_materializes_one_canonical_overtake_identity() -> None:
-    """Validated Dynamic Escape may not lose target/attempt/side at MPCC entry."""
+def test_dynamic_escape_is_normal_obstacle_avoidance_not_overtake_identity() -> None:
+    """Pre-Mission avoidance must not fabricate ShiftOut identity or authority."""
 
-    assert "resolve_canonical_execution_identity(" in SOURCE
-    assert (
-        "progress_contouring_active && canonical_execution_identity.active"
-        in SOURCE
+    assert "DynamicEscapeNormalAvoidance" in OVERTAKE_ORCHESTRATOR_HEADER
+    resolver_start = OVERTAKE_ORCHESTRATOR_SOURCE.index(
+        "CanonicalControlIntentResolution resolve_canonical_control_intent("
     )
-    assert (
-        "canonical_execution_identity.target_id" in SOURCE
-        and "canonical_execution_identity.generation" in SOURCE
-        and "canonical_execution_identity.side_sign" in SOURCE
+    resolver_end = OVERTAKE_ORCHESTRATOR_SOURCE.index(
+        "const char * to_string(const Behavior", resolver_start
     )
-    assert (
-        "behavior_output.dynamic_obstacle_lateral_escape_attempt_id"
-        in SOURCE
+    resolver = OVERTAKE_ORCHESTRATOR_SOURCE[resolver_start:resolver_end]
+    dynamic_escape = resolver.index("case Action::DynamicEscape:")
+    shiftout = resolver.index("case Action::ShiftOut:")
+    assert dynamic_escape < shiftout
+    assert "ControlIntent::Cruise" in resolver[dynamic_escape:shiftout]
+    assert "ControlIntent::Track" in resolver[dynamic_escape:shiftout]
+
+    for retired_symbol in (
+        "CanonicalExecutionIdentitySource::DynamicObstacleEscape",
+        "CanonicalExecutionIdentityReason::DynamicObstacleEscape",
+        "MalformedDynamicObstacleEscape",
+        "dynamic_escape_path_validated",
+        "dynamic_escape_attempt_id",
+    ):
+        assert retired_symbol not in OVERTAKE_ORCHESTRATOR_HEADER
+        assert retired_symbol not in OVERTAKE_ORCHESTRATOR_SOURCE
+
+    normal_owner_start = SOURCE.index("class RateResolvedNormalHomotopyOwner")
+    normal_owner_end = SOURCE.index(
+        "evaluate_rate_resolved_current_world_population(", normal_owner_start
     )
-    assert (
-        "behavior_output.dynamic_obstacle_lateral_escape_execution_path_validated"
-        in SOURCE
-    )
+    normal_owner = SOURCE[normal_owner_start:normal_owner_end]
+    assert "context.dynamic_obstacle_id" in normal_owner
+    assert "obstacle_id_" in normal_owner
+    assert "target_id_" not in normal_owner
 
 
 def test_published_overtake_identity_is_replenished_before_problem_assembly() -> None:

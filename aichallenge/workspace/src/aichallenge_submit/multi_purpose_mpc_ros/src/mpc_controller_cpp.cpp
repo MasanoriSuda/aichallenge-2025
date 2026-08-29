@@ -6392,21 +6392,23 @@ private:
     const rate_resolved_shadow::Snapshot & source) noexcept
   {
     const auto & context = source.identity.source_context;
+    const std::string & obstacle_id = context.dynamic_obstacle_constraint_active ?
+      context.dynamic_obstacle_id : context.target_id;
     if (
-      target_id_ == context.target_id &&
+      obstacle_id_ == obstacle_id &&
       intent_generation_ == context.intent_generation &&
       intent_ == context.intent)
     {
       return;
     }
-    target_id_ = context.target_id;
+    obstacle_id_ = obstacle_id;
     intent_generation_ = context.intent_generation;
     intent_ = context.intent;
     selected_side_sign_ = 0;
   }
 
   std::mutex mutex_;
-  std::string target_id_;
+  std::string obstacle_id_;
   std::uint64_t intent_generation_{};
   mpcc_contract::ControlIntent intent_{mpcc_contract::ControlIntent::Cruise};
   int selected_side_sign_{};
@@ -19576,11 +19578,6 @@ struct MPC
         overtake_line_state_.dynamic_mission_wait_active,
         orchestrator_phase(
           overtake_line_state_.follow_prepare_origin_phase),
-        behavior_output.dynamic_obstacle_lateral_escape_execution_active,
-        behavior_output.dynamic_obstacle_lateral_escape_execution_path_validated,
-        behavior_output.dynamic_obstacle_cruise_target_id,
-        behavior_output.dynamic_obstacle_lateral_escape_attempt_id,
-        behavior_output.dynamic_obstacle_lateral_escape_side_sign,
         retained_execution_active,
         retained_execution_matches_live_tactical_state,
         retained_execution_target_id,
@@ -20824,7 +20821,9 @@ struct MPC
       progress_execution_dynamic_obstacle_contract_active,
       progress_execution_dynamic_obstacle_contract_active ?
       (progress_execution_context_active ?
-      canonical_execution_identity.side_sign : 0) : 0,
+      canonical_execution_identity.side_sign :
+      (behavior_output.dynamic_obstacle_lateral_escape_execution_active ?
+      behavior_output.dynamic_obstacle_lateral_escape_side_sign : 0)) : 0,
       std::move(progress_execution_target_prediction_valid),
       std::move(progress_execution_target_progress_m),
       std::move(progress_execution_target_lateral_m),

@@ -238,25 +238,22 @@ struct AuthorityRequest {
 enum class CanonicalExecutionIdentitySource {
   None,
   OvertakeLine,
-  DynamicObstacleEscape,
   RetainedExecutedArtifact,
 };
 
 enum class CanonicalExecutionIdentityReason {
   Inactive,
   OvertakeLine,
-  DynamicObstacleEscape,
   RetainedExecutedArtifact,
   RetainedExecutedArtifactSuperseded,
   MalformedOvertakeLine,
-  MalformedDynamicObstacleEscape,
   MalformedRetainedExecutedArtifact,
 };
 
 /// Resolve the one execution identity which is allowed to cross the tactical
-/// boundary into the canonical MPCC problem.  Dynamic Escape owns a validated
-/// path without creating an OvertakeLine mission, so deriving this identity
-/// only from OvertakeLineState silently loses its target, generation and side.
+/// boundary into the canonical Overtake MPCC problem. Pre-Mission dynamic
+/// obstacle avoidance is a normal Track/Cruise problem and deliberately has
+/// no ShiftOut/Pass/Return execution identity.
 struct CanonicalExecutionIdentityRequest {
   bool overtake_line_active{false};
   std::string overtake_line_target_id;
@@ -270,12 +267,6 @@ struct CanonicalExecutionIdentityRequest {
   /// ShiftOut or Pass phase while the validated lateral prefix owns control.
   bool dynamic_wait_active{false};
   Phase dynamic_wait_origin_phase{Phase::Idle};
-
-  bool dynamic_escape_active{false};
-  bool dynamic_escape_path_validated{false};
-  std::string dynamic_escape_target_id;
-  std::uint64_t dynamic_escape_attempt_id{0U};
-  int dynamic_escape_side_sign{0};
 
   /// Fallback identity from the exact certified artifact whose command most
   /// recently crossed the publisher boundary. The caller may activate it only
@@ -334,6 +325,7 @@ enum class CanonicalControlIntentReason {
   ResolvedAction,
   TrackBeforeRaceSession,
   CruiseDuringRaceSession,
+  DynamicEscapeNormalAvoidance,
   FollowWithoutCoherentFrontObservation,
   LateralHoldDynamicWaitShiftOut,
   LateralHoldDynamicWaitPass,

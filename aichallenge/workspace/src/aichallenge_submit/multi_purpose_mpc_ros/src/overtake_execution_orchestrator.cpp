@@ -256,8 +256,6 @@ const char * to_string(const CanonicalExecutionIdentitySource source) noexcept
   switch (source) {
     case CanonicalExecutionIdentitySource::None: return "none";
     case CanonicalExecutionIdentitySource::OvertakeLine: return "overtake-line";
-    case CanonicalExecutionIdentitySource::DynamicObstacleEscape:
-      return "dynamic-obstacle-escape";
     case CanonicalExecutionIdentitySource::RetainedExecutedArtifact:
       return "retained-executed-artifact";
   }
@@ -269,16 +267,12 @@ const char * to_string(const CanonicalExecutionIdentityReason reason) noexcept
   switch (reason) {
     case CanonicalExecutionIdentityReason::Inactive: return "inactive";
     case CanonicalExecutionIdentityReason::OvertakeLine: return "overtake-line";
-    case CanonicalExecutionIdentityReason::DynamicObstacleEscape:
-      return "dynamic-obstacle-escape";
     case CanonicalExecutionIdentityReason::RetainedExecutedArtifact:
       return "retained-executed-artifact";
     case CanonicalExecutionIdentityReason::RetainedExecutedArtifactSuperseded:
       return "retained-executed-artifact-superseded";
     case CanonicalExecutionIdentityReason::MalformedOvertakeLine:
       return "malformed-overtake-line";
-    case CanonicalExecutionIdentityReason::MalformedDynamicObstacleEscape:
-      return "malformed-dynamic-obstacle-escape";
     case CanonicalExecutionIdentityReason::MalformedRetainedExecutedArtifact:
       return "malformed-retained-executed-artifact";
   }
@@ -333,27 +327,6 @@ CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
     result.traveled_m = request.overtake_line_traveled_m;
     result.target_exclusion_certified =
       request.overtake_line_target_exclusion_certified;
-    return result;
-  }
-  if (request.dynamic_escape_active) {
-    if (
-      !request.dynamic_escape_path_validated ||
-      request.dynamic_escape_target_id.empty() ||
-      request.dynamic_escape_attempt_id == 0U ||
-      !side_valid(request.dynamic_escape_side_sign))
-    {
-      result.reason =
-        CanonicalExecutionIdentityReason::MalformedDynamicObstacleEscape;
-      return result;
-    }
-    result.active = true;
-    result.source = CanonicalExecutionIdentitySource::DynamicObstacleEscape;
-    result.reason = CanonicalExecutionIdentityReason::DynamicObstacleEscape;
-    result.target_id = request.dynamic_escape_target_id;
-    result.generation = request.dynamic_escape_attempt_id;
-    result.phase = Phase::ShiftOut;
-    result.side_sign = request.dynamic_escape_side_sign;
-    result.target_exclusion_certified = true;
     return result;
   }
   if (request.retained_execution_active) {
@@ -610,6 +583,8 @@ const char * to_string(const CanonicalControlIntentReason reason) noexcept
       return "track-before-race-session";
     case CanonicalControlIntentReason::CruiseDuringRaceSession:
       return "cruise-during-race-session";
+    case CanonicalControlIntentReason::DynamicEscapeNormalAvoidance:
+      return "dynamic-escape-normal-avoidance";
     case CanonicalControlIntentReason::FollowWithoutCoherentFrontObservation:
       return "follow-without-coherent-front-observation";
     case CanonicalControlIntentReason::LateralHoldDynamicWaitShiftOut:
@@ -667,6 +642,12 @@ CanonicalControlIntentResolution resolve_canonical_control_intent(
       }
       break;
     case Action::DynamicEscape:
+      accept(
+        request.race_session_active ?
+        mpcc_execution_contract::ControlIntent::Cruise :
+        mpcc_execution_contract::ControlIntent::Track,
+        CanonicalControlIntentReason::DynamicEscapeNormalAvoidance);
+      break;
     case Action::ShiftOut:
       accept(
         mpcc_execution_contract::ControlIntent::ShiftOut,

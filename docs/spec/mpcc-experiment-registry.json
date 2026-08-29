@@ -534,6 +534,24 @@
         "optional dynamic-wait prefix failure to Recovery production edge"
       ],
       "revisit_condition": "a hard DynamicMissionWait Recovery fault is suppressed, an uncertified prefix gains normal authority, no-proof admission fails to stop, or the obsolete prefix-failure Recovery reason reappears"
+    },
+    {
+      "experiment_id": "20260830-dynamic-escape-normal-authority",
+      "baseline_commit": "e3ac36e4",
+      "snapshot_ids": [
+        "20260830-001650-decisions-1777-1815"
+      ],
+      "hypothesis": "the pre-Mission authority hole is caused by an obsolete DynamicEscape-to-ShiftOut producer competing with the bounded normal Cruise dynamic-obstacle population under a different canonical intent",
+      "changed_dimension": "production_pre_mission_dynamic_obstacle_authority_ownership",
+      "result": "accepted",
+      "reason": "the baseline recorded 30 decisions with the unique false ShiftOut dynamic-escape signature before the real Mission transition; after atomically deleting that execution-identity producer, run 20260830-004030 recorded zero false signatures while retaining six real Idle-to-ShiftOut and one ShiftOut-to-Pass transition, and all 54 package targets plus 76 source-contract tests passed",
+      "production_impact": "pre-Mission DynamicEscape is normal Track/Cruise dynamic-obstacle avoidance through the existing bounded two-side seven-state population; real ShiftOut/Pass/Return identity remains exclusive to OvertakeLine Mission and Gate A, with every existing exact physical and terminal proof unchanged",
+      "deleted_code": [
+        "DynamicObstacleEscape canonical execution identity source and reason",
+        "pre-Mission DynamicEscape-to-ShiftOut identity resolver",
+        "dynamic escape identity request fields and promotion tests"
+      ],
+      "revisit_condition": "a pre-Mission avoidance again requests canonical ShiftOut, an uncertified normal side gains authority, changing dynamic obstacle identity preserves the prior encounter side, or a real OvertakeLine ShiftOut bypasses Mission/Gate A"
     }
   ]
 }

@@ -130,47 +130,29 @@ TEST(OvertakeExecutionOrchestrator, TreatsDynamicEscapeAndGapPlannerAsOneChain)
   EXPECT_EQ(
     result.path_source, orchestrator::PathSource::DynamicObstacleEscape);
   EXPECT_EQ(result.conflicts & orchestrator::MultipleLateralAuthorities, 0U);
-}
-
-TEST(OvertakeExecutionOrchestrator, PromotesValidatedDynamicEscapeIdentity)
-{
-  orchestrator::CanonicalExecutionIdentityRequest request;
-  request.dynamic_escape_active = true;
-  request.dynamic_escape_path_validated = true;
-  request.dynamic_escape_target_id = "d2";
-  request.dynamic_escape_attempt_id = 17U;
-  request.dynamic_escape_side_sign = -1;
-
-  const auto result =
-    orchestrator::resolve_canonical_execution_identity(request);
-
-  ASSERT_TRUE(result.active);
+  const auto intent =
+    orchestrator::resolve_canonical_control_intent(request, result);
+  ASSERT_TRUE(intent.valid);
   EXPECT_EQ(
-    result.source,
-    orchestrator::CanonicalExecutionIdentitySource::DynamicObstacleEscape);
-  EXPECT_EQ(result.target_id, "d2");
-  EXPECT_EQ(result.generation, 17U);
-  EXPECT_EQ(result.phase, orchestrator::Phase::ShiftOut);
-  EXPECT_EQ(result.side_sign, -1);
-  EXPECT_TRUE(result.target_exclusion_certified);
-}
-
-TEST(OvertakeExecutionOrchestrator, RejectsDynamicEscapeWithoutExecutionSide)
-{
-  orchestrator::CanonicalExecutionIdentityRequest request;
-  request.dynamic_escape_active = true;
-  request.dynamic_escape_path_validated = true;
-  request.dynamic_escape_target_id = "d2";
-  request.dynamic_escape_attempt_id = 17U;
-
-  const auto result =
-    orchestrator::resolve_canonical_execution_identity(request);
-
-  EXPECT_FALSE(result.active);
+    intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Track);
   EXPECT_EQ(
-    result.reason,
-    orchestrator::CanonicalExecutionIdentityReason::
-    MalformedDynamicObstacleEscape);
+    intent.reason,
+    orchestrator::CanonicalControlIntentReason::
+    DynamicEscapeNormalAvoidance);
+
+  request.race_session_active = true;
+  const auto race_authority = orchestrator::resolve_authority(request);
+  const auto race_intent =
+    orchestrator::resolve_canonical_control_intent(request, race_authority);
+  ASSERT_TRUE(race_intent.valid);
+  EXPECT_EQ(
+    race_intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Cruise);
+  EXPECT_EQ(
+    race_intent.reason,
+    orchestrator::CanonicalControlIntentReason::
+    DynamicEscapeNormalAvoidance);
 }
 
 TEST(OvertakeExecutionOrchestrator, ReplenishesPublishedExecutedIdentity)
@@ -201,32 +183,6 @@ TEST(OvertakeExecutionOrchestrator, ReplenishesPublishedExecutedIdentity)
   EXPECT_EQ(result.phase, orchestrator::Phase::ShiftOut);
   EXPECT_EQ(result.side_sign, -1);
   EXPECT_DOUBLE_EQ(result.traveled_m, 1.25);
-}
-
-TEST(OvertakeExecutionOrchestrator, LiveEscapePrecedesRetainedExecution)
-{
-  orchestrator::CanonicalExecutionIdentityRequest request;
-  request.dynamic_escape_active = true;
-  request.dynamic_escape_path_validated = true;
-  request.dynamic_escape_target_id = "live";
-  request.dynamic_escape_attempt_id = 21U;
-  request.dynamic_escape_side_sign = 1;
-  request.retained_execution_active = true;
-  request.retained_execution_target_id = "retained";
-  request.retained_execution_mission_generation = 17U;
-  request.retained_execution_phase = orchestrator::Phase::ShiftOut;
-  request.retained_execution_side_sign = -1;
-
-  const auto result =
-    orchestrator::resolve_canonical_execution_identity(request);
-
-  ASSERT_TRUE(result.active);
-  EXPECT_EQ(
-    result.source,
-    orchestrator::CanonicalExecutionIdentitySource::DynamicObstacleEscape);
-  EXPECT_EQ(result.target_id, "live");
-  EXPECT_EQ(result.generation, 21U);
-  EXPECT_EQ(result.side_sign, 1);
 }
 
 TEST(OvertakeExecutionOrchestrator, ExpiredRetainedExecutionDoesNotLatch)
@@ -299,11 +255,6 @@ TEST(OvertakeExecutionOrchestrator, KeepsCommittedLineIdentityPrecedence)
   request.overtake_line_side_sign = 1;
   request.overtake_line_traveled_m = 3.5;
   request.overtake_line_target_exclusion_certified = true;
-  request.dynamic_escape_active = true;
-  request.dynamic_escape_path_validated = true;
-  request.dynamic_escape_target_id = "escape-target";
-  request.dynamic_escape_attempt_id = 17U;
-  request.dynamic_escape_side_sign = -1;
 
   const auto result =
     orchestrator::resolve_canonical_execution_identity(request);

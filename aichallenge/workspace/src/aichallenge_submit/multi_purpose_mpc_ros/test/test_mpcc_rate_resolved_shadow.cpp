@@ -228,6 +228,8 @@ TEST(MpccRateResolvedShadow, DoesNotBindFutureWallSampleBeforeProgressSolve)
   EXPECT_DOUBLE_EQ(result.pre_refinement_lateral_support_upper_m, 1.9);
   EXPECT_TRUE(result.progress_wall_refinement_applied);
   EXPECT_TRUE(result.progress_wall_refinement_solved);
+  EXPECT_GT(result.wall_refinement_solver_solve_count, 0U);
+  EXPECT_EQ(result.wall_refinement_solver_scaling_iterations, 10);
   EXPECT_FALSE(result.physical_wall_lag_pose_box_applied);
   EXPECT_FALSE(result.physical_wall_heading_pose_box_applied);
   EXPECT_TRUE(result.post_refinement_physical_proof_checked);
@@ -1182,6 +1184,8 @@ TEST(MpccRateResolvedShadow, TradesProgressForReachableOpponentSeparation)
   EXPECT_TRUE(result.dynamic_obstacle_refinement_requested);
   EXPECT_TRUE(result.dynamic_obstacle_refinement_applied);
   EXPECT_TRUE(result.dynamic_obstacle_refinement_solved);
+  EXPECT_EQ(result.wall_refinement_solver_solve_count, 0U);
+  EXPECT_EQ(result.wall_refinement_solver_scaling_iterations, 0);
   EXPECT_TRUE(result.post_refinement_physical_proof_checked);
   EXPECT_TRUE(result.post_refinement_physical_proof_accepted);
   EXPECT_EQ(
@@ -1249,6 +1253,8 @@ TEST(MpccRateResolvedShadow, CouplesDynamicProgressChoiceBeforeFinalWallProof)
   EXPECT_TRUE(result.dynamic_obstacle_refinement_requested);
   EXPECT_TRUE(result.dynamic_obstacle_refinement_applied);
   EXPECT_TRUE(result.dynamic_obstacle_refinement_solved);
+  EXPECT_GT(result.wall_refinement_solver_solve_count, 0U);
+  EXPECT_EQ(result.wall_refinement_solver_scaling_iterations, 10);
   EXPECT_TRUE(result.post_refinement_physical_proof_checked);
   EXPECT_TRUE(result.post_refinement_physical_proof_accepted);
   EXPECT_TRUE(shadow::result_valid(result));

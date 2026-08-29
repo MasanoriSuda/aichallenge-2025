@@ -67,6 +67,15 @@ CMAKE = (PACKAGE_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
 MPCC_ARCHITECTURE_COMPARISON_SOURCE = (
     PACKAGE_ROOT / "src" / "mpcc_architecture_comparison.cpp"
 ).read_text(encoding="utf-8")
+MPCC_RATE_RESOLVED_SHADOW_HEADER = (
+    PACKAGE_ROOT
+    / "include"
+    / "multi_purpose_mpc_ros"
+    / "mpcc_rate_resolved_shadow.hpp"
+).read_text(encoding="utf-8")
+MPCC_RATE_RESOLVED_SHADOW_SOURCE = (
+    PACKAGE_ROOT / "src" / "mpcc_rate_resolved_shadow.cpp"
+).read_text(encoding="utf-8")
 LEGACY_BOOST_SURFACE = "\n".join(
     path.read_text(encoding="utf-8")
     for path in (
@@ -88,10 +97,26 @@ def test_wall_bucket_relaxation_is_architecture_audit_only() -> None:
     assert MPCC_ARCHITECTURE_COMPARISON_SOURCE.count(audit_entry) == 1
 
 
-def test_internal_equilibration_policy_is_architecture_audit_only() -> None:
+def test_internal_equilibration_has_one_wall_owner_and_one_audit_arm() -> None:
     policy = "RowToleranceNormalizedWithInternalEquilibration"
     assert policy not in SOURCE
     assert MPCC_ARCHITECTURE_COMPARISON_SOURCE.count(policy) == 1
+    assert MPCC_RATE_RESOLVED_SHADOW_HEADER.count(policy) == 1
+
+    # Every wall-class solve has one preselected owner.  There is no
+    # solve-reject-then-retry path through the normal solver.
+    assert MPCC_RATE_RESOLVED_SHADOW_SOURCE.count(
+        "wall_refinement_solver_.solve("
+    ) == 6
+    wall_block = MPCC_RATE_RESOLVED_SHADOW_SOURCE.split(
+        "auto refinement = build_progress_wall_refinement(", 1
+    )[1].split("if (snapshot.dynamic_obstacle_refinement_active)", 1)[0]
+    assert re.search(r"(?<!wall_refinement_)solver_\.solve\(", wall_block) is None
+
+    coupled_block = MPCC_RATE_RESOLVED_SHADOW_SOURCE.split(
+        "auto joint_refinement = build_progress_wall_refinement(", 1
+    )[1].split("// Architecture audit only:", 1)[0]
+    assert re.search(r"(?<!wall_refinement_)solver_\.solve\(", coupled_block) is None
 
 
 def test_canonical_normal_owner_has_no_runtime_migration_availability_switch() -> None:

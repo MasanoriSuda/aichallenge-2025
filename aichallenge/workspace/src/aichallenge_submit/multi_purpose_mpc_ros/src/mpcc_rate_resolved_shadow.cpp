@@ -1719,6 +1719,12 @@ Result SolverContext::evaluate_impl(
       result.physical_wall_refinement_cache_scanned_pose_count +=
         refinement.cache_scanned_pose_count;
     };
+  const auto record_wall_solver = [&result](
+      const persistent_osqp::SolveTelemetry & telemetry) {
+      ++result.wall_refinement_solver_solve_count;
+      result.wall_refinement_solver_scaling_iterations =
+        telemetry.scaling_iterations;
+    };
   const auto capture_failure = [&result, &snapshot](
       const mpcc_architecture_snapshot::PipelineStage pipeline_stage,
       const mpcc_rate_resolved_problem::AssemblyRequest & request,
@@ -2083,7 +2089,8 @@ Result SolverContext::evaluate_impl(
   if (snapshot.progress_aligned_wall_refinement_active) {
     auto refinement = build_progress_wall_refinement(
       snapshot, adapted->problem, outcome.result->primal,
-      solver_.physical_constraint_tolerance(), &wall_refinement_cache_,
+      wall_refinement_solver_.physical_constraint_tolerance(),
+      &wall_refinement_cache_,
       wall_bucket_audit_mode);
     accumulate_wall_cache(refinement.physical);
     result.progress_wall_refinement_reason = refinement.resolution.reason;
@@ -2155,11 +2162,12 @@ Result SolverContext::evaluate_impl(
       refined_assembled->quadratic_cost.setIdentity();
       refined_assembled->linear_cost = -outcome.result->primal;
     }
-    auto refined_outcome = solver_.solve(
+    auto refined_outcome = wall_refinement_solver_.solve(
       refined_assembled->quadratic_cost, refined_assembled->constraints,
       refined_assembled->linear_cost, refined_assembled->lower_bound,
       refined_assembled->upper_bound, warm_start,
       refined_assembled->variable_scaling);
+    record_wall_solver(refined_outcome.telemetry);
     bool bucket_phase_one_solved = false;
     if (
       wall_bucket_phase_one_enabled &&
@@ -2172,11 +2180,12 @@ Result SolverContext::evaluate_impl(
       warm_start = persistent_osqp::WarmStart{
         refined_outcome.result->primal,
         Eigen::VectorXd::Zero(refined_assembled->lower_bound.size())};
-      refined_outcome = solver_.solve(
+      refined_outcome = wall_refinement_solver_.solve(
         refined_assembled->quadratic_cost, refined_assembled->constraints,
         refined_assembled->linear_cost, refined_assembled->lower_bound,
         refined_assembled->upper_bound, warm_start,
         refined_assembled->variable_scaling);
+      record_wall_solver(refined_outcome.telemetry);
     }
     result.solver = refined_outcome.telemetry;
     if (
@@ -2251,7 +2260,7 @@ Result SolverContext::evaluate_impl(
           restoration_failed = true;
           break;
         }
-        restoration_outcome = solver_.solve(
+        restoration_outcome = wall_refinement_solver_.solve(
           restoration_assembled->quadratic_cost,
           restoration_assembled->constraints,
           restoration_assembled->linear_cost,
@@ -2259,6 +2268,7 @@ Result SolverContext::evaluate_impl(
           restoration_assembled->upper_bound,
           restoration_warm_start,
           restoration_assembled->variable_scaling);
+        record_wall_solver(restoration_outcome.telemetry);
         result.solver = restoration_outcome.telemetry;
         if (
           !restoration_outcome.result.has_value() ||
@@ -2300,7 +2310,8 @@ Result SolverContext::evaluate_impl(
         } else {
           auto final_refinement = build_progress_wall_refinement(
             snapshot, restored_tangent_problem, restoration_primal,
-            solver_.physical_constraint_tolerance(), &wall_refinement_cache_,
+            wall_refinement_solver_.physical_constraint_tolerance(),
+            &wall_refinement_cache_,
             wall_bucket_audit_mode);
           accumulate_wall_cache(final_refinement.physical);
           result.wall_feasibility_restoration_final_refinement_built =
@@ -2329,7 +2340,7 @@ Result SolverContext::evaluate_impl(
                 result.wall_feasibility_restoration_detail =
                   "final-restored-bootstrap-rejected";
               } else {
-                auto final_outcome = solver_.solve(
+                auto final_outcome = wall_refinement_solver_.solve(
                   final_assembled->quadratic_cost,
                   final_assembled->constraints,
                   final_assembled->linear_cost,
@@ -2337,6 +2348,7 @@ Result SolverContext::evaluate_impl(
                   final_assembled->upper_bound,
                   final_warm_start,
                   final_assembled->variable_scaling);
+                record_wall_solver(final_outcome.telemetry);
                 result.solver = final_outcome.telemetry;
                 result.wall_feasibility_restoration_final_solved =
                   final_outcome.result.has_value() &&
@@ -2642,7 +2654,8 @@ Result SolverContext::evaluate_impl(
       // will be certified for publication.
       auto joint_refinement = build_progress_wall_refinement(
         snapshot, adapted->problem, outcome.result->primal,
-        solver_.physical_constraint_tolerance(), &wall_refinement_cache_,
+        wall_refinement_solver_.physical_constraint_tolerance(),
+        &wall_refinement_cache_,
         wall_bucket_audit_mode);
       accumulate_wall_cache(joint_refinement.physical);
       result.progress_wall_refinement_reason =
@@ -2699,11 +2712,12 @@ Result SolverContext::evaluate_impl(
         joint_assembled->quadratic_cost.setIdentity();
         joint_assembled->linear_cost = -outcome.result->primal;
       }
-      auto joint_outcome = solver_.solve(
+      auto joint_outcome = wall_refinement_solver_.solve(
         joint_assembled->quadratic_cost, joint_assembled->constraints,
         joint_assembled->linear_cost, joint_assembled->lower_bound,
         joint_assembled->upper_bound, joint_warm_start,
         joint_assembled->variable_scaling);
+      record_wall_solver(joint_outcome.telemetry);
       bool joint_bucket_phase_one_solved = false;
       if (
         wall_bucket_phase_one_enabled &&
@@ -2720,11 +2734,12 @@ Result SolverContext::evaluate_impl(
           joint_warm_start = persistent_osqp::WarmStart{
             joint_outcome.result->primal,
             Eigen::VectorXd::Zero(joint_assembled->lower_bound.size())};
-          joint_outcome = solver_.solve(
+          joint_outcome = wall_refinement_solver_.solve(
             joint_assembled->quadratic_cost, joint_assembled->constraints,
             joint_assembled->linear_cost, joint_assembled->lower_bound,
             joint_assembled->upper_bound, joint_warm_start,
             joint_assembled->variable_scaling);
+          record_wall_solver(joint_outcome.telemetry);
         } else {
           result.outcome = Outcome::AssemblyRejected;
           result.solved = false;

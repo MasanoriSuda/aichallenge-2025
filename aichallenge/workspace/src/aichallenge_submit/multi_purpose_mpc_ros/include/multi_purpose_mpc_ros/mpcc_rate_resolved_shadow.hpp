@@ -349,6 +349,11 @@ struct Result
   double pre_refinement_lateral_support_upper_m{};
   bool progress_wall_refinement_applied{false};
   bool progress_wall_refinement_solved{false};
+  /// Numerical-owner trace.  A non-zero count proves that this evaluation
+  /// submitted a wall-class QP directly to the equilibrated owner; it is not a
+  /// retry count.
+  std::size_t wall_refinement_solver_solve_count{};
+  int wall_refinement_solver_scaling_iterations{};
   mpcc_progress::ProgressAlignedWallBoundsReason
     progress_wall_refinement_reason{
       mpcc_progress::ProgressAlignedWallBoundsReason::NotRequested};
@@ -529,6 +534,12 @@ private:
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
   mpcc_rate_resolved_wall_refinement::Cache wall_refinement_cache_;
+  // Wall-bucket and coupled wall/opponent QPs are a distinct KKT class.  The
+  // owner is chosen before solve; the normal solver is never tried first and
+  // therefore this is not a retry or fallback path.
+  persistent_osqp::PersistentOsqpSolver wall_refinement_solver_{
+    persistent_osqp::ConstraintPreconditioningPolicy::
+    RowToleranceNormalizedWithInternalEquilibration};
   persistent_osqp::PersistentOsqpSolver solver_{
     persistent_osqp::ConstraintPreconditioningPolicy::RowToleranceNormalized};
 };

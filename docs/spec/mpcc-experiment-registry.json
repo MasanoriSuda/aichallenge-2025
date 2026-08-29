@@ -401,6 +401,20 @@
         "normal-authority heading wall-pose bucket state box"
       ],
       "revisit_condition": "only if an exact physical proof accepts a trajectory that production now publishes unsafely, or a same-world replay proves the removed sampled boxes encode a physical constraint not represented by the unchanged exact proofs"
+    },
+    {
+      "experiment_id": "20260829-shiftout-rejected-iterate-proof",
+      "baseline_commit": "cd044edc40b54ac4c936b9cfafed2de6d4c9c0f3",
+      "snapshot_ids": [
+        "9845010060330222052"
+      ],
+      "hypothesis": "the live ShiftOut maximum-iteration failure contains a physically certifiable finite primal that is discarded by the numerical convergence contract",
+      "changed_dimension": "diagnostic_rejected_primal_and_offline_coordinate_equilibration",
+      "result": "accepted",
+      "reason": "the rejected production iterate passed the exact recorded affine, nonlinear wall, timed obstacle and terminal-successor proofs; the identical unchanged QP also converged in 1150 and 1125 iterations under three- and ten-pass explicit Ruiz equilibration, and both independent primals passed the same proofs",
+      "production_impact": "none; rejected primals remain diagnostic-only, SolveOutcome::result stays empty, and no solver setting, clearance, fallback, timeout, lease, authority or command path changed",
+      "deleted_code": [],
+      "revisit_condition": "a bounded canonical coordinate-formulation Slice replaces rather than retries the current normal solve and passes the frozen corpus plus dynamic ShiftOut/Pass acceptance under unchanged exact proofs"
     }
   ]
 }

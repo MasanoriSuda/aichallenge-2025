@@ -317,6 +317,10 @@ YAML::Node outcome_node(const persistent_osqp::SolveOutcome & outcome)
 {
   YAML::Node node;
   node["result_available"] = outcome.result.has_value();
+  node["rejected_primal_available"] = outcome.rejected_primal.has_value();
+  if (outcome.rejected_primal.has_value()) {
+    node["rejected_primal"] = vector_node(outcome.rejected_primal.value());
+  }
   node["failure_detail"] = outcome.failure_detail;
   YAML::Node telemetry;
   telemetry["setup_performed"] = outcome.telemetry.setup_performed;
@@ -1982,6 +1986,21 @@ std::optional<RecordedQp> load_recorded_qp(
       }
       recorded.warm_start = persistent_osqp::WarmStart{
         std::move(primal.value()), std::move(dual.value())};
+    }
+    const auto production_outcome = root["production_outcome"];
+    if (
+      production_outcome && production_outcome["rejected_primal_available"] &&
+      production_outcome["rejected_primal_available"].as<bool>())
+    {
+      auto rejected_primal = load_vector(
+        production_outcome["rejected_primal"]);
+      if (!rejected_primal) {
+        if (detail != nullptr) {
+          *detail = "malformed rejected-primal payload";
+        }
+        return std::nullopt;
+      }
+      recorded.rejected_primal = std::move(rejected_primal.value());
     }
     recorded.intent = root["source"]["problem_context"]["intent"].as<std::string>();
     recorded.pipeline_stage = root["pipeline_stage"].as<std::string>();

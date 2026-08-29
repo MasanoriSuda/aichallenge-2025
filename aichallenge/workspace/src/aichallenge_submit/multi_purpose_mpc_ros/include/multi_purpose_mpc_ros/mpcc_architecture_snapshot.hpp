@@ -66,6 +66,7 @@ struct RecordedQp
 {
   mpcc_rate_resolved_problem::Problem problem;
   std::optional<persistent_osqp::WarmStart> warm_start;
+  std::optional<Eigen::VectorXd> rejected_primal;
   std::string intent;
   std::string pipeline_stage;
   std::string failure_outcome;

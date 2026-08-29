@@ -148,6 +148,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("snapshot", type=Path)
     parser.add_argument("--omit-lag", action="store_true")
+    parser.add_argument("--output-dir", type=Path)
     arguments = parser.parse_args()
     audit = load_audit_module()
     payload, P_upper, q, A, lower, upper, box_scale = audit.load(arguments.snapshot)
@@ -201,6 +202,9 @@ def main():
             f"extra_variable_max={extra_variable.max():.9g} "
             f"objective_scale={objective_scale:.9g}"
         )
+        if arguments.output_dir is not None:
+            arguments.output_dir.mkdir(parents=True, exist_ok=True)
+            np.savetxt(arguments.output_dir / f"{label}.txt", physical)
     return 0
 
 

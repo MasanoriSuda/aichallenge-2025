@@ -1001,6 +1001,11 @@ SolveOutcome PersistentOsqpSolver::solve(
       if (!primal.allFinite()) {
         return;
       }
+      // Preserve the already-computed physical-coordinate iterate only as
+      // evidence.  `result` remains empty and all production callers continue
+      // to reject this solve status.  The architecture audit can now decide
+      // whether the failure was numerical, affine-model or exact-proof based.
+      outcome.rejected_primal = primal;
       const auto residual_report = evaluate_constraint_residuals(
         prepared->constraints, primal, lower_bound, upper_bound,
         static_cast<double>(impl_->physical_absolute_tolerance),

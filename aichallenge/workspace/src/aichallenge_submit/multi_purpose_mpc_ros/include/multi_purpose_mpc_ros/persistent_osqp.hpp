@@ -160,6 +160,11 @@ std::optional<ConstraintFailureDiagnostic> make_constraint_failure_diagnostic(
 struct SolveOutcome
 {
   std::optional<SolveResult> result;
+  /// Finite physical-coordinate iterate retained solely for offline failure
+  /// diagnosis.  This is never a solved result and must not be converted to a
+  /// command, warm-start Store entry or certified execution artifact without
+  /// independently passing the architecture proof chain.
+  std::optional<Eigen::VectorXd> rejected_primal;
   std::optional<ConstraintFailureDiagnostic> constraint_failure;
   std::string failure_detail;
   SolveTelemetry telemetry;

@@ -201,6 +201,7 @@ TEST(MpccArchitectureSnapshot, WritesLoadsAndReplaysExactProblem)
       Eigen::VectorXd::Zero(1), Eigen::VectorXd::Zero(1)}};
   persistent_osqp::SolveOutcome production_outcome;
   production_outcome.failure_detail = "recorded-test-failure";
+  production_outcome.rejected_primal = Eigen::VectorXd::Constant(1, 0.25);
 
   const auto written = record_failure(
     snapshot, request, problem, warm_start, production_outcome,
@@ -215,6 +216,8 @@ TEST(MpccArchitectureSnapshot, WritesLoadsAndReplaysExactProblem)
   EXPECT_EQ(loaded->intent, "shiftout");
   EXPECT_EQ(loaded->pipeline_stage, "initial");
   ASSERT_TRUE(loaded->warm_start.has_value());
+  ASSERT_TRUE(loaded->rejected_primal.has_value());
+  EXPECT_DOUBLE_EQ((*loaded->rejected_primal)[0], 0.25);
   EXPECT_TRUE(loaded->problem.linear_cost.isApprox(problem.linear_cost));
   EXPECT_TRUE(loaded->problem.lower_bound.isApprox(problem.lower_bound));
   EXPECT_TRUE(loaded->problem.upper_bound.isApprox(problem.upper_bound));

@@ -35,11 +35,14 @@ int main(int argc, char ** argv)
   const bool external_primal_physical_only =
     argc == 4 && std::string{argv[2]} ==
     "--external-primal-physical-nonlinear-oracle";
+  const bool rejected_primal_only =
+    argc == 3 && std::string{argv[2]} == "--rejected-primal-only";
   if (
     argc != 2 && !wall_restoration_only && !wall_buckets_only &&
     !physical_dynamic_sqp_only && !proof_guided_dynamic_sqp_only &&
     !external_primal && !external_primal_omit_heading &&
-    !external_primal_omit_lag && !external_primal_physical_only)
+    !external_primal_omit_lag && !external_primal_physical_only &&
+    !rejected_primal_only)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
                  "[--wall-restoration-only | --wall-buckets-only | "
@@ -49,7 +52,7 @@ int main(int argc, char ** argv)
                  "--external-primal-omit-wall-heading-bucket <values.txt> | "
                  "--external-primal-omit-wall-lag-bucket <values.txt> | "
                  "--external-primal-physical-nonlinear-oracle "
-                 "<values.txt>]\n";
+                 "<values.txt> | --rejected-primal-only]\n";
     return 2;
   }
   std::string detail;
@@ -60,7 +63,23 @@ int main(int argc, char ** argv)
     return 3;
   }
   comparison::Report report;
-  if (
+  if (rejected_primal_only) {
+    auto primal = recorded->recorded_qp.rejected_primal;
+    if (!primal.has_value()) {
+      // Older snapshots did not serialize the rejected iterate.  Replaying
+      // the immutable exact problem from a cold state is observation-only and
+      // reproduces the evidence without changing production authority.
+      const auto replay = architecture::replay_recorded_qp(argv[1], false);
+      primal = replay.outcome.rejected_primal;
+    }
+    if (!primal.has_value()) {
+      std::cerr << "rejected primal unavailable after exact-QP replay\n";
+      return 6;
+    }
+    report = comparison::verify_external_primal(
+      recorded.value(), primal.value(),
+      comparison::ExternalPrimalConstraintPolicy::ExactRecorded);
+  } else if (
     external_primal || external_primal_omit_heading ||
     external_primal_omit_lag || external_primal_physical_only)
   {

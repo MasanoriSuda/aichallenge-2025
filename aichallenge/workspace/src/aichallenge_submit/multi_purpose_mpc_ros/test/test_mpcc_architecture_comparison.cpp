@@ -281,7 +281,7 @@ TEST(
     recorded(source_snapshot()));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 5U);
+  ASSERT_EQ(report.arms.size(), 4U);
   EXPECT_EQ(report.arms[0].arm, Arm::ProductionLeftG);
   EXPECT_EQ(report.arms[1].arm, Arm::ProofGuidedProductionLeftM);
   EXPECT_EQ(report.arms[2].arm, Arm::ProductionRightG);
@@ -375,7 +375,7 @@ TEST(MpccArchitectureComparison, FollowComparesOnlyPersistentAndStatelessSides)
   const auto report = compare(recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 4U);
+  ASSERT_EQ(report.arms.size(), 3U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
@@ -427,20 +427,25 @@ TEST(MpccArchitectureComparison, WallBucketAuditKeepsExactProofChain)
 {
   const auto report = compare_wall_buckets(recorded(source_snapshot()));
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 3U);
+  ASSERT_EQ(report.arms.size(), 5U);
   EXPECT_EQ(report.arms[0].arm, Arm::WallOmitHeadingJ);
   EXPECT_EQ(report.arms[1].arm, Arm::WallOmitLagK);
   EXPECT_EQ(report.arms[2].arm, Arm::WallOmitPoseN);
   EXPECT_EQ(report.arms[3].arm, Arm::WallOmitPoseDirectO);
   EXPECT_EQ(report.arms[4].arm, Arm::WallProductionP);
-  for (const auto & arm : report.arms) {
+  for (std::size_t index = 0; index < report.arms.size(); ++index) {
+    const auto & arm = report.arms[index];
     EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
     ASSERT_TRUE(arm.bundle.has_value());
     EXPECT_EQ(
       arm.bundle->wall_certificate.outcome,
       mpcc_rate_resolved_physical_wall::Outcome::Accepted);
     EXPECT_TRUE(arm.bundle->dynamic_certificate.clear);
-    EXPECT_NE(arm.detail.find("wall-bucket-audit=omit-"), std::string::npos);
+    if (index < 4U) {
+      EXPECT_NE(arm.detail.find("wall-bucket-audit=omit-"), std::string::npos);
+    } else {
+      EXPECT_EQ(arm.detail.find("wall-bucket-audit=omit-"), std::string::npos);
+    }
   }
 }
 
@@ -510,6 +515,25 @@ TEST(MpccArchitectureComparison, ExternalPrimalBucketOracleKeepsPhysicalProofs)
 TEST(MpccArchitectureComparison, PhysicalNonlinearOracleCannotBypassExactProofs)
 {
   auto [input, primal] = recorded_with_solved_qp(source_snapshot());
+  // PhysicalNonlinearOracle intentionally skips affine residual ownership,
+  // so its positive fixture must itself be an exact nonlinear rollout rather
+  // than a merely tolerance-valid affine QP iterate.  On this straight,
+  // zero-steering fixture, v=2 m/s and v_theta=2 m/s advance progress by
+  // exactly 0.2 m per 0.1 s stage while every other state remains constant.
+  const int horizon = input.source.request.horizon_steps;
+  const int state_values = model::kStateDimension * (horizon + 1);
+  ASSERT_EQ(primal.size(), state_values + model::kInputDimension * horizon);
+  for (int stage = 0; stage <= horizon; ++stage) {
+    const int offset = stage * model::kStateDimension;
+    primal.segment(offset, model::kStateDimension).setZero();
+    primal[offset + model::kVelocityIndex] = 2.0;
+    primal[offset + model::kProgressIndex] = 0.2 * stage;
+  }
+  for (int stage = 0; stage < horizon; ++stage) {
+    const int offset = state_values + stage * model::kInputDimension;
+    primal.segment(offset, model::kInputDimension).setZero();
+    primal[offset + model::kVirtualProgressSpeedIndex] = 2.0;
+  }
   const auto accepted = verify_external_primal(
     input, primal, ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle);
   ASSERT_TRUE(accepted.source_accepted) << accepted.detail;

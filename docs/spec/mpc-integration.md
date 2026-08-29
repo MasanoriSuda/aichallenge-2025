@@ -2960,6 +2960,30 @@ retry、fallbackは変更していない。
 `normal-avoidance-positive`または`normal-avoidance-negative`となり、Emergency tailやcallback overrunを
 増やさないことを確認する。
 
+#### Stopからnormalへのstateless current-world Bundle（2026-08-29、2025由来の暫定）
+
+非同期seven-state artifactの先頭操舵が、実際にwireへ出た直前commandから1 publication intervalで
+到達不能な場合、そのsource artifactを実行済みに読み替えてはならない。一方、同じcontrol列を現在の
+serialized predecessorへexactに射影し、現在stateからnonlinear continuationを再構築した結果が、同一の
+壁、timed dynamic-obstacle、Follow gapおよびterminal Stop suffix証明を通過した場合、その1 decisionは
+stateless current-world Bundleとしてcanonical normal authorityを持てる。
+
+Bundleはsource artifactをhomotopy、control列、problem fingerprintのimmutable provenanceとして保持するが、
+`CertifiedPlanStore::mark_executed()`を呼ばない。source artifactの未変更first commandがpublishされたと
+誤記録すると、次周期のcursorとwire predecessorが再び別物になるためである。次周期はfresh candidate、
+実際にexecutedとなったplan、または新しくcurrent-world証明したBundleを必須とし、Bundleの存在だけで
+age、lease、grace、timeoutを延長しない。
+
+`output/20260829-214906`ではD1がnormal／Emergencyを293 decision観測した後、最終速度0.0 m/sでStopへ
+固定された。修正後の`output/20260829-220933`ではD1がcurrent-world Bundleを121 decision publishし、
+ログ上の連続したEmergencyからBundleへの復帰を114回観測、0 m/s付近から最大7.95 m/sへ再加速した。
+Bundle publicationに伴うStore execution-promotion rejectは0で、全54 package testも合格した。
+
+同runには別系統の短いEmergency、Recoveryによるfinal command override、callback overrunが残る。したがって
+これはStop固定を作るpersistent publication join defectの修正であり、統合品質GateまたはOvertake完遂の
+合格を意味しない。失敗したwall／dynamic／terminal proofは従来どおり`steering-unreachable`へ閉じ、
+Emergency Stop以外のnormal fallbackを追加しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

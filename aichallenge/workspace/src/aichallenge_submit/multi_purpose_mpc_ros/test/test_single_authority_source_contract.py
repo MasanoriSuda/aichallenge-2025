@@ -2789,8 +2789,8 @@ def test_on_trajectory_connector_is_observation_only() -> None:
     assert "connector_result.accepted()" not in retained
 
 
-def test_latest_state_feedback_ab_cannot_create_authority() -> None:
-    """The bounded feedback projection remains diagnostic until certified."""
+def test_latest_state_feedback_bundle_uses_common_proof_and_publisher() -> None:
+    """The connector has no publisher and only the common proof grants authority."""
 
     feedback_header = (
         PACKAGE_ROOT
@@ -2818,21 +2818,27 @@ def test_latest_state_feedback_ab_cannot_create_authority() -> None:
     shadow_mode = retained_source.index(
         "feedback_shadow_mode = true;", feedback_call
     )
-    restore_production_reject = retained_source.index(
+    failed_connection_stays_rejected = retained_source.index(
         "result.reason = Reason::SteeringUnreachable;", shadow_mode
     )
-    observation_success = retained_source.index(
-        "return complete_continuation_proof(Reason::Accepted);",
-        restore_production_reject,
+    bundle_classification = retained_source.index(
+        "proof.latest_state_feedback_bundle = feedback_shadow_mode;",
+        failed_connection_stays_rejected,
     )
     proof_authority = retained_source.index("result.proof = std::move(proof);")
-    assert feedback_call < shadow_mode < restore_production_reject
-    assert observation_success < proof_authority
+    assert feedback_call < shadow_mode < failed_connection_stays_rejected
+    assert failed_connection_stays_rejected < bundle_classification < proof_authority
+    assert "return complete_continuation_proof(Reason::Accepted);" not in retained_source
 
     controller = SOURCE
     assert "feedback_shadow_proof_available" in controller
     assert "feedback_shadow_proof_available ?" in controller
-    assert "if (retained.feedback_shadow_proof_available)" not in controller
+    assert "stateless_current_world_bundle" in controller
+    assert (
+        "!retained.selected_from_executed &&\n"
+        "      !retained.stateless_current_world_bundle"
+        in controller
+    )
 
 
 def test_normal_candidate_clock_separates_bootstrap_from_moving_successor() -> None:

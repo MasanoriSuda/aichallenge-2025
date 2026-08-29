@@ -757,7 +757,9 @@ TEST(
   EXPECT_NEAR(result.progress_difference_m, 0.0, 1e-9);
 }
 
-TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  BuildsCurrentWorldBundleForProvedUnreachablePreparedSteering)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
@@ -765,7 +767,7 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
   request.previous_published_steering_rad = -0.10;
   request.previous_published_command_age_sec = 0.0;
   const auto result = retained::evaluate(request);
-  EXPECT_EQ(result.reason, retained::Reason::SteeringUnreachable);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
   EXPECT_NEAR(result.current_steering_rad, 0.105, 1e-9);
   EXPECT_NEAR(result.current_time_steering_rad, -0.10, 1e-9);
   EXPECT_NEAR(result.previous_published_steering_rad, -0.10, 1e-9);
@@ -792,7 +794,12 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsUnreachableSteering)
   EXPECT_EQ(
     result.feedback_shadow_proof_reason, retained::Reason::Accepted);
   EXPECT_TRUE(result.feedback_shadow_proof_available);
-  EXPECT_FALSE(result.proof.has_value());
+  // A complete latest-state connection is a stateless current-world bundle,
+  // not an excuse to retain the source artifact's unreachable first command.
+  // The common production adapter must receive that exact proved bundle.
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_TRUE(result.proof->latest_state_feedback_bundle);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
 }
 
 TEST(
@@ -826,26 +833,29 @@ TEST(
   request.previous_published_steering_rad = 0.079;
   request.previous_published_command_age_sec = 0.025;
 
-  // With a published origin at 1.0, the command cursor has executed 50 ms and
-  // asks for steering 0.105.  That is not reachable from the actual last
-  // serialized command in one 25 ms publication interval.
+  // With a published origin at 1.0, the source cursor has executed 50 ms and
+  // asks for steering 0.105.  The source sample is not directly reachable,
+  // but its exact current-world feedback bundle is.
   request.execution_clock = {
     retained::ExecutionClockKind::PublishedPlan, 1.0, 0.0};
   const auto fictitiously_aged = retained::evaluate(request);
-  EXPECT_EQ(
-    fictitiously_aged.reason, retained::Reason::SteeringUnreachable);
+  EXPECT_EQ(fictitiously_aged.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(fictitiously_aged.proof.has_value());
+  EXPECT_TRUE(fictitiously_aged.proof->latest_state_feedback_bundle);
   EXPECT_NEAR(fictitiously_aged.cursor_elapsed_sec, 0.05, 1e-9);
 
   // A certified candidate which never crossed the publisher receives no
   // authority for its skipped prefix.  It is nevertheless joined at the
-  // time-aligned suffix, where the same current-world actuator proof correctly
-  // rejects this deliberately unreachable command.
+  // time-aligned suffix, where the same current-world proof owns the
+  // reachable feedback command without claiming the skipped prefix.
   request.execution_clock = {
     retained::ExecutionClockKind::TimeAlignedCandidate,
     std::numeric_limits<double>::quiet_NaN(),
     std::numeric_limits<double>::quiet_NaN()};
   const auto candidate = retained::evaluate(request);
-  EXPECT_EQ(candidate.reason, retained::Reason::SteeringUnreachable);
+  EXPECT_EQ(candidate.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(candidate.proof.has_value());
+  EXPECT_TRUE(candidate.proof->latest_state_feedback_bundle);
   EXPECT_NEAR(candidate.cursor_elapsed_sec, 0.05, 1e-9);
 }
 
@@ -973,9 +983,10 @@ TEST(
     accepted.proof->steering_reachability_duration_sec, 0.040, 1e-9);
 
   request.previous_published_command_age_sec = 0.010;
-  EXPECT_EQ(
-    retained::evaluate(request).reason,
-    retained::Reason::SteeringUnreachable);
+  const auto connected = retained::evaluate(request);
+  EXPECT_EQ(connected.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(connected.proof.has_value());
+  EXPECT_TRUE(connected.proof->latest_state_feedback_bundle);
 }
 
 TEST(
@@ -1058,7 +1069,7 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  FeedbackShadowUsesSamePublisherIntervalWallBlockWithoutAuthority)
+  FeedbackBundleUsesSamePublisherIntervalWallBlockWithoutAuthority)
 {
   auto grid = free_grid();
   const auto occupied = grid->world_to_grid(50.15, 0.05);

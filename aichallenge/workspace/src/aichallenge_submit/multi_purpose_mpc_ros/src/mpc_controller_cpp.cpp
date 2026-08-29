@@ -7170,6 +7170,7 @@ struct RateResolvedRetainedShadowEvaluation
   std::optional<rate_resolved_production::Authority> production_authority;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
   bool selected_from_executed{false};
+  bool stateless_current_world_bundle{false};
   bool on_trajectory_connector_attempted{false};
   on_trajectory_connector::Reason on_trajectory_connector_reason{
     on_trajectory_connector::Reason::InvalidRequest};
@@ -24547,6 +24548,8 @@ struct MPC
         result.proof->follow_checked_state_count;
       evaluation.follow_minimum_gap_m =
         result.proof->follow_minimum_gap_m;
+      evaluation.stateless_current_world_bundle =
+        result.proof->latest_state_feedback_bundle;
     }
     return finish();
   }
@@ -26672,11 +26675,14 @@ struct MPC
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id, command, retained.selected_plan,
       retained.control_origin_sec, retained.cursor_elapsed_sec,
-      !retained.selected_from_executed};
+      !retained.selected_from_executed &&
+      !retained.stateless_current_world_bundle};
     last_control_resolution_reason_ =
       std::string{"canonical-rate-resolved-"} +
       mpcc_contract::to_string(intent) +
-      (retained.selected_from_executed ? "-executed-retained" :
+      (retained.stateless_current_world_bundle ?
+      "-current-world-bundle" :
+      retained.selected_from_executed ? "-executed-retained" :
       "-certified-candidate");
     last_solved_wp_id = problem.tracking_wp_id;
     MpcControlCycleResult output{

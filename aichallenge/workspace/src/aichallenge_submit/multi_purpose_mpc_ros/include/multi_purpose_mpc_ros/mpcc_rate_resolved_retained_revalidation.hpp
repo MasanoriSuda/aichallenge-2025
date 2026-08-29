@@ -214,6 +214,12 @@ const char * to_string(DynamicObstacleProofScope scope) noexcept;
 struct Proof
 {
   std::shared_ptr<const certified::CertifiedPlan> plan;
+  /// True when the source artifact's first steering sample could not join the
+  /// actually serialized predecessor and this proof instead owns the exact
+  /// latest-state feedback connection.  Such a proof is a stateless
+  /// current-world bundle: it may command the proved actuation, but it must
+  /// never claim that the unmodified source artifact was published.
+  bool latest_state_feedback_bundle{false};
   std::uint64_t decision_id{};
   std::uint64_t obstacle_generation{};
   double observed_sec{};

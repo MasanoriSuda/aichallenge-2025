@@ -1287,11 +1287,19 @@ Result evaluate(const Request & request)
   }
 
   if (feedback_shadow_mode) {
-    return complete_continuation_proof(Reason::Accepted);
+    // The analytical feedback command, nonlinear continuation and unchanged
+    // wall/dynamic/terminal proof together form one stateless current-world
+    // bundle.  The old behavior deliberately discarded this complete proof,
+    // which made an external Stop alter the predecessor forever.  Preserve
+    // the source plan only as immutable homotopy/control provenance; the
+    // publication ledger must not mark that unmodified plan as executed.
+    result.feedback_shadow_proof_reason = Reason::Accepted;
+    result.feedback_shadow_proof_available = true;
   }
 
   Proof proof;
   proof.plan = request.plan;
+  proof.latest_state_feedback_bundle = feedback_shadow_mode;
   proof.decision_id = request.decision_id;
   proof.obstacle_generation = request.obstacles.generation;
   proof.observed_sec = request.obstacles.observed_sec;
@@ -1309,7 +1317,9 @@ Result evaluate(const Request & request)
   proof.current_time_steering_rad = request.current_time_steering_rad;
   proof.previous_published_steering_rad =
     request.previous_published_steering_rad;
-  proof.steering_difference_rad = steering_difference_rad;
+  proof.steering_difference_rad =
+    current_world_actuation.steering_rad -
+    request.previous_published_steering_rad;
   proof.maximum_steering_step_rad = maximum_steering_step_rad;
   proof.reachable_steering_lower_rad = reachable_steering_lower_rad;
   proof.reachable_steering_upper_rad = reachable_steering_upper_rad;

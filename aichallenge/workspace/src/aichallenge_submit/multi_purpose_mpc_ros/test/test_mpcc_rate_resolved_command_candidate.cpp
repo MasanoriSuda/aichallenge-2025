@@ -252,6 +252,28 @@ TEST(RateResolvedProductionAdapter, BuildsCanonicalSixStateAuthority)
 
 TEST(
   RateResolvedProductionAdapter,
+  BuildsCanonicalAuthorityFromCurrentWorldFeedbackBundle)
+{
+  auto retained_result = accepted_result();
+  retained_result.proof->latest_state_feedback_bundle = true;
+  retained_result.proof->actuation.steering_rad = 0.0795;
+  retained_result.proof->continuation_stage_end_steering_rad = {0.0795};
+
+  const auto result = production::build(retained_result);
+
+  ASSERT_EQ(result.reason, production::Reason::Available);
+  ASSERT_TRUE(result.authority.has_value());
+  EXPECT_EQ(
+    result.authority->command.source,
+    contract::CanonicalNormalAuthoritySource::RetainedCertified);
+  EXPECT_DOUBLE_EQ(
+    result.authority->command.steering_tire_angle_rad, 0.0795);
+  ASSERT_EQ(result.authority->steering_horizon_rad.size(), 1U);
+  EXPECT_DOUBLE_EQ(result.authority->steering_horizon_rad.front(), 0.0795);
+}
+
+TEST(
+  RateResolvedProductionAdapter,
   RejectsPublisherIntervalPrefixWithoutCertifiedTerminalSuffix)
 {
   auto retained_result = accepted_result();

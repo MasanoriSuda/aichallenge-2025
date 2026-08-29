@@ -460,6 +460,20 @@
         "dynamic-obstacle Cruise production fallthrough to the single neutral automatic branch"
       ],
       "revisit_condition": "a same-world replay disproves either rebuilt side certificate, or a dynamic run shows the shared population introduces new Emergency tails, callback overruns or identity mismatches; do not restore the neutral branch without such evidence"
+    },
+    {
+      "experiment_id": "20260829-stop-normal-current-world-bundle",
+      "baseline_commit": "eb3b4fc26f37bb26cab5bee5289bfab8c2e9b6e1",
+      "snapshot_ids": [],
+      "hypothesis": "the permanent Stop is caused by persistent-plan publication joining an old artifact first command to a newer serialized predecessor even after an exact current-world connection passes every unchanged physical proof",
+      "changed_dimension": "production_stateless_current_world_publication_bundle",
+      "result": "accepted",
+      "reason": "baseline run 20260829-214906 ended D1 at 0.0 m/s with no current-world Bundle authority, while run 20260829-220933 published 121 D1 Bundles, observed 114 logged Emergency-to-Bundle exits and reaccelerated to 7.95 m/s; failed wall, dynamic and terminal proofs remained fail-closed, 54 package tests passed, and source-plan execution promotion rejects remained zero",
+      "production_impact": "a fully proved latest-state steering connection may use the existing canonical normal publisher for one current-world decision; it is tagged stateless and never marks the immutable source artifact executed; no solver setting, clearance, timeout, lease, grace, retry, fallback or configuration changed",
+      "deleted_code": [
+        "diagnostic-only discard of a successful latest-state nonlinear and physical proof"
+      ],
+      "revisit_condition": "a same-world replay shows the published Bundle differs from its physical certificate, a failed proof produces normal authority, or production marks the unmodified source plan executed"
     }
   ]
 }

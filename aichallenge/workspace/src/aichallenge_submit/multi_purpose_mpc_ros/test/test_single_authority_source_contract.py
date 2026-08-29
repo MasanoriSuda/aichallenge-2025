@@ -1031,7 +1031,11 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     follow_population = SOURCE[follow_population_start:follow_population_end]
     assert "build_follow_escape_candidates(" in follow_population
     assert "persistent-follow" in follow_population
-    assert "std::make_shared<rate_resolved_shadow::SolverContext>()" in follow_population
+    assert "negative_solver_context" in follow_population
+    assert "positive_solver_context" in follow_population
+    assert "std::make_shared<rate_resolved_shadow::SolverContext>()" not in (
+        follow_population
+    )
     assert "observation_only_store" in follow_population
     assert "certified_plan_store->replace(" in follow_population
     assert follow_population.index("persistent-follow") < follow_population.index(
@@ -1047,6 +1051,12 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         normal_submit_start,
     )
     normal_submit = SOURCE[normal_submit_start:normal_submit_end]
+    assert "rate_resolved_follow_escape_negative_solver_context_" in normal_submit
+    assert "rate_resolved_follow_escape_positive_solver_context_" in normal_submit
+    assert "follow_negative_solver_context, follow_positive_solver_context" in (
+        normal_submit
+    )
+
     assert "evaluate_rate_resolved_normal_population(" in normal_submit
     assert normal_submit.count(
         "rate_resolved_track_cruise_shadow_worker_->submit_latest("

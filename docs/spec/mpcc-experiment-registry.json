@@ -552,6 +552,24 @@
         "dynamic escape identity request fields and promotion tests"
       ],
       "revisit_condition": "a pre-Mission avoidance again requests canonical ShiftOut, an uncertified normal side gains authority, changing dynamic obstacle identity preserves the prior encounter side, or a real OvertakeLine ShiftOut bypasses Mission/Gate A"
+    },
+    {
+      "experiment_id": "20260830-dynamic-wait-canonical-intent",
+      "baseline_commit": "bfaf7333",
+      "snapshot_ids": [
+        "20260830-004030-decision-1473"
+      ],
+      "hypothesis": "the DynamicWait entry Emergency is caused by canonical intent depending on an optional legacy prefix which is generated after the canonical execution identity already exists",
+      "changed_dimension": "production_dynamic_wait_semantic_intent_ownership",
+      "result": "accepted",
+      "reason": "the baseline had one Unknown-intent DynamicWait Emergency at 4.72 m/s; run 20260830-005711 had zero old signatures, resolved all four logged waits from coherent canonical ShiftOut identity, and published certified normal solutions at decisions 1664 and 2960 while still failing closed for two distinct current-world admission failures",
+      "production_impact": "DynamicWait is a tactical no-transition whose ShiftOut/Pass semantics come only from a coherent canonical execution identity; the optional prefix is reference provenance and every normal command still requires the unchanged current-world seven-state and exact physical/terminal proof chain",
+      "deleted_code": [
+        "DynamicWaitPrefix lateral command owner",
+        "dynamic_wait_lateral_authority_active request contract",
+        "prefix-dependent DynamicWait canonical-intent reasons and conflict"
+      ],
+      "revisit_condition": "a wait without coherent target, generation, side and origin identity gains normal intent, an optional prefix publishes without current-world proof, the old Unknown-intent signature returns, or a hard DynamicWait failure no longer stops"
     }
   ]
 }

@@ -341,39 +341,45 @@ TEST(OvertakeExecutionOrchestrator, ClassifiesDynamicWaitWithoutPrefix)
   const auto result = orchestrator::resolve_authority(request);
   EXPECT_EQ(result.action, orchestrator::Action::DynamicWait);
   EXPECT_EQ(result.lateral_owner, orchestrator::LateralOwner::RacingLine);
-  EXPECT_NE(
-    result.conflicts & orchestrator::DynamicWaitWithoutLateralAuthority, 0U);
+  EXPECT_EQ(result.path_source, orchestrator::PathSource::RacingLine);
 }
 
-TEST(OvertakeExecutionOrchestrator, DynamicWaitLateralHoldOwnsPathWithoutForwardAuthority)
+TEST(OvertakeExecutionOrchestrator, DynamicWaitIdentityOwnsTacticalHomotopyWithoutPrefix)
 {
   orchestrator::AuthorityRequest request;
   request.episode_id = 2U;
   request.target_id = "d3";
-  request.phase = orchestrator::Phase::FollowPrepare;
+  request.mission_generation = 7U;
+  request.pass_side_sign = -1;
+  request.phase = orchestrator::Phase::ShiftOut;
   request.behavior = orchestrator::Behavior::Follow;
   request.dynamic_wait_active = true;
-  request.dynamic_wait_lateral_authority_active = true;
+  request.canonical_execution_identity_active = true;
   request.dynamic_wait_forward_prefix_active = false;
-  request.line_active = true;
+  request.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
 
   const auto result = orchestrator::resolve_authority(request);
   EXPECT_EQ(result.action, orchestrator::Action::DynamicWait);
-  EXPECT_EQ(result.lateral_owner, orchestrator::LateralOwner::DynamicWaitPrefix);
-  EXPECT_EQ(result.path_source, orchestrator::PathSource::DynamicWaitPrefix);
+  EXPECT_EQ(result.lateral_owner, orchestrator::LateralOwner::OvertakeLine);
+  EXPECT_EQ(result.path_source, orchestrator::PathSource::RacingLine);
+  const auto intent = orchestrator::resolve_canonical_control_intent(
+    request, result);
+  ASSERT_TRUE(intent.valid);
   EXPECT_EQ(
-    result.conflicts & orchestrator::DynamicWaitWithoutLateralAuthority, 0U);
+    intent.intent,
+    multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::ShiftOut);
 }
 
-TEST(OvertakeExecutionOrchestrator, PreservesLateralHoldDynamicWaitOriginIntent)
+TEST(OvertakeExecutionOrchestrator, PreservesCanonicalDynamicWaitOriginIntent)
 {
   orchestrator::AuthorityRequest shiftout;
   shiftout.mission_generation = 2U;
   shiftout.target_id = "d2";
+  shiftout.pass_side_sign = 1;
+  shiftout.phase = orchestrator::Phase::ShiftOut;
   shiftout.dynamic_wait_active = true;
-  shiftout.dynamic_wait_lateral_authority_active = true;
+  shiftout.canonical_execution_identity_active = true;
   shiftout.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
-  shiftout.line_active = true;
   const auto shiftout_authority = orchestrator::resolve_authority(shiftout);
   const auto shiftout_intent = orchestrator::resolve_canonical_control_intent(
     shiftout, shiftout_authority);
@@ -385,9 +391,10 @@ TEST(OvertakeExecutionOrchestrator, PreservesLateralHoldDynamicWaitOriginIntent)
   EXPECT_EQ(
     shiftout_intent.reason,
     orchestrator::CanonicalControlIntentReason::
-    LateralHoldDynamicWaitShiftOut);
+    CanonicalExecutionDynamicWaitShiftOut);
 
   auto pass = shiftout;
+  pass.phase = orchestrator::Phase::Pass;
   pass.dynamic_wait_origin_phase = orchestrator::Phase::Pass;
   const auto pass_authority = orchestrator::resolve_authority(pass);
   const auto pass_intent = orchestrator::resolve_canonical_control_intent(
@@ -398,20 +405,25 @@ TEST(OvertakeExecutionOrchestrator, PreservesLateralHoldDynamicWaitOriginIntent)
     multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Pass);
   EXPECT_EQ(
     pass_intent.reason,
-    orchestrator::CanonicalControlIntentReason::LateralHoldDynamicWaitPass);
+    orchestrator::CanonicalControlIntentReason::
+    CanonicalExecutionDynamicWaitPass);
 }
 
-TEST(OvertakeExecutionOrchestrator, PreservesRollingDynamicWaitOriginIntent)
+TEST(OvertakeExecutionOrchestrator, OptionalPrefixDoesNotChangeDynamicWaitIntent)
 {
   orchestrator::AuthorityRequest shiftout;
   shiftout.mission_generation = 3U;
   shiftout.target_id = "d2";
+  shiftout.pass_side_sign = -1;
+  shiftout.phase = orchestrator::Phase::ShiftOut;
   shiftout.dynamic_wait_active = true;
   shiftout.dynamic_wait_forward_prefix_active = true;
-  shiftout.dynamic_wait_lateral_authority_active = true;
+  shiftout.canonical_execution_identity_active = true;
   shiftout.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
-  shiftout.line_active = true;
   const auto shiftout_authority = orchestrator::resolve_authority(shiftout);
+  EXPECT_EQ(
+    shiftout_authority.path_source,
+    orchestrator::PathSource::DynamicWaitPrefix);
   const auto shiftout_intent = orchestrator::resolve_canonical_control_intent(
     shiftout, shiftout_authority);
 
@@ -421,9 +433,11 @@ TEST(OvertakeExecutionOrchestrator, PreservesRollingDynamicWaitOriginIntent)
     multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::ShiftOut);
   EXPECT_EQ(
     shiftout_intent.reason,
-    orchestrator::CanonicalControlIntentReason::RollingDynamicWaitShiftOut);
+    orchestrator::CanonicalControlIntentReason::
+    CanonicalExecutionDynamicWaitShiftOut);
 
   auto pass = shiftout;
+  pass.phase = orchestrator::Phase::Pass;
   pass.dynamic_wait_origin_phase = orchestrator::Phase::Pass;
   const auto pass_authority = orchestrator::resolve_authority(pass);
   const auto pass_intent = orchestrator::resolve_canonical_control_intent(
@@ -434,26 +448,35 @@ TEST(OvertakeExecutionOrchestrator, PreservesRollingDynamicWaitOriginIntent)
     multi_purpose_mpc_ros::mpcc_execution_contract::ControlIntent::Pass);
   EXPECT_EQ(
     pass_intent.reason,
-    orchestrator::CanonicalControlIntentReason::RollingDynamicWaitPass);
+    orchestrator::CanonicalControlIntentReason::
+    CanonicalExecutionDynamicWaitPass);
 }
 
 TEST(OvertakeExecutionOrchestrator, RejectsDynamicWaitWithoutExecutableProvenance)
 {
-  orchestrator::AuthorityRequest missing_lateral;
-  missing_lateral.dynamic_wait_active = true;
-  const auto missing_authority = orchestrator::resolve_authority(missing_lateral);
+  orchestrator::AuthorityRequest missing_execution_identity;
+  missing_execution_identity.mission_generation = 2U;
+  missing_execution_identity.target_id = "d2";
+  missing_execution_identity.pass_side_sign = 1;
+  missing_execution_identity.phase = orchestrator::Phase::ShiftOut;
+  missing_execution_identity.dynamic_wait_active = true;
+  missing_execution_identity.dynamic_wait_origin_phase =
+    orchestrator::Phase::ShiftOut;
+  const auto missing_authority =
+    orchestrator::resolve_authority(missing_execution_identity);
   const auto missing_intent = orchestrator::resolve_canonical_control_intent(
-    missing_lateral, missing_authority);
+    missing_execution_identity, missing_authority);
   EXPECT_FALSE(missing_intent.valid);
   EXPECT_EQ(
     missing_intent.reason,
-    orchestrator::CanonicalControlIntentReason::DynamicWaitWithoutLateralAuthority);
+    orchestrator::CanonicalControlIntentReason::
+    DynamicWaitWithoutCanonicalExecutionIdentity);
 
   orchestrator::AuthorityRequest missing_identity;
   missing_identity.dynamic_wait_active = true;
-  missing_identity.dynamic_wait_lateral_authority_active = true;
+  missing_identity.canonical_execution_identity_active = true;
   missing_identity.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
-  missing_identity.line_active = true;
+  missing_identity.phase = orchestrator::Phase::ShiftOut;
   const auto missing_identity_authority =
     orchestrator::resolve_authority(missing_identity);
   const auto missing_identity_intent =
@@ -463,16 +486,17 @@ TEST(OvertakeExecutionOrchestrator, RejectsDynamicWaitWithoutExecutableProvenanc
   EXPECT_EQ(
     missing_identity_intent.reason,
     orchestrator::CanonicalControlIntentReason::
-    DynamicWaitWithoutMissionIdentity);
+    DynamicWaitWithoutCanonicalExecutionIdentity);
 
   orchestrator::AuthorityRequest unsupported;
   unsupported.mission_generation = 3U;
   unsupported.target_id = "d2";
+  unsupported.pass_side_sign = 1;
   unsupported.dynamic_wait_active = true;
   unsupported.dynamic_wait_forward_prefix_active = true;
-  unsupported.dynamic_wait_lateral_authority_active = true;
+  unsupported.canonical_execution_identity_active = true;
   unsupported.dynamic_wait_origin_phase = orchestrator::Phase::Idle;
-  unsupported.line_active = true;
+  unsupported.phase = orchestrator::Phase::Idle;
   const auto unsupported_authority = orchestrator::resolve_authority(unsupported);
   const auto unsupported_intent = orchestrator::resolve_canonical_control_intent(
     unsupported, unsupported_authority);
@@ -480,6 +504,19 @@ TEST(OvertakeExecutionOrchestrator, RejectsDynamicWaitWithoutExecutableProvenanc
   EXPECT_EQ(
     unsupported_intent.reason,
     orchestrator::CanonicalControlIntentReason::UnsupportedDynamicWaitOrigin);
+
+  auto mismatched = unsupported;
+  mismatched.dynamic_wait_origin_phase = orchestrator::Phase::ShiftOut;
+  mismatched.phase = orchestrator::Phase::Pass;
+  const auto mismatched_authority = orchestrator::resolve_authority(mismatched);
+  const auto mismatched_intent =
+    orchestrator::resolve_canonical_control_intent(
+    mismatched, mismatched_authority);
+  EXPECT_FALSE(mismatched_intent.valid);
+  EXPECT_EQ(
+    mismatched_intent.reason,
+    orchestrator::CanonicalControlIntentReason::
+    DynamicWaitCanonicalPhaseMismatch);
 }
 
 TEST(OvertakeExecutionOrchestrator, ResolvesSafetyAndRacingCanonicalIntents)
@@ -835,7 +872,7 @@ TEST(OvertakeExecutionOrchestrator, SummarizesWholeEpisode)
   wait.mission_generation = 3U;
   wait.phase = orchestrator::Phase::FollowPrepare;
   wait.action = orchestrator::Action::DynamicWait;
-  wait.lateral_owner = orchestrator::LateralOwner::DynamicWaitPrefix;
+  wait.lateral_owner = orchestrator::LateralOwner::OvertakeLine;
   wait.dynamic_wait_active = true;
   wait.ego_speed_mps = 5.5;
   wait.maximum_required_lateral_accel_mps2 = 5.0;

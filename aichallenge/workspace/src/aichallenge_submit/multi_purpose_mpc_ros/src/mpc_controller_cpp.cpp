@@ -19693,8 +19693,8 @@ struct MPC
       overtake_line_state_.dynamic_mission_wait_active;
     authority_request.dynamic_wait_forward_prefix_active =
       overtake_line_state_.dynamic_mission_wait_forward_prefix_was_active;
-    authority_request.dynamic_wait_lateral_authority_active =
-      authority_request.dynamic_wait_active && overtake_line_output.active;
+    authority_request.canonical_execution_identity_active =
+      canonical_execution_identity.active;
     authority_request.dynamic_wait_origin_phase =
       orchestrator_phase(overtake_line_state_.follow_prepare_origin_phase);
     authority_request.contact_continuation_active =
@@ -27218,7 +27218,7 @@ struct MPC
       if (unresolved_dynamic_wait_canonical_scope()) {
         return canonical_normal_emergency_stop(
           problem, control_intent,
-          "dynamic wait has no executable canonical lateral authority");
+          "dynamic wait has no coherent canonical execution identity");
       }
       return canonical_normal_emergency_stop(
         problem, control_intent,

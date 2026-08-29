@@ -47,7 +47,6 @@ enum class LateralOwner {
   GapPlanner,
   DynamicObstacleEscape,
   OvertakeLine,
-  DynamicWaitPrefix,
   ContactEscape,
   RecoveryLine,
   SafetyHold,
@@ -81,7 +80,6 @@ enum AuthorityConflict : std::uint32_t {
   SafetyWithActiveLine = 1U << 0U,
   SafetyWithSpeedFloor = 1U << 1U,
   ReleasedPassWithFollowCap = 1U << 2U,
-  DynamicWaitWithoutLateralAuthority = 1U << 3U,
   ActivePhaseWithoutTarget = 1U << 4U,
   MultipleLateralAuthorities = 1U << 5U,
   InvalidSpeedWindow = 1U << 6U,
@@ -199,7 +197,9 @@ struct AuthorityRequest {
   bool dynamic_obstacle_follow_cap_suppressed{false};
   bool dynamic_wait_active{false};
   bool dynamic_wait_forward_prefix_active{false};
-  bool dynamic_wait_lateral_authority_active{false};
+  /// Identity provenance only. This selects the interrupted semantic intent;
+  /// every actual command still requires the ordinary current-world proof.
+  bool canonical_execution_identity_active{false};
   Phase dynamic_wait_origin_phase{Phase::Idle};
   bool contact_continuation_active{false};
   bool precontact_escape_active{false};
@@ -327,12 +327,10 @@ enum class CanonicalControlIntentReason {
   CruiseDuringRaceSession,
   DynamicEscapeNormalAvoidance,
   FollowWithoutCoherentFrontObservation,
-  LateralHoldDynamicWaitShiftOut,
-  LateralHoldDynamicWaitPass,
-  RollingDynamicWaitShiftOut,
-  RollingDynamicWaitPass,
-  DynamicWaitWithoutLateralAuthority,
-  DynamicWaitWithoutMissionIdentity,
+  CanonicalExecutionDynamicWaitShiftOut,
+  CanonicalExecutionDynamicWaitPass,
+  DynamicWaitWithoutCanonicalExecutionIdentity,
+  DynamicWaitCanonicalPhaseMismatch,
   UnsupportedDynamicWaitOrigin,
 };
 
@@ -347,9 +345,9 @@ struct CanonicalControlIntentResolution {
 };
 
 /// Convert the complete authority decision into one canonical problem intent.
-/// DynamicWait is a lateral execution mode.  Its longitudinal problem intent
-/// remains the committed ShiftOut/Pass origin whether the owned lateral path
-/// is a rolling prefix or a held mission path.
+/// DynamicWait is a tactical no-transition. Its problem intent remains the
+/// committed ShiftOut/Pass origin only while a coherent canonical execution
+/// identity exists. An optional prefix is candidate provenance, not authority.
 CanonicalControlIntentResolution resolve_canonical_control_intent(
   const AuthorityRequest & request,
   const AuthorityResolution & resolution) noexcept;

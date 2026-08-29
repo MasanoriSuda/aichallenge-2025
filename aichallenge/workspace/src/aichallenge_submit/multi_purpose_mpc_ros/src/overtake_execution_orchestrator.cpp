@@ -19,6 +19,11 @@ bool finite_nonnegative(const double value) noexcept
   return std::isfinite(value) && value >= 0.0;
 }
 
+bool side_valid(const int side_sign) noexcept
+{
+  return side_sign == -1 || side_sign == 1;
+}
+
 std::string finite_or(const double value, const char * fallback)
 {
   if (!std::isfinite(value)) {
@@ -283,9 +288,6 @@ CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
   const CanonicalExecutionIdentityRequest & request) noexcept
 {
   CanonicalExecutionIdentityResolution result;
-  const auto side_valid = [](const int side_sign) {
-      return side_sign == -1 || side_sign == 1;
-    };
   const bool dynamic_wait_origin_valid =
     request.dynamic_wait_origin_phase == Phase::ShiftOut ||
     request.dynamic_wait_origin_phase == Phase::Pass;
@@ -299,11 +301,10 @@ CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
     effective_line_phase == Phase::Return;
   // `overtake_line_active` describes the current tactical stage corridor.
   // DynamicWait is entered precisely when that corridor is temporarily
-  // unavailable, while a separately certified lateral prefix still owns the
-  // interrupted ShiftOut/Pass execution.  Treating the tactical flag as the
-  // execution-identity flag erased the canonical MPCC producer for one cycle
-  // and forced an emergency stop.  DynamicWait therefore keeps the line
-  // identity alive, but still has to pass every ordinary identity check below.
+  // unavailable. The current-world canonical publisher, not the optional
+  // legacy prefix, owns the interrupted ShiftOut/Pass command. Treating the
+  // tactical flag as an identity request keeps the semantic Mission alive but
+  // still has to pass every ordinary identity check below.
   const bool line_execution_identity_requested =
     request.overtake_line_active || request.dynamic_wait_active;
   if (line_execution_identity_requested) {
@@ -447,10 +448,6 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
     if (request.phase == Phase::Recovery) {
       result.lateral_owner = LateralOwner::RecoveryLine;
     } else if (
-      request.dynamic_wait_active && request.dynamic_wait_lateral_authority_active)
-    {
-      result.lateral_owner = LateralOwner::DynamicWaitPrefix;
-    } else if (
       request.contact_continuation_active || request.precontact_escape_active)
     {
       result.lateral_owner = LateralOwner::ContactEscape;
@@ -459,6 +456,10 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
     } else {
       result.lateral_owner = LateralOwner::OvertakeLine;
     }
+  } else if (
+    request.dynamic_wait_active && request.canonical_execution_identity_active)
+  {
+    result.lateral_owner = LateralOwner::OvertakeLine;
   } else if (request.dynamic_obstacle_escape_active) {
     result.lateral_owner = LateralOwner::DynamicObstacleEscape;
   } else if (request.gap_planner_active) {
@@ -476,7 +477,7 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
   {
     result.path_source = PathSource::ContactEscape;
   } else if (
-    request.dynamic_wait_active && request.dynamic_wait_lateral_authority_active)
+    request.dynamic_wait_active && request.dynamic_wait_forward_prefix_active)
   {
     result.path_source = PathSource::DynamicWaitPrefix;
   } else if (request.dynamic_obstacle_escape_active) {
@@ -524,12 +525,6 @@ AuthorityResolution resolve_authority(const AuthorityRequest & request) noexcept
   }
   if (request.front_cap_release_ready && request.follow_cap_active) {
     result.conflicts |= ReleasedPassWithFollowCap;
-  }
-  if (
-    request.dynamic_wait_active && !request.dynamic_wait_lateral_authority_active &&
-    !request.line_active && !safety_active && request.phase != Phase::Recovery)
-  {
-    result.conflicts |= DynamicWaitWithoutLateralAuthority;
   }
   if (active_phase && request.target_id.empty()) {
     result.conflicts |= ActivePhaseWithoutTarget;
@@ -587,18 +582,14 @@ const char * to_string(const CanonicalControlIntentReason reason) noexcept
       return "dynamic-escape-normal-avoidance";
     case CanonicalControlIntentReason::FollowWithoutCoherentFrontObservation:
       return "follow-without-coherent-front-observation";
-    case CanonicalControlIntentReason::LateralHoldDynamicWaitShiftOut:
-      return "lateral-hold-dynamic-wait-shiftout";
-    case CanonicalControlIntentReason::LateralHoldDynamicWaitPass:
-      return "lateral-hold-dynamic-wait-pass";
-    case CanonicalControlIntentReason::RollingDynamicWaitShiftOut:
-      return "rolling-dynamic-wait-shiftout";
-    case CanonicalControlIntentReason::RollingDynamicWaitPass:
-      return "rolling-dynamic-wait-pass";
-    case CanonicalControlIntentReason::DynamicWaitWithoutLateralAuthority:
-      return "dynamic-wait-without-lateral-authority";
-    case CanonicalControlIntentReason::DynamicWaitWithoutMissionIdentity:
-      return "dynamic-wait-without-mission-identity";
+    case CanonicalControlIntentReason::CanonicalExecutionDynamicWaitShiftOut:
+      return "canonical-execution-dynamic-wait-shiftout";
+    case CanonicalControlIntentReason::CanonicalExecutionDynamicWaitPass:
+      return "canonical-execution-dynamic-wait-pass";
+    case CanonicalControlIntentReason::DynamicWaitWithoutCanonicalExecutionIdentity:
+      return "dynamic-wait-without-canonical-execution-identity";
+    case CanonicalControlIntentReason::DynamicWaitCanonicalPhaseMismatch:
+      return "dynamic-wait-canonical-phase-mismatch";
     case CanonicalControlIntentReason::UnsupportedDynamicWaitOrigin:
       return "unsupported-dynamic-wait-origin";
   }
@@ -666,34 +657,37 @@ CanonicalControlIntentResolution resolve_canonical_control_intent(
       break;
     case Action::DynamicWait:
       if (
-        !request.dynamic_wait_lateral_authority_active ||
-        resolution.lateral_owner != LateralOwner::DynamicWaitPrefix ||
-        resolution.path_source != PathSource::DynamicWaitPrefix)
+        !request.canonical_execution_identity_active ||
+        request.mission_generation == 0U || request.target_id.empty() ||
+        !side_valid(request.pass_side_sign))
       {
         result.reason =
-          CanonicalControlIntentReason::DynamicWaitWithoutLateralAuthority;
+          CanonicalControlIntentReason::
+          DynamicWaitWithoutCanonicalExecutionIdentity;
         break;
       }
-      if (request.mission_generation == 0U || request.target_id.empty()) {
+      if (
+        request.dynamic_wait_origin_phase != Phase::ShiftOut &&
+        request.dynamic_wait_origin_phase != Phase::Pass)
+      {
         result.reason =
-          CanonicalControlIntentReason::DynamicWaitWithoutMissionIdentity;
+          CanonicalControlIntentReason::UnsupportedDynamicWaitOrigin;
+        break;
+      }
+      if (request.phase != request.dynamic_wait_origin_phase) {
+        result.reason =
+          CanonicalControlIntentReason::DynamicWaitCanonicalPhaseMismatch;
         break;
       }
       if (request.dynamic_wait_origin_phase == Phase::ShiftOut) {
         accept(
           mpcc_execution_contract::ControlIntent::ShiftOut,
-          request.dynamic_wait_forward_prefix_active ?
-          CanonicalControlIntentReason::RollingDynamicWaitShiftOut :
-          CanonicalControlIntentReason::LateralHoldDynamicWaitShiftOut);
-      } else if (request.dynamic_wait_origin_phase == Phase::Pass) {
+          CanonicalControlIntentReason::
+          CanonicalExecutionDynamicWaitShiftOut);
+      } else {
         accept(
           mpcc_execution_contract::ControlIntent::Pass,
-          request.dynamic_wait_forward_prefix_active ?
-          CanonicalControlIntentReason::RollingDynamicWaitPass :
-          CanonicalControlIntentReason::LateralHoldDynamicWaitPass);
-      } else {
-        result.reason =
-          CanonicalControlIntentReason::UnsupportedDynamicWaitOrigin;
+          CanonicalControlIntentReason::CanonicalExecutionDynamicWaitPass);
       }
       break;
     case Action::Recovery:
@@ -759,7 +753,6 @@ const char * to_string(const LateralOwner owner) noexcept
     case LateralOwner::GapPlanner: return "gap-planner";
     case LateralOwner::DynamicObstacleEscape: return "dynamic-obstacle-escape";
     case LateralOwner::OvertakeLine: return "overtake-line";
-    case LateralOwner::DynamicWaitPrefix: return "dynamic-wait-prefix";
     case LateralOwner::ContactEscape: return "contact-escape";
     case LateralOwner::RecoveryLine: return "recovery-line";
     case LateralOwner::SafetyHold: return "safety-hold";
@@ -818,7 +811,6 @@ std::string format_conflicts(const std::uint32_t conflicts)
   append(SafetyWithActiveLine, "safety-with-line");
   append(SafetyWithSpeedFloor, "safety-with-floor");
   append(ReleasedPassWithFollowCap, "released-pass-with-follow-cap");
-  append(DynamicWaitWithoutLateralAuthority, "dynamic-wait-without-lateral");
   append(ActivePhaseWithoutTarget, "active-phase-without-target");
   append(MultipleLateralAuthorities, "multiple-lateral-authorities");
   append(InvalidSpeedWindow, "invalid-speed-window");
@@ -852,6 +844,7 @@ std::string categorical_signature(const AuthorityTrace & trace)
          << (trace.request.shiftout_speed_contract_expected ? 1 : 0) << "|"
          << (trace.request.shiftout_speed_contract_active ? 1 : 0) << "|"
          << (trace.request.dynamic_wait_active ? 1 : 0) << "|"
+         << (trace.request.canonical_execution_identity_active ? 1 : 0) << "|"
          << (trace.request.contact_continuation_active ? 1 : 0) << "|"
          << (trace.request.precontact_escape_active ? 1 : 0);
   return stream.str();
@@ -882,8 +875,8 @@ std::string format_authority_trace(const AuthorityTrace & trace)
          << ", gap=" << (trace.request.gap_planner_active ? 1 : 0)
          << ", dynamic_escape=" << (trace.request.dynamic_obstacle_escape_active ? 1 : 0)
          << ", mission_wait=" << (trace.request.dynamic_wait_active ? 1 : 0)
-         << "/lateral=" <<
-    (trace.request.dynamic_wait_lateral_authority_active ? 1 : 0)
+         << "/identity=" <<
+    (trace.request.canonical_execution_identity_active ? 1 : 0)
          << "/forward=" << (trace.request.dynamic_wait_forward_prefix_active ? 1 : 0)
          << "/origin=" << to_string(trace.request.dynamic_wait_origin_phase)
          << ", contact=" << (trace.request.contact_continuation_active ? 1 : 0)
@@ -1061,7 +1054,7 @@ std::string structural_final_control_signature(const FinalControlTrace & trace)
            << static_cast<int>(authority.resolution.path_source) << "|"
            << authority.request.pass_side_sign << "|"
            << authority.resolution.conflicts << "|"
-           << (authority.request.dynamic_wait_lateral_authority_active ? 1 : 0)
+           << (authority.request.canonical_execution_identity_active ? 1 : 0)
            << "|" << (authority.request.contact_continuation_active ? 1 : 0)
            << "|" << (authority.request.precontact_escape_active ? 1 : 0)
            << "|" << (authority.request.speed_floor_adjusted ? 1 : 0);

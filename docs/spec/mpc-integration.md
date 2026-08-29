@@ -3095,6 +3095,30 @@ Track/Cruise mappingのlive acceptanceは未観測であり、focused unit/sourc
 SafetyBrakeは別failure familyである。この統合を根拠にlease、grace、timeout、retry、fallback、solver tolerance、
 clearanceを変更してはならない。
 
+#### DynamicWaitのcanonical intent統合（2026-08-30、2025由来の暫定）
+
+DynamicWaitは`FollowPrepare`表示中に既存ShiftOut／Pass Missionの再計画を待つtactical no-transitionであり、
+横command producerではない。以前はoptionalな`DynamicWaitPrefix`がlateral ownerかつpath sourceでなければ
+canonical intentをUnknownへ落としていた。このprefixは後段で候補/referenceへ降格済みだったため、wait開始周期だけ
+prefix生成順序によりEmergencyとなるsplit ownershipが残っていた。
+
+現在は`resolve_canonical_execution_identity()`が検証したtarget、Mission generation、side、interrupted phaseを
+AuthorityRequestへ明示的に渡す。DynamicWaitはidentityがactiveで、target／generation／sideが完全であり、canonical
+phaseとorigin phaseが一致するときだけShiftOutまたはPass intentを維持する。optional prefixの有無はpath provenanceを
+示せるがintent、lateral ownerまたはpublication authorityを与えない。identity欠落、unsupported originまたはphase
+mismatchは従来どおりUnknownとなりEmergencyへ閉じる。
+
+baseline `output/20260830-004030`ではDynamicWait decision 1件が
+`unknown/dynamic-wait-without-lateral-authority`となり、4.72 m/sからEmergency Stopをpublishした。candidate
+`output/20260830-005711`では同旧signatureは0件、観測した4 DynamicWait decisionすべてが
+`shiftout/canonical-execution-dynamic-wait-shiftout`となった。decision 1664と2960はexact current-world proof済みの
+retained ShiftOut solutionをpublishし、decision 1664は実速4.40 m/sから4.48 m/sをcommandした。別encounterの
+decision 2974／2975はsemantic intentは成立したがcurrent-world admissionに失敗し、Emergencyへ正しく閉じた。
+
+したがってこのSliceはprefix更新順序によるUnknown intentだけを閉じる。current-world solution不成立、static-wall
+Recovery、terminal successor、progress-liftは別failure familyであり、この変更を理由にprefix authority、lease、
+grace、timeout、retry、fallback、solver toleranceまたはclearanceを追加してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

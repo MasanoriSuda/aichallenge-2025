@@ -1746,8 +1746,46 @@ def test_unresolved_dynamic_wait_cannot_fall_through_to_legacy_normal() -> None:
     )
     before_old_path = SOURCE[fail_closed:control_end]
     assert "return canonical_normal_emergency_stop(" in before_old_path
-    assert "dynamic wait has no executable canonical lateral authority" in before_old_path
+    assert "dynamic wait has no coherent canonical execution identity" in before_old_path
     assert "solve_problem(" not in before_old_path
+
+
+def test_dynamic_wait_intent_comes_from_canonical_identity_not_optional_prefix() -> None:
+    """The optional wait prefix is provenance, never a semantic authority."""
+
+    assert (
+        "authority_request.canonical_execution_identity_active =\n"
+        "      canonical_execution_identity.active;"
+        in SOURCE
+    )
+    resolver_start = OVERTAKE_ORCHESTRATOR_SOURCE.index(
+        "CanonicalControlIntentResolution resolve_canonical_control_intent("
+    )
+    resolver_end = OVERTAKE_ORCHESTRATOR_SOURCE.index(
+        "const char * to_string(const Behavior", resolver_start
+    )
+    resolver = OVERTAKE_ORCHESTRATOR_SOURCE[resolver_start:resolver_end]
+    wait_start = resolver.index("case Action::DynamicWait:")
+    wait_end = resolver.index("case Action::Recovery:", wait_start)
+    wait = resolver[wait_start:wait_end]
+    assert "canonical_execution_identity_active" in wait
+    assert "mission_generation" in wait
+    assert "target_id" in wait
+    assert "pass_side_sign" in wait
+    assert "dynamic_wait_origin_phase" in wait
+    assert "request.phase != request.dynamic_wait_origin_phase" in wait
+    assert "dynamic_wait_forward_prefix_active" not in wait
+    assert "DynamicWaitPrefix" not in wait
+
+    for retired_symbol in (
+        "dynamic_wait_lateral_authority_active",
+        "LateralOwner::DynamicWaitPrefix",
+        "DynamicWaitWithoutLateralAuthority",
+        "LateralHoldDynamicWaitShiftOut",
+        "RollingDynamicWaitShiftOut",
+    ):
+        assert retired_symbol not in OVERTAKE_ORCHESTRATOR_HEADER
+        assert retired_symbol not in OVERTAKE_ORCHESTRATOR_SOURCE
 
 
 def test_dynamic_wait_target_tube_is_independent_of_legacy_stage_corridor() -> None:

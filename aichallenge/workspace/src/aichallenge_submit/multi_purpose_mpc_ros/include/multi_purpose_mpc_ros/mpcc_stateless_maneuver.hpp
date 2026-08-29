@@ -109,7 +109,7 @@ struct Result
 enum class CandidateKind
 {
   DirectSide,
-  EarliestPhysicalDiagonal,
+  MidPhysicalDiagonal,
   LatePhysicalDiagonal,
 };
 
@@ -194,10 +194,11 @@ Result build_physical_diagonal_schedule(
   int full_side_stage) noexcept;
 
 /// Build the bounded current-world topology population consumed by the
-/// asynchronous production worker.  Candidate zero is the direct side
-/// homotopy.  When the prediction horizon permits, candidate one is the
-/// earliest complete physical behind-to-side diagonal.  Final authority still
-/// requires the unchanged SQP and exact physical proofs.
+/// asynchronous production worker. Candidate zero is the direct side
+/// homotopy. When the prediction horizon permits, candidate one spans the
+/// first half of the active encounter and candidate two samples a late
+/// wait-then-shift homotopy. Final authority still requires the unchanged SQP
+/// and exact physical proofs.
 CandidateSet build_bounded_candidates(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   int pass_side_sign) noexcept;

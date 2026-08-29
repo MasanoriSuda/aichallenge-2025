@@ -222,7 +222,7 @@ TEST(MpccStatelessManeuver, SealsPhysicalDiagonalReplayGeometry)
   EXPECT_NE(physical.seed->candidate_fingerprint, source_fingerprint);
 }
 
-TEST(MpccStatelessManeuver, BuildsBoundedCurrentWorldProductionPopulation)
+TEST(MpccStatelessManeuver, BuildsMidHorizonPhysicalDiagonalPopulation)
 {
   const auto source = make_source();
   const auto result = build_bounded_candidates(source, -1);
@@ -232,7 +232,7 @@ TEST(MpccStatelessManeuver, BuildsBoundedCurrentWorldProductionPopulation)
   EXPECT_EQ(result.candidates[0].kind, CandidateKind::DirectSide);
   EXPECT_EQ(
     result.candidates[1].kind,
-    CandidateKind::EarliestPhysicalDiagonal);
+    CandidateKind::MidPhysicalDiagonal);
   EXPECT_EQ(result.candidates[0].seed.pass_side_sign, -1);
   EXPECT_EQ(result.candidates[1].seed.pass_side_sign, -1);
   EXPECT_EQ(
@@ -287,6 +287,12 @@ TEST(MpccStatelessManeuver, AddsLatePhysicalDiagonalForLongHorizon)
 
   ASSERT_EQ(result.reason, RejectReason::Accepted) << result.detail;
   ASSERT_EQ(result.candidates.size(), 3U);
+  EXPECT_EQ(
+    result.candidates[1].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_start_stage, 0);
+  EXPECT_EQ(
+    result.candidates[1].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_full_side_stage, 9);
   EXPECT_EQ(result.candidates[2].kind, CandidateKind::LatePhysicalDiagonal);
   EXPECT_EQ(result.candidates[2].seed.pass_side_sign, -1);
   EXPECT_EQ(

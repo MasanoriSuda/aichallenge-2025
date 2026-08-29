@@ -346,8 +346,8 @@ const char * to_string(const CandidateKind kind) noexcept
 {
   switch (kind) {
     case CandidateKind::DirectSide: return "direct-side";
-    case CandidateKind::EarliestPhysicalDiagonal:
-      return "earliest-physical-diagonal";
+    case CandidateKind::MidPhysicalDiagonal:
+      return "mid-physical-diagonal";
     case CandidateKind::LatePhysicalDiagonal:
       return "late-physical-diagonal";
   }
@@ -819,28 +819,35 @@ CandidateSet build_bounded_candidates(
       break;
     }
   }
-  const int full_side_stage = first_valid_stage + 2;
+  const int terminal_side_stage = direct_snapshot.request.horizon_steps - 1;
+  // DirectSide already represents immediate avoidance.  The former
+  // first_valid+2 sample duplicated that temporal extreme and omitted the
+  // ordinary gradual transition: on a 20-stage horizon production sampled
+  // full-side at stages 2 and 19, while the unchanged proof pipeline certified
+  // the same frozen problem at stage 9.  Sample the integer midpoint of the
+  // current valid encounter interval and keep the population bounded.
+  const int mid_full_side_stage = std::max(
+    first_valid_stage + 2,
+    first_valid_stage + (terminal_side_stage - first_valid_stage) / 2);
   if (
     first_valid_stage >= 0 &&
-    full_side_stage < direct_snapshot.request.horizon_steps)
+    mid_full_side_stage < direct_snapshot.request.horizon_steps)
   {
     auto diagonal = build_physical_diagonal_schedule(
       source, source_fingerprint, pass_side_sign,
-      first_valid_stage, full_side_stage);
+      first_valid_stage, mid_full_side_stage);
     if (diagonal.seed.has_value()) {
       result.candidates.push_back(
         Candidate{
-          CandidateKind::EarliestPhysicalDiagonal,
+          CandidateKind::MidPhysicalDiagonal,
           std::move(diagonal.seed.value())});
     }
   }
 
-  // The direct and earliest candidates cover immediate avoidance, but they
-  // cannot represent a physically valid wait-then-shift maneuver.  Sample one
-  // additional temporal homotopy at a normalized late knot.  This remains bounded
-  // and current-world-only; the unchanged solver and nonlinear proofs decide
-  // whether the candidate can be published.
-  const int terminal_side_stage = direct_snapshot.request.horizon_steps - 1;
+  // The direct and mid-horizon candidates do not represent a physically valid
+  // wait-then-shift maneuver. Sample one additional temporal homotopy at a
+  // normalized late knot. This remains bounded and current-world-only; the
+  // unchanged solver and nonlinear proofs decide whether it can be published.
   if (first_valid_stage >= 0 && terminal_side_stage > first_valid_stage + 1) {
     const int stage_span = terminal_side_stage - first_valid_stage;
     const int late_start_stage =

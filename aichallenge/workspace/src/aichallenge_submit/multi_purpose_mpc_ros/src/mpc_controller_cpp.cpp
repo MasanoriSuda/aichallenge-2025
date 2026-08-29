@@ -6335,6 +6335,56 @@ struct RateResolvedCurrentWorldPopulationEvaluation
   std::string detail{"not-evaluated"};
 };
 
+class RateResolvedFollowHomotopyOwner
+{
+public:
+  int preferred_side(
+    const rate_resolved_shadow::Snapshot & source) noexcept
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    synchronize_identity(source);
+    if (selected_side_sign_ == -1 || selected_side_sign_ == 1) {
+      return selected_side_sign_;
+    }
+    const int source_side =
+      source.identity.source_context.dynamic_obstacle_side_sign;
+    return source_side == -1 || source_side == 1 ? source_side : 0;
+  }
+
+  void select(
+    const rate_resolved_shadow::Snapshot & source,
+    const int side_sign) noexcept
+  {
+    if (side_sign != -1 && side_sign != 1) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    synchronize_identity(source);
+    selected_side_sign_ = side_sign;
+  }
+
+private:
+  void synchronize_identity(
+    const rate_resolved_shadow::Snapshot & source) noexcept
+  {
+    const auto & context = source.identity.source_context;
+    if (
+      target_id_ == context.target_id &&
+      intent_generation_ == context.intent_generation)
+    {
+      return;
+    }
+    target_id_ = context.target_id;
+    intent_generation_ = context.intent_generation;
+    selected_side_sign_ = 0;
+  }
+
+  std::mutex mutex_;
+  std::string target_id_;
+  std::uint64_t intent_generation_{};
+  int selected_side_sign_{};
+};
+
 RateResolvedCurrentWorldPopulationEvaluation
 evaluate_rate_resolved_current_world_population(
   const rate_resolved_shadow::Snapshot & source,
@@ -6460,6 +6510,7 @@ evaluate_rate_resolved_follow_escape_population(
   negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   positive_solver_context,
+  const std::shared_ptr<RateResolvedFollowHomotopyOwner> & homotopy_owner,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
 {
   const auto certified = [](const RateResolvedPipelineEvaluation & evaluation) {
@@ -6515,12 +6566,26 @@ evaluate_rate_resolved_follow_escape_population(
     return result;
   }
 
-  bool selected_certified = false;
-  double selected_terminal_progress_m =
-    -std::numeric_limits<double>::infinity();
-  double selected_terminal_velocity_mps =
-    -std::numeric_limits<double>::infinity();
+  const int preferred_side = homotopy_owner != nullptr ?
+    homotopy_owner->preferred_side(source) :
+    source.identity.source_context.dynamic_obstacle_side_sign;
+  std::vector<const stateless_maneuver::Candidate *> ordered_candidates;
+  ordered_candidates.reserve(population.candidates.size());
+  if (preferred_side == -1 || preferred_side == 1) {
+    for (const auto & candidate : population.candidates) {
+      if (candidate.seed.pass_side_sign == preferred_side) {
+        ordered_candidates.push_back(&candidate);
+      }
+    }
+  }
   for (const auto & candidate : population.candidates) {
+    if (candidate.seed.pass_side_sign != preferred_side) {
+      ordered_candidates.push_back(&candidate);
+    }
+  }
+
+  for (const auto * candidate_ptr : ordered_candidates) {
+    const auto & candidate = *candidate_ptr;
     ++result.candidate_count;
     auto physical = physical_source;
     physical.identity.artifact = candidate.seed.solver_snapshot.identity;
@@ -6543,19 +6608,26 @@ evaluate_rate_resolved_follow_escape_population(
       candidate_solver_context, observation_only_store);
     const bool candidate_certified = certified(evaluation);
     const int rank = evidence_rank(evaluation);
-    const double terminal_progress_m =
-      evaluation.solver.terminal_progress_m;
-    const double terminal_velocity_mps =
-      evaluation.solver.terminal_velocity_mps;
-    const bool better_certified = candidate_certified &&
-      (!selected_certified ||
-      terminal_progress_m > selected_terminal_progress_m + 1e-9 ||
-      (std::abs(terminal_progress_m - selected_terminal_progress_m) <= 1e-9 &&
-      terminal_velocity_mps > selected_terminal_velocity_mps));
-    if (better_certified || (!selected_certified && rank > best_rank)) {
-      selected_certified = candidate_certified;
-      selected_terminal_progress_m = terminal_progress_m;
-      selected_terminal_velocity_mps = terminal_velocity_mps;
+    if (candidate_certified) {
+      result.pipeline = std::move(evaluation);
+      result.candidate_source = candidate.seed.pass_side_sign > 0 ?
+        "follow-escape-positive" : "follow-escape-negative";
+      if (homotopy_owner != nullptr) {
+        homotopy_owner->select(source, candidate.seed.pass_side_sign);
+      }
+      const std::string store_detail = certified_plan_store != nullptr ?
+        rate_resolved_certified::to_string(
+        certified_plan_store->replace(result.pipeline.certified_plan.plan)) :
+        "not-requested";
+      result.detail = std::string{"selected/"} + result.candidate_source +
+        "/preferred=" + std::to_string(preferred_side) +
+        "/evaluated=" + std::to_string(result.candidate_count) +
+        "/store=" + store_detail;
+      result.pipeline.solver.detail =
+        result.detail + ", pipeline=" + result.pipeline.solver.detail;
+      return result;
+    }
+    if (rank > best_rank) {
       best_rank = rank;
       result.pipeline = std::move(evaluation);
       result.candidate_source = candidate.seed.pass_side_sign > 0 ?
@@ -6563,16 +6635,10 @@ evaluate_rate_resolved_follow_escape_population(
     }
   }
 
-  if (selected_certified) {
-    const auto store_reason = certified_plan_store != nullptr ?
-      certified_plan_store->replace(result.pipeline.certified_plan.plan) :
-      rate_resolved_certified::StoreReason::InvalidPlan;
-    result.detail = std::string{"selected/"} + result.candidate_source +
-      "/store=" + rate_resolved_certified::to_string(store_reason);
-  } else {
-    result.detail = std::string{"no certified Follow escape/best="} +
-      result.candidate_source;
-  }
+  result.detail = std::string{"no certified Follow escape/best="} +
+    result.candidate_source + "/preferred=" +
+    std::to_string(preferred_side) + "/evaluated=" +
+    std::to_string(result.candidate_count);
   result.pipeline.solver.detail =
     result.detail + ", pipeline=" + result.pipeline.solver.detail;
   return result;
@@ -6586,6 +6652,8 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   follow_negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   follow_positive_solver_context,
+  const std::shared_ptr<RateResolvedFollowHomotopyOwner> &
+  follow_homotopy_owner,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store)
 {
   const auto intent = source.identity.source_context.intent;
@@ -6596,6 +6664,7 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
     return evaluate_rate_resolved_follow_escape_population(
       source, physical_source.value(), solver_context,
       follow_negative_solver_context, follow_positive_solver_context,
+      follow_homotopy_owner,
       certified_plan_store).pipeline;
   }
   if (mpcc_contract::canonical_normal_intent_requires_execution_side(intent)) {
@@ -7257,6 +7326,8 @@ struct MPC
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_follow_escape_positive_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_follow_homotopy_owner_ =
+        std::make_shared<RateResolvedFollowHomotopyOwner>();
       rate_resolved_track_cruise_shadow_mailbox_ =
         std::make_shared<rate_resolved_shadow::Mailbox>();
       rate_resolved_track_cruise_shadow_worker_ =
@@ -23332,6 +23403,7 @@ struct MPC
       rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
       rate_resolved_follow_escape_negative_solver_context_ == nullptr ||
       rate_resolved_follow_escape_positive_solver_context_ == nullptr ||
+      rate_resolved_follow_homotopy_owner_ == nullptr ||
       rate_resolved_track_cruise_shadow_next_sequence_ ==
       std::numeric_limits<std::uint64_t>::max())
     {
@@ -23399,12 +23471,15 @@ struct MPC
       rate_resolved_follow_escape_negative_solver_context_;
     const auto follow_positive_solver_context =
       rate_resolved_follow_escape_positive_solver_context_;
+    const auto follow_homotopy_owner =
+      rate_resolved_follow_homotopy_owner_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
       [snapshot = std::move(snapshot.value()), mailbox, solver_context,
         follow_negative_solver_context, follow_positive_solver_context,
+        follow_homotopy_owner,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
         physical_registered, certified_plan_store]() mutable {
         if (!physical_registered) {
@@ -23413,6 +23488,7 @@ struct MPC
         auto evaluation = evaluate_rate_resolved_normal_population(
           snapshot, std::move(physical_snapshot), solver_context,
           follow_negative_solver_context, follow_positive_solver_context,
+          follow_homotopy_owner,
           certified_plan_store);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
@@ -27350,6 +27426,8 @@ struct MPC
   rate_resolved_follow_escape_negative_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_follow_escape_positive_solver_context_;
+  std::shared_ptr<RateResolvedFollowHomotopyOwner>
+  rate_resolved_follow_homotopy_owner_;
   std::shared_ptr<rate_resolved_shadow::Mailbox>
   rate_resolved_track_cruise_shadow_mailbox_;
   std::unique_ptr<LatestOnlyWorker>

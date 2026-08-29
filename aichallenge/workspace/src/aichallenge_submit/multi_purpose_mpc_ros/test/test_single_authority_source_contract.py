@@ -1033,6 +1033,16 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "persistent-follow" in follow_population
     assert "negative_solver_context" in follow_population
     assert "positive_solver_context" in follow_population
+    assert "RateResolvedFollowHomotopyOwner" in follow_population
+    assert "homotopy_owner->preferred_side(source)" in follow_population
+    assert "homotopy_owner->select(source, candidate.seed.pass_side_sign)" in (
+        follow_population
+    )
+    assert "ordered_candidates" in follow_population
+    assert '"/evaluated="' in follow_population
+    assert "selected_terminal_progress_m" not in follow_population
+    assert "selected_terminal_velocity_mps" not in follow_population
+    assert "better_certified" not in follow_population
     assert "std::make_shared<rate_resolved_shadow::SolverContext>()" not in (
         follow_population
     )
@@ -1053,9 +1063,11 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     normal_submit = SOURCE[normal_submit_start:normal_submit_end]
     assert "rate_resolved_follow_escape_negative_solver_context_" in normal_submit
     assert "rate_resolved_follow_escape_positive_solver_context_" in normal_submit
+    assert "rate_resolved_follow_homotopy_owner_" in normal_submit
     assert "follow_negative_solver_context, follow_positive_solver_context" in (
         normal_submit
     )
+    assert "follow_homotopy_owner" in normal_submit
 
     assert "evaluate_rate_resolved_normal_population(" in normal_submit
     assert normal_submit.count(

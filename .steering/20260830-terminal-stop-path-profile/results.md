@@ -22,6 +22,19 @@ arm contacted waypoint 318 at progress 314.328 m, and the production-left arm
 contacted the same waypoint at progress 314.311 m.  The seven-state Stop
 stopped at local progress 13.4194 m and passed exact wall and dynamic proofs.
 
+## Follow-up correction
+
+The later control audit found that this causal seven-state arm accelerated at
+approximately `+1.33 m/s^2` for its first five stages.  It therefore did not
+share the production Stop's maximum-braking longitudinal contract, and the
+`13.4194 m` result must not be used as the final Stop-feasibility comparison.
+
+The corrected maximum-braking seven-state audit is recorded in
+`.steering/20260830-seven-state-stop-control-audit/results.md`.  It also passes
+the unchanged exact proofs, stopping at local progress `5.55934 m` with
+`0.403418 m` minimum lateral reserve and no positive acceleration.  The
+path-profile rejection in this Slice is unchanged.
+
 ## Root-cause conclusion
 
 The missing representation is not merely a varying lateral reference.  The

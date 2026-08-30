@@ -555,6 +555,15 @@ TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
   EXPECT_NE(report.arms[3].stage, Stage::SourceRejected);
   EXPECT_NE(report.arms[7].stage, Stage::SourceRejected);
   EXPECT_NE(report.arms[8].stage, Stage::SourceRejected);
+  if (report.arms[8].stage == Stage::Accepted) {
+    ASSERT_FALSE(report.arms[8].solved_acceleration_mps2.empty());
+    EXPECT_LE(report.arms[8].solved_acceleration_max_mps2, 1e-9);
+    for (const double acceleration_mps2 :
+      report.arms[8].solved_acceleration_mps2)
+    {
+      EXPECT_LE(acceleration_mps2, 1e-9);
+    }
+  }
 }
 
 TEST(MpccArchitectureComparison, ExternalPrimalUsesExactPhysicalProofChain)

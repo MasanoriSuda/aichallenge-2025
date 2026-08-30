@@ -171,8 +171,33 @@ int main(int argc, char ** argv)
               << " stop_target=" << arm.terminal_stop_target_lateral_m
               << " stop_target_attempts=" <<
       arm.terminal_stop_target_attempt_count
-              << " bundle=" << arm.bundle.has_value()
-              << " detail=" << arm.detail << '\n';
+              << " bundle=" << arm.bundle.has_value();
+    if (!arm.solved_acceleration_mps2.empty()) {
+      std::cout << " stop_controls=" << arm.solved_acceleration_mps2.size()
+                << " accel=[" << arm.solved_acceleration_min_mps2 << ','
+                << arm.solved_acceleration_max_mps2 << "]/mean="
+                << arm.solved_acceleration_time_mean_mps2
+                << "/bounds=" << arm.solved_acceleration_bound_count
+                << " steer_rate=[" << arm.solved_steering_rate_min_radps
+                << ',' << arm.solved_steering_rate_max_radps << "]/mean="
+                << arm.solved_steering_rate_time_mean_radps
+                << "/bounds=" << arm.solved_steering_rate_bound_count
+                << "/sign_changes="
+                << arm.solved_steering_rate_sign_change_count
+                << " sequence=[";
+      for (std::size_t index = 0U;
+        index < arm.solved_acceleration_mps2.size(); ++index)
+      {
+        if (index > 0U) {
+          std::cout << ';';
+        }
+        std::cout << arm.solved_control_duration_sec[index] << ':'
+                  << arm.solved_acceleration_mps2[index] << ':'
+                  << arm.solved_steering_rate_radps[index];
+      }
+      std::cout << ']';
+    }
+    std::cout << " detail=" << arm.detail << '\n';
   }
   return any_bundle ? 0 : 4;
 }

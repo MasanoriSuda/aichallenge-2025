@@ -117,6 +117,21 @@ struct ArmResult
   std::size_t dynamic_sqp_depth{};
   double terminal_stop_target_lateral_m{};
   std::size_t terminal_stop_target_attempt_count{};
+  /// Audit-only copy of the exact solved Stop inputs.  No production adapter
+  /// consumes these values; they expose whether a bounded control lattice can
+  /// represent an independently certified seven-state Stop.
+  std::vector<double> solved_control_duration_sec;
+  std::vector<double> solved_acceleration_mps2;
+  std::vector<double> solved_steering_rate_radps;
+  double solved_acceleration_min_mps2{};
+  double solved_acceleration_max_mps2{};
+  double solved_acceleration_time_mean_mps2{};
+  double solved_steering_rate_min_radps{};
+  double solved_steering_rate_max_radps{};
+  double solved_steering_rate_time_mean_radps{};
+  std::size_t solved_steering_rate_sign_change_count{};
+  std::size_t solved_acceleration_bound_count{};
+  std::size_t solved_steering_rate_bound_count{};
   std::optional<ManeuverBundle> bundle;
   std::string detail{"not-evaluated"};
 };

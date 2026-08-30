@@ -552,6 +552,7 @@ build_normal_path_stop_profile(
 std::optional<shadow::Snapshot> build_seven_state_stop_audit_candidate(
   const shadow::Snapshot & source,
   const artifact::ExecutionArtifact & normal_execution,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
   std::string * const rejection_detail) noexcept
 {
   namespace model = mpcc_rate_resolved;
@@ -569,9 +570,16 @@ std::optional<shadow::Snapshot> build_seven_state_stop_audit_candidate(
   }
   double minimum_acceleration_mps2 = 0.0;
   for (const auto & input : source.request.inputs) {
+    const auto solver_bounds =
+      mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+      input.lower[model::kAccelerationIndex],
+      input.upper[model::kAccelerationIndex], solver_tolerance);
+    if (!solver_bounds.has_value()) {
+      return reject("maximum-braking solver inset unavailable");
+    }
     minimum_acceleration_mps2 = std::min(
       minimum_acceleration_mps2,
-      input.lower[model::kAccelerationIndex]);
+      solver_bounds->lower);
   }
   const auto cursor = artifact::resolve_cursor(
     normal_execution, normal_execution.prediction_origin_sec);
@@ -707,12 +715,28 @@ std::optional<shadow::Snapshot> build_seven_state_stop_audit_candidate(
     elapsed_sec += input.stage_dt_sec;
     const double stage_end_velocity_mps = std::max(
       0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
-    input.reference[model::kAccelerationIndex] =
-      stage_start_velocity_mps > 0.0 ? minimum_acceleration_mps2 : 0.0;
+    const double required_acceleration_mps2 =
+      (stage_end_velocity_mps - stage_start_velocity_mps) /
+      input.stage_dt_sec;
+    if (
+      required_acceleration_mps2 <
+      input.lower[model::kAccelerationIndex] - 1e-9 ||
+      required_acceleration_mps2 >
+      input.upper[model::kAccelerationIndex] + 1e-9)
+    {
+      return reject("maximum-braking Stop acceleration outside source bounds");
+    }
+    input.reference[model::kAccelerationIndex] = required_acceleration_mps2;
     input.reference[model::kVirtualProgressSpeedIndex] =
       stage_start_velocity_mps;
-    candidate.request.states[stage + 1U].reference[model::kVelocityIndex] =
-      stage_end_velocity_mps;
+    auto & next_state = candidate.request.states[stage + 1U];
+    next_state.reference[model::kVelocityIndex] = stage_end_velocity_mps;
+    // Future velocity is a physical state, not a serialized command.  The
+    // canonical adapter deliberately does not inset this equality.  Fixing
+    // every Stop velocity node therefore enforces the solver-safe maximum-
+    // braking law without creating an empty input interval.
+    next_state.lower[model::kVelocityIndex] = stage_end_velocity_mps;
+    next_state.upper[model::kVelocityIndex] = stage_end_velocity_mps;
   }
   auto & terminal = candidate.request.states.back();
   terminal.reference[model::kVelocityIndex] = 0.0;
@@ -1042,6 +1066,119 @@ ArmResult evaluate_arm(
     TerminalStopLateralAuditMode::SolvedStopTrajectory)
   {
     terminal_stop_target_attempt_count = 1U;
+    const auto & stop_artifact = *solved.execution_artifact;
+    arm_result.solved_control_duration_sec.reserve(
+      stop_artifact.control_stages.size());
+    arm_result.solved_acceleration_mps2.reserve(
+      stop_artifact.control_stages.size());
+    arm_result.solved_steering_rate_radps.reserve(
+      stop_artifact.control_stages.size());
+    arm_result.solved_acceleration_min_mps2 =
+      std::numeric_limits<double>::infinity();
+    arm_result.solved_acceleration_max_mps2 =
+      -std::numeric_limits<double>::infinity();
+    arm_result.solved_steering_rate_min_radps =
+      std::numeric_limits<double>::infinity();
+    arm_result.solved_steering_rate_max_radps =
+      -std::numeric_limits<double>::infinity();
+    double total_duration_sec = 0.0;
+    double acceleration_time_integral = 0.0;
+    double steering_rate_time_integral = 0.0;
+    int previous_nonzero_steering_rate_sign = 0;
+    const double control_tolerance = std::max(
+      1e-9, stop_artifact.physical_global_tolerance);
+    for (std::size_t stage = 0U;
+      stage < stop_artifact.control_stages.size(); ++stage)
+    {
+      const auto & control = stop_artifact.control_stages[stage];
+      arm_result.solved_control_duration_sec.push_back(control.duration_sec);
+      arm_result.solved_acceleration_mps2.push_back(
+        control.acceleration_mps2);
+      arm_result.solved_steering_rate_radps.push_back(
+        control.steering_rate_radps);
+      arm_result.solved_acceleration_min_mps2 = std::min(
+        arm_result.solved_acceleration_min_mps2,
+        control.acceleration_mps2);
+      arm_result.solved_acceleration_max_mps2 = std::max(
+        arm_result.solved_acceleration_max_mps2,
+        control.acceleration_mps2);
+      arm_result.solved_steering_rate_min_radps = std::min(
+        arm_result.solved_steering_rate_min_radps,
+        control.steering_rate_radps);
+      arm_result.solved_steering_rate_max_radps = std::max(
+        arm_result.solved_steering_rate_max_radps,
+        control.steering_rate_radps);
+      total_duration_sec += control.duration_sec;
+      acceleration_time_integral +=
+        control.acceleration_mps2 * control.duration_sec;
+      steering_rate_time_integral +=
+        control.steering_rate_radps * control.duration_sec;
+      if (stage < candidate.request.inputs.size()) {
+        const auto & input = candidate.request.inputs[stage];
+        const auto acceleration_bounds =
+          mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+          input.lower[mpcc_rate_resolved::kAccelerationIndex],
+          input.upper[mpcc_rate_resolved::kAccelerationIndex],
+          solver.physical_constraint_tolerance());
+        if (
+          acceleration_bounds.has_value() &&
+          (std::abs(
+            control.acceleration_mps2 - acceleration_bounds->lower) <=
+          control_tolerance ||
+          std::abs(
+            control.acceleration_mps2 - acceleration_bounds->upper) <=
+          control_tolerance))
+        {
+          ++arm_result.solved_acceleration_bound_count;
+        }
+        const double physical_rate_lower = stage == 0U ? std::max(
+            -candidate.request.maximum_abs_steering_rate_radps,
+            (-candidate.request.maximum_abs_steering_rad -
+            candidate.request.current_steering_rad) /
+            input.stage_dt_sec) :
+          -candidate.request.maximum_abs_steering_rate_radps;
+        const double physical_rate_upper = stage == 0U ? std::min(
+            candidate.request.maximum_abs_steering_rate_radps,
+            (candidate.request.maximum_abs_steering_rad -
+            candidate.request.current_steering_rad) /
+            input.stage_dt_sec) :
+          candidate.request.maximum_abs_steering_rate_radps;
+        const auto steering_rate_bounds =
+          mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+          physical_rate_lower, physical_rate_upper,
+          solver.physical_constraint_tolerance());
+        if (
+          steering_rate_bounds.has_value() &&
+          (std::abs(
+            control.steering_rate_radps - steering_rate_bounds->lower) <=
+          control_tolerance ||
+          std::abs(
+            control.steering_rate_radps - steering_rate_bounds->upper) <=
+          control_tolerance))
+        {
+          ++arm_result.solved_steering_rate_bound_count;
+        }
+      }
+      const int steering_rate_sign =
+        control.steering_rate_radps > control_tolerance ? 1 :
+        (control.steering_rate_radps < -control_tolerance ? -1 : 0);
+      if (
+        steering_rate_sign != 0 &&
+        previous_nonzero_steering_rate_sign != 0 &&
+        steering_rate_sign != previous_nonzero_steering_rate_sign)
+      {
+        ++arm_result.solved_steering_rate_sign_change_count;
+      }
+      if (steering_rate_sign != 0) {
+        previous_nonzero_steering_rate_sign = steering_rate_sign;
+      }
+    }
+    if (total_duration_sec > 0.0) {
+      arm_result.solved_acceleration_time_mean_mps2 =
+        acceleration_time_integral / total_duration_sec;
+      arm_result.solved_steering_rate_time_mean_radps =
+        steering_rate_time_integral / total_duration_sec;
+    }
     if (
       exact.velocity_mps.empty() ||
       exact.velocity_mps.back() > std::max(
@@ -2158,7 +2295,9 @@ Report compare_terminal_stop_lateral_contract(
       stop_source.outcome == shadow::Outcome::Solved &&
       stop_source.execution_artifact != nullptr ?
       build_seven_state_stop_audit_candidate(
-        source, *stop_source.execution_artifact, &solved_stop_detail) :
+        source, *stop_source.execution_artifact,
+        stop_source_solver.physical_constraint_tolerance(),
+        &solved_stop_detail) :
       std::nullopt;
     if (solved_stop.has_value()) {
       report.arms.push_back(evaluate_arm(

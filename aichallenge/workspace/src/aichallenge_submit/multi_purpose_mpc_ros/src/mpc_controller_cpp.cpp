@@ -32,6 +32,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp>
 #include <multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp>
 #include <multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp>
@@ -179,6 +180,8 @@ namespace stop_successor_observation =
   ::multi_purpose_mpc_ros::mpcc_certified_stop_successor_observation;
 namespace rate_resolved_retained =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation;
+namespace rate_resolved_stop_lattice_shadow =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_stop_lattice_shadow;
 namespace stateless_maneuver =
   ::multi_purpose_mpc_ros::mpcc_stateless_maneuver;
 namespace steering_state_contract =
@@ -6217,6 +6220,7 @@ struct BoundRateResolvedTrackCruiseSubmission
 
 struct RateResolvedPipelineEvaluation
 {
+  std::shared_ptr<const rate_resolved_shadow::Snapshot> solver_source_snapshot;
   rate_resolved_shadow::Result solver;
   std::optional<rate_resolved_physical_wall::Result> physical;
   std::optional<rate_resolved_dynamic::Result> dynamic;
@@ -6347,6 +6351,15 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
   const std::size_t dynamic_sqp_depth = 0U)
 {
   RateResolvedPipelineEvaluation evaluation;
+  if (
+    snapshot.identity.source_context.intent ==
+    mpcc_contract::ControlIntent::ShiftOut ||
+    snapshot.identity.source_context.intent ==
+    mpcc_contract::ControlIntent::Pass)
+  {
+    evaluation.solver_source_snapshot =
+      std::make_shared<const rate_resolved_shadow::Snapshot>(snapshot);
+  }
   evaluation.dynamic_sqp_depth = dynamic_sqp_depth;
   const auto solver_started = SteadyClock::now();
   try {
@@ -7672,6 +7685,26 @@ struct RateResolvedTrackCruiseShadowTelemetryWindow
   bool last_failure_result_available{false};
 };
 
+struct RateResolvedStopLatticeShadowTelemetryWindow
+{
+  std::uint64_t consumed_count{};
+  std::uint64_t accepted_count{};
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(rate_resolved_stop_lattice_shadow::Reason::Count)>
+  reason_count{};
+  std::uint64_t total_attempted_candidate_count{};
+  std::size_t maximum_attempted_candidate_count{};
+  double total_result_age_sec{};
+  double maximum_result_age_sec{};
+  double total_compute_ms{};
+  double maximum_compute_ms{};
+  double total_selected_solver_ms{};
+  double maximum_selected_solver_ms{};
+  rate_resolved_stop_lattice_shadow::Result last_result;
+  bool last_result_available{false};
+};
+
 struct ControlCallbackTimingObservation
 {
   std::uint64_t decision_id{};
@@ -7861,6 +7894,12 @@ struct MPC
         std::make_shared<rate_resolved_shadow::Mailbox>();
       rate_resolved_track_cruise_shadow_worker_ =
         std::make_unique<LatestOnlyWorker>();
+      rate_resolved_stop_lattice_shadow_solver_context_ =
+        std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_stop_lattice_shadow_mailbox_ =
+        std::make_shared<rate_resolved_stop_lattice_shadow::Mailbox>();
+      rate_resolved_stop_lattice_shadow_worker_ =
+        std::make_shared<LatestOnlyWorker>();
       rate_resolved_track_cruise_physical_wall_mailbox_ =
         std::make_shared<rate_resolved_physical_wall::Mailbox>();
       rate_resolved_track_cruise_certified_plan_store_ =
@@ -24686,6 +24725,12 @@ struct MPC
     const auto overtake_branch_bank = rate_resolved_overtake_branch_bank_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
+    const auto stop_lattice_shadow_worker =
+      rate_resolved_stop_lattice_shadow_worker_;
+    const auto stop_lattice_shadow_solver_context =
+      rate_resolved_stop_lattice_shadow_solver_context_;
+    const auto stop_lattice_shadow_mailbox =
+      rate_resolved_stop_lattice_shadow_mailbox_;
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
       [snapshot = std::move(snapshot.value()), mailbox, solver_context,
@@ -24695,7 +24740,9 @@ struct MPC
         overtake_negative_executor,
         overtake_branch_bank,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
-        physical_registered, certified_plan_store]() mutable {
+        physical_registered, certified_plan_store,
+        stop_lattice_shadow_worker, stop_lattice_shadow_solver_context,
+        stop_lattice_shadow_mailbox]() mutable {
         if (!physical_registered) {
           physical_snapshot.reset();
         }
@@ -24707,6 +24754,40 @@ struct MPC
           overtake_negative_solver_context, overtake_positive_solver_context,
           overtake_negative_executor,
           overtake_branch_bank);
+        if (
+          evaluation.solver_source_snapshot != nullptr &&
+          evaluation.solver.execution_artifact != nullptr &&
+          evaluation.certified_plan.plan != nullptr &&
+          certified_plan_store != nullptr &&
+          stop_lattice_shadow_worker != nullptr &&
+          stop_lattice_shadow_solver_context != nullptr &&
+          stop_lattice_shadow_mailbox != nullptr)
+        {
+          const auto intent = evaluation.solver.execution_artifact->identity.
+            source_context.intent;
+          const auto admitted = certified_plan_store->candidate_snapshot();
+          if (
+            (intent == mpcc_contract::ControlIntent::ShiftOut ||
+            intent == mpcc_contract::ControlIntent::Pass) &&
+            admitted != nullptr && admitted->execution_artifact != nullptr &&
+            rate_resolved_artifact::same_identity(
+              admitted->execution_artifact->identity,
+              evaluation.solver.execution_artifact->identity))
+          {
+            const auto stop_source = evaluation.solver_source_snapshot;
+            const auto stop_normal = evaluation.solver.execution_artifact;
+            static_cast<void>(stop_lattice_shadow_worker->submit_latest(
+                [stop_source, stop_normal,
+                stop_lattice_shadow_solver_context,
+                stop_lattice_shadow_mailbox]() {
+                  auto stop_result = rate_resolved_stop_lattice_shadow::evaluate(
+                    *stop_source, *stop_normal,
+                    *stop_lattice_shadow_solver_context);
+                  static_cast<void>(stop_lattice_shadow_mailbox->publish(
+                      std::move(stop_result)));
+                }));
+          }
+        }
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
           static_cast<void>(physical_mailbox->publish(
@@ -26321,10 +26402,143 @@ struct MPC
     return final_evaluation;
   }
 
+  void record_rate_resolved_stop_lattice_shadow(const double now_sec)
+  {
+    auto & window = rate_resolved_stop_lattice_shadow_telemetry_window_;
+    if (rate_resolved_stop_lattice_shadow_mailbox_ != nullptr) {
+      const auto result = rate_resolved_stop_lattice_shadow_mailbox_->latest_after(
+        rate_resolved_stop_lattice_shadow_last_consumed_sequence_);
+      if (result.has_value()) {
+        rate_resolved_stop_lattice_shadow_last_consumed_sequence_ =
+          result->source_normal_identity.sequence;
+        ++window.consumed_count;
+        window.accepted_count += result->accepted() ? 1U : 0U;
+        const auto reason_index = static_cast<std::size_t>(result->reason);
+        if (reason_index < window.reason_count.size()) {
+          ++window.reason_count[reason_index];
+        }
+        window.total_attempted_candidate_count +=
+          result->attempted_candidate_count;
+        window.maximum_attempted_candidate_count = std::max(
+          window.maximum_attempted_candidate_count,
+          result->attempted_candidate_count);
+        const double age_sec = std::max(
+          0.0, now_sec - result->source_normal_identity.snapshot_sec);
+        window.total_result_age_sec += age_sec;
+        window.maximum_result_age_sec = std::max(
+          window.maximum_result_age_sec, age_sec);
+        window.total_compute_ms += result->total_compute_ms;
+        window.maximum_compute_ms = std::max(
+          window.maximum_compute_ms, result->total_compute_ms);
+        window.total_selected_solver_ms += result->selected_solver_ms;
+        window.maximum_selected_solver_ms = std::max(
+          window.maximum_selected_solver_ms,
+          result->selected_solver_ms);
+        window.last_result = result.value();
+        window.last_result_available = true;
+      }
+    }
+
+    constexpr double log_interval_sec = 2.0;
+    if (
+      !cfg.v2x_behavior.debug_log_enabled ||
+      (std::isfinite(rate_resolved_stop_lattice_shadow_last_log_sec_) &&
+      now_sec - rate_resolved_stop_lattice_shadow_last_log_sec_ <
+      log_interval_sec))
+    {
+      return;
+    }
+    const auto worker = rate_resolved_stop_lattice_shadow_worker_ != nullptr ?
+      rate_resolved_stop_lattice_shadow_worker_->stats() :
+      LatestOnlyWorker::Stats{};
+    const auto mailbox = rate_resolved_stop_lattice_shadow_mailbox_ != nullptr ?
+      rate_resolved_stop_lattice_shadow_mailbox_->state() :
+      rate_resolved_stop_lattice_shadow::MailboxState{};
+    const double denominator = static_cast<double>(
+      std::max<std::uint64_t>(1U, window.consumed_count));
+    const auto & last = window.last_result;
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Rate-resolved Stop lattice live shadow: "
+      "worker=submitted:%lu/replaced:%lu/started:%lu/completed:%lu/"
+      "exceptions:%lu/running:%d/pending:%d, "
+      "mailbox=published:%lu/invalid:%lu/rollback:%lu, "
+      "consumed=%lu/accepted=%lu, "
+      "reject=source:%lu/build:%lu/schedule:%lu/solver:%lu/exact:%lu/"
+      "not_stopped:%lu/wall:%lu/dynamic:%lu/certified:%lu/exception:%lu, "
+      "age=%.4f/%.4fs(avg/max), candidates=%.2f/%lu(avg/max), "
+      "compute=%.3f/%.3fms(avg/max), selected_solve=%.3f/%.3fms(avg/max), "
+      "last=available:%d/seq:%lu/decision:%lu/intent:%s/reason:%s/"
+      "schedule:%d:%d:%d/attempts:%lu/solver:%s/wall:%s/"
+      "lateral_reserve:%.4f/dynamic:valid:%d,clear:%d,reserve:%.4f/"
+      "detail:%s, authority=shadow, selected=0",
+      static_cast<unsigned long>(worker.submitted),
+      static_cast<unsigned long>(worker.replaced),
+      static_cast<unsigned long>(worker.started),
+      static_cast<unsigned long>(worker.completed),
+      static_cast<unsigned long>(worker.exceptions),
+      worker.running ? 1 : 0, worker.pending ? 1 : 0,
+      static_cast<unsigned long>(mailbox.accepted_count),
+      static_cast<unsigned long>(mailbox.invalid_result_count),
+      static_cast<unsigned long>(mailbox.sequence_rollback_count),
+      static_cast<unsigned long>(window.consumed_count),
+      static_cast<unsigned long>(window.accepted_count),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::InvalidSource)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::CandidateBuildRejected)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::ScheduleRejected)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::SolverRejected)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::ExactTrajectoryRejected)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::StopNotReached)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::WallProofRejected)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::DynamicProofRejected)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::CertifiedPlanRejected)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::Exception)]),
+      window.total_result_age_sec / denominator,
+      window.maximum_result_age_sec,
+      static_cast<double>(window.total_attempted_candidate_count) / denominator,
+      static_cast<unsigned long>(window.maximum_attempted_candidate_count),
+      window.total_compute_ms / denominator, window.maximum_compute_ms,
+      window.total_selected_solver_ms / denominator,
+      window.maximum_selected_solver_ms,
+      window.last_result_available ? 1 : 0,
+      static_cast<unsigned long>(last.source_normal_identity.sequence),
+      static_cast<unsigned long>(
+        last.source_normal_identity.source_context.decision_id),
+      window.last_result_available ?
+      mpcc_contract::to_string(last.source_normal_identity.source_context.intent) :
+      "none",
+      window.last_result_available ?
+      rate_resolved_stop_lattice_shadow::to_string(last.reason) : "none",
+      last.initial_rate_sign, last.first_switch_stage,
+      last.second_switch_stage,
+      static_cast<unsigned long>(last.attempted_candidate_count),
+      window.last_result_available ?
+      rate_resolved_shadow::to_string(last.solver_outcome) : "none",
+      window.last_result_available ?
+      rate_resolved_physical_wall::to_string(last.wall_outcome) : "none",
+      last.minimum_lateral_bound_reserve_m,
+      last.dynamic_valid ? 1 : 0, last.dynamic_clear ? 1 : 0,
+      last.minimum_dynamic_clearance_m,
+      window.last_result_available ? last.detail.c_str() : "none");
+    window = RateResolvedStopLatticeShadowTelemetryWindow{};
+    rate_resolved_stop_lattice_shadow_last_log_sec_ = now_sec;
+  }
+
   void record_rate_resolved_track_cruise_shadow(
     const MpcProblem & problem, const double now_sec,
     const RateResolvedRetainedShadowEvaluation & retained)
   {
+    record_rate_resolved_stop_lattice_shadow(now_sec);
     auto & window = rate_resolved_track_cruise_shadow_telemetry_window_;
     ++window.retained_attempt_count;
     const auto retained_reason_index =
@@ -29406,6 +29620,17 @@ struct MPC
   rate_resolved_track_cruise_shadow_mailbox_;
   std::unique_ptr<LatestOnlyWorker>
   rate_resolved_track_cruise_shadow_worker_;
+  std::shared_ptr<rate_resolved_shadow::SolverContext>
+  rate_resolved_stop_lattice_shadow_solver_context_;
+  std::shared_ptr<rate_resolved_stop_lattice_shadow::Mailbox>
+  rate_resolved_stop_lattice_shadow_mailbox_;
+  std::shared_ptr<LatestOnlyWorker>
+  rate_resolved_stop_lattice_shadow_worker_;
+  std::uint64_t rate_resolved_stop_lattice_shadow_last_consumed_sequence_{};
+  RateResolvedStopLatticeShadowTelemetryWindow
+  rate_resolved_stop_lattice_shadow_telemetry_window_;
+  double rate_resolved_stop_lattice_shadow_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
   std::shared_ptr<rate_resolved_physical_wall::Mailbox>
   rate_resolved_track_cruise_physical_wall_mailbox_;
   std::shared_ptr<rate_resolved_certified::Store>

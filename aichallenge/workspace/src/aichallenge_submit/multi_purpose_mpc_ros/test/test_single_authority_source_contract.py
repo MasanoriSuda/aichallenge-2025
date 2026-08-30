@@ -76,6 +76,9 @@ MPCC_RATE_RESOLVED_SHADOW_HEADER = (
 MPCC_RATE_RESOLVED_SHADOW_SOURCE = (
     PACKAGE_ROOT / "src" / "mpcc_rate_resolved_shadow.cpp"
 ).read_text(encoding="utf-8")
+MPCC_RATE_RESOLVED_STOP_LATTICE_SHADOW_SOURCE = (
+    PACKAGE_ROOT / "src" / "mpcc_rate_resolved_stop_lattice_shadow.cpp"
+).read_text(encoding="utf-8")
 LEGACY_BOOST_SURFACE = "\n".join(
     path.read_text(encoding="utf-8")
     for path in (
@@ -2774,6 +2777,53 @@ def test_current_world_stop_successor_remains_shadow_only() -> None:
         "observe_published_certified_stop_successor_join(", shadow_call
     )
     assert authority_loss < shadow_call < observation_join
+
+
+def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
+    """The asynchronous Stop lattice may observe but never select output."""
+
+    for forbidden in (
+        "certify_and_replace(",
+        "replace_pair(",
+        "mark_executed(",
+        "record_published_bundle_source(",
+        "publish_control_command(",
+        "canonical_normal_emergency_stop(",
+        "mpcc_rate_resolved_production_adapter",
+    ):
+        assert forbidden not in MPCC_RATE_RESOLVED_STOP_LATTICE_SHADOW_SOURCE
+
+    submit_start = SOURCE.index(
+        "bool submit_rate_resolved_track_cruise_shadow("
+    )
+    submit_end = SOURCE.index(
+        "bool submit_rate_resolved_preentry_execution_shadow(", submit_start
+    )
+    submit = SOURCE[submit_start:submit_end]
+    normal_admission = submit.index(
+        "evaluate_rate_resolved_normal_population("
+    )
+    stop_submission = submit.index(
+        "stop_lattice_shadow_worker->submit_latest("
+    )
+    assert normal_admission < stop_submission
+    assert "candidate_snapshot()" in submit[normal_admission:stop_submission]
+    assert "rate_resolved_artifact::same_identity(" in submit
+
+    observe_start = SOURCE.index(
+        "void record_rate_resolved_stop_lattice_shadow("
+    )
+    observe_end = SOURCE.index(
+        "void record_rate_resolved_track_cruise_shadow(", observe_start
+    )
+    observe = SOURCE[observe_start:observe_end]
+    assert "authority=shadow, selected=0" in observe
+    for forbidden in (
+        "publish_control_command(",
+        "canonical_normal_emergency_stop(",
+        "mark_executed(",
+    ):
+        assert forbidden not in observe
 
 def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     """Resolved normal intents must use canonical MPCC or explicit Emergency."""

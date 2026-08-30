@@ -151,6 +151,11 @@ StopCandidateResult build_maximum_braking_candidate(
   }
 
   auto candidate = source;
+  // A normal artifact exposes only the short publisher prefix.  A Stop
+  // successor certificate must instead contain the complete trajectory up to
+  // rest; otherwise exact proof sees a still-moving prefix and cannot prove
+  // the contingency that the QP actually solved.
+  candidate.execution_prefix_steps = candidate.request.horizon_steps;
   candidate.control_prediction_origin_sec += source.publication_interval_sec;
   candidate.course_progress_origin_m = prefix_progress_m;
   candidate.request.initial_state[model::kLateralIndex] =
@@ -162,6 +167,13 @@ StopCandidateResult build_maximum_braking_candidate(
   candidate.request.initial_state[model::kVelocityIndex] =
     prefix.velocity_mps[prefix_index];
   candidate.request.initial_state[model::kProgressIndex] = 0.0;
+  // The semantic adapter owns state-zero equality. Rebase that equality with
+  // the publisher-boundary state; leaving the source callback's fixed box in
+  // place makes the otherwise exact successor self-contradictory before the
+  // solver is reached.
+  candidate.request.states.front().reference = candidate.request.initial_state;
+  candidate.request.states.front().lower = candidate.request.initial_state;
+  candidate.request.states.front().upper = candidate.request.initial_state;
   candidate.request.current_steering_rad =
     continuation.publisher_interval_end_steering_rad;
   candidate.request.current_response_steering_rad =

@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
 #include <gtest/gtest.h>
@@ -22,6 +23,7 @@ namespace model = mpcc_rate_resolved;
 namespace recovery = recovery_footprint;
 namespace shadow = mpcc_rate_resolved_shadow;
 namespace stop_lattice = mpcc_rate_resolved_stop_control_lattice;
+namespace stop_lattice_shadow = mpcc_rate_resolved_stop_lattice_shadow;
 
 shadow::Snapshot source_snapshot()
 {
@@ -137,6 +139,40 @@ shadow::Snapshot source_snapshot()
   world.obstacles.push_back(
     shadow::ReplayDynamicObstacle{
       "d2", 3.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.2, 13U});
+  EXPECT_TRUE(architecture::interaction_snapshot_complete(source));
+  return source;
+}
+
+shadow::Snapshot stoppable_source_snapshot()
+{
+  auto source = source_snapshot();
+  constexpr int horizon = 12;
+  source.identity.source_context.horizon_steps = horizon;
+  source.identity.source_context = contract::seal_problem_context(
+    source.identity.source_context);
+  source.execution_prefix_steps = 3;
+  source.request.horizon_steps = horizon;
+  const auto state_template = source.request.states[1];
+  const auto input_template = source.request.inputs.front();
+  source.request.states.assign(horizon + 1U, state_template);
+  source.request.inputs.assign(horizon, input_template);
+  source.nominal_path_distance_m.resize(horizon + 1U);
+  source.wall_reference_progress_m.resize(horizon + 1U);
+  source.wall_lower_m.assign(horizon + 1U, -2.0);
+  source.wall_upper_m.assign(horizon + 1U, 2.0);
+  for (int stage = 0; stage <= horizon; ++stage) {
+    auto & state = source.request.states[stage];
+    state.reference << 0.0, 0.0, 0.0, 2.0, 0.2 * stage;
+    state.lower << -2.0, -1.0, -0.6, 0.0, 0.0;
+    state.upper << 2.0, 1.0, 0.6, 5.0, 5.0;
+    state.weight << 2.0, 1.0, 2.0, 1.0, 1.0;
+    source.nominal_path_distance_m[stage] = 0.2 * stage;
+    source.wall_reference_progress_m[stage] = 0.2 * stage;
+  }
+  source.request.states.front().lower = source.request.initial_state;
+  source.request.states.front().upper = source.request.initial_state;
+  source.dynamic_obstacle_stages.assign(
+    horizon, source.dynamic_obstacle_stages.front());
   EXPECT_TRUE(architecture::interaction_snapshot_complete(source));
   return source;
 }
@@ -605,9 +641,18 @@ TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
     source, *normal.execution_artifact,
     solver.physical_constraint_tolerance());
   ASSERT_TRUE(stop.accepted()) << stop.detail;
+  EXPECT_EQ(
+    stop.candidate.execution_prefix_steps,
+    stop.candidate.request.horizon_steps);
   ASSERT_EQ(
     stop.candidate.request.states.size(),
     stop.candidate.request.inputs.size() + 1U);
+  EXPECT_EQ(
+    stop.candidate.request.states.front().lower,
+    stop.candidate.request.initial_state);
+  EXPECT_EQ(
+    stop.candidate.request.states.front().upper,
+    stop.candidate.request.initial_state);
   double previous_velocity =
     stop.candidate.request.states.front().lower[model::kVelocityIndex];
   for (std::size_t stage = 1U;
@@ -653,6 +698,70 @@ TEST(MpccArchitectureComparison, SharedStopLatticePopulationIsDeterministic)
       first[index].schedule.second_switch_stage,
       second[index].schedule.second_switch_stage);
   }
+}
+
+TEST(MpccArchitectureComparison, LiveStopShadowRejectsMismatchedSource)
+{
+  const auto source = source_snapshot();
+  shadow::SolverContext normal_solver;
+  const auto normal = normal_solver.evaluate(source);
+  ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
+  ASSERT_NE(normal.execution_artifact, nullptr);
+
+  auto mismatched = source;
+  ++mismatched.identity.sequence;
+  shadow::SolverContext stop_solver;
+  const auto result = stop_lattice_shadow::evaluate(
+    mismatched, *normal.execution_artifact, stop_solver);
+  EXPECT_EQ(result.reason, stop_lattice_shadow::Reason::InvalidSource);
+  EXPECT_EQ(result.attempted_candidate_count, 0U);
+  EXPECT_EQ(result.certified_stop_plan, nullptr);
+}
+
+TEST(MpccArchitectureComparison, LiveStopShadowBuildsCertifiedObservation)
+{
+  const auto source = stoppable_source_snapshot();
+  shadow::SolverContext normal_solver;
+  const auto normal = normal_solver.evaluate(source);
+  ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
+  ASSERT_NE(normal.execution_artifact, nullptr);
+
+  shadow::SolverContext stop_solver;
+  const auto result = stop_lattice_shadow::evaluate(
+    source, *normal.execution_artifact, stop_solver);
+  ASSERT_EQ(result.reason, stop_lattice_shadow::Reason::Accepted)
+    << result.detail;
+  ASSERT_TRUE(result.accepted());
+  EXPECT_GT(result.attempted_candidate_count, 0U);
+  EXPECT_EQ(
+    mpcc_rate_resolved_certified_plan::validate(
+      *result.certified_stop_plan),
+    mpcc_rate_resolved_certified_plan::RejectReason::None);
+}
+
+TEST(MpccArchitectureComparison, LiveStopShadowMailboxIsMonotonic)
+{
+  stop_lattice_shadow::Mailbox mailbox;
+  stop_lattice_shadow::Result newer;
+  newer.source_normal_identity = source_snapshot().identity;
+  newer.total_compute_ms = 1.0;
+  EXPECT_EQ(
+    mailbox.publish(newer),
+    stop_lattice_shadow::PublishReason::Accepted);
+
+  stop_lattice_shadow::Result older;
+  older.source_normal_identity = source_snapshot().identity;
+  older.source_normal_identity.sequence -= 1U;
+  older.total_compute_ms = 1.0;
+  EXPECT_EQ(
+    mailbox.publish(older),
+    stop_lattice_shadow::PublishReason::SequenceRollback);
+  const auto latest = mailbox.latest_after(0U);
+  ASSERT_TRUE(latest.has_value());
+  EXPECT_EQ(latest->source_normal_identity.sequence, 9U);
+  const auto state = mailbox.state();
+  EXPECT_EQ(state.accepted_count, 1U);
+  EXPECT_EQ(state.sequence_rollback_count, 1U);
 }
 
 TEST(MpccArchitectureComparison, ExternalPrimalUsesExactPhysicalProofChain)

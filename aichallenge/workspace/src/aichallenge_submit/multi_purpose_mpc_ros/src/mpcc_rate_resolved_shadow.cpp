@@ -2892,6 +2892,14 @@ Result SolverContext::evaluate_fixed_steering_rate_audit(
   const Snapshot & snapshot,
   const std::vector<double> & steering_rate_radps)
 {
+  return evaluate_fixed_steering_rate_shadow(
+    snapshot, steering_rate_radps);
+}
+
+Result SolverContext::evaluate_fixed_steering_rate_shadow(
+  const Snapshot & snapshot,
+  const std::vector<double> & steering_rate_radps)
+{
   return evaluate_impl(
     snapshot, false, std::nullopt, 0U, &steering_rate_radps);
 }

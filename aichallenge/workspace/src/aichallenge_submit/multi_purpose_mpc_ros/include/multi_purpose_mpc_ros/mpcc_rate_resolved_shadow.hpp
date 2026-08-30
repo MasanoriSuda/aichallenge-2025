@@ -730,6 +730,12 @@ public:
   /// owns acceptance, and this entry point cannot publish an artifact.
   Result evaluate_physical_dynamic_sqp_audit(
     const Snapshot & snapshot, std::size_t iteration_count);
+  /// Observation-only fixed steering-rate solve for a separately scheduled
+  /// live shadow.  It returns normal solver evidence but has no Store or
+  /// publisher edge; production authority must not consume the result.
+  Result evaluate_fixed_steering_rate_shadow(
+    const Snapshot & snapshot,
+    const std::vector<double> & steering_rate_radps);
   /// Observation-only fixed-control comparison.  The supplied steering-rate
   /// sequence is installed as equality rows only after the canonical semantic
   /// adapter has built the same seven-state problem.  It has no Store,

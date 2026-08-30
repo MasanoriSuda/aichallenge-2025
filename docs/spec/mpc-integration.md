@@ -3292,6 +3292,27 @@ geometryを現在worldから再構築できるが、ReplayWorldのglobal velocit
 ReplayWorldは引き続きdense timed exact dynamic certificateの独立入力である。近似QP tubeとexact physical proofを別表現にする
 ことは許すが、同一control epoch内で二つの近似target predictorを持たせない。
 
+#### current-world候補のencounter topology所有（2026-08-31、2025由来の暫定）
+
+stateless current-world candidateの時間構造は、capture元の失敗candidateやpersistent Missionではなく、同じepochで
+sealされたcanonical target tubeだけから再構築する。stateless seedは`forced_first_pass_side_stage`、
+`forced_first_ahead_stage`、forced diagonal/disjunction等のcandidate固有scheduleをすべてneutralへ戻す。各candidate builderだけが
+その候補のscheduleを所有する。
+
+target tubeがcontrol horizonの途中で終了する場合、その最初のinvalid stageは「targetが存在しない」という外挿値ではなく、
+sealされたencounterの物理境界である。bounded populationはDirectSide、midpoint physical diagonalに加え、nominal referenceが
+stay-behindを満たす最後のstageから、このencounter境界までのphysical diagonalを第3候補として持つ。targetが全horizonでvalidな
+場合は従来のlate exact-disjunctionを維持する。どちらの場合も片sideあたり最大3候補である。
+
+候補populationは、安定したlocal object上ですべてのscheduleを導出してから結果vectorへmoveする。vector要素への参照を保持したまま
+appendしてはならない。これは候補の有無やfingerprintがallocator capacityに依存する未定義動作を防ぐためである。
+
+`output/20260831-063008/d1`のsequence 992 / decision 1726を同一snapshotで比較すると、persistent Aとstateless direct Bは
+不成立だったが、stage 5からcanonical target-tube境界stage 14へ遷移するC候補は右側で、同じseven-state SQP、nonlinear wall、
+timed opponent、terminal Stop証明を通過した。左側はexact dynamic proofで棄却された。したがって分類は
+`A/B fail, C succeeds = candidate generation defect`であり、後段decision 1802のcursor exhaustionとwall Recoveryをretention ruleや
+clearance変更で隠してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -111,6 +111,7 @@ enum class CandidateKind
 {
   DirectSide,
   MidPhysicalDiagonal,
+  EncounterBoundaryPhysicalDiagonal,
   LateExactDisjunction,
   ReturnRejoin,
 };
@@ -126,6 +127,9 @@ struct Candidate
 /// Bounded production-facing candidate population.  It contains no publisher
 /// or retained lifecycle state.  All members are derived from one immutable
 /// current-world fingerprint and the population size never exceeds three.
+/// The third member follows the canonical target-tube validity topology: a
+/// physical diagonal ending at a finite encounter boundary, or a late exact
+/// disjunction when the encounter occupies the complete horizon.
 struct CandidateSet
 {
   RejectReason reason{RejectReason::IncompleteSnapshot};

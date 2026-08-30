@@ -682,6 +682,24 @@
         "world-velocity target synthesis in stateless maneuver generation"
       ],
       "revisit_condition": "a new current-epoch candidate reintroduces endpoint-pinned or multi-metre lateral target stages, a mismatched target identity gains authority, or exact timed proof consumes geometry different from the published candidate"
+    },
+    {
+      "experiment_id": "20260831-current-world-candidate-topology",
+      "baseline_commit": "d72843c4",
+      "snapshot_ids": [
+        "000000000992-da79aec4f6fc1402-shiftout-side-negative-dynamic-obstacle-refinement-solve-rejected"
+      ],
+      "hypothesis": "the downstream retained cursor exhaustion and wall Recovery are caused by retained clock/progress drift rather than an earlier omission and corruption of current-world candidate topology",
+      "changed_dimension": "production_stateless_candidate_topology_generation",
+      "result": "rejected",
+      "reason": "at frozen sequence 992 persistent A and stateless direct B failed, while a rough physical diagonal C from nominal stay-behind stage 5 to canonical target-tube boundary stage 14 certified on the right with the unchanged seven-state SQP and exact wall, timed obstacle and terminal Stop proofs; code audit also found captured forced schedule leaking into the stateless seed and a vector-invalidated reference used to derive the third candidate",
+      "production_impact": "stateless seeds delete captured candidate schedules and the bounded three-member population represents a finite canonical encounter boundary; production authority, Mission lifecycle, solver, weights, clearance, timeout, lease, grace, retry, fallback and configuration are unchanged",
+      "deleted_code": [
+        "captured forced candidate schedule inheritance in stateless seed",
+        "candidate-vector element reference across population append",
+        "implicit omission of third topology for finite current target tubes"
+      ],
+      "revisit_condition": "dynamic validation cannot adopt an encounter-boundary candidate under the matching world, a finite target tube produces a nonphysical boundary transition, an allocator-dependent candidate count returns, or the same authority gap occurs despite a certified fresh sibling"
     }
   ]
 }

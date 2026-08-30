@@ -328,6 +328,32 @@ TEST(MpccStatelessManeuver, SealsPhysicalDiagonalReplayGeometry)
   EXPECT_NE(physical.seed->candidate_fingerprint, source_fingerprint);
 }
 
+TEST(MpccStatelessManeuver, StatelessSeedDeletesCapturedCandidateSchedule)
+{
+  auto source = make_source();
+  source.dynamic_obstacle_forced_diagonal_start_stage = 0;
+  source.dynamic_obstacle_forced_diagonal_full_side_stage = 2;
+  source.dynamic_obstacle_forced_physical_diagonal = true;
+  ASSERT_TRUE(
+    mpcc_architecture_snapshot::interaction_snapshot_complete(source));
+  const auto source_fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+
+  const auto direct = build(source, source_fingerprint, -1);
+
+  ASSERT_TRUE(direct.seed.has_value()) << direct.detail;
+  const auto & rebuilt = direct.seed->solver_snapshot;
+  EXPECT_EQ(
+    rebuilt.dynamic_obstacle_longitudinal_topology,
+    mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic);
+  EXPECT_EQ(rebuilt.dynamic_obstacle_forced_first_pass_side_stage, -1);
+  EXPECT_EQ(rebuilt.dynamic_obstacle_forced_first_ahead_stage, -1);
+  EXPECT_DOUBLE_EQ(rebuilt.dynamic_obstacle_forced_constraint_fraction, 1.0);
+  EXPECT_EQ(rebuilt.dynamic_obstacle_forced_diagonal_start_stage, -1);
+  EXPECT_EQ(rebuilt.dynamic_obstacle_forced_diagonal_full_side_stage, -1);
+  EXPECT_FALSE(rebuilt.dynamic_obstacle_forced_physical_diagonal);
+}
+
 TEST(MpccStatelessManeuver, BuildsMidHorizonPhysicalDiagonalPopulation)
 {
   const auto source = make_source();
@@ -392,7 +418,7 @@ TEST(MpccStatelessManeuver, AddsLateExactDisjunctionForLongHorizon)
   const auto result = build_bounded_candidates(source, -1);
 
   ASSERT_EQ(result.reason, RejectReason::Accepted) << result.detail;
-  ASSERT_EQ(result.candidates.size(), 3U);
+  ASSERT_EQ(result.candidates.size(), 3U) << result.detail;
   EXPECT_EQ(
     result.candidates[1].seed.solver_snapshot.
     dynamic_obstacle_forced_diagonal_start_stage, 0);
@@ -422,6 +448,71 @@ TEST(MpccStatelessManeuver, AddsLateExactDisjunctionForLongHorizon)
   EXPECT_NE(
     result.candidates[1].seed.candidate_fingerprint,
     result.candidates[2].seed.candidate_fingerprint);
+}
+
+TEST(MpccStatelessManeuver, UsesFiniteTargetTubeBoundaryAsThirdHomotopy)
+{
+  auto source = make_source();
+  constexpr int horizon = 20;
+  constexpr int last_valid_target_stage = 13;
+  const auto state_template = source.request.states.back();
+  const auto input_template = source.request.inputs.back();
+  const auto obstacle_template = source.dynamic_obstacle_stages.back();
+  source.request.horizon_steps = horizon;
+  source.request.states.resize(horizon + 1, state_template);
+  source.request.inputs.resize(horizon, input_template);
+  source.nominal_path_distance_m.resize(horizon + 1);
+  source.wall_reference_progress_m.resize(horizon + 1);
+  source.wall_lower_m.resize(horizon + 1, -2.0);
+  source.wall_upper_m.resize(horizon + 1, 2.0);
+  source.dynamic_obstacle_stages.resize(horizon, obstacle_template);
+  for (int stage = 0; stage <= horizon; ++stage) {
+    const auto index = static_cast<std::size_t>(stage);
+    source.request.states[index].reference(4) = static_cast<double>(stage);
+    source.nominal_path_distance_m[index] = static_cast<double>(stage);
+    source.wall_reference_progress_m[index] = static_cast<double>(stage);
+    if (stage < horizon) {
+      source.dynamic_obstacle_stages[index].valid =
+        stage <= last_valid_target_stage;
+      source.dynamic_obstacle_stages[index].target_progress_m =
+        6.0 + 0.2 * static_cast<double>(stage);
+      source.dynamic_obstacle_stages[index].longitudinal_overlap_m = 2.0;
+    }
+  }
+  source.execution_prefix_steps = horizon;
+  source.identity.source_context.horizon_steps = horizon;
+  source.identity.source_context.fingerprint = 0U;
+  source.identity.source_context =
+    mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
+  ASSERT_TRUE(
+    mpcc_architecture_snapshot::interaction_snapshot_complete(source));
+  const auto source_fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  const auto boundary_candidate = build_physical_diagonal_schedule(
+    source, source_fingerprint, -1, 5, last_valid_target_stage + 1);
+  ASSERT_TRUE(boundary_candidate.seed.has_value()) << boundary_candidate.detail;
+
+  const auto result = build_bounded_candidates(source, -1);
+
+  ASSERT_EQ(result.reason, RejectReason::Accepted) << result.detail;
+  ASSERT_EQ(result.candidates.size(), 3U) << result.detail;
+  EXPECT_EQ(
+    result.candidates[2].kind,
+    CandidateKind::EncounterBoundaryPhysicalDiagonal);
+  EXPECT_EQ(
+    result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_start_stage, 5);
+  EXPECT_EQ(
+    result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_full_side_stage,
+    last_valid_target_stage + 1);
+  EXPECT_TRUE(
+    result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_physical_diagonal);
+  EXPECT_EQ(
+    result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_first_pass_side_stage, -1);
 }
 
 TEST(MpccStatelessManeuver, BoundsPopulationWhenDiagonalDoesNotFit)

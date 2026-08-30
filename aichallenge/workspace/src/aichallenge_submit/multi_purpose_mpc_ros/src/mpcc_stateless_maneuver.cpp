@@ -237,6 +237,8 @@ const char * to_string(const CandidateKind kind) noexcept
     case CandidateKind::DirectSide: return "direct-side";
     case CandidateKind::MidPhysicalDiagonal:
       return "mid-physical-diagonal";
+    case CandidateKind::EncounterBoundaryPhysicalDiagonal:
+      return "encounter-boundary-physical-diagonal";
     case CandidateKind::LateExactDisjunction:
       return "late-exact-disjunction";
     case CandidateKind::ReturnRejoin:
@@ -491,6 +493,19 @@ static Result build_with_intent_policy(
     candidate.dynamic_obstacle_pass_side_sign = pass_side_sign;
     candidate.dynamic_obstacle_refinement_active = true;
     candidate.dynamic_obstacle_stages = target_horizon.stages;
+    // The source may itself be a failed Direct/Diagonal/Disjunction
+    // candidate captured by the architecture auditor.  A stateless seed must
+    // not inherit that candidate's temporal topology; otherwise DirectSide is
+    // mislabeled and every derived member combines old and new forced rows.
+    // Candidate-specific builders below are the sole owners of these fields.
+    candidate.dynamic_obstacle_longitudinal_topology =
+      mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic;
+    candidate.dynamic_obstacle_forced_first_pass_side_stage = -1;
+    candidate.dynamic_obstacle_forced_first_ahead_stage = -1;
+    candidate.dynamic_obstacle_forced_constraint_fraction = 1.0;
+    candidate.dynamic_obstacle_forced_diagonal_start_stage = -1;
+    candidate.dynamic_obstacle_forced_diagonal_full_side_stage = -1;
+    candidate.dynamic_obstacle_forced_physical_diagonal = false;
 
     auto & initial = candidate.request.states.front();
     initial.reference[model::kLateralIndex] =
@@ -956,6 +971,7 @@ CandidateSet build_bounded_candidates(
   const int pass_side_sign) noexcept
 {
   namespace architecture = mpcc_architecture_snapshot;
+  namespace model = mpcc_rate_resolved;
   CandidateSet result;
   const auto source_fingerprint =
     architecture::fingerprint_interaction_snapshot(source);
@@ -989,19 +1005,28 @@ CandidateSet build_bounded_candidates(
     result.detail = direct.detail;
     return result;
   }
-  result.candidates.push_back(
-    Candidate{CandidateKind::DirectSide, std::move(direct.seed.value())});
-
-  const auto & direct_snapshot = result.candidates.front().seed.solver_snapshot;
+  // Keep candidate assembly outside result.candidates.  Holding a reference
+  // to candidates.front() while appending the second member used to read a
+  // vector-invalidated Snapshot when capacity grew, making the third topology
+  // non-deterministically disappear.  Move the completed bounded population
+  // only after every schedule has been derived from the stable direct seed.
+  const auto & direct_snapshot = direct.seed->solver_snapshot;
+  std::optional<Candidate> mid_candidate;
+  std::optional<Candidate> third_candidate;
   int first_valid_stage = -1;
+  int last_contiguous_valid_stage = -1;
   for (int stage = 0; stage < direct_snapshot.request.horizon_steps; ++stage) {
-    if (
+    const bool valid =
       static_cast<std::size_t>(stage) <
       direct_snapshot.dynamic_obstacle_stages.size() &&
       direct_snapshot.dynamic_obstacle_stages[
-        static_cast<std::size_t>(stage)].valid)
-    {
+        static_cast<std::size_t>(stage)].valid;
+    if (valid && first_valid_stage < 0) {
       first_valid_stage = stage;
+      last_contiguous_valid_stage = stage;
+    } else if (valid && last_contiguous_valid_stage == stage - 1) {
+      last_contiguous_valid_stage = stage;
+    } else if (first_valid_stage >= 0) {
       break;
     }
   }
@@ -1023,37 +1048,126 @@ CandidateSet build_bounded_candidates(
       source, source_fingerprint, pass_side_sign,
       first_valid_stage, mid_full_side_stage);
     if (diagonal.seed.has_value()) {
-      result.candidates.push_back(
+      mid_candidate.emplace(
         Candidate{
           CandidateKind::MidPhysicalDiagonal,
           std::move(diagonal.seed.value())});
     }
   }
 
-  // The coupled late diagonal fixes one separating half-space throughout the
-  // transition. Frozen current-world evidence shows that this can remove a
-  // feasible trajectory even though the complete behind and side disjuncts
-  // are individually feasible. Keep the population bounded by replacing that
-  // member with the latest complete side suffix represented by the certified
-  // audit schedule. The side reference remains active throughout, so MPCC is
-  // free to move laterally before the side constraint becomes mandatory.
-  constexpr int kLateSideSuffixStageCount = 3;
   const int horizon = direct_snapshot.request.horizon_steps;
-  const int late_side_stage = horizon - kLateSideSuffixStageCount;
-  if (first_valid_stage >= 0 && late_side_stage > first_valid_stage) {
-    auto late_exact = build_disjunction_schedule(
-      source, source_fingerprint, pass_side_sign,
-      late_side_stage, horizon, 1.0);
-    if (late_exact.seed.has_value()) {
-      result.candidates.push_back(
-        Candidate{
-          CandidateKind::LateExactDisjunction,
-          std::move(late_exact.seed.value())});
+  const bool finite_encounter_boundary =
+    first_valid_stage >= 0 && last_contiguous_valid_stage >= first_valid_stage &&
+    last_contiguous_valid_stage + 1 < horizon;
+  int encounter_boundary_stage = -1;
+  int last_nominal_stay_behind_stage = -1;
+  if (finite_encounter_boundary) {
+    // A finite canonical target tube ends before the unrelated control
+    // horizon. Represent that measured temporal topology explicitly instead
+    // of silently dropping the third candidate when later target stages are
+    // invalid. The unchanged SQP and exact ReplayWorld proofs retain final
+    // authority.
+    encounter_boundary_stage = last_contiguous_valid_stage + 1;
+    last_nominal_stay_behind_stage = first_valid_stage - 1;
+    for (
+      int stage = first_valid_stage;
+      stage <= last_contiguous_valid_stage; ++stage)
+    {
+      const auto index = static_cast<std::size_t>(stage);
+      if (index >= direct_snapshot.request.states.size()) {
+        break;
+      }
+      const auto & target = direct_snapshot.dynamic_obstacle_stages[index];
+      const double nominal_ego_progress_m =
+        direct_snapshot.request.states[index].reference[model::kProgressIndex];
+      const double stay_behind_upper_m =
+        target.target_progress_m - target.longitudinal_overlap_m;
+      if (
+        !std::isfinite(nominal_ego_progress_m) ||
+        !std::isfinite(stay_behind_upper_m) ||
+        nominal_ego_progress_m > stay_behind_upper_m)
+      {
+        break;
+      }
+      last_nominal_stay_behind_stage = stage;
+    }
+    if (
+      last_nominal_stay_behind_stage >= first_valid_stage &&
+      encounter_boundary_stage >= last_nominal_stay_behind_stage + 2)
+    {
+      auto boundary_diagonal = build_physical_diagonal_schedule(
+        source, source_fingerprint, pass_side_sign,
+        last_nominal_stay_behind_stage, encounter_boundary_stage);
+      if (boundary_diagonal.seed.has_value()) {
+        third_candidate.emplace(
+          Candidate{
+            CandidateKind::EncounterBoundaryPhysicalDiagonal,
+            std::move(boundary_diagonal.seed.value())});
+      }
+    }
+  } else {
+    // When the target occupies the complete prediction horizon there is no
+    // observed encounter boundary. Preserve the independently certified
+    // complete-disjunction topology rather than inventing one beyond the
+    // sealed current-world evidence.
+    constexpr int kLateSideSuffixStageCount = 3;
+    const int late_side_stage = horizon - kLateSideSuffixStageCount;
+    if (first_valid_stage >= 0 && late_side_stage > first_valid_stage) {
+      auto late_exact = build_disjunction_schedule(
+        source, source_fingerprint, pass_side_sign,
+        late_side_stage, horizon, 1.0);
+      if (late_exact.seed.has_value()) {
+        third_candidate.emplace(
+          Candidate{
+            CandidateKind::LateExactDisjunction,
+            std::move(late_exact.seed.value())});
+      }
     }
   }
 
+  double first_nominal_progress_m = std::numeric_limits<double>::quiet_NaN();
+  double first_target_progress_m = std::numeric_limits<double>::quiet_NaN();
+  double first_longitudinal_overlap_m =
+    std::numeric_limits<double>::quiet_NaN();
+  if (
+    first_valid_stage >= 0 &&
+    static_cast<std::size_t>(first_valid_stage) <
+    direct_snapshot.dynamic_obstacle_stages.size() &&
+    static_cast<std::size_t>(first_valid_stage) <
+    direct_snapshot.request.states.size())
+  {
+    const auto index = static_cast<std::size_t>(first_valid_stage);
+    first_nominal_progress_m = direct_snapshot.request.states[index].reference[
+      model::kProgressIndex];
+    first_target_progress_m =
+      direct_snapshot.dynamic_obstacle_stages[index].target_progress_m;
+    first_longitudinal_overlap_m =
+      direct_snapshot.dynamic_obstacle_stages[index].longitudinal_overlap_m;
+  }
+
+  result.candidates.reserve(3U);
+  result.candidates.push_back(
+    Candidate{CandidateKind::DirectSide, std::move(direct.seed.value())});
+  if (mid_candidate.has_value()) {
+    result.candidates.push_back(std::move(mid_candidate.value()));
+  }
+  if (third_candidate.has_value()) {
+    result.candidates.push_back(std::move(third_candidate.value()));
+  }
+
   result.reason = RejectReason::Accepted;
-  result.detail = "bounded current-world candidate population";
+  std::ostringstream detail;
+  detail << "bounded current-world candidate population/count="
+         << result.candidates.size() << "/valid=" << first_valid_stage
+         << ':' << last_contiguous_valid_stage << "/stay_behind="
+         << last_nominal_stay_behind_stage << "/boundary="
+         << encounter_boundary_stage;
+  if (std::isfinite(first_nominal_progress_m)) {
+    detail << "/first_nominal=" << first_nominal_progress_m
+           << "/first_target=" << first_target_progress_m
+           << "/first_overlap=" << first_longitudinal_overlap_m;
+  }
+  result.detail = detail.str();
   return result;
 }
 

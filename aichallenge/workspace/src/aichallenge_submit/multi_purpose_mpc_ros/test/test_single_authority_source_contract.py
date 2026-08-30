@@ -2850,6 +2850,50 @@ def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
     ):
         assert forbidden not in observe
 
+    join_start = SOURCE.index(
+        "void observe_rate_resolved_stop_lattice_current_world_join("
+    )
+    join_end = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control(",
+        join_start,
+    )
+    join = SOURCE[join_start:join_end]
+    assert "evaluate_current_world_stop_successor_plan(" in join
+    assert "authority=shadow, selected=0" in join
+    for forbidden in (
+        "certify_and_replace(",
+        "replace_pair(",
+        "mark_executed(",
+        "record_published_bundle_source(",
+        "publish_control_command(",
+        "pending_canonical_normal_actuation_ =",
+    ):
+        assert forbidden not in join
+
+    owner_start = join_end
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    ordinary = owner.index("const auto ordinary_retained = retained;")
+    join_call = owner.index(
+        "observe_rate_resolved_stop_lattice_current_world_join("
+    )
+    production_stop = owner.index(
+        "evaluate_published_stop_successor_shadow(", join_call
+    )
+    assert ordinary < join_call < production_stop
+
+    mailbox_start = SOURCE.index(
+        "void record_rate_resolved_stop_lattice_shadow("
+    )
+    mailbox_end = SOURCE.index(
+        "void observe_rate_resolved_stop_lattice_current_world_join(",
+        mailbox_start,
+    )
+    mailbox = SOURCE[mailbox_start:mailbox_end]
+    assert "current_published_source_result" in mailbox
+    assert "same_identity(" in mailbox
+    assert "result->source_normal_identity" in mailbox
+
 def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     """Resolved normal intents must use canonical MPCC or explicit Emergency."""
 

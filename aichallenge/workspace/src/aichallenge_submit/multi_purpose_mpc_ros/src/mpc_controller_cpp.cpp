@@ -7705,6 +7705,18 @@ struct RateResolvedStopLatticeShadowTelemetryWindow
   double maximum_selected_solver_ms{};
   rate_resolved_stop_lattice_shadow::Result last_result;
   bool last_result_available{false};
+  std::uint64_t current_world_join_missing_plan_count{};
+  std::uint64_t current_world_join_attempt_count{};
+  std::uint64_t current_world_join_accepted_count{};
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(rate_resolved_retained::Reason::Count)>
+  current_world_join_reason_count{};
+  std::uint64_t last_current_world_join_decision_id{};
+  std::uint64_t last_current_world_join_source_sequence{};
+  rate_resolved_retained::Reason last_current_world_join_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  bool last_current_world_join_available{false};
 };
 
 struct ControlCallbackTimingObservation
@@ -9272,6 +9284,7 @@ struct MPC
   void invalidate_published_stop_lattice_observation() noexcept
   {
     rate_resolved_stop_lattice_published_source_identity_.reset();
+    rate_resolved_stop_lattice_current_world_join_plan_.reset();
     if (rate_resolved_stop_lattice_shadow_worker_ != nullptr) {
       static_cast<void>(
         rate_resolved_stop_lattice_shadow_worker_->
@@ -26487,6 +26500,15 @@ struct MPC
           result->selected_solver_ms);
         window.last_result = result.value();
         window.last_result_available = true;
+        const bool current_published_source_result =
+          rate_resolved_stop_lattice_published_source_identity_.has_value() &&
+          rate_resolved_artifact::same_identity(
+          rate_resolved_stop_lattice_published_source_identity_.value(),
+          result->source_normal_identity);
+        if (result->accepted() && current_published_source_result) {
+          rate_resolved_stop_lattice_current_world_join_plan_ =
+            result->certified_stop_plan;
+        }
       }
     }
 
@@ -26522,6 +26544,8 @@ struct MPC
       "age=%.4f/%.4fs(avg/max), candidates=%.2f/%lu(avg/max), "
       "legacy_rank=%.2f/%lu(avg/max), "
       "compute=%.3f/%.3fms(avg/max), selected_solve=%.3f/%.3fms(avg/max), "
+      "join=missing:%lu/attempted:%lu/accepted:%lu/"
+      "last:%d:%lu:%lu:%s, "
       "last=available:%d/seq:%lu/decision:%lu/intent:%s/reason:%s/"
       "schedule:%d:%d:%d/rank:%lu:%lu:%lu/preferred:%d/solver:%s/wall:%s/"
       "lateral_reserve:%.4f/dynamic:valid:%d,clear:%d,reserve:%.4f/"
@@ -26570,6 +26594,15 @@ struct MPC
       window.total_compute_ms / denominator, window.maximum_compute_ms,
       window.total_selected_solver_ms / denominator,
       window.maximum_selected_solver_ms,
+      static_cast<unsigned long>(window.current_world_join_missing_plan_count),
+      static_cast<unsigned long>(window.current_world_join_attempt_count),
+      static_cast<unsigned long>(window.current_world_join_accepted_count),
+      window.last_current_world_join_available ? 1 : 0,
+      static_cast<unsigned long>(window.last_current_world_join_decision_id),
+      static_cast<unsigned long>(window.last_current_world_join_source_sequence),
+      window.last_current_world_join_available ?
+      rate_resolved_retained::to_string(
+        window.last_current_world_join_reason) : "none",
       window.last_result_available ? 1 : 0,
       static_cast<unsigned long>(last.source_normal_identity.sequence),
       static_cast<unsigned long>(
@@ -28685,6 +28718,65 @@ struct MPC
         std::numeric_limits<double>::quiet_NaN()});
   }
 
+  void observe_rate_resolved_stop_lattice_current_world_join(
+    const MpcProblem & problem, const double now_sec,
+    const mpcc_contract::ControlIntent intent,
+    const RateResolvedRetainedShadowEvaluation & ordinary_retained)
+  {
+    if (
+      ordinary_retained.production_authority.has_value() ||
+      (intent != mpcc_contract::ControlIntent::ShiftOut &&
+      intent != mpcc_contract::ControlIntent::Pass))
+    {
+      return;
+    }
+
+    auto & window = rate_resolved_stop_lattice_shadow_telemetry_window_;
+    if (rate_resolved_stop_lattice_current_world_join_plan_ == nullptr) {
+      ++window.current_world_join_missing_plan_count;
+      window.last_current_world_join_decision_id = active_control_decision_id_;
+      window.last_current_world_join_source_sequence = 0U;
+      window.last_current_world_join_reason =
+        rate_resolved_retained::Reason::MissingPlan;
+      window.last_current_world_join_available = true;
+      return;
+    }
+
+    ++window.current_world_join_attempt_count;
+    const auto observed = evaluate_current_world_stop_successor_plan(
+      problem, now_sec, intent,
+      rate_resolved_stop_lattice_current_world_join_plan_);
+    if (observed.production_authority.has_value()) {
+      ++window.current_world_join_accepted_count;
+    }
+    const auto reason_index = static_cast<std::size_t>(observed.reason);
+    if (reason_index < window.current_world_join_reason_count.size()) {
+      ++window.current_world_join_reason_count[reason_index];
+    }
+    window.last_current_world_join_decision_id = active_control_decision_id_;
+    window.last_current_world_join_source_sequence =
+      rate_resolved_stop_lattice_current_world_join_plan_->
+      execution_artifact != nullptr ?
+      rate_resolved_stop_lattice_current_world_join_plan_->
+      execution_artifact->identity.sequence : 0U;
+    window.last_current_world_join_reason = observed.reason;
+    window.last_current_world_join_available = true;
+
+    static rclcpp::Clock join_clock{RCL_STEADY_TIME};
+    RCLCPP_WARN_THROTTLE(
+      rclcpp::get_logger("mpc_controller"), join_clock, 1000,
+      "Stop lattice current-world join shadow: decision=%lu, intent=%s, "
+      "source=%lu, normal=%s, joined=%d, reason=%s, "
+      "authority=shadow, selected=0",
+      static_cast<unsigned long>(active_control_decision_id_),
+      mpcc_contract::to_string(intent),
+      static_cast<unsigned long>(
+        window.last_current_world_join_source_sequence),
+      rate_resolved_retained::to_string(ordinary_retained.reason),
+      observed.production_authority.has_value() ? 1 : 0,
+      rate_resolved_retained::to_string(observed.reason));
+  }
+
   MpcControlCycleResult rate_resolved_normal_production_control(
     MpcProblem problem, const double now_sec,
     const mpcc_contract::ControlIntent intent)
@@ -28739,6 +28831,8 @@ struct MPC
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
       problem, now_sec, intent);
     const auto ordinary_retained = retained;
+    observe_rate_resolved_stop_lattice_current_world_join(
+      problem, now_sec, intent, ordinary_retained);
     std::optional<PublishedStopSuccessorEvaluation> stop_successor;
     if (!retained.production_authority.has_value()) {
       stop_successor = evaluate_published_stop_successor_shadow(
@@ -29693,6 +29787,8 @@ struct MPC
   rate_resolved_stop_lattice_shadow_worker_;
   std::optional<rate_resolved_artifact::Identity>
   rate_resolved_stop_lattice_published_source_identity_;
+  std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
+  rate_resolved_stop_lattice_current_world_join_plan_;
   std::uint64_t rate_resolved_stop_lattice_shadow_last_consumed_sequence_{};
   RateResolvedStopLatticeShadowTelemetryWindow
   rate_resolved_stop_lattice_shadow_telemetry_window_;

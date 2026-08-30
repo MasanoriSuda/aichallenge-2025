@@ -164,6 +164,10 @@ const char * to_string(const RejectReason reason) noexcept
       return "progress-regression-beyond-certificate";
     case RejectReason::SemanticSteeringSequenceRejected:
       return "semantic-steering-sequence-rejected";
+    case RejectReason::InvalidTerminalIntentContract:
+      return "invalid-terminal-intent-contract";
+    case RejectReason::TerminalIntentNotReached:
+      return "terminal-intent-not-reached";
   }
   return "unknown";
 }
@@ -243,6 +247,28 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   if (artifact.control_stages.empty()) {
     return RejectReason::EmptyHorizon;
   }
+  const bool return_intent = artifact.identity.source_context.intent ==
+    mpcc_execution_contract::ControlIntent::Return;
+  const auto & terminal_contract = artifact.terminal_intent_contract;
+  const auto & terminal_certificate = artifact.terminal_intent_certificate;
+  if (
+    return_intent != terminal_contract.active ||
+    return_intent != terminal_certificate.active ||
+    (terminal_contract.active &&
+    (!std::isfinite(terminal_contract.lateral_reference_m) ||
+    !std::isfinite(terminal_contract.lateral_tolerance_m) ||
+    terminal_contract.lateral_tolerance_m < 0.0 ||
+    !std::isfinite(terminal_contract.heading_reference_rad) ||
+    !std::isfinite(terminal_contract.heading_tolerance_rad) ||
+    terminal_contract.heading_tolerance_rad < 0.0)) ||
+    (terminal_certificate.active &&
+    (terminal_certificate.solved_horizon_steps !=
+    artifact.identity.source_context.horizon_steps ||
+    !std::isfinite(terminal_certificate.solved_lateral_m) ||
+    !std::isfinite(terminal_certificate.solved_heading_rad))))
+  {
+    return RejectReason::InvalidTerminalIntentContract;
+  }
   if (
     artifact.control_stages.size() ==
     std::numeric_limits<std::size_t>::max() ||
@@ -295,6 +321,22 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     }
     if (state.velocity_mps < -residual_bound) {
       return RejectReason::InvalidPredictedState;
+    }
+  }
+  if (terminal_contract.active) {
+    const double semantic_residual =
+      std::max(1.0e-9, artifact.maximum_constraint_violation);
+    if (
+      std::abs(
+        terminal_certificate.solved_lateral_m -
+        terminal_contract.lateral_reference_m) >
+      terminal_contract.lateral_tolerance_m + lateral_tolerance_m ||
+      std::abs(
+        terminal_certificate.solved_heading_rad -
+        terminal_contract.heading_reference_rad) >
+      terminal_contract.heading_tolerance_rad + semantic_residual)
+    {
+      return RejectReason::TerminalIntentNotReached;
     }
   }
   if (

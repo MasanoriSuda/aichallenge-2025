@@ -93,8 +93,15 @@ struct Snapshot
   std::vector<double> wall_lower_m;
   std::vector<double> wall_upper_m;
   std::string progress_wall_profile_diagnostic{"not-provided"};
+  /// Exact endpoint semantics captured from the same config/problem epoch as
+  /// the request.  Return candidates may tighten their terminal box, but may
+  /// not invent a tolerance or borrow current config during replay.
+  artifact::TerminalIntentContract terminal_intent_contract;
   bool dynamic_obstacle_refinement_active{false};
   int dynamic_obstacle_pass_side_sign{0};
+  mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology
+    dynamic_obstacle_longitudinal_topology{
+    mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic};
   /// Optional exact disjunction transition. Raw live snapshots leave this
   /// absent (`-1`); bounded current-world candidates may seal it before solve.
   int dynamic_obstacle_forced_first_pass_side_stage{-1};

@@ -128,6 +128,28 @@ mpcc_rate_resolved_shadow::Snapshot make_source()
   return source;
 }
 
+mpcc_rate_resolved_shadow::Snapshot make_return_source()
+{
+  auto source = make_source();
+  source.identity.source_context.intent =
+    mpcc_execution_contract::ControlIntent::Return;
+  source.identity.source_context.fingerprint = 0U;
+  source.identity.source_context =
+    mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
+  for (auto & state : source.request.states) {
+    state.reference[mpcc_rate_resolved::kLateralIndex] = 0.0;
+    state.reference[mpcc_rate_resolved::kHeadingIndex] = 0.0;
+  }
+  source.terminal_intent_contract.active = true;
+  source.terminal_intent_contract.lateral_reference_m = 0.0;
+  source.terminal_intent_contract.lateral_tolerance_m = 0.20;
+  source.terminal_intent_contract.heading_reference_rad = 0.0;
+  source.terminal_intent_contract.heading_tolerance_rad = 0.12;
+  EXPECT_TRUE(mpcc_architecture_snapshot::interaction_snapshot_complete(source));
+  return source;
+}
+
 TEST(MpccStatelessManeuver, BuildsBothSidesWithoutMissionGeometry)
 {
   const auto source = make_source();
@@ -144,6 +166,56 @@ TEST(MpccStatelessManeuver, BuildsBothSidesWithoutMissionGeometry)
   EXPECT_GT(left.seed->lateral_reference_m[1], 0.0);
   EXPECT_LT(right.seed->lateral_reference_m[1], 0.0);
   EXPECT_NE(left.seed->candidate_fingerprint, right.seed->candidate_fingerprint);
+}
+
+TEST(MpccStatelessManeuver, ReturnBehindTargetPreservesRejoinReference)
+{
+  auto source = make_return_source();
+  source.replay_world->obstacles.front().x_m = 3.0;
+  const auto population = build_bounded_candidates(source, 1);
+
+  ASSERT_EQ(population.reason, RejectReason::Accepted) << population.detail;
+  ASSERT_EQ(population.candidates.size(), 1U);
+  const auto & candidate = population.candidates.front();
+  EXPECT_EQ(candidate.kind, CandidateKind::ReturnRejoin);
+  EXPECT_EQ(candidate.seed.pass_side_sign, 0);
+  EXPECT_EQ(
+    candidate.seed.solver_snapshot.dynamic_obstacle_longitudinal_topology,
+    mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::StayBehind);
+  EXPECT_EQ(candidate.seed.solver_snapshot.dynamic_obstacle_pass_side_sign, 0);
+  EXPECT_EQ(candidate.seed.lateral_reference_m, std::vector<double>(4U, 0.0));
+  const auto & terminal = candidate.seed.solver_snapshot.request.states.back();
+  EXPECT_DOUBLE_EQ(terminal.lower[mpcc_rate_resolved::kLateralIndex], -0.20);
+  EXPECT_DOUBLE_EQ(terminal.upper[mpcc_rate_resolved::kLateralIndex], 0.20);
+  EXPECT_DOUBLE_EQ(terminal.lower[mpcc_rate_resolved::kHeadingIndex], -0.12);
+  EXPECT_DOUBLE_EQ(terminal.upper[mpcc_rate_resolved::kHeadingIndex], 0.12);
+}
+
+TEST(MpccStatelessManeuver, ReturnAheadOfRearClearTargetStaysAhead)
+{
+  auto source = make_return_source();
+  source.request.initial_state[mpcc_rate_resolved::kProgressIndex] = 3.0;
+  source.request.states.front().lower = source.request.initial_state;
+  source.request.states.front().upper = source.request.initial_state;
+  const auto population = build_bounded_candidates(source, -1);
+
+  ASSERT_EQ(population.reason, RejectReason::Accepted) << population.detail;
+  ASSERT_EQ(population.candidates.size(), 1U);
+  EXPECT_EQ(
+    population.candidates.front().seed.solver_snapshot.
+    dynamic_obstacle_longitudinal_topology,
+    mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::StayAhead);
+  EXPECT_EQ(population.candidates.front().seed.pass_side_sign, 0);
+}
+
+TEST(MpccStatelessManeuver, ReturnRejectsUnseparatedAmbiguousRelation)
+{
+  const auto source = make_return_source();
+  const auto population = build_bounded_candidates(source, 1);
+
+  EXPECT_EQ(population.reason, RejectReason::DynamicTargetUnavailable);
+  EXPECT_TRUE(population.candidates.empty());
+  EXPECT_NE(population.detail.find("neither"), std::string::npos);
 }
 
 TEST(MpccStatelessManeuver, BuildsDistinctSmoothLatticeTransition)

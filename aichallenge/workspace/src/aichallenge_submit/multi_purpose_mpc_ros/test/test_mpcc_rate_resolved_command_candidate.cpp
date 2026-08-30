@@ -78,6 +78,12 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
   execution->nominal_path_distance_m = {0.0, 0.2, 0.4};
   execution->lateral_lower_m = {-1.0, -1.0, -1.0};
   execution->lateral_upper_m = {1.0, 1.0, 1.0};
+  if (intent == contract::ControlIntent::Return) {
+    execution->terminal_intent_contract =
+      artifact::TerminalIntentContract{true, 0.20, 0.01, 0.0, 0.01};
+    execution->terminal_intent_certificate =
+      artifact::TerminalIntentCertificate{true, 2U, 0.20, 0.0};
+  }
 
   auto grid = std::make_shared<recovery::OccupancyGrid>();
   grid->width = 400U;

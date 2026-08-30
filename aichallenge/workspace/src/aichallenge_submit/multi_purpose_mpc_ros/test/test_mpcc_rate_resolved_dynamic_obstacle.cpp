@@ -57,6 +57,50 @@ TEST(MpccRateResolvedDynamicObstacle, HoldsProgressUntilLateralSuffixIsReachable
     result.problem->dynamic_obstacle_constraints[2].lower, 0.75);
 }
 
+TEST(MpccRateResolvedDynamicObstacle, ReturnCanSealStayBehindWithoutPassSide)
+{
+  auto request = request_with_lateral_suffix();
+  request.pass_side_sign = 0;
+  request.longitudinal_topology =
+    dynamic_obstacle::LongitudinalTopology::StayBehind;
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_EQ(result.resolved_side_sign, 0);
+  EXPECT_EQ(result.stay_behind_row_count, 4U);
+  EXPECT_EQ(result.ahead_row_count, 0U);
+  for (const auto & constraint : result.problem->dynamic_obstacle_constraints) {
+    EXPECT_EQ(
+      constraint.axis,
+      problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+    EXPECT_DOUBLE_EQ(constraint.upper, 1.2);
+  }
+}
+
+TEST(MpccRateResolvedDynamicObstacle, ReturnCanSealStayAheadWithoutPassSide)
+{
+  auto request = request_with_lateral_suffix();
+  request.pass_side_sign = 0;
+  request.longitudinal_topology =
+    dynamic_obstacle::LongitudinalTopology::StayAhead;
+
+  const auto result = dynamic_obstacle::refine(request);
+
+  ASSERT_TRUE(result.applied);
+  ASSERT_TRUE(result.problem.has_value());
+  EXPECT_EQ(result.resolved_side_sign, 0);
+  EXPECT_EQ(result.stay_behind_row_count, 0U);
+  EXPECT_EQ(result.ahead_row_count, 4U);
+  for (const auto & constraint : result.problem->dynamic_obstacle_constraints) {
+    EXPECT_EQ(
+      constraint.axis,
+      problem::DynamicObstacleConstraintAxis::EffectiveProgress);
+    EXPECT_DOUBLE_EQ(constraint.lower, 2.8);
+  }
+}
+
 TEST(MpccRateResolvedDynamicObstacle, AppliesWitnessBranchToCompatibleBroadProblem)
 {
   auto request = request_with_lateral_suffix();

@@ -37,10 +37,23 @@ struct PhysicalSeparationGeometry
   double opponent_radius_m{};
 };
 
+/// Longitudinal homotopy sealed by a current-world semantic producer.  It is
+/// distinct from a tactical pass side: Return behind an unpassed target and
+/// Return ahead of a rear-clear target both have no lateral pass ownership.
+enum class LongitudinalTopology
+{
+  Automatic,
+  StayBehind,
+  StayAhead,
+};
+
+const char * to_string(LongitudinalTopology topology) noexcept;
+
 struct Request
 {
   bool active{false};
   int pass_side_sign{};
+  LongitudinalTopology longitudinal_topology{LongitudinalTopology::Automatic};
   /// Exact disjunction contract. When present, stages before this index use
   /// the complete stay-behind disjunct and this stage onward uses the complete
   /// selected-side disjunct. Audit candidates and the bounded late production

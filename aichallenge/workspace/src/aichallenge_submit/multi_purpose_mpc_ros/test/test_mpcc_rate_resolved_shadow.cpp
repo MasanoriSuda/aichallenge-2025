@@ -2248,6 +2248,15 @@ TEST(MpccRateResolvedShadow, SupportsEveryRateResolvedNormalIntent)
     source.execution_side_sign = overtake_intent ? 1 : 0;
     input.identity.source_context =
       contract::seal_problem_context(std::move(source));
+    if (intent == contract::ControlIntent::Return) {
+      input.terminal_intent_contract.active = true;
+      input.terminal_intent_contract.lateral_reference_m =
+        input.request.states.back().reference[model::kLateralIndex];
+      input.terminal_intent_contract.lateral_tolerance_m = 0.20;
+      input.terminal_intent_contract.heading_reference_rad =
+        input.request.states.back().reference[model::kHeadingIndex];
+      input.terminal_intent_contract.heading_tolerance_rad = 0.12;
+    }
 
     const auto result = context.evaluate(input);
     EXPECT_EQ(result.outcome, shadow::Outcome::Solved)
@@ -2257,6 +2266,37 @@ TEST(MpccRateResolvedShadow, SupportsEveryRateResolvedNormalIntent)
     EXPECT_TRUE(execution::identity_valid(result.execution_artifact->identity))
       << contract::to_string(intent);
   }
+}
+
+TEST(MpccRateResolvedShadow, ReturnArtifactRequiresSealedTerminalIntent)
+{
+  shadow::SolverContext context;
+  auto input = snapshot(90U);
+  auto source = input.identity.source_context;
+  source.intent = contract::ControlIntent::Return;
+  source.target_id = "d2";
+  source.target_obstacle_generation = source.observation_generation;
+  source.execution_side_sign = 1;
+  input.identity.source_context =
+    contract::seal_problem_context(std::move(source));
+
+  const auto missing = context.evaluate(input);
+  EXPECT_EQ(missing.outcome, shadow::Outcome::ArtifactRejected);
+  EXPECT_EQ(
+    missing.execution_artifact_reject_reason,
+    execution::RejectReason::InvalidTerminalIntentContract);
+
+  input.terminal_intent_contract.active = true;
+  input.terminal_intent_contract.lateral_reference_m = 10.0;
+  input.terminal_intent_contract.lateral_tolerance_m = 0.01;
+  input.terminal_intent_contract.heading_reference_rad = 0.0;
+  input.terminal_intent_contract.heading_tolerance_rad = 0.01;
+  shadow::SolverContext second_context;
+  const auto missed = second_context.evaluate(input);
+  EXPECT_EQ(missed.outcome, shadow::Outcome::ArtifactRejected);
+  EXPECT_EQ(
+    missed.execution_artifact_reject_reason,
+    execution::RejectReason::TerminalIntentNotReached);
 }
 
 TEST(MpccRateResolvedShadow, RetainsAndSamplesExactRateResolvedArtifact)

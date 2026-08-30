@@ -70,6 +70,31 @@ struct ControlStage
   double path_curvature_radpm{};
 };
 
+/// Immutable semantic endpoint which a Return solve must actually reach.
+/// This is part of the solved artifact rather than a post-hoc phase hint: a
+/// wall-clear trajectory which does not rejoin the requested line is not a
+/// certified Return trajectory.
+struct TerminalIntentContract
+{
+  bool active{false};
+  double lateral_reference_m{};
+  double lateral_tolerance_m{};
+  double heading_reference_rad{};
+  double heading_tolerance_rad{};
+};
+
+/// Proof carried by a short executable prefix that the complete solution from
+/// which it was cut reached the semantic endpoint above.  The values are read
+/// from the full-horizon primal, not from predicted_states.back(): the latter
+/// is only the end of the publisher prefix and is not the Return endpoint.
+struct TerminalIntentCertificate
+{
+  bool active{false};
+  std::size_t solved_horizon_steps{};
+  double solved_lateral_m{};
+  double solved_heading_rad{};
+};
+
 /// Immutable executable prefix of one complete, physically row-certified
 /// seven-state/three-input solve.  Planning may use a longer horizon than this
 /// artifact; only this leading prefix crosses the execution boundary.  This
@@ -99,6 +124,8 @@ struct ExecutionArtifact
   double physical_global_tolerance{};
   double maximum_constraint_violation{};
   double maximum_normalized_constraint_violation{};
+  TerminalIntentContract terminal_intent_contract;
+  TerminalIntentCertificate terminal_intent_certificate;
   std::vector<PredictedState> predicted_states;
   std::vector<ControlStage> control_stages;
   std::vector<double> nominal_path_distance_m;
@@ -129,6 +156,8 @@ enum class RejectReason
   ProgressDynamicsMismatch,
   ProgressRegressionBeyondCertificate,
   SemanticSteeringSequenceRejected,
+  InvalidTerminalIntentContract,
+  TerminalIntentNotReached,
 };
 
 const char * to_string(RejectReason reason) noexcept;

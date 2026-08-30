@@ -111,6 +111,7 @@ enum class CandidateKind
   DirectSide,
   MidPhysicalDiagonal,
   LateExactDisjunction,
+  ReturnRejoin,
 };
 
 const char * to_string(CandidateKind kind) noexcept;

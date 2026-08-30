@@ -20,6 +20,19 @@ const char * to_string(const Reason reason) noexcept
   return "unknown";
 }
 
+const char * to_string(const LongitudinalTopology topology) noexcept
+{
+  switch (topology) {
+    case LongitudinalTopology::Automatic:
+      return "automatic";
+    case LongitudinalTopology::StayBehind:
+      return "stay-behind";
+    case LongitudinalTopology::StayAhead:
+      return "stay-ahead";
+  }
+  return "unknown";
+}
+
 Result refine(const Request & request) noexcept
 {
   namespace model = mpcc_rate_resolved;
@@ -47,9 +60,24 @@ Result refine(const Request & request) noexcept
         geometry.ego_margin_m >= 0.0 &&
         geometry.opponent_radius_m >= 0.0;
     };
+  const bool forced_longitudinal =
+    request.longitudinal_topology != LongitudinalTopology::Automatic;
+  const bool longitudinal_topology_valid =
+    request.longitudinal_topology == LongitudinalTopology::Automatic ||
+    request.longitudinal_topology == LongitudinalTopology::StayBehind ||
+    request.longitudinal_topology == LongitudinalTopology::StayAhead;
   if (
-    horizon <= 0 || request.pass_side_sign < -1 ||
+    horizon <= 0 || !longitudinal_topology_valid ||
+    request.pass_side_sign < -1 ||
     request.pass_side_sign > 1 ||
+    (forced_longitudinal &&
+    (request.pass_side_sign != 0 ||
+    request.forced_first_pass_side_stage.has_value() ||
+    request.forced_first_ahead_stage.has_value() ||
+    request.forced_constraint_fraction.has_value() ||
+    request.forced_diagonal_start_stage.has_value() ||
+    request.forced_diagonal_full_side_stage.has_value() ||
+    request.forced_physical_separation_geometry.has_value())) ||
     (request.forced_first_pass_side_stage.has_value() &&
     (request.pass_side_sign == 0 ||
     request.forced_first_pass_side_stage.value() < 0 ||
@@ -209,7 +237,7 @@ Result refine(const Request & request) noexcept
   int automatic_diagonal_start_stage = -1;
   int automatic_diagonal_full_side_stage = -1;
   double initial_signed_side_separation_m = 0.0;
-  if (resolved_side_sign == 0) {
+  if (resolved_side_sign == 0 && !forced_longitudinal) {
     bool behind_every_stage = true;
     bool positive_side_every_stage = true;
     bool negative_side_every_stage = true;
@@ -562,6 +590,21 @@ Result refine(const Request & request) noexcept
     }
     problem::DynamicObstacleConstraint constraint;
     constraint.state_stage = stage + 1;
+    if (forced_longitudinal) {
+      constraint.axis =
+        problem::DynamicObstacleConstraintAxis::EffectiveProgress;
+      if (request.longitudinal_topology == LongitudinalTopology::StayAhead) {
+        constraint.lower =
+          prediction.target_progress_m + ahead_separation(stage, prediction);
+        ++result.ahead_row_count;
+      } else {
+        constraint.upper =
+          prediction.target_progress_m - behind_separation(stage, prediction);
+        ++result.stay_behind_row_count;
+      }
+      refined.dynamic_obstacle_constraints.push_back(constraint);
+      continue;
+    }
     if (diagonal) {
       const int diagonal_start = forced_diagonal ?
         request.forced_diagonal_start_stage.value() :

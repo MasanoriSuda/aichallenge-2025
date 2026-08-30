@@ -350,6 +350,8 @@ const char * to_string(const CandidateKind kind) noexcept
       return "mid-physical-diagonal";
     case CandidateKind::LateExactDisjunction:
       return "late-exact-disjunction";
+    case CandidateKind::ReturnRejoin:
+      return "return-rejoin";
   }
   return "unknown";
 }
@@ -410,6 +412,171 @@ static Result build_with_intent_policy(
       return reject(
         RejectReason::DynamicTargetUnavailable,
         target_horizon.detail);
+    }
+
+    if (
+      source.identity.source_context.intent ==
+      mpcc_execution_contract::ControlIntent::Return)
+    {
+      const auto & contract_endpoint = source.terminal_intent_contract;
+      if (!contract_endpoint.active) {
+        return reject(
+          RejectReason::TerminalSuccessorUnavailable,
+          "Return endpoint contract unavailable");
+      }
+      const auto & first_target = target_horizon.stages.front();
+      const double initial_effective_progress_m =
+        source.request.initial_state[model::kProgressIndex] +
+        source.request.initial_state[model::kLagIndex];
+      const double initial_lateral_m =
+        source.request.initial_state[model::kLateralIndex];
+      int dynamic_side_sign = 0;
+      auto longitudinal_topology =
+        mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic;
+      if (
+        initial_effective_progress_m <=
+        first_target.target_progress_m - first_target.longitudinal_overlap_m +
+        kNumericalTolerance)
+      {
+        longitudinal_topology = mpcc_rate_resolved_dynamic_obstacle::
+          LongitudinalTopology::StayBehind;
+      } else if (
+        initial_effective_progress_m >=
+        first_target.target_progress_m +
+        first_target.longitudinal_overlap_m -
+        kNumericalTolerance)
+      {
+        longitudinal_topology = mpcc_rate_resolved_dynamic_obstacle::
+          LongitudinalTopology::StayAhead;
+      } else if (
+        initial_lateral_m >=
+        first_target.target_lateral_m +
+        first_target.lateral_center_separation_m -
+        kNumericalTolerance)
+      {
+        dynamic_side_sign = 1;
+      } else if (
+        initial_lateral_m <=
+        first_target.target_lateral_m -
+        first_target.lateral_center_separation_m +
+        kNumericalTolerance)
+      {
+        dynamic_side_sign = -1;
+      } else {
+        return reject(
+          RejectReason::DynamicTargetUnavailable,
+          "Return relation is neither longitudinally nor laterally "
+          "separated");
+      }
+
+      Seed seed;
+      seed.target_id = source.identity.source_context.target_id;
+      seed.pass_side_sign = dynamic_side_sign;
+      seed.source_interaction_fingerprint = source_interaction_fingerprint;
+      seed.path_distance_m = source.nominal_path_distance_m;
+      seed.solver_snapshot = source;
+      auto & candidate = seed.solver_snapshot;
+      candidate.identity.source_context.execution_side_sign = pass_side_sign;
+      candidate.identity.source_context.dynamic_obstacle_constraint_active =
+        true;
+      candidate.identity.source_context.dynamic_obstacle_id =
+        selected_obstacle_id;
+      candidate.identity.source_context.dynamic_obstacle_generation =
+        selected_obstacle_generation;
+      candidate.identity.source_context.dynamic_obstacle_side_sign =
+        dynamic_side_sign;
+      candidate.identity.source_context.fingerprint = 0U;
+      candidate.identity.source_context =
+        contract::seal_problem_context(candidate.identity.source_context);
+      candidate.dynamic_obstacle_refinement_active = true;
+      candidate.dynamic_obstacle_pass_side_sign = dynamic_side_sign;
+      candidate.dynamic_obstacle_longitudinal_topology = longitudinal_topology;
+      candidate.dynamic_obstacle_forced_first_pass_side_stage = -1;
+      candidate.dynamic_obstacle_forced_first_ahead_stage = -1;
+      candidate.dynamic_obstacle_forced_constraint_fraction = 1.0;
+      candidate.dynamic_obstacle_forced_diagonal_start_stage = -1;
+      candidate.dynamic_obstacle_forced_diagonal_full_side_stage = -1;
+      candidate.dynamic_obstacle_forced_physical_diagonal = false;
+      candidate.dynamic_obstacle_stages = target_horizon.stages;
+
+      seed.lateral_reference_m.reserve(candidate.request.states.size());
+      for (const auto & state : candidate.request.states) {
+        seed.lateral_reference_m.push_back(
+          state.reference[model::kLateralIndex]);
+      }
+      auto & terminal_state = candidate.request.states.back();
+      terminal_state.reference[model::kLateralIndex] =
+        contract_endpoint.lateral_reference_m;
+      terminal_state.reference[model::kHeadingIndex] =
+        contract_endpoint.heading_reference_rad;
+      terminal_state.lower[model::kLateralIndex] =
+        std::max(
+        terminal_state.lower[model::kLateralIndex],
+        contract_endpoint.lateral_reference_m -
+        contract_endpoint.lateral_tolerance_m);
+      terminal_state.upper[model::kLateralIndex] =
+        std::min(
+        terminal_state.upper[model::kLateralIndex],
+        contract_endpoint.lateral_reference_m +
+        contract_endpoint.lateral_tolerance_m);
+      terminal_state.lower[model::kHeadingIndex] =
+        std::max(
+        terminal_state.lower[model::kHeadingIndex],
+        contract_endpoint.heading_reference_rad -
+        contract_endpoint.heading_tolerance_rad);
+      terminal_state.upper[model::kHeadingIndex] =
+        std::min(
+        terminal_state.upper[model::kHeadingIndex],
+        contract_endpoint.heading_reference_rad +
+        contract_endpoint.heading_tolerance_rad);
+      if (
+        terminal_state.lower[model::kLateralIndex] >
+        terminal_state.upper[model::kLateralIndex] ||
+        terminal_state.lower[model::kHeadingIndex] >
+        terminal_state.upper[model::kHeadingIndex])
+      {
+        return reject(
+          RejectReason::TerminalSuccessorUnavailable,
+          "Return endpoint is outside the physical state corridor");
+      }
+      seed.lateral_reference_m.back() = contract_endpoint.lateral_reference_m;
+
+      const auto terminal = resolve_terminal_successor(source);
+      if (!terminal.accepted) {
+        return reject(
+          RejectReason::TerminalSuccessorUnavailable,
+          terminal.detail);
+      }
+      seed.predicted_encounter_stage_count =
+        terminal.predicted_encounter_stage_count;
+      seed.terminal_successor = terminal.successor;
+      seed.stop_suffix = terminal.stop_suffix;
+      if (!architecture::interaction_snapshot_complete(candidate)) {
+        return reject(
+          RejectReason::CandidateSealUnavailable,
+          "rebuilt Return candidate is incomplete");
+      }
+      seed.candidate_fingerprint =
+        architecture::fingerprint_interaction_snapshot(candidate);
+      if (seed.candidate_fingerprint == 0U) {
+        return reject(
+          RejectReason::CandidateSealUnavailable,
+          "rebuilt Return candidate fingerprint unavailable");
+      }
+      Result result;
+      result.reason = RejectReason::Accepted;
+      const char * const topology_name =
+        longitudinal_topology == mpcc_rate_resolved_dynamic_obstacle::
+        LongitudinalTopology::StayBehind ?
+        "stay-behind" :
+        longitudinal_topology == mpcc_rate_resolved_dynamic_obstacle::
+        LongitudinalTopology::StayAhead ?
+        "stay-ahead" :
+        "side";
+      result.detail = std::string{"accepted/Return/"} + topology_name +
+        "/side=" + std::to_string(dynamic_side_sign);
+      result.seed = std::move(seed);
+      return result;
     }
 
     Seed seed;
@@ -593,6 +760,14 @@ Result build_disjunction_schedule(
   const int first_ahead_stage, const double constraint_fraction) noexcept
 {
   namespace architecture = mpcc_architecture_snapshot;
+  if (
+    source.identity.source_context.intent ==
+    mpcc_execution_contract::ControlIntent::Return)
+  {
+    return reject(
+      RejectReason::UnsupportedIntent,
+      "Return does not admit pass-side disjunction schedules");
+  }
   auto result = build(source, source_interaction_fingerprint, pass_side_sign);
   if (!result.seed.has_value()) {
     return result;
@@ -800,6 +975,23 @@ CandidateSet build_bounded_candidates(
   if (source_fingerprint == 0U) {
     result.reason = RejectReason::IncompleteSnapshot;
     result.detail = "current-world interaction fingerprint unavailable";
+    return result;
+  }
+
+  if (
+    source.identity.source_context.intent ==
+    mpcc_execution_contract::ControlIntent::Return)
+  {
+    auto rejoin = build(source, source_fingerprint, pass_side_sign);
+    if (!rejoin.seed.has_value()) {
+      result.reason = rejoin.reason;
+      result.detail = rejoin.detail;
+      return result;
+    }
+    result.candidates.push_back(
+      Candidate{CandidateKind::ReturnRejoin, std::move(rejoin.seed.value())});
+    result.reason = RejectReason::Accepted;
+    result.detail = "current-world Return rejoin candidate";
     return result;
   }
 

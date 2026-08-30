@@ -444,10 +444,24 @@ YAML::Node source_node(
   node["wall_upper_m"] = std_vector_node(source.wall_upper_m);
   node["progress_wall_profile_diagnostic"] =
     source.progress_wall_profile_diagnostic;
+  node["terminal_intent_contract_active"] =
+    source.terminal_intent_contract.active;
+  if (source.terminal_intent_contract.active) {
+    node["terminal_intent_lateral_reference_m"] =
+      source.terminal_intent_contract.lateral_reference_m;
+    node["terminal_intent_lateral_tolerance_m"] =
+      source.terminal_intent_contract.lateral_tolerance_m;
+    node["terminal_intent_heading_reference_rad"] =
+      source.terminal_intent_contract.heading_reference_rad;
+    node["terminal_intent_heading_tolerance_rad"] =
+      source.terminal_intent_contract.heading_tolerance_rad;
+  }
   node["dynamic_obstacle_refinement_active"] =
     source.dynamic_obstacle_refinement_active;
   node["dynamic_obstacle_pass_side_sign"] =
     source.dynamic_obstacle_pass_side_sign;
+  node["dynamic_obstacle_longitudinal_topology"] =
+    static_cast<int>(source.dynamic_obstacle_longitudinal_topology);
   node["dynamic_obstacle_forced_first_pass_side_stage"] =
     source.dynamic_obstacle_forced_first_pass_side_stage;
   node["dynamic_obstacle_forced_first_ahead_stage"] =
@@ -1107,10 +1121,47 @@ std::optional<shadow::Snapshot> load_source_snapshot(
   source.wall_upper_m = std::move(wall_upper.value());
   source.progress_wall_profile_diagnostic =
     node["progress_wall_profile_diagnostic"].as<std::string>();
+  if (node["terminal_intent_contract_active"]) {
+    source.terminal_intent_contract.active =
+      node["terminal_intent_contract_active"].as<bool>();
+  }
+  if (source.terminal_intent_contract.active) {
+    if (!node["terminal_intent_lateral_reference_m"] ||
+      !node["terminal_intent_lateral_tolerance_m"] ||
+      !node["terminal_intent_heading_reference_rad"] ||
+      !node["terminal_intent_heading_tolerance_rad"])
+    {
+      return std::nullopt;
+    }
+    source.terminal_intent_contract.lateral_reference_m =
+      node["terminal_intent_lateral_reference_m"].as<double>();
+    source.terminal_intent_contract.lateral_tolerance_m =
+      node["terminal_intent_lateral_tolerance_m"].as<double>();
+    source.terminal_intent_contract.heading_reference_rad =
+      node["terminal_intent_heading_reference_rad"].as<double>();
+    source.terminal_intent_contract.heading_tolerance_rad =
+      node["terminal_intent_heading_tolerance_rad"].as<double>();
+  }
   source.dynamic_obstacle_refinement_active =
     node["dynamic_obstacle_refinement_active"].as<bool>();
   source.dynamic_obstacle_pass_side_sign =
     node["dynamic_obstacle_pass_side_sign"].as<int>();
+  if (node["dynamic_obstacle_longitudinal_topology"]) {
+    const int topology =
+      node["dynamic_obstacle_longitudinal_topology"].as<int>();
+    if (topology == 0) {
+      source.dynamic_obstacle_longitudinal_topology =
+        mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic;
+    } else if (topology == 1) {
+      source.dynamic_obstacle_longitudinal_topology =
+        mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::StayBehind;
+    } else if (topology == 2) {
+      source.dynamic_obstacle_longitudinal_topology =
+        mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::StayAhead;
+    } else {
+      return std::nullopt;
+    }
+  }
   if (node["dynamic_obstacle_forced_first_pass_side_stage"]) {
     source.dynamic_obstacle_forced_first_pass_side_stage =
       node["dynamic_obstacle_forced_first_pass_side_stage"].as<int>();
@@ -1395,6 +1446,9 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
 {
   try {
     const auto & request = source.request;
+    const bool return_intent = source.identity.source_context.intent ==
+      contract::ControlIntent::Return;
+    const auto & terminal_contract = source.terminal_intent_contract;
     if (
       source.identity.sequence == 0U ||
       !std::isfinite(source.identity.snapshot_sec) ||
@@ -1432,7 +1486,15 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
       static_cast<std::size_t>(request.horizon_steps + 1) ||
       request.inputs.size() != static_cast<std::size_t>(request.horizon_steps) ||
       source.nominal_path_distance_m.size() !=
-      static_cast<std::size_t>(request.horizon_steps + 1))
+      static_cast<std::size_t>(request.horizon_steps + 1) ||
+      return_intent != terminal_contract.active ||
+      (terminal_contract.active &&
+      (!std::isfinite(terminal_contract.lateral_reference_m) ||
+      !std::isfinite(terminal_contract.lateral_tolerance_m) ||
+      terminal_contract.lateral_tolerance_m < 0.0 ||
+      !std::isfinite(terminal_contract.heading_reference_rad) ||
+      !std::isfinite(terminal_contract.heading_tolerance_rad) ||
+      terminal_contract.heading_tolerance_rad < 0.0)))
     {
       return false;
     }
@@ -1515,6 +1577,27 @@ bool interaction_snapshot_complete(const shadow::Snapshot & source) noexcept
       (source.dynamic_obstacle_refinement_active &&
       source.dynamic_obstacle_pass_side_sign !=
       problem_context.dynamic_obstacle_side_sign))
+    {
+      return false;
+    }
+    const bool forced_longitudinal =
+      source.dynamic_obstacle_longitudinal_topology !=
+      mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic;
+    if (
+      (source.dynamic_obstacle_longitudinal_topology !=
+      mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic &&
+      source.dynamic_obstacle_longitudinal_topology !=
+      mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::StayBehind &&
+      source.dynamic_obstacle_longitudinal_topology !=
+      mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::StayAhead) ||
+      (forced_longitudinal &&
+      (!source.dynamic_obstacle_refinement_active ||
+      source.dynamic_obstacle_pass_side_sign != 0 ||
+      source.dynamic_obstacle_forced_first_pass_side_stage >= 0 ||
+      source.dynamic_obstacle_forced_first_ahead_stage >= 0 ||
+      source.dynamic_obstacle_forced_diagonal_start_stage >= 0 ||
+      source.dynamic_obstacle_forced_diagonal_full_side_stage >= 0 ||
+      source.dynamic_obstacle_forced_physical_diagonal)))
     {
       return false;
     }
@@ -1755,8 +1838,23 @@ std::uint64_t fingerprint_interaction_snapshot(
   builder.append_vector(source.wall_reference_progress_m);
   builder.append_vector(source.wall_lower_m);
   builder.append_vector(source.wall_upper_m);
+  if (source.terminal_intent_contract.active) {
+    builder.append_u64(0x5445524d494e414cULL);
+    builder.append_double(source.terminal_intent_contract.lateral_reference_m);
+    builder.append_double(source.terminal_intent_contract.lateral_tolerance_m);
+    builder.append_double(source.terminal_intent_contract.heading_reference_rad);
+    builder.append_double(source.terminal_intent_contract.heading_tolerance_rad);
+  }
   builder.append_bool(source.dynamic_obstacle_refinement_active);
   builder.append_i64(source.dynamic_obstacle_pass_side_sign);
+  if (source.dynamic_obstacle_longitudinal_topology !=
+    mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic)
+  {
+    builder.append_u64(0x4c4f4e47544f504fULL);
+    builder.append_i64(
+      static_cast<std::int64_t>(
+        source.dynamic_obstacle_longitudinal_topology));
+  }
   // Preserve fingerprints of every frozen production snapshot.  The optional
   // lattice member is appended only when candidate C explicitly selects one.
   if (source.dynamic_obstacle_forced_first_pass_side_stage >= 0) {

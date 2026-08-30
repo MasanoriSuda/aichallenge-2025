@@ -147,6 +147,33 @@ TEST(MpccRateResolvedCertifiedPlan, JoinsExactArtifactAndPhysicalProof)
     contract::PhysicalWallCertificateReason::Accepted);
 }
 
+TEST(MpccRateResolvedCertifiedPlan, ReturnUsesFullHorizonTerminalCertificate)
+{
+  auto value = artifact();
+  auto source = value.identity.source_context;
+  source.intent = contract::ControlIntent::Return;
+  source.target_id = "d2";
+  source.target_obstacle_generation = source.observation_generation;
+  source.execution_side_sign = 1;
+  source.horizon_steps = 20U;
+  value.identity.source_context =
+    contract::seal_problem_context(std::move(source));
+  value.terminal_intent_contract =
+    execution::TerminalIntentContract{true, 0.0, 0.01, 0.0, 0.01};
+  value.terminal_intent_certificate =
+    execution::TerminalIntentCertificate{true, 20U, 0.0, 0.0};
+
+  // The two-stage executable prefix has not rejoined yet.  Its immutable
+  // source solution nevertheless reaches the Return endpoint at stage 20.
+  ASSERT_NE(value.predicted_states.back().lateral_m, 0.0);
+  EXPECT_EQ(execution::validate(value), execution::RejectReason::None);
+
+  value.terminal_intent_certificate.solved_lateral_m = 0.20;
+  EXPECT_EQ(
+    execution::validate(value),
+    execution::RejectReason::TerminalIntentNotReached);
+}
+
 TEST(MpccRateResolvedCertifiedPlan, AcceptedAdmissionClearsDiagnosticReason)
 {
   certified::Store store;

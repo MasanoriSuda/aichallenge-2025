@@ -23591,6 +23591,18 @@ struct MPC
             source_problem.progress_execution_target_lateral_separation_m[index]});
       }
     }
+    if (snapshot.identity.source_context.intent == mpcc_contract::ControlIntent::Return) {
+      const auto & terminal = snapshot.request.states.back();
+      snapshot.terminal_intent_contract.active = true;
+      snapshot.terminal_intent_contract.lateral_reference_m =
+        terminal.reference[mpcc_rate_resolved::kLateralIndex];
+      snapshot.terminal_intent_contract.lateral_tolerance_m =
+        cfg.v2x_behavior.overtake_line.return_handoff_lateral_tolerance;
+      snapshot.terminal_intent_contract.heading_reference_rad =
+        terminal.reference[mpcc_rate_resolved::kHeadingIndex];
+      snapshot.terminal_intent_contract.heading_tolerance_rad =
+        cfg.v2x_behavior.overtake_line.return_handoff_heading_tolerance;
+    }
     snapshot.publication_interval_sec = model->Ts;
     return snapshot;
   }

@@ -344,6 +344,16 @@ ExecutionArtifactBuildResult build_execution_artifact(
     outcome.result->maximum_constraint_violation;
   execution_artifact.maximum_normalized_constraint_violation =
     outcome.result->maximum_normalized_constraint_violation;
+  execution_artifact.terminal_intent_contract =
+    snapshot.terminal_intent_contract;
+  if (snapshot.terminal_intent_contract.active) {
+    const int terminal_state_offset = model::kStateDimension * horizon;
+    execution_artifact.terminal_intent_certificate =
+      artifact::TerminalIntentCertificate{
+        true, static_cast<std::size_t>(horizon),
+        primal[terminal_state_offset + model::kLateralIndex],
+        primal[terminal_state_offset + model::kHeadingIndex]};
+  }
   execution_artifact.predicted_states.reserve(
     static_cast<std::size_t>(execution_horizon + 1));
   execution_artifact.nominal_path_distance_m.assign(
@@ -3612,6 +3622,8 @@ Result SolverContext::evaluate_impl(
     dynamic_request.active = true;
     dynamic_request.pass_side_sign =
       snapshot.dynamic_obstacle_pass_side_sign;
+    dynamic_request.longitudinal_topology =
+      snapshot.dynamic_obstacle_longitudinal_topology;
     if (snapshot.dynamic_obstacle_forced_first_pass_side_stage >= 0) {
       dynamic_request.forced_first_pass_side_stage =
         snapshot.dynamic_obstacle_forced_first_pass_side_stage;

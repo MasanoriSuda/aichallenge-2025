@@ -24,7 +24,37 @@ struct CourseProjection
   double progress_m{};
   double lateral_m{};
   double squared_distance_m2{};
+  enum class RejectReason
+  {
+    None,
+    InvalidInput,
+    InvalidKnot,
+    NonmonotonicProgress,
+    DegenerateSegment,
+    CourseFrameUnavailable,
+    NonfiniteProjection,
+    NoEligibleSegment,
+  } reason{RejectReason::NoEligibleSegment};
+  std::size_t rejected_segment{};
+  std::size_t degenerate_segment_count{};
 };
+
+const char * course_projection_reason_name(
+  const CourseProjection::RejectReason reason) noexcept
+{
+  using Reason = CourseProjection::RejectReason;
+  switch (reason) {
+    case Reason::None: return "none";
+    case Reason::InvalidInput: return "invalid-input";
+    case Reason::InvalidKnot: return "invalid-knot";
+    case Reason::NonmonotonicProgress: return "nonmonotonic-progress";
+    case Reason::DegenerateSegment: return "degenerate-segment";
+    case Reason::CourseFrameUnavailable: return "course-frame-unavailable";
+    case Reason::NonfiniteProjection: return "nonfinite-projection";
+    case Reason::NoEligibleSegment: return "no-eligible-segment";
+  }
+  return "unknown";
+}
 
 bool supported_intent(
   const mpcc_execution_contract::ControlIntent intent) noexcept
@@ -59,6 +89,7 @@ CourseProjection project_to_recorded_course(
     knots.size() < 2U || !std::isfinite(x_m) || !std::isfinite(y_m) ||
     !std::isfinite(minimum_progress_m))
   {
+    best.reason = CourseProjection::RejectReason::InvalidInput;
     return best;
   }
   for (std::size_t index = 1U; index < knots.size(); ++index) {
@@ -71,11 +102,25 @@ CourseProjection project_to_recorded_course(
       !std::isfinite(from.progress_m) || !std::isfinite(to.progress_m) ||
       !std::isfinite(from.x_m) || !std::isfinite(from.y_m) ||
       !std::isfinite(to.x_m) || !std::isfinite(to.y_m) ||
-      to.progress_m <= from.progress_m + kNumericalTolerance ||
-      !std::isfinite(length_squared_m2) ||
-      length_squared_m2 <= kNumericalTolerance)
+      !std::isfinite(length_squared_m2))
     {
-      return CourseProjection{};
+      best.valid = false;
+      best.reason = CourseProjection::RejectReason::InvalidKnot;
+      best.rejected_segment = index;
+      return best;
+    }
+    if (to.progress_m <= from.progress_m + kNumericalTolerance) {
+      best.valid = false;
+      best.reason = CourseProjection::RejectReason::NonmonotonicProgress;
+      best.rejected_segment = index;
+      return best;
+    }
+    if (length_squared_m2 <= kNumericalTolerance) {
+      if (best.degenerate_segment_count == 0U) {
+        best.rejected_segment = index;
+      }
+      ++best.degenerate_segment_count;
+      continue;
     }
     const double ratio = std::clamp(
       ((x_m - from.x_m) * dx_m + (y_m - from.y_m) * dy_m) /
@@ -94,7 +139,10 @@ CourseProjection project_to_recorded_course(
     const auto frame = mpc_stage_geometry::sample_course_frame(
       knots, progress_m, kNumericalTolerance);
     if (!frame.has_value()) {
-      return CourseProjection{};
+      best.valid = false;
+      best.reason = CourseProjection::RejectReason::CourseFrameUnavailable;
+      best.rejected_segment = index;
+      return best;
     }
     const double lateral_m =
       std::cos(frame->heading_rad) * (y_m - frame->y_m) -
@@ -102,7 +150,10 @@ CourseProjection project_to_recorded_course(
     if (
       !std::isfinite(squared_distance_m2) || !std::isfinite(lateral_m))
     {
-      return CourseProjection{};
+      best.valid = false;
+      best.reason = CourseProjection::RejectReason::NonfiniteProjection;
+      best.rejected_segment = index;
+      return best;
     }
     if (
       !best.valid || squared_distance_m2 + kNumericalTolerance <
@@ -114,7 +165,12 @@ CourseProjection project_to_recorded_course(
       best.progress_m = progress_m;
       best.lateral_m = lateral_m;
       best.squared_distance_m2 = squared_distance_m2;
+      best.reason = CourseProjection::RejectReason::None;
+      best.rejected_segment = index;
     }
+  }
+  if (!best.valid && best.degenerate_segment_count > 0U) {
+    best.reason = CourseProjection::RejectReason::DegenerateSegment;
   }
   return best;
 }
@@ -212,7 +268,17 @@ TargetHorizon rebuild_target_horizon(
     if (!projection.valid) {
       result.stages.clear();
       std::ostringstream detail;
-      detail << "target course projection unavailable at stage " << stage;
+      detail << "target course projection unavailable at stage " << stage
+             << "/reason=" << course_projection_reason_name(projection.reason)
+             << "/segment=" << projection.rejected_segment
+             << "/degenerate_segments="
+             << projection.degenerate_segment_count
+             << "/point=(" << x_m << ',' << y_m << ')'
+             << "/minimum_progress=" << minimum_progress_m
+             << "/course_window=["
+             << source.wall_course_frame_knots.front().progress_m << ','
+             << source.wall_course_frame_knots.back().progress_m << ']'
+             << "/knots=" << source.wall_course_frame_knots.size();
       result.detail = detail.str();
       return result;
     }

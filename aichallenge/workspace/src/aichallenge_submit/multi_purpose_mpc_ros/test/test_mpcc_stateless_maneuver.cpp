@@ -495,6 +495,35 @@ TEST(MpccStatelessManeuver, RebuildsTargetHorizonWithoutMissionTargetStages)
   EXPECT_EQ(result.seed->solver_snapshot.dynamic_obstacle_stages.size(), 3U);
 }
 
+TEST(MpccStatelessManeuver, SkipsDegenerateCircularClosureSegment)
+{
+  auto source = make_source();
+  source.wall_course_frame_knots = {
+    {99.0, -1.0, 0.0, 0.0, 1},
+    {100.0, -1.0, 0.0, 0.0, 2},
+    {104.0, 4.0, 0.0, 0.0, 3}};
+
+  const auto horizon = rebuild_target_horizon(source);
+
+  ASSERT_TRUE(horizon.accepted) << horizon.detail;
+  ASSERT_EQ(horizon.stages.size(), 3U);
+  EXPECT_TRUE(horizon.stages.front().valid);
+}
+
+TEST(MpccStatelessManeuver, RejectsCourseWithOnlyDegenerateSegments)
+{
+  auto source = make_source();
+  source.wall_course_frame_knots = {
+    {99.0, -1.0, 0.0, 0.0, 1},
+    {100.0, -1.0, 0.0, 0.0, 2}};
+
+  const auto horizon = rebuild_target_horizon(source);
+
+  EXPECT_FALSE(horizon.accepted);
+  EXPECT_NE(horizon.detail.find("reason=degenerate-segment"), std::string::npos);
+  EXPECT_NE(horizon.detail.find("degenerate_segments=1"), std::string::npos);
+}
+
 TEST(MpccStatelessManeuver, BindsCurrentTargetWithoutChangingCapturedGeometry)
 {
   auto source = make_source();

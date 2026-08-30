@@ -3655,6 +3655,51 @@ def test_pass_to_return_requires_causal_certified_gate_a() -> None:
     assert "evaluate_rate_resolved_track_cruise_plan(" in control
 
 
+def test_shiftout_to_pass_requires_causal_certified_gate_a() -> None:
+    """Tactical horizons cannot advance phase ahead of Pass authority."""
+
+    shiftout_boundary = SOURCE.index("const bool shiftout_complete =")
+    transition_start = SOURCE.index(
+        "const auto & pass_gate_a_proposal =", shiftout_boundary
+    )
+    transition_end = SOURCE.index(
+        "} else if (committed_pass_horizon_enabled)", transition_start
+    )
+    transition = SOURCE[transition_start:transition_end]
+    admission = transition.index("resolve_pass_transition_admission(")
+    reject = transition.index("if (!pass_transition_admission.admitted)")
+    mutation = transition.index(
+        "transition_overtake_line_phase(\n"
+        "            OvertakeLinePhase::Pass"
+    )
+    assert admission < reject < mutation
+    assert "action=retain-certified-shiftout" in transition
+    assert "atomic current-world Pass authority" in transition
+
+    pass_builder_start = SOURCE.index("build_prospective_pass_problem(")
+    pass_builder_end = SOURCE.index(
+        "build_prospective_return_problem(", pass_builder_start
+    )
+    pass_builder = SOURCE[pass_builder_start:pass_builder_end]
+    assert "worker-owned tactical snapshot" in pass_builder
+    assert "OvertakeLinePhase::Pass" in pass_builder
+    assert "mpcc_contract::ControlIntent::Pass" in pass_builder
+    assert "build_extended_progress_problem(" in pass_builder
+
+    control_start = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control("
+    )
+    control_end = SOURCE.index(
+        "MpcControlCycleResult get_control(", control_start
+    )
+    control = SOURCE[control_start:control_end]
+    proposal = control.index("pass_gate_a_proposal")
+    atomic_admission = control.index("resolve_atomic_intent_admission(")
+    assert proposal < atomic_admission
+    assert "evaluate_rate_resolved_track_cruise_plan(" in control
+    assert "RateResolvedIntentTransitionKind::PassGateA" in SOURCE
+
+
 def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
     """Architecture evidence persistence cannot consume normal authority time."""
 

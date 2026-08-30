@@ -382,6 +382,53 @@ struct ReturnTransitionAdmission
 ReturnTransitionAdmission resolve_return_transition_admission(
   const ReturnTransitionAdmissionRequest & request) noexcept;
 
+enum class PassTransitionAdmissionReason
+{
+  Inactive,
+  DynamicHorizonUnavailable,
+  PhysicalHorizonUnavailable,
+  ProposalIncomplete,
+  IntentMismatch,
+  TargetMismatch,
+  MissionGenerationMismatch,
+  SideMismatch,
+  CurrentWorldRejected,
+  Admitted,
+};
+
+const char * pass_transition_admission_reason_name(
+  PassTransitionAdmissionReason reason) noexcept;
+
+struct PassTransitionAdmissionRequest
+{
+  bool shiftout_complete{false};
+  bool dynamic_horizon_available{false};
+  bool physical_horizon_available{false};
+  bool proposal_complete{false};
+  bool current_world_certified{false};
+  mpcc_execution_contract::ControlIntent proposal_intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  std::string current_target_id;
+  std::string proposal_target_id;
+  std::uint64_t current_mission_generation{};
+  std::uint64_t proposal_mission_generation{};
+  int current_side_sign{};
+  int proposal_side_sign{};
+};
+
+struct PassTransitionAdmission
+{
+  bool admitted{false};
+  PassTransitionAdmissionReason reason{
+    PassTransitionAdmissionReason::Inactive};
+};
+
+/// Tactical horizons are necessary but cannot transfer normal authority.
+/// ShiftOut may become Pass only when a matching current-world certified
+/// seven-state successor already exists.
+PassTransitionAdmission resolve_pass_transition_admission(
+  const PassTransitionAdmissionRequest & request) noexcept;
+
 enum class FollowProductionAction
 {
   NotOwned,

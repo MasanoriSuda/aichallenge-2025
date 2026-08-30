@@ -2499,6 +2499,39 @@ struct RateResolvedReturnGateAProposal
   }
 };
 
+struct RateResolvedPassGateAProposal
+{
+  std::uint64_t sequence{};
+  std::uint64_t context_epoch{};
+  std::uint64_t mission_generation{};
+  std::uint64_t target_obstacle_generation{};
+  std::string target_id;
+  int side_sign{};
+  bool current_world_certified{false};
+  std::shared_ptr<const rate_resolved_certified::CertifiedPlan> certified_plan;
+
+  bool complete() const noexcept
+  {
+    if (
+      sequence == 0U || context_epoch == 0U || mission_generation == 0U ||
+      target_obstacle_generation == 0U || target_id.empty() ||
+      (side_sign != -1 && side_sign != 1) || !current_world_certified ||
+      certified_plan == nullptr || certified_plan->execution_artifact == nullptr)
+    {
+      return false;
+    }
+    const auto & source_context =
+      certified_plan->execution_artifact->identity.source_context;
+    return
+      source_context.intent == mpcc_contract::ControlIntent::Pass &&
+      source_context.intent_generation == mission_generation &&
+      source_context.target_id == target_id &&
+      source_context.target_obstacle_generation ==
+      target_obstacle_generation &&
+      source_context.execution_side_sign == side_sign;
+  }
+};
+
 bool bind_rate_resolved_gate_a_execution_certificate(
   overtake_core::OvertakeMissionCandidate & mission,
   const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & plan,
@@ -2766,6 +2799,11 @@ struct V2XBehaviorOutput
   /// by the matching target/generation/side transition.
   std::optional<RateResolvedReturnGateAProposal>
   rate_resolved_return_gate_a_proposal;
+  /// Current-world certified successor for the ShiftOut-to-Pass boundary.
+  /// Unlike tactical horizon availability, this exact artifact can atomically
+  /// transfer canonical normal authority to the Pass intent.
+  std::optional<RateResolvedPassGateAProposal>
+  rate_resolved_pass_gate_a_proposal;
   /// Immutable executable artifact produced by the same selected dual branch
   /// as `overtake_selected_mission`.  It is entry evidence only; the live
   /// controller repeats current-world proof before publishing it.
@@ -3194,6 +3232,8 @@ struct OvertakeLineState
   bool target_bound_execution_replan_progress_extension_was_active{false};
   std::uint64_t target_bound_execution_replan_exhausted_generation{0U};
   double return_preflight_last_log_sec{-std::numeric_limits<double>::infinity()};
+  double pass_entry_authority_last_log_sec{
+    -std::numeric_limits<double>::infinity()};
   bool inter_vehicle_corridor{false};
   std::string lower_boundary_vehicle_id;
   std::string upper_boundary_vehicle_id;
@@ -6159,8 +6199,20 @@ struct MPC;
 enum class RateResolvedIntentTransitionKind
 {
   MissionGateA,
+  PassGateA,
   ReturnGateA,
 };
+
+const char * rate_resolved_intent_transition_kind_name(
+  const RateResolvedIntentTransitionKind kind) noexcept
+{
+  switch (kind) {
+    case RateResolvedIntentTransitionKind::MissionGateA: return "mission";
+    case RateResolvedIntentTransitionKind::PassGateA: return "pass";
+    case RateResolvedIntentTransitionKind::ReturnGateA: return "return";
+  }
+  return "unknown";
+}
 
 struct RateResolvedPreentryExecutionDraft
 {
@@ -9240,8 +9292,7 @@ struct MPC
           "kind=%s, decision=%lu/%lu, target=%s, side=%d, tactical=%lu, "
           "generation=%lu, authority=observation-only",
           publication_reject_reason,
-          draft.kind == RateResolvedIntentTransitionKind::ReturnGateA ?
-          "return" : "mission",
+          rate_resolved_intent_transition_kind_name(draft.kind),
           static_cast<unsigned long>(pending.decision_id),
           static_cast<unsigned long>(decision_id), draft.target_id.c_str(),
           draft.selected_side_sign,
@@ -9279,8 +9330,7 @@ struct MPC
         "kind=%s, decision=%lu, target=%s, side=%d, tactical=%lu, "
         "generation=%lu, authority=observation-only",
         admitted ? 1 : 0, admitted ? "worker-submitted" : "worker-rejected",
-        kind == RateResolvedIntentTransitionKind::ReturnGateA ?
-        "return" : "mission",
+        rate_resolved_intent_transition_kind_name(kind),
         static_cast<unsigned long>(decision_id), target_id.c_str(),
         selected_side_sign,
         static_cast<unsigned long>(tactical_source_sequence),
@@ -10172,6 +10222,98 @@ struct MPC
   }
 
   std::optional<ProspectiveExtendedBranchProblem>
+  build_prospective_pass_problem(
+    const V2XBehaviorOutput & source_behavior,
+    const int horizon_size, const double now_sec,
+    std::string & reject_reason)
+  {
+    reject_reason.clear();
+    if (
+      overtake_line_state_.phase != OvertakeLinePhase::ShiftOut ||
+      !overtake_line_state_.mission_path_frozen ||
+      !overtake_line_state_.mission_plan.has_value() ||
+      !overtake_line_state_.mission_plan->valid ||
+      overtake_line_state_.mission_generation == 0U ||
+      overtake_line_state_.target_vehicle_id.empty() ||
+      (overtake_line_state_.pass_side_sign != -1 &&
+      overtake_line_state_.pass_side_sign != 1))
+    {
+      reject_reason = "prospective Pass contract unavailable";
+      return std::nullopt;
+    }
+    model->get_current_waypoint();
+    const int tracking_wp_id = model->wp_id;
+    const int remaining_segments =
+      std::max(0, model->reference_path->n_waypoints - 1 - tracking_wp_id);
+    const int N = model->reference_path->circular ?
+      std::min(cfg.N, horizon_size) :
+      std::min({cfg.N, horizon_size, remaining_segments});
+    if (N < 2) {
+      reject_reason = "prospective Pass horizon has fewer than two stages";
+      return std::nullopt;
+    }
+    ensure_current_control_horizon();
+    const auto & tracking_waypoint =
+      model->reference_path->get_waypoint(tracking_wp_id);
+    model->spatial_state = model->t2s(tracking_waypoint, model->temporal_state);
+
+    // This mutation is confined to the worker-owned tactical snapshot. The
+    // live state remains ShiftOut until the resulting exact artifact is
+    // current-world joined by the Pass Gate A.
+    overtake_line_state_.phase = OvertakeLinePhase::Pass;
+    overtake_line_state_.phase_start_sec = now_sec;
+    overtake_line_state_.phase_start_ey = model->spatial_state.e_y;
+    overtake_line_state_.phase_traveled_m = 0.0;
+    overtake_line_state_.phase_last_update_sec = now_sec;
+    overtake_line_state_.target_ey = model->spatial_state.e_y;
+
+    V2XBehaviorOutput behavior = source_behavior;
+    behavior.state = V2XBehaviorState::Overtake;
+    behavior.allow_gap_planner = true;
+    behavior.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
+    behavior.overtake_gap_available = true;
+    behavior.overtake_selected_mission =
+      overtake_line_state_.mission_plan->mission;
+    behavior.overtake_committed_execution_active = true;
+    behavior.overtake_committed_pass_active = true;
+    behavior.overtake_line_owns_locked_target_speed = true;
+    last_v2x_behavior_output_ = behavior;
+    v2x_behavior_state = V2XBehaviorState::Overtake;
+    v2x_behavior_state_initialized = true;
+
+    MpcProblem source_problem = init_problem(
+      N, model->safety_margin, now_sec, tracking_wp_id,
+      get_preview_wp_id(tracking_wp_id), &behavior,
+      mpcc_contract::ControlIntent::Pass);
+    if (!source_problem.lateral_bounds_contract_valid) {
+      reject_reason = "prospective Pass lateral-bound contract invalid";
+      return std::nullopt;
+    }
+    if (!source_problem.progress_contouring_active) {
+      reject_reason = "prospective Pass progress contouring unavailable";
+      return std::nullopt;
+    }
+    std::string extended_reject_reason;
+    auto extended_problem = build_extended_progress_problem(
+      source_problem, mpcc_contract::ControlIntent::Pass,
+      extended_reject_reason);
+    if (!extended_problem.has_value()) {
+      reject_reason = extended_reject_reason.empty() ?
+        "prospective Pass extended problem unavailable" :
+        extended_reject_reason;
+      return std::nullopt;
+    }
+    if (extended_problem->N <= 0 || extended_problem->N > N) {
+      reject_reason = "prospective Pass effective horizon invalid";
+      return std::nullopt;
+    }
+    reject_reason = "accepted";
+    return ProspectiveExtendedBranchProblem{
+      std::move(source_problem), std::move(extended_problem.value()),
+      mpcc_contract::ControlIntent::Pass, "pass-entry", false};
+  }
+
+  std::optional<ProspectiveExtendedBranchProblem>
   build_prospective_return_problem(
     const V2XBehaviorOutput & source_behavior,
     const int horizon_size, const double now_sec,
@@ -10495,6 +10637,59 @@ struct MPC
   {
     const auto started = SteadyClock::now();
     reject_reason.clear();
+    const bool prospective_pass_requested =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+      overtake_line_state_.mission_path_frozen &&
+      overtake_line_state_.mission_plan.has_value() &&
+      overtake_line_state_.mission_plan->valid &&
+      overtake_line_state_.mission_generation > 0U &&
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      (overtake_line_state_.pass_side_sign == -1 ||
+      overtake_line_state_.pass_side_sign == 1);
+    if (prospective_pass_requested) {
+      auto owned_snapshot = make_owned_tactical_snapshot();
+      if (!owned_snapshot.has_value()) {
+        reject_reason = "causal Pass owned snapshot unavailable";
+        return std::nullopt;
+      }
+      const auto target_provenance = selected_target_provenance(live_behavior);
+      if (
+        !target_provenance.valid ||
+        target_provenance.target_id != overtake_line_state_.target_vehicle_id)
+      {
+        reject_reason = "causal Pass target provenance unavailable";
+        return std::nullopt;
+      }
+      RateResolvedPreentryExecutionDraft draft;
+      draft.reference_path_owner = std::move(owned_snapshot->reference_path);
+      draft.model_owner = std::move(owned_snapshot->model);
+      draft.gap_planner_owner = std::move(owned_snapshot->gap_planner);
+      draft.planner_snapshot = std::move(owned_snapshot->planner);
+      draft.kind = RateResolvedIntentTransitionKind::PassGateA;
+      draft.behavior = live_behavior;
+      draft.assessment.side = overtake_line_state_.pass_side_sign;
+      draft.artifact_identity = OvertakeArtifactIdentitySeed{
+        overtake_line_state_.mission_generation,
+        OvertakeLinePhase::Pass,
+        overtake_line_state_.follow_prepare_origin_phase,
+        overtake_line_state_.pass_side_sign};
+      draft.context_epoch = mpcc_lite_async_context_epoch_;
+      draft.decision_id = active_control_decision_id_;
+      draft.target_obstacle_generation =
+        target_provenance.observation_generation;
+      draft.target_provenance = target_provenance;
+      draft.tactical_source_sequence = active_control_decision_id_;
+      draft.prospective_mission_generation =
+        overtake_line_state_.mission_generation;
+      draft.target_id = overtake_line_state_.target_vehicle_id;
+      draft.selected_side_sign = overtake_line_state_.pass_side_sign;
+      draft.horizon_size = cfg.N;
+      draft.snapshot_sec = now_sec;
+      draft.snapshot_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - started).count();
+      reject_reason = "accepted Pass Gate A";
+      return draft;
+    }
     const bool prospective_return_requested =
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
       overtake_line_state_.mission_path_frozen &&
@@ -25174,8 +25369,7 @@ struct MPC
         "kind=%s, decision=%lu, target=%s, side=%d, tactical=%lu, "
         "generation=%lu, authority=observation-only",
         invalid_reason,
-        draft.kind == RateResolvedIntentTransitionKind::ReturnGateA ?
-        "return" : "mission",
+        rate_resolved_intent_transition_kind_name(draft.kind),
         static_cast<unsigned long>(draft.decision_id), draft.target_id.c_str(),
         draft.selected_side_sign,
         static_cast<unsigned long>(draft.tactical_source_sequence),
@@ -25223,15 +25417,23 @@ struct MPC
           };
         auto & planner = draft.planner_snapshot;
         std::string prospective_reject_reason;
-        auto prospective =
-          draft.kind == RateResolvedIntentTransitionKind::ReturnGateA ?
-          planner->build_prospective_return_problem(
+        std::optional<ProspectiveExtendedBranchProblem> prospective;
+        if (draft.kind == RateResolvedIntentTransitionKind::PassGateA) {
+          prospective = planner->build_prospective_pass_problem(
             draft.behavior, draft.horizon_size, draft.snapshot_sec,
-            prospective_reject_reason) :
-          planner->build_prospective_extended_branch_problem(
+            prospective_reject_reason);
+        } else if (
+          draft.kind == RateResolvedIntentTransitionKind::ReturnGateA)
+        {
+          prospective = planner->build_prospective_return_problem(
+            draft.behavior, draft.horizon_size, draft.snapshot_sec,
+            prospective_reject_reason);
+        } else {
+          prospective = planner->build_prospective_extended_branch_problem(
             draft.behavior, draft.assessment, draft.horizon_size,
             draft.snapshot_sec, draft.artifact_identity,
             prospective_reject_reason);
+        }
         if (!prospective.has_value()) {
           finish_build(prospective_reject_reason.empty() ?
             "causal prospective problem unavailable" :
@@ -25395,8 +25597,11 @@ struct MPC
       rate_resolved_physical_wall::Outcome::Accepted &&
       result->pipeline.certified_plan.plan != nullptr;
     rate_resolved_preentry_execution_shadow_complete_count_ += complete ? 1U : 0U;
+    const bool pass_transition =
+      result->kind == RateResolvedIntentTransitionKind::PassGateA;
     const bool return_transition =
       result->kind == RateResolvedIntentTransitionKind::ReturnGateA;
+    const bool successor_transition = pass_transition || return_transition;
     const bool current_world_preentry_result =
       result->tactical_input_source ==
       overtake_core::RateResolvedGateATacticalInputSource::CurrentWorldPreentry;
@@ -25417,13 +25622,16 @@ struct MPC
     const bool mission_live_selection_valid = current_world_preentry_result ?
       current_world_mission_live_selection_valid :
       async_mission_live_selection_valid;
-    const bool live_selection_valid = return_transition ?
+    const bool live_selection_valid = pass_transition ?
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+      result->selected_side_sign == overtake_line_state_.pass_side_sign :
+      return_transition ?
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
       overtake_line_state_.mission_return_preflight_reference_active &&
       result->selected_side_sign == overtake_line_state_.pass_side_sign :
       mission_live_selection_valid;
     const std::uint64_t current_prospective_generation =
-      return_transition ? overtake_line_state_.mission_generation :
+      successor_transition ? overtake_line_state_.mission_generation :
       std::max<std::uint64_t>(
         1U, overtake_line_state_.mission_generation + 1U);
     const int mission_live_side_sign = current_world_preentry_result &&
@@ -25442,10 +25650,10 @@ struct MPC
         result->tactical_source_sequence,
         live_behavior.target_vehicle_id,
         live_selection_valid,
-        return_transition ? overtake_line_state_.pass_side_sign :
+        successor_transition ? overtake_line_state_.pass_side_sign :
         mission_live_side_sign,
         current_prospective_generation,
-        return_transition ? result->tactical_source_sequence :
+        successor_transition ? result->tactical_source_sequence :
         mission_live_tactical_sequence});
     const auto target_validation = validate_selected_target_provenance(
       result->target_provenance, live_behavior,
@@ -25484,7 +25692,7 @@ struct MPC
       bind_rate_resolved_gate_a_execution_certificate(
       certified_mission, plan, result->target_provenance);
     const bool proposal_identity_complete =
-      !return_transition && authority_ready && target_validation.valid &&
+      !successor_transition && authority_ready && target_validation.valid &&
       result->selected_mission.has_value() &&
       result->selected_mission->feasible &&
       result->selected_mission->pass_side_sign == result->selected_side_sign &&
@@ -25514,6 +25722,38 @@ struct MPC
       if (proposal.complete()) {
         live_behavior.rate_resolved_mission_gate_a_proposal =
           std::move(proposal);
+        ++rate_resolved_preentry_execution_shadow_gate_a_proposal_count_;
+      }
+    }
+    const bool pass_proposal_identity_complete =
+      pass_transition && authority_ready && target_validation.valid &&
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
+      result->prospective_mission_generation ==
+      overtake_line_state_.mission_generation &&
+      result->target_id == overtake_line_state_.target_vehicle_id &&
+      result->selected_side_sign == overtake_line_state_.pass_side_sign &&
+      plan != nullptr && plan->execution_artifact != nullptr &&
+      plan->execution_artifact->identity.source_context.intent ==
+      mpcc_contract::ControlIntent::Pass &&
+      plan->execution_artifact->identity.source_context.intent_generation ==
+      result->prospective_mission_generation &&
+      plan->execution_artifact->identity.source_context.target_id ==
+      result->target_id &&
+      plan->execution_artifact->identity.source_context.execution_side_sign ==
+      result->selected_side_sign;
+    if (pass_proposal_identity_complete) {
+      RateResolvedPassGateAProposal proposal;
+      proposal.sequence = result->sequence;
+      proposal.context_epoch = result->context_epoch;
+      proposal.mission_generation = result->prospective_mission_generation;
+      proposal.target_obstacle_generation =
+        result->target_provenance.observation_generation;
+      proposal.target_id = result->target_id;
+      proposal.side_sign = result->selected_side_sign;
+      proposal.current_world_certified = true;
+      proposal.certified_plan = plan;
+      if (proposal.complete()) {
+        live_behavior.rate_resolved_pass_gate_a_proposal = std::move(proposal);
         ++rate_resolved_preentry_execution_shadow_gate_a_proposal_count_;
       }
     }
@@ -25575,12 +25815,13 @@ struct MPC
         "mission=%d/feasible:%d/proposal_identity:%d, "
         "target_join=%d/%s/%lu->%lu, "
         "identity=%s/exact:%d/authority:%d/live_tactical:%lu, "
-        "join=%s/world:%d/authority_ready:%d/gate_a_proposal:%d/return:%d, "
+        "join=%s/world:%d/authority_ready:%d/"
+        "gate_a_proposal=%d/pass:%d/return:%d, "
         "totals=submitted:%lu/replaced:%lu/result:%lu/complete:%lu/"
         "world_join:%lu/authority_ready:%lu/gate_a_proposal:%lu, "
         "worker_queue=running:%d/pending:%d, "
         "authority=gate-a-evidence,selected=%d",
-        return_transition ? "return" : "mission",
+        rate_resolved_intent_transition_kind_name(result->kind),
         static_cast<unsigned long>(result->sequence),
         static_cast<unsigned long>(result->context_epoch),
         static_cast<unsigned long>(mpcc_lite_async_context_epoch_),
@@ -25589,7 +25830,7 @@ struct MPC
         result->target_id.c_str(),
         result->target_id == live_behavior.target_vehicle_id ? 1 : 0,
         result->selected_side_sign,
-        return_transition ? overtake_line_state_.pass_side_sign :
+        successor_transition ? overtake_line_state_.pass_side_sign :
         mission_live_side_sign,
         overtake_core::to_string(result->tactical_input_source),
         static_cast<unsigned long>(result->prospective_mission_generation),
@@ -25626,12 +25867,13 @@ struct MPC
         tactical_identity.exact ? 1 : 0,
         tactical_identity.tactical_authority_current ? 1 : 0,
         static_cast<unsigned long>(
-          return_transition ? result->tactical_source_sequence :
+          successor_transition ? result->tactical_source_sequence :
           mission_live_tactical_sequence),
         rate_resolved_retained::to_string(join_reason),
         current_world_joinable ? 1 : 0, authority_ready ? 1 : 0,
         live_behavior.rate_resolved_mission_gate_a_proposal.has_value() ?
         1 : 0,
+        live_behavior.rate_resolved_pass_gate_a_proposal.has_value() ? 1 : 0,
         live_behavior.rate_resolved_return_gate_a_proposal.has_value() ?
         1 : 0,
         static_cast<unsigned long>(
@@ -25649,8 +25891,9 @@ struct MPC
         static_cast<unsigned long>(
           rate_resolved_preentry_execution_shadow_gate_a_proposal_count_),
         worker_stats.running ? 1 : 0, worker_stats.pending ? 1 : 0,
-        live_behavior.rate_resolved_mission_gate_a_proposal.has_value() ?
-        1 : 0);
+        (live_behavior.rate_resolved_mission_gate_a_proposal.has_value() ||
+        live_behavior.rate_resolved_pass_gate_a_proposal.has_value() ||
+        live_behavior.rate_resolved_return_gate_a_proposal.has_value()) ? 1 : 0);
     }
   }
 
@@ -29241,8 +29484,7 @@ struct MPC
         "Gate A lifecycle: boundary=draft, admitted=1, reason=built, "
         "kind=%s, decision=%lu, target=%s, side=%d, tactical=%lu, "
         "generation=%lu, source=%s, authority=observation-only",
-        draft.kind == RateResolvedIntentTransitionKind::ReturnGateA ?
-        "return" : "mission",
+        rate_resolved_intent_transition_kind_name(draft.kind),
         static_cast<unsigned long>(draft.decision_id), draft.target_id.c_str(),
         draft.selected_side_sign,
         static_cast<unsigned long>(draft.tactical_source_sequence),
@@ -29376,9 +29618,33 @@ struct MPC
       bool gate_a_identity_matches = false;
       const auto & mission_gate_a_proposal =
         last_v2x_behavior_output_.rate_resolved_mission_gate_a_proposal;
+      const auto & pass_gate_a_proposal =
+        last_v2x_behavior_output_.rate_resolved_pass_gate_a_proposal;
       const auto & return_gate_a_proposal =
         last_v2x_behavior_output_.rate_resolved_return_gate_a_proposal;
       if (
+        intent == mpcc_contract::ControlIntent::Pass &&
+        pass_gate_a_proposal.has_value() &&
+        pass_gate_a_proposal->complete())
+      {
+        gate_a_certified_plan = pass_gate_a_proposal->certified_plan;
+        const auto & artifact = gate_a_certified_plan->execution_artifact;
+        const auto & source_context = artifact->identity.source_context;
+        gate_a_sequence = artifact->identity.sequence;
+        gate_a_identity_matches =
+          source_context.intent == intent &&
+          source_context.intent_generation ==
+          overtake_line_state_.mission_generation &&
+          source_context.target_id == overtake_line_state_.target_vehicle_id &&
+          source_context.execution_side_sign ==
+          overtake_line_state_.pass_side_sign &&
+          pass_gate_a_proposal->mission_generation ==
+          overtake_line_state_.mission_generation &&
+          pass_gate_a_proposal->target_id ==
+          overtake_line_state_.target_vehicle_id &&
+          pass_gate_a_proposal->side_sign ==
+          overtake_line_state_.pass_side_sign;
+      } else if (
         intent == mpcc_contract::ControlIntent::Return &&
         return_gate_a_proposal.has_value() &&
         return_gate_a_proposal->complete())
@@ -40808,6 +41074,33 @@ private:
       overtake_line_state_.shiftout_pass_entry_physical_hold_start_distance = 0.0;
       overtake_line_state_.shiftout_pass_entry_physical_hold_start_speed_mps = 0.0;
     }
+    const auto & pass_gate_a_proposal =
+      behavior_output.rate_resolved_pass_gate_a_proposal;
+    const auto pass_gate_a_intent =
+      pass_gate_a_proposal.has_value() &&
+      pass_gate_a_proposal->certified_plan != nullptr &&
+      pass_gate_a_proposal->certified_plan->execution_artifact != nullptr ?
+      pass_gate_a_proposal->certified_plan->execution_artifact->identity.
+      source_context.intent : mpcc_contract::ControlIntent::Unknown;
+    const auto pass_transition_admission =
+      race_mpcc::resolve_pass_transition_admission(
+      race_mpcc::PassTransitionAdmissionRequest{
+        shiftout_complete,
+        fresh_dynamic_horizon_available,
+        pass_entry_execution_horizon_available,
+        pass_gate_a_proposal.has_value() && pass_gate_a_proposal->complete(),
+        pass_gate_a_proposal.has_value() &&
+        pass_gate_a_proposal->current_world_certified,
+        pass_gate_a_intent,
+        overtake_line_state_.target_vehicle_id,
+        pass_gate_a_proposal.has_value() ?
+        pass_gate_a_proposal->target_id : std::string{},
+        overtake_line_state_.mission_generation,
+        pass_gate_a_proposal.has_value() ?
+        pass_gate_a_proposal->mission_generation : 0U,
+        overtake_line_state_.pass_side_sign,
+        pass_gate_a_proposal.has_value() ?
+        pass_gate_a_proposal->side_sign : 0});
     if (shiftout_complete) {
       if (pass_entry_physical_hold_active) {
         // Keep ShiftOut ownership. A bounded, physically revalidated lateral
@@ -40816,25 +41109,52 @@ private:
         fresh_dynamic_horizon_available &&
         pass_entry_execution_horizon_available)
       {
-        if (overtake_line_state_.shiftout_fresh_horizon_wait_active) {
-          RCLCPP_INFO(
-            rclcpp::get_logger("mpc_controller"),
-            "OvertakeLine fresh Pass horizon acquired: target=%s, side=%d, "
-            "source_age=%.3f, ttl=%.3f, generation=%lu",
-            overtake_line_state_.target_vehicle_id.c_str(),
+        if (!pass_transition_admission.admitted) {
+          const bool log_now =
+            !std::isfinite(
+            overtake_line_state_.pass_entry_authority_last_log_sec) ||
+            now_sec - overtake_line_state_.pass_entry_authority_last_log_sec >=
+            0.50;
+          if (line_cfg.debug_log_enabled && log_now) {
+            overtake_line_state_.pass_entry_authority_last_log_sec = now_sec;
+            RCLCPP_INFO(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine Pass authority deferred before phase mutation: "
+              "target=%s, generation=%lu, side=%d, proposal=%d/%lu, "
+              "reason=%s, action=retain-certified-shiftout, wp_id=%d",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              static_cast<unsigned long>(
+                overtake_line_state_.mission_generation),
+              overtake_line_state_.pass_side_sign,
+              pass_gate_a_proposal.has_value() ? 1 : 0,
+              static_cast<unsigned long>(
+                pass_gate_a_proposal.has_value() ?
+                pass_gate_a_proposal->sequence : 0U),
+              race_mpcc::pass_transition_admission_reason_name(
+                pass_transition_admission.reason),
+              model->wp_id);
+          }
+        } else {
+          if (overtake_line_state_.shiftout_fresh_horizon_wait_active) {
+            RCLCPP_INFO(
+              rclcpp::get_logger("mpc_controller"),
+              "OvertakeLine fresh Pass horizon acquired: target=%s, side=%d, "
+              "source_age=%.3f, ttl=%.3f, generation=%lu",
+              overtake_line_state_.target_vehicle_id.c_str(),
+              overtake_line_state_.pass_side_sign,
+              live_prediction_source_age_sec, live_prediction_timing.remaining_sec,
+              static_cast<unsigned long>(overtake_line_state_.mission_generation));
+          }
+          overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
+          overtake_line_state_.pass_horizon_fallback_start_sec =
+            std::numeric_limits<double>::quiet_NaN();
+          transition_overtake_line_phase(
+            OvertakeLinePhase::Pass, now_sec, current_ey,
             overtake_line_state_.pass_side_sign,
-            live_prediction_source_age_sec, live_prediction_timing.remaining_sec,
-            static_cast<unsigned long>(overtake_line_state_.mission_generation));
+            std::string("shift complete (") +
+            overtake_core::to_string(shiftout_completion.reason) +
+            ") with atomic current-world Pass authority");
         }
-        overtake_line_state_.shiftout_fresh_horizon_wait_active = false;
-        overtake_line_state_.pass_horizon_fallback_start_sec =
-          std::numeric_limits<double>::quiet_NaN();
-        transition_overtake_line_phase(
-          OvertakeLinePhase::Pass, now_sec, current_ey,
-          overtake_line_state_.pass_side_sign,
-          std::string("shift complete (") +
-          overtake_core::to_string(shiftout_completion.reason) +
-          ") with fresh dynamic and physical Pass horizon");
       } else if (committed_pass_horizon_enabled) {
         if (!overtake_line_state_.shiftout_fresh_horizon_wait_active) {
           overtake_line_state_.shiftout_fresh_horizon_wait_active = true;

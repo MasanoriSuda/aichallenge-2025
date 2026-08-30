@@ -3330,6 +3330,27 @@ dynamic source validationはtyped reasonを記録する。`source=none`で`valid
 修正後の`output/20260831-074836`ではD1がvalid/clear 28件・valid/blocked 2件・invalid 0件、D2がvalid/clear 14件・invalid 0件となり、
 D2 sequence 1031では左右両branchをcertifyしてselected planをStoreへ採用した。
 
+#### ShiftOutからPassへのatomic current-world handoff（2026-08-31、2025由来の暫定）
+
+`ShiftOut -> Pass`は横移動完了というtactical条件だけではphaseを変更しない。worker-ownedなcurrent-world snapshotから
+prospective `Pass` seven-state problemを再構築し、exact wall、timed dynamic obstacle、terminal successorを証明した
+Pass Gate-A proposalを先に生成する。proposalはtarget ID、observation generation、Mission generation、pass sideと
+`intent=Pass`をimmutable identityとして持つ。すべてがlive stateと一致した同じcallbackだけがphaseを`Pass`へ変更し、
+canonical atomic admissionが同じcertified artifactを通常command ownerとして採用する。
+
+proposalが未完、別intent、別target、別generation、別sideまたはcurrent-world棄却の場合は、certified `ShiftOut` authorityを
+維持したままphase mutationを延期する。これはlease、grace、timeoutまたはfallbackではなく、successor authorityの存在を
+phase変更の前提にする順序契約である。古いShiftOut artifactが失効した場合は既存のterminal Stop／Emergency契約へ従い、
+証明のないPassへ進めてはならない。
+
+`output/20260831-074836/d1`では旧実装がphaseをPassへ変更した後もdecision 1492--1579でartifact sequence 733の
+`intent=shiftout`を保持し、terminal successor失効時にEmergency Stopへ落ちた。修正後の`output/20260831-081212/d2`
+episode 3ではdecision 3379で`previous=shiftout proposed=pass effective=pass`、`gate_a_attempted=1`、
+`gate_a_joined=1`となり、同じdecisionでsolution／plan 211のcertified Pass commandをpublishした。proposal不在時のD1は
+`proposal-incomplete`としてShiftOutを保持し、phaseだけが先行する旧signatureは再発しなかった。後続の
+`actual footprint wall margin violated`は別のexecution tracking／wall certificate監査対象であり、本handoff契約を
+clearanceやsolver toleranceで緩和する根拠にしない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

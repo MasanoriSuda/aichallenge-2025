@@ -717,6 +717,23 @@
         "pre-solve ReplayWorld tolerance as post-solve dynamic certificate identity"
       ],
       "revisit_condition": "a final wall snapshot and exact trajectory with different certificate tolerances are accepted, source-invalid dynamic proof again reports only an empty obstacle id, or a bounded run reproduces the old invalid result despite a current ReplayWorld"
+    },
+    {
+      "experiment_id": "20260831-shiftout-pass-atomic-handoff",
+      "baseline_commit": "bfc75b19",
+      "snapshot_ids": [
+        "20260831-074836-decisions-1492-1580",
+        "20260831-081212-d2-decision-3379"
+      ],
+      "hypothesis": "the first Pass authority loss is caused by physical wall infeasibility or side selection rather than an asymmetric ShiftOut-to-Pass lifecycle that mutates tactical phase without a certified Pass successor",
+      "changed_dimension": "production_shiftout_to_pass_current_world_atomic_authority_handoff",
+      "result": "accepted",
+      "reason": "baseline mutated to Pass while retaining ShiftOut artifact 733 until its terminal successor expired; the candidate held ShiftOut whenever the Pass proposal was incomplete and dynamically joined a certified current-world Pass proposal at decision 3379 with gate_a_attempted=1, gate_a_joined=1 and a same-decision certified Pass publication",
+      "production_impact": "ShiftOut-to-Pass now has the same pre-mutation successor-authority contract as Mission entry and Return; no solver, clearance, speed, timeout, lease, grace, fallback or configuration changed",
+      "deleted_code": [
+        "tactical-only ShiftOut-to-Pass phase mutation without certified successor authority"
+      ],
+      "revisit_condition": "phase=Pass is again observed with retained intent=shiftout authority, a mismatched target/generation/side Pass proposal is admitted, or Pass Gate A prevents a physically certified transition from joining"
     }
   ]
 }

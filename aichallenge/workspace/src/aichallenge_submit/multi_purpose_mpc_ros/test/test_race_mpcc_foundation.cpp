@@ -158,6 +158,64 @@ TEST(RaceMpccFoundation, ReturnTransitionRejectsStaleOrWrongIdentity)
     race::ReturnTransitionAdmissionReason::CurrentWorldRejected);
 }
 
+TEST(RaceMpccFoundation, PassTransitionRequiresCertifiedExactEncounter)
+{
+  race::PassTransitionAdmissionRequest request;
+  request.shiftout_complete = true;
+  request.dynamic_horizon_available = true;
+  request.physical_horizon_available = true;
+  request.proposal_complete = true;
+  request.current_world_certified = true;
+  request.proposal_intent = contract::ControlIntent::Pass;
+  request.current_target_id = "d2";
+  request.proposal_target_id = "d2";
+  request.current_mission_generation = 7U;
+  request.proposal_mission_generation = 7U;
+  request.current_side_sign = 1;
+  request.proposal_side_sign = 1;
+
+  const auto result = race::resolve_pass_transition_admission(request);
+
+  EXPECT_TRUE(result.admitted);
+  EXPECT_EQ(result.reason, race::PassTransitionAdmissionReason::Admitted);
+}
+
+TEST(RaceMpccFoundation, PassTransitionRejectsHorizonsWithoutAuthority)
+{
+  race::PassTransitionAdmissionRequest request;
+  request.shiftout_complete = true;
+  request.dynamic_horizon_available = true;
+  request.physical_horizon_available = true;
+
+  const auto result = race::resolve_pass_transition_admission(request);
+
+  EXPECT_FALSE(result.admitted);
+  EXPECT_EQ(
+    result.reason, race::PassTransitionAdmissionReason::ProposalIncomplete);
+}
+
+TEST(RaceMpccFoundation, PassTransitionRejectsWrongSuccessorIntent)
+{
+  race::PassTransitionAdmissionRequest request;
+  request.shiftout_complete = true;
+  request.dynamic_horizon_available = true;
+  request.physical_horizon_available = true;
+  request.proposal_complete = true;
+  request.current_world_certified = true;
+  request.proposal_intent = contract::ControlIntent::ShiftOut;
+  request.current_target_id = "d2";
+  request.proposal_target_id = "d2";
+  request.current_mission_generation = 7U;
+  request.proposal_mission_generation = 7U;
+  request.current_side_sign = -1;
+  request.proposal_side_sign = -1;
+
+  const auto result = race::resolve_pass_transition_admission(request);
+
+  EXPECT_FALSE(result.admitted);
+  EXPECT_EQ(result.reason, race::PassTransitionAdmissionReason::IntentMismatch);
+}
+
 TEST(RaceMpccFoundation, FormatsAllFourHomotopiesWithShadowAuthority)
 {
   race::ShadowDecision decision;

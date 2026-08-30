@@ -5352,8 +5352,9 @@ enum class PassEntryCertificateOwner
 
 struct PassEntryCertificatePolicyRequest
 {
-  /// A matching ShiftOut identity exists in the actually-published canonical
-  /// execution ledger.  When true, weaker migration sources may not replace it.
+  /// A matching phase-compatible Overtake identity exists in the actually-
+  /// published canonical execution ledger. When true, weaker migration sources
+  /// may not replace it.
   bool canonical_published_identity_expected{false};
   /// The published artifact cursor is available and its exact physically
   /// certified trajectory can be aligned with the current horizon.

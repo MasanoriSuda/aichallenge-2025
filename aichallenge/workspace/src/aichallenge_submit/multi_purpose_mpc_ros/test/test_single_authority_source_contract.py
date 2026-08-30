@@ -960,17 +960,16 @@ def test_pass_entry_does_not_recertify_published_canonical_execution() -> None:
     assert policy < canonical < projection
     assert "certificate_policy.projected_preflight_required" in owner
     assert "canonical published seven-state execution certificate" in owner
-    assert "Atomic intent admission retains ShiftOut until Pass proof joins" in owner
     assert (
-        "published_shiftout_execution_alignment.trajectory->lateral_m" not in owner
+        "published_overtake_execution_alignment.trajectory->lateral_m" not in owner
     )
 
 
-def test_pass_entry_queries_published_shiftout_through_atomic_handoff() -> None:
-    """Tactical Pass must still see ShiftOut while the publisher retains it."""
+def test_pass_entry_queries_phase_compatible_published_overtake_execution() -> None:
+    """Pass prefers its successor but accepts the exact published predecessor."""
 
     helper_start = SOURCE.index(
-        "bool is_published_shiftout_execution_handoff_phase("
+        "bool is_published_overtake_execution_handoff_phase("
     )
     helper_end = SOURCE.index(
         "const char * to_string(const FollowPrepareCause", helper_start
@@ -980,24 +979,32 @@ def test_pass_entry_queries_published_shiftout_through_atomic_handoff() -> None:
     assert "phase == OvertakeLinePhase::Pass" in helper
 
     request_start = SOURCE.index(
-        "const bool published_shiftout_execution_alignment_requested ="
+        "const OvertakeLinePhase published_overtake_execution_phase ="
     )
     request_end = SOURCE.index(
-        "if (published_shiftout_execution_alignment_requested)", request_start
+        "if (published_overtake_execution_alignment_requested)", request_start
     )
     request = SOURCE[request_start:request_end]
-    assert "is_published_shiftout_execution_handoff_phase(" in request
+    assert "is_published_overtake_execution_handoff_phase(" in request
+    assert "follow_prepare_origin_phase" in request
 
     align_start = SOURCE.index(
-        "align_published_shiftout_execution_trajectory("
+        "align_published_overtake_execution_trajectory("
     )
     align_end = SOURCE.index(
         "build_progress_course_frame_knots(", align_start
     )
     align = SOURCE[align_start:align_end]
     assert "executed_snapshot()" in align
+    assert "ControlIntent::Pass" in align
     assert "ControlIntent::ShiftOut" in align
     assert "build_published(" in align
+    assert "plan.get(), alignment.intent" in align
+    assert "align_published_shiftout_execution_trajectory(" not in SOURCE
+    assert "published_overtake_execution_alignment_last_intent_" in SOURCE
+    assert (
+        "published_overtake_execution_alignment.intent !=" in SOURCE
+    )
 
 
 def test_last_published_intent_is_a_publication_ledger() -> None:

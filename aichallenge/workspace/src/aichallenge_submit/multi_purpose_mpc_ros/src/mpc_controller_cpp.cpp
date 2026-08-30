@@ -1968,13 +1968,13 @@ bool is_solved_overtake_trajectory_handoff_compatible(
          (source == OvertakeLinePhase::Pass && current == OvertakeLinePhase::Return);
 }
 
-bool is_published_shiftout_execution_handoff_phase(
+bool is_published_overtake_execution_handoff_phase(
   const OvertakeLinePhase phase)
 {
   // Tactical phase may advance before canonical atomic admission publishes the
-  // successor.  Keep querying the executed ledger across that boundary; the
-  // execution-source adapter still requires exact ShiftOut intent, target,
-  // generation, side, immutable source time, and a live publication cursor.
+  // successor. Keep querying the executed ledger across that boundary while
+  // requiring an exact phase-compatible intent, target, generation, side,
+  // immutable source time, and a live publication cursor.
   return phase == OvertakeLinePhase::ShiftOut ||
          phase == OvertakeLinePhase::Pass;
 }
@@ -7192,6 +7192,7 @@ struct PublishedMpccExecutionAlignment
 {
   bool identity_expected{false};
   std::uint64_t artifact_sequence{};
+  mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
   double remaining_distance_m{};
   mpcc_rate_resolved_execution_artifact::CursorReason cursor_reason{
     mpcc_rate_resolved_execution_artifact::CursorReason::InvalidArtifact};
@@ -22908,12 +22909,17 @@ struct MPC
   }
 
   PublishedMpccExecutionAlignment
-  align_published_shiftout_execution_trajectory(
+  align_published_overtake_execution_trajectory(
     const std::vector<double> & current_path_distance_m,
     const std::vector<double> & fallback_lateral_m,
-    const double now_sec) const
+    const double now_sec,
+    const OvertakeLinePhase execution_phase) const
   {
     PublishedMpccExecutionAlignment alignment;
+    if (!is_published_overtake_execution_handoff_phase(execution_phase)) {
+      alignment.reason = "published execution phase is not ShiftOut or Pass";
+      return alignment;
+    }
     if (
       rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
       model == nullptr || model->reference_path == nullptr)
@@ -22930,13 +22936,33 @@ struct MPC
     }
     alignment.artifact_sequence =
       plan->execution_artifact->identity.sequence;
-    const auto identity = rate_resolved_execution_source::build(
-      rate_resolved_execution_source::Request{
-        plan.get(), mpcc_contract::ControlIntent::ShiftOut,
-        overtake_line_state_.target_vehicle_id,
-        overtake_line_state_.mission_generation,
-        overtake_line_state_.pass_side_sign});
-    if (!identity.accepted()) {
+
+    const auto identity_for = [&](const mpcc_contract::ControlIntent intent) {
+        return rate_resolved_execution_source::build(
+          rate_resolved_execution_source::Request{
+            plan.get(), intent,
+            overtake_line_state_.target_vehicle_id,
+            overtake_line_state_.mission_generation,
+            overtake_line_state_.pass_side_sign});
+      };
+    auto identity = identity_for(mpcc_contract::ControlIntent::ShiftOut);
+    if (execution_phase == OvertakeLinePhase::Pass) {
+      // Once atomic admission publishes the Pass successor it is the preferred
+      // executed source. Until that publication arrives, the exact ShiftOut
+      // predecessor remains compatible across the tactical phase boundary.
+      const auto pass_identity = identity_for(mpcc_contract::ControlIntent::Pass);
+      if (pass_identity.accepted()) {
+        identity = pass_identity;
+        alignment.intent = mpcc_contract::ControlIntent::Pass;
+      }
+    }
+    if (
+      alignment.intent == mpcc_contract::ControlIntent::Unknown &&
+      identity.accepted())
+    {
+      alignment.intent = mpcc_contract::ControlIntent::ShiftOut;
+    }
+    if (alignment.intent == mpcc_contract::ControlIntent::Unknown) {
       alignment.reason = std::string{"published identity rejected/"} +
         rate_resolved_execution_source::to_string(identity.reason);
       return alignment;
@@ -22945,7 +22971,7 @@ struct MPC
     const auto published = rate_resolved_execution_source::build_published(
       rate_resolved_execution_source::PublishedRequest{
         rate_resolved_execution_source::Request{
-          plan.get(), mpcc_contract::ControlIntent::ShiftOut,
+          plan.get(), alignment.intent,
           overtake_line_state_.target_vehicle_id,
           overtake_line_state_.mission_generation,
           overtake_line_state_.pass_side_sign},
@@ -29296,8 +29322,10 @@ struct MPC
   double solved_mpcc_execution_authority_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   bool solved_mpcc_execution_authority_was_active_{false};
-  bool published_shiftout_execution_alignment_was_active_{false};
-  std::string published_shiftout_execution_alignment_last_reason_;
+  bool published_overtake_execution_alignment_was_active_{false};
+  mpcc_contract::ControlIntent published_overtake_execution_alignment_last_intent_{
+    mpcc_contract::ControlIntent::Unknown};
+  std::string published_overtake_execution_alignment_last_reason_;
   double progress_contouring_fallback_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
   double progress_contouring_stage_normalization_last_log_sec_{
@@ -36353,14 +36381,15 @@ private:
     std::optional<AlignedMpccExecutionTrajectory> aligned_solved_execution;
     const bool dp_execution_authority_active =
       dp_execution_authority.valid && dp_execution_authority.authority_active;
-    PublishedMpccExecutionAlignment published_shiftout_execution_alignment;
-    const bool published_shiftout_execution_alignment_requested =
-      is_published_shiftout_execution_handoff_phase(
-        overtake_line_state_.phase) ||
-      (execution_origin_dynamic_wait_active &&
-      overtake_line_state_.follow_prepare_origin_phase ==
-      OvertakeLinePhase::ShiftOut);
-    if (published_shiftout_execution_alignment_requested) {
+    PublishedMpccExecutionAlignment published_overtake_execution_alignment;
+    const OvertakeLinePhase published_overtake_execution_phase =
+      execution_origin_dynamic_wait_active ?
+      overtake_line_state_.follow_prepare_origin_phase :
+      overtake_line_state_.phase;
+    const bool published_overtake_execution_alignment_requested =
+      is_published_overtake_execution_handoff_phase(
+        published_overtake_execution_phase);
+    if (published_overtake_execution_alignment_requested) {
       std::vector<double> current_path_distances;
       std::vector<double> current_fallback_lateral;
       current_path_distances.reserve(static_cast<std::size_t>(N));
@@ -36371,42 +36400,48 @@ private:
             ref_wp_id, static_cast<std::size_t>(i)));
         current_fallback_lateral.push_back(current_ey);
       }
-      published_shiftout_execution_alignment =
-        align_published_shiftout_execution_trajectory(
-        current_path_distances, current_fallback_lateral, now_sec);
+      published_overtake_execution_alignment =
+        align_published_overtake_execution_trajectory(
+        current_path_distances, current_fallback_lateral, now_sec,
+        published_overtake_execution_phase);
     }
-    const bool published_shiftout_execution_profile_active =
-      published_shiftout_execution_alignment.trajectory.has_value();
-    const bool published_shiftout_alignment_changed =
-      published_shiftout_execution_profile_active !=
-      published_shiftout_execution_alignment_was_active_ ||
-      published_shiftout_execution_alignment.reason !=
-      published_shiftout_execution_alignment_last_reason_;
+    const bool published_overtake_execution_profile_active =
+      published_overtake_execution_alignment.trajectory.has_value();
+    const bool published_overtake_alignment_changed =
+      published_overtake_execution_profile_active !=
+      published_overtake_execution_alignment_was_active_ ||
+      published_overtake_execution_alignment.intent !=
+      published_overtake_execution_alignment_last_intent_ ||
+      published_overtake_execution_alignment.reason !=
+      published_overtake_execution_alignment_last_reason_;
     if (
       line_cfg.debug_log_enabled &&
-      published_shiftout_execution_alignment_requested &&
-      published_shiftout_alignment_changed)
+      published_overtake_execution_alignment_requested &&
+      published_overtake_alignment_changed)
     {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "Published ShiftOut execution alignment: active=%d, expected=%d, "
-        "artifact=%lu, cursor=%s, reason=%s, phase=%s, wp_id=%d",
-        published_shiftout_execution_profile_active ? 1 : 0,
-        published_shiftout_execution_alignment.identity_expected ? 1 : 0,
+        "Published Overtake execution alignment: active=%d, expected=%d, "
+        "intent=%s, artifact=%lu, cursor=%s, reason=%s, phase=%s, wp_id=%d",
+        published_overtake_execution_profile_active ? 1 : 0,
+        published_overtake_execution_alignment.identity_expected ? 1 : 0,
+        mpcc_contract::to_string(published_overtake_execution_alignment.intent),
         static_cast<unsigned long>(
-          published_shiftout_execution_alignment.artifact_sequence),
+          published_overtake_execution_alignment.artifact_sequence),
         rate_resolved_artifact::to_string(
-          published_shiftout_execution_alignment.cursor_reason),
-        published_shiftout_execution_alignment.reason.c_str(),
+          published_overtake_execution_alignment.cursor_reason),
+        published_overtake_execution_alignment.reason.c_str(),
         execution_origin_dynamic_wait_active ? "RollingReplan" :
         to_string(overtake_line_state_.phase), model->wp_id);
     }
-    published_shiftout_execution_alignment_was_active_ =
-      published_shiftout_execution_profile_active;
-    published_shiftout_execution_alignment_last_reason_ =
-      published_shiftout_execution_alignment.reason;
+    published_overtake_execution_alignment_was_active_ =
+      published_overtake_execution_profile_active;
+    published_overtake_execution_alignment_last_intent_ =
+      published_overtake_execution_alignment.intent;
+    published_overtake_execution_alignment_last_reason_ =
+      published_overtake_execution_alignment.reason;
     // The six-state certified store is the sole normal solve owner. Project
-    // its exact accepted ShiftOut horizon into the lateral-prefix supervisor
+    // its exact accepted phase-compatible horizon into the lateral-prefix supervisor
     // before testing whether a newer rolling execution source is available.
     // The retired five-state primal extractor had no producer after canonical
     // authority migration and therefore left the initial DP path to expire.
@@ -37284,8 +37319,8 @@ private:
             horizon_path_distance_to_index(ref_wp_id, static_cast<std::size_t>(i));
         }
         const bool published_execution_prefix_active =
-          published_shiftout_execution_profile_active &&
-          published_shiftout_execution_alignment.trajectory->lateral_m.size() ==
+          published_overtake_execution_profile_active &&
+          published_overtake_execution_alignment.trajectory->lateral_m.size() ==
           static_cast<std::size_t>(N) && !contact_prefix_active;
         const bool continuous_dp_prefix_requested =
           !published_execution_prefix_active && dp_execution_authority_active &&
@@ -37311,7 +37346,7 @@ private:
         const std::optional<std::vector<double>> continuous_dp_override =
           published_execution_prefix_active ?
           std::optional<std::vector<double>>{
-          published_shiftout_execution_alignment.trajectory->lateral_m} :
+          published_overtake_execution_alignment.trajectory->lateral_m} :
           (continuous_dp_prefix_active ?
           std::optional<std::vector<double>>{
           continuous_dp_reference.lateral_targets_m} :
@@ -37464,7 +37499,7 @@ private:
         publish_lateral_prefix();
         output.receding_horizon_fallback_reason =
           published_execution_prefix_active ?
-          "published certified ShiftOut execution retained through rolling replan" :
+          "published certified Overtake execution retained through rolling replan" :
           (continuous_dp_prefix_active ?
           "continuous DP execution retained through rolling replan" :
           physical_margin_fallback ?
@@ -37508,7 +37543,7 @@ private:
             (continuous_dp_prefix_active ? "continuous-dp" :
             (solved_execution_prefix_active ? "solved-bridge" : "live-hold")),
             published_execution_prefix_active ?
-            published_shiftout_execution_alignment.remaining_distance_m :
+            published_overtake_execution_alignment.remaining_distance_m :
             continuous_dp_reference.remaining_distance_m,
             model->wp_id);
         }
@@ -39433,8 +39468,8 @@ private:
       const auto certificate_policy =
         overtake_core::resolve_pass_entry_certificate_policy(
           overtake_core::PassEntryCertificatePolicyRequest{
-            published_shiftout_execution_alignment.identity_expected,
-            published_shiftout_execution_profile_active});
+            published_overtake_execution_alignment.identity_expected,
+            published_overtake_execution_profile_active});
       if (!certificate_policy.valid) {
         pass_entry_execution_horizon_available = false;
         pass_entry_execution_horizon_reason =
@@ -39443,10 +39478,10 @@ private:
         certificate_policy.owner ==
         overtake_core::PassEntryCertificateOwner::CanonicalPublishedExecution)
       {
-        // This exact ShiftOut trajectory already crossed the publisher after
-        // canonical physical/current-world proof. Reprojecting it through the
-        // legacy horizon creates a second, inconsistent certificate owner.
-        // Atomic intent admission retains ShiftOut until Pass proof joins.
+        // This exact phase-compatible trajectory already crossed the publisher
+        // after canonical physical/current-world proof. Reprojecting it through
+        // the legacy horizon creates a second, inconsistent certificate owner.
+        // Atomic admission may retain ShiftOut until the Pass successor joins.
         pass_entry_execution_horizon_available = true;
         pass_entry_execution_horizon_reason =
           "canonical published seven-state execution certificate";
@@ -39455,7 +39490,7 @@ private:
         // may not replace it when its execution cursor is unavailable.
         pass_entry_execution_horizon_available = false;
         pass_entry_execution_horizon_reason =
-          published_shiftout_execution_alignment.reason;
+          published_overtake_execution_alignment.reason;
       } else {
         std::optional<std::vector<double>> entry_execution_override;
         bool projected_execution_profile_expected = false;
@@ -39576,7 +39611,7 @@ private:
       overtake_line_state_.mission_runtime_wall_escape_prefix_active &&
       effective_execution_authority_active;
     const bool published_execution_pass_gate_valid =
-      published_shiftout_execution_profile_active &&
+      published_overtake_execution_profile_active &&
       pass_entry_execution_horizon_available;
     const double pass_entry_gate_elapsed_sec =
       pass_entry_gate_was_active && std::isfinite(

@@ -78,6 +78,7 @@ wall::Snapshot physical_snapshot()
   value.trajectory.lateral_lower_m = {-1.0, -1.0};
   value.trajectory.lateral_upper_m = {1.0, 1.0};
   value.trajectory.minimum_lateral_bound_reserve_m = 1.0;
+  value.trajectory.lateral_bound_tolerance_m = 1.0e-6;
   value.course_frame_knots = {
     {0.0, 0.0, 0.0, 0.0, 0},
     {3.0, 3.0, 0.0, 0.0, 3},
@@ -174,6 +175,35 @@ TEST(MpccRateResolvedDynamicProof, CurrentWorldRejectsDivergedPhysicalSource)
   const auto result = evaluate_current_world(solver, physical);
   EXPECT_FALSE(result.valid);
   EXPECT_FALSE(result.clear);
+}
+
+TEST(
+  MpccRateResolvedDynamicProof,
+  CurrentWorldUsesPostSolveCertificateToleranceNotReplayBaseline)
+{
+  auto physical = physical_snapshot();
+  auto solver = solver_snapshot(physical, 5.0);
+
+  // ReplayWorld is sealed before solve.  A larger accepted QP residual may
+  // legitimately produce a larger exact-trajectory certificate tolerance.
+  // That must not invalidate obstacle proof provenance.
+  physical.bound_tolerance_m = 4.2e-5;
+  physical.trajectory.lateral_bound_tolerance_m = 4.2e-5;
+  ASSERT_NE(
+    solver.replay_world->bound_tolerance_m, physical.bound_tolerance_m);
+  const auto accepted = evaluate_current_world(solver, physical);
+  EXPECT_TRUE(accepted.valid);
+  EXPECT_TRUE(accepted.clear);
+  EXPECT_EQ(
+    accepted.source_validation_reason, SourceValidationReason::None);
+
+  physical.trajectory.lateral_bound_tolerance_m = 4.1e-5;
+  const auto mismatched = evaluate_current_world(solver, physical);
+  EXPECT_FALSE(mismatched.valid);
+  EXPECT_FALSE(mismatched.clear);
+  EXPECT_EQ(
+    mismatched.source_validation_reason,
+    SourceValidationReason::CertificateToleranceMismatch);
 }
 
 }  // namespace

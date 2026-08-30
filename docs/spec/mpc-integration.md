@@ -3313,6 +3313,23 @@ timed opponent、terminal Stop証明を通過した。左側はexact dynamic pro
 `A/B fail, C succeeds = candidate generation defect`であり、後段decision 1802のcursor exhaustionとwall Recoveryをretention ruleや
 clearance変更で隠してはならない。
 
+#### exact dynamic proofのpost-solve certificate所有（2026-08-31、2025由来の暫定）
+
+ReplayWorldはsolver実行前にcaptureするimmutableなworld／observation入力であり、solverが受理した制約残差から決まる
+post-solve lateral certificate toleranceを所有しない。最終exact trajectoryとphysical wall snapshotが、
+`physical_lateral_bound_tolerance_m()`から得た同一値をcertificate pairとして所有する。dynamic proofはこのpairの一致を検証し、
+pre-solve snapshotのplaceholder値との一致を要求してはならない。
+
+`output/20260831-072258/d1`のsequence 942では、exact wall proofはacceptedだったが、ReplayWorldの`1e-5 m`と
+accepted artifact由来の約`4.16e-5 m`が異なるため、旧dynamic proofは障害物を1点も調べず
+`invalid/blocked/obstacle=`となった。同一snapshotのbounded production populationは左右とも完全なManeuverBundleをcertifyでき、
+offline succeeds / live failsだったため、物理的不可能やcandidate不足ではなくproof ownership mismatchに分類した。
+
+dynamic source validationはtyped reasonを記録する。`source=none`で`valid/clear`または具体的obstacleによる`valid/blocked`となるのが
+正常であり、source invariant破損は`certificate-tolerance-mismatch`等として障害物判定と区別する。
+修正後の`output/20260831-074836`ではD1がvalid/clear 28件・valid/blocked 2件・invalid 0件、D2がvalid/clear 14件・invalid 0件となり、
+D2 sequence 1031では左右両branchをcertifyしてselected planをStoreへ採用した。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

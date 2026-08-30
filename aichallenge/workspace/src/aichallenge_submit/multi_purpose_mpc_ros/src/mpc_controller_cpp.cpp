@@ -6424,6 +6424,8 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
              << ", exact_dynamic_final="
              << (evaluation.dynamic->valid ? "valid" : "invalid") << '/'
              << (evaluation.dynamic->clear ? "clear" : "blocked")
+             << "/source=" << rate_resolved_dynamic::to_string(
+        evaluation.dynamic->source_validation_reason)
              << "/obstacle=" << evaluation.dynamic->blocking_obstacle_id
              << "/minimum_clearance="
              << evaluation.dynamic->minimum_clearance_m

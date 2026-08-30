@@ -28,6 +28,47 @@ double wrap_to_pi(const double angle) noexcept
 
 }  // namespace
 
+const char * to_string(const SourceValidationReason reason) noexcept
+{
+  switch (reason) {
+    case SourceValidationReason::None: return "none";
+    case SourceValidationReason::ReplayWorldUnavailable:
+      return "replay-world-unavailable";
+    case SourceValidationReason::ArtifactIdentityMismatch:
+      return "artifact-identity-mismatch";
+    case SourceValidationReason::PhysicalSnapshotInvalid:
+      return "physical-snapshot-invalid";
+    case SourceValidationReason::ReplayWorldNotCurrent:
+      return "replay-world-not-current";
+    case SourceValidationReason::ObservationGenerationUnavailable:
+      return "observation-generation-unavailable";
+    case SourceValidationReason::ControlPrefixUnavailable:
+      return "control-prefix-unavailable";
+    case SourceValidationReason::ControlPrefixMismatch:
+      return "control-prefix-mismatch";
+    case SourceValidationReason::CurrentPoseMismatch:
+      return "current-pose-mismatch";
+    case SourceValidationReason::PhysicalFootprintMismatch:
+      return "physical-footprint-mismatch";
+    case SourceValidationReason::SweptStepMismatch:
+      return "swept-step-mismatch";
+    case SourceValidationReason::WallGridMismatch:
+      return "wall-grid-mismatch";
+    case SourceValidationReason::PredictionOriginInvalid:
+      return "prediction-origin-invalid";
+    case SourceValidationReason::ExactTrajectoryUnavailable:
+      return "exact-trajectory-unavailable";
+    case SourceValidationReason::CertificateToleranceMismatch:
+      return "certificate-tolerance-mismatch";
+    case SourceValidationReason::WorldObservationInvalid:
+      return "world-observation-invalid";
+    case SourceValidationReason::StagePoseUnavailable:
+      return "stage-pose-unavailable";
+    case SourceValidationReason::Count: break;
+  }
+  return "unknown";
+}
+
 bool observation_valid(const WorldObservation & observation) noexcept
 {
   if (
@@ -241,18 +282,22 @@ Result evaluate_current_world(
   namespace shadow = mpcc_rate_resolved_shadow;
 
   Result result;
-  const auto reject_invalid = [&result]() {
+  const auto reject_invalid = [&result](const SourceValidationReason reason) {
       result.valid = false;
       result.clear = false;
+      result.source_validation_reason = reason;
       return result;
     };
-  if (
-    !solver_snapshot.replay_world.has_value() ||
-    !artifact::same_identity(
-      solver_snapshot.identity, physical_snapshot.identity.artifact) ||
-    !physical_wall::snapshot_valid(physical_snapshot))
+  if (!solver_snapshot.replay_world.has_value()) {
+    return reject_invalid(SourceValidationReason::ReplayWorldUnavailable);
+  }
+  if (!artifact::same_identity(
+      solver_snapshot.identity, physical_snapshot.identity.artifact))
   {
-    return reject_invalid();
+    return reject_invalid(SourceValidationReason::ArtifactIdentityMismatch);
+  }
+  if (!physical_wall::snapshot_valid(physical_snapshot)) {
+    return reject_invalid(SourceValidationReason::PhysicalSnapshotInvalid);
   }
   const auto & replay = solver_snapshot.replay_world.value();
   const auto same_pose = [](const recovery::Pose2D & lhs,
@@ -268,24 +313,60 @@ Result evaluate_current_world(
              lhs.right_extent_m == rhs.right_extent_m &&
              lhs.margin_m == rhs.margin_m;
     };
+  if (!replay.current) {
+    return reject_invalid(SourceValidationReason::ReplayWorldNotCurrent);
+  }
+  if (replay.observation_generation == 0U) {
+    return reject_invalid(
+      SourceValidationReason::ObservationGenerationUnavailable);
+  }
   if (
-    !replay.current || replay.observation_generation == 0U ||
     replay.control_prefix.empty() ||
-    replay.control_prefix.size() != replay.control_prefix_elapsed_sec.size() ||
+    replay.control_prefix.size() != replay.control_prefix_elapsed_sec.size())
+  {
+    return reject_invalid(SourceValidationReason::ControlPrefixUnavailable);
+  }
+  if (
     replay.control_prefix.size() != physical_snapshot.control_prefix.size() ||
     !std::equal(
       replay.control_prefix.begin(), replay.control_prefix.end(),
-      physical_snapshot.control_prefix.begin(), same_pose) ||
-    !same_pose(replay.current_pose, physical_snapshot.current_pose) ||
-    !same_footprint(replay.physical_footprint, physical_snapshot.footprint) ||
-    replay.swept_step_m != physical_snapshot.swept_step_m ||
-    replay.bound_tolerance_m != physical_snapshot.bound_tolerance_m ||
-    replay.wall_grid_fingerprint != physical_snapshot.wall_grid_fingerprint ||
-    !std::isfinite(solver_snapshot.control_prediction_origin_sec) ||
-    solver_snapshot.control_prediction_origin_sec < replay.observed_sec ||
-    physical_snapshot.trajectory.elapsed_time_sec.empty())
+      physical_snapshot.control_prefix.begin(), same_pose))
   {
-    return reject_invalid();
+    return reject_invalid(SourceValidationReason::ControlPrefixMismatch);
+  }
+  if (!same_pose(replay.current_pose, physical_snapshot.current_pose)) {
+    return reject_invalid(SourceValidationReason::CurrentPoseMismatch);
+  }
+  if (!same_footprint(replay.physical_footprint, physical_snapshot.footprint)) {
+    return reject_invalid(SourceValidationReason::PhysicalFootprintMismatch);
+  }
+  if (replay.swept_step_m != physical_snapshot.swept_step_m) {
+    return reject_invalid(SourceValidationReason::SweptStepMismatch);
+  }
+  if (replay.wall_grid_fingerprint != physical_snapshot.wall_grid_fingerprint) {
+    return reject_invalid(SourceValidationReason::WallGridMismatch);
+  }
+  if (
+    !std::isfinite(solver_snapshot.control_prediction_origin_sec) ||
+    solver_snapshot.control_prediction_origin_sec < replay.observed_sec)
+  {
+    return reject_invalid(SourceValidationReason::PredictionOriginInvalid);
+  }
+  if (physical_snapshot.trajectory.elapsed_time_sec.empty()) {
+    return reject_invalid(SourceValidationReason::ExactTrajectoryUnavailable);
+  }
+  // ReplayWorld is captured before solve and therefore cannot own a tolerance
+  // derived from the accepted solver residual.  The post-solve exact
+  // trajectory and its wall snapshot are the canonical certificate pair.
+  // Comparing the final tolerance with replay.bound_tolerance_m made every
+  // otherwise valid solution whose measured residual exceeded the baseline
+  // 1e-5 m fail before a single obstacle was checked.
+  if (
+    physical_snapshot.bound_tolerance_m !=
+    physical_snapshot.trajectory.lateral_bound_tolerance_m)
+  {
+    return reject_invalid(
+      SourceValidationReason::CertificateToleranceMismatch);
   }
 
   WorldObservation observation;
@@ -301,7 +382,7 @@ Result evaluate_current_world(
         source.velocity_y_mps, source.radius_m}});
   }
   if (!observation_valid(observation)) {
-    return reject_invalid();
+    return reject_invalid(SourceValidationReason::WorldObservationInvalid);
   }
 
   observe_timed_path(
@@ -322,7 +403,7 @@ Result evaluate_current_world(
     const auto reconstructed =
       physical_wall::reconstruct_stage_pose(physical_snapshot, stage);
     if (!reconstructed.has_value()) {
-      return reject_invalid();
+      return reject_invalid(SourceValidationReason::StagePoseUnavailable);
     }
     const double time_sec = control_origin_age_sec +
       physical_snapshot.trajectory.elapsed_time_sec[stage];

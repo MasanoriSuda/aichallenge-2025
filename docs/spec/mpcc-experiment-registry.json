@@ -700,6 +700,23 @@
         "implicit omission of third topology for finite current target tubes"
       ],
       "revisit_condition": "dynamic validation cannot adopt an encounter-boundary candidate under the matching world, a finite target tube produces a nonphysical boundary transition, an allocator-dependent candidate count returns, or the same authority gap occurs despite a certified fresh sibling"
+    },
+    {
+      "experiment_id": "20260831-post-solve-dynamic-proof-ownership",
+      "baseline_commit": "041b0fa4",
+      "snapshot_ids": [
+        "000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected",
+        "000000001690-e6ec62c038f0c03b-pass-side-positive-physical-proof-terminal-contingency-unavailable"
+      ],
+      "hypothesis": "the Pass-to-Stop authority loss is primarily a Return target-tube lifecycle defect rather than an earlier mismatch between pre-solve ReplayWorld provenance and the post-solve exact physical certificate",
+      "changed_dimension": "exact_dynamic_post_solve_certificate_tolerance_ownership_and_diagnostics",
+      "result": "rejected",
+      "reason": "decision 1690 was already infeasible in every architecture arm, but sequence 942 certified both bounded production sides offline while live exact wall proof accepted and exact dynamic proof returned invalid before checking an obstacle; ReplayWorld sealed 1e-5 m before solve while the accepted artifact owned about 4.16e-5 m from measured residual, and the old proof incorrectly required equality",
+      "production_impact": "ReplayWorld remains immutable world provenance; exact trajectory and wall snapshot jointly own the post-solve artifact-derived tolerance, source validation is typed, and no authority, Mission, solver, weight, clearance, timeout, lease, grace, retry, fallback or configuration changed",
+      "deleted_code": [
+        "pre-solve ReplayWorld tolerance as post-solve dynamic certificate identity"
+      ],
+      "revisit_condition": "a final wall snapshot and exact trajectory with different certificate tolerances are accepted, source-invalid dynamic proof again reports only an empty obstacle id, or a bounded run reproduces the old invalid result despite a current ReplayWorld"
     }
   ]
 }

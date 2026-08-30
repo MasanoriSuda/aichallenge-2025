@@ -38,12 +38,41 @@ struct WorldObservation
   bool current{false};
 };
 
+/// Identifies which immutable-source invariant prevented an exact dynamic
+/// proof.  A missing obstacle id is not sufficient diagnostic evidence: most
+/// source/provenance failures happen before any obstacle is evaluated.
+enum class SourceValidationReason
+{
+  None,
+  ReplayWorldUnavailable,
+  ArtifactIdentityMismatch,
+  PhysicalSnapshotInvalid,
+  ReplayWorldNotCurrent,
+  ObservationGenerationUnavailable,
+  ControlPrefixUnavailable,
+  ControlPrefixMismatch,
+  CurrentPoseMismatch,
+  PhysicalFootprintMismatch,
+  SweptStepMismatch,
+  WallGridMismatch,
+  PredictionOriginInvalid,
+  ExactTrajectoryUnavailable,
+  CertificateToleranceMismatch,
+  WorldObservationInvalid,
+  StagePoseUnavailable,
+  Count,
+};
+
+const char * to_string(SourceValidationReason reason) noexcept;
+
 /// Accumulator shared by fresh architecture replay and retained production
 /// revalidation.  It owns no authority and can only reject a physical path.
 struct Result
 {
   bool valid{true};
   bool clear{true};
+  SourceValidationReason source_validation_reason{
+    SourceValidationReason::None};
   std::string blocking_obstacle_id;
   recovery::DynamicClearanceRejectReason rejection_reason{
     recovery::DynamicClearanceRejectReason::None};

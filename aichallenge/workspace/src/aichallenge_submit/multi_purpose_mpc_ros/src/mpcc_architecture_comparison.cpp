@@ -654,7 +654,9 @@ wall::Snapshot wall_snapshot(
       input.path_curvature_radpm);
   }
   result.hard_wall_clearance_m = replay.hard_wall_clearance_m;
-  result.bound_tolerance_m = replay.bound_tolerance_m;
+  // This is a post-solve physical certificate. Its tolerance is sealed by the
+  // exact execution trajectory, not by the pre-solve ReplayWorld baseline.
+  result.bound_tolerance_m = trajectory.lateral_bound_tolerance_m;
   result.swept_step_m = replay.swept_step_m;
   return result;
 }

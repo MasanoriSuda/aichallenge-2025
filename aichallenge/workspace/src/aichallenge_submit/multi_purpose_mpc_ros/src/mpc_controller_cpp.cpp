@@ -6548,6 +6548,18 @@ evaluate_rate_resolved_normal_avoidance_population(
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
   const std::shared_ptr<rate_resolved_normal_branch_bank::Bank> & branch_bank)
 {
+  const auto started = SteadyClock::now();
+  const auto rejected_pipeline = [&source, &started](
+      const rate_resolved_shadow::Outcome outcome, std::string detail) {
+      RateResolvedPipelineEvaluation rejected;
+      const double compute_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - started).count();
+      rejected.solver = rate_resolved_shadow::make_rejected_result(
+        source.identity, outcome,
+        source.identity.snapshot_sec + compute_ms * 1.0e-3,
+        compute_ms, std::move(detail));
+      return rejected;
+    };
   const auto certified = [](const RateResolvedPipelineEvaluation & evaluation) {
       return
         evaluation.solver.outcome == rate_resolved_shadow::Outcome::Solved &&
@@ -6600,14 +6612,12 @@ evaluate_rate_resolved_normal_avoidance_population(
         branch_bank->clear();
       }
     }
-    result.pipeline.solver.identity = source.identity;
-    result.pipeline.solver.outcome =
-      rate_resolved_shadow::Outcome::BuildRejected;
     result.detail =
       std::string{"normal avoidance population rejected/"} +
       stateless_maneuver::to_string(population.reason) + "/" +
       population.detail;
-    result.pipeline.solver.detail = result.detail;
+    result.pipeline = rejected_pipeline(
+      rate_resolved_shadow::Outcome::BuildRejected, result.detail);
     return result;
   }
 
@@ -6762,6 +6772,18 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   const std::shared_ptr<rate_resolved_normal_branch_bank::Bank> &
   normal_branch_bank)
 {
+  const auto started = SteadyClock::now();
+  const auto rejected_pipeline = [&source, &started](
+      const rate_resolved_shadow::Outcome outcome, std::string detail) {
+      RateResolvedPipelineEvaluation rejected;
+      const double compute_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - started).count();
+      rejected.solver = rate_resolved_shadow::make_rejected_result(
+        source.identity, outcome,
+        source.identity.snapshot_sec + compute_ms * 1.0e-3,
+        compute_ms, std::move(detail));
+      return rejected;
+    };
   const auto intent = source.identity.source_context.intent;
   const bool normal_dynamic_avoidance =
     (intent == mpcc_contract::ControlIntent::Cruise ||
@@ -6783,12 +6805,9 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
           normal_branch_bank->clear();
         }
       }
-      RateResolvedPipelineEvaluation rejected;
-      rejected.solver.identity = source.identity;
-      rejected.solver.outcome = rate_resolved_shadow::Outcome::BuildRejected;
-      rejected.solver.detail =
-        "current-world normal avoidance requires physical snapshot";
-      return rejected;
+      return rejected_pipeline(
+        rate_resolved_shadow::Outcome::BuildRejected,
+        "current-world normal avoidance requires physical snapshot");
     }
     return evaluate_rate_resolved_normal_avoidance_population(
       source, physical_source.value(),
@@ -6805,12 +6824,9 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   }
   if (mpcc_contract::canonical_normal_intent_requires_execution_side(intent)) {
     if (!physical_source.has_value()) {
-      RateResolvedPipelineEvaluation rejected;
-      rejected.solver.identity = source.identity;
-      rejected.solver.outcome = rate_resolved_shadow::Outcome::BuildRejected;
-      rejected.solver.detail =
-        "current-world Overtake population requires physical snapshot";
-      return rejected;
+      return rejected_pipeline(
+        rate_resolved_shadow::Outcome::BuildRejected,
+        "current-world Overtake population requires physical snapshot");
     }
     const int pass_side_sign =
       source.identity.source_context.execution_side_sign;

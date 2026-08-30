@@ -2227,6 +2227,29 @@ TEST(MpccRateResolvedShadow, RejectsNoncanonicalProblemIdentity)
   EXPECT_FALSE(shadow::result_valid(result));
 }
 
+TEST(MpccRateResolvedShadow, SealsEarlyWorkerRejectionForMailboxEvidence)
+{
+  const auto input = snapshot(91U);
+  auto result = shadow::make_rejected_result(
+    input.identity, shadow::Outcome::BuildRejected,
+    input.identity.snapshot_sec + 0.042, 42.0,
+    "normal avoidance population rejected/no candidate");
+
+  EXPECT_TRUE(shadow::result_valid(result));
+  EXPECT_FALSE(result.solved);
+  EXPECT_FALSE(result.actuation_sampled);
+  EXPECT_EQ(result.execution_artifact, nullptr);
+  EXPECT_EQ(result.detail, "normal avoidance population rejected/no candidate");
+
+  shadow::Mailbox mailbox;
+  ASSERT_TRUE(mailbox.register_submission(input.identity.sequence));
+  EXPECT_EQ(mailbox.publish(std::move(result)), shadow::PublishReason::Accepted);
+  const auto published = mailbox.latest_after(0U);
+  ASSERT_TRUE(published.has_value());
+  EXPECT_EQ(published->outcome, shadow::Outcome::BuildRejected);
+  EXPECT_EQ(published->identity.sequence, input.identity.sequence);
+}
+
 TEST(MpccRateResolvedShadow, SupportsEveryRateResolvedNormalIntent)
 {
   for (const auto intent : {

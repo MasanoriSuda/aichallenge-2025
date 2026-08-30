@@ -1248,13 +1248,17 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         "if (!physical_source.has_value())"
     )
     missing_physical_end = normal_population.index(
-        "return rejected;", missing_physical_start
+        "return evaluate_rate_resolved_normal_avoidance_population(",
+        missing_physical_start,
     )
     missing_physical = normal_population[
         missing_physical_start:missing_physical_end
     ]
     assert "normal_branch_bank->replace(" in missing_physical
     assert "source, nullptr, nullptr" in missing_physical
+    assert "return rejected_pipeline(" in missing_physical
+    assert "Outcome::BuildRejected" in missing_physical
+    assert "make_rejected_result(" in normal_population
     assert "canonical_normal_intent_requires_execution_side(intent)" in normal_population
     assert "evaluate_rate_resolved_current_world_population(" in normal_population
     assert "current-world Overtake population requires physical snapshot" in normal_population

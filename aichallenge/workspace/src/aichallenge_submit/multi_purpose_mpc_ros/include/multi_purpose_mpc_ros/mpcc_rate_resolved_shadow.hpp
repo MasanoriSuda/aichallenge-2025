@@ -648,6 +648,15 @@ struct Result
 bool identity_valid(const Identity & identity) noexcept;
 bool result_valid(const Result & result) noexcept;
 
+/// Materialize a completed, non-executable worker rejection. Early
+/// candidate/build failures do not pass through SolverContext::evaluate(), so
+/// their completion fields must be sealed explicitly before they cross the
+/// mailbox boundary. Unsupported outcomes or invalid timing deliberately
+/// remain invalid under result_valid().
+Result make_rejected_result(
+  Identity identity, Outcome outcome, double completed_sec,
+  double compute_ms, std::string detail);
+
 /// Successful full-horizon numerical iterate retained only as an initial
 /// guess for the next QP.  It is neither an execution artifact nor authority:
 /// every current problem is still solved and certified independently.

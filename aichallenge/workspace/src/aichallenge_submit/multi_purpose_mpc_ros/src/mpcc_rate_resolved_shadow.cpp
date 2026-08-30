@@ -896,6 +896,19 @@ bool result_valid(const Result & result) noexcept
          artifact::RejectReason::None;
 }
 
+Result make_rejected_result(
+  Identity identity, const Outcome outcome, const double completed_sec,
+  const double compute_ms, std::string detail)
+{
+  Result result;
+  result.identity = std::move(identity);
+  result.outcome = outcome;
+  result.completed_sec = completed_sec;
+  result.compute_ms = compute_ms;
+  result.detail = std::move(detail);
+  return result;
+}
+
 persistent_osqp::PhysicalConstraintTolerance
 SolverContext::physical_constraint_tolerance() const noexcept
 {

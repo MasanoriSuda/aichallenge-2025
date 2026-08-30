@@ -533,7 +533,7 @@ TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
     recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 9U);
+  ASSERT_EQ(report.arms.size(), 10U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::PersistentDeclaredStopR);
   EXPECT_EQ(report.arms[2].arm, Arm::PersistentStopScanS);
@@ -543,6 +543,7 @@ TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
   EXPECT_EQ(report.arms[6].arm, Arm::ProductionLeftStopScanS);
   EXPECT_EQ(report.arms[7].arm, Arm::ProductionLeftNormalPathStopT);
   EXPECT_EQ(report.arms[8].arm, Arm::SevenStateStopU);
+  EXPECT_EQ(report.arms[9].arm, Arm::SevenStateStopControlLatticeV);
   for (const std::size_t index : {0U, 1U, 2U, 4U, 5U, 6U}) {
     const auto & arm = report.arms[index];
     EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
@@ -555,6 +556,8 @@ TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
   EXPECT_NE(report.arms[3].stage, Stage::SourceRejected);
   EXPECT_NE(report.arms[7].stage, Stage::SourceRejected);
   EXPECT_NE(report.arms[8].stage, Stage::SourceRejected);
+  EXPECT_NE(report.arms[9].stage, Stage::SourceRejected);
+  EXPECT_GT(report.arms[9].candidate_count, 0U);
   if (report.arms[8].stage == Stage::Accepted) {
     ASSERT_FALSE(report.arms[8].solved_acceleration_mps2.empty());
     EXPECT_LE(report.arms[8].solved_acceleration_max_mps2, 1e-9);
@@ -563,6 +566,28 @@ TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
     {
       EXPECT_LE(acceleration_mps2, 1e-9);
     }
+  }
+  if (report.arms[9].stage == Stage::Accepted) {
+    const auto & lattice = report.arms[9];
+    ASSERT_FALSE(lattice.solved_steering_rate_radps.empty());
+    ASSERT_EQ(
+      lattice.solved_steering_rate_radps.size(),
+      lattice.solved_acceleration_mps2.size());
+    const double initial_sign =
+      lattice.candidate_source == "positive-negative-hold" ? 1.0 : -1.0;
+    for (std::size_t stage = 0U;
+      stage < lattice.solved_steering_rate_radps.size(); ++stage)
+    {
+      const double rate = lattice.solved_steering_rate_radps[stage];
+      if (static_cast<int>(stage) < lattice.lattice_transition_stage) {
+        EXPECT_GT(initial_sign * rate, 0.1);
+      } else if (static_cast<int>(stage) < lattice.lattice_ahead_stage) {
+        EXPECT_LT(initial_sign * rate, -0.1);
+      } else {
+        EXPECT_NEAR(rate, 0.0, 1e-6);
+      }
+    }
+    EXPECT_LE(lattice.solved_acceleration_max_mps2, 1e-9);
   }
 }
 

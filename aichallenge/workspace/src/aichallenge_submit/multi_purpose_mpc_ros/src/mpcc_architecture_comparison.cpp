@@ -553,7 +553,7 @@ std::optional<shadow::Snapshot> build_seven_state_stop_audit_candidate(
   const shadow::Snapshot & source,
   const artifact::ExecutionArtifact & normal_execution,
   const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
-  std::string * const rejection_detail) noexcept
+std::string * const rejection_detail) noexcept
 {
   namespace model = mpcc_rate_resolved;
   const auto reject = [rejection_detail](const char * const detail) {
@@ -751,6 +751,82 @@ std::optional<shadow::Snapshot> build_seven_state_stop_audit_candidate(
   return candidate;
 }
 
+std::optional<std::vector<double>> build_stop_control_lattice_candidate(
+  const shadow::Snapshot & maximum_braking_stop,
+  const int initial_rate_sign, const int first_switch_stage,
+  const int second_switch_stage,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
+std::string * const rejection_detail) noexcept
+{
+  const auto reject = [rejection_detail](const char * const detail) {
+      if (rejection_detail != nullptr) {
+        *rejection_detail = detail;
+      }
+      return std::optional<std::vector<double>>{};
+    };
+  if (
+    (initial_rate_sign != -1 && initial_rate_sign != 1) ||
+    first_switch_stage <= 0 ||
+    second_switch_stage <= first_switch_stage ||
+    second_switch_stage >= maximum_braking_stop.request.horizon_steps ||
+    maximum_braking_stop.request.states.size() !=
+    maximum_braking_stop.request.inputs.size() + 1U)
+  {
+    return reject("invalid Stop control lattice schedule");
+  }
+
+  double steering_rad = maximum_braking_stop.request.current_steering_rad;
+  if (!std::isfinite(steering_rad)) {
+    return reject("initial Stop lattice steering non-finite");
+  }
+  std::vector<double> steering_rate_sequence;
+  steering_rate_sequence.reserve(maximum_braking_stop.request.inputs.size());
+  for (std::size_t stage = 0U;
+    stage < maximum_braking_stop.request.inputs.size(); ++stage)
+  {
+    const auto & input = maximum_braking_stop.request.inputs[stage];
+    if (!std::isfinite(input.stage_dt_sec) || input.stage_dt_sec <= 0.0) {
+      return reject("invalid Stop lattice stage duration");
+    }
+    const double physical_rate_lower = std::max(
+      -maximum_braking_stop.request.maximum_abs_steering_rate_radps,
+      (-maximum_braking_stop.request.maximum_abs_steering_rad -
+      steering_rad) / input.stage_dt_sec);
+    const double physical_rate_upper = std::min(
+      maximum_braking_stop.request.maximum_abs_steering_rate_radps,
+      (maximum_braking_stop.request.maximum_abs_steering_rad -
+      steering_rad) / input.stage_dt_sec);
+    const auto steering_rate_bounds =
+      mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+      physical_rate_lower, physical_rate_upper, solver_tolerance);
+    if (!steering_rate_bounds.has_value()) {
+      return reject("Stop lattice steering-rate inset unavailable");
+    }
+    const int stage_index = static_cast<int>(stage);
+    const int rate_sign = stage_index < first_switch_stage ?
+      initial_rate_sign :
+      (stage_index < second_switch_stage ? -initial_rate_sign : 0);
+    const double steering_rate_radps = rate_sign > 0 ?
+      steering_rate_bounds->upper :
+      (rate_sign < 0 ? steering_rate_bounds->lower : 0.0);
+    const double next_steering_rad =
+      steering_rad + steering_rate_radps * input.stage_dt_sec;
+    if (
+      !std::isfinite(next_steering_rad) ||
+      std::abs(next_steering_rad) >
+      maximum_braking_stop.request.maximum_abs_steering_rad + 1e-9)
+    {
+      return reject("Stop lattice steering state outside actuator bounds");
+    }
+    steering_rate_sequence.push_back(steering_rate_radps);
+    steering_rad = next_steering_rad;
+  }
+  if (rejection_detail != nullptr) {
+    *rejection_detail = "accepted";
+  }
+  return steering_rate_sequence;
+}
+
 TerminalStopCertificate certify_terminal_stop(
   const shadow::Snapshot & candidate,
   const artifact::ExecutionArtifact & execution,
@@ -849,7 +925,8 @@ ArmResult evaluate_arm(
   wall_bucket_audit_mode = std::nullopt,
   const std::size_t physical_dynamic_sqp_audit_iteration_count = 0U,
   const TerminalStopLateralAuditMode terminal_stop_lateral_audit_mode =
-  TerminalStopLateralAuditMode::RacingLine)
+  TerminalStopLateralAuditMode::RacingLine,
+  const std::vector<double> * const fixed_steering_rate_radps = nullptr)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
@@ -874,7 +951,10 @@ ArmResult evaluate_arm(
   // passes one private context only across its bounded offline continuation.
   shadow::SolverContext local_solver;
   auto & solver = solver_context == nullptr ? local_solver : *solver_context;
-  const auto solved = physical_dynamic_sqp_audit_iteration_count > 0U ?
+  const auto solved = fixed_steering_rate_radps != nullptr ?
+    solver.evaluate_fixed_steering_rate_audit(
+    candidate, *fixed_steering_rate_radps) :
+    (physical_dynamic_sqp_audit_iteration_count > 0U ?
     solver.evaluate_physical_dynamic_sqp_audit(
       candidate, physical_dynamic_sqp_audit_iteration_count) :
     (wall_bucket_audit_mode.has_value() ?
@@ -882,7 +962,7 @@ ArmResult evaluate_arm(
       candidate, wall_bucket_audit_mode.value()) :
     (wall_restoration_audit ?
     solver.evaluate_wall_feasibility_restoration_audit(candidate) :
-    solver.evaluate(candidate)));
+    solver.evaluate(candidate))));
   arm_result.solver_outcome = solved.outcome;
   arm_result.solver_compute_ms = solved.compute_ms;
   arm_result.terminal_progress_m = solved.terminal_progress_m;
@@ -1514,6 +1594,111 @@ ArmResult evaluate_production_population(
   return best;
 }
 
+ArmResult evaluate_stop_control_lattice(
+  const shadow::Snapshot & maximum_braking_stop,
+  const std::uint64_t source_fingerprint,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance)
+{
+  const int horizon_steps = maximum_braking_stop.request.horizon_steps;
+  std::vector<int> first_switch_stages;
+  std::vector<int> second_switch_stages;
+  const auto append_stage = [horizon_steps](
+      std::vector<int> & stages, const double fraction) {
+      const int stage = std::clamp(
+        static_cast<int>(std::lround(fraction * horizon_steps)),
+        1, std::max(1, horizon_steps - 1));
+      if (std::find(stages.begin(), stages.end(), stage) == stages.end()) {
+        stages.push_back(stage);
+      }
+    };
+  for (const double fraction : {0.10, 0.15, 0.20, 0.25, 0.30}) {
+    append_stage(first_switch_stages, fraction);
+  }
+  for (const double fraction :
+    {0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60})
+  {
+    append_stage(second_switch_stages, fraction);
+  }
+
+  ArmResult best = rejected_arm(
+    Arm::SevenStateStopControlLatticeV, Stage::CandidateRejected,
+    source_fingerprint, "Stop control lattice was not evaluated");
+  int best_rank = -1;
+  std::size_t attempted = 0U;
+  for (const int initial_rate_sign : {1, -1}) {
+    for (const int first_switch_stage : first_switch_stages) {
+      for (const int second_switch_stage : second_switch_stages) {
+        if (second_switch_stage <= first_switch_stage) {
+          continue;
+        }
+        ++attempted;
+        const std::string source = initial_rate_sign > 0 ?
+          "positive-negative-hold" : "negative-positive-hold";
+        std::string build_detail;
+        const auto steering_rate_sequence =
+          build_stop_control_lattice_candidate(
+          maximum_braking_stop, initial_rate_sign, first_switch_stage,
+          second_switch_stage, solver_tolerance, &build_detail);
+        if (!steering_rate_sequence.has_value()) {
+          auto rejected = rejected_arm(
+            Arm::SevenStateStopControlLatticeV, Stage::CandidateRejected,
+            source_fingerprint, build_detail);
+          rejected.lattice_transition_stage = first_switch_stage;
+          rejected.lattice_ahead_stage = second_switch_stage;
+          rejected.candidate_source = source;
+          rejected.candidate_count = attempted;
+          if (best_rank < evidence_rank(rejected.stage)) {
+            best_rank = evidence_rank(rejected.stage);
+            best = std::move(rejected);
+          }
+          continue;
+        }
+        auto candidate_fingerprint =
+          architecture::fingerprint_interaction_snapshot(
+          maximum_braking_stop);
+        append_fingerprint_u64(
+          candidate_fingerprint,
+          static_cast<std::uint64_t>(initial_rate_sign));
+        append_fingerprint_u64(
+          candidate_fingerprint,
+          static_cast<std::uint64_t>(first_switch_stage));
+        append_fingerprint_u64(
+          candidate_fingerprint,
+          static_cast<std::uint64_t>(second_switch_stage));
+        for (const double steering_rate_radps :
+          steering_rate_sequence.value())
+        {
+          append_fingerprint_double(
+            candidate_fingerprint, steering_rate_radps);
+        }
+        auto evaluated = evaluate_arm(
+          Arm::SevenStateStopControlLatticeV, maximum_braking_stop,
+          source_fingerprint, candidate_fingerprint,
+          maneuver::resolve_terminal_successor(maximum_braking_stop),
+          first_switch_stage, second_switch_stage, nullptr, false,
+          std::nullopt, 0U,
+          TerminalStopLateralAuditMode::SolvedStopTrajectory,
+          &steering_rate_sequence.value());
+        evaluated.candidate_source = source;
+        evaluated.candidate_count = attempted;
+        const int rank = evidence_rank(evaluated.stage);
+        if (rank > best_rank) {
+          best_rank = rank;
+          best = std::move(evaluated);
+        }
+        if (best.stage == Stage::Accepted) {
+          best.detail += "/candidate=" + best.candidate_source;
+          return best;
+        }
+      }
+    }
+  }
+  best.candidate_count = attempted;
+  best.detail = std::string{"no certified Stop control lattice/best="} +
+    best.candidate_source + '/' + best.detail;
+  return best;
+}
+
 }  // namespace
 
 const char * to_string(const Arm arm) noexcept
@@ -1565,6 +1750,8 @@ const char * to_string(const Arm arm) noexcept
       return "production-left-normal-path-stop-t";
     case Arm::SevenStateStopU:
       return "seven-state-stop-u";
+    case Arm::SevenStateStopControlLatticeV:
+      return "seven-state-stop-control-lattice-v";
   }
   return "unknown";
 }
@@ -2248,7 +2435,7 @@ Report compare_terminal_stop_lateral_contract(
          Arm::ProductionLeftDeclaredStopR, Arm::ProductionLeftStopScanS,
          Arm::PersistentNormalPathStopT,
          Arm::ProductionLeftNormalPathStopT,
-         Arm::SevenStateStopU})
+         Arm::SevenStateStopU, Arm::SevenStateStopControlLatticeV})
       {
         report.arms.push_back(rejected_arm(
           arm, Stage::SourceRejected, source_fingerprint, report.detail));
@@ -2306,9 +2493,17 @@ Report compare_terminal_stop_lateral_contract(
         maneuver::resolve_terminal_successor(solved_stop.value()), -1, -1,
         nullptr, false, std::nullopt, 0U,
         TerminalStopLateralAuditMode::SolvedStopTrajectory));
+      report.arms.push_back(evaluate_stop_control_lattice(
+        solved_stop.value(), source_fingerprint,
+        stop_source_solver.physical_constraint_tolerance()));
     } else {
       report.arms.push_back(rejected_arm(
         Arm::SevenStateStopU, Stage::CandidateRejected, source_fingerprint,
+        "seven-state Stop audit candidate unavailable/" +
+        solved_stop_detail));
+      report.arms.push_back(rejected_arm(
+        Arm::SevenStateStopControlLatticeV, Stage::CandidateRejected,
+        source_fingerprint,
         "seven-state Stop audit candidate unavailable/" +
         solved_stop_detail));
     }

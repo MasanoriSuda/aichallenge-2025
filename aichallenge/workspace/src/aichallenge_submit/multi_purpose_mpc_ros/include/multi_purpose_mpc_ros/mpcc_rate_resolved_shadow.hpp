@@ -730,6 +730,13 @@ public:
   /// owns acceptance, and this entry point cannot publish an artifact.
   Result evaluate_physical_dynamic_sqp_audit(
     const Snapshot & snapshot, std::size_t iteration_count);
+  /// Observation-only fixed-control comparison.  The supplied steering-rate
+  /// sequence is installed as equality rows only after the canonical semantic
+  /// adapter has built the same seven-state problem.  It has no Store,
+  /// publisher or production call site.
+  Result evaluate_fixed_steering_rate_audit(
+    const Snapshot & snapshot,
+    const std::vector<double> & steering_rate_radps);
   persistent_osqp::PhysicalConstraintTolerance
   physical_constraint_tolerance() const noexcept;
 
@@ -737,7 +744,8 @@ private:
   Result evaluate_impl(
     const Snapshot & snapshot, bool wall_feasibility_restoration_audit,
     std::optional<WallBucketAuditMode> wall_bucket_audit_mode,
-    std::size_t physical_dynamic_sqp_audit_iteration_count);
+    std::size_t physical_dynamic_sqp_audit_iteration_count,
+    const std::vector<double> * fixed_steering_rate_radps);
   std::mutex mutex_;
   std::optional<RecedingWarmStartSeed> warm_start_seed_;
   mpcc_rate_resolved_wall_refinement::Cache wall_refinement_cache_;

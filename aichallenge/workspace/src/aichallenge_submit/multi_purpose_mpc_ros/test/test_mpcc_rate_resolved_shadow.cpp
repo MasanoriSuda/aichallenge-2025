@@ -2476,6 +2476,24 @@ TEST(MpccRateResolvedShadow, SamplesPublicationPeriodAcrossStageBoundary)
   EXPECT_NEAR(result.certified_horizon_duration_sec, 0.30, 1e-12);
 }
 
+TEST(MpccRateResolvedShadow, FixedSteeringRateAuditPreservesExactSequence)
+{
+  shadow::SolverContext context;
+  const std::vector<double> steering_rate_radps{0.20, -0.20, 0.0};
+  const auto result = context.evaluate_fixed_steering_rate_audit(
+    snapshot(), steering_rate_radps);
+  ASSERT_EQ(result.outcome, shadow::Outcome::Solved) << result.detail;
+  ASSERT_NE(result.execution_artifact, nullptr);
+  ASSERT_EQ(
+    result.execution_artifact->control_stages.size(),
+    steering_rate_radps.size());
+  for (std::size_t stage = 0U; stage < steering_rate_radps.size(); ++stage) {
+    EXPECT_NEAR(
+      result.execution_artifact->control_stages[stage].steering_rate_radps,
+      steering_rate_radps[stage], 1e-7);
+  }
+}
+
 TEST(MpccRateResolvedShadow, RejectsPublicationPeriodBeyondCertifiedHorizon)
 {
   shadow::SolverContext context;

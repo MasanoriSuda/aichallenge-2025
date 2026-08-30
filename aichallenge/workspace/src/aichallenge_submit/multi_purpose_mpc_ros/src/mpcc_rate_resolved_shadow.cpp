@@ -2866,32 +2866,42 @@ LatestStateFeedbackSolverContext::evaluate_time_aligned_impl(
 
 Result SolverContext::evaluate(const Snapshot & snapshot)
 {
-  return evaluate_impl(snapshot, false, std::nullopt, 0U);
+  return evaluate_impl(snapshot, false, std::nullopt, 0U, nullptr);
 }
 
 Result SolverContext::evaluate_wall_feasibility_restoration_audit(
   const Snapshot & snapshot)
 {
-  return evaluate_impl(snapshot, true, std::nullopt, 0U);
+  return evaluate_impl(snapshot, true, std::nullopt, 0U, nullptr);
 }
 
 Result SolverContext::evaluate_wall_bucket_audit(
   const Snapshot & snapshot, const WallBucketAuditMode mode)
 {
-  return evaluate_impl(snapshot, false, mode, 0U);
+  return evaluate_impl(snapshot, false, mode, 0U, nullptr);
 }
 
 Result SolverContext::evaluate_physical_dynamic_sqp_audit(
   const Snapshot & snapshot, const std::size_t iteration_count)
 {
-  return evaluate_impl(snapshot, false, std::nullopt, iteration_count);
+  return evaluate_impl(
+    snapshot, false, std::nullopt, iteration_count, nullptr);
+}
+
+Result SolverContext::evaluate_fixed_steering_rate_audit(
+  const Snapshot & snapshot,
+  const std::vector<double> & steering_rate_radps)
+{
+  return evaluate_impl(
+    snapshot, false, std::nullopt, 0U, &steering_rate_radps);
 }
 
 Result SolverContext::evaluate_impl(
   const Snapshot & snapshot,
   const bool wall_feasibility_restoration_audit,
   const std::optional<WallBucketAuditMode> wall_bucket_audit_mode,
-  const std::size_t physical_dynamic_sqp_audit_iteration_count)
+  const std::size_t physical_dynamic_sqp_audit_iteration_count,
+  const std::vector<double> * const fixed_steering_rate_radps)
 {
   const auto started = SteadyClock::now();
   Result result;
@@ -2990,6 +3000,39 @@ Result SolverContext::evaluate_impl(
     return finish();
   }
   result.adapter_built = true;
+  if (fixed_steering_rate_radps != nullptr) {
+    if (
+      fixed_steering_rate_radps->size() !=
+      static_cast<std::size_t>(snapshot.request.horizon_steps))
+    {
+      result.detail = "fixed steering-rate audit sequence size mismatch";
+      return finish();
+    }
+    for (int stage = 0; stage < snapshot.request.horizon_steps; ++stage) {
+      const int input =
+        stage * mpcc_rate_resolved::kInputDimension +
+        mpcc_rate_resolved::kSteeringRateIndex;
+      const double steering_rate_radps =
+        fixed_steering_rate_radps->at(static_cast<std::size_t>(stage));
+      if (
+        !std::isfinite(steering_rate_radps) ||
+        steering_rate_radps < adapted->problem.input_lower[input] - 1e-12 ||
+        steering_rate_radps > adapted->problem.input_upper[input] + 1e-12)
+      {
+        std::ostringstream detail;
+        detail << "fixed steering-rate audit input outside solver bounds"
+               << ", stage=" << stage << ", value="
+               << steering_rate_radps << ", bounds=["
+               << adapted->problem.input_lower[input] << ','
+               << adapted->problem.input_upper[input] << ']';
+        result.detail = detail.str();
+        return finish();
+      }
+      adapted->problem.input_reference[input] = steering_rate_radps;
+      adapted->problem.input_lower[input] = steering_rate_radps;
+      adapted->problem.input_upper[input] = steering_rate_radps;
+    }
+  }
   if (snapshot.progress_aligned_wall_refinement_active) {
     result.progress_wall_refinement_requested = true;
     const auto lateral_support =

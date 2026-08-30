@@ -2804,7 +2804,7 @@ def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
         "evaluate_rate_resolved_normal_population("
     )
     stop_submission = submit.index(
-        "stop_lattice_shadow_worker->submit_latest("
+        "stop_lattice_shadow_worker->submit_latest_cancelable("
     )
     assert normal_admission < stop_submission
     assert "candidate_snapshot()" in submit[normal_admission:stop_submission]

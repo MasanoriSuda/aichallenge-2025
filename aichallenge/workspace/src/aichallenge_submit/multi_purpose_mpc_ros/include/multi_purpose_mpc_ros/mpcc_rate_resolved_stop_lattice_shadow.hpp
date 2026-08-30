@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -37,8 +38,14 @@ enum class Reason
   WallProofRejected,
   DynamicProofRejected,
   CertifiedPlanRejected,
+  Superseded,
   Exception,
   Count,
+};
+
+struct EvaluationControl
+{
+  std::function<bool()> superseded;
 };
 
 const char * to_string(Reason reason) noexcept;
@@ -77,7 +84,8 @@ struct Result
 Result evaluate(
   const shadow::Snapshot & selected_source,
   const artifact::ExecutionArtifact & selected_normal_execution,
-  shadow::SolverContext & private_solver_context) noexcept;
+  shadow::SolverContext & private_solver_context,
+  const EvaluationControl & control = EvaluationControl{}) noexcept;
 
 enum class PublishReason
 {

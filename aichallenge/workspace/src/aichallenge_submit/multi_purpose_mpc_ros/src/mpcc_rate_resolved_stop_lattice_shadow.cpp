@@ -81,6 +81,7 @@ const char * to_string(const Reason reason) noexcept
     case Reason::WallProofRejected: return "wall-proof-rejected";
     case Reason::DynamicProofRejected: return "dynamic-proof-rejected";
     case Reason::CertifiedPlanRejected: return "certified-plan-rejected";
+    case Reason::Superseded: return "superseded";
     case Reason::Exception: return "exception";
     case Reason::Count: break;
   }
@@ -90,7 +91,8 @@ const char * to_string(const Reason reason) noexcept
 Result evaluate(
   const shadow::Snapshot & selected_source,
   const artifact::ExecutionArtifact & selected_normal_execution,
-  shadow::SolverContext & private_solver_context) noexcept
+  shadow::SolverContext & private_solver_context,
+  const EvaluationControl & control) noexcept
 {
   const auto started = SteadyClock::now();
   Result result;
@@ -99,6 +101,15 @@ Result evaluate(
       result.total_compute_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - started).count();
       return result;
+    };
+  const auto abort_if_superseded = [&]() {
+      if (control.superseded && control.superseded()) {
+        result.reason = Reason::Superseded;
+        result.certified_stop_plan.reset();
+        result.detail = "newer observation epoch submitted";
+        return true;
+      }
+      return false;
     };
   try {
     if (!source_identity_matches(selected_source, selected_normal_execution)) {
@@ -117,6 +128,9 @@ Result evaluate(
     if (!stop.candidate.replay_world.has_value()) {
       result.reason = Reason::InvalidSource;
       result.detail = "rebased Stop replay world unavailable";
+      return finish();
+    }
+    if (abort_if_superseded()) {
       return finish();
     }
 
@@ -138,6 +152,9 @@ Result evaluate(
     for (std::size_t candidate_index = 0U;
       candidate_index < population.candidates.size(); ++candidate_index)
     {
+      if (abort_if_superseded()) {
+        return finish();
+      }
       const auto & candidate = population.candidates[candidate_index];
       ++result.attempted_candidate_count;
       result.selected_legacy_rank =
@@ -155,6 +172,9 @@ Result evaluate(
         stop.candidate, candidate.schedule.steering_rate_radps);
       result.solver_outcome = solved.outcome;
       result.selected_solver_ms = solved.compute_ms;
+      if (abort_if_superseded()) {
+        return finish();
+      }
       if (
         solved.outcome != shadow::Outcome::Solved ||
         solved.execution_artifact == nullptr)
@@ -175,6 +195,9 @@ Result evaluate(
         result.detail = detail.str();
         continue;
       }
+      if (abort_if_superseded()) {
+        return finish();
+      }
       const auto & exact = adapted.exact_trajectory.value();
       result.minimum_lateral_bound_reserve_m =
         exact.minimum_lateral_bound_reserve_m;
@@ -191,6 +214,9 @@ Result evaluate(
         stop.candidate, stop.candidate.replay_world.value(), exact);
       const auto wall_result = physical::evaluate(wall_snapshot);
       result.wall_outcome = wall_result.outcome;
+      if (abort_if_superseded()) {
+        return finish();
+      }
       if (wall_result.outcome != physical::Outcome::Accepted) {
         result.reason = Reason::WallProofRejected;
         result.detail = wall_result.detail;
@@ -202,6 +228,9 @@ Result evaluate(
       result.dynamic_clear = dynamic_result.clear;
       result.minimum_dynamic_clearance_m =
         dynamic_result.minimum_clearance_m;
+      if (abort_if_superseded()) {
+        return finish();
+      }
       if (!dynamic_result.valid || !dynamic_result.clear) {
         result.reason = Reason::DynamicProofRejected;
         std::ostringstream detail;

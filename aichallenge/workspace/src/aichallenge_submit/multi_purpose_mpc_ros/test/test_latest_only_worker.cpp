@@ -151,4 +151,41 @@ TEST(LatestOnlyWorker, ContainsJobExceptionAndContinues)
   EXPECT_EQ(worker.stats().exceptions, 1U);
 }
 
+TEST(LatestOnlyWorker, CancelableJobObservesNewerAcceptedGeneration)
+{
+  multi_purpose_mpc_ros::LatestOnlyWorker worker;
+  std::atomic<bool> first_started{false};
+  std::atomic<bool> first_superseded{false};
+  std::atomic<bool> second_ran{false};
+
+  ASSERT_TRUE(worker.submit_latest_cancelable(
+    [&](const multi_purpose_mpc_ros::LatestOnlyWorker::SupersessionToken & token) {
+      first_started.store(true);
+      while (!token.superseded()) {
+        std::this_thread::yield();
+      }
+      first_superseded.store(true);
+    }).accepted);
+  for (int attempt = 0; attempt < 200 && !first_started.load(); ++attempt) {
+    std::this_thread::sleep_for(1ms);
+  }
+  ASSERT_TRUE(first_started.load());
+
+  ASSERT_TRUE(worker.submit_latest_cancelable(
+    [&](const multi_purpose_mpc_ros::LatestOnlyWorker::SupersessionToken & token) {
+      EXPECT_FALSE(token.superseded());
+      second_ran.store(true);
+    }).accepted);
+  for (int attempt = 0; attempt < 200 && !second_ran.load(); ++attempt) {
+    std::this_thread::sleep_for(1ms);
+  }
+
+  EXPECT_TRUE(first_superseded.load());
+  EXPECT_TRUE(second_ran.load());
+  const auto stats = worker.stats();
+  EXPECT_EQ(stats.submitted, 2U);
+  EXPECT_EQ(stats.started, 2U);
+  EXPECT_EQ(stats.completed, 2U);
+}
+
 }  // namespace

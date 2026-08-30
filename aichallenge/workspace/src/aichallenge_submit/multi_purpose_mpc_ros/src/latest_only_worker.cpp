@@ -50,7 +50,8 @@ bool defer_live_tactical_generation(
 }
 
 LatestOnlyWorker::LatestOnlyWorker()
-: thread_([this]() {run();})
+: latest_generation_(std::make_shared<std::atomic<std::uint64_t>>(0U)),
+  thread_([this]() {run();})
 {
 }
 
@@ -64,12 +65,38 @@ LatestOnlyWorker::SubmitResult LatestOnlyWorker::submit_latest(Job job)
   if (!job) {
     return {};
   }
+  return submit_latest_cancelable(
+    [job = std::move(job)](const SupersessionToken &) mutable {job();});
+}
+
+LatestOnlyWorker::SupersessionToken::SupersessionToken(
+  std::shared_ptr<const std::atomic<std::uint64_t>> latest_generation,
+  const std::uint64_t generation) noexcept
+: latest_generation_(std::move(latest_generation)), generation_(generation)
+{
+}
+
+bool LatestOnlyWorker::SupersessionToken::superseded() const noexcept
+{
+  return
+    latest_generation_ == nullptr ||
+    latest_generation_->load(std::memory_order_acquire) != generation_;
+}
+
+LatestOnlyWorker::SubmitResult LatestOnlyWorker::submit_latest_cancelable(
+  CancelableJob job)
+{
+  if (!job) {
+    return {};
+  }
   std::lock_guard<std::mutex> lock(mutex_);
   if (stop_requested_) {
     return {};
   }
   const bool replaced = pending_job_.has_value();
-  pending_job_ = std::move(job);
+  const auto generation =
+    latest_generation_->fetch_add(1U, std::memory_order_acq_rel) + 1U;
+  pending_job_ = PendingJob{std::move(job), generation};
   ++stats_.submitted;
   if (replaced) {
     ++stats_.replaced;
@@ -93,6 +120,8 @@ void LatestOnlyWorker::stop() noexcept
       return;
     }
     stop_requested_ = true;
+    static_cast<void>(
+      latest_generation_->fetch_add(1U, std::memory_order_acq_rel));
     pending_job_.reset();
     stats_.pending = false;
   }
@@ -105,7 +134,7 @@ void LatestOnlyWorker::stop() noexcept
 void LatestOnlyWorker::run() noexcept
 {
   while (true) {
-    Job job;
+    PendingJob job;
     {
       std::unique_lock<std::mutex> lock(mutex_);
       condition_.wait(lock, [this]() {
@@ -123,7 +152,7 @@ void LatestOnlyWorker::run() noexcept
 
     bool failed = false;
     try {
-      job();
+      job.function(SupersessionToken{latest_generation_, job.generation});
     } catch (...) {
       failed = true;
     }

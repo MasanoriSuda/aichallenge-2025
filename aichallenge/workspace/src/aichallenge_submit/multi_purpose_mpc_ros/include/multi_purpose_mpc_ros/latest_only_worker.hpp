@@ -1,8 +1,10 @@
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -55,6 +57,25 @@ class LatestOnlyWorker
 public:
   using Job = std::function<void()>;
 
+  /// Advisory generation token for work that can stop at a safe boundary.
+  /// It never interrupts a running function or solver call.
+  class SupersessionToken
+  {
+  public:
+    bool superseded() const noexcept;
+
+  private:
+    friend class LatestOnlyWorker;
+    SupersessionToken(
+      std::shared_ptr<const std::atomic<std::uint64_t>> latest_generation,
+      std::uint64_t generation) noexcept;
+
+    std::shared_ptr<const std::atomic<std::uint64_t>> latest_generation_;
+    std::uint64_t generation_{};
+  };
+
+  using CancelableJob = std::function<void(const SupersessionToken &)>;
+
   struct SubmitResult
   {
     bool accepted{false};
@@ -79,17 +100,25 @@ public:
   LatestOnlyWorker & operator=(const LatestOnlyWorker &) = delete;
 
   SubmitResult submit_latest(Job job);
+  SubmitResult submit_latest_cancelable(CancelableJob job);
   Stats stats() const;
   void stop() noexcept;
 
 private:
+  struct PendingJob
+  {
+    CancelableJob function;
+    std::uint64_t generation{};
+  };
+
   void run() noexcept;
 
   mutable std::mutex mutex_;
   std::condition_variable condition_;
-  std::optional<Job> pending_job_;
+  std::optional<PendingJob> pending_job_;
   Stats stats_;
   bool stop_requested_{false};
+  std::shared_ptr<std::atomic<std::uint64_t>> latest_generation_;
   std::thread thread_;
 };
 

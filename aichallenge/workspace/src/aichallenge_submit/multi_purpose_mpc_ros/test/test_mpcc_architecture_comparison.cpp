@@ -843,7 +843,31 @@ TEST(MpccArchitectureComparison, LiveStopShadowBuildsCertifiedObservation)
   EXPECT_EQ(
     mpcc_rate_resolved_certified_plan::validate(
       *result.certified_stop_plan),
-    mpcc_rate_resolved_certified_plan::RejectReason::None);
+      mpcc_rate_resolved_certified_plan::RejectReason::None);
+}
+
+TEST(MpccArchitectureComparison, LiveStopShadowStopsAfterSupersededSolve)
+{
+  const auto source = stoppable_source_snapshot();
+  shadow::SolverContext normal_solver;
+  const auto normal = normal_solver.evaluate(source);
+  ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
+  ASSERT_NE(normal.execution_artifact, nullptr);
+
+  std::size_t supersession_checks = 0U;
+  stop_lattice_shadow::EvaluationControl control;
+  control.superseded = [&supersession_checks]() {
+      ++supersession_checks;
+      return supersession_checks >= 3U;
+    };
+  shadow::SolverContext stop_solver;
+  const auto result = stop_lattice_shadow::evaluate(
+    source, *normal.execution_artifact, stop_solver, control);
+
+  EXPECT_EQ(result.reason, stop_lattice_shadow::Reason::Superseded);
+  EXPECT_EQ(result.attempted_candidate_count, 1U);
+  EXPECT_EQ(result.certified_stop_plan, nullptr);
+  EXPECT_EQ(result.detail, "newer observation epoch submitted");
 }
 
 TEST(MpccArchitectureComparison, LiveStopShadowMailboxIsMonotonic)

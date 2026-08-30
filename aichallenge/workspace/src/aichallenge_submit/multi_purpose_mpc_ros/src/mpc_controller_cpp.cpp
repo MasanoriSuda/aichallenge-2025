@@ -24778,13 +24778,16 @@ struct MPC
           {
             const auto stop_source = evaluation.solver_source_snapshot;
             const auto stop_normal = evaluation.solver.execution_artifact;
-            static_cast<void>(stop_lattice_shadow_worker->submit_latest(
+            static_cast<void>(stop_lattice_shadow_worker->submit_latest_cancelable(
                 [stop_source, stop_normal,
                 stop_lattice_shadow_solver_context,
-                stop_lattice_shadow_mailbox]() {
+                stop_lattice_shadow_mailbox](
+                  const LatestOnlyWorker::SupersessionToken & token) {
+                  rate_resolved_stop_lattice_shadow::EvaluationControl control;
+                  control.superseded = [&token]() {return token.superseded();};
                   auto stop_result = rate_resolved_stop_lattice_shadow::evaluate(
                     *stop_source, *stop_normal,
-                    *stop_lattice_shadow_solver_context);
+                    *stop_lattice_shadow_solver_context, control);
                   static_cast<void>(stop_lattice_shadow_mailbox->publish(
                       std::move(stop_result)));
                 }));
@@ -26471,7 +26474,8 @@ struct MPC
       "mailbox=published:%lu/invalid:%lu/rollback:%lu, "
       "consumed=%lu/accepted=%lu, "
       "reject=source:%lu/build:%lu/schedule:%lu/solver:%lu/exact:%lu/"
-      "not_stopped:%lu/wall:%lu/dynamic:%lu/certified:%lu/exception:%lu, "
+      "not_stopped:%lu/wall:%lu/dynamic:%lu/certified:%lu/superseded:%lu/"
+      "exception:%lu, "
       "age=%.4f/%.4fs(avg/max), candidates=%.2f/%lu(avg/max), "
       "legacy_rank=%.2f/%lu(avg/max), "
       "compute=%.3f/%.3fms(avg/max), selected_solve=%.3f/%.3fms(avg/max), "
@@ -26508,6 +26512,8 @@ struct MPC
         rate_resolved_stop_lattice_shadow::Reason::DynamicProofRejected)]),
       static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
         rate_resolved_stop_lattice_shadow::Reason::CertifiedPlanRejected)]),
+      static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
+        rate_resolved_stop_lattice_shadow::Reason::Superseded)]),
       static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
         rate_resolved_stop_lattice_shadow::Reason::Exception)]),
       window.total_result_age_sec / denominator,

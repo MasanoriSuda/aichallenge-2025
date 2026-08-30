@@ -6781,7 +6781,7 @@ evaluate_rate_resolved_normal_avoidance_population(
   negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   positive_solver_context,
-  const std::shared_ptr<BoundedSingleJobExecutor> & sibling_executor,
+  const std::shared_ptr<LatestOnlyWorker> & sibling_worker,
   const std::shared_ptr<RateResolvedNormalHomotopyOwner> & homotopy_owner,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
   const std::shared_ptr<rate_resolved_normal_branch_bank::Bank> & branch_bank)
@@ -6874,11 +6874,11 @@ evaluate_rate_resolved_normal_avoidance_population(
     source, primary_side, homotopy_owner, certified_plan_store, branch_bank,
     sibling_candidate != nullptr);
 
-  BoundedSingleJobExecutor::SubmitResult sibling_submission;
-  if (sibling_candidate != nullptr && sibling_executor != nullptr) {
+  LatestOnlyWorker::SubmitResult sibling_submission;
+  if (sibling_candidate != nullptr && sibling_worker != nullptr) {
     auto sibling_physical = physical_source;
     auto sibling = *sibling_candidate;
-    sibling_submission = sibling_executor->submit(
+    sibling_submission = sibling_worker->submit_latest(
       [sibling_physical = std::move(sibling_physical),
         sibling = std::move(sibling), sibling_context, coordinator]() mutable {
         auto evaluated = evaluate_rate_resolved_normal_branch(
@@ -6890,7 +6890,7 @@ evaluate_rate_resolved_normal_avoidance_population(
   }
   if (
     sibling_candidate != nullptr &&
-    !sibling_submission.accepted())
+    !sibling_submission.accepted)
   {
     static_cast<void>(
       coordinator->complete(sibling_candidate->seed.pass_side_sign, nullptr));
@@ -6906,7 +6906,10 @@ evaluate_rate_resolved_normal_avoidance_population(
   result.candidate_source = primary.source;
 
   const std::string sibling_submit_detail = sibling_candidate == nullptr ?
-    "not-required" : to_string(sibling_submission.reason);
+    "not-required" :
+    !sibling_submission.accepted ? "rejected" :
+    sibling_submission.replaced_pending ? "accepted-replaced-pending" :
+    "accepted";
   const std::string store_detail = publication.store_attempted ?
     rate_resolved_certified::to_string(publication.store_reason) :
     "not-attempted";
@@ -7031,8 +7034,8 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   normal_negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   normal_positive_solver_context,
-  const std::shared_ptr<BoundedSingleJobExecutor> &
-  normal_sibling_executor,
+  const std::shared_ptr<LatestOnlyWorker> &
+  normal_sibling_worker,
   const std::shared_ptr<RateResolvedNormalHomotopyOwner> &
   normal_homotopy_owner,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
@@ -7093,7 +7096,7 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
     return evaluate_rate_resolved_normal_avoidance_population(
       source, physical_source.value(),
       normal_negative_solver_context, normal_positive_solver_context,
-      normal_sibling_executor,
+      normal_sibling_worker,
       normal_homotopy_owner,
       certified_plan_store, normal_branch_bank).pipeline;
   }
@@ -7984,8 +7987,8 @@ struct MPC
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_normal_avoidance_positive_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
-      rate_resolved_normal_avoidance_sibling_executor_ =
-        std::make_shared<BoundedSingleJobExecutor>();
+      rate_resolved_normal_avoidance_sibling_worker_ =
+        std::make_shared<LatestOnlyWorker>();
       rate_resolved_overtake_negative_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_overtake_positive_solver_context_ =
@@ -24894,7 +24897,7 @@ struct MPC
       rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
       rate_resolved_normal_avoidance_negative_solver_context_ == nullptr ||
       rate_resolved_normal_avoidance_positive_solver_context_ == nullptr ||
-      rate_resolved_normal_avoidance_sibling_executor_ == nullptr ||
+      rate_resolved_normal_avoidance_sibling_worker_ == nullptr ||
       rate_resolved_overtake_negative_solver_context_ == nullptr ||
       rate_resolved_overtake_positive_solver_context_ == nullptr ||
       rate_resolved_overtake_negative_executor_ == nullptr ||
@@ -24968,8 +24971,8 @@ struct MPC
       rate_resolved_normal_avoidance_negative_solver_context_;
     const auto normal_positive_solver_context =
       rate_resolved_normal_avoidance_positive_solver_context_;
-    const auto normal_sibling_executor =
-      rate_resolved_normal_avoidance_sibling_executor_;
+    const auto normal_sibling_worker =
+      rate_resolved_normal_avoidance_sibling_worker_;
     const auto normal_homotopy_owner =
       rate_resolved_normal_homotopy_owner_;
     const auto normal_branch_bank = rate_resolved_normal_branch_bank_;
@@ -24986,7 +24989,7 @@ struct MPC
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
       [snapshot = std::move(snapshot.value()), mailbox, solver_context,
         normal_negative_solver_context, normal_positive_solver_context,
-        normal_sibling_executor,
+        normal_sibling_worker,
         normal_homotopy_owner, normal_branch_bank,
         overtake_negative_solver_context, overtake_positive_solver_context,
         overtake_negative_executor,
@@ -24999,7 +25002,7 @@ struct MPC
         auto evaluation = evaluate_rate_resolved_normal_population(
           snapshot, std::move(physical_snapshot), solver_context,
           normal_negative_solver_context, normal_positive_solver_context,
-          normal_sibling_executor,
+          normal_sibling_worker,
           normal_homotopy_owner,
           certified_plan_store, normal_branch_bank,
           overtake_negative_solver_context, overtake_positive_solver_context,
@@ -27257,10 +27260,10 @@ struct MPC
       rate_resolved_normal_branch_bank_ != nullptr ?
       rate_resolved_normal_branch_bank_->state() :
       rate_resolved_normal_branch_bank::State{};
-    const auto normal_sibling_executor_state =
-      rate_resolved_normal_avoidance_sibling_executor_ != nullptr ?
-      rate_resolved_normal_avoidance_sibling_executor_->stats() :
-      BoundedSingleJobExecutor::Stats{};
+    const auto normal_sibling_worker_state =
+      rate_resolved_normal_avoidance_sibling_worker_ != nullptr ?
+      rate_resolved_normal_avoidance_sibling_worker_->stats() :
+      LatestOnlyWorker::Stats{};
     const auto overtake_branch_bank_state =
       rate_resolved_overtake_branch_bank_ != nullptr ?
       rate_resolved_overtake_branch_bank_->state() :
@@ -27806,8 +27809,9 @@ struct MPC
         "Rate-resolved normal branch evidence: "
         "seq=%lu, negative=%d, positive=%d, accepted=%lu, "
         "invalid_source=%lu, invalid_plan=%lu, stale=%lu, last=%s, "
-        "sibling_executor=submitted:%lu/completed:%lu/failed:%lu/"
-        "busy:%lu/running:%d/pending:%d, authority=observation-only",
+        "sibling_worker=submitted:%lu/replaced:%lu/started:%lu/"
+        "completed:%lu/exceptions:%lu/running:%d/pending:%d, "
+        "authority=observation-only",
         static_cast<unsigned long>(
           normal_branch_bank_state.latest_source_sequence),
         normal_branch_bank_state.negative_available ? 1 : 0,
@@ -27820,13 +27824,13 @@ struct MPC
         static_cast<unsigned long>(normal_branch_bank_state.stale_source_count),
         rate_resolved_normal_branch_bank::to_string(
           normal_branch_bank_state.last_reason),
-        static_cast<unsigned long>(normal_sibling_executor_state.submitted),
-        static_cast<unsigned long>(normal_sibling_executor_state.completed),
-        static_cast<unsigned long>(normal_sibling_executor_state.failed),
-        static_cast<unsigned long>(
-          normal_sibling_executor_state.busy_rejected),
-        normal_sibling_executor_state.running ? 1 : 0,
-        normal_sibling_executor_state.pending ? 1 : 0);
+        static_cast<unsigned long>(normal_sibling_worker_state.submitted),
+        static_cast<unsigned long>(normal_sibling_worker_state.replaced),
+        static_cast<unsigned long>(normal_sibling_worker_state.started),
+        static_cast<unsigned long>(normal_sibling_worker_state.completed),
+        static_cast<unsigned long>(normal_sibling_worker_state.exceptions),
+        normal_sibling_worker_state.running ? 1 : 0,
+        normal_sibling_worker_state.pending ? 1 : 0);
     }
     if (overtake_branch_bank_state.latest_source_sequence > 0U) {
       RCLCPP_INFO(
@@ -30114,8 +30118,8 @@ struct MPC
   rate_resolved_normal_avoidance_negative_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_normal_avoidance_positive_solver_context_;
-  std::shared_ptr<BoundedSingleJobExecutor>
-  rate_resolved_normal_avoidance_sibling_executor_;
+  std::shared_ptr<LatestOnlyWorker>
+  rate_resolved_normal_avoidance_sibling_worker_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_overtake_negative_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>

@@ -1255,8 +1255,8 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "homotopy_owner_->select(source_, adopted_side_sign)" in SOURCE
     assert "ordered_candidates" not in normal_avoidance_population
     assert "std::async(" not in normal_avoidance_population
-    assert "sibling_executor->submit(" in normal_avoidance_population
-    assert "sibling_executor->wait(" not in normal_avoidance_population
+    assert "sibling_worker->submit_latest(" in normal_avoidance_population
+    assert "sibling_worker->stop(" not in normal_avoidance_population
     assert "coordinator->complete(" in normal_avoidance_population
     assert "branch_bank->replace(source, nullptr, nullptr)" in (
         normal_avoidance_population
@@ -1300,8 +1300,8 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     normal_submit = SOURCE[normal_submit_start:normal_submit_end]
     assert "rate_resolved_normal_avoidance_negative_solver_context_" in normal_submit
     assert "rate_resolved_normal_avoidance_positive_solver_context_" in normal_submit
-    assert "rate_resolved_normal_avoidance_sibling_executor_" in normal_submit
-    assert "normal_sibling_executor_state" in SOURCE
+    assert "rate_resolved_normal_avoidance_sibling_worker_" in normal_submit
+    assert "normal_sibling_worker_state" in SOURCE
     assert '"Rate-resolved normal branch evidence: "' in SOURCE
     assert "rate_resolved_normal_homotopy_owner_" in normal_submit
     assert "normal_negative_solver_context, normal_positive_solver_context" in (

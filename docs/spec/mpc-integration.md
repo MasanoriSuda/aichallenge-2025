@@ -3160,10 +3160,11 @@ async producer境界を越えなかった。選択candidateが後でexact curren
 物理的に成立していた反対sideを試せず、Emergencyだけが正当なauthorityとして残っていた。
 
 現在は独立solver contextで左右をbackground並列評価する。primary側は完全なsolver、exact physical wall、current-world
-dynamic obstacle、certified-plan proofが揃った時点で、sibling完了を待たずStoreへ渡す。sibling側は固定
-`BoundedSingleJobExecutor`で評価し、同一source sequence、source identity、side別sealed fingerprintを検証したうえで
-data-only branch bankの同一epochへ後着結合する。新しいepochの最初のbranch completionは両方の旧branchを失効させ、
-古いepochから遅れて完了したsiblingはrejectする。bank自体はStore、Mission、publisherまたはcommand authorityを持たない。
+dynamic obstacle、certified-plan proofが揃った時点で、sibling完了を待たずStoreへ渡す。sibling側は
+`LatestOnlyWorker`で評価し、実行中1件を中断せず、新しい要求は最新pending 1件だけを保持する。同一source sequence、
+source identity、side別sealed fingerprintを検証したうえでdata-only branch bankの同一epochへ後着結合する。
+新しいepochの最初のbranch completionは両方の旧branchを失効させ、古いepochから遅れて完了したsiblingはrejectする。
+bank自体はStore、Mission、publisherまたはcommand authorityを持たない。
 
 通常どおりpreferred primary branchだけをStoreへ渡す。primaryが不成立と確定し、同一epochのsiblingがcertified済みの
 場合だけsiblingをStoreへ渡す。完了順だけでpreferred branchを上書きしてはならない。後段でcandidate、published Bundle source、executed planが
@@ -3193,6 +3194,18 @@ Storeへ渡すため、完全にcertified済みのprimaryまでsibling proofのl
 左右戦術candidateを分離し、片branchの遅延・失敗をmain command継続へ波及させていない。normal producerも同じ原則で、
 primary certification latencyとoptional sibling latencyを分離する。これはauthority、proof、clearance、solver tolerance、
 lease、graceまたはfallbackの変更ではなく、certified data publicationのscheduler/lifecycle修正である。
+
+`output/20260831-033922/d1`ではprimary非待機化後も、旧sibling executorが実行中の場合に新しいepochを`busy`として
+捨て続けた。decision 1698ではCruiseのrecursive terminal証明が失効した時点でFollowのcurrent-world authorityがなく、
+front gap 3.67 mでEmergency Stopが先行した。その後gapが2.85 mまで縮んだdecision 1705で物理的なSafetyBrakeへ入った。
+したがって後段の`initial-hard-gap-violation`を緩めてはならない。
+
+decision 1689由来のFollow snapshotを再生すると、選択側Aと同側stateless Bは不成立だった一方、反対側stateless Bは
+同じseven-state SQPでterminal progress 12.406 m、terminal velocity 2.873 m/s、minimum lateral reserve 0.323 mとして
+certified Bundleを生成した。これはphysical infeasibilityではなく、同一worldの反対枝をlive schedulerが実行しなかった
+lifecycle/scheduling defectである。sibling schedulerはno-queueのbusy rejectではなくlatest-onlyへ変更し、古いrunning solve中も
+最新epochをpendingとして保持する。primaryは従来どおり待たず、siblingはexact epoch mergeとcurrent-world proofを通るまで
+authorityを持たない。
 
 #### 非normal publicationによるexecution ledger中断（2026-08-31、2025由来の暫定）
 

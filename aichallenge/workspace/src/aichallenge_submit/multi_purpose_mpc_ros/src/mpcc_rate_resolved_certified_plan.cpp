@@ -19,7 +19,7 @@ bool same_plan_identity(
     lhs->execution_artifact->identity, rhs->execution_artifact->identity);
 }
 
-bool normal_sibling_pair_valid(
+bool sibling_pair_valid(
   const std::shared_ptr<const CertifiedPlan> & selected,
   const std::shared_ptr<const CertifiedPlan> & sibling) noexcept
 {
@@ -36,11 +36,16 @@ bool normal_sibling_pair_valid(
   const auto & sibling_identity = sibling->execution_artifact->identity;
   const auto & selected_context = selected_identity.source_context;
   const auto & sibling_context = sibling_identity.source_context;
+  const bool normal_avoidance =
+    selected_context.intent == contract::ControlIntent::Cruise ||
+    selected_context.intent == contract::ControlIntent::Follow;
+  const bool active_overtake =
+    selected_context.intent == contract::ControlIntent::ShiftOut ||
+    selected_context.intent == contract::ControlIntent::Pass;
   if (
     selected_identity.sequence != sibling_identity.sequence ||
     selected_identity.snapshot_sec != sibling_identity.snapshot_sec ||
-    (selected_context.intent != contract::ControlIntent::Cruise &&
-    selected_context.intent != contract::ControlIntent::Follow) ||
+    (!normal_avoidance && !active_overtake) ||
     sibling_context.intent != selected_context.intent ||
     !selected_context.dynamic_obstacle_constraint_active ||
     !sibling_context.dynamic_obstacle_constraint_active ||
@@ -52,6 +57,18 @@ bool normal_sibling_pair_valid(
     return false;
   }
   auto expected_sibling = selected_context;
+  if (active_overtake) {
+    if (
+      (selected_context.execution_side_sign != -1 &&
+      selected_context.execution_side_sign != 1) ||
+      sibling_context.execution_side_sign !=
+      -selected_context.execution_side_sign)
+    {
+      return false;
+    }
+    expected_sibling.execution_side_sign =
+      sibling_context.execution_side_sign;
+  }
   expected_sibling.dynamic_obstacle_side_sign =
     sibling_context.dynamic_obstacle_side_sign;
   expected_sibling.fingerprint = 0U;
@@ -65,7 +82,7 @@ std::shared_ptr<const CertifiedPlan> associated_sibling(
   const std::shared_ptr<const CertifiedPlan> & selected,
   const std::shared_ptr<const CertifiedPlan> & sibling) noexcept
 {
-  if (!normal_sibling_pair_valid(selected, sibling)) {
+  if (!sibling_pair_valid(selected, sibling)) {
     return nullptr;
   }
   if (same_plan_identity(published, selected)) {
@@ -237,7 +254,7 @@ StoreReason Store::replace_pair(
     selected_plan == nullptr ||
     validate(*selected_plan) != RejectReason::None ||
     (sibling_plan != nullptr &&
-    !normal_sibling_pair_valid(selected_plan, sibling_plan)))
+    !sibling_pair_valid(selected_plan, sibling_plan)))
   {
     std::lock_guard<std::mutex> lock(mutex_);
     ++invalid_plan_count_;
@@ -293,7 +310,7 @@ StoreReason Store::mark_executed(
   if (
     plan == nullptr || validate(*plan) != RejectReason::None ||
     (sibling_plan != nullptr &&
-    !normal_sibling_pair_valid(plan, sibling_plan)) ||
+    !sibling_pair_valid(plan, sibling_plan)) ||
     publication_decision_id == 0U ||
     !std::isfinite(publication_control_origin_sec) ||
     publication_control_origin_sec < 0.0 ||
@@ -407,7 +424,7 @@ StoreReason Store::record_published_bundle_source(
   if (
     plan == nullptr || validate(*plan) != RejectReason::None ||
     (sibling_plan != nullptr &&
-    !normal_sibling_pair_valid(plan, sibling_plan)) ||
+    !sibling_pair_valid(plan, sibling_plan)) ||
     publication_decision_id == 0U ||
     !std::isfinite(publication_control_origin_sec) ||
     publication_control_origin_sec < 0.0 ||

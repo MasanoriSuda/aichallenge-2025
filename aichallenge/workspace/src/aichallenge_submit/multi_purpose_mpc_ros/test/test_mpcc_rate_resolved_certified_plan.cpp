@@ -155,6 +155,31 @@ certified::BuildResult build_normal_avoidance_plan(
     accepted_physical(shared->identity));
 }
 
+certified::BuildResult build_overtake_plan(
+  const std::uint64_t sequence, const int side_sign,
+  const contract::ControlIntent intent = contract::ControlIntent::Pass)
+{
+  auto value = artifact(sequence);
+  auto context = value.identity.source_context;
+  context.intent = intent;
+  context.intent_generation = 3U;
+  context.target_obstacle_generation = context.observation_generation;
+  context.target_id = "d2";
+  context.execution_side_sign = side_sign;
+  context.dynamic_obstacle_constraint_active = true;
+  context.dynamic_obstacle_generation = context.observation_generation;
+  context.dynamic_obstacle_id = "d2";
+  context.dynamic_obstacle_side_sign = side_sign;
+  context.fingerprint = 0U;
+  value.identity.source_context =
+    contract::seal_problem_context(std::move(context));
+  auto shared = std::make_shared<const execution::ExecutionArtifact>(
+    std::move(value));
+  return certified::build(
+    shared, physical_snapshot(shared->identity),
+    accepted_physical(shared->identity));
+}
+
 TEST(MpccRateResolvedCertifiedPlan, JoinsExactArtifactAndPhysicalProof)
 {
   const auto result = build_plan();
@@ -289,6 +314,58 @@ TEST(
   const auto snapshot = store.candidate_with_sibling_snapshot();
   EXPECT_EQ(snapshot.plan, selected.plan);
   EXPECT_EQ(snapshot.sibling_plan, sibling.plan);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  ActiveOvertakeCandidateAndSiblingArePublishedAtomically)
+{
+  certified::Store store;
+  const auto selected = build_overtake_plan(5U, 1);
+  const auto sibling = build_overtake_plan(5U, -1);
+  ASSERT_NE(selected.plan, nullptr);
+  ASSERT_NE(sibling.plan, nullptr);
+
+  EXPECT_EQ(
+    store.replace_pair(selected.plan, sibling.plan),
+    certified::StoreReason::Accepted);
+  const auto candidate = store.candidate_with_sibling_snapshot();
+  EXPECT_EQ(candidate.plan, selected.plan);
+  EXPECT_EQ(candidate.sibling_plan, sibling.plan);
+
+  EXPECT_EQ(
+    store.mark_executed(selected.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  const auto executed = store.executed_snapshot();
+  EXPECT_EQ(executed.plan, selected.plan);
+  EXPECT_EQ(executed.sibling_plan, sibling.plan);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  ActiveOvertakeSiblingRequiresSameEpochIntentAndOppositeSide)
+{
+  certified::Store store;
+  const auto selected = build_overtake_plan(5U, 1);
+  const auto wrong_epoch = build_overtake_plan(6U, -1);
+  const auto wrong_intent = build_overtake_plan(
+    5U, -1, contract::ControlIntent::ShiftOut);
+  const auto wrong_side = build_overtake_plan(5U, 1);
+  ASSERT_NE(selected.plan, nullptr);
+  ASSERT_NE(wrong_epoch.plan, nullptr);
+  ASSERT_NE(wrong_intent.plan, nullptr);
+  ASSERT_NE(wrong_side.plan, nullptr);
+
+  EXPECT_EQ(
+    store.replace_pair(selected.plan, wrong_epoch.plan),
+    certified::StoreReason::InvalidPlan);
+  EXPECT_EQ(
+    store.replace_pair(selected.plan, wrong_intent.plan),
+    certified::StoreReason::InvalidPlan);
+  EXPECT_EQ(
+    store.replace_pair(selected.plan, wrong_side.plan),
+    certified::StoreReason::InvalidPlan);
+  EXPECT_EQ(store.candidate_snapshot(), nullptr);
 }
 
 TEST(

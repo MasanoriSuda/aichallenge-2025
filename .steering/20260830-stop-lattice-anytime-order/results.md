@@ -59,3 +59,62 @@ rank/age for opposite-sign and broad-shape successes without increased
 callback tail or a production behavior change.  A difficult epoch that still
 requires the final schedule remains evidence for a later cancellation or
 candidate-generation Slice, not permission to add a timeout here.
+
+## Live comparison
+
+The statically accepted Slice was exercised with `make dev2`.  The immutable
+run evidence is under:
+
+`output/20260830-224528/d1/autoware.log`
+
+Production authority remained unchanged.  The run reached five ShiftOut
+entries and all five entered Pass.  Two reached Return and completed the
+Return-to-Idle handoff.  One Pass entered Recovery after longitudinal progress
+stalled and two entered the existing Dynamic Mission wait.  No `actual
+footprint wall margin violated` message was observed.  These production
+transitions are context only: the Stop lattice remained
+`authority=shadow, selected=0` throughout the run.
+
+The shadow comparison produced:
+
+| Evidence | Baseline `222744` | Anytime `224528` |
+|---|---:|---:|
+| submitted / replaced | 64 / 35 | 49 / 14 |
+| started / completed | 29 / 29 | 35 / 35 |
+| mailbox published / invalid / rollback | 29 / 0 / 0 | 35 / 0 / 0 |
+| interval-consumed / accepted | 35 / 24 | 35 / 29 |
+| solver rejections | 5 | 6 |
+| maximum complete evaluation | 4158.885 ms | 3655.939 ms |
+| maximum consumed result age | 5.3300 s | 5.4950 s |
+| maximum candidate attempts | 68 | 68 |
+| worker exceptions | 0 | 0 |
+
+The common opposite-sign Stop schedule is now evaluated first instead of
+forty-second.  For example, schedule `-1:3:6` was accepted at anytime rank 1,
+legacy rank 42 with complete evaluation times of 45.806--80.748 ms in several
+live ShiftOut states.  The adjacent sign also appeared at rank 2 instead of
+requiring a second sign-major sweep.  This confirms the intended common-case
+freshness improvement without changing the physical or certificate policy.
+
+The hard tail remains.  Six epochs exhausted all 68 candidates and reported
+the unchanged seven-state maximum-iteration rejection.  Because the worker
+finishes the obsolete running epoch before starting the newest pending epoch,
+one later result was already 5.4950 seconds old when consumed.  The control
+callback also recorded a 211.990 ms maximum and 160 total overrun cycles in
+this longer run.  The Stop evaluator is on its own worker, so the run does not
+prove callback causation, but it fails the required no-tail-regression gate.
+
+## Dynamic conclusion
+
+The Slice is accepted as a complete-set scheduling improvement and rejected
+for production promotion.  It proves that ordering, not a different solver or
+clearance, removes the common legacy-rank-42 latency.  It also proves that
+ordering alone cannot bound freshness: an obsolete infeasible epoch may still
+consume the complete lattice while a newer source waits.
+
+The next root-cause Slice must audit cooperative supersession between
+candidate solves.  It may abandon observation work whose source sequence is
+already obsolete, but it may not add a Mission timeout, lease, grace period,
+fallback, solver tolerance change, clearance change or production authority
+edge.  Candidate generation remains unchanged until that scheduling
+hypothesis is tested.

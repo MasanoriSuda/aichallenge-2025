@@ -7,4 +7,5 @@
 - [x] Extend bounded live telemetry and authority source audit.
 - [x] Build and run the focused/full test suites.
 - [x] Commit the statically accepted Slice.
-- [ ] Run `make dev2` only after static acceptance.
+- [x] Run `make dev2` only after static acceptance.
+- [x] Classify the live result without changing production authority.

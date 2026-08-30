@@ -19,6 +19,7 @@ enum class ReplaceReason
 {
   Accepted,
   InvalidSource,
+  InvalidSide,
   InvalidNegativePlan,
   InvalidPositivePlan,
   StaleSource,
@@ -70,6 +71,12 @@ public:
     const shadow::Snapshot & source,
     std::shared_ptr<const certified::CertifiedPlan> negative_plan,
     std::shared_ptr<const certified::CertifiedPlan> positive_plan);
+  /// Merge one independently completed branch into its exact immutable source
+  /// epoch. A newer epoch first clears both older branches; a same-epoch late
+  /// completion may fill only its own side. Older completions are rejected.
+  ReplaceReason merge_branch(
+    const shadow::Snapshot & source, int side_sign,
+    std::shared_ptr<const certified::CertifiedPlan> plan);
   Snapshot snapshot() const;
   State state() const;
   void clear();

@@ -3159,12 +3159,14 @@ Cruise／Followのnormal dynamic avoidanceは、同一のimmutable source epoch�
 async producer境界を越えなかった。選択candidateが後でexact current-world revalidationに失敗すると、同じworldで
 物理的に成立していた反対sideを試せず、Emergencyだけが正当なauthorityとして残っていた。
 
-現在は独立solver contextで左右をbackground並列評価し、join後に同一source sequence、source identity、side別sealed
-fingerprint、complete physical certificateを検証してdata-only branch bankへ原子的に置換する。新しいepochで両sideが
-不成立または物理snapshot欠落ならempty pairを置換し、古いcertified branchを失効させる。bank自体はStore、Mission、
-publisherまたはcommand authorityを持たない。
+現在は独立solver contextで左右をbackground並列評価する。primary側は完全なsolver、exact physical wall、current-world
+dynamic obstacle、certified-plan proofが揃った時点で、sibling完了を待たずStoreへ渡す。sibling側は固定
+`BoundedSingleJobExecutor`で評価し、同一source sequence、source identity、side別sealed fingerprintを検証したうえで
+data-only branch bankの同一epochへ後着結合する。新しいepochの最初のbranch completionは両方の旧branchを失効させ、
+古いepochから遅れて完了したsiblingはrejectする。bank自体はStore、Mission、publisherまたはcommand authorityを持たない。
 
-通常どおりpreferred certified branchだけをStoreへ渡す。後段でcandidate、published Bundle source、executed planが
+通常どおりpreferred primary branchだけをStoreへ渡す。primaryが不成立と確定し、同一epochのsiblingがcertified済みの
+場合だけsiblingをStoreへ渡す。完了順だけでpreferred branchを上書きしてはならない。後段でcandidate、published Bundle source、executed planが
 すべてcurrent-world証明を得られなかった場合に限り、まだ試していないbank branchを既存のexact wall、timed obstacle、
 actuation、recursive terminal Stopおよびproduction authority chainへ投入する。homotopy ownerはこのproduction証明の
 成功後だけ、bankから採用したalternate sideへ更新する。通常producerでpreferred candidateを選ぶ既存ownership契約は
@@ -3184,6 +3186,13 @@ epochがempty pairへ置換済みで、自然発生したalternate exact adoptio
 上位ログは主GMPCCとは別の子プロセスで左右戦術計算を扱っているため、必要になればscheduler／process isolationを
 独立failure familyとして監査する。この結果を根拠にlease、grace、timeout、retry、fallback、solver tolerance、weight、
 clearanceまたはproduction authorityを変更してはならない。
+
+`output/20260831-031354/d1`のdecision 983 Follow snapshotではpersistent Aがterminal successorを作れなかった一方、
+stateless B-left／B-rightは同じseven-state SQPでともにcertified Bundleを生成した。旧producerは両branchをjoinしてから
+Storeへ渡すため、完全にcertified済みのprimaryまでsibling proofのlong-tailに拘束していた。上位ログはmain GMPCCと
+左右戦術candidateを分離し、片branchの遅延・失敗をmain command継続へ波及させていない。normal producerも同じ原則で、
+primary certification latencyとoptional sibling latencyを分離する。これはauthority、proof、clearance、solver tolerance、
+lease、graceまたはfallbackの変更ではなく、certified data publicationのscheduler/lifecycle修正である。
 
 #### 非normal publicationによるexecution ledger中断（2026-08-31、2025由来の暫定）
 

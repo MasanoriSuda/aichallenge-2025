@@ -183,6 +183,63 @@ TEST(NormalBranchBank, NewEmptyEpochInvalidatesBothOlderBranches)
   EXPECT_FALSE(stored.available());
 }
 
+TEST(NormalBranchBank, MergesIndependentlyCompletedBranchesInEitherOrder)
+{
+  bank::Bank subject;
+  const auto source = source_snapshot(5U);
+  const auto negative = plan(5U, -1);
+  const auto positive = plan(5U, 1);
+
+  EXPECT_EQ(
+    subject.merge_branch(source, 1, positive), bank::ReplaceReason::Accepted);
+  auto stored = subject.snapshot();
+  EXPECT_EQ(stored.negative_plan, nullptr);
+  EXPECT_EQ(stored.positive_plan, positive);
+
+  EXPECT_EQ(
+    subject.merge_branch(source, -1, negative), bank::ReplaceReason::Accepted);
+  stored = subject.snapshot();
+  EXPECT_EQ(stored.negative_plan, negative);
+  EXPECT_EQ(stored.positive_plan, positive);
+}
+
+TEST(NormalBranchBank, NewerBranchInvalidatesOldPairAndRejectsLateSibling)
+{
+  bank::Bank subject;
+  ASSERT_EQ(
+    subject.replace(source_snapshot(5U), plan(5U, -1), plan(5U, 1)),
+    bank::ReplaceReason::Accepted);
+  const auto newer_positive = plan(6U, 1);
+
+  EXPECT_EQ(
+    subject.merge_branch(source_snapshot(6U), 1, newer_positive),
+    bank::ReplaceReason::Accepted);
+  auto stored = subject.snapshot();
+  EXPECT_EQ(stored.source_identity.sequence, 6U);
+  EXPECT_EQ(stored.negative_plan, nullptr);
+  EXPECT_EQ(stored.positive_plan, newer_positive);
+
+  EXPECT_EQ(
+    subject.merge_branch(source_snapshot(5U), -1, plan(5U, -1)),
+    bank::ReplaceReason::StaleSource);
+  stored = subject.snapshot();
+  EXPECT_EQ(stored.source_identity.sequence, 6U);
+  EXPECT_EQ(stored.negative_plan, nullptr);
+  EXPECT_EQ(stored.positive_plan, newer_positive);
+}
+
+TEST(NormalBranchBank, RejectsInvalidMergeSideAndMismatchedEpoch)
+{
+  bank::Bank subject;
+  EXPECT_EQ(
+    subject.merge_branch(source_snapshot(5U), 0, nullptr),
+    bank::ReplaceReason::InvalidSide);
+  EXPECT_EQ(
+    subject.merge_branch(source_snapshot(5U), -1, plan(4U, -1)),
+    bank::ReplaceReason::InvalidNegativePlan);
+  EXPECT_EQ(subject.state().latest_source_sequence, 0U);
+}
+
 TEST(NormalBranchBank, RejectsStaleSourceWithoutChangingAtomicEntry)
 {
   bank::Bank subject;

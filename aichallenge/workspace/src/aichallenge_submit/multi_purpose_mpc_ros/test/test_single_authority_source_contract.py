@@ -1238,7 +1238,8 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         "evaluate_rate_resolved_normal_avoidance_population("
     )
     normal_avoidance_population_end = SOURCE.index(
-        "void bind_rate_resolved_physical_wall_refinement(",
+        "RateResolvedPipelineEvaluation\n"
+        "evaluate_rate_resolved_active_overtake_population(",
         normal_avoidance_population_start,
     )
     normal_avoidance_population = SOURCE[
@@ -1250,33 +1251,26 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "positive_solver_context" in normal_avoidance_population
     assert "RateResolvedNormalHomotopyOwner" in normal_avoidance_population
     assert "homotopy_owner->preferred_side(source)" in normal_avoidance_population
-    assert "homotopy_owner->select(source, selected->side_sign)" in (
-        normal_avoidance_population
-    )
+    assert "RateResolvedNormalBranchPublicationCoordinator" in SOURCE
+    assert "homotopy_owner_->select(source_, adopted_side_sign)" in SOURCE
     assert "ordered_candidates" not in normal_avoidance_population
-    assert "std::async(" in normal_avoidance_population
-    assert "negative_future.get()" in normal_avoidance_population
-    assert "branch_bank->replace(source, negative_plan, positive_plan)" in (
+    assert "std::async(" not in normal_avoidance_population
+    assert "sibling_executor->submit(" in normal_avoidance_population
+    assert "sibling_executor->wait(" not in normal_avoidance_population
+    assert "coordinator->complete(" in normal_avoidance_population
+    assert "branch_bank->replace(source, nullptr, nullptr)" in (
         normal_avoidance_population
     )
-    assert "select_certified(preferred_side)" in normal_avoidance_population
-    assert "select_certified(-preferred_side)" in normal_avoidance_population
-    assert '"/evaluated="' in normal_avoidance_population
+    assert '"/evaluated_primary=1/candidate_count="' in normal_avoidance_population
     assert "selected_terminal_progress_m" not in normal_avoidance_population
     assert "selected_terminal_velocity_mps" not in normal_avoidance_population
     assert "better_certified" not in normal_avoidance_population
     assert "std::make_shared<rate_resolved_shadow::SolverContext>()" not in (
         normal_avoidance_population
     )
-    assert "observation_only_store" in normal_avoidance_population
-    assert "certified_plan_store->replace_pair(" in normal_avoidance_population
-    assert "result.pipeline.certified_plan.plan, sibling_plan" in (
-        normal_avoidance_population
-    )
-    assert "evaluation.dynamic.has_value()" in normal_avoidance_population
-    assert "evaluation.dynamic->valid" in normal_avoidance_population
-    assert "evaluation.dynamic->clear" in normal_avoidance_population
-    assert "&candidate->seed.solver_snapshot" in normal_avoidance_population
+    assert "replace_pair(" not in normal_avoidance_population
+    assert "rate_resolved_normal_branch_certified" in SOURCE
+    assert "&candidate.seed.solver_snapshot" in SOURCE
     assert "source_context.execution_side_sign =" not in normal_avoidance_population
 
     retained_start = SOURCE.index(
@@ -1306,6 +1300,9 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     normal_submit = SOURCE[normal_submit_start:normal_submit_end]
     assert "rate_resolved_normal_avoidance_negative_solver_context_" in normal_submit
     assert "rate_resolved_normal_avoidance_positive_solver_context_" in normal_submit
+    assert "rate_resolved_normal_avoidance_sibling_executor_" in normal_submit
+    assert "normal_sibling_executor_state" in SOURCE
+    assert '"Rate-resolved normal branch evidence: "' in SOURCE
     assert "rate_resolved_normal_homotopy_owner_" in normal_submit
     assert "normal_negative_solver_context, normal_positive_solver_context" in (
         normal_submit

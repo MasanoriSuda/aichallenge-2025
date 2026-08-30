@@ -80,6 +80,7 @@ const char * to_string(const ReplaceReason reason) noexcept
   switch (reason) {
     case ReplaceReason::Accepted: return "accepted";
     case ReplaceReason::InvalidSource: return "invalid-source";
+    case ReplaceReason::InvalidSide: return "invalid-side";
     case ReplaceReason::InvalidNegativePlan: return "invalid-negative-plan";
     case ReplaceReason::InvalidPositivePlan: return "invalid-positive-plan";
     case ReplaceReason::StaleSource: return "stale-source";
@@ -139,6 +140,58 @@ ReplaceReason Bank::replace(
   snapshot_.negative_plan = std::move(negative_plan);
   snapshot_.positive_plan = std::move(positive_plan);
   latest_source_sequence_ = source.identity.sequence;
+  ++accepted_count_;
+  last_reason_ = ReplaceReason::Accepted;
+  return last_reason_;
+}
+
+ReplaceReason Bank::merge_branch(
+  const shadow::Snapshot & source, const int side_sign,
+  std::shared_ptr<const certified::CertifiedPlan> plan)
+{
+  if (!normal_source_valid(source)) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++invalid_source_count_;
+    last_reason_ = ReplaceReason::InvalidSource;
+    return last_reason_;
+  }
+  if (side_sign != -1 && side_sign != 1) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++invalid_plan_count_;
+    last_reason_ = ReplaceReason::InvalidSide;
+    return last_reason_;
+  }
+  if (plan != nullptr && !plan_valid_for_source(source, plan, side_sign)) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++invalid_plan_count_;
+    last_reason_ = side_sign < 0 ?
+      ReplaceReason::InvalidNegativePlan :
+      ReplaceReason::InvalidPositivePlan;
+    return last_reason_;
+  }
+
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (source.identity.sequence < latest_source_sequence_) {
+    ++stale_source_count_;
+    last_reason_ = ReplaceReason::StaleSource;
+    return last_reason_;
+  }
+  if (source.identity.sequence == latest_source_sequence_) {
+    if (!artifact::same_identity(snapshot_.source_identity, source.identity)) {
+      ++invalid_source_count_;
+      last_reason_ = ReplaceReason::InvalidSource;
+      return last_reason_;
+    }
+  } else {
+    snapshot_ = Snapshot{};
+    snapshot_.source_identity = source.identity;
+    latest_source_sequence_ = source.identity.sequence;
+  }
+  if (side_sign < 0) {
+    snapshot_.negative_plan = std::move(plan);
+  } else {
+    snapshot_.positive_plan = std::move(plan);
+  }
   ++accepted_count_;
   last_reason_ = ReplaceReason::Accepted;
   return last_reason_;

@@ -590,6 +590,38 @@ TEST(MpccArchitectureComparison, WallBucketAuditKeepsExactProofChain)
   }
 }
 
+TEST(
+  MpccArchitectureComparison,
+  TargetFreeCruiseReachesSolverAndExactProofInsteadOfTargetGate)
+{
+  auto source = source_snapshot();
+  auto & context = source.identity.source_context;
+  context.intent = contract::ControlIntent::Cruise;
+  context.target_id.clear();
+  context.target_obstacle_generation = 0U;
+  context.execution_side_sign = 0;
+  context.dynamic_obstacle_constraint_active = false;
+  context.dynamic_obstacle_generation = 0U;
+  context.dynamic_obstacle_id.clear();
+  context.dynamic_obstacle_side_sign = 0;
+  context.fingerprint = 0U;
+  context = contract::seal_problem_context(context);
+  source.dynamic_obstacle_refinement_active = false;
+  source.dynamic_obstacle_pass_side_sign = 0;
+  source.dynamic_obstacle_stages.clear();
+
+  const auto report = compare_wall_buckets(recorded(std::move(source)));
+
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 5U);
+  for (const auto & arm : report.arms) {
+    EXPECT_NE(arm.stage, Stage::TerminalSuccessorRejected) << arm.detail;
+    EXPECT_EQ(
+      arm.detail.find("selected current-world target unavailable"),
+      std::string::npos) << arm.detail;
+  }
+}
+
 TEST(MpccArchitectureComparison, ExternalPrimalNeedsExactRecordedProblem)
 {
   const auto report = verify_external_primal(
@@ -1045,9 +1077,19 @@ TEST(MpccArchitectureComparison, PhysicalNonlinearOracleCannotBypassExactProofs)
     << accepted.arms.front().detail;
   EXPECT_TRUE(accepted.arms.front().bundle.has_value());
 
-  ASSERT_GT(primal.size(), mpcc_rate_resolved::kStateDimension);
-  primal[mpcc_rate_resolved::kStateDimension +
-    mpcc_rate_resolved::kLateralIndex] += 10.0;
+  // The physical oracle deliberately ignores affine predicted-state samples
+  // and reconstructs them from the current state plus the control sequence.
+  // It must still fail closed on the immutable exact wall proof.
+  auto occupied_grid = std::make_shared<recovery::OccupancyGrid>(
+    *input.source.wall_grid);
+  std::fill(
+    occupied_grid->cells.begin(), occupied_grid->cells.end(),
+    recovery::CellState::Occupied);
+  input.source.wall_grid = occupied_grid;
+  input.source.replay_world->wall_grid_fingerprint =
+    recovery::occupancy_grid_fingerprint(*occupied_grid);
+  input.interaction_fingerprint =
+    architecture::fingerprint_interaction_snapshot(input.source);
   const auto rejected = verify_external_primal(
     input, primal, ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle);
   ASSERT_TRUE(rejected.source_accepted) << rejected.detail;

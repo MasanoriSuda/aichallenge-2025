@@ -37,6 +37,12 @@ int main(int argc, char ** argv)
     "--external-primal-physical-nonlinear-oracle";
   const bool rejected_primal_only =
     argc == 3 && std::string{argv[2]} == "--rejected-primal-only";
+  const bool rejected_primal_physical_only =
+    argc == 3 && std::string{argv[2]} ==
+    "--rejected-primal-physical-nonlinear-oracle";
+  const bool warm_start_primal_physical_only =
+    argc == 3 && std::string{argv[2]} ==
+    "--warm-start-primal-physical-nonlinear-oracle";
   const bool kkt_equilibration_only =
     argc == 3 && std::string{argv[2]} == "--kkt-equilibration-only";
   const bool terminal_stop_lateral_only =
@@ -47,7 +53,9 @@ int main(int argc, char ** argv)
     !physical_dynamic_sqp_only && !proof_guided_dynamic_sqp_only &&
     !external_primal && !external_primal_omit_heading &&
     !external_primal_omit_lag && !external_primal_physical_only &&
-    !rejected_primal_only && !kkt_equilibration_only &&
+    !rejected_primal_only && !rejected_primal_physical_only &&
+    !warm_start_primal_physical_only &&
+    !kkt_equilibration_only &&
     !terminal_stop_lateral_only)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
@@ -59,6 +67,8 @@ int main(int argc, char ** argv)
                  "--external-primal-omit-wall-lag-bucket <values.txt> | "
                  "--external-primal-physical-nonlinear-oracle "
                  "<values.txt> | --rejected-primal-only | "
+                 "--rejected-primal-physical-nonlinear-oracle | "
+                 "--warm-start-primal-physical-nonlinear-oracle | "
                  "--kkt-equilibration-only | "
                  "--terminal-stop-lateral-contract-only]\n";
     return 2;
@@ -76,7 +86,17 @@ int main(int argc, char ** argv)
       recorded.value());
   } else if (kkt_equilibration_only) {
     report = comparison::compare_kkt_equilibration(recorded.value());
-  } else if (rejected_primal_only) {
+  } else if (warm_start_primal_physical_only) {
+    if (!recorded->recorded_qp.has_value() ||
+      !recorded->recorded_qp->warm_start.has_value())
+    {
+      std::cerr << "recorded warm-start primal unavailable\n";
+      return 6;
+    }
+    report = comparison::verify_external_primal(
+      recorded.value(), recorded->recorded_qp->warm_start->primal,
+      comparison::ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle);
+  } else if (rejected_primal_only || rejected_primal_physical_only) {
     auto primal = recorded->recorded_qp.has_value() ?
       recorded->recorded_qp->rejected_primal :
       std::optional<Eigen::VectorXd>{};
@@ -93,6 +113,8 @@ int main(int argc, char ** argv)
     }
     report = comparison::verify_external_primal(
       recorded.value(), primal.value(),
+      rejected_primal_physical_only ?
+      comparison::ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle :
       comparison::ExternalPrimalConstraintPolicy::ExactRecorded);
   } else if (
     external_primal || external_primal_omit_heading ||

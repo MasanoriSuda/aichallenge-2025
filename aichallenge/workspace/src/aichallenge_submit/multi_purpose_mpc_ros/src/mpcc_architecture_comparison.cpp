@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp"
 
 #include <algorithm>
 #include <array>
@@ -31,6 +32,59 @@ namespace wall = mpcc_rate_resolved_physical_wall;
 namespace recovery = recovery_footprint;
 namespace artifact = mpcc_rate_resolved_execution_artifact;
 namespace osqp = persistent_osqp;
+
+maneuver::TerminalResolution resolve_audit_terminal_successor(
+  const shadow::Snapshot & source) noexcept
+{
+  auto resolution = maneuver::resolve_terminal_successor(source);
+  if (resolution.accepted) {
+    return resolution;
+  }
+  const auto & context = source.identity.source_context;
+  const bool target_free_normal =
+    (context.intent == contract::ControlIntent::Track ||
+    context.intent == contract::ControlIntent::Cruise) &&
+    context.target_id.empty() && context.target_obstacle_generation == 0U &&
+    !context.dynamic_obstacle_constraint_active &&
+    context.dynamic_obstacle_id.empty() &&
+    context.dynamic_obstacle_generation == 0U;
+  if (
+    !target_free_normal || source.request.states.empty() ||
+    source.request.inputs.empty())
+  {
+    return resolution;
+  }
+  double maximum_deceleration_mps2 = 0.0;
+  for (const auto & input : source.request.inputs) {
+    maximum_deceleration_mps2 = std::min(
+      maximum_deceleration_mps2,
+      input.lower[mpcc_rate_resolved::kAccelerationIndex]);
+  }
+  if (!std::isfinite(maximum_deceleration_mps2) ||
+    maximum_deceleration_mps2 >= -1.0e-9)
+  {
+    resolution.detail =
+      "target-free normal audit has no physical braking authority";
+    return resolution;
+  }
+  const double terminal_lateral_m =
+    source.request.states.back().reference[
+    mpcc_rate_resolved::kLateralIndex];
+  if (!std::isfinite(terminal_lateral_m)) {
+    resolution.detail =
+      "target-free normal audit terminal lateral reference unavailable";
+    return resolution;
+  }
+  resolution.accepted = true;
+  resolution.successor = maneuver::TerminalSuccessor::Replan;
+  resolution.stop_suffix.available = true;
+  resolution.stop_suffix.hold_lateral_m = terminal_lateral_m;
+  resolution.stop_suffix.target_velocity_mps = 0.0;
+  resolution.stop_suffix.maximum_deceleration_mps2 =
+    maximum_deceleration_mps2;
+  resolution.detail = "target-free normal replan with Stop contingency";
+  return resolution;
+}
 
 void append_fingerprint_u64(
   std::uint64_t & fingerprint, const std::uint64_t value) noexcept
@@ -145,10 +199,13 @@ struct ExternalArtifactBuild
 
 ExternalArtifactBuild build_external_artifact(
   const shadow::Snapshot & snapshot, const problem::Problem & qp,
-  const Eigen::VectorXd & primal, const bool enforce_affine_rows) noexcept
+  const Eigen::VectorXd & primal,
+  const ExternalPrimalConstraintPolicy policy) noexcept
 {
   namespace model = mpcc_rate_resolved;
   ExternalArtifactBuild result;
+  const bool enforce_affine_rows =
+    policy != ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle;
   const int horizon = snapshot.request.horizon_steps;
   const int execution_horizon = snapshot.execution_prefix_steps;
   const int state_values = model::kStateDimension * (horizon + 1);
@@ -246,19 +303,110 @@ ExternalArtifactBuild build_external_artifact(
     static_cast<std::size_t>(execution_horizon + 1));
   execution.lateral_upper_m.reserve(
     static_cast<std::size_t>(execution_horizon + 1));
+  std::optional<std::pair<double, double>> physical_oracle_lateral_support;
+  if (!enforce_affine_rows) {
+    const auto support =
+      mpcc_rate_resolved_wall_refinement::
+      resolve_pre_refinement_lateral_support(
+      mpcc_rate_resolved_wall_refinement::
+      PreRefinementLateralSupportRequest{
+        true, snapshot.request.initial_state[model::kLateralIndex],
+        snapshot.wall_lower_m, snapshot.wall_upper_m});
+    if (!support.valid || !support.applied) {
+      result.detail =
+        "physical-nonlinear-oracle-lateral-support-rejected/" +
+        std::string{mpcc_rate_resolved_wall_refinement::to_string(
+          support.reason)};
+      return result;
+    }
+    physical_oracle_lateral_support =
+      std::pair{support.lower_m, support.upper_m};
+  }
+  model::StateVector nonlinear_state = model::StateVector::Zero();
+  nonlinear_state[model::kLateralIndex] =
+    snapshot.request.initial_state[model::kLateralIndex];
+  nonlinear_state[model::kLagIndex] =
+    snapshot.request.initial_state[model::kLagIndex];
+  nonlinear_state[model::kHeadingIndex] =
+    snapshot.request.initial_state[model::kHeadingIndex];
+  nonlinear_state[model::kVelocityIndex] =
+    snapshot.request.initial_state[model::kVelocityIndex];
+  nonlinear_state[model::kProgressIndex] =
+    snapshot.request.initial_state[model::kProgressIndex];
+  nonlinear_state[model::kSteeringIndex] =
+    snapshot.request.current_steering_rad;
+  nonlinear_state[model::kResponseSteeringIndex] =
+    snapshot.request.current_response_steering_rad;
   for (int stage = 0; stage <= execution_horizon; ++stage) {
     const int state = model::kStateDimension * stage;
+    if (!enforce_affine_rows && stage > 0) {
+      const int input = state_values +
+        model::kInputDimension * (stage - 1);
+      const auto & semantic = snapshot.request.inputs[
+        static_cast<std::size_t>(stage - 1)];
+      model::LinearizationRequest transition;
+      transition.reference_lateral_m =
+        nonlinear_state[model::kLateralIndex];
+      transition.reference_lag_m = nonlinear_state[model::kLagIndex];
+      transition.reference_heading_rad =
+        nonlinear_state[model::kHeadingIndex];
+      transition.reference_velocity_mps =
+        nonlinear_state[model::kVelocityIndex];
+      transition.reference_progress_m =
+        nonlinear_state[model::kProgressIndex];
+      transition.reference_steering_rad =
+        nonlinear_state[model::kSteeringIndex];
+      transition.reference_response_steering_rad =
+        nonlinear_state[model::kResponseSteeringIndex];
+      transition.reference_acceleration_mps2 =
+        primal[input + model::kAccelerationIndex];
+      transition.reference_steering_rate_radps =
+        primal[input + model::kSteeringRateIndex];
+      transition.reference_virtual_progress_speed_mps =
+        primal[input + model::kVirtualProgressSpeedIndex];
+      transition.reference_path_curvature_radpm =
+        semantic.path_curvature_radpm;
+      transition.wheelbase_m = snapshot.request.wheelbase_m;
+      transition.yaw_response_gain = snapshot.request.yaw_response_gain;
+      transition.yaw_response_time_constant_sec =
+        snapshot.request.yaw_response_time_constant_sec;
+      transition.stage_dt_sec = semantic.stage_dt_sec;
+      transition.minimum_frenet_denominator =
+        snapshot.request.minimum_frenet_denominator;
+      transition.minimum_stage_dt_sec = semantic.stage_dt_sec;
+      transition.maximum_stage_dt_sec = semantic.stage_dt_sec;
+      const auto advanced = model::evaluate_temporal_frenet_transition(
+        transition);
+      if (!advanced.has_value()) {
+        result.detail =
+          "physical-nonlinear-oracle-transition-rejected/stage=" +
+          std::to_string(stage - 1);
+        return result;
+      }
+      nonlinear_state = advanced->next_state;
+    }
     execution.predicted_states.push_back(artifact::PredictedState{
-      primal[state + model::kLateralIndex],
-      primal[state + model::kLagIndex],
-      primal[state + model::kHeadingIndex],
-      primal[state + model::kVelocityIndex],
-      primal[state + model::kProgressIndex],
-      primal[state + model::kSteeringIndex],
-      primal[state + model::kResponseSteeringIndex]});
+      enforce_affine_rows ? primal[state + model::kLateralIndex] :
+      nonlinear_state[model::kLateralIndex],
+      enforce_affine_rows ? primal[state + model::kLagIndex] :
+      nonlinear_state[model::kLagIndex],
+      enforce_affine_rows ? primal[state + model::kHeadingIndex] :
+      nonlinear_state[model::kHeadingIndex],
+      enforce_affine_rows ? primal[state + model::kVelocityIndex] :
+      nonlinear_state[model::kVelocityIndex],
+      enforce_affine_rows ? primal[state + model::kProgressIndex] :
+      nonlinear_state[model::kProgressIndex],
+      enforce_affine_rows ? primal[state + model::kSteeringIndex] :
+      nonlinear_state[model::kSteeringIndex],
+      enforce_affine_rows ? primal[state + model::kResponseSteeringIndex] :
+      nonlinear_state[model::kResponseSteeringIndex]});
     const int lateral_row = state_box_row + state + model::kLateralIndex;
-    execution.lateral_lower_m.push_back(qp.lower_bound[lateral_row]);
-    execution.lateral_upper_m.push_back(qp.upper_bound[lateral_row]);
+    execution.lateral_lower_m.push_back(
+      physical_oracle_lateral_support.has_value() ?
+      physical_oracle_lateral_support->first : qp.lower_bound[lateral_row]);
+    execution.lateral_upper_m.push_back(
+      physical_oracle_lateral_support.has_value() ?
+      physical_oracle_lateral_support->second : qp.upper_bound[lateral_row]);
   }
   execution.control_stages.reserve(
     static_cast<std::size_t>(execution_horizon));
@@ -1095,7 +1243,7 @@ ArmResult evaluate_offline_continuation(
     rejected.lattice_ahead_stage = ahead_stage;
     return rejected;
   }
-  const auto successor = maneuver::resolve_terminal_successor(
+  const auto successor = resolve_audit_terminal_successor(
     exact_candidate.seed->solver_snapshot);
   auto direct = evaluate_arm(
     arm, exact_candidate.seed->solver_snapshot, source_fingerprint,
@@ -1231,7 +1379,7 @@ ArmResult evaluate_offline_return_rejoin(
     rejected.lattice_ahead_stage = rejoin_complete_stage;
     return rejected;
   }
-  const auto successor = maneuver::resolve_terminal_successor(
+  const auto successor = resolve_audit_terminal_successor(
     candidate.seed->solver_snapshot);
   auto direct = evaluate_arm(
     Arm::OfflineReturnD, candidate.seed->solver_snapshot,
@@ -1360,7 +1508,7 @@ ArmResult evaluate_production_population(
   std::size_t attempted = 0U;
   for (const auto & candidate : population.candidates) {
     ++attempted;
-    const auto successor = maneuver::resolve_terminal_successor(
+    const auto successor = resolve_audit_terminal_successor(
       candidate.seed.solver_snapshot);
     const int transition_stage = candidate.seed.solver_snapshot.
       dynamic_obstacle_forced_diagonal_start_stage;
@@ -1443,7 +1591,7 @@ ArmResult evaluate_stop_control_lattice(
     auto evaluated = evaluate_arm(
       Arm::SevenStateStopControlLatticeV, maximum_braking_stop,
       source_fingerprint, candidate_fingerprint,
-      maneuver::resolve_terminal_successor(maximum_braking_stop),
+      resolve_audit_terminal_successor(maximum_braking_stop),
       schedule.first_switch_stage, schedule.second_switch_stage,
       nullptr, false, std::nullopt, 0U,
       TerminalStopLateralAuditMode::SolvedStopTrajectory,
@@ -1574,7 +1722,7 @@ Report compare(
     }
     report.source_accepted = true;
     report.detail = "accepted";
-    const auto persistent_successor = maneuver::resolve_terminal_successor(source);
+    const auto persistent_successor = resolve_audit_terminal_successor(source);
     report.arms.push_back(evaluate_arm(
       Arm::PersistentA, source, source_fingerprint, source_fingerprint,
       persistent_successor));
@@ -1608,7 +1756,7 @@ Report compare(
             rebuilt.detail));
           continue;
         }
-        const auto successor = maneuver::resolve_terminal_successor(
+        const auto successor = resolve_audit_terminal_successor(
           rebuilt.seed->solver_snapshot);
         report.arms.push_back(evaluate_arm(
           arm, rebuilt.seed->solver_snapshot, source_fingerprint,
@@ -1630,7 +1778,7 @@ Report compare(
         std::string{maneuver::to_string(target_bound.reason)} + ": " +
         target_bound.detail));
     } else {
-      const auto target_bound_successor = maneuver::resolve_terminal_successor(
+      const auto target_bound_successor = resolve_audit_terminal_successor(
         target_bound.seed->solver_snapshot);
       report.arms.push_back(evaluate_arm(
         Arm::PersistentTargetBoundA2,
@@ -1656,7 +1804,7 @@ Report compare(
           std::string{maneuver::to_string(rebuilt.reason)} + ": " +
           rebuilt.detail));
       } else {
-        const auto successor = maneuver::resolve_terminal_successor(
+        const auto successor = resolve_audit_terminal_successor(
           rebuilt.seed->solver_snapshot);
         report.arms.push_back(evaluate_arm(
           Arm::StatelessReturnB, rebuilt.seed->solver_snapshot,
@@ -1681,7 +1829,7 @@ Report compare(
           rejected.lattice_ahead_stage = complete_stage;
           report.arms.push_back(std::move(rejected));
         } else {
-          const auto successor = maneuver::resolve_terminal_successor(
+          const auto successor = resolve_audit_terminal_successor(
             candidate.seed->solver_snapshot);
           auto evaluated = evaluate_arm(
             Arm::RoughReturnC, candidate.seed->solver_snapshot,
@@ -1716,7 +1864,7 @@ Report compare(
           std::string{maneuver::to_string(built.reason)} + ": " + built.detail));
         continue;
       }
-      const auto successor = maneuver::resolve_terminal_successor(
+      const auto successor = resolve_audit_terminal_successor(
         built.seed->solver_snapshot);
       report.arms.push_back(evaluate_arm(
         arm, built.seed->solver_snapshot, source_fingerprint,
@@ -1747,7 +1895,7 @@ Report compare(
             report.arms.push_back(std::move(rejected));
             continue;
           }
-          const auto successor = maneuver::resolve_terminal_successor(
+          const auto successor = resolve_audit_terminal_successor(
             built.seed->solver_snapshot);
           report.arms.push_back(evaluate_arm(
             arm, built.seed->solver_snapshot, source_fingerprint,
@@ -1801,7 +1949,7 @@ Report compare(
             report.arms.push_back(std::move(rejected));
             continue;
           }
-          const auto successor = maneuver::resolve_terminal_successor(
+          const auto successor = resolve_audit_terminal_successor(
             built.seed->solver_snapshot);
           report.arms.push_back(evaluate_arm(
             arm, built.seed->solver_snapshot, source_fingerprint,
@@ -1838,7 +1986,7 @@ Report compare(
             report.arms.push_back(std::move(rejected));
             continue;
           }
-          const auto successor = maneuver::resolve_terminal_successor(
+          const auto successor = resolve_audit_terminal_successor(
             built.seed->solver_snapshot);
           report.arms.push_back(evaluate_arm(
             arm, built.seed->solver_snapshot, source_fingerprint,
@@ -1894,7 +2042,7 @@ Report compare_wall_restoration(
     }
     report.source_accepted = true;
     report.detail = "accepted/wall-restoration-only";
-    const auto successor = maneuver::resolve_terminal_successor(source);
+    const auto successor = resolve_audit_terminal_successor(source);
     report.arms.push_back(evaluate_arm(
       Arm::WallRestorationH, source, source_fingerprint, source_fingerprint,
       successor, -1, -1, nullptr, true));
@@ -1935,7 +2083,7 @@ Report compare_physical_dynamic_sqp(
     report.source_accepted = true;
     report.detail = "accepted/physical-dynamic-sqp-only";
     const auto persistent_successor =
-      maneuver::resolve_terminal_successor(source);
+      resolve_audit_terminal_successor(source);
     report.arms.push_back(evaluate_arm(
       Arm::PersistentA, source, source_fingerprint, source_fingerprint,
       persistent_successor));
@@ -2034,7 +2182,7 @@ Report compare_wall_buckets(
     }
     report.source_accepted = true;
     report.detail = "accepted/wall-bucket-audit-only";
-    const auto successor = maneuver::resolve_terminal_successor(source);
+    const auto successor = resolve_audit_terminal_successor(source);
     report.arms.push_back(evaluate_arm(
       Arm::WallOmitHeadingJ, source, source_fingerprint,
       source_fingerprint, successor, -1, -1, nullptr, false,
@@ -2104,7 +2252,7 @@ Report verify_external_primal(
     }
     const auto candidate_fingerprint = exact_problem_fingerprint(
       verification_problem.value(), source_fingerprint);
-    const auto successor = maneuver::resolve_terminal_successor(source);
+    const auto successor = resolve_audit_terminal_successor(source);
     if (!successor.accepted) {
       auto rejected = rejected_arm(
         Arm::ExternalPrimalI, Stage::TerminalSuccessorRejected,
@@ -2127,8 +2275,7 @@ Report verify_external_primal(
     arm_result.source_interaction_fingerprint = source_fingerprint;
     arm_result.candidate_fingerprint = candidate_fingerprint;
     const auto built = build_external_artifact(
-      source, verification_problem.value(), primal,
-      policy != ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle);
+      source, verification_problem.value(), primal, policy);
     if (!built.value.has_value()) {
       arm_result.stage = Stage::SolverRejected;
       arm_result.detail = built.detail;
@@ -2280,7 +2427,7 @@ Report compare_terminal_stop_lateral_contract(
     report.source_accepted = true;
     report.detail = "accepted/terminal-stop-lateral-contract-audit-only";
     const auto persistent_successor =
-      maneuver::resolve_terminal_successor(source);
+      resolve_audit_terminal_successor(source);
     report.arms.push_back(evaluate_arm(
       Arm::PersistentA, source, source_fingerprint, source_fingerprint,
       persistent_successor));
@@ -2326,7 +2473,7 @@ Report compare_terminal_stop_lateral_contract(
       report.arms.push_back(evaluate_arm(
         Arm::SevenStateStopU, solved_stop.candidate, source_fingerprint,
         architecture::fingerprint_interaction_snapshot(solved_stop.candidate),
-        maneuver::resolve_terminal_successor(solved_stop.candidate), -1, -1,
+        resolve_audit_terminal_successor(solved_stop.candidate), -1, -1,
         nullptr, false, std::nullopt, 0U,
         TerminalStopLateralAuditMode::SolvedStopTrajectory));
       report.arms.push_back(evaluate_stop_control_lattice(

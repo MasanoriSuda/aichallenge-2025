@@ -3248,6 +3248,24 @@ Stop全体は従来どおりexact occupancy-grid swept-footprint wall proofとti
 そこでfail closedする。これはwall marginやfootprintの緩和ではなく、近似supportがexact authorityを先取りしていた
 二重証明所有を解消する修正である。
 
+#### normal SQPのphysical wall bucket監査（2026-08-31、2025由来の暫定）
+
+`output/20260831-043038/d3`のtarget-free Cruise snapshotでは、broad problemのseven-state解は得られたが、
+その解を中心に作ったpost-hoc physical wall bucketをhard state／swept rowとして追加したrefinement QPが
+maximum iterationsで停止した。凍結QPを独立LP feasibility solverへ渡すと、solver設定によらず線形制約集合自体が
+infeasibleだった。stage 1のphysical lateral上限は`0.209006 m`、現在state、seven-state dynamicsおよびinput envelopeから
+到達可能な最小lateralは`0.235208 m`で、2.62 cmの非交差があった。
+
+一方、broad problemの解とrefinementの棄却iterateからcontrol sequenceだけを取り出し、affine predicted stateを捨てて
+canonical nonlinear seven-state transitionから再構成すると、両方ともexact occupancy-grid wall、timed dynamic-obstacle、
+terminal Stop proofを通過した。したがって本件はMission lifecycle、反対homotopy欠落、OSQP toleranceまたは物理的不可能ではなく、
+局所pose bucketがexact wall certificateより先にhard authorityを持ったmodel/certificate mismatchである。
+
+この監査結果だけでclearance、weight、iteration、lease、graceまたはfallbackを変更してはならない。production修正は別Sliceで、
+progress-aligned planning corridorを残しつつ、局所physical bucketをexact swept-footprint proofと競合する第二のwall authorityに
+しない責務分離として行う。監査用nonlinear oracleはStore、mailbox、publisherまたはcommand APIを持たず、production authorityを
+変更しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

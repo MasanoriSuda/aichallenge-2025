@@ -53,3 +53,56 @@ new submission, no all-68 obsolete completion ahead of that newest epoch, and
 lower maximum result age than `output/20260830-224528`.  Production behavior
 must remain unchanged because this Slice still has `authority=shadow,
 selected=0`.
+
+## First live result and falsification
+
+The first dynamic run is under:
+
+`output/20260830-230003/d1/autoware.log`
+
+Cooperative supersession worked while newer Stop sources continued to arrive.
+Observed superseded evaluations stopped after 3--8 candidates with result ages
+of approximately 0.3--0.7 seconds.  Subsequent newest epochs then ran and
+produced accepted exact certified observations.  This validates the worker
+generation token and safe-boundary evaluator checks.
+
+The original dynamic gate did not pass.  Episode 1 left ShiftOut through
+Dynamic Mission wait, after which no further Stop source was submitted.  The
+last ShiftOut observation exhausted all 68 candidates, computed for 6633.485
+ms and was consumed 6.7800 seconds old.  Later controller evidence showed
+certified Track/Cruise/Follow artifacts replacing Overtake authority, but that
+replacement did not invalidate the dedicated Stop worker.
+
+The refined root cause is therefore not a solver tolerance or candidate-set
+defect.  Newer Stop submission handles supersession correctly; certified exit
+from the eligible ShiftOut/Pass intent set lacks an explicit worker lifecycle
+edge.  Static and dynamic acceptance remain open until that proven replacement
+invalidates both running and pending observation work.
+
+## Refined lifecycle implementation
+
+`LatestOnlyWorker::invalidate_pending_and_running()` now advances the active
+generation only when a current running generation still needs invalidation,
+and discards a pending job when present.  Repeated invalidation is idempotent
+for an already superseded running generation.  Bounded worker telemetry records
+running invalidations and discarded pending jobs separately.
+
+The normal evaluation calls this API only after the certified Store exposes an
+exact identity match for a newly solved artifact whose intent is not ShiftOut
+or Pass.  Missing solves, missing candidates and identity mismatches preserve
+the prior observation generation.  This creates the previously absent source
+lifecycle edge without relying on a Mission phase timeout.
+
+Static verification after the refinement:
+
+- `make autoware-build`: passed (25 packages);
+- full `multi_purpose_mpc_ros` CTest: 59 / 59 passed;
+- aggregate tests: 2278, 0 errors, 0 failures;
+- single-authority source contract: 92 / 92 passed;
+- running invalidation without replacement: passed;
+- pending discard without execution: passed;
+- `git diff --check`: passed.
+
+The refined dynamic gate remains pending.  It must reproduce the Overtake
+intent exit and show `invalidated_running` or `discarded_pending` without a
+subsequent 68-candidate terminal observation.

@@ -106,6 +106,34 @@ LatestOnlyWorker::SubmitResult LatestOnlyWorker::submit_latest_cancelable(
   return {true, replaced};
 }
 
+LatestOnlyWorker::InvalidateResult
+LatestOnlyWorker::invalidate_pending_and_running() noexcept
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (stop_requested_) {
+    return {};
+  }
+  const auto latest_generation =
+    latest_generation_->load(std::memory_order_acquire);
+  const bool invalidate_running =
+    stats_.running && running_generation_ == latest_generation;
+  const bool discard_pending = pending_job_.has_value();
+  if (!invalidate_running && !discard_pending) {
+    return {};
+  }
+  if (invalidate_running) {
+    static_cast<void>(
+      latest_generation_->fetch_add(1U, std::memory_order_acq_rel));
+    ++stats_.invalidated_running;
+  }
+  if (discard_pending) {
+    pending_job_.reset();
+    stats_.pending = false;
+    ++stats_.discarded_pending;
+  }
+  return {invalidate_running, discard_pending};
+}
+
 LatestOnlyWorker::Stats LatestOnlyWorker::stats() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -147,6 +175,7 @@ void LatestOnlyWorker::run() noexcept
       pending_job_.reset();
       stats_.pending = false;
       stats_.running = true;
+      running_generation_ = job.generation;
       ++stats_.started;
     }
 
@@ -160,6 +189,7 @@ void LatestOnlyWorker::run() noexcept
     {
       std::lock_guard<std::mutex> lock(mutex_);
       stats_.running = false;
+      running_generation_ = 0U;
       ++stats_.completed;
       if (failed) {
         ++stats_.exceptions;

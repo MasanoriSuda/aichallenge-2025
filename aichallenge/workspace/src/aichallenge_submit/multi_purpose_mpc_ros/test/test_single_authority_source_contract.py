@@ -2809,6 +2809,7 @@ def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
     assert normal_admission < stop_submission
     assert "candidate_snapshot()" in submit[normal_admission:stop_submission]
     assert "rate_resolved_artifact::same_identity(" in submit
+    assert "invalidate_pending_and_running()" in submit[stop_submission:]
 
     observe_start = SOURCE.index(
         "void record_rate_resolved_stop_lattice_shadow("

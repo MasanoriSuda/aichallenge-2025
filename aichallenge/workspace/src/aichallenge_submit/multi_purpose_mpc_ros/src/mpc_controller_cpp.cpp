@@ -24756,6 +24756,7 @@ struct MPC
           overtake_negative_solver_context, overtake_positive_solver_context,
           overtake_negative_executor,
           overtake_branch_bank);
+        bool stop_observation_source_replaced = false;
         if (
           evaluation.solver_source_snapshot != nullptr &&
           evaluation.solver.execution_artifact != nullptr &&
@@ -24768,14 +24769,15 @@ struct MPC
           const auto intent = evaluation.solver.execution_artifact->identity.
             source_context.intent;
           const auto admitted = certified_plan_store->candidate_snapshot();
-          if (
-            (intent == mpcc_contract::ControlIntent::ShiftOut ||
-            intent == mpcc_contract::ControlIntent::Pass) &&
+          const bool admitted_matches =
             admitted != nullptr && admitted->execution_artifact != nullptr &&
             rate_resolved_artifact::same_identity(
               admitted->execution_artifact->identity,
-              evaluation.solver.execution_artifact->identity))
-          {
+              evaluation.solver.execution_artifact->identity);
+          const bool stop_intent =
+            intent == mpcc_contract::ControlIntent::ShiftOut ||
+            intent == mpcc_contract::ControlIntent::Pass;
+          if (admitted_matches && stop_intent) {
             const auto stop_source = evaluation.solver_source_snapshot;
             const auto stop_normal = evaluation.solver.execution_artifact;
             static_cast<void>(stop_lattice_shadow_worker->submit_latest_cancelable(
@@ -24791,7 +24793,16 @@ struct MPC
                   static_cast<void>(stop_lattice_shadow_mailbox->publish(
                       std::move(stop_result)));
                 }));
+          } else if (admitted_matches) {
+            stop_observation_source_replaced = true;
           }
+        }
+        if (
+          stop_observation_source_replaced &&
+          stop_lattice_shadow_worker != nullptr)
+        {
+          static_cast<void>(
+            stop_lattice_shadow_worker->invalidate_pending_and_running());
         }
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
@@ -26470,7 +26481,8 @@ struct MPC
       rclcpp::get_logger("mpc_controller"),
       "Rate-resolved Stop lattice live shadow: "
       "worker=submitted:%lu/replaced:%lu/started:%lu/completed:%lu/"
-      "exceptions:%lu/running:%d/pending:%d, "
+      "exceptions:%lu/invalidated_running:%lu/discarded_pending:%lu/"
+      "running:%d/pending:%d, "
       "mailbox=published:%lu/invalid:%lu/rollback:%lu, "
       "consumed=%lu/accepted=%lu, "
       "reject=source:%lu/build:%lu/schedule:%lu/solver:%lu/exact:%lu/"
@@ -26488,6 +26500,8 @@ struct MPC
       static_cast<unsigned long>(worker.started),
       static_cast<unsigned long>(worker.completed),
       static_cast<unsigned long>(worker.exceptions),
+      static_cast<unsigned long>(worker.invalidated_running),
+      static_cast<unsigned long>(worker.discarded_pending),
       worker.running ? 1 : 0, worker.pending ? 1 : 0,
       static_cast<unsigned long>(mailbox.accepted_count),
       static_cast<unsigned long>(mailbox.invalid_result_count),

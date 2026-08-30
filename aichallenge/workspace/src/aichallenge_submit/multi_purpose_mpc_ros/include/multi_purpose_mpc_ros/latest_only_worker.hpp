@@ -82,6 +82,12 @@ public:
     bool replaced_pending{false};
   };
 
+  struct InvalidateResult
+  {
+    bool invalidated_running{false};
+    bool discarded_pending{false};
+  };
+
   struct Stats
   {
     std::uint64_t submitted{0U};
@@ -89,6 +95,8 @@ public:
     std::uint64_t started{0U};
     std::uint64_t completed{0U};
     std::uint64_t exceptions{0U};
+    std::uint64_t invalidated_running{0U};
+    std::uint64_t discarded_pending{0U};
     bool running{false};
     bool pending{false};
   };
@@ -101,6 +109,7 @@ public:
 
   SubmitResult submit_latest(Job job);
   SubmitResult submit_latest_cancelable(CancelableJob job);
+  InvalidateResult invalidate_pending_and_running() noexcept;
   Stats stats() const;
   void stop() noexcept;
 
@@ -118,6 +127,7 @@ private:
   std::optional<PendingJob> pending_job_;
   Stats stats_;
   bool stop_requested_{false};
+  std::uint64_t running_generation_{};
   std::shared_ptr<std::atomic<std::uint64_t>> latest_generation_;
   std::thread thread_;
 };

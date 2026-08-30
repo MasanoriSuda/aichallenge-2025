@@ -188,4 +188,65 @@ TEST(LatestOnlyWorker, CancelableJobObservesNewerAcceptedGeneration)
   EXPECT_EQ(stats.completed, 2U);
 }
 
+TEST(LatestOnlyWorker, LifecycleInvalidationSupersedesRunningWithoutNewJob)
+{
+  multi_purpose_mpc_ros::LatestOnlyWorker worker;
+  std::atomic<bool> started{false};
+  std::atomic<bool> superseded{false};
+  ASSERT_TRUE(worker.submit_latest_cancelable(
+    [&](const multi_purpose_mpc_ros::LatestOnlyWorker::SupersessionToken & token) {
+      started.store(true);
+      while (!token.superseded()) {
+        std::this_thread::yield();
+      }
+      superseded.store(true);
+    }).accepted);
+  for (int attempt = 0; attempt < 200 && !started.load(); ++attempt) {
+    std::this_thread::sleep_for(1ms);
+  }
+  ASSERT_TRUE(started.load());
+
+  const auto invalidation = worker.invalidate_pending_and_running();
+  EXPECT_TRUE(invalidation.invalidated_running);
+  EXPECT_FALSE(invalidation.discarded_pending);
+  for (int attempt = 0; attempt < 200 && !superseded.load(); ++attempt) {
+    std::this_thread::sleep_for(1ms);
+  }
+  EXPECT_TRUE(superseded.load());
+  EXPECT_EQ(worker.stats().invalidated_running, 1U);
+}
+
+TEST(LatestOnlyWorker, LifecycleInvalidationDiscardsPendingJob)
+{
+  multi_purpose_mpc_ros::LatestOnlyWorker worker;
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool release_running = false;
+  std::atomic<bool> pending_ran{false};
+  ASSERT_TRUE(worker.submit_latest([&]() {
+    std::unique_lock<std::mutex> lock(mutex);
+    condition.wait(lock, [&]() {return release_running;});
+  }).accepted);
+  for (int attempt = 0; attempt < 200 && !worker.stats().running; ++attempt) {
+    std::this_thread::sleep_for(1ms);
+  }
+  ASSERT_TRUE(worker.stats().running);
+  ASSERT_TRUE(worker.submit_latest([&]() {pending_ran.store(true);}).accepted);
+
+  const auto invalidation = worker.invalidate_pending_and_running();
+  EXPECT_FALSE(invalidation.invalidated_running);
+  EXPECT_TRUE(invalidation.discarded_pending);
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    release_running = true;
+  }
+  condition.notify_one();
+  for (int attempt = 0; attempt < 200 && worker.stats().running; ++attempt) {
+    std::this_thread::sleep_for(1ms);
+  }
+  EXPECT_FALSE(pending_ran.load());
+  EXPECT_EQ(worker.stats().discarded_pending, 1U);
+  EXPECT_EQ(worker.stats().completed, 1U);
+}
+
 }  // namespace

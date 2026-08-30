@@ -53,3 +53,24 @@ supersession from solver, wall or certificate rejection.
 - Publishing an old certified Stop anyway: violates current-world freshness.
 - Stop-specific atomic flag in the controller: duplicates the generic worker
   lifecycle and hides the actual ownership defect.
+
+## Live falsification and refined lifecycle edge
+
+The first live run proved that a newer Stop submission supersedes a running
+evaluation, but also exposed a distinct terminal case: after ShiftOut changed
+to Dynamic Mission wait, no further Stop submission existed.  The final old
+ShiftOut epoch therefore exhausted all 68 candidates even though subsequent
+normal production artifacts had Track/Cruise/Follow intent.
+
+The worker consequently also needs an explicit source-invalidation operation.
+It is not driven by a phase timeout.  The normal evaluation may invalidate the
+Stop generation only when all of the following hold:
+
+- the new normal solve has an execution artifact and certified plan;
+- the certified Store exposes that exact immutable identity as its candidate;
+- its intent is neither ShiftOut nor Pass.
+
+A solver failure, identity mismatch or temporarily missing candidate does not
+invalidate the previous generation.  This keeps lifecycle invalidation tied
+to a proven authority replacement rather than an incidental calculation
+failure.

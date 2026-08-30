@@ -17,6 +17,7 @@
 #include <multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp>
+#include <multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp>
 #include <multi_purpose_mpc_ros/mpcc_progress.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp>
@@ -144,6 +145,8 @@ namespace persistent_osqp = ::multi_purpose_mpc_ros::persistent_osqp;
 namespace mpcc_progress = ::multi_purpose_mpc_ros::mpcc_progress;
 namespace on_trajectory_connector =
   ::multi_purpose_mpc_ros::mpcc_on_trajectory_connector;
+namespace overtake_sibling_adoption =
+  ::multi_purpose_mpc_ros::mpcc_overtake_sibling_adoption;
 namespace latest_state_feedback =
   ::multi_purpose_mpc_ros::mpcc_latest_state_feedback;
 namespace rate_resolved_shadow =
@@ -2957,6 +2960,11 @@ struct OvertakeLineState
   std::optional<double> fixed_pass_corridor_goal_ey;
   std::optional<overtake_core::OvertakePassPlan> mission_plan;
   bool mission_path_frozen{false};
+  // A same-epoch stateless Bundle may replace a rejected frozen homotopy.
+  // This records the last actually published certified artifact; it is not a
+  // lease and carries no geometry or independent command authority.
+  bool stateless_sibling_authority_active{false};
+  std::uint64_t stateless_sibling_source_sequence{0U};
   bool mission_frenet_dp_execution_active{false};
   int mission_frenet_dp_side_sign{0};
   double mission_frenet_dp_execution_traveled_m{0.0};
@@ -7504,6 +7512,10 @@ struct RateResolvedRetainedShadowEvaluation
   rate_resolved_retained::Reason normal_branch_positive_reason{
     rate_resolved_retained::Reason::MissingPlan};
   int normal_branch_selected_side_sign{};
+  overtake_sibling_adoption::Reason overtake_sibling_adoption_reason{
+    overtake_sibling_adoption::Reason::InactiveExecution};
+  std::optional<overtake_sibling_adoption::Token>
+  overtake_sibling_adoption_token;
   double elapsed_ms{};
 };
 
@@ -7624,6 +7636,20 @@ struct CanonicalNormalPendingActuation
     std::numeric_limits<double>::quiet_NaN()};
   bool promote_to_executed{false};
   bool record_published_bundle_source{false};
+  std::optional<overtake_sibling_adoption::Token>
+  overtake_sibling_adoption_token;
+};
+
+struct OvertakeSiblingAdoptionLiveState
+{
+  mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
+  std::string target_id;
+  std::uint64_t mission_generation{};
+  int side_sign{};
+  bool active_execution{false};
+  bool hard_fault{true};
+  bool before_no_return{false};
+  bool replacement_budget_available{false};
 };
 
 struct CanonicalNormalFinalActuationTelemetryWindow
@@ -8907,6 +8933,49 @@ struct MPC
     }
   }
 
+  OvertakeSiblingAdoptionLiveState
+  current_overtake_sibling_adoption_live_state() const
+  {
+    OvertakeSiblingAdoptionLiveState state;
+    state.active_execution =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass;
+    state.intent =
+      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ?
+      mpcc_contract::ControlIntent::ShiftOut :
+      overtake_line_state_.phase == OvertakeLinePhase::Pass ?
+      mpcc_contract::ControlIntent::Pass :
+      mpcc_contract::ControlIntent::Unknown;
+    state.target_id = overtake_line_state_.target_vehicle_id;
+    state.mission_generation = overtake_line_state_.mission_generation;
+    state.side_sign = overtake_line_state_.pass_side_sign;
+    const bool target_continuous =
+      last_v2x_behavior_output_.locked_target_seen &&
+      !last_v2x_behavior_output_.locked_target_position_jump &&
+      !last_v2x_behavior_output_.locked_target_course_progress_rejected &&
+      last_v2x_behavior_output_.target_vehicle_id == state.target_id;
+    state.hard_fault =
+      !target_continuous ||
+      last_v2x_behavior_output_.front_risk_level ==
+      FrontRiskLevel::EmergencyBrake ||
+      overtake_solver_recovery_active_ ||
+      last_v2x_behavior_output_.overtake_forbidden_wp;
+    state.before_no_return =
+      !overtake_line_state_.opponent_side_replan_no_return_latched &&
+      !overtake_line_state_.mission_cross_side_transition_committed &&
+      last_v2x_behavior_output_.overtake_commit_stage ==
+      overtake_core::PassCommitStage::ShiftCommitted &&
+      std::isfinite(last_v2x_behavior_output_.locked_target_longitudinal) &&
+      last_v2x_behavior_output_.locked_target_longitudinal + kEps >=
+      cfg.v2x_behavior.overtake_line.
+      opponent_side_replan_no_return_front_distance;
+    state.replacement_budget_available =
+      !overtake_line_state_.mission_cross_side_transition_committed &&
+      overtake_line_state_.opponent_side_replan_count <
+      cfg.v2x_behavior.overtake_line.opponent_side_replan_max_count;
+    return state;
+  }
+
   void record_canonical_normal_final_command(
     const std::uint64_t decision_id, const double final_target_speed_mps,
     const double final_acceleration_mps2, const double final_steering_rad,
@@ -8995,6 +9064,78 @@ struct MPC
     {
       rate_resolved_track_cruise_certified_plan_store_->
       supersede_published_bundle_source(decision_id);
+    }
+
+    if (pending.overtake_sibling_adoption_token.has_value()) {
+      const auto & token = pending.overtake_sibling_adoption_token.value();
+      const auto live = current_overtake_sibling_adoption_live_state();
+      if (!overtake_sibling_adoption::token_matches_live_state(
+          token, live.intent, live.target_id, live.mission_generation,
+          live.side_sign, live.active_execution, live.before_no_return,
+          live.replacement_budget_available, live.hard_fault))
+      {
+        if (rate_resolved_track_cruise_certified_plan_store_ != nullptr) {
+          rate_resolved_track_cruise_certified_plan_store_->
+          supersede_published_bundle_source(decision_id);
+        }
+        RCLCPP_ERROR(
+          rclcpp::get_logger("mpc_controller"),
+          "Published sibling Bundle could not commit tactical authority: "
+          "target=%s, generation=%lu, side=%d->%d, sequence=%lu, phase=%s",
+          token.target_id.c_str(),
+          static_cast<unsigned long>(token.mission_generation),
+          token.previous_side_sign, token.adopted_side_sign,
+          static_cast<unsigned long>(token.source_sequence),
+          to_string(overtake_line_state_.phase));
+      } else {
+        // The exact opposite-side Bundle has now crossed the only command
+        // publisher. Retire all geometry owned by the rejected frozen
+        // Mission, while preserving encounter identity, phase and cumulative
+        // completion budgets. Future geometry is rebuilt from current world.
+        overtake_line_state_.pass_side_sign = token.adopted_side_sign;
+        overtake_locked_side_sign_ = token.adopted_side_sign;
+        overtake_line_state_.opponent_side_replan_count += 1;
+        overtake_line_state_.mission_cross_side_transition_committed = true;
+        overtake_line_state_.opponent_side_replan_no_return_latched = true;
+        overtake_line_state_.opponent_side_replan_pending_sign = 0;
+        overtake_line_state_.opponent_side_replan_pending_since_sec =
+          std::numeric_limits<double>::quiet_NaN();
+        overtake_line_state_.opponent_side_replan_last_evaluation_sec = now_sec;
+        overtake_line_state_.stateless_sibling_authority_active = true;
+        overtake_line_state_.stateless_sibling_source_sequence =
+          token.source_sequence;
+        overtake_line_state_.mission_plan.reset();
+        overtake_line_state_.mission_path_frozen = false;
+        overtake_line_state_.fixed_pass_corridor_goal_ey.reset();
+        overtake_line_state_.mission_frenet_dp_execution_active = false;
+        overtake_line_state_.mission_frenet_dp_side_sign = 0;
+        overtake_line_state_.mission_frenet_dp_execution_traveled_m = 0.0;
+        overtake_line_state_.mission_frenet_dp_path_distances_m.clear();
+        overtake_line_state_.mission_frenet_dp_lateral_path_m.clear();
+        overtake_line_state_.mission_frenet_dp_execution_authority_was_active =
+          false;
+        overtake_line_state_.
+          mission_frenet_dp_execution_authority_runtime_was_active = false;
+        overtake_line_state_.mission_pass_lateral_replan_active = false;
+        overtake_line_state_.mission_return_preflight_reference_active = false;
+        overtake_line_state_.mission_return_preflight_path_distances_m.clear();
+        overtake_line_state_.mission_return_preflight_lateral_path_m.clear();
+        overtake_line_state_.mission_outer_strategy_committed = false;
+        overtake_line_state_.mission_outer_transition_pending = false;
+        overtake_line_state_.mission_outer_transition_side_sign = 0;
+        overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
+        clear_last_feasible_maneuver_cache(
+          "published stateless sibling authority adopted");
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Published stateless sibling Bundle adopted: target=%s, "
+          "generation=%lu, side=%d->%d, sequence=%lu, phase=%s",
+          token.target_id.c_str(),
+          static_cast<unsigned long>(token.mission_generation),
+          token.previous_side_sign, token.adopted_side_sign,
+          static_cast<unsigned long>(token.source_sequence),
+          to_string(overtake_line_state_.phase));
+      }
     }
 
     // The tactical proposal and solver selection are not publication events.
@@ -25456,6 +25597,80 @@ struct MPC
       final_evaluation = std::move(executed_evaluation);
     }
 
+    const bool active_overtake_intent =
+      evaluation_intent == mpcc_contract::ControlIntent::ShiftOut ||
+      evaluation_intent == mpcc_contract::ControlIntent::Pass;
+    if (
+      !final_evaluation.production_authority.has_value() &&
+      active_overtake_intent &&
+      problem.progress_execution_dynamic_obstacle_contract_active &&
+      rate_resolved_overtake_branch_bank_ != nullptr)
+    {
+      const auto live = current_overtake_sibling_adoption_live_state();
+      const auto bank = rate_resolved_overtake_branch_bank_->snapshot();
+      const auto sibling_plan = bank.plan_for_side(-live.side_sign);
+      const auto selected_epoch_plan = bank.plan_for_side(live.side_sign);
+      RateResolvedRetainedShadowEvaluation sibling_evaluation;
+      if (sibling_plan != nullptr) {
+        sibling_evaluation = evaluate_rate_resolved_track_cruise_plan(
+          problem, now_sec, evaluation_intent, sibling_plan,
+          rate_resolved_retained::ExecutionClock{
+            new_candidate_execution_clock_kind,
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN()});
+        sibling_evaluation.selected_sibling_plan = selected_epoch_plan;
+      }
+      const auto sibling_identity =
+        sibling_plan != nullptr &&
+        sibling_plan->execution_artifact != nullptr ?
+        sibling_plan->execution_artifact->identity :
+        rate_resolved_artifact::Identity{};
+      const auto resolution = overtake_sibling_adoption::resolve(
+        overtake_sibling_adoption::Request{
+          false,
+          live.active_execution,
+          live.hard_fault,
+          live.before_no_return,
+          live.replacement_budget_available,
+          sibling_evaluation.production_authority.has_value(),
+          sibling_evaluation.stateless_current_world_bundle,
+          evaluation_intent,
+          live.target_id,
+          live.mission_generation,
+          live.side_sign,
+          bank.source_identity,
+          sibling_identity});
+      final_evaluation.overtake_sibling_adoption_reason =
+        resolution.reason;
+      if (resolution.accepted) {
+        copy_candidate_diagnostics(final_evaluation, sibling_evaluation);
+        sibling_evaluation.published_bundle_source_attempted =
+          final_evaluation.published_bundle_source_attempted;
+        sibling_evaluation.published_bundle_source_reason =
+          final_evaluation.published_bundle_source_reason;
+        sibling_evaluation.published_bundle_source_sequence =
+          final_evaluation.published_bundle_source_sequence;
+        sibling_evaluation.executed_attempted =
+          final_evaluation.executed_attempted;
+        sibling_evaluation.executed_reason =
+          final_evaluation.executed_reason;
+        sibling_evaluation.executed_sequence =
+          final_evaluation.executed_sequence;
+        sibling_evaluation.associated_sibling_inspected = true;
+        sibling_evaluation.associated_sibling_source_sequence =
+          sequence_of(sibling_plan);
+        sibling_evaluation.overtake_sibling_adoption_reason =
+          resolution.reason;
+        sibling_evaluation.overtake_sibling_adoption_token =
+          resolution.token;
+        attach_connector(sibling_evaluation);
+        sibling_evaluation.elapsed_ms =
+          std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        return sibling_evaluation;
+      }
+    }
+
     const bool normal_avoidance_intent =
       evaluation_intent == mpcc_contract::ControlIntent::Cruise ||
       evaluation_intent == mpcc_contract::ControlIntent::Follow;
@@ -26271,7 +26486,7 @@ struct MPC
       "executed:%d/seq:%lu/"
       "reason:%s/source:%s, "
       "associated_sibling=inspected:%d/seq:%lu/negative:%d:%s/"
-      "positive:%d:%s/selected_side:%d, "
+      "positive:%d:%s/selected_side:%d/overtake_adoption:%s, "
       "on_trajectory=attempted:%d/reason:%s/"
       "parent_elapsed:%.6f/candidate_elapsed:%.6f/"
       "lateral_delta:%.6f/progress_delta:%.6f/steering_delta:%.6f, "
@@ -26444,6 +26659,8 @@ struct MPC
       rate_resolved_retained::to_string(
         window.last_retained.normal_branch_positive_reason),
       window.last_retained.normal_branch_selected_side_sign,
+      overtake_sibling_adoption::to_string(
+        window.last_retained.overtake_sibling_adoption_reason),
       window.last_retained.on_trajectory_connector_attempted ? 1 : 0,
       on_trajectory_connector::to_string(
         window.last_retained.on_trajectory_connector_reason),
@@ -27553,7 +27770,8 @@ struct MPC
       retained.control_origin_sec, retained.cursor_elapsed_sec,
       !retained.selected_from_executed &&
       !retained.stateless_current_world_bundle,
-      retained.stateless_current_world_bundle};
+      retained.stateless_current_world_bundle,
+      retained.overtake_sibling_adoption_token};
     last_control_resolution_reason_ =
       std::string{"canonical-rate-resolved-"} +
       mpcc_contract::to_string(intent) +
@@ -29050,6 +29268,8 @@ private:
       next_phase != OvertakeLinePhase::ShiftOut &&
       next_phase != OvertakeLinePhase::Pass)
     {
+      overtake_line_state_.stateless_sibling_authority_active = false;
+      overtake_line_state_.stateless_sibling_source_sequence = 0U;
       overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
       overtake_line_state_.target_bound_execution_replan_hold_active = false;
       overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
@@ -29369,6 +29589,8 @@ private:
     const double configured_max_closing_speed =
       std::max(0.0, cfg.v2x_behavior.overtake_shiftout_max_closing_speed);
     overtake_line_state_.mission_plan.reset();
+    overtake_line_state_.stateless_sibling_authority_active = false;
+    overtake_line_state_.stateless_sibling_source_sequence = 0U;
     if (selected_mission.has_value()) {
       const auto pass_plan = overtake_core::build_overtake_pass_plan(
         overtake_core::OvertakePassPlanRequest{

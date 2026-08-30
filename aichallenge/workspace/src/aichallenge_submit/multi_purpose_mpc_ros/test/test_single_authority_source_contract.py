@@ -2900,6 +2900,45 @@ def test_certified_candidate_becomes_retained_only_after_exact_publication() -> 
     assert "published_steering.value()" in control[record_call : record_call + 250]
 
 
+def test_overtake_sibling_authority_commits_only_after_exact_publication() -> None:
+    """Same-epoch sibling selection cannot mutate tactical state before publish."""
+
+    retained_start = SOURCE.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow("
+    )
+    retained_end = SOURCE.index(
+        "void record_rate_resolved_track_cruise_shadow(", retained_start
+    )
+    retained = SOURCE[retained_start:retained_end]
+    assert "rate_resolved_overtake_branch_bank_->snapshot()" in retained
+    assert "overtake_sibling_adoption::resolve(" in retained
+    assert "sibling_evaluation.stateless_current_world_bundle" in retained
+    assert "overtake_sibling_adoption_token =" in retained
+    assert "overtake_line_state_.pass_side_sign =" not in retained
+
+    record_start = SOURCE.index("void record_canonical_normal_final_command(")
+    record_end = SOURCE.index(
+        "last_overtake_authority_trace() const noexcept", record_start
+    )
+    record = SOURCE[record_start:record_end]
+    serialized_join = record.index(
+        "canonical_normal_command_matches_serialized_actuation("
+    )
+    token_revalidation = record.index(
+        "overtake_sibling_adoption::token_matches_live_state("
+    )
+    tactical_commit = record.index(
+        "overtake_line_state_.pass_side_sign = token.adopted_side_sign;"
+    )
+    retire_frozen_geometry = record.index(
+        "overtake_line_state_.mission_plan.reset();", tactical_commit
+    )
+    assert serialized_join < token_revalidation < tactical_commit
+    assert tactical_commit < retire_frozen_geometry
+    assert "overtake_line_state_.mission_path_frozen = false;" in record
+    assert "mission_cross_side_transition_committed = true;" in record
+
+
 def test_control_callback_overrun_trace_is_observation_only() -> None:
     """Timing attribution may diagnose a callback but cannot influence it."""
 

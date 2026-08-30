@@ -366,6 +366,18 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_overtake_branch_bank
   Threads::Threads
 )
 
+add_library(${PROJECT_NAME}_mpcc_overtake_sibling_adoption STATIC
+  src/mpcc_overtake_sibling_adoption.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_overtake_sibling_adoption PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_overtake_sibling_adoption
+  ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
+)
+
 add_library(${PROJECT_NAME}_mpcc_on_trajectory_connector STATIC
   src/mpcc_on_trajectory_connector.cpp
 )
@@ -512,6 +524,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
   ${PROJECT_NAME}_mpcc_rate_resolved_normal_branch_bank
   ${PROJECT_NAME}_mpcc_rate_resolved_overtake_branch_bank
+  ${PROJECT_NAME}_mpcc_overtake_sibling_adoption
   ${PROJECT_NAME}_mpcc_on_trajectory_connector
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_source
   ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
@@ -729,6 +742,15 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_overtake_branch_bank
       ${PROJECT_NAME}_mpcc_rate_resolved_overtake_branch_bank
+    )
+  endif()
+
+  ament_add_gtest(test_mpcc_overtake_sibling_adoption
+    test/test_mpcc_overtake_sibling_adoption.cpp
+  )
+  if(TARGET test_mpcc_overtake_sibling_adoption)
+    target_link_libraries(test_mpcc_overtake_sibling_adoption
+      ${PROJECT_NAME}_mpcc_overtake_sibling_adoption
     )
   endif()
 

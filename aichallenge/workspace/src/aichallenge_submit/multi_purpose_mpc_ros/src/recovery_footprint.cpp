@@ -871,6 +871,14 @@ FootprintSample sample_footprint(
     const std::size_t row = grid.y_axis == YAxisConvention::RowZeroAtMaximumY ?
       grid.height - 1U - y_index : y_index;
     for (std::size_t column = min_column; column <= max_column; ++column) {
+      // Occupancy is an exact broad phase. Free cells cannot contribute a
+      // footprint contact, so avoid the substantially more expensive
+      // oriented-box/cell intersection for the common racing-surface case.
+      // Occupied and unknown cells retain the original exact geometry and
+      // fail-closed semantics.
+      if (grid.cell(row, column) == CellState::Free) {
+        continue;
+      }
       const double cell_x =
         grid.origin_x_m + static_cast<double>(column) * grid.resolution_m;
       const double cell_y =
@@ -878,9 +886,7 @@ FootprintSample sample_footprint(
       if (!box_intersects_cell(box, cell_x, cell_y, cell_half)) {
         continue;
       }
-      if (grid.cell(row, column) != CellState::Free) {
-        sample.contact_cells.push_back(row * grid.width + column);
-      }
+      sample.contact_cells.push_back(row * grid.width + column);
     }
   }
   std::sort(sample.contact_cells.begin(), sample.contact_cells.end());

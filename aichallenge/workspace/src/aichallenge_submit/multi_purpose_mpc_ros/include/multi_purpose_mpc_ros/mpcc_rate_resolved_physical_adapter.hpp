@@ -105,6 +105,13 @@ struct ContinuationResult
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
   std::optional<race_mpcc_foundation::ExactPhysicalExecutionTrajectory>
   exact_trajectory;
+  /// Exact actuator state at the next publisher boundary.  A recursive
+  /// successor must start here rather than from either the old affine stage
+  /// endpoint or the current measured actuator state.
+  double publisher_interval_end_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double publisher_interval_end_response_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
   /// Nonlinear stage-end states on the shortened suffix. For a publisher
   /// interval prefix these contain exactly the state at the publication
   /// boundary, independent of solver-stage duration. These are kept
@@ -263,7 +270,8 @@ StopContingencyResult build_stop_contingency(
   const ContinuationInitialState & initial_state,
   const StopCourseGeometry & course_geometry,
   const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
-  double minimum_acceleration_mps2) noexcept;
+  double minimum_acceleration_mps2,
+  double target_lateral_m = 0.0) noexcept;
 
 /// Rebuild the already-declared terminal Stop policy from a fresh physical
 /// control-origin state.  Unlike build_stop_contingency(), this operation does

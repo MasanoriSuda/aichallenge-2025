@@ -518,10 +518,197 @@ struct TerminalStopCertificate
   std::string detail{"not-evaluated"};
 };
 
+enum class TerminalStopLateralAuditMode
+{
+  RacingLine,
+  Declared,
+  PhysicalRangeScan,
+  SolvedStopTrajectory,
+};
+
+std::optional<shadow::Snapshot> build_seven_state_stop_audit_candidate(
+  const shadow::Snapshot & source,
+  const artifact::ExecutionArtifact & normal_execution,
+  std::string * const rejection_detail) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  const auto reject = [rejection_detail](const char * const detail) {
+      if (rejection_detail != nullptr) {
+        *rejection_detail = detail;
+      }
+      return std::optional<shadow::Snapshot>{};
+    };
+  if (
+    source.request.states.empty() || source.request.inputs.empty() ||
+    source.request.states.size() != source.request.inputs.size() + 1U)
+  {
+    return reject("invalid source state/input shape");
+  }
+  double minimum_acceleration_mps2 = 0.0;
+  for (const auto & input : source.request.inputs) {
+    minimum_acceleration_mps2 = std::min(
+      minimum_acceleration_mps2,
+      input.lower[model::kAccelerationIndex]);
+  }
+  const auto cursor = artifact::resolve_cursor(
+    normal_execution, normal_execution.prediction_origin_sec);
+  const auto continuation = physical::build_continuation(
+    normal_execution, cursor,
+    physical::ContinuationInitialState{
+      source.request.initial_state[model::kLateralIndex],
+      source.request.initial_state[model::kLagIndex],
+      source.request.initial_state[model::kHeadingIndex],
+      source.request.initial_state[model::kVelocityIndex],
+      source.request.initial_state[model::kProgressIndex],
+      source.request.current_steering_rad,
+      source.request.current_response_steering_rad});
+  if (
+    !continuation.exact_trajectory.has_value() ||
+    !std::isfinite(continuation.publisher_interval_end_steering_rad) ||
+    !std::isfinite(
+      continuation.publisher_interval_end_response_steering_rad))
+  {
+    if (rejection_detail != nullptr) {
+      std::ostringstream detail;
+      detail << "publisher-boundary continuation unavailable/reason="
+             << physical::to_string(continuation.reason)
+             << "/scope=" << physical::to_string(continuation.scope)
+             << "/exact=" << (continuation.exact_trajectory.has_value() ? 1 : 0)
+             << "/steering="
+             << continuation.publisher_interval_end_steering_rad
+             << "/response="
+             << continuation.publisher_interval_end_response_steering_rad;
+      *rejection_detail = detail.str();
+    }
+    return std::nullopt;
+  }
+  const auto prefix_sample = std::lower_bound(
+    continuation.exact_trajectory->elapsed_time_sec.begin(),
+    continuation.exact_trajectory->elapsed_time_sec.end(),
+    source.publication_interval_sec - 1e-12);
+  if (prefix_sample == continuation.exact_trajectory->elapsed_time_sec.end()) {
+    return reject("publisher-boundary sample unavailable");
+  }
+  const auto prefix_index = static_cast<std::size_t>(std::distance(
+    continuation.exact_trajectory->elapsed_time_sec.begin(), prefix_sample));
+  if (
+    std::abs(*prefix_sample - source.publication_interval_sec) > 1e-9)
+  {
+    return reject("publisher-boundary sample timestamp mismatch");
+  }
+  const auto & prefix = continuation.exact_trajectory.value();
+  const double prefix_progress_m = prefix.progress_m[prefix_index];
+  if (!std::isfinite(prefix_progress_m)) {
+    return reject("publisher-boundary progress non-finite");
+  }
+
+  auto candidate = source;
+  candidate.control_prediction_origin_sec += source.publication_interval_sec;
+  candidate.course_progress_origin_m = prefix_progress_m;
+  candidate.request.initial_state[model::kLateralIndex] =
+    prefix.lateral_m[prefix_index];
+  candidate.request.initial_state[model::kLagIndex] =
+    prefix.lag_m[prefix_index];
+  candidate.request.initial_state[model::kHeadingIndex] =
+    prefix.heading_offset_rad[prefix_index];
+  candidate.request.initial_state[model::kVelocityIndex] =
+    prefix.velocity_mps[prefix_index];
+  candidate.request.initial_state[model::kProgressIndex] = 0.0;
+  candidate.request.current_steering_rad =
+    continuation.publisher_interval_end_steering_rad;
+  candidate.request.current_response_steering_rad =
+    continuation.publisher_interval_end_response_steering_rad;
+  candidate.request.previous_input[model::kAccelerationIndex] =
+    normal_execution.control_stages.front().acceleration_mps2;
+  candidate.request.previous_input[model::kSteeringRateIndex] =
+    normal_execution.control_stages.front().steering_rate_radps;
+  candidate.request.previous_input[model::kVirtualProgressSpeedIndex] =
+    normal_execution.control_stages.front().virtual_progress_speed_mps;
+  const double progress_shift_m =
+    prefix_progress_m - source.course_progress_origin_m;
+  for (auto & obstacle : candidate.dynamic_obstacle_stages) {
+    if (obstacle.valid) {
+      obstacle.target_progress_m -= progress_shift_m;
+    }
+  }
+  if (!candidate.replay_world.has_value()) {
+    return reject("replay world unavailable at publisher boundary");
+  }
+  const double old_control_origin_age_sec =
+    source.control_prediction_origin_sec -
+    candidate.replay_world->observed_sec;
+  for (std::size_t sample = 0U; sample <= prefix_index; ++sample) {
+    const auto frame = mpc_stage_geometry::sample_course_frame(
+      candidate.wall_course_frame_knots, prefix.progress_m[sample],
+      std::max(1e-9, candidate.replay_world->bound_tolerance_m));
+    if (!frame.has_value()) {
+      return reject("publisher-boundary course frame unavailable");
+    }
+    const auto pose = contract::reconstruct_planar_pose_from_frenet(
+      contract::PlanarPose{
+        frame->x_m, frame->y_m, frame->heading_rad},
+      contract::FrenetPose{
+        prefix.lateral_m[sample], prefix.lag_m[sample],
+        prefix.heading_offset_rad[sample]});
+    if (!pose.has_value()) {
+      return reject("publisher-boundary world pose unavailable");
+    }
+    candidate.replay_world->control_prefix.push_back(
+      recovery::Pose2D{pose->x_m, pose->y_m, pose->yaw_rad});
+    candidate.replay_world->control_prefix_elapsed_sec.push_back(
+      old_control_origin_age_sec + prefix.elapsed_time_sec[sample]);
+  }
+
+  const double initial_velocity_mps =
+    candidate.request.initial_state[model::kVelocityIndex];
+  if (
+    !std::isfinite(initial_velocity_mps) || initial_velocity_mps < 0.0 ||
+    !std::isfinite(minimum_acceleration_mps2) ||
+    minimum_acceleration_mps2 >= 0.0)
+  {
+    return reject("invalid publisher-boundary braking envelope");
+  }
+
+  double elapsed_sec = 0.0;
+  candidate.request.states.front().reference[model::kVelocityIndex] =
+    initial_velocity_mps;
+  for (std::size_t stage = 0U;
+    stage < candidate.request.inputs.size(); ++stage)
+  {
+    auto & input = candidate.request.inputs[stage];
+    if (!std::isfinite(input.stage_dt_sec) || input.stage_dt_sec <= 0.0) {
+      return reject("invalid Stop stage duration");
+    }
+    const double stage_start_velocity_mps = std::max(
+      0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
+    elapsed_sec += input.stage_dt_sec;
+    const double stage_end_velocity_mps = std::max(
+      0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
+    input.reference[model::kAccelerationIndex] =
+      stage_start_velocity_mps > 0.0 ? minimum_acceleration_mps2 : 0.0;
+    input.reference[model::kVirtualProgressSpeedIndex] =
+      stage_start_velocity_mps;
+    candidate.request.states[stage + 1U].reference[model::kVelocityIndex] =
+      stage_end_velocity_mps;
+  }
+  auto & terminal = candidate.request.states.back();
+  terminal.reference[model::kVelocityIndex] = 0.0;
+  terminal.lower[model::kVelocityIndex] = 0.0;
+  terminal.upper[model::kVelocityIndex] = 0.0;
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject("rebased Stop interaction snapshot incomplete");
+  }
+  if (rejection_detail != nullptr) {
+    *rejection_detail = "accepted";
+  }
+  return candidate;
+}
+
 TerminalStopCertificate certify_terminal_stop(
   const shadow::Snapshot & candidate,
   const artifact::ExecutionArtifact & execution,
-  const wall::Snapshot & normal_wall_snapshot)
+  const wall::Snapshot & normal_wall_snapshot,
+  const double target_lateral_m = 0.0)
 {
   TerminalStopCertificate result;
   if (!candidate.replay_world.has_value() ||
@@ -556,7 +743,7 @@ TerminalStopCertificate certify_terminal_stop(
       initial.response_steering_rad},
     normal_wall_snapshot.terminal_stop_course_geometry,
     world.terminal_stop_lateral_policy,
-    world.terminal_stop_minimum_acceleration_mps2);
+    world.terminal_stop_minimum_acceleration_mps2, target_lateral_m);
   if (!terminal.exact_trajectory.has_value()) {
     std::ostringstream detail;
     detail << "terminal Stop synthesis rejected/reason="
@@ -611,7 +798,9 @@ ArmResult evaluate_arm(
   const bool wall_restoration_audit = false,
   const std::optional<shadow::SolverContext::WallBucketAuditMode>
   wall_bucket_audit_mode = std::nullopt,
-  const std::size_t physical_dynamic_sqp_audit_iteration_count = 0U)
+  const std::size_t physical_dynamic_sqp_audit_iteration_count = 0U,
+  const TerminalStopLateralAuditMode terminal_stop_lateral_audit_mode =
+  TerminalStopLateralAuditMode::RacingLine)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
@@ -763,11 +952,92 @@ ArmResult evaluate_arm(
     return arm_result;
   }
 
-  const auto terminal_stop = certify_terminal_stop(
-    candidate, *solved.execution_artifact, physical_snapshot);
+  double terminal_stop_target_lateral_m = 0.0;
+  std::size_t terminal_stop_target_attempt_count = 0U;
+  TerminalStopCertificate terminal_stop;
+  if (
+    terminal_stop_lateral_audit_mode ==
+    TerminalStopLateralAuditMode::PhysicalRangeScan)
+  {
+    const auto & terminal_geometry =
+      physical_snapshot.terminal_stop_course_geometry;
+    const double target_lower_m = *std::min_element(
+      terminal_geometry.lateral_lower_m.begin(),
+      terminal_geometry.lateral_lower_m.end());
+    const double target_upper_m = *std::max_element(
+      terminal_geometry.lateral_upper_m.begin(),
+      terminal_geometry.lateral_upper_m.end());
+    const double target_step_m =
+      std::isfinite(candidate.wall_lateral_sample_step_m) &&
+      candidate.wall_lateral_sample_step_m > 0.0 ?
+      candidate.wall_lateral_sample_step_m : 0.10;
+    constexpr std::size_t kMaximumAuditTargets = 128U;
+    const std::size_t requested_target_count =
+      static_cast<std::size_t>(std::ceil(
+        std::max(0.0, target_upper_m - target_lower_m) / target_step_m)) + 1U;
+    const std::size_t target_count = std::clamp<std::size_t>(
+      requested_target_count, 1U, kMaximumAuditTargets);
+    for (std::size_t target_index = 0U;
+      target_index < target_count; ++target_index)
+    {
+      const double fraction = target_count <= 1U ? 0.0 :
+        static_cast<double>(target_index) /
+        static_cast<double>(target_count - 1U);
+      const double target_m = target_lower_m +
+        fraction * (target_upper_m - target_lower_m);
+      ++terminal_stop_target_attempt_count;
+      auto evaluated = certify_terminal_stop(
+        candidate, *solved.execution_artifact, physical_snapshot, target_m);
+      if (evaluated.accepted) {
+        terminal_stop_target_lateral_m = target_m;
+        terminal_stop = std::move(evaluated);
+        break;
+      }
+      if (terminal_stop_target_attempt_count == 1U) {
+        terminal_stop_target_lateral_m = target_m;
+        terminal_stop = std::move(evaluated);
+      }
+    }
+  } else if (
+    terminal_stop_lateral_audit_mode ==
+    TerminalStopLateralAuditMode::SolvedStopTrajectory)
+  {
+    terminal_stop_target_attempt_count = 1U;
+    if (
+      exact.velocity_mps.empty() ||
+      exact.velocity_mps.back() > std::max(
+        1e-9, solved.execution_artifact->physical_global_tolerance))
+    {
+      terminal_stop.detail = "seven-state Stop did not reach rest";
+    } else {
+      terminal_stop.accepted = true;
+      terminal_stop.trajectory = exact;
+      terminal_stop.wall_certificate = wall_result;
+      terminal_stop.dynamic_certificate = dynamic_result;
+      terminal_stop.detail = "accepted/seven-state-stop";
+    }
+  } else {
+    terminal_stop_target_lateral_m =
+      terminal_stop_lateral_audit_mode ==
+      TerminalStopLateralAuditMode::Declared &&
+      successor.stop_suffix.available ?
+      successor.stop_suffix.hold_lateral_m : 0.0;
+    terminal_stop_target_attempt_count = 1U;
+    terminal_stop = certify_terminal_stop(
+      candidate, *solved.execution_artifact, physical_snapshot,
+      terminal_stop_target_lateral_m);
+  }
+  arm_result.terminal_stop_target_lateral_m =
+    terminal_stop_target_lateral_m;
+  arm_result.terminal_stop_target_attempt_count =
+    terminal_stop_target_attempt_count;
   if (!terminal_stop.accepted) {
     arm_result.stage = Stage::TerminalSuccessorRejected;
-    arm_result.detail = terminal_stop.detail;
+    std::ostringstream detail;
+    detail << terminal_stop.detail << "/stop_target_lateral="
+           << terminal_stop_target_lateral_m << "/stop_target_attempts="
+           << terminal_stop_target_attempt_count;
+    arm_result.detail = detail.str();
     return arm_result;
   }
 
@@ -1003,7 +1273,9 @@ enum class ProductionEvaluationMode
 ArmResult evaluate_production_population(
   const Arm arm, const shadow::Snapshot & source,
   const std::uint64_t source_fingerprint, const int side,
-  const ProductionEvaluationMode mode = ProductionEvaluationMode::SingleSqp)
+  const ProductionEvaluationMode mode = ProductionEvaluationMode::SingleSqp,
+  const TerminalStopLateralAuditMode terminal_stop_lateral_audit_mode =
+  TerminalStopLateralAuditMode::RacingLine)
 {
   const auto population = maneuver::build_bounded_candidates(source, side);
   if (
@@ -1046,7 +1318,8 @@ ArmResult evaluate_production_population(
       arm, candidate.seed.solver_snapshot, source_fingerprint,
       candidate.seed.candidate_fingerprint, successor, transition_stage,
       ahead_stage, &solver_context, false, std::nullopt,
-      mode == ProductionEvaluationMode::FixedDynamicSqp ? 3U : 0U);
+      mode == ProductionEvaluationMode::FixedDynamicSqp ? 3U : 0U,
+      terminal_stop_lateral_audit_mode);
     evaluated.candidate_source = maneuver::to_string(candidate.kind);
     evaluated.candidate_count = attempted;
     const int rank = evidence_rank(evaluated.stage);
@@ -1102,6 +1375,16 @@ const char * to_string(const Arm arm) noexcept
       return "proof-guided-production-left-m";
     case Arm::ProofGuidedProductionRightM:
       return "proof-guided-production-right-m";
+    case Arm::PersistentDeclaredStopR:
+      return "persistent-declared-stop-r";
+    case Arm::ProductionLeftDeclaredStopR:
+      return "production-left-declared-stop-r";
+    case Arm::PersistentStopScanS:
+      return "persistent-stop-scan-s";
+    case Arm::ProductionLeftStopScanS:
+      return "production-left-stop-scan-s";
+    case Arm::SevenStateStopU:
+      return "seven-state-stop-u";
   }
   return "unknown";
 }
@@ -1761,6 +2044,88 @@ Report verify_external_primal(
   } catch (...) {
     report.source_accepted = false;
     report.detail = "unknown external primal verification exception";
+  }
+  return report;
+}
+
+Report compare_terminal_stop_lateral_contract(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  Report report;
+  try {
+    const auto & source = recorded.source;
+    const auto source_fingerprint = recorded.interaction_fingerprint;
+    report.source_interaction_fingerprint = source_fingerprint;
+    if (
+      !architecture::interaction_snapshot_complete(source) ||
+      !architecture::interaction_snapshot_matches_fingerprint(
+        source, source_fingerprint))
+    {
+      report.detail = "source interaction snapshot rejected";
+      for (const auto arm :
+        {Arm::PersistentA, Arm::PersistentDeclaredStopR,
+         Arm::PersistentStopScanS, Arm::ProductionLeftG,
+         Arm::ProductionLeftDeclaredStopR, Arm::ProductionLeftStopScanS,
+         Arm::SevenStateStopU})
+      {
+        report.arms.push_back(rejected_arm(
+          arm, Stage::SourceRejected, source_fingerprint, report.detail));
+      }
+      return report;
+    }
+    report.source_accepted = true;
+    report.detail = "accepted/terminal-stop-lateral-contract-audit-only";
+    const auto persistent_successor =
+      maneuver::resolve_terminal_successor(source);
+    report.arms.push_back(evaluate_arm(
+      Arm::PersistentA, source, source_fingerprint, source_fingerprint,
+      persistent_successor));
+    report.arms.push_back(evaluate_arm(
+      Arm::PersistentDeclaredStopR, source, source_fingerprint,
+      source_fingerprint, persistent_successor, -1, -1, nullptr, false,
+      std::nullopt, 0U, TerminalStopLateralAuditMode::Declared));
+    report.arms.push_back(evaluate_arm(
+      Arm::PersistentStopScanS, source, source_fingerprint,
+      source_fingerprint, persistent_successor, -1, -1, nullptr, false,
+      std::nullopt, 0U, TerminalStopLateralAuditMode::PhysicalRangeScan));
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProductionLeftG, source, source_fingerprint, 1));
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProductionLeftDeclaredStopR, source, source_fingerprint, 1,
+      ProductionEvaluationMode::SingleSqp,
+      TerminalStopLateralAuditMode::Declared));
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProductionLeftStopScanS, source, source_fingerprint, 1,
+      ProductionEvaluationMode::SingleSqp,
+      TerminalStopLateralAuditMode::PhysicalRangeScan));
+    shadow::SolverContext stop_source_solver;
+    const auto stop_source = stop_source_solver.evaluate(source);
+    std::string solved_stop_detail{"source normal solve rejected"};
+    const auto solved_stop =
+      stop_source.outcome == shadow::Outcome::Solved &&
+      stop_source.execution_artifact != nullptr ?
+      build_seven_state_stop_audit_candidate(
+        source, *stop_source.execution_artifact, &solved_stop_detail) :
+      std::nullopt;
+    if (solved_stop.has_value()) {
+      report.arms.push_back(evaluate_arm(
+        Arm::SevenStateStopU, solved_stop.value(), source_fingerprint,
+        architecture::fingerprint_interaction_snapshot(solved_stop.value()),
+        maneuver::resolve_terminal_successor(solved_stop.value()), -1, -1,
+        nullptr, false, std::nullopt, 0U,
+        TerminalStopLateralAuditMode::SolvedStopTrajectory));
+    } else {
+      report.arms.push_back(rejected_arm(
+        Arm::SevenStateStopU, Stage::CandidateRejected, source_fingerprint,
+        "seven-state Stop audit candidate unavailable/" +
+        solved_stop_detail));
+    }
+  } catch (const std::exception & exception) {
+    report.source_accepted = false;
+    report.detail = exception.what();
+  } catch (...) {
+    report.source_accepted = false;
+    report.detail = "unknown terminal Stop lateral comparison exception";
   }
   return report;
 }

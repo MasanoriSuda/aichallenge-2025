@@ -707,6 +707,7 @@ std::optional<StopPathTrackingCommand> resolve_stop_path_tracking_command(
     !std::isfinite(policy.lateral_gain) || policy.lateral_gain < 0.0 ||
     !std::isfinite(policy.heading_gain) || policy.heading_gain < 0.0 ||
     !std::isfinite(request.current_lateral_m) ||
+    !std::isfinite(request.target_lateral_m) ||
     !std::isfinite(request.current_heading_error_rad) ||
     !std::isfinite(request.reference_curvature_radpm) ||
     !std::isfinite(request.current_speed_mps) ||
@@ -717,9 +718,11 @@ std::optional<StopPathTrackingCommand> resolve_stop_path_tracking_command(
     return std::nullopt;
   }
 
+  const double lateral_error_m =
+    request.current_lateral_m - request.target_lateral_m;
   const double target_curvature_radpm =
     request.reference_curvature_radpm -
-    policy.lateral_gain * request.current_lateral_m -
+    policy.lateral_gain * lateral_error_m -
     policy.heading_gain * request.current_heading_error_rad;
   if (!std::isfinite(target_curvature_radpm)) {
     return std::nullopt;

@@ -392,6 +392,32 @@ TEST(RaceMpccFoundation, MovingStopPathFeedbackIsRateAndAccelerationBounded)
   EXPECT_FALSE(race::resolve_stop_path_tracking_command(request).has_value());
 }
 
+TEST(RaceMpccFoundation, MovingStopPathFeedbackTracksDeclaredLateralReference)
+{
+  race::StopPathTrackingCommandRequest request;
+  request.policy = race::StopPathTrackingPolicy{
+    2.0, 0.60, 10.0, 100.0, 1.0, 0.4, 1.3};
+  request.current_lateral_m = 0.5;
+  request.current_heading_error_rad = 0.0;
+  request.reference_curvature_radpm = 0.05;
+  request.current_speed_mps = 1.0;
+  request.current_steering_rad = 0.0;
+  request.step_sec = 0.1;
+
+  const auto racing_line = race::resolve_stop_path_tracking_command(request);
+  ASSERT_TRUE(racing_line.has_value());
+  EXPECT_LT(racing_line->target_steering_rad, 0.0);
+
+  request.target_lateral_m = 0.5;
+  const auto declared_offset =
+    race::resolve_stop_path_tracking_command(request);
+  ASSERT_TRUE(declared_offset.has_value());
+  EXPECT_GT(declared_offset->target_steering_rad, 0.0);
+  EXPECT_GT(
+    declared_offset->target_steering_rad,
+    racing_line->target_steering_rad);
+}
+
 TEST(RaceMpccFoundation, StopKeepsOnlyTheLatentNormalShadowWarm)
 {
   const auto not_stop = race::resolve_stop_shadow_intent(

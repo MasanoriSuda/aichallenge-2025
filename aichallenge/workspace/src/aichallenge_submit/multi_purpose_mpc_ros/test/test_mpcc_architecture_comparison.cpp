@@ -525,6 +525,34 @@ TEST(MpccArchitectureComparison, KktEquilibrationKeepsExactProofChain)
   EXPECT_TRUE(report.arms.front().bundle.has_value());
 }
 
+TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
+{
+  auto source = source_snapshot();
+  source.request.states.back().reference[model::kLateralIndex] = 0.5;
+  const auto report = compare_terminal_stop_lateral_contract(
+    recorded(std::move(source)));
+
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 7U);
+  EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
+  EXPECT_EQ(report.arms[1].arm, Arm::PersistentDeclaredStopR);
+  EXPECT_EQ(report.arms[2].arm, Arm::PersistentStopScanS);
+  EXPECT_EQ(report.arms[3].arm, Arm::ProductionLeftG);
+  EXPECT_EQ(report.arms[4].arm, Arm::ProductionLeftDeclaredStopR);
+  EXPECT_EQ(report.arms[5].arm, Arm::ProductionLeftStopScanS);
+  EXPECT_EQ(report.arms[6].arm, Arm::SevenStateStopU);
+  for (std::size_t index = 0U; index < 6U; ++index) {
+    const auto & arm = report.arms[index];
+    EXPECT_EQ(arm.stage, Stage::Accepted) << arm.detail;
+    ASSERT_TRUE(arm.bundle.has_value());
+    EXPECT_TRUE(arm.bundle->stop_suffix.available);
+  }
+  EXPECT_NEAR(report.arms[1].bundle->stop_suffix.hold_lateral_m, 0.5, 1e-12);
+  EXPECT_GE(report.arms[2].terminal_stop_target_attempt_count, 1U);
+  EXPECT_GE(report.arms[5].terminal_stop_target_attempt_count, 1U);
+  EXPECT_NE(report.arms[6].stage, Stage::SourceRejected);
+}
+
 TEST(MpccArchitectureComparison, ExternalPrimalUsesExactPhysicalProofChain)
 {
   auto [input, primal] = recorded_with_solved_qp(source_snapshot());

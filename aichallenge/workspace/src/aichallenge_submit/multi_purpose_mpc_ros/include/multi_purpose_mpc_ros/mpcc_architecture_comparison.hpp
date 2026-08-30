@@ -45,6 +45,11 @@ enum class Arm
   DynamicSqpProductionRightL,
   ProofGuidedProductionLeftM,
   ProofGuidedProductionRightM,
+  PersistentDeclaredStopR,
+  ProductionLeftDeclaredStopR,
+  PersistentStopScanS,
+  ProductionLeftStopScanS,
+  SevenStateStopU,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -108,6 +113,8 @@ struct ArmResult
   std::string candidate_source{"none"};
   std::size_t candidate_count{};
   std::size_t dynamic_sqp_depth{};
+  double terminal_stop_target_lateral_m{};
+  std::size_t terminal_stop_target_attempt_count{};
   std::optional<ManeuverBundle> bundle;
   std::string detail{"not-evaluated"};
 };
@@ -157,6 +164,13 @@ Report compare_physical_dynamic_sqp(
 /// depths one through three. The first certified depth wins; later numerical
 /// iterates cannot replace it. Observation-only with no authority API.
 Report compare_proof_guided_dynamic_sqp(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
+  noexcept;
+
+/// Compare the unchanged zero-offset terminal Stop with the candidate's
+/// declared pass-side Stop reference. Both arms use the same primary solve,
+/// nonlinear model and exact proof chain; this function has no authority API.
+Report compare_terminal_stop_lateral_contract(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
   noexcept;
 

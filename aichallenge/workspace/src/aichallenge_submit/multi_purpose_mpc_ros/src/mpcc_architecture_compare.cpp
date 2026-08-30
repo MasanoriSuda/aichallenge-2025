@@ -39,12 +39,16 @@ int main(int argc, char ** argv)
     argc == 3 && std::string{argv[2]} == "--rejected-primal-only";
   const bool kkt_equilibration_only =
     argc == 3 && std::string{argv[2]} == "--kkt-equilibration-only";
+  const bool terminal_stop_lateral_only =
+    argc == 3 && std::string{argv[2]} ==
+    "--terminal-stop-lateral-contract-only";
   if (
     argc != 2 && !wall_restoration_only && !wall_buckets_only &&
     !physical_dynamic_sqp_only && !proof_guided_dynamic_sqp_only &&
     !external_primal && !external_primal_omit_heading &&
     !external_primal_omit_lag && !external_primal_physical_only &&
-    !rejected_primal_only && !kkt_equilibration_only)
+    !rejected_primal_only && !kkt_equilibration_only &&
+    !terminal_stop_lateral_only)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
                  "[--wall-restoration-only | --wall-buckets-only | "
@@ -55,7 +59,8 @@ int main(int argc, char ** argv)
                  "--external-primal-omit-wall-lag-bucket <values.txt> | "
                  "--external-primal-physical-nonlinear-oracle "
                  "<values.txt> | --rejected-primal-only | "
-                 "--kkt-equilibration-only]\n";
+                 "--kkt-equilibration-only | "
+                 "--terminal-stop-lateral-contract-only]\n";
     return 2;
   }
   std::string detail;
@@ -66,7 +71,10 @@ int main(int argc, char ** argv)
     return 3;
   }
   comparison::Report report;
-  if (kkt_equilibration_only) {
+  if (terminal_stop_lateral_only) {
+    report = comparison::compare_terminal_stop_lateral_contract(
+      recorded.value());
+  } else if (kkt_equilibration_only) {
     report = comparison::compare_kkt_equilibration(recorded.value());
   } else if (rejected_primal_only) {
     auto primal = recorded->recorded_qp.has_value() ?
@@ -160,6 +168,9 @@ int main(int argc, char ** argv)
               << " candidate_source=" << arm.candidate_source
               << " candidate_count=" << arm.candidate_count
               << " sqp_depth=" << arm.dynamic_sqp_depth
+              << " stop_target=" << arm.terminal_stop_target_lateral_m
+              << " stop_target_attempts=" <<
+      arm.terminal_stop_target_attempt_count
               << " bundle=" << arm.bundle.has_value()
               << " detail=" << arm.detail << '\n';
   }

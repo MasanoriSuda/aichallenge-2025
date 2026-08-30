@@ -459,6 +459,11 @@ struct StopPathTrackingCommandRequest
   double current_speed_mps{};
   double current_steering_rad{};
   double step_sec{};
+  /// Course-frame lateral reference owned by this immutable Stop policy.
+  /// Ordinary Emergency Stop targets the racing line (zero). Architecture
+  /// audits may provide a candidate-declared offset without creating a second
+  /// feedback law.
+  double target_lateral_m{};
 };
 
 struct StopPathTrackingCommand

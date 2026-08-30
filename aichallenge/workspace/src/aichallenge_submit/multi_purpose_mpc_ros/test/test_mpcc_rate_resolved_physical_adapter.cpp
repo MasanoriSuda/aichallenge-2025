@@ -162,6 +162,9 @@ TEST(
   EXPECT_NEAR(exact.progress_m.back(), 50.40, 1e-12);
   ASSERT_EQ(result.stage_end_velocity_mps.size(), 2U);
   ASSERT_EQ(result.stage_end_steering_rad.size(), 2U);
+  EXPECT_NEAR(result.publisher_interval_end_steering_rad, 0.105, 1e-12);
+  EXPECT_NEAR(
+    result.publisher_interval_end_response_steering_rad, 0.105, 1e-12);
   EXPECT_NEAR(result.stage_end_velocity_mps.back(), 2.20, 1e-12);
   // The serialized 0.105 rad angle is held for the first 25 ms. The
   // un-serialized 0.1 rad/s SQP input resumes only after that boundary.

@@ -638,6 +638,9 @@ ContinuationResult build_continuation(
         artifact.physical_global_tolerance)
       {
         publisher_interval_sample_count = exact.path_distance_m.size();
+        result.publisher_interval_end_steering_rad = nonlinear.steering_rad;
+        result.publisher_interval_end_response_steering_rad =
+          nonlinear.response_steering_rad;
       }
     }
     result.stage_end_velocity_mps.push_back(nonlinear.velocity_mps);
@@ -681,7 +684,8 @@ StopContingencyResult build_stop_contingency(
   const ContinuationInitialState & initial_state,
   const StopCourseGeometry & course_geometry,
   const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
-  const double minimum_acceleration_mps2) noexcept
+  const double minimum_acceleration_mps2,
+  const double target_lateral_m) noexcept
 {
   namespace execution = mpcc_rate_resolved_execution_artifact;
   namespace race = race_mpcc_foundation;
@@ -735,6 +739,7 @@ StopContingencyResult build_stop_contingency(
   }
   if (
     !std::isfinite(minimum_acceleration_mps2) ||
+    !std::isfinite(target_lateral_m) ||
     minimum_acceleration_mps2 >= 0.0)
   {
     result.reason = StopContingencyRejectReason::InvalidBrakingEnvelope;
@@ -938,7 +943,7 @@ StopContingencyResult build_stop_contingency(
         lateral_policy, nonlinear.lateral_m,
         nonlinear.heading_offset_rad, geometry->curvature_radpm,
         nonlinear.velocity_mps, nonlinear.steering_rad,
-        artifact.publication_interval_sec});
+        artifact.publication_interval_sec, target_lateral_m});
     if (!lateral_command.has_value()) {
       result.reason = StopContingencyRejectReason::InvalidLateralPolicy;
       return result;

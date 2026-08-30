@@ -10561,6 +10561,20 @@ struct MPC
     const int current_world_preentry_side_sign =
       current_world_preentry_owned ?
       live_behavior.overtake_selected_mission->pass_side_sign : 0;
+    const auto & async_preentry_selection =
+      live_behavior.rate_resolved_preentry_branch_selection;
+    const bool async_preentry_owned =
+      !active_execution &&
+      live_behavior.rate_resolved_preentry_tactical_source_sequence != 0U &&
+      async_preentry_selection.valid &&
+      (async_preentry_selection.selected_side_sign == -1 ||
+      async_preentry_selection.selected_side_sign == 1) &&
+      live_behavior.rate_resolved_preentry_selected_mission_hint.has_value() &&
+      live_behavior.rate_resolved_preentry_selected_mission_hint->feasible &&
+      live_behavior.rate_resolved_preentry_selected_mission_hint->pass_side_sign ==
+      async_preentry_selection.selected_side_sign;
+    const int async_preentry_side_sign = async_preentry_owned ?
+      async_preentry_selection.selected_side_sign : 0;
     const auto tactical_input =
       overtake_core::resolve_rate_resolved_gate_a_tactical_input(
       overtake_core::RateResolvedGateATacticalInputRequest{
@@ -10570,10 +10584,18 @@ struct MPC
         current_world_preentry_owned ?
         live_behavior.overtake_selected_mission : std::nullopt,
         live_behavior.mpcc_lite_same_side_replan_mission,
-        live_behavior.mpcc_lite_cross_side_replan_mission});
-    const std::uint64_t tactical_source_sequence = active_execution ?
-      live_behavior.rate_resolved_preentry_tactical_source_sequence :
-      active_control_decision_id_;
+        live_behavior.mpcc_lite_cross_side_replan_mission,
+        async_preentry_side_sign,
+        async_preentry_owned ?
+        live_behavior.rate_resolved_preentry_selected_mission_hint :
+        std::nullopt});
+    const bool current_world_preentry_input =
+      tactical_input.source ==
+      overtake_core::RateResolvedGateATacticalInputSource::CurrentWorldPreentry;
+    const std::uint64_t tactical_source_sequence =
+      !active_execution && current_world_preentry_input ?
+      active_control_decision_id_ :
+      live_behavior.rate_resolved_preentry_tactical_source_sequence;
     if (
       !tactical_input.valid || !tactical_input.mission.has_value() ||
       tactical_source_sequence == 0U ||

@@ -86,6 +86,8 @@ const char * to_string(const RateResolvedGateATacticalInputSource source) noexce
       return "none";
     case RateResolvedGateATacticalInputSource::CurrentWorldPreentry:
       return "current-world-preentry";
+    case RateResolvedGateATacticalInputSource::AsyncPreentryHomotopy:
+      return "async-preentry-homotopy";
     case RateResolvedGateATacticalInputSource::ActiveSameSideReplacement:
       return "active-same-side";
     case RateResolvedGateATacticalInputSource::ActiveCrossSideReplacement:
@@ -145,6 +147,17 @@ resolve_rate_resolved_gate_a_tactical_input(
     resolution.source =
       RateResolvedGateATacticalInputSource::CurrentWorldPreentry;
     resolution.mission = request.current_world_preentry_mission;
+    return resolution;
+  }
+  if (candidate_matches(
+      request.async_preentry_mission,
+      request.async_preentry_side_sign))
+  {
+    resolution.valid = true;
+    resolution.selected_side_sign = request.async_preentry_side_sign;
+    resolution.source =
+      RateResolvedGateATacticalInputSource::AsyncPreentryHomotopy;
+    resolution.mission = request.async_preentry_mission;
   }
   return resolution;
 }

@@ -1617,13 +1617,14 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "resolve_rate_resolved_gate_a_tactical_input(" in draft
     assert "live_behavior.overtake_selected_mission" in draft
     assert "live_behavior.validated_overtake_entry_longitudinal_owner" in draft
-    assert "CurrentWorldPreentry" not in draft
+    assert "AsyncPreentryHomotopy" not in draft
     assert "live_behavior.mpcc_lite_same_side_replan_mission" in draft
     assert "live_behavior.mpcc_lite_cross_side_replan_mission" in draft
-    assert "rate_resolved_preentry_selected_mission_hint" not in draft
+    assert "live_behavior.rate_resolved_preentry_selected_mission_hint" in draft
+    assert "async_preentry_owned" in draft
     assert (
-        "live_behavior.rate_resolved_preentry_tactical_source_sequence :\n"
-        "      active_control_decision_id_" in draft
+        "!active_execution && current_world_preentry_input ?\n"
+        "      active_control_decision_id_ :" in draft
     )
     assert "assessment.side = tactical_input.selected_side_sign" in draft
     assert "draft.tactical_input_source = tactical_input.source" in draft

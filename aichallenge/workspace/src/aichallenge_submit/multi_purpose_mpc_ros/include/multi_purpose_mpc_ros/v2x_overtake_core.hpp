@@ -4504,6 +4504,7 @@ enum class RateResolvedGateATacticalInputSource
 {
   None,
   CurrentWorldPreentry,
+  AsyncPreentryHomotopy,
   ActiveSameSideReplacement,
   ActiveCrossSideReplacement,
 };
@@ -4518,6 +4519,8 @@ struct RateResolvedGateATacticalInputRequest
   std::optional<OvertakeMissionCandidate> current_world_preentry_mission;
   std::optional<OvertakeMissionCandidate> active_same_side_mission;
   std::optional<OvertakeMissionCandidate> active_cross_side_mission;
+  int async_preentry_side_sign{};
+  std::optional<OvertakeMissionCandidate> async_preentry_mission;
 };
 
 struct RateResolvedGateATacticalInputResolution
@@ -4530,7 +4533,9 @@ struct RateResolvedGateATacticalInputResolution
 };
 
 /// Resolve the sole tactical input owner for the causal seven-state Gate A
-/// worker. New entry consumes the current control epoch's selected Mission;
+/// worker. New entry first consumes the current control epoch's selected
+/// Mission. If candidate generation belongs to an accepted asynchronous
+/// tactical result, it may instead consume that result's homotopy geometry;
 /// the worker must still build and certify a fresh seven-state trajectory.
 /// Active execution consumes the same runtime replacement request that the
 /// execution layer will attempt, and deliberately cannot fall back to

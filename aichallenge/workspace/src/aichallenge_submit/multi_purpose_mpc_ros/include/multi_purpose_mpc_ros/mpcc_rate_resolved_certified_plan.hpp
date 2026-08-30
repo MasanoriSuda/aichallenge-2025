@@ -124,6 +124,30 @@ struct PublishedBundleSourceSnapshot
     std::numeric_limits<double>::quiet_NaN()};
 };
 
+enum class PublishedSourceKind
+{
+  None,
+  ExactExecutedPlan,
+  CurrentWorldBundle,
+};
+
+const char * to_string(PublishedSourceKind kind) noexcept;
+
+/// Atomic view of the source identity behind the last command which crossed
+/// the sole publisher.  A current-world Bundle remains distinct from exact
+/// executed evidence even though it takes publication-order precedence.
+struct LatestPublishedSourceSnapshot
+{
+  PublishedSourceKind kind{PublishedSourceKind::None};
+  std::shared_ptr<const CertifiedPlan> plan;
+  std::shared_ptr<const CertifiedPlan> sibling_plan;
+  std::uint64_t publication_decision_id{};
+  double publication_control_origin_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double publication_artifact_elapsed_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+};
+
 /// Atomic candidate lifecycle entry.  A sibling may only accompany a normal
 /// Cruise/Follow dynamic-obstacle plan from the same source epoch and opposite
 /// homotopy.  Newer unrelated worker output cannot overwrite this association.
@@ -202,6 +226,7 @@ public:
   /// read under one lock so a consumer cannot join mismatched lifecycle data.
   ExecutedPlanSnapshot executed_snapshot() const;
   PublishedBundleSourceSnapshot published_bundle_source_snapshot() const;
+  LatestPublishedSourceSnapshot latest_published_source_snapshot() const;
   StoreState state() const;
   bool clear();
   bool clear_if_sequence(std::uint64_t expected_sequence);

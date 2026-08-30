@@ -508,6 +508,60 @@ TEST(
 
 TEST(
   MpccRateResolvedCertifiedPlan,
+  LatestPublishedSourcePrefersBundleWithoutPromotingItToExecuted)
+{
+  certified::Store store;
+  const auto exact = build_plan(5U);
+  const auto bundle_source = build_plan(6U);
+  ASSERT_EQ(store.replace(exact.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.mark_executed(exact.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.record_published_bundle_source(
+      bundle_source.plan, 101U, 10.1, 0.10),
+    certified::StoreReason::Accepted);
+
+  const auto latest = store.latest_published_source_snapshot();
+  EXPECT_EQ(
+    latest.kind, certified::PublishedSourceKind::CurrentWorldBundle);
+  EXPECT_EQ(latest.plan, bundle_source.plan);
+  EXPECT_EQ(latest.publication_decision_id, 101U);
+  EXPECT_DOUBLE_EQ(latest.publication_control_origin_sec, 10.1);
+  EXPECT_DOUBLE_EQ(latest.publication_artifact_elapsed_sec, 0.10);
+  EXPECT_EQ(store.executed_snapshot().plan, exact.plan);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  LaterExactPublicationBecomesLatestPublishedSource)
+{
+  certified::Store store;
+  const auto exact = build_plan(5U);
+  const auto bundle_source = build_plan(6U);
+  const auto successor = build_plan(7U);
+  ASSERT_EQ(
+    store.mark_executed(exact.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.record_published_bundle_source(
+      bundle_source.plan, 101U, 10.1, 0.10),
+    certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.mark_executed(successor.plan, 102U, 10.2, 0.15),
+    certified::StoreReason::Accepted);
+
+  const auto latest = store.latest_published_source_snapshot();
+  EXPECT_EQ(latest.kind, certified::PublishedSourceKind::ExactExecutedPlan);
+  EXPECT_EQ(latest.plan, successor.plan);
+  EXPECT_EQ(latest.publication_decision_id, 102U);
+  EXPECT_DOUBLE_EQ(latest.publication_control_origin_sec, 10.2);
+  EXPECT_DOUBLE_EQ(latest.publication_artifact_elapsed_sec, 0.15);
+  EXPECT_EQ(store.published_bundle_source_snapshot().plan, nullptr);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
   ExactPublicationSupersedesPublishedBundleSource)
 {
   certified::Store store;

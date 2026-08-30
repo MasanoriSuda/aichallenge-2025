@@ -7192,6 +7192,10 @@ struct PublishedMpccExecutionAlignment
 {
   bool identity_expected{false};
   std::uint64_t artifact_sequence{};
+  std::uint64_t publication_decision_id{};
+  rate_resolved_certified::PublishedSourceKind source_kind{
+    rate_resolved_certified::PublishedSourceKind::None};
+  int source_side_sign{};
   mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
   double remaining_distance_m{};
   mpcc_rate_resolved_execution_artifact::CursorReason cursor_reason{
@@ -22927,15 +22931,21 @@ struct MPC
       alignment.reason = "published store or course unavailable";
       return alignment;
     }
-    const auto executed_entry =
-      rate_resolved_track_cruise_certified_plan_store_->executed_snapshot();
-    const auto & plan = executed_entry.plan;
+    const auto published_source =
+      rate_resolved_track_cruise_certified_plan_store_->
+      latest_published_source_snapshot();
+    const auto & plan = published_source.plan;
     if (plan == nullptr || plan->execution_artifact == nullptr) {
       alignment.reason = "no published execution artifact";
       return alignment;
     }
+    alignment.source_kind = published_source.kind;
+    alignment.publication_decision_id =
+      published_source.publication_decision_id;
     alignment.artifact_sequence =
       plan->execution_artifact->identity.sequence;
+    alignment.source_side_sign =
+      plan->execution_artifact->identity.source_context.execution_side_sign;
 
     const auto identity_for = [&](const mpcc_contract::ControlIntent intent) {
         return rate_resolved_execution_source::build(
@@ -22976,8 +22986,8 @@ struct MPC
           overtake_line_state_.mission_generation,
           overtake_line_state_.pass_side_sign},
         now_sec + std::max(0.0, execution_prediction_delay_sec_),
-        executed_entry.first_published_control_origin_sec,
-        executed_entry.first_published_artifact_elapsed_sec,
+        published_source.publication_control_origin_sec,
+        published_source.publication_artifact_elapsed_sec,
         model->s, model->reference_path->length,
         model->reference_path->circular});
     alignment.cursor_reason = published.published.cursor.reason;
@@ -29325,6 +29335,7 @@ struct MPC
   bool published_overtake_execution_alignment_was_active_{false};
   mpcc_contract::ControlIntent published_overtake_execution_alignment_last_intent_{
     mpcc_contract::ControlIntent::Unknown};
+  int published_overtake_execution_alignment_last_source_side_sign_{};
   std::string published_overtake_execution_alignment_last_reason_;
   double progress_contouring_fallback_last_log_sec_{
     -std::numeric_limits<double>::infinity()};
@@ -36412,6 +36423,8 @@ private:
       published_overtake_execution_alignment_was_active_ ||
       published_overtake_execution_alignment.intent !=
       published_overtake_execution_alignment_last_intent_ ||
+      published_overtake_execution_alignment.source_side_sign !=
+      published_overtake_execution_alignment_last_source_side_sign_ ||
       published_overtake_execution_alignment.reason !=
       published_overtake_execution_alignment_last_reason_;
     if (
@@ -36422,12 +36435,19 @@ private:
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
         "Published Overtake execution alignment: active=%d, expected=%d, "
-        "intent=%s, artifact=%lu, cursor=%s, reason=%s, phase=%s, wp_id=%d",
+        "intent=%s, source=%s, source_side=%d, artifact=%lu, "
+        "publication_decision=%lu, "
+        "cursor=%s, reason=%s, phase=%s, wp_id=%d",
         published_overtake_execution_profile_active ? 1 : 0,
         published_overtake_execution_alignment.identity_expected ? 1 : 0,
         mpcc_contract::to_string(published_overtake_execution_alignment.intent),
+        rate_resolved_certified::to_string(
+          published_overtake_execution_alignment.source_kind),
+        published_overtake_execution_alignment.source_side_sign,
         static_cast<unsigned long>(
           published_overtake_execution_alignment.artifact_sequence),
+        static_cast<unsigned long>(
+          published_overtake_execution_alignment.publication_decision_id),
         rate_resolved_artifact::to_string(
           published_overtake_execution_alignment.cursor_reason),
         published_overtake_execution_alignment.reason.c_str(),
@@ -36438,6 +36458,8 @@ private:
       published_overtake_execution_profile_active;
     published_overtake_execution_alignment_last_intent_ =
       published_overtake_execution_alignment.intent;
+    published_overtake_execution_alignment_last_source_side_sign_ =
+      published_overtake_execution_alignment.source_side_sign;
     published_overtake_execution_alignment_last_reason_ =
       published_overtake_execution_alignment.reason;
     // The six-state certified store is the sole normal solve owner. Project

@@ -995,7 +995,11 @@ def test_pass_entry_queries_phase_compatible_published_overtake_execution() -> N
         "build_progress_course_frame_knots(", align_start
     )
     align = SOURCE[align_start:align_end]
-    assert "executed_snapshot()" in align
+    assert "latest_published_source_snapshot()" in align
+    assert "published_source.publication_control_origin_sec" in align
+    assert "published_source.publication_artifact_elapsed_sec" in align
+    assert "alignment.source_kind = published_source.kind;" in align
+    assert "alignment.source_side_sign =" in align
     assert "ControlIntent::Pass" in align
     assert "ControlIntent::ShiftOut" in align
     assert "build_published(" in align

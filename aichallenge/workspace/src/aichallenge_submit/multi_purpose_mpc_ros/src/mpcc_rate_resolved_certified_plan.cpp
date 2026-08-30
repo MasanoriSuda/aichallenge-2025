@@ -219,6 +219,19 @@ const char * to_string(const StoreReason reason) noexcept
   return "unknown";
 }
 
+const char * to_string(const PublishedSourceKind kind) noexcept
+{
+  switch (kind) {
+    case PublishedSourceKind::None:
+      return "none";
+    case PublishedSourceKind::ExactExecutedPlan:
+      return "exact-executed";
+    case PublishedSourceKind::CurrentWorldBundle:
+      return "current-world-bundle";
+  }
+  return "unknown";
+}
+
 AdmissionResult Store::certify_and_replace(
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
   const physical::Snapshot & physical_snapshot,
@@ -524,6 +537,27 @@ PublishedBundleSourceSnapshot Store::published_bundle_source_snapshot() const
     latest_published_bundle_decision_id_,
     published_bundle_control_origin_sec_,
     published_bundle_artifact_elapsed_sec_};
+}
+
+LatestPublishedSourceSnapshot Store::latest_published_source_snapshot() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (published_bundle_source_plan_ != nullptr) {
+    return LatestPublishedSourceSnapshot{
+      PublishedSourceKind::CurrentWorldBundle,
+      published_bundle_source_plan_, published_bundle_source_sibling_plan_,
+      latest_published_bundle_decision_id_,
+      published_bundle_control_origin_sec_,
+      published_bundle_artifact_elapsed_sec_};
+  }
+  if (executed_plan_ != nullptr) {
+    return LatestPublishedSourceSnapshot{
+      PublishedSourceKind::ExactExecutedPlan,
+      executed_plan_, executed_sibling_plan_, latest_execution_decision_id_,
+      first_published_control_origin_sec_,
+      first_published_artifact_elapsed_sec_};
+  }
+  return LatestPublishedSourceSnapshot{};
 }
 
 StoreState Store::state() const

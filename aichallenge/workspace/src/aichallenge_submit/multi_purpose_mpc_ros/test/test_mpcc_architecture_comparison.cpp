@@ -400,7 +400,7 @@ TEST(
 
 TEST(
   MpccArchitectureComparison,
-  PersistentTargetBoundArmRestoresOnlyCurrentWorldTargetConstraint)
+  PersistentTargetBoundArmDoesNotSynthesizeMissingCanonicalTargetTube)
 {
   auto source = source_snapshot();
   source.dynamic_obstacle_refinement_active = false;
@@ -412,21 +412,17 @@ TEST(
   source.identity.source_context.dynamic_obstacle_side_sign = 0;
   source.identity.source_context = contract::seal_problem_context(
     source.identity.source_context);
-  const auto source_fingerprint =
-    architecture::fingerprint_interaction_snapshot(source);
-
   const auto report = compare(recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
   ASSERT_GE(report.arms.size(), 2U);
   const auto & target_bound = report.arms[1];
   EXPECT_EQ(target_bound.arm, Arm::PersistentTargetBoundA2);
-  EXPECT_NE(target_bound.candidate_fingerprint, source_fingerprint);
-  EXPECT_EQ(target_bound.stage, Stage::Accepted) << target_bound.detail;
-  ASSERT_TRUE(target_bound.bundle.has_value());
-  EXPECT_EQ(
-    target_bound.bundle->pass_side_sign,
-    source_snapshot().identity.source_context.execution_side_sign);
+  EXPECT_EQ(target_bound.stage, Stage::CandidateRejected);
+  EXPECT_FALSE(target_bound.bundle.has_value());
+  EXPECT_NE(
+    target_bound.detail.find("canonical current-epoch target tube unavailable"),
+    std::string::npos);
 }
 
 TEST(MpccArchitectureComparison, PhysicalDynamicRejectionCannotCreateBundle)

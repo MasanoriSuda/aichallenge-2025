@@ -2,7 +2,6 @@
 
 #include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
-#include "multi_purpose_mpc_ros/mpc_stage_geometry.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 
 #include <algorithm>
@@ -17,44 +16,6 @@ namespace
 {
 
 constexpr double kNumericalTolerance = 1e-9;
-
-struct CourseProjection
-{
-  bool valid{false};
-  double progress_m{};
-  double lateral_m{};
-  double squared_distance_m2{};
-  enum class RejectReason
-  {
-    None,
-    InvalidInput,
-    InvalidKnot,
-    NonmonotonicProgress,
-    DegenerateSegment,
-    CourseFrameUnavailable,
-    NonfiniteProjection,
-    NoEligibleSegment,
-  } reason{RejectReason::NoEligibleSegment};
-  std::size_t rejected_segment{};
-  std::size_t degenerate_segment_count{};
-};
-
-const char * course_projection_reason_name(
-  const CourseProjection::RejectReason reason) noexcept
-{
-  using Reason = CourseProjection::RejectReason;
-  switch (reason) {
-    case Reason::None: return "none";
-    case Reason::InvalidInput: return "invalid-input";
-    case Reason::InvalidKnot: return "invalid-knot";
-    case Reason::NonmonotonicProgress: return "nonmonotonic-progress";
-    case Reason::DegenerateSegment: return "degenerate-segment";
-    case Reason::CourseFrameUnavailable: return "course-frame-unavailable";
-    case Reason::NonfiniteProjection: return "nonfinite-projection";
-    case Reason::NoEligibleSegment: return "no-eligible-segment";
-  }
-  return "unknown";
-}
 
 bool supported_intent(
   const mpcc_execution_contract::ControlIntent intent) noexcept
@@ -79,102 +40,6 @@ bool valid_interval(const double lower, const double upper) noexcept
          upper != -std::numeric_limits<double>::infinity() && lower <= upper;
 }
 
-CourseProjection project_to_recorded_course(
-  const std::vector<mpc_stage_geometry::CourseFrameKnot> & knots,
-  const double x_m, const double y_m, const double minimum_progress_m) noexcept
-{
-  CourseProjection best;
-  best.squared_distance_m2 = std::numeric_limits<double>::infinity();
-  if (
-    knots.size() < 2U || !std::isfinite(x_m) || !std::isfinite(y_m) ||
-    !std::isfinite(minimum_progress_m))
-  {
-    best.reason = CourseProjection::RejectReason::InvalidInput;
-    return best;
-  }
-  for (std::size_t index = 1U; index < knots.size(); ++index) {
-    const auto & from = knots[index - 1U];
-    const auto & to = knots[index];
-    const double dx_m = to.x_m - from.x_m;
-    const double dy_m = to.y_m - from.y_m;
-    const double length_squared_m2 = dx_m * dx_m + dy_m * dy_m;
-    if (
-      !std::isfinite(from.progress_m) || !std::isfinite(to.progress_m) ||
-      !std::isfinite(from.x_m) || !std::isfinite(from.y_m) ||
-      !std::isfinite(to.x_m) || !std::isfinite(to.y_m) ||
-      !std::isfinite(length_squared_m2))
-    {
-      best.valid = false;
-      best.reason = CourseProjection::RejectReason::InvalidKnot;
-      best.rejected_segment = index;
-      return best;
-    }
-    if (to.progress_m <= from.progress_m + kNumericalTolerance) {
-      best.valid = false;
-      best.reason = CourseProjection::RejectReason::NonmonotonicProgress;
-      best.rejected_segment = index;
-      return best;
-    }
-    if (length_squared_m2 <= kNumericalTolerance) {
-      if (best.degenerate_segment_count == 0U) {
-        best.rejected_segment = index;
-      }
-      ++best.degenerate_segment_count;
-      continue;
-    }
-    const double ratio = std::clamp(
-      ((x_m - from.x_m) * dx_m + (y_m - from.y_m) * dy_m) /
-      length_squared_m2, 0.0, 1.0);
-    const double progress_m =
-      from.progress_m + ratio * (to.progress_m - from.progress_m);
-    if (progress_m + kNumericalTolerance < minimum_progress_m) {
-      continue;
-    }
-    const double projected_x_m = from.x_m + ratio * dx_m;
-    const double projected_y_m = from.y_m + ratio * dy_m;
-    const double residual_x_m = x_m - projected_x_m;
-    const double residual_y_m = y_m - projected_y_m;
-    const double squared_distance_m2 =
-      residual_x_m * residual_x_m + residual_y_m * residual_y_m;
-    const auto frame = mpc_stage_geometry::sample_course_frame(
-      knots, progress_m, kNumericalTolerance);
-    if (!frame.has_value()) {
-      best.valid = false;
-      best.reason = CourseProjection::RejectReason::CourseFrameUnavailable;
-      best.rejected_segment = index;
-      return best;
-    }
-    const double lateral_m =
-      std::cos(frame->heading_rad) * (y_m - frame->y_m) -
-      std::sin(frame->heading_rad) * (x_m - frame->x_m);
-    if (
-      !std::isfinite(squared_distance_m2) || !std::isfinite(lateral_m))
-    {
-      best.valid = false;
-      best.reason = CourseProjection::RejectReason::NonfiniteProjection;
-      best.rejected_segment = index;
-      return best;
-    }
-    if (
-      !best.valid || squared_distance_m2 + kNumericalTolerance <
-      best.squared_distance_m2 ||
-      (std::abs(squared_distance_m2 - best.squared_distance_m2) <=
-      kNumericalTolerance && progress_m < best.progress_m))
-    {
-      best.valid = true;
-      best.progress_m = progress_m;
-      best.lateral_m = lateral_m;
-      best.squared_distance_m2 = squared_distance_m2;
-      best.reason = CourseProjection::RejectReason::None;
-      best.rejected_segment = index;
-    }
-  }
-  if (!best.valid && best.degenerate_segment_count > 0U) {
-    best.reason = CourseProjection::RejectReason::DegenerateSegment;
-  }
-  return best;
-}
-
 Result reject(const RejectReason reason, std::string detail)
 {
   Result result;
@@ -185,114 +50,72 @@ Result reject(const RejectReason reason, std::string detail)
 
 }  // namespace
 
-TargetHorizon rebuild_target_horizon(
+TargetHorizon resolve_canonical_target_horizon(
   const mpcc_rate_resolved_shadow::Snapshot & source) noexcept
 {
   TargetHorizon result;
   const int horizon = source.request.horizon_steps;
+  const auto & context = source.identity.source_context;
   if (
     horizon <= 0 || !source.replay_world.has_value() ||
-    source.request.inputs.size() != static_cast<std::size_t>(horizon) ||
-    source.wall_course_frame_knots.size() < 2U ||
-    !std::isfinite(source.course_progress_origin_m))
+    !source.dynamic_obstacle_refinement_active ||
+    !context.dynamic_obstacle_constraint_active ||
+    source.dynamic_obstacle_stages.size() !=
+    static_cast<std::size_t>(horizon))
   {
-    result.detail = "current-world horizon inputs unavailable";
+    result.detail = "canonical current-epoch target tube unavailable";
     return result;
   }
   const auto & world = source.replay_world.value();
-  const auto & problem_context = source.identity.source_context;
-  const std::string & selected_obstacle_id =
-    problem_context.dynamic_obstacle_constraint_active ?
-    problem_context.dynamic_obstacle_id : problem_context.target_id;
+  const std::string & selected_obstacle_id = context.dynamic_obstacle_id;
   const std::uint64_t selected_obstacle_generation =
-    problem_context.dynamic_obstacle_constraint_active ?
-    problem_context.dynamic_obstacle_generation :
-    problem_context.target_obstacle_generation;
+    context.dynamic_obstacle_generation;
   const auto target = std::find_if(
     world.obstacles.begin(), world.obstacles.end(),
     [&](const auto & obstacle) {
       return obstacle.id == selected_obstacle_id;
     });
   if (
-    selected_obstacle_id.empty() || selected_obstacle_generation == 0U ||
+    !world.current || selected_obstacle_id.empty() ||
+    selected_obstacle_generation == 0U ||
+    world.observation_generation != selected_obstacle_generation ||
     target == world.obstacles.end() || target->observation_generation == 0U ||
     target->observation_generation != selected_obstacle_generation ||
-    target->observation_generation != world.observation_generation ||
     !std::isfinite(target->x_m) || !std::isfinite(target->y_m) ||
     !std::isfinite(target->velocity_x_mps) ||
     !std::isfinite(target->velocity_y_mps) ||
-    !std::isfinite(target->radius_m) || target->radius_m < 0.0 ||
-    !world.physical_footprint.valid())
+    !std::isfinite(target->radius_m) || target->radius_m < 0.0)
   {
-    result.detail = "selected current-world target unavailable";
+    result.detail = "canonical target identity does not match ReplayWorld";
     return result;
   }
-  const double observation_age_sec =
-    source.control_prediction_origin_sec - world.observed_sec;
-  if (!std::isfinite(observation_age_sec) || observation_age_sec < 0.0) {
-    result.detail = "control prediction predates target observation";
-    return result;
-  }
-  const auto & footprint = world.physical_footprint;
-  const double longitudinal_overlap_m = std::max(
-    footprint.front_extent_m, footprint.rear_extent_m) +
-    footprint.margin_m + target->radius_m;
-  const double lateral_center_separation_m = std::max(
-    footprint.left_extent_m, footprint.right_extent_m) +
-    footprint.margin_m + target->radius_m;
-  if (
-    !std::isfinite(longitudinal_overlap_m) || longitudinal_overlap_m <= 0.0 ||
-    !std::isfinite(lateral_center_separation_m) ||
-    lateral_center_separation_m <= 0.0)
+  bool any_valid = false;
+  for (std::size_t stage_index = 0U;
+    stage_index < source.dynamic_obstacle_stages.size(); ++stage_index)
   {
-    result.detail = "physical target separation unavailable";
-    return result;
-  }
-
-  result.stages.reserve(static_cast<std::size_t>(horizon));
-  double elapsed_sec = observation_age_sec;
-  double minimum_progress_m = source.wall_course_frame_knots.front().progress_m;
-  for (int stage = 0; stage < horizon; ++stage) {
-    const double dt_sec = source.request.inputs[
-      static_cast<std::size_t>(stage)].stage_dt_sec;
-    if (!std::isfinite(dt_sec) || dt_sec <= 0.0) {
-      result.stages.clear();
-      result.detail = "invalid target prediction stage time";
-      return result;
-    }
-    elapsed_sec += dt_sec;
-    const double x_m = target->x_m + target->velocity_x_mps * elapsed_sec;
-    const double y_m = target->y_m + target->velocity_y_mps * elapsed_sec;
-    const auto projection = project_to_recorded_course(
-      source.wall_course_frame_knots, x_m, y_m, minimum_progress_m);
-    if (!projection.valid) {
-      result.stages.clear();
+    const auto & stage = source.dynamic_obstacle_stages[stage_index];
+    if (
+      !std::isfinite(stage.target_progress_m) ||
+      !std::isfinite(stage.target_lateral_m) ||
+      !std::isfinite(stage.longitudinal_overlap_m) ||
+      stage.longitudinal_overlap_m <= 0.0 ||
+      !std::isfinite(stage.lateral_center_separation_m) ||
+      stage.lateral_center_separation_m <= 0.0)
+    {
       std::ostringstream detail;
-      detail << "target course projection unavailable at stage " << stage
-             << "/reason=" << course_projection_reason_name(projection.reason)
-             << "/segment=" << projection.rejected_segment
-             << "/degenerate_segments="
-             << projection.degenerate_segment_count
-             << "/point=(" << x_m << ',' << y_m << ')'
-             << "/minimum_progress=" << minimum_progress_m
-             << "/course_window=["
-             << source.wall_course_frame_knots.front().progress_m << ','
-             << source.wall_course_frame_knots.back().progress_m << ']'
-             << "/knots=" << source.wall_course_frame_knots.size();
+      detail << "invalid canonical target stage " << stage_index;
       result.detail = detail.str();
       return result;
     }
-    minimum_progress_m = projection.progress_m;
-    result.stages.push_back(
-      mpcc_rate_resolved_dynamic_obstacle::StagePrediction{
-        true,
-        projection.progress_m - source.course_progress_origin_m,
-        projection.lateral_m,
-        longitudinal_overlap_m,
-        lateral_center_separation_m});
+    any_valid = any_valid || stage.valid;
   }
+  if (!any_valid) {
+    result.detail = "canonical target tube has no valid prediction stage";
+    return result;
+  }
+  result.stages = source.dynamic_obstacle_stages;
   result.accepted = true;
-  result.detail = "accepted";
+  result.detail = "accepted canonical current-epoch target tube";
   return result;
 }
 
@@ -302,7 +125,7 @@ TerminalResolution resolve_terminal_successor(
   namespace model = mpcc_rate_resolved;
   TerminalResolution resolution;
   const int horizon = source.request.horizon_steps;
-  const auto target_horizon = rebuild_target_horizon(source);
+  const auto target_horizon = resolve_canonical_target_horizon(source);
   if (
     horizon <= 0 || !target_horizon.accepted ||
     target_horizon.stages.size() != static_cast<std::size_t>(horizon) ||
@@ -469,7 +292,7 @@ static Result build_with_intent_policy(
       source_context.dynamic_obstacle_constraint_active ?
       source_context.dynamic_obstacle_generation :
       source_context.target_obstacle_generation;
-    const auto target_horizon = rebuild_target_horizon(source);
+    const auto target_horizon = resolve_canonical_target_horizon(source);
     if (
       !target_horizon.accepted || target_horizon.stages.size() !=
       static_cast<std::size_t>(horizon) || source.nominal_path_distance_m.size() !=
@@ -888,7 +711,7 @@ Result build_lattice(
     return result;
   }
   const int horizon = source.request.horizon_steps;
-  const auto target_horizon = rebuild_target_horizon(source);
+  const auto target_horizon = resolve_canonical_target_horizon(source);
   if (
     !target_horizon.accepted ||
     target_horizon.stages.size() != static_cast<std::size_t>(horizon))

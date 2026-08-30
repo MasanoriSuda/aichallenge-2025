@@ -62,9 +62,10 @@ struct TerminalResolution
   std::string detail{"not-evaluated"};
 };
 
-/// Current-world target tube rebuilt without persistent Mission products.
-/// Stage predictions use the same immutable ReplayWorld observation consumed
-/// by the final exact dynamic proof.
+/// Canonical current-epoch target tube sealed by the normal problem producer.
+/// Stateless candidate generation may rebuild path/reference geometry, but it
+/// must not introduce a second target predictor. ReplayWorld remains the
+/// independent input to the final exact dynamic proof.
 struct TargetHorizon
 {
   bool accepted{false};
@@ -72,7 +73,7 @@ struct TargetHorizon
   std::string detail{"not-evaluated"};
 };
 
-TargetHorizon rebuild_target_horizon(
+TargetHorizon resolve_canonical_target_horizon(
   const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
 
 /// Resolve the common terminal successor contract without changing candidate

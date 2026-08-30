@@ -3277,6 +3277,21 @@ productionでは、この局所physical bucketから導出したlateral／progre
 target-free Cruiseのためstateless左右armが`dynamic-target-unavailable`となるのは期待どおりである。これはMission、solver、
 clearanceを変更せずwall proof ownerの重複だけを除去したA/B結果である。
 
+#### current-epoch target tubeの単一所有（2026-08-31、2025由来の暫定）
+
+normal seven-state problemへ入れる近似target tubeは、current observation epochでStageCorridorまたは
+CurrentTargetTubeを解決し、submission snapshotへsealするproducerだけが所有する。stateless candidateはMissionのpath／reference
+geometryを現在worldから再構築できるが、ReplayWorldのglobal velocityを有限wall-course windowへ再投影してtarget tubeを
+置換してはならない。target ID、observation generation、horizon lengthまたはfinite physical extentが一致しない場合はfail closedする。
+
+`output/20260831-060156/d2`では旧stateless projectorがtargetをwall window終端へ固定し、lateralを
+`-1.170..-8.143 m`へ発散させたため、stage 10でwall lower `-3.836 m`とdynamic upper `-6.236 m`が矛盾した。
+重複projector削除後の`output/20260831-063008/d2`では、target progressはstageごとに前進し、lateralは
+`-0.069..0.208 m`に収まった。新しい最初の棄却は`steering-rate-prefix`であり、別failure familyとして扱う。
+
+ReplayWorldは引き続きdense timed exact dynamic certificateの独立入力である。近似QP tubeとexact physical proofを別表現にする
+ことは許すが、同一control epoch内で二つの近似target predictorを持たせない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

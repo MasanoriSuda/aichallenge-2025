@@ -50,6 +50,16 @@
       "snapshot_id": "20260830-005711-decision-2725",
       "manifest": ".steering/20260830-dynamic-escape-normal-scope/snapshots/20260830-005711-decision-2725.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260831-sequence-864-post-candidate",
+      "manifest": ".steering/20260831-canonical-target-tube-owner/snapshots/20260831-sequence-864-post-candidate.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260831-sequence-904-canonical-tube",
+      "manifest": ".steering/20260831-canonical-target-tube-owner/snapshots/20260831-sequence-904-canonical-tube.json",
+      "replay_ready": false
     }
   ],
   "experiments": [
@@ -653,6 +663,25 @@
       "production_impact": "none; the audit changed no production authority, Mission state, solver tolerance, clearance, speed, timeout, lease, grace, retry, fallback or configuration",
       "deleted_code": [],
       "revisit_condition": "an executable current-side bundle is certified from the same frozen fingerprint, a bounded physical infeasibility certificate is produced, or the already certified published terminal Stop successor is atomically connected to the canonical publisher and dynamically prevents the cursor-expiry authority hole"
+    },
+    {
+      "experiment_id": "20260831-canonical-target-tube-owner",
+      "baseline_commit": "a8b8cbe3db243eee87bde1bcbb7bfde5c01d1333",
+      "snapshot_ids": [
+        "20260831-sequence-864-post-candidate",
+        "20260831-sequence-904-canonical-tube"
+      ],
+      "hypothesis": "the first post-Gate-A ShiftOut failure is caused by stateless candidate generation replacing the sealed current-epoch target tube with a second finite-window world projection",
+      "changed_dimension": "production_current_epoch_target_prediction_ownership",
+      "result": "accepted",
+      "reason": "baseline sequence 864 pinned all target progress stages at the wall-window endpoint and expanded lateral from -1.170 to -8.143 m, creating contradictory stage-10 wall and dynamic rows; after deleting the second predictor, dynamic sequence 904 advanced target progress and kept lateral within -0.069 to 0.208 m, while the next rejection moved to the distinct steering-rate-prefix family",
+      "production_impact": "stateless path candidates validate and copy the canonical current-epoch target tube; ReplayWorld remains the exact timed physical-proof input, and no authority, Mission rule, solver setting, clearance, weight, timeout, lease, grace, retry, fallback or configuration changed",
+      "deleted_code": [
+        "stateless finite-wall-window target course projection",
+        "CourseProjection rejection taxonomy",
+        "world-velocity target synthesis in stateless maneuver generation"
+      ],
+      "revisit_condition": "a new current-epoch candidate reintroduces endpoint-pinned or multi-metre lateral target stages, a mismatched target identity gains authority, or exact timed proof consumes geometry different from the published candidate"
     }
   ]
 }

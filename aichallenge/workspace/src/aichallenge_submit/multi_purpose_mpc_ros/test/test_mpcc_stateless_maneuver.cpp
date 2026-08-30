@@ -161,8 +161,8 @@ TEST(MpccStatelessManeuver, BuildsBothSidesWithoutMissionGeometry)
   ASSERT_TRUE(right.seed.has_value()) << right.detail;
   EXPECT_EQ(left.reason, RejectReason::Accepted);
   EXPECT_EQ(right.reason, RejectReason::Accepted);
-  EXPECT_EQ(left.seed->terminal_successor, TerminalSuccessor::Return);
-  EXPECT_EQ(right.seed->terminal_successor, TerminalSuccessor::Return);
+  EXPECT_EQ(left.seed->terminal_successor, TerminalSuccessor::Replan);
+  EXPECT_EQ(right.seed->terminal_successor, TerminalSuccessor::Replan);
   EXPECT_GT(left.seed->lateral_reference_m[1], 0.0);
   EXPECT_LT(right.seed->lateral_reference_m[1], 0.0);
   EXPECT_NE(left.seed->candidate_fingerprint, right.seed->candidate_fingerprint);
@@ -171,7 +171,6 @@ TEST(MpccStatelessManeuver, BuildsBothSidesWithoutMissionGeometry)
 TEST(MpccStatelessManeuver, ReturnBehindTargetPreservesRejoinReference)
 {
   auto source = make_return_source();
-  source.replay_world->obstacles.front().x_m = 3.0;
   const auto population = build_bounded_candidates(source, 1);
 
   ASSERT_EQ(population.reason, RejectReason::Accepted) << population.detail;
@@ -243,7 +242,9 @@ TEST(MpccStatelessManeuver, AuditReturnScheduleDiscardsCapturedMissionReference)
 
 TEST(MpccStatelessManeuver, ReturnRejectsUnseparatedAmbiguousRelation)
 {
-  const auto source = make_return_source();
+  auto source = make_return_source();
+  source.dynamic_obstacle_stages.front().target_progress_m = 0.0;
+  source.dynamic_obstacle_stages.front().target_lateral_m = 0.0;
   const auto population = build_bounded_candidates(source, 1);
 
   EXPECT_EQ(population.reason, RejectReason::DynamicTargetUnavailable);
@@ -506,7 +507,7 @@ TEST(MpccStatelessManeuver, IgnoresPersistentMissionLateralAndHeadingReference)
       mpcc_rate_resolved::kHeadingIndex], 0.0);
 }
 
-TEST(MpccStatelessManeuver, RebuildsTargetHorizonWithoutMissionTargetStages)
+TEST(MpccStatelessManeuver, RejectsMissingCanonicalCurrentEpochTargetTube)
 {
   auto source = make_source();
   source.dynamic_obstacle_refinement_active = false;
@@ -517,58 +518,74 @@ TEST(MpccStatelessManeuver, RebuildsTargetHorizonWithoutMissionTargetStages)
   source.identity.source_context.dynamic_obstacle_side_sign = 0;
   source.identity.source_context = mpcc_execution_contract::seal_problem_context(
     source.identity.source_context);
-  source.replay_world->obstacles.front().x_m = 2.0;
+  const auto horizon = resolve_canonical_target_horizon(source);
   const auto result = build(
     source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
-  ASSERT_TRUE(result.seed.has_value()) << result.detail;
-  EXPECT_EQ(result.reason, RejectReason::Accepted);
-  EXPECT_EQ(result.seed->terminal_successor, TerminalSuccessor::Replan);
-  EXPECT_TRUE(result.seed->stop_suffix.available);
-  EXPECT_TRUE(result.seed->solver_snapshot.dynamic_obstacle_refinement_active);
-  EXPECT_EQ(result.seed->solver_snapshot.dynamic_obstacle_stages.size(), 3U);
-}
-
-TEST(MpccStatelessManeuver, SkipsDegenerateCircularClosureSegment)
-{
-  auto source = make_source();
-  source.wall_course_frame_knots = {
-    {99.0, -1.0, 0.0, 0.0, 1},
-    {100.0, -1.0, 0.0, 0.0, 2},
-    {104.0, 4.0, 0.0, 0.0, 3}};
-
-  const auto horizon = rebuild_target_horizon(source);
-
-  ASSERT_TRUE(horizon.accepted) << horizon.detail;
-  ASSERT_EQ(horizon.stages.size(), 3U);
-  EXPECT_TRUE(horizon.stages.front().valid);
-}
-
-TEST(MpccStatelessManeuver, RejectsCourseWithOnlyDegenerateSegments)
-{
-  auto source = make_source();
-  source.wall_course_frame_knots = {
-    {99.0, -1.0, 0.0, 0.0, 1},
-    {100.0, -1.0, 0.0, 0.0, 2}};
-
-  const auto horizon = rebuild_target_horizon(source);
 
   EXPECT_FALSE(horizon.accepted);
-  EXPECT_NE(horizon.detail.find("reason=degenerate-segment"), std::string::npos);
-  EXPECT_NE(horizon.detail.find("degenerate_segments=1"), std::string::npos);
+  EXPECT_EQ(
+    horizon.detail, "canonical current-epoch target tube unavailable");
+  EXPECT_FALSE(result.seed.has_value());
+  EXPECT_EQ(result.reason, RejectReason::DynamicTargetUnavailable);
+}
+
+TEST(MpccStatelessManeuver, RejectsCanonicalTubeWithMismatchedWorldGeneration)
+{
+  auto source = make_source();
+  source.replay_world->observation_generation = 14U;
+
+  const auto horizon = resolve_canonical_target_horizon(source);
+
+  EXPECT_FALSE(horizon.accepted);
+  EXPECT_EQ(
+    horizon.detail, "canonical target identity does not match ReplayWorld");
+}
+
+TEST(MpccStatelessManeuver, CanonicalTubeIsNotReprojectedIntoWallWindow)
+{
+  auto source = make_source();
+  const auto expected_stages = source.dynamic_obstacle_stages;
+  // This deliberately makes the legacy constant-global-velocity projection
+  // leave the finite course window almost immediately. The canonical tube is
+  // already expressed in the current solver epoch and must remain unchanged.
+  source.replay_world->obstacles.front().x_m = 3.9;
+  source.replay_world->obstacles.front().velocity_x_mps = 120.0;
+  source.replay_world->obstacles.front().velocity_y_mps = -80.0;
+  source.wall_course_frame_knots = {
+    {99.0, -1.0, 0.0, 0.0, 1},
+    {104.0, 4.0, 0.0, 0.0, 2}};
+
+  const auto horizon = resolve_canonical_target_horizon(source);
+  const auto result = build(
+    source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
+
+  ASSERT_TRUE(horizon.accepted) << horizon.detail;
+  ASSERT_TRUE(result.seed.has_value()) << result.detail;
+  ASSERT_EQ(horizon.stages.size(), expected_stages.size());
+  ASSERT_EQ(
+    result.seed->solver_snapshot.dynamic_obstacle_stages.size(),
+    expected_stages.size());
+  for (std::size_t index = 0U; index < expected_stages.size(); ++index) {
+    const auto & expected = expected_stages[index];
+    const auto & resolved = horizon.stages[index];
+    const auto & candidate =
+      result.seed->solver_snapshot.dynamic_obstacle_stages[index];
+    EXPECT_EQ(resolved.valid, expected.valid);
+    EXPECT_DOUBLE_EQ(resolved.target_progress_m, expected.target_progress_m);
+    EXPECT_DOUBLE_EQ(resolved.target_lateral_m, expected.target_lateral_m);
+    EXPECT_DOUBLE_EQ(
+      resolved.longitudinal_overlap_m, expected.longitudinal_overlap_m);
+    EXPECT_DOUBLE_EQ(
+      resolved.lateral_center_separation_m,
+      expected.lateral_center_separation_m);
+    EXPECT_DOUBLE_EQ(candidate.target_progress_m, expected.target_progress_m);
+    EXPECT_DOUBLE_EQ(candidate.target_lateral_m, expected.target_lateral_m);
+  }
 }
 
 TEST(MpccStatelessManeuver, BindsCurrentTargetWithoutChangingCapturedGeometry)
 {
   auto source = make_source();
-  source.dynamic_obstacle_refinement_active = false;
-  source.dynamic_obstacle_pass_side_sign = 0;
-  source.dynamic_obstacle_stages.clear();
-  source.identity.source_context.dynamic_obstacle_constraint_active = false;
-  source.identity.source_context.dynamic_obstacle_generation = 0U;
-  source.identity.source_context.dynamic_obstacle_id.clear();
-  source.identity.source_context.dynamic_obstacle_side_sign = 0;
-  source.identity.source_context = mpcc_execution_contract::seal_problem_context(
-    source.identity.source_context);
   const auto source_fingerprint =
     mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
 
@@ -578,7 +595,7 @@ TEST(MpccStatelessManeuver, BindsCurrentTargetWithoutChangingCapturedGeometry)
   ASSERT_TRUE(result.seed.has_value()) << result.detail;
   const auto & candidate = result.seed->solver_snapshot;
   EXPECT_EQ(candidate.identity.sequence, source.identity.sequence);
-  EXPECT_NE(
+  EXPECT_EQ(
     candidate.identity.source_context.fingerprint,
     source.identity.source_context.fingerprint);
   EXPECT_TRUE(
@@ -598,10 +615,10 @@ TEST(MpccStatelessManeuver, BindsCurrentTargetWithoutChangingCapturedGeometry)
     candidate.dynamic_obstacle_pass_side_sign,
     source.identity.source_context.execution_side_sign);
   EXPECT_EQ(candidate.dynamic_obstacle_stages.size(), 3U);
-  EXPECT_NE(result.seed->candidate_fingerprint, source_fingerprint);
+  EXPECT_EQ(result.seed->candidate_fingerprint, source_fingerprint);
 }
 
-TEST(MpccStatelessManeuver, IgnoresPersistentMissionTargetStages)
+TEST(MpccStatelessManeuver, UsesCanonicalCurrentEpochTargetStages)
 {
   const auto source = make_source();
   auto changed_mission = source;
@@ -618,7 +635,7 @@ TEST(MpccStatelessManeuver, IgnoresPersistentMissionTargetStages)
     mpcc_architecture_snapshot::fingerprint_interaction_snapshot(changed_mission), 1);
   ASSERT_TRUE(original.seed.has_value()) << original.detail;
   ASSERT_TRUE(changed.seed.has_value()) << changed.detail;
-  EXPECT_EQ(original.seed->lateral_reference_m, changed.seed->lateral_reference_m);
+  EXPECT_NE(original.seed->lateral_reference_m, changed.seed->lateral_reference_m);
   const auto & original_stages =
     original.seed->solver_snapshot.dynamic_obstacle_stages;
   const auto & changed_stages =
@@ -627,24 +644,24 @@ TEST(MpccStatelessManeuver, IgnoresPersistentMissionTargetStages)
   for (std::size_t index = 0U; index < original_stages.size(); ++index) {
     EXPECT_EQ(original_stages[index].valid, changed_stages[index].valid);
     EXPECT_DOUBLE_EQ(
-      original_stages[index].target_progress_m,
-      changed_stages[index].target_progress_m);
+      changed_stages[index].target_progress_m,
+      changed_mission.dynamic_obstacle_stages[index].target_progress_m);
     EXPECT_DOUBLE_EQ(
-      original_stages[index].target_lateral_m,
-      changed_stages[index].target_lateral_m);
+      changed_stages[index].target_lateral_m,
+      changed_mission.dynamic_obstacle_stages[index].target_lateral_m);
     EXPECT_DOUBLE_EQ(
-      original_stages[index].longitudinal_overlap_m,
-      changed_stages[index].longitudinal_overlap_m);
+      changed_stages[index].longitudinal_overlap_m,
+      changed_mission.dynamic_obstacle_stages[index].longitudinal_overlap_m);
     EXPECT_DOUBLE_EQ(
-      original_stages[index].lateral_center_separation_m,
-      changed_stages[index].lateral_center_separation_m);
+      changed_stages[index].lateral_center_separation_m,
+      changed_mission.dynamic_obstacle_stages[index].
+      lateral_center_separation_m);
   }
 }
 
 TEST(MpccStatelessManeuver, UsesReplanWithExplicitContingencyStop)
 {
   auto source = make_source();
-  source.replay_world->obstacles.front().x_m = 2.0;
   const auto result = build(
     source, mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source), 1);
   ASSERT_TRUE(result.seed.has_value()) << result.detail;
@@ -657,6 +674,7 @@ TEST(MpccStatelessManeuver, UsesReplanWithExplicitContingencyStop)
 TEST(MpccStatelessManeuver, ReturnAllowsSemanticallyUnboundedLateralInterval)
 {
   auto source = make_source();
+  source.dynamic_obstacle_stages.back().target_progress_m = 2.0;
   source.request.states.back().lower[mpcc_rate_resolved::kLateralIndex] =
     -std::numeric_limits<double>::infinity();
   source.request.states.back().upper[mpcc_rate_resolved::kLateralIndex] =

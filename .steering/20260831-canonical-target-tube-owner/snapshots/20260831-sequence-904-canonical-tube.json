@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260831-sequence-904-canonical-tube",
+  "baseline_commit": "a8b8cbe3db243eee87bde1bcbb7bfde5c01d1333",
+  "run_id": "20260831-063008",
+  "domain_id": 2,
+  "decision_id": 1525,
+  "source_sequence": 904,
+  "evidence_type": "post-repair-dynamic-failure-snapshot",
+  "replay_ready": false,
+  "incomplete_reason": "the snapshot is local dynamic evidence for canonical target-tube geometry; its earliest rejection belongs to the separate steering-rate-prefix failure family and the large wall-grid payload is intentionally not committed",
+  "local_numerical_snapshot": {
+    "path": "output/20260831-063008/d2/mpcc_architecture_snapshots/000000000904-b2d98de819dfafd0-shiftout-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+    "sha256": "86c442e1fe41abc1491a81c42915abdf1b30e348cb5f5d7c5488f059c3d0e40e",
+    "size_bytes": 241868
+  }
+}

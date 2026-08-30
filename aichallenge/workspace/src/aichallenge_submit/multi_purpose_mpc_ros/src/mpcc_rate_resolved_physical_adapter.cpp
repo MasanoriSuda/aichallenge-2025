@@ -961,10 +961,30 @@ StopContingencyResult build_stop_contingency(
         exact.velocity_mps.push_back(nonlinear.velocity_mps);
         exact.progress_m.push_back(
           artifact.course_progress_origin_m + nonlinear.progress_m);
-        exact.lateral_lower_m.push_back(
-          endpoint_geometry->lateral_lower_m);
-        exact.lateral_upper_m.push_back(
-          endpoint_geometry->lateral_upper_m);
+        const double approximate_support_violation_m = std::max(
+          {0.0,
+            endpoint_geometry->lateral_lower_m - nonlinear.lateral_m,
+            nonlinear.lateral_m - endpoint_geometry->lateral_upper_m});
+        if (approximate_support_violation_m > tolerance) {
+          result.approximate_lateral_support_exceeded = true;
+          if (
+            result.first_approximate_lateral_support_exceeded_sample < 0)
+          {
+            result.first_approximate_lateral_support_exceeded_sample =
+              static_cast<int>(exact.lateral_m.size() - 1U);
+          }
+          result.maximum_approximate_lateral_support_violation_m = std::max(
+            result.maximum_approximate_lateral_support_violation_m,
+            approximate_support_violation_m);
+        }
+        // StopCourseGeometry supplies interpolation and path-tracking support.
+        // It is conservative and may exclude an exact-grid-clear physical
+        // state. Do not let that approximation pre-empt the downstream swept
+        // footprint occupancy-grid proof, which remains the wall authority.
+        exact.lateral_lower_m.push_back(std::min(
+          endpoint_geometry->lateral_lower_m, nonlinear.lateral_m));
+        exact.lateral_upper_m.push_back(std::max(
+          endpoint_geometry->lateral_upper_m, nonlinear.lateral_m));
         exact.minimum_lateral_bound_reserve_m = std::min(
           exact.minimum_lateral_bound_reserve_m,
           std::min(

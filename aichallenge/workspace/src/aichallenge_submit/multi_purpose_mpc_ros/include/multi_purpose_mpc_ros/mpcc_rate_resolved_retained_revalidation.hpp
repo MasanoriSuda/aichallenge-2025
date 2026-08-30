@@ -339,6 +339,9 @@ struct Result
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
   bool terminal_stop_attempted{false};
   bool terminal_stop_certified{false};
+  bool terminal_stop_approximate_support_exceeded{false};
+  int terminal_stop_first_approximate_support_exceeded_sample{-1};
+  double terminal_stop_maximum_approximate_support_violation_m{};
   mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason
   terminal_stop_reason{
     mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason::

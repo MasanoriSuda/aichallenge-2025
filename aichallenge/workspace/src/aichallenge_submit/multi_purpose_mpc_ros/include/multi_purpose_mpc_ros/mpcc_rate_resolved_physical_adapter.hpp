@@ -224,6 +224,13 @@ struct StopContingencyResult
   race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason exact_reason{
     race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
   int rejected_sample{-1};
+  /// The progress-aligned course-frame support is a conservative planner
+  /// approximation, not the final occupancy-grid wall certificate. Keep any
+  /// mismatch observable while allowing the exact swept-footprint proof to
+  /// own physical acceptance.
+  bool approximate_lateral_support_exceeded{false};
+  int first_approximate_lateral_support_exceeded_sample{-1};
+  double maximum_approximate_lateral_support_violation_m{};
   /// Steering state after replaying the already selected publisher command
   /// for one publication interval.  This makes the causal hand-off into the
   /// braking suffix observable and testable.

@@ -1264,6 +1264,12 @@ Result evaluate(const Request & request)
     result.terminal_stop_reason = terminal_stop.reason;
     result.terminal_stop_exact_reason = terminal_stop.exact_reason;
     result.terminal_stop_rejected_sample = terminal_stop.rejected_sample;
+    result.terminal_stop_approximate_support_exceeded =
+      terminal_stop.approximate_lateral_support_exceeded;
+    result.terminal_stop_first_approximate_support_exceeded_sample =
+      terminal_stop.first_approximate_lateral_support_exceeded_sample;
+    result.terminal_stop_maximum_approximate_support_violation_m =
+      terminal_stop.maximum_approximate_lateral_support_violation_m;
     result.terminal_stop_publisher_interval_end_steering_rad =
       terminal_stop.publisher_interval_end_steering_rad;
     result.terminal_stop_final_steering_rad =

@@ -3230,6 +3230,24 @@ current-world Stop successorを生成済みであり、その後のauthority割�
 scheduling/lifecycle defectに分類する。wall clearance、solver tolerance、grace、timeout、lease、normal fallbackの変更で
 隠してはならない。
 
+#### exact wall proofとterminal Stop近似supportの責務分離（2026-08-31、2025由来の暫定）
+
+terminal Stop用のprogress-aligned lateral supportはcourse-frame上の保守的な近似であり、occupancy grid上の
+swept-footprint証明が最終的な物理wall authorityである。exact trajectoryがwall-clearである可能性を、近似supportだけで
+exact wall proof前に棄却してはならない。
+
+`output/20260831-040106/d2`のdecision 889ではnormal Cruise continuationとexact grid wall proofが成立した一方、
+初期lateral `-2.837629 m`が近似lower support `-2.797560 m`を約4 cm下回り、terminal Stopが
+`invalid-lateral-bounds`で停止した。同じstateは外部Emergency Stopが既に保持しており、これはsolver不成立や
+clearance不足ではなくmodel/certificate mismatchである。初期区間だけsupportを広げる修正を動的確認したところ、
+`output/20260831-041927`ではD1がsample 254、D3がsample 66で同じ近似support棄却を起こし、D3は約24秒Stopに残った。
+したがって初期点だけの例外ではなく、近似supportが全Stop rolloutで重複wall authorityになっていたことが根因である。
+
+近似supportからの逸脱はfirst sampleと最大逸脱量を診断値として保持するが、それ単独ではStopを棄却しない。生成された
+Stop全体は従来どおりexact occupancy-grid swept-footprint wall proofとtimed dynamic proofを必須とし、実壁占有や動的障害物は
+そこでfail closedする。これはwall marginやfootprintの緩和ではなく、近似supportがexact authorityを先取りしていた
+二重証明所有を解消する修正である。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <limits>
 #include <memory>
 
@@ -322,6 +323,37 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
   EXPECT_TRUE(result.terminal_stop_certified);
   EXPECT_TRUE(result.proof->terminal_stop_certified);
   EXPECT_FALSE(result.proof->terminal_stop_trajectory.progress_m.empty());
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  ExactWallClearInitialStateOwnsTerminalStopBeforeApproximateSupport)
+{
+  auto execution = std::make_shared<const artifact::ExecutionArtifact>(
+    execution_artifact());
+  auto snapshot = source_snapshot(execution->identity);
+  std::fill(
+    snapshot.terminal_stop_course_geometry.lateral_lower_m.begin(),
+    snapshot.terminal_stop_course_geometry.lateral_lower_m.end(), -0.04);
+  const auto built = certified::build(
+    execution, snapshot, accepted_result(snapshot));
+  ASSERT_EQ(built.reason, certified::RejectReason::None);
+  ASSERT_NE(built.plan, nullptr);
+  auto request = accepted_request(built.plan);
+  request.control_pose = {50.05, -0.05, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+
+  const auto result = retained::evaluate(request);
+
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  EXPECT_TRUE(result.terminal_stop_approximate_support_exceeded);
+  EXPECT_GE(
+    result.terminal_stop_first_approximate_support_exceeded_sample, 0);
+  EXPECT_GT(
+    result.terminal_stop_maximum_approximate_support_violation_m, 0.0);
+  EXPECT_TRUE(result.terminal_stop_certified);
+  EXPECT_TRUE(result.terminal_stop_path_clearance.valid);
+  EXPECT_TRUE(result.terminal_stop_path_clearance.clear);
 }
 
 TEST(

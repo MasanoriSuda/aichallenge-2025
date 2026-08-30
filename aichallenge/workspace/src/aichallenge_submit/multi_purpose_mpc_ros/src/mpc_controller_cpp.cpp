@@ -7572,6 +7572,9 @@ struct RateResolvedRetainedShadowEvaluation
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
   bool terminal_stop_attempted{false};
   bool terminal_stop_certified{false};
+  bool terminal_stop_approximate_support_exceeded{false};
+  int terminal_stop_first_approximate_support_exceeded_sample{-1};
+  double terminal_stop_maximum_approximate_support_violation_m{};
   rate_resolved_physical::StopContingencyRejectReason terminal_stop_reason{
     rate_resolved_physical::StopContingencyRejectReason::InvalidArtifact};
   race_mpcc::ExactPhysicalExecutionTrajectoryReason terminal_stop_exact_reason{
@@ -26042,6 +26045,12 @@ struct MPC
     evaluation.follow_minimum_gap_m = result.follow_minimum_gap_m;
     evaluation.terminal_stop_attempted = result.terminal_stop_attempted;
     evaluation.terminal_stop_certified = result.terminal_stop_certified;
+    evaluation.terminal_stop_approximate_support_exceeded =
+      result.terminal_stop_approximate_support_exceeded;
+    evaluation.terminal_stop_first_approximate_support_exceeded_sample =
+      result.terminal_stop_first_approximate_support_exceeded_sample;
+    evaluation.terminal_stop_maximum_approximate_support_violation_m =
+      result.terminal_stop_maximum_approximate_support_violation_m;
     evaluation.terminal_stop_reason = result.terminal_stop_reason;
     evaluation.terminal_stop_exact_reason =
       result.terminal_stop_exact_reason;
@@ -26911,7 +26920,9 @@ struct MPC
       retained.terminal_stop_attempted !=
       rate_resolved_track_cruise_last_terminal_stop_attempted_ ||
       retained.terminal_stop_certified !=
-      rate_resolved_track_cruise_last_terminal_stop_certified_;
+      rate_resolved_track_cruise_last_terminal_stop_certified_ ||
+      retained.terminal_stop_approximate_support_exceeded !=
+      rate_resolved_track_cruise_last_terminal_stop_approximate_support_exceeded_;
     if (retained_reason_changed) {
       ++rate_resolved_track_cruise_retained_suppressed_transition_count_;
       const bool first_transition =
@@ -26951,7 +26962,9 @@ struct MPC
           "continuation=model:%s/scope:%s/exact:%s/proved_stages:%lu/"
           "valid:%d/clear:%d/reason:%s/checked:%lu/"
           "reject_index:%lu/reject_pose:%d/(%.3f,%.3f,%.3f), "
-          "terminal_stop=attempted:%d/certified:%d/model:%s/exact:%s/"
+          "terminal_stop=attempted:%d/certified:%d/"
+          "approx_support_exceeded:%d/approx_first:%d/approx_max:%.6f/"
+          "model:%s/exact:%s/"
           "policy:track-reference-path/exact_reject_sample:%d/"
           "steering_handoff:%.6f/steering_final:%.6f/"
           "wall_valid:%d/wall_clear:%d/wall_reason:%s/wall_checked:%lu/"
@@ -27036,6 +27049,9 @@ struct MPC
           continuation.rejected_pose.yaw_rad,
           retained.terminal_stop_attempted ? 1 : 0,
           retained.terminal_stop_certified ? 1 : 0,
+          retained.terminal_stop_approximate_support_exceeded ? 1 : 0,
+          retained.terminal_stop_first_approximate_support_exceeded_sample,
+          retained.terminal_stop_maximum_approximate_support_violation_m,
           rate_resolved_physical::to_string(retained.terminal_stop_reason),
           race_mpcc::exact_physical_execution_trajectory_reason_name(
             retained.terminal_stop_exact_reason),
@@ -27083,6 +27099,8 @@ struct MPC
         retained.terminal_stop_attempted;
       rate_resolved_track_cruise_last_terminal_stop_certified_ =
         retained.terminal_stop_certified;
+      rate_resolved_track_cruise_last_terminal_stop_approximate_support_exceeded_ =
+        retained.terminal_stop_approximate_support_exceeded;
       rate_resolved_track_cruise_retained_trace_initialized_ = true;
     }
     if (rate_resolved_track_cruise_physical_wall_mailbox_ != nullptr) {
@@ -30191,6 +30209,8 @@ struct MPC
   bool rate_resolved_track_cruise_retained_trace_initialized_{false};
   bool rate_resolved_track_cruise_last_terminal_stop_attempted_{false};
   bool rate_resolved_track_cruise_last_terminal_stop_certified_{false};
+  bool rate_resolved_track_cruise_last_terminal_stop_approximate_support_exceeded_{
+    false};
   double rate_resolved_track_cruise_retained_last_trace_sec_{
     -std::numeric_limits<double>::infinity()};
   std::uint64_t

@@ -432,7 +432,7 @@ TEST(
 
 TEST(
   MpccRateResolvedPhysicalAdapter,
-  RejectsTerminalStopOutsideFullPhysicalLateralSupport)
+  ReportsApproximateSupportMismatchWithoutPreemptingExactWallProof)
 {
   const auto source = artifact();
   const auto cursor = execution::resolve_cursor(source, 10.05);
@@ -450,13 +450,14 @@ TEST(
       -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
     geometry, stop_lateral_policy(), -3.0);
 
-  EXPECT_EQ(
-    result.reason,
-    adapter::StopContingencyRejectReason::ExactTrajectoryRejected);
+  EXPECT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
   EXPECT_EQ(
     result.exact_reason,
-    race::ExactPhysicalExecutionTrajectoryReason::InvalidLateralBounds);
-  EXPECT_FALSE(result.exact_trajectory.has_value());
+    race::ExactPhysicalExecutionTrajectoryReason::Accepted);
+  EXPECT_TRUE(result.exact_trajectory.has_value());
+  EXPECT_TRUE(result.approximate_lateral_support_exceeded);
+  EXPECT_GE(result.first_approximate_lateral_support_exceeded_sample, 0);
+  EXPECT_GT(result.maximum_approximate_lateral_support_violation_m, 0.0);
 }
 
 TEST(

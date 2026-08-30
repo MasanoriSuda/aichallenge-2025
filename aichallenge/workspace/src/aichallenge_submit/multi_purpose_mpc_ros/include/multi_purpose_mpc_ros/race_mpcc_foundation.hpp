@@ -336,6 +336,52 @@ OvertakeCanonicalFreshShadowEligibility
 resolve_overtake_canonical_fresh_shadow_eligibility(
   const OvertakeCanonicalFreshShadowEligibilityRequest & request) noexcept;
 
+enum class ReturnTransitionAdmissionReason
+{
+  Inactive,
+  GeometricPreflightUnavailable,
+  ProposalIncomplete,
+  IntentMismatch,
+  TargetMismatch,
+  MissionGenerationMismatch,
+  SideMismatch,
+  CurrentWorldRejected,
+  Admitted,
+};
+
+const char * return_transition_admission_reason_name(
+  ReturnTransitionAdmissionReason reason) noexcept;
+
+struct ReturnTransitionAdmissionRequest
+{
+  bool pass_active{false};
+  bool geometric_preflight_valid{false};
+  bool proposal_complete{false};
+  bool current_world_certified{false};
+  mpcc_execution_contract::ControlIntent proposal_intent{
+    mpcc_execution_contract::ControlIntent::Unknown};
+  std::string current_target_id;
+  std::string proposal_target_id;
+  std::uint64_t current_mission_generation{};
+  std::uint64_t proposal_mission_generation{};
+  int current_side_sign{};
+  int proposal_side_sign{};
+};
+
+struct ReturnTransitionAdmission
+{
+  bool admitted{false};
+  ReturnTransitionAdmissionReason reason{
+    ReturnTransitionAdmissionReason::Inactive};
+};
+
+/// A geometric rejoin path is necessary but cannot transfer normal authority.
+/// Pass may become Return only when the same current-world certified
+/// seven-state artifact carries the exact encounter identity consumed by the
+/// canonical publisher.
+ReturnTransitionAdmission resolve_return_transition_admission(
+  const ReturnTransitionAdmissionRequest & request) noexcept;
+
 enum class FollowProductionAction
 {
   NotOwned,

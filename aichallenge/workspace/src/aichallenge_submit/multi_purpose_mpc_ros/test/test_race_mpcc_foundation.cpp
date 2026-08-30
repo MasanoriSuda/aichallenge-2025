@@ -80,6 +80,84 @@ TEST(RaceMpccFoundation, RejectsLockedTargetLifecycleRegression)
   EXPECT_EQ(result.reject_reason, race::TargetProvenanceRejectReason::StageRegression);
 }
 
+TEST(RaceMpccFoundation, ReturnTransitionRequiresCertifiedExactEncounter)
+{
+  race::ReturnTransitionAdmissionRequest request;
+  request.pass_active = true;
+  request.geometric_preflight_valid = true;
+  request.proposal_complete = true;
+  request.current_world_certified = true;
+  request.proposal_intent = contract::ControlIntent::Return;
+  request.current_target_id = "d2";
+  request.proposal_target_id = "d2";
+  request.current_mission_generation = 7U;
+  request.proposal_mission_generation = 7U;
+  request.current_side_sign = -1;
+  request.proposal_side_sign = -1;
+
+  const auto result = race::resolve_return_transition_admission(request);
+
+  EXPECT_TRUE(result.admitted);
+  EXPECT_EQ(result.reason, race::ReturnTransitionAdmissionReason::Admitted);
+}
+
+TEST(RaceMpccFoundation, ReturnTransitionRejectsGeometryWithoutAuthority)
+{
+  race::ReturnTransitionAdmissionRequest request;
+  request.pass_active = true;
+  request.geometric_preflight_valid = true;
+
+  const auto result = race::resolve_return_transition_admission(request);
+
+  EXPECT_FALSE(result.admitted);
+  EXPECT_EQ(
+    result.reason,
+    race::ReturnTransitionAdmissionReason::ProposalIncomplete);
+}
+
+TEST(RaceMpccFoundation, ReturnTransitionRejectsStaleOrWrongIdentity)
+{
+  race::ReturnTransitionAdmissionRequest request;
+  request.pass_active = true;
+  request.geometric_preflight_valid = true;
+  request.proposal_complete = true;
+  request.current_world_certified = true;
+  request.proposal_intent = contract::ControlIntent::Pass;
+  request.current_target_id = "d2";
+  request.proposal_target_id = "d2";
+  request.current_mission_generation = 7U;
+  request.proposal_mission_generation = 7U;
+  request.current_side_sign = 1;
+  request.proposal_side_sign = 1;
+  EXPECT_EQ(
+    race::resolve_return_transition_admission(request).reason,
+    race::ReturnTransitionAdmissionReason::IntentMismatch);
+
+  request.proposal_intent = contract::ControlIntent::Return;
+  request.proposal_target_id = "d3";
+  EXPECT_EQ(
+    race::resolve_return_transition_admission(request).reason,
+    race::ReturnTransitionAdmissionReason::TargetMismatch);
+
+  request.proposal_target_id = "d2";
+  request.proposal_mission_generation = 6U;
+  EXPECT_EQ(
+    race::resolve_return_transition_admission(request).reason,
+    race::ReturnTransitionAdmissionReason::MissionGenerationMismatch);
+
+  request.proposal_mission_generation = 7U;
+  request.proposal_side_sign = -1;
+  EXPECT_EQ(
+    race::resolve_return_transition_admission(request).reason,
+    race::ReturnTransitionAdmissionReason::SideMismatch);
+
+  request.proposal_side_sign = 1;
+  request.current_world_certified = false;
+  EXPECT_EQ(
+    race::resolve_return_transition_admission(request).reason,
+    race::ReturnTransitionAdmissionReason::CurrentWorldRejected);
+}
+
 TEST(RaceMpccFoundation, FormatsAllFourHomotopiesWithShadowAuthority)
 {
   race::ShadowDecision decision;

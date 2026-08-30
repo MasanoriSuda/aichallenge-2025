@@ -3194,3 +3194,47 @@ def test_canonical_overtake_problem_has_no_legacy_receding_optimizer_edge() -> N
     assert "seven-state MPCC is the sole continuous" in problem_builder
     assert "optimize_live_overtake_line_horizon(" not in problem_builder
     assert "Overtake horizon schedule:" not in problem_builder
+
+
+def test_pass_to_return_requires_causal_certified_gate_a() -> None:
+    """Geometric Return preflight alone cannot mutate tactical authority."""
+
+    begin_start = SOURCE.index("const auto begin_validated_return =")
+    begin_end = SOURCE.index(
+        "auto completed_pass_return_request =", begin_start
+    )
+    begin_return = SOURCE[begin_start:begin_end]
+    admission = begin_return.index("resolve_return_transition_admission(")
+    reject = begin_return.index("if (!transition_admission.admitted)")
+    transition = begin_return.index(
+        "transition_overtake_line_phase(\n"
+        "          OvertakeLinePhase::Return"
+    )
+    assert admission < reject < transition
+    assert "action=retain-certified-pass" in begin_return
+    assert "rate_resolved_return_gate_a_proposal" in SOURCE
+
+    return_builder_start = SOURCE.index(
+        "build_prospective_return_problem("
+    )
+    return_builder_end = SOURCE.index(
+        "build_prospective_extended_branch_problem(", return_builder_start
+    )
+    return_builder = SOURCE[return_builder_start:return_builder_end]
+    assert "worker-owned tactical snapshot" in return_builder
+    assert "OvertakeLinePhase::Return" in return_builder
+    assert "mpcc_contract::ControlIntent::Return" in return_builder
+    assert "build_extended_progress_problem(" in return_builder
+
+    control_start = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control("
+    )
+    control_end = SOURCE.index(
+        "MpcControlCycleResult get_control(", control_start
+    )
+    control = SOURCE[control_start:control_end]
+    assert "return_gate_a_proposal" in control
+    assert control.index("return_gate_a_proposal") < control.index(
+        "resolve_atomic_intent_admission("
+    )
+    assert "evaluate_rate_resolved_track_cruise_plan(" in control

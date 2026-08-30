@@ -67,6 +67,79 @@ const char * target_provenance_reject_reason_name(
   return "unknown";
 }
 
+const char * return_transition_admission_reason_name(
+  const ReturnTransitionAdmissionReason reason) noexcept
+{
+  switch (reason) {
+    case ReturnTransitionAdmissionReason::Inactive:
+      return "inactive";
+    case ReturnTransitionAdmissionReason::GeometricPreflightUnavailable:
+      return "geometric-preflight-unavailable";
+    case ReturnTransitionAdmissionReason::ProposalIncomplete:
+      return "proposal-incomplete";
+    case ReturnTransitionAdmissionReason::IntentMismatch:
+      return "intent-mismatch";
+    case ReturnTransitionAdmissionReason::TargetMismatch:
+      return "target-mismatch";
+    case ReturnTransitionAdmissionReason::MissionGenerationMismatch:
+      return "mission-generation-mismatch";
+    case ReturnTransitionAdmissionReason::SideMismatch:
+      return "side-mismatch";
+    case ReturnTransitionAdmissionReason::CurrentWorldRejected:
+      return "current-world-rejected";
+    case ReturnTransitionAdmissionReason::Admitted:
+      return "admitted";
+  }
+  return "unknown";
+}
+
+ReturnTransitionAdmission resolve_return_transition_admission(
+  const ReturnTransitionAdmissionRequest & request) noexcept
+{
+  const auto reject = [](const ReturnTransitionAdmissionReason reason) {
+      return ReturnTransitionAdmission{false, reason};
+    };
+  if (!request.pass_active) {
+    return reject(ReturnTransitionAdmissionReason::Inactive);
+  }
+  if (!request.geometric_preflight_valid) {
+    return reject(
+      ReturnTransitionAdmissionReason::GeometricPreflightUnavailable);
+  }
+  if (!request.proposal_complete) {
+    return reject(ReturnTransitionAdmissionReason::ProposalIncomplete);
+  }
+  if (
+    request.proposal_intent !=
+    mpcc_execution_contract::ControlIntent::Return)
+  {
+    return reject(ReturnTransitionAdmissionReason::IntentMismatch);
+  }
+  if (
+    request.current_target_id.empty() ||
+    request.proposal_target_id != request.current_target_id)
+  {
+    return reject(ReturnTransitionAdmissionReason::TargetMismatch);
+  }
+  if (
+    request.current_mission_generation == 0U ||
+    request.proposal_mission_generation != request.current_mission_generation)
+  {
+    return reject(
+      ReturnTransitionAdmissionReason::MissionGenerationMismatch);
+  }
+  if (
+    (request.current_side_sign != -1 && request.current_side_sign != 1) ||
+    request.proposal_side_sign != request.current_side_sign)
+  {
+    return reject(ReturnTransitionAdmissionReason::SideMismatch);
+  }
+  if (!request.current_world_certified) {
+    return reject(ReturnTransitionAdmissionReason::CurrentWorldRejected);
+  }
+  return {true, ReturnTransitionAdmissionReason::Admitted};
+}
+
 namespace
 {
 

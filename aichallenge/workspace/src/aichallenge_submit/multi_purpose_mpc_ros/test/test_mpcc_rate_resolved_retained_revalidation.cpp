@@ -595,6 +595,14 @@ TEST(
     multi_purpose_mpc_ros::race_mpcc_foundation::
     exact_physical_execution_trajectory_complete(
       result.proof->terminal_stop_trajectory));
+  EXPECT_EQ(
+    result.proof->terminal_stop_actuation_samples.size(),
+    result.proof->terminal_stop_trajectory.elapsed_time_sec.size());
+  EXPECT_GT(
+    result.proof->terminal_stop_publisher_interval_sample_count, 0U);
+  EXPECT_LE(
+    result.proof->terminal_stop_publisher_interval_sample_count,
+    result.proof->terminal_stop_actuation_samples.size());
 }
 
 TEST(

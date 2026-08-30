@@ -220,6 +220,28 @@ TEST(
   EXPECT_GT(
     result.braking_suffix_final_steering_rad,
     result.publisher_interval_end_steering_rad);
+  ASSERT_EQ(result.actuation_samples.size(), exact.elapsed_time_sec.size());
+  ASSERT_GT(result.publisher_interval_sample_count, 0U);
+  ASSERT_LE(
+    result.publisher_interval_sample_count, result.actuation_samples.size());
+  const auto & publisher_boundary = result.actuation_samples[
+    result.publisher_interval_sample_count - 1U];
+  EXPECT_NEAR(
+    publisher_boundary.elapsed_time_sec,
+    source.publication_interval_sec, 1e-12);
+  EXPECT_NEAR(
+    publisher_boundary.end_steering_rad,
+    result.publisher_interval_end_steering_rad, 1e-12);
+  EXPECT_NEAR(
+    result.actuation_samples.back().acceleration_mps2, -3.0, 1e-12);
+  for (std::size_t index = 0U; index < result.actuation_samples.size(); ++index) {
+    EXPECT_DOUBLE_EQ(
+      result.actuation_samples[index].elapsed_time_sec,
+      exact.elapsed_time_sec[index]);
+    EXPECT_DOUBLE_EQ(
+      result.actuation_samples[index].end_velocity_mps,
+      exact.velocity_mps[index]);
+  }
   EXPECT_TRUE(
     multi_purpose_mpc_ros::race_mpcc_foundation::
     exact_physical_execution_trajectory_complete(exact));

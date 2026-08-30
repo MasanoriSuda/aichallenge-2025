@@ -15,6 +15,7 @@
 #include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp>
+#include <multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp>
 #include <multi_purpose_mpc_ros/mpcc_execution_contract.hpp>
 #include <multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp>
 #include <multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp>
@@ -171,6 +172,8 @@ namespace rate_resolved_execution_source =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_execution_source;
 namespace rate_resolved_production =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
+namespace stop_successor_observation =
+  ::multi_purpose_mpc_ros::mpcc_certified_stop_successor_observation;
 namespace rate_resolved_retained =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation;
 namespace stateless_maneuver =
@@ -7686,6 +7689,8 @@ struct CanonicalNormalPendingActuation
   bool record_published_bundle_source{false};
   std::optional<overtake_sibling_adoption::Token>
   overtake_sibling_adoption_token;
+  std::optional<rate_resolved_production::CertifiedStopSuccessorEvidence>
+  certified_stop_successor;
 };
 
 struct OvertakeSiblingAdoptionLiveState
@@ -8981,6 +8986,70 @@ struct MPC
     }
   }
 
+  void observe_published_certified_stop_successor_join(
+    const RateResolvedRetainedShadowEvaluation & current,
+    const std::uint64_t decision_id)
+  {
+    if (!published_certified_stop_successor_observation_.has_value()) {
+      return;
+    }
+    auto published = std::move(
+      published_certified_stop_successor_observation_.value());
+    published_certified_stop_successor_observation_.reset();
+    const auto result = stop_successor_observation::evaluate(
+      published,
+      stop_successor_observation::CurrentControlOrigin{
+        decision_id, current.current_control_state_available,
+        current.observation_origin_sec, current.control_origin_sec,
+        current.control_pose.x_m, current.control_pose.y_m,
+        current.control_pose.yaw_rad, current.control_origin_speed_mps,
+        current.current_steering_rad});
+    const auto & evidence = published.evidence;
+    if (result.reason != stop_successor_observation::Reason::Sampled) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Certified Stop successor join: source_decision=%lu, decision=%lu, "
+        "solution=%lu, fingerprint=%lu, intent=%s, result=%s, "
+        "elapsed=%.6f, publisher_boundary=%.6f, publication_age=%.6f, "
+        "authority=observation-only",
+        static_cast<unsigned long>(evidence.source_decision_id),
+        static_cast<unsigned long>(decision_id),
+        static_cast<unsigned long>(evidence.solution_id),
+        static_cast<unsigned long>(evidence.problem_fingerprint),
+        mpcc_contract::to_string(evidence.source_intent),
+        stop_successor_observation::to_string(result.reason),
+        result.successor_elapsed_sec, result.publisher_boundary_sec,
+        result.publication_age_sec);
+      return;
+    }
+    RCLCPP_INFO(
+      rclcpp::get_logger("mpc_controller"),
+      "Certified Stop successor join: source_decision=%lu, decision=%lu, "
+      "solution=%lu, fingerprint=%lu, intent=%s, result=%s, "
+      "elapsed=%.6f, publisher_boundary=%.6f, boundary_delta=%.6f, "
+      "sample=%zu/%zu, alpha=%.6f, "
+      "position_error=%.6f m, yaw_error=%.6f rad, "
+      "speed_error=%.6f mps, steering_error=%.6f rad, "
+      "expected=(%.6f,%.6f,%.6f,%.6f,%.6f), "
+      "observed=(%.6f,%.6f,%.6f,%.6f,%.6f), "
+      "authority=observation-only",
+      static_cast<unsigned long>(evidence.source_decision_id),
+      static_cast<unsigned long>(decision_id),
+      static_cast<unsigned long>(evidence.solution_id),
+      static_cast<unsigned long>(evidence.problem_fingerprint),
+      mpcc_contract::to_string(evidence.source_intent),
+      stop_successor_observation::to_string(result.reason),
+      result.successor_elapsed_sec, result.publisher_boundary_sec,
+      result.successor_elapsed_sec - result.publisher_boundary_sec,
+      result.lower_sample_index, result.upper_sample_index,
+      result.interpolation_alpha, result.position_error_m,
+      result.yaw_error_rad, result.speed_error_mps,
+      result.steering_error_rad, result.expected_x_m, result.expected_y_m,
+      result.expected_yaw_rad, result.expected_speed_mps,
+      result.expected_steering_rad, current.control_pose.x_m,
+      current.control_pose.y_m, current.control_pose.yaw_rad,
+      current.control_origin_speed_mps, current.current_steering_rad);
+  }
   OvertakeSiblingAdoptionLiveState
   current_overtake_sibling_adoption_live_state() const
   {
@@ -9190,6 +9259,43 @@ struct MPC
     // Update this ledger only after the exact serialized command has joined
     // and any newly certified candidate has become the executed plan.
     last_published_canonical_intent_ = pending.command.intent;
+    if (pending.certified_stop_successor.has_value()) {
+      const auto & evidence = pending.certified_stop_successor.value();
+      if (
+        evidence.source_decision_id == decision_id &&
+        evidence.solution_id == pending.command.solution_id &&
+        evidence.problem_fingerprint ==
+        pending.command.problem_fingerprint &&
+        evidence.source_intent == pending.command.intent &&
+        std::isfinite(evidence.control_origin_sec) &&
+        !evidence.exact_trajectory.elapsed_time_sec.empty() &&
+        evidence.actuation_samples.size() ==
+        evidence.exact_trajectory.elapsed_time_sec.size() &&
+        evidence.world_prediction.first.size() ==
+        evidence.exact_trajectory.elapsed_time_sec.size() &&
+        evidence.world_prediction.second.size() ==
+        evidence.exact_trajectory.elapsed_time_sec.size() &&
+        evidence.world_yaw_rad.size() ==
+        evidence.exact_trajectory.elapsed_time_sec.size() &&
+        evidence.publisher_interval_sample_count > 0U &&
+        evidence.publisher_interval_sample_count <=
+        evidence.actuation_samples.size())
+      {
+        published_certified_stop_successor_observation_ =
+          stop_successor_observation::Published{evidence, now_sec};
+      } else {
+        published_certified_stop_successor_observation_.reset();
+        RCLCPP_ERROR(
+          rclcpp::get_logger("mpc_controller"),
+          "Certified Stop successor publication evidence rejected: "
+          "decision=%lu, solution=%lu, intent=%s, authority=observation-only",
+          static_cast<unsigned long>(decision_id),
+          static_cast<unsigned long>(pending.command.solution_id),
+          mpcc_contract::to_string(pending.command.intent));
+      }
+    } else {
+      published_certified_stop_successor_observation_.reset();
+    }
 
     const double speed_difference_mps = std::abs(
       pending.command.predicted_speed_mps - final_target_speed_mps);
@@ -28030,7 +28136,8 @@ struct MPC
       !retained.selected_from_executed &&
       !retained.stateless_current_world_bundle,
       retained.stateless_current_world_bundle,
-      retained.overtake_sibling_adoption_token};
+      retained.overtake_sibling_adoption_token,
+      authority.certified_stop_successor};
     last_control_resolution_reason_ =
       std::string{"canonical-rate-resolved-"} +
       mpcc_contract::to_string(intent) +
@@ -28102,6 +28209,8 @@ struct MPC
     bool published_stop_retained = false;
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
       problem, now_sec, intent);
+    observe_published_certified_stop_successor_join(
+      retained, active_control_decision_id_);
     // Observation only: capture the immutable current-world problem at the
     // proof boundary before atomic intent bridging can replace the rejected
     // proposed intent.  This never solves, stores, publishes or changes
@@ -29052,6 +29161,8 @@ struct MPC
     std::numeric_limits<double>::quiet_NaN()};
   std::optional<CanonicalNormalPendingActuation>
   pending_canonical_normal_actuation_;
+  std::optional<stop_successor_observation::Published>
+  published_certified_stop_successor_observation_;
   std::optional<PendingRateResolvedPublicationSuccessor>
   pending_rate_resolved_publication_successor_;
   CanonicalNormalFinalActuationTelemetryWindow

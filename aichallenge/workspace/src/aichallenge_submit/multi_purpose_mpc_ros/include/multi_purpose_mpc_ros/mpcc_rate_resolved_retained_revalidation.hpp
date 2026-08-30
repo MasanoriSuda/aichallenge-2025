@@ -288,6 +288,9 @@ struct Proof
   continuation_trajectory;
   race_mpcc_foundation::ExactPhysicalExecutionTrajectory
   terminal_stop_trajectory;
+  std::vector<mpcc_rate_resolved_physical_adapter::StopContingencyResult::
+    ActuationSample> terminal_stop_actuation_samples;
+  std::size_t terminal_stop_publisher_interval_sample_count{};
   std::vector<double> continuation_stage_end_velocity_mps;
   std::vector<double> continuation_stage_end_steering_rad;
 };

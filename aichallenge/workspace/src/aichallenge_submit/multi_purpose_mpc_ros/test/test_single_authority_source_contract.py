@@ -2633,6 +2633,58 @@ def test_five_state_track_cruise_owner_is_physically_deleted() -> None:
             rf"(?<![A-Za-z0-9_]){re.escape(retired_symbol)}(?![A-Za-z0-9_])",
             SOURCE,
         )
+
+
+def test_certified_stop_successor_is_observed_only_after_publication_join() -> None:
+    """A proved Stop suffix remains data-only until its normal command publishes."""
+
+    package = Path(__file__).resolve().parents[1]
+    physical_header = (
+        package
+        / "include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp"
+    ).read_text(encoding="utf-8")
+    production_header = (
+        package
+        / "include/multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp"
+    ).read_text(encoding="utf-8")
+    production_source = (
+        package / "src/mpcc_rate_resolved_production_adapter.cpp"
+    ).read_text(encoding="utf-8")
+
+    assert "struct ActuationSample" in physical_header
+    assert "publisher_interval_sample_count" in physical_header
+    assert "struct CertifiedStopSuccessorEvidence" in production_header
+    assert "certified_stop_successor" in production_header
+    assert "proof.terminal_stop_actuation_samples" in production_source
+
+    record_start = SOURCE.index("void record_canonical_normal_final_command(")
+    record_end = SOURCE.index("void record_final_published_authority(", record_start)
+    record = SOURCE[record_start:record_end]
+    serialized_join = record.index(
+        "canonical_normal_command_matches_serialized_actuation("
+    )
+    successor_promotion = record.index(
+        "published_certified_stop_successor_observation_ ="
+    )
+    assert serialized_join < successor_promotion
+
+    observe_start = SOURCE.index(
+        "void observe_published_certified_stop_successor_join("
+    )
+    observe_end = SOURCE.index(
+        "OvertakeSiblingAdoptionLiveState", observe_start
+    )
+    observe = SOURCE[observe_start:observe_end]
+    assert "authority=observation-only" in observe
+    assert "canonical_normal_emergency_stop(" not in observe
+    assert "publish_control_command(" not in observe
+
+    emergency_start = SOURCE.index("MpcControlCycleResult canonical_normal_emergency_stop(")
+    emergency_end = SOURCE.index(
+        "void prepare_rate_resolved_stop_shadow_successor(", emergency_start
+    )
+    emergency = SOURCE[emergency_start:emergency_end]
+    assert "published_certified_stop_successor_observation_" not in emergency
     for retired_function in (
         "evaluate_track_cruise_retained_shadow(",
         "record_track_cruise_shadow_telemetry(",

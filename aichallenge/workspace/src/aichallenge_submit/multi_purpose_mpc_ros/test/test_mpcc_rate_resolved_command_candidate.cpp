@@ -322,6 +322,11 @@ TEST(
   retained_result.proof->terminal_stop_certified = true;
   retained_result.proof->terminal_stop_trajectory =
     retained_result.proof->continuation_trajectory;
+  retained_result.proof->terminal_stop_actuation_samples = {
+    {0.10, 0.10, -3.0, 0.0, 1.8, 0.10},
+    {0.20, 0.10, -3.0, 0.0, 1.5, 0.10},
+  };
+  retained_result.proof->terminal_stop_publisher_interval_sample_count = 1U;
 
   const auto result = production::build(retained_result);
 
@@ -329,6 +334,35 @@ TEST(
   ASSERT_TRUE(result.authority.has_value());
   EXPECT_EQ(result.authority->target_speed_horizon_mps.size(), 1U);
   EXPECT_TRUE(result.authority->command.retained_solution);
+  ASSERT_TRUE(result.authority->certified_stop_successor.has_value());
+  EXPECT_EQ(
+    result.authority->certified_stop_successor->source_decision_id,
+    retained_result.proof->decision_id);
+  EXPECT_EQ(
+    result.authority->certified_stop_successor->actuation_samples.size(), 2U);
+  EXPECT_EQ(
+    result.authority->certified_stop_successor->world_yaw_rad.size(), 2U);
+}
+
+TEST(
+  RateResolvedProductionAdapter,
+  RejectsTerminalStopStateWithoutItsCausalActuationTrace)
+{
+  auto retained_result = accepted_result();
+  retained_result.proof->cursor.control_stage_index = 0U;
+  retained_result.proof->cursor.remaining_control_stage_count = 2U;
+  retained_result.proof->actuation.control_stage_index = 0U;
+  retained_result.proof->proved_control_stage_count = 1U;
+  retained_result.proof->dynamic_obstacle_scope =
+    retained::DynamicObstacleProofScope::PublisherIntervalPrefix;
+  retained_result.proof->terminal_stop_certified = true;
+  retained_result.proof->terminal_stop_trajectory =
+    retained_result.proof->continuation_trajectory;
+
+  const auto result = production::build(retained_result);
+
+  EXPECT_EQ(result.reason, production::Reason::PredictionRejected);
+  EXPECT_FALSE(result.authority.has_value());
 }
 
 TEST(

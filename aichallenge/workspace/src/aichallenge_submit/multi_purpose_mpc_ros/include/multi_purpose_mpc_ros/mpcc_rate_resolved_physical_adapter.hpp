@@ -204,6 +204,21 @@ struct StopContingencyResult
   /// Final steering reached by the path-tracking maximum-braking suffix.
   double braking_suffix_final_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  struct ActuationSample
+  {
+    double elapsed_time_sec{std::numeric_limits<double>::quiet_NaN()};
+    double duration_sec{std::numeric_limits<double>::quiet_NaN()};
+    double acceleration_mps2{std::numeric_limits<double>::quiet_NaN()};
+    double steering_rate_radps{std::numeric_limits<double>::quiet_NaN()};
+    double end_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
+    double end_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  };
+  /// Input/state samples aligned one-to-one with exact_trajectory.  The
+  /// certificate can otherwise prove states which no publisher can reproduce.
+  std::vector<ActuationSample> actuation_samples;
+  /// Number of leading samples which replay the normal command already chosen
+  /// for the next publisher interval.  The braking suffix starts here.
+  std::size_t publisher_interval_sample_count{};
   std::optional<race_mpcc_foundation::ExactPhysicalExecutionTrajectory>
   exact_trajectory;
 };

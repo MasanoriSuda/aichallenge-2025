@@ -1188,6 +1188,9 @@ Result evaluate(const Request & request)
 
   race_mpcc_foundation::ExactPhysicalExecutionTrajectory
   terminal_stop_trajectory;
+  std::vector<mpcc_rate_resolved_physical_adapter::StopContingencyResult::
+    ActuationSample> terminal_stop_actuation_samples;
+  std::size_t terminal_stop_publisher_interval_sample_count{};
   recovery::PathClearanceResult terminal_stop_clearance;
   dynamic_proof::Result terminal_stop_dynamic;
   if (partial_normal_proof) {
@@ -1225,6 +1228,19 @@ Result evaluate(const Request & request)
         Reason::TerminalContingencyUnavailable);
     }
     terminal_stop_trajectory = terminal_stop.exact_trajectory.value();
+    terminal_stop_actuation_samples = terminal_stop.actuation_samples;
+    terminal_stop_publisher_interval_sample_count =
+      terminal_stop.publisher_interval_sample_count;
+    if (
+      terminal_stop_actuation_samples.size() !=
+      terminal_stop_trajectory.elapsed_time_sec.size() ||
+      terminal_stop_publisher_interval_sample_count == 0U ||
+      terminal_stop_publisher_interval_sample_count >
+      terminal_stop_actuation_samples.size())
+    {
+      return complete_continuation_proof(
+        Reason::TerminalContingencyUnavailable);
+    }
     std::vector<recovery::Pose2D> terminal_stop_path;
     terminal_stop_path.reserve(
       terminal_stop_trajectory.progress_m.size() + 1U);
@@ -1411,6 +1427,10 @@ Result evaluate(const Request & request)
   proof.continuation_trajectory =
     std::move(proved_continuation_trajectory);
   proof.terminal_stop_trajectory = std::move(terminal_stop_trajectory);
+  proof.terminal_stop_actuation_samples =
+    std::move(terminal_stop_actuation_samples);
+  proof.terminal_stop_publisher_interval_sample_count =
+    terminal_stop_publisher_interval_sample_count;
   proof.continuation_stage_end_velocity_mps =
     std::move(proved_stage_end_velocity_mps);
   proof.continuation_stage_end_steering_rad =

@@ -31,7 +31,13 @@ std::optional<double> project_certified_nonnegative(
   return std::max(0.0, value);
 }
 
-std::optional<std::pair<std::vector<double>, std::vector<double>>>
+struct WorldPrediction
+{
+  std::pair<std::vector<double>, std::vector<double>> position;
+  std::vector<double> yaw_rad;
+};
+
+std::optional<WorldPrediction>
 build_world_prediction(
   const physical::Snapshot & snapshot,
   const race_mpcc_foundation::ExactPhysicalExecutionTrajectory & trajectory)
@@ -44,9 +50,10 @@ noexcept
   {
     return std::nullopt;
   }
-  std::pair<std::vector<double>, std::vector<double>> prediction;
-  prediction.first.reserve(trajectory.progress_m.size());
-  prediction.second.reserve(trajectory.progress_m.size());
+  WorldPrediction prediction;
+  prediction.position.first.reserve(trajectory.progress_m.size());
+  prediction.position.second.reserve(trajectory.progress_m.size());
+  prediction.yaw_rad.reserve(trajectory.progress_m.size());
   const double tolerance_m = std::max(1e-9, snapshot.bound_tolerance_m);
   for (
     std::size_t index = 0U; index < trajectory.progress_m.size(); ++index)
@@ -65,10 +72,11 @@ noexcept
     if (!pose.has_value()) {
       return std::nullopt;
     }
-    prediction.first.push_back(pose->x_m);
-    prediction.second.push_back(pose->y_m);
+    prediction.position.first.push_back(pose->x_m);
+    prediction.position.second.push_back(pose->y_m);
+    prediction.yaw_rad.push_back(pose->yaw_rad);
   }
-  if (prediction.first.empty()) {
+  if (prediction.position.first.empty()) {
     return std::nullopt;
   }
   return prediction;
@@ -321,7 +329,35 @@ Result build(const retained::Result & retained_result) noexcept
     authority.maximum_abs_steering_rad = std::max(
       authority.maximum_abs_steering_rad, std::abs(steering_rad));
   }
-  authority.world_prediction = world_prediction.value();
+  authority.world_prediction = world_prediction->position;
+  if (proof.terminal_stop_certified) {
+    const auto terminal_world_prediction = build_world_prediction(
+      *proof.plan->physical_snapshot, proof.terminal_stop_trajectory);
+    if (
+      !terminal_world_prediction.has_value() ||
+      proof.terminal_stop_actuation_samples.size() !=
+      proof.terminal_stop_trajectory.elapsed_time_sec.size() ||
+      proof.terminal_stop_publisher_interval_sample_count == 0U ||
+      proof.terminal_stop_publisher_interval_sample_count >
+      proof.terminal_stop_actuation_samples.size())
+    {
+      result.reason = Reason::PredictionRejected;
+      return result;
+    }
+    CertifiedStopSuccessorEvidence evidence;
+    evidence.source_decision_id = proof.decision_id;
+    evidence.solution_id = execution.identity.sequence;
+    evidence.problem_fingerprint = source_context.fingerprint;
+    evidence.source_intent = source_context.intent;
+    evidence.control_origin_sec = proof.control_origin_sec;
+    evidence.exact_trajectory = proof.terminal_stop_trajectory;
+    evidence.actuation_samples = proof.terminal_stop_actuation_samples;
+    evidence.publisher_interval_sample_count =
+      proof.terminal_stop_publisher_interval_sample_count;
+    evidence.world_prediction = terminal_world_prediction->position;
+    evidence.world_yaw_rad = terminal_world_prediction->yaw_rad;
+    authority.certified_stop_successor = std::move(evidence);
+  }
   result.reason = Reason::Available;
   result.authority = std::move(authority);
   return result;

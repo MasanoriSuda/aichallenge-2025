@@ -5,6 +5,8 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -32,6 +34,25 @@ enum class Reason
 
 const char * to_string(Reason reason) noexcept;
 
+/// Observation-only causal Stop successor which certified one bounded normal
+/// publisher interval.  Production does not select it in this slice; carrying
+/// the complete input/state evidence prevents a boolean certificate from
+/// becoming detached from the sequence which was actually proved.
+struct CertifiedStopSuccessorEvidence
+{
+  std::uint64_t source_decision_id{};
+  std::uint64_t solution_id{};
+  std::uint64_t problem_fingerprint{};
+  contract::ControlIntent source_intent{contract::ControlIntent::Unknown};
+  double control_origin_sec{std::numeric_limits<double>::quiet_NaN()};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory exact_trajectory;
+  std::vector<mpcc_rate_resolved_physical_adapter::StopContingencyResult::
+    ActuationSample> actuation_samples;
+  std::size_t publisher_interval_sample_count{};
+  std::pair<std::vector<double>, std::vector<double>> world_prediction;
+  std::vector<double> world_yaw_rad;
+};
+
 /// Complete seven-state normal authority ready for the existing final publisher.
 /// This adapter can only transform already accepted evidence.  It may project
 /// a lower-bound solver residual to the exact physical boundary when that
@@ -47,6 +68,7 @@ struct Authority
   std::vector<double> steering_horizon_rad;
   std::pair<std::vector<double>, std::vector<double>> world_prediction;
   double maximum_abs_steering_rad{};
+  std::optional<CertifiedStopSuccessorEvidence> certified_stop_successor;
 };
 
 struct Result

@@ -215,7 +215,12 @@ struct StopContingencyResult
   {
     double elapsed_time_sec{std::numeric_limits<double>::quiet_NaN()};
     double duration_sec{std::numeric_limits<double>::quiet_NaN()};
+    /// Acceleration command owned by this serialized command interval.
     double acceleration_mps2{std::numeric_limits<double>::quiet_NaN()};
+    /// Acceleration used by the nonlinear plant after applying its zero-speed
+    /// saturation.  It may become zero without creating a new command.
+    double effective_acceleration_mps2{
+      std::numeric_limits<double>::quiet_NaN()};
     double steering_rate_radps{std::numeric_limits<double>::quiet_NaN()};
     double end_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
     double end_steering_rad{std::numeric_limits<double>::quiet_NaN()};

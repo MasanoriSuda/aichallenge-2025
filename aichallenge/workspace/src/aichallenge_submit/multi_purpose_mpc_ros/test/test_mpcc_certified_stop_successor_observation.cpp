@@ -25,10 +25,31 @@ observation::Published published()
   evidence.world_prediction.first = {10.0, 10.1, 10.2};
   evidence.world_prediction.second = {1.0, 1.0, 1.0};
   evidence.world_yaw_rad = {3.13, -3.13, -3.12};
+  using ActuationSample =
+    typename decltype(evidence.actuation_samples)::value_type;
+  const auto actuation_sample = [] (
+      const double elapsed_sec, const double duration_sec,
+      const double acceleration_mps2, const double steering_rate_radps,
+      const double velocity_mps, const double steering_rad,
+      const std::size_t command_interval_index) {
+      ActuationSample sample;
+      sample.elapsed_time_sec = elapsed_sec;
+      sample.duration_sec = duration_sec;
+      sample.acceleration_mps2 = acceleration_mps2;
+      sample.effective_acceleration_mps2 = acceleration_mps2;
+      sample.steering_rate_radps = steering_rate_radps;
+      sample.end_velocity_mps = velocity_mps;
+      sample.end_steering_rad = steering_rad;
+      sample.end_response_steering_rad = steering_rad;
+      sample.path_curvature_radpm = 0.0;
+      sample.virtual_progress_speed_mps = velocity_mps;
+      sample.command_interval_index = command_interval_index;
+      return sample;
+    };
   evidence.actuation_samples = {
-    {0.01, 0.01, 0.0, 0.1, 2.0, 0.10},
-    {0.02, 0.01, 0.0, 0.1, 1.9, 0.11},
-    {0.03, 0.01, -3.0, 0.1, 1.8, 0.12},
+    actuation_sample(0.01, 0.01, 0.0, 0.1, 2.0, 0.10, 0U),
+    actuation_sample(0.02, 0.01, 0.0, 0.1, 1.9, 0.11, 0U),
+    actuation_sample(0.03, 0.01, -3.0, 0.1, 1.8, 0.12, 1U),
   };
   evidence.publisher_interval_sample_count = 2U;
   published.publication_sec = 0.98;

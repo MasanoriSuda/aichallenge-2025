@@ -204,6 +204,7 @@ Result build(
         !finite(samples[end].elapsed_time_sec) ||
         !finite(samples[end].duration_sec) || samples[end].duration_sec <= 0.0 ||
         !finite(samples[end].acceleration_mps2) ||
+        !finite(samples[end].effective_acceleration_mps2) ||
         !finite(samples[end].steering_rate_radps) ||
         !finite(samples[end].end_velocity_mps) ||
         !finite(samples[end].end_steering_rad) ||

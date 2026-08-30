@@ -305,6 +305,37 @@ TEST(
 
 TEST(
   MpccRateResolvedPhysicalAdapter,
+  PreservesSerializedBrakingCommandAcrossZeroSpeedSaturation)
+{
+  auto source = artifact();
+  source.physical_global_tolerance = 0.01;
+
+  const auto result = adapter::build_stop_successor(
+    source,
+    adapter::ContinuationInitialState{
+      -0.40, 0.0, 0.0, 0.035, 0.45, 0.10, 0.10},
+    stop_course_geometry(), stop_lateral_policy(), -3.0);
+
+  ASSERT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  ASSERT_GE(result.actuation_samples.size(), 2U);
+  bool observed_saturated_response = false;
+  for (const auto & sample : result.actuation_samples) {
+    EXPECT_DOUBLE_EQ(sample.acceleration_mps2, -3.0);
+    EXPECT_EQ(sample.command_interval_index, 0U);
+    if (sample.effective_acceleration_mps2 == 0.0) {
+      observed_saturated_response = true;
+    }
+  }
+  EXPECT_TRUE(observed_saturated_response);
+  EXPECT_GT(result.exact_trajectory->velocity_mps.back(), 0.0);
+  EXPECT_LE(
+    result.exact_trajectory->velocity_mps.back(),
+    source.physical_global_tolerance);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
   RejectsTerminalStopWhenPhysicalCourseHorizonEndsBeforeBraking)
 {
   const auto source = artifact();

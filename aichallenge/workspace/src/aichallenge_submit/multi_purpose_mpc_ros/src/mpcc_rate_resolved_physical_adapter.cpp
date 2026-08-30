@@ -807,14 +807,17 @@ StopContingencyResult build_stop_contingency(
         double step_sec = std::min(
           mpcc_rate_resolved::kMaximumPhysicalIntegrationStepSec,
           remaining_sec);
-        double acceleration_mps2 = requested_acceleration_mps2;
-        if (nonlinear.velocity_mps <= tolerance && acceleration_mps2 < 0.0) {
-          acceleration_mps2 = 0.0;
-        } else if (
-          acceleration_mps2 < 0.0 &&
-          nonlinear.velocity_mps + acceleration_mps2 * step_sec < 0.0)
+        double effective_acceleration_mps2 = requested_acceleration_mps2;
+        if (
+          nonlinear.velocity_mps <= tolerance &&
+          effective_acceleration_mps2 < 0.0)
         {
-          step_sec = nonlinear.velocity_mps / -acceleration_mps2;
+          effective_acceleration_mps2 = 0.0;
+        } else if (
+          effective_acceleration_mps2 < 0.0 &&
+          nonlinear.velocity_mps + effective_acceleration_mps2 * step_sec < 0.0)
+        {
+          step_sec = nonlinear.velocity_mps / -effective_acceleration_mps2;
         }
         if (!std::isfinite(step_sec) || step_sec <= 0.0) {
           return false;
@@ -835,7 +838,7 @@ StopContingencyResult build_stop_contingency(
           return false;
         }
         execution::ControlStage control;
-        control.acceleration_mps2 = acceleration_mps2;
+        control.acceleration_mps2 = effective_acceleration_mps2;
         control.steering_rate_radps = requested_steering_rate_radps;
         control.virtual_progress_speed_mps = progress_speed.value();
         control.duration_sec = step_sec;
@@ -899,7 +902,8 @@ StopContingencyResult build_stop_contingency(
             endpoint_geometry->lateral_upper_m - nonlinear.lateral_m));
         result.actuation_samples.push_back(
           StopContingencyResult::ActuationSample{
-            elapsed_sec, step_sec, acceleration_mps2,
+            elapsed_sec, step_sec, requested_acceleration_mps2,
+            effective_acceleration_mps2,
             requested_steering_rate_radps, nonlinear.velocity_mps,
             nonlinear.steering_rad, nonlinear.response_steering_rad,
             geometry->curvature_radpm, progress_speed.value(),

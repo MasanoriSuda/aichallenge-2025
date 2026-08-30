@@ -3384,6 +3384,31 @@ def test_current_world_stop_successor_uses_the_canonical_normal_boundary() -> No
     )
 
 
+def test_stop_successor_separates_serialized_and_effective_acceleration() -> None:
+    """Zero-speed plant saturation cannot mutate one command interval."""
+
+    adapter_header = (
+        PACKAGE_ROOT
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_physical_adapter.hpp"
+    ).read_text(encoding="utf-8")
+    adapter_source = (
+        PACKAGE_ROOT / "src" / "mpcc_rate_resolved_physical_adapter.cpp"
+    ).read_text(encoding="utf-8")
+    bundle_source = (
+        PACKAGE_ROOT / "src" / "mpcc_rate_resolved_stop_successor_bundle.cpp"
+    ).read_text(encoding="utf-8")
+
+    assert "double effective_acceleration_mps2" in adapter_header
+    assert (
+        "elapsed_sec, step_sec, requested_acceleration_mps2," in adapter_source
+    )
+    assert "effective_acceleration_mps2," in adapter_source
+    assert "samples[end].effective_acceleration_mps2" in bundle_source
+    assert "same_command(samples[begin], samples[end], tolerance)" in bundle_source
+
+
 def test_canonical_overtake_problem_has_no_legacy_receding_optimizer_edge() -> None:
     """The tactical layer builds a reference; only seven-state MPCC optimises it."""
 

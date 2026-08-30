@@ -7,5 +7,5 @@
 - [x] Carry the immutable rebased Stop source into `CertifiedPlan`.
 - [x] Preserve mismatch/supersession fail-closed behavior.
 - [x] Run build, package tests, source contract and `git diff --check`.
-- [ ] Run `make dev2` and verify publication continuity.
-- [ ] Record results and commit the Slice.
+- [x] Run `make dev2` and verify publication continuity.
+- [x] Record results and commit the Slice.

@@ -58,8 +58,16 @@ TEST(MpccOvertakeSiblingAdoption, AcceptsExactPreNoReturnSibling) {
   EXPECT_EQ(result.token.previous_side_sign, -1);
   EXPECT_EQ(result.token.adopted_side_sign, 1);
   EXPECT_TRUE(adoption::token_matches_live_state(
-      result.token, contract::ControlIntent::ShiftOut, "d2", 4U, -1, true, true,
-      true, false));
+      result.token, contract::ControlIntent::ShiftOut, "d2", 4U, -1, true,
+      false, true, true, false));
+}
+
+TEST(MpccOvertakeSiblingAdoption, RejectsEstablishedSelectedHomotopy) {
+  auto request = accepted_request();
+  request.selected_homotopy_established = true;
+  const auto result = adoption::resolve(request);
+  EXPECT_FALSE(result.accepted);
+  EXPECT_EQ(result.reason, adoption::Reason::SelectedHomotopyEstablished);
 }
 
 TEST(MpccOvertakeSiblingAdoption, RejectsAfterNoReturn) {
@@ -140,8 +148,15 @@ TEST(MpccOvertakeSiblingAdoption, RejectsSelectedAuthorityStillAvailable) {
 TEST(MpccOvertakeSiblingAdoption, PublicationTokenRejectsChangedLiveSide) {
   const auto token = adoption::resolve(accepted_request()).token;
   EXPECT_FALSE(adoption::token_matches_live_state(
-      token, contract::ControlIntent::ShiftOut, "d2", 4U, 1, true, true, true,
-      false));
+      token, contract::ControlIntent::ShiftOut, "d2", 4U, 1, true, false,
+      true, true, false));
+}
+
+TEST(MpccOvertakeSiblingAdoption, PublicationTokenRejectsEstablishedHomotopy) {
+  const auto token = adoption::resolve(accepted_request()).token;
+  EXPECT_FALSE(adoption::token_matches_live_state(
+      token, contract::ControlIntent::ShiftOut, "d2", 4U, -1, true, true,
+      true, true, false));
 }
 
 } // namespace

@@ -17,6 +17,7 @@ enum class Reason {
   InactiveExecution,
   InvalidLiveIdentity,
   HardFault,
+  SelectedHomotopyEstablished,
   NoReturn,
   ReplacementBudgetExhausted,
   MissingSiblingAuthority,
@@ -47,6 +48,7 @@ struct Request {
   bool selected_authority_available{false};
   bool active_execution{false};
   bool hard_fault{false};
+  bool selected_homotopy_established{false};
   bool before_no_return{false};
   bool replacement_budget_available{false};
   bool sibling_current_world_authority{false};
@@ -75,7 +77,8 @@ Resolution resolve(const Request &request) noexcept;
 bool token_matches_live_state(
     const Token &token, contract::ControlIntent live_intent,
     const std::string &live_target_id, std::uint64_t live_mission_generation,
-    int live_side_sign, bool active_execution, bool before_no_return,
+    int live_side_sign, bool active_execution,
+    bool selected_homotopy_established, bool before_no_return,
     bool replacement_budget_available, bool hard_fault) noexcept;
 
 } // namespace multi_purpose_mpc_ros::mpcc_overtake_sibling_adoption

@@ -3075,6 +3075,31 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
     assert "mission_cross_side_transition_committed = true;" in record
 
 
+def test_overtake_sibling_cannot_replace_established_lateral_homotopy() -> None:
+    """A transient solve loss cannot undo physically established pass side."""
+
+    live_start = SOURCE.index(
+        "current_overtake_sibling_adoption_live_state() const"
+    )
+    live_end = SOURCE.index(
+        "void record_canonical_normal_final_command(", live_start
+    )
+    live = SOURCE[live_start:live_end]
+    assert "state.selected_homotopy_established =" in live
+    assert "locked_target_current_lateral_clear" in live
+    assert "locked_target_relative_lateral" in live
+    assert "state.side_sign *" in live
+
+    adoption_source = (
+        PACKAGE_ROOT / "src" / "mpcc_overtake_sibling_adoption.cpp"
+    ).read_text(encoding="utf-8")
+    assert "request.selected_homotopy_established" in adoption_source
+    assert 'return "selected-homotopy-established";' in adoption_source
+    assert "!selected_homotopy_established && before_no_return" in (
+        adoption_source
+    )
+
+
 def test_control_callback_overrun_trace_is_observation_only() -> None:
     """Timing attribution may diagnose a callback but cannot influence it."""
 

@@ -57,6 +57,8 @@ const char *to_string(const Reason reason) noexcept {
     return "invalid-live-identity";
   case Reason::HardFault:
     return "hard-fault";
+  case Reason::SelectedHomotopyEstablished:
+    return "selected-homotopy-established";
   case Reason::NoReturn:
     return "no-return";
   case Reason::ReplacementBudgetExhausted:
@@ -96,6 +98,10 @@ Resolution resolve(const Request &request) noexcept {
   }
   if (request.hard_fault) {
     result.reason = Reason::HardFault;
+    return result;
+  }
+  if (request.selected_homotopy_established) {
+    result.reason = Reason::SelectedHomotopyEstablished;
     return result;
   }
   if (!request.before_no_return) {
@@ -158,7 +164,8 @@ bool token_matches_live_state(
     const Token &token, const contract::ControlIntent live_intent,
     const std::string &live_target_id,
     const std::uint64_t live_mission_generation, const int live_side_sign,
-    const bool active_execution, const bool before_no_return,
+    const bool active_execution, const bool selected_homotopy_established,
+    const bool before_no_return,
     const bool replacement_budget_available, const bool hard_fault) noexcept {
   return token.source_sequence > 0U &&
          std::isfinite(token.source_snapshot_sec) && active_execution &&
@@ -169,7 +176,8 @@ bool token_matches_live_state(
          side_valid(live_side_sign) &&
          live_side_sign == token.previous_side_sign &&
          side_valid(token.adopted_side_sign) &&
-         token.adopted_side_sign == -live_side_sign && before_no_return &&
+         token.adopted_side_sign == -live_side_sign &&
+         !selected_homotopy_established && before_no_return &&
          replacement_budget_available && !hard_fault;
 }
 

@@ -3266,6 +3266,17 @@ progress-aligned planning corridorを残しつつ、局所physical bucketをexac
 しない責務分離として行う。監査用nonlinear oracleはStore、mailbox、publisherまたはcommand APIを持たず、production authorityを
 変更しない。
 
+productionでは、この局所physical bucketから導出したlateral／progress state boxとswept affine rowをQPのhard constraintへ
+追加しない。QP内のwall guidanceはprogress-aligned corridorが所有し、候補の物理受入れはcanonical nonlinear rolloutから
+再構築したexact occupancy-grid swept-footprint proofが所有する。bucket resolverとcacheは診断用に維持し、旧hard rowは
+`evaluate_wall_bucket_audit()`からだけ再現できる。これによりcandidate生成近似とexecution certificateの責務を分離しつつ、
+実occupied cell、map外、timed obstacle、recursive terminal Stopは従来どおりfail closedとなる。
+
+同じdecision 2177の凍結snapshotをproduction経路で再生すると、旧refinement QPの線形infeasibleは消え、terminal progress
+`12.9628 m`、terminal velocity `7.99676 m/s`、minimum lateral reserve `0.305762 m`のcertified Bundleを生成した。
+target-free Cruiseのためstateless左右armが`dynamic-target-unavailable`となるのは期待どおりである。これはMission、solver、
+clearanceを変更せずwall proof ownerの重複だけを除去したA/B結果である。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

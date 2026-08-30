@@ -586,6 +586,10 @@ struct Result
   bool physical_wall_refinement_requested{false};
   bool physical_wall_refinement_applied{false};
   bool physical_wall_refinement_solved{false};
+  /// True only for the observation-only historical wall-bucket A/B arms.
+  /// Production wall authority belongs to the progress-aligned corridor and
+  /// the exact nonlinear swept-footprint proof, not to a local pose bucket.
+  bool physical_wall_bucket_hard_constraints_applied{false};
   bool physical_wall_lag_pose_box_applied{false};
   bool physical_wall_heading_pose_box_applied{false};
   mpcc_rate_resolved_wall_refinement::Reason

@@ -129,6 +129,31 @@ void bind_dynamic_obstacle_identity(
   context = contract::seal_problem_context(std::move(context));
 }
 
+void bind_open_physical_wall(shadow::Snapshot & input)
+{
+  input.progress_aligned_wall_refinement_active = true;
+  input.wall_reference_progress_m = {0.0, 1.0, 2.0, 3.0};
+  input.wall_lower_m = {-1.0, -1.0, -1.0, -1.0};
+  input.wall_upper_m = {1.0, 1.0, 1.0, 1.0};
+  input.progress_wall_profile_diagnostic = "open-physical-wall";
+  input.physical_wall_refinement_active = true;
+  auto grid = std::make_shared<recovery::OccupancyGrid>();
+  grid->width = 400U;
+  grid->height = 200U;
+  grid->resolution_m = 0.1;
+  grid->origin_x_m = -10.0;
+  grid->origin_y_m = -10.0;
+  grid->y_axis = recovery::YAxisConvention::RowZeroAtMinimumY;
+  grid->cells.assign(grid->width * grid->height, recovery::CellState::Free);
+  input.wall_grid = grid;
+  input.wall_footprint = {1.0, 1.0, 0.725, 0.725, 0.0};
+  input.wall_course_frame_knots = {
+    {49.0, -1.0, 0.0, 0.0, 1},
+    {54.0, 4.0, 0.0, 0.0, 2}};
+  input.wall_lateral_sample_step_m = 0.1;
+  input.wall_translation_bucket_width_m = 0.1;
+}
+
 recovery::OccupancyGrid corridor_grid()
 {
   recovery::OccupancyGrid grid;
@@ -230,6 +255,7 @@ TEST(MpccRateResolvedShadow, DoesNotBindFutureWallSampleBeforeProgressSolve)
   EXPECT_TRUE(result.progress_wall_refinement_solved);
   EXPECT_GT(result.wall_refinement_solver_solve_count, 0U);
   EXPECT_EQ(result.wall_refinement_solver_scaling_iterations, 10);
+  EXPECT_FALSE(result.physical_wall_bucket_hard_constraints_applied);
   EXPECT_FALSE(result.physical_wall_lag_pose_box_applied);
   EXPECT_FALSE(result.physical_wall_heading_pose_box_applied);
   EXPECT_TRUE(result.post_refinement_physical_proof_checked);
@@ -246,6 +272,28 @@ TEST(MpccRateResolvedShadow, DoesNotBindFutureWallSampleBeforeProgressSolve)
       multi_purpose_mpc_ros::mpcc_rate_resolved_adapter::
       RelinearizationReason::Accepted);
   }
+}
+
+TEST(MpccRateResolvedShadow, PhysicalWallBucketHardRowsAreAuditOnly)
+{
+  auto input = snapshot();
+  bind_open_physical_wall(input);
+
+  shadow::SolverContext production_context;
+  const auto production = production_context.evaluate(input);
+  ASSERT_EQ(production.outcome, shadow::Outcome::Solved) << production.detail;
+  EXPECT_TRUE(production.physical_wall_refinement_applied);
+  EXPECT_FALSE(production.physical_wall_bucket_hard_constraints_applied);
+  EXPECT_TRUE(production.post_refinement_physical_proof_checked);
+  EXPECT_TRUE(production.post_refinement_physical_proof_accepted);
+
+  shadow::SolverContext audit_context;
+  const auto audit = audit_context.evaluate_wall_bucket_audit(
+    input, shadow::SolverContext::WallBucketAuditMode::OmitPose);
+  EXPECT_TRUE(audit.physical_wall_refinement_applied) << audit.detail;
+  EXPECT_TRUE(audit.physical_wall_bucket_hard_constraints_applied);
+  EXPECT_FALSE(audit.physical_wall_lag_pose_box_applied);
+  EXPECT_FALSE(audit.physical_wall_heading_pose_box_applied);
 }
 
 TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)

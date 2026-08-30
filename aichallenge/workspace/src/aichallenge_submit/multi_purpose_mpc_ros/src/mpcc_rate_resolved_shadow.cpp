@@ -206,63 +206,62 @@ ProgressWallRefinement build_progress_wall_refinement(
     {
       return result;
     }
-    for (int stage = 0; stage < horizon; ++stage) {
-      const int state = (stage + 1) * model::kStateDimension;
-      const auto & bounds = result.physical.stages[
-        static_cast<std::size_t>(stage)];
-      refined.state_lower[state + model::kLateralIndex] =
-        bounds.lateral_lower_m;
-      refined.state_upper[state + model::kLateralIndex] =
-        bounds.lateral_upper_m;
-      // The lateral/progress rows describe the convex wall corridor.  Lag
-      // and heading intervals only describe the sampled pose bucket used to
-      // construct that approximation; making both hard in production can
-      // empty the affine subproblem even when the immutable-world exact
-      // proof accepts a trajectory.  They remain available solely for the
-      // historical offline A/B arms below.  Production acceptance is owned
-      // by the exact nonlinear trajectory and swept physical-wall proof.
-      if (
-        wall_bucket_audit_mode.has_value() &&
-        wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitLag &&
-        wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitPose &&
-        wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitPoseDirect)
-      {
-        refined.state_lower[state + model::kLagIndex] = bounds.lag_lower_m;
-        refined.state_upper[state + model::kLagIndex] = bounds.lag_upper_m;
+    // The local pose-bucket bounds are a sampled affine approximation, not
+    // the physical wall certificate.  Installing them beside the
+    // progress-aligned rows created a second hard wall owner: a bucket could
+    // be unreachable by the affine dynamics even though the canonical
+    // nonlinear trajectory passed the exact swept-footprint proof.  Preserve
+    // the historical constraints only in the observation-only audit arms.
+    if (wall_bucket_audit_mode.has_value()) {
+      for (int stage = 0; stage < horizon; ++stage) {
+        const int state = (stage + 1) * model::kStateDimension;
+        const auto & bounds = result.physical.stages[
+          static_cast<std::size_t>(stage)];
+        refined.state_lower[state + model::kLateralIndex] =
+          bounds.lateral_lower_m;
+        refined.state_upper[state + model::kLateralIndex] =
+          bounds.lateral_upper_m;
+        if (
+          wall_bucket_audit_mode !=
+          SolverContext::WallBucketAuditMode::OmitLag &&
+          wall_bucket_audit_mode !=
+          SolverContext::WallBucketAuditMode::OmitPose &&
+          wall_bucket_audit_mode !=
+          SolverContext::WallBucketAuditMode::OmitPoseDirect)
+        {
+          refined.state_lower[state + model::kLagIndex] = bounds.lag_lower_m;
+          refined.state_upper[state + model::kLagIndex] = bounds.lag_upper_m;
+        }
+        if (
+          wall_bucket_audit_mode !=
+          SolverContext::WallBucketAuditMode::OmitHeading &&
+          wall_bucket_audit_mode !=
+          SolverContext::WallBucketAuditMode::OmitPose &&
+          wall_bucket_audit_mode !=
+          SolverContext::WallBucketAuditMode::OmitPoseDirect)
+        {
+          refined.state_lower[state + model::kHeadingIndex] =
+            bounds.heading_lower_rad;
+          refined.state_upper[state + model::kHeadingIndex] =
+            bounds.heading_upper_rad;
+        }
+        refined.state_lower[state + model::kProgressIndex] =
+          bounds.progress_lower_m;
+        refined.state_upper[state + model::kProgressIndex] =
+          bounds.progress_upper_m;
       }
-      if (
-        wall_bucket_audit_mode.has_value() &&
-        wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitHeading &&
-        wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitPose &&
-        wall_bucket_audit_mode !=
-        SolverContext::WallBucketAuditMode::OmitPoseDirect)
+      refined.swept_lateral_wall_constraints.reserve(
+        result.physical.swept_lateral_constraints.size());
+      for (const auto & constraint :
+        result.physical.swept_lateral_constraints)
       {
-        refined.state_lower[state + model::kHeadingIndex] =
-          bounds.heading_lower_rad;
-        refined.state_upper[state + model::kHeadingIndex] =
-          bounds.heading_upper_rad;
+        refined.swept_lateral_wall_constraints.push_back(
+          mpcc_rate_resolved_problem::SweptLateralWallConstraint{
+            constraint.transition_stage,
+            constraint.destination_ratio,
+            constraint.lateral_lower_m,
+            constraint.lateral_upper_m});
       }
-      refined.state_lower[state + model::kProgressIndex] =
-        bounds.progress_lower_m;
-      refined.state_upper[state + model::kProgressIndex] =
-        bounds.progress_upper_m;
-    }
-    refined.swept_lateral_wall_constraints.reserve(
-      result.physical.swept_lateral_constraints.size());
-    for (const auto & constraint :
-      result.physical.swept_lateral_constraints)
-    {
-      refined.swept_lateral_wall_constraints.push_back(
-        mpcc_rate_resolved_problem::SweptLateralWallConstraint{
-          constraint.transition_stage,
-          constraint.destination_ratio,
-          constraint.lateral_lower_m,
-          constraint.lateral_upper_m});
     }
   }
   refined.progress_aligned_wall_constraints = std::move(wall);
@@ -3352,6 +3351,9 @@ Result SolverContext::evaluate_impl(
     result.progress_wall_refinement_applied = refinement.request.has_value();
     result.physical_wall_refinement_reason = refinement.physical.reason;
     result.physical_wall_refinement_applied = refinement.physical.applied;
+    result.physical_wall_bucket_hard_constraints_applied =
+      snapshot.physical_wall_refinement_active &&
+      refinement.physical.applied && wall_bucket_audit_mode.has_value();
     result.physical_wall_lag_pose_box_applied =
       wall_bucket_audit_mode.has_value() &&
       wall_bucket_audit_mode != WallBucketAuditMode::OmitLag &&
@@ -4575,6 +4577,8 @@ Result SolverContext::evaluate_impl(
         result.physical_wall_refinement_cache_miss_count
              << "/cache_scanned=" <<
         result.physical_wall_refinement_cache_scanned_pose_count
+             << "/bucket_hard=" <<
+        (result.physical_wall_bucket_hard_constraints_applied ? 1 : 0)
              << "/lag_pose_box=" <<
         (result.physical_wall_lag_pose_box_applied ? 1 : 0)
              << "/heading_pose_box=" <<

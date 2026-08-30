@@ -359,6 +359,67 @@ bool OccupancyGrid::valid() const noexcept
     finite(origin_y_m) && valid_y_axis(y_axis);
 }
 
+bool OccupancyGrid::build_non_free_integral_index()
+{
+  non_free_integral_index.clear();
+  if (!valid() || width == std::numeric_limits<std::size_t>::max() ||
+    height == std::numeric_limits<std::size_t>::max())
+  {
+    return false;
+  }
+  const std::size_t stride = width + 1U;
+  std::size_t index_size{};
+  if (!checked_cell_count(stride, height + 1U, index_size)) {
+    return false;
+  }
+  std::vector<std::size_t> index(index_size, 0U);
+  for (std::size_t row = 0U; row < height; ++row) {
+    std::size_t row_non_free{};
+    for (std::size_t column = 0U; column < width; ++column) {
+      row_non_free += cell(row, column) == CellState::Free ? 0U : 1U;
+      index[(row + 1U) * stride + column + 1U] =
+        index[row * stride + column + 1U] + row_non_free;
+    }
+  }
+  non_free_integral_index = std::move(index);
+  return true;
+}
+
+bool OccupancyGrid::has_non_free_integral_index() const noexcept
+{
+  if (!valid() || width == std::numeric_limits<std::size_t>::max() ||
+    height == std::numeric_limits<std::size_t>::max())
+  {
+    return false;
+  }
+  std::size_t expected_size{};
+  return checked_cell_count(width + 1U, height + 1U, expected_size) &&
+         non_free_integral_index.size() == expected_size;
+}
+
+std::optional<bool> OccupancyGrid::contains_non_free_cell(
+  const std::size_t minimum_row, const std::size_t maximum_row,
+  const std::size_t minimum_column, const std::size_t maximum_column) const noexcept
+{
+  if (!has_non_free_integral_index() || minimum_row > maximum_row ||
+    minimum_column > maximum_column || maximum_row >= height ||
+    maximum_column >= width)
+  {
+    return std::nullopt;
+  }
+  const std::size_t stride = width + 1U;
+  const std::size_t top = minimum_row;
+  const std::size_t bottom = maximum_row + 1U;
+  const std::size_t left = minimum_column;
+  const std::size_t right = maximum_column + 1U;
+  const std::size_t count =
+    non_free_integral_index[bottom * stride + right] -
+    non_free_integral_index[top * stride + right] -
+    non_free_integral_index[bottom * stride + left] +
+    non_free_integral_index[top * stride + left];
+  return count != 0U;
+}
+
 std::uint64_t occupancy_grid_fingerprint(const OccupancyGrid & grid) noexcept
 {
   if (!grid.valid()) {
@@ -866,6 +927,24 @@ FootprintSample sample_footprint(
   const std::size_t max_column = clamp_index(raw_max_column, grid.width);
   const std::size_t min_y_index = clamp_index(raw_min_y_index, grid.height);
   const std::size_t max_y_index = clamp_index(raw_max_y_index, grid.height);
+
+  // A summed-area query can prove that the entire conservative AABB contains
+  // no occupied or unknown cell.  In that case exact oriented geometry has
+  // nothing to intersect.  An absent index deliberately falls through to the
+  // original exact scan.
+  if (grid.has_non_free_integral_index()) {
+    const std::size_t minimum_row =
+      grid.y_axis == YAxisConvention::RowZeroAtMaximumY ?
+      grid.height - 1U - max_y_index : min_y_index;
+    const std::size_t maximum_row =
+      grid.y_axis == YAxisConvention::RowZeroAtMaximumY ?
+      grid.height - 1U - min_y_index : max_y_index;
+    const auto contains_non_free = grid.contains_non_free_cell(
+      minimum_row, maximum_row, min_column, max_column);
+    if (contains_non_free.has_value() && !contains_non_free.value()) {
+      return sample;
+    }
+  }
 
   for (std::size_t y_index = min_y_index; y_index <= max_y_index; ++y_index) {
     const std::size_t row = grid.y_axis == YAxisConvention::RowZeroAtMaximumY ?

@@ -114,6 +114,50 @@ TEST(RecoveryFootprintGrid, FingerprintRejectsChangedCellOrGeometry)
   EXPECT_EQ(recovery::occupancy_grid_fingerprint(invalid), 0U);
 }
 
+TEST(RecoveryFootprintGrid, IntegralIndexFindsOnlyNonFreeInclusiveRegions)
+{
+  auto grid = make_grid(8U, 6U, 0.5);
+  set_world_cell(grid, 1.0, 1.0, recovery::CellState::Occupied);
+  set_world_cell(grid, 2.0, 2.0, recovery::CellState::Unknown);
+  ASSERT_TRUE(grid.build_non_free_integral_index());
+  ASSERT_TRUE(grid.has_non_free_integral_index());
+
+  const auto occupied = grid.world_to_grid(1.0, 1.0);
+  const auto unknown = grid.world_to_grid(2.0, 2.0);
+  ASSERT_TRUE(occupied.has_value());
+  ASSERT_TRUE(unknown.has_value());
+  EXPECT_EQ(
+    grid.contains_non_free_cell(
+      occupied->row, occupied->row, occupied->column, occupied->column),
+    std::optional<bool>{true});
+  EXPECT_EQ(
+    grid.contains_non_free_cell(
+      unknown->row, unknown->row, unknown->column, unknown->column),
+    std::optional<bool>{true});
+  EXPECT_EQ(
+    grid.contains_non_free_cell(0U, 0U, 0U, 0U),
+    std::optional<bool>{false});
+}
+
+TEST(RecoveryFootprintGrid, IndexedRasterizationMatchesExactFallback)
+{
+  auto exact_grid = make_grid(80U, 80U, 0.1);
+  set_world_cell(exact_grid, 3.0, 3.0, recovery::CellState::Occupied);
+  set_world_cell(exact_grid, 3.1, 3.0, recovery::CellState::Unknown);
+  auto indexed_grid = exact_grid;
+  ASSERT_TRUE(indexed_grid.build_non_free_integral_index());
+  const recovery::FootprintExtents footprint{0.8, 0.4, 0.5, 0.3, 0.1};
+  const std::vector<recovery::Pose2D> poses{
+    {1.0, 1.0, 0.0}, {3.0, 3.0, 0.0}, {3.0, 3.0, kPi / 4.0}};
+  for (const auto & pose : poses) {
+    const auto exact = recovery::sample_footprint(exact_grid, footprint, pose);
+    const auto indexed = recovery::sample_footprint(indexed_grid, footprint, pose);
+    EXPECT_EQ(indexed.valid, exact.valid);
+    EXPECT_EQ(indexed.out_of_map, exact.out_of_map);
+    EXPECT_EQ(indexed.contact_cells, exact.contact_cells);
+  }
+}
+
 TEST(RecoveryFootprintSteeringSamples, DividesMaximumAngleDeterministically)
 {
   const auto samples = recovery::steering_magnitude_samples(0.25, 5U);

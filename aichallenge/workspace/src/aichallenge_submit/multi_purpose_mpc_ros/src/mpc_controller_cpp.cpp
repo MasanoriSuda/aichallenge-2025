@@ -7976,10 +7976,12 @@ struct MPC
     snapshot->start_grid_grace_guard_ = start_grid_grace_guard_;
     snapshot->active_control_decision_id_ = active_control_decision_id_;
     snapshot->gap_planner = gap_planner_snapshot;
-    if (overtake_static_wall_grid_ != nullptr) {
+    if (overtake_static_wall_grid_snapshot_owner_ != nullptr) {
+      // The wall snapshot and its broad-phase index are immutable. Sharing
+      // preserves one physical-world identity and avoids rebuilding/copying a
+      // multi-megabyte derived index for every tactical snapshot.
       snapshot->overtake_static_wall_grid_snapshot_owner_ =
-        std::make_shared<recovery_footprint::OccupancyGrid>(
-        *overtake_static_wall_grid_);
+        overtake_static_wall_grid_snapshot_owner_;
       snapshot->overtake_static_wall_grid_ =
         snapshot->overtake_static_wall_grid_snapshot_owner_.get();
       snapshot->overtake_static_wall_grid_fingerprint_ =
@@ -8239,8 +8241,13 @@ struct MPC
     overtake_static_wall_grid_snapshot_owner_.reset();
     overtake_static_wall_grid_fingerprint_ = 0U;
     if (grid != nullptr) {
-      overtake_static_wall_grid_snapshot_owner_ =
+      auto immutable_grid =
         std::make_shared<recovery_footprint::OccupancyGrid>(*grid);
+      if (!immutable_grid->build_non_free_integral_index()) {
+        throw std::invalid_argument(
+                "failed to build immutable wall-grid broad-phase index");
+      }
+      overtake_static_wall_grid_snapshot_owner_ = std::move(immutable_grid);
       overtake_static_wall_grid_fingerprint_ =
         recovery_footprint::occupancy_grid_fingerprint(
         *overtake_static_wall_grid_snapshot_owner_);
@@ -29398,7 +29405,7 @@ struct MPC
   V2XGapPlanner * gap_planner{};
   const recovery_footprint::OccupancyGrid * overtake_static_wall_grid_{};
   std::shared_ptr<ReferencePath> reference_path_snapshot_owner_;
-  std::shared_ptr<recovery_footprint::OccupancyGrid>
+  std::shared_ptr<const recovery_footprint::OccupancyGrid>
   overtake_static_wall_grid_snapshot_owner_;
   std::uint64_t overtake_static_wall_grid_fingerprint_{0U};
   recovery_footprint::FootprintExtents overtake_static_wall_footprint_;

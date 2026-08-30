@@ -53,8 +53,18 @@ struct OccupancyGrid
   double origin_y_m{};
   YAxisConvention y_axis{YAxisConvention::RowZeroAtMaximumY};
   std::vector<CellState> cells;
+  /// Optional summed-area table of non-free cells. It is deliberately not
+  /// part of occupancy identity: callers build it only after the cell array
+  /// has reached its final immutable state. Unprepared grids retain the exact
+  /// per-cell fallback.
+  std::vector<std::size_t> non_free_integral_index;
 
   bool valid() const noexcept;
+  bool build_non_free_integral_index();
+  bool has_non_free_integral_index() const noexcept;
+  std::optional<bool> contains_non_free_cell(
+    std::size_t minimum_row, std::size_t maximum_row,
+    std::size_t minimum_column, std::size_t maximum_column) const noexcept;
   std::optional<GridIndex> world_to_grid(double x_m, double y_m) const noexcept;
   std::optional<Point2D> grid_to_world(std::size_t row, std::size_t column) const noexcept;
   CellState cell(std::size_t row, std::size_t column) const noexcept;

@@ -1221,14 +1221,6 @@ Result evaluate(const Request & request)
   result.runtime.continuation_wall_ms = elapsed_ms(
     wall_proof_started, SteadyClock::now());
 
-  const bool partial_normal_proof =
-    continuation.scope ==
-    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::
-    PublisherIntervalPrefix ||
-    result.static_wall_scope ==
-    StaticWallProofScope::PublisherIntervalPrefix ||
-    result.dynamic_obstacle_scope ==
-    DynamicObstacleProofScope::PublisherIntervalPrefix;
   const auto continuation_proved = SteadyClock::now();
   result.runtime.continuation_proof_ms = elapsed_ms(
     continuation_built, continuation_proved);
@@ -1240,14 +1232,16 @@ Result evaluate(const Request & request)
   std::size_t terminal_stop_publisher_interval_sample_count{};
   recovery::PathClearanceResult terminal_stop_clearance;
   dynamic_proof::Result terminal_stop_dynamic;
-  if (partial_normal_proof) {
+  {
     // Publication is causal: the current serialized command can remain on the
-    // actuator for one publisher interval even if the next solve fails. A
-    // partial normal prefix therefore receives authority only when that exact
-    // interval followed by a max-braking/path-tracking terminal
-    // sequence is rebuilt from the current state and proved against this same
-    // immutable world observation. The first interval must replay both the
-    // acceleration and steering-rate components of the serialized command.
+    // actuator for one publisher interval even if the next solve fails. Every
+    // retained normal transaction therefore receives authority only when that
+    // exact interval followed by a max-braking/path-tracking terminal sequence
+    // is rebuilt from the current state and proved against this same immutable
+    // world observation. A wall-clear FullSuffix is not a substitute: its
+    // terminal state is neither rest nor a recursively certified successor,
+    // and current-world rebasing can invalidate it before another worker
+    // result arrives.
     result.terminal_stop_attempted = true;
     const auto terminal_build_started = SteadyClock::now();
     const auto terminal_stop =

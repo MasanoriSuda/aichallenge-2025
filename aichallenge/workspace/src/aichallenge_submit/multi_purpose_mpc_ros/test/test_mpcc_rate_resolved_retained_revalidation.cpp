@@ -318,6 +318,35 @@ TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
   EXPECT_NEAR(result.proof->expected_absolute_progress_m, 50.10, 1e-9);
   EXPECT_NEAR(result.proof->expected_physical_progress_m, 50.15, 1e-9);
   EXPECT_EQ(result.proof->obstacle_generation, 7U);
+  EXPECT_TRUE(result.terminal_stop_attempted);
+  EXPECT_TRUE(result.terminal_stop_certified);
+  EXPECT_TRUE(result.proof->terminal_stop_certified);
+  EXPECT_FALSE(result.proof->terminal_stop_trajectory.progress_m.empty());
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsFullSuffixWhoseCurrentWorldStopIsWallBlocked)
+{
+  auto grid = free_grid();
+  const auto occupied = grid->world_to_grid(50.65, 0.10);
+  ASSERT_TRUE(occupied.has_value());
+  grid->cells[occupied->row * grid->width + occupied->column] =
+    recovery::CellState::Occupied;
+  const auto plan = certified_plan(grid);
+  ASSERT_NE(plan, nullptr);
+
+  const auto result = retained::evaluate(accepted_request(plan));
+
+  EXPECT_EQ(
+    result.static_wall_scope,
+    retained::StaticWallProofScope::FullSuffix);
+  EXPECT_TRUE(result.continuation_path_clearance.valid);
+  EXPECT_TRUE(result.continuation_path_clearance.clear);
+  EXPECT_TRUE(result.terminal_stop_attempted);
+  EXPECT_FALSE(result.terminal_stop_certified);
+  EXPECT_EQ(result.reason, retained::Reason::TerminalContingencyUnavailable);
+  EXPECT_FALSE(result.proof.has_value());
 }
 
 TEST(

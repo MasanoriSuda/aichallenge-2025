@@ -2750,6 +2750,16 @@ obstacleの三者を同じ境界で評価する。
 terminal Stop suffixの両方が必要である。Stop suffixなしのprefix単独はproduction authorityを持たない。
 次周期はfresh solveまたは新しいretained再証明を必須とし、artifact ageだけで権限を延長しない。
 
+同じrecursive Stop条件は`FullSuffix`にも適用する。full normal suffixの終端は静止状態でも、次周期の
+current-world-certified successorでもないため、wall-clearなfull suffixだけで停止可能性を代用してはならない。
+retained authorityはproof scopeにかかわらず、現在のserialized commandが不可避に継続する1 publication
+intervalと、その直後から最大制動するexact Stop trajectoryを同じworld snapshotで再構築し、static wall、
+timed dynamic obstacle、Follow hard gapを証明する。Stopが不成立ならnormal suffixが成立していてもauthorityを
+与えない。`output/20260831-022355`ではこの契約下でD2が
+`Idle -> ShiftOut -> Pass -> Return -> Idle`を1回完遂し、同episodeのRecoveryと
+`actual footprint wall margin violated`は0件だった。これはrecursive-stoppabilityの動的Gateであり、六周の
+race acceptanceまたは残るtiming tailの合格を意味しない。
+
 current serialized commandの到達可能性、非線形trajectory、wall、dynamic obstacle、Follow hard gap、
 identity／freshnessがpublication interval内で不成立な場合はfail closedを維持する。現在のsolver stageの
 残りがpublication intervalより短く、wire上のcurrent command holdを証明できない場合も拒否する。

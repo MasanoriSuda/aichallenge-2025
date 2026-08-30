@@ -9,6 +9,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <memory>
 
@@ -700,6 +702,109 @@ TEST(MpccArchitectureComparison, SharedStopLatticePopulationIsDeterministic)
   }
 }
 
+TEST(MpccArchitectureComparison, SharedStopLatticeAnytimeOrderIsCompleteAndFair)
+{
+  const auto source = stoppable_source_snapshot();
+  shadow::SolverContext solver;
+  const auto normal = solver.evaluate(source);
+  ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
+  ASSERT_NE(normal.execution_artifact, nullptr);
+  const auto stop = stop_lattice::build_maximum_braking_candidate(
+    source, *normal.execution_artifact,
+    solver.physical_constraint_tolerance());
+  ASSERT_TRUE(stop.accepted()) << stop.detail;
+
+  const auto legacy = stop_lattice::build_population(
+    stop.candidate, solver.physical_constraint_tolerance());
+  const auto anytime = stop_lattice::build_anytime_population(
+    stop.candidate, solver.physical_constraint_tolerance());
+  const auto repeated = stop_lattice::build_anytime_population(
+    stop.candidate, solver.physical_constraint_tolerance());
+  ASSERT_EQ(anytime.candidates.size(), legacy.size());
+  ASSERT_EQ(anytime.legacy_rank_by_candidate.size(), legacy.size());
+  ASSERT_EQ(repeated.candidates.size(), anytime.candidates.size());
+
+  std::vector<bool> observed_legacy_rank(legacy.size(), false);
+  for (std::size_t index = 0U; index < anytime.candidates.size(); ++index) {
+    const auto legacy_rank = anytime.legacy_rank_by_candidate[index];
+    ASSERT_GE(legacy_rank, 1U);
+    ASSERT_LE(legacy_rank, legacy.size());
+    ASSERT_FALSE(observed_legacy_rank[legacy_rank - 1U]);
+    observed_legacy_rank[legacy_rank - 1U] = true;
+    const auto & candidate = anytime.candidates[index];
+    const auto & original = legacy[legacy_rank - 1U];
+    EXPECT_EQ(candidate.reason, original.reason);
+    EXPECT_EQ(
+      candidate.schedule.steering_rate_radps,
+      original.schedule.steering_rate_radps);
+    EXPECT_EQ(
+      repeated.legacy_rank_by_candidate[index], legacy_rank);
+    EXPECT_EQ(
+      repeated.candidates[index].schedule.steering_rate_radps,
+      candidate.schedule.steering_rate_radps);
+  }
+  EXPECT_TRUE(std::all_of(
+      observed_legacy_rank.begin(), observed_legacy_rank.end(),
+      [](const bool observed) {return observed;}));
+
+  ASSERT_GE(anytime.candidates.size(), 4U);
+  for (std::size_t index = 0U; index + 1U < anytime.candidates.size();
+    index += 2U)
+  {
+    const auto & first = anytime.candidates[index];
+    const auto & second = anytime.candidates[index + 1U];
+    ASSERT_TRUE(first.accepted());
+    ASSERT_TRUE(second.accepted());
+    EXPECT_EQ(
+      first.schedule.first_switch_stage,
+      second.schedule.first_switch_stage);
+    EXPECT_EQ(
+      first.schedule.second_switch_stage,
+      second.schedule.second_switch_stage);
+    EXPECT_EQ(
+      first.schedule.initial_rate_sign,
+      anytime.preferred_initial_rate_sign);
+    EXPECT_EQ(
+      second.schedule.initial_rate_sign,
+      -anytime.preferred_initial_rate_sign);
+  }
+
+  const auto & nominal = anytime.candidates.front().schedule;
+  EXPECT_EQ(
+    nominal.first_switch_stage,
+    std::lround(0.15 * stop.candidate.request.horizon_steps));
+  EXPECT_EQ(
+    nominal.second_switch_stage,
+    std::lround(0.30 * stop.candidate.request.horizon_steps));
+  const auto & farthest = anytime.candidates[2U].schedule;
+  const auto distance_from_nominal = [&nominal, &stop](
+      const stop_lattice::Schedule & schedule) {
+      const double horizon = static_cast<double>(
+        stop.candidate.request.horizon_steps);
+      const double first = static_cast<double>(
+        schedule.first_switch_stage - nominal.first_switch_stage) / horizon;
+      const double second = static_cast<double>(
+        schedule.second_switch_stage - nominal.second_switch_stage) / horizon;
+      return first * first + second * second;
+    };
+  const double selected_distance = distance_from_nominal(farthest);
+  for (const auto & candidate : legacy) {
+    ASSERT_TRUE(candidate.accepted());
+    EXPECT_GE(
+      selected_distance + 1e-15,
+      distance_from_nominal(candidate.schedule));
+  }
+
+  auto negative_continuity = stop.candidate;
+  negative_continuity.request.previous_input[model::kSteeringRateIndex] =
+    -0.1;
+  const auto negative_first = stop_lattice::build_anytime_population(
+    negative_continuity, solver.physical_constraint_tolerance());
+  ASSERT_FALSE(negative_first.candidates.empty());
+  EXPECT_EQ(negative_first.preferred_initial_rate_sign, -1);
+  EXPECT_EQ(negative_first.candidates.front().schedule.initial_rate_sign, -1);
+}
+
 TEST(MpccArchitectureComparison, LiveStopShadowRejectsMismatchedSource)
 {
   const auto source = source_snapshot();
@@ -733,6 +838,8 @@ TEST(MpccArchitectureComparison, LiveStopShadowBuildsCertifiedObservation)
     << result.detail;
   ASSERT_TRUE(result.accepted());
   EXPECT_GT(result.attempted_candidate_count, 0U);
+  EXPECT_GE(result.population_size, result.attempted_candidate_count);
+  EXPECT_GT(result.selected_legacy_rank, 0U);
   EXPECT_EQ(
     mpcc_rate_resolved_certified_plan::validate(
       *result.certified_stop_plan),

@@ -48,6 +48,9 @@ struct Result
   artifact::Identity source_normal_identity;
   Reason reason{Reason::InvalidSource};
   std::size_t attempted_candidate_count{};
+  std::size_t population_size{};
+  std::size_t selected_legacy_rank{};
+  int preferred_initial_rate_sign{1};
   int initial_rate_sign{};
   int first_switch_stage{};
   int second_switch_stage{};

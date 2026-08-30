@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <utility>
@@ -42,6 +43,55 @@ ScheduleResult reject_schedule(
   result.reason = reason;
   result.detail = std::move(detail);
   return result;
+}
+
+int preferred_initial_rate_sign(
+  const shadow::Snapshot & maximum_braking_stop) noexcept
+{
+  const double previous_rate =
+    maximum_braking_stop.request.previous_input[model::kSteeringRateIndex];
+  if (std::isfinite(previous_rate) && std::abs(previous_rate) > 1e-9) {
+    return previous_rate > 0.0 ? 1 : -1;
+  }
+  const double steering = maximum_braking_stop.request.current_steering_rad;
+  if (std::isfinite(steering) && std::abs(steering) > 1e-9) {
+    return steering > 0.0 ? -1 : 1;
+  }
+  return 1;
+}
+
+struct ScheduleGeometry
+{
+  int first_switch_stage{};
+  int second_switch_stage{};
+  std::size_t first_legacy_index{};
+  std::optional<std::size_t> positive_legacy_index;
+  std::optional<std::size_t> negative_legacy_index;
+};
+
+double normalized_geometry_distance_squared(
+  const ScheduleGeometry & lhs, const ScheduleGeometry & rhs,
+  const int horizon_steps) noexcept
+{
+  const double denominator = static_cast<double>(std::max(1, horizon_steps));
+  const double first_delta = static_cast<double>(
+    lhs.first_switch_stage - rhs.first_switch_stage) / denominator;
+  const double second_delta = static_cast<double>(
+    lhs.second_switch_stage - rhs.second_switch_stage) / denominator;
+  return first_delta * first_delta + second_delta * second_delta;
+}
+
+double nominal_geometry_distance_squared(
+  const ScheduleGeometry & geometry, const int horizon_steps) noexcept
+{
+  const double denominator = static_cast<double>(std::max(1, horizon_steps));
+  const double first =
+    static_cast<double>(geometry.first_switch_stage) / denominator;
+  const double second =
+    static_cast<double>(geometry.second_switch_stage) / denominator;
+  const double first_delta = first - 0.15;
+  const double second_delta = second - 0.30;
+  return first_delta * first_delta + second_delta * second_delta;
 }
 
 } // namespace
@@ -410,6 +460,133 @@ std::vector<ScheduleResult> build_population(
     }
   }
   return population;
+}
+
+OrderedPopulation build_anytime_population(
+  const shadow::Snapshot & maximum_braking_stop,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance)
+{
+  const auto legacy = build_population(maximum_braking_stop, solver_tolerance);
+  OrderedPopulation result;
+  result.preferred_initial_rate_sign =
+    preferred_initial_rate_sign(maximum_braking_stop);
+  result.candidates.reserve(legacy.size());
+  result.legacy_rank_by_candidate.reserve(legacy.size());
+
+  std::vector<ScheduleGeometry> geometries;
+  std::vector<std::size_t> deferred_indices;
+  for (std::size_t index = 0U; index < legacy.size(); ++index) {
+    const auto & candidate = legacy[index];
+    if (!candidate.accepted()) {
+      deferred_indices.push_back(index);
+      continue;
+    }
+    const auto found = std::find_if(
+      geometries.begin(), geometries.end(),
+      [&candidate](const ScheduleGeometry & geometry) {
+        return
+          geometry.first_switch_stage ==
+          candidate.schedule.first_switch_stage &&
+          geometry.second_switch_stage ==
+          candidate.schedule.second_switch_stage;
+      });
+    auto * geometry = found == geometries.end() ? nullptr : &(*found);
+    if (geometry == nullptr) {
+      geometries.push_back(ScheduleGeometry{
+        candidate.schedule.first_switch_stage,
+        candidate.schedule.second_switch_stage, index, std::nullopt,
+        std::nullopt});
+      geometry = &geometries.back();
+    }
+    auto & sign_index = candidate.schedule.initial_rate_sign > 0 ?
+      geometry->positive_legacy_index : geometry->negative_legacy_index;
+    if (sign_index.has_value()) {
+      // Preserve unexpected duplicates exactly, but keep them out of the
+      // geometry traversal so the permutation remains one-to-one.
+      deferred_indices.push_back(index);
+    } else {
+      sign_index = index;
+    }
+  }
+
+  std::vector<std::size_t> geometry_order;
+  geometry_order.reserve(geometries.size());
+  std::vector<bool> selected(geometries.size(), false);
+  if (!geometries.empty()) {
+    std::size_t first = 0U;
+    double first_distance = std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0U; index < geometries.size(); ++index) {
+      const double distance = nominal_geometry_distance_squared(
+        geometries[index], maximum_braking_stop.request.horizon_steps);
+      if (
+        distance < first_distance - 1e-15 ||
+        (std::abs(distance - first_distance) <= 1e-15 &&
+        geometries[index].first_legacy_index <
+        geometries[first].first_legacy_index))
+      {
+        first = index;
+        first_distance = distance;
+      }
+    }
+    selected[first] = true;
+    geometry_order.push_back(first);
+  }
+  while (geometry_order.size() < geometries.size()) {
+    std::size_t next = geometries.size();
+    double best_minimum_distance = -1.0;
+    for (std::size_t index = 0U; index < geometries.size(); ++index) {
+      if (selected[index]) {
+        continue;
+      }
+      double minimum_distance = std::numeric_limits<double>::infinity();
+      for (const auto selected_index : geometry_order) {
+        minimum_distance = std::min(
+          minimum_distance,
+          normalized_geometry_distance_squared(
+            geometries[index], geometries[selected_index],
+            maximum_braking_stop.request.horizon_steps));
+      }
+      if (
+        next == geometries.size() ||
+        minimum_distance > best_minimum_distance + 1e-15 ||
+        (std::abs(minimum_distance - best_minimum_distance) <= 1e-15 &&
+        geometries[index].first_legacy_index <
+        geometries[next].first_legacy_index))
+      {
+        next = index;
+        best_minimum_distance = minimum_distance;
+      }
+    }
+    if (next == geometries.size()) {
+      break;
+    }
+    selected[next] = true;
+    geometry_order.push_back(next);
+  }
+
+  const auto append_legacy = [&result, &legacy](
+      const std::optional<std::size_t> index) {
+      if (!index.has_value()) {
+        return;
+      }
+      result.candidates.push_back(legacy[index.value()]);
+      result.legacy_rank_by_candidate.push_back(index.value() + 1U);
+    };
+  for (const auto geometry_index : geometry_order) {
+    const auto & geometry = geometries[geometry_index];
+    if (result.preferred_initial_rate_sign > 0) {
+      append_legacy(geometry.positive_legacy_index);
+      append_legacy(geometry.negative_legacy_index);
+    } else {
+      append_legacy(geometry.negative_legacy_index);
+      append_legacy(geometry.positive_legacy_index);
+    }
+  }
+  for (const auto index : deferred_indices) {
+    result.candidates.push_back(legacy[index]);
+    result.legacy_rank_by_candidate.push_back(index + 1U);
+  }
+  return result;
 }
 
 } // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_stop_control_lattice

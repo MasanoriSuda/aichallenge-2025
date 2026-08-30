@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -73,6 +74,21 @@ ScheduleResult build_schedule(
 
 /// Deterministic horizon-relative schedule grid used by audit and live shadow.
 std::vector<ScheduleResult> build_population(
+  const shadow::Snapshot & maximum_braking_stop,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance);
+
+struct OrderedPopulation
+{
+  std::vector<ScheduleResult> candidates;
+  /// One-based rank of each candidate in build_population().
+  std::vector<std::size_t> legacy_rank_by_candidate;
+  int preferred_initial_rate_sign{1};
+};
+
+/// Reorder the complete legacy population for anytime observation.  The
+/// member set is unchanged: schedule geometry is traversed with deterministic
+/// broad coverage and both initial-rate signs are adjacent for each geometry.
+OrderedPopulation build_anytime_population(
   const shadow::Snapshot & maximum_braking_stop,
   const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance);
 

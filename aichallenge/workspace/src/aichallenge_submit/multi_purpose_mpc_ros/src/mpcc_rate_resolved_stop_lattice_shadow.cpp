@@ -120,16 +120,28 @@ Result evaluate(
       return finish();
     }
 
-    const auto population = lattice::build_population(
+    const auto population = lattice::build_anytime_population(
       stop.candidate,
       private_solver_context.physical_constraint_tolerance());
-    if (population.empty()) {
+    result.population_size = population.candidates.size();
+    result.preferred_initial_rate_sign =
+      population.preferred_initial_rate_sign;
+    if (
+      population.candidates.empty() ||
+      population.candidates.size() !=
+      population.legacy_rank_by_candidate.size())
+    {
       result.reason = Reason::ScheduleRejected;
       result.detail = "empty Stop control lattice";
       return finish();
     }
-    for (const auto & candidate : population) {
+    for (std::size_t candidate_index = 0U;
+      candidate_index < population.candidates.size(); ++candidate_index)
+    {
+      const auto & candidate = population.candidates[candidate_index];
       ++result.attempted_candidate_count;
+      result.selected_legacy_rank =
+        population.legacy_rank_by_candidate[candidate_index];
       result.initial_rate_sign = candidate.schedule.initial_rate_sign;
       result.first_switch_stage = candidate.schedule.first_switch_stage;
       result.second_switch_stage = candidate.schedule.second_switch_stage;

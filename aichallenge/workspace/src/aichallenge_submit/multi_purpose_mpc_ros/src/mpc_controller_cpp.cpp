@@ -7695,6 +7695,8 @@ struct RateResolvedStopLatticeShadowTelemetryWindow
   reason_count{};
   std::uint64_t total_attempted_candidate_count{};
   std::size_t maximum_attempted_candidate_count{};
+  std::uint64_t total_selected_legacy_rank{};
+  std::size_t maximum_selected_legacy_rank{};
   double total_result_age_sec{};
   double maximum_result_age_sec{};
   double total_compute_ms{};
@@ -26422,6 +26424,10 @@ struct MPC
         window.maximum_attempted_candidate_count = std::max(
           window.maximum_attempted_candidate_count,
           result->attempted_candidate_count);
+        window.total_selected_legacy_rank += result->selected_legacy_rank;
+        window.maximum_selected_legacy_rank = std::max(
+          window.maximum_selected_legacy_rank,
+          result->selected_legacy_rank);
         const double age_sec = std::max(
           0.0, now_sec - result->source_normal_identity.snapshot_sec);
         window.total_result_age_sec += age_sec;
@@ -26467,9 +26473,10 @@ struct MPC
       "reject=source:%lu/build:%lu/schedule:%lu/solver:%lu/exact:%lu/"
       "not_stopped:%lu/wall:%lu/dynamic:%lu/certified:%lu/exception:%lu, "
       "age=%.4f/%.4fs(avg/max), candidates=%.2f/%lu(avg/max), "
+      "legacy_rank=%.2f/%lu(avg/max), "
       "compute=%.3f/%.3fms(avg/max), selected_solve=%.3f/%.3fms(avg/max), "
       "last=available:%d/seq:%lu/decision:%lu/intent:%s/reason:%s/"
-      "schedule:%d:%d:%d/attempts:%lu/solver:%s/wall:%s/"
+      "schedule:%d:%d:%d/rank:%lu:%lu:%lu/preferred:%d/solver:%s/wall:%s/"
       "lateral_reserve:%.4f/dynamic:valid:%d,clear:%d,reserve:%.4f/"
       "detail:%s, authority=shadow, selected=0",
       static_cast<unsigned long>(worker.submitted),
@@ -26507,6 +26514,8 @@ struct MPC
       window.maximum_result_age_sec,
       static_cast<double>(window.total_attempted_candidate_count) / denominator,
       static_cast<unsigned long>(window.maximum_attempted_candidate_count),
+      static_cast<double>(window.total_selected_legacy_rank) / denominator,
+      static_cast<unsigned long>(window.maximum_selected_legacy_rank),
       window.total_compute_ms / denominator, window.maximum_compute_ms,
       window.total_selected_solver_ms / denominator,
       window.maximum_selected_solver_ms,
@@ -26522,6 +26531,9 @@ struct MPC
       last.initial_rate_sign, last.first_switch_stage,
       last.second_switch_stage,
       static_cast<unsigned long>(last.attempted_candidate_count),
+      static_cast<unsigned long>(last.selected_legacy_rank),
+      static_cast<unsigned long>(last.population_size),
+      last.preferred_initial_rate_sign,
       window.last_result_available ?
       rate_resolved_shadow::to_string(last.solver_outcome) : "none",
       window.last_result_available ?

@@ -9,4 +9,6 @@
 - [x] Add focused tests and static authority-edge audit.
 - [x] Run final full package tests.
 - [x] Commit the statically accepted Slice.
-- [ ] Request an Overtake trial only after static acceptance.
+- [x] Run an Overtake trial only after static acceptance.
+- [x] Record live feasibility, freshness and timing evidence without changing
+      production authority.

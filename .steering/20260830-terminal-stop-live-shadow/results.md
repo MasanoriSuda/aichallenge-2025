@@ -61,9 +61,66 @@ prefix.  Both terminal velocities are approximately zero.
 - `git diff --check`: passed;
 - production parameters and authority: unchanged.
 
-## Remaining dynamic gate
+## Live Overtake observation
 
-Live Overtake evidence is still required.  The next run must show whether the
-separate worker keeps up with ShiftOut/Pass epochs, how often pending work is
-replaced, and whether accepted Stop observations exist before production
-authority loss.  No production promotion is authorized by this Slice.
+The accepted Slice was exercised with `make dev2` and then stopped cleanly.
+The immutable run evidence is under:
+
+`output/20260830-222744/d1/autoware.log`
+
+The run reached five ShiftOut entries, four Pass entries, three Return entries
+and three completed Return-to-Idle handoffs.  One ShiftOut and one Pass moved
+to `FollowPrepare` through the existing Dynamic Mission wait.  There were no
+`actual footprint wall margin violated` messages.  Production authority and
+all normal transition behavior remained unchanged by the shadow.
+
+The Stop shadow exercised the intended live boundary:
+
+| Evidence | Observed value |
+|---|---:|
+| submitted / replaced | 64 / 35 |
+| started / completed | 29 / 29 |
+| mailbox published / invalid / rollback | 29 / 0 / 0 |
+| interval-consumed / accepted observations | 35 / 24 |
+| solver rejections reported by interval telemetry | 5 |
+| maximum complete lattice evaluation | 4158.885 ms |
+| maximum consumed result age | 5.3300 s |
+| worker exceptions | 0 |
+
+Accepted observations covered both ShiftOut and Pass.  They passed exact
+nonlinear trajectory, rest, wall, all-peer dynamic and certified-plan checks.
+Examples include:
+
+- ShiftOut: schedule `1:3:6`, exact lateral reserve `0.0639 m`, dynamic
+  reserve `2.0448 m`;
+- Pass: schedule `1:6:7`, exact lateral reserve `0.0011 m`, dynamic reserve
+  `3.0646 m`;
+- opposite-side ShiftOut: schedule `-1:3:6`, exact lateral reserve
+  `0.0474 m`, dynamic reserve `4.5091 m`.
+
+The only classified evaluation rejection in the live telemetry was the
+seven-state solver reaching its iteration limit.  The later exact-wall,
+dynamic and certified-plan stages did not reject a solved candidate.
+
+## Dynamic conclusion
+
+The live gate is accepted for observation, not for production promotion.
+The result disproves the hypothesis that a physically certified Stop suffix
+cannot be produced from live ShiftOut/Pass states.  It also isolates the next
+problem: exhaustive deterministic enumeration is not fresh enough for a
+production successor.  Although individual selected solves were generally
+tens of milliseconds, evaluating up to 68 candidates made complete results
+2.6--5.3 seconds old in difficult epochs.
+
+The next Slice must therefore preserve the same certificate chain while
+changing scheduling/search semantics: return the first sufficiently robust
+certified Stop candidate under an explicit live deadline, cancel or abandon
+the remaining obsolete search, and keep a later result observationally
+distinct from current authority.  Solver tolerances, clearance margins and
+production authority remain frozen until that freshness question is answered.
+
+Control callback overruns were also observed (a worst logged callback of
+`58.191 ms` against the `25 ms` period, and a one-second window with ten
+overruns).  The Stop computation ran on its separate worker, so this run does
+not by itself prove causation.  Any production proposal must demonstrate that
+its deadline/cancellation policy does not increase callback tail latency.

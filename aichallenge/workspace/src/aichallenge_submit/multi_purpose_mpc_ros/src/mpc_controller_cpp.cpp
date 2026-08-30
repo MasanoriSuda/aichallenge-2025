@@ -9209,16 +9209,43 @@ struct MPC
     auto pending = std::move(
       pending_rate_resolved_publication_successor_.value());
     pending_rate_resolved_publication_successor_.reset();
-    if (
-      !normal_successor_allowed || !predecessor.has_value() ||
-      pending.decision_id != decision_id ||
-      !std::isfinite(now_sec) || now_sec < pending.snapshot_sec ||
-      !mpcc_contract::physical_steering_matches_serialized_actuation(
+    const bool preentry_pending = pending.preentry_draft.has_value();
+    const char * publication_reject_reason = nullptr;
+    if (!normal_successor_allowed) {
+      publication_reject_reason = "normal-successor-disallowed";
+    } else if (!predecessor.has_value()) {
+      publication_reject_reason = "serialized-predecessor-unavailable";
+    } else if (pending.decision_id != decision_id) {
+      publication_reject_reason = "decision-mismatch";
+    } else if (!std::isfinite(now_sec) || now_sec < pending.snapshot_sec) {
+      publication_reject_reason = "publication-time-invalid";
+    } else if (!mpcc_contract::physical_steering_matches_serialized_actuation(
         final_physical_steering_rad, final_wire_steering_rad,
         cfg.steering_tire_angle_gain_var))
     {
+      publication_reject_reason = "serialized-steering-mismatch";
+    }
+    if (
+      publication_reject_reason != nullptr)
+    {
       ++rate_resolved_track_cruise_shadow_telemetry_window_.
         submission_reject_count;
+      if (preentry_pending) {
+        const auto & draft = pending.preentry_draft.value();
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Gate A lifecycle: boundary=publication, admitted=0, reason=%s, "
+          "kind=%s, decision=%lu/%lu, target=%s, side=%d, tactical=%lu, "
+          "generation=%lu, authority=observation-only",
+          publication_reject_reason,
+          draft.kind == RateResolvedIntentTransitionKind::ReturnGateA ?
+          "return" : "mission",
+          static_cast<unsigned long>(pending.decision_id),
+          static_cast<unsigned long>(decision_id), draft.target_id.c_str(),
+          draft.selected_side_sign,
+          static_cast<unsigned long>(draft.tactical_source_sequence),
+          static_cast<unsigned long>(draft.prospective_mission_generation));
+      }
       return;
     }
     if (pending.normal_draft.has_value()) {
@@ -9235,9 +9262,27 @@ struct MPC
       }
     }
     if (pending.preentry_draft.has_value()) {
-      static_cast<void>(submit_rate_resolved_preentry_execution_shadow(
-          std::move(pending.preentry_draft.value()),
-          predecessor.value(), now_sec));
+      const auto & draft = pending.preentry_draft.value();
+      const auto kind = draft.kind;
+      const auto tactical_source_sequence = draft.tactical_source_sequence;
+      const auto prospective_mission_generation =
+        draft.prospective_mission_generation;
+      const auto selected_side_sign = draft.selected_side_sign;
+      const auto target_id = draft.target_id;
+      const bool admitted = submit_rate_resolved_preentry_execution_shadow(
+        std::move(pending.preentry_draft.value()), predecessor.value(), now_sec);
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Gate A lifecycle: boundary=publication, admitted=%d, reason=%s, "
+        "kind=%s, decision=%lu, target=%s, side=%d, tactical=%lu, "
+        "generation=%lu, authority=observation-only",
+        admitted ? 1 : 0, admitted ? "worker-submitted" : "worker-rejected",
+        kind == RateResolvedIntentTransitionKind::ReturnGateA ?
+        "return" : "mission",
+        static_cast<unsigned long>(decision_id), target_id.c_str(),
+        selected_side_sign,
+        static_cast<unsigned long>(tactical_source_sequence),
+        static_cast<unsigned long>(prospective_mission_generation));
     }
   }
 
@@ -25048,29 +25093,69 @@ struct MPC
     const RateResolvedSerializedPredecessor predecessor,
     const double now_sec)
   {
-    if (
-      rate_resolved_preentry_execution_shadow_worker_ == nullptr ||
-      rate_resolved_preentry_execution_shadow_mailbox_ == nullptr ||
-      rate_resolved_preentry_execution_shadow_solver_context_ == nullptr ||
+    const char * invalid_reason = nullptr;
+    if (rate_resolved_preentry_execution_shadow_worker_ == nullptr) {
+      invalid_reason = "worker-unavailable";
+    } else if (rate_resolved_preentry_execution_shadow_mailbox_ == nullptr) {
+      invalid_reason = "mailbox-unavailable";
+    } else if (rate_resolved_preentry_execution_shadow_solver_context_ == nullptr) {
+      invalid_reason = "solver-context-unavailable";
+    } else if (
       rate_resolved_preentry_execution_shadow_next_sequence_ ==
-      std::numeric_limits<std::uint64_t>::max() ||
-      draft.reference_path_owner == nullptr || draft.model_owner == nullptr ||
-      draft.gap_planner_owner == nullptr || draft.planner_snapshot == nullptr ||
-      draft.horizon_size < 2 || draft.decision_id == 0U ||
-      draft.context_epoch == 0U ||
-      draft.target_obstacle_generation == 0U ||
-      !draft.target_provenance.valid ||
-      draft.tactical_source_sequence == 0U ||
-      draft.prospective_mission_generation == 0U || draft.target_id.empty() ||
-      (draft.selected_side_sign != -1 && draft.selected_side_sign != 1) ||
-      !std::isfinite(draft.snapshot_sec) ||
-      predecessor.decision_id == 0U ||
-      !std::isfinite(predecessor.publication_sec) ||
-      !std::isfinite(predecessor.physical_steering_rad) ||
-      !predecessor.previous_input.allFinite() ||
-      !std::isfinite(now_sec) || now_sec < draft.snapshot_sec ||
-      draft.context_epoch != mpcc_lite_async_context_epoch_)
+      std::numeric_limits<std::uint64_t>::max())
     {
+      invalid_reason = "sequence-exhausted";
+    } else if (
+      draft.reference_path_owner == nullptr || draft.model_owner == nullptr ||
+      draft.gap_planner_owner == nullptr || draft.planner_snapshot == nullptr)
+    {
+      invalid_reason = "owned-snapshot-incomplete";
+    } else if (draft.horizon_size < 2) {
+      invalid_reason = "horizon-invalid";
+    } else if (draft.decision_id == 0U) {
+      invalid_reason = "decision-invalid";
+    } else if (draft.context_epoch == 0U) {
+      invalid_reason = "epoch-invalid";
+    } else if (draft.target_obstacle_generation == 0U) {
+      invalid_reason = "target-generation-invalid";
+    } else if (!draft.target_provenance.valid) {
+      invalid_reason = "target-provenance-invalid";
+    } else if (draft.tactical_source_sequence == 0U) {
+      invalid_reason = "tactical-sequence-invalid";
+    } else if (draft.prospective_mission_generation == 0U) {
+      invalid_reason = "mission-generation-invalid";
+    } else if (draft.target_id.empty()) {
+      invalid_reason = "target-empty";
+    } else if (draft.selected_side_sign != -1 && draft.selected_side_sign != 1) {
+      invalid_reason = "side-invalid";
+    } else if (!std::isfinite(draft.snapshot_sec)) {
+      invalid_reason = "snapshot-time-invalid";
+    } else if (predecessor.decision_id == 0U) {
+      invalid_reason = "predecessor-decision-invalid";
+    } else if (!std::isfinite(predecessor.publication_sec)) {
+      invalid_reason = "predecessor-time-invalid";
+    } else if (!std::isfinite(predecessor.physical_steering_rad)) {
+      invalid_reason = "predecessor-steering-invalid";
+    } else if (!predecessor.previous_input.allFinite()) {
+      invalid_reason = "predecessor-input-invalid";
+    } else if (!std::isfinite(now_sec) || now_sec < draft.snapshot_sec) {
+      invalid_reason = "submission-time-invalid";
+    } else if (draft.context_epoch != mpcc_lite_async_context_epoch_) {
+      invalid_reason = "epoch-mismatch";
+    }
+    if (invalid_reason != nullptr) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Gate A lifecycle: boundary=worker-preflight, admitted=0, reason=%s, "
+        "kind=%s, decision=%lu, target=%s, side=%d, tactical=%lu, "
+        "generation=%lu, authority=observation-only",
+        invalid_reason,
+        draft.kind == RateResolvedIntentTransitionKind::ReturnGateA ?
+        "return" : "mission",
+        static_cast<unsigned long>(draft.decision_id), draft.target_id.c_str(),
+        draft.selected_side_sign,
+        static_cast<unsigned long>(draft.tactical_source_sequence),
+        static_cast<unsigned long>(draft.prospective_mission_generation));
       return false;
     }
     const std::uint64_t sequence =
@@ -25237,6 +25322,12 @@ struct MPC
         mailbox->latest_result = std::move(result);
       });
     if (!submission.accepted) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Gate A lifecycle: boundary=worker-queue, admitted=0, "
+        "reason=latest-only-worker-rejected, sequence=%lu, "
+        "authority=observation-only",
+        static_cast<unsigned long>(sequence));
       return false;
     }
     ++rate_resolved_preentry_execution_shadow_submission_count_;
@@ -29119,6 +29210,21 @@ struct MPC
       build_rate_resolved_preentry_execution_draft(
       last_v2x_behavior_output_, now_sec,
       preentry_execution_draft_reject_reason);
+    if (preentry_execution_draft.has_value()) {
+      const auto & draft = preentry_execution_draft.value();
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Gate A lifecycle: boundary=draft, admitted=1, reason=built, "
+        "kind=%s, decision=%lu, target=%s, side=%d, tactical=%lu, "
+        "generation=%lu, source=%s, authority=observation-only",
+        draft.kind == RateResolvedIntentTransitionKind::ReturnGateA ?
+        "return" : "mission",
+        static_cast<unsigned long>(draft.decision_id), draft.target_id.c_str(),
+        draft.selected_side_sign,
+        static_cast<unsigned long>(draft.tactical_source_sequence),
+        static_cast<unsigned long>(draft.prospective_mission_generation),
+        overtake_core::to_string(draft.tactical_input_source));
+    }
     const auto preentry_draft_finished = SteadyClock::now();
 
     std::string draft_reject_reason;

@@ -638,6 +638,21 @@
       "production_impact": "none; production authority, runtime configuration, solver, weights, clearance, Mission lifecycle and publisher were frozen for this audit; the next Slice is restricted to structurally separating sustainable candidate production from 40 Hz certified command publication and retaining all exact current-world admission proofs",
       "deleted_code": [],
       "revisit_condition": "a live current-world population adopts the same certified candidate before the Pass-entry gate while preserving exact compatibility and proofs, a same-snapshot replay no longer certifies the bounded candidate, or evidence shows candidate production is not being invalidated by the faster request lifecycle"
+    },
+    {
+      "experiment_id": "20260830-pass-artifact-expiry-architecture-audit",
+      "baseline_commit": "3fca7d4393bb63fb676547fb09b248d93a83bd55",
+      "snapshot_ids": [
+        "000000003800-9e2c6962173873f9-pass-side-positive-successive-linearization-solve-rejected",
+        "20260830-162637-decisions-5683-5698"
+      ],
+      "hypothesis": "the Pass authority hole is a global physical infeasibility or a solver-tolerance defect rather than a long-lived selected-homotopy lifecycle with no executable normal contingency successor",
+      "changed_dimension": "observation_only_pass_expiry_lifecycle_candidate_and_sqp_comparison",
+      "result": "rejected",
+      "reason": "selected positive A/B/C/D and three-SQP arms failed without a bounded infeasibility certificate, while the same immutable world certified 41 rough, 2 offline, 40 diagonal and 16 physical-diagonal negative-side ManeuverBundles; in the later live epoch decision 5683 the production negative sibling was certified but the first published sibling adoption had permanently committed the positive homotopy, so artifact 4577 exhaustion at decision 5698 propagated to Emergency Stop",
+      "production_impact": "none; the audit changed no production authority, Mission state, solver tolerance, clearance, speed, timeout, lease, grace, retry, fallback or configuration",
+      "deleted_code": [],
+      "revisit_condition": "an executable current-side bundle is certified from the same frozen fingerprint, a bounded physical infeasibility certificate is produced, or the already certified published terminal Stop successor is atomically connected to the canonical publisher and dynamically prevents the cursor-expiry authority hole"
     }
   ]
 }

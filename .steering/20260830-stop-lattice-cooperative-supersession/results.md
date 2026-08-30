@@ -158,3 +158,33 @@ Static verification of this ownership correction:
 
 The unrelated stale-build warning for
 `build/joycon_contract_guard/package.xml` remains outside this Slice.
+
+## Final dynamic acceptance
+
+The publisher-owned lifecycle run is under:
+
+`output/20260830-233212/d1/autoware.log`
+
+The first complete episode established the required causal ordering:
+
+1. `ShiftOut -> Pass` at `1788100371.889`;
+2. a published Pass/ShiftOut source started the third Stop observation;
+3. `Pass -> Return` at `1788100373.444`;
+4. publisher-owned invalidation retired the running observation;
+5. the result was consumed as `reason=superseded` after 24 candidates;
+6. later Return, Idle and Cruise publication did not restart that observation.
+
+Across the run, no published-source identity rejection and no all-68 Stop
+observation occurred.  The maximum observed result age was 2.445 seconds and
+the maximum candidate count was 24, compared with 6.780 seconds and 68
+candidates in `output/20260830-230003`.  Worker telemetry remained idle after
+each Return/normal publication until another independently published Overtake
+artifact began a new episode.  Subsequent episodes also completed
+`ShiftOut -> Pass -> Return`, including one normal `Return -> Idle` handoff.
+
+Production authority was unchanged throughout (`authority=shadow,
+selected=0`).  The dynamic evidence therefore accepts the publisher boundary
+as the Stop observation lifecycle owner and closes this Slice.  The episode-1
+external-Recovery handoff and separate wall-margin warnings remain production
+behavior outside this observation-only lifecycle correction; they must not be
+hidden by further Stop-worker changes.

@@ -8,7 +8,7 @@
 - [x] Extend telemetry and source authority audit.
 - [x] Run build, full package tests and `git diff --check`.
 - [x] Commit static acceptance before dynamic exercise.
-- [ ] Run `make dev2` and classify freshness/tail evidence.
+- [x] Run `make dev2` and classify freshness/tail evidence.
 - [x] Observe newer-submission supersession in `output/20260830-230003`.
 - [x] Isolate the final-source invalidation gap after Overtake intent exit.
 - [x] Falsify candidate Store ownership in `output/20260830-231135`.
@@ -16,4 +16,4 @@
 - [x] Start/invalidate Stop observation only after exact command publication.
 - [x] Remove candidate-worker Stop lifecycle edges.
 - [x] Re-run static gates for the publisher-owned lifecycle contract.
-- [ ] Re-run the dynamic gate for the publisher-owned lifecycle contract.
+- [x] Re-run the dynamic gate for the publisher-owned lifecycle contract.

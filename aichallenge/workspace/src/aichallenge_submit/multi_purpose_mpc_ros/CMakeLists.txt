@@ -321,6 +321,26 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
   Threads::Threads
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_stop_control_lattice STATIC
+  src/mpcc_rate_resolved_stop_control_lattice.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_rate_resolved_stop_control_lattice PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_stop_control_lattice
+  ${PROJECT_NAME}_mpcc_rate_resolved_shadow
+  ${PROJECT_NAME}_mpcc_rate_resolved_adapter
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
+  ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
+  ${PROJECT_NAME}_mpcc_architecture_snapshot
+  ${PROJECT_NAME}_mpc_stage_geometry
+  ${PROJECT_NAME}_mpcc_execution_contract
+  ${PROJECT_NAME}_recovery_footprint
+)
+
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_certified_plan STATIC
   src/mpcc_rate_resolved_certified_plan.cpp
 )
@@ -461,6 +481,7 @@ target_link_libraries(${PROJECT_NAME}_mpcc_architecture_comparison
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
   ${PROJECT_NAME}_mpcc_rate_resolved_dynamic_proof
+  ${PROJECT_NAME}_mpcc_rate_resolved_stop_control_lattice
   ${PROJECT_NAME}_mpc_stage_geometry
   ${PROJECT_NAME}_mpcc_execution_contract
 )

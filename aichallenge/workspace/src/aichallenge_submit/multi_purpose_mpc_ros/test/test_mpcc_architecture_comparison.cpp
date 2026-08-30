@@ -3,6 +3,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
 #include <gtest/gtest.h>
@@ -20,6 +21,7 @@ namespace contract = mpcc_execution_contract;
 namespace model = mpcc_rate_resolved;
 namespace recovery = recovery_footprint;
 namespace shadow = mpcc_rate_resolved_shadow;
+namespace stop_lattice = mpcc_rate_resolved_stop_control_lattice;
 
 shadow::Snapshot source_snapshot()
 {
@@ -588,6 +590,68 @@ TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
       }
     }
     EXPECT_LE(lattice.solved_acceleration_max_mps2, 1e-9);
+  }
+}
+
+TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
+{
+  const auto source = source_snapshot();
+  shadow::SolverContext solver;
+  const auto normal = solver.evaluate(source);
+  ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
+  ASSERT_NE(normal.execution_artifact, nullptr);
+
+  const auto stop = stop_lattice::build_maximum_braking_candidate(
+    source, *normal.execution_artifact,
+    solver.physical_constraint_tolerance());
+  ASSERT_TRUE(stop.accepted()) << stop.detail;
+  ASSERT_EQ(
+    stop.candidate.request.states.size(),
+    stop.candidate.request.inputs.size() + 1U);
+  double previous_velocity =
+    stop.candidate.request.states.front().lower[model::kVelocityIndex];
+  for (std::size_t stage = 1U;
+    stage < stop.candidate.request.states.size(); ++stage)
+  {
+    const auto & state = stop.candidate.request.states[stage];
+    EXPECT_DOUBLE_EQ(
+      state.lower[model::kVelocityIndex],
+      state.upper[model::kVelocityIndex]);
+    EXPECT_LE(state.lower[model::kVelocityIndex], previous_velocity + 1e-12);
+    previous_velocity = state.lower[model::kVelocityIndex];
+  }
+  EXPECT_NEAR(previous_velocity, 0.0, 1e-12);
+}
+
+TEST(MpccArchitectureComparison, SharedStopLatticePopulationIsDeterministic)
+{
+  const auto source = source_snapshot();
+  shadow::SolverContext solver;
+  const auto normal = solver.evaluate(source);
+  ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
+  ASSERT_NE(normal.execution_artifact, nullptr);
+  const auto stop = stop_lattice::build_maximum_braking_candidate(
+    source, *normal.execution_artifact,
+    solver.physical_constraint_tolerance());
+  ASSERT_TRUE(stop.accepted()) << stop.detail;
+
+  const auto first = stop_lattice::build_population(
+    stop.candidate, solver.physical_constraint_tolerance());
+  const auto second = stop_lattice::build_population(
+    stop.candidate, solver.physical_constraint_tolerance());
+  ASSERT_FALSE(first.empty());
+  ASSERT_EQ(first.size(), second.size());
+  for (std::size_t index = 0U; index < first.size(); ++index) {
+    ASSERT_EQ(first[index].reason, second[index].reason);
+    ASSERT_EQ(
+      first[index].schedule.steering_rate_radps,
+      second[index].schedule.steering_rate_radps);
+    EXPECT_EQ(
+      first[index].schedule.first_switch_stage,
+      second[index].schedule.first_switch_stage);
+    EXPECT_EQ(
+      first[index].schedule.second_switch_stage,
+      second[index].schedule.second_switch_stage);
   }
 }
 

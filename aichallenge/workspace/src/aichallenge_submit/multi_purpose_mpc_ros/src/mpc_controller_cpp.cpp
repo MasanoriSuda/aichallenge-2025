@@ -34455,9 +34455,11 @@ private:
     }
     overtake_contact_wall_guard_safe_ = contact_continuation_wall_margin_clear;
     bool return_preflight_deferred = false;
+    bool return_transition_authority_pending = false;
     const auto begin_validated_return = [&] (
         const std::string & reason,
         const ReturnReacquirePolicy reacquire_policy = ReturnReacquirePolicy::SameTargetEarly) {
+        return_transition_authority_pending = false;
         if (overtake_line_state_.phase != OvertakeLinePhase::Pass) {
           transition_overtake_line_phase(
             OvertakeLinePhase::Return, now_sec, current_ey,
@@ -34599,6 +34601,7 @@ private:
             return_proposal.has_value() ? return_proposal->side_sign : 0});
         if (!transition_admission.admitted) {
           return_preflight_deferred = true;
+          return_transition_authority_pending = true;
           const bool log_now =
             !std::isfinite(overtake_line_state_.return_preflight_last_log_sec) ||
             now_sec - overtake_line_state_.return_preflight_last_log_sec >= 0.50;
@@ -41463,10 +41466,19 @@ private:
               return update_overtake_line(
                 behavior_output, ref_wp_id, N, lb, ub, now_sec);
             }
+            if (return_transition_authority_pending) {
+              // The geometric Return is physically admissible, but its exact
+              // current-world seven-state artifact is still being produced.
+              // Keep Pass as the sole tactical phase owner.  Falling through
+              // to DynamicMissionWait here would invalidate the Mission
+              // generation that identifies the in-flight Return proposal and
+              // would let a second phase writer defeat the atomic handoff.
+              return output;
+            }
           }
-          // A Return proposal can still fail its full runtime path validation.
-          // In that case retain the normal wait/follow fallback instead of
-          // silently remaining in Pass with no selected action.
+          // A physically rejected Return may still use the normal wait/follow
+          // fallback.  A physically valid Return whose certified authority is
+          // merely pending was handled above and must not reach this writer.
           if (enter_dynamic_mission_wait(wait_reason)) {
             return update_overtake_line(
               behavior_output, ref_wp_id, N, lb, ub, now_sec);

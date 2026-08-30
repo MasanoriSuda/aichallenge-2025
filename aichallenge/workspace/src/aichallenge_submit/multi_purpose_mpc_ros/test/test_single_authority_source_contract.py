@@ -3214,6 +3214,22 @@ def test_pass_to_return_requires_causal_certified_gate_a() -> None:
     assert "action=retain-certified-pass" in begin_return
     assert "rate_resolved_return_gate_a_proposal" in SOURCE
 
+    safe_separation_start = SOURCE.index(
+        "SafeSeparation requested revalidation:"
+    )
+    safe_separation_end = SOURCE.index(
+        "SafeSeparationAction::Abort", safe_separation_start
+    )
+    safe_separation = SOURCE[safe_separation_start:safe_separation_end]
+    pending = safe_separation.index(
+        "if (return_transition_authority_pending)"
+    )
+    dynamic_wait = safe_separation.index(
+        "if (enter_dynamic_mission_wait(wait_reason))"
+    )
+    assert pending < dynamic_wait
+    assert "Keep Pass as the sole tactical phase owner" in safe_separation
+
     return_builder_start = SOURCE.index(
         "build_prospective_return_problem("
     )

@@ -7936,6 +7936,8 @@ struct MPC
         mpcc_lite_async_context_epoch_;
       rate_resolved_preentry_execution_shadow_worker_ =
         std::make_unique<LatestOnlyWorker>();
+      rate_resolved_terminal_failure_snapshot_worker_ =
+        std::make_unique<LatestOnlyWorker>();
     }
     if (
       !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_offset) ||
@@ -24718,22 +24720,48 @@ struct MPC
            << "/dynamic_blocker="
            << (retained.terminal_stop_blocking_obstacle_id.empty() ?
              "none" : retained.terminal_stop_blocking_obstacle_id);
-    const auto recorded = mpcc_architecture_snapshot::record_proof_failure(
-      source.value(), mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
-      "terminal-contingency-unavailable", detail.str());
-    if (recorded.status == mpcc_architecture_snapshot::RecordStatus::Written) {
-      RCLCPP_WARN(
-        rclcpp::get_logger("mpc_controller"),
-        "Rate-resolved terminal proof snapshot recorded: decision=%lu, "
-        "intent=%s, file=%s",
-        static_cast<unsigned long>(retained.decision_id),
-        mpcc_contract::to_string(intent),
-        recorded.snapshot_file.string().c_str());
-    } else if (
-      recorded.status == mpcc_architecture_snapshot::RecordStatus::IoFailure ||
-      recorded.status == mpcc_architecture_snapshot::RecordStatus::InvalidInput)
-    {
-      reject(std::string{"snapshot recorder rejected/"} + recorded.detail);
+    if (rate_resolved_terminal_failure_snapshot_worker_ == nullptr) {
+      reject("snapshot observation worker unavailable");
+      return;
+    }
+    auto snapshot = std::move(source.value());
+    const auto detail_text = detail.str();
+    const auto decision_id = retained.decision_id;
+    const auto submission =
+      rate_resolved_terminal_failure_snapshot_worker_->submit_latest(
+      [snapshot = std::move(snapshot), detail_text, decision_id, intent]() {
+        const auto recorded =
+          mpcc_architecture_snapshot::record_proof_failure(
+          snapshot,
+          mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
+          "terminal-contingency-unavailable", detail_text);
+        if (
+          recorded.status ==
+          mpcc_architecture_snapshot::RecordStatus::Written)
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "Rate-resolved terminal proof snapshot recorded asynchronously: "
+            "decision=%lu, intent=%s, file=%s",
+            static_cast<unsigned long>(decision_id),
+            mpcc_contract::to_string(intent),
+            recorded.snapshot_file.string().c_str());
+        } else if (
+          recorded.status ==
+          mpcc_architecture_snapshot::RecordStatus::IoFailure ||
+          recorded.status ==
+          mpcc_architecture_snapshot::RecordStatus::InvalidInput)
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "Rate-resolved terminal proof snapshot async recorder rejected: "
+            "decision=%lu, intent=%s, detail=%s",
+            static_cast<unsigned long>(decision_id),
+            mpcc_contract::to_string(intent), recorded.detail.c_str());
+        }
+      });
+    if (!submission.accepted) {
+      reject("snapshot observation worker rejected submission");
     }
   }
 
@@ -29917,6 +29945,8 @@ struct MPC
   rate_resolved_preentry_execution_shadow_mailbox_;
   std::unique_ptr<LatestOnlyWorker>
   rate_resolved_preentry_execution_shadow_worker_;
+  std::unique_ptr<LatestOnlyWorker>
+  rate_resolved_terminal_failure_snapshot_worker_;
   std::uint64_t rate_resolved_preentry_execution_shadow_next_sequence_{1U};
   std::uint64_t rate_resolved_preentry_execution_shadow_last_consumed_sequence_{};
   double rate_resolved_preentry_execution_shadow_last_log_sec_{

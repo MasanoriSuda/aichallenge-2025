@@ -3632,3 +3632,34 @@ def test_pass_to_return_requires_causal_certified_gate_a() -> None:
         "resolve_atomic_intent_admission("
     )
     assert "evaluate_rate_resolved_track_cruise_plan(" in control
+
+
+def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
+    """Architecture evidence persistence cannot consume normal authority time."""
+
+    recorder_start = SOURCE.index(
+        "void record_rate_resolved_terminal_contingency_failure_snapshot("
+    )
+    recorder_end = SOURCE.index(
+        "bool submit_rate_resolved_track_cruise_shadow(", recorder_start
+    )
+    recorder = SOURCE[recorder_start:recorder_end]
+    submission = recorder.index(
+        "rate_resolved_terminal_failure_snapshot_worker_->submit_latest("
+    )
+    persistence = recorder.index(
+        "mpcc_architecture_snapshot::record_proof_failure("
+    )
+    assert submission < persistence
+    assert "[snapshot = std::move(snapshot)" in recorder
+    assert "recorded asynchronously" in recorder
+
+    production_start = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control("
+    )
+    production_end = SOURCE.index(
+        "MpcControlCycleResult get_control(", production_start
+    )
+    production = SOURCE[production_start:production_end]
+    assert "record_rate_resolved_terminal_contingency_failure_snapshot(" in production
+    assert "mpcc_architecture_snapshot::record_proof_failure(" not in production

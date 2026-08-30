@@ -28483,13 +28483,19 @@ struct MPC
       RCLCPP_WARN(
         rclcpp::get_logger("mpc_controller"),
         "Published Stop successor production: decision=%lu, intent=%s, "
-        "source=%lu, bundle=%s/%lu, joined=%d, join_reason=%s, "
+        "source=%lu, bundle=%s/%lu, bundle_detail=%s/index:%lu/"
+        "observed:%.9f/required:%.9f/tolerance:%.9f, "
+        "joined=%d, join_reason=%s, "
         "authority=%s",
         static_cast<unsigned long>(active_control_decision_id_),
         mpcc_contract::to_string(intent),
         static_cast<unsigned long>(stop_successor->result.source_sequence),
         stop_successor_bundle::to_string(bundle.reason),
         static_cast<unsigned long>(stop_sequence),
+        stop_successor_bundle::to_string(bundle.actuation_detail),
+        static_cast<unsigned long>(bundle.rejected_index),
+        bundle.observed_value, bundle.required_bound,
+        bundle.certificate_tolerance,
         retained.production_authority.has_value() ? 1 : 0,
         rate_resolved_retained::to_string(retained.reason),
         retained.production_authority.has_value() ?

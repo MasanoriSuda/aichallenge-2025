@@ -3355,6 +3355,8 @@ def test_current_world_stop_successor_uses_the_canonical_normal_boundary() -> No
     assert "certified::build(execution, snapshot, physical_result)" in bundle_source
     assert "physical::evaluate(snapshot)" in bundle_source
     assert "UnsupportedTerminalIntent" in bundle
+    assert "enum class ActuationRejectDetail" in bundle_header
+    assert "ProgressRegressed" in bundle_header
     assert "publish_control_command(" not in bundle
     assert "CanonicalNormalCommand" not in bundle
     assert "mark_executed(" not in bundle
@@ -3372,6 +3374,7 @@ def test_current_world_stop_successor_uses_the_canonical_normal_boundary() -> No
         "evaluate_current_world_stop_successor_plan("
     )
     canonical_output = owner.index("rate_resolved_track_cruise_control(")
+    assert "bundle_detail=%s/index:%lu/" in owner
     assert (
         ordinary_join
         < stop_proof

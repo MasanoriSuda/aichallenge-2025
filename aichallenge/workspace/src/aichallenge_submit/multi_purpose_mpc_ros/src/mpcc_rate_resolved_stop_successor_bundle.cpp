@@ -61,12 +61,51 @@ const char * to_string(const Reason reason) noexcept
   return "unknown";
 }
 
+const char * to_string(const ActuationRejectDetail detail) noexcept
+{
+  switch (detail) {
+    case ActuationRejectDetail::None: return "none";
+    case ActuationRejectDetail::ExactTrajectoryShape:
+      return "exact-trajectory-shape";
+    case ActuationRejectDetail::InitialLateralBounds:
+      return "initial-lateral-bounds";
+    case ActuationRejectDetail::CommandIndexDiscontinuity:
+      return "command-index-discontinuity";
+    case ActuationRejectDetail::CommandChangedWithinInterval:
+      return "command-changed-within-interval";
+    case ActuationRejectDetail::InvalidDenseSample:
+      return "invalid-dense-sample";
+    case ActuationRejectDetail::InvalidCommandDuration:
+      return "invalid-command-duration";
+    case ActuationRejectDetail::PublicationIntervalNotCovered:
+      return "publication-interval-not-covered";
+    case ActuationRejectDetail::ProgressRegressed:
+      return "progress-regressed";
+    case ActuationRejectDetail::Count: break;
+  }
+  return "unknown";
+}
+
 Result build(
   const retained::Request & request,
   const retained::StopSuccessorResult & stop_successor,
   const std::uint64_t artifact_sequence)
 {
   Result result;
+  const auto reject_actuation = [&] (
+      const ActuationRejectDetail detail, const std::size_t index,
+      const double observed = std::numeric_limits<double>::quiet_NaN(),
+      const double required = std::numeric_limits<double>::quiet_NaN(),
+      const double certificate_tolerance =
+      std::numeric_limits<double>::quiet_NaN()) {
+      result.reason = Reason::InvalidActuationSequence;
+      result.actuation_detail = detail;
+      result.rejected_index = index;
+      result.observed_value = observed;
+      result.required_bound = required;
+      result.certificate_tolerance = certificate_tolerance;
+      return result;
+    };
   if (!stop_successor.accepted()) {
     return result;
   }
@@ -111,7 +150,13 @@ Result build(
   const std::size_t dense_count = exact.elapsed_time_sec.size();
   if (
     !race_mpcc_foundation::exact_physical_execution_trajectory_complete(exact) ||
-    dense_count == 0U || samples.size() != dense_count ||
+    dense_count == 0U || samples.size() != dense_count)
+  {
+    return reject_actuation(
+      ActuationRejectDetail::ExactTrajectoryShape, samples.size(),
+      static_cast<double>(samples.size()), static_cast<double>(dense_count));
+  }
+  if (
     !finite(stop_successor.initial_lateral_m) ||
     !finite(stop_successor.initial_lag_m) ||
     !finite(stop_successor.initial_heading_offset_rad) ||
@@ -121,8 +166,10 @@ Result build(
     stop_successor.initial_lateral_lower_m >
     stop_successor.initial_lateral_upper_m)
   {
-    result.reason = Reason::InvalidActuationSequence;
-    return result;
+    return reject_actuation(
+      ActuationRejectDetail::InitialLateralBounds, 0U,
+      stop_successor.initial_lateral_m,
+      stop_successor.initial_lateral_lower_m);
   }
 
   const double tolerance =
@@ -136,8 +183,10 @@ Result build(
   std::size_t expected_command_index = 0U;
   while (begin < samples.size()) {
     if (samples[begin].command_interval_index != expected_command_index) {
-      result.reason = Reason::InvalidActuationSequence;
-      return result;
+      return reject_actuation(
+        ActuationRejectDetail::CommandIndexDiscontinuity, begin,
+        static_cast<double>(samples[begin].command_interval_index),
+        static_cast<double>(expected_command_index), tolerance);
     }
     std::size_t end = begin;
     double duration_sec{};
@@ -145,8 +194,13 @@ Result build(
       end < samples.size() &&
       samples[end].command_interval_index == expected_command_index)
     {
+      if (!same_command(samples[begin], samples[end], tolerance)) {
+        return reject_actuation(
+          ActuationRejectDetail::CommandChangedWithinInterval, end,
+          samples[end].acceleration_mps2 - samples[begin].acceleration_mps2,
+          tolerance, tolerance);
+      }
       if (
-        !same_command(samples[begin], samples[end], tolerance) ||
         !finite(samples[end].elapsed_time_sec) ||
         !finite(samples[end].duration_sec) || samples[end].duration_sec <= 0.0 ||
         !finite(samples[end].acceleration_mps2) ||
@@ -157,15 +211,17 @@ Result build(
         !finite(samples[end].path_curvature_radpm) ||
         !finite(samples[end].virtual_progress_speed_mps))
       {
-        result.reason = Reason::InvalidActuationSequence;
-        return result;
+        return reject_actuation(
+          ActuationRejectDetail::InvalidDenseSample, end,
+          samples[end].duration_sec, 0.0, tolerance);
       }
       duration_sec += samples[end].duration_sec;
       ++end;
     }
     if (!finite(duration_sec) || duration_sec <= 0.0) {
-      result.reason = Reason::InvalidActuationSequence;
-      return result;
+      return reject_actuation(
+        ActuationRejectDetail::InvalidCommandDuration,
+        command_end_indices.size(), duration_sec, 0.0, tolerance);
     }
     command_end_indices.push_back(end - 1U);
     command_durations_sec.push_back(duration_sec);
@@ -180,8 +236,10 @@ Result build(
     command_durations_sec.front() + tolerance <
     source_artifact.publication_interval_sec)
   {
-    result.reason = Reason::InvalidActuationSequence;
-    return result;
+    return reject_actuation(
+      ActuationRejectDetail::PublicationIntervalNotCovered, 0U,
+      command_durations_sec.empty() ? 0.0 : command_durations_sec.front(),
+      source_artifact.publication_interval_sec, tolerance);
   }
 
   auto execution = std::make_shared<artifact::ExecutionArtifact>();
@@ -249,11 +307,13 @@ Result build(
     const std::size_t dense_end = command_end_indices[command];
     const double duration_sec = command_durations_sec[command];
     const double endpoint_progress_m = exact.progress_m[dense_end];
+    const double progress_delta_m = endpoint_progress_m - previous_progress_m;
     const double progress_speed_mps =
-      (endpoint_progress_m - previous_progress_m) / duration_sec;
+      progress_delta_m / duration_sec;
     if (!finite(progress_speed_mps) || progress_speed_mps < -tolerance) {
-      result.reason = Reason::InvalidActuationSequence;
-      return result;
+      return reject_actuation(
+        ActuationRejectDetail::ProgressRegressed, command,
+        progress_delta_m, -tolerance * duration_sec, tolerance);
     }
     artifact::ControlStage control;
     control.acceleration_mps2 = command_acceleration_mps2[command];

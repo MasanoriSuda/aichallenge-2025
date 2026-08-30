@@ -4,7 +4,9 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_stop_successor_bundle
@@ -29,9 +31,30 @@ enum class Reason
 
 const char * to_string(Reason reason) noexcept;
 
+enum class ActuationRejectDetail
+{
+  None,
+  ExactTrajectoryShape,
+  InitialLateralBounds,
+  CommandIndexDiscontinuity,
+  CommandChangedWithinInterval,
+  InvalidDenseSample,
+  InvalidCommandDuration,
+  PublicationIntervalNotCovered,
+  ProgressRegressed,
+  Count,
+};
+
+const char * to_string(ActuationRejectDetail detail) noexcept;
+
 struct Result
 {
   Reason reason{Reason::StopSuccessorUnavailable};
+  ActuationRejectDetail actuation_detail{ActuationRejectDetail::None};
+  std::size_t rejected_index{std::numeric_limits<std::size_t>::max()};
+  double observed_value{std::numeric_limits<double>::quiet_NaN()};
+  double required_bound{std::numeric_limits<double>::quiet_NaN()};
+  double certificate_tolerance{std::numeric_limits<double>::quiet_NaN()};
   std::shared_ptr<const certified::CertifiedPlan> plan;
 };
 

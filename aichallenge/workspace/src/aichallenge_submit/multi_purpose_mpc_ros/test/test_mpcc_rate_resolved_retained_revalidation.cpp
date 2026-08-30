@@ -1355,6 +1355,76 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
+  ClassifiesStopSuccessorCommandIndexDiscontinuity)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.45, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.control_origin_speed_mps = 2.0;
+  request.current_speed_mps = 2.0;
+  request.current_time_steering_rad = 0.10;
+  request.current_steering_rad = 0.10;
+  request.current_response_steering_rad = 0.10;
+  request.previous_published_steering_rad = 0.10;
+
+  auto successor = retained::evaluate_stop_successor(request);
+  ASSERT_TRUE(successor.accepted());
+  ASSERT_FALSE(successor.actuation_samples.empty());
+  successor.actuation_samples.front().command_interval_index = 1U;
+
+  const auto bundle = stop_bundle::build(request, successor, 103U);
+  EXPECT_EQ(bundle.reason, stop_bundle::Reason::InvalidActuationSequence);
+  EXPECT_EQ(
+    bundle.actuation_detail,
+    stop_bundle::ActuationRejectDetail::CommandIndexDiscontinuity);
+  EXPECT_EQ(bundle.rejected_index, 0U);
+  EXPECT_DOUBLE_EQ(bundle.observed_value, 1.0);
+  EXPECT_DOUBLE_EQ(bundle.required_bound, 0.0);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  ClassifiesStopSuccessorCommandMutationWithinPublisherInterval)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.45, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.control_origin_speed_mps = 2.0;
+  request.current_speed_mps = 2.0;
+  request.current_time_steering_rad = 0.10;
+  request.current_steering_rad = 0.10;
+  request.current_response_steering_rad = 0.10;
+  request.previous_published_steering_rad = 0.10;
+
+  auto successor = retained::evaluate_stop_successor(request);
+  ASSERT_TRUE(successor.accepted());
+  ASSERT_GE(successor.actuation_samples.size(), 2U);
+  ASSERT_EQ(
+    successor.actuation_samples[0].command_interval_index,
+    successor.actuation_samples[1].command_interval_index);
+  successor.actuation_samples[1].acceleration_mps2 += 0.5;
+
+  const auto bundle = stop_bundle::build(request, successor, 104U);
+  EXPECT_EQ(bundle.reason, stop_bundle::Reason::InvalidActuationSequence);
+  EXPECT_EQ(
+    bundle.actuation_detail,
+    stop_bundle::ActuationRejectDetail::CommandChangedWithinInterval);
+  EXPECT_EQ(bundle.rejected_index, 1U);
+  EXPECT_NEAR(bundle.observed_value, 0.5, 1e-12);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
   RejectsCurrentWorldStopWithDifferentIntentIdentity)
 {
   const auto plan = certified_plan();

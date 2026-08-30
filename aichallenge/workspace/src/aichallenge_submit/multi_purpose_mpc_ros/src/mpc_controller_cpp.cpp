@@ -25980,6 +25980,12 @@ struct MPC
           runtime.continuation_build_ms;
         aggregate_runtime.continuation_proof_ms +=
           runtime.continuation_proof_ms;
+        aggregate_runtime.continuation_delay_wall_ms +=
+          runtime.continuation_delay_wall_ms;
+        aggregate_runtime.continuation_dynamic_ms +=
+          runtime.continuation_dynamic_ms;
+        aggregate_runtime.continuation_wall_ms +=
+          runtime.continuation_wall_ms;
         aggregate_runtime.terminal_build_ms += runtime.terminal_build_ms;
         aggregate_runtime.terminal_dynamic_ms += runtime.terminal_dynamic_ms;
         aggregate_runtime.terminal_wall_ms += runtime.terminal_wall_ms;
@@ -26804,11 +26810,13 @@ struct MPC
           "wall_reject_index:%lu/wall_reject_pose:%d/(%.3f,%.3f,%.3f)/"
           "dynamic_checked:%lu/dynamic_clearance:%.3f/blocker:%s, "
           "runtime=pre:%.3f/continuation_build:%.3f/"
-          "continuation_proof:%.3f/terminal_build:%.3f/"
+          "continuation_proof:%.3f(delay_wall:%.3f/dynamic:%.3f/wall:%.3f)/"
+          "terminal_build:%.3f/"
           "terminal_dynamic:%.3f/terminal_wall:%.3fms, "
           "runtime_aggregate=attempts:%lu/evaluations:%.3f/"
           "orchestration:%.3f/pre:%.3f/continuation_build:%.3f/"
-          "continuation_proof:%.3f/terminal_build:%.3f/"
+          "continuation_proof:%.3f(delay_wall:%.3f/dynamic:%.3f/wall:%.3f)/"
+          "terminal_build:%.3f/"
           "terminal_dynamic:%.3f/terminal_wall:%.3fms",
           static_cast<unsigned long>(retained.decision_id),
           rate_resolved_track_cruise_retained_trace_initialized_ ?
@@ -26901,6 +26909,9 @@ struct MPC
           retained.runtime.pre_continuation_ms,
           retained.runtime.continuation_build_ms,
           retained.runtime.continuation_proof_ms,
+          retained.runtime.continuation_delay_wall_ms,
+          retained.runtime.continuation_dynamic_ms,
+          retained.runtime.continuation_wall_ms,
           retained.runtime.terminal_build_ms,
           retained.runtime.terminal_dynamic_ms,
           retained.runtime.terminal_wall_ms,
@@ -26910,6 +26921,9 @@ struct MPC
           retained.aggregate_runtime.pre_continuation_ms,
           retained.aggregate_runtime.continuation_build_ms,
           retained.aggregate_runtime.continuation_proof_ms,
+          retained.aggregate_runtime.continuation_delay_wall_ms,
+          retained.aggregate_runtime.continuation_dynamic_ms,
+          retained.aggregate_runtime.continuation_wall_ms,
           retained.aggregate_runtime.terminal_build_ms,
           retained.aggregate_runtime.terminal_dynamic_ms,
           retained.aggregate_runtime.terminal_wall_ms);
@@ -29216,7 +29230,12 @@ struct MPC
         "published_stop_join:%.3f/failure_snapshot:%.3f/gate_a:%.3f/"
         "previous_intent:%.3fms, "
         "retained_attempts=%lu/retained_evaluations:%.3f/"
-        "retained_orchestration:%.3f, preentry=%d, retained=%d, selected=%d",
+        "retained_orchestration:%.3f, "
+        "retained_proof=pre:%.3f/continuation_build:%.3f/"
+        "continuation_proof:%.3f(delay_wall:%.3f/dynamic:%.3f/wall:%.3f)/"
+        "terminal_build:%.3f/"
+        "terminal_dynamic:%.3f/terminal_wall:%.3fms, "
+        "preentry=%d, retained=%d, selected=%d",
         static_cast<unsigned long>(active_control_decision_id_),
         production_total_ms,
         std::chrono::duration<double, std::milli>(
@@ -29234,6 +29253,15 @@ struct MPC
         static_cast<unsigned long>(retained.plan_evaluation_count),
         retained.plan_evaluation_elapsed_ms,
         retained.orchestration_elapsed_ms,
+        retained.aggregate_runtime.pre_continuation_ms,
+        retained.aggregate_runtime.continuation_build_ms,
+        retained.aggregate_runtime.continuation_proof_ms,
+        retained.aggregate_runtime.continuation_delay_wall_ms,
+        retained.aggregate_runtime.continuation_dynamic_ms,
+        retained.aggregate_runtime.continuation_wall_ms,
+        retained.aggregate_runtime.terminal_build_ms,
+        retained.aggregate_runtime.terminal_dynamic_ms,
+        retained.aggregate_runtime.terminal_wall_ms,
         pending_rate_resolved_publication_successor_->
         preentry_draft.has_value() ? 1 : 0,
         retained.production_authority.has_value() ? 1 : 0,

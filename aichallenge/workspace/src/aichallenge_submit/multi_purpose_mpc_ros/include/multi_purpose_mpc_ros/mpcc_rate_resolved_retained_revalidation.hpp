@@ -309,6 +309,9 @@ struct Result
     double pre_continuation_ms{};
     double continuation_build_ms{};
     double continuation_proof_ms{};
+    double continuation_delay_wall_ms{};
+    double continuation_dynamic_ms{};
+    double continuation_wall_ms{};
     double terminal_build_ms{};
     double terminal_dynamic_ms{};
     double terminal_wall_ms{};

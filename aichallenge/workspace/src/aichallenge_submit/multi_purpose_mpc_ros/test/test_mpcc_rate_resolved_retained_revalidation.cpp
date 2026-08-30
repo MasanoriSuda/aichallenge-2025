@@ -612,6 +612,9 @@ TEST(
   EXPECT_GE(result.runtime.pre_continuation_ms, 0.0);
   EXPECT_GT(result.runtime.continuation_build_ms, 0.0);
   EXPECT_GE(result.runtime.continuation_proof_ms, 0.0);
+  EXPECT_GE(result.runtime.continuation_delay_wall_ms, 0.0);
+  EXPECT_GE(result.runtime.continuation_dynamic_ms, 0.0);
+  EXPECT_GE(result.runtime.continuation_wall_ms, 0.0);
   EXPECT_GT(result.runtime.terminal_build_ms, 0.0);
   EXPECT_GT(result.runtime.terminal_dynamic_ms, 0.0);
   EXPECT_GT(result.runtime.terminal_wall_ms, 0.0);
@@ -985,6 +988,9 @@ TEST(
   EXPECT_GE(result.runtime.pre_continuation_ms, 0.0);
   EXPECT_GT(result.runtime.continuation_build_ms, 0.0);
   EXPECT_GE(result.runtime.continuation_proof_ms, 0.0);
+  EXPECT_GE(result.runtime.continuation_delay_wall_ms, 0.0);
+  EXPECT_GE(result.runtime.continuation_dynamic_ms, 0.0);
+  EXPECT_GE(result.runtime.continuation_wall_ms, 0.0);
 }
 
 TEST(

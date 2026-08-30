@@ -1005,6 +1005,11 @@ Result evaluate(const Request & request)
   const auto continuation_built = SteadyClock::now();
   result.runtime.continuation_build_ms = elapsed_ms(
     continuation_build_started, continuation_built);
+  const auto finish_continuation_proof = [&] (const Reason reason) {
+      result.runtime.continuation_proof_ms = elapsed_ms(
+        continuation_built, SteadyClock::now());
+      return complete_continuation_proof(reason);
+    };
   result.continuation_reason = continuation.reason;
   result.continuation_scope = continuation.scope;
   result.continuation_exact_reason = continuation.exact_reason;
@@ -1015,7 +1020,7 @@ Result evaluate(const Request & request)
       continuation.exact_trajectory.has_value();
   }
   if (!continuation.exact_trajectory.has_value()) {
-    return complete_continuation_proof(Reason::ContinuationRejected);
+    return finish_continuation_proof(Reason::ContinuationRejected);
   }
   const auto & continuation_trajectory =
     continuation.exact_trajectory.value();
@@ -1036,17 +1041,20 @@ Result evaluate(const Request & request)
   const auto clearance_footprint = physical::resolve_clearance_footprint(
     source.footprint, source.hard_wall_clearance_m);
   if (!clearance_footprint.has_value()) {
-    return complete_continuation_proof(Reason::StaticWorldMismatch);
+    return finish_continuation_proof(Reason::StaticWorldMismatch);
   }
   const auto delay = recovery::evaluate_clear_footprint_path(
     *source.wall_grid, clearance_footprint.value(),
     request.measured_to_control_path, source.swept_step_m);
   result.delay_path_clearance = delay;
+  const auto delay_wall_proved = SteadyClock::now();
+  result.runtime.continuation_delay_wall_ms = elapsed_ms(
+    continuation_built, delay_wall_proved);
   if (!delay.valid) {
-    return complete_continuation_proof(Reason::ControlPathInvalid);
+    return finish_continuation_proof(Reason::ControlPathInvalid);
   }
   if (!delay.clear) {
-    return complete_continuation_proof(Reason::DelayPrefixBlocked);
+    return finish_continuation_proof(Reason::DelayPrefixBlocked);
   }
 
   std::vector<recovery::Pose2D> continuation_path;
@@ -1064,6 +1072,12 @@ Result evaluate(const Request & request)
   // Solver-stage duration is planning discretization and must not extend the
   // minimum authority proof horizon.
   dynamic_proof::Result publisher_interval_dynamic = dynamic;
+  const auto dynamic_proof_started = delay_wall_proved;
+  const auto finish_dynamic_proof = [&] (const Reason reason) {
+      result.runtime.continuation_dynamic_ms = elapsed_ms(
+        dynamic_proof_started, SteadyClock::now());
+      return finish_continuation_proof(reason);
+    };
   auto previous_dynamic_pose = request.control_pose;
   double dynamic_time_sec = prediction_delay_sec;
   for (
@@ -1080,7 +1094,7 @@ Result evaluate(const Request & request)
       execution.course_progress_origin_m);
     const auto endpoint_pose = reconstruct_pose(source, endpoint_state);
     if (!endpoint_pose.has_value()) {
-      return complete_continuation_proof(Reason::CourseFrameUnavailable);
+      return finish_dynamic_proof(Reason::CourseFrameUnavailable);
     }
     continuation_path.push_back(endpoint_pose.value());
     if (
@@ -1095,14 +1109,14 @@ Result evaluate(const Request & request)
       const auto stage_gap = evaluate_follow_gap(
         endpoint_state, endpoint_time_sec);
       if (!stage_gap.has_value()) {
-        return complete_continuation_proof(
+        return finish_dynamic_proof(
           Reason::FollowTargetHorizonUnavailable);
       }
       ++result.follow_checked_state_count;
       result.follow_minimum_gap_m = std::min(
         result.follow_minimum_gap_m, stage_gap.value());
       if (stage_gap.value() + kIdentityTolerance < follow_target->hard_gap_m) {
-        return complete_continuation_proof(Reason::FollowStageGapViolation);
+        return finish_dynamic_proof(Reason::FollowStageGapViolation);
       }
     }
     if (
@@ -1127,20 +1141,28 @@ Result evaluate(const Request & request)
   }
   dynamic_proof::finalize(request.obstacles, publisher_interval_dynamic);
   dynamic_proof::finalize(request.obstacles, dynamic);
+  const auto dynamic_proved = SteadyClock::now();
+  result.runtime.continuation_dynamic_ms = elapsed_ms(
+    dynamic_proof_started, dynamic_proved);
+  const auto wall_proof_started = dynamic_proved;
   const auto continuation_clearance =
     recovery::evaluate_clear_footprint_path(
     *source.wall_grid, clearance_footprint.value(), continuation_path,
     source.swept_step_m);
   result.continuation_path_clearance = continuation_clearance;
   if (!continuation_clearance.valid) {
-    return complete_continuation_proof(Reason::ControlPathInvalid);
+    result.runtime.continuation_wall_ms = elapsed_ms(
+      wall_proof_started, SteadyClock::now());
+    return finish_continuation_proof(Reason::ControlPathInvalid);
   }
   if (!continuation_clearance.clear) {
     if (
       publisher_interval_last_path_index < 1U ||
       publisher_interval_last_path_index >= continuation_path.size())
     {
-      return complete_continuation_proof(Reason::ContinuationRejected);
+      result.runtime.continuation_wall_ms = elapsed_ms(
+        wall_proof_started, SteadyClock::now());
+      return finish_continuation_proof(Reason::ContinuationRejected);
     }
     const std::vector<recovery::Pose2D> publisher_interval_path{
       continuation_path.begin(),
@@ -1153,10 +1175,14 @@ Result evaluate(const Request & request)
     result.publisher_interval_path_clearance =
       publisher_interval_clearance;
     if (!publisher_interval_clearance.valid) {
-      return complete_continuation_proof(Reason::ControlPathInvalid);
+      result.runtime.continuation_wall_ms = elapsed_ms(
+        wall_proof_started, SteadyClock::now());
+      return finish_continuation_proof(Reason::ControlPathInvalid);
     }
     if (!publisher_interval_clearance.clear) {
-      return complete_continuation_proof(Reason::ContinuationWallBlocked);
+      result.runtime.continuation_wall_ms = elapsed_ms(
+        wall_proof_started, SteadyClock::now());
+      return finish_continuation_proof(Reason::ContinuationWallBlocked);
     }
     result.static_wall_scope =
       StaticWallProofScope::PublisherIntervalPrefix;
@@ -1173,19 +1199,27 @@ Result evaluate(const Request & request)
   result.dynamic_checked_pose_count = dynamic.checked_pose_count;
   result.minimum_dynamic_clearance_m = dynamic.minimum_clearance_m;
   if (!dynamic.valid) {
-    return complete_continuation_proof(Reason::DynamicPathInvalid);
+    result.runtime.continuation_wall_ms = elapsed_ms(
+      wall_proof_started, SteadyClock::now());
+    return finish_continuation_proof(Reason::DynamicPathInvalid);
   }
   if (!dynamic.clear) {
     if (!publisher_interval_dynamic.valid) {
-      return complete_continuation_proof(Reason::DynamicPathInvalid);
+      result.runtime.continuation_wall_ms = elapsed_ms(
+        wall_proof_started, SteadyClock::now());
+      return finish_continuation_proof(Reason::DynamicPathInvalid);
     }
     if (!publisher_interval_dynamic.clear) {
-      return complete_continuation_proof(Reason::DynamicPathBlocked);
+      result.runtime.continuation_wall_ms = elapsed_ms(
+        wall_proof_started, SteadyClock::now());
+      return finish_continuation_proof(Reason::DynamicPathBlocked);
     }
     result.dynamic_obstacle_scope =
       DynamicObstacleProofScope::PublisherIntervalPrefix;
     result.proved_control_stage_count = 1U;
   }
+  result.runtime.continuation_wall_ms = elapsed_ms(
+    wall_proof_started, SteadyClock::now());
 
   const bool partial_normal_proof =
     continuation.scope ==

@@ -1,4 +1,6 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp"
 
 #include <gtest/gtest.h>
 
@@ -18,6 +20,10 @@ namespace physical =
   multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
+namespace production =
+  multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
+namespace stop_bundle =
+  multi_purpose_mpc_ros::mpcc_rate_resolved_stop_successor_bundle;
 
 contract::MpccProblemContext source_context(
   const contract::ControlIntent intent = contract::ControlIntent::Track)
@@ -1260,6 +1266,91 @@ TEST(
   EXPECT_TRUE(successor.control_path_clearance.clear);
   EXPECT_TRUE(successor.successor_path_clearance.clear);
   EXPECT_TRUE(successor.dynamic_clearance.clear);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  ReifiesCurrentWorldStopAsCanonicalSevenStateAuthority)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.45, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.control_origin_speed_mps = 2.0;
+  request.current_speed_mps = 2.0;
+  request.current_time_steering_rad = 0.10;
+  request.current_steering_rad = 0.10;
+  request.current_response_steering_rad = 0.10;
+  request.previous_published_steering_rad = 0.10;
+
+  const auto successor = retained::evaluate_stop_successor(request);
+  ASSERT_TRUE(successor.accepted());
+  const auto bundle = stop_bundle::build(request, successor, 101U);
+  ASSERT_EQ(bundle.reason, stop_bundle::Reason::Available);
+  ASSERT_NE(bundle.plan, nullptr);
+  ASSERT_EQ(certified::validate(*bundle.plan), certified::RejectReason::None);
+  const auto & execution = *bundle.plan->execution_artifact;
+  EXPECT_EQ(execution.identity.sequence, 101U);
+  EXPECT_EQ(execution.identity.source_context.decision_id, request.decision_id);
+  EXPECT_EQ(execution.identity.source_context.intent, request.current_intent);
+  ASSERT_FALSE(execution.control_stages.empty());
+  EXPECT_NEAR(
+    execution.control_stages.front().acceleration_mps2,
+    request.minimum_acceleration_mps2, 1e-12);
+  EXPECT_GE(
+    execution.control_stages.front().duration_sec,
+    execution.publication_interval_sec);
+
+  auto joined_request = request;
+  joined_request.plan = bundle.plan;
+  joined_request.decision_id = request.decision_id + 1U;
+  joined_request.obstacles.generation += 1U;
+  joined_request.obstacles.observed_sec = joined_request.now_sec;
+  joined_request.execution_clock = {
+    retained::ExecutionClockKind::TimeAlignedCandidate,
+    std::numeric_limits<double>::quiet_NaN(),
+    std::numeric_limits<double>::quiet_NaN()};
+  const auto joined = retained::evaluate(joined_request);
+  ASSERT_EQ(joined.reason, retained::Reason::Accepted);
+  const auto authority = production::build(joined);
+  ASSERT_EQ(authority.reason, production::Reason::Available);
+  ASSERT_TRUE(authority.authority.has_value());
+  EXPECT_EQ(authority.authority->command.intent, request.current_intent);
+  EXPECT_NEAR(
+    authority.authority->command.acceleration_mps2,
+    request.minimum_acceleration_mps2, 1e-12);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  DoesNotRelabelStopEndpointAsReturnCompletion)
+{
+  const auto plan = certified_plan(
+    free_grid(), contract::ControlIntent::Return);
+  auto request = accepted_request(plan);
+  request.current_intent = contract::ControlIntent::Return;
+  request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.45, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.control_origin_speed_mps = 2.0;
+  request.current_speed_mps = 2.0;
+  request.current_time_steering_rad = 0.10;
+  request.current_steering_rad = 0.10;
+  request.current_response_steering_rad = 0.10;
+  request.previous_published_steering_rad = 0.10;
+
+  const auto successor = retained::evaluate_stop_successor(request);
+  ASSERT_TRUE(successor.accepted());
+  const auto bundle = stop_bundle::build(request, successor, 102U);
+  EXPECT_EQ(bundle.reason, stop_bundle::Reason::UnsupportedTerminalIntent);
+  EXPECT_EQ(bundle.plan, nullptr);
 }
 
 TEST(

@@ -786,6 +786,16 @@ StopContingencyResult build_stop_contingency(
   result.actuation_samples.reserve(reserve_count);
   double elapsed_sec{};
   double path_distance_m{};
+  std::size_t command_interval_index{};
+
+  const auto initial_geometry = sample_course_geometry(
+    course_geometry, tolerance, nonlinear.progress_m);
+  if (!initial_geometry.has_value()) {
+    result.reason = StopContingencyRejectReason::CourseGeometryUnavailable;
+    return result;
+  }
+  result.initial_lateral_lower_m = initial_geometry->lateral_lower_m;
+  result.initial_lateral_upper_m = initial_geometry->lateral_upper_m;
 
   const auto append_duration = [&] (
       const double requested_duration_sec,
@@ -891,7 +901,9 @@ StopContingencyResult build_stop_contingency(
           StopContingencyResult::ActuationSample{
             elapsed_sec, step_sec, acceleration_mps2,
             requested_steering_rate_radps, nonlinear.velocity_mps,
-            nonlinear.steering_rad});
+            nonlinear.steering_rad, nonlinear.response_steering_rad,
+            geometry->curvature_radpm, progress_speed.value(),
+            command_interval_index});
       }
       return true;
     };
@@ -906,6 +918,7 @@ StopContingencyResult build_stop_contingency(
     }
     return result;
   }
+  ++command_interval_index;
   result.publisher_interval_end_steering_rad = nonlinear.steering_rad;
   result.publisher_interval_sample_count = result.actuation_samples.size();
   while (nonlinear.velocity_mps > tolerance) {
@@ -939,6 +952,7 @@ StopContingencyResult build_stop_contingency(
       }
       return result;
     }
+    ++command_interval_index;
   }
   result.braking_suffix_final_steering_rad = nonlinear.steering_rad;
   if (exact.elapsed_time_sec.empty() || nonlinear.velocity_mps > tolerance) {

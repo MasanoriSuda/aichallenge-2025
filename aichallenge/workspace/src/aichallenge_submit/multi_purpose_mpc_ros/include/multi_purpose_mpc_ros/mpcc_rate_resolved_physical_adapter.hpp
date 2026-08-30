@@ -204,6 +204,13 @@ struct StopContingencyResult
   /// Final steering reached by the path-tracking maximum-braking suffix.
   double braking_suffix_final_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  /// Exact lateral support at the fresh control origin.  Dense trajectory
+  /// samples only carry endpoint bounds; reifying the Stop into a new
+  /// immutable execution artifact also needs the initial state's bounds.
+  double initial_lateral_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double initial_lateral_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
   struct ActuationSample
   {
     double elapsed_time_sec{std::numeric_limits<double>::quiet_NaN()};
@@ -212,6 +219,20 @@ struct StopContingencyResult
     double steering_rate_radps{std::numeric_limits<double>::quiet_NaN()};
     double end_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
     double end_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+    /// Effective yaw-producing steering after this physical integration
+    /// sample.  This cannot be reconstructed from the serialized steering
+    /// endpoint when actuator response lag is nonzero.
+    double end_response_steering_rad{
+      std::numeric_limits<double>::quiet_NaN()};
+    /// Course-frame inputs used by the exact nonlinear integration sample.
+    double path_curvature_radpm{
+      std::numeric_limits<double>::quiet_NaN()};
+    double virtual_progress_speed_mps{
+      std::numeric_limits<double>::quiet_NaN()};
+    /// Consecutive dense samples with the same command interval share this
+    /// index.  It allows an exact physical rollout to be reified into the
+    /// publisher-sized control stages owned by ExecutionArtifact.
+    std::size_t command_interval_index{};
   };
   /// Input/state samples aligned one-to-one with exact_trajectory.  The
   /// certificate can otherwise prove states which no publisher can reproduce.

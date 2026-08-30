@@ -487,6 +487,10 @@ struct StopSuccessorResult
   double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
   double initial_heading_offset_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  double initial_lateral_lower_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double initial_lateral_upper_m{
+    std::numeric_limits<double>::quiet_NaN()};
 
   bool accepted() const noexcept
   {

@@ -1599,6 +1599,8 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
     request.minimum_acceleration_mps2);
   result.physical_reason = successor.reason;
   result.exact_reason = successor.exact_reason;
+  result.initial_lateral_lower_m = successor.initial_lateral_lower_m;
+  result.initial_lateral_upper_m = successor.initial_lateral_upper_m;
   if (!successor.exact_trajectory.has_value()) {
     result.reason = StopSuccessorReason::PhysicalSuccessorRejected;
     return result;
@@ -1619,7 +1621,7 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
       result.exact_trajectory.progress_m[index] -
       execution.course_progress_origin_m,
       result.actuation_samples[index].end_steering_rad,
-      result.actuation_samples[index].end_steering_rad};
+      result.actuation_samples[index].end_response_steering_rad};
     const auto pose = reconstruct_pose(source, state);
     if (!pose.has_value()) {
       result.reason = StopSuccessorReason::CourseFrameUnavailable;

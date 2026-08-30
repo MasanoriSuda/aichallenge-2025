@@ -3339,6 +3339,48 @@ def test_terminal_stop_does_not_extrapolate_executable_prefix_geometry() -> None
     assert "source.terminal_stop_course_geometry" in retained_source
 
 
+def test_current_world_stop_successor_uses_the_canonical_normal_boundary() -> None:
+    """A proved Stop becomes an artifact; its adapter never becomes a publisher."""
+
+    bundle_header = (
+        PACKAGE_ROOT
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_stop_successor_bundle.hpp"
+    ).read_text(encoding="utf-8")
+    bundle_source = (
+        PACKAGE_ROOT / "src" / "mpcc_rate_resolved_stop_successor_bundle.cpp"
+    ).read_text(encoding="utf-8")
+    bundle = bundle_header + bundle_source
+    assert "certified::build(execution, snapshot, physical_result)" in bundle_source
+    assert "physical::evaluate(snapshot)" in bundle_source
+    assert "UnsupportedTerminalIntent" in bundle
+    assert "publish_control_command(" not in bundle
+    assert "CanonicalNormalCommand" not in bundle
+    assert "mark_executed(" not in bundle
+    assert "record_published_bundle_source(" not in bundle
+
+    owner_start = SOURCE.index("rate_resolved_normal_production_control(")
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    ordinary_join = owner.index(
+        "evaluate_rate_resolved_track_cruise_retained_shadow("
+    )
+    stop_proof = owner.index("evaluate_published_stop_successor_shadow(")
+    bundle_build = owner.index("stop_successor_bundle::build(")
+    current_world_join = owner.index(
+        "evaluate_current_world_stop_successor_plan("
+    )
+    canonical_output = owner.index("rate_resolved_track_cruise_control(")
+    assert (
+        ordinary_join
+        < stop_proof
+        < bundle_build
+        < current_world_join
+        < canonical_output
+    )
+
+
 def test_canonical_overtake_problem_has_no_legacy_receding_optimizer_edge() -> None:
     """The tactical layer builds a reference; only seven-state MPCC optimises it."""
 

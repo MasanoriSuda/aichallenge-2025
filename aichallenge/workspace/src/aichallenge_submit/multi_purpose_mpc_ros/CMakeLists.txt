@@ -501,6 +501,22 @@ target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved_production_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_command_candidate
 )
 
+add_library(${PROJECT_NAME}_mpcc_rate_resolved_stop_successor_bundle STATIC
+  src/mpcc_rate_resolved_stop_successor_bundle.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_mpcc_rate_resolved_stop_successor_bundle PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(
+  ${PROJECT_NAME}_mpcc_rate_resolved_stop_successor_bundle
+  ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+  ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
+  ${PROJECT_NAME}_mpcc_rate_resolved_physical_wall
+  ${PROJECT_NAME}_mpcc_execution_contract
+)
+
 add_library(${PROJECT_NAME}_mpcc_certified_stop_successor_observation STATIC
   src/mpcc_certified_stop_successor_observation.cpp
 )
@@ -512,6 +528,7 @@ target_include_directories(
 target_link_libraries(
   ${PROJECT_NAME}_mpcc_certified_stop_successor_observation
   ${PROJECT_NAME}_mpcc_rate_resolved_production_adapter
+  ${PROJECT_NAME}_mpcc_rate_resolved_stop_successor_bundle
   ${PROJECT_NAME}_mpcc_execution_contract
 )
 
@@ -809,6 +826,8 @@ if(BUILD_TESTING)
     )
     target_link_libraries(test_mpcc_rate_resolved_retained_revalidation
       ${PROJECT_NAME}_mpcc_rate_resolved_retained_revalidation
+      ${PROJECT_NAME}_mpcc_rate_resolved_production_adapter
+      ${PROJECT_NAME}_mpcc_rate_resolved_stop_successor_bundle
     )
   endif()
 

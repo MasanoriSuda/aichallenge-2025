@@ -32,6 +32,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp>
 #include <multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp>
 #include <multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
@@ -172,6 +173,8 @@ namespace rate_resolved_execution_source =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_execution_source;
 namespace rate_resolved_production =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_production_adapter;
+namespace stop_successor_bundle =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_stop_successor_bundle;
 namespace stop_successor_observation =
   ::multi_purpose_mpc_ros::mpcc_certified_stop_successor_observation;
 namespace rate_resolved_retained =
@@ -7697,6 +7700,12 @@ struct CanonicalNormalPendingActuation
   overtake_sibling_adoption_token;
   std::optional<rate_resolved_production::CertifiedStopSuccessorEvidence>
   certified_stop_successor;
+};
+
+struct PublishedStopSuccessorEvaluation
+{
+  std::optional<rate_resolved_retained::Request> request;
+  rate_resolved_retained::StopSuccessorResult result;
 };
 
 struct OvertakeSiblingAdoptionLiveState
@@ -28305,12 +28314,13 @@ struct MPC
     return output;
   }
 
-  rate_resolved_retained::StopSuccessorResult
+  PublishedStopSuccessorEvaluation
   evaluate_published_stop_successor_shadow(
     const double now_sec, const mpcc_contract::ControlIntent intent,
     const rate_resolved_retained::Reason normal_reject_reason)
   {
-    rate_resolved_retained::StopSuccessorResult result;
+    PublishedStopSuccessorEvaluation evaluation;
+    auto & result = evaluation.result;
     result.decision_id = active_control_decision_id_;
     if (rate_resolved_track_cruise_certified_plan_store_ != nullptr) {
       const auto published =
@@ -28329,6 +28339,7 @@ struct MPC
         if (request.has_value()) {
           result = rate_resolved_retained::evaluate_stop_successor(
             request.value());
+          evaluation.request = request;
         }
       }
     }
@@ -28368,7 +28379,21 @@ struct MPC
       published_stop_successor_shadow_last_sequence_ = result.source_sequence;
       published_stop_successor_shadow_last_log_sec_ = now_sec;
     }
-    return result;
+    return evaluation;
+  }
+
+  RateResolvedRetainedShadowEvaluation
+  evaluate_current_world_stop_successor_plan(
+    const MpcProblem & problem, const double now_sec,
+    const mpcc_contract::ControlIntent intent,
+    const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & plan)
+  {
+    return evaluate_rate_resolved_track_cruise_plan(
+      problem, now_sec, intent, plan,
+      rate_resolved_retained::ExecutionClock{
+        rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN()});
   }
 
   MpcControlCycleResult rate_resolved_normal_production_control(
@@ -28424,18 +28449,54 @@ struct MPC
     bool published_stop_retained = false;
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
       problem, now_sec, intent);
+    const auto ordinary_retained = retained;
+    std::optional<PublishedStopSuccessorEvaluation> stop_successor;
     if (!retained.production_authority.has_value()) {
-      static_cast<void>(evaluate_published_stop_successor_shadow(
-          now_sec, intent, retained.reason));
+      stop_successor = evaluate_published_stop_successor_shadow(
+        now_sec, intent, retained.reason);
     }
-    observe_published_certified_stop_successor_join(
-      retained, active_control_decision_id_);
     // Observation only: capture the immutable current-world problem at the
     // proof boundary before atomic intent bridging can replace the rejected
     // proposed intent.  This never solves, stores, publishes or changes
     // production authority.
     record_rate_resolved_terminal_contingency_failure_snapshot(
-      problem, submission_draft, now_sec, intent, retained);
+      problem, submission_draft, now_sec, intent, ordinary_retained);
+    if (
+      !retained.production_authority.has_value() &&
+      stop_successor.has_value() && stop_successor->request.has_value() &&
+      stop_successor->result.accepted() &&
+      rate_resolved_track_cruise_shadow_next_sequence_ <
+      std::numeric_limits<std::uint64_t>::max())
+    {
+      const std::uint64_t stop_sequence =
+        rate_resolved_track_cruise_shadow_next_sequence_++;
+      const auto bundle = stop_successor_bundle::build(
+        stop_successor->request.value(), stop_successor->result,
+        stop_sequence);
+      if (bundle.plan != nullptr) {
+        auto joined_stop = evaluate_current_world_stop_successor_plan(
+          problem, now_sec, intent, bundle.plan);
+        if (joined_stop.production_authority.has_value()) {
+          retained = std::move(joined_stop);
+        }
+      }
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Published Stop successor production: decision=%lu, intent=%s, "
+        "source=%lu, bundle=%s/%lu, joined=%d, join_reason=%s, "
+        "authority=%s",
+        static_cast<unsigned long>(active_control_decision_id_),
+        mpcc_contract::to_string(intent),
+        static_cast<unsigned long>(stop_successor->result.source_sequence),
+        stop_successor_bundle::to_string(bundle.reason),
+        static_cast<unsigned long>(stop_sequence),
+        retained.production_authority.has_value() ? 1 : 0,
+        rate_resolved_retained::to_string(retained.reason),
+        retained.production_authority.has_value() ?
+        "canonical-normal" : "external-emergency");
+    }
+    observe_published_certified_stop_successor_join(
+      retained, active_control_decision_id_);
     if (
       !retained.production_authority.has_value() &&
       last_published_authority_intent_ !=

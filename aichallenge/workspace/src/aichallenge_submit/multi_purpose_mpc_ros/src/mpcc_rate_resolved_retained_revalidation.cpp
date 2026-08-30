@@ -4,6 +4,7 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 
@@ -14,6 +15,14 @@ namespace
 {
 
 constexpr double kIdentityTolerance = 1e-9;
+using SteadyClock = std::chrono::steady_clock;
+
+double elapsed_ms(
+  const SteadyClock::time_point started,
+  const SteadyClock::time_point finished) noexcept
+{
+  return std::chrono::duration<double, std::milli>(finished - started).count();
+}
 
 bool finite_pose(const recovery::Pose2D & pose) noexcept
 {
@@ -552,6 +561,7 @@ const char * to_string(const DynamicObstacleProofScope scope) noexcept
 
 Result evaluate(const Request & request)
 {
+  const auto evaluation_started = SteadyClock::now();
   Result result;
   result.execution_clock_kind = request.execution_clock.kind;
   result.first_published_control_origin_sec =
@@ -978,6 +988,9 @@ Result evaluate(const Request & request)
       continuation_initial_steering_rad;
   }
 
+  const auto continuation_build_started = SteadyClock::now();
+  result.runtime.pre_continuation_ms = elapsed_ms(
+    evaluation_started, continuation_build_started);
   const auto continuation =
     mpcc_rate_resolved_physical_adapter::build_continuation(
     execution, command_cursor,
@@ -989,6 +1002,9 @@ Result evaluate(const Request & request)
       current_control_state.progress_m,
       continuation_initial_steering_rad,
       request.current_response_steering_rad});
+  const auto continuation_built = SteadyClock::now();
+  result.runtime.continuation_build_ms = elapsed_ms(
+    continuation_build_started, continuation_built);
   result.continuation_reason = continuation.reason;
   result.continuation_scope = continuation.scope;
   result.continuation_exact_reason = continuation.exact_reason;
@@ -1179,6 +1195,9 @@ Result evaluate(const Request & request)
     StaticWallProofScope::PublisherIntervalPrefix ||
     result.dynamic_obstacle_scope ==
     DynamicObstacleProofScope::PublisherIntervalPrefix;
+  const auto continuation_proved = SteadyClock::now();
+  result.runtime.continuation_proof_ms = elapsed_ms(
+    continuation_built, continuation_proved);
 
   race_mpcc_foundation::ExactPhysicalExecutionTrajectory
   terminal_stop_trajectory;
@@ -1196,6 +1215,7 @@ Result evaluate(const Request & request)
     // immutable world observation. The first interval must replay both the
     // acceleration and steering-rate components of the serialized command.
     result.terminal_stop_attempted = true;
+    const auto terminal_build_started = SteadyClock::now();
     const auto terminal_stop =
       mpcc_rate_resolved_physical_adapter::build_stop_contingency(
       execution, command_cursor, current_world_actuation,
@@ -1210,6 +1230,9 @@ Result evaluate(const Request & request)
       source.terminal_stop_course_geometry,
       request.stop_lateral_policy,
       request.minimum_acceleration_mps2);
+    const auto terminal_built = SteadyClock::now();
+    result.runtime.terminal_build_ms = elapsed_ms(
+      terminal_build_started, terminal_built);
     result.terminal_stop_reason = terminal_stop.reason;
     result.terminal_stop_exact_reason = terminal_stop.exact_reason;
     result.terminal_stop_rejected_sample = terminal_stop.rejected_sample;
@@ -1235,6 +1258,7 @@ Result evaluate(const Request & request)
       return complete_continuation_proof(
         Reason::TerminalContingencyUnavailable);
     }
+    const auto terminal_dynamic_started = SteadyClock::now();
     std::vector<recovery::Pose2D> terminal_stop_path;
     terminal_stop_path.reserve(
       terminal_stop_trajectory.progress_m.size() + 1U);
@@ -1288,6 +1312,9 @@ Result evaluate(const Request & request)
       }
     }
     dynamic_proof::finalize(request.obstacles, terminal_stop_dynamic);
+    const auto terminal_dynamic_finished = SteadyClock::now();
+    result.runtime.terminal_dynamic_ms = elapsed_ms(
+      terminal_dynamic_started, terminal_dynamic_finished);
     result.terminal_stop_blocking_obstacle_id =
       terminal_stop_dynamic.blocking_obstacle_id;
     result.terminal_stop_dynamic_checked_pose_count =
@@ -1298,9 +1325,13 @@ Result evaluate(const Request & request)
       return complete_continuation_proof(
         Reason::TerminalContingencyUnavailable);
     }
+    const auto terminal_wall_started = SteadyClock::now();
     terminal_stop_clearance = recovery::evaluate_clear_footprint_path(
       *source.wall_grid, clearance_footprint.value(), terminal_stop_path,
       source.swept_step_m);
+    const auto terminal_wall_finished = SteadyClock::now();
+    result.runtime.terminal_wall_ms = elapsed_ms(
+      terminal_wall_started, terminal_wall_finished);
     result.terminal_stop_path_clearance = terminal_stop_clearance;
     if (!terminal_stop_clearance.valid || !terminal_stop_clearance.clear) {
       return complete_continuation_proof(

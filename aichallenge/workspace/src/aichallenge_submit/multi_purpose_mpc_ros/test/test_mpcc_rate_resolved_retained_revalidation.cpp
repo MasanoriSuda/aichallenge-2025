@@ -609,6 +609,12 @@ TEST(
   EXPECT_LE(
     result.proof->terminal_stop_publisher_interval_sample_count,
     result.proof->terminal_stop_actuation_samples.size());
+  EXPECT_GE(result.runtime.pre_continuation_ms, 0.0);
+  EXPECT_GT(result.runtime.continuation_build_ms, 0.0);
+  EXPECT_GE(result.runtime.continuation_proof_ms, 0.0);
+  EXPECT_GT(result.runtime.terminal_build_ms, 0.0);
+  EXPECT_GT(result.runtime.terminal_dynamic_ms, 0.0);
+  EXPECT_GT(result.runtime.terminal_wall_ms, 0.0);
 }
 
 TEST(
@@ -976,6 +982,9 @@ TEST(
   EXPECT_TRUE(result.proof->publication_stage_advanced);
   EXPECT_TRUE(result.proof->stateless_current_world_bundle());
   EXPECT_FALSE(result.proof->latest_state_feedback_bundle);
+  EXPECT_GE(result.runtime.pre_continuation_ms, 0.0);
+  EXPECT_GT(result.runtime.continuation_build_ms, 0.0);
+  EXPECT_GE(result.runtime.continuation_proof_ms, 0.0);
 }
 
 TEST(

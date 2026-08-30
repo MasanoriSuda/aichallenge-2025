@@ -302,6 +302,17 @@ struct Proof
 
 struct Result
 {
+  /// Non-overlapping wall-clock regions inside evaluate().  These fields are
+  /// diagnostic only and never participate in authority selection.
+  struct RuntimeBreakdown
+  {
+    double pre_continuation_ms{};
+    double continuation_build_ms{};
+    double continuation_proof_ms{};
+    double terminal_build_ms{};
+    double terminal_dynamic_ms{};
+    double terminal_wall_ms{};
+  } runtime;
   Reason reason{Reason::MissingPlan};
   artifact::CursorReason cursor_reason{artifact::CursorReason::InvalidArtifact};
   artifact::ActuationReason actuation_reason{

@@ -7394,6 +7394,11 @@ struct RateResolvedPhysicalShadowEvaluation
 
 struct RateResolvedRetainedShadowEvaluation
 {
+  rate_resolved_retained::Result::RuntimeBreakdown runtime;
+  rate_resolved_retained::Result::RuntimeBreakdown aggregate_runtime;
+  std::size_t plan_evaluation_count{};
+  double plan_evaluation_elapsed_ms{};
+  double orchestration_elapsed_ms{};
   rate_resolved_retained::Reason reason{
     rate_resolved_retained::Reason::MissingPlan};
   rate_resolved_shadow::artifact::CursorReason cursor_reason{
@@ -25770,6 +25775,7 @@ struct MPC
     }
     evaluation.obstacle_count = request->obstacles.obstacles.size();
     const auto result = rate_resolved_retained::evaluate(request.value());
+    evaluation.runtime = result.runtime;
     evaluation.decision_id = request->decision_id;
     evaluation.observation_origin_sec = request->now_sec;
     evaluation.control_origin_sec = request->control_origin_sec;
@@ -25936,8 +25942,34 @@ struct MPC
   {
     const auto started = SteadyClock::now();
     RateResolvedRetainedShadowEvaluation final_evaluation;
+    rate_resolved_retained::Result::RuntimeBreakdown aggregate_runtime;
+    std::size_t plan_evaluation_count{};
+    double plan_evaluation_elapsed_ms{};
+    const auto accumulate_runtime = [&aggregate_runtime](
+      const rate_resolved_retained::Result::RuntimeBreakdown & runtime) {
+        aggregate_runtime.pre_continuation_ms += runtime.pre_continuation_ms;
+        aggregate_runtime.continuation_build_ms +=
+          runtime.continuation_build_ms;
+        aggregate_runtime.continuation_proof_ms +=
+          runtime.continuation_proof_ms;
+        aggregate_runtime.terminal_build_ms += runtime.terminal_build_ms;
+        aggregate_runtime.terminal_dynamic_ms += runtime.terminal_dynamic_ms;
+        aggregate_runtime.terminal_wall_ms += runtime.terminal_wall_ms;
+      };
+    const auto finish_retained = [&] (
+      RateResolvedRetainedShadowEvaluation evaluation) {
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - started).count();
+        evaluation.aggregate_runtime = aggregate_runtime;
+        evaluation.plan_evaluation_count = plan_evaluation_count;
+        evaluation.plan_evaluation_elapsed_ms = plan_evaluation_elapsed_ms;
+        evaluation.orchestration_elapsed_ms = std::max(
+          0.0, elapsed_ms - plan_evaluation_elapsed_ms);
+        evaluation.elapsed_ms = elapsed_ms;
+        return evaluation;
+      };
     if (rate_resolved_track_cruise_certified_plan_store_ == nullptr) {
-      return final_evaluation;
+      return finish_retained(std::move(final_evaluation));
     }
 
     const auto candidate_entry =
@@ -26014,6 +26046,17 @@ struct MPC
         evaluation.on_trajectory_steering_difference_rad =
           connector_result.steering_difference_rad;
       };
+    const auto evaluate_plan = [&] (
+      std::shared_ptr<const rate_resolved_certified::CertifiedPlan> plan,
+      const rate_resolved_retained::ExecutionClock execution_clock) {
+        auto evaluation = evaluate_rate_resolved_track_cruise_plan(
+          problem, now_sec, evaluation_intent, std::move(plan),
+          execution_clock);
+        ++plan_evaluation_count;
+        plan_evaluation_elapsed_ms += evaluation.elapsed_ms;
+        accumulate_runtime(evaluation.runtime);
+        return evaluation;
+      };
     const auto copy_candidate_diagnostics = [](
       const RateResolvedRetainedShadowEvaluation & source,
       RateResolvedRetainedShadowEvaluation & destination)
@@ -26066,8 +26109,8 @@ struct MPC
       rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate;
 
     if (candidate_plan != nullptr) {
-      final_evaluation = evaluate_rate_resolved_track_cruise_plan(
-        problem, now_sec, evaluation_intent, candidate_plan,
+      final_evaluation = evaluate_plan(
+        candidate_plan,
         candidate_is_published_bundle ?
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::PublishedPlan,
@@ -26122,10 +26165,7 @@ struct MPC
           candidate_is_executed && !candidate_is_published_bundle;
         final_evaluation.selected_from_published_bundle_source =
           candidate_is_published_bundle;
-        final_evaluation.elapsed_ms = std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - started)
-          .count();
-        return final_evaluation;
+        return finish_retained(std::move(final_evaluation));
       }
     }
 
@@ -26133,9 +26173,8 @@ struct MPC
       published_bundle_plan != nullptr &&
       !candidate_is_published_bundle)
     {
-      auto published_bundle_evaluation =
-        evaluate_rate_resolved_track_cruise_plan(
-        problem, now_sec, evaluation_intent, published_bundle_plan,
+      auto published_bundle_evaluation = evaluate_plan(
+        published_bundle_plan,
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::PublishedPlan,
           published_bundle_entry.publication_control_origin_sec,
@@ -26154,10 +26193,7 @@ struct MPC
         published_bundle_evaluation.selected_from_published_bundle_source =
           true;
         attach_connector(published_bundle_evaluation);
-        published_bundle_evaluation.elapsed_ms =
-          std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - started).count();
-        return published_bundle_evaluation;
+        return finish_retained(std::move(published_bundle_evaluation));
       }
       final_evaluation = std::move(published_bundle_evaluation);
     }
@@ -26208,8 +26244,8 @@ struct MPC
       const double candidate_minimum_dynamic_clearance_m =
         final_evaluation.candidate_minimum_dynamic_clearance_m;
       const bool candidate_attempted = final_evaluation.candidate_attempted;
-      auto executed_evaluation = evaluate_rate_resolved_track_cruise_plan(
-        problem, now_sec, evaluation_intent, executed_plan,
+      auto executed_evaluation = evaluate_plan(
+        executed_plan,
         rate_resolved_retained::ExecutionClock{
           rate_resolved_retained::ExecutionClockKind::PublishedPlan,
           executed_entry.first_published_control_origin_sec,
@@ -26286,8 +26322,8 @@ struct MPC
       const auto selected_epoch_plan = bank.plan_for_side(live.side_sign);
       RateResolvedRetainedShadowEvaluation sibling_evaluation;
       if (sibling_plan != nullptr) {
-        sibling_evaluation = evaluate_rate_resolved_track_cruise_plan(
-          problem, now_sec, evaluation_intent, sibling_plan,
+        sibling_evaluation = evaluate_plan(
+          sibling_plan,
           rate_resolved_retained::ExecutionClock{
             new_candidate_execution_clock_kind,
             std::numeric_limits<double>::quiet_NaN(),
@@ -26339,10 +26375,7 @@ struct MPC
         sibling_evaluation.overtake_sibling_adoption_token =
           resolution.token;
         attach_connector(sibling_evaluation);
-        sibling_evaluation.elapsed_ms =
-          std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - started).count();
-        return sibling_evaluation;
+        return finish_retained(std::move(sibling_evaluation));
       }
     }
 
@@ -26396,8 +26429,8 @@ struct MPC
         final_evaluation.associated_sibling_inspected = true;
         final_evaluation.associated_sibling_source_sequence =
           sequence_of(plan);
-        auto branch_evaluation = evaluate_rate_resolved_track_cruise_plan(
-          problem, now_sec, evaluation_intent, plan,
+        auto branch_evaluation = evaluate_plan(
+          plan,
           rate_resolved_retained::ExecutionClock{
             new_candidate_execution_clock_kind,
           std::numeric_limits<double>::quiet_NaN(),
@@ -26450,17 +26483,11 @@ struct MPC
             source_identity_only, side_sign);
         }
         attach_connector(branch_evaluation);
-        branch_evaluation.elapsed_ms =
-          std::chrono::duration<double, std::milli>(
-          SteadyClock::now() - started).count();
-        return branch_evaluation;
+        return finish_retained(std::move(branch_evaluation));
       }
     }
     attach_connector(final_evaluation);
-    final_evaluation.elapsed_ms =
-      std::chrono::duration<double, std::milli>(SteadyClock::now() - started)
-      .count();
-    return final_evaluation;
+    return finish_retained(std::move(final_evaluation));
   }
 
   void record_rate_resolved_stop_lattice_shadow(const double now_sec)
@@ -26747,7 +26774,14 @@ struct MPC
           "steering_handoff:%.6f/steering_final:%.6f/"
           "wall_valid:%d/wall_clear:%d/wall_reason:%s/wall_checked:%lu/"
           "wall_reject_index:%lu/wall_reject_pose:%d/(%.3f,%.3f,%.3f)/"
-          "dynamic_checked:%lu/dynamic_clearance:%.3f/blocker:%s",
+          "dynamic_checked:%lu/dynamic_clearance:%.3f/blocker:%s, "
+          "runtime=pre:%.3f/continuation_build:%.3f/"
+          "continuation_proof:%.3f/terminal_build:%.3f/"
+          "terminal_dynamic:%.3f/terminal_wall:%.3fms, "
+          "runtime_aggregate=attempts:%lu/evaluations:%.3f/"
+          "orchestration:%.3f/pre:%.3f/continuation_build:%.3f/"
+          "continuation_proof:%.3f/terminal_build:%.3f/"
+          "terminal_dynamic:%.3f/terminal_wall:%.3fms",
           static_cast<unsigned long>(retained.decision_id),
           rate_resolved_track_cruise_retained_trace_initialized_ ?
           rate_resolved_retained::to_string(
@@ -26835,7 +26869,22 @@ struct MPC
             retained.terminal_stop_dynamic_checked_pose_count),
           retained.terminal_stop_minimum_dynamic_clearance_m,
           retained.terminal_stop_blocking_obstacle_id.empty() ?
-          "none" : retained.terminal_stop_blocking_obstacle_id.c_str());
+          "none" : retained.terminal_stop_blocking_obstacle_id.c_str(),
+          retained.runtime.pre_continuation_ms,
+          retained.runtime.continuation_build_ms,
+          retained.runtime.continuation_proof_ms,
+          retained.runtime.terminal_build_ms,
+          retained.runtime.terminal_dynamic_ms,
+          retained.runtime.terminal_wall_ms,
+          static_cast<unsigned long>(retained.plan_evaluation_count),
+          retained.plan_evaluation_elapsed_ms,
+          retained.orchestration_elapsed_ms,
+          retained.aggregate_runtime.pre_continuation_ms,
+          retained.aggregate_runtime.continuation_build_ms,
+          retained.aggregate_runtime.continuation_proof_ms,
+          retained.aggregate_runtime.terminal_build_ms,
+          retained.aggregate_runtime.terminal_dynamic_ms,
+          retained.aggregate_runtime.terminal_wall_ms);
         rate_resolved_track_cruise_retained_last_trace_sec_ = now_sec;
         rate_resolved_track_cruise_retained_suppressed_transition_count_ = 0U;
       }
@@ -28838,13 +28887,24 @@ struct MPC
     // origin and one seven-state actuation time base.
     auto effective_intent = intent;
     bool published_stop_retained = false;
+    double primary_retained_ms{};
+    double stop_lattice_ms{};
+    double stop_successor_ms{};
+    double published_stop_join_ms{};
+    double failure_snapshot_ms{};
+    double gate_a_join_ms{};
+    double previous_intent_join_ms{};
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
       problem, now_sec, intent);
+    primary_retained_ms = retained.elapsed_ms;
     const auto ordinary_retained = retained;
     if (!retained.production_authority.has_value()) {
+      const auto stop_lattice_started = SteadyClock::now();
       auto lattice_alternate =
         evaluate_rate_resolved_stop_lattice_current_world_alternate(
         problem, now_sec, intent, ordinary_retained);
+      stop_lattice_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - stop_lattice_started).count();
       if (lattice_alternate.production_authority.has_value()) {
         ++rate_resolved_stop_lattice_shadow_telemetry_window_.
           current_world_alternate_selected_count;
@@ -28863,15 +28923,21 @@ struct MPC
     }
     std::optional<PublishedStopSuccessorEvaluation> stop_successor;
     if (!retained.production_authority.has_value()) {
+      const auto stop_successor_started = SteadyClock::now();
       stop_successor = evaluate_published_stop_successor_shadow(
         now_sec, intent, retained.reason);
+      stop_successor_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - stop_successor_started).count();
     }
     // Observation only: capture the immutable current-world problem at the
     // proof boundary before atomic intent bridging can replace the rejected
     // proposed intent.  This never solves, stores, publishes or changes
     // production authority.
+    const auto failure_snapshot_started = SteadyClock::now();
     record_rate_resolved_terminal_contingency_failure_snapshot(
       problem, submission_draft, now_sec, intent, ordinary_retained);
+    failure_snapshot_ms = std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - failure_snapshot_started).count();
     if (
       !retained.production_authority.has_value() &&
       stop_successor.has_value() && stop_successor->request.has_value() &&
@@ -28885,8 +28951,11 @@ struct MPC
         stop_successor->request.value(), stop_successor->result,
         stop_sequence);
       if (bundle.plan != nullptr) {
+        const auto published_stop_join_started = SteadyClock::now();
         auto joined_stop = evaluate_current_world_stop_successor_plan(
           problem, now_sec, intent, bundle.plan);
+        published_stop_join_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - published_stop_join_started).count();
         if (joined_stop.production_authority.has_value()) {
           retained = std::move(joined_stop);
         }
@@ -28982,12 +29051,15 @@ struct MPC
       }
       if (gate_a_identity_matches && gate_a_certified_plan != nullptr) {
         gate_a_plan_attempted = true;
+        const auto gate_a_join_started = SteadyClock::now();
         retained = evaluate_rate_resolved_track_cruise_plan(
           problem, now_sec, intent, gate_a_certified_plan,
           rate_resolved_retained::ExecutionClock{
             rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
             std::numeric_limits<double>::quiet_NaN(),
             std::numeric_limits<double>::quiet_NaN()});
+        gate_a_join_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - gate_a_join_started).count();
         gate_a_plan_joined = retained.production_authority.has_value();
       }
       auto previous_retained =
@@ -28998,9 +29070,12 @@ struct MPC
         !retained.production_authority.has_value() &&
         !previous_stop_authority)
       {
+        const auto previous_intent_join_started = SteadyClock::now();
         previous_retained =
           evaluate_rate_resolved_track_cruise_retained_shadow(
           problem, now_sec, previous_intent);
+        previous_intent_join_ms = std::chrono::duration<double, std::milli>(
+          SteadyClock::now() - previous_intent_join_started).count();
       }
       const auto atomic_resolution =
         mpcc_contract::resolve_atomic_intent_admission(
@@ -29109,7 +29184,11 @@ struct MPC
         "Canonical production join runtime: decision=%lu, total=%.3fms, "
         "regions=preentry-draft:%.3f/submission-draft:%.3f/"
         "retained-join:%.3f/output-successor:%.3fms, intent=%s, "
-        "preentry=%d, retained=%d, selected=%d",
+        "join_detail=primary:%.3f/stop_lattice:%.3f/stop_successor:%.3f/"
+        "published_stop_join:%.3f/failure_snapshot:%.3f/gate_a:%.3f/"
+        "previous_intent:%.3fms, "
+        "retained_attempts=%lu/retained_evaluations:%.3f/"
+        "retained_orchestration:%.3f, preentry=%d, retained=%d, selected=%d",
         static_cast<unsigned long>(active_control_decision_id_),
         production_total_ms,
         std::chrono::duration<double, std::milli>(
@@ -29121,6 +29200,12 @@ struct MPC
         std::chrono::duration<double, std::milli>(
           production_finished - retained_join_finished).count(),
         mpcc_contract::to_string(intent),
+        primary_retained_ms, stop_lattice_ms, stop_successor_ms,
+        published_stop_join_ms, failure_snapshot_ms, gate_a_join_ms,
+        previous_intent_join_ms,
+        static_cast<unsigned long>(retained.plan_evaluation_count),
+        retained.plan_evaluation_elapsed_ms,
+        retained.orchestration_elapsed_ms,
         pending_rate_resolved_publication_successor_->
         preentry_draft.has_value() ? 1 : 0,
         retained.production_authority.has_value() ? 1 : 0,

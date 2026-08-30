@@ -22,6 +22,7 @@
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp>
+#include <multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp>
 #include <multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp>
@@ -154,6 +155,8 @@ namespace rate_resolved_certified =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan;
 namespace rate_resolved_normal_branch_bank =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_normal_branch_bank;
+namespace rate_resolved_overtake_branch_bank =
+  ::multi_purpose_mpc_ros::mpcc_rate_resolved_overtake_branch_bank;
 namespace rate_resolved_command =
   ::multi_purpose_mpc_ros::mpcc_rate_resolved_command_candidate;
 namespace rate_resolved_dynamic =
@@ -6769,6 +6772,84 @@ evaluate_rate_resolved_normal_avoidance_population(
   return result;
 }
 
+RateResolvedPipelineEvaluation
+evaluate_rate_resolved_active_overtake_population(
+  const rate_resolved_shadow::Snapshot & source,
+  const rate_resolved_physical_wall::Snapshot & physical_source,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> &
+  negative_solver_context,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> &
+  positive_solver_context,
+  const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
+  const std::shared_ptr<rate_resolved_overtake_branch_bank::Bank> & branch_bank)
+{
+  const int selected_side =
+    source.identity.source_context.execution_side_sign;
+  const auto evaluate_side = [&source, &physical_source](
+      const int side_sign,
+      const std::shared_ptr<rate_resolved_shadow::SolverContext> & context) {
+      const std::shared_ptr<rate_resolved_certified::Store>
+      observation_only_store;
+      return evaluate_rate_resolved_current_world_population(
+        source, physical_source, side_sign, context, observation_only_store);
+    };
+  const auto certified = [](const RateResolvedPipelineEvaluation & evaluation) {
+      return
+        evaluation.solver.outcome == rate_resolved_shadow::Outcome::Solved &&
+        evaluation.physical.has_value() &&
+        evaluation.physical->outcome ==
+        rate_resolved_physical_wall::Outcome::Accepted &&
+        evaluation.dynamic.has_value() && evaluation.dynamic->valid &&
+        evaluation.dynamic->clear &&
+        evaluation.certified_plan.plan != nullptr;
+    };
+
+  // Both sides use one immutable observation epoch. They have independent
+  // persistent numerical contexts, so a failed warm start on the selected
+  // side cannot contaminate the opposite-side evidence. This runs only in the
+  // background LatestOnlyWorker; production authority remains selected-side.
+  auto negative_future = std::async(
+    std::launch::async,
+    [&]() {return evaluate_side(-1, negative_solver_context);});
+  auto positive = evaluate_side(1, positive_solver_context);
+  auto negative = negative_future.get();
+
+  const auto negative_plan = certified(negative.pipeline) ?
+    negative.pipeline.certified_plan.plan : nullptr;
+  const auto positive_plan = certified(positive.pipeline) ?
+    positive.pipeline.certified_plan.plan : nullptr;
+  const std::string bank_detail = branch_bank != nullptr ?
+    rate_resolved_overtake_branch_bank::to_string(
+    branch_bank->replace(source, negative_plan, positive_plan)) :
+    "not-requested";
+
+  auto selected = selected_side < 0 ? std::move(negative) :
+    std::move(positive);
+  const auto sibling_plan = selected_side < 0 ? positive_plan : negative_plan;
+  const bool selected_certified = certified(selected.pipeline);
+  const bool sibling_certified = sibling_plan != nullptr;
+  std::string store_detail{"not-requested"};
+  if (selected_certified && certified_plan_store != nullptr) {
+    store_detail = rate_resolved_certified::to_string(
+      certified_plan_store->replace_pair(
+        selected.pipeline.certified_plan.plan, sibling_plan));
+  }
+
+  std::ostringstream detail;
+  detail << "active-overtake-dual/selected=" << selected_side
+         << "/selected_certified=" << (selected_certified ? 1 : 0)
+         << "/sibling_certified=" << (sibling_certified ? 1 : 0)
+         << "/negative=" << (negative_plan != nullptr ? "certified" : "rejected")
+         << "/positive=" << (positive_plan != nullptr ? "certified" : "rejected")
+         << "/selected_source=" << selected.candidate_source
+         << "/selected_candidates=" << selected.candidate_count
+         << "/bank=" << bank_detail << "/store=" << store_detail
+         << "/selected_result=" << selected.detail;
+  selected.pipeline.solver.detail =
+    detail.str() + ", pipeline=" + selected.pipeline.solver.detail;
+  return std::move(selected.pipeline);
+}
+
 RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   const rate_resolved_shadow::Snapshot & source,
   std::optional<rate_resolved_physical_wall::Snapshot> physical_source,
@@ -6781,7 +6862,13 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   normal_homotopy_owner,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
   const std::shared_ptr<rate_resolved_normal_branch_bank::Bank> &
-  normal_branch_bank)
+  normal_branch_bank,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> &
+  overtake_negative_solver_context,
+  const std::shared_ptr<rate_resolved_shadow::SolverContext> &
+  overtake_positive_solver_context,
+  const std::shared_ptr<rate_resolved_overtake_branch_bank::Bank> &
+  overtake_branch_bank)
 {
   const auto started = SteadyClock::now();
   const auto rejected_pipeline = [&source, &started](
@@ -6794,8 +6881,14 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
         source.identity.snapshot_sec + compute_ms * 1.0e-3,
         compute_ms, std::move(detail));
       return rejected;
-    };
+  };
   const auto intent = source.identity.source_context.intent;
+  const bool active_overtake_dual_intent =
+    intent == mpcc_contract::ControlIntent::ShiftOut ||
+    intent == mpcc_contract::ControlIntent::Pass;
+  if (overtake_branch_bank != nullptr && !active_overtake_dual_intent) {
+    overtake_branch_bank->clear();
+  }
   const bool normal_dynamic_avoidance =
     (intent == mpcc_contract::ControlIntent::Cruise ||
     intent == mpcc_contract::ControlIntent::Follow) &&
@@ -6835,9 +6928,32 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   }
   if (mpcc_contract::canonical_normal_intent_requires_execution_side(intent)) {
     if (!physical_source.has_value()) {
+      if (
+        overtake_branch_bank != nullptr &&
+        active_overtake_dual_intent)
+      {
+        const auto bank_reason = overtake_branch_bank->replace(
+          source, nullptr, nullptr);
+        if (
+          bank_reason !=
+          rate_resolved_overtake_branch_bank::ReplaceReason::Accepted &&
+          bank_reason !=
+          rate_resolved_overtake_branch_bank::ReplaceReason::StaleSource)
+        {
+          overtake_branch_bank->clear();
+        }
+      }
       return rejected_pipeline(
         rate_resolved_shadow::Outcome::BuildRejected,
         "current-world Overtake population requires physical snapshot");
+    }
+    if (
+      active_overtake_dual_intent)
+    {
+      return evaluate_rate_resolved_active_overtake_population(
+        source, physical_source.value(),
+        overtake_negative_solver_context, overtake_positive_solver_context,
+        certified_plan_store, overtake_branch_bank);
     }
     const int pass_side_sign =
       source.identity.source_context.execution_side_sign;
@@ -7535,10 +7651,16 @@ struct MPC
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_normal_avoidance_positive_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_overtake_negative_solver_context_ =
+        std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_overtake_positive_solver_context_ =
+        std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_normal_homotopy_owner_ =
         std::make_shared<RateResolvedNormalHomotopyOwner>();
       rate_resolved_normal_branch_bank_ =
         std::make_shared<rate_resolved_normal_branch_bank::Bank>();
+      rate_resolved_overtake_branch_bank_ =
+        std::make_shared<rate_resolved_overtake_branch_bank::Bank>();
       rate_resolved_track_cruise_shadow_mailbox_ =
         std::make_shared<rate_resolved_shadow::Mailbox>();
       rate_resolved_track_cruise_shadow_worker_ =
@@ -23841,8 +23963,11 @@ struct MPC
       rate_resolved_track_cruise_shadow_solver_context_ == nullptr ||
       rate_resolved_normal_avoidance_negative_solver_context_ == nullptr ||
       rate_resolved_normal_avoidance_positive_solver_context_ == nullptr ||
+      rate_resolved_overtake_negative_solver_context_ == nullptr ||
+      rate_resolved_overtake_positive_solver_context_ == nullptr ||
       rate_resolved_normal_homotopy_owner_ == nullptr ||
       rate_resolved_normal_branch_bank_ == nullptr ||
+      rate_resolved_overtake_branch_bank_ == nullptr ||
       rate_resolved_track_cruise_shadow_next_sequence_ ==
       std::numeric_limits<std::uint64_t>::max())
     {
@@ -23913,6 +24038,11 @@ struct MPC
     const auto normal_homotopy_owner =
       rate_resolved_normal_homotopy_owner_;
     const auto normal_branch_bank = rate_resolved_normal_branch_bank_;
+    const auto overtake_negative_solver_context =
+      rate_resolved_overtake_negative_solver_context_;
+    const auto overtake_positive_solver_context =
+      rate_resolved_overtake_positive_solver_context_;
+    const auto overtake_branch_bank = rate_resolved_overtake_branch_bank_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
     const auto submission =
@@ -23920,6 +24050,8 @@ struct MPC
       [snapshot = std::move(snapshot.value()), mailbox, solver_context,
         normal_negative_solver_context, normal_positive_solver_context,
         normal_homotopy_owner, normal_branch_bank,
+        overtake_negative_solver_context, overtake_positive_solver_context,
+        overtake_branch_bank,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
         physical_registered, certified_plan_store]() mutable {
         if (!physical_registered) {
@@ -23929,7 +24061,9 @@ struct MPC
           snapshot, std::move(physical_snapshot), solver_context,
           normal_negative_solver_context, normal_positive_solver_context,
           normal_homotopy_owner,
-          certified_plan_store, normal_branch_bank);
+          certified_plan_store, normal_branch_bank,
+          overtake_negative_solver_context, overtake_positive_solver_context,
+          overtake_branch_bank);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
           static_cast<void>(physical_mailbox->publish(
@@ -25790,6 +25924,10 @@ struct MPC
       rate_resolved_track_cruise_certified_plan_store_ != nullptr ?
       rate_resolved_track_cruise_certified_plan_store_->state() :
       rate_resolved_certified::StoreState{};
+    const auto overtake_branch_bank_state =
+      rate_resolved_overtake_branch_bank_ != nullptr ?
+      rate_resolved_overtake_branch_bank_->state() :
+      rate_resolved_overtake_branch_bank::State{};
     const double denominator = static_cast<double>(
       std::max<std::uint64_t>(1U, window.consumed_count));
     const std::uint64_t physical_evaluated_count =
@@ -26320,6 +26458,27 @@ struct MPC
       rate_resolved_retained::to_string(
         window.last_retained.feedback_shadow_proof_reason),
       window.last_retained.feedback_shadow_proof_available ? 1 : 0);
+    if (overtake_branch_bank_state.latest_source_sequence > 0U) {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"),
+        "Rate-resolved active Overtake branch evidence: "
+        "seq=%lu, selected=%d, negative=%d, positive=%d, "
+        "accepted=%lu, invalid_source=%lu, invalid_plan=%lu, stale=%lu, "
+        "last=%s, authority=observation-only",
+        static_cast<unsigned long>(
+          overtake_branch_bank_state.latest_source_sequence),
+        overtake_branch_bank_state.selected_execution_side_sign,
+        overtake_branch_bank_state.negative_available ? 1 : 0,
+        overtake_branch_bank_state.positive_available ? 1 : 0,
+        static_cast<unsigned long>(overtake_branch_bank_state.accepted_count),
+        static_cast<unsigned long>(
+          overtake_branch_bank_state.invalid_source_count),
+        static_cast<unsigned long>(
+          overtake_branch_bank_state.invalid_plan_count),
+        static_cast<unsigned long>(overtake_branch_bank_state.stale_source_count),
+        rate_resolved_overtake_branch_bank::to_string(
+          overtake_branch_bank_state.last_reason));
+    }
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
       RCLCPP_WARN(
@@ -28281,10 +28440,16 @@ struct MPC
   rate_resolved_normal_avoidance_negative_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_normal_avoidance_positive_solver_context_;
+  std::shared_ptr<rate_resolved_shadow::SolverContext>
+  rate_resolved_overtake_negative_solver_context_;
+  std::shared_ptr<rate_resolved_shadow::SolverContext>
+  rate_resolved_overtake_positive_solver_context_;
   std::shared_ptr<RateResolvedNormalHomotopyOwner>
   rate_resolved_normal_homotopy_owner_;
   std::shared_ptr<rate_resolved_normal_branch_bank::Bank>
   rate_resolved_normal_branch_bank_;
+  std::shared_ptr<rate_resolved_overtake_branch_bank::Bank>
+  rate_resolved_overtake_branch_bank_;
   std::shared_ptr<rate_resolved_shadow::Mailbox>
   rate_resolved_track_cruise_shadow_mailbox_;
   std::unique_ptr<LatestOnlyWorker>

@@ -1605,8 +1605,16 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "draft.context_epoch = mpcc_lite_async_context_epoch_" in draft
     assert "draft.snapshot_sec = now_sec" in draft
     assert "resolve_rate_resolved_gate_a_tactical_input(" in draft
+    assert "live_behavior.overtake_selected_mission" in draft
+    assert "live_behavior.validated_overtake_entry_longitudinal_owner" in draft
+    assert "CurrentWorldPreentry" not in draft
     assert "live_behavior.mpcc_lite_same_side_replan_mission" in draft
     assert "live_behavior.mpcc_lite_cross_side_replan_mission" in draft
+    assert "rate_resolved_preentry_selected_mission_hint" not in draft
+    assert (
+        "live_behavior.rate_resolved_preentry_tactical_source_sequence :\n"
+        "      active_control_decision_id_" in draft
+    )
     assert "assessment.side = tactical_input.selected_side_sign" in draft
     assert "draft.tactical_input_source = tactical_input.source" in draft
     assert "assessment.side = selection.selected_side_sign" not in draft
@@ -1657,6 +1665,8 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     assert "build_rate_resolved_current_world_request(" in consume
     assert "rate_resolved_retained::evaluate(" in consume
     assert "resolve_preentry_tactical_identity(" in consume
+    assert "RateResolvedGateATacticalInputSource::CurrentWorldPreentry" in consume
+    assert "current_world_mission_live_selection_valid" in consume
     assert "tactical_identity.current_world_observation_permitted" in consume
     assert "tactical_identity.tactical_authority_current" in consume
     assert "current_world_joinable && tactical_identity.tactical_authority_current" in consume

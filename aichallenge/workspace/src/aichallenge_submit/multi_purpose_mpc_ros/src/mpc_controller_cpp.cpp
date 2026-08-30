@@ -10395,26 +10395,33 @@ struct MPC
       reject_reason = "accepted Return Gate A";
       return draft;
     }
-    const auto & selection =
-      live_behavior.rate_resolved_preentry_branch_selection;
-    const auto & hint =
-      live_behavior.rate_resolved_preentry_selected_mission_hint;
     const bool active_execution =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
       overtake_line_state_.phase == OvertakeLinePhase::Pass ||
       overtake_line_state_.phase == OvertakeLinePhase::FollowPrepare;
+    const bool current_world_preentry_owned =
+      !active_execution && live_behavior.state == V2XBehaviorState::Overtake &&
+      live_behavior.validated_overtake_entry_longitudinal_owner &&
+      live_behavior.overtake_selected_mission.has_value();
+    const int current_world_preentry_side_sign =
+      current_world_preentry_owned ?
+      live_behavior.overtake_selected_mission->pass_side_sign : 0;
     const auto tactical_input =
       overtake_core::resolve_rate_resolved_gate_a_tactical_input(
       overtake_core::RateResolvedGateATacticalInputRequest{
         active_execution,
         overtake_line_state_.pass_side_sign,
-        selection.valid ? selection.selected_side_sign : 0,
-        hint,
+        current_world_preentry_side_sign,
+        current_world_preentry_owned ?
+        live_behavior.overtake_selected_mission : std::nullopt,
         live_behavior.mpcc_lite_same_side_replan_mission,
         live_behavior.mpcc_lite_cross_side_replan_mission});
+    const std::uint64_t tactical_source_sequence = active_execution ?
+      live_behavior.rate_resolved_preentry_tactical_source_sequence :
+      active_control_decision_id_;
     if (
       !tactical_input.valid || !tactical_input.mission.has_value() ||
-      live_behavior.rate_resolved_preentry_tactical_source_sequence == 0U ||
+      tactical_source_sequence == 0U ||
       live_behavior.target_vehicle_id.empty())
     {
       reject_reason = active_execution ?
@@ -10470,7 +10477,7 @@ struct MPC
       target_provenance.observation_generation;
     draft.target_provenance = target_provenance;
     draft.tactical_source_sequence =
-      live_behavior.rate_resolved_preentry_tactical_source_sequence;
+      tactical_source_sequence;
     draft.tactical_input_source = tactical_input.source;
     draft.prospective_mission_generation = std::max<std::uint64_t>(
       1U, overtake_line_state_.mission_generation + 1U);
@@ -25160,13 +25167,26 @@ struct MPC
     rate_resolved_preentry_execution_shadow_complete_count_ += complete ? 1U : 0U;
     const bool return_transition =
       result->kind == RateResolvedIntentTransitionKind::ReturnGateA;
+    const bool current_world_preentry_result =
+      result->tactical_input_source ==
+      overtake_core::RateResolvedGateATacticalInputSource::CurrentWorldPreentry;
     const auto & live_selection =
       live_behavior.rate_resolved_preentry_branch_selection;
-    const bool mission_live_selection_valid =
+    const bool async_mission_live_selection_valid =
       live_selection.valid &&
       (live_selection.selected_side_sign == -1 ||
       live_selection.selected_side_sign == 1) &&
       live_behavior.rate_resolved_preentry_tactical_source_sequence != 0U;
+    const bool current_world_mission_live_selection_valid =
+      live_behavior.state == V2XBehaviorState::Overtake &&
+      live_behavior.validated_overtake_entry_longitudinal_owner &&
+      live_behavior.overtake_selected_mission.has_value() &&
+      live_behavior.overtake_selected_mission->feasible &&
+      (live_behavior.overtake_selected_mission->pass_side_sign == -1 ||
+      live_behavior.overtake_selected_mission->pass_side_sign == 1);
+    const bool mission_live_selection_valid = current_world_preentry_result ?
+      current_world_mission_live_selection_valid :
+      async_mission_live_selection_valid;
     const bool live_selection_valid = return_transition ?
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
       overtake_line_state_.mission_return_preflight_reference_active &&
@@ -25176,6 +25196,13 @@ struct MPC
       return_transition ? overtake_line_state_.mission_generation :
       std::max<std::uint64_t>(
         1U, overtake_line_state_.mission_generation + 1U);
+    const int mission_live_side_sign = current_world_preentry_result &&
+      live_behavior.overtake_selected_mission.has_value() ?
+      live_behavior.overtake_selected_mission->pass_side_sign :
+      live_selection.selected_side_sign;
+    const std::uint64_t mission_live_tactical_sequence =
+      current_world_preentry_result ? active_control_decision_id_ :
+      live_behavior.rate_resolved_preentry_tactical_source_sequence;
     const auto tactical_identity =
       mpcc_contract::resolve_preentry_tactical_identity(
       mpcc_contract::PreentryTacticalIdentityRequest{
@@ -25186,10 +25213,10 @@ struct MPC
         live_behavior.target_vehicle_id,
         live_selection_valid,
         return_transition ? overtake_line_state_.pass_side_sign :
-        live_selection.selected_side_sign,
+        mission_live_side_sign,
         current_prospective_generation,
         return_transition ? result->tactical_source_sequence :
-        live_behavior.rate_resolved_preentry_tactical_source_sequence});
+        mission_live_tactical_sequence});
     const auto target_validation = validate_selected_target_provenance(
       result->target_provenance, live_behavior,
       std::max(0.0, now_sec - result->snapshot_sec));
@@ -25332,7 +25359,8 @@ struct MPC
         result->target_id.c_str(),
         result->target_id == live_behavior.target_vehicle_id ? 1 : 0,
         result->selected_side_sign,
-        live_behavior.rate_resolved_preentry_branch_selection.selected_side_sign,
+        return_transition ? overtake_line_state_.pass_side_sign :
+        mission_live_side_sign,
         overtake_core::to_string(result->tactical_input_source),
         static_cast<unsigned long>(result->prospective_mission_generation),
         static_cast<unsigned long>(
@@ -25368,7 +25396,8 @@ struct MPC
         tactical_identity.exact ? 1 : 0,
         tactical_identity.tactical_authority_current ? 1 : 0,
         static_cast<unsigned long>(
-          live_behavior.rate_resolved_preentry_tactical_source_sequence),
+          return_transition ? result->tactical_source_sequence :
+          mission_live_tactical_sequence),
         rate_resolved_retained::to_string(join_reason),
         current_world_joinable ? 1 : 0, authority_ready ? 1 : 0,
         live_behavior.rate_resolved_mission_gate_a_proposal.has_value() ?
@@ -29199,8 +29228,9 @@ struct MPC
         mpcc_contract::to_string(intent), draft_reject_reason.c_str());
     }
     if (!preentry_execution_draft.has_value() &&
+      (last_v2x_behavior_output_.overtake_selected_mission.has_value() ||
       last_v2x_behavior_output_.
-      rate_resolved_preentry_selected_mission_hint.has_value())
+      rate_resolved_preentry_selected_mission_hint.has_value()))
     {
       static rclcpp::Clock preentry_draft_log_clock{RCL_STEADY_TIME};
       RCLCPP_WARN_THROTTLE(

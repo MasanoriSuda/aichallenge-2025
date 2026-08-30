@@ -84,8 +84,8 @@ const char * to_string(const RateResolvedGateATacticalInputSource source) noexce
   switch (source) {
     case RateResolvedGateATacticalInputSource::None:
       return "none";
-    case RateResolvedGateATacticalInputSource::PreentrySelection:
-      return "preentry-selection";
+    case RateResolvedGateATacticalInputSource::CurrentWorldPreentry:
+      return "current-world-preentry";
     case RateResolvedGateATacticalInputSource::ActiveSameSideReplacement:
       return "active-same-side";
     case RateResolvedGateATacticalInputSource::ActiveCrossSideReplacement:
@@ -137,14 +137,14 @@ resolve_rate_resolved_gate_a_tactical_input(
   }
 
   if (candidate_matches(
-      request.preentry_selected_mission,
-      request.preentry_selected_side_sign))
+      request.current_world_preentry_mission,
+      request.current_world_preentry_side_sign))
   {
     resolution.valid = true;
-    resolution.selected_side_sign = request.preentry_selected_side_sign;
+    resolution.selected_side_sign = request.current_world_preentry_side_sign;
     resolution.source =
-      RateResolvedGateATacticalInputSource::PreentrySelection;
-    resolution.mission = request.preentry_selected_mission;
+      RateResolvedGateATacticalInputSource::CurrentWorldPreentry;
+    resolution.mission = request.current_world_preentry_mission;
   }
   return resolution;
 }

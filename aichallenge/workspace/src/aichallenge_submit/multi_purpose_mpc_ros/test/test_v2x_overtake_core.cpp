@@ -18479,7 +18479,7 @@ TEST(V2XOvertakeCoreMpccLite, ExtendedBranchPrefersCompleteMission)
   EXPECT_DOUBLE_EQ(resolution.candidate->goal_lateral_m, 0.7);
 }
 
-TEST(V2XOvertakeCoreMpccLite, GateATacticalInputUsesPreentryOnlyWhenIdle)
+TEST(V2XOvertakeCoreMpccLite, GateATacticalInputUsesCurrentWorldMissionWhenIdle)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
   using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -18489,21 +18489,21 @@ TEST(V2XOvertakeCoreMpccLite, GateATacticalInputUsesPreentryOnlyWhenIdle)
   using multi_purpose_mpc_ros::v2x_overtake_core::
     resolve_rate_resolved_gate_a_tactical_input;
 
-  OvertakeMissionCandidate preentry;
-  preentry.feasible = true;
-  preentry.pass_side_sign = -1;
-  OvertakeMissionCandidate runtime = preentry;
+  OvertakeMissionCandidate current_world;
+  current_world.feasible = true;
+  current_world.pass_side_sign = -1;
+  OvertakeMissionCandidate runtime = current_world;
   runtime.pass_side_sign = 1;
 
   const auto resolution = resolve_rate_resolved_gate_a_tactical_input(
     RateResolvedGateATacticalInputRequest{
-      false, 0, -1, preentry, std::nullopt, runtime});
+      false, 0, -1, current_world, std::nullopt, runtime});
   ASSERT_TRUE(resolution.valid);
   ASSERT_TRUE(resolution.mission.has_value());
   EXPECT_EQ(resolution.selected_side_sign, -1);
   EXPECT_EQ(
     resolution.source,
-    RateResolvedGateATacticalInputSource::PreentrySelection);
+    RateResolvedGateATacticalInputSource::CurrentWorldPreentry);
 }
 
 TEST(V2XOvertakeCoreMpccLite, GateATacticalInputMirrorsActiveExecutionOrder)
@@ -18543,15 +18543,15 @@ TEST(V2XOvertakeCoreMpccLite, GateATacticalInputCertifiesActiveCrossSideRequest)
   using multi_purpose_mpc_ros::v2x_overtake_core::
     resolve_rate_resolved_gate_a_tactical_input;
 
-  OvertakeMissionCandidate old_preentry;
-  old_preentry.feasible = true;
-  old_preentry.pass_side_sign = -1;
-  OvertakeMissionCandidate cross_side = old_preentry;
+  OvertakeMissionCandidate old_current_world;
+  old_current_world.feasible = true;
+  old_current_world.pass_side_sign = -1;
+  OvertakeMissionCandidate cross_side = old_current_world;
   cross_side.pass_side_sign = 1;
 
   const auto resolution = resolve_rate_resolved_gate_a_tactical_input(
     RateResolvedGateATacticalInputRequest{
-      true, -1, -1, old_preentry, std::nullopt, cross_side});
+      true, -1, -1, old_current_world, std::nullopt, cross_side});
   ASSERT_TRUE(resolution.valid);
   ASSERT_TRUE(resolution.mission.has_value());
   EXPECT_EQ(resolution.selected_side_sign, 1);
@@ -18560,7 +18560,7 @@ TEST(V2XOvertakeCoreMpccLite, GateATacticalInputCertifiesActiveCrossSideRequest)
     RateResolvedGateATacticalInputSource::ActiveCrossSideReplacement);
 }
 
-TEST(V2XOvertakeCoreMpccLite, GateATacticalInputNeverFallsBackToPreentryWhenActive)
+TEST(V2XOvertakeCoreMpccLite, GateATacticalInputNeverUsesNewEntryMissionWhenActive)
 {
   using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
   using multi_purpose_mpc_ros::v2x_overtake_core::
@@ -18568,13 +18568,34 @@ TEST(V2XOvertakeCoreMpccLite, GateATacticalInputNeverFallsBackToPreentryWhenActi
   using multi_purpose_mpc_ros::v2x_overtake_core::
     resolve_rate_resolved_gate_a_tactical_input;
 
-  OvertakeMissionCandidate preentry;
-  preentry.feasible = true;
-  preentry.pass_side_sign = -1;
+  OvertakeMissionCandidate current_world;
+  current_world.feasible = true;
+  current_world.pass_side_sign = -1;
 
   const auto resolution = resolve_rate_resolved_gate_a_tactical_input(
     RateResolvedGateATacticalInputRequest{
-      true, -1, -1, preentry, std::nullopt, std::nullopt});
+      true, -1, -1, current_world, std::nullopt, std::nullopt});
+  EXPECT_FALSE(resolution.valid);
+  EXPECT_FALSE(resolution.mission.has_value());
+  EXPECT_EQ(resolution.selected_side_sign, 0);
+}
+
+TEST(V2XOvertakeCoreMpccLite, GateATacticalInputRejectsInvalidCurrentWorldMission)
+{
+  using multi_purpose_mpc_ros::v2x_overtake_core::OvertakeMissionCandidate;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    RateResolvedGateATacticalInputRequest;
+  using multi_purpose_mpc_ros::v2x_overtake_core::
+    resolve_rate_resolved_gate_a_tactical_input;
+
+  OvertakeMissionCandidate invalid;
+  invalid.feasible = false;
+  invalid.pass_side_sign = 1;
+
+  const auto resolution = resolve_rate_resolved_gate_a_tactical_input(
+    RateResolvedGateATacticalInputRequest{
+      false, 0, 1, invalid, std::nullopt, std::nullopt});
+
   EXPECT_FALSE(resolution.valid);
   EXPECT_FALSE(resolution.mission.has_value());
   EXPECT_EQ(resolution.selected_side_sign, 0);

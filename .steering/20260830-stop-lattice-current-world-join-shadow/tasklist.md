@@ -7,5 +7,5 @@
 - [x] Add bounded typed join telemetry.
 - [x] Prove no Store/publisher/production selection edge exists.
 - [x] Run build, package tests and `git diff --check`.
-- [ ] Run `make dev2` and classify the first live authority loss.
-- [ ] Record results and commit the Slice.
+- [x] Run `make dev2` and classify the first live authority loss.
+- [x] Record results and commit the Slice.

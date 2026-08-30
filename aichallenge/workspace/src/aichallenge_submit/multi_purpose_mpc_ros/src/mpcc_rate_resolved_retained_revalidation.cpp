@@ -557,7 +557,11 @@ const char * to_string(const DynamicObstacleProofScope scope) noexcept
   return "unknown";
 }
 
-Result evaluate(const Request & request)
+namespace
+{
+
+Result evaluate_impl(
+  const Request & request, const bool enforce_progress_continuity)
 {
   Result result;
   result.execution_clock_kind = request.execution_clock.kind;
@@ -732,7 +736,7 @@ Result evaluate(const Request & request)
     request.circular);
   result.lifted_control_origin_physical_progress_m = lift.progress_m;
   result.progress_difference_m = lift.difference_m;
-  if (!lift.accepted) {
+  if (!lift.accepted && enforce_progress_continuity) {
     result.reason = Reason::ProgressLiftRejected;
     return result;
   }
@@ -1438,6 +1442,27 @@ Result evaluate(const Request & request)
   result.reason = Reason::Accepted;
   result.proof = std::move(proof);
   return result;
+}
+
+}  // namespace
+
+Result evaluate(const Request & request)
+{
+  auto production = evaluate_impl(request, true);
+  if (production.reason != Reason::ProgressLiftRejected) {
+    return production;
+  }
+
+  // Compare the frozen production failure with a stateless ManeuverBundle
+  // using the same source controls and current world.  This second result is
+  // diagnostics only: production keeps the original reject and no shadow
+  // proof is returned to the publisher.
+  const auto stateless = evaluate_impl(request, false);
+  production.stateless_progress_rebase_attempted = true;
+  production.stateless_progress_rebase_reason = stateless.reason;
+  production.stateless_progress_rebase_proof_available =
+    stateless.proof.has_value();
+  return production;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation

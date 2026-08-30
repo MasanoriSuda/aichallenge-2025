@@ -3229,6 +3229,27 @@ def test_normal_candidate_clock_separates_bootstrap_from_moving_successor() -> N
     assert SOURCE.count("ExecutionClockKind::BootstrapCandidate") == 1
 
 
+def test_progress_rebase_escape_hatch_is_observation_only() -> None:
+    """A/B audit must not turn the shadow Bundle into production authority."""
+
+    retained = (
+        PACKAGE_ROOT / "src" / "mpcc_rate_resolved_retained_revalidation.cpp"
+    ).read_text(encoding="utf-8")
+    wrapper = retained[retained.index("Result evaluate(const Request & request)") :]
+    production = wrapper.index("evaluate_impl(request, true)")
+    reject_gate = wrapper.index(
+        "production.reason != Reason::ProgressLiftRejected", production
+    )
+    shadow = wrapper.index("evaluate_impl(request, false)", reject_gate)
+    diagnostic = wrapper.index(
+        "production.stateless_progress_rebase_proof_available", shadow
+    )
+    returned = wrapper.index("return production;", diagnostic)
+    assert production < reject_gate < shadow < diagnostic < returned
+    assert "production.proof = stateless.proof" not in wrapper
+    assert "return stateless;" not in wrapper
+
+
 def test_terminal_stop_does_not_extrapolate_executable_prefix_geometry() -> None:
     """A long braking suffix owns full physical course support, not Mission prefix boxes."""
 

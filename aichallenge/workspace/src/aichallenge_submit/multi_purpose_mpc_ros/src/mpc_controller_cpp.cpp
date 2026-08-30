@@ -7404,6 +7404,10 @@ struct RateResolvedRetainedShadowEvaluation
     std::numeric_limits<double>::quiet_NaN()};
   double progress_continuity_tolerance_m{
     std::numeric_limits<double>::quiet_NaN()};
+  bool stateless_progress_rebase_attempted{false};
+  rate_resolved_retained::Reason stateless_progress_rebase_reason{
+    rate_resolved_retained::Reason::MissingPlan};
+  bool stateless_progress_rebase_proof_available{false};
   double expected_lateral_m{std::numeric_limits<double>::quiet_NaN()};
   double expected_lag_m{std::numeric_limits<double>::quiet_NaN()};
   double expected_heading_offset_rad{
@@ -25595,6 +25599,12 @@ struct MPC
     evaluation.progress_difference_m = result.progress_difference_m;
     evaluation.progress_continuity_tolerance_m =
       result.progress_continuity_tolerance_m;
+    evaluation.stateless_progress_rebase_attempted =
+      result.stateless_progress_rebase_attempted;
+    evaluation.stateless_progress_rebase_reason =
+      result.stateless_progress_rebase_reason;
+    evaluation.stateless_progress_rebase_proof_available =
+      result.stateless_progress_rebase_proof_available;
     evaluation.reason = result.reason;
     evaluation.cursor_reason = result.cursor_reason;
     evaluation.actuation_reason = result.actuation_reason;
@@ -26353,7 +26363,7 @@ struct MPC
           "clock:%s/first_publish:%.6f/first_cursor:%.6f, "
           "progress=control_physical:%.6f/lifted:%.6f/"
           "expected_physical:%.6f/expected_theta:%.6f/delta:%.6f/"
-          "tolerance:%.6f, "
+          "tolerance:%.6f/stateless_rebase:%d/%s/proof:%d, "
           "physical_join=position:%.6f/yaw:%.6f/"
           "control:(%.3f,%.3f,%.3f)/expected:(%.3f,%.3f,%.3f)/"
           "frenet:(%.3f,%.3f,%.3f), "
@@ -26398,6 +26408,10 @@ struct MPC
           retained.expected_absolute_progress_m,
           retained.progress_difference_m,
           retained.progress_continuity_tolerance_m,
+          retained.stateless_progress_rebase_attempted ? 1 : 0,
+          rate_resolved_retained::to_string(
+            retained.stateless_progress_rebase_reason),
+          retained.stateless_progress_rebase_proof_available ? 1 : 0,
           retained.control_pose_error_m, retained.control_yaw_error_rad,
           retained.control_pose.x_m, retained.control_pose.y_m,
           retained.control_pose.yaw_rad,

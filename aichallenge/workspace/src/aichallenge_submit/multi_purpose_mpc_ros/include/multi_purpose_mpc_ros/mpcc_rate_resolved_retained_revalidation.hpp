@@ -358,6 +358,13 @@ struct Result
     std::numeric_limits<double>::quiet_NaN()};
   double progress_continuity_tolerance_m{
     std::numeric_limits<double>::quiet_NaN()};
+  /// Observation-only architecture escape hatch.  Production still rejects
+  /// ProgressLiftRejected.  These fields report whether the same immutable
+  /// controls can form a complete current-world Bundle when the historical
+  /// artifact progress gate is not treated as a publication prerequisite.
+  bool stateless_progress_rebase_attempted{false};
+  Reason stateless_progress_rebase_reason{Reason::MissingPlan};
+  bool stateless_progress_rebase_proof_available{false};
   double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double control_origin_speed_mps{
     std::numeric_limits<double>::quiet_NaN()};

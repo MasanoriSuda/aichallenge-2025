@@ -844,6 +844,25 @@ TEST(MpccArchitectureComparison, LiveStopShadowBuildsCertifiedObservation)
     mpcc_rate_resolved_certified_plan::validate(
       *result.certified_stop_plan),
       mpcc_rate_resolved_certified_plan::RejectReason::None);
+  ASSERT_NE(result.certified_stop_plan->solver_source_snapshot, nullptr);
+  EXPECT_TRUE(
+    mpcc_rate_resolved_execution_artifact::same_identity(
+      result.certified_stop_plan->solver_source_snapshot->identity,
+      result.certified_stop_plan->execution_artifact->identity));
+  EXPECT_GT(
+    result.certified_stop_plan->solver_source_snapshot->
+    control_prediction_origin_sec,
+    source.control_prediction_origin_sec);
+  ASSERT_FALSE(
+    result.certified_stop_plan->solver_source_snapshot->request.states.empty());
+  EXPECT_DOUBLE_EQ(
+    result.certified_stop_plan->solver_source_snapshot->request.states.back().
+    lower[model::kVelocityIndex],
+    0.0);
+  EXPECT_DOUBLE_EQ(
+    result.certified_stop_plan->solver_source_snapshot->request.states.back().
+    upper[model::kVelocityIndex],
+    0.0);
 }
 
 TEST(MpccArchitectureComparison, LiveStopShadowStopsAfterSupersededSolve)

@@ -130,12 +130,14 @@ Result evaluate(
       result.detail = "rebased Stop replay world unavailable";
       return finish();
     }
+    const auto stop_solver_source =
+      std::make_shared<const shadow::Snapshot>(stop.candidate);
     if (abort_if_superseded()) {
       return finish();
     }
 
     const auto population = lattice::build_anytime_population(
-      stop.candidate,
+      *stop_solver_source,
       private_solver_context.physical_constraint_tolerance());
     result.population_size = population.candidates.size();
     result.preferred_initial_rate_sign =
@@ -169,7 +171,7 @@ Result evaluate(
       }
       const auto solved =
         private_solver_context.evaluate_fixed_steering_rate_shadow(
-        stop.candidate, candidate.schedule.steering_rate_radps);
+        *stop_solver_source, candidate.schedule.steering_rate_radps);
       result.solver_outcome = solved.outcome;
       result.selected_solver_ms = solved.compute_ms;
       if (abort_if_superseded()) {
@@ -185,8 +187,8 @@ Result evaluate(
       }
       const auto adapted = physical_adapter::build(
         *solved.execution_artifact,
-        stop.candidate.identity.source_context.intent,
-        stop.candidate.identity.source_context.stage_geometry_id);
+        stop_solver_source->identity.source_context.intent,
+        stop_solver_source->identity.source_context.stage_geometry_id);
       if (!adapted.exact_trajectory.has_value()) {
         result.reason = Reason::ExactTrajectoryRejected;
         std::ostringstream detail;
@@ -211,7 +213,7 @@ Result evaluate(
         continue;
       }
       auto wall_snapshot = build_wall_snapshot(
-        stop.candidate, stop.candidate.replay_world.value(), exact);
+        *stop_solver_source, stop_solver_source->replay_world.value(), exact);
       const auto wall_result = physical::evaluate(wall_snapshot);
       result.wall_outcome = wall_result.outcome;
       if (abort_if_superseded()) {
@@ -223,7 +225,7 @@ Result evaluate(
         continue;
       }
       const auto dynamic_result = dynamic::evaluate_current_world(
-        stop.candidate, wall_snapshot);
+        *stop_solver_source, wall_snapshot);
       result.dynamic_valid = dynamic_result.valid;
       result.dynamic_clear = dynamic_result.clear;
       result.minimum_dynamic_clearance_m =
@@ -240,7 +242,8 @@ Result evaluate(
         continue;
       }
       const auto built = certified::build(
-        solved.execution_artifact, wall_snapshot, wall_result);
+        solved.execution_artifact, wall_snapshot, wall_result,
+        stop_solver_source);
       if (built.reason != certified::RejectReason::None || built.plan == nullptr) {
         result.reason = Reason::CertifiedPlanRejected;
         result.detail = certified::to_string(built.reason);

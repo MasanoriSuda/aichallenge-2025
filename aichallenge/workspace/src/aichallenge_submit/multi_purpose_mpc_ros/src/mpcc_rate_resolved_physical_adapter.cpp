@@ -528,11 +528,10 @@ ContinuationResult build_continuation(
       }
       result.scope = ContinuationProofScope::PublisherIntervalPrefix;
       result.stage_end_velocity_mps = {exact.velocity_mps.back()};
-      // Steering is not stored per dense trajectory sample. Recover the exact
-      // command state at the publication boundary from the immutable ramp.
-      result.stage_end_steering_rad = {
-        initial_state.steering_rad +
-        first_control.steering_rate_radps * artifact.publication_interval_sec};
+      // The first serialized tire angle is held over this prefix. The exact
+      // nonlinear state, rather than the SQP's un-serialized rate input, owns
+      // the publisher-boundary steering state.
+      result.stage_end_steering_rad = {nonlinear.steering_rad};
       result.reason = ContinuationRejectReason::None;
       result.exact_trajectory = std::move(exact);
       return true;
@@ -580,7 +579,17 @@ ContinuationResult build_continuation(
         }
         return result;
       }
-      if (!advance_nonlinear_state(nonlinear, control, artifact, step_sec)) {
+      auto applied_control = control;
+      if (elapsed_sec < artifact.publication_interval_sec - 1e-12) {
+        // AckermannControlCommand serializes tire angle, not steering rate.
+        // The already-published angle therefore remains constant until the
+        // next publication boundary. Applying the SQP rate here proves a
+        // different command from the one that actually crossed the wire.
+        applied_control.steering_rate_radps = 0.0;
+      }
+      if (!advance_nonlinear_state(
+          nonlinear, applied_control, artifact, step_sec))
+      {
         result.reason = ContinuationRejectReason::NonlinearModelRejected;
         result.rejected_stage = static_cast<int>(exact.path_distance_m.size());
         if (retain_publisher_interval_prefix()) {
@@ -890,7 +899,7 @@ StopContingencyResult build_stop_contingency(
   if (!append_duration(
       artifact.publication_interval_sec,
       current_actuation.acceleration_mps2,
-      current_actuation.steering_rate_radps))
+      0.0))
   {
     if (result.reason == StopContingencyRejectReason::InvalidArtifact) {
       result.reason = StopContingencyRejectReason::NonlinearModelRejected;

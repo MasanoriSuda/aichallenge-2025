@@ -163,7 +163,10 @@ TEST(
   ASSERT_EQ(result.stage_end_velocity_mps.size(), 2U);
   ASSERT_EQ(result.stage_end_steering_rad.size(), 2U);
   EXPECT_NEAR(result.stage_end_velocity_mps.back(), 2.20, 1e-12);
-  EXPECT_NEAR(result.stage_end_steering_rad.back(), 0.12, 1e-12);
+  // The serialized 0.105 rad angle is held for the first 25 ms. The
+  // un-serialized 0.1 rad/s SQP input resumes only after that boundary.
+  EXPECT_NEAR(result.stage_end_steering_rad.front(), 0.1075, 1e-12);
+  EXPECT_NEAR(result.stage_end_steering_rad.back(), 0.1175, 1e-12);
 }
 
 TEST(
@@ -213,9 +216,7 @@ TEST(
     2.05 + actuation.actuation->acceleration_mps2 * 0.01, 1e-9);
   EXPECT_NEAR(
     result.publisher_interval_end_steering_rad,
-    0.105 + actuation.actuation->steering_rate_radps *
-    source.publication_interval_sec,
-    1e-12);
+    0.105, 1e-12);
   EXPECT_TRUE(std::isfinite(result.braking_suffix_final_steering_rad));
   EXPECT_GT(
     result.braking_suffix_final_steering_rad,
@@ -232,6 +233,14 @@ TEST(
   EXPECT_NEAR(
     publisher_boundary.end_steering_rad,
     result.publisher_interval_end_steering_rad, 1e-12);
+  for (std::size_t index = 0U;
+    index < result.publisher_interval_sample_count; ++index)
+  {
+    EXPECT_DOUBLE_EQ(
+      result.actuation_samples[index].steering_rate_radps, 0.0);
+    EXPECT_NEAR(
+      result.actuation_samples[index].end_steering_rad, 0.105, 1e-12);
+  }
   EXPECT_NEAR(
     result.actuation_samples.back().acceleration_mps2, -3.0, 1e-12);
   for (std::size_t index = 0U; index < result.actuation_samples.size(); ++index) {

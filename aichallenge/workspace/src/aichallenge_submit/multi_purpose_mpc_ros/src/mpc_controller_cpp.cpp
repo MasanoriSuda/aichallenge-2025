@@ -9671,6 +9671,26 @@ struct MPC
     const mpcc_contract::ControlIntent authority_intent,
     const bool publication_overridden) noexcept
   {
+    const bool normal_execution_interrupted =
+      publication_overridden ||
+      authority_intent == mpcc_contract::ControlIntent::Stop;
+    if (
+      normal_execution_interrupted &&
+      rate_resolved_track_cruise_certified_plan_store_ != nullptr &&
+      rate_resolved_track_cruise_certified_plan_store_->clear())
+    {
+      // PublishedPlan is an execution ledger, not a lease. Once another
+      // authority crosses the publisher, elapsed wall time can no longer be
+      // used to advance skipped normal controls. Keep the independently
+      // certified candidate bank, but require its existing current-world join
+      // before normal authority can return.
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Canonical normal execution ledger interrupted: authority=%s, "
+        "overridden=%d, action=discard-executed-clock/retain-candidates",
+        mpcc_contract::to_string(authority_intent),
+        publication_overridden ? 1 : 0);
+    }
     if (publication_overridden) {
       invalidate_published_stop_lattice_observation();
       last_published_authority_intent_ =

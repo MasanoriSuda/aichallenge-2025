@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <memory>
 
 namespace
@@ -697,6 +698,49 @@ TEST(MpccRateResolvedCertifiedPlan, ConditionalClearOnlyClearsExecutedPlan)
   EXPECT_EQ(
     store.candidate_snapshot()->execution_artifact->identity.sequence,
     6U);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  PublicationInterruptionClearsEveryExecutedClockButPreservesCandidate)
+{
+  certified::Store store;
+  const auto executed = build_plan(5U);
+  const auto published_bundle = build_plan(6U);
+  const auto fresh_candidate = build_plan(7U);
+  ASSERT_NE(executed.plan, nullptr);
+  ASSERT_NE(published_bundle.plan, nullptr);
+  ASSERT_NE(fresh_candidate.plan, nullptr);
+  ASSERT_EQ(store.replace(executed.plan), certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.mark_executed(executed.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.record_published_bundle_source(
+      published_bundle.plan, 101U, 10.1, 0.10),
+    certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.replace(fresh_candidate.plan), certified::StoreReason::Accepted);
+
+  // This is the publication-boundary operation used after Stop, Recovery or
+  // another non-normal authority. Neither normal execution clock remains
+  // valid because its next cursor would include controls that were not
+  // actually published.
+  EXPECT_TRUE(store.clear());
+  const auto state = store.state();
+  EXPECT_FALSE(state.executed_plan_available);
+  EXPECT_FALSE(state.published_bundle_source_available);
+  EXPECT_TRUE(std::isnan(state.first_published_control_origin_sec));
+  EXPECT_TRUE(std::isnan(state.first_published_artifact_elapsed_sec));
+
+  // Certification is not execution. The newest candidate remains eligible
+  // only for the existing current-world proof and can later be published with
+  // a new execution clock.
+  ASSERT_NE(store.candidate_snapshot(), nullptr);
+  EXPECT_EQ(
+    store.candidate_snapshot()->execution_artifact->identity.sequence,
+    7U);
+  EXPECT_FALSE(store.clear());
 }
 
 TEST(MpccRateResolvedCertifiedPlan, FailedReplacementPreservesExecutedPlan)

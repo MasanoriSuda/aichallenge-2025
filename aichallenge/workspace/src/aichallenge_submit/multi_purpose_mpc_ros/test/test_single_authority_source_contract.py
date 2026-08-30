@@ -1044,6 +1044,19 @@ def test_last_published_intent_is_a_publication_ledger() -> None:
     authority_recorder = recorder[
         recorder.index("record_final_published_authority(") :
     ]
+    interruption_clear = authority_recorder.index(
+        "rate_resolved_track_cruise_certified_plan_store_->clear()"
+    )
+    authority_ledger_update = authority_recorder.index(
+        "last_published_authority_intent_ = authority_intent"
+    )
+    assert interruption_clear < authority_ledger_update
+    assert "normal_execution_interrupted" in authority_recorder
+    assert (
+        "authority_intent == mpcc_contract::ControlIntent::Stop"
+        in authority_recorder
+    )
+    assert "discard-executed-clock/retain-candidates" in authority_recorder
     assert "last_published_authority_intent_ = authority_intent" in authority_recorder
     assert "ControlIntent::Stop" in authority_recorder
 

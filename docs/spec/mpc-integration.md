@@ -3185,6 +3185,29 @@ epochがempty pairへ置換済みで、自然発生したalternate exact adoptio
 独立failure familyとして監査する。この結果を根拠にlease、grace、timeout、retry、fallback、solver tolerance、weight、
 clearanceまたはproduction authorityを変更してはならない。
 
+#### 非normal publicationによるexecution ledger中断（2026-08-31、2025由来の暫定）
+
+certified Storeの`executed plan`と`last-published Bundle source`は、実際にwireへ出したnormal command列の
+実行台帳であり、authority leaseではない。Emergency Stop、Recovery、disabled-control等の非normal commandが
+publisher境界を横切った時点で、それ以前のnormal command列は連続実行ではなくなる。このため、次周期に
+wall-clock経過時間を使って旧artifactのcursorを進めてはならない。
+
+`output/20260831-024939/d1`では、Pass用sequence 680をpublishした後、normal Passと外部Stopが交互に出力された。
+StoreはStop周期を含む0.45 sを`PublishedPlan` cursorとして進め、期待操舵0.3665 radに対して実操舵0.0409 radとなった。
+current-world revalidationは到達不能なjoinを正しく拒否したが、拒否時点では車両が壁側へ進み、後続Stop軌道と実footprintが
+wall-blockedになった。観測されたwall-margin違反は下流症状であり、最初の破損はpublication ledger continuityである。
+
+final publisherは実際に出力したauthorityを記録する際、非normal出力ならStoreのexecuted identity、published-Bundle
+identity、first-publication originを原子的に破棄する。独立にcertify済みのcandidateは残すが、実行済みとは扱わない。
+normal authorityへ戻るには、残したcandidateまたはfresh worker結果を既存のcurrent-world actuation、static wall、
+timed obstacle、Follow hard gap、recursive terminal Stop proofへ再投入し、新しいexecution clockを開始する。
+
+decision 1269の凍結snapshotをA/B/C/D比較した結果、既に発散したstateからはpersistent Mission、stateless Bundle、
+rough/lattice candidate、bounded offline solveの全armがcertified Bundleを生成できなかった。一方、live系はdecision 1279で
+current-world Stop successorを生成済みであり、その後のauthority割込みを実行台帳が表現できなかった。したがって本件は
+scheduling/lifecycle defectに分類する。wall clearance、solver tolerance、grace、timeout、lease、normal fallbackの変更で
+隠してはならない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

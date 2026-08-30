@@ -1321,13 +1321,18 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     active_dual = SOURCE[active_dual_start:active_dual_end]
     assert "evaluate_side(-1, negative_solver_context)" in active_dual
     assert "evaluate_side(1, positive_solver_context)" in active_dual
-    assert "std::async(" in active_dual
+    assert "negative_executor->submit(" in active_dual
+    assert "negative_executor->wait(" in active_dual
+    assert "std::async(" not in active_dual
+    assert "bounded negative branch unavailable" in active_dual
     assert "branch_bank->replace(source, negative_plan, positive_plan)" in active_dual
-    assert "selected_side < 0 ? std::move(negative)" in active_dual
+    assert "selected_side < 0 ? std::move(negative.value())" in active_dual
     assert "homotopy_owner" not in active_dual
     assert "replace_pair(" in active_dual
     assert "selected.pipeline.certified_plan.plan, sibling_plan" in active_dual
     assert '"active-overtake-dual/selected="' in active_dual
+    assert "overtake_negative_executor_->stats()" in SOURCE
+    assert "executor=submitted:%lu/completed:%lu/failed:%lu/" in SOURCE
 
     assert "active_overtake_dual_intent" in overtake_branch
     assert "evaluate_rate_resolved_active_overtake_population(" in overtake_branch

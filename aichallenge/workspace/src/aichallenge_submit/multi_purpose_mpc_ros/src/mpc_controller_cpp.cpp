@@ -11,6 +11,7 @@
 #include <geometry_msgs/msg/vector3.hpp>
 #include <multi_purpose_mpc_ros/awsim_boost_start_dash.hpp>
 #include <multi_purpose_mpc_ros/awsim_control_mode_guard.hpp>
+#include <multi_purpose_mpc_ros/bounded_single_job_executor.hpp>
 #include <multi_purpose_mpc_ros/external_speed_loss_monitor.hpp>
 #include <multi_purpose_mpc_ros/latest_only_worker.hpp>
 #include <multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp>
@@ -6780,6 +6781,7 @@ evaluate_rate_resolved_active_overtake_population(
   negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   positive_solver_context,
+  const std::shared_ptr<BoundedSingleJobExecutor> & negative_executor,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
   const std::shared_ptr<rate_resolved_overtake_branch_bank::Bank> & branch_bank)
 {
@@ -6804,18 +6806,35 @@ evaluate_rate_resolved_active_overtake_population(
         evaluation.certified_plan.plan != nullptr;
     };
 
-  // Both sides use one immutable observation epoch. They have independent
-  // persistent numerical contexts, so a failed warm start on the selected
-  // side cannot contaminate the opposite-side evidence. This runs only in the
-  // background LatestOnlyWorker; production authority remains selected-side.
-  auto negative_future = std::async(
-    std::launch::async,
-    [&]() {return evaluate_side(-1, negative_solver_context);});
+  // Both sides use one immutable observation epoch. The negative branch runs
+  // on one persistent bounded worker while this LatestOnlyWorker evaluates
+  // the positive branch. The 40 Hz callback never waits for either branch.
+  std::optional<RateResolvedCurrentWorldPopulationEvaluation> negative;
+  const auto negative_submission = negative_executor != nullptr ?
+    negative_executor->submit([&]() {
+      negative = evaluate_side(-1, negative_solver_context);
+    }) : BoundedSingleJobExecutor::SubmitResult{};
   auto positive = evaluate_side(1, positive_solver_context);
-  auto negative = negative_future.get();
+  const auto negative_wait = negative_submission.accepted() ?
+    negative_executor->wait(negative_submission.ticket) :
+    BoundedSingleJobExecutor::WaitReason::InvalidTicket;
+  if (
+    negative_wait != BoundedSingleJobExecutor::WaitReason::Completed ||
+    !negative.has_value())
+  {
+    RateResolvedCurrentWorldPopulationEvaluation rejected;
+    rejected.candidate_source = "bounded-negative-executor";
+    rejected.detail = std::string{"bounded negative branch unavailable/submit="} +
+      to_string(negative_submission.reason) + "/wait=" +
+      to_string(negative_wait);
+    rejected.pipeline.solver = rate_resolved_shadow::make_rejected_result(
+      source.identity, rate_resolved_shadow::Outcome::Exception,
+      source.identity.snapshot_sec, 0.0, rejected.detail);
+    negative = std::move(rejected);
+  }
 
-  const auto negative_plan = certified(negative.pipeline) ?
-    negative.pipeline.certified_plan.plan : nullptr;
+  const auto negative_plan = certified(negative->pipeline) ?
+    negative->pipeline.certified_plan.plan : nullptr;
   const auto positive_plan = certified(positive.pipeline) ?
     positive.pipeline.certified_plan.plan : nullptr;
   const std::string bank_detail = branch_bank != nullptr ?
@@ -6823,7 +6842,7 @@ evaluate_rate_resolved_active_overtake_population(
     branch_bank->replace(source, negative_plan, positive_plan)) :
     "not-requested";
 
-  auto selected = selected_side < 0 ? std::move(negative) :
+  auto selected = selected_side < 0 ? std::move(negative.value()) :
     std::move(positive);
   const auto sibling_plan = selected_side < 0 ? positive_plan : negative_plan;
   const bool selected_certified = certified(selected.pipeline);
@@ -6867,6 +6886,8 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   overtake_negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   overtake_positive_solver_context,
+  const std::shared_ptr<BoundedSingleJobExecutor> &
+  overtake_negative_executor,
   const std::shared_ptr<rate_resolved_overtake_branch_bank::Bank> &
   overtake_branch_bank)
 {
@@ -6953,6 +6974,7 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
       return evaluate_rate_resolved_active_overtake_population(
         source, physical_source.value(),
         overtake_negative_solver_context, overtake_positive_solver_context,
+        overtake_negative_executor,
         certified_plan_store, overtake_branch_bank);
     }
     const int pass_side_sign =
@@ -7655,6 +7677,8 @@ struct MPC
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_overtake_positive_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_overtake_negative_executor_ =
+        std::make_shared<BoundedSingleJobExecutor>();
       rate_resolved_normal_homotopy_owner_ =
         std::make_shared<RateResolvedNormalHomotopyOwner>();
       rate_resolved_normal_branch_bank_ =
@@ -23965,6 +23989,7 @@ struct MPC
       rate_resolved_normal_avoidance_positive_solver_context_ == nullptr ||
       rate_resolved_overtake_negative_solver_context_ == nullptr ||
       rate_resolved_overtake_positive_solver_context_ == nullptr ||
+      rate_resolved_overtake_negative_executor_ == nullptr ||
       rate_resolved_normal_homotopy_owner_ == nullptr ||
       rate_resolved_normal_branch_bank_ == nullptr ||
       rate_resolved_overtake_branch_bank_ == nullptr ||
@@ -24042,6 +24067,8 @@ struct MPC
       rate_resolved_overtake_negative_solver_context_;
     const auto overtake_positive_solver_context =
       rate_resolved_overtake_positive_solver_context_;
+    const auto overtake_negative_executor =
+      rate_resolved_overtake_negative_executor_;
     const auto overtake_branch_bank = rate_resolved_overtake_branch_bank_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
@@ -24051,6 +24078,7 @@ struct MPC
         normal_negative_solver_context, normal_positive_solver_context,
         normal_homotopy_owner, normal_branch_bank,
         overtake_negative_solver_context, overtake_positive_solver_context,
+        overtake_negative_executor,
         overtake_branch_bank,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
         physical_registered, certified_plan_store]() mutable {
@@ -24063,6 +24091,7 @@ struct MPC
           normal_homotopy_owner,
           certified_plan_store, normal_branch_bank,
           overtake_negative_solver_context, overtake_positive_solver_context,
+          overtake_negative_executor,
           overtake_branch_bank);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
@@ -25928,6 +25957,10 @@ struct MPC
       rate_resolved_overtake_branch_bank_ != nullptr ?
       rate_resolved_overtake_branch_bank_->state() :
       rate_resolved_overtake_branch_bank::State{};
+    const auto overtake_executor_state =
+      rate_resolved_overtake_negative_executor_ != nullptr ?
+      rate_resolved_overtake_negative_executor_->stats() :
+      BoundedSingleJobExecutor::Stats{};
     const double denominator = static_cast<double>(
       std::max<std::uint64_t>(1U, window.consumed_count));
     const std::uint64_t physical_evaluated_count =
@@ -26464,7 +26497,8 @@ struct MPC
         "Rate-resolved active Overtake branch evidence: "
         "seq=%lu, selected=%d, negative=%d, positive=%d, "
         "accepted=%lu, invalid_source=%lu, invalid_plan=%lu, stale=%lu, "
-        "last=%s, authority=observation-only",
+        "last=%s, executor=submitted:%lu/completed:%lu/failed:%lu/"
+        "busy:%lu/running:%d/pending:%d, authority=observation-only",
         static_cast<unsigned long>(
           overtake_branch_bank_state.latest_source_sequence),
         overtake_branch_bank_state.selected_execution_side_sign,
@@ -26477,7 +26511,13 @@ struct MPC
           overtake_branch_bank_state.invalid_plan_count),
         static_cast<unsigned long>(overtake_branch_bank_state.stale_source_count),
         rate_resolved_overtake_branch_bank::to_string(
-          overtake_branch_bank_state.last_reason));
+          overtake_branch_bank_state.last_reason),
+        static_cast<unsigned long>(overtake_executor_state.submitted),
+        static_cast<unsigned long>(overtake_executor_state.completed),
+        static_cast<unsigned long>(overtake_executor_state.failed),
+        static_cast<unsigned long>(overtake_executor_state.busy_rejected),
+        overtake_executor_state.running ? 1 : 0,
+        overtake_executor_state.pending ? 1 : 0);
     }
     if (window.last_failure_result_available) {
       const auto & failure = window.last_failure_result;
@@ -28444,6 +28484,8 @@ struct MPC
   rate_resolved_overtake_negative_solver_context_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_overtake_positive_solver_context_;
+  std::shared_ptr<BoundedSingleJobExecutor>
+  rate_resolved_overtake_negative_executor_;
   std::shared_ptr<RateResolvedNormalHomotopyOwner>
   rate_resolved_normal_homotopy_owner_;
   std::shared_ptr<rate_resolved_normal_branch_bank::Bank>

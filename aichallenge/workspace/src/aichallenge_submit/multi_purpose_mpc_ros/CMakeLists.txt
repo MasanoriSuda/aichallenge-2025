@@ -231,6 +231,13 @@ ament_auto_add_library(${PROJECT_NAME}_latest_only_worker SHARED
 )
 target_link_libraries(${PROJECT_NAME}_latest_only_worker Threads::Threads)
 
+ament_auto_add_library(${PROJECT_NAME}_bounded_single_job_executor SHARED
+  NO_TARGET_LINK_LIBRARIES
+  src/bounded_single_job_executor.cpp
+)
+target_link_libraries(
+  ${PROJECT_NAME}_bounded_single_job_executor Threads::Threads)
+
 ament_auto_add_library(${PROJECT_NAME}_overtake_decision_trace SHARED
   NO_TARGET_LINK_LIBRARIES
   src/overtake_decision_trace.cpp
@@ -515,6 +522,7 @@ target_link_libraries(mpc_controller_cpp
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_mpcc_steering_state_contract
   ${PROJECT_NAME}_persistent_osqp
+  ${PROJECT_NAME}_bounded_single_job_executor
   ${PROJECT_NAME}_latest_only_worker
   ${PROJECT_NAME}_overtake_decision_trace
   ${PROJECT_NAME}_overtake_execution_orchestrator
@@ -876,6 +884,15 @@ if(BUILD_TESTING)
   if(TARGET test_latest_only_worker)
     target_link_libraries(test_latest_only_worker
       ${PROJECT_NAME}_latest_only_worker
+    )
+  endif()
+
+  ament_add_gtest(test_bounded_single_job_executor
+    test/test_bounded_single_job_executor.cpp
+  )
+  if(TARGET test_bounded_single_job_executor)
+    target_link_libraries(test_bounded_single_job_executor
+      ${PROJECT_NAME}_bounded_single_job_executor
     )
   endif()
 

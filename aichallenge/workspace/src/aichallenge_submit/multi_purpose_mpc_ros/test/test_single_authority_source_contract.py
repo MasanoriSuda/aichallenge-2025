@@ -1183,7 +1183,10 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         normal_avoidance_population
     )
     assert "observation_only_store" in normal_avoidance_population
-    assert "certified_plan_store->replace(" in normal_avoidance_population
+    assert "certified_plan_store->replace_pair(" in normal_avoidance_population
+    assert "result.pipeline.certified_plan.plan, sibling_plan" in (
+        normal_avoidance_population
+    )
     assert "evaluation.dynamic.has_value()" in normal_avoidance_population
     assert "evaluation.dynamic->valid" in normal_avoidance_population
     assert "evaluation.dynamic->clear" in normal_avoidance_population
@@ -1197,8 +1200,12 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         "void record_rate_resolved_track_cruise_shadow(", retained_start
     )
     retained = SOURCE[retained_start:retained_end]
-    assert "rate_resolved_normal_branch_bank_->snapshot()" in retained
-    assert "branches.plan_for_side(side_sign)" in retained
+    assert "rate_resolved_normal_branch_bank_->snapshot()" not in retained
+    assert "candidate_with_sibling_snapshot()" in retained
+    assert "candidate_sibling_plan" in retained
+    assert "published_bundle_sibling_plan" in retained
+    assert "executed_sibling_plan" in retained
+    assert "sibling_candidates" in retained
     assert "evaluate_rate_resolved_track_cruise_plan(" in retained
     assert "branch_evaluation.stateless_current_world_bundle" in retained
     assert "normal_branch_selected_side_sign = side_sign" in retained
@@ -2297,6 +2304,8 @@ def test_rate_resolved_physical_wall_proof_is_shared_but_cannot_publish() -> Non
     assert "std::shared_ptr<const artifact::ExecutionArtifact>" in certified_header
     assert "physical::Identity physical_identity" in certified_header
     assert "candidate_snapshot()" in certified_header
+    assert "candidate_with_sibling_snapshot()" in certified_header
+    assert "replace_pair(" in certified_header
     assert "mark_executed(" in certified_header
     assert "Last plan whose command was successfully published" in certified_header
     for forbidden in (
@@ -2388,7 +2397,7 @@ def test_rate_resolved_retained_current_world_path_is_shadow_only() -> None:
         in evaluate
     )
     assert (
-        "rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot()"
+        "candidate_with_sibling_snapshot()"
         in evaluate
     )
     assert "rate_resolved_shadow::artifact::same_identity(" in evaluate
@@ -2807,6 +2816,7 @@ def test_certified_candidate_becomes_retained_only_after_exact_publication() -> 
     assert "canonical_normal_command_matches_serialized_actuation(" in record
     assert "pending.promote_to_executed" in record
     assert "mark_executed(" in record
+    assert "pending.selected_plan, pending.selected_sibling_plan" in record
     assert "pending.record_published_bundle_source" in record
     assert "record_published_bundle_source(" in record
     assert "supersede_published_bundle_source(" in record

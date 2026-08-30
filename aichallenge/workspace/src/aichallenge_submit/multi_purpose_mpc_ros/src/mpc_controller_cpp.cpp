@@ -6723,9 +6723,12 @@ evaluate_rate_resolved_normal_avoidance_population(
     if (homotopy_owner != nullptr) {
       homotopy_owner->select(source, selected->side_sign);
     }
+    const auto sibling_plan = selected->side_sign < 0 ?
+      positive_plan : negative_plan;
     const std::string store_detail = certified_plan_store != nullptr ?
       rate_resolved_certified::to_string(
-      certified_plan_store->replace(result.pipeline.certified_plan.plan)) :
+      certified_plan_store->replace_pair(
+        result.pipeline.certified_plan.plan, sibling_plan)) :
       "not-requested";
     result.detail = std::string{"selected/"} + result.candidate_source +
       "/preferred=" + std::to_string(preferred_side) +
@@ -7271,6 +7274,8 @@ struct RateResolvedRetainedShadowEvaluation
     rate_resolved_production::Reason::RetainedProofUnavailable};
   std::optional<rate_resolved_production::Authority> production_authority;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
+  std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
+  selected_sibling_plan;
   bool selected_from_executed{false};
   bool selected_from_published_bundle_source{false};
   bool stateless_current_world_bundle{false};
@@ -7325,8 +7330,8 @@ struct RateResolvedRetainedShadowEvaluation
   bool candidate_attempted{false};
   bool published_bundle_source_attempted{false};
   bool executed_attempted{false};
-  bool normal_branch_bank_inspected{false};
-  std::uint64_t normal_branch_bank_source_sequence{};
+  bool associated_sibling_inspected{false};
+  std::uint64_t associated_sibling_source_sequence{};
   bool normal_branch_negative_attempted{false};
   bool normal_branch_positive_attempted{false};
   rate_resolved_retained::Reason normal_branch_negative_reason{
@@ -7446,6 +7451,8 @@ struct CanonicalNormalPendingActuation
   std::uint64_t decision_id{};
   mpcc_contract::CanonicalNormalCommand command;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
+  std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
+  selected_sibling_plan;
   double first_published_control_origin_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double first_published_artifact_elapsed_sec{
@@ -8773,7 +8780,7 @@ struct MPC
         pending.selected_plan == nullptr ||
         rate_resolved_track_cruise_certified_plan_store_->
         record_published_bundle_source(
-          pending.selected_plan, decision_id,
+          pending.selected_plan, pending.selected_sibling_plan, decision_id,
           pending.first_published_control_origin_sec,
           pending.first_published_artifact_elapsed_sec) !=
         rate_resolved_certified::StoreReason::Accepted)
@@ -8793,7 +8800,7 @@ struct MPC
         rate_resolved_track_cruise_certified_plan_store_ == nullptr ||
         pending.selected_plan == nullptr ||
         rate_resolved_track_cruise_certified_plan_store_->mark_executed(
-          pending.selected_plan, decision_id,
+          pending.selected_plan, pending.selected_sibling_plan, decision_id,
           pending.first_published_control_origin_sec,
           pending.first_published_artifact_elapsed_sec) !=
         rate_resolved_certified::StoreReason::Accepted)
@@ -24928,15 +24935,21 @@ struct MPC
       return final_evaluation;
     }
 
-    const auto candidate_plan =
-      rate_resolved_track_cruise_certified_plan_store_->candidate_snapshot();
+    const auto candidate_entry =
+      rate_resolved_track_cruise_certified_plan_store_->
+      candidate_with_sibling_snapshot();
+    const auto & candidate_plan = candidate_entry.plan;
+    const auto & candidate_sibling_plan = candidate_entry.sibling_plan;
     const auto published_bundle_entry =
       rate_resolved_track_cruise_certified_plan_store_->
       published_bundle_source_snapshot();
     const auto & published_bundle_plan = published_bundle_entry.plan;
+    const auto & published_bundle_sibling_plan =
+      published_bundle_entry.sibling_plan;
     const auto executed_entry =
       rate_resolved_track_cruise_certified_plan_store_->executed_snapshot();
     const auto & executed_plan = executed_entry.plan;
+    const auto & executed_sibling_plan = executed_entry.sibling_plan;
     const auto sequence_of =
       [](const std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
         & plan) {
@@ -25064,6 +25077,7 @@ struct MPC
           new_candidate_execution_clock_kind,
           std::numeric_limits<double>::quiet_NaN(),
           std::numeric_limits<double>::quiet_NaN()});
+      final_evaluation.selected_sibling_plan = candidate_sibling_plan;
       final_evaluation.candidate_attempted = true;
       final_evaluation.candidate_reason = final_evaluation.reason;
       final_evaluation.candidate_cursor_reason =
@@ -25121,6 +25135,8 @@ struct MPC
           rate_resolved_retained::ExecutionClockKind::PublishedPlan,
           published_bundle_entry.publication_control_origin_sec,
           published_bundle_entry.publication_artifact_elapsed_sec});
+      published_bundle_evaluation.selected_sibling_plan =
+        published_bundle_sibling_plan;
       copy_candidate_diagnostics(
         final_evaluation, published_bundle_evaluation);
       published_bundle_evaluation.published_bundle_source_attempted = true;
@@ -25193,6 +25209,7 @@ struct MPC
           rate_resolved_retained::ExecutionClockKind::PublishedPlan,
           executed_entry.first_published_control_origin_sec,
           executed_entry.first_published_artifact_elapsed_sec});
+      executed_evaluation.selected_sibling_plan = executed_sibling_plan;
       executed_evaluation.candidate_attempted = candidate_attempted;
       executed_evaluation.candidate_reason = candidate_reason;
       executed_evaluation.candidate_cursor_reason = candidate_cursor_reason;
@@ -25255,13 +25272,8 @@ struct MPC
     if (
       !final_evaluation.production_authority.has_value() &&
       normal_avoidance_intent &&
-      problem.progress_execution_dynamic_obstacle_contract_active &&
-      rate_resolved_normal_branch_bank_ != nullptr)
+      problem.progress_execution_dynamic_obstacle_contract_active)
     {
-      const auto branches = rate_resolved_normal_branch_bank_->snapshot();
-      final_evaluation.normal_branch_bank_inspected = true;
-      final_evaluation.normal_branch_bank_source_sequence =
-        branches.source_identity.sequence;
       const auto side_of = [](
           const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> &
           plan) {
@@ -25272,39 +25284,45 @@ struct MPC
             dynamic_obstacle_side_sign;
           return side == -1 || side == 1 ? side : 0;
         };
-      int ordinary_side = side_of(candidate_plan);
-      if (ordinary_side == 0) {
-        ordinary_side = side_of(published_bundle_plan);
-      }
-      if (ordinary_side == 0) {
-        ordinary_side = side_of(executed_plan);
-      }
-      if (ordinary_side == 0 && branches.source_identity.sequence > 0U) {
-        rate_resolved_shadow::Snapshot source_identity_only;
-        source_identity_only.identity = branches.source_identity;
-        ordinary_side = rate_resolved_normal_homotopy_owner_ != nullptr ?
-          rate_resolved_normal_homotopy_owner_->preferred_side(
-          source_identity_only) : 0;
-      }
-      const std::array<int, 2> branch_order =
-        ordinary_side == -1 || ordinary_side == 1 ?
-        std::array<int, 2>{-ordinary_side, ordinary_side} :
-        std::array<int, 2>{1, -1};
-      for (const int side_sign : branch_order) {
-        const auto plan = branches.plan_for_side(side_sign);
+      using Plan =
+        std::shared_ptr<const rate_resolved_certified::CertifiedPlan>;
+      const std::array<std::pair<Plan, Plan>, 3> sibling_candidates{{
+        {candidate_sibling_plan, candidate_plan},
+        {published_bundle_sibling_plan, published_bundle_plan},
+        {executed_sibling_plan, executed_plan},
+      }};
+      std::array<Plan, 3> attempted_siblings{};
+      std::size_t attempted_sibling_count = 0U;
+      for (const auto & [plan, associated_plan] : sibling_candidates) {
+        const bool already_attempted = std::any_of(
+          attempted_siblings.begin(),
+          attempted_siblings.begin() +
+          static_cast<std::ptrdiff_t>(attempted_sibling_count),
+          [&](const Plan & attempted) {
+            return same_plan_identity(plan, attempted);
+          });
         if (
           plan == nullptr || same_plan_identity(plan, candidate_plan) ||
           same_plan_identity(plan, published_bundle_plan) ||
-          same_plan_identity(plan, executed_plan))
+          same_plan_identity(plan, executed_plan) || already_attempted)
         {
           continue;
         }
+        attempted_siblings[attempted_sibling_count++] = plan;
+        const int side_sign = side_of(plan);
+        if (side_sign != -1 && side_sign != 1) {
+          continue;
+        }
+        final_evaluation.associated_sibling_inspected = true;
+        final_evaluation.associated_sibling_source_sequence =
+          sequence_of(plan);
         auto branch_evaluation = evaluate_rate_resolved_track_cruise_plan(
           problem, now_sec, evaluation_intent, plan,
           rate_resolved_retained::ExecutionClock{
             new_candidate_execution_clock_kind,
-            std::numeric_limits<double>::quiet_NaN(),
-            std::numeric_limits<double>::quiet_NaN()});
+          std::numeric_limits<double>::quiet_NaN(),
+          std::numeric_limits<double>::quiet_NaN()});
+        branch_evaluation.selected_sibling_plan = associated_plan;
         if (side_sign < 0) {
           final_evaluation.normal_branch_negative_attempted = true;
           final_evaluation.normal_branch_negative_reason =
@@ -25332,9 +25350,9 @@ struct MPC
         branch_evaluation.executed_reason = final_evaluation.executed_reason;
         branch_evaluation.executed_sequence =
           final_evaluation.executed_sequence;
-        branch_evaluation.normal_branch_bank_inspected = true;
-        branch_evaluation.normal_branch_bank_source_sequence =
-          branches.source_identity.sequence;
+        branch_evaluation.associated_sibling_inspected = true;
+        branch_evaluation.associated_sibling_source_sequence =
+          sequence_of(plan);
         branch_evaluation.normal_branch_negative_attempted =
           final_evaluation.normal_branch_negative_attempted;
         branch_evaluation.normal_branch_positive_attempted =
@@ -25346,7 +25364,8 @@ struct MPC
         branch_evaluation.normal_branch_selected_side_sign = side_sign;
         if (rate_resolved_normal_homotopy_owner_ != nullptr) {
           rate_resolved_shadow::Snapshot source_identity_only;
-          source_identity_only.identity = branches.source_identity;
+          source_identity_only.identity =
+            plan->execution_artifact->identity;
           rate_resolved_normal_homotopy_owner_->select(
             source_identity_only, side_sign);
         }
@@ -26053,7 +26072,7 @@ struct MPC
       "min_dynamic_clearance:%.3f/published_bundle:%d/seq:%lu/reason:%s/"
       "executed:%d/seq:%lu/"
       "reason:%s/source:%s, "
-      "normal_branches=inspected:%d/seq:%lu/negative:%d:%s/"
+      "associated_sibling=inspected:%d/seq:%lu/negative:%d:%s/"
       "positive:%d:%s/selected_side:%d, "
       "on_trajectory=attempted:%d/reason:%s/"
       "parent_elapsed:%.6f/candidate_elapsed:%.6f/"
@@ -26217,9 +26236,9 @@ struct MPC
       window.last_retained.selected_from_published_bundle_source ?
       "published-bundle" : "candidate") :
       "none",
-      window.last_retained.normal_branch_bank_inspected ? 1 : 0,
+      window.last_retained.associated_sibling_inspected ? 1 : 0,
       static_cast<unsigned long>(
-        window.last_retained.normal_branch_bank_source_sequence),
+        window.last_retained.associated_sibling_source_sequence),
       window.last_retained.normal_branch_negative_attempted ? 1 : 0,
       rate_resolved_retained::to_string(
         window.last_retained.normal_branch_negative_reason),
@@ -27304,6 +27323,7 @@ struct MPC
     last_control_was_fallback_ = false;
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id, command, retained.selected_plan,
+      retained.selected_sibling_plan,
       retained.control_origin_sec, retained.cursor_elapsed_sec,
       !retained.selected_from_executed &&
       !retained.stateless_current_world_bundle,

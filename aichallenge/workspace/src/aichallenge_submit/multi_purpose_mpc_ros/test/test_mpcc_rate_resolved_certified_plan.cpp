@@ -135,6 +135,26 @@ certified::BuildResult build_plan(const std::uint64_t sequence = 1U)
     accepted_physical(value->identity));
 }
 
+certified::BuildResult build_normal_avoidance_plan(
+  const std::uint64_t sequence, const int side_sign)
+{
+  auto value = artifact(sequence);
+  auto context = value.identity.source_context;
+  context.intent = contract::ControlIntent::Cruise;
+  context.dynamic_obstacle_constraint_active = true;
+  context.dynamic_obstacle_generation = context.observation_generation;
+  context.dynamic_obstacle_id = "d2";
+  context.dynamic_obstacle_side_sign = side_sign;
+  context.fingerprint = 0U;
+  value.identity.source_context =
+    contract::seal_problem_context(std::move(context));
+  auto shared = std::make_shared<const execution::ExecutionArtifact>(
+    std::move(value));
+  return certified::build(
+    shared, physical_snapshot(shared->identity),
+    accepted_physical(shared->identity));
+}
+
 TEST(MpccRateResolvedCertifiedPlan, JoinsExactArtifactAndPhysicalProof)
 {
   const auto result = build_plan();
@@ -251,6 +271,111 @@ TEST(MpccRateResolvedCertifiedPlan, CertificationDoesNotImplyExecution)
   EXPECT_DOUBLE_EQ(executed_snapshot.first_published_control_origin_sec, 10.0);
   EXPECT_DOUBLE_EQ(executed_snapshot.first_published_artifact_elapsed_sec, 0.05);
   EXPECT_EQ(executed_state.executed_count, 1U);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  SelectedAndSiblingCandidateArePublishedAtomically)
+{
+  certified::Store store;
+  const auto selected = build_normal_avoidance_plan(5U, -1);
+  const auto sibling = build_normal_avoidance_plan(5U, 1);
+  ASSERT_NE(selected.plan, nullptr);
+  ASSERT_NE(sibling.plan, nullptr);
+
+  EXPECT_EQ(
+    store.replace_pair(selected.plan, sibling.plan),
+    certified::StoreReason::Accepted);
+  const auto snapshot = store.candidate_with_sibling_snapshot();
+  EXPECT_EQ(snapshot.plan, selected.plan);
+  EXPECT_EQ(snapshot.sibling_plan, sibling.plan);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  RejectsSiblingFromDifferentWorldEpochWithoutReplacingCandidate)
+{
+  certified::Store store;
+  const auto selected = build_normal_avoidance_plan(5U, -1);
+  const auto sibling = build_normal_avoidance_plan(5U, 1);
+  const auto wrong_epoch = build_normal_avoidance_plan(6U, 1);
+  ASSERT_EQ(
+    store.replace_pair(selected.plan, sibling.plan),
+    certified::StoreReason::Accepted);
+
+  EXPECT_EQ(
+    store.replace_pair(selected.plan, wrong_epoch.plan),
+    certified::StoreReason::InvalidPlan);
+  const auto snapshot = store.candidate_with_sibling_snapshot();
+  EXPECT_EQ(snapshot.plan, selected.plan);
+  EXPECT_EQ(snapshot.sibling_plan, sibling.plan);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  ExecutionPromotionCarriesExactCandidateSiblingInEitherDirection)
+{
+  certified::Store store;
+  const auto selected = build_normal_avoidance_plan(5U, -1);
+  const auto sibling = build_normal_avoidance_plan(5U, 1);
+  ASSERT_EQ(
+    store.replace_pair(selected.plan, sibling.plan),
+    certified::StoreReason::Accepted);
+
+  ASSERT_EQ(
+    store.mark_executed(sibling.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  const auto executed = store.executed_snapshot();
+  EXPECT_EQ(executed.plan, sibling.plan);
+  EXPECT_EQ(executed.sibling_plan, selected.plan);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  PublicationCarriesExplicitSiblingAfterWorkerAdvancesToNewerEpoch)
+{
+  certified::Store store;
+  const auto selected = build_normal_avoidance_plan(5U, -1);
+  const auto sibling = build_normal_avoidance_plan(5U, 1);
+  const auto newer_selected = build_normal_avoidance_plan(6U, -1);
+  const auto newer_sibling = build_normal_avoidance_plan(6U, 1);
+  ASSERT_EQ(
+    store.replace_pair(selected.plan, sibling.plan),
+    certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.replace_pair(newer_selected.plan, newer_sibling.plan),
+    certified::StoreReason::Accepted);
+
+  ASSERT_EQ(
+    store.mark_executed(
+      selected.plan, sibling.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  const auto executed = store.executed_snapshot();
+  EXPECT_EQ(executed.plan, selected.plan);
+  EXPECT_EQ(executed.sibling_plan, sibling.plan);
+  const auto candidate = store.candidate_with_sibling_snapshot();
+  EXPECT_EQ(candidate.plan, newer_selected.plan);
+  EXPECT_EQ(candidate.sibling_plan, newer_sibling.plan);
+}
+
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  PublishedBundleSourceCarriesExactCandidateSibling)
+{
+  certified::Store store;
+  const auto selected = build_normal_avoidance_plan(5U, -1);
+  const auto sibling = build_normal_avoidance_plan(5U, 1);
+  ASSERT_EQ(
+    store.replace_pair(selected.plan, sibling.plan),
+    certified::StoreReason::Accepted);
+
+  ASSERT_EQ(
+    store.record_published_bundle_source(
+      selected.plan, 100U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  const auto published = store.published_bundle_source_snapshot();
+  EXPECT_EQ(published.plan, selected.plan);
+  EXPECT_EQ(published.sibling_plan, sibling.plan);
 }
 
 TEST(MpccRateResolvedCertifiedPlan, NewerCandidateDoesNotReplaceExecutedPlan)

@@ -97,6 +97,9 @@ struct StoreState
 struct ExecutedPlanSnapshot
 {
   std::shared_ptr<const CertifiedPlan> plan;
+  /// Opposite homotopy certified from the exact same immutable source epoch.
+  /// It is evidence only until current-world proof succeeds at consumption.
+  std::shared_ptr<const CertifiedPlan> sibling_plan;
   double first_published_control_origin_sec{
     std::numeric_limits<double>::quiet_NaN()};
   /// Artifact-local cursor whose command first crossed the publisher.  A
@@ -113,11 +116,21 @@ struct ExecutedPlanSnapshot
 struct PublishedBundleSourceSnapshot
 {
   std::shared_ptr<const CertifiedPlan> plan;
+  std::shared_ptr<const CertifiedPlan> sibling_plan;
   std::uint64_t publication_decision_id{};
   double publication_control_origin_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double publication_artifact_elapsed_sec{
     std::numeric_limits<double>::quiet_NaN()};
+};
+
+/// Atomic candidate lifecycle entry.  A sibling may only accompany a normal
+/// Cruise/Follow dynamic-obstacle plan from the same source epoch and opposite
+/// homotopy.  Newer unrelated worker output cannot overwrite this association.
+struct CandidatePlanSnapshot
+{
+  std::shared_ptr<const CertifiedPlan> plan;
+  std::shared_ptr<const CertifiedPlan> sibling_plan;
 };
 
 struct AdmissionResult
@@ -148,7 +161,11 @@ public:
     const physical::Snapshot & physical_snapshot,
     const physical::Result & physical_result);
   StoreReason replace(std::shared_ptr<const CertifiedPlan> plan);
+  StoreReason replace_pair(
+    std::shared_ptr<const CertifiedPlan> selected_plan,
+    std::shared_ptr<const CertifiedPlan> sibling_plan);
   std::shared_ptr<const CertifiedPlan> candidate_snapshot() const;
+  CandidatePlanSnapshot candidate_with_sibling_snapshot() const;
   /// Record the exact plan whose command crossed the publisher boundary.
   /// Artifact sequences order one producer's certification stream; they do
   /// not order publication across the normal and pre-entry Gate A producers.
@@ -158,8 +175,20 @@ public:
     std::uint64_t publication_decision_id,
     double publication_control_origin_sec,
     double publication_artifact_elapsed_sec);
+  StoreReason mark_executed(
+    std::shared_ptr<const CertifiedPlan> plan,
+    std::shared_ptr<const CertifiedPlan> sibling_plan,
+    std::uint64_t publication_decision_id,
+    double publication_control_origin_sec,
+    double publication_artifact_elapsed_sec);
   StoreReason record_published_bundle_source(
     std::shared_ptr<const CertifiedPlan> plan,
+    std::uint64_t publication_decision_id,
+    double publication_control_origin_sec,
+    double publication_artifact_elapsed_sec);
+  StoreReason record_published_bundle_source(
+    std::shared_ptr<const CertifiedPlan> plan,
+    std::shared_ptr<const CertifiedPlan> sibling_plan,
     std::uint64_t publication_decision_id,
     double publication_control_origin_sec,
     double publication_artifact_elapsed_sec);
@@ -180,10 +209,13 @@ public:
 private:
   mutable std::mutex mutex_;
   std::shared_ptr<const CertifiedPlan> candidate_plan_;
+  std::shared_ptr<const CertifiedPlan> candidate_sibling_plan_;
   std::shared_ptr<const CertifiedPlan> executed_plan_;
+  std::shared_ptr<const CertifiedPlan> executed_sibling_plan_;
   std::uint64_t latest_executed_sequence_{};
   std::uint64_t latest_execution_decision_id_{};
   std::shared_ptr<const CertifiedPlan> published_bundle_source_plan_;
+  std::shared_ptr<const CertifiedPlan> published_bundle_source_sibling_plan_;
   std::uint64_t latest_published_bundle_decision_id_{};
   double published_bundle_control_origin_sec_{
     std::numeric_limits<double>::quiet_NaN()};

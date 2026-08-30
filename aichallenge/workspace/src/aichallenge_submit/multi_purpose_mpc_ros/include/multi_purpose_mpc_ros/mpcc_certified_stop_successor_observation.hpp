@@ -27,7 +27,16 @@ struct CurrentControlOrigin
   double y_m{std::numeric_limits<double>::quiet_NaN()};
   double yaw_rad{std::numeric_limits<double>::quiet_NaN()};
   double speed_mps{std::numeric_limits<double>::quiet_NaN()};
+  /// Canonical command-control-origin steering used by the next problem.
   double steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  /// Physical report at the observation timestamp, before latency projection.
+  double current_time_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  /// Yaw-response steering projected to the command control origin.
+  double response_control_origin_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  /// Last physical steering command which crossed the publisher boundary.
+  double previous_published_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 enum class Reason
@@ -37,6 +46,7 @@ enum class Reason
   InvalidShape,
   InvalidCurrentState,
   TimeOutsideSuccessor,
+  Count,
 };
 
 const char * to_string(Reason reason) noexcept;
@@ -58,7 +68,14 @@ struct Result
   double position_error_m{std::numeric_limits<double>::quiet_NaN()};
   double yaw_error_rad{std::numeric_limits<double>::quiet_NaN()};
   double speed_error_mps{std::numeric_limits<double>::quiet_NaN()};
+  /// Command-control-origin error. This preserves the original field meaning.
   double steering_error_rad{std::numeric_limits<double>::quiet_NaN()};
+  double current_time_steering_error_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double response_control_origin_steering_error_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  double previous_published_steering_error_rad{
+    std::numeric_limits<double>::quiet_NaN()};
 };
 
 Result evaluate(
@@ -68,4 +85,3 @@ Result evaluate(
 }  // namespace multi_purpose_mpc_ros::mpcc_certified_stop_successor_observation
 
 #endif  // MULTI_PURPOSE_MPC_ROS__MPCC_CERTIFIED_STOP_SUCCESSOR_OBSERVATION_HPP_
-

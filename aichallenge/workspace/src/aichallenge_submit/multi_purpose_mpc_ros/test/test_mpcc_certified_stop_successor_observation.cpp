@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+
 namespace
 {
 
@@ -50,6 +52,28 @@ TEST(CertifiedStopSuccessorObservation, SamplesTheNextControlOrigin)
   EXPECT_NEAR(result.speed_error_mps, 0.0, 1e-12);
   EXPECT_NEAR(result.steering_error_rad, 0.0, 1e-12);
   EXPECT_LT(result.yaw_error_rad, 1e-12);
+  EXPECT_FALSE(std::isfinite(result.current_time_steering_error_rad));
+  EXPECT_FALSE(std::isfinite(
+      result.response_control_origin_steering_error_rad));
+  EXPECT_FALSE(std::isfinite(
+      result.previous_published_steering_error_rad));
+}
+
+TEST(CertifiedStopSuccessorObservation, ClassifiesEachSteeringOwnerIndependently)
+{
+  auto source = published();
+  const observation::CurrentControlOrigin current{
+    11U, true, 1.0, 1.025, 10.15, 1.0, -3.125, 1.85,
+    0.115, 0.105, 0.125, 0.110};
+
+  const auto result = observation::evaluate(source, current);
+
+  ASSERT_EQ(result.reason, observation::Reason::Sampled);
+  EXPECT_NEAR(result.steering_error_rad, 0.0, 1e-12);
+  EXPECT_NEAR(result.current_time_steering_error_rad, -0.010, 1e-12);
+  EXPECT_NEAR(
+    result.response_control_origin_steering_error_rad, 0.010, 1e-12);
+  EXPECT_NEAR(result.previous_published_steering_error_rad, -0.005, 1e-12);
 }
 
 TEST(CertifiedStopSuccessorObservation, RejectsASecondDecisionAtTheSameOrigin)

@@ -2676,6 +2676,12 @@ def test_certified_stop_successor_is_observed_only_after_publication_join() -> N
     )
     observe = SOURCE[observe_start:observe_end]
     assert "authority=observation-only" in observe
+    assert "Certified Stop successor join summary:" in observe
+    assert "certified_stop_successor_telemetry_window_.record(" in observe
+    assert "current.current_time_steering_rad" in observe
+    assert "current.current_response_steering_rad" in observe
+    assert "current.previous_published_steering_rad" in observe
+    assert "Certified Stop successor join: source_decision=" not in observe
     assert "canonical_normal_emergency_stop(" not in observe
     assert "publish_control_command(" not in observe
 

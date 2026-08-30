@@ -52,3 +52,25 @@ Run `make dev2` and inspect `Certified Stop successor join`:
 - large pose/speed/steering deltas indicate model/publisher mismatch and block
   any production connection.
 
+## Dynamic run: `output/20260830-142647`
+
+The observation joined the next control origin 1,282 times. ShiftOut and Pass
+were both represented, so the join is not limited to Cruise. Identity and time
+provenance generally survived the publication boundary.
+
+Position, yaw and speed errors were usually small enough to support further
+classification. Steering error, however, repeated in discrete values close to
+one or more control-rate steps (for example 0.010713, 0.014284, 0.017855,
+0.021514 and 0.025172 rad). This is structured rather than random noise.
+
+The run therefore does **not** authorize production use of the successor. It
+shows that the causal join exists while leaving two competing explanations:
+
+1. terminal Stop integration and serialized steering are offset by a sample;
+2. the observation compares the exact successor against the wrong one of the
+   controller's physical, response, command-origin and committed steering
+   states.
+
+The run also exposed an observability defect: one log per control cycle created
+more than a thousand lines. The follow-up Slice aggregates telemetry and
+separates steering owners before any authority change.

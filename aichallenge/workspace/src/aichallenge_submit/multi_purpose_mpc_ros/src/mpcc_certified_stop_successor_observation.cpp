@@ -40,6 +40,7 @@ const char * to_string(const Reason reason) noexcept
     case Reason::InvalidShape: return "invalid-shape";
     case Reason::InvalidCurrentState: return "invalid-current-state";
     case Reason::TimeOutsideSuccessor: return "time-outside-successor";
+    case Reason::Count: break;
   }
   return "unknown";
 }
@@ -142,9 +143,22 @@ Result evaluate(
   result.speed_error_mps = current.speed_mps - result.expected_speed_mps;
   result.steering_error_rad = angle_error(
     current.steering_rad, result.expected_steering_rad);
+  if (std::isfinite(current.current_time_steering_rad)) {
+    result.current_time_steering_error_rad = angle_error(
+      current.current_time_steering_rad, result.expected_steering_rad);
+  }
+  if (std::isfinite(current.response_control_origin_steering_rad)) {
+    result.response_control_origin_steering_error_rad = angle_error(
+      current.response_control_origin_steering_rad,
+      result.expected_steering_rad);
+  }
+  if (std::isfinite(current.previous_published_steering_rad)) {
+    result.previous_published_steering_error_rad = angle_error(
+      current.previous_published_steering_rad,
+      result.expected_steering_rad);
+  }
   result.reason = Reason::Sampled;
   return result;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_certified_stop_successor_observation
-

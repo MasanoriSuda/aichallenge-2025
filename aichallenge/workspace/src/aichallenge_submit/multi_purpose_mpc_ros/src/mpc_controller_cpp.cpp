@@ -7730,6 +7730,83 @@ struct CanonicalNormalFinalActuationTelemetryWindow
   double last_rejected_final_wire_steering_rad{};
 };
 
+struct CertifiedStopSuccessorErrorAggregate
+{
+  std::uint64_t count{};
+  double total_absolute{};
+  double maximum_absolute{};
+
+  void record(const double value)
+  {
+    if (!std::isfinite(value)) {
+      return;
+    }
+    const double absolute = std::abs(value);
+    ++count;
+    total_absolute += absolute;
+    maximum_absolute = std::max(maximum_absolute, absolute);
+  }
+
+  double mean_absolute() const
+  {
+    return count == 0U ? std::numeric_limits<double>::quiet_NaN() :
+           total_absolute / static_cast<double>(count);
+  }
+};
+
+struct CertifiedStopSuccessorTelemetryWindow
+{
+  static constexpr std::size_t kIntentCount =
+    static_cast<std::size_t>(mpcc_contract::ControlIntent::Rejoin) + 1U;
+  std::array<
+    std::uint64_t,
+    static_cast<std::size_t>(stop_successor_observation::Reason::Count)>
+  reason_count{};
+  std::array<std::uint64_t, kIntentCount> sampled_intent_count{};
+  CertifiedStopSuccessorErrorAggregate position;
+  CertifiedStopSuccessorErrorAggregate yaw;
+  CertifiedStopSuccessorErrorAggregate speed;
+  CertifiedStopSuccessorErrorAggregate command_origin_steering;
+  CertifiedStopSuccessorErrorAggregate current_time_steering;
+  CertifiedStopSuccessorErrorAggregate response_origin_steering;
+  CertifiedStopSuccessorErrorAggregate previous_published_steering;
+
+  void record(
+    const mpcc_contract::ControlIntent intent,
+    const stop_successor_observation::Result & result)
+  {
+    const auto reason_index = static_cast<std::size_t>(result.reason);
+    if (reason_index < reason_count.size()) {
+      ++reason_count[reason_index];
+    }
+    if (result.reason != stop_successor_observation::Reason::Sampled) {
+      return;
+    }
+    const auto intent_index = static_cast<std::size_t>(intent);
+    if (intent_index < sampled_intent_count.size()) {
+      ++sampled_intent_count[intent_index];
+    }
+    position.record(result.position_error_m);
+    yaw.record(result.yaw_error_rad);
+    speed.record(result.speed_error_mps);
+    command_origin_steering.record(result.steering_error_rad);
+    current_time_steering.record(result.current_time_steering_error_rad);
+    response_origin_steering.record(
+      result.response_control_origin_steering_error_rad);
+    previous_published_steering.record(
+      result.previous_published_steering_error_rad);
+  }
+
+  std::uint64_t rejected_count() const
+  {
+    std::uint64_t count{};
+    for (std::size_t i = 1U; i < reason_count.size(); ++i) {
+      count += reason_count[i];
+    }
+    return count;
+  }
+};
+
 struct MPC
 {
   MPC(
@@ -9003,52 +9080,83 @@ struct MPC
         current.observation_origin_sec, current.control_origin_sec,
         current.control_pose.x_m, current.control_pose.y_m,
         current.control_pose.yaw_rad, current.control_origin_speed_mps,
-        current.current_steering_rad});
+        current.current_steering_rad, current.current_time_steering_rad,
+        current.current_response_steering_rad,
+        current.previous_published_steering_rad});
     const auto & evidence = published.evidence;
-    if (result.reason != stop_successor_observation::Reason::Sampled) {
-      RCLCPP_WARN(
-        rclcpp::get_logger("mpc_controller"),
-        "Certified Stop successor join: source_decision=%lu, decision=%lu, "
-        "solution=%lu, fingerprint=%lu, intent=%s, result=%s, "
-        "elapsed=%.6f, publisher_boundary=%.6f, publication_age=%.6f, "
-        "authority=observation-only",
-        static_cast<unsigned long>(evidence.source_decision_id),
-        static_cast<unsigned long>(decision_id),
-        static_cast<unsigned long>(evidence.solution_id),
-        static_cast<unsigned long>(evidence.problem_fingerprint),
-        mpcc_contract::to_string(evidence.source_intent),
-        stop_successor_observation::to_string(result.reason),
-        result.successor_elapsed_sec, result.publisher_boundary_sec,
-        result.publication_age_sec);
+    certified_stop_successor_telemetry_window_.record(
+      evidence.source_intent, result);
+    if (
+      !std::isfinite(current.observation_origin_sec) ||
+      !std::isfinite(certified_stop_successor_telemetry_last_log_sec_))
+    {
+      certified_stop_successor_telemetry_last_log_sec_ =
+        current.observation_origin_sec;
       return;
     }
-    RCLCPP_INFO(
-      rclcpp::get_logger("mpc_controller"),
-      "Certified Stop successor join: source_decision=%lu, decision=%lu, "
-      "solution=%lu, fingerprint=%lu, intent=%s, result=%s, "
-      "elapsed=%.6f, publisher_boundary=%.6f, boundary_delta=%.6f, "
-      "sample=%zu/%zu, alpha=%.6f, "
-      "position_error=%.6f m, yaw_error=%.6f rad, "
-      "speed_error=%.6f mps, steering_error=%.6f rad, "
-      "expected=(%.6f,%.6f,%.6f,%.6f,%.6f), "
-      "observed=(%.6f,%.6f,%.6f,%.6f,%.6f), "
-      "authority=observation-only",
-      static_cast<unsigned long>(evidence.source_decision_id),
-      static_cast<unsigned long>(decision_id),
-      static_cast<unsigned long>(evidence.solution_id),
-      static_cast<unsigned long>(evidence.problem_fingerprint),
-      mpcc_contract::to_string(evidence.source_intent),
-      stop_successor_observation::to_string(result.reason),
-      result.successor_elapsed_sec, result.publisher_boundary_sec,
-      result.successor_elapsed_sec - result.publisher_boundary_sec,
-      result.lower_sample_index, result.upper_sample_index,
-      result.interpolation_alpha, result.position_error_m,
-      result.yaw_error_rad, result.speed_error_mps,
-      result.steering_error_rad, result.expected_x_m, result.expected_y_m,
-      result.expected_yaw_rad, result.expected_speed_mps,
-      result.expected_steering_rad, current.control_pose.x_m,
-      current.control_pose.y_m, current.control_pose.yaw_rad,
-      current.control_origin_speed_mps, current.current_steering_rad);
+    const double window_sec = current.observation_origin_sec -
+      certified_stop_successor_telemetry_last_log_sec_;
+    if (window_sec < 1.0) {
+      return;
+    }
+    const auto & window = certified_stop_successor_telemetry_window_;
+    const auto reason = [&window](const stop_successor_observation::Reason value) {
+        return window.reason_count[static_cast<std::size_t>(value)];
+      };
+    const auto intent = [&window](const mpcc_contract::ControlIntent value) {
+        return window.sampled_intent_count[static_cast<std::size_t>(value)];
+      };
+    std::ostringstream summary;
+    summary << std::fixed << std::setprecision(6)
+            << "Certified Stop successor join summary: window=" << window_sec
+            << "s, sampled="
+            << reason(stop_successor_observation::Reason::Sampled)
+            << ", rejected=" << window.rejected_count()
+            << "[identity="
+            << reason(stop_successor_observation::Reason::InvalidIdentity)
+            << ",shape="
+            << reason(stop_successor_observation::Reason::InvalidShape)
+            << ",state="
+            << reason(stop_successor_observation::Reason::InvalidCurrentState)
+            << ",time="
+            << reason(stop_successor_observation::Reason::TimeOutsideSuccessor)
+            << "], intents=track:" << intent(mpcc_contract::ControlIntent::Track)
+            << "/cruise:" << intent(mpcc_contract::ControlIntent::Cruise)
+            << "/follow:" << intent(mpcc_contract::ControlIntent::Follow)
+            << "/shiftout:" << intent(mpcc_contract::ControlIntent::ShiftOut)
+            << "/pass:" << intent(mpcc_contract::ControlIntent::Pass)
+            << "/return:" << intent(mpcc_contract::ControlIntent::Return)
+            << "/rejoin:" << intent(mpcc_contract::ControlIntent::Rejoin)
+            << ", error_mean/max=position:"
+            << window.position.mean_absolute() << "/"
+            << window.position.maximum_absolute
+            << "m,yaw:" << window.yaw.mean_absolute() << "/"
+            << window.yaw.maximum_absolute
+            << "rad,speed:" << window.speed.mean_absolute() << "/"
+            << window.speed.maximum_absolute
+            << "mps,steering_command_origin:"
+            << window.command_origin_steering.mean_absolute() << "/"
+            << window.command_origin_steering.maximum_absolute
+            << ",steering_current_time:"
+            << window.current_time_steering.mean_absolute() << "/"
+            << window.current_time_steering.maximum_absolute
+            << ",steering_response_origin:"
+            << window.response_origin_steering.mean_absolute() << "/"
+            << window.response_origin_steering.maximum_absolute
+            << ",steering_previous_published:"
+            << window.previous_published_steering.mean_absolute() << "/"
+            << window.previous_published_steering.maximum_absolute
+            << "rad, authority=observation-only";
+    if (window.rejected_count() > 0U) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"), "%s", summary.str().c_str());
+    } else {
+      RCLCPP_INFO(
+        rclcpp::get_logger("mpc_controller"), "%s", summary.str().c_str());
+    }
+    certified_stop_successor_telemetry_window_ = {};
+    certified_stop_successor_telemetry_last_log_sec_ =
+      current.observation_origin_sec;
   }
   OvertakeSiblingAdoptionLiveState
   current_overtake_sibling_adoption_live_state() const
@@ -29163,6 +29271,10 @@ struct MPC
   pending_canonical_normal_actuation_;
   std::optional<stop_successor_observation::Published>
   published_certified_stop_successor_observation_;
+  CertifiedStopSuccessorTelemetryWindow
+  certified_stop_successor_telemetry_window_;
+  double certified_stop_successor_telemetry_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
   std::optional<PendingRateResolvedPublicationSuccessor>
   pending_rate_resolved_publication_successor_;
   CanonicalNormalFinalActuationTelemetryWindow

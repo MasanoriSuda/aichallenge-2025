@@ -970,4 +970,55 @@ StopContingencyResult build_stop_contingency(
   return result;
 }
 
+StopContingencyResult build_stop_successor(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const ContinuationInitialState & initial_state,
+  const StopCourseGeometry & course_geometry,
+  const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
+  const double minimum_acceleration_mps2) noexcept
+{
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  StopContingencyResult rejected;
+  if (execution::validate(artifact) != execution::RejectReason::None) {
+    return rejected;
+  }
+  if (
+    !std::isfinite(minimum_acceleration_mps2) ||
+    minimum_acceleration_mps2 >= 0.0)
+  {
+    rejected.reason = StopContingencyRejectReason::InvalidBrakingEnvelope;
+    return rejected;
+  }
+  const double tolerance = std::max(1e-9, artifact.physical_global_tolerance);
+  const bool braking_owned_by_every_source_stage = std::all_of(
+    artifact.control_stages.begin(), artifact.control_stages.end(),
+    [minimum_acceleration_mps2, tolerance](
+      const execution::ControlStage & stage) {
+      return minimum_acceleration_mps2 >=
+             stage.acceleration_lower_mps2 - tolerance &&
+             minimum_acceleration_mps2 <=
+             stage.acceleration_upper_mps2 + tolerance;
+    });
+  if (!braking_owned_by_every_source_stage) {
+    rejected.reason = StopContingencyRejectReason::InvalidBrakingEnvelope;
+    return rejected;
+  }
+
+  // The successor does not extend or revive an exhausted normal cursor.  A
+  // synthetic cursor only transports the immutable source identity and the
+  // already-certified physical input envelope into the common Stop builder.
+  // Maximum braking begins immediately; the first publisher interval holds
+  // the last serialized steering state exactly.
+  const execution::Cursor successor_cursor{
+    true, execution::CursorReason::Available, artifact.identity.sequence,
+    0U, artifact.control_stages.size(), 0.0, 0.0};
+  const execution::Actuation successor_actuation{
+    artifact.identity.sequence, 0U, initial_state.velocity_mps,
+    minimum_acceleration_mps2, 0.0, initial_state.steering_rad,
+    artifact.control_stages.front().path_curvature_radpm, 0.0};
+  return build_stop_contingency(
+    artifact, successor_cursor, successor_actuation, initial_state,
+    course_geometry, lateral_policy, minimum_acceleration_mps2);
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter

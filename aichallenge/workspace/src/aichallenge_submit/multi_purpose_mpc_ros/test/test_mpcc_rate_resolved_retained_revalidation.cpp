@@ -1228,6 +1228,117 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsExhaustedArtifact)
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
+  CertifiesCurrentWorldStopAfterNormalPrefixExhaustion)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.45, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.control_origin_speed_mps = 2.0;
+  request.current_speed_mps = 2.0;
+  request.current_time_steering_rad = 0.10;
+  request.current_steering_rad = 0.10;
+  request.current_response_steering_rad = 0.10;
+  request.previous_published_steering_rad = 0.10;
+
+  const auto normal = retained::evaluate(request);
+  ASSERT_EQ(normal.reason, retained::Reason::CursorUnavailable);
+  ASSERT_EQ(normal.cursor_reason, artifact::CursorReason::Exhausted);
+
+  const auto successor = retained::evaluate_stop_successor(request);
+  ASSERT_EQ(successor.reason, retained::StopSuccessorReason::Accepted);
+  ASSERT_TRUE(successor.accepted());
+  ASSERT_FALSE(successor.exact_trajectory.elapsed_time_sec.empty());
+  ASSERT_EQ(
+    successor.exact_trajectory.elapsed_time_sec.size(),
+    successor.actuation_samples.size());
+  EXPECT_NEAR(successor.exact_trajectory.velocity_mps.back(), 0.0, 1e-9);
+  EXPECT_TRUE(successor.control_path_clearance.clear);
+  EXPECT_TRUE(successor.successor_path_clearance.clear);
+  EXPECT_TRUE(successor.dynamic_clearance.clear);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsCurrentWorldStopWithDifferentIntentIdentity)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.current_intent = contract::ControlIntent::Cruise;
+
+  const auto successor = retained::evaluate_stop_successor(request);
+  EXPECT_EQ(
+    successor.reason, retained::StopSuccessorReason::InvalidIdentity);
+  EXPECT_FALSE(successor.accepted());
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsCurrentWorldStopWhenWallOccupiesSuccessor)
+{
+  auto grid = free_grid();
+  const auto occupied = grid->world_to_grid(50.65, 0.20);
+  ASSERT_TRUE(occupied.has_value());
+  grid->cells[occupied->row * grid->width + occupied->column] =
+    recovery::CellState::Occupied;
+  const auto plan = certified_plan(grid);
+  auto request = accepted_request(plan);
+  request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.45, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.control_origin_speed_mps = 2.0;
+  request.current_speed_mps = 2.0;
+  request.current_time_steering_rad = 0.10;
+  request.current_steering_rad = 0.10;
+  request.current_response_steering_rad = 0.10;
+  request.previous_published_steering_rad = 0.10;
+
+  const auto successor = retained::evaluate_stop_successor(request);
+  EXPECT_EQ(
+    successor.reason, retained::StopSuccessorReason::StaticPathBlocked);
+  EXPECT_FALSE(successor.accepted());
+  EXPECT_TRUE(successor.control_path_clearance.clear);
+  EXPECT_FALSE(successor.successor_path_clearance.clear);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  RejectsCurrentWorldStopWhenPeerOccupiesSuccessor)
+{
+  const auto plan = certified_plan();
+  auto request = accepted_request(plan);
+  request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.45, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.control_origin_speed_mps = 2.0;
+  request.current_speed_mps = 2.0;
+  request.current_time_steering_rad = 0.10;
+  request.current_steering_rad = 0.10;
+  request.current_response_steering_rad = 0.10;
+  request.previous_published_steering_rad = 0.10;
+  request.obstacles.obstacles.push_back(
+    {"d2", {50.75, 0.20, 0.0, 0.0, 0.10}});
+
+  const auto successor = retained::evaluate_stop_successor(request);
+  EXPECT_EQ(
+    successor.reason, retained::StopSuccessorReason::DynamicPathBlocked);
+  EXPECT_FALSE(successor.accepted());
+  EXPECT_FALSE(successor.dynamic_clearance.clear);
+  EXPECT_EQ(successor.dynamic_clearance.blocking_obstacle_id, "d2");
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
   RejectsRemainingSuffixShorterThanPublisherInterval)
 {
   const auto plan = certified_plan();

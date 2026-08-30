@@ -239,6 +239,19 @@ StopContingencyResult build_stop_contingency(
   const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
   double minimum_acceleration_mps2) noexcept;
 
+/// Rebuild the already-declared terminal Stop policy from a fresh physical
+/// control-origin state.  Unlike build_stop_contingency(), this operation does
+/// not need an unconsumed normal-prefix cursor: it is the successor after that
+/// prefix has ended.  The first publisher interval applies maximum braking
+/// while holding the serialized steering origin; subsequent intervals use the
+/// same path-feedback law as the ordinary terminal contingency.
+StopContingencyResult build_stop_successor(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const ContinuationInitialState & initial_state,
+  const StopCourseGeometry & course_geometry,
+  const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
+  double minimum_acceleration_mps2) noexcept;
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter
 
 #endif  // MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_PHYSICAL_ADAPTER_HPP_

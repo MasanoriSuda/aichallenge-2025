@@ -441,6 +441,65 @@ struct Result
 /// certified suffix.  This function deliberately cannot produce a command.
 Result evaluate(const Request & request);
 
+/// Observation-only result for the terminal successor of the last actually
+/// published normal Bundle. It deliberately owns no publisher command:
+/// production promotion requires separate dynamic acceptance.
+enum class StopSuccessorReason
+{
+  Accepted,
+  MissingPlan,
+  InvalidPlan,
+  InvalidIdentity,
+  InvalidCurrentWorld,
+  StaticWorldMismatch,
+  CourseFrameUnavailable,
+  PhysicalSuccessorRejected,
+  ControlPathBlocked,
+  StaticPathBlocked,
+  DynamicPathBlocked,
+  Count,
+};
+
+const char * to_string(StopSuccessorReason reason) noexcept;
+
+struct StopSuccessorResult
+{
+  StopSuccessorReason reason{StopSuccessorReason::MissingPlan};
+  std::uint64_t source_sequence{};
+  std::uint64_t decision_id{};
+  std::uint64_t obstacle_generation{};
+  mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason
+  physical_reason{
+    mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason::
+    InvalidArtifact};
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason exact_reason{
+    race_mpcc_foundation::ExactPhysicalExecutionTrajectoryReason::Accepted};
+  recovery::PathClearanceResult control_path_clearance;
+  recovery::PathClearanceResult successor_path_clearance;
+  mpcc_rate_resolved_dynamic_proof::Result dynamic_clearance;
+  race_mpcc_foundation::ExactPhysicalExecutionTrajectory exact_trajectory;
+  std::vector<mpcc_rate_resolved_physical_adapter::StopContingencyResult::
+    ActuationSample> actuation_samples;
+  std::vector<recovery::Pose2D> world_path;
+  double lifted_control_origin_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  double initial_lateral_m{std::numeric_limits<double>::quiet_NaN()};
+  double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};
+  double initial_heading_offset_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+
+  bool accepted() const noexcept
+  {
+    return reason == StopSuccessorReason::Accepted;
+  }
+};
+
+/// Rebuild maximum-braking Stop from Request's fresh control-origin state and
+/// prove the complete timed path against Request's current wall and all peers.
+/// The source plan contributes only immutable model, course and homotopy
+/// provenance; its exhausted normal cursor is never extended.
+StopSuccessorResult evaluate_stop_successor(const Request & request);
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
 
 #endif  // MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_RETAINED_REVALIDATION_HPP_

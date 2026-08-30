@@ -28305,6 +28305,72 @@ struct MPC
     return output;
   }
 
+  rate_resolved_retained::StopSuccessorResult
+  evaluate_published_stop_successor_shadow(
+    const double now_sec, const mpcc_contract::ControlIntent intent,
+    const rate_resolved_retained::Reason normal_reject_reason)
+  {
+    rate_resolved_retained::StopSuccessorResult result;
+    result.decision_id = active_control_decision_id_;
+    if (rate_resolved_track_cruise_certified_plan_store_ != nullptr) {
+      const auto published =
+        rate_resolved_track_cruise_certified_plan_store_->
+        latest_published_source_snapshot();
+      if (
+        published.plan != nullptr && published.publication_decision_id > 0U &&
+        published.publication_decision_id < active_control_decision_id_)
+      {
+        const auto request = build_rate_resolved_current_world_request(
+          published.plan, intent, now_sec,
+          rate_resolved_retained::ExecutionClock{
+            rate_resolved_retained::ExecutionClockKind::PublishedPlan,
+            published.publication_control_origin_sec,
+            published.publication_artifact_elapsed_sec});
+        if (request.has_value()) {
+          result = rate_resolved_retained::evaluate_stop_successor(
+            request.value());
+        }
+      }
+    }
+    const bool transition =
+      !published_stop_successor_shadow_trace_initialized_ ||
+      result.reason != published_stop_successor_shadow_last_reason_ ||
+      result.source_sequence != published_stop_successor_shadow_last_sequence_;
+    const bool summary_due =
+      !std::isfinite(published_stop_successor_shadow_last_log_sec_) ||
+      now_sec - published_stop_successor_shadow_last_log_sec_ >= 1.0;
+    if (transition || summary_due) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Published Stop successor shadow: decision=%lu, intent=%s, "
+        "normal=%s, source=%lu, result=%s, physical=%s/exact:%s, "
+        "control_wall=%d/%d, stop_wall=%d/%d, "
+        "dynamic=%d/%d/blocker:%s, states=%zu, authority=shadow",
+        static_cast<unsigned long>(active_control_decision_id_),
+        mpcc_contract::to_string(intent),
+        rate_resolved_retained::to_string(normal_reject_reason),
+        static_cast<unsigned long>(result.source_sequence),
+        rate_resolved_retained::to_string(result.reason),
+        rate_resolved_physical::to_string(result.physical_reason),
+        race_mpcc::exact_physical_execution_trajectory_reason_name(
+          result.exact_reason),
+        result.control_path_clearance.valid ? 1 : 0,
+        result.control_path_clearance.clear ? 1 : 0,
+        result.successor_path_clearance.valid ? 1 : 0,
+        result.successor_path_clearance.clear ? 1 : 0,
+        result.dynamic_clearance.valid ? 1 : 0,
+        result.dynamic_clearance.clear ? 1 : 0,
+        result.dynamic_clearance.blocking_obstacle_id.empty() ? "none" :
+        result.dynamic_clearance.blocking_obstacle_id.c_str(),
+        result.exact_trajectory.elapsed_time_sec.size());
+      published_stop_successor_shadow_trace_initialized_ = true;
+      published_stop_successor_shadow_last_reason_ = result.reason;
+      published_stop_successor_shadow_last_sequence_ = result.source_sequence;
+      published_stop_successor_shadow_last_log_sec_ = now_sec;
+    }
+    return result;
+  }
+
   MpcControlCycleResult rate_resolved_normal_production_control(
     MpcProblem problem, const double now_sec,
     const mpcc_contract::ControlIntent intent)
@@ -28358,6 +28424,10 @@ struct MPC
     bool published_stop_retained = false;
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
       problem, now_sec, intent);
+    if (!retained.production_authority.has_value()) {
+      static_cast<void>(evaluate_published_stop_successor_shadow(
+          now_sec, intent, retained.reason));
+    }
     observe_published_certified_stop_successor_join(
       retained, active_control_decision_id_);
     // Observation only: capture the immutable current-world problem at the
@@ -29312,6 +29382,13 @@ struct MPC
   pending_canonical_normal_actuation_;
   std::optional<stop_successor_observation::Published>
   published_certified_stop_successor_observation_;
+  bool published_stop_successor_shadow_trace_initialized_{false};
+  rate_resolved_retained::StopSuccessorReason
+    published_stop_successor_shadow_last_reason_{
+      rate_resolved_retained::StopSuccessorReason::Count};
+  std::uint64_t published_stop_successor_shadow_last_sequence_{};
+  double published_stop_successor_shadow_last_log_sec_{
+    -std::numeric_limits<double>::infinity()};
   CertifiedStopSuccessorTelemetryWindow
   certified_stop_successor_telemetry_window_;
   double certified_stop_successor_telemetry_last_log_sec_{

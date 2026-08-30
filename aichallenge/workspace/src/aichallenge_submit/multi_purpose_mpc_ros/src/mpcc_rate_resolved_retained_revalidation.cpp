@@ -1435,4 +1435,237 @@ Result evaluate(const Request & request)
   return result;
 }
 
+const char * to_string(const StopSuccessorReason reason) noexcept
+{
+  switch (reason) {
+    case StopSuccessorReason::Accepted: return "accepted";
+    case StopSuccessorReason::MissingPlan: return "missing-plan";
+    case StopSuccessorReason::InvalidPlan: return "invalid-plan";
+    case StopSuccessorReason::InvalidIdentity: return "invalid-identity";
+    case StopSuccessorReason::InvalidCurrentWorld:
+      return "invalid-current-world";
+    case StopSuccessorReason::StaticWorldMismatch:
+      return "static-world-mismatch";
+    case StopSuccessorReason::CourseFrameUnavailable:
+      return "course-frame-unavailable";
+    case StopSuccessorReason::PhysicalSuccessorRejected:
+      return "physical-successor-rejected";
+    case StopSuccessorReason::ControlPathBlocked:
+      return "control-path-blocked";
+    case StopSuccessorReason::StaticPathBlocked:
+      return "static-path-blocked";
+    case StopSuccessorReason::DynamicPathBlocked:
+      return "dynamic-path-blocked";
+    case StopSuccessorReason::Count: break;
+  }
+  return "unknown";
+}
+
+StopSuccessorResult evaluate_stop_successor(const Request & request)
+{
+  StopSuccessorResult result;
+  result.decision_id = request.decision_id;
+  result.obstacle_generation = request.obstacles.generation;
+  if (request.plan == nullptr) {
+    return result;
+  }
+  if (certified::validate(*request.plan) != certified::RejectReason::None) {
+    result.reason = StopSuccessorReason::InvalidPlan;
+    return result;
+  }
+  const auto & execution = *request.plan->execution_artifact;
+  const auto & source = *request.plan->physical_snapshot;
+  result.source_sequence = execution.identity.sequence;
+  if (
+    request.decision_id == 0U ||
+    request.decision_id <= execution.identity.source_context.decision_id ||
+    !artifact::supports_intent(request.current_intent) ||
+    request.current_intent != execution.identity.source_context.intent)
+  {
+    result.reason = StopSuccessorReason::InvalidIdentity;
+    return result;
+  }
+  if (
+    !request.obstacles.current ||
+    !dynamic_proof::observation_valid(request.obstacles) ||
+    request.obstacles.observed_sec > request.now_sec + kIdentityTolerance ||
+    !std::isfinite(request.now_sec) ||
+    !std::isfinite(request.control_origin_sec) ||
+    request.control_origin_sec < request.now_sec ||
+    !std::isfinite(request.control_origin_physical_progress_m) ||
+    !std::isfinite(request.path_length_m) || request.path_length_m <= 0.0 ||
+    !std::isfinite(request.progress_continuity_tolerance_m) ||
+    request.progress_continuity_tolerance_m < 0.0 ||
+    !finite_pose(request.control_pose) ||
+    !std::isfinite(request.control_origin_speed_mps) ||
+    request.control_origin_speed_mps < 0.0 ||
+    !std::isfinite(request.current_steering_rad) ||
+    !std::isfinite(request.current_response_steering_rad) ||
+    !std::isfinite(request.minimum_acceleration_mps2) ||
+    request.minimum_acceleration_mps2 >= 0.0 ||
+    request.measured_to_control_path.empty() ||
+    request.measured_to_control_path.size() !=
+    request.measured_to_control_elapsed_sec.size() ||
+    !same_pose(request.measured_to_control_path.back(), request.control_pose))
+  {
+    result.reason = StopSuccessorReason::InvalidCurrentWorld;
+    return result;
+  }
+  const bool static_world_matches =
+    request.current_wall_grid != nullptr &&
+    source.wall_grid_fingerprint != 0U &&
+    (request.current_wall_grid.get() == source.wall_grid.get() ||
+    recovery::occupancy_grid_fingerprint(*request.current_wall_grid) ==
+    source.wall_grid_fingerprint) &&
+    same_footprint(request.current_footprint, source.footprint);
+  if (!static_world_matches) {
+    result.reason = StopSuccessorReason::StaticWorldMismatch;
+    return result;
+  }
+  const auto clearance_footprint = physical::resolve_clearance_footprint(
+    source.footprint, source.hard_wall_clearance_m);
+  if (!clearance_footprint.has_value()) {
+    result.reason = StopSuccessorReason::StaticWorldMismatch;
+    return result;
+  }
+  result.control_path_clearance = recovery::evaluate_clear_footprint_path(
+    *request.current_wall_grid, clearance_footprint.value(),
+    request.measured_to_control_path, source.swept_step_m);
+  if (
+    !result.control_path_clearance.valid ||
+    !result.control_path_clearance.clear)
+  {
+    result.reason = StopSuccessorReason::ControlPathBlocked;
+    return result;
+  }
+
+  // The normal prefix may already be exhausted, so no artifact cursor is
+  // consulted.  Lift the fresh physical progress near the source horizon,
+  // then solve the course coordinate and lag directly from the measured pose.
+  const auto & source_trajectory = source.trajectory;
+  if (
+    source_trajectory.progress_m.empty() ||
+    source_trajectory.lag_m.size() != source_trajectory.progress_m.size())
+  {
+    result.reason = StopSuccessorReason::InvalidPlan;
+    return result;
+  }
+  const double source_terminal_physical_progress_m =
+    source_trajectory.progress_m.back() + source_trajectory.lag_m.back();
+  const auto lifted = lift_progress(
+    request.control_origin_physical_progress_m,
+    source_terminal_physical_progress_m, request.path_length_m,
+    request.progress_continuity_tolerance_m, request.circular);
+  if (!lifted.valid) {
+    result.reason = StopSuccessorReason::CourseFrameUnavailable;
+    return result;
+  }
+  result.lifted_control_origin_progress_m = lifted.progress_m;
+  double absolute_progress_m = lifted.progress_m;
+  std::optional<contract::FrenetPose> current_frenet;
+  for (int iteration = 0; iteration < 2; ++iteration) {
+    const auto frame = mpc_stage_geometry::sample_course_frame(
+      source.course_frame_knots, absolute_progress_m,
+      std::max(kIdentityTolerance, source.bound_tolerance_m));
+    if (!frame.has_value()) {
+      result.reason = StopSuccessorReason::CourseFrameUnavailable;
+      return result;
+    }
+    current_frenet = contract::project_planar_pose_to_frenet(
+      contract::PlanarPose{
+        request.control_pose.x_m, request.control_pose.y_m,
+        request.control_pose.yaw_rad},
+      contract::PlanarPose{
+        frame->x_m, frame->y_m, frame->heading_rad});
+    if (!current_frenet.has_value()) {
+      result.reason = StopSuccessorReason::CourseFrameUnavailable;
+      return result;
+    }
+    absolute_progress_m = lifted.progress_m - current_frenet->lag_m;
+  }
+  result.initial_lateral_m = current_frenet->lateral_m;
+  result.initial_lag_m = current_frenet->lag_m;
+  result.initial_heading_offset_rad = current_frenet->heading_offset_rad;
+  const auto successor =
+    mpcc_rate_resolved_physical_adapter::build_stop_successor(
+    execution,
+    mpcc_rate_resolved_physical_adapter::ContinuationInitialState{
+      current_frenet->lateral_m, current_frenet->lag_m,
+      current_frenet->heading_offset_rad,
+      request.control_origin_speed_mps,
+      absolute_progress_m - execution.course_progress_origin_m,
+      request.current_steering_rad, request.current_response_steering_rad},
+    source.terminal_stop_course_geometry, request.stop_lateral_policy,
+    request.minimum_acceleration_mps2);
+  result.physical_reason = successor.reason;
+  result.exact_reason = successor.exact_reason;
+  if (!successor.exact_trajectory.has_value()) {
+    result.reason = StopSuccessorReason::PhysicalSuccessorRejected;
+    return result;
+  }
+  result.exact_trajectory = successor.exact_trajectory.value();
+  result.actuation_samples = successor.actuation_samples;
+
+  result.world_path.reserve(result.exact_trajectory.progress_m.size() + 1U);
+  result.world_path.push_back(request.control_pose);
+  for (std::size_t index = 0U;
+    index < result.exact_trajectory.progress_m.size(); ++index)
+  {
+    const artifact::PredictedState state{
+      result.exact_trajectory.lateral_m[index],
+      result.exact_trajectory.lag_m[index],
+      result.exact_trajectory.heading_offset_rad[index],
+      result.exact_trajectory.velocity_mps[index],
+      result.exact_trajectory.progress_m[index] -
+      execution.course_progress_origin_m,
+      result.actuation_samples[index].end_steering_rad,
+      result.actuation_samples[index].end_steering_rad};
+    const auto pose = reconstruct_pose(source, state);
+    if (!pose.has_value()) {
+      result.reason = StopSuccessorReason::CourseFrameUnavailable;
+      return result;
+    }
+    result.world_path.push_back(pose.value());
+  }
+  result.successor_path_clearance = recovery::evaluate_clear_footprint_path(
+    *request.current_wall_grid, clearance_footprint.value(), result.world_path,
+    source.swept_step_m);
+  if (
+    !result.successor_path_clearance.valid ||
+    !result.successor_path_clearance.clear)
+  {
+    result.reason = StopSuccessorReason::StaticPathBlocked;
+    return result;
+  }
+
+  dynamic_proof::observe_timed_path(
+    source.footprint, request.measured_to_control_path,
+    request.measured_to_control_elapsed_sec, source.swept_step_m,
+    request.obstacles, result.dynamic_clearance);
+  const double prediction_delay_sec =
+    request.control_origin_sec - request.now_sec;
+  auto previous_pose = request.control_pose;
+  double previous_time_sec = prediction_delay_sec;
+  for (std::size_t index = 1U; index < result.world_path.size(); ++index) {
+    const double endpoint_time_sec = prediction_delay_sec +
+      result.exact_trajectory.elapsed_time_sec[index - 1U];
+    dynamic_proof::observe_segment(
+      source.footprint, previous_pose, result.world_path[index],
+      previous_time_sec, endpoint_time_sec, source.swept_step_m,
+      request.obstacles, result.dynamic_clearance);
+    previous_pose = result.world_path[index];
+    previous_time_sec = endpoint_time_sec;
+    if (!result.dynamic_clearance.valid || !result.dynamic_clearance.clear) {
+      break;
+    }
+  }
+  dynamic_proof::finalize(request.obstacles, result.dynamic_clearance);
+  if (!result.dynamic_clearance.valid || !result.dynamic_clearance.clear) {
+    result.reason = StopSuccessorReason::DynamicPathBlocked;
+    return result;
+  }
+  result.reason = StopSuccessorReason::Accepted;
+  return result;
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation

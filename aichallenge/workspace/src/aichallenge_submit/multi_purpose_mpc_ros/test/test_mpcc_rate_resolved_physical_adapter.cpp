@@ -261,6 +261,50 @@ TEST(
 
 TEST(
   MpccRateResolvedPhysicalAdapter,
+  BuildsMaximumBrakingSuccessorAfterNormalPrefixExhaustion)
+{
+  const auto source = artifact();
+
+  const auto result = adapter::build_stop_successor(
+    source,
+    adapter::ContinuationInitialState{
+      -0.40, 0.0, 0.0, 2.0, 0.45, 0.10, 0.10},
+    stop_course_geometry(), stop_lateral_policy(), -3.0);
+
+  ASSERT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  ASSERT_FALSE(result.actuation_samples.empty());
+  EXPECT_NEAR(result.exact_trajectory->velocity_mps.back(), 0.0, 1e-9);
+  EXPECT_GT(result.exact_trajectory->progress_m.front(), 50.45);
+  EXPECT_GT(result.publisher_interval_sample_count, 0U);
+  for (std::size_t index = 0U;
+    index < result.publisher_interval_sample_count; ++index)
+  {
+    EXPECT_DOUBLE_EQ(
+      result.actuation_samples[index].acceleration_mps2, -3.0);
+    EXPECT_DOUBLE_EQ(
+      result.actuation_samples[index].steering_rate_radps, 0.0);
+  }
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  StopSuccessorStillRejectsBrakingOutsideSourceEnvelope)
+{
+  const auto result = adapter::build_stop_successor(
+    artifact(),
+    adapter::ContinuationInitialState{
+      -0.40, 0.0, 0.0, 2.0, 0.45, 0.10, 0.10},
+    stop_course_geometry(), stop_lateral_policy(), -4.0);
+
+  EXPECT_EQ(
+    result.reason,
+    adapter::StopContingencyRejectReason::InvalidBrakingEnvelope);
+  EXPECT_FALSE(result.exact_trajectory.has_value());
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
   RejectsTerminalStopWhenPhysicalCourseHorizonEndsBeforeBraking)
 {
   const auto source = artifact();

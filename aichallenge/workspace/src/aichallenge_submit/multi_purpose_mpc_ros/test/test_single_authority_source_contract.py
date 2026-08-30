@@ -2733,6 +2733,48 @@ def test_certified_stop_successor_is_observed_only_after_publication_join() -> N
     ):
         assert retired_function not in SOURCE
 
+
+def test_current_world_stop_successor_remains_shadow_only() -> None:
+    """Fresh Stop rebuilding observes authority loss without owning output."""
+
+    shadow_start = SOURCE.index(
+        "evaluate_published_stop_successor_shadow("
+    )
+    shadow_end = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control(",
+        shadow_start,
+    )
+    shadow = SOURCE[shadow_start:shadow_end]
+    assert "latest_published_source_snapshot()" in shadow
+    assert "evaluate_stop_successor(" in shadow
+    assert "authority=shadow" in shadow
+    for forbidden in (
+        "canonical_normal_emergency_stop(",
+        "publish_control_command(",
+        "record_canonical_normal_final_command(",
+        "store_executed(",
+        "store_candidate(",
+    ):
+        assert forbidden not in shadow
+
+    owner_start = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control("
+    )
+    owner_end = SOURCE.index(
+        "MpcControlCycleResult get_control(", owner_start
+    )
+    owner = SOURCE[owner_start:owner_end]
+    authority_loss = owner.index(
+        "if (!retained.production_authority.has_value())"
+    )
+    shadow_call = owner.index(
+        "evaluate_published_stop_successor_shadow(", authority_loss
+    )
+    observation_join = owner.index(
+        "observe_published_certified_stop_successor_join(", shadow_call
+    )
+    assert authority_loss < shadow_call < observation_join
+
 def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     """Resolved normal intents must use canonical MPCC or explicit Emergency."""
 

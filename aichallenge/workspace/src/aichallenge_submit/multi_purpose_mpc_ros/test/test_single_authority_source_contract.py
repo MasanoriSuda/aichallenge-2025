@@ -2779,8 +2779,8 @@ def test_current_world_stop_successor_remains_shadow_only() -> None:
     assert authority_loss < shadow_call < observation_join
 
 
-def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
-    """The asynchronous Stop lattice may observe but never select output."""
+def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
+    """A published-source lattice alternate has one canonical selection edge."""
 
     for forbidden in (
         "certify_and_replace(",
@@ -2851,7 +2851,7 @@ def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
         assert forbidden not in observe
 
     join_start = SOURCE.index(
-        "void observe_rate_resolved_stop_lattice_current_world_join("
+        "evaluate_rate_resolved_stop_lattice_current_world_alternate("
     )
     join_end = SOURCE.index(
         "MpcControlCycleResult rate_resolved_normal_production_control(",
@@ -2859,7 +2859,6 @@ def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
     )
     join = SOURCE[join_start:join_end]
     assert "evaluate_current_world_stop_successor_plan(" in join
-    assert "authority=shadow, selected=0" in join
     for forbidden in (
         "certify_and_replace(",
         "replace_pair(",
@@ -2875,24 +2874,30 @@ def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
     owner = SOURCE[owner_start:owner_end]
     ordinary = owner.index("const auto ordinary_retained = retained;")
     join_call = owner.index(
-        "observe_rate_resolved_stop_lattice_current_world_join("
+        "evaluate_rate_resolved_stop_lattice_current_world_alternate("
     )
+    join_select = owner.index("retained = std::move(lattice_alternate);")
     production_stop = owner.index(
-        "evaluate_published_stop_successor_shadow(", join_call
+        "evaluate_published_stop_successor_shadow(", join_select
     )
-    assert ordinary < join_call < production_stop
+    assert ordinary < join_call < join_select < production_stop
+    assert owner.count(
+        "evaluate_rate_resolved_stop_lattice_current_world_alternate("
+    ) == 1
+    assert "lattice_alternate.production_authority.has_value()" in owner
 
     mailbox_start = SOURCE.index(
         "void record_rate_resolved_stop_lattice_shadow("
     )
     mailbox_end = SOURCE.index(
-        "void observe_rate_resolved_stop_lattice_current_world_join(",
+        "evaluate_rate_resolved_stop_lattice_current_world_alternate(",
         mailbox_start,
     )
     mailbox = SOURCE[mailbox_start:mailbox_end]
     assert "current_published_source_result" in mailbox
     assert "same_identity(" in mailbox
     assert "result->source_normal_identity" in mailbox
+    assert "observe_rate_resolved_stop_lattice_current_world_join(" not in SOURCE
 
 def test_get_control_has_no_legacy_normal_fallthrough() -> None:
     """Resolved normal intents must use canonical MPCC or explicit Emergency."""

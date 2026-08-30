@@ -165,6 +165,27 @@ struct StopCourseGeometry
   std::vector<double> lateral_upper_m;
 };
 
+/// Immutable lateral candidate for a terminal Stop.  The coordinate is the
+/// same artifact-local progress used by the nonlinear seven-state rollout;
+/// no elapsed-time or Mission-age interpretation is permitted.  A profile is
+/// valid only over its declared closed interval and is never extrapolated.
+struct StopLateralTargetProfile
+{
+  std::vector<double> progress_m;
+  std::vector<double> lateral_m;
+};
+
+bool stop_lateral_target_profile_valid(
+  const StopLateralTargetProfile & profile) noexcept;
+
+/// Linearly sample a validated immutable profile.  Values within tolerance of
+/// either endpoint are clamped to that endpoint; values outside the certified
+/// interval are rejected rather than retaining or extrapolating old geometry.
+std::optional<double> sample_stop_lateral_target(
+  const StopLateralTargetProfile & profile,
+  double progress_m,
+  double tolerance_m) noexcept;
+
 inline bool stop_course_geometry_valid(
   const StopCourseGeometry & geometry) noexcept
 {
@@ -271,7 +292,8 @@ StopContingencyResult build_stop_contingency(
   const StopCourseGeometry & course_geometry,
   const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
   double minimum_acceleration_mps2,
-  double target_lateral_m = 0.0) noexcept;
+  double target_lateral_m = 0.0,
+  const StopLateralTargetProfile * target_profile = nullptr) noexcept;
 
 /// Rebuild the already-declared terminal Stop policy from a fresh physical
 /// control-origin state.  Unlike build_stop_contingency(), this operation does

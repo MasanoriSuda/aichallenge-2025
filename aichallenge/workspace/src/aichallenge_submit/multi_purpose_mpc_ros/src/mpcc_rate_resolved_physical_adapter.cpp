@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter
@@ -153,6 +154,67 @@ std::optional<double> physical_progress_speed(
 }
 
 }  // namespace
+
+bool stop_lateral_target_profile_valid(
+  const StopLateralTargetProfile & profile) noexcept
+{
+  if (
+    profile.progress_m.size() < 2U ||
+    profile.lateral_m.size() != profile.progress_m.size())
+  {
+    return false;
+  }
+  for (std::size_t index = 0U; index < profile.progress_m.size(); ++index) {
+    if (
+      !std::isfinite(profile.progress_m[index]) ||
+      !std::isfinite(profile.lateral_m[index]) ||
+      (index > 0U &&
+      profile.progress_m[index] <= profile.progress_m[index - 1U]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<double> sample_stop_lateral_target(
+  const StopLateralTargetProfile & profile,
+  const double progress_m,
+  const double tolerance_m) noexcept
+{
+  if (
+    !stop_lateral_target_profile_valid(profile) ||
+    !std::isfinite(progress_m) || !std::isfinite(tolerance_m) ||
+    tolerance_m < 0.0 ||
+    progress_m < profile.progress_m.front() - tolerance_m ||
+    progress_m > profile.progress_m.back() + tolerance_m)
+  {
+    return std::nullopt;
+  }
+  if (progress_m <= profile.progress_m.front()) {
+    return profile.lateral_m.front();
+  }
+  if (progress_m >= profile.progress_m.back()) {
+    return profile.lateral_m.back();
+  }
+  const auto upper = std::upper_bound(
+    profile.progress_m.begin(), profile.progress_m.end(), progress_m);
+  if (upper == profile.progress_m.begin() || upper == profile.progress_m.end()) {
+    return std::nullopt;
+  }
+  const std::size_t upper_index = static_cast<std::size_t>(
+    std::distance(profile.progress_m.begin(), upper));
+  const std::size_t lower_index = upper_index - 1U;
+  const double progress_span_m =
+    profile.progress_m[upper_index] - profile.progress_m[lower_index];
+  const double fraction =
+    (progress_m - profile.progress_m[lower_index]) / progress_span_m;
+  const double sampled_lateral_m = profile.lateral_m[lower_index] +
+    fraction *
+    (profile.lateral_m[upper_index] - profile.lateral_m[lower_index]);
+  return std::isfinite(sampled_lateral_m) ?
+    std::optional<double>{sampled_lateral_m} : std::nullopt;
+}
 
 const char * to_string(const RejectReason reason) noexcept
 {
@@ -685,7 +747,8 @@ StopContingencyResult build_stop_contingency(
   const StopCourseGeometry & course_geometry,
   const race_mpcc_foundation::StopPathTrackingPolicy & lateral_policy,
   const double minimum_acceleration_mps2,
-  const double target_lateral_m) noexcept
+  const double target_lateral_m,
+  const StopLateralTargetProfile * const target_profile) noexcept
 {
   namespace execution = mpcc_rate_resolved_execution_artifact;
   namespace race = race_mpcc_foundation;
@@ -740,7 +803,9 @@ StopContingencyResult build_stop_contingency(
   if (
     !std::isfinite(minimum_acceleration_mps2) ||
     !std::isfinite(target_lateral_m) ||
-    minimum_acceleration_mps2 >= 0.0)
+    minimum_acceleration_mps2 >= 0.0 ||
+    (target_profile != nullptr &&
+    !stop_lateral_target_profile_valid(*target_profile)))
   {
     result.reason = StopContingencyRejectReason::InvalidBrakingEnvelope;
     return result;
@@ -937,13 +1002,22 @@ StopContingencyResult build_stop_contingency(
       result.reason = StopContingencyRejectReason::CourseGeometryUnavailable;
       return result;
     }
+    const auto sampled_target_lateral_m = target_profile == nullptr ?
+      std::optional<double>{target_lateral_m} :
+      sample_stop_lateral_target(
+        *target_profile, nonlinear.progress_m, tolerance);
+    if (!sampled_target_lateral_m.has_value()) {
+      result.reason = StopContingencyRejectReason::InvalidLateralPolicy;
+      return result;
+    }
     const auto lateral_command =
       race::resolve_stop_path_tracking_command(
       race::StopPathTrackingCommandRequest{
         lateral_policy, nonlinear.lateral_m,
         nonlinear.heading_offset_rad, geometry->curvature_radpm,
         nonlinear.velocity_mps, nonlinear.steering_rad,
-        artifact.publication_interval_sec, target_lateral_m});
+        artifact.publication_interval_sec,
+        sampled_target_lateral_m.value()});
     if (!lateral_command.has_value()) {
       result.reason = StopContingencyRejectReason::InvalidLateralPolicy;
       return result;

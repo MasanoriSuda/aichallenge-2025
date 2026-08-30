@@ -49,6 +49,8 @@ enum class Arm
   ProductionLeftDeclaredStopR,
   PersistentStopScanS,
   ProductionLeftStopScanS,
+  PersistentNormalPathStopT,
+  ProductionLeftNormalPathStopT,
   SevenStateStopU,
 };
 

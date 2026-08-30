@@ -523,8 +523,31 @@ enum class TerminalStopLateralAuditMode
   RacingLine,
   Declared,
   PhysicalRangeScan,
+  NormalPathProfile,
   SolvedStopTrajectory,
 };
+
+std::optional<physical::StopLateralTargetProfile>
+build_normal_path_stop_profile(
+  const artifact::ExecutionArtifact & execution) noexcept
+{
+  if (
+    artifact::validate(execution) != artifact::RejectReason::None ||
+    execution.predicted_states.size() < 2U)
+  {
+    return std::nullopt;
+  }
+  physical::StopLateralTargetProfile profile;
+  profile.progress_m.reserve(execution.predicted_states.size());
+  profile.lateral_m.reserve(execution.predicted_states.size());
+  for (const auto & state : execution.predicted_states) {
+    profile.progress_m.push_back(state.progress_m);
+    profile.lateral_m.push_back(state.lateral_m);
+  }
+  return physical::stop_lateral_target_profile_valid(profile) ?
+    std::optional<physical::StopLateralTargetProfile>{std::move(profile)} :
+    std::nullopt;
+}
 
 std::optional<shadow::Snapshot> build_seven_state_stop_audit_candidate(
   const shadow::Snapshot & source,
@@ -708,7 +731,8 @@ TerminalStopCertificate certify_terminal_stop(
   const shadow::Snapshot & candidate,
   const artifact::ExecutionArtifact & execution,
   const wall::Snapshot & normal_wall_snapshot,
-  const double target_lateral_m = 0.0)
+  const double target_lateral_m = 0.0,
+  const physical::StopLateralTargetProfile * const target_profile = nullptr)
 {
   TerminalStopCertificate result;
   if (!candidate.replay_world.has_value() ||
@@ -743,7 +767,8 @@ TerminalStopCertificate certify_terminal_stop(
       initial.response_steering_rad},
     normal_wall_snapshot.terminal_stop_course_geometry,
     world.terminal_stop_lateral_policy,
-    world.terminal_stop_minimum_acceleration_mps2, target_lateral_m);
+    world.terminal_stop_minimum_acceleration_mps2, target_lateral_m,
+    target_profile);
   if (!terminal.exact_trajectory.has_value()) {
     std::ostringstream detail;
     detail << "terminal Stop synthesis rejected/reason="
@@ -997,6 +1022,20 @@ ArmResult evaluate_arm(
         terminal_stop_target_lateral_m = target_m;
         terminal_stop = std::move(evaluated);
       }
+    }
+  } else if (
+    terminal_stop_lateral_audit_mode ==
+    TerminalStopLateralAuditMode::NormalPathProfile)
+  {
+    terminal_stop_target_attempt_count = 1U;
+    const auto profile = build_normal_path_stop_profile(
+      *solved.execution_artifact);
+    if (!profile.has_value()) {
+      terminal_stop.detail = "normal-path Stop profile unavailable";
+    } else {
+      terminal_stop = certify_terminal_stop(
+        candidate, *solved.execution_artifact, physical_snapshot, 0.0,
+        &profile.value());
     }
   } else if (
     terminal_stop_lateral_audit_mode ==
@@ -1383,6 +1422,10 @@ const char * to_string(const Arm arm) noexcept
       return "persistent-stop-scan-s";
     case Arm::ProductionLeftStopScanS:
       return "production-left-stop-scan-s";
+    case Arm::PersistentNormalPathStopT:
+      return "persistent-normal-path-stop-t";
+    case Arm::ProductionLeftNormalPathStopT:
+      return "production-left-normal-path-stop-t";
     case Arm::SevenStateStopU:
       return "seven-state-stop-u";
   }
@@ -2066,6 +2109,8 @@ Report compare_terminal_stop_lateral_contract(
         {Arm::PersistentA, Arm::PersistentDeclaredStopR,
          Arm::PersistentStopScanS, Arm::ProductionLeftG,
          Arm::ProductionLeftDeclaredStopR, Arm::ProductionLeftStopScanS,
+         Arm::PersistentNormalPathStopT,
+         Arm::ProductionLeftNormalPathStopT,
          Arm::SevenStateStopU})
       {
         report.arms.push_back(rejected_arm(
@@ -2088,6 +2133,10 @@ Report compare_terminal_stop_lateral_contract(
       Arm::PersistentStopScanS, source, source_fingerprint,
       source_fingerprint, persistent_successor, -1, -1, nullptr, false,
       std::nullopt, 0U, TerminalStopLateralAuditMode::PhysicalRangeScan));
+    report.arms.push_back(evaluate_arm(
+      Arm::PersistentNormalPathStopT, source, source_fingerprint,
+      source_fingerprint, persistent_successor, -1, -1, nullptr, false,
+      std::nullopt, 0U, TerminalStopLateralAuditMode::NormalPathProfile));
     report.arms.push_back(evaluate_production_population(
       Arm::ProductionLeftG, source, source_fingerprint, 1));
     report.arms.push_back(evaluate_production_population(
@@ -2098,6 +2147,10 @@ Report compare_terminal_stop_lateral_contract(
       Arm::ProductionLeftStopScanS, source, source_fingerprint, 1,
       ProductionEvaluationMode::SingleSqp,
       TerminalStopLateralAuditMode::PhysicalRangeScan));
+    report.arms.push_back(evaluate_production_population(
+      Arm::ProductionLeftNormalPathStopT, source, source_fingerprint, 1,
+      ProductionEvaluationMode::SingleSqp,
+      TerminalStopLateralAuditMode::NormalPathProfile));
     shadow::SolverContext stop_source_solver;
     const auto stop_source = stop_source_solver.evaluate(source);
     std::string solved_stop_detail{"source normal solve rejected"};

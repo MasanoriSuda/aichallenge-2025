@@ -80,6 +80,36 @@ adapter::StopCourseGeometry stop_course_geometry()
 
 }  // namespace
 
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  SamplesImmutableStopLateralProfileOnlyInsideDeclaredProgress)
+{
+  const adapter::StopLateralTargetProfile profile{
+    {0.0, 1.0, 3.0}, {-0.6, -0.2, 0.2}};
+
+  ASSERT_TRUE(adapter::stop_lateral_target_profile_valid(profile));
+  ASSERT_TRUE(adapter::sample_stop_lateral_target(profile, 0.5, 1e-6));
+  EXPECT_NEAR(
+    adapter::sample_stop_lateral_target(profile, 0.5, 1e-6).value(),
+    -0.4, 1e-12);
+  ASSERT_TRUE(adapter::sample_stop_lateral_target(profile, 2.0, 1e-6));
+  EXPECT_NEAR(
+    adapter::sample_stop_lateral_target(profile, 2.0, 1e-6).value(),
+    0.0, 1e-12);
+  EXPECT_FALSE(
+    adapter::sample_stop_lateral_target(profile, 3.01, 1e-3).has_value());
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  RejectsStopLateralProfileWithAmbiguousProgressAxis)
+{
+  EXPECT_FALSE(adapter::stop_lateral_target_profile_valid(
+      adapter::StopLateralTargetProfile{{0.0, 0.0}, {-0.6, -0.2}}));
+  EXPECT_FALSE(adapter::stop_lateral_target_profile_valid(
+      adapter::StopLateralTargetProfile{{0.0, 1.0}, {-0.6}}));
+}
+
 TEST(MpccRateResolvedPhysicalAdapter, ReplaysControlsThroughNonlinearModel)
 {
   const auto source = artifact();
@@ -335,6 +365,42 @@ TEST(
   EXPECT_LE(
     result.exact_trajectory->velocity_mps.back(),
     source.physical_global_tolerance);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
+  BuildsStopAgainstVaryingLateralProfileWithoutExtrapolation)
+{
+  const auto source = artifact();
+  const auto cursor = execution::resolve_cursor(source, 10.05);
+  ASSERT_TRUE(cursor.available);
+  const auto actuation = execution::extract_actuation(source, cursor);
+  ASSERT_TRUE(actuation.actuation.has_value());
+  const adapter::StopLateralTargetProfile profile{
+    {0.0, 1.0, 3.0}, {-0.60, -0.25, 0.0}};
+
+  const auto result = adapter::build_stop_contingency(
+    source, cursor, actuation.actuation.value(),
+    adapter::ContinuationInitialState{
+      -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    stop_course_geometry(), stop_lateral_policy(), -3.0, 0.0, &profile);
+
+  ASSERT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  EXPECT_NEAR(result.exact_trajectory->velocity_mps.back(), 0.0, 1e-9);
+
+  const adapter::StopLateralTargetProfile short_profile{
+    {0.0, 0.20}, {-0.60, -0.50}};
+  const auto rejected = adapter::build_stop_contingency(
+    source, cursor, actuation.actuation.value(),
+    adapter::ContinuationInitialState{
+      -0.60, 0.0, 0.0, 2.05, 0.10, 0.105, 0.105},
+    stop_course_geometry(), stop_lateral_policy(), -3.0, 0.0,
+    &short_profile);
+  EXPECT_EQ(
+    rejected.reason,
+    adapter::StopContingencyRejectReason::InvalidLateralPolicy);
+  EXPECT_FALSE(rejected.exact_trajectory.has_value());
 }
 
 TEST(

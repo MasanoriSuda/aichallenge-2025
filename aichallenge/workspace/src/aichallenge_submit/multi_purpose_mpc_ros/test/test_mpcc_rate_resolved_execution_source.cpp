@@ -40,7 +40,8 @@ contract::MpccProblemContext context()
   return contract::seal_problem_context(std::move(value));
 }
 
-std::shared_ptr<const certified::CertifiedPlan> plan()
+std::shared_ptr<const certified::CertifiedPlan> plan(
+  std::vector<double> exact_progress_m = {50.3, 50.6})
 {
   execution::ExecutionArtifact artifact;
   artifact.identity = execution::Identity{3U, context(), 12.0};
@@ -89,12 +90,15 @@ std::shared_ptr<const certified::CertifiedPlan> plan()
   snapshot.control_prefix = {snapshot.current_pose};
   snapshot.trajectory.progress_origin_m = 50.0;
   snapshot.trajectory.elapsed_time_sec = {0.1, 0.2};
-  snapshot.trajectory.path_distance_m = {0.3, 0.6};
+  // A displaced curved execution has a physical path length which differs
+  // from its lifted course progress.  Keep the coordinates deliberately
+  // unequal so a consumer cannot silently substitute one for the other.
+  snapshot.trajectory.path_distance_m = {0.35, 0.75};
   snapshot.trajectory.lateral_m = {-0.1, -0.2};
   snapshot.trajectory.lag_m = {0.0, 0.0};
   snapshot.trajectory.heading_offset_rad = {0.0, 0.0};
   snapshot.trajectory.velocity_mps = {3.1, 3.2};
-  snapshot.trajectory.progress_m = {50.3, 50.6};
+  snapshot.trajectory.progress_m = std::move(exact_progress_m);
   snapshot.trajectory.lateral_lower_m = {-1.0, -1.0};
   snapshot.trajectory.lateral_upper_m = {1.0, 1.0};
   snapshot.trajectory.minimum_lateral_bound_reserve_m = 0.8;
@@ -140,7 +144,8 @@ TEST(MpccRateResolvedExecutionSource, ProjectsExactCertifiedSixStatePrefix)
   EXPECT_EQ(result.source.source_snapshot_sec, 12.0);
   EXPECT_EQ(result.source.source_completed_sec, 12.03);
   EXPECT_EQ(result.source.course_progress_origin_m, 50.0);
-  EXPECT_EQ(result.source.path_distance_m, (std::vector<double>{0.3, 0.6}));
+  EXPECT_EQ(result.source.path_distance_m, (std::vector<double>{0.35, 0.75}));
+  EXPECT_EQ(result.source.elapsed_time_sec, (std::vector<double>{0.1, 0.2}));
   EXPECT_EQ(result.source.lateral_m, (std::vector<double>{-0.1, -0.2}));
   EXPECT_EQ(result.source.progress_m, (std::vector<double>{50.3, 50.6}));
 }
@@ -193,7 +198,8 @@ TEST(MpccRateResolvedExecutionSource, ResolvesPublishedCursorAndMeasuredProgress
   EXPECT_TRUE(result.published.cursor.available);
   EXPECT_EQ(result.published.cursor.control_stage_index, 1U);
   EXPECT_NEAR(result.published.cursor.stage_elapsed_sec, 0.05, 1e-9);
-  EXPECT_NEAR(result.published.advanced_distance_m, 0.45, 1e-9);
+  EXPECT_NEAR(result.published.advanced_course_progress_m, 0.45, 1e-9);
+  EXPECT_NEAR(result.published.advanced_path_distance_m, 0.55, 1e-9);
   EXPECT_EQ(result.published.source.source_snapshot_sec, 12.0);
 }
 
@@ -208,6 +214,21 @@ TEST(MpccRateResolvedExecutionSource, UsesPublicationClockInsteadOfSolveAge)
   ASSERT_TRUE(result.accepted());
   EXPECT_EQ(result.published.cursor.control_stage_index, 0U);
   EXPECT_NEAR(result.published.cursor.stage_elapsed_sec, 0.05, 1e-9);
+}
+
+TEST(MpccRateResolvedExecutionSource, UsesCursorToDisambiguateProgressPlateau)
+{
+  const auto certified_plan = plan({50.3, 50.3});
+  ASSERT_NE(certified_plan, nullptr);
+  // Course progress is intentionally stationary while the certified path
+  // continues laterally.  The publication clock selects the matching point
+  // on that plateau, after which every consumer stays on the monotonic path
+  // coordinate.
+  const auto result = source::build_published(source::PublishedRequest{
+    request(certified_plan.get()), 20.15, 20.0, 0.0, 50.3, 100.0, false});
+  ASSERT_TRUE(result.accepted());
+  EXPECT_NEAR(result.published.advanced_course_progress_m, 0.3, 1e-9);
+  EXPECT_NEAR(result.published.advanced_path_distance_m, 0.55, 1e-9);
 }
 
 TEST(MpccRateResolvedExecutionSource, PreservesFirstPublishedSuffixOffset)
@@ -247,7 +268,9 @@ TEST(MpccRateResolvedExecutionSource, LiftsProgressAcrossCircularWrap)
   const auto result = source::build_published(source::PublishedRequest{
     request(certified_plan.get()), 20.05, 20.0, 0.0, 0.2, 50.0, true});
   ASSERT_TRUE(result.accepted());
-  EXPECT_NEAR(result.published.advanced_distance_m, 0.2, 1e-9);
+  EXPECT_NEAR(result.published.advanced_course_progress_m, 0.2, 1e-9);
+  EXPECT_NEAR(
+    result.published.advanced_path_distance_m, 0.35 * 2.0 / 3.0, 1e-9);
 }
 
 }  // namespace

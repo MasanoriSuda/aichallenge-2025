@@ -22999,7 +22999,7 @@ struct MPC
     const auto & source = published.published.source;
     const auto resampled = overtake_core::resample_receding_horizon_warm_start(
       overtake_core::RecedingHorizonWarmStartRequest{
-        published.published.advanced_distance_m,
+        published.published.advanced_path_distance_m,
         source.path_distance_m, source.lateral_m,
         current_path_distance_m, fallback_lateral_m});
     if (
@@ -23011,13 +23011,13 @@ struct MPC
     }
     alignment.trajectory = AlignedMpccExecutionTrajectory{
       published.published.cursor.elapsed_sec,
-      published.published.advanced_distance_m,
+      published.published.advanced_path_distance_m,
       source.minimum_lateral_bound_reserve_m,
       resampled.lateral_targets_m, {}, {},
       std::numeric_limits<double>::quiet_NaN(), {}, {}};
     alignment.remaining_distance_m = std::max(
       0.0, source.path_distance_m.back() -
-      published.published.advanced_distance_m);
+      published.published.advanced_path_distance_m);
     alignment.reason = "published execution artifact aligned";
     return alignment;
   }

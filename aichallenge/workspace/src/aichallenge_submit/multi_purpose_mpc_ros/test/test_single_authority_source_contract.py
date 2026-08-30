@@ -1004,6 +1004,10 @@ def test_pass_entry_queries_phase_compatible_published_overtake_execution() -> N
     assert "ControlIntent::ShiftOut" in align
     assert "build_published(" in align
     assert "plan.get(), alignment.intent" in align
+    assert "published.published.advanced_path_distance_m" in align
+    assert "source.path_distance_m, source.lateral_m" in align
+    assert "source.path_distance_m.back()" in align
+    assert "source.progress_m, source.lateral_m" not in align
     assert "align_published_shiftout_execution_trajectory(" not in SOURCE
     assert "published_overtake_execution_alignment_last_intent_" in SOURCE
     assert (

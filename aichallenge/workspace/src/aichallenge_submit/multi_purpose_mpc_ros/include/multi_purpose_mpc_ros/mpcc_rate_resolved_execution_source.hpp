@@ -54,9 +54,18 @@ struct Source
   double source_completed_sec{};
   double course_progress_origin_m{};
   double minimum_lateral_bound_reserve_m{};
+  /// Monotonic nominal path coordinate used by the certified horizon geometry
+  /// and its exact nonlinear proof samples.  It is not interchangeable with
+  /// course progress on a curved or laterally displaced path.
   std::vector<double> path_distance_m;
+  std::vector<double> elapsed_time_sec;
   std::vector<double> lateral_m;
+  /// Lifted course-progress samples.  Progress is allowed to plateau while a
+  /// certified trajectory moves laterally, so it is evidence for projecting
+  /// the measured vehicle position onto path_distance_m, never a resampling
+  /// axis by itself.
   std::vector<double> progress_m;
+  double progress_regression_tolerance_m{};
 };
 
 struct Result
@@ -95,6 +104,7 @@ enum class PublishedRejectReason
   CursorUnavailable,
   InvalidCourseProgress,
   CourseProgressRegressed,
+  CourseProgressProjectionUnavailable,
 };
 
 const char * to_string(PublishedRejectReason reason) noexcept;
@@ -103,7 +113,8 @@ struct PublishedSource
 {
   Source source;
   mpcc_rate_resolved_execution_artifact::Cursor cursor;
-  double advanced_distance_m{};
+  double advanced_course_progress_m{};
+  double advanced_path_distance_m{};
 };
 
 struct PublishedResult

@@ -7,5 +7,5 @@
 - [x] Remove the observation-only duplicate edge and wording.
 - [x] Prove single publisher, immutable identity and source invalidation.
 - [x] Run build, package tests and `git diff --check`.
-- [ ] Run `make dev2` and verify production bridge behavior.
-- [ ] Record results and commit the Slice.
+- [x] Run `make dev2` and verify production bridge behavior.
+- [x] Record results and commit the Slice.

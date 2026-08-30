@@ -1958,6 +1958,17 @@ bool is_solved_overtake_trajectory_handoff_compatible(
          (source == OvertakeLinePhase::Pass && current == OvertakeLinePhase::Return);
 }
 
+bool is_published_shiftout_execution_handoff_phase(
+  const OvertakeLinePhase phase)
+{
+  // Tactical phase may advance before canonical atomic admission publishes the
+  // successor.  Keep querying the executed ledger across that boundary; the
+  // execution-source adapter still requires exact ShiftOut intent, target,
+  // generation, side, immutable source time, and a live publication cursor.
+  return phase == OvertakeLinePhase::ShiftOut ||
+         phase == OvertakeLinePhase::Pass;
+}
+
 const char * to_string(const FollowPrepareCause cause)
 {
   switch (cause) {
@@ -35346,7 +35357,8 @@ private:
       dp_execution_authority.valid && dp_execution_authority.authority_active;
     PublishedMpccExecutionAlignment published_shiftout_execution_alignment;
     const bool published_shiftout_execution_alignment_requested =
-      overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      is_published_shiftout_execution_handoff_phase(
+        overtake_line_state_.phase) ||
       (execution_origin_dynamic_wait_active &&
       overtake_line_state_.follow_prepare_origin_phase ==
       OvertakeLinePhase::ShiftOut);

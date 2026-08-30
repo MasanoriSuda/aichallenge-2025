@@ -945,6 +945,40 @@ def test_pass_entry_does_not_recertify_published_canonical_execution() -> None:
     )
 
 
+def test_pass_entry_queries_published_shiftout_through_atomic_handoff() -> None:
+    """Tactical Pass must still see ShiftOut while the publisher retains it."""
+
+    helper_start = SOURCE.index(
+        "bool is_published_shiftout_execution_handoff_phase("
+    )
+    helper_end = SOURCE.index(
+        "const char * to_string(const FollowPrepareCause", helper_start
+    )
+    helper = SOURCE[helper_start:helper_end]
+    assert "phase == OvertakeLinePhase::ShiftOut" in helper
+    assert "phase == OvertakeLinePhase::Pass" in helper
+
+    request_start = SOURCE.index(
+        "const bool published_shiftout_execution_alignment_requested ="
+    )
+    request_end = SOURCE.index(
+        "if (published_shiftout_execution_alignment_requested)", request_start
+    )
+    request = SOURCE[request_start:request_end]
+    assert "is_published_shiftout_execution_handoff_phase(" in request
+
+    align_start = SOURCE.index(
+        "align_published_shiftout_execution_trajectory("
+    )
+    align_end = SOURCE.index(
+        "build_progress_course_frame_knots(", align_start
+    )
+    align = SOURCE[align_start:align_end]
+    assert "executed_snapshot()" in align
+    assert "ControlIntent::ShiftOut" in align
+    assert "build_published(" in align
+
+
 def test_last_published_intent_is_a_publication_ledger() -> None:
     """Solver selection may not advance the actually-published intent ledger."""
 

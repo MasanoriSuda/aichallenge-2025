@@ -173,7 +173,6 @@ enum class Reason
   DynamicPathBlocked,
   StaticWorldMismatch,
   InvalidCurrentState,
-  ProgressLiftRejected,
   CourseFrameUnavailable,
   ActuationRejected,
   SteeringUnreachable,
@@ -226,9 +225,15 @@ struct Proof
   /// skipped residual is never executed and the source artifact must not be
   /// promoted as an unmodified executed plan.
   bool publication_stage_advanced{false};
+  /// True when the current measured physical progress could not be identified
+  /// with the historical artifact progress inside the diagnostic continuity
+  /// tolerance.  The complete continuation is then a current-world Bundle;
+  /// the source plan supplies immutable controls and homotopy only.
+  bool progress_rebased{false};
   bool stateless_current_world_bundle() const noexcept
   {
-    return latest_state_feedback_bundle || publication_stage_advanced;
+    return latest_state_feedback_bundle || publication_stage_advanced ||
+           progress_rebased;
   }
   std::uint64_t decision_id{};
   std::uint64_t obstacle_generation{};
@@ -358,13 +363,10 @@ struct Result
     std::numeric_limits<double>::quiet_NaN()};
   double progress_continuity_tolerance_m{
     std::numeric_limits<double>::quiet_NaN()};
-  /// Observation-only architecture escape hatch.  Production still rejects
-  /// ProgressLiftRejected.  These fields report whether the same immutable
-  /// controls can form a complete current-world Bundle when the historical
-  /// artifact progress gate is not treated as a publication prerequisite.
-  bool stateless_progress_rebase_attempted{false};
-  Reason stateless_progress_rebase_reason{Reason::MissingPlan};
-  bool stateless_progress_rebase_proof_available{false};
+  /// Historical progress continuity is diagnostic.  A mismatch makes a
+  /// successfully certified proof stateless; it does not pre-empt the full
+  /// current-world wall, peer and terminal-successor proof.
+  bool progress_rebased{false};
   double current_speed_mps{std::numeric_limits<double>::quiet_NaN()};
   double control_origin_speed_mps{
     std::numeric_limits<double>::quiet_NaN()};

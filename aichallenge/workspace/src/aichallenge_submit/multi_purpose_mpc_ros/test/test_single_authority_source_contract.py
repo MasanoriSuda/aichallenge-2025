@@ -3229,25 +3229,27 @@ def test_normal_candidate_clock_separates_bootstrap_from_moving_successor() -> N
     assert SOURCE.count("ExecutionClockKind::BootstrapCandidate") == 1
 
 
-def test_progress_rebase_escape_hatch_is_observation_only() -> None:
-    """A/B audit must not turn the shadow Bundle into production authority."""
+def test_progress_rebase_is_current_world_bundle_authority() -> None:
+    """Historical progress may not pre-empt complete current-world proof."""
 
     retained = (
         PACKAGE_ROOT / "src" / "mpcc_rate_resolved_retained_revalidation.cpp"
     ).read_text(encoding="utf-8")
-    wrapper = retained[retained.index("Result evaluate(const Request & request)") :]
-    production = wrapper.index("evaluate_impl(request, true)")
-    reject_gate = wrapper.index(
-        "production.reason != Reason::ProgressLiftRejected", production
-    )
-    shadow = wrapper.index("evaluate_impl(request, false)", reject_gate)
-    diagnostic = wrapper.index(
-        "production.stateless_progress_rebase_proof_available", shadow
-    )
-    returned = wrapper.index("return production;", diagnostic)
-    assert production < reject_gate < shadow < diagnostic < returned
-    assert "production.proof = stateless.proof" not in wrapper
-    assert "return stateless;" not in wrapper
+    retained_header = (
+        PACKAGE_ROOT
+        / "include"
+        / "multi_purpose_mpc_ros"
+        / "mpcc_rate_resolved_retained_revalidation.hpp"
+    ).read_text(encoding="utf-8")
+    controller = SOURCE
+    assert "ProgressLiftRejected" not in retained
+    assert "ProgressLiftRejected" not in retained_header
+    assert "evaluate_impl(request" not in retained
+    assert "result.progress_rebased = !lift.within_continuity_tolerance;" in retained
+    assert "proof.progress_rebased = result.progress_rebased;" in retained
+    assert "progress_rebased;" in retained_header
+    assert "retained.stateless_current_world_bundle" in controller
+    assert "record_published_bundle_source(" in controller
 
 
 def test_terminal_stop_does_not_extrapolate_executable_prefix_geometry() -> None:

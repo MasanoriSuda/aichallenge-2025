@@ -7404,10 +7404,7 @@ struct RateResolvedRetainedShadowEvaluation
     std::numeric_limits<double>::quiet_NaN()};
   double progress_continuity_tolerance_m{
     std::numeric_limits<double>::quiet_NaN()};
-  bool stateless_progress_rebase_attempted{false};
-  rate_resolved_retained::Reason stateless_progress_rebase_reason{
-    rate_resolved_retained::Reason::MissingPlan};
-  bool stateless_progress_rebase_proof_available{false};
+  bool progress_rebased{false};
   double expected_lateral_m{std::numeric_limits<double>::quiet_NaN()};
   double expected_lag_m{std::numeric_limits<double>::quiet_NaN()};
   double expected_heading_offset_rad{
@@ -25599,12 +25596,7 @@ struct MPC
     evaluation.progress_difference_m = result.progress_difference_m;
     evaluation.progress_continuity_tolerance_m =
       result.progress_continuity_tolerance_m;
-    evaluation.stateless_progress_rebase_attempted =
-      result.stateless_progress_rebase_attempted;
-    evaluation.stateless_progress_rebase_reason =
-      result.stateless_progress_rebase_reason;
-    evaluation.stateless_progress_rebase_proof_available =
-      result.stateless_progress_rebase_proof_available;
+    evaluation.progress_rebased = result.progress_rebased;
     evaluation.reason = result.reason;
     evaluation.cursor_reason = result.cursor_reason;
     evaluation.actuation_reason = result.actuation_reason;
@@ -26363,7 +26355,7 @@ struct MPC
           "clock:%s/first_publish:%.6f/first_cursor:%.6f, "
           "progress=control_physical:%.6f/lifted:%.6f/"
           "expected_physical:%.6f/expected_theta:%.6f/delta:%.6f/"
-          "tolerance:%.6f/stateless_rebase:%d/%s/proof:%d, "
+          "tolerance:%.6f/current_world_rebase:%d, "
           "physical_join=position:%.6f/yaw:%.6f/"
           "control:(%.3f,%.3f,%.3f)/expected:(%.3f,%.3f,%.3f)/"
           "frenet:(%.3f,%.3f,%.3f), "
@@ -26408,10 +26400,7 @@ struct MPC
           retained.expected_absolute_progress_m,
           retained.progress_difference_m,
           retained.progress_continuity_tolerance_m,
-          retained.stateless_progress_rebase_attempted ? 1 : 0,
-          rate_resolved_retained::to_string(
-            retained.stateless_progress_rebase_reason),
-          retained.stateless_progress_rebase_proof_available ? 1 : 0,
+          retained.progress_rebased ? 1 : 0,
           retained.control_pose_error_m, retained.control_yaw_error_rad,
           retained.control_pose.x_m, retained.control_pose.y_m,
           retained.control_pose.yaw_rad,
@@ -26947,7 +26936,7 @@ struct MPC
       "follow_invalid:%lu/follow_identity:%lu/follow_horizon:%lu/"
       "follow_initial_gap:%lu/follow_stage_gap:%lu/dynamic_invalid:%lu/"
       "dynamic_blocked:%lu/static_world:%lu/current_state:%lu/"
-      "progress:%lu/course:%lu/actuation:%lu/steering:%lu/"
+      "course:%lu/actuation:%lu/steering:%lu/"
       "control_path:%lu/delay:%lu/connector:%lu/continuation:%lu/"
       "continuation_wall:%lu, proof_scope=full:%lu/publisher_interval:%lu/"
       "last_wall:%s/last_dynamic:%s, "
@@ -26958,7 +26947,7 @@ struct MPC
       "time=observation:%.6f/control:%.6f/delay:%.6f/cursor_elapsed:%.6f/"
       "progress=control_physical:%.6f/lifted:%.6f/"
       "expected_physical:%.6f/expected_theta:%.6f/delta:%.6f/"
-      "tolerance:%.6f/"
+      "tolerance:%.6f/current_world_rebase:%d/"
       "steering=physical_now:%.6f/command_control_origin:%.6f/"
       "previous_published:%.6f/expected:%.6f/"
       "publication_delta:%.6f/bounds:[%.6f,%.6f]/duration:%.6f/"
@@ -27024,8 +27013,6 @@ struct MPC
       static_cast<unsigned long>(retained_count(
         rate_resolved_retained::Reason::InvalidCurrentState)),
       static_cast<unsigned long>(retained_count(
-        rate_resolved_retained::Reason::ProgressLiftRejected)),
-      static_cast<unsigned long>(retained_count(
         rate_resolved_retained::Reason::CourseFrameUnavailable)),
       static_cast<unsigned long>(retained_count(
         rate_resolved_retained::Reason::ActuationRejected)),
@@ -27075,6 +27062,7 @@ struct MPC
       window.last_retained.expected_absolute_progress_m,
       window.last_retained.progress_difference_m,
       window.last_retained.progress_continuity_tolerance_m,
+      window.last_retained.progress_rebased ? 1 : 0,
       window.last_retained.current_time_steering_rad,
       window.last_retained.current_steering_rad,
       window.last_retained.previous_published_steering_rad,

@@ -729,13 +729,13 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsChangedStaticWorldDeepCopy)
     retained::Reason::StaticWorldMismatch);
 }
 
-TEST(MpccRateResolvedRetainedRevalidation, RejectsProgressDiscontinuity)
+TEST(MpccRateResolvedRetainedRevalidation, CertifiesCurrentWorldProgressRebase)
 {
   const auto plan = certified_plan();
   auto request = accepted_request(plan);
   request.control_origin_physical_progress_m = 60.0;
   const auto result = retained::evaluate(request);
-  EXPECT_EQ(result.reason, retained::Reason::ProgressLiftRejected);
+  EXPECT_EQ(result.reason, retained::Reason::Accepted);
   EXPECT_NEAR(result.expected_absolute_progress_m, 50.10, 1e-9);
   EXPECT_NEAR(result.expected_physical_progress_m, 50.15, 1e-9);
   EXPECT_NEAR(
@@ -744,12 +744,10 @@ TEST(MpccRateResolvedRetainedRevalidation, RejectsProgressDiscontinuity)
   EXPECT_NEAR(result.progress_continuity_tolerance_m, 0.20, 1e-9);
   EXPECT_NEAR(result.current_speed_mps, 2.05, 1e-9);
   EXPECT_NEAR(result.current_steering_rad, 0.105, 1e-9);
-  EXPECT_TRUE(result.stateless_progress_rebase_attempted);
-  EXPECT_EQ(
-    result.stateless_progress_rebase_reason,
-    retained::Reason::Accepted);
-  EXPECT_TRUE(result.stateless_progress_rebase_proof_available);
-  EXPECT_FALSE(result.proof.has_value());
+  EXPECT_TRUE(result.progress_rebased);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_TRUE(result.proof->progress_rebased);
+  EXPECT_TRUE(result.proof->stateless_current_world_bundle());
 }
 
 TEST(
@@ -775,7 +773,8 @@ TEST(
   const auto result = retained::evaluate(request);
   EXPECT_EQ(result.reason, retained::Reason::Accepted);
   ASSERT_TRUE(result.proof.has_value());
-  EXPECT_FALSE(result.stateless_progress_rebase_attempted);
+  EXPECT_FALSE(result.progress_rebased);
+  EXPECT_FALSE(result.proof->progress_rebased);
   EXPECT_NEAR(result.expected_absolute_progress_m, 50.20, 1e-9);
   EXPECT_NEAR(result.expected_physical_progress_m, 51.0, 1e-9);
   EXPECT_NEAR(result.progress_difference_m, 0.0, 1e-9);

@@ -178,7 +178,8 @@ artifact::PredictedState as_predicted_state(
 
 struct LiftResult
 {
-  bool accepted{false};
+  bool valid{false};
+  bool within_continuity_tolerance{false};
   double progress_m{std::numeric_limits<double>::quiet_NaN()};
   double difference_m{std::numeric_limits<double>::quiet_NaN()};
   long lap_offset{};
@@ -200,13 +201,9 @@ LiftResult lift_progress(
   if (!circular) {
     result.progress_m = measured_progress_m;
     result.difference_m = measured_progress_m - retained_progress_m;
-    if (std::abs(measured_progress_m - retained_progress_m) >
-      tolerance_m + kIdentityTolerance)
-    {
-      return result;
-    }
-    result.accepted = true;
-    result.progress_m = measured_progress_m;
+    result.within_continuity_tolerance =
+      std::abs(result.difference_m) <= tolerance_m + kIdentityTolerance;
+    result.valid = true;
     return result;
   }
   if (tolerance_m >= 0.5 * path_length_m) {
@@ -225,12 +222,9 @@ LiftResult lift_progress(
   result.progress_m = lifted;
   result.difference_m = lifted - retained_progress_m;
   result.lap_offset = lap_offset;
-  if (std::abs(lifted - retained_progress_m) >
-    tolerance_m + kIdentityTolerance)
-  {
-    return result;
-  }
-  result.accepted = true;
+  result.within_continuity_tolerance =
+    std::abs(result.difference_m) <= tolerance_m + kIdentityTolerance;
+  result.valid = true;
   return result;
 }
 
@@ -452,7 +446,6 @@ const char * to_string(const Reason reason) noexcept
     case Reason::DynamicPathBlocked: return "dynamic-path-blocked";
     case Reason::StaticWorldMismatch: return "static-world-mismatch";
     case Reason::InvalidCurrentState: return "invalid-current-state";
-    case Reason::ProgressLiftRejected: return "progress-lift-rejected";
     case Reason::CourseFrameUnavailable: return "course-frame-unavailable";
     case Reason::ActuationRejected: return "actuation-rejected";
     case Reason::SteeringUnreachable: return "steering-unreachable";
@@ -557,11 +550,7 @@ const char * to_string(const DynamicObstacleProofScope scope) noexcept
   return "unknown";
 }
 
-namespace
-{
-
-Result evaluate_impl(
-  const Request & request, const bool enforce_progress_continuity)
+Result evaluate(const Request & request)
 {
   Result result;
   result.execution_clock_kind = request.execution_clock.kind;
@@ -736,10 +725,11 @@ Result evaluate_impl(
     request.circular);
   result.lifted_control_origin_physical_progress_m = lift.progress_m;
   result.progress_difference_m = lift.difference_m;
-  if (!lift.accepted && enforce_progress_continuity) {
-    result.reason = Reason::ProgressLiftRejected;
+  if (!lift.valid) {
+    result.reason = Reason::InvalidCurrentState;
     return result;
   }
+  result.progress_rebased = !lift.within_continuity_tolerance;
   const auto expected_pose = reconstruct_pose(source, expected);
   if (!expected_pose.has_value()) {
     result.reason = Reason::CourseFrameUnavailable;
@@ -1371,6 +1361,7 @@ Result evaluate_impl(
   proof.plan = request.plan;
   proof.latest_state_feedback_bundle = feedback_shadow_mode;
   proof.publication_stage_advanced = result.publication_stage_advanced;
+  proof.progress_rebased = result.progress_rebased;
   proof.decision_id = request.decision_id;
   proof.obstacle_generation = request.obstacles.generation;
   proof.observed_sec = request.obstacles.observed_sec;
@@ -1442,27 +1433,6 @@ Result evaluate_impl(
   result.reason = Reason::Accepted;
   result.proof = std::move(proof);
   return result;
-}
-
-}  // namespace
-
-Result evaluate(const Request & request)
-{
-  auto production = evaluate_impl(request, true);
-  if (production.reason != Reason::ProgressLiftRejected) {
-    return production;
-  }
-
-  // Compare the frozen production failure with a stateless ManeuverBundle
-  // using the same source controls and current world.  This second result is
-  // diagnostics only: production keeps the original reject and no shadow
-  // proof is returned to the publisher.
-  const auto stateless = evaluate_impl(request, false);
-  production.stateless_progress_rebase_attempted = true;
-  production.stateless_progress_rebase_reason = stateless.reason;
-  production.stateless_progress_rebase_proof_available =
-    stateless.proof.has_value();
-  return production;
 }
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation

@@ -898,6 +898,27 @@ def test_published_overtake_identity_is_replenished_before_problem_assembly() ->
     )
 
 
+def test_live_overtake_identity_does_not_depend_on_legacy_stage_corridor() -> None:
+    """A failed corridor must leave the seven-state replanning scope alive."""
+
+    init_start = SOURCE.index("MpcProblem init_problem(")
+    init_end = SOURCE.index(
+        "std::optional<ExtendedProgressMpcProblem> build_extended_progress_problem(",
+        init_start,
+    )
+    init = SOURCE[init_start:init_end]
+    request = init.index("live_overtake_execution_identity_requested")
+    identity = init.index("resolve_canonical_execution_identity(", request)
+    progress_scope = init.index(
+        "progress_execution_context_active =", identity
+    )
+    assert request < identity < progress_scope
+    identity_block = init[request:identity]
+    assert "is_overtake_receding_horizon_execution_phase" in identity_block
+    assert "stage_corridor.active" not in identity_block
+    assert "overtake_line_output.active" not in identity_block
+
+
 def test_follow_transition_admission_uses_the_same_canonical_producer() -> None:
     """Follow waits on async evidence while the published intent keeps authority."""
 

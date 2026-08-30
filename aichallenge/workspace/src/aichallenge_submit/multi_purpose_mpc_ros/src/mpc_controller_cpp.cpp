@@ -20440,10 +20440,13 @@ struct MPC
         }
       }
     }
+    const bool live_overtake_execution_identity_requested =
+      is_overtake_receding_horizon_execution_phase(
+      overtake_line_state_.phase);
     const auto canonical_execution_identity =
       overtake_orchestrator::resolve_canonical_execution_identity(
       overtake_orchestrator::CanonicalExecutionIdentityRequest{
-        overtake_line_output.active && stage_corridor.active,
+        live_overtake_execution_identity_requested,
         overtake_line_state_.target_vehicle_id,
         overtake_line_state_.mission_generation,
         orchestrator_phase(overtake_line_state_.phase),

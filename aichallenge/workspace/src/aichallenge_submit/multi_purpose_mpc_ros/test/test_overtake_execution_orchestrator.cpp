@@ -248,7 +248,7 @@ TEST(OvertakeExecutionOrchestrator, RejectsMalformedRetainedExecution)
 TEST(OvertakeExecutionOrchestrator, KeepsCommittedLineIdentityPrecedence)
 {
   orchestrator::CanonicalExecutionIdentityRequest request;
-  request.overtake_line_active = true;
+  request.overtake_execution_requested = true;
   request.overtake_line_target_id = "line-target";
   request.overtake_line_mission_generation = 5U;
   request.overtake_line_phase = orchestrator::Phase::Pass;
@@ -272,13 +272,41 @@ TEST(OvertakeExecutionOrchestrator, KeepsCommittedLineIdentityPrecedence)
 
 TEST(
   OvertakeExecutionOrchestrator,
+  KeepsLivePassIdentityIndependentOfStageCorridorAvailability)
+{
+  orchestrator::CanonicalExecutionIdentityRequest request;
+  // No stage-corridor flag participates in this request.  The live Pass
+  // identity is precisely what permits the next current-world problem to
+  // rebuild physical wall rows and inspect the same-epoch sibling branch.
+  request.overtake_execution_requested = true;
+  request.overtake_line_target_id = "d2";
+  request.overtake_line_mission_generation = 9U;
+  request.overtake_line_phase = orchestrator::Phase::Pass;
+  request.overtake_line_side_sign = -1;
+  request.overtake_line_traveled_m = 4.0;
+
+  const auto result =
+    orchestrator::resolve_canonical_execution_identity(request);
+
+  ASSERT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::CanonicalExecutionIdentitySource::OvertakeLine);
+  EXPECT_EQ(result.target_id, "d2");
+  EXPECT_EQ(result.generation, 9U);
+  EXPECT_EQ(result.phase, orchestrator::Phase::Pass);
+  EXPECT_EQ(result.side_sign, -1);
+}
+
+TEST(
+  OvertakeExecutionOrchestrator,
   KeepsDynamicWaitOriginAsCanonicalExecutionIdentity)
 {
   orchestrator::CanonicalExecutionIdentityRequest request;
   // The live stage corridor is deliberately unavailable while DynamicWait
   // owns a previously certified execution prefix.  Losing the tactical
   // corridor must not erase the interrupted ShiftOut execution identity.
-  request.overtake_line_active = false;
+  request.overtake_execution_requested = false;
   request.overtake_line_target_id = "d2";
   request.overtake_line_mission_generation = 8U;
   request.overtake_line_phase = orchestrator::Phase::FollowPrepare;

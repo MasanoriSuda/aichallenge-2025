@@ -255,7 +255,12 @@ enum class CanonicalExecutionIdentityReason {
 /// obstacle avoidance is a normal Track/Cruise problem and deliberately has
 /// no ShiftOut/Pass/Return execution identity.
 struct CanonicalExecutionIdentityRequest {
-  bool overtake_line_active{false};
+  /// A live tactical ShiftOut/Pass/Return encounter requests a canonical
+  /// execution identity independently of whether the optional legacy stage
+  /// corridor is available in this cycle.  Wall/corridor availability remains
+  /// a separate problem/certificate contract; coupling it here would erase
+  /// the identity required to rebuild a current-world seven-state problem.
+  bool overtake_execution_requested{false};
   std::string overtake_line_target_id;
   std::uint64_t overtake_line_mission_generation{0U};
   Phase overtake_line_phase{Phase::Idle};

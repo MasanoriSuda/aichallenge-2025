@@ -299,14 +299,14 @@ CanonicalExecutionIdentityResolution resolve_canonical_execution_identity(
     effective_line_phase == Phase::ShiftOut ||
     effective_line_phase == Phase::Pass ||
     effective_line_phase == Phase::Return;
-  // `overtake_line_active` describes the current tactical stage corridor.
-  // DynamicWait is entered precisely when that corridor is temporarily
-  // unavailable. The current-world canonical publisher, not the optional
-  // legacy prefix, owns the interrupted ShiftOut/Pass command. Treating the
-  // tactical flag as an identity request keeps the semantic Mission alive but
-  // still has to pass every ordinary identity check below.
+  // Execution identity and geometry availability are separate contracts.  A
+  // live tactical encounter must remain able to build a current-world problem
+  // when its previous stage corridor becomes infeasible; otherwise the same
+  // failure that requires replanning also removes the producer which could
+  // evaluate the opposite homotopy. DynamicWait requests the interrupted
+  // identity by the same rule.
   const bool line_execution_identity_requested =
-    request.overtake_line_active || request.dynamic_wait_active;
+    request.overtake_execution_requested || request.dynamic_wait_active;
   if (line_execution_identity_requested) {
     if (
       request.overtake_line_target_id.empty() ||

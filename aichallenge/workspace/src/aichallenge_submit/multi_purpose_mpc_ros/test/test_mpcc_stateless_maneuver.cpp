@@ -208,6 +208,39 @@ TEST(MpccStatelessManeuver, ReturnAheadOfRearClearTargetStaysAhead)
   EXPECT_EQ(population.candidates.front().seed.pass_side_sign, 0);
 }
 
+TEST(MpccStatelessManeuver, AuditReturnScheduleDiscardsCapturedMissionReference)
+{
+  auto source = make_return_source();
+  source.replay_world->obstacles.front().x_m = 3.0;
+  source.request.initial_state[mpcc_rate_resolved::kLateralIndex] = 1.0;
+  source.request.states.front().lower = source.request.initial_state;
+  source.request.states.front().upper = source.request.initial_state;
+  for (std::size_t index = 1U; index + 1U < source.request.states.size(); ++index) {
+    source.request.states[index].reference[
+      mpcc_rate_resolved::kLateralIndex] = -1.5;
+  }
+  const auto fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+  const auto production_b = build(source, fingerprint, 1);
+  const auto audit_c = build_return_rejoin_schedule(
+    source, fingerprint, 0, source.request.horizon_steps);
+
+  ASSERT_TRUE(production_b.seed.has_value()) << production_b.detail;
+  ASSERT_TRUE(audit_c.seed.has_value()) << audit_c.detail;
+  ASSERT_EQ(audit_c.seed->lateral_reference_m.size(), 4U);
+  EXPECT_DOUBLE_EQ(audit_c.seed->lateral_reference_m.front(), 1.0);
+  EXPECT_GT(audit_c.seed->lateral_reference_m[1], 0.0);
+  EXPECT_LT(audit_c.seed->lateral_reference_m[1], 1.0);
+  EXPECT_DOUBLE_EQ(audit_c.seed->lateral_reference_m.back(), 0.0);
+  EXPECT_EQ(production_b.seed->lateral_reference_m[1], -1.5);
+  EXPECT_NE(
+    audit_c.seed->candidate_fingerprint,
+    production_b.seed->candidate_fingerprint);
+  EXPECT_LT(
+    audit_c.seed->solver_snapshot.request.states[1].reference[
+      mpcc_rate_resolved::kHeadingIndex], 0.0);
+}
+
 TEST(MpccStatelessManeuver, ReturnRejectsUnseparatedAmbiguousRelation)
 {
   const auto source = make_return_source();

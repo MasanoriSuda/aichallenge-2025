@@ -179,6 +179,17 @@ Result build_lattice(
   int pass_side_sign, int first_pass_side_stage,
   int first_ahead_stage) noexcept;
 
+/// Architecture-audit-only Return candidate.  Unlike build(), which records
+/// the current production B behavior, this arm discards the captured Mission
+/// reference between the measured state and immutable Return endpoint.  It
+/// rebuilds a bounded smooth rejoin schedule from the current world so C/D
+/// can distinguish retained-geometry defects from physical infeasibility.
+/// It has no Store, mailbox, publisher or production call site.
+Result build_return_rejoin_schedule(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint,
+  int rejoin_start_stage, int rejoin_complete_stage) noexcept;
+
 /// Shadow-only candidate-E member. It keeps the stateless-B reference and
 /// seals a monotone diagonal supporting-row schedule into the candidate.
 Result build_diagonal_schedule(

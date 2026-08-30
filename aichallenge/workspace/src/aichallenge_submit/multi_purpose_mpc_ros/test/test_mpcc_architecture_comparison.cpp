@@ -179,6 +179,28 @@ shadow::Snapshot stoppable_source_snapshot()
   return source;
 }
 
+shadow::Snapshot return_source_snapshot()
+{
+  auto source = source_snapshot();
+  source.identity.source_context.intent = contract::ControlIntent::Return;
+  source.identity.source_context.fingerprint = 0U;
+  source.identity.source_context = contract::seal_problem_context(
+    source.identity.source_context);
+  source.request.initial_state[model::kLateralIndex] = 1.0;
+  source.request.states.front().lower = source.request.initial_state;
+  source.request.states.front().upper = source.request.initial_state;
+  for (std::size_t index = 1U; index < source.request.states.size(); ++index) {
+    source.request.states[index].reference[model::kLateralIndex] = 1.25;
+  }
+  source.terminal_intent_contract.active = true;
+  source.terminal_intent_contract.lateral_reference_m = 0.0;
+  source.terminal_intent_contract.lateral_tolerance_m = 0.20;
+  source.terminal_intent_contract.heading_reference_rad = 0.0;
+  source.terminal_intent_contract.heading_tolerance_rad = 0.12;
+  EXPECT_TRUE(architecture::interaction_snapshot_complete(source));
+  return source;
+}
+
 architecture::RecordedInteractionSnapshot recorded(
   shadow::Snapshot source)
 {
@@ -299,6 +321,36 @@ TEST(MpccArchitectureComparison, IndependentlyProducesSealedBundles)
   EXPECT_NE(
     report.arms[2].candidate_fingerprint,
     report.arms[3].candidate_fingerprint);
+}
+
+TEST(MpccArchitectureComparison, ReturnUsesRejoinSchedulesForCAndD)
+{
+  const auto report = compare(recorded(return_source_snapshot()));
+
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 15U);
+  EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
+  EXPECT_EQ(report.arms[1].arm, Arm::PersistentTargetBoundA2);
+  EXPECT_EQ(report.arms[2].arm, Arm::StatelessReturnB);
+  std::size_t rough_count = 0U;
+  std::size_t offline_count = 0U;
+  for (const auto & arm : report.arms) {
+    if (arm.arm == Arm::RoughReturnC) {
+      ++rough_count;
+      EXPECT_EQ(arm.candidate_source, "return-rejoin-polynomial");
+      EXPECT_EQ(arm.detail.find("unsupported-intent"), std::string::npos);
+    }
+    if (arm.arm == Arm::OfflineReturnD) {
+      ++offline_count;
+      EXPECT_EQ(arm.candidate_source, "return-rejoin-polynomial");
+      EXPECT_TRUE(arm.direct_final_attempted);
+      EXPECT_EQ(arm.detail.find("unsupported-intent"), std::string::npos);
+    }
+  }
+  EXPECT_EQ(rough_count, 5U);
+  EXPECT_EQ(offline_count, 5U);
+  EXPECT_EQ(report.arms[13].arm, Arm::ProductionReturnG);
+  EXPECT_EQ(report.arms[14].arm, Arm::WallRestorationH);
 }
 
 TEST(

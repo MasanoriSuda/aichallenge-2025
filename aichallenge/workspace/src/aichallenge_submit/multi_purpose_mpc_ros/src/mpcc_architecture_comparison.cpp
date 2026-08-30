@@ -1186,6 +1186,83 @@ ArmResult evaluate_offline_continuation(
   return continued;
 }
 
+std::vector<std::pair<int, int>> return_rejoin_schedule_lattice(
+  const int horizon)
+{
+  std::vector<std::pair<int, int>> schedules;
+  const auto append = [&schedules, horizon](const int start, const int complete) {
+      if (start < 0 || start >= horizon || complete <= start ||
+        complete > horizon)
+      {
+        return;
+      }
+      const auto value = std::pair{start, complete};
+      if (std::find(schedules.begin(), schedules.end(), value) == schedules.end()) {
+        schedules.push_back(value);
+      }
+    };
+  for (const int start : {0, horizon / 4, horizon / 2}) {
+    for (const int complete : {horizon / 2, 3 * horizon / 4, horizon}) {
+      append(start, complete);
+    }
+  }
+  if (schedules.empty() && horizon > 0) {
+    append(0, horizon);
+  }
+  return schedules;
+}
+
+ArmResult evaluate_offline_return_rejoin(
+  const shadow::Snapshot & source,
+  const std::uint64_t source_fingerprint,
+  const int rejoin_start_stage, const int rejoin_complete_stage)
+{
+  const auto candidate = maneuver::build_return_rejoin_schedule(
+    source, source_fingerprint, rejoin_start_stage, rejoin_complete_stage);
+  if (!candidate.seed.has_value()) {
+    const auto stage =
+      candidate.reason == maneuver::RejectReason::TerminalSuccessorUnavailable ?
+      Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+    auto rejected = rejected_arm(
+      Arm::OfflineReturnD, stage, source_fingerprint,
+      std::string{maneuver::to_string(candidate.reason)} + ": " +
+      candidate.detail);
+    rejected.lattice_transition_stage = rejoin_start_stage;
+    rejected.lattice_ahead_stage = rejoin_complete_stage;
+    return rejected;
+  }
+  const auto successor = maneuver::resolve_terminal_successor(
+    candidate.seed->solver_snapshot);
+  auto direct = evaluate_arm(
+    Arm::OfflineReturnD, candidate.seed->solver_snapshot,
+    source_fingerprint, candidate.seed->candidate_fingerprint, successor,
+    rejoin_start_stage, rejoin_complete_stage);
+  direct.direct_final_attempted = true;
+  direct.direct_final_stage = direct.stage;
+  direct.candidate_source = "return-rejoin-polynomial";
+  if (direct.bundle.has_value()) {
+    direct.detail = "direct-final accepted";
+    return direct;
+  }
+
+  constexpr std::size_t kOfflineSqpDepth = 3U;
+  auto refined = evaluate_arm(
+    Arm::OfflineReturnD, candidate.seed->solver_snapshot,
+    source_fingerprint, candidate.seed->candidate_fingerprint, successor,
+    rejoin_start_stage, rejoin_complete_stage, nullptr, false, std::nullopt,
+    kOfflineSqpDepth);
+  refined.direct_final_attempted = true;
+  refined.direct_final_stage = direct.stage;
+  refined.continuation_attempted = true;
+  refined.continuation_solved_step_count = refined.dynamic_sqp_depth;
+  refined.continuation_compute_ms = refined.solver_compute_ms;
+  refined.candidate_source = "return-rejoin-polynomial";
+  refined.detail = std::string{"direct="} + to_string(direct.stage) +
+    "/offline_multi_sqp_depth=" + std::to_string(kOfflineSqpDepth) +
+    "/final=" + refined.detail;
+  return refined;
+}
+
 int evidence_rank(const Stage stage) noexcept
 {
   switch (stage) {
@@ -1399,16 +1476,20 @@ const char * to_string(const Arm arm) noexcept
       return "persistent-target-bound-a2";
     case Arm::StatelessLeftB: return "stateless-left-b";
     case Arm::StatelessRightB: return "stateless-right-b";
+    case Arm::StatelessReturnB: return "stateless-return-b";
     case Arm::RoughLeftC: return "rough-left-c";
     case Arm::RoughRightC: return "rough-right-c";
+    case Arm::RoughReturnC: return "rough-return-c";
     case Arm::OfflineLeftD: return "offline-left-d";
     case Arm::OfflineRightD: return "offline-right-d";
+    case Arm::OfflineReturnD: return "offline-return-d";
     case Arm::DiagonalLeftE: return "diagonal-left-e";
     case Arm::DiagonalRightE: return "diagonal-right-e";
     case Arm::PhysicalDiagonalLeftF: return "physical-diagonal-left-f";
     case Arm::PhysicalDiagonalRightF: return "physical-diagonal-right-f";
     case Arm::ProductionLeftG: return "production-left-g";
     case Arm::ProductionRightG: return "production-right-g";
+    case Arm::ProductionReturnG: return "production-return-g";
     case Arm::WallRestorationH: return "wall-restoration-h";
     case Arm::ExternalPrimalI: return "external-primal-i";
     case Arm::WallOmitHeadingJ: return "wall-omit-heading-j";
@@ -1555,6 +1636,70 @@ Report compare(
         Arm::PersistentTargetBoundA2,
         target_bound.seed->solver_snapshot, source_fingerprint,
         target_bound.seed->candidate_fingerprint, target_bound_successor));
+    }
+
+    // Return owns one committed homotopy, so pass-side disjunction schedules
+    // are not a meaningful C/D comparison. Rebuild a bounded family of smooth
+    // current-state-to-endpoint schedules instead. This is observation-only:
+    // the production candidate population below remains the unchanged G arm.
+    if (source.identity.source_context.intent == contract::ControlIntent::Return) {
+      const int source_side =
+        source.identity.source_context.execution_side_sign;
+      const auto rebuilt = maneuver::build(
+        source, source_fingerprint, source_side);
+      if (!rebuilt.seed.has_value()) {
+        const auto stage =
+          rebuilt.reason == maneuver::RejectReason::TerminalSuccessorUnavailable ?
+          Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+        report.arms.push_back(rejected_arm(
+          Arm::StatelessReturnB, stage, source_fingerprint,
+          std::string{maneuver::to_string(rebuilt.reason)} + ": " +
+          rebuilt.detail));
+      } else {
+        const auto successor = maneuver::resolve_terminal_successor(
+          rebuilt.seed->solver_snapshot);
+        report.arms.push_back(evaluate_arm(
+          Arm::StatelessReturnB, rebuilt.seed->solver_snapshot,
+          source_fingerprint, rebuilt.seed->candidate_fingerprint, successor));
+      }
+
+      const auto schedules = return_rejoin_schedule_lattice(
+        source.request.horizon_steps);
+      for (const auto & [start_stage, complete_stage] : schedules) {
+        const auto candidate = maneuver::build_return_rejoin_schedule(
+          source, source_fingerprint, start_stage, complete_stage);
+        if (!candidate.seed.has_value()) {
+          const auto stage =
+            candidate.reason ==
+            maneuver::RejectReason::TerminalSuccessorUnavailable ?
+            Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+          auto rejected = rejected_arm(
+            Arm::RoughReturnC, stage, source_fingerprint,
+            std::string{maneuver::to_string(candidate.reason)} + ": " +
+            candidate.detail);
+          rejected.lattice_transition_stage = start_stage;
+          rejected.lattice_ahead_stage = complete_stage;
+          report.arms.push_back(std::move(rejected));
+        } else {
+          const auto successor = maneuver::resolve_terminal_successor(
+            candidate.seed->solver_snapshot);
+          auto evaluated = evaluate_arm(
+            Arm::RoughReturnC, candidate.seed->solver_snapshot,
+            source_fingerprint, candidate.seed->candidate_fingerprint,
+            successor, start_stage, complete_stage);
+          evaluated.candidate_source = "return-rejoin-polynomial";
+          report.arms.push_back(std::move(evaluated));
+        }
+        report.arms.push_back(evaluate_offline_return_rejoin(
+          source, source_fingerprint, start_stage, complete_stage));
+      }
+
+      report.arms.push_back(evaluate_production_population(
+        Arm::ProductionReturnG, source, source_fingerprint, source_side));
+      report.arms.push_back(evaluate_arm(
+        Arm::WallRestorationH, source, source_fingerprint,
+        source_fingerprint, persistent_successor, -1, -1, nullptr, true));
+      return report;
     }
 
     for (const auto & [arm, side] :

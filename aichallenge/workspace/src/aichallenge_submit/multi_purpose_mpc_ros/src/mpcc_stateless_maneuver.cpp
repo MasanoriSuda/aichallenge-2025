@@ -953,6 +953,105 @@ Result build_lattice(
   return result;
 }
 
+Result build_return_rejoin_schedule(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const std::uint64_t source_interaction_fingerprint,
+  const int rejoin_start_stage, const int rejoin_complete_stage) noexcept
+{
+  namespace architecture = mpcc_architecture_snapshot;
+  namespace contract = mpcc_execution_contract;
+  namespace model = mpcc_rate_resolved;
+  if (source.identity.source_context.intent != contract::ControlIntent::Return) {
+    return reject(
+      RejectReason::UnsupportedIntent,
+      "Return rejoin schedule accepts only Return intent");
+  }
+  const int horizon = source.request.horizon_steps;
+  if (
+    rejoin_start_stage < 0 || rejoin_start_stage >= horizon ||
+    rejoin_complete_stage <= rejoin_start_stage ||
+    rejoin_complete_stage > horizon)
+  {
+    return reject(
+      RejectReason::InvalidTransitionStage,
+      "Return rejoin schedule is outside the planning horizon");
+  }
+  const int source_side =
+    source.identity.source_context.execution_side_sign;
+  if (source_side != -1 && source_side != 1) {
+    return reject(
+      RejectReason::InvalidSide,
+      "Return rejoin schedule requires the committed homotopy");
+  }
+  auto result = build(source, source_interaction_fingerprint, source_side);
+  if (!result.seed.has_value()) {
+    return result;
+  }
+
+  auto & seed = result.seed.value();
+  auto & candidate = seed.solver_snapshot;
+  const double initial_lateral_m =
+    candidate.request.initial_state[model::kLateralIndex];
+  const double terminal_lateral_m =
+    source.terminal_intent_contract.lateral_reference_m;
+  std::vector<double> reference_lateral_m(
+    static_cast<std::size_t>(horizon + 1), initial_lateral_m);
+  for (int stage = 1; stage <= horizon; ++stage) {
+    const double raw_fraction = std::clamp(
+      static_cast<double>(stage - rejoin_start_stage) /
+      static_cast<double>(rejoin_complete_stage - rejoin_start_stage),
+      0.0, 1.0);
+    const double smooth_fraction =
+      raw_fraction * raw_fraction * (3.0 - 2.0 * raw_fraction);
+    auto & state = candidate.request.states[static_cast<std::size_t>(stage)];
+    const double desired_lateral_m = std::clamp(
+      initial_lateral_m +
+      smooth_fraction * (terminal_lateral_m - initial_lateral_m),
+      state.lower[model::kLateralIndex],
+      state.upper[model::kLateralIndex]);
+    reference_lateral_m[static_cast<std::size_t>(stage)] =
+      desired_lateral_m;
+    state.reference[model::kLateralIndex] = desired_lateral_m;
+    state.reference[model::kLagIndex] = 0.0;
+  }
+
+  // Supply the same SQP with a geometric heading seed derived from the new
+  // polynomial reference.  This is a reference only; steering, yaw-response,
+  // wall and terminal bounds remain unchanged and retain final authority.
+  for (int stage = 1; stage < horizon; ++stage) {
+    const auto before = static_cast<std::size_t>(stage - 1);
+    const auto after = static_cast<std::size_t>(stage + 1);
+    const double distance_m =
+      seed.path_distance_m[after] - seed.path_distance_m[before];
+    const double slope = distance_m > kNumericalTolerance ?
+      (reference_lateral_m[after] - reference_lateral_m[before]) /
+      distance_m : 0.0;
+    auto & state = candidate.request.states[static_cast<std::size_t>(stage)];
+    state.reference[model::kHeadingIndex] = std::clamp(
+      std::atan(slope), state.lower[model::kHeadingIndex],
+      state.upper[model::kHeadingIndex]);
+  }
+  candidate.request.states.back().reference[model::kHeadingIndex] =
+    source.terminal_intent_contract.heading_reference_rad;
+  seed.lateral_reference_m = std::move(reference_lateral_m);
+
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "Return rejoin schedule candidate is incomplete");
+  }
+  seed.candidate_fingerprint =
+    architecture::fingerprint_interaction_snapshot(candidate);
+  if (seed.candidate_fingerprint == 0U) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "Return rejoin schedule fingerprint unavailable");
+  }
+  result.reason = RejectReason::Accepted;
+  result.detail = "accepted/audit-only-Return-rejoin-schedule";
+  return result;
+}
+
 Result build_diagonal_schedule(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,

@@ -1,4 +1,5 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 
 #include <gtest/gtest.h>
 
@@ -13,6 +14,7 @@ namespace execution =
   multi_purpose_mpc_ros::mpcc_rate_resolved_execution_artifact;
 namespace physical =
   multi_purpose_mpc_ros::mpcc_rate_resolved_physical_wall;
+namespace shadow = multi_purpose_mpc_ros::mpcc_rate_resolved_shadow;
 namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace recovery = multi_purpose_mpc_ros::recovery_footprint;
 
@@ -190,6 +192,51 @@ TEST(MpccRateResolvedCertifiedPlan, JoinsExactArtifactAndPhysicalProof)
   EXPECT_EQ(
     result.plan->physical_diagnostic.reason,
     contract::PhysicalWallCertificateReason::Accepted);
+}
+
+TEST(MpccRateResolvedCertifiedPlan, RetainsMatchingSolverSourceAsProvenance)
+{
+  auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
+  auto source = std::make_shared<shadow::Snapshot>();
+  source->identity = value->identity;
+  const auto result = certified::build(
+    value, physical_snapshot(value->identity),
+    accepted_physical(value->identity), source);
+
+  ASSERT_EQ(result.reason, certified::RejectReason::None);
+  ASSERT_NE(result.plan, nullptr);
+  ASSERT_NE(result.plan->solver_source_snapshot, nullptr);
+  EXPECT_TRUE(execution::same_identity(
+      result.plan->solver_source_snapshot->identity, value->identity));
+}
+
+TEST(MpccRateResolvedCertifiedPlan, RejectsMismatchedSolverSourceProvenance)
+{
+  auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
+  auto source = std::make_shared<shadow::Snapshot>();
+  source->identity = artifact(2U).identity;
+  const auto result = certified::build(
+    value, physical_snapshot(value->identity),
+    accepted_physical(value->identity), source);
+
+  EXPECT_EQ(result.reason, certified::RejectReason::IdentityMismatch);
+  EXPECT_EQ(result.plan, nullptr);
+}
+
+TEST(MpccRateResolvedCertifiedPlan, StorePreservesSolverSourceProvenance)
+{
+  certified::Store store;
+  auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
+  auto source = std::make_shared<shadow::Snapshot>();
+  source->identity = value->identity;
+  const auto admission = store.certify_and_replace(
+    value, physical_snapshot(value->identity),
+    accepted_physical(value->identity), source);
+
+  ASSERT_TRUE(admission.accepted());
+  const auto candidate = store.candidate_snapshot();
+  ASSERT_NE(candidate, nullptr);
+  EXPECT_EQ(candidate->solver_source_snapshot, source);
 }
 
 TEST(MpccRateResolvedCertifiedPlan, ReturnUsesFullHorizonTerminalCertificate)

@@ -103,6 +103,58 @@ Static verification after the refinement:
 - pending discard without execution: passed;
 - `git diff --check`: passed.
 
-The refined dynamic gate remains pending.  It must reproduce the Overtake
-intent exit and show `invalidated_running` or `discarded_pending` without a
-subsequent 68-candidate terminal observation.
+## Second live result: candidate ownership falsified
+
+The refined run is under:
+
+`output/20260830-231135/d1/autoware.log`
+
+Newer Stop submissions still superseded older running work, and several
+Overtake episodes completed through Pass, Return and Idle.  However worker
+telemetry remained `invalidated_running=0/discarded_pending=0`.  A Pass source
+(`sequence=4915`, `decision=5790`) exhausted all 68 candidates in 2891.212 ms
+and was consumed 3.610 seconds old.
+
+The causal ordering rejects the candidate-owned invalidation design:
+
+1. `Pass -> Return` occurred;
+2. a canonical Return command crossed the publisher;
+3. `Return -> Idle` and later Cruise publication followed;
+4. an asynchronously completed Pass candidate then occupied the candidate
+   Store and started/retained the Stop observation;
+5. no candidate-based non-Overtake invalidation could retire it.
+
+The Store contract already states that certification creates a candidate only
+and that execution identity changes exclusively at the publisher boundary.
+The remaining implementation therefore moves Stop observation submission and
+invalidation to that boundary.  The dynamic gate remains open until a new run
+shows publisher-driven invalidation and no final all-68 Pass tail after Return.
+
+## Publisher-owned implementation
+
+The exact solver `Snapshot` is now immutable provenance on its
+`CertifiedPlan`.  Its identity must match the execution artifact, but its
+presence grants no Store, command or publisher authority.  The selected plan
+passes that provenance through `CanonicalNormalPendingActuation`.
+
+Only after serialized actuation has crossed the ROS publisher and
+`mark_executed()` or `record_published_bundle_source()` accepts the exact plan
+does the controller submit a Stop observation for ShiftOut/Pass.  Repeated
+publication of the same exact artifact is deduplicated.  Published
+Track/Cruise/Follow/Return/Rejoin, external Stop, and publication override
+invalidate the observation worker.  Candidate completion no longer has any
+Stop worker edge.
+
+Static verification of this ownership correction:
+
+- `make autoware-build`: passed (25 packages);
+- full `multi_purpose_mpc_ros` CTest: 59 / 59 passed;
+- aggregate tests: 2281, 0 errors, 0 failures;
+- single-authority source contract: 92 / 92 passed;
+- matching source provenance retained and mismatched identity rejected;
+- candidate worker contains neither Stop submission nor candidate-owned
+  invalidation;
+- `git diff --check`: passed.
+
+The unrelated stale-build warning for
+`build/joycon_contract_guard/package.xml` remains outside this Slice.

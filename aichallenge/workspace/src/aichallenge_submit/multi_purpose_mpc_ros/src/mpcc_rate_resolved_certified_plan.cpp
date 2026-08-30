@@ -1,4 +1,5 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 
 #include <cmath>
 #include <utility>
@@ -150,13 +151,22 @@ RejectReason validate(const CertifiedPlan & plan) noexcept
   {
     return RejectReason::IdentityMismatch;
   }
+  if (
+    plan.solver_source_snapshot != nullptr &&
+    !artifact::same_identity(
+      plan.solver_source_snapshot->identity,
+      plan.execution_artifact->identity))
+  {
+    return RejectReason::IdentityMismatch;
+  }
   return RejectReason::None;
 }
 
 BuildResult build(
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
   const physical::Snapshot & physical_snapshot,
-  const physical::Result & physical_result)
+  const physical::Result & physical_result,
+  std::shared_ptr<const shadow::Snapshot> solver_source_snapshot)
 {
   BuildResult result;
   if (execution_artifact == nullptr) {
@@ -193,9 +203,18 @@ BuildResult build(
     result.reason = RejectReason::PhysicalSnapshotMismatch;
     return result;
   }
+  if (
+    solver_source_snapshot != nullptr &&
+    !artifact::same_identity(
+      solver_source_snapshot->identity, execution_artifact->identity))
+  {
+    result.reason = RejectReason::IdentityMismatch;
+    return result;
+  }
 
   auto plan = std::make_shared<CertifiedPlan>();
   plan->execution_artifact = std::move(execution_artifact);
+  plan->solver_source_snapshot = std::move(solver_source_snapshot);
   plan->physical_snapshot =
     std::make_shared<const physical::Snapshot>(physical_snapshot);
   plan->physical_identity = physical_result.identity;
@@ -235,10 +254,12 @@ const char * to_string(const PublishedSourceKind kind) noexcept
 AdmissionResult Store::certify_and_replace(
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
   const physical::Snapshot & physical_snapshot,
-  const physical::Result & physical_result)
+  const physical::Result & physical_result,
+  std::shared_ptr<const shadow::Snapshot> solver_source_snapshot)
 {
   const auto certified = build(
-    std::move(execution_artifact), physical_snapshot, physical_result);
+    std::move(execution_artifact), physical_snapshot, physical_result,
+    std::move(solver_source_snapshot));
   if (certified.plan == nullptr) {
     std::lock_guard<std::mutex> lock(mutex_);
     ++certification_reject_count_;

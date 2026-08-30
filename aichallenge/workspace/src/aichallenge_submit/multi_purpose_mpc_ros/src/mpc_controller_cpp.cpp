@@ -6436,11 +6436,11 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
     }
     evaluation.certified_plan = rate_resolved_certified::build(
       evaluation.solver.execution_artifact, physical_snapshot.value(),
-      physical_result);
+      physical_result, evaluation.solver_source_snapshot);
     if (certified_plan_store != nullptr) {
       static_cast<void>(certified_plan_store->certify_and_replace(
         evaluation.solver.execution_artifact, physical_snapshot.value(),
-        physical_result));
+        physical_result, evaluation.solver_source_snapshot));
     }
   }
   evaluation.physical = std::move(physical_result);
@@ -7725,6 +7725,10 @@ struct CanonicalNormalPendingActuation
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
   selected_sibling_plan;
+  /// Immutable provenance for the selected plan.  This becomes an eligible
+  /// observation source only after this exact command crosses the publisher.
+  std::shared_ptr<const rate_resolved_shadow::Snapshot>
+  solver_source_snapshot;
   double first_published_control_origin_sec{
     std::numeric_limits<double>::quiet_NaN()};
   double first_published_artifact_elapsed_sec{
@@ -9265,6 +9269,82 @@ struct MPC
     return state;
   }
 
+  void invalidate_published_stop_lattice_observation() noexcept
+  {
+    rate_resolved_stop_lattice_published_source_identity_.reset();
+    if (rate_resolved_stop_lattice_shadow_worker_ != nullptr) {
+      static_cast<void>(
+        rate_resolved_stop_lattice_shadow_worker_->
+        invalidate_pending_and_running());
+    }
+  }
+
+  void update_published_stop_lattice_observation(
+    const CanonicalNormalPendingActuation & published)
+  {
+    const bool stop_observation_intent =
+      published.command.intent == mpcc_contract::ControlIntent::ShiftOut ||
+      published.command.intent == mpcc_contract::ControlIntent::Pass;
+    if (!stop_observation_intent) {
+      invalidate_published_stop_lattice_observation();
+      return;
+    }
+    if (
+      rate_resolved_stop_lattice_shadow_worker_ == nullptr ||
+      rate_resolved_stop_lattice_shadow_solver_context_ == nullptr ||
+      rate_resolved_stop_lattice_shadow_mailbox_ == nullptr ||
+      published.selected_plan == nullptr ||
+      published.selected_plan->execution_artifact == nullptr ||
+      published.solver_source_snapshot == nullptr ||
+      !rate_resolved_artifact::same_identity(
+        published.solver_source_snapshot->identity,
+        published.selected_plan->execution_artifact->identity))
+    {
+      invalidate_published_stop_lattice_observation();
+      static rclcpp::Clock source_reject_clock{RCL_STEADY_TIME};
+      RCLCPP_ERROR_THROTTLE(
+        rclcpp::get_logger("mpc_controller"), source_reject_clock, 1000,
+        "Published Stop lattice source rejected: decision=%lu, intent=%s, "
+        "plan=%d, artifact=%d, source=%d, authority=shadow, selected=0",
+        static_cast<unsigned long>(published.decision_id),
+        mpcc_contract::to_string(published.command.intent),
+        published.selected_plan != nullptr ? 1 : 0,
+        published.selected_plan != nullptr &&
+        published.selected_plan->execution_artifact != nullptr ? 1 : 0,
+        published.solver_source_snapshot != nullptr ? 1 : 0);
+      return;
+    }
+
+    const auto & identity =
+      published.selected_plan->execution_artifact->identity;
+    if (
+      rate_resolved_stop_lattice_published_source_identity_.has_value() &&
+      rate_resolved_artifact::same_identity(
+        rate_resolved_stop_lattice_published_source_identity_.value(),
+        identity))
+    {
+      return;
+    }
+
+    const auto stop_source = published.solver_source_snapshot;
+    const auto stop_normal = published.selected_plan->execution_artifact;
+    const auto stop_solver = rate_resolved_stop_lattice_shadow_solver_context_;
+    const auto stop_mailbox = rate_resolved_stop_lattice_shadow_mailbox_;
+    const auto submission =
+      rate_resolved_stop_lattice_shadow_worker_->submit_latest_cancelable(
+      [stop_source, stop_normal, stop_solver, stop_mailbox](
+        const LatestOnlyWorker::SupersessionToken & token) {
+        rate_resolved_stop_lattice_shadow::EvaluationControl control;
+        control.superseded = [&token]() {return token.superseded();};
+        auto result = rate_resolved_stop_lattice_shadow::evaluate(
+          *stop_source, *stop_normal, *stop_solver, control);
+        static_cast<void>(stop_mailbox->publish(std::move(result)));
+      });
+    if (submission.accepted) {
+      rate_resolved_stop_lattice_published_source_identity_ = identity;
+    }
+  }
+
   void record_canonical_normal_final_command(
     const std::uint64_t decision_id, const double final_target_speed_mps,
     const double final_acceleration_mps2, const double final_steering_rad,
@@ -9354,6 +9434,8 @@ struct MPC
       rate_resolved_track_cruise_certified_plan_store_->
       supersede_published_bundle_source(decision_id);
     }
+
+    update_published_stop_lattice_observation(pending);
 
     if (pending.overtake_sibling_adoption_token.has_value()) {
       const auto & token = pending.overtake_sibling_adoption_token.value();
@@ -9562,6 +9644,7 @@ struct MPC
     const bool publication_overridden) noexcept
   {
     if (publication_overridden) {
+      invalidate_published_stop_lattice_observation();
       last_published_authority_intent_ =
         mpcc_contract::ControlIntent::Unknown;
       return;
@@ -9570,9 +9653,13 @@ struct MPC
       mpcc_contract::canonical_normal_intent_supported(authority_intent) ||
       authority_intent == mpcc_contract::ControlIntent::Stop)
     {
+      if (authority_intent == mpcc_contract::ControlIntent::Stop) {
+        invalidate_published_stop_lattice_observation();
+      }
       last_published_authority_intent_ = authority_intent;
       return;
     }
+    invalidate_published_stop_lattice_observation();
     last_published_authority_intent_ =
       mpcc_contract::ControlIntent::Unknown;
   }
@@ -24727,12 +24814,6 @@ struct MPC
     const auto overtake_branch_bank = rate_resolved_overtake_branch_bank_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
-    const auto stop_lattice_shadow_worker =
-      rate_resolved_stop_lattice_shadow_worker_;
-    const auto stop_lattice_shadow_solver_context =
-      rate_resolved_stop_lattice_shadow_solver_context_;
-    const auto stop_lattice_shadow_mailbox =
-      rate_resolved_stop_lattice_shadow_mailbox_;
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
       [snapshot = std::move(snapshot.value()), mailbox, solver_context,
@@ -24742,9 +24823,7 @@ struct MPC
         overtake_negative_executor,
         overtake_branch_bank,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
-        physical_registered, certified_plan_store,
-        stop_lattice_shadow_worker, stop_lattice_shadow_solver_context,
-        stop_lattice_shadow_mailbox]() mutable {
+        physical_registered, certified_plan_store]() mutable {
         if (!physical_registered) {
           physical_snapshot.reset();
         }
@@ -24756,54 +24835,6 @@ struct MPC
           overtake_negative_solver_context, overtake_positive_solver_context,
           overtake_negative_executor,
           overtake_branch_bank);
-        bool stop_observation_source_replaced = false;
-        if (
-          evaluation.solver_source_snapshot != nullptr &&
-          evaluation.solver.execution_artifact != nullptr &&
-          evaluation.certified_plan.plan != nullptr &&
-          certified_plan_store != nullptr &&
-          stop_lattice_shadow_worker != nullptr &&
-          stop_lattice_shadow_solver_context != nullptr &&
-          stop_lattice_shadow_mailbox != nullptr)
-        {
-          const auto intent = evaluation.solver.execution_artifact->identity.
-            source_context.intent;
-          const auto admitted = certified_plan_store->candidate_snapshot();
-          const bool admitted_matches =
-            admitted != nullptr && admitted->execution_artifact != nullptr &&
-            rate_resolved_artifact::same_identity(
-              admitted->execution_artifact->identity,
-              evaluation.solver.execution_artifact->identity);
-          const bool stop_intent =
-            intent == mpcc_contract::ControlIntent::ShiftOut ||
-            intent == mpcc_contract::ControlIntent::Pass;
-          if (admitted_matches && stop_intent) {
-            const auto stop_source = evaluation.solver_source_snapshot;
-            const auto stop_normal = evaluation.solver.execution_artifact;
-            static_cast<void>(stop_lattice_shadow_worker->submit_latest_cancelable(
-                [stop_source, stop_normal,
-                stop_lattice_shadow_solver_context,
-                stop_lattice_shadow_mailbox](
-                  const LatestOnlyWorker::SupersessionToken & token) {
-                  rate_resolved_stop_lattice_shadow::EvaluationControl control;
-                  control.superseded = [&token]() {return token.superseded();};
-                  auto stop_result = rate_resolved_stop_lattice_shadow::evaluate(
-                    *stop_source, *stop_normal,
-                    *stop_lattice_shadow_solver_context, control);
-                  static_cast<void>(stop_lattice_shadow_mailbox->publish(
-                      std::move(stop_result)));
-                }));
-          } else if (admitted_matches) {
-            stop_observation_source_replaced = true;
-          }
-        }
-        if (
-          stop_observation_source_replaced &&
-          stop_lattice_shadow_worker != nullptr)
-        {
-          static_cast<void>(
-            stop_lattice_shadow_worker->invalidate_pending_and_running());
-        }
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
           static_cast<void>(physical_mailbox->publish(
@@ -28546,6 +28577,8 @@ struct MPC
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id, command, retained.selected_plan,
       retained.selected_sibling_plan,
+      retained.selected_plan != nullptr ?
+      retained.selected_plan->solver_source_snapshot : nullptr,
       retained.control_origin_sec, retained.cursor_elapsed_sec,
       !retained.selected_from_executed &&
       !retained.stateless_current_world_bundle,
@@ -29658,6 +29691,8 @@ struct MPC
   rate_resolved_stop_lattice_shadow_mailbox_;
   std::shared_ptr<LatestOnlyWorker>
   rate_resolved_stop_lattice_shadow_worker_;
+  std::optional<rate_resolved_artifact::Identity>
+  rate_resolved_stop_lattice_published_source_identity_;
   std::uint64_t rate_resolved_stop_lattice_shadow_last_consumed_sequence_{};
   RateResolvedStopLatticeShadowTelemetryWindow
   rate_resolved_stop_lattice_shadow_telemetry_window_;

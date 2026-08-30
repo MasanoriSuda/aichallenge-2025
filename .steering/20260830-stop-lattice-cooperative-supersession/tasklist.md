@@ -11,5 +11,9 @@
 - [ ] Run `make dev2` and classify freshness/tail evidence.
 - [x] Observe newer-submission supersession in `output/20260830-230003`.
 - [x] Isolate the final-source invalidation gap after Overtake intent exit.
-- [x] Invalidate running/pending observation work on certified non-Overtake replacement.
-- [ ] Re-run static and dynamic gates for the refined lifecycle contract.
+- [x] Falsify candidate Store ownership in `output/20260830-231135`.
+- [x] Carry exact solver source provenance with the certified artifact.
+- [x] Start/invalidate Stop observation only after exact command publication.
+- [x] Remove candidate-worker Stop lifecycle edges.
+- [x] Re-run static gates for the publisher-owned lifecycle contract.
+- [ ] Re-run the dynamic gate for the publisher-owned lifecycle contract.

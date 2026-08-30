@@ -2803,13 +2803,37 @@ def test_live_stop_lattice_comparison_has_no_authority_edge() -> None:
     normal_admission = submit.index(
         "evaluate_rate_resolved_normal_population("
     )
-    stop_submission = submit.index(
-        "stop_lattice_shadow_worker->submit_latest_cancelable("
+    assert normal_admission >= 0
+    assert "stop_lattice_shadow_worker->submit_latest_cancelable(" not in submit
+    assert "candidate_snapshot()" not in submit
+
+    publication_start = SOURCE.index(
+        "void update_published_stop_lattice_observation("
     )
-    assert normal_admission < stop_submission
-    assert "candidate_snapshot()" in submit[normal_admission:stop_submission]
-    assert "rate_resolved_artifact::same_identity(" in submit
-    assert "invalidate_pending_and_running()" in submit[stop_submission:]
+    publication_end = SOURCE.index(
+        "void record_canonical_normal_final_command(", publication_start
+    )
+    publication = SOURCE[publication_start:publication_end]
+    assert "published.solver_source_snapshot" in publication
+    assert "rate_resolved_artifact::same_identity(" in publication
+    assert "submit_latest_cancelable(" in publication
+    assert "invalidate_published_stop_lattice_observation()" in publication
+
+    final_start = publication_end
+    final_end = SOURCE.index(
+        "const std::optional<overtake_orchestrator::AuthorityTrace>",
+        final_start,
+    )
+    final_publication = SOURCE[final_start:final_end]
+    observation_update = final_publication.index(
+        "update_published_stop_lattice_observation(pending)"
+    )
+    assert final_publication.index("mark_executed(") < observation_update
+    assert (
+        final_publication.index("record_published_bundle_source(")
+        < observation_update
+    )
+    assert "invalidate_published_stop_lattice_observation();" in final_publication
 
     observe_start = SOURCE.index(
         "void record_rate_resolved_stop_lattice_shadow("

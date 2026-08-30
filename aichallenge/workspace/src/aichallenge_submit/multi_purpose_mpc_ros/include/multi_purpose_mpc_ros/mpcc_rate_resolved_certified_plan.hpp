@@ -9,11 +9,17 @@
 #include <memory>
 #include <mutex>
 
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
+{
+struct Snapshot;
+}
+
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan
 {
 
 namespace artifact = mpcc_rate_resolved_execution_artifact;
 namespace physical = mpcc_rate_resolved_physical_wall;
+namespace shadow = mpcc_rate_resolved_shadow;
 namespace contract = mpcc_execution_contract;
 
 /// One immutable seven-state execution artifact joined to the exact physical
@@ -22,6 +28,11 @@ namespace contract = mpcc_execution_contract;
 struct CertifiedPlan
 {
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact;
+  /// Exact immutable solver input which produced this artifact.  It is
+  /// provenance only: certification does not make it an executed or published
+  /// source.  Observation consumers may use it only after this plan crosses
+  /// the sole command publisher.
+  std::shared_ptr<const shadow::Snapshot> solver_source_snapshot;
   /// Exact immutable source consumed by the accepted physical result.  A
   /// retained consumer must match this static-world owner before reusing the
   /// certified suffix.
@@ -57,7 +68,8 @@ struct BuildResult
 BuildResult build(
   std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
   const physical::Snapshot & physical_snapshot,
-  const physical::Result & physical_result);
+  const physical::Result & physical_result,
+  std::shared_ptr<const shadow::Snapshot> solver_source_snapshot = nullptr);
 
 enum class StoreReason
 {
@@ -183,7 +195,8 @@ public:
   AdmissionResult certify_and_replace(
     std::shared_ptr<const artifact::ExecutionArtifact> execution_artifact,
     const physical::Snapshot & physical_snapshot,
-    const physical::Result & physical_result);
+    const physical::Result & physical_result,
+    std::shared_ptr<const shadow::Snapshot> solver_source_snapshot = nullptr);
   StoreReason replace(std::shared_ptr<const CertifiedPlan> plan);
   StoreReason replace_pair(
     std::shared_ptr<const CertifiedPlan> selected_plan,

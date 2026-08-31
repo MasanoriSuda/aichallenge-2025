@@ -8,4 +8,4 @@
 - [x] Re-run the frozen snapshot.
 - [x] Build and run package tests.
 - [x] Record the root-cause classification and residual risk.
-- [ ] Commit the completed structural Slice.
+- [x] Commit the completed structural Slice (`32aa7304`).

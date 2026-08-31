@@ -1430,24 +1430,23 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
         active_dual_start,
     )
     active_dual = SOURCE[active_dual_start:active_dual_end]
-    assert "evaluate_side(-1, negative_solver_context)" in active_dual
-    assert "evaluate_side(1, positive_solver_context)" in active_dual
-    assert "negative_executor->submit(" in active_dual
-    assert "negative_executor->wait(" in active_dual
+    assert "const int sibling_side = -selected_side;" in active_dual
+    assert "evaluate_side(selected_side, selected_context)" in active_dual
+    assert "sibling_executor->submit(" in active_dual
+    assert "sibling_executor->wait(" not in active_dual
     assert "std::async(" not in active_dual
-    assert "bounded negative branch unavailable" in active_dual
+    assert "observation-only work on a persistent bounded executor" in active_dual
     assert "branch_bank->merge_branch(" in active_dual
-    assert "source, -1, negative_plan" in active_dual
-    assert "source, 1, positive_plan" in active_dual
-    assert active_dual.index("source, 1, positive_plan") < active_dual.index(
-        "negative_executor->wait("
+    assert "source, sibling_side," in active_dual
+    assert "source, selected_side, selected_plan" in active_dual
+    assert active_dual.index("sibling_executor->submit(") < active_dual.index(
+        "evaluate_side(selected_side, selected_context)"
     )
-    assert "selected_side < 0 ? std::move(negative.value())" in active_dual
     assert "homotopy_owner" not in active_dual
-    assert "replace_pair(" in active_dual
-    assert "selected.pipeline.certified_plan.plan, sibling_plan" in active_dual
-    assert '"active-overtake-dual/selected="' in active_dual
-    assert "overtake_negative_executor_->stats()" in SOURCE
+    assert "replace_pair(" not in active_dual
+    assert "certified_plan_store->replace(selected_plan)" in active_dual
+    assert '"active-overtake-primary/selected="' in active_dual
+    assert "rate_resolved_overtake_sibling_executor_->stats()" in SOURCE
     assert "executor=submitted:%lu/completed:%lu/failed:%lu/" in SOURCE
 
     assert "active_overtake_dual_intent" in overtake_branch

@@ -6994,7 +6994,7 @@ evaluate_rate_resolved_active_overtake_population(
   negative_solver_context,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   positive_solver_context,
-  const std::shared_ptr<BoundedSingleJobExecutor> & negative_executor,
+  const std::shared_ptr<BoundedSingleJobExecutor> & sibling_executor,
   const std::shared_ptr<rate_resolved_certified::Store> & certified_plan_store,
   const std::shared_ptr<rate_resolved_overtake_branch_bank::Bank> & branch_bank)
 {
@@ -7019,80 +7019,73 @@ evaluate_rate_resolved_active_overtake_population(
         evaluation.certified_plan.plan != nullptr;
     };
 
-  // Both sides use one immutable observation epoch. The negative branch runs
-  // on one persistent bounded worker while this LatestOnlyWorker evaluates
-  // the positive branch. The 40 Hz callback never waits for either branch.
-  std::optional<RateResolvedCurrentWorldPopulationEvaluation> negative;
-  std::optional<rate_resolved_overtake_branch_bank::ReplaceReason>
-  negative_bank_reason;
-  const auto negative_submission = negative_executor != nullptr ?
-    negative_executor->submit([&]() {
-      negative = evaluate_side(-1, negative_solver_context);
-      const auto negative_plan = certified(negative->pipeline) ?
-        negative->pipeline.certified_plan.plan : nullptr;
-      if (branch_bank != nullptr) {
-        negative_bank_reason = branch_bank->merge_branch(
-          source, -1, negative_plan);
-      }
-    }) : BoundedSingleJobExecutor::SubmitResult{};
-  auto positive = evaluate_side(1, positive_solver_context);
-  const auto positive_plan = certified(positive.pipeline) ?
-    positive.pipeline.certified_plan.plan : nullptr;
-  const auto positive_bank_reason = branch_bank != nullptr ?
-    std::optional<rate_resolved_overtake_branch_bank::ReplaceReason>{
-      branch_bank->merge_branch(source, 1, positive_plan)} : std::nullopt;
-  const auto negative_wait = negative_submission.accepted() ?
-    negative_executor->wait(negative_submission.ticket) :
-    BoundedSingleJobExecutor::WaitReason::InvalidTicket;
-  if (
-    negative_wait != BoundedSingleJobExecutor::WaitReason::Completed ||
-    !negative.has_value())
-  {
-    RateResolvedCurrentWorldPopulationEvaluation rejected;
-    rejected.candidate_source = "bounded-negative-executor";
-    rejected.detail = std::string{"bounded negative branch unavailable/submit="} +
-      to_string(negative_submission.reason) + "/wait=" +
-      to_string(negative_wait);
-    rejected.pipeline.solver = rate_resolved_shadow::make_rejected_result(
-      source.identity, rate_resolved_shadow::Outcome::Exception,
-      source.identity.snapshot_sec, 0.0, rejected.detail);
-    negative = std::move(rejected);
+  if (selected_side != -1 && selected_side != 1) {
+    RateResolvedPipelineEvaluation rejected;
+    rejected.solver = rate_resolved_shadow::make_rejected_result(
+      source.identity, rate_resolved_shadow::Outcome::BuildRejected,
+      source.identity.snapshot_sec, 0.0,
+      "active Overtake selected side unavailable");
+    return rejected;
   }
 
-  const auto negative_plan = certified(negative->pipeline) ?
-    negative->pipeline.certified_plan.plan : nullptr;
-  const std::string bank_detail = branch_bank != nullptr ?
-    std::string{"negative:"} +
-    (negative_bank_reason.has_value() ?
-    rate_resolved_overtake_branch_bank::to_string(
-      negative_bank_reason.value()) : "not-published") +
-    "/positive:" +
-    (positive_bank_reason.has_value() ?
-    rate_resolved_overtake_branch_bank::to_string(
-      positive_bank_reason.value()) : "not-published") :
-    "not-requested";
+  // The committed side is the primary producer.  Its complete proof may enter
+  // the certified Store as soon as it is available.  The opposite homotopy is
+  // observation-only work on a persistent bounded executor and must not delay
+  // or invalidate the primary producer.  Both jobs still own copies of the
+  // same immutable observation epoch; no Mission geometry is retained here.
+  const int sibling_side = -selected_side;
+  const auto selected_context = selected_side < 0 ?
+    negative_solver_context : positive_solver_context;
+  const auto sibling_context = sibling_side < 0 ?
+    negative_solver_context : positive_solver_context;
+  const auto sibling_submission = sibling_executor != nullptr ?
+    sibling_executor->submit(
+      [source, physical_source, sibling_side, sibling_context, branch_bank]() mutable {
+        const std::shared_ptr<rate_resolved_certified::Store>
+        observation_only_store;
+        const auto sibling = evaluate_rate_resolved_current_world_population(
+          source, physical_source, sibling_side, sibling_context,
+          observation_only_store);
+        const bool sibling_certified =
+          sibling.pipeline.solver.outcome ==
+          rate_resolved_shadow::Outcome::Solved &&
+          sibling.pipeline.physical.has_value() &&
+          sibling.pipeline.physical->outcome ==
+          rate_resolved_physical_wall::Outcome::Accepted &&
+          sibling.pipeline.dynamic.has_value() &&
+          sibling.pipeline.dynamic->valid && sibling.pipeline.dynamic->clear &&
+          sibling.pipeline.certified_plan.plan != nullptr;
+        if (branch_bank != nullptr) {
+          static_cast<void>(branch_bank->merge_branch(
+            source, sibling_side,
+            sibling_certified ? sibling.pipeline.certified_plan.plan : nullptr));
+        }
+      }) : BoundedSingleJobExecutor::SubmitResult{};
 
-  auto selected = selected_side < 0 ? std::move(negative.value()) :
-    std::move(positive);
-  const auto sibling_plan = selected_side < 0 ? positive_plan : negative_plan;
+  auto selected = evaluate_side(selected_side, selected_context);
   const bool selected_certified = certified(selected.pipeline);
-  const bool sibling_certified = sibling_plan != nullptr;
+  const auto selected_plan = selected_certified ?
+    selected.pipeline.certified_plan.plan : nullptr;
+  std::string selected_bank_detail{"not-requested"};
+  if (branch_bank != nullptr) {
+    selected_bank_detail = rate_resolved_overtake_branch_bank::to_string(
+      branch_bank->merge_branch(source, selected_side, selected_plan));
+  }
   std::string store_detail{"not-requested"};
   if (selected_certified && certified_plan_store != nullptr) {
     store_detail = rate_resolved_certified::to_string(
-      certified_plan_store->replace_pair(
-        selected.pipeline.certified_plan.plan, sibling_plan));
+      certified_plan_store->replace(selected_plan));
   }
 
   std::ostringstream detail;
-  detail << "active-overtake-dual/selected=" << selected_side
+  detail << "active-overtake-primary/selected=" << selected_side
          << "/selected_certified=" << (selected_certified ? 1 : 0)
-         << "/sibling_certified=" << (sibling_certified ? 1 : 0)
-         << "/negative=" << (negative_plan != nullptr ? "certified" : "rejected")
-         << "/positive=" << (positive_plan != nullptr ? "certified" : "rejected")
+         << "/sibling=" << sibling_side
+         << "/sibling_submit=" << to_string(sibling_submission.reason)
          << "/selected_source=" << selected.candidate_source
          << "/selected_candidates=" << selected.candidate_count
-         << "/bank=" << bank_detail << "/store=" << store_detail
+         << "/selected_bank=" << selected_bank_detail
+         << "/store=" << store_detail
          << "/selected_result=" << selected.detail;
   selected.pipeline.solver.detail =
     detail.str() + ", pipeline=" + selected.pipeline.solver.detail;
@@ -7119,7 +7112,7 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
   const std::shared_ptr<rate_resolved_shadow::SolverContext> &
   overtake_positive_solver_context,
   const std::shared_ptr<BoundedSingleJobExecutor> &
-  overtake_negative_executor,
+  overtake_sibling_executor,
   const std::shared_ptr<rate_resolved_overtake_branch_bank::Bank> &
   overtake_branch_bank)
 {
@@ -7207,7 +7200,7 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_normal_population(
       return evaluate_rate_resolved_active_overtake_population(
         source, physical_source.value(),
         overtake_negative_solver_context, overtake_positive_solver_context,
-        overtake_negative_executor,
+        overtake_sibling_executor,
         certified_plan_store, overtake_branch_bank);
     }
     const int pass_side_sign =
@@ -8089,7 +8082,7 @@ struct MPC
         std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_overtake_positive_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
-      rate_resolved_overtake_negative_executor_ =
+      rate_resolved_overtake_sibling_executor_ =
         std::make_shared<BoundedSingleJobExecutor>();
       rate_resolved_normal_homotopy_owner_ =
         std::make_shared<RateResolvedNormalHomotopyOwner>();
@@ -25377,7 +25370,7 @@ struct MPC
       rate_resolved_normal_avoidance_sibling_worker_ == nullptr ||
       rate_resolved_overtake_negative_solver_context_ == nullptr ||
       rate_resolved_overtake_positive_solver_context_ == nullptr ||
-      rate_resolved_overtake_negative_executor_ == nullptr ||
+      rate_resolved_overtake_sibling_executor_ == nullptr ||
       rate_resolved_normal_homotopy_owner_ == nullptr ||
       rate_resolved_normal_branch_bank_ == nullptr ||
       rate_resolved_overtake_branch_bank_ == nullptr ||
@@ -25457,8 +25450,8 @@ struct MPC
       rate_resolved_overtake_negative_solver_context_;
     const auto overtake_positive_solver_context =
       rate_resolved_overtake_positive_solver_context_;
-    const auto overtake_negative_executor =
-      rate_resolved_overtake_negative_executor_;
+    const auto overtake_sibling_executor =
+      rate_resolved_overtake_sibling_executor_;
     const auto overtake_branch_bank = rate_resolved_overtake_branch_bank_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
@@ -25475,7 +25468,7 @@ struct MPC
         normal_sibling_worker,
         normal_homotopy_owner, normal_branch_bank,
         overtake_negative_solver_context, overtake_positive_solver_context,
-        overtake_negative_executor,
+        overtake_sibling_executor,
         overtake_branch_bank,
         physical_snapshot = std::move(physical_snapshot), physical_mailbox,
         physical_registered, certified_plan_store]() mutable {
@@ -25489,7 +25482,7 @@ struct MPC
           normal_homotopy_owner,
           certified_plan_store, normal_branch_bank,
           overtake_negative_solver_context, overtake_positive_solver_context,
-          overtake_negative_executor,
+          overtake_sibling_executor,
           overtake_branch_bank);
         static_cast<void>(mailbox->publish(std::move(evaluation.solver)));
         if (evaluation.physical.has_value() && physical_mailbox != nullptr) {
@@ -27919,8 +27912,8 @@ struct MPC
       rate_resolved_overtake_branch_bank_->state() :
       rate_resolved_overtake_branch_bank::State{};
     const auto overtake_executor_state =
-      rate_resolved_overtake_negative_executor_ != nullptr ?
-      rate_resolved_overtake_negative_executor_->stats() :
+      rate_resolved_overtake_sibling_executor_ != nullptr ?
+      rate_resolved_overtake_sibling_executor_->stats() :
       BoundedSingleJobExecutor::Stats{};
     const double denominator = static_cast<double>(
       std::max<std::uint64_t>(1U, window.consumed_count));
@@ -30877,7 +30870,7 @@ struct MPC
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_overtake_positive_solver_context_;
   std::shared_ptr<BoundedSingleJobExecutor>
-  rate_resolved_overtake_negative_executor_;
+  rate_resolved_overtake_sibling_executor_;
   std::shared_ptr<RateResolvedNormalHomotopyOwner>
   rate_resolved_normal_homotopy_owner_;
   std::shared_ptr<rate_resolved_normal_branch_bank::Bank>

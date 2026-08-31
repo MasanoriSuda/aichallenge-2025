@@ -51,8 +51,21 @@ parameter changed.
 - Regression fixture reproduces a 0.055985 m/s Stop crossing zero inside one
   0.025 s publication interval and observes the real repeated-distance suffix.
 
-## Dynamic acceptance remaining
+## Dynamic acceptance
 
-The next bounded dev2 run must verify that the first low-speed Stop candidate
-no longer fails with `invalid-path-distance`.  Any later first failure must be
-frozen as a new snapshot rather than folded into this Slice.
+Bounded `make dev2` Acceptance was run in `output/20260831-190352` and stopped
+after the repaired contract and the next independent failure were observable.
+
+- `invalid-path-distance`: 0 occurrences.
+- `terminal Stop course geometry unavailable`: 0 occurrences.
+- `Published Stop successor shadow`: 28 observations; the exact physical
+  trajectory remained accepted rather than failing on its stationary suffix.
+- The run entered `ShiftOut` and continued publishing certified normal MPCC
+  solutions, so Acceptance covered both nominal running and a tactical intent.
+
+The repair is therefore dynamically accepted for the frozen low-speed Stop
+failure.  The next independent issue is not folded into this Slice: a tactical
+candidate took about 2.38 s to build, and by result consumption its stage wall
+proof was rejected (`stage-wall-rejected` / `ShiftOut/Pass path requires wall
+clamp`).  That timing/provenance failure requires a separate frozen snapshot
+and root-cause Slice.

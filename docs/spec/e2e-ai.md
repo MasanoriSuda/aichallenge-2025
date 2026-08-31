@@ -50,6 +50,25 @@ End to End AI 部門でも次を評価できる構成を維持する。
 MPC / MPCC は教師データ生成と比較評価に使えるが、E2E controller の推論入力には
 しない。
 
+## Teacher Dataset Contract
+
+教師データはbag/runを最小のidentityおよびsplit単位とする。sample単位で同一runを
+trainとvalidationへ分割してはならない。
+
+- 入力: `/sensing/lidar/scan`
+- 教師label: `/control/command/control_cmd`
+- 既定同期上限: 50 ms
+- 既定scan契約: 750点、最大30 m
+- 既定教師出所: `mpc`、`mpcc`、`human`
+
+抽出時に教師出所を必ず記録し、同期timestamp、同期差、元bag、topic型、scan shape、
+採用/reject件数をsequence metadataへ保存する。E2E自身のcommandを記録した失敗bagは
+`student`として観測・解析できるが、corrective labelなしに教師へ混ぜない。
+
+trainerはmetadata欠損、shape/type不一致、同期上限超過、非finite値、教師出所不一致、
+train/validationのsequence重複を学習開始前に拒否する。古いdatasetを暗黙補完せず、
+契約対応extractorで再生成する。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

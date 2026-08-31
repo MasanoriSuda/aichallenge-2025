@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
 from lib.model import TinyLidarNet, TinyLidarNetSmall
-from lib.data import MultiSeqConcatDataset
+from lib.data import MultiSeqConcatDataset, assert_disjoint_sequence_ids
 from lib.loss import WeightedSmoothL1Loss
 
 
@@ -31,8 +31,26 @@ def main(cfg: DictConfig):
     print(f"Using device: {device}")
 
     # === Dataset ===
-    train_dataset = MultiSeqConcatDataset(cfg.data.train_dir)
-    val_dataset = MultiSeqConcatDataset(cfg.data.val_dir)
+    dataset_contract = {
+        "max_range": cfg.data.max_range,
+        "expected_input_dim": cfg.model.input_dim,
+        "allowed_label_sources": list(cfg.data.allowed_label_sources),
+        "require_metadata": cfg.data.require_metadata,
+        "max_sync_delta_sec": cfg.data.max_sync_delta_sec,
+    }
+    train_dataset = MultiSeqConcatDataset(
+        cfg.data.train_dir,
+        expected_split="train",
+        **dataset_contract,
+    )
+    val_dataset = MultiSeqConcatDataset(
+        cfg.data.val_dir,
+        expected_split="val",
+        **dataset_contract,
+    )
+    assert_disjoint_sequence_ids(
+        train_dataset.sequence_ids, val_dataset.sequence_ids
+    )
 
     train_loader = DataLoader(
         train_dataset,
@@ -65,7 +83,7 @@ def main(cfg: DictConfig):
         ).to(device)
 
     if cfg.train.pretrained_path:
-        model.load_state_dict(torch.load(cfg.train.pretrained_path))
+        model.load_state_dict(torch.load(cfg.train.pretrained_path, map_location=device))
         print(f"[INFO] Loaded pretrained model from {cfg.train.pretrained_path}")
 
     # === Loss & Optimizer ===

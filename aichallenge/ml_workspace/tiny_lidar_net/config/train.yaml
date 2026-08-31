@@ -1,7 +1,11 @@
 data:
-  # データセットのディレクトリパス
+  # extract_data_from_bag.py が生成した run-level split を指定する。
   train_dir: "/aichallenge/ml_workspace/tiny_lidar_net/dataset/train"
   val_dir: "/aichallenge/ml_workspace/tiny_lidar_net/dataset/val"
+  max_range: 30.0
+  max_sync_delta_sec: 0.05
+  allowed_label_sources: ["mpc", "mpcc", "human"]
+  require_metadata: true
 
 model:
   # "TinyLidarNet" または "TinyLidarNetSmall"

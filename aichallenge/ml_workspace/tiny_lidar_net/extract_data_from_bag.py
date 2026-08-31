@@ -1,312 +1,473 @@
+#!/usr/bin/env python3
+"""Extract an auditable, run-level TinyLidarNet dataset from ROS 2 bags."""
+
 import argparse
+from dataclasses import asdict, dataclass
+import hashlib
+import json
 import logging
 import multiprocessing
 import os
-import time
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, List
+import re
+import time
+from typing import List, Optional, Tuple
 
 import numpy as np
 from rosbags.highlevel import AnyReader
 
 
-@dataclass
+DATASET_SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True)
 class ExtractionConfig:
-    """Configuration parameters for data extraction."""
+    """Configuration shared by all extraction workers."""
+
     control_topic: str
     scan_topic: str
-    control_msg_type: str = 'autoware_auto_control_msgs/msg/AckermannControlCommand'
-    scan_msg_type: str = 'sensor_msgs/msg/LaserScan'
-    max_scan_range: float = 30.0
+    max_sync_delta_sec: float
+    max_scan_range: float
+    label_source: str
+    control_msg_type: str = "autoware_auto_control_msgs/msg/AckermannControlCommand"
+    scan_msg_type: str = "sensor_msgs/msg/LaserScan"
+
+
+@dataclass(frozen=True)
+class BagTask:
+    """One independently auditable source run."""
+
+    bag_path: Path
+    sequence_id: str
+    split: str
+
+
+@dataclass
+class ExtractionResult:
+    """Serializable outcome returned from a worker."""
+
+    sequence_id: str
+    split: str
+    source_bag: str
+    success: bool
+    sample_count: int = 0
+    rejected_sync_count: int = 0
+    error: str = ""
 
 
 def worker_init(debug_mode: bool) -> None:
-    """
-    Initializes the logging configuration for worker processes.
-
-    Args:
-        debug_mode: If True, sets logging level to DEBUG.
-    """
     level = logging.DEBUG if debug_mode else logging.INFO
     logging.basicConfig(
         level=level,
-        format='[%(levelname)s] [PID:%(process)d] %(message)s',
-        force=True
+        format="[%(levelname)s] [PID:%(process)d] %(message)s",
+        force=True,
     )
 
 
 def setup_logger(debug: bool = False) -> logging.Logger:
-    """
-    Sets up the main process logger.
-
-    Args:
-        debug: If True, enables debug logging.
-
-    Returns:
-        Configured Logger instance.
-    """
     level = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
         level=level,
-        format='[%(levelname)s] [PID:%(process)d] %(message)s',
-        handlers=[logging.StreamHandler()]
+        format="[%(levelname)s] [PID:%(process)d] %(message)s",
+        handlers=[logging.StreamHandler()],
+        force=True,
     )
     return logging.getLogger(__name__)
 
 
 def clean_scan_array(scan_array: np.ndarray, max_range: float) -> np.ndarray:
-    """
-    Sanitizes LiDAR scan data by handling non-finite values.
-
-    Operations:
-        - NaN -> 0.0
-        - Positive Inf -> max_range
-        - Negative Inf -> 0.0
-        - Values > max_range -> clipped to max_range
-
-    Args:
-        scan_array: Raw input array from LaserScan message.
-        max_range: The maximum valid range distance.
-
-    Returns:
-        A float32 numpy array with cleaned values.
-    """
-    if not isinstance(scan_array, np.ndarray):
-        scan_array = np.array(scan_array, dtype=np.float32)
-
-    # Replace NaN with 0.0 and positive infinity with max_range
-    cleaned = np.nan_to_num(scan_array, nan=0.0, posinf=max_range, neginf=0.0)
-    
-    # Clip values to ensure they fall within the valid range [0.0, max_range]
-    cleaned = np.clip(cleaned, 0.0, max_range)
-    
-    return cleaned.astype(np.float32)
+    """Replace invalid ranges and clip to the training/runtime range contract."""
+    values = np.asarray(scan_array, dtype=np.float32)
+    cleaned = np.nan_to_num(values, nan=0.0, posinf=max_range, neginf=0.0)
+    return np.clip(cleaned, 0.0, max_range).astype(np.float32, copy=False)
 
 
-def synchronize_data(src_times: np.ndarray, target_times: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Synchronizes two time series using Nearest Neighbor search.
-    Optimized with np.searchsorted for O(N log M) complexity.
+def synchronize_data(
+    src_times: np.ndarray, target_times: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return nearest target index and absolute timestamp delta for each source."""
+    src_times = np.asarray(src_times, dtype=np.int64)
+    target_times = np.asarray(target_times, dtype=np.int64)
+    if target_times.size == 0:
+        return np.array([], dtype=np.int64), np.array([], dtype=np.int64)
 
-    Args:
-        src_times: Timestamps of the source data (e.g., Scan times).
-        target_times: Reference timestamps to match against (e.g., Control times).
+    insertion = np.searchsorted(target_times, src_times)
+    insertion = np.clip(insertion, 0, len(target_times) - 1)
+    previous = np.clip(insertion - 1, 0, len(target_times) - 1)
+    current_delta = np.abs(target_times[insertion] - src_times)
+    previous_delta = np.abs(target_times[previous] - src_times)
+    use_previous = previous_delta < current_delta
+    return (
+        np.where(use_previous, previous, insertion),
+        np.where(use_previous, previous_delta, current_delta),
+    )
 
-    Returns:
-        A tuple containing:
-            - indices: Indices of target_times that are closest to src_times.
-            - deltas: Absolute time differences between matched timestamps.
-    """
-    if len(target_times) == 0:
-        return np.array([]), np.array([])
-        
-    # Find insertion points for source times in target times
-    idx_sorted = np.searchsorted(target_times, src_times)
-    
-    # Clip indices to stay within valid bounds
-    idx_sorted = np.clip(idx_sorted, 0, len(target_times) - 1)
-    prev_idx = np.clip(idx_sorted - 1, 0, len(target_times) - 1)
-    
-    # Calculate time differences for current and previous indices
-    time_diff_curr = np.abs(target_times[idx_sorted] - src_times)
-    time_diff_prev = np.abs(target_times[prev_idx] - src_times)
-    
-    # Select the index with the smaller time difference
-    use_prev = time_diff_prev < time_diff_curr
-    final_indices = np.where(use_prev, prev_idx, idx_sorted)
-    final_deltas = np.where(use_prev, time_diff_prev, time_diff_curr)
-    
-    return final_indices, final_deltas
+
+def sync_acceptance_mask(deltas_ns: np.ndarray, max_delta_sec: float) -> np.ndarray:
+    """Accept exact-boundary samples and reject only those beyond the contract."""
+    if not np.isfinite(max_delta_sec) or max_delta_sec < 0.0:
+        raise ValueError("max_delta_sec must be finite and non-negative")
+    max_delta_ns = int(round(max_delta_sec * 1e9))
+    return np.asarray(deltas_ns, dtype=np.int64) <= max_delta_ns
+
+
+def make_sequence_id(identity: str) -> str:
+    """Create a readable collision-resistant ID without relying on bag basename."""
+    normalized = identity.strip().replace("\\", "/").strip("/") or "bag"
+    readable = re.sub(r"[^A-Za-z0-9._-]+", "-", normalized).strip("-._")
+    readable = (readable or "bag")[-72:]
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:10]
+    return f"{readable}-{digest}"
+
+
+def choose_split(sequence_id: str, val_fraction: float, split_seed: int) -> str:
+    """Assign an entire sequence to one deterministic dataset split."""
+    if not 0.0 <= val_fraction <= 1.0:
+        raise ValueError("val_fraction must be within [0.0, 1.0]")
+    token = f"{split_seed}:{sequence_id}".encode("utf-8")
+    value = int.from_bytes(hashlib.sha256(token).digest()[:8], "big") / float(2**64)
+    return "val" if value < val_fraction else "train"
+
+
+def discover_tasks(
+    bags_dir: Optional[Path],
+    seq_dirs: Optional[List[Path]],
+    val_fraction: float,
+    split_seed: int,
+) -> List[BagTask]:
+    """Discover bags and reject ambiguous sequence identities before workers start."""
+    discovered: List[Tuple[Path, str]] = []
+    if bags_dir is not None:
+        root = bags_dir.expanduser().resolve()
+        bag_paths = sorted({path.parent for path in root.rglob("metadata.yaml")})
+        if (root / "metadata.yaml").exists():
+            bag_paths = [root]
+        for path in bag_paths:
+            relative = path.relative_to(root)
+            identity = str(relative) if str(relative) != "." else root.name
+            discovered.append((path, identity))
+    else:
+        supplied_paths = set()
+        for supplied in seq_dirs or []:
+            path = supplied.expanduser().resolve()
+            if not (path / "metadata.yaml").exists():
+                raise ValueError(f"not a ROS 2 bag directory: {path}")
+            if path in supplied_paths:
+                raise ValueError(f"duplicate ROS 2 bag directory: {path}")
+            supplied_paths.add(path)
+            identity = str(path)
+            discovered.append((path, identity))
+
+    if not discovered:
+        raise ValueError("no valid ROS 2 bag directories found")
+
+    tasks: List[BagTask] = []
+    identities = {}
+    for path, identity in discovered:
+        sequence_id = make_sequence_id(identity)
+        previous = identities.get(sequence_id)
+        if previous is not None and previous != path:
+            raise ValueError(
+                f"sequence ID collision: {sequence_id}: {previous} and {path}"
+            )
+        identities[sequence_id] = path
+        tasks.append(
+            BagTask(
+                bag_path=path,
+                sequence_id=sequence_id,
+                split=choose_split(sequence_id, val_fraction, split_seed),
+            )
+        )
+    return tasks
+
+
+def _validate_topic_contract(reader: AnyReader, config: ExtractionConfig) -> List:
+    expected = {
+        config.control_topic: config.control_msg_type,
+        config.scan_topic: config.scan_msg_type,
+    }
+    connections = [connection for connection in reader.connections if connection.topic in expected]
+    for topic, message_type in expected.items():
+        matching = [connection for connection in connections if connection.topic == topic]
+        if not matching:
+            raise ValueError(f"required topic missing: {topic}")
+        actual_types = sorted({connection.msgtype for connection in matching})
+        if actual_types != [message_type]:
+            raise ValueError(
+                f"topic type mismatch for {topic}: expected={message_type}, "
+                f"actual={actual_types}"
+            )
+    return connections
 
 
 def process_bag(
-    bag_path: Path, 
-    output_root: Path, 
-    config: ExtractionConfig, 
-    debug: bool = False
-) -> None:
-    """
-    Worker function to process a single ROS bag file.
-    Reads, cleans, synchronizes, and saves the data.
-    """
+    task: BagTask,
+    output_root: Path,
+    config: ExtractionConfig,
+    debug: bool = False,
+) -> ExtractionResult:
+    """Extract one bag without sharing output identity with any other worker."""
     logger = logging.getLogger(__name__)
-    bag_name = bag_path.name
-    out_dir = output_root / bag_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    result = ExtractionResult(
+        sequence_id=task.sequence_id,
+        split=task.split,
+        source_bag=str(task.bag_path),
+        success=False,
+    )
+    started = time.perf_counter()
 
-    t_start_total = time.perf_counter()
-
-    cmd_data: List[List[float]] = []
-    cmd_times: List[int] = []
-    scan_data: List[np.ndarray] = []
-    scan_times: List[int] = []
-
-    # --- 1. Read Bag File ---
-    t_start_read = time.perf_counter()
     try:
-        with AnyReader([bag_path]) as reader:
-            target_topics = [config.control_topic, config.scan_topic]
-            connections = [c for c in reader.connections if c.topic in target_topics]
-            
-            if not connections:
-                if debug: logger.warning(f"{bag_name}: No relevant topics found.")
-                return
+        output_dir = output_root / task.split / task.sequence_id
+        if output_dir.exists():
+            raise FileExistsError(
+                f"output already exists; use a new output root: {output_dir}"
+            )
 
-            for conn, timestamp, raw in reader.messages(connections=connections):
+        command_data: List[List[float]] = []
+        command_times: List[int] = []
+        scan_data: List[np.ndarray] = []
+        scan_times: List[int] = []
+        deserialize_failures = 0
+        first_deserialize_error = ""
+        scan_shape = None
+
+        with AnyReader([task.bag_path]) as reader:
+            connections = _validate_topic_contract(reader, config)
+            for connection, timestamp, raw in reader.messages(connections=connections):
                 try:
-                    msg = reader.deserialize(raw, conn.msgtype)
-                    
-                    # Extract Control Command
-                    if conn.topic == config.control_topic:
-                        if conn.msgtype == config.control_msg_type:
-                            accel = msg.longitudinal.acceleration
-                            steer = msg.lateral.steering_tire_angle
-                            cmd_data.append([steer, accel])
-                            cmd_times.append(timestamp)
-                    
-                    # Extract LiDAR Scan
-                    elif conn.topic == config.scan_topic:
-                        if conn.msgtype == config.scan_msg_type:
-                            ranges = np.array(msg.ranges, dtype=np.float32)
-                            scan_vec = clean_scan_array(ranges, config.max_scan_range)
-                            scan_data.append(scan_vec)
-                            scan_times.append(timestamp)
-                except Exception:
-                    continue
-    except Exception as e:
-        logger.error(f"Failed to read {bag_name}: {e}")
-        return
+                    message = reader.deserialize(raw, connection.msgtype)
+                    if connection.topic == config.control_topic:
+                        acceleration = float(message.longitudinal.acceleration)
+                        steering = float(message.lateral.steering_tire_angle)
+                        if not np.isfinite(acceleration) or not np.isfinite(steering):
+                            raise ValueError("non-finite control command")
+                        command_data.append([steering, acceleration])
+                        command_times.append(timestamp)
+                    elif connection.topic == config.scan_topic:
+                        ranges = np.asarray(message.ranges, dtype=np.float32)
+                        if ranges.ndim != 1 or ranges.size == 0:
+                            raise ValueError(f"invalid scan shape: {ranges.shape}")
+                        if scan_shape is None:
+                            scan_shape = ranges.shape
+                        elif ranges.shape != scan_shape:
+                            raise ValueError(
+                                f"scan shape changed: expected={scan_shape}, actual={ranges.shape}"
+                            )
+                        scan_data.append(clean_scan_array(ranges, config.max_scan_range))
+                        scan_times.append(timestamp)
+                except Exception as exc:
+                    deserialize_failures += 1
+                    if not first_deserialize_error:
+                        first_deserialize_error = (
+                            f"{connection.topic}@{timestamp}: {type(exc).__name__}: {exc}"
+                        )
 
-    t_end_read = time.perf_counter()
+        if not command_data:
+            raise ValueError("no valid control commands")
+        if not scan_data:
+            raise ValueError("no valid LiDAR scans")
+        if deserialize_failures:
+            raise ValueError(
+                f"message extraction failures={deserialize_failures}; "
+                f"first={first_deserialize_error}"
+            )
 
-    if not cmd_data or not scan_data:
-        if debug: logger.warning(f"Skipping {bag_name}: Insufficient data.")
-        return
+        commands = np.asarray(command_data, dtype=np.float32)
+        command_timestamps = np.asarray(command_times, dtype=np.int64)
+        scans = np.asarray(scan_data, dtype=np.float32)
+        scan_timestamps = np.asarray(scan_times, dtype=np.int64)
 
-    # Convert lists to NumPy arrays for efficient processing
-    np_cmd_data = np.array(cmd_data, dtype=np.float32)
-    np_cmd_times = np.array(cmd_times, dtype=np.int64)
-    np_scan_data = np.array(scan_data, dtype=np.float32)
-    np_scan_times = np.array(scan_times, dtype=np.int64)
+        command_order = np.argsort(command_timestamps)
+        command_timestamps = command_timestamps[command_order]
+        commands = commands[command_order]
+        scan_order = np.argsort(scan_timestamps)
+        scan_timestamps = scan_timestamps[scan_order]
+        scans = scans[scan_order]
 
-    # --- 2. Synchronize Data ---
-    t_start_sync = time.perf_counter()
-    
-    # searchsorted requires the target array to be sorted
-    sort_idx = np.argsort(np_cmd_times)
-    np_cmd_times = np_cmd_times[sort_idx]
-    np_cmd_data = np_cmd_data[sort_idx]
+        matched_indices, deltas_ns = synchronize_data(scan_timestamps, command_timestamps)
+        accepted = sync_acceptance_mask(deltas_ns, config.max_sync_delta_sec)
+        result.rejected_sync_count = int((~accepted).sum())
+        if not np.any(accepted):
+            raise ValueError(
+                f"all {len(scan_timestamps)} samples exceed sync limit "
+                f"{config.max_sync_delta_sec:.6f}s"
+            )
 
-    indices, deltas = synchronize_data(np_scan_times, np_cmd_times)
+        accepted_indices = matched_indices[accepted]
+        accepted_deltas_sec = deltas_ns[accepted].astype(np.float64) / 1e9
+        accepted_scans = scans[accepted]
+        accepted_commands = commands[accepted_indices]
+        accepted_scan_times = scan_timestamps[accepted]
+        accepted_command_times = command_timestamps[accepted_indices]
 
-    synced_cmds = np_cmd_data[indices]
-    synced_steers = synced_cmds[:, 0]
-    synced_accels = synced_cmds[:, 1]
-    
-    t_end_sync = time.perf_counter()
+        output_dir.mkdir(parents=True, exist_ok=False)
+        np.save(output_dir / "scans.npy", accepted_scans)
+        np.save(output_dir / "steers.npy", accepted_commands[:, 0])
+        np.save(output_dir / "accelerations.npy", accepted_commands[:, 1])
+        np.save(output_dir / "delta_times.npy", accepted_deltas_sec)
+        np.save(output_dir / "scan_timestamps_ns.npy", accepted_scan_times)
+        np.save(output_dir / "control_timestamps_ns.npy", accepted_command_times)
 
-    # --- 3. Save Results ---
-    t_start_save = time.perf_counter()
-    
-    np.save(out_dir / 'scans.npy', np_scan_data)
-    np.save(out_dir / 'steers.npy', synced_steers)
-    np.save(out_dir / 'accelerations.npy', synced_accels)
-    
-    # Save delta times only when debugging to save disk space/IO
-    if debug:
-        delta_seconds = deltas / 1e9
-        np.save(out_dir / 'delta_times.npy', delta_seconds)
-    
-    t_end_save = time.perf_counter()
-    duration_total = t_end_save - t_start_total
-
-    # Log successful processing
-    logger.info(f"Saved {bag_name}: {len(np_scan_data)} samples (Total: {duration_total:.2f}s)")
-
-    if debug:
-        duration_read = t_end_read - t_start_read
-        duration_sync = t_end_sync - t_start_sync
-        duration_save = t_end_save - t_start_save
-        delta_seconds = deltas / 1e9
-        
-        logger.debug(
-            f"  [Performance {bag_name}]\n"
-            f"    - Read : {duration_read:.4f}s\n"
-            f"    - Sync : {duration_sync:.4f}s\n"
-            f"    - Save : {duration_save:.4f}s\n"
-            f"  [Sync Stats]\n"
-            f"    - Δt Mean: {delta_seconds.mean():.6f}s\n"
-            f"    - Δt Max : {delta_seconds.max():.6f}s"
+        metadata = {
+            "schema_version": DATASET_SCHEMA_VERSION,
+            "sequence_id": task.sequence_id,
+            "split": task.split,
+            "source_bag": str(task.bag_path),
+            "topics": {"scan": config.scan_topic, "control": config.control_topic},
+            "message_types": {
+                "scan": config.scan_msg_type,
+                "control": config.control_msg_type,
+            },
+            "scan_shape": list(accepted_scans.shape[1:]),
+            "max_scan_range_m": config.max_scan_range,
+            "max_sync_delta_sec": config.max_sync_delta_sec,
+            "label_source": config.label_source,
+            "counts": {
+                "raw_scans": len(scan_timestamps),
+                "raw_controls": len(command_timestamps),
+                "accepted_samples": len(accepted_scans),
+                "rejected_sync_samples": result.rejected_sync_count,
+                "message_failures": deserialize_failures,
+            },
+            "sync_delta_sec": {
+                "mean": float(np.mean(accepted_deltas_sec)),
+                "p95": float(np.percentile(accepted_deltas_sec, 95)),
+                "max": float(np.max(accepted_deltas_sec)),
+            },
+            "timestamp_ns": {
+                "first_scan": int(accepted_scan_times[0]),
+                "last_scan": int(accepted_scan_times[-1]),
+            },
+        }
+        (output_dir / "metadata.json").write_text(
+            json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
         )
 
+        result.success = True
+        result.sample_count = len(accepted_scans)
+        logger.info(
+            "Saved %s split=%s samples=%d rejected_sync=%d duration=%.2fs",
+            task.sequence_id,
+            task.split,
+            result.sample_count,
+            result.rejected_sync_count,
+            time.perf_counter() - started,
+        )
+        if debug:
+            logger.debug("metadata=%s", metadata)
+    except Exception as exc:
+        result.error = f"{type(exc).__name__}: {exc}"
+        logger.error("Failed %s: %s", task.sequence_id, result.error)
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Extract and synchronize scan and control data from ROS 2 bags.',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    return result
+
+
+def write_manifest(
+    output_root: Path,
+    config: ExtractionConfig,
+    val_fraction: float,
+    split_seed: int,
+    results: List[ExtractionResult],
+) -> None:
+    output_root.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema_version": DATASET_SCHEMA_VERSION,
+        "config": asdict(config),
+        "val_fraction": val_fraction,
+        "split_seed": split_seed,
+        "summary": {
+            "total_sequences": len(results),
+            "successful_sequences": sum(result.success for result in results),
+            "failed_sequences": sum(not result.success for result in results),
+            "accepted_samples": sum(result.sample_count for result in results),
+            "rejected_sync_samples": sum(result.rejected_sync_count for result in results),
+        },
+        "sequences": [asdict(result) for result in results],
+    }
+    (output_root / "dataset-manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
-    
-    # Input/Output arguments
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--bags-dir', type=Path, help='Path to directory containing rosbag folders (recursive search).')
-    group.add_argument('--seq-dirs', type=Path, nargs='+', help='List of specific sequence directories to process.')
-    parser.add_argument('--outdir', type=Path, required=True, help='Root directory for output files.')
-    
-    # Topic configuration
-    parser.add_argument('--control-topic', type=str, default='/control/command/control_cmd', help='Topic name for control commands.')
-    parser.add_argument('--scan-topic', type=str, default='/sensing/lidar/scan', help='Topic name for LiDAR scans.')
-    
-    # Performance arguments
-    default_workers = min(os.cpu_count() or 1, 8)
-    parser.add_argument('--workers', type=int, default=default_workers, help='Number of parallel workers.')
-    parser.add_argument('--debug', action='store_true', help='Enable detailed performance and debug logging.')
 
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Extract synchronized, run-level TinyLidarNet training data.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--bags-dir", type=Path, help="Recursively discover ROS 2 bags.")
+    source.add_argument("--seq-dirs", type=Path, nargs="+", help="Explicit bag directories.")
+    parser.add_argument("--outdir", type=Path, required=True)
+    parser.add_argument("--control-topic", default="/control/command/control_cmd")
+    parser.add_argument("--scan-topic", default="/sensing/lidar/scan")
+    parser.add_argument("--max-sync-delta-sec", type=float, default=0.05)
+    parser.add_argument("--max-scan-range", type=float, default=30.0)
+    parser.add_argument(
+        "--label-source",
+        required=True,
+        choices=("mpc", "mpcc", "human", "student", "other"),
+        help="Provenance of the synchronized control labels.",
+    )
+    parser.add_argument("--val-fraction", type=float, default=0.2)
+    parser.add_argument("--split-seed", type=int, default=2026)
+    parser.add_argument("--workers", type=int, default=min(os.cpu_count() or 1, 8))
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
-    setup_logger(args.debug)
-    logger = logging.getLogger(__name__)
 
-    # --- Discovery Phase ---
-    bag_dirs = []
-    if args.bags_dir:
-        p = args.bags_dir.expanduser().resolve()
-        # Find directories containing metadata.yaml
-        bag_dirs = [x.parent for x in p.rglob("metadata.yaml")]
-        # Handle case where bags-dir itself is a bag
-        if not bag_dirs and (p / "metadata.yaml").exists():
-            bag_dirs = [p]
-    elif args.seq_dirs:
-        for p in args.seq_dirs:
-            p = p.expanduser().resolve()
-            if (p / "metadata.yaml").exists():
-                bag_dirs.append(p)
-    
-    bag_dirs = sorted(list(set(bag_dirs)))
-    if not bag_dirs:
-        logger.error("No valid ROS 2 bag directories found.")
-        return
+    logger = setup_logger(args.debug)
+    if not np.isfinite(args.max_sync_delta_sec) or args.max_sync_delta_sec < 0.0:
+        parser.error("--max-sync-delta-sec must be finite and non-negative")
+    if not np.isfinite(args.max_scan_range) or args.max_scan_range <= 0.0:
+        parser.error("--max-scan-range must be finite and positive")
+    if not 0.0 <= args.val_fraction <= 1.0:
+        parser.error("--val-fraction must be within [0.0, 1.0]")
 
-    # Intelligent worker sizing: don't create more workers than tasks
-    num_workers = min(max(1, args.workers), len(bag_dirs))
-    logger.info(f"Found {len(bag_dirs)} bags. Starting processing with {num_workers} workers.")
-
-    # --- Processing Phase ---
-    config = ExtractionConfig(control_topic=args.control_topic, scan_topic=args.scan_topic)
-    tasks = [(p, args.outdir, config, args.debug) for p in bag_dirs]
-
-    start_time = time.time()
-    
-    # Use 'spawn' method for compatibility with various environments (especially if CUDA is involved later)
-    with multiprocessing.Pool(processes=num_workers, initializer=worker_init, initargs=(args.debug,)) as pool:
-        pool.starmap(process_bag, tasks)
-        
-    logger.info(f"All processing finished in {time.time() - start_time:.2f} seconds.")
-
-
-if __name__ == '__main__':
-    # Ensure multiprocessing works correctly on all platforms
     try:
-        multiprocessing.set_start_method('spawn', force=True)
-    except RuntimeError:
-        pass
+        tasks = discover_tasks(
+            args.bags_dir,
+            args.seq_dirs,
+            args.val_fraction,
+            args.split_seed,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    output_root = args.outdir.expanduser().resolve()
+    config = ExtractionConfig(
+        control_topic=args.control_topic,
+        scan_topic=args.scan_topic,
+        max_sync_delta_sec=args.max_sync_delta_sec,
+        max_scan_range=args.max_scan_range,
+        label_source=args.label_source,
+    )
+    worker_count = min(max(1, args.workers), len(tasks))
+    logger.info("Found %d bags; workers=%d", len(tasks), worker_count)
+
+    worker_args = [(task, output_root, config, args.debug) for task in tasks]
+    if worker_count == 1:
+        results = [process_bag(*worker_args[0])]
+    else:
+        with multiprocessing.Pool(
+            processes=worker_count,
+            initializer=worker_init,
+            initargs=(args.debug,),
+        ) as pool:
+            results = pool.starmap(process_bag, worker_args)
+
+    write_manifest(output_root, config, args.val_fraction, args.split_seed, results)
+    failures = [result for result in results if not result.success]
+    if failures:
+        logger.error("Extraction failed for %d/%d sequences", len(failures), len(results))
+        raise SystemExit(2)
+    logger.info(
+        "Extraction complete: sequences=%d samples=%d",
+        len(results),
+        sum(result.sample_count for result in results),
+    )
+
+
+if __name__ == "__main__":
+    multiprocessing.set_start_method("spawn", force=True)
     main()

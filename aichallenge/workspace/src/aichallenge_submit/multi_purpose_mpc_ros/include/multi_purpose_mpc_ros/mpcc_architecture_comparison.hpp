@@ -57,6 +57,7 @@ enum class Arm
   ProductionLeftNormalPathStopT,
   SevenStateStopU,
   SevenStateStopControlLatticeV,
+  FollowStayBehindW,
 };
 
 const char * to_string(Arm arm) noexcept;

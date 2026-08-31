@@ -483,27 +483,33 @@ TEST(MpccArchitectureComparison, FollowComparesPersistentThroughOfflineLattice)
   auto source = source_snapshot();
   source.identity.source_context.intent = contract::ControlIntent::Follow;
   source.identity.source_context.execution_side_sign = 0;
+  source.identity.source_context.dynamic_obstacle_side_sign = 0;
   source.identity.source_context.fingerprint = 0U;
   source.identity.source_context = contract::seal_problem_context(
     source.identity.source_context);
+  source.dynamic_obstacle_pass_side_sign = 0;
 
   const auto report = compare(recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 9U);
+  ASSERT_EQ(report.arms.size(), 10U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
-  EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
-  EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
-  EXPECT_EQ(report.arms[3].arm, Arm::RoughLeftC);
-  EXPECT_EQ(report.arms[4].arm, Arm::RoughRightC);
-  EXPECT_EQ(report.arms[5].arm, Arm::OfflineLeftD);
-  EXPECT_EQ(report.arms[6].arm, Arm::OfflineRightD);
-  EXPECT_EQ(report.arms[7].arm, Arm::ProductionLeftG);
-  EXPECT_EQ(report.arms[8].arm, Arm::ProductionRightG);
-  EXPECT_NE(report.arms[1].stage, Stage::CandidateRejected) << report.arms[1].detail;
+  EXPECT_EQ(report.arms[1].arm, Arm::FollowStayBehindW);
+  EXPECT_NE(
+    report.arms[1].candidate_fingerprint,
+    report.source_interaction_fingerprint);
+  EXPECT_EQ(report.arms[2].arm, Arm::StatelessLeftB);
+  EXPECT_EQ(report.arms[3].arm, Arm::StatelessRightB);
+  EXPECT_EQ(report.arms[4].arm, Arm::RoughLeftC);
+  EXPECT_EQ(report.arms[5].arm, Arm::RoughRightC);
+  EXPECT_EQ(report.arms[6].arm, Arm::OfflineLeftD);
+  EXPECT_EQ(report.arms[7].arm, Arm::OfflineRightD);
+  EXPECT_EQ(report.arms[8].arm, Arm::ProductionLeftG);
+  EXPECT_EQ(report.arms[9].arm, Arm::ProductionRightG);
   EXPECT_NE(report.arms[2].stage, Stage::CandidateRejected) << report.arms[2].detail;
-  EXPECT_NE(report.arms[1].candidate_fingerprint, 0U);
+  EXPECT_NE(report.arms[3].stage, Stage::CandidateRejected) << report.arms[3].detail;
   EXPECT_NE(report.arms[2].candidate_fingerprint, 0U);
+  EXPECT_NE(report.arms[3].candidate_fingerprint, 0U);
 }
 
 TEST(MpccArchitectureComparison, CruiseComparesCapturedBranchAndCurrentWorldSides)

@@ -1793,6 +1793,8 @@ const char * to_string(const Arm arm) noexcept
       return "seven-state-stop-u";
     case Arm::SevenStateStopControlLatticeV:
       return "seven-state-stop-control-lattice-v";
+    case Arm::FollowStayBehindW:
+      return "follow-stay-behind-w";
   }
   return "unknown";
 }
@@ -1848,6 +1850,29 @@ Report compare(
     report.arms.push_back(evaluate_arm(
       Arm::PersistentA, source, source_fingerprint, source_fingerprint,
       persistent_successor));
+
+    // Audit-only semantic isolation for normal Follow.  Production currently
+    // leaves its obstacle topology Automatic, allowing an obstacle-free wall
+    // witness to invent a behind-to-side transition even though Follow owns no
+    // pass side.  Change only that topology and reseal the candidate so a
+    // frozen failure can distinguish intent ownership from SQP/model failure.
+    // This comparison module has no store, mailbox, command or publisher API.
+    if (
+      source.identity.source_context.intent == contract::ControlIntent::Follow &&
+      source.dynamic_obstacle_refinement_active &&
+      source.dynamic_obstacle_pass_side_sign == 0 &&
+      source.identity.source_context.dynamic_obstacle_side_sign == 0)
+    {
+      auto stay_behind = source;
+      stay_behind.dynamic_obstacle_longitudinal_topology =
+        mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::StayBehind;
+      const auto candidate_fingerprint =
+        architecture::fingerprint_interaction_snapshot(stay_behind);
+      report.arms.push_back(evaluate_arm(
+        Arm::FollowStayBehindW, stay_behind, source_fingerprint,
+        candidate_fingerprint,
+        resolve_audit_terminal_successor(stay_behind)));
+    }
 
     // Cruise/Follow own no tactical pass side in production. When their
     // automatically selected obstacle branch is infeasible, compare two

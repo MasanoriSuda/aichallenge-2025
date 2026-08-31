@@ -138,6 +138,10 @@ python3 extract_data_from_bag.py \
 再利用しません。接触suffixを除外し、同じgap teacherでpre-contact scanを再labelします。
 既定ではteacherがactiveな補正sampleだけをtrain splitへ保存します。
 
+教師自身が同じworldを完走できた場合は、その合格run全体も別sequenceとしてtrainへ追加
+します。失敗直前の局所補正だけでなく、回避開始後に安全な走行状態へ戻る分布を学習する
+ためです。既知seedの再現合格だけでは昇格せず、未見seedを必須gateとします。
+
 ```bash
 python3 relabel_gap_teacher_bag.py /output/<failed-run>/d1/rosbag2_autoware \
   --checkpoint checkpoints/<student-run>/candidate.npy \

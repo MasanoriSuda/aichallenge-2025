@@ -98,6 +98,12 @@ TinyLidarNet steeringをbaseとし、180度LiDARの物理距離からFollow-the-
 変更せず固定加速度だけを制限する。教師自身がFinish/contact/stall gateを通ったrunだけを
 `--label-source lidar_gap_teacher`として抽出する。
 
+2026-09-01のcandidate3は、合格した教師rolloutを第2回DAgger train sequenceとして
+追加し、単車、既知NPC seed、未見NPC seedの3条件をすべてpost-start stall 0秒で完走した。
+production checkpointのSHA-256は
+`de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa`である。
+単一の成功runでは昇格せず、通常走行と未見配置を含む閉ループgateを必須とする。
+
 bag単位の固着監査は次で行う。起動待ちは除外し、一度1.0 m/s以上で走行した後の
 0.15 m/s以下の連続時間と、そのうち正加速指令中の連続時間を別々に判定する。縦安全層が
 正しく加速を抑止しても、その場で停止し続けるcandidateを成功扱いしない。GUIの見た目

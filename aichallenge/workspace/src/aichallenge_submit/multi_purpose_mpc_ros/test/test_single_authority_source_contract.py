@@ -3989,3 +3989,17 @@ def test_terminal_failure_pairs_last_accepted_same_source_before_overwrite() -> 
     )
     assert record < update
     assert "ordinary_retained.terminal_stop_certified" in production
+
+
+def test_terminal_stop_geometry_rejection_reports_every_shape_owner() -> None:
+    """A seam failure must identify the malformed immutable geometry field."""
+
+    assert '"terminal Stop course geometry unavailable"' in SOURCE
+    assert '<< "/nominal=" << terminal_geometry_size' in SOURCE
+    assert '<< "/inputs=" << solver_snapshot.request.inputs.size()' in SOURCE
+    assert '<< "/horizon=" << solver_snapshot.request.horizon_steps' in SOURCE
+    assert '<< "/wall_progress="' in SOURCE
+    assert '<< "/wall_lower=" << solver_snapshot.wall_lower_m.size()' in SOURCE
+    assert '<< "/wall_upper=" << solver_snapshot.wall_upper_m.size()' in SOURCE
+    assert '<< "/wall_refinement="' in SOURCE
+    assert '<< "/wall_diagnostic="' in SOURCE

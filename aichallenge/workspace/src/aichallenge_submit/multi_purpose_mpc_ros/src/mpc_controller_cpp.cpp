@@ -24846,7 +24846,21 @@ struct MPC
     {
       rejection.outcome =
         RateResolvedPhysicalShadowOutcome::CourseFrameRejected;
-      rejection.detail = "terminal Stop course geometry unavailable";
+      std::ostringstream detail;
+      detail << "terminal Stop course geometry unavailable"
+             << "/nominal=" << terminal_geometry_size
+             << "/inputs=" << solver_snapshot.request.inputs.size()
+             << "/horizon=" << solver_snapshot.request.horizon_steps
+             << "/wall_progress="
+             << solver_snapshot.wall_reference_progress_m.size()
+             << "/wall_lower=" << solver_snapshot.wall_lower_m.size()
+             << "/wall_upper=" << solver_snapshot.wall_upper_m.size()
+             << "/wall_refinement="
+             << (solver_snapshot.progress_aligned_wall_refinement_active ? 1 : 0)
+             << "/wall_diagnostic="
+             << (solver_snapshot.progress_wall_profile_diagnostic.empty() ?
+             "none" : solver_snapshot.progress_wall_profile_diagnostic);
+      rejection.detail = detail.str();
       return std::nullopt;
     }
     auto & terminal_geometry = snapshot.terminal_stop_course_geometry;

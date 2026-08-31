@@ -6,5 +6,5 @@
 - [x] Record final normal-authority loss asynchronously.
 - [x] Add regression/static architecture coverage.
 - [x] Build and run complete package tests.
-- [ ] Commit the observation-only Slice.
-- [ ] Run bounded dev2 and classify the frozen snapshot with A/B/C/D.
+- [x] Commit the observation-only Slice (`79ff9f88`).
+- [x] Run bounded dev2 and classify the frozen snapshot with A/B/C/D.

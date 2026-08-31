@@ -3549,6 +3549,30 @@ fresh Cruise continuationが不成立の間`previous=stop/effective=stop/resolut
 利用可能になり、decision 3587ではproduction Cruise commandへ復帰した。古いnormal artifactの無証明再実行は観測されていない。
 新しいtimeout、lease、fallback、solver／wall parameterは追加していない。
 
+#### current-world Stopのobservation-only監査契約（2026-08-31、2025由来の暫定）
+
+architecture comparisonでfree seven-state Stopおよびsteering-rate
+control latticeを評価する際は、normal solveの成功を前提にしない。
+liveの独立Stop workerと同じく、immutable current-world snapshotへ直接
+maximum-braking lawを課して候補を生成する。normal solve成功後のartifactを
+必要とするpublisher-boundary Stopは別仮説であり、normal solver failure時の
+物理的Stop可否を分類する代用にはならない。
+
+`output/20260831-134900/d1` decision 1563の旧監査ではA/B/C/Dがすべて
+stage-zero steering-rate rowでsolver rejectとなり、Stop 2 armは
+`source normal solve rejected`として未評価だった。current-world入力へ統一後、
+direct seven-state Stopと68件のcontrol-lattice候補が実際に評価され、いずれも
+solver rejectとなった。best lattice rejected iterateの非線形rolloutも約5.624 m先で
+exact wall contactとなった。したがってdecision 1563は少なくとも既存候補・既存
+single-SQPにとって既に遅い状態であり、Stop監査未実行を物理的不可能と誤分類する
+盲点は閉じた。production authority、solver tolerance、wall clearanceは変更しない。
+
+同runではdecision 1563より前にcertified current-world Stop planが存在したが、
+消費時には`steering-unreachable`だった。残課題はStop fallback追加ではなく、
+そのplanのproducer decision／ageとconsumer decisionを結び、可行なplanが
+current stateへ接続不能になるまで遅延したscheduling／lifecycle起点を凍結すること
+である。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

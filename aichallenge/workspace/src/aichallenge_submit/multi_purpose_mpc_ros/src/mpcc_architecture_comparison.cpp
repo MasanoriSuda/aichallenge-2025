@@ -2459,18 +2459,15 @@ Report compare_terminal_stop_lateral_contract(
       Arm::ProductionLeftNormalPathStopT, source, source_fingerprint, 1,
       ProductionEvaluationMode::SingleSqp,
       TerminalStopLateralAuditMode::NormalPathProfile));
+    // The live independent Stop worker owns a current-world producer that
+    // does not depend on a normal execution artifact.  The observation-only
+    // comparison must exercise that same hypothesis: requiring a successful
+    // normal solve here made normal-solver failures indistinguishable from
+    // physical Stop infeasibility.
     shadow::SolverContext stop_source_solver;
-    const auto stop_source = stop_source_solver.evaluate(source);
-    stop_lattice::StopCandidateResult solved_stop;
-    solved_stop.detail = "source normal solve rejected";
-    if (
-      stop_source.outcome == shadow::Outcome::Solved &&
-      stop_source.execution_artifact != nullptr)
-    {
-      solved_stop = stop_lattice::build_maximum_braking_candidate(
-        source, *stop_source.execution_artifact,
-        stop_source_solver.physical_constraint_tolerance());
-    }
+    const auto solved_stop =
+      stop_lattice::build_current_world_maximum_braking_candidate(
+      source, stop_source_solver.physical_constraint_tolerance());
     if (solved_stop.accepted()) {
       report.arms.push_back(evaluate_arm(
         Arm::SevenStateStopU, solved_stop.candidate, source_fingerprint,
@@ -2484,12 +2481,12 @@ Report compare_terminal_stop_lateral_contract(
     } else {
       report.arms.push_back(rejected_arm(
         Arm::SevenStateStopU, Stage::CandidateRejected, source_fingerprint,
-        "seven-state Stop audit candidate unavailable/" +
+        "current-world seven-state Stop audit candidate unavailable/" +
         solved_stop.detail));
       report.arms.push_back(rejected_arm(
         Arm::SevenStateStopControlLatticeV, Stage::CandidateRejected,
         source_fingerprint,
-        "seven-state Stop audit candidate unavailable/" +
+        "current-world seven-state Stop audit candidate unavailable/" +
         solved_stop.detail));
     }
   } catch (const std::exception & exception) {

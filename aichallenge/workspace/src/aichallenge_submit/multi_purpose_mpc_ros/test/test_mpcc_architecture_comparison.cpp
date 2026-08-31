@@ -711,6 +711,34 @@ TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
   }
 }
 
+TEST(
+  MpccArchitectureComparison,
+  CurrentWorldStopAuditDoesNotDependOnNormalSolve)
+{
+  auto source = stoppable_source_snapshot();
+  // Make the normal velocity schedule dynamically unreachable.  The
+  // current-world maximum-braking producer replaces this future schedule
+  // from the same measured state and must still be evaluated.
+  for (std::size_t stage = 1U; stage < source.request.states.size(); ++stage) {
+    source.request.states[stage].reference[model::kVelocityIndex] = 4.0;
+    source.request.states[stage].lower[model::kVelocityIndex] = 4.0;
+    source.request.states[stage].upper[model::kVelocityIndex] = 4.0;
+  }
+  const auto report = compare_terminal_stop_lateral_contract(
+    recorded(std::move(source)));
+
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 10U);
+  EXPECT_NE(report.arms[0].stage, Stage::Accepted)
+    << "fixture must reject the normal source: " << report.arms[0].detail;
+  EXPECT_EQ(report.arms[8].arm, Arm::SevenStateStopU);
+  EXPECT_NE(report.arms[8].stage, Stage::CandidateRejected)
+    << report.arms[8].detail;
+  EXPECT_EQ(report.arms[9].arm, Arm::SevenStateStopControlLatticeV);
+  EXPECT_GT(report.arms[9].candidate_count, 0U)
+    << report.arms[9].detail;
+}
+
 TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
 {
   const auto source = source_snapshot();

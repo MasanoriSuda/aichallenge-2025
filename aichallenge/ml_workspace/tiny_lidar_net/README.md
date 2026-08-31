@@ -44,7 +44,8 @@ trainerは学習開始前に次を検証します。
 
 - 750点LiDAR、30 m range契約
 - scan/controlの同期差が50 ms以下
-- `label_source`が`mpc`、`mpcc`、`human`、`lidar_gap_teacher`のいずれか
+- `label_source`が`mpc`、`mpcc`、`human`、`lidar_gap_teacher`、
+  `lidar_gap_teacher_dagger`のいずれか
 - 全配列の長さ、finite値、timestamp順序
 - train/validation間のsequence ID非重複
 
@@ -128,4 +129,14 @@ python3 extract_data_from_bag.py \
   --seq-dirs /output/<run>/d1/rosbag2_autoware \
   --outdir dataset/obstacle_v1 \
   --label-source lidar_gap_teacher
+```
+
+学習済みstudentが新しい状態分布で失敗した場合は、student commandを教師dataとして
+再利用しません。接触suffixを除外し、同じgap teacherでpre-contact scanを再labelします。
+既定ではteacherがactiveな補正sampleだけをtrain splitへ保存します。
+
+```bash
+python3 relabel_gap_teacher_bag.py /output/<failed-run>/d1/rosbag2_autoware \
+  --checkpoint checkpoints/<student-run>/candidate.npy \
+  --outdir dataset/<dagger-name>
 ```

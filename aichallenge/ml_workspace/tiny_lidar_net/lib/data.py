@@ -17,6 +17,7 @@ DEFAULT_ALLOWED_LABEL_SOURCES = (
     "mpcc",
     "human",
     "lidar_gap_teacher",
+    "lidar_gap_teacher_dagger",
 )
 REQUIRED_ARRAY_FILES = (
     "scans.npy",

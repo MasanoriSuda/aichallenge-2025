@@ -37051,33 +37051,34 @@ private:
         effective_mission_total_time_limit_sec,
         rear_clear_confirmed,
         !return_corridor_blocked});
-    if (mission_total_budget.action == overtake_core::MissionTotalBudgetAction::Return) {
-      if (begin_validated_return(
-          "same-target Mission total budget reached after rear-clear"))
-      {
-        return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
-      }
-    }
-    if (mission_total_budget.action == overtake_core::MissionTotalBudgetAction::Abort) {
-      const int expired_side = overtake_line_state_.pass_side_sign;
-      const std::string expired_target = overtake_line_state_.target_vehicle_id;
-      RCLCPP_WARN(
-        rclcpp::get_logger("mpc_controller"),
-        "OvertakeLine same-target Mission total budget expired: target=%s, "
-        "side=%d, phase=%s, elapsed=%.2f/%.2f s, extension=%.2f s",
-        expired_target.c_str(), expired_side,
+    const bool mission_total_budget_observation_valid =
+      std::isfinite(mission_total_elapsed_sec) &&
+      !overtake_line_state_.target_vehicle_id.empty() &&
+      overtake_line_state_.phase != OvertakeLinePhase::Idle;
+    if (
+      mission_total_budget_observation_valid &&
+      mission_total_budget.action != overtake_core::MissionTotalBudgetAction::Keep)
+    {
+      // Elapsed Mission time is tactical telemetry, not current-world physical
+      // evidence.  It must not mutate the phase while a publisher-aligned
+      // seven-state artifact remains the normal authority; doing so previously
+      // produced Recovery state with a still-published ShiftOut command.
+      // Rear-clear, exact Return admission, hard faults and certified Stop are
+      // the only owners of the corresponding production transitions.
+      static rclcpp::Clock mission_total_budget_log_clock{RCL_STEADY_TIME};
+      RCLCPP_WARN_THROTTLE(
+        rclcpp::get_logger("mpc_controller"), mission_total_budget_log_clock,
+        1000,
+        "OvertakeLine Mission total budget observed: target=%s, side=%d, "
+        "phase=%s, elapsed=%.2f/%.2f s, extension=%.2f s, requested=%s, "
+        "authority=observation-only",
+        overtake_line_state_.target_vehicle_id.c_str(),
+        overtake_line_state_.pass_side_sign,
         to_string(overtake_line_state_.phase), mission_total_elapsed_sec,
         effective_mission_total_time_limit_sec,
-        overtake_line_state_.mission_total_deadline_extension_sec);
-      arm_overtake_line_side_retry_block(
-        expired_side, expired_target, now_sec,
-        "same-target Mission total budget expired",
-        overtake_core::OvertakeSideRetryFailureClass::PhysicalOrCommittedFailure);
-      overtake_line_state_.mission_retention_forbidden = true;
-      transition_overtake_line_phase(
-        OvertakeLinePhase::Recovery, now_sec, current_ey, expired_side,
-        "same-target Mission total budget expired");
-      return update_overtake_line(behavior_output, ref_wp_id, N, lb, ub, now_sec);
+        overtake_line_state_.mission_total_deadline_extension_sec,
+        mission_total_budget.action ==
+        overtake_core::MissionTotalBudgetAction::Return ? "return" : "abort");
     }
     const auto try_last_feasible_maneuver = [&] (
       const std::string & reason, const bool soft_failure,

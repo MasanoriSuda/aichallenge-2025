@@ -3388,6 +3388,27 @@ def test_overtake_sibling_exact_proof_owns_receding_replacement() -> None:
     assert "request.hard_fault" in adoption_source
 
 
+def test_mission_total_budget_is_observation_only() -> None:
+    """A tactical wall clock cannot mutate canonical normal authority."""
+
+    start = SOURCE.index(
+        "const auto mission_total_budget = overtake_core::resolve_mission_total_budget("
+    )
+    end = SOURCE.index("const auto try_last_feasible_maneuver", start)
+    budget = SOURCE[start:end]
+    assert "mission_total_budget_observation_valid" in budget
+    assert "std::isfinite(mission_total_elapsed_sec)" in budget
+    assert "!overtake_line_state_.target_vehicle_id.empty()" in budget
+    assert "overtake_line_state_.phase != OvertakeLinePhase::Idle" in budget
+    assert "authority=observation-only" in budget
+    assert "Mission total budget observed" in budget
+    assert "begin_validated_return(" not in budget
+    assert "arm_overtake_line_side_retry_block(" not in budget
+    assert "mission_retention_forbidden = true" not in budget
+    assert "transition_overtake_line_phase(" not in budget
+    assert "return update_overtake_line(" not in budget
+
+
 def test_control_callback_overrun_trace_is_observation_only() -> None:
     """Timing attribution may diagnose a callback but cannot influence it."""
 

@@ -3384,6 +3384,23 @@ revalidationは従来どおりであり、片側solve完了だけではcommand a
 実行中の次epoch sequence 958のpositive branchがbankへ公開され、outer executorはなお`running=1`だった。これにより
 candidate failure／latencyを兄弟branchとレース全体から局所化する。
 
+#### Stop-lattice非同期結果のcontrol-decision時系列（2026-08-31、2025由来の暫定）
+
+Stop-lattice workerの`source_normal_identity.sequence`はartifact producerごとのlocal sequenceであり、
+ShiftOut、Pass、Gate-Aをまたぐglobal clockではない。非同期mailboxの新旧判定とconsumer watermarkは、single control ownerが
+各周期に付与する`source_context.decision_id`を唯一の時系列として使用する。artifact sequenceはexact source identityの一部として
+保持し、current published sourceとの完全一致joinは従来どおり必須である。時系列が新しいだけでauthorityを取得してはならない。
+
+`output/20260831-091516/d1`のdecision 1832では、古いShiftOut source sequence 954より後に生成されたPass sourceが
+sequence 295だったため、旧mailboxが有効なPass Stop-lattice結果をrollbackとして破棄した。残ったShiftOut結果は正しく
+`intent-mismatch`となり、normal authorityがEmergency Stopへ落ちた。同一snapshotのseven-state Stop control latticeは、
+変更していないexact wall、timed dynamic、terminal proofを通過したため、これは物理的不可能やclearance不足ではなく
+async provenance defectである。
+
+修正後の`output/20260831-093415/d1`では65件をsubmit／complete／publishし、`invalid=0`、`rollback=0`だった。
+ShiftOutからPassへのproducer遷移も発生した。Pass候補の`steering-unreachable`はtransportとは別のcandidate reachabilityとして
+明示されており、grace、lease、fallback、solver toleranceまたはclearance変更で隠していない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

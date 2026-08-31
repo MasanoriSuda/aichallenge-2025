@@ -91,7 +91,7 @@ enum class PublishReason
 {
   Accepted,
   InvalidResult,
-  SequenceRollback,
+  DecisionRollback,
 };
 
 const char * to_string(PublishReason reason) noexcept;
@@ -100,15 +100,17 @@ struct MailboxState
 {
   std::uint64_t accepted_count{};
   std::uint64_t invalid_result_count{};
-  std::uint64_t sequence_rollback_count{};
-  std::uint64_t latest_sequence{};
+  std::uint64_t decision_rollback_count{};
+  /// Global control-cycle chronology. Artifact sequence is producer-local and
+  /// cannot order results across ShiftOut, Pass and Gate-A producers.
+  std::uint64_t latest_decision_id{};
 };
 
 class Mailbox
 {
 public:
   PublishReason publish(Result result);
-  std::optional<Result> latest_after(std::uint64_t sequence) const;
+  std::optional<Result> latest_after(std::uint64_t decision_id) const;
   MailboxState state() const;
 
 private:

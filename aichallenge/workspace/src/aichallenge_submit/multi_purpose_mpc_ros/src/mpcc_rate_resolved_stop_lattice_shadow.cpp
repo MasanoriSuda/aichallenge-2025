@@ -271,7 +271,7 @@ const char * to_string(const PublishReason reason) noexcept
   switch (reason) {
     case PublishReason::Accepted: return "accepted";
     case PublishReason::InvalidResult: return "invalid-result";
-    case PublishReason::SequenceRollback: return "sequence-rollback";
+    case PublishReason::DecisionRollback: return "decision-rollback";
   }
   return "unknown";
 }
@@ -280,6 +280,7 @@ PublishReason Mailbox::publish(Result result)
 {
   if (
     result.source_normal_identity.sequence == 0U ||
+    result.source_normal_identity.source_context.decision_id == 0U ||
     !std::isfinite(result.total_compute_ms) || result.total_compute_ms < 0.0)
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -287,22 +288,25 @@ PublishReason Mailbox::publish(Result result)
     return PublishReason::InvalidResult;
   }
   std::lock_guard<std::mutex> lock(mutex_);
-  if (result.source_normal_identity.sequence <= state_.latest_sequence) {
-    ++state_.sequence_rollback_count;
-    return PublishReason::SequenceRollback;
+  const std::uint64_t decision_id =
+    result.source_normal_identity.source_context.decision_id;
+  if (decision_id <= state_.latest_decision_id) {
+    ++state_.decision_rollback_count;
+    return PublishReason::DecisionRollback;
   }
-  state_.latest_sequence = result.source_normal_identity.sequence;
+  state_.latest_decision_id = decision_id;
   latest_ = std::move(result);
   ++state_.accepted_count;
   return PublishReason::Accepted;
 }
 
-std::optional<Result> Mailbox::latest_after(const std::uint64_t sequence) const
+std::optional<Result> Mailbox::latest_after(
+  const std::uint64_t decision_id) const
 {
   std::lock_guard<std::mutex> lock(mutex_);
   if (
     !latest_.has_value() ||
-    latest_->source_normal_identity.sequence <= sequence)
+    latest_->source_normal_identity.source_context.decision_id <= decision_id)
   {
     return std::nullopt;
   }

@@ -976,29 +976,60 @@ TEST(MpccArchitectureComparison, LiveStopShadowStopsAfterSupersededSolve)
   EXPECT_EQ(result.detail, "newer observation epoch submitted");
 }
 
-TEST(MpccArchitectureComparison, LiveStopShadowMailboxIsMonotonic)
+TEST(MpccArchitectureComparison, LiveStopShadowMailboxUsesDecisionChronology)
 {
   stop_lattice_shadow::Mailbox mailbox;
-  stop_lattice_shadow::Result newer;
-  newer.source_normal_identity = source_snapshot().identity;
-  newer.total_compute_ms = 1.0;
+  stop_lattice_shadow::Result shiftout;
+  shiftout.source_normal_identity = source_snapshot().identity;
+  shiftout.source_normal_identity.sequence = 954U;
+  shiftout.source_normal_identity.source_context.decision_id = 1736U;
+  shiftout.source_normal_identity.source_context.fingerprint = 0U;
+  shiftout.source_normal_identity.source_context = contract::seal_problem_context(
+    shiftout.source_normal_identity.source_context);
+  shiftout.total_compute_ms = 1.0;
   EXPECT_EQ(
-    mailbox.publish(newer),
+    mailbox.publish(shiftout),
     stop_lattice_shadow::PublishReason::Accepted);
 
-  stop_lattice_shadow::Result older;
-  older.source_normal_identity = source_snapshot().identity;
-  older.source_normal_identity.sequence -= 1U;
-  older.total_compute_ms = 1.0;
+  // Pass is a different producer and may allocate a smaller local artifact
+  // sequence. Its later control decision is the canonical chronology.
+  stop_lattice_shadow::Result pass;
+  pass.source_normal_identity = source_snapshot().identity;
+  pass.source_normal_identity.sequence = 295U;
+  pass.source_normal_identity.source_context.decision_id = 1832U;
+  pass.source_normal_identity.source_context.intent =
+    contract::ControlIntent::Pass;
+  pass.source_normal_identity.source_context.fingerprint = 0U;
+  pass.source_normal_identity.source_context = contract::seal_problem_context(
+    pass.source_normal_identity.source_context);
+  pass.total_compute_ms = 1.0;
   EXPECT_EQ(
-    mailbox.publish(older),
-    stop_lattice_shadow::PublishReason::SequenceRollback);
-  const auto latest = mailbox.latest_after(0U);
+    mailbox.publish(pass),
+    stop_lattice_shadow::PublishReason::Accepted);
+
+  // A late completion from an older control decision remains stale even when
+  // its producer-local sequence is numerically larger.
+  stop_lattice_shadow::Result stale;
+  stale.source_normal_identity = source_snapshot().identity;
+  stale.source_normal_identity.sequence = 1200U;
+  stale.source_normal_identity.source_context.decision_id = 1800U;
+  stale.source_normal_identity.source_context.fingerprint = 0U;
+  stale.source_normal_identity.source_context = contract::seal_problem_context(
+    stale.source_normal_identity.source_context);
+  stale.total_compute_ms = 1.0;
+  EXPECT_EQ(
+    mailbox.publish(stale),
+    stop_lattice_shadow::PublishReason::DecisionRollback);
+  const auto latest = mailbox.latest_after(1736U);
   ASSERT_TRUE(latest.has_value());
-  EXPECT_EQ(latest->source_normal_identity.sequence, 9U);
+  EXPECT_EQ(latest->source_normal_identity.sequence, 295U);
+  EXPECT_EQ(
+    latest->source_normal_identity.source_context.decision_id, 1832U);
+  EXPECT_FALSE(mailbox.latest_after(1832U).has_value());
   const auto state = mailbox.state();
-  EXPECT_EQ(state.accepted_count, 1U);
-  EXPECT_EQ(state.sequence_rollback_count, 1U);
+  EXPECT_EQ(state.accepted_count, 2U);
+  EXPECT_EQ(state.decision_rollback_count, 1U);
+  EXPECT_EQ(state.latest_decision_id, 1832U);
 }
 
 TEST(MpccArchitectureComparison, ExternalPrimalUsesExactPhysicalProofChain)

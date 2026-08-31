@@ -27061,10 +27061,10 @@ struct MPC
     auto & window = rate_resolved_stop_lattice_shadow_telemetry_window_;
     if (rate_resolved_stop_lattice_shadow_mailbox_ != nullptr) {
       const auto result = rate_resolved_stop_lattice_shadow_mailbox_->latest_after(
-        rate_resolved_stop_lattice_shadow_last_consumed_sequence_);
+        rate_resolved_stop_lattice_shadow_last_consumed_decision_id_);
       if (result.has_value()) {
-        rate_resolved_stop_lattice_shadow_last_consumed_sequence_ =
-          result->source_normal_identity.sequence;
+        rate_resolved_stop_lattice_shadow_last_consumed_decision_id_ =
+          result->source_normal_identity.source_context.decision_id;
         ++window.consumed_count;
         window.accepted_count += result->accepted() ? 1U : 0U;
         const auto reason_index = static_cast<std::size_t>(result->reason);
@@ -27154,7 +27154,7 @@ struct MPC
       worker.running ? 1 : 0, worker.pending ? 1 : 0,
       static_cast<unsigned long>(mailbox.accepted_count),
       static_cast<unsigned long>(mailbox.invalid_result_count),
-      static_cast<unsigned long>(mailbox.sequence_rollback_count),
+      static_cast<unsigned long>(mailbox.decision_rollback_count),
       static_cast<unsigned long>(window.consumed_count),
       static_cast<unsigned long>(window.accepted_count),
       static_cast<unsigned long>(window.reason_count[static_cast<std::size_t>(
@@ -30577,7 +30577,7 @@ struct MPC
   rate_resolved_stop_lattice_published_source_identity_;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
   rate_resolved_stop_lattice_current_world_alternate_plan_;
-  std::uint64_t rate_resolved_stop_lattice_shadow_last_consumed_sequence_{};
+  std::uint64_t rate_resolved_stop_lattice_shadow_last_consumed_decision_id_{};
   RateResolvedStopLatticeShadowTelemetryWindow
   rate_resolved_stop_lattice_shadow_telemetry_window_;
   double rate_resolved_stop_lattice_shadow_last_log_sec_{

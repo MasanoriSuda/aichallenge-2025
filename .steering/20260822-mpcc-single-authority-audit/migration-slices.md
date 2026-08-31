@@ -1325,6 +1325,18 @@ Finish the architecture simplification instead of leaving permanent dual control
   outer executor is running, proving early publication without changing
   command authority, no-return, solver settings or clearance.
 
+- `.steering/20260831-stop-lattice-publication-chronology` repairs the async
+  Stop-lattice transport chronology across normal-intent producers. Artifact
+  sequence remains an exact producer identity but no longer orders ShiftOut,
+  Pass and Gate-A results; publication and consumer watermarks use the single
+  control owner's decision ID. The frozen decision 1832 had discarded a
+  physically certified Pass Stop lattice because local sequence 295 followed
+  ShiftOut sequence 954. After the correction, bounded `make dev2` completed
+  and published 65/65 jobs with zero invalid or decision rollback. Exact
+  intent/source join remains mandatory, and the newly visible
+  `steering-unreachable` case is a separate frozen reachability Slice rather
+  than a reason to add a grace, fallback, solver or clearance change.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

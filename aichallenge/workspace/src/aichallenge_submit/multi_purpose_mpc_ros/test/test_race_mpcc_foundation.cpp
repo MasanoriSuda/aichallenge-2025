@@ -995,3 +995,39 @@ TEST(RaceMpccFoundation, ExactPhysicalTrajectoryAppliesCertifiedVelocityToleranc
     race::ExactPhysicalExecutionTrajectoryReason::InvalidVelocity);
   EXPECT_EQ(outside_certificate.stage, 1);
 }
+
+TEST(
+  RaceMpccFoundation,
+  ExactPhysicalTrajectoryAllowsRepeatedDistanceOnlyForCertifiedStationaryStop)
+{
+  race::ExactPhysicalExecutionTrajectory trajectory;
+  trajectory.progress_origin_m = 100.0;
+  trajectory.elapsed_time_sec = {0.01, 0.025};
+  trajectory.path_distance_m = {0.001, 0.001};
+  trajectory.lateral_m = {0.2, 0.2};
+  trajectory.lag_m = {0.0, 0.0};
+  trajectory.heading_offset_rad = {0.0, 0.0};
+  trajectory.velocity_mps = {0.0, 0.0};
+  trajectory.progress_m = {100.001, 100.001};
+  trajectory.lateral_lower_m = {-0.5, -0.5};
+  trajectory.lateral_upper_m = {0.8, 0.8};
+  trajectory.minimum_lateral_bound_reserve_m = 0.3;
+
+  EXPECT_EQ(
+    race::validate_exact_physical_execution_trajectory(trajectory).reason,
+    race::ExactPhysicalExecutionTrajectoryReason::InvalidPathDistance);
+
+  trajectory.stationary_path_suffix_allowed = true;
+  trajectory.stationary_velocity_tolerance_mps = 1e-6;
+  EXPECT_TRUE(race::exact_physical_execution_trajectory_complete(trajectory));
+
+  trajectory.velocity_mps[0] = 0.1;
+  EXPECT_EQ(
+    race::validate_exact_physical_execution_trajectory(trajectory).reason,
+    race::ExactPhysicalExecutionTrajectoryReason::InvalidPathDistance);
+  trajectory.velocity_mps[0] = 0.0;
+  trajectory.path_distance_m[1] = 0.0009;
+  EXPECT_EQ(
+    race::validate_exact_physical_execution_trajectory(trajectory).reason,
+    race::ExactPhysicalExecutionTrajectoryReason::InvalidPathDistance);
+}

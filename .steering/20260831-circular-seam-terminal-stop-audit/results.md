@@ -29,8 +29,16 @@ fallback behavior changed.
 - complete `multi_purpose_mpc_ros` CTest suite: 59/59 passed.
 - source contract requires all geometry-owner fields to remain observable.
 
-## Pending dynamic classification
+## Bounded dynamic result
 
-The next bounded dev2 run must reproduce the seam and use the new field counts
-to decide whether the root defect is horizon truncation, missing wall profile,
-or a circular-stage provenance mismatch.
+Run `output/20260831-184430` crossed the circular seam and emitted the normal
+`circular seam normalized` records at waypoints 330, 338 and 347, but did not
+emit `terminal Stop course geometry unavailable`.  The baseline defect was
+therefore not reproduced and no shape/provenance repair is justified from this
+run.
+
+The run later lost normal authority for a different, independently traceable
+reason at decision 1116: a low-speed Stop successor was rejected as
+`exact-trajectory-rejected/exact:invalid-path-distance`.  That failure is
+owned by the separate `20260831-stop-stationary-trajectory-contract` Slice so
+the two snapshots are not conflated.

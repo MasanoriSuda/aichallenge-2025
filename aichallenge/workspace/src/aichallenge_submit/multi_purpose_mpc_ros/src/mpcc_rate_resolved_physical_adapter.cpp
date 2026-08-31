@@ -848,6 +848,8 @@ StopContingencyResult build_stop_contingency(
   exact.lateral_lower_m.reserve(reserve_count);
   exact.lateral_upper_m.reserve(reserve_count);
   exact.velocity_lower_bound_tolerance_mps = tolerance;
+  exact.stationary_path_suffix_allowed = true;
+  exact.stationary_velocity_tolerance_mps = tolerance;
   exact.lateral_bound_tolerance_m =
     execution::physical_lateral_bound_tolerance_m(artifact);
   exact.progress_regression_tolerance_m = tolerance;

@@ -116,6 +116,13 @@ struct ExactPhysicalExecutionTrajectory
   /// Maximum solver-certified residual below the semantic zero-velocity
   /// bound. Raw solved states remain unchanged for physical proof.
   double velocity_lower_bound_tolerance_mps{};
+  /// A maximum-braking Stop remains a temporal trajectory after the vehicle
+  /// reaches zero speed: actuator response and the publisher clock still
+  /// advance while physical path distance remains constant.  Normal MPCC
+  /// trajectories leave this false and retain a strictly increasing distance
+  /// certificate.
+  bool stationary_path_suffix_allowed{false};
+  double stationary_velocity_tolerance_mps{};
   /// Solver-certified physical tolerance for the lateral corridor rows.
   /// The nonlinear replay remains the wall-proof trajectory; this tolerance
   /// only prevents an already accepted numerical row residual from being
@@ -130,6 +137,7 @@ enum class ExactPhysicalExecutionTrajectoryReason
   InvalidProgressOrigin,
   InvalidProgressRegressionTolerance,
   InvalidVelocityLowerBoundTolerance,
+  InvalidStationaryVelocityTolerance,
   InvalidLateralBoundTolerance,
   InvalidMinimumLateralReserve,
   TimeShapeMismatch,

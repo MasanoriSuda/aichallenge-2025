@@ -369,6 +369,39 @@ TEST(
 
 TEST(
   MpccRateResolvedPhysicalAdapter,
+  CertifiesStationarySuffixWhenBrakingCrossesZeroInsidePublisherInterval)
+{
+  const auto source = artifact();
+
+  const auto result = adapter::build_stop_successor(
+    source,
+    adapter::ContinuationInitialState{
+      -0.40, 0.0, 0.0, 0.055985, 0.45, 0.10, 0.10},
+    stop_course_geometry(), stop_lateral_policy(), -3.0);
+
+  ASSERT_EQ(result.reason, adapter::StopContingencyRejectReason::None);
+  ASSERT_TRUE(result.exact_trajectory.has_value());
+  const auto & exact = result.exact_trajectory.value();
+  EXPECT_TRUE(exact.stationary_path_suffix_allowed);
+  ASSERT_GE(exact.path_distance_m.size(), 2U);
+  bool stationary_suffix_observed = false;
+  for (std::size_t index = 1U; index < exact.path_distance_m.size(); ++index) {
+    if (exact.path_distance_m[index] == exact.path_distance_m[index - 1U]) {
+      stationary_suffix_observed = true;
+      EXPECT_NEAR(exact.velocity_mps[index - 1U], 0.0, 1e-12);
+      EXPECT_NEAR(exact.velocity_mps[index], 0.0, 1e-12);
+    }
+  }
+  EXPECT_TRUE(stationary_suffix_observed);
+  EXPECT_TRUE(race::exact_physical_execution_trajectory_complete(exact));
+  EXPECT_NEAR(
+    result.actuation_samples[result.publisher_interval_sample_count - 1U].
+    elapsed_time_sec,
+    source.publication_interval_sec, 1e-12);
+}
+
+TEST(
+  MpccRateResolvedPhysicalAdapter,
   BuildsStopAgainstVaryingLateralProfileWithoutExtrapolation)
 {
   const auto source = artifact();

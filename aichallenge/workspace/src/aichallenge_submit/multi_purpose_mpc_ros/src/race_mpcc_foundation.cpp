@@ -352,6 +352,8 @@ const char * exact_physical_execution_trajectory_reason_name(
       return "invalid-progress-regression-tolerance";
     case ExactPhysicalExecutionTrajectoryReason::InvalidVelocityLowerBoundTolerance:
       return "invalid-velocity-lower-bound-tolerance";
+    case ExactPhysicalExecutionTrajectoryReason::InvalidStationaryVelocityTolerance:
+      return "invalid-stationary-velocity-tolerance";
     case ExactPhysicalExecutionTrajectoryReason::InvalidLateralBoundTolerance:
       return "invalid-lateral-bound-tolerance";
     case ExactPhysicalExecutionTrajectoryReason::InvalidMinimumLateralReserve:
@@ -426,6 +428,14 @@ validate_exact_physical_execution_trajectory(
       ExactPhysicalExecutionTrajectoryReason::InvalidVelocityLowerBoundTolerance);
   }
   if (
+    trajectory.stationary_path_suffix_allowed &&
+    (!std::isfinite(trajectory.stationary_velocity_tolerance_mps) ||
+    trajectory.stationary_velocity_tolerance_mps < 0.0))
+  {
+    return reject(
+      ExactPhysicalExecutionTrajectoryReason::InvalidStationaryVelocityTolerance);
+  }
+  if (
     !std::isfinite(trajectory.lateral_bound_tolerance_m) ||
     trajectory.lateral_bound_tolerance_m < 0.0)
   {
@@ -465,6 +475,7 @@ validate_exact_physical_execution_trajectory(
   }
   double previous_distance_m = -std::numeric_limits<double>::infinity();
   double previous_progress_m = -std::numeric_limits<double>::infinity();
+  double previous_velocity_mps = std::numeric_limits<double>::infinity();
   double previous_elapsed_sec{};
   for (std::size_t stage = 0U; stage < stage_count; ++stage) {
     const double elapsed_sec = trajectory.elapsed_time_sec[stage];
@@ -483,7 +494,17 @@ validate_exact_physical_execution_trajectory(
       return reject(
         ExactPhysicalExecutionTrajectoryReason::InvalidElapsedTime, stage_index);
     }
-    if (!std::isfinite(distance_m) || distance_m <= previous_distance_m) {
+    const bool repeated_stationary_distance =
+      stage > 0U && distance_m == previous_distance_m &&
+      trajectory.stationary_path_suffix_allowed &&
+      std::abs(previous_velocity_mps) <=
+      trajectory.stationary_velocity_tolerance_mps &&
+      std::abs(velocity_mps) <=
+      trajectory.stationary_velocity_tolerance_mps;
+    if (
+      !std::isfinite(distance_m) || distance_m < previous_distance_m ||
+      (distance_m == previous_distance_m && !repeated_stationary_distance))
+    {
       return reject(
         ExactPhysicalExecutionTrajectoryReason::InvalidPathDistance, stage_index);
     }
@@ -524,6 +545,7 @@ validate_exact_physical_execution_trajectory(
     }
     previous_distance_m = distance_m;
     previous_progress_m = progress_m;
+    previous_velocity_mps = velocity_mps;
     previous_elapsed_sec = elapsed_sec;
   }
   return ExactPhysicalExecutionTrajectoryValidation{

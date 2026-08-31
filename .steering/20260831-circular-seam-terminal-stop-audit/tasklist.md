@@ -4,4 +4,4 @@
 - [x] Add a regression contract for the evidence fields.
 - [x] Build and run the full package tests.
 - [x] Commit the audit Slice.
-- [ ] Re-run a bounded dev2 trial and classify the exact malformed component.
+- [x] Re-run a bounded dev2 trial; record that the seam defect did not reproduce.

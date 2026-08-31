@@ -172,6 +172,69 @@ TEST(OvertakeBranchBank, PublishesBothSidesFromOnePassEpoch)
   EXPECT_EQ(stored.plan_for_side(1), positive);
 }
 
+TEST(OvertakeBranchBank, PublishesCompletedSiblingWithoutWaitingForSelectedSide)
+{
+  bank::Bank subject;
+  const auto source = source_snapshot(5U, -1);
+  const auto positive = plan(5U, 1);
+  const auto negative = plan(5U, -1);
+
+  EXPECT_EQ(
+    subject.merge_branch(source, 1, positive), bank::ReplaceReason::Accepted);
+  auto stored = subject.snapshot();
+  EXPECT_EQ(stored.selected_execution_side_sign, -1);
+  EXPECT_EQ(stored.negative_plan, nullptr);
+  EXPECT_EQ(stored.positive_plan, positive);
+
+  EXPECT_EQ(
+    subject.merge_branch(source, -1, negative), bank::ReplaceReason::Accepted);
+  stored = subject.snapshot();
+  EXPECT_EQ(stored.negative_plan, negative);
+  EXPECT_EQ(stored.positive_plan, positive);
+}
+
+TEST(OvertakeBranchBank, NewerPartialEpochInvalidatesBothOlderSides)
+{
+  bank::Bank subject;
+  ASSERT_EQ(
+    subject.replace(
+      source_snapshot(5U, -1), plan(5U, -1), plan(5U, 1)),
+    bank::ReplaceReason::Accepted);
+  const auto newer_positive = plan(6U, 1);
+
+  EXPECT_EQ(
+    subject.merge_branch(source_snapshot(6U, -1), 1, newer_positive),
+    bank::ReplaceReason::Accepted);
+  const auto stored = subject.snapshot();
+  EXPECT_EQ(stored.source_identity.sequence, 6U);
+  EXPECT_EQ(stored.negative_plan, nullptr);
+  EXPECT_EQ(stored.positive_plan, newer_positive);
+  EXPECT_EQ(
+    subject.merge_branch(source_snapshot(5U, -1), -1, plan(5U, -1)),
+    bank::ReplaceReason::StaleSource);
+  EXPECT_EQ(subject.snapshot().positive_plan, newer_positive);
+}
+
+TEST(OvertakeBranchBank, RejectsSequenceCollisionFromDifferentSourceEpoch)
+{
+  bank::Bank subject;
+  const auto source = source_snapshot(5U, -1);
+  const auto positive = plan(5U, 1);
+  ASSERT_EQ(
+    subject.merge_branch(source, 1, positive),
+    bank::ReplaceReason::Accepted);
+  auto collision = source;
+  auto collision_context = collision.identity.source_context;
+  ++collision_context.decision_id;
+  collision.identity.source_context =
+    contract::seal_problem_context(std::move(collision_context));
+
+  EXPECT_EQ(
+    subject.merge_branch(collision, -1, nullptr),
+    bank::ReplaceReason::SourceEpochMismatch);
+  EXPECT_EQ(subject.snapshot().positive_plan, positive);
+}
+
 TEST(OvertakeBranchBank, AcceptsShiftOutAndAtomicallyInvalidatesOlderSides)
 {
   bank::Bank subject;

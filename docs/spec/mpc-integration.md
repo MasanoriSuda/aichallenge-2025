@@ -3369,6 +3369,21 @@ certified Bundleを生成した。したがってfailure familyは物理的不�
 candidateがstage-zero二重constraintで消えたproducer／lifecycle defectである。既存dual populationとsibling bankを利用し、
 新しいresume rule、lease、grace、fallbackは追加しない。
 
+#### active Overtake branchの独立公開（2026-08-31、2025由来の暫定）
+
+左右branchは同一immutable worldから生成するが、一方のcandidate生成／SQP／exact proofが遅いことを理由に、先に完全認証された
+他方branchを観測bankから隠してはならない。新しいsource sequenceで最初のbranchが完了した時点で旧epochの左右を同時に無効化し、
+そのexact source identityへ各branchを独立mergeする。同じsequenceでもidentityが異なる結果、および新しいepochより遅れて完了した
+古い結果は受理しない。
+
+これはobservation evidenceの公開順序だけを変更する。selected plan Store、normal publisher、no-return、homotopy commit、current-world
+revalidationは従来どおりであり、片側solve完了だけではcommand authorityを得ない。
+
+`output/20260831-085329/d2`ではdecision 1506の反対側がoffline exact proofを通ったが、旧bankは両solve join待ちでdecision 1493に
+留まり、liveではwall contact前に利用できなかった。修正後の`output/20260831-091516/d1`ではmailboxの最終完了sequenceが954の間に、
+実行中の次epoch sequence 958のpositive branchがbankへ公開され、outer executorはなお`running=1`だった。これにより
+candidate failure／latencyを兄弟branchとレース全体から局所化する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

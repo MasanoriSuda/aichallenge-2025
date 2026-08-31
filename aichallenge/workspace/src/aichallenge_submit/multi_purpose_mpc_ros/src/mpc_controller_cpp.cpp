@@ -7021,11 +7021,24 @@ evaluate_rate_resolved_active_overtake_population(
   // on one persistent bounded worker while this LatestOnlyWorker evaluates
   // the positive branch. The 40 Hz callback never waits for either branch.
   std::optional<RateResolvedCurrentWorldPopulationEvaluation> negative;
+  std::optional<rate_resolved_overtake_branch_bank::ReplaceReason>
+  negative_bank_reason;
   const auto negative_submission = negative_executor != nullptr ?
     negative_executor->submit([&]() {
       negative = evaluate_side(-1, negative_solver_context);
+      const auto negative_plan = certified(negative->pipeline) ?
+        negative->pipeline.certified_plan.plan : nullptr;
+      if (branch_bank != nullptr) {
+        negative_bank_reason = branch_bank->merge_branch(
+          source, -1, negative_plan);
+      }
     }) : BoundedSingleJobExecutor::SubmitResult{};
   auto positive = evaluate_side(1, positive_solver_context);
+  const auto positive_plan = certified(positive.pipeline) ?
+    positive.pipeline.certified_plan.plan : nullptr;
+  const auto positive_bank_reason = branch_bank != nullptr ?
+    std::optional<rate_resolved_overtake_branch_bank::ReplaceReason>{
+      branch_bank->merge_branch(source, 1, positive_plan)} : std::nullopt;
   const auto negative_wait = negative_submission.accepted() ?
     negative_executor->wait(negative_submission.ticket) :
     BoundedSingleJobExecutor::WaitReason::InvalidTicket;
@@ -7046,11 +7059,15 @@ evaluate_rate_resolved_active_overtake_population(
 
   const auto negative_plan = certified(negative->pipeline) ?
     negative->pipeline.certified_plan.plan : nullptr;
-  const auto positive_plan = certified(positive.pipeline) ?
-    positive.pipeline.certified_plan.plan : nullptr;
   const std::string bank_detail = branch_bank != nullptr ?
+    std::string{"negative:"} +
+    (negative_bank_reason.has_value() ?
     rate_resolved_overtake_branch_bank::to_string(
-    branch_bank->replace(source, negative_plan, positive_plan)) :
+      negative_bank_reason.value()) : "not-published") +
+    "/positive:" +
+    (positive_bank_reason.has_value() ?
+    rate_resolved_overtake_branch_bank::to_string(
+      positive_bank_reason.value()) : "not-published") :
     "not-requested";
 
   auto selected = selected_side < 0 ? std::move(negative.value()) :

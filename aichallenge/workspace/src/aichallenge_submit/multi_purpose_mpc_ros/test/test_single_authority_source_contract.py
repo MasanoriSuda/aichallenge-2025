@@ -1374,7 +1374,12 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "negative_executor->wait(" in active_dual
     assert "std::async(" not in active_dual
     assert "bounded negative branch unavailable" in active_dual
-    assert "branch_bank->replace(source, negative_plan, positive_plan)" in active_dual
+    assert "branch_bank->merge_branch(" in active_dual
+    assert "source, -1, negative_plan" in active_dual
+    assert "source, 1, positive_plan" in active_dual
+    assert active_dual.index("source, 1, positive_plan") < active_dual.index(
+        "negative_executor->wait("
+    )
     assert "selected_side < 0 ? std::move(negative.value())" in active_dual
     assert "homotopy_owner" not in active_dual
     assert "replace_pair(" in active_dual

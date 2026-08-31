@@ -1314,6 +1314,17 @@ Finish the architecture simplification instead of leaving permanent dual control
   path without adding a Mission resume rule, fallback, lease, grace, solver
   tolerance or clearance change.
 
+- `.steering/20260831-overtake-independent-branch-publication` repairs the
+  next scheduling/lifecycle defect exposed by that dynamic run. Active
+  Overtake sides still use one immutable source epoch, but each exact-certified
+  branch now becomes visible in the observation bank immediately after its own
+  proof instead of waiting for the slower sibling. A newer epoch atomically
+  invalidates both older sides; same-sequence identity collisions and stale
+  completions are rejected. `output/20260831-091516/d1` records bank sequence
+  958 while the completed normal mailbox still reports sequence 954 and the
+  outer executor is running, proving early publication without changing
+  command authority, no-return, solver settings or clearance.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

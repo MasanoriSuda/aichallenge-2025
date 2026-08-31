@@ -21,6 +21,7 @@ enum class ReplaceReason
   InvalidSource,
   InvalidNegativePlan,
   InvalidPositivePlan,
+  SourceEpochMismatch,
   StaleSource,
 };
 
@@ -28,7 +29,8 @@ const char * to_string(ReplaceReason reason) noexcept;
 
 /// One immutable-world set of exact-certified active Overtake branches.
 /// This is observation evidence only and has no execution ledger or command
-/// surface. A newer source replaces both sides atomically, including nullptr.
+/// surface. A newer source invalidates both older sides atomically; completed
+/// sides from that exact source epoch may then become visible independently.
 struct Snapshot
 {
   artifact::Identity source_identity;
@@ -70,6 +72,12 @@ public:
     const shadow::Snapshot & source,
     std::shared_ptr<const certified::CertifiedPlan> negative_plan,
     std::shared_ptr<const certified::CertifiedPlan> positive_plan);
+  /// Publish one completed branch without waiting for its same-epoch sibling.
+  /// A newer source invalidates both older branches; only the exact same source
+  /// identity may fill the other side afterwards.
+  ReplaceReason merge_branch(
+    const shadow::Snapshot & source, int side_sign,
+    std::shared_ptr<const certified::CertifiedPlan> plan);
   Snapshot snapshot() const;
   State state() const;
   void clear();

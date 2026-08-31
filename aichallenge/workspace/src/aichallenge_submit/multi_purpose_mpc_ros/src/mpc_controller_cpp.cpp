@@ -7762,6 +7762,12 @@ struct RateResolvedRetainedShadowEvaluation
   double elapsed_ms{};
 };
 
+struct RateResolvedTerminalViabilityBoundarySample
+{
+  mpcc_contract::ControlIntent intent{mpcc_contract::ControlIntent::Unknown};
+  RateResolvedRetainedShadowEvaluation evaluation;
+};
+
 struct RateResolvedCommandShadowTelemetryWindow
 {
   std::uint64_t attempt_count{};
@@ -25106,6 +25112,73 @@ struct MPC
       return;
     }
 
+    const auto accepted_boundary_matches =
+      rate_resolved_last_accepted_terminal_viability_boundary_.has_value() &&
+      rate_resolved_last_accepted_terminal_viability_boundary_->intent ==
+      intent &&
+      rate_resolved_last_accepted_terminal_viability_boundary_->evaluation.
+      sequence == retained.sequence &&
+      rate_resolved_last_accepted_terminal_viability_boundary_->evaluation.
+      decision_id < retained.decision_id;
+    const RateResolvedRetainedShadowEvaluation * accepted_boundary =
+      accepted_boundary_matches ?
+      &rate_resolved_last_accepted_terminal_viability_boundary_->evaluation :
+      nullptr;
+    if (accepted_boundary != nullptr) {
+      const auto & accepted_wall =
+        accepted_boundary->terminal_stop_path_clearance;
+      const auto & failed_wall = retained.terminal_stop_path_clearance;
+      RCLCPP_WARN(
+        rclcpp::get_logger("mpc_controller"),
+        "Rate-resolved terminal viability boundary: intent=%s, sequence=%lu, "
+        "accepted_decision=%lu, failed_decision=%lu, decision_delta=%lu, "
+        "observation_delta=%.6f, "
+        "progress=accepted:%.6f/failed:%.6f/delta:%.6f, "
+        "join=position:%.6f->%.6f/yaw:%.6f->%.6f, "
+        "steering=physical:%.6f->%.6f/expected:%.6f->%.6f/"
+        "difference:%.6f->%.6f, "
+        "velocity=current:%.6f->%.6f/expected:%.6f->%.6f/"
+        "difference:%.6f->%.6f, "
+        "terminal_wall=clear:%d->%d/checked:%lu->%lu/"
+        "final_steering:%.6f->%.6f/failed_reject_index:%lu/"
+        "failed_reject_pose:%d/(%.3f,%.3f,%.3f), authority=observation-only",
+        mpcc_contract::to_string(intent),
+        static_cast<unsigned long>(retained.sequence),
+        static_cast<unsigned long>(accepted_boundary->decision_id),
+        static_cast<unsigned long>(retained.decision_id),
+        static_cast<unsigned long>(
+          retained.decision_id - accepted_boundary->decision_id),
+        retained.observation_origin_sec -
+        accepted_boundary->observation_origin_sec,
+        accepted_boundary->control_origin_physical_progress_m,
+        retained.control_origin_physical_progress_m,
+        retained.control_origin_physical_progress_m -
+        accepted_boundary->control_origin_physical_progress_m,
+        accepted_boundary->control_pose_error_m,
+        retained.control_pose_error_m,
+        accepted_boundary->control_yaw_error_rad,
+        retained.control_yaw_error_rad,
+        accepted_boundary->current_time_steering_rad,
+        retained.current_time_steering_rad,
+        accepted_boundary->expected_steering_rad,
+        retained.expected_steering_rad,
+        accepted_boundary->steering_difference_rad,
+        retained.steering_difference_rad,
+        accepted_boundary->current_speed_mps, retained.current_speed_mps,
+        accepted_boundary->expected_speed_mps, retained.expected_speed_mps,
+        accepted_boundary->velocity_difference_mps,
+        retained.velocity_difference_mps,
+        accepted_wall.clear ? 1 : 0, failed_wall.clear ? 1 : 0,
+        static_cast<unsigned long>(accepted_wall.checked_pose_count),
+        static_cast<unsigned long>(failed_wall.checked_pose_count),
+        accepted_boundary->terminal_stop_final_steering_rad,
+        retained.terminal_stop_final_steering_rad,
+        static_cast<unsigned long>(failed_wall.rejected_path_index),
+        failed_wall.rejected_pose_available ? 1 : 0,
+        failed_wall.rejected_pose.x_m, failed_wall.rejected_pose.y_m,
+        failed_wall.rejected_pose.yaw_rad);
+    }
+
     const auto reject = [intent, &retained](const std::string & reason) {
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),
@@ -25176,6 +25249,38 @@ struct MPC
            << "/dynamic_blocker="
            << (retained.terminal_stop_blocking_obstacle_id.empty() ?
              "none" : retained.terminal_stop_blocking_obstacle_id);
+    if (accepted_boundary != nullptr) {
+      const auto & accepted_wall =
+        accepted_boundary->terminal_stop_path_clearance;
+      detail << "/accepted_boundary_decision="
+             << accepted_boundary->decision_id
+             << "/accepted_boundary_sequence="
+             << accepted_boundary->sequence
+             << "/accepted_boundary_observation="
+             << accepted_boundary->observation_origin_sec
+             << "/accepted_boundary_progress="
+             << accepted_boundary->control_origin_physical_progress_m
+             << "/accepted_boundary_position_error="
+             << accepted_boundary->control_pose_error_m
+             << "/accepted_boundary_yaw_error="
+             << accepted_boundary->control_yaw_error_rad
+             << "/accepted_boundary_physical_steering="
+             << accepted_boundary->current_time_steering_rad
+             << "/accepted_boundary_expected_steering="
+             << accepted_boundary->expected_steering_rad
+             << "/accepted_boundary_current_speed="
+             << accepted_boundary->current_speed_mps
+             << "/accepted_boundary_expected_speed="
+             << accepted_boundary->expected_speed_mps
+             << "/accepted_boundary_terminal_wall_clear="
+             << (accepted_wall.clear ? 1 : 0)
+             << "/accepted_boundary_terminal_wall_checked="
+             << accepted_wall.checked_pose_count
+             << "/accepted_boundary_terminal_final_steering="
+             << accepted_boundary->terminal_stop_final_steering_rad;
+    } else {
+      detail << "/accepted_boundary=unavailable";
+    }
     if (rate_resolved_terminal_failure_snapshot_worker_ == nullptr) {
       reject("snapshot observation worker unavailable");
       return;
@@ -29774,6 +29879,17 @@ struct MPC
     const auto failure_snapshot_started = SteadyClock::now();
     record_rate_resolved_terminal_contingency_failure_snapshot(
       problem, submission_draft, now_sec, intent, ordinary_retained);
+    if (
+      ordinary_retained.reason == rate_resolved_retained::Reason::Accepted &&
+      ordinary_retained.production_authority.has_value() &&
+      ordinary_retained.terminal_stop_certified &&
+      (intent == mpcc_contract::ControlIntent::ShiftOut ||
+      intent == mpcc_contract::ControlIntent::Pass))
+    {
+      rate_resolved_last_accepted_terminal_viability_boundary_ =
+        RateResolvedTerminalViabilityBoundarySample{
+        intent, ordinary_retained};
+    }
     failure_snapshot_ms = std::chrono::duration<double, std::milli>(
       SteadyClock::now() - failure_snapshot_started).count();
     if (
@@ -30803,6 +30919,8 @@ struct MPC
   rate_resolved_return_execution_shadow_worker_;
   std::unique_ptr<LatestOnlyWorker>
   rate_resolved_terminal_failure_snapshot_worker_;
+  std::optional<RateResolvedTerminalViabilityBoundarySample>
+  rate_resolved_last_accepted_terminal_viability_boundary_;
   std::uint64_t rate_resolved_preentry_execution_shadow_next_sequence_{1U};
   std::uint64_t rate_resolved_preentry_execution_shadow_last_consumed_sequence_{};
   double rate_resolved_preentry_execution_shadow_last_log_sec_{

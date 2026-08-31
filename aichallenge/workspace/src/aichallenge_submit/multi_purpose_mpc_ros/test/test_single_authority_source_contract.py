@@ -3870,3 +3870,43 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
     production = SOURCE[production_start:production_end]
     assert "record_rate_resolved_terminal_contingency_failure_snapshot(" in production
     assert "mpcc_architecture_snapshot::record_proof_failure(" not in production
+
+
+def test_terminal_failure_pairs_last_accepted_same_source_before_overwrite() -> None:
+    """The viable boundary is observation-only and cannot consume failure state."""
+
+    recorder_start = SOURCE.index(
+        "void record_rate_resolved_terminal_contingency_failure_snapshot("
+    )
+    recorder_end = SOURCE.index(
+        "bool submit_rate_resolved_track_cruise_shadow(", recorder_start
+    )
+    recorder = SOURCE[recorder_start:recorder_end]
+    assert "accepted_boundary_matches" in recorder
+    assert (
+        "rate_resolved_last_accepted_terminal_viability_boundary_->intent ==\n"
+        "      intent" in recorder
+    )
+    assert (
+        "rate_resolved_last_accepted_terminal_viability_boundary_->evaluation.\n"
+        "      sequence == retained.sequence" in recorder
+    )
+    assert "Rate-resolved terminal viability boundary:" in recorder
+    assert "accepted_boundary_decision=" in recorder
+    assert "authority=observation-only" in recorder
+
+    production_start = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control("
+    )
+    production_end = SOURCE.index(
+        "MpcControlCycleResult get_control(", production_start
+    )
+    production = SOURCE[production_start:production_end]
+    record = production.index(
+        "record_rate_resolved_terminal_contingency_failure_snapshot("
+    )
+    update = production.index(
+        "rate_resolved_last_accepted_terminal_viability_boundary_ ="
+    )
+    assert record < update
+    assert "ordinary_retained.terminal_stop_certified" in production

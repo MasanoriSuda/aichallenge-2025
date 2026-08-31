@@ -9528,11 +9528,7 @@ struct MPC
       rate_resolved_stop_lattice_shadow_solver_context_ == nullptr ||
       rate_resolved_stop_lattice_shadow_mailbox_ == nullptr ||
       published.selected_plan == nullptr ||
-      published.selected_plan->execution_artifact == nullptr ||
-      published.solver_source_snapshot == nullptr ||
-      !rate_resolved_artifact::same_identity(
-        published.solver_source_snapshot->identity,
-        published.selected_plan->execution_artifact->identity))
+      published.selected_plan->execution_artifact == nullptr)
     {
       invalidate_published_stop_lattice_observation();
       static rclcpp::Clock source_reject_clock{RCL_STEADY_TIME};
@@ -9545,7 +9541,8 @@ struct MPC
         published.selected_plan != nullptr ? 1 : 0,
         published.selected_plan != nullptr &&
         published.selected_plan->execution_artifact != nullptr ? 1 : 0,
-        published.solver_source_snapshot != nullptr ? 1 : 0);
+        published.selected_plan != nullptr &&
+        published.selected_plan->solver_source_snapshot != nullptr ? 1 : 0);
       return;
     }
 
@@ -9571,23 +9568,12 @@ struct MPC
         rate_resolved_stop_lattice_shadow_worker_->
         invalidate_pending_and_running());
     }
-
-    const auto stop_source = published.solver_source_snapshot;
-    const auto stop_normal = published.selected_plan->execution_artifact;
-    const auto stop_solver = rate_resolved_stop_lattice_shadow_solver_context_;
-    const auto stop_mailbox = rate_resolved_stop_lattice_shadow_mailbox_;
-    const auto submission =
-      rate_resolved_stop_lattice_shadow_worker_->submit_latest(
-      [stop_source, stop_normal, stop_solver, stop_mailbox]() {
-        auto result = rate_resolved_stop_lattice_shadow::evaluate(
-          *stop_source, *stop_normal, *stop_solver, {},
-          rate_resolved_stop_lattice_shadow::EvaluationMode::
-          DirectSevenStateOnly);
-        static_cast<void>(stop_mailbox->publish(std::move(result)));
-      });
-    if (submission.accepted) {
-      rate_resolved_stop_lattice_published_source_identity_ = identity;
-    }
+    // Publication owns only the live tactical scope.  Stop candidate
+    // generation is submitted beside each immutable current-world normal
+    // snapshot; deriving it here from a possibly old selected normal epoch
+    // was the temporal mismatch that made a physically feasible Stop appear
+    // steering-unreachable at current-world join.
+    rate_resolved_stop_lattice_published_source_identity_ = identity;
   }
 
   void record_canonical_normal_final_command(
@@ -25204,6 +25190,43 @@ struct MPC
     }
   }
 
+  bool submit_rate_resolved_current_world_stop_observation(
+    const std::shared_ptr<const rate_resolved_shadow::Snapshot> & source)
+  {
+    if (source == nullptr) {
+      return false;
+    }
+    const auto intent = source->identity.source_context.intent;
+    if (
+      intent != mpcc_contract::ControlIntent::ShiftOut &&
+      intent != mpcc_contract::ControlIntent::Pass)
+    {
+      return false;
+    }
+    if (
+      rate_resolved_stop_lattice_shadow_worker_ == nullptr ||
+      rate_resolved_stop_lattice_shadow_solver_context_ == nullptr ||
+      rate_resolved_stop_lattice_shadow_mailbox_ == nullptr ||
+      !source->replay_world.has_value() ||
+      !mpcc_architecture_snapshot::interaction_snapshot_complete(*source))
+    {
+      return false;
+    }
+    const auto stop_solver = rate_resolved_stop_lattice_shadow_solver_context_;
+    const auto stop_mailbox = rate_resolved_stop_lattice_shadow_mailbox_;
+    const auto submission =
+      rate_resolved_stop_lattice_shadow_worker_->submit_latest(
+      [source, stop_solver, stop_mailbox]() {
+        auto result =
+          rate_resolved_stop_lattice_shadow::evaluate_current_world(
+          *source, *stop_solver, {},
+          rate_resolved_stop_lattice_shadow::EvaluationMode::
+          DirectSevenStateOnly);
+        static_cast<void>(stop_mailbox->publish(std::move(result)));
+      });
+    return submission.accepted;
+  }
+
   bool submit_rate_resolved_track_cruise_shadow(
     const MpcProblem & source_problem,
     const BoundRateResolvedTrackCruiseSubmission & bound_submission,
@@ -25303,9 +25326,15 @@ struct MPC
     const auto overtake_branch_bank = rate_resolved_overtake_branch_bank_;
     const auto certified_plan_store =
       rate_resolved_track_cruise_certified_plan_store_;
+    // Both normal and Stop producers consume the same immutable current-world
+    // problem.  Sharing the snapshot avoids a second large copy while keeping
+    // their solver contexts and latest-only scheduling independent.
+    const auto current_world_snapshot =
+      std::make_shared<const rate_resolved_shadow::Snapshot>(
+      std::move(snapshot.value()));
     const auto submission =
       rate_resolved_track_cruise_shadow_worker_->submit_latest(
-      [snapshot = std::move(snapshot.value()), mailbox, solver_context,
+      [current_world_snapshot, mailbox, solver_context,
         normal_negative_solver_context, normal_positive_solver_context,
         normal_sibling_worker,
         normal_homotopy_owner, normal_branch_bank,
@@ -25318,7 +25347,7 @@ struct MPC
           physical_snapshot.reset();
         }
         auto evaluation = evaluate_rate_resolved_normal_population(
-          snapshot, std::move(physical_snapshot), solver_context,
+          *current_world_snapshot, std::move(physical_snapshot), solver_context,
           normal_negative_solver_context, normal_positive_solver_context,
           normal_sibling_worker,
           normal_homotopy_owner,
@@ -25341,6 +25370,9 @@ struct MPC
       }
       return false;
     }
+    static_cast<void>(
+      submit_rate_resolved_current_world_stop_observation(
+        current_world_snapshot));
     ++rate_resolved_track_cruise_shadow_telemetry_window_.submission_count;
     rate_resolved_track_cruise_shadow_telemetry_window_.
       replaced_pending_count += submission.replaced_pending ? 1U : 0U;

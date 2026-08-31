@@ -3473,6 +3473,28 @@ target、Mission generation、side、intentが一致するtactical scope内で�
 exact wall contact、右はtimed opponent conflictだった。したがってこの時点は物理的no-escapeであり、Stop fallbackを追加しない。
 後続Sliceは、normal ShiftOut候補がその状態へ進入する前にterminal successor viabilityを失った最初のpredecessorを監査する。
 
+#### terminal Stopのcurrent-world producer契約（2026-08-31、2025由来の暫定）
+
+ShiftOut／Passのnormal候補とterminal Stop候補は、実際にserializeされた直前commandをbindした後の同一immutable
+current-world snapshotから独立に生成する。normal artifactがpublisherを横断した後、そのartifactの古いsolver sourceへ戻って
+Stopを派生させてはならない。snapshotはnormal latest-only workerとStop latest-only workerで共有できるが、solver context、job ownership、
+mailboxは分離する。Stopはsnapshotのcontrol prediction originから最大制動velocity lawを課し、free seven-state steering、exact trajectory、
+occupancy-grid wall、timed dynamic-obstacle、terminal restを証明する。
+
+publisher側が保持するpersistent stateは現在publish中のtarget、Mission generation、side、intentからなるtactical scopeだけである。
+Stop trajectory、corridor、solver source、古いobservation cursorはpublication eventから生成しない。background Stop結果は同じtactical
+scopeであってもcurrent-world retained revalidationへ再投入し、delay prefixまたはwall／dynamic proofが不成立ならfail closedする。
+
+`output/20260831-122218/d1` decision 1576では、旧live Stopがsequence 929の古いstage zeroから生成され、current decisionで
+`steering-unreachable`となった。同一snapshotではfree seven-state Stopとcontrol-lattice Stopがexact certificateを取得したため、物理的
+Stop不可能ではなくproducer時刻不整合だった。修正後の`output/20260831-124927/d1`では、current-world Stop workerが代表windowで
+34/36および28/30をacceptedとし、build／solver／exact／wall rejectは0、旧`terminal-contingency-unavailable`は再発しなかった。
+
+後続decision 1833では現在車両からcontrol originまでのdelay prefix自体がwall collisionとなり、current-world Stopは正しく
+`delay-prefix-blocked`になった。約0.12秒後にactual-footprint margin違反が観測されたため、これはStop producerではなく、約1.9秒保持された
+ShiftOut geometryがstoppable／wall-clear領域を出るまで更新されなかった上流継続欠陥として別に監査する。Stop fallback、wall margin、
+solver toleranceで隠蔽しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

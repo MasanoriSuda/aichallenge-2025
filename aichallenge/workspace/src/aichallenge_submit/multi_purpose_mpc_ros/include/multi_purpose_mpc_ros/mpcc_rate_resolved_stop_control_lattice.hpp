@@ -45,6 +45,15 @@ StopCandidateResult build_maximum_braking_candidate(
   const persistent_osqp::PhysicalConstraintTolerance
   & solver_tolerance) noexcept;
 
+/// Impose the same solver-safe maximum-braking law directly on one immutable
+/// current-world snapshot.  The snapshot already starts after the serialized
+/// publisher predecessor and contains the exact control-delay prefix, so this
+/// variant must not rebase through an older normal execution artifact.
+StopCandidateResult build_current_world_maximum_braking_candidate(
+  const shadow::Snapshot & source,
+  const persistent_osqp::PhysicalConstraintTolerance
+  & solver_tolerance) noexcept;
+
 struct Schedule
 {
   int initial_rate_sign{};

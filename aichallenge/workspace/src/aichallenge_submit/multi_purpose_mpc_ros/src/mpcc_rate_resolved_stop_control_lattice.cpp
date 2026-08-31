@@ -94,6 +94,107 @@ double nominal_geometry_distance_squared(
   return first_delta * first_delta + second_delta * second_delta;
 }
 
+StopCandidateResult impose_maximum_braking_law(
+  shadow::Snapshot candidate,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance,
+  const char * source_description) noexcept
+{
+  if (candidate.request.states.empty() || candidate.request.inputs.empty() ||
+    candidate.request.states.size() != candidate.request.inputs.size() + 1U)
+  {
+    return reject_stop(
+      Reason::InvalidSource,
+      std::string{source_description} + " state/input shape invalid");
+  }
+  if (!candidate.replay_world.has_value()) {
+    return reject_stop(
+      Reason::ReplayWorldUnavailable,
+      std::string{source_description} + " replay world unavailable");
+  }
+
+  double minimum_acceleration_mps2 = 0.0;
+  for (const auto & input : candidate.request.inputs) {
+    const auto solver_bounds =
+      mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+      input.lower[model::kAccelerationIndex],
+      input.upper[model::kAccelerationIndex], solver_tolerance);
+    if (!solver_bounds.has_value()) {
+      return reject_stop(
+        Reason::InvalidBrakingEnvelope,
+        "maximum-braking solver inset unavailable");
+    }
+    minimum_acceleration_mps2 =
+      std::min(minimum_acceleration_mps2, solver_bounds->lower);
+  }
+
+  const double initial_velocity_mps =
+    candidate.request.initial_state[model::kVelocityIndex];
+  if (!std::isfinite(initial_velocity_mps) || initial_velocity_mps < 0.0 ||
+    !std::isfinite(minimum_acceleration_mps2) ||
+    minimum_acceleration_mps2 >= 0.0)
+  {
+    return reject_stop(
+      Reason::InvalidBrakingEnvelope,
+      std::string{"invalid "} + source_description + " braking envelope");
+  }
+
+  // Exact Stop proof owns the complete suffix through rest, rather than the
+  // shorter normal publication prefix.
+  candidate.execution_prefix_steps = candidate.request.horizon_steps;
+  double elapsed_sec = 0.0;
+  candidate.request.states.front().reference[model::kVelocityIndex] =
+    initial_velocity_mps;
+  for (std::size_t stage = 0U; stage < candidate.request.inputs.size();
+    ++stage)
+  {
+    auto & input = candidate.request.inputs[stage];
+    if (!std::isfinite(input.stage_dt_sec) || input.stage_dt_sec <= 0.0) {
+      return reject_stop(
+        Reason::InvalidBrakingEnvelope,
+        "invalid Stop stage duration");
+    }
+    const double stage_start_velocity_mps = std::max(
+      0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
+    elapsed_sec += input.stage_dt_sec;
+    const double stage_end_velocity_mps = std::max(
+      0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
+    const double required_acceleration_mps2 =
+      (stage_end_velocity_mps - stage_start_velocity_mps) /
+      input.stage_dt_sec;
+    if (required_acceleration_mps2 <
+      input.lower[model::kAccelerationIndex] - 1e-9 ||
+      required_acceleration_mps2 >
+      input.upper[model::kAccelerationIndex] + 1e-9)
+    {
+      return reject_stop(
+        Reason::InvalidBrakingEnvelope,
+        "maximum-braking Stop acceleration outside source bounds");
+    }
+    input.reference[model::kAccelerationIndex] = required_acceleration_mps2;
+    input.reference[model::kVirtualProgressSpeedIndex] =
+      stage_start_velocity_mps;
+    auto & next_state = candidate.request.states[stage + 1U];
+    next_state.reference[model::kVelocityIndex] = stage_end_velocity_mps;
+    next_state.lower[model::kVelocityIndex] = stage_end_velocity_mps;
+    next_state.upper[model::kVelocityIndex] = stage_end_velocity_mps;
+  }
+  auto & terminal = candidate.request.states.back();
+  terminal.reference[model::kVelocityIndex] = 0.0;
+  terminal.lower[model::kVelocityIndex] = 0.0;
+  terminal.upper[model::kVelocityIndex] = 0.0;
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject_stop(
+      Reason::InvalidSource,
+      std::string{source_description} + " interaction snapshot incomplete");
+  }
+
+  StopCandidateResult result;
+  result.reason = Reason::Accepted;
+  result.candidate = std::move(candidate);
+  result.detail = "accepted";
+  return result;
+}
+
 } // namespace
 
 const char * to_string(const Reason reason) noexcept
@@ -130,21 +231,6 @@ StopCandidateResult build_maximum_braking_candidate(
     return reject_stop(
       Reason::InvalidSource,
       "invalid source state/input shape");
-  }
-
-  double minimum_acceleration_mps2 = 0.0;
-  for (const auto & input : source.request.inputs) {
-    const auto solver_bounds =
-      mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
-      input.lower[model::kAccelerationIndex],
-      input.upper[model::kAccelerationIndex], solver_tolerance);
-    if (!solver_bounds.has_value()) {
-      return reject_stop(
-        Reason::InvalidBrakingEnvelope,
-        "maximum-braking solver inset unavailable");
-    }
-    minimum_acceleration_mps2 =
-      std::min(minimum_acceleration_mps2, solver_bounds->lower);
   }
 
   const auto cursor = artifact::resolve_cursor(
@@ -201,11 +287,6 @@ StopCandidateResult build_maximum_braking_candidate(
   }
 
   auto candidate = source;
-  // A normal artifact exposes only the short publisher prefix.  A Stop
-  // successor certificate must instead contain the complete trajectory up to
-  // rest; otherwise exact proof sees a still-moving prefix and cannot prove
-  // the contingency that the QP actually solved.
-  candidate.execution_prefix_steps = candidate.request.horizon_steps;
   candidate.control_prediction_origin_sec += source.publication_interval_sec;
   candidate.course_progress_origin_m = prefix_progress_m;
   candidate.request.initial_state[model::kLateralIndex] =
@@ -269,69 +350,25 @@ StopCandidateResult build_maximum_braking_candidate(
       old_control_origin_age_sec + prefix.elapsed_time_sec[sample]);
   }
 
-  const double initial_velocity_mps =
-    candidate.request.initial_state[model::kVelocityIndex];
-  if (!std::isfinite(initial_velocity_mps) || initial_velocity_mps < 0.0 ||
-    !std::isfinite(minimum_acceleration_mps2) ||
-    minimum_acceleration_mps2 >= 0.0)
-  {
-    return reject_stop(
-      Reason::InvalidBrakingEnvelope,
-      "invalid publisher-boundary braking envelope");
-  }
+  return impose_maximum_braking_law(
+    std::move(candidate), solver_tolerance, "publisher-boundary Stop");
+}
 
-  double elapsed_sec = 0.0;
-  candidate.request.states.front().reference[model::kVelocityIndex] =
-    initial_velocity_mps;
-  for (std::size_t stage = 0U; stage < candidate.request.inputs.size();
-    ++stage)
-  {
-    auto & input = candidate.request.inputs[stage];
-    if (!std::isfinite(input.stage_dt_sec) || input.stage_dt_sec <= 0.0) {
-      return reject_stop(
-        Reason::InvalidBrakingEnvelope,
-        "invalid Stop stage duration");
-    }
-    const double stage_start_velocity_mps = std::max(
-      0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
-    elapsed_sec += input.stage_dt_sec;
-    const double stage_end_velocity_mps = std::max(
-      0.0, initial_velocity_mps + minimum_acceleration_mps2 * elapsed_sec);
-    const double required_acceleration_mps2 =
-      (stage_end_velocity_mps - stage_start_velocity_mps) /
-      input.stage_dt_sec;
-    if (required_acceleration_mps2 <
-      input.lower[model::kAccelerationIndex] - 1e-9 ||
-      required_acceleration_mps2 >
-      input.upper[model::kAccelerationIndex] + 1e-9)
-    {
-      return reject_stop(
-        Reason::InvalidBrakingEnvelope,
-        "maximum-braking Stop acceleration outside source bounds");
-    }
-    input.reference[model::kAccelerationIndex] = required_acceleration_mps2;
-    input.reference[model::kVirtualProgressSpeedIndex] =
-      stage_start_velocity_mps;
-    auto & next_state = candidate.request.states[stage + 1U];
-    next_state.reference[model::kVelocityIndex] = stage_end_velocity_mps;
-    next_state.lower[model::kVelocityIndex] = stage_end_velocity_mps;
-    next_state.upper[model::kVelocityIndex] = stage_end_velocity_mps;
-  }
-  auto & terminal = candidate.request.states.back();
-  terminal.reference[model::kVelocityIndex] = 0.0;
-  terminal.lower[model::kVelocityIndex] = 0.0;
-  terminal.upper[model::kVelocityIndex] = 0.0;
-  if (!architecture::interaction_snapshot_complete(candidate)) {
+StopCandidateResult build_current_world_maximum_braking_candidate(
+  const shadow::Snapshot & source,
+  const persistent_osqp::PhysicalConstraintTolerance
+  & solver_tolerance) noexcept
+{
+  if (!architecture::interaction_snapshot_complete(source)) {
     return reject_stop(
       Reason::InvalidSource,
-      "rebased Stop interaction snapshot incomplete");
+      "current-world interaction snapshot incomplete");
   }
-
-  StopCandidateResult result;
-  result.reason = Reason::Accepted;
-  result.candidate = std::move(candidate);
-  result.detail = "accepted";
-  return result;
+  // No cursor/rebase is allowed here.  The source was built after the exact
+  // serialized predecessor and its replay prefix already ends at this
+  // control prediction origin.
+  return impose_maximum_braking_law(
+    source, solver_tolerance, "current-world Stop");
 }
 
 ScheduleResult build_schedule(

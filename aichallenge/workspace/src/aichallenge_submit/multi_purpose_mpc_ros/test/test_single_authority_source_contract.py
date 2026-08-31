@@ -2830,8 +2830,21 @@ def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
         "evaluate_rate_resolved_normal_population("
     )
     assert normal_admission >= 0
-    assert "stop_lattice_shadow_worker->submit_latest_cancelable(" not in submit
+    assert "submit_rate_resolved_current_world_stop_observation(" in submit
+    assert "std::make_shared<const rate_resolved_shadow::Snapshot>" in submit
+    assert "evaluate_current_world(" not in submit
     assert "candidate_snapshot()" not in submit
+
+    stop_submit_start = SOURCE.index(
+        "bool submit_rate_resolved_current_world_stop_observation("
+    )
+    stop_submit_end = submit_start
+    stop_submit = SOURCE[stop_submit_start:stop_submit_end]
+    assert "submit_latest(" in stop_submit
+    assert "evaluate_current_world(" in stop_submit
+    assert "DirectSevenStateOnly" in stop_submit
+    assert "solver_source_snapshot" not in stop_submit
+    assert "ExecutionArtifact" not in stop_submit
 
     publication_start = SOURCE.index(
         "void update_published_stop_lattice_observation("
@@ -2840,13 +2853,12 @@ def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
         "void record_canonical_normal_final_command(", publication_start
     )
     publication = SOURCE[publication_start:publication_end]
-    assert "published.solver_source_snapshot" in publication
-    assert "rate_resolved_artifact::same_identity(" in publication
-    assert "submit_latest(" in publication
-    assert "submit_latest_cancelable(" not in publication
-    assert "DirectSevenStateOnly" in publication
+    assert "published.solver_source_snapshot" not in publication
+    assert "submit_latest(" not in publication
+    assert "evaluate(" not in publication
     assert "same_tactical_stop_scope(" in publication
     assert "invalidate_published_stop_lattice_observation()" in publication
+    assert "rate_resolved_stop_lattice_published_source_identity_ = identity" in publication
 
     final_start = publication_end
     final_end = SOURCE.index(

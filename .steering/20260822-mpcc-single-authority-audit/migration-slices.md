@@ -1408,6 +1408,24 @@ Finish the architecture simplification instead of leaving permanent dual control
   package CTest passed 59/59. The later canonical Stop/recovery interval is a
   separate failure family and was not hidden by this Slice.
 
+- `.steering/20260831-current-world-stop-producer` removes the temporal
+  mismatch between asynchronous normal publication and terminal Stop
+  generation. The old producer copied the selected normal artifact's original
+  solver snapshot and rebased stage zero by one publisher interval even when
+  that artifact first crossed the publisher far into its horizon. Normal and
+  Stop workers now share the same immutable current-world snapshot created
+  after serialized-predecessor binding; publication owns only tactical scope
+  and never submits a historical-artifact Stop. Same-snapshot audit at frozen
+  decision 1576 accepted free seven-state and control-lattice Stops, ruling
+  out physical stop infeasibility. Build passed 25/25 and CTest 59/59. In
+  `output/20260831-124927/d1`, representative Stop windows accepted 34/36 and
+  28/30 exact candidates with zero build/solver/exact/wall rejection, and the
+  old `terminal-contingency-unavailable` did not recur. The next failure at
+  decision 1833 was instead a current physical delay-prefix wall collision,
+  followed by actual-footprint margin violation. That upstream ShiftOut
+  continuation defect is a new frozen Slice; no fallback, lease, timeout,
+  solver or clearance change belongs to this correction.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

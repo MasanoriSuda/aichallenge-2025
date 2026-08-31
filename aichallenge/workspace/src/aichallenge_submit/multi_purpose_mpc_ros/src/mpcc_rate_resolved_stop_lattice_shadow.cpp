@@ -108,16 +108,17 @@ bool same_tactical_stop_scope(
     lhs_context.execution_side_sign == rhs_context.execution_side_sign;
 }
 
-Result evaluate(
+static Result evaluate_impl(
   const shadow::Snapshot & selected_source,
-  const artifact::ExecutionArtifact & selected_normal_execution,
+  const artifact::ExecutionArtifact * selected_normal_execution,
   shadow::SolverContext & private_solver_context,
   const EvaluationControl & control,
   const EvaluationMode mode) noexcept
 {
   const auto started = SteadyClock::now();
   Result result;
-  result.source_normal_identity = selected_normal_execution.identity;
+  result.source_normal_identity = selected_normal_execution != nullptr ?
+    selected_normal_execution->identity : selected_source.identity;
   const auto finish = [&]() {
       result.total_compute_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - started).count();
@@ -131,14 +132,21 @@ Result evaluate(
         return true;
       }
       return false;
-    };
+  };
   try {
-    if (!source_identity_matches(selected_source, selected_normal_execution)) {
+    if (
+      selected_normal_execution != nullptr &&
+      !source_identity_matches(selected_source, *selected_normal_execution))
+    {
       result.detail = "selected snapshot/artifact identity mismatch";
       return finish();
     }
-    const auto stop = lattice::build_maximum_braking_candidate(
-      selected_source, selected_normal_execution,
+    const auto stop = selected_normal_execution != nullptr ?
+      lattice::build_maximum_braking_candidate(
+      selected_source, *selected_normal_execution,
+      private_solver_context.physical_constraint_tolerance()) :
+      lattice::build_current_world_maximum_braking_candidate(
+      selected_source,
       private_solver_context.physical_constraint_tolerance());
     if (!stop.accepted()) {
       result.reason = Reason::CandidateBuildRejected;
@@ -311,6 +319,28 @@ Result evaluate(
     result.detail = "unknown Stop lattice shadow exception";
     return finish();
   }
+}
+
+Result evaluate(
+  const shadow::Snapshot & selected_source,
+  const artifact::ExecutionArtifact & selected_normal_execution,
+  shadow::SolverContext & private_solver_context,
+  const EvaluationControl & control,
+  const EvaluationMode mode) noexcept
+{
+  return evaluate_impl(
+    selected_source, &selected_normal_execution, private_solver_context,
+    control, mode);
+}
+
+Result evaluate_current_world(
+  const shadow::Snapshot & current_source,
+  shadow::SolverContext & private_solver_context,
+  const EvaluationControl & control,
+  const EvaluationMode mode) noexcept
+{
+  return evaluate_impl(
+    current_source, nullptr, private_solver_context, control, mode);
 }
 
 const char * to_string(const PublishReason reason) noexcept

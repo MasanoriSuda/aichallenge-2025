@@ -757,6 +757,34 @@ TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
   EXPECT_NEAR(previous_velocity, 0.0, 1e-12);
 }
 
+TEST(MpccArchitectureComparison, CurrentWorldStopDoesNotRebaseControlOrigin)
+{
+  const auto source = stoppable_source_snapshot();
+  shadow::SolverContext solver;
+
+  const auto stop =
+    stop_lattice::build_current_world_maximum_braking_candidate(
+    source, solver.physical_constraint_tolerance());
+
+  ASSERT_TRUE(stop.accepted()) << stop.detail;
+  EXPECT_DOUBLE_EQ(
+    stop.candidate.control_prediction_origin_sec,
+    source.control_prediction_origin_sec);
+  EXPECT_DOUBLE_EQ(
+    stop.candidate.course_progress_origin_m,
+    source.course_progress_origin_m);
+  EXPECT_TRUE(stop.candidate.request.previous_input.isApprox(
+      source.request.previous_input, 0.0));
+  EXPECT_EQ(
+    stop.candidate.execution_prefix_steps,
+    stop.candidate.request.horizon_steps);
+  ASSERT_FALSE(stop.candidate.request.states.empty());
+  EXPECT_DOUBLE_EQ(
+    stop.candidate.request.states.back().lower[model::kVelocityIndex], 0.0);
+  EXPECT_DOUBLE_EQ(
+    stop.candidate.request.states.back().upper[model::kVelocityIndex], 0.0);
+}
+
 TEST(MpccArchitectureComparison, SharedStopLatticePopulationIsDeterministic)
 {
   const auto source = source_snapshot();
@@ -952,6 +980,32 @@ TEST(MpccArchitectureComparison, LiveStopShadowBuildsCertifiedObservation)
     result.certified_stop_plan->solver_source_snapshot->request.states.back().
     upper[model::kVelocityIndex],
     0.0);
+}
+
+TEST(MpccArchitectureComparison, CurrentWorldStopBuildsCertifiedObservation)
+{
+  const auto source = stoppable_source_snapshot();
+  shadow::SolverContext stop_solver;
+
+  const auto result = stop_lattice_shadow::evaluate_current_world(
+    source, stop_solver, {},
+    stop_lattice_shadow::EvaluationMode::DirectSevenStateOnly);
+
+  ASSERT_EQ(result.reason, stop_lattice_shadow::Reason::Accepted)
+    << result.detail;
+  ASSERT_TRUE(result.accepted());
+  EXPECT_TRUE(result.direct_seven_state_attempted);
+  EXPECT_TRUE(result.direct_seven_state_accepted);
+  EXPECT_EQ(result.source_normal_identity.sequence, source.identity.sequence);
+  ASSERT_NE(result.certified_stop_plan->solver_source_snapshot, nullptr);
+  EXPECT_DOUBLE_EQ(
+    result.certified_stop_plan->solver_source_snapshot->
+    control_prediction_origin_sec,
+    source.control_prediction_origin_sec);
+  EXPECT_TRUE(
+    mpcc_rate_resolved_execution_artifact::same_identity(
+      result.certified_stop_plan->solver_source_snapshot->identity,
+      result.certified_stop_plan->execution_artifact->identity));
 }
 
 TEST(MpccArchitectureComparison, LiveStopShadowStopsAfterSupersededSolve)

@@ -109,6 +109,15 @@ Result evaluate(
   const EvaluationControl & control = EvaluationControl{},
   EvaluationMode mode = EvaluationMode::DirectThenControlLattice) noexcept;
 
+/// Evaluate the Stop sibling directly from the immutable current-world
+/// snapshot submitted beside the normal population.  No historical normal
+/// execution artifact participates in candidate construction.
+Result evaluate_current_world(
+  const shadow::Snapshot & current_source,
+  shadow::SolverContext & private_solver_context,
+  const EvaluationControl & control = EvaluationControl{},
+  EvaluationMode mode = EvaluationMode::DirectThenControlLattice) noexcept;
+
 enum class PublishReason
 {
   Accepted,

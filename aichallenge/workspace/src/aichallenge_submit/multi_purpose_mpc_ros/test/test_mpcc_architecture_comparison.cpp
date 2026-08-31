@@ -729,11 +729,18 @@ TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
   ASSERT_EQ(
     stop.candidate.request.states.size(),
     stop.candidate.request.inputs.size() + 1U);
+  // The Stop producer only rebases the semantic initial state.  The common
+  // adapter is the sole owner of the corresponding stage-zero equality box.
+  const auto adapted = mpcc_rate_resolved_adapter::build(
+    stop.candidate.request, solver.physical_constraint_tolerance());
+  ASSERT_TRUE(adapted.has_value());
   EXPECT_EQ(
-    stop.candidate.request.states.front().lower,
+    adapted->problem.state_lower.head<
+      mpcc_rate_resolved_adapter::kLegacyStateDimension>(),
     stop.candidate.request.initial_state);
   EXPECT_EQ(
-    stop.candidate.request.states.front().upper,
+    adapted->problem.state_upper.head<
+      mpcc_rate_resolved_adapter::kLegacyStateDimension>(),
     stop.candidate.request.initial_state);
   double previous_velocity =
     stop.candidate.request.states.front().lower[model::kVelocityIndex];

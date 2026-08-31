@@ -99,18 +99,31 @@ TEST(LatestOnlyWorker, ReplacesPendingJobWithoutWaitingForRunningJob)
   multi_purpose_mpc_ros::LatestOnlyWorker worker;
   std::mutex mutex;
   std::condition_variable condition;
+  bool first_started = false;
   bool release_first = false;
   std::atomic<int> last_value{0};
 
   ASSERT_TRUE(worker.submit_latest([&]() {
     std::unique_lock<std::mutex> lock(mutex);
+    first_started = true;
+    condition.notify_all();
     condition.wait(lock, [&]() {return release_first;});
     last_value.store(1);
   }).accepted);
 
-  for (int attempt = 0; attempt < 100 && !worker.stats().running; ++attempt) {
-    std::this_thread::sleep_for(1ms);
+  bool observed_first_start = false;
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    observed_first_start = condition.wait_for(
+      lock, 5s, [&]() {return first_started;});
+    // A failed startup assertion must not leave the non-cancelable test job
+    // blocked while the worker destructor joins its thread.
+    if (!observed_first_start) {
+      release_first = true;
+    }
   }
+  condition.notify_all();
+  ASSERT_TRUE(observed_first_start);
   ASSERT_TRUE(worker.stats().running);
 
   ASSERT_TRUE(worker.submit_latest([&]() {last_value.store(2);}).accepted);

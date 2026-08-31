@@ -217,13 +217,9 @@ StopCandidateResult build_maximum_braking_candidate(
   candidate.request.initial_state[model::kVelocityIndex] =
     prefix.velocity_mps[prefix_index];
   candidate.request.initial_state[model::kProgressIndex] = 0.0;
-  // The semantic adapter owns state-zero equality. Rebase that equality with
-  // the publisher-boundary state; leaving the source callback's fixed box in
-  // place makes the otherwise exact successor self-contradictory before the
-  // solver is reached.
-  candidate.request.states.front().reference = candidate.request.initial_state;
-  candidate.request.states.front().lower = candidate.request.initial_state;
-  candidate.request.states.front().upper = candidate.request.initial_state;
+  // The common semantic adapter owns the state-zero equality and rebases its
+  // box from this publisher-boundary initial state.  Candidate producers must
+  // not duplicate that ownership with a second set of stage-zero bounds.
   candidate.request.current_steering_rad =
     continuation.publisher_interval_end_steering_rad;
   candidate.request.current_response_steering_rad =

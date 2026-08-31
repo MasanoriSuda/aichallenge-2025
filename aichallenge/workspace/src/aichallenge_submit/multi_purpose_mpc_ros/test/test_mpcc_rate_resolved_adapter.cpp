@@ -475,30 +475,35 @@ TEST(MpccRateResolvedAdapter, RejectsMalformedOrUnphysicalSnapshots)
   EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 
   request = curved_request();
-  request.states.front().upper[0] = -0.1;
-  EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
-
-  request = curved_request();
   request.inputs.front().lower[0] = 0.0;
   request.inputs.front().upper[0] = 0.0;
   EXPECT_FALSE(adapter::build(request, kSolverTolerance).has_value());
 }
 
-TEST(MpccRateResolvedAdapter, IdentifiesTheExactInitialStateBoundViolation)
+TEST(MpccRateResolvedAdapter, InitialStateEqualityOwnsStageZeroBounds)
 {
   auto request = curved_request();
   request.states.front().upper[model::kProgressIndex] = -0.1;
   adapter::BuildDiagnostic diagnostic;
 
-  EXPECT_FALSE(
-    adapter::build(request, kSolverTolerance, &diagnostic).has_value());
-  EXPECT_EQ(
-    diagnostic.reason, adapter::RejectReason::InitialStateOutsideBounds);
-  EXPECT_EQ(diagnostic.stage, 0);
-  EXPECT_EQ(diagnostic.element, model::kProgressIndex);
-  EXPECT_DOUBLE_EQ(diagnostic.value, 0.0);
-  EXPECT_DOUBLE_EQ(diagnostic.lower, -1.0);
-  EXPECT_DOUBLE_EQ(diagnostic.upper, -0.1);
+  const auto result = adapter::build(request, kSolverTolerance, &diagnostic);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(diagnostic.reason, adapter::RejectReason::None);
+  for (int element = 0; element < adapter::kLegacyStateDimension; ++element) {
+    EXPECT_DOUBLE_EQ(
+      result->problem.state_lower[element], request.initial_state[element]);
+    EXPECT_DOUBLE_EQ(
+      result->problem.state_upper[element], request.initial_state[element]);
+  }
+  const int future_progress =
+    model::kStateDimension + model::kProgressIndex;
+  EXPECT_DOUBLE_EQ(
+    result->problem.state_lower[future_progress],
+    request.states[1].lower[model::kProgressIndex]);
+  EXPECT_DOUBLE_EQ(
+    result->problem.state_upper[future_progress],
+    request.states[1].upper[model::kProgressIndex]);
 }
 
 TEST(MpccRateResolvedAdapter, PreservesAZeroWidthFutureStopState)

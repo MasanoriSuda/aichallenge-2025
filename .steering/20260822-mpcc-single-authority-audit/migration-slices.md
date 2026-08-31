@@ -1300,6 +1300,20 @@ Finish the architecture simplification instead of leaving permanent dual control
   1266 remains the separate single-SQP/convexification Slice and is not hidden
   by a fallback or parameter change.
 
+- `.steering/20260831-pass-terminal-stop-owner-audit` traces the first
+  post-admission Pass failure from decision 3418 back to the still-recoverable
+  decision 3396 in `output/20260831-081212/d2`. The semantic adapter applied
+  both immutable initial-state equality and a conservative future planning
+  box to stage zero, while the Stop producer carried a local workaround for
+  the same contradiction. Stage zero is now centrally owned by the measured
+  equality and the Stop-local rebase is deleted; future boxes and exact
+  physical/dynamic/terminal proof are unchanged. On the frozen earlier state,
+  persistent A fails while opposite stateless B and both bounded production
+  populations certify Bundles. The later state is already exact-wall
+  infeasible. This repairs the existing current-world producer/sibling-bank
+  path without adding a Mission resume rule, fallback, lease, grace, solver
+  tolerance or clearance change.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

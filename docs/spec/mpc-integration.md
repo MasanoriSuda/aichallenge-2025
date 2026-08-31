@@ -3351,6 +3351,24 @@ episode 3ではdecision 3379で`previous=shiftout proposed=pass effective=pass`�
 `actual footprint wall margin violated`は別のexecution tracking／wall certificate監査対象であり、本handoff契約を
 clearanceやsolver toleranceで緩和する根拠にしない。
 
+#### seven-state stage zeroの単一所有（2026-08-31、2025由来の暫定）
+
+seven-state QPのstage zeroはcontrol originで観測されたimmutable initial stateであり、initial-state equalityが唯一の
+constraint ownerである。progress-aligned wall／corridor boxは将来stateのcandidate guidanceであり、stage zeroへ重ねて
+現在車両を近似support内へ移動させる権限を持たない。実壁受入れは従来どおりcanonical nonlinear rolloutとexact
+occupancy-grid swept-footprint proofが所有する。
+
+`output/20260831-081212/d2`のdecision 3418では、measured lateral `0.943174 m`が近似上限`0.911453 m`を超えたため、旧adapterは
+persistent、stateless、rough/lattice、terminal Stopを入力最適化前にすべて`initial-state-outside-bounds`で棄却した。exact gridは
+現在footprint接触を報告しておらず、Stop producerだけには同じ矛盾を避ける局所rebaseがあった。共通adapterがstage-zero boxを
+initial state equalityへ統一し、Stop局所rebaseを削除する。future box、swept row、wall margin、solver toleranceは変更しない。
+
+修正後、decision 3418は全候補がsolver／proofへ到達したうえでexact wall contactとなり、既に回避不能な下流stateと判明した。
+一方、earlier decision 3396ではpersistent Aが不成立でもopposite stateless Bと左右production populationがterminal Stopを含む
+certified Bundleを生成した。したがってfailure familyは物理的不可能ではなく、古いMission geometryが残る間にcurrent-world
+candidateがstage-zero二重constraintで消えたproducer／lifecycle defectである。既存dual populationとsibling bankを利用し、
+新しいresume rule、lease、grace、fallbackは追加しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

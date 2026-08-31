@@ -224,18 +224,6 @@ std::optional<Result> build(
         RejectReason::InvalidInputStage, static_cast<int>(stage));
     }
   }
-  for (int element = 0; element < kLegacyStateDimension; ++element) {
-    if (
-      request.initial_state[element] < request.states.front().lower[element] ||
-      request.initial_state[element] > request.states.front().upper[element])
-    {
-      return reject(
-        RejectReason::InitialStateOutsideBounds, 0, element,
-        request.initial_state[element], request.states.front().lower[element],
-        request.states.front().upper[element]);
-    }
-  }
-
   const int state_values = model::kStateDimension * (horizon + 1);
   const int input_values = model::kInputDimension * horizon;
   Result result;
@@ -296,6 +284,21 @@ std::optional<Result> build(
       request.states[static_cast<std::size_t>(stage)].lower;
     problem.state_upper.segment<kLegacyStateDimension>(state_offset) =
       request.states[static_cast<std::size_t>(stage)].upper;
+    if (stage == 0) {
+      // x(0) is the measured state and is already owned by the initial-state
+      // equality.  Reapplying a conservative future wall/corridor box to the
+      // same immutable value can only make the QP infeasible; it cannot move
+      // the vehicle back into that box.  This previously rejected every
+      // continuation, alternate branch and Stop candidate before any input
+      // was optimized when tracking error placed the current pose just
+      // outside the progress-aligned approximation.  Future boxes, swept
+      // constraints and the downstream exact footprint certificate remain
+      // unchanged and own physical acceptance.
+      problem.state_lower.segment<kLegacyStateDimension>(state_offset) =
+        request.initial_state;
+      problem.state_upper.segment<kLegacyStateDimension>(state_offset) =
+        request.initial_state;
+    }
     // Future velocity is a predicted state, not a command crossing the
     // publisher boundary.  Its physical certificate already owns the solver
     // residual tolerance.  Applying the command inset here turns a legitimate

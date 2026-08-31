@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: autoware-build autoware-vehicle autoware-simulator autoware-request-initialpose autoware-request-control  awsim-request-start awsim-request-reset autoware-driver-zenoh autoware-driver-zenoh-rosbag \
-	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e e2e-final driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
+	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
 
 # Used by docker-compose.yml for build/eval artifact ownership.
 HOST_UID ?= $(shell id -u)
@@ -86,14 +86,35 @@ dev2 dev3 dev4: simulator
 # e2e/e2e-final mirror the upstream practice/final reference scenarios.
 e2e-single: SIM_MODE := e2e-single
 e2e-teacher: SIM_MODE := e2e-teacher
+e2e-npc-single: SIM_MODE := e2e-npc-single
+e2e-peer-audit-mpc e2e-peer-audit-student: SIM_MODE := e2e-peer
 e2e: SIM_MODE := e2e
 e2e-final: SIM_MODE := e2e-final
-e2e-single e2e e2e-final: AIC_CONTROL_METHOD := tiny_lidar_net
+e2e-single e2e-npc-single e2e e2e-final: AIC_CONTROL_METHOD := tiny_lidar_net
 e2e-teacher: AIC_CONTROL_METHOD := mpc
 e2e-single e2e-teacher e2e: AIC_VEHICLE_COUNT := 1
-e2e-single e2e-teacher e2e: simulator autoware-simulator
+# vehicle_count is the complete simulated world count for the launch contract,
+# not the number of Autoware containers started by these one-ego targets. Counting
+# both runtime NPCs prevents the single-vehicle empty-V2X producer from masking
+# privileged teacher observations.
+e2e-npc-single: AIC_VEHICLE_COUNT := 3
+e2e-single e2e-teacher e2e-npc-single e2e: simulator autoware-simulator
 	@echo "Start E2E simulation (SIM_MODE=$(SIM_MODE), controller=$(AIC_CONTROL_METHOD))"
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
+
+e2e-peer-audit-mpc e2e-peer-audit-student: simulator
+	@echo "Start deterministic 3-vehicle E2E peer gate (ego=domain 3, mode=$@)"
+	@for p in 1 2; do \
+		LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=3 AIC_CONTROL_METHOD=mpc \
+			docker compose -p $$p up -d autoware; \
+	done
+	@LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=3 AIC_VEHICLE_COUNT=3 \
+		AIC_CONTROL_METHOD=$(if $(filter e2e-peer-audit-student,$@),tiny_lidar_net,mpc) \
+		TINY_LIDAR_CKPT_PATH=$(if $(filter e2e-peer-audit-student,$@),$(TINY_LIDAR_CKPT_PATH),) \
+		docker compose -p 3 up -d autoware
+	@echo "Audit only: current MPC peer runs are not admitted as E2E teacher data."
+	@echo "Domain 2 is the configured low-speed peer; inspect the domain 3 bag."
+	@echo "To stop: make down"
 
 e2e-final: simulator
 	@echo "Start 4-vehicle E2E final reference (Autoware on ROS_DOMAIN_ID 1..4)"

@@ -82,3 +82,17 @@ make e2e-single \
 
 override未指定時はpackage同梱のproduction重みを使います。存在しないpathや、
 `tiny_lidar_net`以外のcontrollerとの組み合わせは起動前に拒否されます。
+
+### Closed-loop run admission
+
+単車・NPC試走後は、正の加速度指令を出しながら実車速がほぼ0へ固着していないかをbag
+から確認します。これは接触や壁拘束を「センサ停止」と誤認しないための最低限の自動gate
+です。Finish、接触、周回時間の判定を置き換えるものではありません。
+
+```bash
+docker compose run --rm --no-deps autoware-command \
+  python3 /aichallenge/ml_workspace/tiny_lidar_net/analyze_e2e_run.py \
+  /output/<run>/d1/rosbag2_autoware \
+  --output /output/<run>/d1/e2e-run-analysis.json \
+  --fail-on-stall
+```

@@ -7,3 +7,4 @@ omegaconf
 hydra-core
 tensorboard
 jaxtyping
+rosbags

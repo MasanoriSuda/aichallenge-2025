@@ -74,6 +74,32 @@ start・3周・LiDAR onの条件でcontrollerだけをMPCへ切り替え、local
 追加する。IMU/GNSSは教師controllerとAWSIM infrastructureだけが利用し、student model
 featureへは追加しない。抽出時は`--label-source mpc`を指定する。
 
+同梱AWSIMのruntime NPCはV2X fanoutへ参加しないため、既存MPCをそのままNPC教師には
+できない。3台固定配置のMPC/Tiny比較は`make e2e-peer-audit-mpc`と
+`make e2e-peer-audit-student`で行えるが、2026-09-01時点のMPC試走では3 domainとも
+wall/terminal証明切れ、Emergency StopまたはRecoveryへ波及した。このworldのMPC出力を
+教師へ自動採用しない。TinyLidarNetはV2X/IMUを購読せずLiDARだけからsteeringを推論する。
+将来教師候補として再利用する場合も、Finish、接触なし、長時間停止なし、Recoveryなしを
+run単位で証明してから抽出する。
+
+本番形状のruntime NPCに対する学生専用gateは`make e2e-npc-single`とする。runtime NPCの
+MPC教師を捏造せず、peerで学習した回避がLiDAR外観差へ汎化するかを別Acceptanceとして
+測る。
+
+`make e2e-npc-single`による2026-09-01の初回baselineでは、約150秒後に実速度が
+0.02 m/sまで低下した一方、TinyLidarNetは+0.6 m/s2を指令し、前方LiDARは約8 m
+空いていた。これは意図的停止ではなく接触・壁拘束後も固定加速を続けた失敗として扱う。
+
+bag単位の固着監査は次で行う。既知の単車完走runでは正加速中固着0秒、初回NPC runでは
+70.56秒を検出した。GUIの見た目ではなく、このJSONとAWSIM Finish/接触結果を合わせて
+candidate admissionを判断する。
+
+```bash
+docker compose run --rm --no-deps autoware-command \
+  python3 /aichallenge/ml_workspace/tiny_lidar_net/analyze_e2e_run.py \
+  /output/<run>/d1/rosbag2_autoware --fail-on-stall
+```
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

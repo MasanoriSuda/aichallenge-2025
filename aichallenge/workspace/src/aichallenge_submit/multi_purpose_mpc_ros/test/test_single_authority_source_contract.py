@@ -3278,9 +3278,26 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
     current_world_resolution = retained.index(
         "const auto resolution = overtake_sibling_adoption::resolve("
     )
-    retained_candidate = retained.index("if (candidate_plan != nullptr)")
+    retained_candidate = retained.index(
+        "if (\n"
+        "      candidate_plan != nullptr &&\n"
+        "      candidate_tactical_identity_reason =="
+    )
     assert current_world_resolution < retained_candidate
     assert "selected_epoch_plan != nullptr" in retained
+    assert "direct_tactical_identity_reason" in retained
+    assert "live_overtake_identity.target_id" in retained
+    assert "live_overtake_identity.mission_generation" in retained
+    assert "live_overtake_identity.side_sign" in retained
+    assert (
+        retained.count(
+            "tactical_identity_reason ==\n"
+            "      rate_resolved_execution_source::RejectReason::None"
+        )
+        >= 3
+    )
+    assert "attach_tactical_identity_diagnostics(sibling_evaluation)" in retained
+    assert "attach_tactical_identity_diagnostics(final_evaluation)" in retained
 
     behavior_start = SOURCE.index(
         "const bool published_stateless_overtake_execution_source ="

@@ -7736,6 +7736,18 @@ struct RateResolvedRetainedShadowEvaluation
   std::uint64_t candidate_sequence{};
   std::uint64_t published_bundle_source_sequence{};
   std::uint64_t executed_sequence{};
+  bool candidate_tactical_identity_checked{false};
+  rate_resolved_execution_source::RejectReason
+  candidate_tactical_identity_reason{
+    rate_resolved_execution_source::RejectReason::None};
+  bool published_bundle_tactical_identity_checked{false};
+  rate_resolved_execution_source::RejectReason
+  published_bundle_tactical_identity_reason{
+    rate_resolved_execution_source::RejectReason::None};
+  bool executed_tactical_identity_checked{false};
+  rate_resolved_execution_source::RejectReason
+  executed_tactical_identity_reason{
+    rate_resolved_execution_source::RejectReason::None};
   bool candidate_attempted{false};
   bool published_bundle_source_attempted{false};
   bool executed_attempted{false};
@@ -26820,9 +26832,64 @@ struct MPC
       same_plan_identity(candidate_plan, published_bundle_plan);
     const bool published_bundle_is_executed =
       same_plan_identity(published_bundle_plan, executed_plan);
+    const bool active_overtake_intent =
+      evaluation_intent == mpcc_contract::ControlIntent::ShiftOut ||
+      evaluation_intent == mpcc_contract::ControlIntent::Pass;
+    const auto live_overtake_identity =
+      current_overtake_sibling_adoption_live_state();
+    const auto direct_tactical_identity_reason = [&] (
+      const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & plan)
+      {
+        if (!active_overtake_intent) {
+          return rate_resolved_execution_source::RejectReason::None;
+        }
+        if (plan == nullptr || plan->execution_artifact == nullptr) {
+          return rate_resolved_execution_source::RejectReason::MissingPlan;
+        }
+        const auto plan_intent =
+          plan->execution_artifact->identity.source_context.intent;
+        const bool phase_compatible =
+          plan_intent == evaluation_intent ||
+          (evaluation_intent == mpcc_contract::ControlIntent::Pass &&
+          plan_intent == mpcc_contract::ControlIntent::ShiftOut);
+        if (!phase_compatible) {
+          return rate_resolved_execution_source::RejectReason::IntentMismatch;
+        }
+        return rate_resolved_execution_source::build(
+          rate_resolved_execution_source::Request{
+            plan.get(), plan_intent, live_overtake_identity.target_id,
+            live_overtake_identity.mission_generation,
+            live_overtake_identity.side_sign}).reason;
+      };
+    const auto candidate_tactical_identity_reason =
+      direct_tactical_identity_reason(candidate_plan);
+    const auto published_bundle_tactical_identity_reason =
+      direct_tactical_identity_reason(published_bundle_plan);
+    const auto executed_tactical_identity_reason =
+      direct_tactical_identity_reason(executed_plan);
+    const auto attach_tactical_identity_diagnostics = [&] (
+      RateResolvedRetainedShadowEvaluation & evaluation)
+      {
+        evaluation.candidate_tactical_identity_checked =
+          active_overtake_intent && candidate_plan != nullptr;
+        evaluation.candidate_tactical_identity_reason =
+          candidate_tactical_identity_reason;
+        evaluation.published_bundle_tactical_identity_checked =
+          active_overtake_intent && published_bundle_plan != nullptr;
+        evaluation.published_bundle_tactical_identity_reason =
+          published_bundle_tactical_identity_reason;
+        evaluation.executed_tactical_identity_checked =
+          active_overtake_intent && executed_plan != nullptr;
+        evaluation.executed_tactical_identity_reason =
+          executed_tactical_identity_reason;
+      };
     on_trajectory_connector::Result connector_result;
     const bool connector_attempted =
       candidate_plan != nullptr && executed_plan != nullptr &&
+      candidate_tactical_identity_reason ==
+      rate_resolved_execution_source::RejectReason::None &&
+      executed_tactical_identity_reason ==
+      rate_resolved_execution_source::RejectReason::None &&
       !candidate_is_executed && model != nullptr &&
       model->reference_path != nullptr;
     if (connector_attempted) {
@@ -26919,9 +26986,6 @@ struct MPC
     // certified same-epoch sibling before considering continuity artifacts.
     // The returned token still defers every tactical mutation until the exact
     // sibling command crosses the canonical publisher boundary.
-    const bool active_overtake_intent =
-      evaluation_intent == mpcc_contract::ControlIntent::ShiftOut ||
-      evaluation_intent == mpcc_contract::ControlIntent::Pass;
     overtake_sibling_adoption::Reason current_world_sibling_reason{
       overtake_sibling_adoption::Reason::InactiveExecution};
     if (
@@ -26973,12 +27037,17 @@ struct MPC
           resolution.reason;
         sibling_evaluation.overtake_sibling_adoption_token =
           resolution.token;
+        attach_tactical_identity_diagnostics(sibling_evaluation);
         attach_connector(sibling_evaluation);
         return finish_retained(std::move(sibling_evaluation));
       }
     }
 
-    if (candidate_plan != nullptr) {
+    if (
+      candidate_plan != nullptr &&
+      candidate_tactical_identity_reason ==
+      rate_resolved_execution_source::RejectReason::None)
+    {
       final_evaluation = evaluate_plan(
         candidate_plan,
         candidate_is_published_bundle ?
@@ -27031,6 +27100,7 @@ struct MPC
       final_evaluation.executed_sequence = executed_sequence;
       final_evaluation.overtake_sibling_adoption_reason =
         current_world_sibling_reason;
+      attach_tactical_identity_diagnostics(final_evaluation);
       attach_connector(final_evaluation);
       if (final_evaluation.production_authority.has_value()) {
         final_evaluation.selected_from_executed =
@@ -27043,6 +27113,8 @@ struct MPC
 
     if (
       published_bundle_plan != nullptr &&
+      published_bundle_tactical_identity_reason ==
+      rate_resolved_execution_source::RejectReason::None &&
       !candidate_is_published_bundle)
     {
       auto published_bundle_evaluation = evaluate_plan(
@@ -27066,6 +27138,7 @@ struct MPC
       if (published_bundle_evaluation.production_authority.has_value()) {
         published_bundle_evaluation.selected_from_published_bundle_source =
           true;
+        attach_tactical_identity_diagnostics(published_bundle_evaluation);
         attach_connector(published_bundle_evaluation);
         return finish_retained(std::move(published_bundle_evaluation));
       }
@@ -27074,6 +27147,8 @@ struct MPC
 
     if (
       executed_plan != nullptr && !candidate_is_executed &&
+      executed_tactical_identity_reason ==
+      rate_resolved_execution_source::RejectReason::None &&
       !published_bundle_is_executed)
     {
       const auto candidate_reason = final_evaluation.candidate_reason;
@@ -27178,6 +27253,7 @@ struct MPC
       executed_evaluation.executed_sequence = executed_sequence;
       executed_evaluation.selected_from_executed =
         executed_evaluation.production_authority.has_value();
+      attach_tactical_identity_diagnostics(executed_evaluation);
       final_evaluation = std::move(executed_evaluation);
     }
 
@@ -27284,12 +27360,14 @@ struct MPC
           rate_resolved_normal_homotopy_owner_->select(
             source_identity_only, side_sign);
         }
+        attach_tactical_identity_diagnostics(branch_evaluation);
         attach_connector(branch_evaluation);
         return finish_retained(std::move(branch_evaluation));
       }
     }
     final_evaluation.overtake_sibling_adoption_reason =
       current_world_sibling_reason;
+    attach_tactical_identity_diagnostics(final_evaluation);
     attach_connector(final_evaluation);
     return finish_retained(std::move(final_evaluation));
   }
@@ -28217,6 +28295,8 @@ struct MPC
       "blocked_by:%s/continuation_model:%s/scope:%s/exact:%s/"
       "proved_stages:%lu/"
       "follow_generation:%lu/follow_states:%lu/min_follow_gap:%.3f, "
+      "tactical_identity=candidate:%d:%s/published_bundle:%d:%s/"
+      "executed:%d:%s, "
       "selection=candidate:%d/seq:%lu/reason:%s/cursor:%s/"
       "cursor_elapsed:%.6f/control:%.6f/progress_delta:%.6f/"
       "steering_delta:%.6f/steering_step:%.6f/"
@@ -28354,6 +28434,15 @@ struct MPC
       static_cast<unsigned long>(
         window.last_retained.follow_checked_state_count),
       window.last_retained.follow_minimum_gap_m,
+      window.last_retained.candidate_tactical_identity_checked ? 1 : 0,
+      rate_resolved_execution_source::to_string(
+        window.last_retained.candidate_tactical_identity_reason),
+      window.last_retained.published_bundle_tactical_identity_checked ? 1 : 0,
+      rate_resolved_execution_source::to_string(
+        window.last_retained.published_bundle_tactical_identity_reason),
+      window.last_retained.executed_tactical_identity_checked ? 1 : 0,
+      rate_resolved_execution_source::to_string(
+        window.last_retained.executed_tactical_identity_reason),
       window.last_retained.candidate_attempted ? 1 : 0,
       static_cast<unsigned long>(window.last_retained.candidate_sequence),
       rate_resolved_retained::to_string(

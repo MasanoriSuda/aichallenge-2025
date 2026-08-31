@@ -1337,6 +1337,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   `steering-unreachable` case is a separate frozen reachability Slice rather
   than a reason to add a grace, fallback, solver or clearance change.
 
+- `.steering/20260831-return-canonical-target-producer-contract` repairs the
+  producer/consumer contradiction at atomic Pass-to-Return handoff. Stateless
+  Return already required a canonical current-epoch target tube to prove its
+  stay-ahead/stay-behind merge topology, while the sole canonical producer
+  excluded Return intent and made every proposal structurally build-rejected.
+  Return now consumes only a complete current-world target tube; the passing
+  stage corridor remains exclusive to ShiftOut/Pass. In bounded
+  `output/20260831-100351`, the old rejection was absent in all three domains,
+  D1 and D2 each completed `Pass -> Return -> Idle`, and D2 logged a solved,
+  exact-wall-accepted, dynamic-clear Return Bundle. No Mission rule, fallback,
+  lease, timeout, solver setting or clearance changed. Later target-stale and
+  wall-margin episodes are separate frozen failure families.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

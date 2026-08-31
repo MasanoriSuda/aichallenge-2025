@@ -3401,6 +3401,23 @@ async provenance defectである。
 ShiftOutからPassへのproducer遷移も発生した。Pass候補の`steering-unreachable`はtransportとは別のcandidate reachabilityとして
 明示されており、grace、lease、fallback、solver toleranceまたはclearance変更で隠していない。
 
+#### Returnのcanonical target tube producer契約（2026-08-31、2025由来の暫定）
+
+Return用のstateless current-world candidateは、合流軌道がtargetの前方を維持するか後方へ戻るかを判定するため、
+current observation epochでsealされたcanonical target tubeを必須とする。Passのstage corridorは選択済み追い越しsideの
+経路表現であり、Returnのtarget証明として流用しない。Returnは完全な`CurrentTargetTube`だけを受け取り、欠損時はsolver前に
+fail closedする。
+
+`output/20260831-093415/d1`ではPassが3秒以上Returnを要求したが、旧producerがReturn intentを対象外にしていたため、
+すべてのGate-A proposalが`canonical current-epoch target tube unavailable`でbuild-rejectedとなった。atomic handoffは正しく
+旧Passを維持したものの、decision 1839ではそのPassもterminal／wall可行性を失っていた。同decisionのA/B/C/Dと独立非線形
+oracleはいずれも不成立であり、後段のsteering／wall条件を変更してはならない。
+
+canonical dynamic-obstacle producerへReturnを追加した`output/20260831-100351`では、旧rejectは全domainで0件となり、D1とD2が
+それぞれ`Pass -> Return -> Idle`を完遂した。D2 Returnは`return-rejoin`、seven-state solve、exact physical wall、timed dynamic
+proofをすべて通過した。これはtarget予測を追加した修正ではなく、既存の単一producerと既存consumerのintent契約を整合させた
+ものである。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

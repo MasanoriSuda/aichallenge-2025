@@ -380,12 +380,14 @@ struct DynamicObstacleContractResolution {
 };
 
 /// Select the current-world target tube independently from the legacy stage
-/// corridor owner.  Cruise/Follow use a stay-behind disjunction, while
-/// ShiftOut/Pass can switch to the selected lateral side.  In both cases the
-/// obstacle belongs to the canonical QP before current-world certification;
-/// an upstream Mission-path exclusion certificate cannot certify the
-/// independently optimized MPCC trajectory, and the verifier must not be the
-/// first layer that discovers the opponent.
+/// corridor owner. Cruise/Follow use a stay-behind disjunction,
+/// ShiftOut/Pass can switch to the selected lateral side, and Return uses the
+/// current target tube to prove its stay-ahead/stay-behind merge topology.
+/// Only ShiftOut/Pass may consume the passing stage corridor. In every intent
+/// the obstacle belongs to the canonical QP before current-world
+/// certification; an upstream Mission-path exclusion certificate cannot
+/// certify the independently optimized MPCC trajectory, and the verifier
+/// must not be the first layer that discovers the opponent.
 DynamicObstacleContractResolution resolve_dynamic_obstacle_contract(
   const DynamicObstacleContractRequest & request) noexcept;
 

@@ -114,6 +114,29 @@ TEST(
     orchestrator::DynamicObstacleContractSource::CurrentTargetTube);
 }
 
+TEST(
+  OvertakeExecutionOrchestrator,
+  DynamicObstacleContractUsesOnlyCurrentTargetTubeForReturn)
+{
+  orchestrator::DynamicObstacleContractRequest request;
+  request.canonical_normal_scope_active = true;
+  request.intent = contract::ControlIntent::Return;
+  request.stage_corridor_target_bound_effective = true;
+  request.stage_corridor_contract_complete = true;
+  request.current_target_tube_complete = true;
+
+  auto result = orchestrator::resolve_dynamic_obstacle_contract(request);
+  EXPECT_TRUE(result.active);
+  EXPECT_EQ(
+    result.source,
+    orchestrator::DynamicObstacleContractSource::CurrentTargetTube);
+
+  request.current_target_tube_complete = false;
+  result = orchestrator::resolve_dynamic_obstacle_contract(request);
+  EXPECT_FALSE(result.active);
+  EXPECT_EQ(result.source, orchestrator::DynamicObstacleContractSource::None);
+}
+
 TEST(OvertakeExecutionOrchestrator, TreatsDynamicEscapeAndGapPlannerAsOneChain)
 {
   orchestrator::AuthorityRequest request;

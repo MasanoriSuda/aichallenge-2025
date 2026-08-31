@@ -399,9 +399,39 @@ enum class PassTransitionAdmissionReason
 const char * pass_transition_admission_reason_name(
   PassTransitionAdmissionReason reason) noexcept;
 
+struct PassTransitionBoundaryState
+{
+  bool observed{false};
+  std::string target_id;
+  std::uint64_t mission_generation{};
+  int side_sign{};
+};
+
+struct PassTransitionBoundaryRequest
+{
+  bool shiftout_active{false};
+  bool completion_observed{false};
+  std::string target_id;
+  std::uint64_t mission_generation{};
+  int side_sign{};
+};
+
+struct PassTransitionBoundaryResolution
+{
+  PassTransitionBoundaryState state;
+  bool ready{false};
+};
+
+/// Rendezvous state for a physical ShiftOut boundary and its asynchronous
+/// current-world Pass successor. It retains only the identity-scoped boundary
+/// fact; no path, certificate, timeout or execution authority is retained.
+PassTransitionBoundaryResolution resolve_pass_transition_boundary(
+  const PassTransitionBoundaryState & previous,
+  const PassTransitionBoundaryRequest & request);
+
 struct PassTransitionAdmissionRequest
 {
-  bool shiftout_complete{false};
+  bool shiftout_boundary_ready{false};
   bool dynamic_horizon_available{false};
   bool physical_horizon_available{false};
   bool proposal_complete{false};

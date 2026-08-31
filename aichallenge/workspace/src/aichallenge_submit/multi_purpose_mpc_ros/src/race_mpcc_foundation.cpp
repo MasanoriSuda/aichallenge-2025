@@ -172,7 +172,7 @@ PassTransitionAdmission resolve_pass_transition_admission(
   const auto reject = [](const PassTransitionAdmissionReason reason) {
       return PassTransitionAdmission{false, reason};
     };
-  if (!request.shiftout_complete) {
+  if (!request.shiftout_boundary_ready) {
     return reject(PassTransitionAdmissionReason::Inactive);
   }
   if (!request.dynamic_horizon_available) {
@@ -212,6 +212,36 @@ PassTransitionAdmission resolve_pass_transition_admission(
     return reject(PassTransitionAdmissionReason::CurrentWorldRejected);
   }
   return {true, PassTransitionAdmissionReason::Admitted};
+}
+
+PassTransitionBoundaryResolution resolve_pass_transition_boundary(
+  const PassTransitionBoundaryState & previous,
+  const PassTransitionBoundaryRequest & request)
+{
+  const bool identity_valid =
+    !request.target_id.empty() && request.mission_generation != 0U &&
+    (request.side_sign == -1 || request.side_sign == 1);
+  if (!request.shiftout_active || !identity_valid) {
+    return {};
+  }
+
+  const bool previous_matches =
+    previous.observed && previous.target_id == request.target_id &&
+    previous.mission_generation == request.mission_generation &&
+    previous.side_sign == request.side_sign;
+  if (previous_matches) {
+    return {previous, true};
+  }
+  if (!request.completion_observed) {
+    return {};
+  }
+
+  PassTransitionBoundaryState state;
+  state.observed = true;
+  state.target_id = request.target_id;
+  state.mission_generation = request.mission_generation;
+  state.side_sign = request.side_sign;
+  return {state, true};
 }
 
 namespace

@@ -1350,6 +1350,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   lease, timeout, solver setting or clearance changed. Later target-stale and
   wall-margin episodes are separate frozen failure families.
 
+- `.steering/20260831-pass-gate-a-rendezvous` repairs the asynchronous
+  ShiftOut-to-Pass producer/consumer boundary. Physical ShiftOut completion
+  and a current-world certified Pass result previously had to occur in the
+  same 25 ms callback; valid events in different callbacks were discarded and
+  ShiftOut could persist until target loss. The controller now retains only an
+  identity-scoped monotonic boundary fact while every Pass trajectory and
+  certificate remains freshly rebuilt and joined. In
+  `output/20260831-102636/d2`, completion arrived without a proposal, a fresh
+  proposal arrived 28 ms later, and the episode completed
+  `ShiftOut -> Pass -> Return -> Idle`. No timeout, lease, fallback, solver or
+  clearance change was introduced. Independent wall/corridor failures remain
+  later integration-quality debt.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

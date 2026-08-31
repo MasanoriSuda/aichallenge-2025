@@ -161,7 +161,7 @@ TEST(RaceMpccFoundation, ReturnTransitionRejectsStaleOrWrongIdentity)
 TEST(RaceMpccFoundation, PassTransitionRequiresCertifiedExactEncounter)
 {
   race::PassTransitionAdmissionRequest request;
-  request.shiftout_complete = true;
+  request.shiftout_boundary_ready = true;
   request.dynamic_horizon_available = true;
   request.physical_horizon_available = true;
   request.proposal_complete = true;
@@ -183,7 +183,7 @@ TEST(RaceMpccFoundation, PassTransitionRequiresCertifiedExactEncounter)
 TEST(RaceMpccFoundation, PassTransitionRejectsHorizonsWithoutAuthority)
 {
   race::PassTransitionAdmissionRequest request;
-  request.shiftout_complete = true;
+  request.shiftout_boundary_ready = true;
   request.dynamic_horizon_available = true;
   request.physical_horizon_available = true;
 
@@ -197,7 +197,7 @@ TEST(RaceMpccFoundation, PassTransitionRejectsHorizonsWithoutAuthority)
 TEST(RaceMpccFoundation, PassTransitionRejectsWrongSuccessorIntent)
 {
   race::PassTransitionAdmissionRequest request;
-  request.shiftout_complete = true;
+  request.shiftout_boundary_ready = true;
   request.dynamic_horizon_available = true;
   request.physical_horizon_available = true;
   request.proposal_complete = true;
@@ -214,6 +214,59 @@ TEST(RaceMpccFoundation, PassTransitionRejectsWrongSuccessorIntent)
 
   EXPECT_FALSE(result.admitted);
   EXPECT_EQ(result.reason, race::PassTransitionAdmissionReason::IntentMismatch);
+}
+
+TEST(RaceMpccFoundation, PassBoundaryRendezvousSurvivesAsyncProposalDelay)
+{
+  race::PassTransitionBoundaryState state;
+  auto resolution = race::resolve_pass_transition_boundary(
+    state, race::PassTransitionBoundaryRequest{
+      true, true, "d2", 7U, 1});
+  ASSERT_TRUE(resolution.ready);
+  ASSERT_TRUE(resolution.state.observed);
+
+  resolution = race::resolve_pass_transition_boundary(
+    resolution.state, race::PassTransitionBoundaryRequest{
+      true, false, "d2", 7U, 1});
+  EXPECT_TRUE(resolution.ready);
+  EXPECT_EQ(resolution.state.target_id, "d2");
+  EXPECT_EQ(resolution.state.mission_generation, 7U);
+  EXPECT_EQ(resolution.state.side_sign, 1);
+
+  race::PassTransitionAdmissionRequest admission;
+  admission.shiftout_boundary_ready = resolution.ready;
+  admission.dynamic_horizon_available = true;
+  admission.physical_horizon_available = true;
+  admission.proposal_complete = true;
+  admission.current_world_certified = true;
+  admission.proposal_intent = contract::ControlIntent::Pass;
+  admission.current_target_id = "d2";
+  admission.proposal_target_id = "d2";
+  admission.current_mission_generation = 7U;
+  admission.proposal_mission_generation = 7U;
+  admission.current_side_sign = 1;
+  admission.proposal_side_sign = 1;
+  EXPECT_TRUE(race::resolve_pass_transition_admission(admission).admitted);
+}
+
+TEST(RaceMpccFoundation, PassBoundaryRendezvousCannotCrossEncounterIdentity)
+{
+  auto resolution = race::resolve_pass_transition_boundary(
+    {}, race::PassTransitionBoundaryRequest{
+      true, true, "d2", 7U, -1});
+  ASSERT_TRUE(resolution.ready);
+
+  resolution = race::resolve_pass_transition_boundary(
+    resolution.state, race::PassTransitionBoundaryRequest{
+      true, false, "d3", 7U, -1});
+  EXPECT_FALSE(resolution.ready);
+  EXPECT_FALSE(resolution.state.observed);
+
+  resolution = race::resolve_pass_transition_boundary(
+    {}, race::PassTransitionBoundaryRequest{
+      false, true, "d2", 7U, -1});
+  EXPECT_FALSE(resolution.ready);
+  EXPECT_FALSE(resolution.state.observed);
 }
 
 TEST(RaceMpccFoundation, FormatsAllFourHomotopiesWithShadowAuthority)

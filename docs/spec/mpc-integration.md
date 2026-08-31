@@ -3418,6 +3418,21 @@ canonical dynamic-obstacle producerへReturnを追加した`output/20260831-1003
 proofをすべて通過した。これはtarget予測を追加した修正ではなく、既存の単一producerと既存consumerのintent契約を整合させた
 ものである。
 
+#### ShiftOut完了とPass Gate-Aの非同期rendezvous（2026-08-31、2025由来の暫定）
+
+物理的なShiftOut完了とbackground workerが生成するcurrent-world Pass proposalは独立したcausal eventであり、同じ25 ms callbackに
+同時出現することを要求しない。ShiftOut完了はtarget ID、Mission generation、selected sideへ束縛した単調なboundary factとして
+記録する。別callbackでproposalが到着しても、このidentityが一致し、かつそのcallbackでproposalのcurrent-world／physical proofが
+freshに成立した場合だけPassへ遷移する。
+
+boundary factは軌道、corridor、certificate、時刻leaseを持たず、ShiftOutを離れる、新しいShiftOutへ入る、sideを再選択する、または
+encounter identityが変わると消去する。したがって非同期接続のためにstale artifactを保持せず、proposal不在時はcertified ShiftOutを
+維持する既存atomic authority契約も変えない。
+
+`output/20260831-100351/d2` episode 2では、完了callbackと認証済みPass callbackがずれたため、旧実装は約8.38秒ShiftOutへ残り
+targetを失った。修正後の`output/20260831-102636/d2`では`completion=1/1, proposal=0`を一周期保持し、約28 ms後のfresh proposalで
+`ShiftOut -> Pass -> Return -> Idle`を完遂した。別sideの後続episodeへboundary factが漏れないことも確認した。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

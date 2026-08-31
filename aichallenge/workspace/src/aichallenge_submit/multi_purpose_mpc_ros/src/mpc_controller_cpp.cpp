@@ -3213,6 +3213,7 @@ struct OvertakeLineState
   bool pass_contact_rearward_completion_was_active{false};
   bool shiftout_fresh_horizon_wait_active{false};
   int shiftout_fresh_horizon_replan_count{0};
+  race_mpcc::PassTransitionBoundaryState shiftout_pass_boundary;
   double pass_horizon_fallback_start_sec{std::numeric_limits<double>::quiet_NaN()};
   double pass_horizon_fallback_start_distance{0.0};
   bool target_bound_execution_replan_hold_active{false};
@@ -31032,6 +31033,15 @@ private:
       overtake_line_state_.follow_prepare_cause = FollowPrepareCause::Unspecified;
     }
     overtake_line_state_.phase = next_phase;
+    // A ShiftOut boundary belongs only to one uninterrupted
+    // target/generation/side encounter. Entering or leaving ShiftOut starts a
+    // new rendezvous; no successor trajectory or certificate is retained.
+    if (
+      previous_phase != OvertakeLinePhase::ShiftOut ||
+      next_phase != OvertakeLinePhase::ShiftOut)
+    {
+      overtake_line_state_.shiftout_pass_boundary = {};
+    }
     overtake_line_state_.return_reacquire_policy =
       next_phase == OvertakeLinePhase::Return ?
       return_reacquire_policy : ReturnReacquirePolicy::FinishReturn;
@@ -31245,6 +31255,7 @@ private:
     overtake_line_state_.target_ey = current_ey;
     overtake_line_state_.phase_traveled_m = 0.0;
     overtake_line_state_.phase_last_update_sec = now_sec;
+    overtake_line_state_.shiftout_pass_boundary = {};
     overtake_line_state_.pass_front_overlap_exclusion_latched = false;
     overtake_line_state_.pass_front_cap_release_active = false;
     overtake_line_state_.pass_current_overlap_since_sec =
@@ -40804,9 +40815,21 @@ private:
     const bool shiftout_complete =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
       shiftout_completion.complete;
+    const auto pass_transition_boundary =
+      race_mpcc::resolve_pass_transition_boundary(
+      overtake_line_state_.shiftout_pass_boundary,
+      race_mpcc::PassTransitionBoundaryRequest{
+        overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
+        shiftout_complete,
+        overtake_line_state_.target_vehicle_id,
+        overtake_line_state_.mission_generation,
+        overtake_line_state_.pass_side_sign});
+    overtake_line_state_.shiftout_pass_boundary =
+      pass_transition_boundary.state;
+    const bool shiftout_boundary_ready = pass_transition_boundary.ready;
     const bool pass_entry_execution_horizon_required =
       line_cfg.pass_entry_physical_gate_enabled &&
-      committed_pass_horizon_enabled && shiftout_complete;
+      committed_pass_horizon_enabled && shiftout_boundary_ready;
     bool pass_entry_execution_horizon_available = true;
     double pass_entry_execution_max_lateral_accel_mps2 = 0.0;
     std::string pass_entry_execution_horizon_reason = "not required";
@@ -40953,7 +40976,7 @@ private:
       overtake_line_state_.shiftout_pass_entry_physical_hold_active;
     const bool pass_entry_gate_at_shiftout_boundary =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
-      (shiftout_complete || pass_entry_gate_was_active);
+      (shiftout_boundary_ready || pass_entry_gate_was_active);
     const bool pass_entry_gate_in_early_pass =
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
       overtake_mission_pass_elapsed(now_sec) <=
@@ -41102,7 +41125,7 @@ private:
     const auto pass_transition_admission =
       race_mpcc::resolve_pass_transition_admission(
       race_mpcc::PassTransitionAdmissionRequest{
-        shiftout_complete,
+        shiftout_boundary_ready,
         fresh_dynamic_horizon_available,
         pass_entry_execution_horizon_available,
         pass_gate_a_proposal.has_value() && pass_gate_a_proposal->complete(),
@@ -41118,7 +41141,7 @@ private:
         overtake_line_state_.pass_side_sign,
         pass_gate_a_proposal.has_value() ?
         pass_gate_a_proposal->side_sign : 0});
-    if (shiftout_complete) {
+    if (shiftout_boundary_ready) {
       if (pass_entry_physical_hold_active) {
         // Keep ShiftOut ownership. A bounded, physically revalidated lateral
         // hold is built below while the rolling planner searches again.
@@ -41137,12 +41160,15 @@ private:
             RCLCPP_INFO(
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine Pass authority deferred before phase mutation: "
-              "target=%s, generation=%lu, side=%d, proposal=%d/%lu, "
+              "target=%s, generation=%lu, side=%d, completion=%d/%d, "
+              "proposal=%d/%lu, "
               "reason=%s, action=retain-certified-shiftout, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               static_cast<unsigned long>(
                 overtake_line_state_.mission_generation),
               overtake_line_state_.pass_side_sign,
+              shiftout_complete ? 1 : 0,
+              shiftout_boundary_ready ? 1 : 0,
               pass_gate_a_proposal.has_value() ? 1 : 0,
               static_cast<unsigned long>(
                 pass_gate_a_proposal.has_value() ?
@@ -44309,7 +44335,7 @@ private:
       std::max(0.0, overtake_line_state_.phase_traveled_m);
     const bool target_bound_shiftout_freeze =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
-      !shiftout_complete;
+      !shiftout_boundary_ready;
     double target_bound_hold_max_sec = std::max(
       0.0,
       target_bound_shiftout_freeze ?

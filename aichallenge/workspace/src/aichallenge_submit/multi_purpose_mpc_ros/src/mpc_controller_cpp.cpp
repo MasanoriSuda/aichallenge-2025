@@ -6467,6 +6467,37 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
     evaluation.solver.detail = detail.str();
   }
   if (
+    physical_result.outcome !=
+    rate_resolved_physical_wall::Outcome::Accepted &&
+    mpcc_architecture_snapshot::interaction_snapshot_complete(snapshot))
+  {
+    std::ostringstream failure_detail;
+    failure_detail
+      << "outer exact physical wall proof rejected/outcome="
+      << rate_resolved_physical_wall::to_string(physical_result.outcome)
+      << "/reason="
+      << mpcc_contract::physical_wall_certificate_reason_name(
+      physical_result.diagnostic.reason)
+      << "/stage=" << physical_result.diagnostic.stage_index
+      << "/detail=" << physical_result.detail;
+    const auto recorded = mpcc_architecture_snapshot::record_proof_failure(
+      snapshot, mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
+      "outer-exact-physical-wall-rejected", failure_detail.str());
+    if (
+      recorded.status ==
+      mpcc_architecture_snapshot::RecordStatus::Written)
+    {
+      evaluation.solver.detail += ", architecture_snapshot=" +
+        recorded.snapshot_file.generic_string();
+    } else if (
+      recorded.status ==
+      mpcc_architecture_snapshot::RecordStatus::IoFailure)
+    {
+      evaluation.solver.detail += ", architecture_snapshot_error=" +
+        recorded.detail;
+    }
+  }
+  if (
     physical_result.outcome ==
     rate_resolved_physical_wall::Outcome::Accepted)
   {

@@ -3908,6 +3908,25 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
     assert "mpcc_architecture_snapshot::record_proof_failure(" not in production
 
 
+def test_outer_exact_wall_failure_is_frozen_in_planning_worker() -> None:
+    """A solved QP rejected by exact proof must be replayable, not patched."""
+
+    evaluator_start = SOURCE.index(
+        "RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline("
+    )
+    evaluator_end = SOURCE.index(
+        "struct RateResolvedCurrentWorldPopulationEvaluation", evaluator_start
+    )
+    evaluator = SOURCE[evaluator_start:evaluator_end]
+    recorder = evaluator.index(
+        "mpcc_architecture_snapshot::record_proof_failure("
+    )
+    assert "physical_result.outcome !=" in evaluator
+    assert "interaction_snapshot_complete(snapshot)" in evaluator
+    assert '"outer-exact-physical-wall-rejected"' in evaluator[recorder:]
+    assert "certified_plan_store->replace" not in evaluator[:recorder]
+
+
 def test_terminal_failure_pairs_last_accepted_same_source_before_overwrite() -> None:
     """The viable boundary is observation-only and cannot consume failure state."""
 

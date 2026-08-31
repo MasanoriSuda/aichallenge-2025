@@ -65,9 +65,9 @@ RecordResult record_failure(
   std::filesystem::path{"mpcc_architecture_snapshots"}) noexcept;
 
 /// Persist a complete immutable interaction at a physical-proof failure
-/// boundary which has no rejected QP in the current callback.  This is the
-/// canonical capture path for retained terminal-contingency failures.  It has
-/// no solver, Store, mailbox or publisher side effect.
+/// boundary which has no rejected QP.  This is the canonical capture path for
+/// outer exact-proof and retained terminal-contingency failures.  It has no
+/// solver, Store, mailbox or publisher side effect.
 RecordResult record_proof_failure(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   PipelineStage pipeline_stage,

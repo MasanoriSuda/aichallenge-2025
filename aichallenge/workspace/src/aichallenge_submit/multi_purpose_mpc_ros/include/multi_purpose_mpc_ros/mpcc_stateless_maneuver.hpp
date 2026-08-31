@@ -114,6 +114,9 @@ enum class CandidateKind
   MidPhysicalDiagonal,
   EncounterBoundaryPhysicalDiagonal,
   LateExactDisjunction,
+  NormalSteeringReachableLattice,
+  NormalMidLattice,
+  NormalBoundaryLattice,
   ReturnRejoin,
 };
 
@@ -188,11 +191,11 @@ Result build_lattice(
   int pass_side_sign, int first_pass_side_stage,
   int first_ahead_stage) noexcept;
 
-/// Architecture-audit-only Cruise/Follow lattice member.  It starts from the
-/// same stateless current-world normal-avoidance seed as B, then seals one
+/// Data-only Cruise/Follow schedule member.  It starts from the same stateless
+/// current-world normal-avoidance seed as the direct candidate, then seals one
 /// complete side/ahead disjunction schedule and a smooth lateral reference.
-/// It has no Store, mailbox, publisher or production call site.
-Result build_normal_avoidance_lattice(
+/// It has no Store, retained state, command or publisher surface.
+Result build_normal_avoidance_schedule(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   std::uint64_t source_interaction_fingerprint,
   int pass_side_sign, int first_pass_side_stage,
@@ -235,9 +238,10 @@ CandidateSet build_bounded_candidates(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   int pass_side_sign) noexcept;
 
-/// Bounded current-world Cruise/Follow avoidance population. It contains at
-/// most one direct candidate per side and does not solve, certify, retain or
-/// publish.
+/// Bounded current-world Cruise/Follow avoidance population. Each side starts
+/// with its direct candidate and may add at most three deduplicated smooth
+/// schedules derived from the measured steering state and prediction
+/// boundary. It does not solve, certify, retain or publish.
 CandidateSet build_normal_avoidance_candidates(
   const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
 

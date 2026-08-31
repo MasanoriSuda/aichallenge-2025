@@ -1323,7 +1323,9 @@ def test_rate_resolved_preentry_gate_shadow_uses_explicit_intent_without_authori
     assert "branch_bank->replace(source, nullptr, nullptr)" in (
         normal_avoidance_population
     )
-    assert '"/evaluated_primary=1/candidate_count="' in normal_avoidance_population
+    assert '"/evaluated_primary="' in normal_avoidance_population
+    assert "std::to_string(primary.candidate_count)" in normal_avoidance_population
+    assert '"/candidate_count="' in normal_avoidance_population
     assert "selected_terminal_progress_m" not in normal_avoidance_population
     assert "selected_terminal_velocity_mps" not in normal_avoidance_population
     assert "better_certified" not in normal_avoidance_population

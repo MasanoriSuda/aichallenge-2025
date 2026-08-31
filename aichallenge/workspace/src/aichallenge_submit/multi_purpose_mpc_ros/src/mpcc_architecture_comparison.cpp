@@ -1433,7 +1433,7 @@ ArmResult evaluate_normal_avoidance_lattice_population(
       ahead_stage <= horizon; ++ahead_stage)
     {
       ++attempted;
-      const auto candidate = maneuver::build_normal_avoidance_lattice(
+      const auto candidate = maneuver::build_normal_avoidance_schedule(
         source, source_fingerprint, side, transition_stage, ahead_stage);
       ArmResult evaluated;
       if (!candidate.seed.has_value()) {
@@ -1605,6 +1605,62 @@ ArmResult evaluate_production_population(
   }
   best.candidate_count = attempted;
   best.detail = std::string{"no certified current-world candidate/best="} +
+    best.candidate_source + "/" + best.detail;
+  return best;
+}
+
+ArmResult evaluate_normal_production_population(
+  const Arm arm, const shadow::Snapshot & source,
+  const std::uint64_t source_fingerprint, const int side)
+{
+  const auto population = maneuver::build_normal_avoidance_candidates(source);
+  if (
+    population.reason != maneuver::RejectReason::Accepted ||
+    population.candidates.empty())
+  {
+    const auto stage =
+      population.reason == maneuver::RejectReason::TerminalSuccessorUnavailable ?
+      Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+    return rejected_arm(
+      arm, stage, source_fingerprint,
+      std::string{maneuver::to_string(population.reason)} + ": " +
+      population.detail);
+  }
+  shadow::SolverContext solver_context;
+  ArmResult best = rejected_arm(
+    arm, Stage::CandidateRejected, source_fingerprint,
+    "bounded normal production population was not evaluated");
+  int best_rank = -1;
+  std::size_t attempted = 0U;
+  for (const auto & candidate : population.candidates) {
+    if (candidate.seed.pass_side_sign != side) {
+      continue;
+    }
+    ++attempted;
+    const auto successor = resolve_audit_terminal_successor(
+      candidate.seed.solver_snapshot);
+    auto evaluated = evaluate_arm(
+      arm, candidate.seed.solver_snapshot, source_fingerprint,
+      candidate.seed.candidate_fingerprint, successor,
+      candidate.seed.solver_snapshot.
+      dynamic_obstacle_forced_first_pass_side_stage,
+      candidate.seed.solver_snapshot.
+      dynamic_obstacle_forced_first_ahead_stage,
+      &solver_context);
+    evaluated.candidate_source = maneuver::to_string(candidate.kind);
+    evaluated.candidate_count = attempted;
+    const int rank = evidence_rank(evaluated.stage);
+    if (rank > best_rank) {
+      best_rank = rank;
+      best = std::move(evaluated);
+    }
+    if (best.stage == Stage::Accepted) {
+      best.detail += std::string{"/candidate="} + best.candidate_source;
+      return best;
+    }
+  }
+  best.candidate_count = attempted;
+  best.detail = std::string{"no certified bounded normal candidate/best="} +
     best.candidate_source + "/" + best.detail;
   return best;
 }
@@ -1844,6 +1900,13 @@ Report compare(
         report.arms.push_back(evaluate_normal_avoidance_lattice_population(
           arm, source, source_fingerprint, side,
           kOfflineNormalSqpDepth));
+      }
+      for (const auto & [arm, side] :
+        {std::pair{Arm::ProductionLeftG, 1},
+         std::pair{Arm::ProductionRightG, -1}})
+      {
+        report.arms.push_back(evaluate_normal_production_population(
+          arm, source, source_fingerprint, side));
       }
       return report;
     }

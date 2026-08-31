@@ -6605,6 +6605,7 @@ private:
 struct RateResolvedNormalBranchEvaluation
 {
   int side_sign{};
+  std::size_t candidate_count{};
   RateResolvedPipelineEvaluation pipeline;
   bool certified{false};
   std::string source{"none"};
@@ -6624,31 +6625,64 @@ bool rate_resolved_normal_branch_certified(
 
 RateResolvedNormalBranchEvaluation evaluate_rate_resolved_normal_branch(
   const rate_resolved_physical_wall::Snapshot & physical_source,
-  const stateless_maneuver::Candidate & candidate,
+  const std::vector<stateless_maneuver::Candidate> & candidates,
   const std::shared_ptr<rate_resolved_shadow::SolverContext> & solver_context)
 {
   RateResolvedNormalBranchEvaluation branch;
-  branch.side_sign = candidate.seed.pass_side_sign;
-  branch.source = branch.side_sign > 0 ?
+  if (candidates.empty()) {
+    branch.pipeline.solver = rate_resolved_shadow::make_rejected_result(
+      physical_source.identity.artifact,
+      rate_resolved_shadow::Outcome::BuildRejected,
+      physical_source.identity.artifact.snapshot_sec, 0.0,
+      "normal avoidance side population unavailable");
+    return branch;
+  }
+  branch.side_sign = candidates.front().seed.pass_side_sign;
+  const std::string branch_source = branch.side_sign > 0 ?
     "normal-avoidance-positive" : "normal-avoidance-negative";
+  branch.source = branch_source;
   if (solver_context == nullptr) {
     branch.pipeline.solver = rate_resolved_shadow::make_rejected_result(
-      candidate.seed.solver_snapshot.identity,
+      candidates.front().seed.solver_snapshot.identity,
       rate_resolved_shadow::Outcome::BuildRejected,
-      candidate.seed.solver_snapshot.identity.snapshot_sec, 0.0,
+      candidates.front().seed.solver_snapshot.identity.snapshot_sec, 0.0,
       "normal avoidance solver context unavailable");
     return branch;
   }
-  auto physical = physical_source;
-  physical.identity.artifact = candidate.seed.solver_snapshot.identity;
+  const auto evidence_rank = [](const RateResolvedPipelineEvaluation & value) {
+      if (rate_resolved_normal_branch_certified(value)) return 5;
+      if (value.dynamic.has_value() && value.dynamic->valid) return 4;
+      if (value.physical.has_value()) return 3;
+      if (value.solver.solved) return 2;
+      return value.solver.solve_attempted ? 1 : 0;
+    };
   const std::shared_ptr<rate_resolved_certified::Store> observation_only_store;
-  branch.pipeline = evaluate_rate_resolved_pipeline(
-    candidate.seed.solver_snapshot,
-    std::optional<rate_resolved_physical_wall::Snapshot>{std::move(physical)},
-    solver_context, observation_only_store,
-    &candidate.seed.solver_snapshot);
-  branch.certified =
-    rate_resolved_normal_branch_certified(branch.pipeline);
+  int best_rank = -1;
+  for (const auto & candidate : candidates) {
+    ++branch.candidate_count;
+    auto physical = physical_source;
+    physical.identity.artifact = candidate.seed.solver_snapshot.identity;
+    auto evaluated = evaluate_rate_resolved_pipeline(
+      candidate.seed.solver_snapshot,
+      std::optional<rate_resolved_physical_wall::Snapshot>{
+        std::move(physical)},
+      solver_context, observation_only_store,
+      &candidate.seed.solver_snapshot);
+    const int rank = evidence_rank(evaluated);
+    if (rank > best_rank) {
+      best_rank = rank;
+      branch.pipeline = std::move(evaluated);
+      branch.source = branch_source + "/" +
+        stateless_maneuver::to_string(candidate.kind);
+    }
+    if (rate_resolved_normal_branch_certified(branch.pipeline)) {
+      branch.certified = true;
+      break;
+    }
+  }
+  branch.pipeline.solver.detail = branch.source + "/evaluated=" +
+    std::to_string(branch.candidate_count) + ", pipeline=" +
+    branch.pipeline.solver.detail;
   return branch;
 }
 
@@ -6918,18 +6952,16 @@ evaluate_rate_resolved_normal_avoidance_population(
   const int preferred_side = homotopy_owner != nullptr ?
     homotopy_owner->preferred_side(source) :
     source.identity.source_context.dynamic_obstacle_side_sign;
-  const stateless_maneuver::Candidate * negative_candidate = nullptr;
-  const stateless_maneuver::Candidate * positive_candidate = nullptr;
+  std::vector<stateless_maneuver::Candidate> negative_candidates;
+  std::vector<stateless_maneuver::Candidate> positive_candidates;
   for (const auto & candidate : population.candidates) {
     if (candidate.seed.pass_side_sign < 0) {
-      negative_candidate = &candidate;
+      negative_candidates.push_back(candidate);
     } else if (candidate.seed.pass_side_sign > 0) {
-      positive_candidate = &candidate;
+      positive_candidates.push_back(candidate);
     }
   }
-  result.candidate_count =
-    static_cast<std::size_t>(negative_candidate != nullptr) +
-    static_cast<std::size_t>(positive_candidate != nullptr);
+  result.candidate_count = population.candidates.size();
 
   // The preferred branch is the primary producer. It is evaluated by the
   // latest-only normal worker and may publish as soon as its own complete proof
@@ -6938,20 +6970,20 @@ evaluate_rate_resolved_normal_avoidance_population(
   int primary_side = preferred_side == -1 || preferred_side == 1 ?
     preferred_side : 1;
   if (
-    (primary_side < 0 && negative_candidate == nullptr) ||
-    (primary_side > 0 && positive_candidate == nullptr))
+    (primary_side < 0 && negative_candidates.empty()) ||
+    (primary_side > 0 && positive_candidates.empty()))
   {
     primary_side = -primary_side;
   }
-  const auto * primary_candidate = primary_side < 0 ?
-    negative_candidate : positive_candidate;
-  const auto * sibling_candidate = primary_side < 0 ?
-    positive_candidate : negative_candidate;
+  const auto * primary_candidates = primary_side < 0 ?
+    &negative_candidates : &positive_candidates;
+  const auto * sibling_candidates = primary_side < 0 ?
+    &positive_candidates : &negative_candidates;
   const auto primary_context = primary_side < 0 ?
     negative_solver_context : positive_solver_context;
   const auto sibling_context = primary_side < 0 ?
     positive_solver_context : negative_solver_context;
-  if (primary_candidate == nullptr) {
+  if (primary_candidates->empty()) {
     result.detail = "normal avoidance primary candidate unavailable";
     result.pipeline = rejected_pipeline(
       rate_resolved_shadow::Outcome::BuildRejected, result.detail);
@@ -6964,12 +6996,12 @@ evaluate_rate_resolved_normal_avoidance_population(
   const auto coordinator =
     std::make_shared<RateResolvedNormalBranchPublicationCoordinator>(
     source, primary_side, homotopy_owner, certified_plan_store, branch_bank,
-    sibling_candidate != nullptr);
+    !sibling_candidates->empty());
 
   LatestOnlyWorker::SubmitResult sibling_submission;
-  if (sibling_candidate != nullptr && sibling_worker != nullptr) {
+  if (!sibling_candidates->empty() && sibling_worker != nullptr) {
     auto sibling_physical = physical_source;
-    auto sibling = *sibling_candidate;
+    auto sibling = *sibling_candidates;
     sibling_submission = sibling_worker->submit_latest(
       [sibling_physical = std::move(sibling_physical),
         sibling = std::move(sibling), sibling_context, coordinator]() mutable {
@@ -6981,15 +7013,15 @@ evaluate_rate_resolved_normal_avoidance_population(
       });
   }
   if (
-    sibling_candidate != nullptr &&
+    !sibling_candidates->empty() &&
     !sibling_submission.accepted)
   {
     static_cast<void>(
-      coordinator->complete(sibling_candidate->seed.pass_side_sign, nullptr));
+      coordinator->complete(-primary_side, nullptr));
   }
 
   auto primary = evaluate_rate_resolved_normal_branch(
-    physical_source, *primary_candidate, primary_context);
+    physical_source, *primary_candidates, primary_context);
   const auto primary_plan = primary.certified ?
     primary.pipeline.certified_plan.plan : nullptr;
   const auto publication = coordinator->complete(
@@ -6997,7 +7029,7 @@ evaluate_rate_resolved_normal_avoidance_population(
   result.pipeline = std::move(primary.pipeline);
   result.candidate_source = primary.source;
 
-  const std::string sibling_submit_detail = sibling_candidate == nullptr ?
+  const std::string sibling_submit_detail = sibling_candidates->empty() ?
     "not-required" :
     !sibling_submission.accepted ? "rejected" :
     sibling_submission.replaced_pending ? "accepted-replaced-pending" :
@@ -7009,7 +7041,8 @@ evaluate_rate_resolved_normal_avoidance_population(
     "primary-certified/" : "primary-rejected/"} + result.candidate_source +
     "/preferred=" + std::to_string(preferred_side) +
     "/primary=" + std::to_string(primary_side) +
-    "/evaluated_primary=1/candidate_count=" +
+    "/evaluated_primary=" + std::to_string(primary.candidate_count) +
+    "/candidate_count=" +
     std::to_string(result.candidate_count) +
     "/sibling_submit=" + sibling_submit_detail +
     "/initial_bank=" + initial_bank_detail +

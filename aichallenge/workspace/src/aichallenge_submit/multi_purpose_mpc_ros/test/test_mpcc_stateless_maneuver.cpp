@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -863,9 +864,20 @@ TEST(MpccStatelessManeuver, FollowAvoidanceKeepsNormalIntentAndIdentity)
 
   const auto population = build_normal_avoidance_candidates(source);
   EXPECT_EQ(population.reason, RejectReason::Accepted) << population.detail;
-  ASSERT_EQ(population.candidates.size(), 2U);
-  EXPECT_EQ(population.candidates[0].seed.pass_side_sign, 1);
-  EXPECT_EQ(population.candidates[1].seed.pass_side_sign, -1);
+  ASSERT_GE(population.candidates.size(), 2U);
+  EXPECT_LE(population.candidates.size(), 8U);
+  EXPECT_TRUE(std::any_of(
+    population.candidates.begin(), population.candidates.end(),
+    [](const Candidate & candidate) {
+      return candidate.seed.pass_side_sign > 0 &&
+             candidate.kind == CandidateKind::DirectSide;
+    }));
+  EXPECT_TRUE(std::any_of(
+    population.candidates.begin(), population.candidates.end(),
+    [](const Candidate & candidate) {
+      return candidate.seed.pass_side_sign < 0 &&
+             candidate.kind == CandidateKind::DirectSide;
+    }));
   for (const auto & candidate : population.candidates) {
     EXPECT_EQ(
       candidate.seed.solver_snapshot.identity.source_context.intent,
@@ -923,10 +935,13 @@ TEST(MpccStatelessManeuver, NormalAvoidancePopulationSupportsCruiseAndFollow)
     const auto population = build_normal_avoidance_candidates(source);
 
     EXPECT_EQ(population.reason, RejectReason::Accepted) << population.detail;
-    ASSERT_EQ(population.candidates.size(), 2U);
-    EXPECT_EQ(population.candidates[0].seed.pass_side_sign, 1);
-    EXPECT_EQ(population.candidates[1].seed.pass_side_sign, -1);
+    ASSERT_GE(population.candidates.size(), 2U);
+    EXPECT_LE(population.candidates.size(), 8U);
+    std::size_t positive_count = 0U;
+    std::size_t negative_count = 0U;
     for (const auto & candidate : population.candidates) {
+      positive_count += candidate.seed.pass_side_sign > 0 ? 1U : 0U;
+      negative_count += candidate.seed.pass_side_sign < 0 ? 1U : 0U;
       EXPECT_EQ(
         candidate.seed.solver_snapshot.identity.source_context.intent,
         intent);
@@ -934,10 +949,12 @@ TEST(MpccStatelessManeuver, NormalAvoidancePopulationSupportsCruiseAndFollow)
         candidate.seed.solver_snapshot.identity.source_context.execution_side_sign,
         0);
     }
+    EXPECT_GT(positive_count, 0U);
+    EXPECT_GT(negative_count, 0U);
   }
 }
 
-TEST(MpccStatelessManeuver, NormalAvoidanceLatticeIsSealedAndAuditOnly)
+TEST(MpccStatelessManeuver, NormalAvoidanceScheduleIsSealedAndDataOnly)
 {
   auto source = make_source();
   source.identity.source_context.intent =
@@ -950,7 +967,7 @@ TEST(MpccStatelessManeuver, NormalAvoidanceLatticeIsSealedAndAuditOnly)
   const auto fingerprint =
     mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
 
-  const auto lattice = build_normal_avoidance_lattice(
+  const auto lattice = build_normal_avoidance_schedule(
     source, fingerprint, 1, 0, source.request.horizon_steps);
 
   EXPECT_EQ(lattice.reason, RejectReason::Accepted) << lattice.detail;

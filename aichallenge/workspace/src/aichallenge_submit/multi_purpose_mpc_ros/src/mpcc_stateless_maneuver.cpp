@@ -290,6 +290,12 @@ const char * to_string(const CandidateKind kind) noexcept
       return "encounter-boundary-physical-diagonal";
     case CandidateKind::LateExactDisjunction:
       return "late-exact-disjunction";
+    case CandidateKind::NormalSteeringReachableLattice:
+      return "normal-steering-reachable-lattice";
+    case CandidateKind::NormalMidLattice:
+      return "normal-mid-lattice";
+    case CandidateKind::NormalBoundaryLattice:
+      return "normal-boundary-lattice";
     case CandidateKind::ReturnRejoin:
       return "return-rejoin";
   }
@@ -840,7 +846,7 @@ Result build_lattice(
   return result;
 }
 
-Result build_normal_avoidance_lattice(
+Result build_normal_avoidance_schedule(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,
   const int pass_side_sign, const int first_pass_side_stage,
@@ -1372,8 +1378,89 @@ CandidateSet build_normal_avoidance_candidates(
                << to_string(built.reason) << '/' << built.detail << ';';
       continue;
     }
+    const auto & direct_snapshot = built.seed->solver_snapshot;
+    const int horizon = direct_snapshot.request.horizon_steps;
+    int first_valid_stage = -1;
+    int last_contiguous_valid_stage = -1;
+    for (int stage = 0; stage < horizon; ++stage) {
+      const bool valid =
+        static_cast<std::size_t>(stage) <
+        direct_snapshot.dynamic_obstacle_stages.size() &&
+        direct_snapshot.dynamic_obstacle_stages[
+        static_cast<std::size_t>(stage)].valid;
+      if (valid && first_valid_stage < 0) {
+        first_valid_stage = stage;
+        last_contiguous_valid_stage = stage;
+      } else if (valid && last_contiguous_valid_stage == stage - 1) {
+        last_contiguous_valid_stage = stage;
+      } else if (first_valid_stage >= 0) {
+        break;
+      }
+    }
+    const int ahead_stage =
+      last_contiguous_valid_stage >= first_valid_stage &&
+      last_contiguous_valid_stage + 1 < horizon ?
+      last_contiguous_valid_stage + 1 : horizon;
+    std::vector<int> appended_transition_stages;
+    std::optional<Candidate> steering_reachable_candidate;
+    std::optional<Candidate> midpoint_candidate;
+    std::optional<Candidate> boundary_candidate;
+    const auto append_schedule = [&source, &population, side, ahead_stage,
+        &appended_transition_stages](
+        const int transition_stage, const CandidateKind kind,
+        std::optional<Candidate> & destination) {
+        if (
+          transition_stage < 0 || transition_stage >= ahead_stage ||
+          std::find(
+            appended_transition_stages.begin(),
+            appended_transition_stages.end(), transition_stage) !=
+          appended_transition_stages.end())
+        {
+          return;
+        }
+        auto schedule = build_normal_avoidance_schedule(
+          source, population.source_interaction_fingerprint, side,
+          transition_stage, ahead_stage);
+        if (!schedule.seed.has_value()) {
+          return;
+        }
+        appended_transition_stages.push_back(transition_stage);
+        destination.emplace(
+          Candidate{kind, std::move(schedule.seed.value())});
+      };
+
+    const auto steering_reachable_stage =
+      steering_reachable_full_side_stage(
+      direct_snapshot, side, first_valid_stage);
+    if (steering_reachable_stage.has_value()) {
+      append_schedule(
+        steering_reachable_stage.value(),
+        CandidateKind::NormalSteeringReachableLattice,
+        steering_reachable_candidate);
+    }
+    const int latest_transition_stage = ahead_stage - 2;
+    const int midpoint_stage = first_valid_stage >= 0 ?
+      first_valid_stage +
+      (latest_transition_stage - first_valid_stage) / 2 : -1;
+    append_schedule(
+      midpoint_stage, CandidateKind::NormalMidLattice,
+      midpoint_candidate);
+    append_schedule(
+      latest_transition_stage, CandidateKind::NormalBoundaryLattice,
+      boundary_candidate);
+
     population.candidates.push_back(
       Candidate{CandidateKind::DirectSide, std::move(built.seed.value())});
+    if (steering_reachable_candidate.has_value()) {
+      population.candidates.push_back(
+        std::move(steering_reachable_candidate.value()));
+    }
+    if (midpoint_candidate.has_value()) {
+      population.candidates.push_back(std::move(midpoint_candidate.value()));
+    }
+    if (boundary_candidate.has_value()) {
+      population.candidates.push_back(std::move(boundary_candidate.value()));
+    }
   }
   if (population.candidates.empty()) {
     population.reason = RejectReason::CandidateSealUnavailable;
@@ -1383,7 +1470,7 @@ CandidateSet build_normal_avoidance_candidates(
   }
   population.reason = RejectReason::Accepted;
   population.detail =
-    std::string{"accepted/count="} +
+    std::string{"accepted/bounded-normal-avoidance/count="} +
     std::to_string(population.candidates.size());
   return population;
 }

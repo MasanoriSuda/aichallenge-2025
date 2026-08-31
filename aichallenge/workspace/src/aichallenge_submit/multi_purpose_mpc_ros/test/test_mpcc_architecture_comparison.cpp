@@ -490,7 +490,7 @@ TEST(MpccArchitectureComparison, FollowComparesPersistentThroughOfflineLattice)
   const auto report = compare(recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 7U);
+  ASSERT_EQ(report.arms.size(), 9U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
@@ -498,6 +498,8 @@ TEST(MpccArchitectureComparison, FollowComparesPersistentThroughOfflineLattice)
   EXPECT_EQ(report.arms[4].arm, Arm::RoughRightC);
   EXPECT_EQ(report.arms[5].arm, Arm::OfflineLeftD);
   EXPECT_EQ(report.arms[6].arm, Arm::OfflineRightD);
+  EXPECT_EQ(report.arms[7].arm, Arm::ProductionLeftG);
+  EXPECT_EQ(report.arms[8].arm, Arm::ProductionRightG);
   EXPECT_NE(report.arms[1].stage, Stage::CandidateRejected) << report.arms[1].detail;
   EXPECT_NE(report.arms[2].stage, Stage::CandidateRejected) << report.arms[2].detail;
   EXPECT_NE(report.arms[1].candidate_fingerprint, 0U);
@@ -516,7 +518,7 @@ TEST(MpccArchitectureComparison, CruiseComparesCapturedBranchAndCurrentWorldSide
   const auto report = compare(recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 7U);
+  ASSERT_EQ(report.arms.size(), 9U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
@@ -524,6 +526,8 @@ TEST(MpccArchitectureComparison, CruiseComparesCapturedBranchAndCurrentWorldSide
   EXPECT_EQ(report.arms[4].arm, Arm::RoughRightC);
   EXPECT_EQ(report.arms[5].arm, Arm::OfflineLeftD);
   EXPECT_EQ(report.arms[6].arm, Arm::OfflineRightD);
+  EXPECT_EQ(report.arms[7].arm, Arm::ProductionLeftG);
+  EXPECT_EQ(report.arms[8].arm, Arm::ProductionRightG);
   EXPECT_NE(report.arms[1].stage, Stage::CandidateRejected) << report.arms[1].detail;
   EXPECT_NE(report.arms[2].stage, Stage::CandidateRejected) << report.arms[2].detail;
   EXPECT_NE(report.arms[1].candidate_fingerprint, 0U);

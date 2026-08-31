@@ -3522,6 +3522,31 @@ wall proof不成立、rough Cとoffline Dはtransition stage 6で成立した。
 frozen Missionを約1.3秒保持した後のactual-footprint wall違反は別のpost-admission geometry／lifecycle defectであり、到達候補、
 wall margin、Stop fallbackの追加で隠蔽しない。
 
+#### 認証済みterminal contingencyのpublisher authority（2026-08-31、2025由来の暫定）
+
+ShiftOut／Pass問題から生成したmaximum-braking Stopは、immutable problem、solution、target、homotopyのprovenanceとして元の
+normal intentを保持する。一方、そのexact trajectoryとcommandがsingle publisherを横断した時点の外部authorityは`Stop`である。
+provenanceの`ShiftOut`／`Pass`をそのままpublisher authorityへ流用してはならない。
+
+production resultは`certified_terminal_contingency_selected`を明示し、publisher境界で次を同時に行う。
+
+- commandとproblemの内部identityは元のnormal intentのまま保持する。
+- `published_authority_intent`は`Stop`へ解決する。
+- terminal contingencyをnormal executed planまたはpublished Bundle sourceとして記録しない。
+- Stop trajectoryを次のStop-lattice生成元にしない。
+- normal executed／published clockを破棄し、既存candidate bankはcurrent-world revalidationを必須として保持する。
+- fresh normal authorityがcurrent-world joinするまでは既存atomic admissionが`Stop`を維持する。
+
+`output/20260831-131649/d1` decision 1609のA/B/C/D再比較では、persistent、stateless左右、rough/lattice、offline multi-SQP、
+production左右の全forward armがwall／dynamic／terminal proofで不成立だった。一方、独立current-world Stop latticeだけがcertifyされ、
+旧実装はこれを`authority=canonical-normal`としてpublishしたため、5 callback後に古いnormal sourceが再選択された。これは
+candidate generation、single-SQP、clearanceまたはStop生成の問題ではなく、proof provenanceとpublisher authorityの混同である。
+
+修正後は純粋契約関数で外部authorityを解決し、単体・ownershipテストでStopがnormal execution evidenceへ昇格しないことを固定する。
+短時間run `output/20260831-134900`では同じterminal-contingency bridge自体は自然発火しなかったため、このrunを直接の動的再現証拠とは
+しない。別経路のexternal Stopについては、fresh normal joinがない間`previous=stop`を維持し、古いnormal artifactを再実行しない
+atomic挙動を確認した。新しいtimeout、lease、fallback、solver／wall parameterは追加していない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

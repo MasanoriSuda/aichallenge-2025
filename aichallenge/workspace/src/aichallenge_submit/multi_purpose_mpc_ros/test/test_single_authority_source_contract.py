@@ -1075,6 +1075,68 @@ def test_last_published_intent_is_a_publication_ledger() -> None:
     ]
 
 
+def test_certified_terminal_contingency_publishes_stop_not_normal_evidence() -> None:
+    """A proved Stop suffix may not masquerade as retained ShiftOut/Pass."""
+
+    retained_start = SOURCE.index("struct RateResolvedRetainedShadowEvaluation")
+    retained_end = SOURCE.index("struct RateResolvedCommandShadowTelemetryWindow")
+    retained = SOURCE[retained_start:retained_end]
+    assert "certified_terminal_contingency_selected" in retained
+
+    pending_start = SOURCE.index("struct CanonicalNormalPendingActuation")
+    pending_end = SOURCE.index("struct PublishedStopSuccessorEvaluation")
+    pending = SOURCE[pending_start:pending_end]
+    assert "published_authority_intent" in pending
+
+    production_start = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_track_cruise_control("
+    )
+    production_end = SOURCE.index(
+        "PublishedStopSuccessorEvaluation", production_start
+    )
+    production = SOURCE[production_start:production_end]
+    assert "resolve_published_authority_intent(" in production
+    assert "normal_execution_evidence" in production
+    assert (
+        "canonical_normal_intent_supported(" in production
+    )
+    assert "output.published_authority_intent = published_authority_intent" in production
+    assert "canonical-certified-terminal-stop/source-" in production
+
+    alternate_start = SOURCE.index(
+        "evaluate_rate_resolved_stop_lattice_current_world_alternate("
+    )
+    alternate_end = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control(",
+        alternate_start,
+    )
+    alternate = SOURCE[alternate_start:alternate_end]
+    assert "alternate.certified_terminal_contingency_selected = true" in alternate
+
+    owner_start = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control("
+    )
+    owner_end = SOURCE.index("MpcControlCycleResult get_control(", owner_start)
+    owner = SOURCE[owner_start:owner_end]
+    assert "joined_stop.certified_terminal_contingency_selected = true" in owner
+
+    record_start = SOURCE.index("void record_canonical_normal_final_command(")
+    record_end = SOURCE.index("void record_final_published_authority(", record_start)
+    record = SOURCE[record_start:record_end]
+    assert "pending.published_authority_intent !=" in record
+    assert "mpcc_contract::ControlIntent::Stop" in record
+
+    stop_observation_start = SOURCE.index(
+        "void update_published_stop_lattice_observation("
+    )
+    stop_observation_end = SOURCE.index(
+        "void record_canonical_normal_final_command(", stop_observation_start
+    )
+    stop_observation = SOURCE[stop_observation_start:stop_observation_end]
+    assert "published.published_authority_intent" in stop_observation
+    assert "invalidate_published_stop_lattice_observation();" in stop_observation
+
+
 def test_rate_resolved_solver_is_owned_only_by_the_async_worker() -> None:
     """The control callback revalidates evidence but never enters the solver."""
 

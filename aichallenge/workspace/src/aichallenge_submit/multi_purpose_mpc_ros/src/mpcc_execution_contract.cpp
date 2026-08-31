@@ -261,6 +261,17 @@ bool canonical_normal_intent_supported(const ControlIntent intent) noexcept
     intent == ControlIntent::Rejoin;
 }
 
+ControlIntent resolve_published_authority_intent(
+  const ControlIntent source_intent,
+  const bool certified_terminal_contingency_selected) noexcept
+{
+  if (!canonical_normal_intent_supported(source_intent)) {
+    return ControlIntent::Unknown;
+  }
+  return certified_terminal_contingency_selected ?
+    ControlIntent::Stop : source_intent;
+}
+
 const char * to_string(const AtomicIntentAdmissionReason reason) noexcept
 {
   switch (reason) {

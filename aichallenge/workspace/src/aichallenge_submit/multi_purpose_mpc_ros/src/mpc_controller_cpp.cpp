@@ -7685,6 +7685,10 @@ struct RateResolvedRetainedShadowEvaluation
   rate_resolved_production::Reason production_reason{
     rate_resolved_production::Reason::RetainedProofUnavailable};
   std::optional<rate_resolved_production::Authority> production_authority;
+  /// The selected plan is the exact, current-world-certified terminal Stop
+  /// contingency of a normal source problem. Its immutable problem/command
+  /// identity remains the source intent, while publication authority is Stop.
+  bool certified_terminal_contingency_selected{false};
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
   selected_sibling_plan;
@@ -7901,6 +7905,8 @@ struct CanonicalNormalPendingActuation
 {
   std::uint64_t decision_id{};
   mpcc_contract::CanonicalNormalCommand command;
+  mpcc_contract::ControlIntent published_authority_intent{
+    mpcc_contract::ControlIntent::Unknown};
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
   selected_sibling_plan;
@@ -9516,6 +9522,15 @@ struct MPC
   void update_published_stop_lattice_observation(
     const CanonicalNormalPendingActuation & published)
   {
+    if (
+      published.published_authority_intent ==
+      mpcc_contract::ControlIntent::Stop)
+    {
+      // A terminal contingency has become the Stop owner. It cannot also be
+      // the normal source from which another Stop lattice is generated.
+      invalidate_published_stop_lattice_observation();
+      return;
+    }
     const bool stop_observation_intent =
       published.command.intent == mpcc_contract::ControlIntent::ShiftOut ||
       published.command.intent == mpcc_contract::ControlIntent::Pass;
@@ -9747,7 +9762,11 @@ struct MPC
     // Update this ledger only after the exact serialized command has joined
     // and any newly certified candidate has become the executed plan.
     last_published_canonical_intent_ = pending.command.intent;
-    if (pending.certified_stop_successor.has_value()) {
+    if (
+      pending.published_authority_intent !=
+      mpcc_contract::ControlIntent::Stop &&
+      pending.certified_stop_successor.has_value())
+    {
       const auto & evidence = pending.certified_stop_successor.value();
       if (
         evidence.source_decision_id == decision_id &&
@@ -29298,6 +29317,9 @@ struct MPC
     }
     const auto & authority = retained.production_authority.value();
     const auto & command = authority.command;
+    const auto published_authority_intent =
+      mpcc_contract::resolve_published_authority_intent(
+      intent, retained.certified_terminal_contingency_selected);
     if (
       !mpcc_contract::problem_context_complete(authority.problem) ||
       !mpcc_contract::solution_certified(authority.solution) ||
@@ -29308,6 +29330,7 @@ struct MPC
       command.problem_fingerprint != authority.problem.fingerprint ||
       command.solution_id != authority.solution.solution_id ||
       command.decision_id != active_control_decision_id_ ||
+      published_authority_intent == mpcc_contract::ControlIntent::Unknown ||
       authority.target_speed_horizon_mps.empty() ||
       authority.target_speed_horizon_mps.size() !=
       authority.steering_horizon_rad.size() ||
@@ -29349,19 +29372,27 @@ struct MPC
     infeasibility_counter = 0;
     overtake_infeasibility_counter_ = 0;
     last_control_was_fallback_ = false;
+    const bool normal_execution_evidence =
+      mpcc_contract::canonical_normal_intent_supported(
+      published_authority_intent);
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
-      command.decision_id, command, retained.selected_plan,
+      command.decision_id, command, published_authority_intent,
+      retained.selected_plan,
       retained.selected_sibling_plan,
       retained.selected_plan != nullptr ?
       retained.selected_plan->solver_source_snapshot : nullptr,
       retained.control_origin_sec, retained.cursor_elapsed_sec,
-      !retained.selected_from_executed &&
+      normal_execution_evidence && !retained.selected_from_executed &&
       !retained.stateless_current_world_bundle,
-      retained.stateless_current_world_bundle,
-      retained.overtake_sibling_adoption_token,
-      authority.certified_stop_successor};
+      normal_execution_evidence && retained.stateless_current_world_bundle,
+      normal_execution_evidence ?
+      retained.overtake_sibling_adoption_token : std::nullopt,
+      normal_execution_evidence ?
+      authority.certified_stop_successor : std::nullopt};
     last_control_resolution_reason_ =
-      std::string{"canonical-rate-resolved-"} +
+      std::string{retained.certified_terminal_contingency_selected ?
+      "canonical-certified-terminal-stop/source-" :
+      "canonical-rate-resolved-"} +
       mpcc_contract::to_string(intent) +
       (retained.stateless_current_world_bundle ?
       (retained.selected_from_published_bundle_source ?
@@ -29374,7 +29405,7 @@ struct MPC
         command.predicted_speed_mps, command.steering_tire_angle_rad),
       maximum_steering};
     output.canonical_normal_command = command;
-    output.published_authority_intent = intent;
+    output.published_authority_intent = published_authority_intent;
     return output;
   }
 
@@ -29492,6 +29523,7 @@ struct MPC
       problem, now_sec, intent,
       rate_resolved_stop_lattice_current_world_alternate_plan_);
     if (alternate.production_authority.has_value()) {
+      alternate.certified_terminal_contingency_selected = true;
       ++window.current_world_alternate_joined_count;
     }
     const auto reason_index = static_cast<std::size_t>(alternate.reason);
@@ -29614,7 +29646,7 @@ struct MPC
           rclcpp::get_logger("mpc_controller"),
           "Stop lattice production bridge: decision=%lu, intent=%s, "
           "ordinary=%s, source=%lu, join=%s, "
-          "authority=canonical-normal, selected=1",
+          "authority=certified-stop, selected=1",
           static_cast<unsigned long>(active_control_decision_id_),
           mpcc_contract::to_string(intent),
           rate_resolved_retained::to_string(ordinary_retained.reason),
@@ -29659,6 +29691,7 @@ struct MPC
         published_stop_join_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - published_stop_join_started).count();
         if (joined_stop.production_authority.has_value()) {
+          joined_stop.certified_terminal_contingency_selected = true;
           retained = std::move(joined_stop);
         }
       }
@@ -29681,7 +29714,7 @@ struct MPC
         retained.production_authority.has_value() ? 1 : 0,
         rate_resolved_retained::to_string(retained.reason),
         retained.production_authority.has_value() ?
-        "canonical-normal" : "external-emergency");
+        "certified-stop" : "external-emergency");
     }
     observe_published_certified_stop_successor_join(
       retained, active_control_decision_id_);

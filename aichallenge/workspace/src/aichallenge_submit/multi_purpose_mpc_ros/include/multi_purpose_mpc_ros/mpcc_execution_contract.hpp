@@ -40,6 +40,15 @@ const char * to_string(Formulation formulation) noexcept;
 /// intentionally outside this contract.
 bool canonical_normal_intent_supported(ControlIntent intent) noexcept;
 
+/// Resolve the authority which crosses the single publisher. A certified
+/// terminal contingency keeps the immutable normal problem/solution intent as
+/// provenance, but the command it publishes is externally a Stop authority.
+/// Invalid normal source identities remain invalid instead of being promoted
+/// to Stop merely because a caller set the contingency marker.
+ControlIntent resolve_published_authority_intent(
+  ControlIntent source_intent,
+  bool certified_terminal_contingency_selected) noexcept;
+
 enum class AtomicIntentAdmissionReason
 {
   ProposedAccepted,

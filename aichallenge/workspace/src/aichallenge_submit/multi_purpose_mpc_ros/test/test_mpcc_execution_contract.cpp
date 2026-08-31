@@ -109,6 +109,30 @@ TEST(MpccExecutionContract, AtomicIntentRetainsPublishedStopUntilNormalJoins)
   EXPECT_EQ(joined.effective_intent, contract::ControlIntent::Follow);
 }
 
+TEST(MpccExecutionContract, CertifiedTerminalContingencyPublishesStopAuthority)
+{
+  EXPECT_EQ(
+    contract::resolve_published_authority_intent(
+      contract::ControlIntent::ShiftOut, false),
+    contract::ControlIntent::ShiftOut);
+  EXPECT_EQ(
+    contract::resolve_published_authority_intent(
+      contract::ControlIntent::ShiftOut, true),
+    contract::ControlIntent::Stop);
+  EXPECT_EQ(
+    contract::resolve_published_authority_intent(
+      contract::ControlIntent::Pass, true),
+    contract::ControlIntent::Stop);
+  EXPECT_EQ(
+    contract::resolve_published_authority_intent(
+      contract::ControlIntent::Unknown, true),
+    contract::ControlIntent::Unknown);
+  EXPECT_EQ(
+    contract::resolve_published_authority_intent(
+      contract::ControlIntent::Stop, true),
+    contract::ControlIntent::Unknown);
+}
+
 contract::MpccProblemContext make_context()
 {
   contract::MpccProblemContext context;

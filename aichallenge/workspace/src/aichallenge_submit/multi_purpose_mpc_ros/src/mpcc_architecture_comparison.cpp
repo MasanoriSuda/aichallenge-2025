@@ -1413,6 +1413,70 @@ ArmResult evaluate_offline_return_rejoin(
   return refined;
 }
 
+int evidence_rank(Stage stage) noexcept;
+
+ArmResult evaluate_normal_avoidance_lattice_population(
+  const Arm arm, const shadow::Snapshot & source,
+  const std::uint64_t source_fingerprint, const int side,
+  const std::size_t dynamic_sqp_depth)
+{
+  ArmResult best = rejected_arm(
+    arm, Stage::CandidateRejected, source_fingerprint,
+    "normal-avoidance lattice was not evaluated");
+  int best_rank = -1;
+  std::size_t attempted = 0U;
+  const int horizon = source.request.horizon_steps;
+  for (int transition_stage = 0;
+    transition_stage < horizon; ++transition_stage)
+  {
+    for (int ahead_stage = transition_stage + 1;
+      ahead_stage <= horizon; ++ahead_stage)
+    {
+      ++attempted;
+      const auto candidate = maneuver::build_normal_avoidance_lattice(
+        source, source_fingerprint, side, transition_stage, ahead_stage);
+      ArmResult evaluated;
+      if (!candidate.seed.has_value()) {
+        const auto stage =
+          candidate.reason == maneuver::RejectReason::TerminalSuccessorUnavailable ?
+          Stage::TerminalSuccessorRejected : Stage::CandidateRejected;
+        evaluated = rejected_arm(
+          arm, stage, source_fingerprint,
+          std::string{maneuver::to_string(candidate.reason)} + ": " +
+          candidate.detail);
+        evaluated.lattice_transition_stage = transition_stage;
+        evaluated.lattice_ahead_stage = ahead_stage;
+      } else {
+        const auto successor = resolve_audit_terminal_successor(
+          candidate.seed->solver_snapshot);
+        evaluated = evaluate_arm(
+          arm, candidate.seed->solver_snapshot, source_fingerprint,
+          candidate.seed->candidate_fingerprint, successor,
+          transition_stage, ahead_stage, nullptr, false, std::nullopt,
+          dynamic_sqp_depth);
+      }
+      evaluated.candidate_source = "normal-avoidance-lattice";
+      evaluated.candidate_count = attempted;
+      const int rank = evidence_rank(evaluated.stage);
+      if (rank > best_rank) {
+        best_rank = rank;
+        best = std::move(evaluated);
+      }
+      if (best.stage == Stage::Accepted) {
+        best.detail = std::string{"accepted/normal-avoidance-lattice/depth="} +
+          std::to_string(dynamic_sqp_depth) + "/attempts=" +
+          std::to_string(attempted) + "/" + best.detail;
+        return best;
+      }
+    }
+  }
+  best.candidate_count = attempted;
+  best.detail = std::string{"no certified normal-avoidance lattice/depth="} +
+    std::to_string(dynamic_sqp_depth) + "/attempts=" +
+    std::to_string(attempted) + "/best=" + best.detail;
+  return best;
+}
+
 int evidence_rank(const Stage stage) noexcept
 {
   switch (stage) {
@@ -1733,8 +1797,9 @@ Report compare(
     // automatically selected obstacle branch is infeasible, compare two
     // independently rebuilt current-world side candidates before attributing
     // the failure to physics. This is audit-only: it has no store, mailbox or
-    // publisher and intentionally does not enumerate Overtake-specific C--G
-    // candidates.
+    // publisher.  C and D remain architecture-audit-only: they enumerate a
+    // smooth current-world normal-avoidance lattice and never enter the
+    // production candidate population.
     if (
       source.identity.source_context.intent ==
       contract::ControlIntent::Follow ||
@@ -1763,6 +1828,22 @@ Report compare(
         report.arms.push_back(evaluate_arm(
           arm, rebuilt.seed->solver_snapshot, source_fingerprint,
           rebuilt.seed->candidate_fingerprint, successor));
+      }
+      for (const auto & [arm, side] :
+        {std::pair{Arm::RoughLeftC, 1},
+         std::pair{Arm::RoughRightC, -1}})
+      {
+        report.arms.push_back(evaluate_normal_avoidance_lattice_population(
+          arm, source, source_fingerprint, side, 0U));
+      }
+      constexpr std::size_t kOfflineNormalSqpDepth = 3U;
+      for (const auto & [arm, side] :
+        {std::pair{Arm::OfflineLeftD, 1},
+         std::pair{Arm::OfflineRightD, -1}})
+      {
+        report.arms.push_back(evaluate_normal_avoidance_lattice_population(
+          arm, source, source_fingerprint, side,
+          kOfflineNormalSqpDepth));
       }
       return report;
     }

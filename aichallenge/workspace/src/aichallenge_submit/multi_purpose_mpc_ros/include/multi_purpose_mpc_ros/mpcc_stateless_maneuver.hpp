@@ -188,6 +188,16 @@ Result build_lattice(
   int pass_side_sign, int first_pass_side_stage,
   int first_ahead_stage) noexcept;
 
+/// Architecture-audit-only Cruise/Follow lattice member.  It starts from the
+/// same stateless current-world normal-avoidance seed as B, then seals one
+/// complete side/ahead disjunction schedule and a smooth lateral reference.
+/// It has no Store, mailbox, publisher or production call site.
+Result build_normal_avoidance_lattice(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  std::uint64_t source_interaction_fingerprint,
+  int pass_side_sign, int first_pass_side_stage,
+  int first_ahead_stage) noexcept;
+
 /// Architecture-audit-only Return candidate.  Unlike build(), which records
 /// the current production B behavior, this arm discards the captured Mission
 /// reference between the measured state and immutable Return endpoint.  It

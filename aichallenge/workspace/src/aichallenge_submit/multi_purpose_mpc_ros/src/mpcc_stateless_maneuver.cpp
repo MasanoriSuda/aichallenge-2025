@@ -840,6 +840,102 @@ Result build_lattice(
   return result;
 }
 
+Result build_normal_avoidance_lattice(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const std::uint64_t source_interaction_fingerprint,
+  const int pass_side_sign, const int first_pass_side_stage,
+  const int first_ahead_stage) noexcept
+{
+  namespace architecture = mpcc_architecture_snapshot;
+  namespace model = mpcc_rate_resolved;
+  auto result = build_normal_avoidance(
+    source, source_interaction_fingerprint, pass_side_sign);
+  if (!result.seed.has_value()) {
+    return result;
+  }
+  const int horizon = source.request.horizon_steps;
+  if (
+    first_pass_side_stage < 0 || first_pass_side_stage >= horizon ||
+    first_ahead_stage <= first_pass_side_stage ||
+    first_ahead_stage > horizon)
+  {
+    return reject(
+      RejectReason::InvalidTransitionStage,
+      "normal-avoidance lattice is outside the planning horizon");
+  }
+  const auto target_horizon = resolve_canonical_target_horizon(source);
+  if (
+    !target_horizon.accepted ||
+    target_horizon.stages.size() != static_cast<std::size_t>(horizon))
+  {
+    return reject(
+      RejectReason::DynamicTargetUnavailable, target_horizon.detail);
+  }
+
+  auto & seed = result.seed.value();
+  auto & candidate = seed.solver_snapshot;
+  candidate.dynamic_obstacle_forced_first_pass_side_stage =
+    first_pass_side_stage;
+  candidate.dynamic_obstacle_forced_first_ahead_stage = first_ahead_stage;
+  candidate.dynamic_obstacle_forced_constraint_fraction = 1.0;
+
+  const double initial_lateral_m =
+    candidate.request.initial_state[model::kLateralIndex];
+  seed.lateral_reference_m.clear();
+  seed.lateral_reference_m.reserve(static_cast<std::size_t>(horizon + 1));
+  seed.lateral_reference_m.push_back(initial_lateral_m);
+  candidate.request.states.front().reference[model::kLateralIndex] =
+    initial_lateral_m;
+  for (int stage = 1; stage <= horizon; ++stage) {
+    auto & state = candidate.request.states[static_cast<std::size_t>(stage)];
+    const auto & target = target_horizon.stages[
+      static_cast<std::size_t>(stage - 1)];
+    const double full_side_lateral_m = target.target_lateral_m +
+      static_cast<double>(pass_side_sign) *
+      target.lateral_center_separation_m;
+    const double side_fraction_raw = std::clamp(
+      static_cast<double>(stage) /
+      static_cast<double>(first_pass_side_stage + 1), 0.0, 1.0);
+    const double side_fraction = side_fraction_raw * side_fraction_raw *
+      (3.0 - 2.0 * side_fraction_raw);
+    double desired_lateral_m = initial_lateral_m +
+      side_fraction * (full_side_lateral_m - initial_lateral_m);
+    if (stage - 1 >= first_ahead_stage) {
+      const double return_fraction_raw = std::clamp(
+        static_cast<double>(stage - first_ahead_stage) /
+        static_cast<double>(horizon - first_ahead_stage), 0.0, 1.0);
+      const double return_fraction =
+        return_fraction_raw * return_fraction_raw *
+        (3.0 - 2.0 * return_fraction_raw);
+      desired_lateral_m = desired_lateral_m * (1.0 - return_fraction) +
+        source.request.states[static_cast<std::size_t>(stage)].reference[
+        model::kLateralIndex] * return_fraction;
+    }
+    desired_lateral_m = std::clamp(
+      desired_lateral_m, state.lower[model::kLateralIndex],
+      state.upper[model::kLateralIndex]);
+    state.reference[model::kLateralIndex] = desired_lateral_m;
+    state.reference[model::kLagIndex] = 0.0;
+    state.reference[model::kHeadingIndex] = 0.0;
+    seed.lateral_reference_m.push_back(desired_lateral_m);
+  }
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "normal-avoidance lattice candidate is incomplete");
+  }
+  seed.candidate_fingerprint =
+    architecture::fingerprint_interaction_snapshot(candidate);
+  if (seed.candidate_fingerprint == 0U) {
+    return reject(
+      RejectReason::CandidateSealUnavailable,
+      "normal-avoidance lattice fingerprint unavailable");
+  }
+  result.reason = RejectReason::Accepted;
+  result.detail = "accepted/audit-only-normal-avoidance-lattice";
+  return result;
+}
+
 Result build_return_rejoin_schedule(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   const std::uint64_t source_interaction_fingerprint,

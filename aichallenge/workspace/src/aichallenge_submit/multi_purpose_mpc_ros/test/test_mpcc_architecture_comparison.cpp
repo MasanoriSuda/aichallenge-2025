@@ -478,7 +478,7 @@ TEST(MpccArchitectureComparison, MissingImmutableStopContractRejectsAllArms)
   }
 }
 
-TEST(MpccArchitectureComparison, FollowComparesOnlyPersistentAndStatelessSides)
+TEST(MpccArchitectureComparison, FollowComparesPersistentThroughOfflineLattice)
 {
   auto source = source_snapshot();
   source.identity.source_context.intent = contract::ControlIntent::Follow;
@@ -490,10 +490,14 @@ TEST(MpccArchitectureComparison, FollowComparesOnlyPersistentAndStatelessSides)
   const auto report = compare(recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 3U);
+  ASSERT_EQ(report.arms.size(), 7U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
+  EXPECT_EQ(report.arms[3].arm, Arm::RoughLeftC);
+  EXPECT_EQ(report.arms[4].arm, Arm::RoughRightC);
+  EXPECT_EQ(report.arms[5].arm, Arm::OfflineLeftD);
+  EXPECT_EQ(report.arms[6].arm, Arm::OfflineRightD);
   EXPECT_NE(report.arms[1].stage, Stage::CandidateRejected) << report.arms[1].detail;
   EXPECT_NE(report.arms[2].stage, Stage::CandidateRejected) << report.arms[2].detail;
   EXPECT_NE(report.arms[1].candidate_fingerprint, 0U);
@@ -512,10 +516,14 @@ TEST(MpccArchitectureComparison, CruiseComparesCapturedBranchAndCurrentWorldSide
   const auto report = compare(recorded(std::move(source)));
 
   ASSERT_TRUE(report.source_accepted) << report.detail;
-  ASSERT_EQ(report.arms.size(), 3U);
+  ASSERT_EQ(report.arms.size(), 7U);
   EXPECT_EQ(report.arms[0].arm, Arm::PersistentA);
   EXPECT_EQ(report.arms[1].arm, Arm::StatelessLeftB);
   EXPECT_EQ(report.arms[2].arm, Arm::StatelessRightB);
+  EXPECT_EQ(report.arms[3].arm, Arm::RoughLeftC);
+  EXPECT_EQ(report.arms[4].arm, Arm::RoughRightC);
+  EXPECT_EQ(report.arms[5].arm, Arm::OfflineLeftD);
+  EXPECT_EQ(report.arms[6].arm, Arm::OfflineRightD);
   EXPECT_NE(report.arms[1].stage, Stage::CandidateRejected) << report.arms[1].detail;
   EXPECT_NE(report.arms[2].stage, Stage::CandidateRejected) << report.arms[2].detail;
   EXPECT_NE(report.arms[1].candidate_fingerprint, 0U);

@@ -937,6 +937,39 @@ TEST(MpccStatelessManeuver, NormalAvoidancePopulationSupportsCruiseAndFollow)
   }
 }
 
+TEST(MpccStatelessManeuver, NormalAvoidanceLatticeIsSealedAndAuditOnly)
+{
+  auto source = make_source();
+  source.identity.source_context.intent =
+    mpcc_execution_contract::ControlIntent::Cruise;
+  source.identity.source_context.execution_side_sign = 0;
+  source.identity.source_context.fingerprint = 0U;
+  source.identity.source_context =
+    mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
+  const auto fingerprint =
+    mpcc_architecture_snapshot::fingerprint_interaction_snapshot(source);
+
+  const auto lattice = build_normal_avoidance_lattice(
+    source, fingerprint, 1, 0, source.request.horizon_steps);
+
+  EXPECT_EQ(lattice.reason, RejectReason::Accepted) << lattice.detail;
+  ASSERT_TRUE(lattice.seed.has_value());
+  EXPECT_NE(lattice.seed->candidate_fingerprint, 0U);
+  EXPECT_EQ(
+    lattice.seed->solver_snapshot.identity.source_context.intent,
+    mpcc_execution_contract::ControlIntent::Cruise);
+  EXPECT_EQ(
+    lattice.seed->solver_snapshot.identity.source_context.execution_side_sign,
+    0);
+  EXPECT_EQ(
+    lattice.seed->solver_snapshot.dynamic_obstacle_forced_first_pass_side_stage,
+    0);
+  EXPECT_EQ(
+    lattice.seed->solver_snapshot.dynamic_obstacle_forced_first_ahead_stage,
+    source.request.horizon_steps);
+}
+
 TEST(MpccStatelessManeuver, RejectsInvalidSideAndMixedObservation)
 {
   auto source = make_source();

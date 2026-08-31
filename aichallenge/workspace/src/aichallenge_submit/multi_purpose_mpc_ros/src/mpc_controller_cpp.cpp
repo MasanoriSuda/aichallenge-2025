@@ -25643,19 +25643,55 @@ struct MPC
         }
         result.worker_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started).count();
-        std::lock_guard<std::mutex> lock(mailbox->mutex);
-        if (!should_publish_latest_only_result(
-            LatestOnlyResultPublicationRequest{
-              result.context_epoch,
-              mailbox->context_epoch,
-              result.sequence,
-              mailbox->latest_submitted_sequence,
-              mailbox->latest_published_sequence}))
+        const auto completed_kind = result.kind;
+        const auto completed_sequence = result.sequence;
+        const auto completed_decision = result.decision_id;
+        const double completed_worker_ms = result.worker_ms;
+        const auto completed_solver_outcome = result.pipeline.solver.outcome;
+        const char * completed_physical_outcome =
+          result.pipeline.physical.has_value() ?
+          rate_resolved_physical_wall::to_string(
+            result.pipeline.physical->outcome) : "missing";
+        const std::string completed_detail = result.build_detail;
+        bool published = false;
+        std::uint64_t latest_submitted_sequence = 0U;
+        std::uint64_t latest_published_sequence = 0U;
         {
-          return;
+          std::lock_guard<std::mutex> lock(mailbox->mutex);
+          latest_submitted_sequence = mailbox->latest_submitted_sequence;
+          if (should_publish_latest_only_result(
+              LatestOnlyResultPublicationRequest{
+                result.context_epoch,
+                mailbox->context_epoch,
+                result.sequence,
+                mailbox->latest_submitted_sequence,
+                mailbox->latest_published_sequence}))
+          {
+            mailbox->latest_published_sequence = result.sequence;
+            mailbox->latest_result = std::move(result);
+            published = true;
+          }
+          latest_published_sequence = mailbox->latest_published_sequence;
         }
-        mailbox->latest_published_sequence = result.sequence;
-        mailbox->latest_result = std::move(result);
+        if (completed_kind == RateResolvedIntentTransitionKind::ReturnGateA) {
+          static rclcpp::Clock return_completion_clock{RCL_STEADY_TIME};
+          RCLCPP_INFO_THROTTLE(
+            rclcpp::get_logger("mpc_controller"), return_completion_clock,
+            250,
+            "Return Gate A worker completion: sequence=%lu, decision=%lu, "
+            "worker=%.3f ms, solver=%s, physical=%s, published=%d, "
+            "mailbox=submitted:%lu/published:%lu, detail=%s, "
+            "authority=observation-only",
+            static_cast<unsigned long>(completed_sequence),
+            static_cast<unsigned long>(completed_decision),
+            completed_worker_ms,
+            rate_resolved_shadow::to_string(completed_solver_outcome),
+            completed_physical_outcome,
+            published ? 1 : 0,
+            static_cast<unsigned long>(latest_submitted_sequence),
+            static_cast<unsigned long>(latest_published_sequence),
+            completed_detail.c_str());
+        }
       });
     if (!submission.accepted) {
       RCLCPP_WARN(
@@ -36377,11 +36413,17 @@ private:
             now_sec - overtake_line_state_.return_preflight_last_log_sec >= 0.50;
           if (line_cfg.debug_log_enabled && log_now) {
             overtake_line_state_.return_preflight_last_log_sec = now_sec;
+            const auto transition_worker =
+              rate_resolved_preentry_execution_shadow_worker_ != nullptr ?
+              rate_resolved_preentry_execution_shadow_worker_->stats() :
+              LatestOnlyWorker::Stats{};
             RCLCPP_INFO(
               rclcpp::get_logger("mpc_controller"),
               "OvertakeLine Return authority deferred before phase mutation: "
               "target=%s, generation=%lu, side=%d, proposal=%d/%lu, "
-              "reason=%s, action=retain-certified-pass, wp_id=%d",
+              "reason=%s, worker=submitted:%lu/replaced:%lu/started:%lu/"
+              "completed:%lu/running:%d/pending:%d, "
+              "action=retain-certified-pass, wp_id=%d",
               overtake_line_state_.target_vehicle_id.c_str(),
               static_cast<unsigned long>(
                 overtake_line_state_.mission_generation),
@@ -36391,6 +36433,12 @@ private:
                 return_proposal.has_value() ? return_proposal->sequence : 0U),
               race_mpcc::return_transition_admission_reason_name(
                 transition_admission.reason),
+              static_cast<unsigned long>(transition_worker.submitted),
+              static_cast<unsigned long>(transition_worker.replaced),
+              static_cast<unsigned long>(transition_worker.started),
+              static_cast<unsigned long>(transition_worker.completed),
+              transition_worker.running ? 1 : 0,
+              transition_worker.pending ? 1 : 0,
               model->wp_id);
           }
           return false;

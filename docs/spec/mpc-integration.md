@@ -3578,6 +3578,24 @@ Pass authorityは成立した。したがってraw worker／mailbox ageはStop�
 監査対象はStopのage緩和ではなく、normal Passがterminal viabilityを失う地点まで
 publish可能だった上流のadmission／lifecycle境界とする。
 
+#### Return Gate Aのworker head-of-line監査（2026-08-31、2025由来の暫定）
+
+`output/20260831-145722/d1`では、Pass完了後にReturn Gate Aをdecision 1523--1536で
+毎周期submitしたが、共有transition workerはReturn以前のdecision 1491
+`MissionGateA`を`2824.032 ms`実行していた。最初のReturn defer時点でworkerは
+`submitted=127/replaced=101/started=25/completed=24/running=1/pending=1`であり、
+`LatestOnlyWorker`はpendingを置換するだけでrunning jobを中断しない。そのため最新
+Return decision 1536が開始されたのは古いMission完了後で、さらに`445.695 ms`後に
+`stage-wall-rejected`として完了した。完了前に車両はPassからFollowPrepare、続いて
+actual-footprint wall接触Recoveryへ遷移した。
+
+これはReturn timeout不足ではなく、Mission／Pass／Returnが同じnon-cancelable worker laneを
+共有したhead-of-line scheduling defectである。ただし遅れて評価されたdecision 1536自体も
+壁不成立であり、最初のReturn decision 1523が物理的に成立したかは未評価である。構造修正は
+Return solver laneをMission／Passから分離し、最初に実行されたcurrent-world Returnのphysical
+proofでcandidate-generation問題を再分類する。Pass保持時間、wall margin、solver toleranceは
+変更しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

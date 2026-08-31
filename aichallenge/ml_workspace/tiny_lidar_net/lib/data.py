@@ -12,7 +12,12 @@ from torch.utils.data import ConcatDataset, Dataset
 logger = logging.getLogger(__name__)
 
 DATASET_SCHEMA_VERSION = 1
-DEFAULT_ALLOWED_LABEL_SOURCES = ("mpc", "mpcc", "human")
+DEFAULT_ALLOWED_LABEL_SOURCES = (
+    "mpc",
+    "mpcc",
+    "human",
+    "lidar_gap_teacher",
+)
 REQUIRED_ARRAY_FILES = (
     "scans.npy",
     "steers.npy",

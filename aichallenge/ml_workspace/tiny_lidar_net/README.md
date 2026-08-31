@@ -44,7 +44,7 @@ trainerは学習開始前に次を検証します。
 
 - 750点LiDAR、30 m range契約
 - scan/controlの同期差が50 ms以下
-- `label_source`が`mpc`、`mpcc`、`human`のいずれか
+- `label_source`が`mpc`、`mpcc`、`human`、`lidar_gap_teacher`のいずれか
 - 全配列の長さ、finite値、timestamp順序
 - train/validation間のsequence ID非重複
 
@@ -75,6 +75,21 @@ python3 convert_weight.py --model tinylidarnet --ckpt ./ckpts/weight.pth
 変換時もtrainingと同じcheckpoint契約（全key、shape、finite値）を検証します。閉ループ確認前に
 production重みを上書きせず、コンテナから見えるcandidate pathを明示してA/Bできます。
 
+独立したvalidation runに対し、production重みより候補のsteering MAEが改善したことを
+閉ループ試験前に確認できます。sequence IDとcheckpoint SHA-256をJSONへ保存します。
+
+```bash
+python3 evaluate_checkpoint.py \
+  --dataset-dir dataset/<name>/val \
+  --candidate checkpoints/<run>/candidate.npy \
+  --baseline /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+  --output checkpoints/<run>/offline-evaluation.json \
+  --require-rmse-improvement
+```
+
+全sampleのMAE/RMSE/P95に加え、production出力と教師labelが0.02 rad以上異なる
+corrective subsetを別集計します。希少な回避labelを通常走行sampleの平均に埋没させません。
+
 ```bash
 make e2e-single \
   TINY_LIDAR_CKPT_PATH=/aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<run>/candidate.npy
@@ -95,4 +110,22 @@ docker compose run --rm --no-deps autoware-command \
   /output/<run>/d1/rosbag2_autoware \
   --output /output/<run>/d1/e2e-run-analysis.json \
   --fail-on-stall
+```
+
+### Runtime NPC corrective teacher
+
+runtime NPCはV2Xへ現れないため、MPC教師を捏造しません。次のtargetは同じNPC worldで、
+既存ML steeringへLiDAR gap residualを加えた教師候補を走らせます。
+
+```bash
+make e2e-npc-gap-teacher
+```
+
+このmodeは教師収集専用です。run admission後のbagだけを、明示的な出所で抽出します。
+
+```bash
+python3 extract_data_from_bag.py \
+  --seq-dirs /output/<run>/d1/rosbag2_autoware \
+  --outdir dataset/obstacle_v1 \
+  --label-source lidar_gap_teacher
 ```

@@ -407,7 +407,14 @@ def main() -> None:
     parser.add_argument(
         "--label-source",
         required=True,
-        choices=("mpc", "mpcc", "human", "student", "other"),
+        choices=(
+            "mpc",
+            "mpcc",
+            "human",
+            "lidar_gap_teacher",
+            "student",
+            "other",
+        ),
         help="Provenance of the synchronized control labels.",
     )
     parser.add_argument("--val-fraction", type=float, default=0.2)

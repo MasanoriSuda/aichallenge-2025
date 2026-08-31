@@ -25,6 +25,7 @@ x-autoware-base: &autoware-base
     - AIC_VEHICLE_COUNT=${AIC_VEHICLE_COUNT:-1}
     - AIC_CONTROL_METHOD=${AIC_CONTROL_METHOD:-tiny_lidar_net}
     - TINY_LIDAR_CKPT_PATH=${TINY_LIDAR_CKPT_PATH:-}
+    - TINY_LIDAR_CONTROL_MODE=${TINY_LIDAR_CONTROL_MODE:-}
     - LOG_DIR=${LOG_DIR:-}
   volumes:
     - ./output:${OUTPUT_ROOT:-/output}
@@ -78,6 +79,7 @@ x-racing_kart_interface-base: &racing_kart_interface-base
     - ROS_DISTRO=humble
     - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-1}
     - LOG_DIR=${LOG_DIR:-}
+    - E2E_START_RANDOM_SEED=${E2E_START_RANDOM_SEED:-}
     - HOST_UID=${HOST_UID:-}
     - HOST_GID=${HOST_GID:-}
     - NTRIP_USERNAME=${NTRIP_USERNAME:-}

@@ -4,7 +4,7 @@ data:
   val_dir: "/aichallenge/ml_workspace/tiny_lidar_net/dataset/val"
   max_range: 30.0
   max_sync_delta_sec: 0.05
-  allowed_label_sources: ["mpc", "mpcc", "human"]
+  allowed_label_sources: ["mpc", "mpcc", "human", "lidar_gap_teacher"]
   require_metadata: true
 
 model:

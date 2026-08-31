@@ -90,6 +90,12 @@ MPC教師を捏造せず、peerで学習した回避がLiDAR外観差へ汎化�
 0.02 m/sまで低下した一方、TinyLidarNetは+0.6 m/s2を指令し、前方LiDARは約8 m
 空いていた。これは意図的停止ではなく接触・壁拘束後も固定加速を続けた失敗として扱う。
 
+回避教師候補は`make e2e-npc-gap-teacher`で収集する。単車でadmission済みの
+TinyLidarNet steeringをbaseとし、180度LiDARの物理距離からFollow-the-Gap residualを
+加える。これは教師データ生成専用の`gap_teacher` modeであり、最終studentや提出時の
+既定`fixed` modeへ残さない。教師自身がFinish/contact/stall gateを通ったrunだけを
+`--label-source lidar_gap_teacher`として抽出する。
+
 bag単位の固着監査は次で行う。既知の単車完走runでは正加速中固着0秒、初回NPC runでは
 70.56秒を検出した。GUIの見た目ではなく、このJSONとAWSIM Finish/接触結果を合わせて
 candidate admissionを判断する。

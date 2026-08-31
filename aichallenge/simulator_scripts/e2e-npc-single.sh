@@ -3,6 +3,11 @@
 
 AWSIM_DIRECTORY=/aichallenge/simulator/AWSIM
 export ROS_DOMAIN_ID=0
+start_random_seed="${E2E_START_RANDOM_SEED:-2026}"
+if [[ ! ${start_random_seed} =~ ^[0-9]+$ ]]; then
+    echo "[ERROR] E2E_START_RANDOM_SEED must be a non-negative integer" >&2
+    exit 2
+fi
 
 # GNSS is infrastructure-only for Ready/Grounded. The TinyLidarNet controller
 # subscribes only to /scan and never consumes GNSS, IMU, or V2X.
@@ -21,7 +26,7 @@ exec "$AWSIM_DIRECTORY/AWSIM.x86_64" \
     --handicap off \
     --wall-recovery off \
     --start-random on \
-    --start-random-seed 2026 \
+    --start-random-seed "${start_random_seed}" \
     --start-random-range 2.0,2.0 \
     --start-random-min-separation 3.0 \
     --ranking off \

@@ -1,0 +1,96 @@
+"""Unit tests for the teacher-only LiDAR gap residual."""
+
+import numpy as np
+import pytest
+
+from tiny_lidar_net_controller.gap_teacher import (
+    GapTeacherConfig,
+    LidarGapTeacher,
+)
+
+
+def _angles(size: int = 750) -> np.ndarray:
+    return np.linspace(-np.pi / 2.0, np.pi / 2.0, size)
+
+
+def test_clear_front_preserves_network_command() -> None:
+    teacher = LidarGapTeacher(GapTeacherConfig())
+    decision = teacher.decide(np.full(750, 30.0), 0.17, 0.6)
+    assert not decision.active
+    assert decision.reason == "front-clear"
+    assert decision.steering_rad == pytest.approx(0.17)
+    assert decision.acceleration_mps2 == pytest.approx(0.6)
+
+
+def test_teacher_steers_toward_side_with_larger_physical_reserve() -> None:
+    teacher = LidarGapTeacher(GapTeacherConfig())
+    angles = _angles()
+    ranges = np.full(750, 10.0)
+    ranges[(angles >= -0.18) & (angles <= 0.18)] = 3.0
+    ranges[angles > 0.18] = 4.0
+    decision = teacher.decide(ranges, 0.0, 0.6)
+    assert decision.active
+    assert decision.reason == "gap-selected"
+    assert decision.target_angle_rad < 0.0
+    assert decision.steering_rad < 0.0
+
+
+def test_close_obstacle_commands_teacher_brake() -> None:
+    teacher = LidarGapTeacher(GapTeacherConfig())
+    angles = _angles()
+    ranges = np.full(750, 10.0)
+    ranges[np.abs(angles) <= 0.18] = 1.0
+    decision = teacher.decide(ranges, 0.0, 0.6)
+    assert decision.active
+    assert decision.acceleration_mps2 == pytest.approx(-1.0)
+
+
+def test_left_side_wall_retains_teacher_authority_and_steers_right() -> None:
+    teacher = LidarGapTeacher(GapTeacherConfig())
+    angles = _angles()
+    ranges = np.full(750, 30.0)
+    ranges[angles >= 1.0] = 1.2
+    decision = teacher.decide(ranges, 0.45, 0.6)
+    assert decision.active
+    assert decision.reason == "side-clearance"
+    assert decision.left_side_distance_m == pytest.approx(1.2)
+    assert decision.right_side_distance_m == pytest.approx(30.0)
+    assert decision.steering_rad < 0.0
+    assert decision.acceleration_mps2 == pytest.approx(0.6)
+
+
+def test_right_side_wall_steers_left() -> None:
+    teacher = LidarGapTeacher(GapTeacherConfig())
+    angles = _angles()
+    ranges = np.full(750, 30.0)
+    ranges[angles <= -1.0] = 1.2
+    decision = teacher.decide(ranges, -0.45, 0.6)
+    assert decision.active
+    assert decision.reason == "side-clearance"
+    assert decision.steering_rad > 0.0
+
+
+def test_no_gap_keeps_lateral_base_but_does_not_accelerate() -> None:
+    teacher = LidarGapTeacher(GapTeacherConfig())
+    decision = teacher.decide(np.full(750, 2.0), 0.2, 0.6)
+    assert decision.active
+    assert decision.reason == "no-gap"
+    assert decision.steering_rad == pytest.approx(0.2)
+    assert decision.acceleration_mps2 == pytest.approx(0.0)
+
+
+def test_invalid_distance_order_is_rejected() -> None:
+    with pytest.raises(ValueError, match="stop < slow < trigger"):
+        GapTeacherConfig(
+            trigger_distance_m=3.0,
+            slow_distance_m=2.0,
+            stop_distance_m=2.5,
+        )
+
+
+def test_invalid_side_distance_order_is_rejected() -> None:
+    with pytest.raises(ValueError, match="critical < trigger"):
+        GapTeacherConfig(
+            side_trigger_distance_m=1.0,
+            side_critical_distance_m=1.2,
+        )

@@ -27,6 +27,7 @@
   <arg name="control_method" default="mpc"
       description="Select control: mpc, pure_pursuit, tiny_lidar_net, pilot_net, joycon, rl_train"/>
   <arg name="tiny_lidar_ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/tinylidarnet_weights.npy"/>
+  <arg name="tiny_lidar_control_mode" default="fixed"/>
 
   <!-- Global parameters -->
   <group scoped="false">
@@ -161,6 +162,7 @@
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/control/tiny_lidar_net.launch.xml">
       <arg name="use_sim_time" value="$(var use_sim_time)"/>
       <arg name="ckpt_path" value="$(var tiny_lidar_ckpt_path)"/>
+      <arg name="control_mode" value="$(var tiny_lidar_control_mode)"/>
     </include>
   </group>
 

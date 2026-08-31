@@ -5,7 +5,7 @@
 ## 呼び出しの仕組み
 
 ```
-make simulator-<mode> / make dev / make dev2..dev4 / make gate1..gate3 / make e2e-single / make e2e-teacher / make e2e-npc-single / make e2e-peer-audit-mpc / make e2e-peer-audit-student
+make simulator-<mode> / make dev / make dev2..dev4 / make gate1..gate3 / make e2e-single / make e2e-teacher / make e2e-npc-single / make e2e-npc-gap-teacher / make e2e-peer-audit-mpc / make e2e-peer-audit-student
   → docker compose up simulator (SIM_MODE=<mode>)
     → run_simulator.bash <mode> [args...]
       → simulator_scripts/<mode>.sh [args...]
@@ -21,7 +21,7 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 - Makefile は `*.sh` を wildcard で拾って `make simulator-<mode>` を自動生成する。
   `dev2..dev4` / `gate1..gate3` のエイリアスも `SIM_MODES` に追加してあり、
   `make simulator-dev2` / `make simulator-gate1` のように使える（AWSIM のみ起動）。
-- `make dev` / `make gate1..gate3` / `make e2e-single` / `make e2e-teacher` / `make e2e-npc-single` / `make e2e-peer-audit-mpc` / `make e2e-peer-audit-student` / `make e2e` / `make e2e-final` は AWSIM に加えて Autoware も起動する複合ターゲット。
+- `make dev` / `make gate1..gate3` / `make e2e-single` / `make e2e-teacher` / `make e2e-npc-single` / `make e2e-npc-gap-teacher` / `make e2e-peer-audit-mpc` / `make e2e-peer-audit-student` / `make e2e` / `make e2e-final` は AWSIM に加えて Autoware も起動する複合ターゲット。
   `make dev2..dev4` と `make e2e-final` は N 台分の autoware を別 compose
   プロジェクト（ROS_DOMAIN_ID=1..N）で起動する。`e2e-final` はsync開始のため、全車Ready後に
   `make awsim-request-start` を実行する。
@@ -41,6 +41,13 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 | `e2e.sh` | E2E 練習参考 | - | 1台 / NPC 2 / 6 laps / Camera・LiDAR on |
 | `e2e-final.sh` | E2E 決勝参考 | - | 4台 / 6 laps / sync開始 / handicap・ranking on |
 | `sample-scenario.sh` | シナリオ指定起動 | - | `StreamingAssets/Race/official.yaml` を `--scenario` で読み込む |
+
+`make e2e-npc-gap-teacher`は`e2e-npc-single.sh`と同じworldを使用し、TinyLidarNetの
+明示的な`gap_teacher`モードを有効にする。これは教師候補収集専用であり、本番既定値の
+`control_mode=fixed`を変更しない。
+再現可能なrun-level train/validation分割では、例えば
+`make e2e-npc-gap-teacher E2E_START_RANDOM_SEED=2027`のようにseedを明示する。
+未指定時は従来どおり2026であり、整数以外はAWSIM起動前に拒否する。
 | `multiplay-server.sh` | Multiplay 専用サーバー | - | `-batchmode -nographics`、port 7777 |
 | `multiplay-host.sh` | Multiplay ホスト | - | 127.0.0.1:7777、vehicle-index 1 |
 | `multiplay-client.sh` | Multiplay クライアント | - | 127.0.0.1:7777、vehicle-index 1 |

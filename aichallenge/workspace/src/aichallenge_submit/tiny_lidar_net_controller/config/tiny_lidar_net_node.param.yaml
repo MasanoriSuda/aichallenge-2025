@@ -9,8 +9,21 @@
       ckpt_path: "/path/to/tinylidarnet_weights.npy"
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
-    control_mode: "fixed"          # "ai" または "fixed"
+    control_mode: "fixed"          # "ai", "fixed" or teacher-only "gap_teacher"
     acceleration: 0.6            # 現AWSIMで発進・周回できる暫定baseline
+
+    # Teacher-data collection only. Production stays in control_mode=fixed.
+    gap_teacher:
+      trigger_distance_m: 7.0
+      slow_distance_m: 3.0
+      stop_distance_m: 1.5
+      bubble_margin_m: 0.25
+      vehicle_half_width_m: 0.725
+      steering_angle_gain: 0.75
+      side_start_angle_rad: 1.3
+      side_trigger_distance_m: 1.8
+      side_critical_distance_m: 0.9
+      brake_acceleration_mps2: -1.0
 
     # Runtime safety contract. When LiDAR stops, do not retain the last drive command.
     sensor_timeout_sec: 0.25

@@ -56,6 +56,24 @@ def test_runtime_propagates_only_an_explicit_tiny_lidar_checkpoint_override() ->
     )
 
 
+def test_runtime_validates_and_propagates_tiny_lidar_control_mode() -> None:
+    runner = read("run_autoware.bash")
+    system_launch = read(
+        "workspace/src/aichallenge_system/"
+        "aichallenge_system_launch/launch/aichallenge_system.launch.xml"
+    )
+
+    assert 'tiny_lidar_control_mode="${TINY_LIDAR_CONTROL_MODE:-}"' in runner
+    assert '"fixed"|"ai"|"gap_teacher")' in runner
+    assert 'opts+=("tiny_lidar_control_mode:=${tiny_lidar_control_mode}")' in runner
+    assert '<arg name="tiny_lidar_control_mode" default="fixed"/>' in system_launch
+    assert (
+        '<arg name="tiny_lidar_control_mode" '
+        'value="$(var tiny_lidar_control_mode)"/>'
+        in system_launch
+    )
+
+
 def test_single_vehicle_empty_world_producer_is_simulation_only() -> None:
     system_launch = read(
         "workspace/src/aichallenge_system/"

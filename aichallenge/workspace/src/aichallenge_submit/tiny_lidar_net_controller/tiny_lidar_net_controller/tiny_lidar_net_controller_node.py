@@ -8,6 +8,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import LaserScan
 from autoware_auto_control_msgs.msg import AckermannControlCommand
 
+from tiny_lidar_net_controller.gap_teacher import GapTeacherConfig
 from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 
 
@@ -35,6 +36,16 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('startup_grace_sec', 2.0)
         self.declare_parameter('stale_brake_acceleration', -1.0)
         self.declare_parameter('max_steering_angle_rad', 0.64)
+        self.declare_parameter('gap_teacher.trigger_distance_m', 7.0)
+        self.declare_parameter('gap_teacher.slow_distance_m', 3.0)
+        self.declare_parameter('gap_teacher.stop_distance_m', 1.5)
+        self.declare_parameter('gap_teacher.bubble_margin_m', 0.25)
+        self.declare_parameter('gap_teacher.vehicle_half_width_m', 0.725)
+        self.declare_parameter('gap_teacher.steering_angle_gain', 0.75)
+        self.declare_parameter('gap_teacher.side_start_angle_rad', 1.3)
+        self.declare_parameter('gap_teacher.side_trigger_distance_m', 1.8)
+        self.declare_parameter('gap_teacher.side_critical_distance_m', 0.9)
+        self.declare_parameter('gap_teacher.brake_acceleration_mps2', -1.0)
         self.declare_parameter('debug', False)
 
         # --- Initialization ---
@@ -59,6 +70,39 @@ class TinyLidarNetNode(Node):
         )
         self.max_steering_angle_rad = float(
             self.get_parameter('max_steering_angle_rad').value
+        )
+        gap_teacher_config = GapTeacherConfig(
+            trigger_distance_m=float(
+                self.get_parameter('gap_teacher.trigger_distance_m').value
+            ),
+            slow_distance_m=float(
+                self.get_parameter('gap_teacher.slow_distance_m').value
+            ),
+            stop_distance_m=float(
+                self.get_parameter('gap_teacher.stop_distance_m').value
+            ),
+            bubble_margin_m=float(
+                self.get_parameter('gap_teacher.bubble_margin_m').value
+            ),
+            vehicle_half_width_m=float(
+                self.get_parameter('gap_teacher.vehicle_half_width_m').value
+            ),
+            max_steering_angle_rad=self.max_steering_angle_rad,
+            steering_angle_gain=float(
+                self.get_parameter('gap_teacher.steering_angle_gain').value
+            ),
+            side_start_angle_rad=float(
+                self.get_parameter('gap_teacher.side_start_angle_rad').value
+            ),
+            side_trigger_distance_m=float(
+                self.get_parameter('gap_teacher.side_trigger_distance_m').value
+            ),
+            side_critical_distance_m=float(
+                self.get_parameter('gap_teacher.side_critical_distance_m').value
+            ),
+            brake_acceleration_mps2=float(
+                self.get_parameter('gap_teacher.brake_acceleration_mps2').value
+            ),
         )
         
         self.debug = self.get_parameter('debug').value
@@ -88,7 +132,8 @@ class TinyLidarNetNode(Node):
                 ckpt_path=ckpt_path,
                 acceleration=acceleration,
                 control_mode=control_mode,
-                max_range=max_range
+                max_range=max_range,
+                gap_teacher_config=gap_teacher_config,
             )
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
@@ -103,6 +148,8 @@ class TinyLidarNetNode(Node):
         self.inference_times = []
         self.scan_count = 0
         self.last_log_scan_count = 0
+        self.gap_teacher_active_count = 0
+        self.last_log_gap_teacher_active_count = 0
         self.last_log_time = self.get_clock().now()
         self.startup_time = self.get_clock().now()
         self.last_scan_time = None
@@ -148,6 +195,9 @@ class TinyLidarNetNode(Node):
         try:
             # 2. Process via Core Logic
             accel, steer = self.core.process(ranges)
+            gap_decision = self.core.last_gap_teacher_decision
+            if gap_decision is not None and gap_decision.active:
+                self.gap_teacher_active_count += 1
             steer = float(np.clip(
                 steer,
                 -self.max_steering_angle_rad,
@@ -227,7 +277,23 @@ class TinyLidarNetNode(Node):
                 max_time = np.max(self.inference_times)
                 inference_capacity_hz = 1000.0 / avg_time if avg_time > 0 else 0.0
                 interval_scans = self.scan_count - self.last_log_scan_count
+                interval_teacher_active = (
+                    self.gap_teacher_active_count
+                    - self.last_log_gap_teacher_active_count
+                )
                 scan_hz = interval_scans / elapsed_sec if elapsed_sec > 0.0 else 0.0
+
+                teacher_status = ""
+                decision = self.core.last_gap_teacher_decision
+                if decision is not None:
+                    teacher_status = (
+                        f" gap_teacher_active={interval_teacher_active}/{interval_scans} "
+                        f"front_m={decision.front_distance_m:.2f} "
+                        f"left_side_m={decision.left_side_distance_m:.2f} "
+                        f"right_side_m={decision.right_side_distance_m:.2f} "
+                        f"gap_angle_rad={decision.target_angle_rad:.2f} "
+                        f"gap_reason={decision.reason}"
+                    )
 
                 self.get_logger().info(
                     f"E2E_STATUS scans={self.scan_count} stale={int(self.sensor_stale)} "
@@ -235,9 +301,13 @@ class TinyLidarNetNode(Node):
                     f"avg_inference_ms={avg_time:.2f} "
                     f"max_inference_ms={max_time:.2f} "
                     f"inference_capacity_hz={inference_capacity_hz:.2f}"
+                    f"{teacher_status}"
                 )
                 self.inference_times.clear()
                 self.last_log_scan_count = self.scan_count
+                self.last_log_gap_teacher_active_count = (
+                    self.gap_teacher_active_count
+                )
 
             self.last_log_time = now
 

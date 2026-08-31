@@ -1,7 +1,12 @@
 import logging
 import numpy as np
-from typing import Tuple
+from typing import Optional, Tuple
 
+from tiny_lidar_net_controller.gap_teacher import (
+    GapTeacherConfig,
+    GapTeacherDecision,
+    LidarGapTeacher,
+)
 from tiny_lidar_net_controller.model.tinylidarnet import (
     TinyLidarNetNp,
     TinyLidarNetSmallNp,
@@ -20,7 +25,8 @@ class TinyLidarNetCore:
         output_dim (int): Dimension of the output vector (acceleration, steering).
         architecture (str): Model architecture type ('large' or 'small').
         acceleration (float): Fixed acceleration value used in 'fixed' control mode.
-        control_mode (str): Control strategy ('ai' or 'fixed').
+        control_mode (str): Control strategy ('ai', 'fixed', or teacher-only
+            'gap_teacher').
         max_range (float): Maximum LiDAR range used for normalization and clipping.
         model (object): The instantiated neural network model.
         logger (logging.Logger): Logger instance.
@@ -34,7 +40,8 @@ class TinyLidarNetCore:
         ckpt_path: str = '',
         acceleration: float = 0.1,
         control_mode: str = 'ai',
-        max_range: float = 30.0
+        max_range: float = 30.0,
+        gap_teacher_config: Optional[GapTeacherConfig] = None,
     ):
         """Initializes the TinyLidarNetCore with specified parameters.
 
@@ -52,6 +59,8 @@ class TinyLidarNetCore:
             control_mode (str, optional): The control mode to determine output behavior.
                 'ai' uses model output for both acceleration and steering.
                 'fixed' uses the fixed acceleration value and model output for steering.
+                'gap_teacher' blends model steering toward a LiDAR opening for
+                teacher-data collection only.
                 Defaults to 'ai'.
             max_range (float, optional): The maximum range value for normalization.
                 Values exceeding this will be clipped, and infinity will be replaced
@@ -65,6 +74,7 @@ class TinyLidarNetCore:
         self.max_range = max_range
         self.logger = logging.getLogger(__name__)
         self.loaded_parameter_count = 0
+        self.last_gap_teacher_decision: Optional[GapTeacherDecision] = None
 
         if not isinstance(self.input_dim, int) or self.input_dim <= 0:
             raise ValueError("input_dim must be a positive integer")
@@ -74,8 +84,10 @@ class TinyLidarNetCore:
             raise ValueError(
                 "architecture must be one of: normal, large, small"
             )
-        if self.control_mode not in {"ai", "fixed"}:
-            raise ValueError("control_mode must be either 'ai' or 'fixed'")
+        if self.control_mode not in {"ai", "fixed", "gap_teacher"}:
+            raise ValueError(
+                "control_mode must be one of: ai, fixed, gap_teacher"
+            )
         if not np.isfinite(self.max_range) or self.max_range <= 0.0:
             raise ValueError("max_range must be finite and positive")
         if not np.isfinite(self.acceleration) or not -1.0 <= self.acceleration <= 1.0:
@@ -85,6 +97,12 @@ class TinyLidarNetCore:
             self.model = TinyLidarNetSmallNp(input_dim=self.input_dim, output_dim=self.output_dim)
         else:
             self.model = TinyLidarNetNp(input_dim=self.input_dim, output_dim=self.output_dim)
+
+        self.gap_teacher = None
+        if self.control_mode == "gap_teacher":
+            self.gap_teacher = LidarGapTeacher(
+                gap_teacher_config or GapTeacherConfig()
+            )
 
         if not ckpt_path:
             raise ValueError("ckpt_path is required; random production weights are forbidden")
@@ -107,8 +125,10 @@ class TinyLidarNetCore:
         if ranges.ndim != 1 or ranges.size == 0:
             raise ValueError("ranges must be a non-empty 1D array")
 
-        # 1. Preprocess (Clean -> Resize -> Normalize)
-        processed_ranges = self._preprocess_ranges(ranges)
+        # 1. Preprocess (Clean -> Resize -> Normalize). Keep metre ranges for
+        # the explicitly teacher-only gap policy; the network sees normalized data.
+        physical_ranges = self._clean_and_resize_ranges(ranges)
+        processed_ranges = physical_ranges / self.max_range
 
         # Prepare input tensor: (1, 1, input_dim)
         x = np.expand_dims(np.expand_dims(processed_ranges, axis=0), axis=1)
@@ -127,6 +147,13 @@ class TinyLidarNetCore:
             accel = self.acceleration
 
         steer = float(np.clip(outputs[1], -1.0, 1.0))
+
+        self.last_gap_teacher_decision = None
+        if self.gap_teacher is not None:
+            decision = self.gap_teacher.decide(physical_ranges, steer, accel)
+            self.last_gap_teacher_decision = decision
+            accel = decision.acceleration_mps2
+            steer = decision.steering_rad
 
         return accel, steer
 
@@ -195,21 +222,20 @@ class TinyLidarNetCore:
             self.logger.error(f"Failed to load weights from {path}: {e}")
             raise e
 
-    def _preprocess_ranges(self, ranges: np.ndarray) -> np.ndarray:
-        """Cleans, resizes, and normalizes LiDAR ranges.
+    def _clean_and_resize_ranges(self, ranges: np.ndarray) -> np.ndarray:
+        """Clean and resize LiDAR ranges while preserving metres.
 
         This method performs the following operations:
         1. Replaces NaNs with 0.0.
         2. Replaces infinite values with `self.max_range`.
         3. Clips all values to the range [0.0, `self.max_range`].
         4. Resizes the array to match `self.input_dim` via interpolation or padding.
-        5. Normalizes the data by dividing by `self.max_range`.
 
         Args:
             ranges (np.ndarray): Source LiDAR range data.
 
         Returns:
-            np.ndarray: Processed data array of shape (self.input_dim,).
+            np.ndarray: Physical ranges in metres with shape (self.input_dim,).
         """
         # Work on a copy to avoid side effects on the input array
         ranges = ranges.copy()
@@ -229,5 +255,8 @@ class TinyLidarNetCore:
         elif current_len < self.input_dim:
             ranges = np.pad(ranges, (0, self.input_dim - current_len), 'constant')
 
-        # Normalize
-        return ranges / self.max_range 
+        return ranges.astype(np.float32, copy=False)
+
+    def _preprocess_ranges(self, ranges: np.ndarray) -> np.ndarray:
+        """Backward-compatible normalized preprocessing entry point."""
+        return self._clean_and_resize_ranges(ranges) / self.max_range

@@ -89,6 +89,38 @@ def test_fixed_acceleration_outside_command_contract_is_rejected() -> None:
         )
 
 
+def test_gap_teacher_mode_is_explicit_and_keeps_finite_contract() -> None:
+    core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="gap_teacher",
+        max_range=30.0,
+    )
+    acceleration, steering = core.process(
+        np.full(750, 30.0, dtype=np.float32)
+    )
+    assert acceleration == pytest.approx(0.6)
+    assert np.isfinite(steering)
+    assert core.last_gap_teacher_decision is not None
+    assert not core.last_gap_teacher_decision.active
+
+
+def test_unknown_control_mode_is_rejected() -> None:
+    with pytest.raises(ValueError, match="control_mode"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            acceleration=0.6,
+            control_mode="gap-ish",
+            max_range=30.0,
+        )
+
+
 def test_numpy_runtime_matches_reference_forward_pass() -> None:
     weights = np.load(CHECKPOINT, allow_pickle=True).item()
     model = TinyLidarNetNp(input_dim=750, output_dim=2)

@@ -52,6 +52,26 @@ if [[ -n "${tiny_lidar_ckpt_path}" ]]; then
     opts+=("tiny_lidar_ckpt_path:=${tiny_lidar_ckpt_path}")
 fi
 
+# The gap teacher is an explicit data-collection mode under the existing
+# tiny_lidar_net interface. It cannot be selected accidentally by another
+# controller or by an unknown spelling.
+tiny_lidar_control_mode="${TINY_LIDAR_CONTROL_MODE:-}"
+if [[ -n "${tiny_lidar_control_mode}" ]]; then
+    if [[ "${control_method}" != "tiny_lidar_net" ]]; then
+        echo "TINY_LIDAR_CONTROL_MODE is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"
+        exit 1
+    fi
+    case "${tiny_lidar_control_mode}" in
+    "fixed"|"ai"|"gap_teacher")
+        ;;
+    *)
+        echo "invalid TINY_LIDAR_CONTROL_MODE '${tiny_lidar_control_mode}'"
+        exit 1
+        ;;
+    esac
+    opts+=("tiny_lidar_control_mode:=${tiny_lidar_control_mode}")
+fi
+
 export ROS_DOMAIN_ID=$id
 
 mkdir -p "${out_dir}"

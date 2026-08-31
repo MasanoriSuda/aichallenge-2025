@@ -24,6 +24,7 @@ x-autoware-base: &autoware-base
     - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-1}
     - AIC_VEHICLE_COUNT=${AIC_VEHICLE_COUNT:-1}
     - AIC_CONTROL_METHOD=${AIC_CONTROL_METHOD:-tiny_lidar_net}
+    - TINY_LIDAR_CKPT_PATH=${TINY_LIDAR_CKPT_PATH:-}
     - LOG_DIR=${LOG_DIR:-}
   volumes:
     - ./output:${OUTPUT_ROOT:-/output}

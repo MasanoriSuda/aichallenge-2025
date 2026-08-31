@@ -10,6 +10,7 @@
     <arg name="domain_id" default="0"/>
     <arg name="vehicle_count" default="1"/>
     <arg name="control_method" default="tiny_lidar_net"/>
+    <arg name="tiny_lidar_ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/tinylidarnet_weights.npy"/>
 
     <let name="domain_id" value="$(var domain_id)"/>
     <let name="rviz_config" value="$(find-pkg-share aichallenge_system_launch)/config/autoware_vehicle.rviz"/>
@@ -27,6 +28,7 @@
     <log message=" - domain_id: $(var domain_id)"/>
     <log message=" - vehicle_count: $(var vehicle_count)"/>
     <log message=" - control_method: $(var control_method)"/>
+    <log message=" - tiny_lidar_ckpt_path: $(var tiny_lidar_ckpt_path)"/>
 
     <!-- Main module of AI challenge 2025. -->
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/aichallenge_submit.launch.xml" >
@@ -35,6 +37,7 @@
         <arg name="sensor_model" value="$(var sensor_model)"/>
         <arg name="launch_vehicle_interface" value="$(var launch_vehicle_interface)"/>
         <arg name="control_method" value="$(var control_method)"/>
+        <arg name="tiny_lidar_ckpt_path" value="$(var tiny_lidar_ckpt_path)"/>
     </include>
 
     <!-- Visualization. -->

@@ -1,4 +1,9 @@
+import json
 from pathlib import Path
+import random
+from datetime import datetime
+
+import numpy as np
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -6,11 +11,11 @@ from tqdm import tqdm
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.tensorboard import SummaryWriter
-from datetime import datetime
 
-from lib.model import TinyLidarNet, TinyLidarNetSmall
+from lib.checkpoint import load_pretrained_weights
 from lib.data import MultiSeqConcatDataset, assert_disjoint_sequence_ids
 from lib.loss import WeightedSmoothL1Loss
+from lib.model import TinyLidarNet, TinyLidarNetSmall
 
 
 
@@ -21,6 +26,41 @@ def clean_numerical_tensor(x: torch.Tensor) -> torch.Tensor:
     return x
 
 
+def seed_everything(seed: int) -> torch.Generator:
+    """Make model initialization and DataLoader shuffling reproducible."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    return generator
+
+
+def write_training_manifest(
+    path: Path,
+    cfg: DictConfig,
+    train_dataset: MultiSeqConcatDataset,
+    val_dataset: MultiSeqConcatDataset,
+    pretrained: dict,
+) -> None:
+    manifest = {
+        "schema_version": 1,
+        "config": OmegaConf.to_container(cfg, resolve=True),
+        "train_sequence_ids": train_dataset.sequence_ids,
+        "val_sequence_ids": val_dataset.sequence_ids,
+        "train_samples": len(train_dataset),
+        "val_samples": len(val_dataset),
+        "pretrained": pretrained,
+    }
+    path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
 @hydra.main(config_path="./config", config_name="train", version_base="1.2")
 def main(cfg: DictConfig):
     print("------ Configuration ------")
@@ -29,6 +69,7 @@ def main(cfg: DictConfig):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+    data_generator = seed_everything(int(cfg.train.seed))
 
     # === Dataset ===
     dataset_contract = {
@@ -57,8 +98,9 @@ def main(cfg: DictConfig):
         batch_size=cfg.train.batch_size,
         shuffle=True,
         num_workers=cfg.train.num_workers,
-        pin_memory=True,
-        drop_last=True
+        pin_memory=device.type == "cuda",
+        drop_last=True,
+        generator=data_generator,
     )
 
     val_loader = DataLoader(
@@ -66,8 +108,8 @@ def main(cfg: DictConfig):
         batch_size=cfg.train.batch_size,
         shuffle=False,
         num_workers=cfg.train.num_workers,
-        pin_memory=True,
-        drop_last=False
+        pin_memory=device.type == "cuda",
+        drop_last=False,
     )
 
     # === Model ===
@@ -82,9 +124,15 @@ def main(cfg: DictConfig):
             output_dim=cfg.model.output_dim
         ).to(device)
 
+    pretrained = {}
     if cfg.train.pretrained_path:
-        model.load_state_dict(torch.load(cfg.train.pretrained_path, map_location=device))
-        print(f"[INFO] Loaded pretrained model from {cfg.train.pretrained_path}")
+        pretrained = load_pretrained_weights(
+            model, Path(cfg.train.pretrained_path)
+        )
+        print(
+            "[INFO] Loaded pretrained model "
+            f"format={pretrained['format']} sha256={pretrained['sha256']}"
+        )
 
     # === Loss & Optimizer ===
     criterion = WeightedSmoothL1Loss(
@@ -97,23 +145,34 @@ def main(cfg: DictConfig):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_dir = Path(cfg.train.save_dir).expanduser().resolve()
     log_dir = Path(cfg.train.log_dir).expanduser().resolve()
-    save_dir.mkdir(parents=True, exist_ok=True)
+    run_save_dir = save_dir / timestamp
+    run_save_dir.mkdir(parents=True, exist_ok=False)
     log_dir.mkdir(parents=True, exist_ok=True)
+    write_training_manifest(
+        run_save_dir / "training-manifest.json",
+        cfg,
+        train_dataset,
+        val_dataset,
+        pretrained,
+    )
 
     with SummaryWriter(log_dir / timestamp) as writer:
         best_val_loss = float("inf")
         patience_counter = 0
         max_patience = cfg.train.get("early_stop_patience", 10)
 
-        best_path = save_dir / "best_model.pth"
-        last_path = save_dir / "last_model.pth"
+        best_path = run_save_dir / "best_model.pth"
+        last_path = run_save_dir / "last_model.pth"
 
         # === Training Loop ===
         for epoch in range(cfg.train.epochs):
             model.train()
             train_loss = 0.0
 
-            for scans, targets in tqdm(train_loader, desc=f"[Train] Epoch {epoch+1}/{cfg.train.epochs}"):
+            for scans, targets in tqdm(
+                train_loader,
+                desc=f"[Train] Epoch {epoch + 1}/{cfg.train.epochs}",
+            ):
                 scans = scans.unsqueeze(1).to(device)
                 targets = targets.to(device)
 
@@ -131,7 +190,10 @@ def main(cfg: DictConfig):
             avg_train_loss = train_loss / len(train_loader)
             avg_val_loss = validate(model, val_loader, device, criterion)
 
-            print(f"Epoch {epoch+1:03d}: Train={avg_train_loss:.4f} | Val={avg_val_loss:.4f}")
+            print(
+                f"Epoch {epoch + 1:03d}: "
+                f"Train={avg_train_loss:.4f} | Val={avg_val_loss:.4f}"
+            )
             writer.add_scalar("Loss/train", avg_train_loss, epoch + 1)
             writer.add_scalar("Loss/val", avg_val_loss, epoch + 1)
 

@@ -16,15 +16,16 @@ model:
   output_dim: 2
 
 train:
+  seed: 2026
   batch_size: 64
   num_workers: 4
-  epochs: 100
-  lr: 0.001
+  epochs: 30
+  lr: 0.0001
   
-  early_stop_patience: 15
+  early_stop_patience: 5
 
   # 事前学習済みモデルのパス（指定しない場合は null）
-  pretrained_path: null
+  pretrained_path: "/aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy"
 
   # 保存先設定
   save_dir: "/aichallenge/ml_workspace/tiny_lidar_net/checkpoints"
@@ -33,4 +34,4 @@ train:
   # 損失関数の重み設定
   loss:
     steer_weight: 1.0
-    accel_weight: 1.0
+    accel_weight: 0.0

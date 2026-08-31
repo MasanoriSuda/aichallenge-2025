@@ -36,6 +36,22 @@ case "${control_method}" in
 esac
 opts+=("control_method:=${control_method}")
 
+# A candidate checkpoint is an explicit A/B-test input. An unset override leaves
+# the launch/package default untouched, so experiments cannot silently replace
+# the production checkpoint.
+tiny_lidar_ckpt_path="${TINY_LIDAR_CKPT_PATH:-}"
+if [[ -n "${tiny_lidar_ckpt_path}" ]]; then
+    if [[ "${control_method}" != "tiny_lidar_net" ]]; then
+        echo "TINY_LIDAR_CKPT_PATH is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"
+        exit 1
+    fi
+    if [[ ! -f "${tiny_lidar_ckpt_path}" ]]; then
+        echo "TINY_LIDAR_CKPT_PATH does not exist in the runtime container: ${tiny_lidar_ckpt_path}"
+        exit 1
+    fi
+    opts+=("tiny_lidar_ckpt_path:=${tiny_lidar_ckpt_path}")
+fi
+
 export ROS_DOMAIN_ID=$id
 
 mkdir -p "${out_dir}"

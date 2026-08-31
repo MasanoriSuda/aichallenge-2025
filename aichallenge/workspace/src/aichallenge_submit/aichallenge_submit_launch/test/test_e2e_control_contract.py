@@ -36,6 +36,7 @@ def test_e2e_entry_selects_tiny_lidar_net() -> None:
         for node in includes[0].findall("arg")
     }
     assert forwarded["control_method"] == "$(var control_method)"
+    assert forwarded["tiny_lidar_ckpt_path"] == "$(var tiny_lidar_ckpt_path)"
 
 
 def test_reference_retains_explicit_controller_switch() -> None:
@@ -53,6 +54,13 @@ def test_reference_retains_explicit_controller_switch() -> None:
         == "$(eval \"'$(var control_method)' == 'tiny_lidar_net'\")"
     ]
     assert len(tiny_groups) == 1
+    tiny_include = tiny_groups[0].find("include")
+    assert tiny_include is not None
+    tiny_forwarded = {
+        node.get("name"): node.get("value")
+        for node in tiny_include.findall("arg")
+    }
+    assert tiny_forwarded["ckpt_path"] == "$(var tiny_lidar_ckpt_path)"
 
 
 def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None:

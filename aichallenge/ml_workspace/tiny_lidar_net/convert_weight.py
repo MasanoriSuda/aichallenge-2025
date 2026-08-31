@@ -4,6 +4,7 @@ from typing import Dict
 import numpy as np
 import torch
 
+from lib.checkpoint import load_pretrained_weights
 from lib.model import TinyLidarNet, TinyLidarNetSmall
 
 
@@ -67,12 +68,12 @@ def load_model(
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
-    if not ckpt_path.exists():
-        raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-
-    state_dict = torch.load(ckpt_path, map_location="cpu")
-    model.load_state_dict(state_dict)
-    print(f"Loaded checkpoint: {ckpt_path}")
+    metadata = load_pretrained_weights(model, ckpt_path)
+    print(
+        "Loaded checkpoint: "
+        f"{metadata['path']} format={metadata['format']} "
+        f"sha256={metadata['sha256']}"
+    )
     return model
 
 

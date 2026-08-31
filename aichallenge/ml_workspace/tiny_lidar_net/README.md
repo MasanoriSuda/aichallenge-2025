@@ -52,6 +52,10 @@ trainerは学習開始前に次を検証します。
 
 `train.loss.accel_weight`を`0.0`にすることで、steeringのみ学習できます。現baselineは
 longitudinalを固定加速度としているため、まずsteeringのみの学習を推奨します。
+`train.pretrained_path`には`.pth/.pt`のraw state dictだけでなく、提出runtimeで使う
+`.npy/.npz`weightも指定できます。全parameterのkey、shape、finite値を検証してから
+warm-startします。各学習runはtimestamp directoryへ保存され、dataset sequence ID、設定、
+pretrained checkpointのSHA-256を`training-manifest.json`へ記録します。
 
 ```bash
 python3 train.py \
@@ -67,3 +71,14 @@ train.loss.accel_weight=0.0
 ```bash
 python3 convert_weight.py --model tinylidarnet --ckpt ./ckpts/weight.pth
 ```
+
+変換時もtrainingと同じcheckpoint契約（全key、shape、finite値）を検証します。閉ループ確認前に
+production重みを上書きせず、コンテナから見えるcandidate pathを明示してA/Bできます。
+
+```bash
+make e2e-single \
+  TINY_LIDAR_CKPT_PATH=/aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<run>/candidate.npy
+```
+
+override未指定時はpackage同梱のproduction重みを使います。存在しないpathや、
+`tiny_lidar_net`以外のcontrollerとの組み合わせは起動前に拒否されます。

@@ -1707,9 +1707,7 @@ def test_preentry_causal_execution_pipeline_is_gate_only_and_predecessor_bound()
     )
     submit_end = SOURCE.index("consume_rate_resolved_preentry_execution_shadow(", submit_start)
     submit = SOURCE[submit_start:submit_end]
-    queued = submit.index(
-        "rate_resolved_preentry_execution_shadow_worker_->submit_latest("
-    )
+    queued = submit.index("transition_worker->submit_latest(")
     worker = submit[queued:]
     assert "planner->build_prospective_extended_branch_problem(" in worker
     assert "evaluate_rate_resolved_current_world_population(" in worker
@@ -3761,6 +3759,41 @@ def test_pass_to_return_requires_causal_certified_gate_a() -> None:
         "resolve_atomic_intent_admission("
     )
     assert "evaluate_rate_resolved_track_cruise_plan(" in control
+
+
+def test_return_gate_a_has_an_isolated_worker_and_solver_lane() -> None:
+    """Long Mission/Pass solves must not head-of-line block Return Gate A."""
+
+    submit_start = SOURCE.index(
+        "bool submit_rate_resolved_preentry_execution_shadow("
+    )
+    submit_end = SOURCE.index(
+        "void consume_rate_resolved_preentry_execution_shadow(", submit_start
+    )
+    submit = SOURCE[submit_start:submit_end]
+
+    assert "rate_resolved_return_execution_shadow_worker_.get()" in submit
+    assert "rate_resolved_return_execution_shadow_solver_context_" in submit
+    assert "draft.kind == RateResolvedIntentTransitionKind::ReturnGateA" in submit
+    assert "transition_worker->submit_latest(" in submit
+
+    initialization = SOURCE.index(
+        "rate_resolved_return_execution_shadow_solver_context_ ="
+    )
+    worker_initialization = SOURCE.index(
+        "rate_resolved_return_execution_shadow_worker_ =", initialization
+    )
+    submit_function = SOURCE.index(
+        "bool submit_rate_resolved_preentry_execution_shadow("
+    )
+    assert initialization < worker_initialization < submit_function
+
+    return_deferral = SOURCE.index(
+        "OvertakeLine Return authority deferred before phase mutation:"
+    )
+    assert "rate_resolved_return_execution_shadow_worker_" in SOURCE[
+        return_deferral - 800 : return_deferral
+    ]
 
 
 def test_shiftout_to_pass_requires_causal_certified_gate_a() -> None:

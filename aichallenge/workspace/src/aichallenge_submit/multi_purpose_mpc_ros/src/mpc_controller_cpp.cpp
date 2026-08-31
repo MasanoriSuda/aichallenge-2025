@@ -8107,11 +8107,15 @@ struct MPC
         std::make_shared<rate_resolved_certified::Store>();
       rate_resolved_preentry_execution_shadow_solver_context_ =
         std::make_shared<rate_resolved_shadow::SolverContext>();
+      rate_resolved_return_execution_shadow_solver_context_ =
+        std::make_shared<rate_resolved_shadow::SolverContext>();
       rate_resolved_preentry_execution_shadow_mailbox_ =
         std::make_shared<RateResolvedPreentryExecutionShadowMailbox>();
       rate_resolved_preentry_execution_shadow_mailbox_->context_epoch =
         mpcc_lite_async_context_epoch_;
       rate_resolved_preentry_execution_shadow_worker_ =
+        std::make_unique<LatestOnlyWorker>();
+      rate_resolved_return_execution_shadow_worker_ =
         std::make_unique<LatestOnlyWorker>();
       rate_resolved_terminal_failure_snapshot_worker_ =
         std::make_unique<LatestOnlyWorker>();
@@ -25422,12 +25426,20 @@ struct MPC
     const RateResolvedSerializedPredecessor predecessor,
     const double now_sec)
   {
+    const bool return_lane =
+      draft.kind == RateResolvedIntentTransitionKind::ReturnGateA;
+    auto * transition_worker = return_lane ?
+      rate_resolved_return_execution_shadow_worker_.get() :
+      rate_resolved_preentry_execution_shadow_worker_.get();
+    const auto solver_context = return_lane ?
+      rate_resolved_return_execution_shadow_solver_context_ :
+      rate_resolved_preentry_execution_shadow_solver_context_;
     const char * invalid_reason = nullptr;
-    if (rate_resolved_preentry_execution_shadow_worker_ == nullptr) {
+    if (transition_worker == nullptr) {
       invalid_reason = "worker-unavailable";
     } else if (rate_resolved_preentry_execution_shadow_mailbox_ == nullptr) {
       invalid_reason = "mailbox-unavailable";
-    } else if (rate_resolved_preentry_execution_shadow_solver_context_ == nullptr) {
+    } else if (solver_context == nullptr) {
       invalid_reason = "solver-context-unavailable";
     } else if (
       rate_resolved_preentry_execution_shadow_next_sequence_ ==
@@ -25494,8 +25506,6 @@ struct MPC
       mailbox->context_epoch = draft.context_epoch;
       mailbox->latest_submitted_sequence = sequence;
     }
-    const auto solver_context =
-      rate_resolved_preentry_execution_shadow_solver_context_;
     RateResolvedPreentryExecutionShadowResult result;
     result.sequence = sequence;
     result.kind = draft.kind;
@@ -25515,7 +25525,7 @@ struct MPC
     result.snapshot_ms = draft.snapshot_ms;
     const double snapshot_ms = draft.snapshot_ms;
     const auto submission =
-      rate_resolved_preentry_execution_shadow_worker_->submit_latest(
+      transition_worker->submit_latest(
       [draft = std::move(draft), predecessor,
       sequence, solver_context, mailbox,
       result = std::move(result)]() mutable {
@@ -25946,9 +25956,11 @@ struct MPC
       now_sec - rate_resolved_preentry_execution_shadow_last_log_sec_ >= 0.5)
     {
       rate_resolved_preentry_execution_shadow_last_log_sec_ = now_sec;
-      const auto worker_stats =
-        rate_resolved_preentry_execution_shadow_worker_ != nullptr ?
-        rate_resolved_preentry_execution_shadow_worker_->stats() :
+      const auto * result_worker = return_transition ?
+        rate_resolved_return_execution_shadow_worker_.get() :
+        rate_resolved_preentry_execution_shadow_worker_.get();
+      const auto worker_stats = result_worker != nullptr ?
+        result_worker->stats() :
         LatestOnlyWorker::Stats{};
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
@@ -30781,10 +30793,14 @@ struct MPC
   rate_resolved_track_cruise_certified_plan_store_;
   std::shared_ptr<rate_resolved_shadow::SolverContext>
   rate_resolved_preentry_execution_shadow_solver_context_;
+  std::shared_ptr<rate_resolved_shadow::SolverContext>
+  rate_resolved_return_execution_shadow_solver_context_;
   std::shared_ptr<RateResolvedPreentryExecutionShadowMailbox>
   rate_resolved_preentry_execution_shadow_mailbox_;
   std::unique_ptr<LatestOnlyWorker>
   rate_resolved_preentry_execution_shadow_worker_;
+  std::unique_ptr<LatestOnlyWorker>
+  rate_resolved_return_execution_shadow_worker_;
   std::unique_ptr<LatestOnlyWorker>
   rate_resolved_terminal_failure_snapshot_worker_;
   std::uint64_t rate_resolved_preentry_execution_shadow_next_sequence_{1U};
@@ -36414,8 +36430,8 @@ private:
           if (line_cfg.debug_log_enabled && log_now) {
             overtake_line_state_.return_preflight_last_log_sec = now_sec;
             const auto transition_worker =
-              rate_resolved_preentry_execution_shadow_worker_ != nullptr ?
-              rate_resolved_preentry_execution_shadow_worker_->stats() :
+              rate_resolved_return_execution_shadow_worker_ != nullptr ?
+              rate_resolved_return_execution_shadow_worker_->stats() :
               LatestOnlyWorker::Stats{};
             RCLCPP_INFO(
               rclcpp::get_logger("mpc_controller"),

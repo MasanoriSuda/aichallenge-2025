@@ -3596,6 +3596,18 @@ Return solver laneをMission／Passから分離し、最初に実行されたcur
 proofでcandidate-generation問題を再分類する。Pass保持時間、wall margin、solver toleranceは
 変更しない。
 
+分離後は`ReturnGateA`専用のlatest-only workerとprivate solver contextを持たせた。Mission／Pass
+laneとは計算資源だけを分離し、sequence、immutable result mailbox、consumer admission、production
+authorityは共有したままとする。したがって別publisherや別authorityを追加する変更ではない。
+
+`output/20260831-151543/d1`では最初のReturn defer時に専用laneが
+`submitted=0/started=0/running=0/pending=0`であり、最初のReturn jobが`52.743 ms`で
+`solver=solved/physical=accepted/published=1`となった。完了の約3 ms後に`Pass -> Return`、
+約1.47秒後に`Return -> Idle`を完遂した。旧runの2.824秒待ちは解消され、同snapshotの早い
+Return候補は物理的にも成立したため、このfailureはcandidate-generation defectではなく
+worker head-of-line scheduling defectと分類する。別runで観測したShiftOutのwall／corridor failureは
+このReturn修正へ混ぜず、個別のfrozen snapshotとして監査する。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

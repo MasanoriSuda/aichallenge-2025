@@ -3495,6 +3495,33 @@ Stop不可能ではなくproducer時刻不整合だった。修正後の`output/
 ShiftOut geometryがstoppable／wall-clear領域を出るまで更新されなかった上流継続欠陥として別に監査する。Stop fallback、wall margin、
 solver toleranceで隠蔽しない。
 
+#### 操舵到達可能性に基づくOvertake時間homotopy（2026-08-31、2025由来の暫定）
+
+stateless Overtakeのbounded populationは、direct side、固定midpoint physical diagonal、late-exactだけでなく、現在操舵角から
+選択sideの操舵限界へ物理的に到達できる最初のstageを持つsteering-reachable physical diagonalを生成する。到達時間はimmutable
+current-world requestの値だけから、次式で求める。
+
+```text
+abs(side * maximum_abs_steering - current_steering)
+  / maximum_abs_steering_rate
++ yaw_response_time_constant
+```
+
+stageごとのimmutable `dt`を累積し、この時間を初めて超えるstageをfull-side transitionとする。ただし既存diagonalの最小長を満たし、
+midpointと同じstageなら重複生成しない。評価順はdirect、steering-reachable、distinct midpoint、finite-boundary／late-exactとし、
+最初にseven-state SQP、exact wall、timed opponent、terminal Stopをすべて証明したBundleだけを返す。candidate数は最大4で固定し、
+liveでaudit lattice全探索を行わない。
+
+`output/20260831-124927/d1` decision 1833由来のsequence 1141を同一snapshotでA/B/C/D比較すると、persistent Aとdirect stateless Bは
+wall proof不成立、rough Cとoffline Dはtransition stage 6で成立した。旧productionの固定midpointはstage 9で全候補不成立だった。
+現在操舵`-0.172680 rad`、左限界`+0.366519 rad`、rate`0.731707 rad/s`、yaw delay`0.13 s`から計算した到達時間は
+約`0.867 s`で、immutable stage列ではstage 6となる。修正後のproduction-leftは同じsingle SQPとproofで
+`candidate_source=steering-reachable-physical-diagonal`、`lattice_ahead=6`をcertifyした。
+
+これは`A/B fail, C succeeds`のcandidate-generation defectだけを閉じる。動的run `output/20260831-131649/d1`で残った、direct-side
+frozen Missionを約1.3秒保持した後のactual-footprint wall違反は別のpost-admission geometry／lifecycle defectであり、到達候補、
+wall margin、Stop fallbackの追加で隠蔽しない。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

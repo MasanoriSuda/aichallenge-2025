@@ -418,36 +418,93 @@ TEST(MpccStatelessManeuver, AddsLateExactDisjunctionForLongHorizon)
   const auto result = build_bounded_candidates(source, -1);
 
   ASSERT_EQ(result.reason, RejectReason::Accepted) << result.detail;
-  ASSERT_EQ(result.candidates.size(), 3U) << result.detail;
+  ASSERT_EQ(result.candidates.size(), 4U) << result.detail;
+  EXPECT_EQ(
+    result.candidates[1].kind,
+    CandidateKind::SteeringReachablePhysicalDiagonal);
   EXPECT_EQ(
     result.candidates[1].seed.solver_snapshot.
     dynamic_obstacle_forced_diagonal_start_stage, 0);
   EXPECT_EQ(
     result.candidates[1].seed.solver_snapshot.
-    dynamic_obstacle_forced_diagonal_full_side_stage, 9);
-  EXPECT_EQ(result.candidates[2].kind, CandidateKind::LateExactDisjunction);
-  EXPECT_EQ(result.candidates[2].seed.pass_side_sign, -1);
+    dynamic_obstacle_forced_diagonal_full_side_stage, 6);
   EXPECT_EQ(
     result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_start_stage, 0);
+  EXPECT_EQ(
+    result.candidates[2].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_full_side_stage, 9);
+  EXPECT_EQ(result.candidates[3].kind, CandidateKind::LateExactDisjunction);
+  EXPECT_EQ(result.candidates[3].seed.pass_side_sign, -1);
+  EXPECT_EQ(
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_first_pass_side_stage, 17);
   EXPECT_EQ(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_first_ahead_stage, 20);
   EXPECT_DOUBLE_EQ(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_constraint_fraction, 1.0);
   EXPECT_EQ(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_diagonal_start_stage, -1);
   EXPECT_EQ(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_diagonal_full_side_stage, -1);
   EXPECT_FALSE(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_physical_diagonal);
   EXPECT_NE(
-    result.candidates[1].seed.candidate_fingerprint,
-    result.candidates[2].seed.candidate_fingerprint);
+    result.candidates[2].seed.candidate_fingerprint,
+    result.candidates[3].seed.candidate_fingerprint);
+}
+
+TEST(MpccStatelessManeuver, DeduplicatesReachableAndMidpointTopology)
+{
+  auto source = make_source();
+  constexpr int horizon = 20;
+  const auto state_template = source.request.states.back();
+  const auto input_template = source.request.inputs.back();
+  const auto obstacle_template = source.dynamic_obstacle_stages.back();
+  source.request.horizon_steps = horizon;
+  source.request.current_steering_rad = 0.3;
+  source.request.states.resize(horizon + 1, state_template);
+  source.request.inputs.resize(horizon, input_template);
+  source.nominal_path_distance_m.resize(horizon + 1);
+  source.wall_reference_progress_m.resize(horizon + 1);
+  source.wall_lower_m.resize(horizon + 1, -2.0);
+  source.wall_upper_m.resize(horizon + 1, 2.0);
+  source.dynamic_obstacle_stages.resize(horizon, obstacle_template);
+  for (int stage = 0; stage <= horizon; ++stage) {
+    const auto index = static_cast<std::size_t>(stage);
+    source.request.states[index].reference(4) = static_cast<double>(stage);
+    source.nominal_path_distance_m[index] = static_cast<double>(stage);
+    source.wall_reference_progress_m[index] = static_cast<double>(stage);
+    if (stage < horizon) {
+      source.dynamic_obstacle_stages[index].target_progress_m =
+        static_cast<double>(stage + 1);
+    }
+  }
+  source.execution_prefix_steps = horizon;
+  source.identity.source_context.horizon_steps = horizon;
+  source.identity.source_context.fingerprint = 0U;
+  source.identity.source_context =
+    mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
+  ASSERT_TRUE(
+    mpcc_architecture_snapshot::interaction_snapshot_complete(source));
+
+  const auto result = build_bounded_candidates(source, -1);
+
+  ASSERT_EQ(result.reason, RejectReason::Accepted) << result.detail;
+  ASSERT_EQ(result.candidates.size(), 3U) << result.detail;
+  EXPECT_EQ(
+    result.candidates[1].kind,
+    CandidateKind::SteeringReachablePhysicalDiagonal);
+  EXPECT_EQ(
+    result.candidates[1].seed.solver_snapshot.
+    dynamic_obstacle_forced_diagonal_full_side_stage, 9);
+  EXPECT_EQ(result.candidates[2].kind, CandidateKind::LateExactDisjunction);
 }
 
 TEST(MpccStatelessManeuver, UsesFiniteTargetTubeBoundaryAsThirdHomotopy)
@@ -496,22 +553,25 @@ TEST(MpccStatelessManeuver, UsesFiniteTargetTubeBoundaryAsThirdHomotopy)
   const auto result = build_bounded_candidates(source, -1);
 
   ASSERT_EQ(result.reason, RejectReason::Accepted) << result.detail;
-  ASSERT_EQ(result.candidates.size(), 3U) << result.detail;
+  ASSERT_EQ(result.candidates.size(), 4U) << result.detail;
   EXPECT_EQ(
-    result.candidates[2].kind,
+    result.candidates[1].kind,
+    CandidateKind::SteeringReachablePhysicalDiagonal);
+  EXPECT_EQ(
+    result.candidates[3].kind,
     CandidateKind::EncounterBoundaryPhysicalDiagonal);
   EXPECT_EQ(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_diagonal_start_stage, 5);
   EXPECT_EQ(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_diagonal_full_side_stage,
     last_valid_target_stage + 1);
   EXPECT_TRUE(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_physical_diagonal);
   EXPECT_EQ(
-    result.candidates[2].seed.solver_snapshot.
+    result.candidates[3].seed.solver_snapshot.
     dynamic_obstacle_forced_first_pass_side_stage, -1);
 }
 

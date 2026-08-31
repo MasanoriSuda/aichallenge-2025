@@ -48,6 +48,53 @@ Result reject(const RejectReason reason, std::string detail)
   return result;
 }
 
+std::optional<int> steering_reachable_full_side_stage(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const int pass_side_sign, const int first_valid_stage) noexcept
+{
+  const auto & request = source.request;
+  const int horizon = request.horizon_steps;
+  if (
+    (pass_side_sign != -1 && pass_side_sign != 1) ||
+    first_valid_stage < 0 || horizon <= 0 ||
+    request.inputs.size() != static_cast<std::size_t>(horizon) ||
+    !std::isfinite(request.current_steering_rad) ||
+    !std::isfinite(request.maximum_abs_steering_rad) ||
+    request.maximum_abs_steering_rad < 0.0 ||
+    !std::isfinite(request.maximum_abs_steering_rate_radps) ||
+    request.maximum_abs_steering_rate_radps <= kNumericalTolerance ||
+    !std::isfinite(request.yaw_response_time_constant_sec) ||
+    request.yaw_response_time_constant_sec < 0.0)
+  {
+    return std::nullopt;
+  }
+
+  const double side_steering_limit_rad =
+    static_cast<double>(pass_side_sign) *
+    request.maximum_abs_steering_rad;
+  const double reachability_duration_sec =
+    std::abs(side_steering_limit_rad - request.current_steering_rad) /
+    request.maximum_abs_steering_rate_radps +
+    request.yaw_response_time_constant_sec;
+  double cumulative_duration_sec = 0.0;
+  for (int full_side_stage = 1; full_side_stage < horizon; ++full_side_stage) {
+    const double stage_dt_sec = request.inputs[
+      static_cast<std::size_t>(full_side_stage - 1)].stage_dt_sec;
+    if (!std::isfinite(stage_dt_sec) || stage_dt_sec <= 0.0) {
+      return std::nullopt;
+    }
+    cumulative_duration_sec += stage_dt_sec;
+    if (
+      full_side_stage >= first_valid_stage + 2 &&
+      cumulative_duration_sec + kNumericalTolerance >=
+      reachability_duration_sec)
+    {
+      return full_side_stage;
+    }
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 TargetHorizon resolve_canonical_target_horizon(
@@ -235,6 +282,8 @@ const char * to_string(const CandidateKind kind) noexcept
 {
   switch (kind) {
     case CandidateKind::DirectSide: return "direct-side";
+    case CandidateKind::SteeringReachablePhysicalDiagonal:
+      return "steering-reachable-physical-diagonal";
     case CandidateKind::MidPhysicalDiagonal:
       return "mid-physical-diagonal";
     case CandidateKind::EncounterBoundaryPhysicalDiagonal:
@@ -1011,6 +1060,7 @@ CandidateSet build_bounded_candidates(
   // non-deterministically disappear.  Move the completed bounded population
   // only after every schedule has been derived from the stable direct seed.
   const auto & direct_snapshot = direct.seed->solver_snapshot;
+  std::optional<Candidate> steering_reachable_candidate;
   std::optional<Candidate> mid_candidate;
   std::optional<Candidate> third_candidate;
   int first_valid_stage = -1;
@@ -1031,6 +1081,20 @@ CandidateSet build_bounded_candidates(
     }
   }
   const int terminal_side_stage = direct_snapshot.request.horizon_steps - 1;
+  const auto steering_reachable_stage =
+    steering_reachable_full_side_stage(
+    direct_snapshot, pass_side_sign, first_valid_stage);
+  if (steering_reachable_stage.has_value()) {
+    auto diagonal = build_physical_diagonal_schedule(
+      source, source_fingerprint, pass_side_sign,
+      first_valid_stage, steering_reachable_stage.value());
+    if (diagonal.seed.has_value()) {
+      steering_reachable_candidate.emplace(
+        Candidate{
+          CandidateKind::SteeringReachablePhysicalDiagonal,
+          std::move(diagonal.seed.value())});
+    }
+  }
   // DirectSide already represents immediate avoidance.  The former
   // first_valid+2 sample duplicated that temporal extreme and omitted the
   // ordinary gradual transition: on a 20-stage horizon production sampled
@@ -1042,7 +1106,9 @@ CandidateSet build_bounded_candidates(
     first_valid_stage + (terminal_side_stage - first_valid_stage) / 2);
   if (
     first_valid_stage >= 0 &&
-    mid_full_side_stage < direct_snapshot.request.horizon_steps)
+    mid_full_side_stage < direct_snapshot.request.horizon_steps &&
+    (!steering_reachable_stage.has_value() ||
+    steering_reachable_stage.value() != mid_full_side_stage))
   {
     auto diagonal = build_physical_diagonal_schedule(
       source, source_fingerprint, pass_side_sign,
@@ -1145,9 +1211,13 @@ CandidateSet build_bounded_candidates(
       direct_snapshot.dynamic_obstacle_stages[index].longitudinal_overlap_m;
   }
 
-  result.candidates.reserve(3U);
+  result.candidates.reserve(4U);
   result.candidates.push_back(
     Candidate{CandidateKind::DirectSide, std::move(direct.seed.value())});
+  if (steering_reachable_candidate.has_value()) {
+    result.candidates.push_back(
+      std::move(steering_reachable_candidate.value()));
+  }
   if (mid_candidate.has_value()) {
     result.candidates.push_back(std::move(mid_candidate.value()));
   }
@@ -1161,7 +1231,9 @@ CandidateSet build_bounded_candidates(
          << result.candidates.size() << "/valid=" << first_valid_stage
          << ':' << last_contiguous_valid_stage << "/stay_behind="
          << last_nominal_stay_behind_stage << "/boundary="
-         << encounter_boundary_stage;
+         << encounter_boundary_stage << "/steering_reachable="
+         << steering_reachable_stage.value_or(-1) << "/mid="
+         << mid_full_side_stage;
   if (std::isfinite(first_nominal_progress_m)) {
     detail << "/first_nominal=" << first_nominal_progress_m
            << "/first_target=" << first_target_progress_m

@@ -49,8 +49,8 @@ const char *to_string(const Reason reason) noexcept {
   switch (reason) {
   case Reason::Accepted:
     return "accepted";
-  case Reason::SelectedAuthorityAvailable:
-    return "selected-authority-available";
+  case Reason::SelectedCurrentWorldAuthorityAvailable:
+    return "selected-current-world-authority-available";
   case Reason::InactiveExecution:
     return "inactive-execution";
   case Reason::InvalidLiveIdentity:
@@ -83,8 +83,8 @@ const char *to_string(const Reason reason) noexcept {
 
 Resolution resolve(const Request &request) noexcept {
   Resolution result;
-  if (request.selected_authority_available) {
-    result.reason = Reason::SelectedAuthorityAvailable;
+  if (request.selected_current_world_authority_available) {
+    result.reason = Reason::SelectedCurrentWorldAuthorityAvailable;
     return result;
   }
   if (!request.active_execution || !active_intent(request.live_intent)) {

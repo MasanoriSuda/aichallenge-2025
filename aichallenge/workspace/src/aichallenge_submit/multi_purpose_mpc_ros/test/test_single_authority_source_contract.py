@@ -3204,6 +3204,12 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
     assert "sibling_evaluation.stateless_current_world_bundle" in retained
     assert "overtake_sibling_adoption_token =" in retained
     assert "overtake_line_state_.pass_side_sign =" not in retained
+    current_world_resolution = retained.index(
+        "const auto resolution = overtake_sibling_adoption::resolve("
+    )
+    retained_candidate = retained.index("if (candidate_plan != nullptr)")
+    assert current_world_resolution < retained_candidate
+    assert "selected_epoch_plan != nullptr" in retained
 
     record_start = SOURCE.index("void record_canonical_normal_final_command(")
     record_end = SOURCE.index(

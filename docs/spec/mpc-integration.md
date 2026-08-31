@@ -272,6 +272,16 @@ publish済みcommandを観測状態そのものへ置換せず、受信間隔か
 ため削除した。これらをfeature flagとして残さない。非線形footprintをQP内部へ移す場合は、別sliceで
 保守的包絡と計算時間のfailure-first証拠を用意する。
 
+2026-08-31以降、Overtakeの同一immutable world epochにある左右branchについて、最新epochの
+selected side証明と過去artifactのretained command可否を同じauthorityとして扱わない。selected sideが
+最新epochで不成立、反対sideがexact wall / dynamic-obstacle / terminal Stopまでcertifiedであれば、過去の
+selected side commandが1周期実行可能でも反対sideをcurrent-world再検証できる。反対sideの採用は
+single canonical publisherを通過した後だけtarget、Mission generation、side、no-return状態をatomicに
+更新する。retained artifactは出力連続性の証拠であり、最新worldのhomotopy選択権を持たない。一方、
+stateless sibling採用後にlegacy Mission候補が存在しないことだけを理由にBehaviorをFollowへ戻す処理は、
+current-world MPCC authorityとの責務競合として未解決であり、parameter調整ではなく別のfailure-first
+Sliceで監査する。
+
 ### Wall / Contact Stuck Recovery（Implementation Complete / dev3 Enabled）
 
 前進専用の現行MPCは、正面が壁に押し付けられると後退できない。

@@ -1379,6 +1379,19 @@ Finish the architecture simplification instead of leaving permanent dual control
   no-escape admission/continuation defect, not justification for a fallback,
   lease, solver or clearance change.
 
+- `.steering/20260831-overtake-current-world-sibling-adoption` separates
+  retained command continuity from latest-epoch homotopy feasibility. An
+  executable older selected-side artifact no longer vetoes an exact-certified
+  opposite branch from the same immutable dual epoch. Sibling inspection now
+  precedes all retained-source returns, but tactical side still changes only
+  after the exact sibling command crosses the canonical publisher. In
+  `output/20260831-112650/d1`, sequence 703 was dynamically adopted from side
+  `-1` to `+1`; an independent run completed
+  `Idle -> ShiftOut -> Pass -> Return -> Idle`. The subsequent legacy Mission
+  candidate rejection and `Overtake -> Follow` transition are a separate
+  supervisor/producer ownership defect and remain the next frozen audit, not a
+  reason to restore the old veto or tune a parameter.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

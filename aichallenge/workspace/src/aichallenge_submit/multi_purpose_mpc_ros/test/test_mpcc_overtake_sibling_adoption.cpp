@@ -137,12 +137,14 @@ TEST(MpccOvertakeSiblingAdoption, RejectsDifferentTarget) {
   EXPECT_EQ(result.reason, adoption::Reason::SiblingEpochMismatch);
 }
 
-TEST(MpccOvertakeSiblingAdoption, RejectsSelectedAuthorityStillAvailable) {
+TEST(MpccOvertakeSiblingAdoption, RejectsSelectedCurrentWorldAuthority) {
   auto request = accepted_request();
-  request.selected_authority_available = true;
+  request.selected_current_world_authority_available = true;
   const auto result = adoption::resolve(request);
   EXPECT_FALSE(result.accepted);
-  EXPECT_EQ(result.reason, adoption::Reason::SelectedAuthorityAvailable);
+  EXPECT_EQ(
+      result.reason,
+      adoption::Reason::SelectedCurrentWorldAuthorityAvailable);
 }
 
 TEST(MpccOvertakeSiblingAdoption, PublicationTokenRejectsChangedLiveSide) {

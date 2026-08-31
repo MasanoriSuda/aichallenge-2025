@@ -13,7 +13,7 @@ namespace contract = mpcc_execution_contract;
 
 enum class Reason {
   Accepted,
-  SelectedAuthorityAvailable,
+  SelectedCurrentWorldAuthorityAvailable,
   InactiveExecution,
   InvalidLiveIdentity,
   HardFault,
@@ -45,7 +45,10 @@ struct Token {
 };
 
 struct Request {
-  bool selected_authority_available{false};
+  /// Whether the live selected homotopy is certified in the same immutable
+  /// world epoch as the sibling.  An older retained selected command is only
+  /// continuity evidence and must not set this flag.
+  bool selected_current_world_authority_available{false};
   bool active_execution{false};
   bool hard_fault{false};
   bool selected_homotopy_established{false};

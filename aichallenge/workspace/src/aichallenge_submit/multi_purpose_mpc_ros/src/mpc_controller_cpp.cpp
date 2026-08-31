@@ -26686,6 +26686,71 @@ struct MPC
       rate_resolved_retained::ExecutionClockKind::BootstrapCandidate :
       rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate;
 
+    // Tactical feasibility belongs to the latest immutable dual epoch, not
+    // to an older retained command which happens to remain executable for one
+    // more publication.  Resolve a rejected selected homotopy and its
+    // certified same-epoch sibling before considering continuity artifacts.
+    // The returned token still defers every tactical mutation until the exact
+    // sibling command crosses the canonical publisher boundary.
+    const bool active_overtake_intent =
+      evaluation_intent == mpcc_contract::ControlIntent::ShiftOut ||
+      evaluation_intent == mpcc_contract::ControlIntent::Pass;
+    overtake_sibling_adoption::Reason current_world_sibling_reason{
+      overtake_sibling_adoption::Reason::InactiveExecution};
+    if (
+      active_overtake_intent &&
+      problem.progress_execution_dynamic_obstacle_contract_active &&
+      rate_resolved_overtake_branch_bank_ != nullptr)
+    {
+      const auto live = current_overtake_sibling_adoption_live_state();
+      const auto bank = rate_resolved_overtake_branch_bank_->snapshot();
+      const auto selected_epoch_plan = bank.plan_for_side(live.side_sign);
+      const auto sibling_plan = bank.plan_for_side(-live.side_sign);
+      RateResolvedRetainedShadowEvaluation sibling_evaluation;
+      if (sibling_plan != nullptr) {
+        sibling_evaluation = evaluate_plan(
+          sibling_plan,
+          rate_resolved_retained::ExecutionClock{
+            new_candidate_execution_clock_kind,
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN()});
+        sibling_evaluation.selected_sibling_plan = selected_epoch_plan;
+      }
+      const auto sibling_identity =
+        sibling_plan != nullptr &&
+        sibling_plan->execution_artifact != nullptr ?
+        sibling_plan->execution_artifact->identity :
+        rate_resolved_artifact::Identity{};
+      const auto resolution = overtake_sibling_adoption::resolve(
+        overtake_sibling_adoption::Request{
+          selected_epoch_plan != nullptr,
+          live.active_execution,
+          live.hard_fault,
+          live.selected_homotopy_established,
+          live.before_no_return,
+          live.replacement_budget_available,
+          sibling_evaluation.production_authority.has_value(),
+          sibling_evaluation.stateless_current_world_bundle,
+          evaluation_intent,
+          live.target_id,
+          live.mission_generation,
+          live.side_sign,
+          bank.source_identity,
+          sibling_identity});
+      current_world_sibling_reason = resolution.reason;
+      if (resolution.accepted) {
+        sibling_evaluation.associated_sibling_inspected = true;
+        sibling_evaluation.associated_sibling_source_sequence =
+          sequence_of(sibling_plan);
+        sibling_evaluation.overtake_sibling_adoption_reason =
+          resolution.reason;
+        sibling_evaluation.overtake_sibling_adoption_token =
+          resolution.token;
+        attach_connector(sibling_evaluation);
+        return finish_retained(std::move(sibling_evaluation));
+      }
+    }
+
     if (candidate_plan != nullptr) {
       final_evaluation = evaluate_plan(
         candidate_plan,
@@ -26737,6 +26802,8 @@ struct MPC
           published_bundle_sequence;
       }
       final_evaluation.executed_sequence = executed_sequence;
+      final_evaluation.overtake_sibling_adoption_reason =
+        current_world_sibling_reason;
       attach_connector(final_evaluation);
       if (final_evaluation.production_authority.has_value()) {
         final_evaluation.selected_from_executed =
@@ -26767,6 +26834,8 @@ struct MPC
       published_bundle_evaluation.published_bundle_source_sequence =
         published_bundle_sequence;
       published_bundle_evaluation.executed_sequence = executed_sequence;
+      published_bundle_evaluation.overtake_sibling_adoption_reason =
+        current_world_sibling_reason;
       if (published_bundle_evaluation.production_authority.has_value()) {
         published_bundle_evaluation.selected_from_published_bundle_source =
           true;
@@ -26885,78 +26954,6 @@ struct MPC
       final_evaluation = std::move(executed_evaluation);
     }
 
-    const bool active_overtake_intent =
-      evaluation_intent == mpcc_contract::ControlIntent::ShiftOut ||
-      evaluation_intent == mpcc_contract::ControlIntent::Pass;
-    if (
-      !final_evaluation.production_authority.has_value() &&
-      active_overtake_intent &&
-      problem.progress_execution_dynamic_obstacle_contract_active &&
-      rate_resolved_overtake_branch_bank_ != nullptr)
-    {
-      const auto live = current_overtake_sibling_adoption_live_state();
-      const auto bank = rate_resolved_overtake_branch_bank_->snapshot();
-      const auto sibling_plan = bank.plan_for_side(-live.side_sign);
-      const auto selected_epoch_plan = bank.plan_for_side(live.side_sign);
-      RateResolvedRetainedShadowEvaluation sibling_evaluation;
-      if (sibling_plan != nullptr) {
-        sibling_evaluation = evaluate_plan(
-          sibling_plan,
-          rate_resolved_retained::ExecutionClock{
-            new_candidate_execution_clock_kind,
-            std::numeric_limits<double>::quiet_NaN(),
-            std::numeric_limits<double>::quiet_NaN()});
-        sibling_evaluation.selected_sibling_plan = selected_epoch_plan;
-      }
-      const auto sibling_identity =
-        sibling_plan != nullptr &&
-        sibling_plan->execution_artifact != nullptr ?
-        sibling_plan->execution_artifact->identity :
-        rate_resolved_artifact::Identity{};
-      const auto resolution = overtake_sibling_adoption::resolve(
-        overtake_sibling_adoption::Request{
-          false,
-          live.active_execution,
-          live.hard_fault,
-          live.selected_homotopy_established,
-          live.before_no_return,
-          live.replacement_budget_available,
-          sibling_evaluation.production_authority.has_value(),
-          sibling_evaluation.stateless_current_world_bundle,
-          evaluation_intent,
-          live.target_id,
-          live.mission_generation,
-          live.side_sign,
-          bank.source_identity,
-          sibling_identity});
-      final_evaluation.overtake_sibling_adoption_reason =
-        resolution.reason;
-      if (resolution.accepted) {
-        copy_candidate_diagnostics(final_evaluation, sibling_evaluation);
-        sibling_evaluation.published_bundle_source_attempted =
-          final_evaluation.published_bundle_source_attempted;
-        sibling_evaluation.published_bundle_source_reason =
-          final_evaluation.published_bundle_source_reason;
-        sibling_evaluation.published_bundle_source_sequence =
-          final_evaluation.published_bundle_source_sequence;
-        sibling_evaluation.executed_attempted =
-          final_evaluation.executed_attempted;
-        sibling_evaluation.executed_reason =
-          final_evaluation.executed_reason;
-        sibling_evaluation.executed_sequence =
-          final_evaluation.executed_sequence;
-        sibling_evaluation.associated_sibling_inspected = true;
-        sibling_evaluation.associated_sibling_source_sequence =
-          sequence_of(sibling_plan);
-        sibling_evaluation.overtake_sibling_adoption_reason =
-          resolution.reason;
-        sibling_evaluation.overtake_sibling_adoption_token =
-          resolution.token;
-        attach_connector(sibling_evaluation);
-        return finish_retained(std::move(sibling_evaluation));
-      }
-    }
-
     const bool normal_avoidance_intent =
       evaluation_intent == mpcc_contract::ControlIntent::Cruise ||
       evaluation_intent == mpcc_contract::ControlIntent::Follow;
@@ -27064,6 +27061,8 @@ struct MPC
         return finish_retained(std::move(branch_evaluation));
       }
     }
+    final_evaluation.overtake_sibling_adoption_reason =
+      current_world_sibling_reason;
     attach_connector(final_evaluation);
     return finish_retained(std::move(final_evaluation));
   }

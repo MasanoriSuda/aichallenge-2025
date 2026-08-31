@@ -1136,6 +1136,7 @@ bool should_block_live_execution_corridor(
   const LiveExecutionCorridorBlockRequest & request) noexcept
 {
   return request.raw_corridor_blocked &&
+         !request.publisher_bound_execution_source_active &&
          !(request.pass_phase && request.lateral_clearance_latched);
 }
 

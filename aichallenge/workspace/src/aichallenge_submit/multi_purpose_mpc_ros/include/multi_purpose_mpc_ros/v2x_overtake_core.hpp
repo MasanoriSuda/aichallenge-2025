@@ -644,14 +644,16 @@ bool should_apply_gap_planner_state_bounds(
 struct LiveExecutionCorridorBlockRequest
 {
   bool raw_corridor_blocked{false};
+  bool publisher_bound_execution_source_active{false};
   bool pass_phase{false};
   bool lateral_clearance_latched{false};
 };
 
-/// A live planner dropout can still abort ShiftOut and an uncommitted Pass.
-/// Once Pass has established lateral separation, keep the explicit line and
-/// let target intrusion, wall, emergency, continuity, and solver guards own
-/// cancellation instead of re-applying entry-corridor geometry.
+/// A gap/candidate planner verdict may abort an uncommitted execution only
+/// when it still owns the corridor.  Once an exact stateless source has crossed
+/// the publisher, or Pass has established lateral separation, keep that
+/// stronger execution source and let target intrusion, wall, emergency,
+/// continuity and solver guards own cancellation.
 bool should_block_live_execution_corridor(
   const LiveExecutionCorridorBlockRequest & request) noexcept;
 

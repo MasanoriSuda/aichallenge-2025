@@ -9531,6 +9531,19 @@ struct MPC
     return state;
   }
 
+  bool publisher_bound_stateless_overtake_source_active() const noexcept
+  {
+    return
+      (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+      overtake_line_state_.phase == OvertakeLinePhase::Pass) &&
+      overtake_line_state_.stateless_sibling_authority_active &&
+      overtake_line_state_.stateless_sibling_source_sequence > 0U &&
+      overtake_line_state_.stateless_sibling_source_generation ==
+      overtake_line_state_.mission_generation &&
+      overtake_line_state_.pass_side_sign != 0 &&
+      overtake_line_state_.mission_generation > 0U;
+  }
+
   void invalidate_published_stop_lattice_observation() noexcept
   {
     rate_resolved_stop_lattice_published_source_identity_.reset();
@@ -19127,12 +19140,7 @@ struct MPC
     // sibling back to Follow. This fact preserves tactical ownership only; the
     // current command still needs current-world proof and publisher join.
     const bool published_stateless_overtake_execution_source =
-      overtake_line_state_.stateless_sibling_authority_active &&
-      overtake_line_state_.stateless_sibling_source_sequence > 0U &&
-      overtake_line_state_.stateless_sibling_source_generation ==
-      overtake_line_state_.mission_generation &&
-      overtake_line_state_.pass_side_sign != 0 &&
-      overtake_line_state_.mission_generation > 0U;
+      publisher_bound_stateless_overtake_source_active();
     const bool validated_fixed_mission_execution_source =
       overtake_line_state_.mission_path_frozen &&
       overtake_line_state_.fixed_pass_corridor_goal_ey.has_value();
@@ -20616,7 +20624,8 @@ struct MPC
     last_v2x_behavior_output_ = behavior_output;
     const bool live_execution_corridor_valid =
       explicit_overtake_line_owns_plan && use_gap_planner &&
-      (!planner_output.active || planner_output.feasible);
+      (!planner_output.active || planner_output.feasible ||
+      publisher_bound_stateless_overtake_source_active());
     if (live_execution_corridor_valid) {
       overtake_line_state_.last_valid_execution_corridor_sec = now_sec;
     }
@@ -20626,6 +20635,7 @@ struct MPC
       v2x_overtake_core::should_block_live_execution_corridor(
       v2x_overtake_core::LiveExecutionCorridorBlockRequest{
         raw_execution_corridor_blocked,
+        publisher_bound_stateless_overtake_source_active(),
         overtake_line_state_.phase == OvertakeLinePhase::Pass,
         overtake_line_state_.pass_front_overlap_exclusion_latched});
     const bool committed_execution_corridor_bypass =
@@ -20688,7 +20698,7 @@ struct MPC
     {
       RCLCPP_INFO(
         rclcpp::get_logger("mpc_controller"),
-        "OvertakeLine live execution corridor is diagnostic-only for committed Pass: "
+        "OvertakeLine gap-planner corridor is diagnostic-only for committed execution: "
         "active=%d, wp_id=%d",
         committed_execution_corridor_bypass ? 1 : 0, model->wp_id);
     }

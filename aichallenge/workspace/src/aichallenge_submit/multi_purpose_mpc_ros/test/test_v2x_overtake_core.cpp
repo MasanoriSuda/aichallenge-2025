@@ -2903,6 +2903,12 @@ TEST(V2XOvertakeCoreSpeed, LiveCorridorLossDoesNotAbortLaterallyCommittedPass)
 
   request.pass_phase = false;
   EXPECT_TRUE(should_block_live_execution_corridor(request));
+
+  request.publisher_bound_execution_source_active = true;
+  EXPECT_FALSE(should_block_live_execution_corridor(request));
+
+  request.publisher_bound_execution_source_active = false;
+  EXPECT_TRUE(should_block_live_execution_corridor(request));
 }
 
 TEST(V2XOvertakeCoreSpeed, LiveCorridorHoldBudgetIsScopedToSeparatedPassPhase)

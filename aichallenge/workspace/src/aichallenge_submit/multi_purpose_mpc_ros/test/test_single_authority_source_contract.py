@@ -3299,6 +3299,19 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
     assert "attach_tactical_identity_diagnostics(sibling_evaluation)" in retained
     assert "attach_tactical_identity_diagnostics(final_evaluation)" in retained
 
+    source_predicate_start = SOURCE.index(
+        "bool publisher_bound_stateless_overtake_source_active() const noexcept"
+    )
+    source_predicate_end = SOURCE.index(
+        "void invalidate_published_stop_lattice_observation()", source_predicate_start
+    )
+    source_predicate = SOURCE[source_predicate_start:source_predicate_end]
+    assert "stateless_sibling_authority_active" in source_predicate
+    assert "stateless_sibling_source_sequence > 0U" in source_predicate
+    assert "stateless_sibling_source_generation" in source_predicate
+    assert "mission_generation" in source_predicate
+    assert "pass_side_sign != 0" in source_predicate
+
     behavior_start = SOURCE.index(
         "const bool published_stateless_overtake_execution_source ="
     )
@@ -3307,13 +3320,20 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
         behavior_start,
     )
     behavior = SOURCE[behavior_start:behavior_end]
-    assert "stateless_sibling_authority_active" in behavior
-    assert "stateless_sibling_source_sequence > 0U" in behavior
-    assert "stateless_sibling_source_generation" in behavior
     assert "overtake_execution_command_published(" not in behavior
+    assert "publisher_bound_stateless_overtake_source_active()" in behavior
     assert "validated_fixed_mission_execution_source" in behavior
     assert "published_stateless_overtake_execution_source" in behavior
     assert "CommittedShiftOutBehaviorOwnershipRequest" in behavior
+
+    corridor_start = SOURCE.index("const bool live_execution_corridor_valid =")
+    corridor_end = SOURCE.index(
+        "const bool apply_gap_planner_state_bounds =", corridor_start
+    )
+    corridor = SOURCE[corridor_start:corridor_end]
+    assert corridor.count("publisher_bound_stateless_overtake_source_active()") >= 2
+    assert "should_block_live_execution_corridor(" in corridor
+    assert "raw_execution_corridor_blocked" in corridor
 
     record_start = SOURCE.index("void record_canonical_normal_final_command(")
     record_end = SOURCE.index(

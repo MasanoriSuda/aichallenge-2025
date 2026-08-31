@@ -62,3 +62,18 @@ The promoted artifact must hash to the candidate3 identity above.
 - `colcon test-result` reported one stale unrelated missing
   `joycon_contract_guard/package.xml` result path before the successful aggregate
   test summary; no selected package test failed.
+
+## Override-free production integration
+
+`output/20260901-062337` ran NPC seed 2029 without
+`TINY_LIDAR_CKPT_PATH`. Launch resolved the checkpoint from the package install
+space and selected `fixed_lidar_brake`.
+
+- distance: 1025.49 m
+- duration: 336.99 s
+- post-start low-speed interval: 0 s
+- positive-acceleration stall: 0 s
+- result: pass
+
+This verifies that the submitted package path, rather than only the training
+candidate override, contains and executes the admitted artifact.

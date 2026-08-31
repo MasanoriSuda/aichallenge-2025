@@ -9,4 +9,5 @@
 - [x] Run unseen-seed NPC gate
 - [x] Decide promotion and record evidence
 - [x] Rebuild and test the shipped checkpoint
+- [x] Run an override-free production checkpoint gate on unseen seed 2029
 - [x] Commit the promoted production artifact

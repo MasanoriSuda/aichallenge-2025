@@ -62,7 +62,7 @@ if [[ -n "${tiny_lidar_control_mode}" ]]; then
         exit 1
     fi
     case "${tiny_lidar_control_mode}" in
-    "fixed"|"ai"|"gap_teacher")
+    "fixed"|"fixed_lidar_brake"|"ai"|"gap_teacher")
         ;;
     *)
         echo "invalid TINY_LIDAR_CONTROL_MODE '${tiny_lidar_control_mode}'"

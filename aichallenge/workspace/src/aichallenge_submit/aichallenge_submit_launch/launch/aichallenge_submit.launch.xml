@@ -6,7 +6,7 @@
   <arg name="launch_vehicle_interface"/>
   <arg name="control_method" default="tiny_lidar_net"/>
   <arg name="tiny_lidar_ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/tinylidarnet_weights.npy"/>
-  <arg name="tiny_lidar_control_mode" default="fixed"/>
+  <arg name="tiny_lidar_control_mode" default="fixed_lidar_brake"/>
 
   <log message="The arguments for aichallenge_submit_launch."/>
   <log message=" - simulation: $(var simulation)"/>

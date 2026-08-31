@@ -72,7 +72,7 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
         for node in control.findall("arg")
     }
     assert arguments["model_type"] == "tiny_lidar_net"
-    assert arguments["control_mode"] == "fixed"
+    assert arguments["control_mode"] == "fixed_lidar_brake"
 
     include = control.find("include")
     assert include is not None
@@ -89,7 +89,7 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
         for node in controller.findall("arg")
     }
     assert controller_arguments["scan_topic"] == "/sensing/lidar/scan"
-    assert controller_arguments["control_mode"] == "fixed"
+    assert controller_arguments["control_mode"] == "fixed_lidar_brake"
     assert (
         controller_arguments["control_cmd_topic"]
         == "/control/command/control_cmd"

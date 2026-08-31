@@ -91,6 +91,79 @@ class GapTeacherDecision:
     reason: str
 
 
+@dataclass(frozen=True)
+class LongitudinalSafetyDecision:
+    """Auditable acceleration authority derived from frontal LiDAR clearance."""
+
+    active: bool
+    front_distance_m: float
+    requested_acceleration_mps2: float
+    acceleration_mps2: float
+    reason: str
+
+
+class LidarLongitudinalSafety:
+    """Limit longitudinal acceleration without taking lateral authority."""
+
+    def __init__(self, config: GapTeacherConfig):
+        self.config = config
+
+    def front_distance(self, ranges_m: np.ndarray) -> float:
+        ranges = np.asarray(ranges_m, dtype=np.float64)
+        if ranges.ndim != 1 or ranges.size < 3:
+            raise ValueError("LiDAR safety requires a one-dimensional scan")
+        if not np.all(np.isfinite(ranges)) or np.any(ranges < 0.0):
+            raise ValueError("LiDAR safety ranges must be finite and non-negative")
+        angles = np.linspace(
+            -self.config.scan_half_fov_rad,
+            self.config.scan_half_fov_rad,
+            ranges.size,
+            dtype=np.float64,
+        )
+        front_values = ranges[
+            np.abs(angles) <= self.config.front_half_angle_rad
+        ]
+        return float(np.percentile(front_values, 20.0))
+
+    def decide_from_front_distance(
+        self,
+        front_distance_m: float,
+        requested_acceleration_mps2: float,
+    ) -> LongitudinalSafetyDecision:
+        front_distance = float(front_distance_m)
+        requested = float(requested_acceleration_mps2)
+        if not np.isfinite(front_distance) or front_distance < 0.0:
+            raise ValueError("front_distance_m must be finite and non-negative")
+        if not np.isfinite(requested):
+            raise ValueError("requested acceleration must be finite")
+
+        if front_distance <= self.config.stop_distance_m:
+            acceleration = self.config.brake_acceleration_mps2
+            reason = "stop-clearance"
+        elif front_distance <= self.config.slow_distance_m:
+            acceleration = min(requested, 0.0)
+            reason = "slow-clearance"
+        else:
+            acceleration = requested
+            reason = "clear"
+        return LongitudinalSafetyDecision(
+            active=acceleration < requested,
+            front_distance_m=front_distance,
+            requested_acceleration_mps2=requested,
+            acceleration_mps2=float(acceleration),
+            reason=reason,
+        )
+
+    def decide(
+        self,
+        ranges_m: np.ndarray,
+        requested_acceleration_mps2: float,
+    ) -> LongitudinalSafetyDecision:
+        return self.decide_from_front_distance(
+            self.front_distance(ranges_m), requested_acceleration_mps2
+        )
+
+
 def _true_segments(mask: np.ndarray) -> List[Tuple[int, int]]:
     """Return inclusive-exclusive intervals for contiguous true values."""
     values = np.asarray(mask, dtype=bool)
@@ -108,6 +181,7 @@ class LidarGapTeacher:
 
     def __init__(self, config: GapTeacherConfig):
         self.config = config
+        self.longitudinal_safety = LidarLongitudinalSafety(config)
 
     def decide(
         self,
@@ -135,8 +209,10 @@ class LidarGapTeacher:
                 cfg.max_steering_angle_rad,
             )
         )
-        front_values = ranges[np.abs(angles) <= cfg.front_half_angle_rad]
-        front_distance = float(np.percentile(front_values, 20.0))
+        front_distance = self.longitudinal_safety.front_distance(ranges)
+        longitudinal = self.longitudinal_safety.decide_from_front_distance(
+            front_distance, base_acceleration_mps2
+        )
         left_side_values = ranges[angles >= cfg.side_start_angle_rad]
         right_side_values = ranges[angles <= -cfg.side_start_angle_rad]
         left_side_distance = float(np.percentile(left_side_values, 10.0))
@@ -165,7 +241,7 @@ class LidarGapTeacher:
                 target_angle_rad=0.0,
                 base_steering_rad=base_steering,
                 steering_rad=base_steering,
-                acceleration_mps2=float(base_acceleration_mps2),
+                acceleration_mps2=longitudinal.acceleration_mps2,
                 left_side_distance_m=left_side_distance,
                 right_side_distance_m=right_side_distance,
                 reason="front-clear",
@@ -189,7 +265,7 @@ class LidarGapTeacher:
                 target_angle_rad=side_escape_steering,
                 base_steering_rad=base_steering,
                 steering_rad=steering,
-                acceleration_mps2=float(base_acceleration_mps2),
+                acceleration_mps2=longitudinal.acceleration_mps2,
                 left_side_distance_m=left_side_distance,
                 right_side_distance_m=right_side_distance,
                 reason="side-clearance",
@@ -221,11 +297,7 @@ class LidarGapTeacher:
             if segment[1] - segment[0] >= minimum_points
         ]
 
-        acceleration = float(base_acceleration_mps2)
-        if front_distance <= cfg.stop_distance_m:
-            acceleration = cfg.brake_acceleration_mps2
-        elif front_distance <= cfg.slow_distance_m:
-            acceleration = min(acceleration, 0.0)
+        acceleration = longitudinal.acceleration_mps2
 
         if not segments:
             return GapTeacherDecision(

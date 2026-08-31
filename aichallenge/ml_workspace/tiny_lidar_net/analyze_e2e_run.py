@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize E2E motion and detect positive-acceleration stall from a ROS 2 bag."""
+"""Summarize E2E motion and detect post-start stalls from a ROS 2 bag."""
 
 import argparse
 import json
@@ -10,7 +10,7 @@ from typing import Iterable, Optional, Tuple
 import numpy as np
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def nearest_values(
@@ -118,8 +118,12 @@ def summarize_motion(
     moving = np.abs(speeds) >= moving_speed_mps
     ever_moved = np.maximum.accumulate(moving)
     low_speed = np.abs(speeds) <= stall_speed_mps
+    post_start_low_speed = ever_moved & low_speed
     positive_accel_stall = ever_moved & low_speed & (
         acceleration >= positive_accel_mps2
+    )
+    low_speed_start, low_speed_end = longest_true_interval_ns(
+        times, post_start_low_speed
     )
     stall_start, stall_end = longest_true_interval_ns(times, positive_accel_stall)
 
@@ -133,7 +137,19 @@ def summarize_motion(
         "distance_m": distance_m,
         "max_speed_mps": float(np.max(speeds)),
         "mean_forward_speed_mps": float(np.mean(np.maximum(speeds, 0.0))),
-        "longest_low_speed_sec": longest_true_duration_sec(times, ever_moved & low_speed),
+        "longest_low_speed_sec": longest_true_duration_sec(
+            times, post_start_low_speed
+        ),
+        "low_speed_start_sec": (
+            None
+            if low_speed_start is None
+            else float(low_speed_start - times[0]) / 1e9
+        ),
+        "low_speed_end_sec": (
+            None
+            if low_speed_end is None
+            else float(low_speed_end - times[0]) / 1e9
+        ),
         "longest_positive_accel_stall_sec": longest_true_duration_sec(
             times, positive_accel_stall
         ),
@@ -358,11 +374,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--moving-speed-mps", type=float, default=1.0)
     parser.add_argument("--stall-speed-mps", type=float, default=0.15)
     parser.add_argument("--positive-accel-mps2", type=float, default=0.2)
+    parser.add_argument("--max-low-speed-sec", type=float, default=10.0)
     parser.add_argument("--max-positive-accel-stall-sec", type=float, default=5.0)
     parser.add_argument(
         "--fail-on-stall",
         action="store_true",
-        help="Return exit status 2 when the positive-acceleration stall limit is exceeded",
+        help="Return exit status 2 when either post-start stall limit is exceeded",
     )
     return parser.parse_args()
 
@@ -388,12 +405,20 @@ def main() -> int:
         "left_front_min_m": float(np.min(arrays["scan_left_m"])),
         "right_front_min_m": float(np.min(arrays["scan_right_m"])),
     }
-    stalled = (
+    low_speed_stalled = (
+        motion["longest_low_speed_sec"] > args.max_low_speed_sec
+    )
+    positive_accel_stalled = (
         motion["longest_positive_accel_stall_sec"]
         > args.max_positive_accel_stall_sec
     )
+    stalled = low_speed_stalled or positive_accel_stalled
     stall_context = None
-    stall_start_sec = motion["positive_accel_stall_start_sec"]
+    stall_start_sec = (
+        motion["low_speed_start_sec"]
+        if low_speed_stalled
+        else motion["positive_accel_stall_start_sec"]
+    )
     if stall_start_sec is not None:
         stall_start_ns = int(
             arrays["velocity_times_ns"][0] + round(stall_start_sec * 1e9)
@@ -412,13 +437,15 @@ def main() -> int:
             "moving_speed_mps": args.moving_speed_mps,
             "stall_speed_mps": args.stall_speed_mps,
             "positive_accel_mps2": args.positive_accel_mps2,
+            "max_low_speed_sec": args.max_low_speed_sec,
             "max_positive_accel_stall_sec": args.max_positive_accel_stall_sec,
         },
         "motion": motion,
         "scan": scan,
         "positive_accel_stall_context": stall_context,
         "admission": {
-            "positive_accel_stall": not stalled,
+            "post_start_low_speed": not low_speed_stalled,
+            "positive_accel_stall": not positive_accel_stalled,
             "result": "fail" if stalled else "pass",
         },
     }

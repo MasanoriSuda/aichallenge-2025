@@ -6,6 +6,7 @@ import pytest
 from tiny_lidar_net_controller.gap_teacher import (
     GapTeacherConfig,
     LidarGapTeacher,
+    LidarLongitudinalSafety,
 )
 
 
@@ -43,6 +44,26 @@ def test_close_obstacle_commands_teacher_brake() -> None:
     decision = teacher.decide(ranges, 0.0, 0.6)
     assert decision.active
     assert decision.acceleration_mps2 == pytest.approx(-1.0)
+
+
+def test_longitudinal_safety_has_no_lateral_output_and_preserves_clear_accel() -> None:
+    safety = LidarLongitudinalSafety(GapTeacherConfig())
+    decision = safety.decide(np.full(750, 30.0), 0.6)
+    assert not decision.active
+    assert decision.reason == "clear"
+    assert decision.acceleration_mps2 == pytest.approx(0.6)
+
+
+def test_longitudinal_safety_inhibits_and_brakes_at_shared_thresholds() -> None:
+    safety = LidarLongitudinalSafety(GapTeacherConfig())
+    slow = safety.decide(np.full(750, 2.0), 0.6)
+    stop = safety.decide(np.full(750, 1.0), 0.6)
+    assert slow.active
+    assert slow.reason == "slow-clearance"
+    assert slow.acceleration_mps2 == pytest.approx(0.0)
+    assert stop.active
+    assert stop.reason == "stop-clearance"
+    assert stop.acceleration_mps2 == pytest.approx(-1.0)
 
 
 def test_left_side_wall_retains_teacher_authority_and_steers_right() -> None:

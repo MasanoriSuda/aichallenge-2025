@@ -9,10 +9,10 @@
       ckpt_path: "/path/to/tinylidarnet_weights.npy"
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
-    control_mode: "fixed"          # "ai", "fixed" or teacher-only "gap_teacher"
+    control_mode: "fixed_lidar_brake"  # ML steer + LiDAR longitudinal safety
     acceleration: 0.6            # 現AWSIMで発進・周回できる暫定baseline
 
-    # Teacher-data collection only. Production stays in control_mode=fixed.
+    # Shared obstacle policy. Only gap_teacher may modify lateral control.
     gap_teacher:
       trigger_distance_m: 7.0
       slow_distance_m: 3.0

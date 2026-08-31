@@ -52,7 +52,8 @@ trainerは学習開始前に次を検証します。
 古いmetadataなしdatasetは既定では読み込まれません。上記extractorで再抽出してください。
 
 `train.loss.accel_weight`を`0.0`にすることで、steeringのみ学習できます。現baselineは
-longitudinalを固定加速度としているため、まずsteeringのみの学習を推奨します。
+MLがsteeringを所有し、`fixed_lidar_brake`が固定加速度をLiDAR前方距離だけで安全側へ
+制限するため、まずsteeringのみの学習を推奨します。
 `train.pretrained_path`には`.pth/.pt`のraw state dictだけでなく、提出runtimeで使う
 `.npy/.npz`weightも指定できます。全parameterのkey、shape、finite値を検証してから
 warm-startします。各学習runはtimestamp directoryへ保存され、dataset sequence ID、設定、
@@ -101,9 +102,11 @@ override未指定時はpackage同梱のproduction重みを使います。存在�
 
 ### Closed-loop run admission
 
-単車・NPC試走後は、正の加速度指令を出しながら実車速がほぼ0へ固着していないかをbag
-から確認します。これは接触や壁拘束を「センサ停止」と誤認しないための最低限の自動gate
-です。Finish、接触、周回時間の判定を置き換えるものではありません。
+単車・NPC試走後は、一度走行を開始した後に実車速がほぼ0へ固着していないかをbagから
+確認します。全post-start低速時間と正加速指令中の低速時間を別々に判定するため、LiDAR
+安全層が加速を止めただけで回避できていないrunも失敗になります。これは接触や壁拘束を
+「センサ停止」と誤認しないための最低限の自動gateです。Finish、接触、周回時間の判定を
+置き換えるものではありません。
 
 ```bash
 docker compose run --rm --no-deps autoware-command \

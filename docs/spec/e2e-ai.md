@@ -24,8 +24,9 @@ GNSS、IMU、V2X、地図上の自己位置、計画 trajectory、MPC の出力�
 モデルがその出力を利用することは分けて監査する。
 
 大会説明では入力から横方向制御まで ML を使用することが前提である。現ローカルの
-最初の baseline は 2D LiDAR から steering を直接出力する TinyLidarNet とし、
-longitudinal は固定加速度から開始する。
+最初の baseline は 2D LiDAR から steering を直接出力する TinyLidarNet とする。
+横方向のauthorityはMLに限定し、longitudinalは固定加速度を基本としながら、同じLiDARの
+前方clearanceが3.0 m以下なら加速を抑止し、1.5 m以下なら制動する。
 
 ## Safety Gates
 
@@ -92,13 +93,15 @@ MPC教師を捏造せず、peerで学習した回避がLiDAR外観差へ汎化�
 
 回避教師候補は`make e2e-npc-gap-teacher`で収集する。単車でadmission済みの
 TinyLidarNet steeringをbaseとし、180度LiDARの物理距離からFollow-the-Gap residualを
-加える。これは教師データ生成専用の`gap_teacher` modeであり、最終studentや提出時の
-既定`fixed` modeへ残さない。教師自身がFinish/contact/stall gateを通ったrunだけを
+加える。横補正は教師データ生成専用の`gap_teacher` modeであり、最終studentへ残さない。
+一方、教師と同じ縦停止判定は`fixed_lidar_brake`としてstudentにも残し、ML steeringを
+変更せず固定加速度だけを制限する。教師自身がFinish/contact/stall gateを通ったrunだけを
 `--label-source lidar_gap_teacher`として抽出する。
 
-bag単位の固着監査は次で行う。既知の単車完走runでは正加速中固着0秒、初回NPC runでは
-70.56秒を検出した。GUIの見た目ではなく、このJSONとAWSIM Finish/接触結果を合わせて
-candidate admissionを判断する。
+bag単位の固着監査は次で行う。起動待ちは除外し、一度1.0 m/s以上で走行した後の
+0.15 m/s以下の連続時間と、そのうち正加速指令中の連続時間を別々に判定する。縦安全層が
+正しく加速を抑止しても、その場で停止し続けるcandidateを成功扱いしない。GUIの見た目
+ではなく、このJSONとAWSIM Finish/接触結果を合わせてcandidate admissionを判断する。
 
 ```bash
 docker compose run --rm --no-deps autoware-command \

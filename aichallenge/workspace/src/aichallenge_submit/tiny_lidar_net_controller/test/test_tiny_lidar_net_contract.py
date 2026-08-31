@@ -108,6 +108,27 @@ def test_gap_teacher_mode_is_explicit_and_keeps_finite_contract() -> None:
     assert not core.last_gap_teacher_decision.active
 
 
+def test_fixed_lidar_brake_preserves_network_steering_and_limits_acceleration() -> None:
+    fixed_core = _load_core()
+    safe_core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+    )
+    scan = np.full(750, 1.0, dtype=np.float32)
+    fixed_acceleration, fixed_steering = fixed_core.process(scan)
+    safe_acceleration, safe_steering = safe_core.process(scan)
+    assert fixed_acceleration == pytest.approx(0.6)
+    assert safe_acceleration == pytest.approx(-1.0)
+    assert safe_steering == pytest.approx(fixed_steering)
+    assert safe_core.last_longitudinal_safety_decision is not None
+    assert safe_core.last_longitudinal_safety_decision.active
+
+
 def test_unknown_control_mode_is_rejected() -> None:
     with pytest.raises(ValueError, match="control_mode"):
         TinyLidarNetCore(

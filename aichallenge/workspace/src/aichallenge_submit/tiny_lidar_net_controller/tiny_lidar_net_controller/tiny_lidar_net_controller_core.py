@@ -6,6 +6,8 @@ from tiny_lidar_net_controller.gap_teacher import (
     GapTeacherConfig,
     GapTeacherDecision,
     LidarGapTeacher,
+    LidarLongitudinalSafety,
+    LongitudinalSafetyDecision,
 )
 from tiny_lidar_net_controller.model.tinylidarnet import (
     TinyLidarNetNp,
@@ -25,8 +27,8 @@ class TinyLidarNetCore:
         output_dim (int): Dimension of the output vector (acceleration, steering).
         architecture (str): Model architecture type ('large' or 'small').
         acceleration (float): Fixed acceleration value used in 'fixed' control mode.
-        control_mode (str): Control strategy ('ai', 'fixed', or teacher-only
-            'gap_teacher').
+        control_mode (str): Control strategy ('ai', 'fixed', production
+            'fixed_lidar_brake', or teacher-only 'gap_teacher').
         max_range (float): Maximum LiDAR range used for normalization and clipping.
         model (object): The instantiated neural network model.
         logger (logging.Logger): Logger instance.
@@ -75,6 +77,9 @@ class TinyLidarNetCore:
         self.logger = logging.getLogger(__name__)
         self.loaded_parameter_count = 0
         self.last_gap_teacher_decision: Optional[GapTeacherDecision] = None
+        self.last_longitudinal_safety_decision: Optional[
+            LongitudinalSafetyDecision
+        ] = None
 
         if not isinstance(self.input_dim, int) or self.input_dim <= 0:
             raise ValueError("input_dim must be a positive integer")
@@ -84,9 +89,15 @@ class TinyLidarNetCore:
             raise ValueError(
                 "architecture must be one of: normal, large, small"
             )
-        if self.control_mode not in {"ai", "fixed", "gap_teacher"}:
+        if self.control_mode not in {
+            "ai",
+            "fixed",
+            "fixed_lidar_brake",
+            "gap_teacher",
+        }:
             raise ValueError(
-                "control_mode must be one of: ai, fixed, gap_teacher"
+                "control_mode must be one of: ai, fixed, fixed_lidar_brake, "
+                "gap_teacher"
             )
         if not np.isfinite(self.max_range) or self.max_range <= 0.0:
             raise ValueError("max_range must be finite and positive")
@@ -99,8 +110,13 @@ class TinyLidarNetCore:
             self.model = TinyLidarNetNp(input_dim=self.input_dim, output_dim=self.output_dim)
 
         self.gap_teacher = None
+        self.longitudinal_safety = None
         if self.control_mode == "gap_teacher":
             self.gap_teacher = LidarGapTeacher(
+                gap_teacher_config or GapTeacherConfig()
+            )
+        elif self.control_mode == "fixed_lidar_brake":
+            self.longitudinal_safety = LidarLongitudinalSafety(
                 gap_teacher_config or GapTeacherConfig()
             )
 
@@ -149,11 +165,18 @@ class TinyLidarNetCore:
         steer = float(np.clip(outputs[1], -1.0, 1.0))
 
         self.last_gap_teacher_decision = None
+        self.last_longitudinal_safety_decision = None
         if self.gap_teacher is not None:
             decision = self.gap_teacher.decide(physical_ranges, steer, accel)
             self.last_gap_teacher_decision = decision
             accel = decision.acceleration_mps2
             steer = decision.steering_rad
+        elif self.longitudinal_safety is not None:
+            safety_decision = self.longitudinal_safety.decide(
+                physical_ranges, accel
+            )
+            self.last_longitudinal_safety_decision = safety_decision
+            accel = safety_decision.acceleration_mps2
 
         return accel, steer
 

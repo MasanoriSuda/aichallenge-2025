@@ -53,6 +53,30 @@ def test_motion_summary_detects_positive_acceleration_stall_after_motion():
     assert result["positive_accel_stall_start_sec"] == 3.0
     assert result["positive_accel_stall_end_sec"] == 8.0
     assert result["positive_accel_stall_samples"] == 51
+    assert result["longest_low_speed_sec"] == 5.0
+    assert result["low_speed_start_sec"] == 3.0
+    assert result["low_speed_end_sec"] == 8.0
+
+
+def test_motion_summary_detects_braking_stall_after_motion():
+    times = np.arange(0, 81, dtype=np.int64) * 100_000_000
+    speeds = np.concatenate(
+        (np.array([0.0]), np.full(29, 1.2), np.full(51, 0.05))
+    )
+    acceleration = np.concatenate(
+        (np.full(30, 0.6), np.full(51, -1.0))
+    )
+    result = MODULE.summarize_motion(
+        times,
+        speeds,
+        times,
+        acceleration,
+        moving_speed_mps=1.0,
+        stall_speed_mps=0.15,
+        positive_accel_mps2=0.2,
+    )
+    assert result["longest_low_speed_sec"] == 5.0
+    assert result["longest_positive_accel_stall_sec"] == 0.0
 
 
 def test_failure_context_synchronizes_scan_control_and_pose():

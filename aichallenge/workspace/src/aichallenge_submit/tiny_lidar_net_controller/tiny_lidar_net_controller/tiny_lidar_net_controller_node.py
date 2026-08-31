@@ -150,6 +150,8 @@ class TinyLidarNetNode(Node):
         self.last_log_scan_count = 0
         self.gap_teacher_active_count = 0
         self.last_log_gap_teacher_active_count = 0
+        self.longitudinal_safety_active_count = 0
+        self.last_log_longitudinal_safety_active_count = 0
         self.last_log_time = self.get_clock().now()
         self.startup_time = self.get_clock().now()
         self.last_scan_time = None
@@ -198,6 +200,9 @@ class TinyLidarNetNode(Node):
             gap_decision = self.core.last_gap_teacher_decision
             if gap_decision is not None and gap_decision.active:
                 self.gap_teacher_active_count += 1
+            safety_decision = self.core.last_longitudinal_safety_decision
+            if safety_decision is not None and safety_decision.active:
+                self.longitudinal_safety_active_count += 1
             steer = float(np.clip(
                 steer,
                 -self.max_steering_angle_rad,
@@ -281,6 +286,10 @@ class TinyLidarNetNode(Node):
                     self.gap_teacher_active_count
                     - self.last_log_gap_teacher_active_count
                 )
+                interval_safety_active = (
+                    self.longitudinal_safety_active_count
+                    - self.last_log_longitudinal_safety_active_count
+                )
                 scan_hz = interval_scans / elapsed_sec if elapsed_sec > 0.0 else 0.0
 
                 teacher_status = ""
@@ -295,6 +304,16 @@ class TinyLidarNetNode(Node):
                         f"gap_reason={decision.reason}"
                     )
 
+                safety_status = ""
+                safety_decision = self.core.last_longitudinal_safety_decision
+                if safety_decision is not None:
+                    safety_status = (
+                        " longitudinal_safety_active="
+                        f"{interval_safety_active}/{interval_scans} "
+                        f"front_m={safety_decision.front_distance_m:.2f} "
+                        f"safety_reason={safety_decision.reason}"
+                    )
+
                 self.get_logger().info(
                     f"E2E_STATUS scans={self.scan_count} stale={int(self.sensor_stale)} "
                     f"scan_hz={scan_hz:.2f} "
@@ -302,11 +321,15 @@ class TinyLidarNetNode(Node):
                     f"max_inference_ms={max_time:.2f} "
                     f"inference_capacity_hz={inference_capacity_hz:.2f}"
                     f"{teacher_status}"
+                    f"{safety_status}"
                 )
                 self.inference_times.clear()
                 self.last_log_scan_count = self.scan_count
                 self.last_log_gap_teacher_active_count = (
                     self.gap_teacher_active_count
+                )
+                self.last_log_longitudinal_safety_active_count = (
+                    self.longitudinal_safety_active_count
                 )
 
             self.last_log_time = now

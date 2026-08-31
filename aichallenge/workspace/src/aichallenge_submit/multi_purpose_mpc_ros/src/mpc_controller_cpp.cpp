@@ -25224,6 +25224,103 @@ struct MPC
     solver_snapshot.replay_world = std::move(replay);
   }
 
+  std::optional<rate_resolved_shadow::Snapshot>
+  build_rate_resolved_current_world_interaction_snapshot(
+    const MpcProblem & problem,
+    const std::optional<RateResolvedTrackCruiseSubmissionDraft> &
+    submission_draft,
+    const double now_sec, std::string & reject_reason)
+  {
+    const auto reject = [&reject_reason](const std::string & reason) {
+        reject_reason = reason;
+        return std::optional<rate_resolved_shadow::Snapshot>{};
+      };
+    if (!submission_draft.has_value()) {
+      return reject("current-world submission draft unavailable");
+    }
+    if (!last_rate_resolved_serialized_predecessor_.has_value()) {
+      return reject("current-cycle serialized predecessor unavailable");
+    }
+    const char * binding_reason = "not-evaluated";
+    const auto bound_submission = bind_rate_resolved_track_cruise_submission(
+      submission_draft.value(),
+      last_rate_resolved_serialized_predecessor_.value(), &binding_reason);
+    if (!bound_submission.has_value()) {
+      return reject(std::string{"current-cycle predecessor binding rejected/"} +
+        binding_reason);
+    }
+    auto source = build_rate_resolved_submission_snapshot(
+      problem, bound_submission.value(), now_sec,
+      std::max<std::uint64_t>(1U, active_control_decision_id_));
+    if (!source.has_value()) {
+      return reject("current-world interaction snapshot unavailable");
+    }
+    RateResolvedPhysicalShadowEvaluation physical_rejection;
+    const auto physical = build_rate_resolved_track_cruise_physical_snapshot(
+      source.value(), problem, now_sec, physical_rejection);
+    if (!physical.has_value()) {
+      return reject(std::string{"current-world physical snapshot rejected/"} +
+        physical_rejection.detail);
+    }
+    bind_rate_resolved_physical_wall_refinement(
+      source.value(), physical.value());
+    bind_rate_resolved_replay_world(source.value(), physical.value(), now_sec);
+    if (!mpcc_architecture_snapshot::interaction_snapshot_complete(
+        source.value()))
+    {
+      return reject("current-world replay contract incomplete");
+    }
+    reject_reason = "accepted";
+    return source;
+  }
+
+  bool submit_rate_resolved_architecture_failure_snapshot(
+    rate_resolved_shadow::Snapshot snapshot,
+    const std::uint64_t decision_id,
+    const mpcc_contract::ControlIntent intent,
+    std::string outcome, std::string detail)
+  {
+    if (rate_resolved_terminal_failure_snapshot_worker_ == nullptr) {
+      return false;
+    }
+    const auto submission =
+      rate_resolved_terminal_failure_snapshot_worker_->submit_latest(
+      [snapshot = std::move(snapshot), decision_id, intent,
+        outcome = std::move(outcome), detail = std::move(detail)]() {
+        const auto recorded =
+          mpcc_architecture_snapshot::record_proof_failure(
+          snapshot,
+          mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
+          outcome, detail);
+        if (
+          recorded.status ==
+          mpcc_architecture_snapshot::RecordStatus::Written)
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "Rate-resolved architecture snapshot recorded asynchronously: "
+            "decision=%lu, intent=%s, outcome=%s, file=%s",
+            static_cast<unsigned long>(decision_id),
+            mpcc_contract::to_string(intent), outcome.c_str(),
+            recorded.snapshot_file.string().c_str());
+        } else if (
+          recorded.status ==
+          mpcc_architecture_snapshot::RecordStatus::IoFailure ||
+          recorded.status ==
+          mpcc_architecture_snapshot::RecordStatus::InvalidInput)
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "Rate-resolved architecture snapshot async recorder rejected: "
+            "decision=%lu, intent=%s, outcome=%s, detail=%s",
+            static_cast<unsigned long>(decision_id),
+            mpcc_contract::to_string(intent), outcome.c_str(),
+            recorded.detail.c_str());
+        }
+      });
+    return submission.accepted;
+  }
+
   void record_rate_resolved_terminal_contingency_failure_snapshot(
     const MpcProblem & problem,
     const std::optional<RateResolvedTrackCruiseSubmissionDraft> &
@@ -25318,41 +25415,13 @@ struct MPC
           static_cast<unsigned long>(retained.decision_id),
           mpcc_contract::to_string(intent), reason.c_str());
       };
-    if (!submission_draft.has_value()) {
-      reject("current-world submission draft unavailable");
-      return;
-    }
-    if (!last_rate_resolved_serialized_predecessor_.has_value()) {
-      reject("current-cycle serialized predecessor unavailable");
-      return;
-    }
-    const char * binding_reason = "not-evaluated";
-    const auto bound_submission = bind_rate_resolved_track_cruise_submission(
-      submission_draft.value(),
-      last_rate_resolved_serialized_predecessor_.value(), &binding_reason);
-    if (!bound_submission.has_value()) {
-      reject(std::string{"current-cycle predecessor binding rejected/"} +
-        binding_reason);
-      return;
-    }
-    auto source = build_rate_resolved_submission_snapshot(
-      problem, bound_submission.value(), now_sec,
-      std::max<std::uint64_t>(1U, active_control_decision_id_));
+    std::string snapshot_reject_reason;
+    auto source = build_rate_resolved_current_world_interaction_snapshot(
+      problem, submission_draft, now_sec, snapshot_reject_reason);
     if (!source.has_value()) {
-      reject("current-world interaction snapshot unavailable");
+      reject(snapshot_reject_reason);
       return;
     }
-    RateResolvedPhysicalShadowEvaluation physical_rejection;
-    const auto physical = build_rate_resolved_track_cruise_physical_snapshot(
-      source.value(), problem, now_sec, physical_rejection);
-    if (!physical.has_value()) {
-      reject(std::string{"current-world physical snapshot rejected/"} +
-        physical_rejection.detail);
-      return;
-    }
-    bind_rate_resolved_physical_wall_refinement(
-      source.value(), physical.value());
-    bind_rate_resolved_replay_world(source.value(), physical.value(), now_sec);
 
     const auto & terminal_wall = retained.terminal_stop_path_clearance;
     std::ostringstream detail;
@@ -25412,47 +25481,69 @@ struct MPC
     } else {
       detail << "/accepted_boundary=unavailable";
     }
-    if (rate_resolved_terminal_failure_snapshot_worker_ == nullptr) {
-      reject("snapshot observation worker unavailable");
+    if (!submit_rate_resolved_architecture_failure_snapshot(
+        std::move(source.value()), retained.decision_id, intent,
+        "terminal-contingency-unavailable", detail.str()))
+    {
+      reject("snapshot observation worker rejected submission");
+    }
+  }
+
+  void record_rate_resolved_normal_authority_failure_snapshot(
+    const MpcProblem & problem,
+    const std::optional<RateResolvedTrackCruiseSubmissionDraft> &
+    submission_draft,
+    const double now_sec,
+    const mpcc_contract::ControlIntent requested_intent,
+    const mpcc_contract::ControlIntent effective_intent,
+    const RateResolvedRetainedShadowEvaluation & retained,
+    const bool published_stop_retained)
+  {
+    if (
+      retained.production_authority.has_value() || published_stop_retained ||
+      requested_intent == mpcc_contract::ControlIntent::Stop ||
+      requested_intent == mpcc_contract::ControlIntent::Unknown)
+    {
       return;
     }
-    auto snapshot = std::move(source.value());
-    const auto detail_text = detail.str();
-    const auto decision_id = retained.decision_id;
-    const auto submission =
-      rate_resolved_terminal_failure_snapshot_worker_->submit_latest(
-      [snapshot = std::move(snapshot), detail_text, decision_id, intent]() {
-        const auto recorded =
-          mpcc_architecture_snapshot::record_proof_failure(
-          snapshot,
-          mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
-          "terminal-contingency-unavailable", detail_text);
-        if (
-          recorded.status ==
-          mpcc_architecture_snapshot::RecordStatus::Written)
-        {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "Rate-resolved terminal proof snapshot recorded asynchronously: "
-            "decision=%lu, intent=%s, file=%s",
-            static_cast<unsigned long>(decision_id),
-            mpcc_contract::to_string(intent),
-            recorded.snapshot_file.string().c_str());
-        } else if (
-          recorded.status ==
-          mpcc_architecture_snapshot::RecordStatus::IoFailure ||
-          recorded.status ==
-          mpcc_architecture_snapshot::RecordStatus::InvalidInput)
-        {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "Rate-resolved terminal proof snapshot async recorder rejected: "
-            "decision=%lu, intent=%s, detail=%s",
-            static_cast<unsigned long>(decision_id),
-            mpcc_contract::to_string(intent), recorded.detail.c_str());
-        }
-      });
-    if (!submission.accepted) {
+
+    const auto reject = [this, requested_intent](const std::string & reason) {
+        RCLCPP_WARN(
+          rclcpp::get_logger("mpc_controller"),
+          "Rate-resolved normal authority-loss snapshot unavailable: "
+          "decision=%lu, intent=%s, reason=%s, authority=observation-only",
+          static_cast<unsigned long>(active_control_decision_id_),
+          mpcc_contract::to_string(requested_intent), reason.c_str());
+      };
+    std::string snapshot_reject_reason;
+    auto source = build_rate_resolved_current_world_interaction_snapshot(
+      problem, submission_draft, now_sec, snapshot_reject_reason);
+    if (!source.has_value()) {
+      reject(snapshot_reject_reason);
+      return;
+    }
+
+    std::ostringstream detail;
+    detail << "requested=" << mpcc_contract::to_string(requested_intent)
+           << "/effective=" << mpcc_contract::to_string(effective_intent)
+           << "/retained="
+           << rate_resolved_retained::to_string(retained.reason)
+           << "/sequence=" << retained.sequence
+           << "/candidate="
+           << rate_resolved_retained::to_string(retained.candidate_reason)
+           << "/candidate_sequence=" << retained.candidate_sequence
+           << "/executed="
+           << rate_resolved_retained::to_string(retained.executed_reason)
+           << "/executed_sequence=" << retained.executed_sequence
+           << "/published_stop_retained="
+           << (published_stop_retained ? 1 : 0)
+           << "/last_published_intent="
+           << mpcc_contract::to_string(last_published_authority_intent_)
+           << "/decision=" << active_control_decision_id_;
+    if (!submit_rate_resolved_architecture_failure_snapshot(
+        std::move(source.value()), active_control_decision_id_,
+        requested_intent, "normal-authority-unavailable", detail.str()))
+    {
       reject("snapshot observation worker rejected submission");
     }
   }
@@ -30040,6 +30131,7 @@ struct MPC
     double stop_successor_ms{};
     double published_stop_join_ms{};
     double failure_snapshot_ms{};
+    double normal_authority_snapshot_ms{};
     double gate_a_join_ms{};
     double previous_intent_join_ms{};
     auto retained = evaluate_rate_resolved_track_cruise_retained_shadow(
@@ -30315,6 +30407,17 @@ struct MPC
         static_cast<unsigned long>(gate_a_sequence),
         proposed_blocker.empty() ? "none" : proposed_blocker.c_str());
     }
+    // Observation only: freeze the final current-world boundary after every
+    // normal, Stop-suffix, Gate-A and previous-intent join has failed, but
+    // before command selection converts that missing authority into external
+    // Emergency Stop.  The snapshot cannot feed any production store.
+    const auto normal_authority_snapshot_started = SteadyClock::now();
+    record_rate_resolved_normal_authority_failure_snapshot(
+      problem, submission_draft, now_sec, intent, effective_intent, retained,
+      published_stop_retained);
+    normal_authority_snapshot_ms =
+      std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - normal_authority_snapshot_started).count();
     const auto retained_join_finished = SteadyClock::now();
     record_rate_resolved_track_cruise_shadow(problem, now_sec, retained);
     auto output = published_stop_retained ?
@@ -30370,7 +30473,8 @@ struct MPC
         "regions=preentry-draft:%.3f/submission-draft:%.3f/"
         "retained-join:%.3f/output-successor:%.3fms, intent=%s, "
         "join_detail=primary:%.3f/stop_lattice:%.3f/stop_successor:%.3f/"
-        "published_stop_join:%.3f/failure_snapshot:%.3f/gate_a:%.3f/"
+        "published_stop_join:%.3f/failure_snapshot:%.3f/"
+        "normal_authority_snapshot:%.3f/gate_a:%.3f/"
         "previous_intent:%.3fms, "
         "retained_attempts=%lu/retained_evaluations:%.3f/"
         "retained_orchestration:%.3f, "
@@ -30391,7 +30495,8 @@ struct MPC
           production_finished - retained_join_finished).count(),
         mpcc_contract::to_string(intent),
         primary_retained_ms, stop_lattice_ms, stop_successor_ms,
-        published_stop_join_ms, failure_snapshot_ms, gate_a_join_ms,
+        published_stop_join_ms, failure_snapshot_ms,
+        normal_authority_snapshot_ms, gate_a_join_ms,
         previous_intent_join_ms,
         static_cast<unsigned long>(retained.plan_evaluation_count),
         retained.plan_evaluation_elapsed_ms,

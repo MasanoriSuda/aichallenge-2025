@@ -3904,22 +3904,34 @@ def test_shiftout_to_pass_requires_causal_certified_gate_a() -> None:
 def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
     """Architecture evidence persistence cannot consume normal authority time."""
 
+    submitter_start = SOURCE.index(
+        "bool submit_rate_resolved_architecture_failure_snapshot("
+    )
+    submitter_end = SOURCE.index(
+        "void record_rate_resolved_terminal_contingency_failure_snapshot(",
+        submitter_start,
+    )
+    submitter = SOURCE[submitter_start:submitter_end]
+    submission = submitter.index(
+        "rate_resolved_terminal_failure_snapshot_worker_->submit_latest("
+    )
+    persistence = submitter.index(
+        "mpcc_architecture_snapshot::record_proof_failure("
+    )
+    assert submission < persistence
+    assert "[snapshot = std::move(snapshot)" in submitter
+    assert "recorded asynchronously" in submitter
+
     recorder_start = SOURCE.index(
         "void record_rate_resolved_terminal_contingency_failure_snapshot("
     )
     recorder_end = SOURCE.index(
-        "bool submit_rate_resolved_track_cruise_shadow(", recorder_start
+        "void record_rate_resolved_normal_authority_failure_snapshot(",
+        recorder_start,
     )
     recorder = SOURCE[recorder_start:recorder_end]
-    submission = recorder.index(
-        "rate_resolved_terminal_failure_snapshot_worker_->submit_latest("
-    )
-    persistence = recorder.index(
-        "mpcc_architecture_snapshot::record_proof_failure("
-    )
-    assert submission < persistence
-    assert "[snapshot = std::move(snapshot)" in recorder
-    assert "recorded asynchronously" in recorder
+    assert "submit_rate_resolved_architecture_failure_snapshot(" in recorder
+    assert "mpcc_architecture_snapshot::record_proof_failure(" not in recorder
 
     production_start = SOURCE.index(
         "MpcControlCycleResult rate_resolved_normal_production_control("
@@ -3930,6 +3942,53 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
     production = SOURCE[production_start:production_end]
     assert "record_rate_resolved_terminal_contingency_failure_snapshot(" in production
     assert "mpcc_architecture_snapshot::record_proof_failure(" not in production
+
+
+def test_final_normal_authority_loss_is_frozen_without_control_authority() -> None:
+    """The Stop symptom is recorded only after every normal join has failed."""
+
+    builder_start = SOURCE.index(
+        "build_rate_resolved_current_world_interaction_snapshot("
+    )
+    builder_end = SOURCE.index(
+        "bool submit_rate_resolved_architecture_failure_snapshot(", builder_start
+    )
+    builder = SOURCE[builder_start:builder_end]
+    assert "last_rate_resolved_serialized_predecessor_" in builder
+    assert "build_rate_resolved_track_cruise_physical_snapshot(" in builder
+    assert "bind_rate_resolved_replay_world(" in builder
+    assert "interaction_snapshot_complete(" in builder
+    assert "certified_plan_store" not in builder
+    assert "mailbox" not in builder
+
+    recorder_start = SOURCE.index(
+        "void record_rate_resolved_normal_authority_failure_snapshot("
+    )
+    recorder_end = SOURCE.index(
+        "bool submit_rate_resolved_current_world_stop_observation(", recorder_start
+    )
+    recorder = SOURCE[recorder_start:recorder_end]
+    assert "retained.production_authority.has_value()" in recorder
+    assert "published_stop_retained" in recorder
+    assert '"normal-authority-unavailable"' in recorder
+    assert "certified_plan_store" not in recorder
+    assert "mailbox" not in recorder
+    assert "canonical_normal_emergency_stop(" not in recorder
+
+    production_start = SOURCE.index(
+        "MpcControlCycleResult rate_resolved_normal_production_control("
+    )
+    production_end = SOURCE.index(
+        "MpcControlCycleResult get_control(", production_start
+    )
+    production = SOURCE[production_start:production_end]
+    atomic_admission = production.index("resolve_atomic_intent_admission(")
+    freeze = production.index(
+        "record_rate_resolved_normal_authority_failure_snapshot("
+    )
+    output = production.index("auto output = published_stop_retained ?")
+    assert atomic_admission < freeze < output
+    assert "authority=observation-only" in recorder
 
 
 def test_outer_exact_wall_failure_is_frozen_in_planning_worker() -> None:

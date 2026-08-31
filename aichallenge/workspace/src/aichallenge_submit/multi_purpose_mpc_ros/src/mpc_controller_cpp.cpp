@@ -7990,9 +7990,6 @@ struct OvertakeSiblingAdoptionLiveState
   int side_sign{};
   bool active_execution{false};
   bool hard_fault{true};
-  bool selected_homotopy_established{false};
-  bool before_no_return{false};
-  bool replacement_budget_available{false};
 };
 
 struct CanonicalNormalFinalActuationTelemetryWindow
@@ -9539,26 +9536,6 @@ struct MPC
       FrontRiskLevel::EmergencyBrake ||
       overtake_solver_recovery_active_ ||
       last_v2x_behavior_output_.overtake_forbidden_wp;
-    state.selected_homotopy_established =
-      last_v2x_behavior_output_.locked_target_current_lateral_clear &&
-      std::isfinite(
-      last_v2x_behavior_output_.locked_target_relative_lateral) &&
-      (state.side_sign == -1 || state.side_sign == 1) &&
-      state.side_sign *
-      last_v2x_behavior_output_.locked_target_relative_lateral < -kEps;
-    state.before_no_return =
-      !overtake_line_state_.opponent_side_replan_no_return_latched &&
-      !overtake_line_state_.mission_cross_side_transition_committed &&
-      last_v2x_behavior_output_.overtake_commit_stage ==
-      overtake_core::PassCommitStage::ShiftCommitted &&
-      std::isfinite(last_v2x_behavior_output_.locked_target_longitudinal) &&
-      last_v2x_behavior_output_.locked_target_longitudinal + kEps >=
-      cfg.v2x_behavior.overtake_line.
-      opponent_side_replan_no_return_front_distance;
-    state.replacement_budget_available =
-      !overtake_line_state_.mission_cross_side_transition_committed &&
-      overtake_line_state_.opponent_side_replan_count <
-      cfg.v2x_behavior.overtake_line.opponent_side_replan_max_count;
     return state;
   }
 
@@ -9755,9 +9732,7 @@ struct MPC
       const auto live = current_overtake_sibling_adoption_live_state();
       if (!overtake_sibling_adoption::token_matches_live_state(
           token, live.intent, live.target_id, live.mission_generation,
-          live.side_sign, live.active_execution,
-          live.selected_homotopy_established, live.before_no_return,
-          live.replacement_budget_available, live.hard_fault))
+          live.side_sign, live.active_execution, live.hard_fault))
       {
         if (rate_resolved_track_cruise_certified_plan_store_ != nullptr) {
           rate_resolved_track_cruise_certified_plan_store_->
@@ -27058,9 +27033,6 @@ struct MPC
           selected_epoch_plan != nullptr,
           live.active_execution,
           live.hard_fault,
-          live.selected_homotopy_established,
-          live.before_no_return,
-          live.replacement_budget_available,
           sibling_evaluation.production_authority.has_value(),
           sibling_evaluation.stateless_current_world_bundle,
           evaluation_intent,

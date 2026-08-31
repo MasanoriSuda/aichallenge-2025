@@ -37,8 +37,6 @@ artifact::Identity identity(const int side) {
 adoption::Request accepted_request() {
   adoption::Request request;
   request.active_execution = true;
-  request.before_no_return = true;
-  request.replacement_budget_available = true;
   request.sibling_current_world_authority = true;
   request.sibling_stateless_current_world_bundle = true;
   request.live_intent = contract::ControlIntent::ShiftOut;
@@ -50,7 +48,7 @@ adoption::Request accepted_request() {
   return request;
 }
 
-TEST(MpccOvertakeSiblingAdoption, AcceptsExactPreNoReturnSibling) {
+TEST(MpccOvertakeSiblingAdoption, AcceptsExactProofLossSibling) {
   const auto result = adoption::resolve(accepted_request());
   ASSERT_TRUE(result.accepted);
   EXPECT_EQ(result.reason, adoption::Reason::Accepted);
@@ -59,23 +57,19 @@ TEST(MpccOvertakeSiblingAdoption, AcceptsExactPreNoReturnSibling) {
   EXPECT_EQ(result.token.adopted_side_sign, 1);
   EXPECT_TRUE(adoption::token_matches_live_state(
       result.token, contract::ControlIntent::ShiftOut, "d2", 4U, -1, true,
-      false, true, true, false));
+      false));
 }
 
-TEST(MpccOvertakeSiblingAdoption, RejectsEstablishedSelectedHomotopy) {
+TEST(MpccOvertakeSiblingAdoption, AcceptsRepeatedExactProofLossReplacement) {
   auto request = accepted_request();
-  request.selected_homotopy_established = true;
+  request.live_side_sign = 1;
+  request.source_identity = identity(1);
+  request.sibling_identity = identity(-1);
   const auto result = adoption::resolve(request);
-  EXPECT_FALSE(result.accepted);
-  EXPECT_EQ(result.reason, adoption::Reason::SelectedHomotopyEstablished);
-}
-
-TEST(MpccOvertakeSiblingAdoption, RejectsAfterNoReturn) {
-  auto request = accepted_request();
-  request.before_no_return = false;
-  const auto result = adoption::resolve(request);
-  EXPECT_FALSE(result.accepted);
-  EXPECT_EQ(result.reason, adoption::Reason::NoReturn);
+  ASSERT_TRUE(result.accepted);
+  EXPECT_EQ(result.reason, adoption::Reason::Accepted);
+  EXPECT_EQ(result.token.previous_side_sign, 1);
+  EXPECT_EQ(result.token.adopted_side_sign, -1);
 }
 
 TEST(MpccOvertakeSiblingAdoption, RejectsHardFault) {
@@ -84,14 +78,6 @@ TEST(MpccOvertakeSiblingAdoption, RejectsHardFault) {
   const auto result = adoption::resolve(request);
   EXPECT_FALSE(result.accepted);
   EXPECT_EQ(result.reason, adoption::Reason::HardFault);
-}
-
-TEST(MpccOvertakeSiblingAdoption, RejectsExhaustedReplacementBudget) {
-  auto request = accepted_request();
-  request.replacement_budget_available = false;
-  const auto result = adoption::resolve(request);
-  EXPECT_FALSE(result.accepted);
-  EXPECT_EQ(result.reason, adoption::Reason::ReplacementBudgetExhausted);
 }
 
 TEST(MpccOvertakeSiblingAdoption, RejectsMissingCurrentWorldAuthority) {
@@ -150,15 +136,13 @@ TEST(MpccOvertakeSiblingAdoption, RejectsSelectedCurrentWorldAuthority) {
 TEST(MpccOvertakeSiblingAdoption, PublicationTokenRejectsChangedLiveSide) {
   const auto token = adoption::resolve(accepted_request()).token;
   EXPECT_FALSE(adoption::token_matches_live_state(
-      token, contract::ControlIntent::ShiftOut, "d2", 4U, 1, true, false,
-      true, true, false));
+      token, contract::ControlIntent::ShiftOut, "d2", 4U, 1, true, false));
 }
 
-TEST(MpccOvertakeSiblingAdoption, PublicationTokenRejectsEstablishedHomotopy) {
+TEST(MpccOvertakeSiblingAdoption, PublicationTokenRejectsHardFault) {
   const auto token = adoption::resolve(accepted_request()).token;
   EXPECT_FALSE(adoption::token_matches_live_state(
-      token, contract::ControlIntent::ShiftOut, "d2", 4U, -1, true, true,
-      true, true, false));
+      token, contract::ControlIntent::ShiftOut, "d2", 4U, -1, true, true));
 }
 
 } // namespace

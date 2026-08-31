@@ -57,12 +57,6 @@ const char *to_string(const Reason reason) noexcept {
     return "invalid-live-identity";
   case Reason::HardFault:
     return "hard-fault";
-  case Reason::SelectedHomotopyEstablished:
-    return "selected-homotopy-established";
-  case Reason::NoReturn:
-    return "no-return";
-  case Reason::ReplacementBudgetExhausted:
-    return "replacement-budget-exhausted";
   case Reason::MissingSiblingAuthority:
     return "missing-sibling-authority";
   case Reason::NonStatelessSibling:
@@ -98,18 +92,6 @@ Resolution resolve(const Request &request) noexcept {
   }
   if (request.hard_fault) {
     result.reason = Reason::HardFault;
-    return result;
-  }
-  if (request.selected_homotopy_established) {
-    result.reason = Reason::SelectedHomotopyEstablished;
-    return result;
-  }
-  if (!request.before_no_return) {
-    result.reason = Reason::NoReturn;
-    return result;
-  }
-  if (!request.replacement_budget_available) {
-    result.reason = Reason::ReplacementBudgetExhausted;
     return result;
   }
   if (!request.sibling_current_world_authority) {
@@ -164,9 +146,7 @@ bool token_matches_live_state(
     const Token &token, const contract::ControlIntent live_intent,
     const std::string &live_target_id,
     const std::uint64_t live_mission_generation, const int live_side_sign,
-    const bool active_execution, const bool selected_homotopy_established,
-    const bool before_no_return,
-    const bool replacement_budget_available, const bool hard_fault) noexcept {
+    const bool active_execution, const bool hard_fault) noexcept {
   return token.source_sequence > 0U &&
          std::isfinite(token.source_snapshot_sec) && active_execution &&
          active_intent(live_intent) && live_intent == token.intent &&
@@ -177,8 +157,7 @@ bool token_matches_live_state(
          live_side_sign == token.previous_side_sign &&
          side_valid(token.adopted_side_sign) &&
          token.adopted_side_sign == -live_side_sign &&
-         !selected_homotopy_established && before_no_return &&
-         replacement_budget_available && !hard_fault;
+         !hard_fault;
 }
 
 } // namespace multi_purpose_mpc_ros::mpcc_overtake_sibling_adoption

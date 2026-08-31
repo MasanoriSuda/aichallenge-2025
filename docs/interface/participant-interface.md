@@ -35,7 +35,7 @@
 1. tar.gz 内の最上位ディレクトリ名は **必ず `aichallenge_submit/`** にする。異なる名前にすると eval ビルド時に展開後の `aichallenge_submit/` が空になり、参加者パッケージが一切ビルドされない。
 2. tar.gz は**リポジトリ直下（Docker ビルドコンテキスト内）**に置く。リポジトリルート外のパスを指定すると `docker build` の `COPY` が解決できず eval イメージのビルドが失敗する。
 3. エントリ launch ファイルは **`aichallenge_submit_launch` パッケージ内の `aichallenge_submit.launch.xml`** として提供する。このファイルを欠くと評価の launch ツリーが起動できない。
-4. `control_method` に渡せる値は **`mpc`・`pure_pursuit`・`tiny_lidar_net`・`pilot_net`・`joycon` の 5 つのみ**（既定: `mpc`）。それ以外の値を渡すとどの制御ノードも起動せず車両が動かない。既定値を変更すると `control_method` を明示しない既存の起動経路の挙動が変わる。
+4. `control_method` に渡せる値は **`mpc`・`pure_pursuit`・`tiny_lidar_net`・`pilot_net`・`joycon` の 5 つのみ**。`reference.launch.xml` 単体の既定は `mpc`、E2E ブランチの提出 entry は `tiny_lidar_net` を明示する。それ以外の値を渡すとどの制御ノードも起動せず車両が動かない。既定値を変更すると `control_method` を明示しない既存の起動経路の挙動が変わる。
 5. 提出パッケージは最小インターフェース（AWSIM センサトピックの subscribe、`/localization/kinematic_state` と `/planning/scenario_planning/trajectory` の produce、`/control/command/control_cmd` の publish、`/set_initial_pose` サービスの advertise）をすべて満たす。いずれかのトピック名・型を変更すると localization / planning / control の連結が切れ、車両の起動・走行・評価ができなくなる。
 6. 2026 SIMでBoostを使う場合は、車両Domain内の `/awsim/status` と `/awsim/cmd` を `std_msgs/msg/Float32MultiArray` で扱う。`/awsim/cmd.data[0]` の `0.0`→`1.0`以上の立ち上がりが発動条件であり、`/awsim/boost_cmd`、`Bool`、Domain 0の`/admin/awsim/*`を代用しない。
 7. gear変更が必要な場合は、車両Domain内の `/control/command/gear_cmd` と `/vehicle/status/gear_status` を使う。スタック復帰を理由にDomain 0の`/admin/awsim/reset`、クロスドメイン転送、非公開のteleport / respawn手段で代用しない。
@@ -95,15 +95,15 @@ aichallenge_submit.launch.xml
 
 | `control_method` | 起動するノード（パッケージ） | 主な入力トピック |
 |---|---|---|
-| `mpc`（既定） | `multi_purpose_mpc_ros`（C++、`mpc_controller_cpp`） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
+| `mpc`（reference の既定） | `multi_purpose_mpc_ros`（C++、`mpc_controller_cpp`） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
 | `pure_pursuit` | `simple_pure_pursuit`（C++） | `/localization/kinematic_state`、`/planning/scenario_planning/trajectory` |
-| `tiny_lidar_net` | `tiny_lidar_net_controller`（Python） | `/scan`（`sensor_msgs/LaserScan`） |
+| `tiny_lidar_net`（E2E entry の既定） | `tiny_lidar_net_controller`（Python） | `/sensing/lidar/scan`（`sensor_msgs/LaserScan`） |
 | `pilot_net` | `pilot_net_controller`（Python） | `/image_raw`（`sensor_msgs/Image`） |
 | `joycon` | `teleop_manager`（`teleop_manager` パッケージ） | （手動制御） |
 
 各値は `control/<name>.launch.xml` を `<include>` する `<group if=...>` で実装されており、いずれも `/control/command/control_cmd`（`autoware_auto_control_msgs/AckermannControlCommand`）を publish します。
 
-上記 5 値以外を渡すと、どの `<group if=...>` にも一致せず制御ノードが起動せず車両が動きません。既定値 `mpc` を変更すると、`control_method` を明示しない既存の起動経路の挙動が変わります。
+上記 5 値以外を渡すと、どの `<group if=...>` にも一致せず制御ノードが起動せず車両が動きません。`reference.launch.xml` の既定は `mpc` のまま維持し、E2E ブランチでは提出 entry から `tiny_lidar_net` を明示的に渡します。
 
 ---
 
@@ -128,11 +128,13 @@ AWSIM が publish し参加者ノードが subscribe するトピックです（
 | `/awsim/status` | `std_msgs/Float32MultiArray` | 2026公式AWSIM状態。index 5=`boostRemaining`、6=`isBoosting` |
 | `/awsim/state` | `std_msgs/String` | 車両FSM。`Spawned, Grounded, Ready, Start, Finish` |
 
-`tiny_lidar_net` 使用時の追加入力（要確認: AWSIM 側の `/scan` publisher 名は本リポジトリ外）:
+`tiny_lidar_net` 使用時の追加入力:
 
 | トピック | 型 | 確認元 |
 |---|---|---|
-| `/scan` | `sensor_msgs/LaserScan` | `tiny_lidar_net_controller_node.py` の `create_subscription` |
+| `/sensing/lidar/scan` | `sensor_msgs/LaserScan` | `tiny_lidar_net.launch.xml` が node 内部名 `/scan` へ remap |
+
+End to End AI 部門の推論入力制約は [E2E AI 部門ベース仕様](../spec/e2e-ai.md) を参照する。E2E controller は GNSS、IMU、V2X、map pose、trajectory、MPC 出力を推論入力にしてはならない。
 
 `pilot_net` 使用時の追加入力（要確認: AWSIM 側のカメラトピック名は本リポジトリ外）:
 

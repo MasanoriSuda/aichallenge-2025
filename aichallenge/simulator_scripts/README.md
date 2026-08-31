@@ -5,7 +5,7 @@
 ## 呼び出しの仕組み
 
 ```
-make simulator-<mode> / make dev / make dev2..dev4 / make gate1..gate3
+make simulator-<mode> / make dev / make dev2..dev4 / make gate1..gate3 / make e2e-single
   → docker compose up simulator (SIM_MODE=<mode>)
     → run_simulator.bash <mode> [args...]
       → simulator_scripts/<mode>.sh [args...]
@@ -21,8 +21,10 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 - Makefile は `*.sh` を wildcard で拾って `make simulator-<mode>` を自動生成する。
   `dev2..dev4` / `gate1..gate3` のエイリアスも `SIM_MODES` に追加してあり、
   `make simulator-dev2` / `make simulator-gate1` のように使える（AWSIM のみ起動）。
-- `make dev` / `make gate1..gate3` は AWSIM に加えて Autoware も起動する複合ターゲット。
-  `make dev2..dev4` は N 台分の autoware を別 compose プロジェクト（ROS_DOMAIN_ID=1..N）で起動する。
+- `make dev` / `make gate1..gate3` / `make e2e-single` / `make e2e` / `make e2e-final` は AWSIM に加えて Autoware も起動する複合ターゲット。
+  `make dev2..dev4` と `make e2e-final` は N 台分の autoware を別 compose
+  プロジェクト（ROS_DOMAIN_ID=1..N）で起動する。`e2e-final` はsync開始のため、全車Ready後に
+  `make awsim-request-start` を実行する。
 
 ## モード一覧
 
@@ -32,6 +34,9 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 | `dev.sh` | 開発 | 車両数 N（既定 1） | unlimited laps・timeout / count開始 / handicap・wall-recovery・ranking off |
 | `parallel.sh` | 複数台レース | - | 3台 / 6 laps / 600s / sync開始 / handicap・ranking・start-random off / wall-recovery off |
 | `gate.sh` | Safety Gate テスト | テスト番号 1/2/3/all（既定 all） | 1台。all は test1〜3 を順次実行 |
+| `e2e-single.sh` | E2E 単車ベースライン | - | 1台 / NPC 0 / 3 laps / 420s / LiDAR on / 固定スタート |
+| `e2e.sh` | E2E 練習参考 | - | 1台 / NPC 2 / 6 laps / Camera・LiDAR on |
+| `e2e-final.sh` | E2E 決勝参考 | - | 4台 / 6 laps / sync開始 / handicap・ranking on |
 | `sample-scenario.sh` | シナリオ指定起動 | - | `StreamingAssets/Race/official.yaml` を `--scenario` で読み込む |
 | `multiplay-server.sh` | Multiplay 専用サーバー | - | `-batchmode -nographics`、port 7777 |
 | `multiplay-host.sh` | Multiplay ホスト | - | 127.0.0.1:7777、vehicle-index 1 |
@@ -41,7 +46,11 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 - start-mode: `dev.sh` は count（全車接地後にカウントダウン開始、`/admin/awsim/start` 不要）。
   `eval.sh` / `parallel.sh` は sync（`/admin/awsim/start` 待ち。評価では awsim_state_manager が
   自動送信、手動で送るなら `make awsim-request-start`）。
-- センサー（camera/LiDAR）は off が既定。GPU 描画への切り替えは各ファイル末尾のコメント参照。
+- 通常の dev/gate はセンサー（camera/LiDAR）off が既定。E2E モードは各 script に明記したセンサーだけを有効にする。
+- 現在同梱する AWSIM の LiDAR CLI は `on/off` を受け付ける。旧 upstream script の `cpu` は無効値になるため使用しない。
+- 現在同梱するAWSIMではGNSS publisherを無効にすると車両がReady/Groundedへ到達しない。
+  E2E modeのGNSSは起動ハンドシェイク専用に有効化するが、TinyLidarNetはGNSSを
+  subscribeしない。モデル入力契約と評価基盤の初期化を分けて監査する。
 - 引数の完全な仕様は AWSIM リポジトリの `docs/AIChallenge/specs/CLI.md` を参照。
 
 ## 設計方針

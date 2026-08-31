@@ -2,7 +2,10 @@ import logging
 import numpy as np
 from typing import Tuple
 
-from model.tinylidarnet import TinyLidarNetNp, TinyLidarNetSmallNp
+from tiny_lidar_net_controller.model.tinylidarnet import (
+    TinyLidarNetNp,
+    TinyLidarNetSmallNp,
+)
 
 
 class TinyLidarNetCore:
@@ -61,16 +64,31 @@ class TinyLidarNetCore:
         self.control_mode = control_mode.lower()
         self.max_range = max_range
         self.logger = logging.getLogger(__name__)
+        self.loaded_parameter_count = 0
+
+        if not isinstance(self.input_dim, int) or self.input_dim <= 0:
+            raise ValueError("input_dim must be a positive integer")
+        if self.output_dim != 2:
+            raise ValueError("output_dim must be 2 with [acceleration, steering] semantics")
+        if self.architecture not in {"normal", "large", "small"}:
+            raise ValueError(
+                "architecture must be one of: normal, large, small"
+            )
+        if self.control_mode not in {"ai", "fixed"}:
+            raise ValueError("control_mode must be either 'ai' or 'fixed'")
+        if not np.isfinite(self.max_range) or self.max_range <= 0.0:
+            raise ValueError("max_range must be finite and positive")
+        if not np.isfinite(self.acceleration) or not -1.0 <= self.acceleration <= 1.0:
+            raise ValueError("acceleration must be finite and within [-1.0, 1.0]")
 
         if self.architecture == 'small':
             self.model = TinyLidarNetSmallNp(input_dim=self.input_dim, output_dim=self.output_dim)
         else:
             self.model = TinyLidarNetNp(input_dim=self.input_dim, output_dim=self.output_dim)
 
-        if ckpt_path:
-            self._load_weights(ckpt_path)
-        else:
-            self.logger.warning("No weight file provided. Using randomly initialized weights.")
+        if not ckpt_path:
+            raise ValueError("ckpt_path is required; random production weights are forbidden")
+        self._load_weights(ckpt_path)
 
     def process(self, ranges: np.ndarray) -> Tuple[float, float]:
         """Runs the complete inference pipeline on raw LiDAR data.
@@ -85,6 +103,10 @@ class TinyLidarNetCore:
             Tuple[float, float]: A tuple containing (acceleration, steering_angle).
                 Values are clipped between -1.0 and 1.0.
         """
+        ranges = np.asarray(ranges, dtype=np.float32)
+        if ranges.ndim != 1 or ranges.size == 0:
+            raise ValueError("ranges must be a non-empty 1D array")
+
         # 1. Preprocess (Clean -> Resize -> Normalize)
         processed_ranges = self._preprocess_ranges(ranges)
 
@@ -92,7 +114,11 @@ class TinyLidarNetCore:
         x = np.expand_dims(np.expand_dims(processed_ranges, axis=0), axis=1)
 
         # 2. Inference
-        outputs = self.model(x)[0]
+        outputs = np.asarray(self.model(x)[0], dtype=np.float32)
+        if outputs.shape != (2,):
+            raise ValueError(f"model output must have shape (2,), got {outputs.shape}")
+        if not np.all(np.isfinite(outputs)):
+            raise ValueError("model output contains non-finite values")
 
         # 3. Post-process
         if self.control_mode == "ai":
@@ -126,15 +152,44 @@ class TinyLidarNetCore:
             else:
                 raise ValueError(f"Unsupported weight format type: {type(weights)}")
 
-            loaded_count = 0
+            normalized_weights = {}
             for key, value in weight_dict.items():
                 key_norm = key.replace('.', '_')
+                if key_norm in normalized_weights:
+                    raise ValueError(f"duplicate normalized parameter key: {key_norm}")
+                normalized_weights[key_norm] = np.asarray(value)
 
-                if key_norm in self.model.params:
-                    self.model.params[key_norm] = value
-                    loaded_count += 1
+            expected_keys = set(self.model.params)
+            provided_keys = set(normalized_weights)
+            missing = sorted(expected_keys - provided_keys)
+            unexpected = sorted(provided_keys - expected_keys)
+            if missing or unexpected:
+                raise ValueError(
+                    f"weight key mismatch: missing={missing}, unexpected={unexpected}"
+                )
 
-            self.logger.info(f"Successfully loaded {loaded_count} parameters from {path}")
+            validated_weights = {}
+            for key, expected in self.model.params.items():
+                value = normalized_weights[key]
+                if value.shape != expected.shape:
+                    raise ValueError(
+                        f"weight shape mismatch for {key}: "
+                        f"expected={expected.shape}, actual={value.shape}"
+                    )
+                if not np.issubdtype(value.dtype, np.number):
+                    raise ValueError(f"weight {key} must be numeric, got {value.dtype}")
+                value = value.astype(np.float32, copy=False)
+                if not np.all(np.isfinite(value)):
+                    raise ValueError(f"weight {key} contains non-finite values")
+                validated_weights[key] = value
+
+            self.model.params.update(validated_weights)
+            self.loaded_parameter_count = len(validated_weights)
+            self.logger.info(
+                "Successfully loaded %d validated parameters from %s",
+                self.loaded_parameter_count,
+                path,
+            )
 
         except Exception as e:
             self.logger.error(f"Failed to load weights from {path}: {e}")

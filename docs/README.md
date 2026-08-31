@@ -17,6 +17,7 @@
 - `competition-rules.md` — Automotive AI Challenge 2026 / SW 部門ルールの公式ページ要約と、このリポジトリへの影響。
 - `compose-overlays.md` — `.env` の `COMPOSE_FILE` で GPU / サウンド を切り替えるオーバーレイ設計（複数 compose ファイル構成の正）。
 - `docker-audio.md` — Linux（PipeWire / Pulse）で `simulator` コンテナからホストへ音声を出すための前提と手順。
+- `e2e-ai.md` — Automotive AI Challenge 2026 End to End AI 部門の入力制約、開発段階、提出物方針。
 - `how-to-setup.md` — 環境構築（Ubuntu 22.04 想定）。`setup.bash` による対話一括セットアップから起動確認まで。
 - `introduction.md` — 初学者向け `make dev` / `make eval` 入門。ホストでコマンドを実行し docker compose で AWSIM と Autoware を動かす全体像。
 - `log-design.md` — `/output` 配下へログを集約する設計（compose / `run_evaluation.bash` の出力レイアウト）。

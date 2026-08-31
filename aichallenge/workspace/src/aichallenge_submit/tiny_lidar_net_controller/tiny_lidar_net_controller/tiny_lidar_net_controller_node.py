@@ -8,7 +8,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import LaserScan
 from autoware_auto_control_msgs.msg import AckermannControlCommand
 
-from tiny_lidar_net_controller_core import TinyLidarNetCore
+from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 
 
 class TinyLidarNetNode(Node):
@@ -30,6 +30,11 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('max_range', 30.0)
         self.declare_parameter('acceleration', 0.1)
         self.declare_parameter('control_mode', 'ai')
+        self.declare_parameter('sensor_timeout_sec', 0.25)
+        self.declare_parameter('watchdog_period_sec', 0.05)
+        self.declare_parameter('startup_grace_sec', 2.0)
+        self.declare_parameter('stale_brake_acceleration', -1.0)
+        self.declare_parameter('max_steering_angle_rad', 0.64)
         self.declare_parameter('debug', False)
 
         # --- Initialization ---
@@ -40,9 +45,40 @@ class TinyLidarNetNode(Node):
         max_range = self.get_parameter('max_range').value
         acceleration = self.get_parameter('acceleration').value
         control_mode = self.get_parameter('control_mode').value
+        self.sensor_timeout_sec = float(
+            self.get_parameter('sensor_timeout_sec').value
+        )
+        watchdog_period_sec = float(
+            self.get_parameter('watchdog_period_sec').value
+        )
+        self.startup_grace_sec = float(
+            self.get_parameter('startup_grace_sec').value
+        )
+        self.stale_brake_acceleration = float(
+            self.get_parameter('stale_brake_acceleration').value
+        )
+        self.max_steering_angle_rad = float(
+            self.get_parameter('max_steering_angle_rad').value
+        )
         
         self.debug = self.get_parameter('debug').value
         self.log_interval = self.get_parameter('log_interval_sec').value
+
+        positive_parameters = {
+            'log_interval_sec': self.log_interval,
+            'sensor_timeout_sec': self.sensor_timeout_sec,
+            'watchdog_period_sec': watchdog_period_sec,
+            'startup_grace_sec': self.startup_grace_sec,
+            'max_steering_angle_rad': self.max_steering_angle_rad,
+        }
+        for name, value in positive_parameters.items():
+            if not np.isfinite(value) or value <= 0.0:
+                raise ValueError(f'{name} must be finite and positive')
+        if (
+            not np.isfinite(self.stale_brake_acceleration)
+            or self.stale_brake_acceleration >= 0.0
+        ):
+            raise ValueError('stale_brake_acceleration must be finite and negative')
 
         try:
             self.core = TinyLidarNetCore(
@@ -55,7 +91,9 @@ class TinyLidarNetNode(Node):
                 max_range=max_range
             )
             self.get_logger().info(
-                f"Core initialized. Arch: {architecture}, MaxRange: {max_range}"
+                f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
+                f"MaxRange: {max_range}, "
+                f"ValidatedWeights: {self.core.loaded_parameter_count}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")
@@ -63,7 +101,13 @@ class TinyLidarNetNode(Node):
 
         # --- Communication Setup ---
         self.inference_times = []
+        self.scan_count = 0
+        self.last_log_scan_count = 0
         self.last_log_time = self.get_clock().now()
+        self.startup_time = self.get_clock().now()
+        self.last_scan_time = None
+        self.sensor_stale = False
+        self.last_error_log_time = 0.0
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -77,8 +121,15 @@ class TinyLidarNetNode(Node):
         self.pub_control = self.create_publisher(
             AckermannControlCommand, "/control/command/control_cmd", 1
         )
+        self.watchdog_timer = self.create_timer(
+            watchdog_period_sec, self._watchdog_callback
+        )
 
-        self.get_logger().info("TinyLidarNetNode is ready.")
+        self.get_logger().info(
+            "TinyLidarNetNode is ready: input=/scan, "
+            "output=/control/command/control_cmd, "
+            f"sensor_timeout={self.sensor_timeout_sec:.3f}s"
+        )
 
     def scan_callback(self, msg: LaserScan):
         """Callback for LaserScan subscription.
@@ -94,21 +145,76 @@ class TinyLidarNetNode(Node):
         # We pass the raw array; the core logic handles NaN/Inf and normalization.
         ranges = np.array(msg.ranges, dtype=np.float32)
 
-        # 2. Process via Core Logic
-        accel, steer = self.core.process(ranges)
+        try:
+            # 2. Process via Core Logic
+            accel, steer = self.core.process(ranges)
+            steer = float(np.clip(
+                steer,
+                -self.max_steering_angle_rad,
+                self.max_steering_angle_rad,
+            ))
 
-        # 3. Publish Command
+            # 3. Publish Command
+            self._publish_command(accel, steer)
+            now = self.get_clock().now()
+            self.last_scan_time = now
+            self.scan_count += 1
+            if self.sensor_stale:
+                self.get_logger().info("LiDAR stream recovered; resuming ML control")
+                self.sensor_stale = False
+        except Exception as exc:
+            self._log_inference_error(exc)
+            self._publish_stop()
+
+        # 4. Operational metrics
+        duration_ms = (time.monotonic() - start_time) * 1000.0
+        self.inference_times.append(duration_ms)
+        self._log_performance_metrics()
+
+    def _publish_command(self, acceleration: float, steering: float):
+        """Publish one finite Ackermann command."""
+        if not np.isfinite(acceleration) or not np.isfinite(steering):
+            raise ValueError("refusing to publish a non-finite control command")
         cmd = AckermannControlCommand()
         cmd.stamp = self.get_clock().now().to_msg()
-        cmd.longitudinal.acceleration = float(accel)
-        cmd.lateral.steering_tire_angle = float(steer)
+        cmd.longitudinal.acceleration = float(acceleration)
+        cmd.lateral.steering_tire_angle = float(steering)
         self.pub_control.publish(cmd)
 
-        # 4. Debug Logging
-        if self.debug:
-            duration_ms = (time.monotonic() - start_time) * 1000.0
-            self.inference_times.append(duration_ms)
-            self._log_performance_metrics()
+    def _publish_stop(self):
+        """Invalidate a retained drive command when sensing or inference is unsafe."""
+        self._publish_command(self.stale_brake_acceleration, 0.0)
+
+    def _watchdog_callback(self):
+        """Stop if no successful LiDAR inference has completed recently."""
+        now = self.get_clock().now()
+        if self.last_scan_time is None:
+            elapsed_sec = (now - self.startup_time).nanoseconds / 1e9
+            timeout_sec = self.startup_grace_sec
+            reason = "no valid LiDAR scan received after startup"
+        else:
+            elapsed_sec = (now - self.last_scan_time).nanoseconds / 1e9
+            timeout_sec = self.sensor_timeout_sec
+            reason = "LiDAR stream is stale"
+
+        if elapsed_sec <= timeout_sec:
+            return
+
+        if not self.sensor_stale:
+            self.get_logger().error(
+                f"{reason}: age={elapsed_sec:.3f}s limit={timeout_sec:.3f}s; "
+                "publishing stop"
+            )
+            self.sensor_stale = True
+        self._publish_stop()
+
+    def _log_inference_error(self, exc: Exception):
+        now = time.monotonic()
+        if now - self.last_error_log_time >= 1.0:
+            self.get_logger().error(
+                f"TinyLidarNet inference rejected; publishing stop: {exc}"
+            )
+            self.last_error_log_time = now
 
     def _log_performance_metrics(self):
         """Logs internal performance metrics at fixed intervals."""
@@ -119,14 +225,20 @@ class TinyLidarNetNode(Node):
             if self.inference_times:
                 avg_time = np.mean(self.inference_times)
                 max_time = np.max(self.inference_times)
-                fps = 1000.0 / avg_time if avg_time > 0 else 0.0
+                inference_capacity_hz = 1000.0 / avg_time if avg_time > 0 else 0.0
+                interval_scans = self.scan_count - self.last_log_scan_count
+                scan_hz = interval_scans / elapsed_sec if elapsed_sec > 0.0 else 0.0
 
                 self.get_logger().info(
-                    f"DEBUG: Avg Inference: {avg_time:.2f}ms ({fps:.2f}Hz) | "
-                    f"Max: {max_time:.2f}ms"
+                    f"E2E_STATUS scans={self.scan_count} stale={int(self.sensor_stale)} "
+                    f"scan_hz={scan_hz:.2f} "
+                    f"avg_inference_ms={avg_time:.2f} "
+                    f"max_inference_ms={max_time:.2f} "
+                    f"inference_capacity_hz={inference_capacity_hz:.2f}"
                 )
                 self.inference_times.clear()
-            
+                self.last_log_scan_count = self.scan_count
+
             self.last_log_time = now
 
 

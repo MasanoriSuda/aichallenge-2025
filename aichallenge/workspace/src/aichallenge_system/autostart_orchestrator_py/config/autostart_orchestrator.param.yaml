@@ -28,6 +28,8 @@
       - /sensing/gnss/pose_with_covariance
       - /sensing/imu/imu_raw
       - /sensing/imu/imu_data
+      # Required to reproduce and audit End to End AI inference.
+      - /sensing/lidar/scan
       - /vehicle/status/velocity_status
       - /vehicle/status/steering_status
       - /localization/imu_gnss_poser/pose_with_covariance

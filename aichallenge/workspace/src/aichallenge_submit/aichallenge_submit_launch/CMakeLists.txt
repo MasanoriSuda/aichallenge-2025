@@ -10,6 +10,10 @@ if(BUILD_TESTING)
     test_localization_timing_contract
     test/test_localization_timing_contract.py
   )
+  ament_add_pytest_test(
+    test_e2e_control_contract
+    test/test_e2e_control_contract.py
+  )
 endif()
 
 ament_auto_package(INSTALL_TO_SHARE launch map data config)

@@ -1392,6 +1392,22 @@ Finish the architecture simplification instead of leaving permanent dual control
   supervisor/producer ownership defect and remain the next frozen audit, not a
   reason to restore the old veto or tune a parameter.
 
+- `.steering/20260831-stateless-overtake-behavior-ownership` closes that
+  supervisor/producer ownership defect. Frozen Mission geometry and its
+  admission-time body-clear deadline remain one execution-source type; an
+  exact stateless sibling that crossed the canonical publisher is a second
+  source type identified by immutable `{Mission generation, source sequence}`.
+  The stateless source no longer depends on a separate mutable
+  generation-only publication ledger or on lifecycle state owned by retired
+  geometry. Existing target, wall, waypoint, intrusion, emergency and solver
+  hard guards are unchanged. `output/20260831-115922/d1` dynamically exposed
+  the old double-owner contradiction at sequence 598. In corrected
+  `output/20260831-122218/d1`, sequence 896 remained Behavior authority after
+  sibling adoption and legacy Mission candidate rejection; ownership released
+  only when the target became stale/lost. Build passed for all 25 packages and
+  package CTest passed 59/59. The later canonical Stop/recovery interval is a
+  separate failure family and was not hidden by this Slice.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

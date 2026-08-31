@@ -14676,7 +14676,7 @@ TEST(V2XOvertakeCoreMissionOwnership, ValidatedPassOwnsBehaviorAcrossEntryReject
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.lateral_exclusion_latched = true;
   request.locked_target_seen = true;
@@ -14689,7 +14689,7 @@ TEST(V2XOvertakeCoreMissionOwnership, MinimumMotionReleaseOwnsBehaviorWithoutLeg
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.minimum_motion_front_cap_release_latched = true;
   request.locked_target_seen = true;
@@ -14711,7 +14711,7 @@ TEST(V2XOvertakeCoreMissionOwnership, RecoverableSideContactOwnsConfirmedOverlap
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.locked_target_seen = true;
   request.current_body_footprints_separated = false;
@@ -14730,7 +14730,7 @@ TEST(V2XOvertakeCoreMissionOwnership, PrecontactSqueezeKeepsLateralPassAuthority
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.minimum_motion_front_cap_release_latched = true;
   request.locked_target_seen = true;
@@ -14766,7 +14766,7 @@ TEST(V2XOvertakeCoreMissionOwnership, RecoverableContactCannotBypassHardGuards)
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.locked_target_seen = true;
   request.current_body_footprint_overlap_confirmed = true;
@@ -14805,7 +14805,7 @@ TEST(V2XOvertakeCoreMissionOwnership, ShiftOutDoesNotBypassEntryOrExecutionGuard
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = false;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.lateral_exclusion_latched = true;
   request.locked_target_seen = true;
@@ -14818,7 +14818,7 @@ TEST(V2XOvertakeCoreMissionOwnership, DeadlineFeasibleShiftOutOwnsBehavior)
 {
   CommittedShiftOutBehaviorOwnershipRequest request;
   request.committed_shiftout_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.body_clear_deadline_checked = true;
   request.body_clear_handoff_active = true;
@@ -14827,11 +14827,39 @@ TEST(V2XOvertakeCoreMissionOwnership, DeadlineFeasibleShiftOutOwnsBehavior)
   EXPECT_TRUE(can_preserve_committed_shiftout_behavior(request));
 }
 
+TEST(V2XOvertakeCoreMissionOwnership, PublishedStatelessSourceOwnsShiftOutBehavior)
+{
+  CommittedShiftOutBehaviorOwnershipRequest request;
+  request.committed_shiftout_active = true;
+  // This semantic fact may come from an actually published stateless Bundle;
+  // no frozen Mission geometry is part of the pure ownership contract.
+  request.published_stateless_execution_source = true;
+  request.mission_side_valid = true;
+  request.locked_target_seen = true;
+
+  EXPECT_FALSE(request.body_clear_deadline_checked);
+  EXPECT_FALSE(request.body_clear_handoff_active);
+  EXPECT_TRUE(can_preserve_committed_shiftout_behavior(request));
+}
+
+TEST(V2XOvertakeCoreMissionOwnership, PublishedStatelessSourceOwnsSeparatedPassBehavior)
+{
+  CommittedPassBehaviorOwnershipRequest request;
+  request.committed_pass_active = true;
+  request.published_stateless_execution_source = true;
+  request.mission_side_valid = true;
+  request.lateral_exclusion_latched = true;
+  request.locked_target_seen = true;
+  request.current_body_footprints_separated = true;
+
+  EXPECT_TRUE(can_preserve_committed_pass_behavior(request));
+}
+
 TEST(V2XOvertakeCoreMissionOwnership, TargetIdentityBridgesOneGeometryClassificationMiss)
 {
   CommittedShiftOutBehaviorOwnershipRequest shiftout;
   shiftout.committed_shiftout_active = true;
-  shiftout.validated_fixed_line = true;
+  shiftout.validated_fixed_mission_source = true;
   shiftout.mission_side_valid = true;
   shiftout.body_clear_deadline_checked = true;
   shiftout.body_clear_handoff_active = true;
@@ -14843,7 +14871,7 @@ TEST(V2XOvertakeCoreMissionOwnership, TargetIdentityBridgesOneGeometryClassifica
 
   CommittedPassBehaviorOwnershipRequest pass;
   pass.committed_pass_active = true;
-  pass.validated_fixed_line = true;
+  pass.validated_fixed_mission_source = true;
   pass.mission_side_valid = true;
   pass.lateral_exclusion_latched = true;
   pass.target_identity_continuous = true;
@@ -14858,7 +14886,7 @@ TEST(V2XOvertakeCoreMissionOwnership, ShiftOutOwnerReleasesForHardAbortOrMissedD
 {
   CommittedShiftOutBehaviorOwnershipRequest request;
   request.committed_shiftout_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.body_clear_deadline_checked = true;
   request.body_clear_handoff_active = true;
@@ -14901,7 +14929,7 @@ TEST(V2XOvertakeCoreMissionOwnership, BodyClearHandoffOwnsEarlyPassBeforeLatch)
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.locked_target_seen = true;
   request.current_body_footprints_separated = true;
@@ -15118,7 +15146,7 @@ TEST(V2XOvertakeCoreMissionOwnership, PassOwnerReleasesForEveryHardAbort)
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.lateral_exclusion_latched = true;
   request.locked_target_seen = true;
@@ -15153,19 +15181,19 @@ TEST(V2XOvertakeCoreMissionOwnership, PassOwnerReleasesForEveryHardAbort)
   EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
 }
 
-TEST(V2XOvertakeCoreMissionOwnership, PassOwnerRequiresValidatedMissionIdentity)
+TEST(V2XOvertakeCoreMissionOwnership, PassOwnerRequiresValidatedExecutionIdentity)
 {
   CommittedPassBehaviorOwnershipRequest request;
   request.committed_pass_active = true;
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
   request.mission_side_valid = true;
   request.lateral_exclusion_latched = true;
   request.locked_target_seen = true;
   request.current_body_footprints_separated = true;
 
-  request.validated_fixed_line = false;
+  request.validated_fixed_mission_source = false;
   EXPECT_FALSE(can_preserve_committed_pass_behavior(request));
-  request.validated_fixed_line = true;
+  request.validated_fixed_mission_source = true;
 
   request.mission_side_valid = false;
   EXPECT_FALSE(can_preserve_committed_pass_behavior(request));

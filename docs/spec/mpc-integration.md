@@ -278,9 +278,17 @@ selected side証明と過去artifactのretained command可否を同じauthority�
 selected side commandが1周期実行可能でも反対sideをcurrent-world再検証できる。反対sideの採用は
 single canonical publisherを通過した後だけtarget、Mission generation、side、no-return状態をatomicに
 更新する。retained artifactは出力連続性の証拠であり、最新worldのhomotopy選択権を持たない。一方、
-stateless sibling採用後にlegacy Mission候補が存在しないことだけを理由にBehaviorをFollowへ戻す処理は、
-current-world MPCC authorityとの責務競合として未解決であり、parameter調整ではなく別のfailure-first
-Sliceで監査する。
+stateless sibling採用後は、canonical publisher内でexact serialized commandとlive tokenをjoinした時点の
+`{Mission generation, source sequence}`をimmutable publication identityとして保持する。Behaviorはこの
+identityまたはvalidated frozen Missionのどちらかをexecution sourceとして認識するが、前者へretired
+Missionのpath、corridorまたはbody-clear deadlineを要求しない。別のgeneration-only ledgerを再照合して
+同じpublicationを二重所有させない。これはtactical ownershipだけを保持し、各周期のcommandは引き続き
+current-world wall/dynamic proofとcanonical publisher joinを必要とする。
+
+`output/20260831-115922/d1`ではsequence 598採用後、全hard guardが成立しているにもかかわらず二重ledger
+照合だけがfalseとなり`Overtake -> Follow`を反復した。修正後の`output/20260831-122218/d1`ではsequence
+896/generation 1採用後にstateless source ownershipを保持し、legacy Mission候補棄却によるdemotionは
+再発しなかった。約6秒後のreleaseはtarget観測喪失による既存hard guardであり別failure familyである。
 
 ### Wall / Contact Stuck Recovery（Implementation Complete / dev3 Enabled）
 

@@ -3211,6 +3211,22 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
     assert current_world_resolution < retained_candidate
     assert "selected_epoch_plan != nullptr" in retained
 
+    behavior_start = SOURCE.index(
+        "const bool published_stateless_overtake_execution_source ="
+    )
+    behavior_end = SOURCE.index(
+        "output.overtake_committed_pass_behavior_owner_active =",
+        behavior_start,
+    )
+    behavior = SOURCE[behavior_start:behavior_end]
+    assert "stateless_sibling_authority_active" in behavior
+    assert "stateless_sibling_source_sequence > 0U" in behavior
+    assert "stateless_sibling_source_generation" in behavior
+    assert "overtake_execution_command_published(" not in behavior
+    assert "validated_fixed_mission_execution_source" in behavior
+    assert "published_stateless_overtake_execution_source" in behavior
+    assert "CommittedShiftOutBehaviorOwnershipRequest" in behavior
+
     record_start = SOURCE.index("void record_canonical_normal_final_command(")
     record_end = SOURCE.index(
         "last_overtake_authority_trace() const noexcept", record_start
@@ -3225,10 +3241,14 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
     tactical_commit = record.index(
         "overtake_line_state_.pass_side_sign = token.adopted_side_sign;"
     )
+    source_generation_commit = record.index(
+        "overtake_line_state_.stateless_sibling_source_generation ="
+    )
     retire_frozen_geometry = record.index(
         "overtake_line_state_.mission_plan.reset();", tactical_commit
     )
     assert serialized_join < token_revalidation < tactical_commit
+    assert tactical_commit < source_generation_commit
     assert tactical_commit < retire_frozen_geometry
     assert "overtake_line_state_.mission_path_frozen = false;" in record
     assert "mission_cross_side_transition_committed = true;" in record

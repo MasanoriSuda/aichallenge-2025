@@ -12467,8 +12467,11 @@ bool can_preserve_committed_pass_behavior(
       request.body_clear_handoff_active,
       request.recoverable_side_contact_active,
       request.precontact_squeeze_escape_active});
+  const bool validated_execution_source =
+    request.validated_fixed_mission_source ||
+    request.published_stateless_execution_source;
   return request.committed_pass_active &&
-         request.validated_fixed_line &&
+         validated_execution_source &&
          request.mission_side_valid &&
          common_guards.ownership_allowed &&
          geometry_ownership.ownership_allowed;
@@ -12487,11 +12490,18 @@ bool can_preserve_committed_shiftout_behavior(
       request.explicit_forbidden_waypoint,
       request.emergency_front_risk,
       request.solver_recovery_requested});
+  // A persistent Mission owns ShiftOut only while its admission-time
+  // body-clear contract is active. A stateless Bundle is rebuilt and proved
+  // against the current world, so requiring that retired Mission deadline
+  // would make successful sibling publication demote Behavior to Follow.
+  const bool validated_execution_source =
+    (request.validated_fixed_mission_source &&
+    request.body_clear_deadline_checked &&
+    request.body_clear_handoff_active) ||
+    request.published_stateless_execution_source;
   return request.committed_shiftout_active &&
-         request.validated_fixed_line &&
+         validated_execution_source &&
          request.mission_side_valid &&
-         request.body_clear_deadline_checked &&
-         request.body_clear_handoff_active &&
          common_guards.ownership_allowed;
 }
 

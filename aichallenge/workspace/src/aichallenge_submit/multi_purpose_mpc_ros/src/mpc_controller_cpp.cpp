@@ -3050,6 +3050,7 @@ struct OvertakeLineState
   // lease and carries no geometry or independent command authority.
   bool stateless_sibling_authority_active{false};
   std::uint64_t stateless_sibling_source_sequence{0U};
+  std::uint64_t stateless_sibling_source_generation{0U};
   bool mission_frenet_dp_execution_active{false};
   int mission_frenet_dp_side_sign{0};
   double mission_frenet_dp_execution_traveled_m{0.0};
@@ -9720,6 +9721,8 @@ struct MPC
         overtake_line_state_.stateless_sibling_authority_active = true;
         overtake_line_state_.stateless_sibling_source_sequence =
           token.source_sequence;
+        overtake_line_state_.stateless_sibling_source_generation =
+          token.mission_generation;
         overtake_line_state_.mission_plan.reset();
         overtake_line_state_.mission_path_frozen = false;
         overtake_line_state_.fixed_pass_corridor_goal_ey.reset();
@@ -19087,12 +19090,30 @@ struct MPC
       output.overtake_execution_corridor_blocked,
       overtake_forbidden_wp,
       effective_front_risk_emergency);
+    // A published stateless sibling is the last actually executed certified
+    // artifact for this encounter. Sibling adoption happens only inside the
+    // canonical publisher after exact serialized-command and live-token joins.
+    // Preserve that immutable {generation, source sequence} identity here;
+    // re-consulting the legacy generation-only publication ledger would create
+    // a second owner whose update order can demote a successfully published
+    // sibling back to Follow. This fact preserves tactical ownership only; the
+    // current command still needs current-world proof and publisher join.
+    const bool published_stateless_overtake_execution_source =
+      overtake_line_state_.stateless_sibling_authority_active &&
+      overtake_line_state_.stateless_sibling_source_sequence > 0U &&
+      overtake_line_state_.stateless_sibling_source_generation ==
+      overtake_line_state_.mission_generation &&
+      overtake_line_state_.pass_side_sign != 0 &&
+      overtake_line_state_.mission_generation > 0U;
+    const bool validated_fixed_mission_execution_source =
+      overtake_line_state_.mission_path_frozen &&
+      overtake_line_state_.fixed_pass_corridor_goal_ey.has_value();
     output.overtake_committed_shiftout_behavior_owner_active =
       overtake_core::can_preserve_committed_shiftout_behavior(
-      overtake_core::CommittedShiftOutBehaviorOwnershipRequest{
+        overtake_core::CommittedShiftOutBehaviorOwnershipRequest{
         overtake_line_state_.phase == OvertakeLinePhase::ShiftOut,
-        overtake_line_state_.mission_path_frozen &&
-        overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
+        validated_fixed_mission_execution_source,
+        published_stateless_overtake_execution_source,
         overtake_line_state_.pass_side_sign != 0,
         committed_body_clear_handoff.active,
         output.locked_target_seen,
@@ -19131,7 +19152,8 @@ struct MPC
       v2x_overtake_core::can_preserve_committed_pass_behavior(
       v2x_overtake_core::CommittedPassBehaviorOwnershipRequest{
         committed_pass_behavior_context_active,
-        overtake_line_state_.fixed_pass_corridor_goal_ey.has_value(),
+        validated_fixed_mission_execution_source,
+        published_stateless_overtake_execution_source,
         overtake_line_state_.pass_side_sign != 0,
         overtake_line_state_.pass_front_overlap_exclusion_latched,
         overtake_line_state_.pass_front_cap_release_active,
@@ -31181,6 +31203,7 @@ private:
     {
       overtake_line_state_.stateless_sibling_authority_active = false;
       overtake_line_state_.stateless_sibling_source_sequence = 0U;
+      overtake_line_state_.stateless_sibling_source_generation = 0U;
       overtake_line_state_.mission_runtime_wall_escape_prefix_active = false;
       overtake_line_state_.target_bound_execution_replan_hold_active = false;
       overtake_line_state_.target_bound_execution_replan_prefix_executing = false;
@@ -31503,6 +31526,7 @@ private:
     overtake_line_state_.mission_plan.reset();
     overtake_line_state_.stateless_sibling_authority_active = false;
     overtake_line_state_.stateless_sibling_source_sequence = 0U;
+    overtake_line_state_.stateless_sibling_source_generation = 0U;
     if (selected_mission.has_value()) {
       const auto pass_plan = overtake_core::build_overtake_pass_plan(
         overtake_core::OvertakePassPlanRequest{
@@ -47986,7 +48010,11 @@ private:
         "lookahead_inner=%d, inner_pref=%d, front_danger_suppress=%d, "
         "entry_owner=%d, entry_immediate=%d, prearm=%d, prearm_lease=%d, "
         "engage_hold=%d/%.2f, "
-        "shift_owner=%d, pass_owner=%d",
+        "shift_owner=%d, pass_owner=%d, "
+        "committed_source=fixed:%d/stateless:%d/seq:%lu/gen:%lu/"
+        "published_generation:%d, "
+        "owner_guard=seen:%d/identity:%d/jump:%d/course:%d/intrusion:%d/"
+        "forbid:%d/emergency:%d/solver:%d/deadline:%d/handoff:%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
         output.v2x_health.c_str(), output.v2x_receipt_age_sec,
@@ -48021,7 +48049,34 @@ private:
         output.overtake_engagement_hold_active ? 1 : 0,
         output.overtake_engagement_hold_remaining_sec,
         output.overtake_committed_shiftout_behavior_owner_active ? 1 : 0,
-        output.overtake_committed_pass_behavior_owner_active ? 1 : 0);
+        output.overtake_committed_pass_behavior_owner_active ? 1 : 0,
+        (overtake_line_state_.mission_path_frozen &&
+        overtake_line_state_.fixed_pass_corridor_goal_ey.has_value()) ? 1 : 0,
+        (overtake_line_state_.stateless_sibling_authority_active &&
+        overtake_line_state_.stateless_sibling_source_sequence > 0U &&
+        overtake_line_state_.stateless_sibling_source_generation ==
+        overtake_line_state_.mission_generation &&
+        overtake_line_state_.mission_generation > 0U) ? 1 : 0,
+        static_cast<unsigned long>(
+          overtake_line_state_.stateless_sibling_source_sequence),
+        static_cast<unsigned long>(
+          overtake_line_state_.stateless_sibling_source_generation),
+        overtake_execution_command_published(
+          overtake_line_state_.mission_generation) ? 1 : 0,
+        output.locked_target_seen ? 1 : 0,
+        (!overtake_line_state_.target_vehicle_id.empty() &&
+        overtake_line_state_.target_vehicle_id != "__unknown__" &&
+        output.target_vehicle_id == overtake_line_state_.target_vehicle_id &&
+        (output.has_front_vehicle || output.has_side_vehicle) &&
+        !output.v2x_message_invalid) ? 1 : 0,
+        output.locked_target_position_jump ? 1 : 0,
+        output.locked_target_course_progress_rejected ? 1 : 0,
+        output.locked_target_pass_side_intrusion ? 1 : 0,
+        output.overtake_forbidden_wp ? 1 : 0,
+        output.front_risk_level == FrontRiskLevel::EmergencyBrake ? 1 : 0,
+        overtake_solver_recovery_active_ ? 1 : 0,
+        overtake_line_state_.mission_body_clear_deadline_checked ? 1 : 0,
+        output.overtake_body_clear_handoff_active ? 1 : 0);
       v2x_behavior_state = final_state;
       last_v2x_behavior_state_change_sec = now_sec;
       v2x_behavior_state_initialized = true;

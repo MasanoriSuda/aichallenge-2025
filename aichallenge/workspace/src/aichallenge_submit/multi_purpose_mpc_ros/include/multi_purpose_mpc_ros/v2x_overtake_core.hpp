@@ -7244,7 +7244,11 @@ CommittedPassGeometryOwnershipResolution resolve_committed_pass_geometry_ownersh
 struct CommittedPassBehaviorOwnershipRequest
 {
   bool committed_pass_active{false};
-  bool validated_fixed_line{false};
+  /// The legacy persistent Mission still owns admitted immutable geometry.
+  bool validated_fixed_mission_source{false};
+  /// An exact stateless current-world Bundle crossed the canonical publisher.
+  /// This fact preserves tactical ownership only; it never supplies a command.
+  bool published_stateless_execution_source{false};
   bool mission_side_valid{false};
   bool lateral_exclusion_latched{false};
   bool minimum_motion_front_cap_release_latched{false};
@@ -7288,7 +7292,9 @@ bool can_preserve_committed_pass_behavior(
 struct CommittedShiftOutBehaviorOwnershipRequest
 {
   bool committed_shiftout_active{false};
-  bool validated_fixed_line{false};
+  /// See CommittedPassBehaviorOwnershipRequest source fields.
+  bool validated_fixed_mission_source{false};
+  bool published_stateless_execution_source{false};
   bool mission_side_valid{false};
   bool body_clear_handoff_active{false};
   bool locked_target_seen{false};

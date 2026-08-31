@@ -2903,6 +2903,11 @@ struct V2XBehaviorOutput
   double target_execution_predicted_lateral{
     std::numeric_limits<double>::infinity()};
   bool locked_target_seen{false};
+  /// The locked target was continuously projected using its prior course
+  /// identity after it left the bounded tactical entry/front window. This is
+  /// target-lifecycle evidence only; it must not promote a new front target.
+  bool locked_target_continuity_projection_used{false};
+  bool locked_target_outside_tactical_horizon{false};
   bool locked_target_near_field_fallback_used{false};
   bool locked_target_position_jump{false};
   bool locked_target_lateral_prediction_valid{false};
@@ -11620,7 +11625,16 @@ struct MPC
       const double longitudinal = cos_yaw * dx + sin_yaw * dy;
       const double lateral = -sin_yaw * dx + cos_yaw * dy;
       const double vehicle_speed = std::hypot(vehicle.vx, vehicle.vy);
+      const bool vehicle_is_locked_target =
+        !overtake_line_state_.target_vehicle_id.empty() &&
+        vehicle.id == overtake_line_state_.target_vehicle_id;
+      const bool active_locked_execution_target =
+        vehicle_is_locked_target &&
+        (overtake_line_state_.phase == OvertakeLinePhase::ShiftOut ||
+        overtake_line_state_.phase == OvertakeLinePhase::Pass);
       v2x_overtake_core::ForwardCourseProjection course_projection;
+      bool tactical_course_projection_valid = false;
+      bool locked_target_continuity_projection_used = false;
       bool course_progress_continuity_constrained = false;
       bool course_progress_continuity_rejected = false;
       if (
@@ -11664,6 +11678,7 @@ struct MPC
         }
         course_projection = v2x_overtake_core::project_forward_course_progress(
           course_progress_path, projection_request);
+        tactical_course_projection_valid = course_projection.valid;
         if (course_progress_continuity_constrained && !course_projection.valid) {
           // Retry only to classify the failure. Never adopt this result for
           // tracking because it may belong to a nearby topological branch.
@@ -11676,6 +11691,53 @@ struct MPC
           course_progress_continuity_rejected =
             v2x_overtake_core::is_course_progress_continuity_constraint_rejection(
             true, course_projection.valid, unconstrained_projection.valid);
+        }
+        v2x_overtake_core::ForwardCourseProjection continuity_projection;
+        if (
+          active_locked_execution_target && !vehicle.position_jump &&
+          course_progress_continuity_constrained &&
+          !tactical_course_projection_valid && !course_progress_continuity_rejected)
+        {
+          // The bounded front-detection window is an entry/tactical filter,
+          // not the lifecycle of an already locked target. Keep the prior
+          // topological identity while scanning at most one course lap. The
+          // existing per-observation progress-change constraint remains in
+          // force, so this cannot jump to an adjacent hairpin branch.
+          projection_request.lookahead_distance_m = std::max(
+            front_detection_distance,
+            std::isfinite(model->reference_path->length) ?
+            model->reference_path->length : front_detection_distance);
+          continuity_projection =
+            v2x_overtake_core::project_forward_course_progress(
+            course_progress_path, projection_request);
+          if (!continuity_projection.valid) {
+            auto diagnostic_request = projection_request;
+            diagnostic_request.preferred_target_path_progress_m.reset();
+            diagnostic_request.max_target_path_progress_change_m =
+              std::numeric_limits<double>::infinity();
+            const auto unconstrained_continuity_projection =
+              v2x_overtake_core::project_forward_course_progress(
+              course_progress_path, diagnostic_request);
+            course_progress_continuity_rejected =
+              v2x_overtake_core::is_course_progress_continuity_constraint_rejection(
+              true, continuity_projection.valid,
+              unconstrained_continuity_projection.valid);
+          }
+        }
+        const auto locked_projection_selection =
+          v2x_overtake_core::resolve_locked_target_projection_selection(
+          v2x_overtake_core::LockedTargetProjectionSelectionRequest{
+            active_locked_execution_target,
+            vehicle.position_jump,
+            course_progress_continuity_constrained,
+            tactical_course_projection_valid,
+            continuity_projection.valid});
+        if (
+          locked_projection_selection.source ==
+          v2x_overtake_core::LockedTargetProjectionSource::ContinuityWindow)
+        {
+          course_projection = continuity_projection;
+          locked_target_continuity_projection_used = true;
         }
         if (course_projection.valid) {
           v2x_course_progress_tracks_[vehicle.id] = V2XCourseProgressTrack{
@@ -11778,9 +11840,6 @@ struct MPC
             std::isfinite(observed_course_lateral_velocity);
         }
       }
-      const bool vehicle_is_locked_target =
-        !overtake_line_state_.target_vehicle_id.empty() &&
-        vehicle.id == overtake_line_state_.target_vehicle_id;
       const double return_corridor_lateral_clearance =
         cfg.v2x_gap.vehicle_radius + cfg.v2x_gap.prediction_margin;
       const double return_corridor_rear_clearance = std::max(
@@ -11850,6 +11909,10 @@ struct MPC
           course_progress_continuity_rejected &&
           !locked_target_continuity.local_fallback_used;
         output.locked_target_seen = locked_target_continuity.geometry_valid;
+        output.locked_target_continuity_projection_used =
+          locked_target_continuity_projection_used;
+        output.locked_target_outside_tactical_horizon =
+          locked_target_continuity_projection_used;
         output.locked_target_near_field_fallback_used =
           locked_target_continuity.local_fallback_used;
         if (locked_target_continuity.geometry_valid) {
@@ -48412,7 +48475,8 @@ private:
         "shift_owner=%d, pass_owner=%d, "
         "committed_source=fixed:%d/stateless:%d/seq:%lu/gen:%lu/"
         "published_generation:%d, "
-        "owner_guard=seen:%d/identity:%d/jump:%d/course:%d/intrusion:%d/"
+        "owner_guard=seen:%d/continuity_projection:%d/outside_tactical:%d/"
+        "identity:%d/jump:%d/course:%d/intrusion:%d/"
         "forbid:%d/emergency:%d/solver:%d/deadline:%d/handoff:%d",
         v2x_behavior_state_initialized ? to_string(v2x_behavior_state) : "None", to_string(final_state),
         output.front_distance, model->wp_id, output.reason.c_str(),
@@ -48463,6 +48527,8 @@ private:
         overtake_execution_command_published(
           overtake_line_state_.mission_generation) ? 1 : 0,
         output.locked_target_seen ? 1 : 0,
+        output.locked_target_continuity_projection_used ? 1 : 0,
+        output.locked_target_outside_tactical_horizon ? 1 : 0,
         (!overtake_line_state_.target_vehicle_id.empty() &&
         overtake_line_state_.target_vehicle_id != "__unknown__" &&
         output.target_vehicle_id == overtake_line_state_.target_vehicle_id &&
@@ -48520,6 +48586,7 @@ private:
           "completion_avail=%.2f, completion_req=%.2f, completion_rel=%.2f, "
           "gap=%d, gap_hold=%d, hold_rem=%.2f, fallback=%d, "
           "cooldown=%d, pass=%d, side_clear=%.2f, plan_N=%d, target=%s, locked_seen=%d, "
+          "continuity_projection=%d, outside_tactical=%d, "
           "course_reject=%d, near_field=%d, locked_s=%.2f, locked_lat=%.2f, "
           "lat_clear=%d, body_clear=%d, footprint_clear=%d, "
           "current_overlap_confirmed=%d, current_overlap_elapsed=%.2f, "
@@ -48631,6 +48698,8 @@ private:
           output.overtake_cooldown_active ? 1 : 0, output.overtake_pass_side_sign,
           output.overtake_side_clearance, output.overtake_plan_N,
           output.target_vehicle_id.c_str(), output.locked_target_seen ? 1 : 0,
+          output.locked_target_continuity_projection_used ? 1 : 0,
+          output.locked_target_outside_tactical_horizon ? 1 : 0,
           output.locked_target_course_progress_rejected ? 1 : 0,
           output.locked_target_near_field_fallback_used ? 1 : 0,
           output.locked_target_longitudinal,

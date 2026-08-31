@@ -5962,6 +5962,37 @@ struct ForwardCourseProjection
 ForwardCourseProjection project_forward_course_progress(
   const std::vector<CoursePoint> & path, const ForwardCourseProjectionRequest & request);
 
+enum class LockedTargetProjectionSource
+{
+  None,
+  TacticalWindow,
+  ContinuityWindow,
+};
+
+struct LockedTargetProjectionSelectionRequest
+{
+  bool active_locked_target{false};
+  bool target_position_jump{false};
+  bool prior_course_progress_available{false};
+  bool tactical_projection_valid{false};
+  bool continuity_projection_valid{false};
+};
+
+struct LockedTargetProjectionSelection
+{
+  LockedTargetProjectionSource source{LockedTargetProjectionSource::None};
+  bool geometry_valid{false};
+  bool outside_tactical_horizon{false};
+};
+
+/// Select the course geometry used to maintain an already committed target
+/// identity. The ordinary bounded projection remains the only tactical
+/// entry/front-detection source. A wider continuity projection may only keep
+/// an existing ShiftOut/Pass target observable when it is tied to prior
+/// course progress and no position jump was reported.
+LockedTargetProjectionSelection resolve_locked_target_projection_selection(
+  const LockedTargetProjectionSelectionRequest & request) noexcept;
+
 /// Distinguish a real rejection by the target-progress continuity constraint
 /// from a target that is unavailable even to the same unconstrained bounded
 /// projection. The unconstrained result is diagnostic-only.

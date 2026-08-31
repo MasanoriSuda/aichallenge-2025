@@ -10720,6 +10720,30 @@ ForwardCourseProjection project_forward_course_progress(
   return result;
 }
 
+LockedTargetProjectionSelection resolve_locked_target_projection_selection(
+  const LockedTargetProjectionSelectionRequest & request) noexcept
+{
+  if (request.target_position_jump) {
+    return {};
+  }
+  if (request.tactical_projection_valid) {
+    return {
+      LockedTargetProjectionSource::TacticalWindow,
+      true,
+      false};
+  }
+  if (
+    request.active_locked_target && request.prior_course_progress_available &&
+    request.continuity_projection_valid)
+  {
+    return {
+      LockedTargetProjectionSource::ContinuityWindow,
+      true,
+      true};
+  }
+  return {};
+}
+
 bool is_course_progress_continuity_constraint_rejection(
   const bool continuity_constraint_applied, const bool constrained_projection_valid,
   const bool unconstrained_projection_valid) noexcept

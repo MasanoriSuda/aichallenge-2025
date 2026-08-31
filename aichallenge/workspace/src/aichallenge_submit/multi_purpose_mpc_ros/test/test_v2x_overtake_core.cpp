@@ -49,6 +49,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::CommittedPassBodyGeometryRequest
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardHoldRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FrontHazardTargetContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::ForwardCourseProjectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetProjectionSelectionRequest;
+using multi_purpose_mpc_ros::v2x_overtake_core::LockedTargetProjectionSource;
 using multi_purpose_mpc_ros::v2x_overtake_core::RelativeCourseProgressContinuityRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::FollowSpeedLimitRequest;
 using multi_purpose_mpc_ros::v2x_overtake_core::GenericFollowCapOwnershipRequest;
@@ -429,6 +431,8 @@ using multi_purpose_mpc_ros::v2x_overtake_core::resolve_course_lateral_predictio
 using multi_purpose_mpc_ros::v2x_overtake_core::classify_opponent_sample_continuity;
 using multi_purpose_mpc_ros::v2x_overtake_core::update_opponent_motion_filter;
 using multi_purpose_mpc_ros::v2x_overtake_core::project_forward_course_progress;
+using multi_purpose_mpc_ros::v2x_overtake_core::
+  resolve_locked_target_projection_selection;
 using multi_purpose_mpc_ros::v2x_overtake_core::
   is_course_progress_continuity_constraint_rejection;
 using multi_purpose_mpc_ros::v2x_overtake_core::is_relative_course_progress_continuous;
@@ -11639,6 +11643,42 @@ TEST(V2XOvertakeCoreProgress, BoundedTargetLossIsNotProgressDiscontinuity)
   ASSERT_FALSE(constrained.valid);
   EXPECT_FALSE(is_course_progress_continuity_constraint_rejection(
     true, constrained.valid, unconstrained.valid));
+}
+
+TEST(V2XOvertakeCoreProgress, SeparatesLockedContinuityFromTacticalDetectionWindow)
+{
+  const auto continuity = resolve_locked_target_projection_selection(
+    LockedTargetProjectionSelectionRequest{
+      true, false, true, false, true});
+  EXPECT_TRUE(continuity.geometry_valid);
+  EXPECT_TRUE(continuity.outside_tactical_horizon);
+  EXPECT_EQ(continuity.source, LockedTargetProjectionSource::ContinuityWindow);
+
+  const auto tactical = resolve_locked_target_projection_selection(
+    LockedTargetProjectionSelectionRequest{
+      true, false, true, true, true});
+  EXPECT_TRUE(tactical.geometry_valid);
+  EXPECT_FALSE(tactical.outside_tactical_horizon);
+  EXPECT_EQ(tactical.source, LockedTargetProjectionSource::TacticalWindow);
+}
+
+TEST(V2XOvertakeCoreProgress, ContinuityProjectionCannotCreateOrRepairTargetIdentity)
+{
+  auto request = LockedTargetProjectionSelectionRequest{
+    false, false, true, false, true};
+  EXPECT_FALSE(resolve_locked_target_projection_selection(request).geometry_valid);
+
+  request.active_locked_target = true;
+  request.prior_course_progress_available = false;
+  EXPECT_FALSE(resolve_locked_target_projection_selection(request).geometry_valid);
+
+  request.prior_course_progress_available = true;
+  request.target_position_jump = true;
+  EXPECT_FALSE(resolve_locked_target_projection_selection(request).geometry_valid);
+
+  request.target_position_jump = false;
+  request.continuity_projection_valid = false;
+  EXPECT_FALSE(resolve_locked_target_projection_selection(request).geometry_valid);
 }
 
 TEST(V2XOvertakeCoreStartGrid, AdmitsNearbyRearBoundaryWithinConfiguredWindow)

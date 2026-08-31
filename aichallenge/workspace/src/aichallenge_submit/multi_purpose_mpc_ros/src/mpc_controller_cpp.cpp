@@ -7885,6 +7885,14 @@ struct RateResolvedStopLatticeShadowTelemetryWindow
   current_world_alternate_reason_count{};
   std::uint64_t last_current_world_alternate_decision_id{};
   std::uint64_t last_current_world_alternate_source_sequence{};
+  std::uint64_t last_current_world_alternate_source_decision_id{};
+  mpcc_contract::ControlIntent last_current_world_alternate_source_intent{
+    mpcc_contract::ControlIntent::Unknown};
+  std::uint64_t last_current_world_alternate_source_intent_generation{};
+  double last_current_world_alternate_source_age_sec{
+    std::numeric_limits<double>::quiet_NaN()};
+  double last_current_world_alternate_control_origin_age_sec{
+    std::numeric_limits<double>::quiet_NaN()};
   rate_resolved_retained::Reason last_current_world_alternate_reason{
     rate_resolved_retained::Reason::MissingPlan};
   bool last_current_world_alternate_available{false};
@@ -27223,7 +27231,8 @@ struct MPC
       "legacy_rank=%.2f/%lu(avg/max), "
       "compute=%.3f/%.3fms(avg/max), selected_solve=%.3f/%.3fms(avg/max), "
       "alternate=missing:%lu/attempted:%lu/joined:%lu/selected:%lu/"
-      "last:%d:%lu:%lu:%s, "
+      "last:%d/consumer:%lu/source:%lu:%lu:%s:generation:%lu/age:%.4f/"
+      "control_origin_age:%.4f/reason:%s, "
       "last=available:%d/seq:%lu/decision:%lu/intent:%s/reason:%s/"
       "direct:%d:%d/schedule:%d:%d:%d/rank:%lu:%lu:%lu/"
       "preferred:%d/solver:%s/wall:%s/"
@@ -27283,6 +27292,14 @@ struct MPC
         window.last_current_world_alternate_decision_id),
       static_cast<unsigned long>(
         window.last_current_world_alternate_source_sequence),
+      static_cast<unsigned long>(
+        window.last_current_world_alternate_source_decision_id),
+      mpcc_contract::to_string(
+        window.last_current_world_alternate_source_intent),
+      static_cast<unsigned long>(
+        window.last_current_world_alternate_source_intent_generation),
+      window.last_current_world_alternate_source_age_sec,
+      window.last_current_world_alternate_control_origin_age_sec,
       window.last_current_world_alternate_available ?
       rate_resolved_retained::to_string(
         window.last_current_world_alternate_reason) : "none",
@@ -29512,6 +29529,14 @@ struct MPC
       window.last_current_world_alternate_decision_id =
         active_control_decision_id_;
       window.last_current_world_alternate_source_sequence = 0U;
+      window.last_current_world_alternate_source_decision_id = 0U;
+      window.last_current_world_alternate_source_intent =
+        mpcc_contract::ControlIntent::Unknown;
+      window.last_current_world_alternate_source_intent_generation = 0U;
+      window.last_current_world_alternate_source_age_sec =
+        std::numeric_limits<double>::quiet_NaN();
+      window.last_current_world_alternate_control_origin_age_sec =
+        std::numeric_limits<double>::quiet_NaN();
       window.last_current_world_alternate_reason =
         rate_resolved_retained::Reason::MissingPlan;
       window.last_current_world_alternate_available = true;
@@ -29519,9 +29544,35 @@ struct MPC
     }
 
     ++window.current_world_alternate_attempt_count;
+    const auto & alternate_plan =
+      rate_resolved_stop_lattice_current_world_alternate_plan_;
+    const auto * alternate_artifact =
+      alternate_plan->execution_artifact.get();
+    window.last_current_world_alternate_source_sequence =
+      alternate_artifact != nullptr ? alternate_artifact->identity.sequence : 0U;
+    window.last_current_world_alternate_source_decision_id =
+      alternate_artifact != nullptr ?
+      alternate_artifact->identity.source_context.decision_id : 0U;
+    window.last_current_world_alternate_source_intent =
+      alternate_artifact != nullptr ?
+      alternate_artifact->identity.source_context.intent :
+      mpcc_contract::ControlIntent::Unknown;
+    window.last_current_world_alternate_source_intent_generation =
+      alternate_artifact != nullptr ?
+      alternate_artifact->identity.source_context.intent_generation : 0U;
+    window.last_current_world_alternate_source_age_sec =
+      alternate_artifact != nullptr &&
+      std::isfinite(alternate_artifact->identity.snapshot_sec) ?
+      std::max(0.0, now_sec - alternate_artifact->identity.snapshot_sec) :
+      std::numeric_limits<double>::quiet_NaN();
+    window.last_current_world_alternate_control_origin_age_sec =
+      alternate_artifact != nullptr &&
+      std::isfinite(alternate_artifact->prediction_origin_sec) ?
+      now_sec - alternate_artifact->prediction_origin_sec :
+      std::numeric_limits<double>::quiet_NaN();
     alternate = evaluate_current_world_stop_successor_plan(
       problem, now_sec, intent,
-      rate_resolved_stop_lattice_current_world_alternate_plan_);
+      alternate_plan);
     if (alternate.production_authority.has_value()) {
       alternate.certified_terminal_contingency_selected = true;
       ++window.current_world_alternate_joined_count;
@@ -29532,11 +29583,6 @@ struct MPC
     }
     window.last_current_world_alternate_decision_id =
       active_control_decision_id_;
-    window.last_current_world_alternate_source_sequence =
-      rate_resolved_stop_lattice_current_world_alternate_plan_->
-      execution_artifact != nullptr ?
-      rate_resolved_stop_lattice_current_world_alternate_plan_->
-      execution_artifact->identity.sequence : 0U;
     window.last_current_world_alternate_reason = alternate.reason;
     window.last_current_world_alternate_available = true;
 
@@ -29544,12 +29590,22 @@ struct MPC
     RCLCPP_WARN_THROTTLE(
       rclcpp::get_logger("mpc_controller"), join_clock, 1000,
       "Stop lattice current-world alternate: decision=%lu, intent=%s, "
-      "source=%lu, normal=%s, joined=%d, reason=%s, "
+      "source=%lu/%lu/%s/generation:%lu, age=%.4f, "
+      "control_origin_age=%.4f, "
+      "normal=%s, joined=%d, reason=%s, "
       "authority=canonical-normal-candidate, selected=0",
       static_cast<unsigned long>(active_control_decision_id_),
       mpcc_contract::to_string(intent),
       static_cast<unsigned long>(
         window.last_current_world_alternate_source_sequence),
+      static_cast<unsigned long>(
+        window.last_current_world_alternate_source_decision_id),
+      mpcc_contract::to_string(
+        window.last_current_world_alternate_source_intent),
+      static_cast<unsigned long>(
+        window.last_current_world_alternate_source_intent_generation),
+      window.last_current_world_alternate_source_age_sec,
+      window.last_current_world_alternate_control_origin_age_sec,
       rate_resolved_retained::to_string(ordinary_retained.reason),
       alternate.production_authority.has_value() ? 1 : 0,
       rate_resolved_retained::to_string(alternate.reason));

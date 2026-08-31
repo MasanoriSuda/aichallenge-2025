@@ -3568,10 +3568,15 @@ single-SQPにとって既に遅い状態であり、Stop監査未実行を物理
 盲点は閉じた。production authority、solver tolerance、wall clearanceは変更しない。
 
 同runではdecision 1563より前にcertified current-world Stop planが存在したが、
-消費時には`steering-unreachable`だった。残課題はStop fallback追加ではなく、
-そのplanのproducer decision／ageとconsumer decisionを結び、可行なplanが
-current stateへ接続不能になるまで遅延したscheduling／lifecycle起点を凍結すること
-である。
+消費時には`steering-unreachable`だった。producer／consumer telemetryを追加した
+`output/20260831-143756/d1`では、decision 1528が`0.200 s`前のShiftOut Stop候補を
+消費し、候補control originが`0.070 s`過去でもcurrent-world revalidationは
+`accepted`となった。一方、`output/20260831-142607/d1` decision 1494の最初の拒否は
+`0.105 s`のageではなくShiftOutからPassへの`intent-mismatch`であり、同周期のfresh
+Pass authorityは成立した。したがってraw worker／mailbox ageはStop拒否の十分原因では
+ない。decision 1563はfresh current-world Stop監査自体も全候補不成立であるため、次の
+監査対象はStopのage緩和ではなく、normal Passがterminal viabilityを失う地点まで
+publish可能だった上流のadmission／lifecycle境界とする。
 
 ### 提出ファイルへの影響
 

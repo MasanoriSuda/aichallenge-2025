@@ -6,7 +6,7 @@
 - [x] Add explicit certified-terminal-contingency authority ownership.
 - [x] Add unit and single-authority contract tests.
 - [x] Run focused tests, package tests and `make autoware-build`.
-- [x] Run bounded dynamic validation (target bridge did not naturally fire;
-      external Stop atomic retention was observed).
+- [x] Run bounded dynamic validation (certified Stop publication, atomic Stop
+      retention and later fresh Cruise recovery were observed on D2).
 - [x] Update specification and results.
 - [x] Commit the Slice.

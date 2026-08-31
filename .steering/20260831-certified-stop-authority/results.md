@@ -47,16 +47,19 @@ limit was added or changed.
   classification.
 - Bounded dynamic run: `output/20260831-134900` (`make dev2`).
 
-The bounded run did not naturally select the certified terminal-contingency
-bridge, so it is not claimed as a direct reproduction of decision 1609.  It
-did exercise external Stop retention: callbacks reported
-`previous=stop`, `effective=stop`, `previous-retained` until a current-world
-normal authority could join, and did not replay an old normal artifact.
+The bounded run selected the certified terminal-contingency bridge on D2 at
+decisions 3552, 3554 and 3558.  Each joined published Stop successor reported
+`authority=certified-stop` and immediately interrupted the normal execution
+ledger.  Decisions 3559 through 3576 then reported `previous=stop`,
+`effective=stop`, `previous-retained` while the proposed Cruise continuation
+failed current-world proof.  A fresh normal solve later became available;
+decision 3587 published a production Cruise command.  No old normal artifact
+was replayed without proof.
 
 ## Residual family
 
-The same bounded run contains separate Emergency Stop intervals where the
-proposed normal intent repeatedly fails current-world continuation or steering
-reachability and no normal successor joins.  That is not a reason to undo
-Stop authority semantics or add a resume timeout.  It must be frozen and
-classified independently in the next Slice.
+The same bounded run contains separate, longer Emergency Stop intervals where
+the proposed normal intent repeatedly fails current-world continuation or
+steering reachability before a normal successor joins.  That is not a reason
+to undo Stop authority semantics or add a resume timeout.  The first such
+failure must be frozen and classified independently in the next Slice.

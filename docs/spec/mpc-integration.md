@@ -3543,9 +3543,11 @@ production左右の全forward armがwall／dynamic／terminal proofで不成立�
 candidate generation、single-SQP、clearanceまたはStop生成の問題ではなく、proof provenanceとpublisher authorityの混同である。
 
 修正後は純粋契約関数で外部authorityを解決し、単体・ownershipテストでStopがnormal execution evidenceへ昇格しないことを固定する。
-短時間run `output/20260831-134900`では同じterminal-contingency bridge自体は自然発火しなかったため、このrunを直接の動的再現証拠とは
-しない。別経路のexternal Stopについては、fresh normal joinがない間`previous=stop`を維持し、古いnormal artifactを再実行しない
-atomic挙動を確認した。新しいtimeout、lease、fallback、solver／wall parameterは追加していない。
+短時間run `output/20260831-134900/d2`ではdecision 3552、3554、3558でpublished Stop successorがcurrent-world joinし、
+`authority=certified-stop`としてsingle publisherを横断した。各publicationはnormal execution ledgerを破棄し、decision 3559--3576では
+fresh Cruise continuationが不成立の間`previous=stop/effective=stop/resolution=previous-retained`を維持した。その後fresh normal solveが
+利用可能になり、decision 3587ではproduction Cruise commandへ復帰した。古いnormal artifactの無証明再実行は観測されていない。
+新しいtimeout、lease、fallback、solver／wall parameterは追加していない。
 
 ### 提出ファイルへの影響
 

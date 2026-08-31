@@ -924,9 +924,11 @@ TEST(MpccArchitectureComparison, LiveStopShadowBuildsCertifiedObservation)
   ASSERT_EQ(result.reason, stop_lattice_shadow::Reason::Accepted)
     << result.detail;
   ASSERT_TRUE(result.accepted());
-  EXPECT_GT(result.attempted_candidate_count, 0U);
+  EXPECT_TRUE(result.direct_seven_state_attempted);
+  EXPECT_TRUE(result.direct_seven_state_accepted);
+  EXPECT_EQ(result.attempted_candidate_count, 1U);
   EXPECT_GE(result.population_size, result.attempted_candidate_count);
-  EXPECT_GT(result.selected_legacy_rank, 0U);
+  EXPECT_EQ(result.selected_legacy_rank, 0U);
   EXPECT_EQ(
     mpcc_rate_resolved_certified_plan::validate(
       *result.certified_stop_plan),
@@ -964,7 +966,7 @@ TEST(MpccArchitectureComparison, LiveStopShadowStopsAfterSupersededSolve)
   stop_lattice_shadow::EvaluationControl control;
   control.superseded = [&supersession_checks]() {
       ++supersession_checks;
-      return supersession_checks >= 3U;
+      return supersession_checks >= 2U;
     };
   shadow::SolverContext stop_solver;
   const auto result = stop_lattice_shadow::evaluate(
@@ -974,6 +976,47 @@ TEST(MpccArchitectureComparison, LiveStopShadowStopsAfterSupersededSolve)
   EXPECT_EQ(result.attempted_candidate_count, 1U);
   EXPECT_EQ(result.certified_stop_plan, nullptr);
   EXPECT_EQ(result.detail, "newer observation epoch submitted");
+}
+
+TEST(MpccArchitectureComparison, StopScopeIgnoresProducerEpochOnly)
+{
+  auto first = source_snapshot().identity;
+  first.source_context.intent = contract::ControlIntent::ShiftOut;
+  first.source_context.intent_generation = 8U;
+  first.source_context.target_id = "d3";
+  first.source_context.execution_side_sign = -1;
+  auto later = first;
+  later.sequence += 17U;
+  later.source_context.decision_id += 31U;
+  later.source_context.observation_generation += 4U;
+
+  EXPECT_TRUE(stop_lattice_shadow::same_tactical_stop_scope(first, later));
+  later.source_context.target_id = "d2";
+  EXPECT_FALSE(stop_lattice_shadow::same_tactical_stop_scope(first, later));
+  later = first;
+  later.source_context.execution_side_sign = 1;
+  EXPECT_FALSE(stop_lattice_shadow::same_tactical_stop_scope(first, later));
+  later = first;
+  later.source_context.intent = contract::ControlIntent::Pass;
+  EXPECT_FALSE(stop_lattice_shadow::same_tactical_stop_scope(first, later));
+}
+
+TEST(MpccArchitectureComparison, DirectStopModeDoesNotEnterControlLattice)
+{
+  const auto source = stoppable_source_snapshot();
+  shadow::SolverContext normal_solver;
+  const auto normal = normal_solver.evaluate(source);
+  ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
+  ASSERT_NE(normal.execution_artifact, nullptr);
+
+  shadow::SolverContext stop_solver;
+  const auto result = stop_lattice_shadow::evaluate(
+    source, *normal.execution_artifact, stop_solver, {},
+    stop_lattice_shadow::EvaluationMode::DirectSevenStateOnly);
+
+  EXPECT_TRUE(result.direct_seven_state_attempted);
+  EXPECT_LE(result.attempted_candidate_count, 1U);
+  EXPECT_LE(result.population_size, 1U);
 }
 
 TEST(MpccArchitectureComparison, LiveStopShadowMailboxUsesDecisionChronology)

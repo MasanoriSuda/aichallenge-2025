@@ -88,11 +88,32 @@ const char * to_string(const Reason reason) noexcept
   return "unknown";
 }
 
+bool same_tactical_stop_scope(
+  const artifact::Identity & lhs,
+  const artifact::Identity & rhs) noexcept
+{
+  const auto & lhs_context = lhs.source_context;
+  const auto & rhs_context = rhs.source_context;
+  const bool lhs_execution_intent =
+    lhs_context.intent == mpcc_execution_contract::ControlIntent::ShiftOut ||
+    lhs_context.intent == mpcc_execution_contract::ControlIntent::Pass;
+  return
+    lhs_execution_intent && lhs_context.intent == rhs_context.intent &&
+    lhs_context.intent_generation != 0U &&
+    lhs_context.intent_generation == rhs_context.intent_generation &&
+    !lhs_context.target_id.empty() &&
+    lhs_context.target_id == rhs_context.target_id &&
+    (lhs_context.execution_side_sign == -1 ||
+    lhs_context.execution_side_sign == 1) &&
+    lhs_context.execution_side_sign == rhs_context.execution_side_sign;
+}
+
 Result evaluate(
   const shadow::Snapshot & selected_source,
   const artifact::ExecutionArtifact & selected_normal_execution,
   shadow::SolverContext & private_solver_context,
-  const EvaluationControl & control) noexcept
+  const EvaluationControl & control,
+  const EvaluationMode mode) noexcept
 {
   const auto started = SteadyClock::now();
   Result result;
@@ -136,10 +157,111 @@ Result evaluate(
       return finish();
     }
 
+    const auto certify_solved_stop = [&] (
+      const shadow::Result & solved,
+      const std::string & source_detail) {
+        result.solver_outcome = solved.outcome;
+        result.selected_solver_ms = solved.compute_ms;
+        if (
+          solved.outcome != shadow::Outcome::Solved ||
+          solved.execution_artifact == nullptr)
+        {
+          result.reason = Reason::SolverRejected;
+          result.detail = source_detail + '/' + solved.detail;
+          return false;
+        }
+        const auto adapted = physical_adapter::build(
+          *solved.execution_artifact,
+          stop_solver_source->identity.source_context.intent,
+          stop_solver_source->identity.source_context.stage_geometry_id);
+        if (!adapted.exact_trajectory.has_value()) {
+          result.reason = Reason::ExactTrajectoryRejected;
+          std::ostringstream detail;
+          detail << source_detail << '/'
+                 << physical_adapter::to_string(adapted.reason)
+                 << "/stage=" << adapted.rejected_stage;
+          result.detail = detail.str();
+          return false;
+        }
+        const auto & exact = adapted.exact_trajectory.value();
+        result.minimum_lateral_bound_reserve_m =
+          exact.minimum_lateral_bound_reserve_m;
+        if (
+          exact.velocity_mps.empty() ||
+          exact.velocity_mps.back() > std::max(
+            1e-9, solved.execution_artifact->physical_global_tolerance))
+        {
+          result.reason = Reason::StopNotReached;
+          result.detail = source_detail + "/seven-state Stop did not reach rest";
+          return false;
+        }
+        auto wall_snapshot = build_wall_snapshot(
+          *stop_solver_source, stop_solver_source->replay_world.value(), exact);
+        const auto wall_result = physical::evaluate(wall_snapshot);
+        result.wall_outcome = wall_result.outcome;
+        if (wall_result.outcome != physical::Outcome::Accepted) {
+          result.reason = Reason::WallProofRejected;
+          result.detail = source_detail + '/' + wall_result.detail;
+          return false;
+        }
+        const auto dynamic_result = dynamic::evaluate_current_world(
+          *stop_solver_source, wall_snapshot);
+        result.dynamic_valid = dynamic_result.valid;
+        result.dynamic_clear = dynamic_result.clear;
+        result.minimum_dynamic_clearance_m =
+          dynamic_result.minimum_clearance_m;
+        if (!dynamic_result.valid || !dynamic_result.clear) {
+          result.reason = Reason::DynamicProofRejected;
+          std::ostringstream detail;
+          detail << source_detail << "/obstacle="
+                 << dynamic_result.blocking_obstacle_id
+                 << "/minimum=" << dynamic_result.minimum_clearance_m;
+          result.detail = detail.str();
+          return false;
+        }
+        const auto built = certified::build(
+          solved.execution_artifact, wall_snapshot, wall_result,
+          stop_solver_source);
+        if (
+          built.reason != certified::RejectReason::None ||
+          built.plan == nullptr)
+        {
+          result.reason = Reason::CertifiedPlanRejected;
+          result.detail = source_detail + '/' + certified::to_string(built.reason);
+          return false;
+        }
+        result.reason = Reason::Accepted;
+        result.certified_stop_plan = built.plan;
+        result.detail = "accepted/" + source_detail + "/observation-only";
+        return true;
+      };
+
+    // The frozen failure audit proves that a free seven-state Stop is
+    // feasible where fixed lateral/path suffixes collide with the wall. Solve
+    // the canonical Stop first; the steering-rate lattice remains a secondary
+    // candidate generator only when that direct solution cannot be certified.
+    result.direct_seven_state_attempted = true;
+    result.population_size = 1U;
+    ++result.attempted_candidate_count;
+    const auto direct_stop = private_solver_context.evaluate(*stop_solver_source);
+    if (abort_if_superseded()) {
+      return finish();
+    }
+    if (certify_solved_stop(direct_stop, "direct-seven-state")) {
+      result.direct_seven_state_accepted = true;
+      return finish();
+    }
+    if (mode == EvaluationMode::DirectSevenStateOnly) {
+      return finish();
+    }
+    if (abort_if_superseded()) {
+      return finish();
+    }
+
     const auto population = lattice::build_anytime_population(
       *stop_solver_source,
       private_solver_context.physical_constraint_tolerance());
-    result.population_size = population.candidates.size();
+    result.population_size = population.candidates.size() + 1U;
     result.preferred_initial_rate_sign =
       population.preferred_initial_rate_sign;
     if (
@@ -172,87 +294,12 @@ Result evaluate(
       const auto solved =
         private_solver_context.evaluate_fixed_steering_rate_shadow(
         *stop_solver_source, candidate.schedule.steering_rate_radps);
-      result.solver_outcome = solved.outcome;
-      result.selected_solver_ms = solved.compute_ms;
       if (abort_if_superseded()) {
         return finish();
       }
-      if (
-        solved.outcome != shadow::Outcome::Solved ||
-        solved.execution_artifact == nullptr)
-      {
-        result.reason = Reason::SolverRejected;
-        result.detail = solved.detail;
-        continue;
-      }
-      const auto adapted = physical_adapter::build(
-        *solved.execution_artifact,
-        stop_solver_source->identity.source_context.intent,
-        stop_solver_source->identity.source_context.stage_geometry_id);
-      if (!adapted.exact_trajectory.has_value()) {
-        result.reason = Reason::ExactTrajectoryRejected;
-        std::ostringstream detail;
-        detail << physical_adapter::to_string(adapted.reason)
-               << "/stage=" << adapted.rejected_stage;
-        result.detail = detail.str();
-        continue;
-      }
-      if (abort_if_superseded()) {
+      if (certify_solved_stop(solved, "control-lattice")) {
         return finish();
       }
-      const auto & exact = adapted.exact_trajectory.value();
-      result.minimum_lateral_bound_reserve_m =
-        exact.minimum_lateral_bound_reserve_m;
-      if (
-        exact.velocity_mps.empty() ||
-        exact.velocity_mps.back() > std::max(
-          1e-9, solved.execution_artifact->physical_global_tolerance))
-      {
-        result.reason = Reason::StopNotReached;
-        result.detail = "seven-state lattice did not reach rest";
-        continue;
-      }
-      auto wall_snapshot = build_wall_snapshot(
-        *stop_solver_source, stop_solver_source->replay_world.value(), exact);
-      const auto wall_result = physical::evaluate(wall_snapshot);
-      result.wall_outcome = wall_result.outcome;
-      if (abort_if_superseded()) {
-        return finish();
-      }
-      if (wall_result.outcome != physical::Outcome::Accepted) {
-        result.reason = Reason::WallProofRejected;
-        result.detail = wall_result.detail;
-        continue;
-      }
-      const auto dynamic_result = dynamic::evaluate_current_world(
-        *stop_solver_source, wall_snapshot);
-      result.dynamic_valid = dynamic_result.valid;
-      result.dynamic_clear = dynamic_result.clear;
-      result.minimum_dynamic_clearance_m =
-        dynamic_result.minimum_clearance_m;
-      if (abort_if_superseded()) {
-        return finish();
-      }
-      if (!dynamic_result.valid || !dynamic_result.clear) {
-        result.reason = Reason::DynamicProofRejected;
-        std::ostringstream detail;
-        detail << "obstacle=" << dynamic_result.blocking_obstacle_id
-               << "/minimum=" << dynamic_result.minimum_clearance_m;
-        result.detail = detail.str();
-        continue;
-      }
-      const auto built = certified::build(
-        solved.execution_artifact, wall_snapshot, wall_result,
-        stop_solver_source);
-      if (built.reason != certified::RejectReason::None || built.plan == nullptr) {
-        result.reason = Reason::CertifiedPlanRejected;
-        result.detail = certified::to_string(built.reason);
-        continue;
-      }
-      result.reason = Reason::Accepted;
-      result.certified_stop_plan = built.plan;
-      result.detail = "accepted/observation-only";
-      return finish();
     }
     return finish();
   } catch (const std::exception & error) {

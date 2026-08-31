@@ -1363,6 +1363,22 @@ Finish the architecture simplification instead of leaving permanent dual control
   clearance change was introduced. Independent wall/corridor failures remain
   later integration-quality debt.
 
+- `.steering/20260831-terminal-stop-worker-freshness` separates the live
+  terminal Stop authority producer from the broad audit-only steering-rate
+  lattice. A frozen earlier failure proves the fixed-path Stop hits the wall
+  while a free seven-state Stop certifies in about 59 ms. The old live worker
+  could nevertheless spend about 1209 ms in the lattice and make that result
+  steering-unreachable. Production now performs one direct seven-state solve,
+  completes the running bounded job, coalesces only pending observations and
+  retains a certified result only within the same target/generation/side/
+  intent scope with unchanged current-world reproof. In
+  `output/20260831-110041/d1`, the worker published 51 results with one
+  candidate each and no invalid/rollback result. The residual decision 2092
+  fails persistent, stateless, rough and multi-SQP arms: left terminal Stop
+  contacts the wall and right conflicts with the opponent. It is an upstream
+  no-escape admission/continuation defect, not justification for a fallback,
+  lease, solver or clearance change.
+
 ## Slice 7: Parameter tuning
 
 Only after Slice 6, tune:

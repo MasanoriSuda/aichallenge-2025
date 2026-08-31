@@ -9559,18 +9559,29 @@ struct MPC
       return;
     }
 
+    const bool same_tactical_scope =
+      rate_resolved_stop_lattice_published_source_identity_.has_value() &&
+      rate_resolved_stop_lattice_shadow::same_tactical_stop_scope(
+        rate_resolved_stop_lattice_published_source_identity_.value(),
+        identity);
+    if (!same_tactical_scope) {
+      rate_resolved_stop_lattice_current_world_alternate_plan_.reset();
+      static_cast<void>(
+        rate_resolved_stop_lattice_shadow_worker_->
+        invalidate_pending_and_running());
+    }
+
     const auto stop_source = published.solver_source_snapshot;
     const auto stop_normal = published.selected_plan->execution_artifact;
     const auto stop_solver = rate_resolved_stop_lattice_shadow_solver_context_;
     const auto stop_mailbox = rate_resolved_stop_lattice_shadow_mailbox_;
     const auto submission =
-      rate_resolved_stop_lattice_shadow_worker_->submit_latest_cancelable(
-      [stop_source, stop_normal, stop_solver, stop_mailbox](
-        const LatestOnlyWorker::SupersessionToken & token) {
-        rate_resolved_stop_lattice_shadow::EvaluationControl control;
-        control.superseded = [&token]() {return token.superseded();};
+      rate_resolved_stop_lattice_shadow_worker_->submit_latest(
+      [stop_source, stop_normal, stop_solver, stop_mailbox]() {
         auto result = rate_resolved_stop_lattice_shadow::evaluate(
-          *stop_source, *stop_normal, *stop_solver, control);
+          *stop_source, *stop_normal, *stop_solver, {},
+          rate_resolved_stop_lattice_shadow::EvaluationMode::
+          DirectSevenStateOnly);
         static_cast<void>(stop_mailbox->publish(std::move(result)));
       });
     if (submission.accepted) {
@@ -27095,12 +27106,12 @@ struct MPC
           result->selected_solver_ms);
         window.last_result = result.value();
         window.last_result_available = true;
-        const bool current_published_source_result =
+        const bool current_tactical_scope_result =
           rate_resolved_stop_lattice_published_source_identity_.has_value() &&
-          rate_resolved_artifact::same_identity(
+          rate_resolved_stop_lattice_shadow::same_tactical_stop_scope(
           rate_resolved_stop_lattice_published_source_identity_.value(),
           result->source_normal_identity);
-        if (result->accepted() && current_published_source_result) {
+        if (result->accepted() && current_tactical_scope_result) {
           rate_resolved_stop_lattice_current_world_alternate_plan_ =
             result->certified_stop_plan;
         }
@@ -27142,7 +27153,8 @@ struct MPC
       "alternate=missing:%lu/attempted:%lu/joined:%lu/selected:%lu/"
       "last:%d:%lu:%lu:%s, "
       "last=available:%d/seq:%lu/decision:%lu/intent:%s/reason:%s/"
-      "schedule:%d:%d:%d/rank:%lu:%lu:%lu/preferred:%d/solver:%s/wall:%s/"
+      "direct:%d:%d/schedule:%d:%d:%d/rank:%lu:%lu:%lu/"
+      "preferred:%d/solver:%s/wall:%s/"
       "lateral_reserve:%.4f/dynamic:valid:%d,clear:%d,reserve:%.4f/"
       "detail:%s, authority=shadow, selected=0",
       static_cast<unsigned long>(worker.submitted),
@@ -27211,6 +27223,8 @@ struct MPC
       "none",
       window.last_result_available ?
       rate_resolved_stop_lattice_shadow::to_string(last.reason) : "none",
+      last.direct_seven_state_attempted ? 1 : 0,
+      last.direct_seven_state_accepted ? 1 : 0,
       last.initial_rate_sign, last.first_switch_stage,
       last.second_switch_stage,
       static_cast<unsigned long>(last.attempted_candidate_count),

@@ -3389,7 +3389,9 @@ candidate failure／latencyを兄弟branchとレース全体から局所化す�
 Stop-lattice workerの`source_normal_identity.sequence`はartifact producerごとのlocal sequenceであり、
 ShiftOut、Pass、Gate-Aをまたぐglobal clockではない。非同期mailboxの新旧判定とconsumer watermarkは、single control ownerが
 各周期に付与する`source_context.decision_id`を唯一の時系列として使用する。artifact sequenceはexact source identityの一部として
-保持し、current published sourceとの完全一致joinは従来どおり必須である。時系列が新しいだけでauthorityを取得してはならない。
+保持する。production Stop planの保持範囲は後続のworker責務分離でtarget、Mission generation、side、intentが一致する
+tactical scopeへ拡張したが、current-world exact revalidationは引き続き必須である。時系列またはscope一致だけでauthorityを
+取得してはならない。
 
 `output/20260831-091516/d1`のdecision 1832では、古いShiftOut source sequence 954より後に生成されたPass sourceが
 sequence 295だったため、旧mailboxが有効なPass Stop-lattice結果をrollbackとして破棄した。残ったShiftOut結果は正しく
@@ -3432,6 +3434,26 @@ encounter identityが変わると消去する。したがって非同期接続�
 `output/20260831-100351/d2` episode 2では、完了callbackと認証済みPass callbackがずれたため、旧実装は約8.38秒ShiftOutへ残り
 targetを失った。修正後の`output/20260831-102636/d2`では`completion=1/1, proposal=0`を一周期保持し、約28 ms後のfresh proposalで
 `ShiftOut -> Pass -> Return -> Idle`を完遂した。別sideの後続episodeへboundary factが漏れないことも確認した。
+
+#### terminal Stop workerのproduction責務分離（2026-08-31、2025由来の暫定）
+
+ShiftOut／Passのterminal Stop successorを生成するlive workerは、最新のpublished normal stateから1回の
+seven-state maximum-braking Stopを解き、exact trajectory、wall、timed dynamic obstacle、terminal restを証明することだけを
+production責務とする。広いsteering-rate control latticeはoffline architecture comparisonへ隔離し、direct solve失敗後に
+single workerを長時間占有して次のworld observationを古くしてはならない。
+
+workerは実行中のbounded solveを完了させ、pending入力だけを最新へcoalesceする。結果の新旧はcontrol decision IDで判定し、
+target、Mission generation、side、intentが一致するtactical scope内ではproducer sequence／observation epochをまたいで保持できる。
+ただしproduction authority取得前のcurrent-world exact revalidationは省略しない。scope変更時はplan、pending、running ownershipを
+破棄する。
+
+`output/20260831-105057/d1`では旧control latticeが最大約1209 ms workerを占有し、結果age最大1.29 sから
+`steering-unreachable`となった。責務分離後の`output/20260831-110041/d1`では候補数は常に1、通常windowの平均computeは
+約45--71 ms、初期ageは約0.18--0.27 sとなり、51件をinvalid／rollbackなしでpublishした。
+
+残るdecision 2092はA persistent、B stateless、C rough/lattice、D multi-SQP／proof-guidedの全armが不成立で、左はterminal Stopの
+exact wall contact、右はtimed opponent conflictだった。したがってこの時点は物理的no-escapeであり、Stop fallbackを追加しない。
+後続Sliceは、normal ShiftOut候補がその状態へ進入する前にterminal successor viabilityを失った最初のpredecessorを監査する。
 
 ### 提出ファイルへの影響
 

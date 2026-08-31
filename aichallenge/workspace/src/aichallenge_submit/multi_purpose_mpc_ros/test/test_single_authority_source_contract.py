@@ -2842,7 +2842,10 @@ def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
     publication = SOURCE[publication_start:publication_end]
     assert "published.solver_source_snapshot" in publication
     assert "rate_resolved_artifact::same_identity(" in publication
-    assert "submit_latest_cancelable(" in publication
+    assert "submit_latest(" in publication
+    assert "submit_latest_cancelable(" not in publication
+    assert "DirectSevenStateOnly" in publication
+    assert "same_tactical_stop_scope(" in publication
     assert "invalidate_published_stop_lattice_observation()" in publication
 
     final_start = publication_end
@@ -2920,8 +2923,8 @@ def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
         mailbox_start,
     )
     mailbox = SOURCE[mailbox_start:mailbox_end]
-    assert "current_published_source_result" in mailbox
-    assert "same_identity(" in mailbox
+    assert "current_tactical_scope_result" in mailbox
+    assert "same_tactical_stop_scope(" in mailbox
     assert "result->source_normal_identity" in mailbox
     assert "observe_rate_resolved_stop_lattice_current_world_join(" not in SOURCE
 

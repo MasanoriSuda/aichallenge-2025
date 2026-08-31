@@ -48,7 +48,26 @@ struct EvaluationControl
   std::function<bool()> superseded;
 };
 
+enum class EvaluationMode
+{
+  /// Production worker: one bounded seven-state solve from the latest
+  /// published normal state. An older control-lattice search must not block
+  /// the next current-world observation from reaching the worker.
+  DirectSevenStateOnly,
+  /// Offline/shadow comparison: retain the broader candidate population so
+  /// candidate-generation limits remain observable without owning authority.
+  DirectThenControlLattice,
+};
+
 const char * to_string(Reason reason) noexcept;
+
+/// Stop artifacts may be re-proved against the current world while the
+/// tactical encounter is unchanged. Decision, observation and artifact
+/// sequence are deliberately excluded: requiring exact producer identity
+/// makes every asynchronous Stop result obsolete before it completes.
+bool same_tactical_stop_scope(
+  const artifact::Identity & lhs,
+  const artifact::Identity & rhs) noexcept;
 
 struct Result
 {
@@ -61,6 +80,8 @@ struct Result
   int initial_rate_sign{};
   int first_switch_stage{};
   int second_switch_stage{};
+  bool direct_seven_state_attempted{false};
+  bool direct_seven_state_accepted{false};
   shadow::Outcome solver_outcome{shadow::Outcome::BuildRejected};
   physical::Outcome wall_outcome{physical::Outcome::InvalidInput};
   bool dynamic_valid{false};
@@ -85,7 +106,8 @@ Result evaluate(
   const shadow::Snapshot & selected_source,
   const artifact::ExecutionArtifact & selected_normal_execution,
   shadow::SolverContext & private_solver_context,
-  const EvaluationControl & control = EvaluationControl{}) noexcept;
+  const EvaluationControl & control = EvaluationControl{},
+  EvaluationMode mode = EvaluationMode::DirectThenControlLattice) noexcept;
 
 enum class PublishReason
 {

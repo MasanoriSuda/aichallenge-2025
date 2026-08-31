@@ -69,6 +69,11 @@ trainerはmetadata欠損、shape/type不一致、同期上限超過、非finite�
 train/validationのsequence重複を学習開始前に拒否する。古いdatasetを暗黙補完せず、
 契約対応extractorで再生成する。
 
+MPC教師収集は`make e2e-teacher`を使う。これは`e2e-single`と同じ1台・NPCなし・固定
+start・3周・LiDAR onの条件でcontrollerだけをMPCへ切り替え、localizationに必要なIMUを
+追加する。IMU/GNSSは教師controllerとAWSIM infrastructureだけが利用し、student model
+featureへは追加しない。抽出時は`--label-source mpc`を指定する。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

@@ -25,6 +25,17 @@ case "${mode}" in
     ;;
 esac
 
+control_method="${AIC_CONTROL_METHOD:-tiny_lidar_net}"
+case "${control_method}" in
+"mpc"|"pure_pursuit"|"tiny_lidar_net"|"pilot_net"|"joycon")
+    ;;
+*)
+    echo "invalid AIC_CONTROL_METHOD '${control_method}'"
+    exit 1
+    ;;
+esac
+opts+=("control_method:=${control_method}")
+
 export ROS_DOMAIN_ID=$id
 
 mkdir -p "${out_dir}"

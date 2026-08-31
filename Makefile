@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: autoware-build autoware-vehicle autoware-simulator autoware-request-initialpose autoware-request-control  awsim-request-start awsim-request-reset autoware-driver-zenoh autoware-driver-zenoh-rosbag \
-	simulator dev dev2 dev3 dev4 e2e-single e2e e2e-final driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
+	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e e2e-final driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
 
 # Used by docker-compose.yml for build/eval artifact ownership.
 HOST_UID ?= $(shell id -u)
@@ -38,7 +38,7 @@ autoware-vehicle:
 # run autoware for simulator
 autoware-simulator:
 	@echo "Start Autoware for AWSIM"
-	LOG_DIR=$(LOG_DIR) RUN_MODE=awsim AIC_VEHICLE_COUNT=$(AIC_VEHICLE_COUNT) docker compose up -d autoware
+	LOG_DIR=$(LOG_DIR) RUN_MODE=awsim AIC_VEHICLE_COUNT=$(AIC_VEHICLE_COUNT) AIC_CONTROL_METHOD=$(AIC_CONTROL_METHOD) docker compose up -d autoware
 
 # autoware command service use ROS_DOMAIN_ID from .env
 autoware-request-initialpose:
@@ -85,16 +85,19 @@ dev2 dev3 dev4: simulator
 # End to End AI modes. e2e-single is the deterministic three-lap development gate;
 # e2e/e2e-final mirror the upstream practice/final reference scenarios.
 e2e-single: SIM_MODE := e2e-single
+e2e-teacher: SIM_MODE := e2e-teacher
 e2e: SIM_MODE := e2e
 e2e-final: SIM_MODE := e2e-final
-e2e-single e2e: AIC_VEHICLE_COUNT := 1
-e2e-single e2e: simulator autoware-simulator
-	@echo "Start E2E simulation (SIM_MODE=$(SIM_MODE), TinyLidarNet)"
+e2e-single e2e e2e-final: AIC_CONTROL_METHOD := tiny_lidar_net
+e2e-teacher: AIC_CONTROL_METHOD := mpc
+e2e-single e2e-teacher e2e: AIC_VEHICLE_COUNT := 1
+e2e-single e2e-teacher e2e: simulator autoware-simulator
+	@echo "Start E2E simulation (SIM_MODE=$(SIM_MODE), controller=$(AIC_CONTROL_METHOD))"
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
 
 e2e-final: simulator
 	@echo "Start 4-vehicle E2E final reference (Autoware on ROS_DOMAIN_ID 1..4)"
-	@for p in $$(seq 1 4); do LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=4 docker compose -p $$p up -d autoware; done
+	@for p in $$(seq 1 4); do LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=4 AIC_CONTROL_METHOD=$(AIC_CONTROL_METHOD) docker compose -p $$p up -d autoware; done
 	@echo "Start mode is sync; publish /admin/awsim/start after all vehicles are Ready."
 	@echo "To stop: make down"
 

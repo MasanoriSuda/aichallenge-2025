@@ -24,6 +24,19 @@ def test_runtime_propagates_scenario_vehicle_count_to_launch() -> None:
     assert '"vehicle_count:=${vehicle_count}"' in runner
 
 
+def test_runtime_propagates_explicit_control_method_to_submit_launch() -> None:
+    runner = read("run_autoware.bash")
+    system_launch = read(
+        "workspace/src/aichallenge_system/"
+        "aichallenge_system_launch/launch/aichallenge_system.launch.xml"
+    )
+
+    assert 'control_method="${AIC_CONTROL_METHOD:-tiny_lidar_net}"' in runner
+    assert 'opts+=("control_method:=${control_method}")' in runner
+    assert '<arg name="control_method" default="tiny_lidar_net"/>' in system_launch
+    assert '<arg name="control_method" value="$(var control_method)"/>' in system_launch
+
+
 def test_single_vehicle_empty_world_producer_is_simulation_only() -> None:
     system_launch = read(
         "workspace/src/aichallenge_system/"

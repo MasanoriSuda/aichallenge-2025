@@ -23,6 +23,7 @@ x-autoware-base: &autoware-base
     - HOST_GID=${HOST_GID:-}
     - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-1}
     - AIC_VEHICLE_COUNT=${AIC_VEHICLE_COUNT:-1}
+    - AIC_CONTROL_METHOD=${AIC_CONTROL_METHOD:-tiny_lidar_net}
     - LOG_DIR=${LOG_DIR:-}
   volumes:
     - ./output:${OUTPUT_ROOT:-/output}

@@ -125,7 +125,7 @@ AWSIM結果を含む最終判定は、motion JSONを生成した後にrun単位�
 ```bash
 python3 analyze_e2e_competition.py /output/<run> \
   --expected-control-mode fixed_lidar_brake \
-  --expected-acceleration-mps2 0.8 \
+  --expected-acceleration-mps2 0.6 \
   --expected-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
   --checkpoint-file checkpoints/20260901_055824/candidate.npy \
@@ -155,9 +155,10 @@ python3 analyze_e2e_competition.py /output/<run> \
   --fail-on-rejection
 ```
 
-packaged defaultは単車とNPCの両Gateに合格した`0.8 m/s2`です。`1.0 m/s2`は
-単車Gateに合格しましたが、NPC Gateでwall penaltyが発生したため既定値へは
-昇格していません。比較runでは必ず`TINY_LIDAR_ACCELERATION`と
+packaged defaultはcross-seed Gateに合格した`0.6 m/s2`です。`0.8 m/s2`は
+単車とNPC seed 2026/2034に合格しましたが、seed 2035でwall penaltyと長時間停止を
+起こしたためcross-seed不採用です。`1.0 m/s2`もNPC Gateのwall penaltyで
+不採用です。比較runでは必ず`TINY_LIDAR_ACCELERATION`と
 `--expected-acceleration-mps2`を対にしてruntime identityを固定します。
 
 競技runが失敗した後は、checkpointを再学習する前に失敗直前状態のcoverageを監査できます。

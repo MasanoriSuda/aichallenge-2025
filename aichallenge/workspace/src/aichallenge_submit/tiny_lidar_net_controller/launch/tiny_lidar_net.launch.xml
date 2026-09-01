@@ -18,7 +18,7 @@
   <arg name="recurrent_authority_enabled" default="false"/>
   <arg name="recurrent_authority_max_abs_correction_rad" default="0.24"/>
   <arg name="control_mode" default="fixed_lidar_brake"/>
-  <arg name="acceleration" default="0.8"/>
+  <arg name="acceleration" default="0.6"/>
 
   <!-- tiny_lidar_net_node -->
   <node pkg="tiny_lidar_net_controller" 

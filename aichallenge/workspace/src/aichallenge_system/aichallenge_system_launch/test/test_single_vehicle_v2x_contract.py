@@ -365,7 +365,7 @@ def test_runtime_tiny_lidar_acceleration_is_explicit_and_qualified_by_gate() -> 
         'opts+=("tiny_lidar_acceleration:=${tiny_lidar_acceleration}")'
         in runner
     )
-    assert '<arg name="tiny_lidar_acceleration" default="0.8"/>' in system_launch
+    assert '<arg name="tiny_lidar_acceleration" default="0.6"/>' in system_launch
     assert (
         '<arg name="tiny_lidar_acceleration" '
         'value="$(var tiny_lidar_acceleration)"/>' in system_launch

@@ -283,6 +283,13 @@ normal train 3 sequenceをzero-residual anchorとして追加した再評価で�
 空間表現上で同時に分離可能かを確認する。分離不能ならinput/data、分離可能ならcontinuous
 head/lossの問題として扱う。
 
+normal anchorを含めた3 seed分類では、速度なしstatic spatialはmaterial-sign 85.06%を
+維持したが、未見normalの14.56%をmaterialと誤分類した。1/8-step LiDAR履歴でも13.76%に
+留まり、material-signは80.42%へ下がった。LiDAR-only static/short-historyでは通常と補正の
+観測重なりが残る。速度ありcontrolはnormal datasetに同期速度がなくzeroを代入しているため
+採用根拠にしない。次のAI platform作業は元bagからnormal train/validationの速度を同一契約で
+同期したimmutable datasetを生成し、実速度で分離性を再監査することとする。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

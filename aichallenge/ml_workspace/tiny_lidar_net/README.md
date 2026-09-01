@@ -171,6 +171,19 @@ python3 probe_e2e_action_separability.py \
   --output /output/e2e-action-separability-probe.json
 ```
 
+通常走行との同時分離を調べる場合は、train/validationを必ず対で渡します。古いnormal
+datasetは速度を保存していないため、この指定で有効な比較は`*_no_speed`だけです。速度あり
+結果を使うには、元bagから同じ同期契約でnormal recurrent datasetを作る必要があります。
+
+```bash
+python3 probe_e2e_action_separability.py \
+  --dataset dataset/recurrent_direct_v3 \
+  --checkpoint checkpoints/20260901_055824/candidate.npy \
+  --normal-anchor-train-dir dataset/dagger_aggregate_v2/train \
+  --normal-validation-dir dataset/dagger_aggregate_v2/val \
+  --output /output/e2e-spatial-normal-separability.json
+```
+
 probeが空間表現を支持した場合も、次の候補はoffline限定で学習・評価します。candidate
 artifactにfrozen baseを含め、評価時にbase tensorの同一性、teacher validation、peer subset、
 独立normal leakageを同時に検査します。

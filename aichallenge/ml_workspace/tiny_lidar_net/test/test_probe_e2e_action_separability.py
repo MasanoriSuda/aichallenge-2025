@@ -54,3 +54,27 @@ def test_standardization_uses_train_only_statistics():
 
     assert normalized_train[:, 0].tolist() == pytest.approx([-1.0, 1.0])
     assert normalized_validation[0, 0] == pytest.approx(2.0)
+
+
+def test_static_spatial_no_speed_does_not_invent_odometry_input():
+    projected = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    compact = np.zeros((2, 10), dtype=np.float32)
+
+    features = MODULE.compose_probe_features(
+        "static_conv5_no_speed",
+        projected,
+        compact,
+        np.asarray([1.0, 9.0], dtype=np.float32),
+    )
+
+    assert np.array_equal(features, projected)
+
+
+def test_spatial_history_resets_each_sequence_without_speed_columns():
+    current = np.asarray([[1.0], [2.0], [4.0]], dtype=np.float32)
+
+    features = MODULE.spatial_history_features(current, lags=(1, 2))
+
+    assert features.shape == (3, 3)
+    assert features[0].tolist() == pytest.approx([1.0, 0.0, 0.0])
+    assert features[2].tolist() == pytest.approx([4.0, 2.0, 3.0])

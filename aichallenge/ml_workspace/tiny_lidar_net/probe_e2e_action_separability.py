@@ -21,6 +21,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from lib.checkpoint import load_pretrained_weights
+from lib.data import MultiSeqConcatDataset
 from lib.model import TinyLidarNet
 from lib.recurrent_policy import MultiSeqRecurrentPolicyDataset
 
@@ -30,6 +31,7 @@ VARIANTS = (
     "static_fc3",
     "static_conv5_no_speed",
     "static_conv5",
+    "temporal_conv5_no_speed",
     "temporal_conv5",
 )
 
@@ -113,6 +115,21 @@ def temporal_features(
     return np.concatenate((*feature_parts, *speed_parts), axis=1).astype(
         np.float32, copy=False
     )
+
+
+def spatial_history_features(
+    current: np.ndarray, lags: tuple[int, ...] = (1, 8)
+) -> np.ndarray:
+    features = np.asarray(current, dtype=np.float32)
+    if features.ndim != 2:
+        raise ValueError("spatial history must be a two-dimensional array")
+    if not lags or any(lag <= 0 for lag in lags):
+        raise ValueError("spatial history lags must be positive")
+    parts = [features]
+    for lag in lags:
+        previous_indices = np.maximum(np.arange(len(features)) - lag, 0)
+        parts.append(features - features[previous_indices])
+    return np.concatenate(parts, axis=1).astype(np.float32, copy=False)
 
 
 def standardize_from_train(
@@ -230,22 +247,9 @@ def make_probe_sequences(
             cached = (projected, fc3)
             feature_cache[sequence.sequence_id] = cached
         projected, fc3 = cached
-        if variant == "static_fc3":
-            features = np.concatenate(
-                (fc3, np.clip(sequence.speeds / 12.0, 0.0, 1.5)[:, None]),
-                axis=1,
-            )
-        elif variant == "static_conv5_no_speed":
-            features = projected
-        elif variant == "static_conv5":
-            features = np.concatenate(
-                (projected, np.clip(sequence.speeds / 12.0, 0.0, 1.5)[:, None]),
-                axis=1,
-            )
-        elif variant == "temporal_conv5":
-            features = temporal_features(projected, sequence.speeds)
-        else:
-            raise ValueError(f"unsupported probe variant: {variant}")
+        features = compose_probe_features(
+            variant, projected, fc3, sequence.speeds
+        )
         output.append(
             ProbeSequence(
                 sequence_id=sequence.sequence_id,
@@ -254,6 +258,67 @@ def make_probe_sequences(
                 labels=action_classes(
                     sequence.steers, sequence.base_steers, material_delta_rad
                 ),
+            )
+        )
+    return output
+
+
+def compose_probe_features(
+    variant: str,
+    projected: np.ndarray,
+    fc3: np.ndarray,
+    speeds_mps: np.ndarray,
+) -> np.ndarray:
+    speeds = np.asarray(speeds_mps, dtype=np.float32)
+    if speeds.shape != (len(projected),):
+        raise ValueError("probe speed feature must align with spatial features")
+    normalized_speed = np.clip(speeds / 12.0, 0.0, 1.5)[:, None]
+    if variant == "static_fc3":
+        return np.concatenate((fc3, normalized_speed), axis=1)
+    if variant == "static_conv5_no_speed":
+        return projected
+    if variant == "static_conv5":
+        return np.concatenate((projected, normalized_speed), axis=1)
+    if variant == "temporal_conv5_no_speed":
+        return spatial_history_features(projected)
+    if variant == "temporal_conv5":
+        return temporal_features(projected, speeds)
+    raise ValueError(f"unsupported probe variant: {variant}")
+
+
+def make_normal_probe_sequences(
+    source,
+    model: TinyLidarNet,
+    variant: str,
+    projection: np.ndarray,
+    device: torch.device,
+    feature_cache: dict[str, tuple[np.ndarray, np.ndarray]],
+) -> list[ProbeSequence]:
+    output = []
+    for sequence in source.datasets:
+        cache_key = f"normal-anchor:{sequence.sequence_id}"
+        cached = feature_cache.get(cache_key)
+        if cached is None:
+            conv5, fc3 = frozen_features(
+                model, sequence.scans * sequence.max_range, device
+            )
+            if conv5.shape[1] != projection.shape[0]:
+                raise ValueError("normal conv5 projection dimension mismatch")
+            cached = (conv5 @ projection, fc3)
+            feature_cache[cache_key] = cached
+        projected, fc3 = cached
+        features = compose_probe_features(
+            variant,
+            projected,
+            fc3,
+            np.zeros(len(sequence), dtype=np.float32),
+        )
+        output.append(
+            ProbeSequence(
+                sequence_id=cache_key,
+                source_bag=f"normal-anchor:{sequence.seq_dir}",
+                features=features,
+                labels=np.ones(len(sequence), dtype=np.int64),
             )
         )
     return output
@@ -374,6 +439,8 @@ def main() -> int:
     parser.add_argument("--patience", type=int, default=6)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
+    parser.add_argument("--normal-anchor-train-dir", type=Path)
+    parser.add_argument("--normal-validation-dir", type=Path)
     args = parser.parse_args()
     if min(args.projection_dim, args.epochs, args.batch_size, args.patience) <= 0:
         parser.error("projection, training and patience values must be positive")
@@ -404,6 +471,30 @@ def main() -> int:
         conv5 = F.relu(base_model.conv5(conv5))
         conv5_dim = int(torch.flatten(conv5, start_dim=1).shape[1])
     projection = random_projection(conv5_dim, args.projection_dim, args.seed)
+    if (args.normal_anchor_train_dir is None) != (
+        args.normal_validation_dir is None
+    ):
+        parser.error("normal train and validation directories must be supplied together")
+    normal_train_source = None
+    normal_validation_source = None
+    if args.normal_anchor_train_dir is not None:
+        normal_train_source = MultiSeqConcatDataset(
+            args.normal_anchor_train_dir,
+            expected_split="train",
+            max_range=30.0,
+            expected_input_dim=750,
+        )
+        normal_validation_source = MultiSeqConcatDataset(
+            args.normal_validation_dir,
+            expected_split="val",
+            max_range=30.0,
+            expected_input_dim=750,
+        )
+        normal_overlap = set(normal_train_source.sequence_ids) & set(
+            normal_validation_source.sequence_ids
+        )
+        if normal_overlap:
+            raise ValueError(f"normal probe sequence overlap: {sorted(normal_overlap)}")
 
     variant_reports = {}
     feature_cache: dict[str, tuple[np.ndarray, np.ndarray]] = {}
@@ -426,6 +517,27 @@ def main() -> int:
             device,
             feature_cache,
         )
+        if normal_train_source is not None:
+            train_sequences.extend(
+                make_normal_probe_sequences(
+                    normal_train_source,
+                    base_model,
+                    variant,
+                    projection,
+                    device,
+                    feature_cache,
+                )
+            )
+            validation_sequences.extend(
+                make_normal_probe_sequences(
+                    normal_validation_source,
+                    base_model,
+                    variant,
+                    projection,
+                    device,
+                    feature_cache,
+                )
+            )
         train_features, train_labels = concatenate_sequences(train_sequences)
         validation_features, validation_labels = concatenate_sequences(
             validation_sequences
@@ -465,6 +577,8 @@ def main() -> int:
         validation_predictions = predict(model, validation_features, device)
         per_sequence = []
         peer_validation = None
+        normal_predictions = []
+        normal_labels = []
         for sequence in normalized_validation_sequences:
             record = {
                 "sequence_id": sequence.sequence_id,
@@ -478,6 +592,11 @@ def main() -> int:
                 if peer_validation is not None:
                     raise ValueError("peer validation token is ambiguous")
                 peer_validation = record
+            if sequence.source_bag.startswith("normal-anchor:"):
+                normal_predictions.append(
+                    predict(model, sequence.features, device)
+                )
+                normal_labels.append(sequence.labels)
         if peer_validation is None:
             raise ValueError("peer validation token did not match a sequence")
         variant_reports[variant] = {
@@ -489,6 +608,14 @@ def main() -> int:
             ),
             "aggregate": probe_metrics(validation_predictions, validation_labels),
             "peer_validation": peer_validation,
+            "normal_validation": (
+                None
+                if not normal_labels
+                else probe_metrics(
+                    np.concatenate(normal_predictions),
+                    np.concatenate(normal_labels),
+                )
+            ),
             "per_sequence": per_sequence,
         }
 
@@ -509,6 +636,16 @@ def main() -> int:
             "projection_dim": args.projection_dim,
             "seed": args.seed,
             "peer_validation_token": args.peer_validation_token,
+            "normal_anchor_train_dir": (
+                None
+                if args.normal_anchor_train_dir is None
+                else str(args.normal_anchor_train_dir.expanduser().resolve())
+            ),
+            "normal_validation_dir": (
+                None
+                if args.normal_validation_dir is None
+                else str(args.normal_validation_dir.expanduser().resolve())
+            ),
         },
         "variants": variant_reports,
         "comparison": {

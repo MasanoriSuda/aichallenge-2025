@@ -11,6 +11,7 @@ from tiny_lidar_net_controller.gap_teacher import (
     LongitudinalSafetyDecision,
 )
 from tiny_lidar_net_controller.model.tinylidarnet import (
+    SteeringResidualNetNp,
     TinyLidarNetNp,
     TinyLidarNetSmallNp,
 )
@@ -45,6 +46,8 @@ class TinyLidarNetCore:
         control_mode: str = 'ai',
         max_range: float = 30.0,
         gap_teacher_config: Optional[GapTeacherConfig] = None,
+        residual_ckpt_path: str = '',
+        residual_max_abs_delta_rad: float = 1.28,
     ):
         """Initializes the TinyLidarNetCore with specified parameters.
 
@@ -77,6 +80,10 @@ class TinyLidarNetCore:
         self.max_range = max_range
         self.logger = logging.getLogger(__name__)
         self.loaded_parameter_count = 0
+        self.residual_loaded_parameter_count = 0
+        self.residual_model = None
+        self.last_residual_correction_rad = 0.0
+        self.last_residual_gate_probability = 0.0
         self.last_gap_teacher_decision: Optional[GapTeacherDecision] = None
         self.last_longitudinal_safety_decision: Optional[
             LongitudinalSafetyDecision
@@ -105,6 +112,13 @@ class TinyLidarNetCore:
             raise ValueError("max_range must be finite and positive")
         if not np.isfinite(self.acceleration) or not -1.0 <= self.acceleration <= 1.0:
             raise ValueError("acceleration must be finite and within [-1.0, 1.0]")
+        if (
+            not np.isfinite(residual_max_abs_delta_rad)
+            or residual_max_abs_delta_rad <= 0.0
+        ):
+            raise ValueError(
+                "residual_max_abs_delta_rad must be finite and positive"
+            )
 
         if self.architecture == 'small':
             self.model = TinyLidarNetSmallNp(input_dim=self.input_dim, output_dim=self.output_dim)
@@ -129,6 +143,16 @@ class TinyLidarNetCore:
         if not ckpt_path:
             raise ValueError("ckpt_path is required; random production weights are forbidden")
         self._load_weights(ckpt_path)
+        if residual_ckpt_path:
+            self.residual_model = SteeringResidualNetNp(
+                input_dim=self.input_dim,
+                max_abs_delta_rad=residual_max_abs_delta_rad,
+            )
+            self.residual_loaded_parameter_count = self._load_model_weights(
+                self.residual_model,
+                residual_ckpt_path,
+                "steering residual",
+            )
 
     def process(self, ranges: np.ndarray) -> Tuple[float, float]:
         """Runs the complete inference pipeline on raw LiDAR data.
@@ -170,6 +194,20 @@ class TinyLidarNetCore:
 
         steer = float(np.clip(outputs[1], -1.0, 1.0))
 
+        self.last_residual_correction_rad = 0.0
+        self.last_residual_gate_probability = 0.0
+        if self.residual_model is not None:
+            residual, _, gate_logit = self.residual_model.forward_components(x)
+            residual_value = float(residual[0, 0])
+            gate_value = float(
+                1.0 / (1.0 + np.exp(-np.clip(gate_logit[0, 0], -60.0, 60.0)))
+            )
+            if not np.isfinite(residual_value) or not np.isfinite(gate_value):
+                raise ValueError("residual model output contains non-finite values")
+            self.last_residual_correction_rad = residual_value
+            self.last_residual_gate_probability = gate_value
+            steer = float(np.clip(steer + residual_value, -1.0, 1.0))
+
         self.last_gap_teacher_decision = None
         self.last_longitudinal_safety_decision = None
         if self.gap_teacher is not None:
@@ -196,6 +234,12 @@ class TinyLidarNetCore:
             ValueError: If the weight file format is unsupported.
             IOError: If the file cannot be read.
         """
+        self.loaded_parameter_count = self._load_model_weights(
+            self.model, path, "base TinyLidarNet"
+        )
+
+    def _load_model_weights(self, model, path: str, label: str) -> int:
+        """Strictly load one NumPy model without accepting partial parameters."""
         try:
             weights = np.load(path, allow_pickle=True)
 
@@ -215,7 +259,7 @@ class TinyLidarNetCore:
                     raise ValueError(f"duplicate normalized parameter key: {key_norm}")
                 normalized_weights[key_norm] = np.asarray(value)
 
-            expected_keys = set(self.model.params)
+            expected_keys = set(model.params)
             provided_keys = set(normalized_weights)
             missing = sorted(expected_keys - provided_keys)
             unexpected = sorted(provided_keys - expected_keys)
@@ -225,7 +269,7 @@ class TinyLidarNetCore:
                 )
 
             validated_weights = {}
-            for key, expected in self.model.params.items():
+            for key, expected in model.params.items():
                 value = normalized_weights[key]
                 if value.shape != expected.shape:
                     raise ValueError(
@@ -239,13 +283,14 @@ class TinyLidarNetCore:
                     raise ValueError(f"weight {key} contains non-finite values")
                 validated_weights[key] = value
 
-            self.model.params.update(validated_weights)
-            self.loaded_parameter_count = len(validated_weights)
+            model.params.update(validated_weights)
             self.logger.info(
-                "Successfully loaded %d validated parameters from %s",
-                self.loaded_parameter_count,
+                "Successfully loaded %d validated %s parameters from %s",
+                len(validated_weights),
+                label,
                 path,
             )
+            return len(validated_weights)
 
         except Exception as e:
             self.logger.error(f"Failed to load weights from {path}: {e}")

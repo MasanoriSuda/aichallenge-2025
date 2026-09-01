@@ -27,6 +27,19 @@ def test_cutoff_excludes_pre_contact_margin():
     assert MODULE.cutoff_before_margin(timestamps, None, 0.2) == 10
 
 
+def test_duration_cutoff_is_exclusive_from_first_scan():
+    timestamps = 1_000_000_000 + np.arange(10, dtype=np.int64) * 100_000_000
+    assert MODULE.cutoff_before_duration(timestamps, 0.35) == 4
+    assert MODULE.cutoff_before_duration(timestamps, None) == 10
+
+
+@pytest.mark.parametrize("duration", [0.0, -1.0, np.inf, np.nan])
+def test_duration_cutoff_rejects_invalid_limit(duration):
+    timestamps = np.arange(3, dtype=np.int64) * 100_000_000
+    with pytest.raises(ValueError, match="max_duration_sec"):
+        MODULE.cutoff_before_duration(timestamps, duration)
+
+
 def test_minimum_observed_ranges_treats_empty_scan_as_blocked():
     scans = np.array([[0.0, np.nan, np.inf], [0.0, 1.2, 0.8]])
     minima = MODULE.minimum_observed_ranges(scans)

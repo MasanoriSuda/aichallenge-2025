@@ -7,7 +7,10 @@ import numpy as np
 import pytest
 
 from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
-from tiny_lidar_net_controller.model.tinylidarnet import TinyLidarNetNp
+from tiny_lidar_net_controller.model.tinylidarnet import (
+    SteeringResidualNetNp,
+    TinyLidarNetNp,
+)
 
 
 PACKAGE_ROOT = Path(__file__).parents[1]
@@ -169,3 +172,47 @@ def test_numpy_runtime_matches_reference_forward_pass() -> None:
     output = model(sample)
     assert output.shape == (1, 2)
     assert np.all(np.isfinite(output))
+
+
+def test_optional_residual_composes_with_frozen_base(tmp_path: Path) -> None:
+    residual_model = SteeringResidualNetNp(input_dim=750)
+    weights = {key: value.copy() for key, value in residual_model.params.items()}
+    weights["correction_head_bias"][0] = np.arctanh(0.2 / 1.28)
+    weights["gate_head_bias"][0] = 20.0
+    residual_checkpoint = tmp_path / "residual.npy"
+    np.save(residual_checkpoint, weights)
+
+    base = _load_core()
+    composed = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        residual_ckpt_path=str(residual_checkpoint),
+        acceleration=0.6,
+        control_mode="fixed",
+        max_range=30.0,
+    )
+    scan = np.full(750, 30.0, dtype=np.float32)
+    _, base_steering = base.process(scan)
+    _, composed_steering = composed.process(scan)
+    assert composed.residual_loaded_parameter_count == 14
+    assert composed.last_residual_correction_rad == pytest.approx(0.2, abs=1e-6)
+    assert composed.last_residual_gate_probability > 0.999
+    assert composed_steering == pytest.approx(base_steering + 0.2, abs=1e-6)
+
+
+def test_partial_residual_checkpoint_is_rejected(tmp_path: Path) -> None:
+    residual_model = SteeringResidualNetNp(input_dim=750)
+    weights = {key: value.copy() for key, value in residual_model.params.items()}
+    weights.pop("gate_head_bias")
+    residual_checkpoint = tmp_path / "partial-residual.npy"
+    np.save(residual_checkpoint, weights)
+    with pytest.raises(ValueError, match="weight key mismatch"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            residual_ckpt_path=str(residual_checkpoint),
+        )

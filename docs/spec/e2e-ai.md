@@ -158,6 +158,35 @@ LiDARが約1.45--1.66 m、右側が約1.00 mで、`fixed_lidar_brake`は正し�
 zero-output正常anchorと共に学ぶML steering residualとして分離する。residualはoffline
 評価と閉ループgateを通るまでruntime既定で無効とする。
 
+### Frozen-base steering residual A/B
+
+productionは引き続きSHA-256
+`de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa`の
+TinyLidarNetと`fixed_lidar_brake`であり、residual pathの既定値は空とする。診断時だけ
+`TINY_LIDAR_RESIDUAL_CKPT_PATH`を明示し、runtimeは
+`base_steering + learned_residual`を実行する。checkpoint不在、shape不一致、非finite値は
+起動時に拒否する。
+
+residual datasetは同一scan上の`LidarPrecontactTeacher`出力からfrozen production base
+出力を引いた値をtargetとする。旧`LidarGapTeacher`との差は診断provenanceであり、runtime
+targetへ使わない。失敗bagは接触・固着suffixを教師化せず、接触cutoffまたは明示した
+`--max-duration-sec`の早い方までを因果prefixとして保存する。短い失敗prefixが長い成功runへ
+埋没しないよう、trainerは既定で各sequenceへ等しいsampling massを与える。train/valは
+引き続きrun/domain単位で分離する。
+
+2026-09-01の診断候補は単車`output/20260901-120424`で1015.22 m、平均3.40 m/s、
+NPC `output/20260901-121209`で1020.53 m、平均3.20 m/sを走り、双方ともpost-start low-speed
+およびpositive-acceleration stallが0秒だった。一方、4台`output/20260901-121938`では
+d1/d2がsim時刻約118秒から211--219秒固着した。両者は正加速+0.6 m/s2を出し続け、停止位置の
+間隔は約1.9--2.2 mだったため、縦停止ではなく横方策の失敗である。d3/d4は同runで
+1049.37 m / 1102.46 mを走りstall 0秒だった。
+
+失敗直前10秒の教師補正はd1が平均正方向、d2が平均負方向で、最も近いLiDAR状態間の教師符号
+一致率は0%だった。現単フレームresidual CNNはこの境界で出力をほぼ0へ平均化し、強い再学習は
+過去の正常anchorへ漏れた。したがってresidual runtime基盤はA/B用に保持するが、どの候補も
+productionへ昇格しない。次のモデル変更は同じSliceへの閾値追加ではなく、時系列LiDAR、
+wheel odometry等の許可入力、または状態付きarchitectureを別Sliceで評価する。
+
 bag単位の固着監査は次で行う。起動待ちは除外し、一度1.0 m/s以上で走行した後の
 0.15 m/s以下の連続時間と、そのうち正加速指令中の連続時間を別々に判定する。縦安全層が
 正しく加速を抑止しても、その場で停止し続けるcandidateを成功扱いしない。GUIの見た目

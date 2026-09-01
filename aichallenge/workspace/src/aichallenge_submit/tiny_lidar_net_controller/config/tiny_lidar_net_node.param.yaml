@@ -7,6 +7,9 @@
       output_dim: 2              # 出力（steering, throttleなど）
       architecture: "normal"      # "normal" または "small"
       ckpt_path: "/path/to/tinylidarnet_weights.npy"
+      # Empty by default: production remains the admitted base policy.
+      residual_ckpt_path: ""
+      residual_max_abs_delta_rad: 1.28
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
     control_mode: "fixed_lidar_brake"  # ML steer + LiDAR longitudinal safety

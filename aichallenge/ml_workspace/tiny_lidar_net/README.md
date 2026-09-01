@@ -165,3 +165,37 @@ python3 relabel_gap_teacher_bag.py /output/<admitted-run>/d1/rosbag2_autoware \
 `--novel-policy-only`は同一scan・同一base steeringに対する旧`LidarGapTeacher`との差が
 0.02 rad以上あるlabelだけを残す。新teacherに固有でない通常のgap追従を大量に再学習して
 既存の車線維持を退行させないためのdataset admissionであり、閾値はmetadataへ記録する。
+
+### Frozen-base steering residual
+
+production TinyLidarNetを変更せず、`precontact_teacher - frozen base`だけを学ぶ場合は
+`train_residual.py`を使う。各sequenceには`base_steers.npy`、`reference_steers.npy`、
+`steering_deltas.npy`とtarget identityを保存する。長い成功runのsample数だけで学習が支配
+されないよう、既定の`--sequence-balanced-sampling`は各runへ等しいsampling massを与える。
+material correctionの重みとzero/small anchorはその上で両方保持する。
+
+```bash
+python3 train_residual.py \
+  --train-dir dataset/<residual-name>/train \
+  --val-dir dataset/<residual-name>/val \
+  --output-root checkpoints/<residual-run> \
+  --init-checkpoint checkpoints/<previous-residual>/candidate.npy
+
+python3 evaluate_residual.py \
+  --dataset-dir dataset/<residual-name>/val \
+  --checkpoint checkpoints/<residual-run>/candidate.npy \
+  --normal-dataset-dir dataset/<normal-name>/val \
+  --output checkpoints/<residual-run>/gate.json \
+  --fail-on-gate
+```
+
+evaluatorは合成後residualだけでなく、ungated correctionとgate probabilityも出力する。
+これにより「gateが閉じた」のか「補正headが状態を区別できない」のかを分離する。runtime A/Bは
+次のように明示する。未指定時はresidual modelを生成せず、production base出力は変わらない。
+
+```bash
+make e2e-single \
+  TINY_LIDAR_RESIDUAL_CKPT_PATH=/aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<residual-run>/candidate.npy
+```
+
+単車、NPC、4台の順に全gateを通るまでこのpathを既定設定や提出物へ設定しない。

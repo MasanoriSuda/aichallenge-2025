@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 # Assuming these are imported from your local module as per the original code
 from . import (
@@ -309,3 +310,63 @@ class TinyLidarNetSmallNp:
         x = relu(linear(x, self.params['fc1_weight'], self.params['fc1_bias']))
         x = relu(linear(x, self.params['fc2_weight'], self.params['fc2_bias']))
         return tanh(linear(x, self.params['fc3_weight'], self.params['fc3_bias']))
+
+
+class SteeringResidualNetNp:
+    """NumPy inference counterpart of the offline two-head residual model."""
+
+    def __init__(self, input_dim=750, max_abs_delta_rad=1.28):
+        if input_dim <= 0:
+            raise ValueError("input_dim must be positive")
+        if not np.isfinite(max_abs_delta_rad) or max_abs_delta_rad <= 0.0:
+            raise ValueError("max_abs_delta_rad must be finite and positive")
+        self.input_dim = input_dim
+        self.max_abs_delta_rad = float(max_abs_delta_rad)
+        self.params = {}
+        self.strides = {'conv1': 4, 'conv2': 4, 'conv3': 2}
+        self.shapes = {
+            'conv1_weight': (16, 1, 10), 'conv1_bias': (16,),
+            'conv2_weight': (24, 16, 8), 'conv2_bias': (24,),
+            'conv3_weight': (32, 24, 4), 'conv3_bias': (32,),
+        }
+        length = input_dim
+        for index in range(1, 4):
+            kernel = self.shapes[f'conv{index}_weight'][2]
+            length = (length - kernel) // self.strides[f'conv{index}'] + 1
+        flatten_dim = 32 * length
+        self.shapes.update({
+            'fc1_weight': (64, flatten_dim), 'fc1_bias': (64,),
+            'fc2_weight': (16, 64), 'fc2_bias': (16,),
+            'correction_head_weight': (1, 16), 'correction_head_bias': (1,),
+            'gate_head_weight': (1, 16), 'gate_head_bias': (1,),
+        })
+        for name, shape in self.shapes.items():
+            self.params[name] = zeros_init(shape)
+
+    def forward_components(self, x):
+        x = relu(conv1d(
+            x, self.params['conv1_weight'], self.params['conv1_bias'],
+            self.strides['conv1']))
+        x = relu(conv1d(
+            x, self.params['conv2_weight'], self.params['conv2_bias'],
+            self.strides['conv2']))
+        x = relu(conv1d(
+            x, self.params['conv3_weight'], self.params['conv3_bias'],
+            self.strides['conv3']))
+        x = flatten(x)
+        x = relu(linear(x, self.params['fc1_weight'], self.params['fc1_bias']))
+        x = relu(linear(x, self.params['fc2_weight'], self.params['fc2_bias']))
+        correction = tanh(linear(
+            x,
+            self.params['correction_head_weight'],
+            self.params['correction_head_bias'],
+        )) * self.max_abs_delta_rad
+        gate_logit = linear(
+            x, self.params['gate_head_weight'], self.params['gate_head_bias']
+        )
+        gate = 1.0 / (1.0 + np.exp(-np.clip(gate_logit, -60.0, 60.0)))
+        return gate * correction, correction, gate_logit
+
+    def __call__(self, x):
+        residual, _, _ = self.forward_components(x)
+        return residual

@@ -80,6 +80,29 @@ def test_runtime_validates_and_propagates_tiny_lidar_control_mode() -> None:
     )
 
 
+def test_runtime_propagates_only_an_explicit_residual_checkpoint() -> None:
+    runner = read("run_autoware.bash")
+    system_launch = read(
+        "workspace/src/aichallenge_system/"
+        "aichallenge_system_launch/launch/aichallenge_system.launch.xml"
+    )
+    assert (
+        'tiny_lidar_residual_ckpt_path="${TINY_LIDAR_RESIDUAL_CKPT_PATH:-}"'
+        in runner
+    )
+    assert 'if [[ ! -f "${tiny_lidar_residual_ckpt_path}" ]]; then' in runner
+    assert (
+        'opts+=("tiny_lidar_residual_ckpt_path:=${tiny_lidar_residual_ckpt_path}")'
+        in runner
+    )
+    assert '<arg name="tiny_lidar_residual_ckpt_path" default=""/>' in system_launch
+    assert (
+        '<arg name="tiny_lidar_residual_ckpt_path" '
+        'value="$(var tiny_lidar_residual_ckpt_path)"/>'
+        in system_launch
+    )
+
+
 def test_single_vehicle_empty_world_producer_is_simulation_only() -> None:
     system_launch = read(
         "workspace/src/aichallenge_system/"

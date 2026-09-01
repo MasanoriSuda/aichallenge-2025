@@ -109,6 +109,30 @@ def cutoff_before_margin(
     return int(np.searchsorted(timestamps, cutoff_time, side="left"))
 
 
+def cutoff_before_duration(
+    timestamps_ns: np.ndarray,
+    max_duration_sec: Optional[float],
+) -> int:
+    """Return an exclusive cutoff measured from the first admitted scan.
+
+    Closed-loop DAgger bags may contain a terminal stalled state that is a
+    consequence of an earlier policy error.  A caller-supplied duration keeps
+    only the causal pre-failure prefix without changing the source bag.  The
+    boundary is explicit metadata, not an inferred runtime heuristic.
+    """
+    timestamps = np.asarray(timestamps_ns, dtype=np.int64)
+    if timestamps.ndim != 1 or timestamps.size == 0:
+        raise ValueError("timestamps must be a non-empty one-dimensional array")
+    if np.any(np.diff(timestamps) < 0):
+        raise ValueError("timestamps must be monotonic")
+    if max_duration_sec is None:
+        return int(timestamps.size)
+    if not np.isfinite(max_duration_sec) or max_duration_sec <= 0.0:
+        raise ValueError("max_duration_sec must be finite and positive")
+    cutoff_time = int(timestamps[0] + round(max_duration_sec * 1e9))
+    return int(np.searchsorted(timestamps, cutoff_time, side="left"))
+
+
 def minimum_observed_ranges(scans: np.ndarray) -> np.ndarray:
     """Return per-scan positive minima, treating an empty scan as blocked."""
     scan_array = np.asarray(scans, dtype=np.float32)
@@ -174,13 +198,23 @@ def relabel(args: argparse.Namespace) -> dict:
     breach_index = first_confirmed_breach(
         minima, args.contact_clearance_m, args.contact_confirmation_samples
     )
-    cutoff = cutoff_before_margin(timestamps, breach_index, args.pre_contact_margin_sec)
+    contact_cutoff = cutoff_before_margin(
+        timestamps, breach_index, args.pre_contact_margin_sec
+    )
+    duration_cutoff = cutoff_before_duration(timestamps, args.max_duration_sec)
+    cutoff = min(contact_cutoff, duration_cutoff)
     if cutoff <= 0:
-        raise ValueError("contact cutoff removed the complete sequence")
+        raise ValueError("admission cutoff removed the complete sequence")
 
     teacher_config = GapTeacherConfig()
+    # A successor teacher is only meaningful relative to the historical
+    # teacher evaluated on the exact same state and base steering.  Persist the
+    # paired result for every precontact sample, not only when a positives-only
+    # novelty filter happens to be requested.
     reference_teacher = (
-        LidarGapTeacher(teacher_config) if args.novel_policy_only else None
+        LidarGapTeacher(teacher_config)
+        if args.teacher_mode == "precontact_teacher"
+        else None
     )
     core = TinyLidarNetCore(
         input_dim=750,
@@ -195,6 +229,11 @@ def relabel(args: argparse.Namespace) -> dict:
     accepted_scans = []
     accepted_steering = []
     accepted_acceleration = []
+    accepted_base_steering = []
+    accepted_reference_steering = []
+    accepted_steering_delta = []
+    accepted_reference_steering_delta = []
+    accepted_successor_upgrade_delta = []
     accepted_timestamps = []
     reason_counts = {}
     rejected_non_novel_samples = 0
@@ -206,13 +245,14 @@ def relabel(args: argparse.Namespace) -> dict:
         reason_counts[decision.reason] = reason_counts.get(decision.reason, 0) + 1
         if args.active_only and not decision.active:
             continue
+        reference_decision = None
         if reference_teacher is not None:
             reference_decision = reference_teacher.decide(
                 scan,
                 decision.base_steering_rad,
                 args.fixed_acceleration,
             )
-            if not is_novel_policy_sample(
+            if args.novel_policy_only and not is_novel_policy_sample(
                 decision.steering_rad,
                 reference_decision.steering_rad,
                 args.minimum_novel_steering_delta_rad,
@@ -222,6 +262,18 @@ def relabel(args: argparse.Namespace) -> dict:
         accepted_scans.append(scan)
         accepted_steering.append(steering)
         accepted_acceleration.append(acceleration)
+        accepted_base_steering.append(decision.base_steering_rad)
+        if reference_decision is not None:
+            accepted_reference_steering.append(reference_decision.steering_rad)
+            accepted_steering_delta.append(
+                decision.steering_rad - decision.base_steering_rad
+            )
+            accepted_reference_steering_delta.append(
+                reference_decision.steering_rad - decision.base_steering_rad
+            )
+            accepted_successor_upgrade_delta.append(
+                decision.steering_rad - reference_decision.steering_rad
+            )
         accepted_timestamps.append(timestamp)
     if not accepted_scans:
         raise ValueError("no teacher correction samples survived admission")
@@ -231,10 +283,11 @@ def relabel(args: argparse.Namespace) -> dict:
         f"{bag}:dagger:{identity.control_mode}:{checkpoint_sha}:"
         f"{timestamps[cutoff - 1]}:active={args.active_only}:"
         f"novel={args.novel_policy_only}:"
-        f"novel_delta={args.minimum_novel_steering_delta_rad}"
+        f"novel_delta={args.minimum_novel_steering_delta_rad}:"
+        f"max_duration={args.max_duration_sec}:split={args.split}"
     )
     sequence_id = make_sequence_id(sequence_identity)
-    output_dir = args.outdir.expanduser().resolve() / "train" / sequence_id
+    output_dir = args.outdir.expanduser().resolve() / args.split / sequence_id
     if output_dir.exists():
         raise FileExistsError(f"output already exists: {output_dir}")
     output_dir.mkdir(parents=True)
@@ -249,11 +302,91 @@ def relabel(args: argparse.Namespace) -> dict:
     np.save(output_dir / "delta_times.npy", np.zeros(len(scan_array), dtype=np.float64))
     np.save(output_dir / "scan_timestamps_ns.npy", timestamp_array)
     np.save(output_dir / "control_timestamps_ns.npy", timestamp_array)
+    residual_statistics = None
+    if reference_teacher is not None:
+        base_array = np.asarray(accepted_base_steering, dtype=np.float32)
+        reference_array = np.asarray(
+            accepted_reference_steering, dtype=np.float32
+        )
+        residual_array = np.asarray(accepted_steering_delta, dtype=np.float32)
+        reference_residual_array = np.asarray(
+            accepted_reference_steering_delta, dtype=np.float32
+        )
+        successor_upgrade_array = np.asarray(
+            accepted_successor_upgrade_delta, dtype=np.float32
+        )
+        paired_arrays = {
+            "base": base_array,
+            "reference": reference_array,
+            "residual": residual_array,
+            "reference_residual": reference_residual_array,
+            "successor_upgrade": successor_upgrade_array,
+        }
+        for name, values in paired_arrays.items():
+            if values.shape != steering_array.shape:
+                raise RuntimeError(
+                    f"paired residual {name} steering shape mismatch"
+                )
+        if not np.allclose(
+            steering_array - base_array,
+            residual_array,
+            rtol=1e-6,
+            atol=1e-7,
+        ):
+            raise RuntimeError("runtime residual target identity mismatch")
+        if not np.allclose(
+            reference_array - base_array,
+            reference_residual_array,
+            rtol=1e-6,
+            atol=1e-7,
+        ):
+            raise RuntimeError("reference teacher residual identity mismatch")
+        if not np.allclose(
+            steering_array - reference_array,
+            successor_upgrade_array,
+            rtol=1e-6,
+            atol=1e-7,
+        ):
+            raise RuntimeError("successor teacher upgrade identity mismatch")
+        np.save(output_dir / "base_steers.npy", base_array)
+        np.save(output_dir / "reference_steers.npy", reference_array)
+        np.save(output_dir / "steering_deltas.npy", residual_array)
+        np.save(
+            output_dir / "reference_steering_deltas.npy",
+            reference_residual_array,
+        )
+        np.save(
+            output_dir / "successor_upgrade_deltas.npy",
+            successor_upgrade_array,
+        )
+        material = np.abs(residual_array) >= args.minimum_novel_steering_delta_rad
+        upgrade_material = (
+            np.abs(successor_upgrade_array)
+            >= args.minimum_novel_steering_delta_rad
+        )
+        residual_statistics = {
+            "target_definition": "successor_steering_minus_base_steering",
+            "runtime_composition": "base_steering_plus_learned_residual",
+            "successor_teacher": identity.teacher_class,
+            "base_policy": "frozen_production_tiny_lidar_net",
+            "material_delta_rad": args.minimum_novel_steering_delta_rad,
+            "material_samples": int(np.count_nonzero(material)),
+            "anchor_samples": int(len(residual_array) - np.count_nonzero(material)),
+            "mean_abs_delta_rad": float(np.mean(np.abs(residual_array))),
+            "max_abs_delta_rad": float(np.max(np.abs(residual_array))),
+            "diagnostic_reference_teacher": "LidarGapTeacher",
+            "reference_teacher_material_samples": int(
+                np.count_nonzero(upgrade_material)
+            ),
+            "reference_teacher_mean_abs_upgrade_rad": float(
+                np.mean(np.abs(successor_upgrade_array))
+            ),
+        }
 
     metadata = {
         "schema_version": 1,
         "sequence_id": sequence_id,
-        "split": "train",
+        "split": args.split,
         "source_bag": str(bag),
         "topics": {
             "scan": args.scan_topic,
@@ -294,11 +427,15 @@ def relabel(args: argparse.Namespace) -> dict:
             "reference_teacher": (
                 "LidarGapTeacher" if reference_teacher is not None else None
             ),
+            "residual_target": residual_statistics,
             "decision_reason_counts_before_filter": reason_counts,
             "contact_clearance_m": args.contact_clearance_m,
             "contact_confirmation_samples": args.contact_confirmation_samples,
             "pre_contact_margin_sec": args.pre_contact_margin_sec,
             "breach_index": breach_index,
+            "contact_cutoff_index": contact_cutoff,
+            "max_duration_sec": args.max_duration_sec,
+            "duration_cutoff_index": duration_cutoff,
             "exclusive_cutoff_index": cutoff,
         },
     }
@@ -317,6 +454,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-scan-range", type=float, default=30.0)
     parser.add_argument("--fixed-acceleration", type=float, default=0.6)
     parser.add_argument(
+        "--split",
+        choices=("train", "val"),
+        default="train",
+        help="Run-level dataset split; source bags must not cross splits.",
+    )
+    parser.add_argument(
         "--teacher-mode",
         choices=tuple(TEACHER_IDENTITIES),
         default="gap_teacher",
@@ -325,6 +468,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contact-clearance-m", type=float, default=0.5)
     parser.add_argument("--contact-confirmation-samples", type=int, default=3)
     parser.add_argument("--pre-contact-margin-sec", type=float, default=1.0)
+    parser.add_argument(
+        "--max-duration-sec",
+        type=float,
+        help=(
+            "Optional exclusive source-bag duration for a causal pre-failure "
+            "DAgger prefix; combined with the contact cutoff by taking the "
+            "earlier boundary."
+        ),
+    )
     parser.add_argument(
         "--active-only", action=argparse.BooleanOptionalAction, default=True
     )

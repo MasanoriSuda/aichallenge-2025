@@ -28,6 +28,8 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('model.output_dim', 2)
         self.declare_parameter('model.architecture', 'large')
         self.declare_parameter('model.ckpt_path', '')
+        self.declare_parameter('model.residual_ckpt_path', '')
+        self.declare_parameter('model.residual_max_abs_delta_rad', 1.28)
         self.declare_parameter('max_range', 30.0)
         self.declare_parameter('acceleration', 0.1)
         self.declare_parameter('control_mode', 'ai')
@@ -54,6 +56,12 @@ class TinyLidarNetNode(Node):
         output_dim = self.get_parameter('model.output_dim').value
         architecture = self.get_parameter('model.architecture').value
         ckpt_path = self.get_parameter('model.ckpt_path').value
+        residual_ckpt_path = self.get_parameter(
+            'model.residual_ckpt_path'
+        ).value
+        residual_max_abs_delta_rad = float(
+            self.get_parameter('model.residual_max_abs_delta_rad').value
+        )
         max_range = self.get_parameter('max_range').value
         acceleration = self.get_parameter('acceleration').value
         control_mode = self.get_parameter('control_mode').value
@@ -118,6 +126,7 @@ class TinyLidarNetNode(Node):
             'watchdog_period_sec': watchdog_period_sec,
             'startup_grace_sec': self.startup_grace_sec,
             'max_steering_angle_rad': self.max_steering_angle_rad,
+            'model.residual_max_abs_delta_rad': residual_max_abs_delta_rad,
         }
         for name, value in positive_parameters.items():
             if not np.isfinite(value) or value <= 0.0:
@@ -138,11 +147,16 @@ class TinyLidarNetNode(Node):
                 control_mode=control_mode,
                 max_range=max_range,
                 gap_teacher_config=gap_teacher_config,
+                residual_ckpt_path=residual_ckpt_path,
+                residual_max_abs_delta_rad=residual_max_abs_delta_rad,
             )
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
                 f"MaxRange: {max_range}, "
-                f"ValidatedWeights: {self.core.loaded_parameter_count}"
+                f"ValidatedWeights: {self.core.loaded_parameter_count}, "
+                "ResidualWeights: "
+                f"{self.core.residual_loaded_parameter_count}, "
+                f"ResidualEnabled: {self.core.residual_model is not None}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")
@@ -318,6 +332,15 @@ class TinyLidarNetNode(Node):
                         f"safety_reason={safety_decision.reason}"
                     )
 
+                residual_status = ""
+                if self.core.residual_model is not None:
+                    residual_status = (
+                        " residual_steer_rad="
+                        f"{self.core.last_residual_correction_rad:.4f} "
+                        "residual_gate="
+                        f"{self.core.last_residual_gate_probability:.3f}"
+                    )
+
                 self.get_logger().info(
                     f"E2E_STATUS scans={self.scan_count} stale={int(self.sensor_stale)} "
                     f"scan_hz={scan_hz:.2f} "
@@ -326,6 +349,7 @@ class TinyLidarNetNode(Node):
                     f"inference_capacity_hz={inference_capacity_hz:.2f}"
                     f"{teacher_status}"
                     f"{safety_status}"
+                    f"{residual_status}"
                 )
                 self.inference_times.clear()
                 self.last_log_scan_count = self.scan_count

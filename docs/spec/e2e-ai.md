@@ -259,6 +259,15 @@ validationに固定する。既存10 sequenceとmulti-rootで結合した`recurr
 scan最小値は0.4993 mでcontact suffixを含まず、split identity重複もない。次のoffline比較で
 peer d3をtrainへ移すことは禁止する。
 
+同じsplitに対するleft/neutral/right補正方向の診断probeを3 seedで比較した結果、frozen
+`fc3`＋speedの平均balanced accuracyは0.5245、frozen `conv5`空間map＋speedは0.8779、
+同じ空間mapへ1/8 step差分を加えた方式は0.8420だった。material-sign accuracyも順に
+0.4656、0.8654、0.8227であり、短時間差分は空間単体を全seedで下回った。したがってこの
+evidenceが支持する次の候補は、compact recurrent adapterではなくfrozen baseのfull spatial
+featureを使うstatic adapterである。分類probeはcheckpointではなく、continuous correction、
+normal anchor、seed-disjoint評価を通るまでruntimeへ接続しない。peer d3のmaterial supportは
+右補正16 sampleだけなので、双方向の回避能力を証明したとは扱わない。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

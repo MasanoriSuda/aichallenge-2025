@@ -160,6 +160,17 @@ python3 build_recurrent_dataset.py \
   --output-root dataset/recurrent_direct_v3
 ```
 
+新しいsteering modelを学習する前に、frozen baseのcompact feature、spatial feature、
+spatial＋短時間差分のどれがsuccessor teacherの補正方向を識別できるか診断できます。
+これは分類probeであり、runtime checkpointは生成しません。
+
+```bash
+python3 probe_e2e_action_separability.py \
+  --dataset dataset/recurrent_direct_v3 \
+  --checkpoint checkpoints/20260901_055824/candidate.npy \
+  --output /output/e2e-action-separability-probe.json
+```
+
 ### Runtime NPC corrective teacher
 
 runtime NPCはV2Xへ現れないため、MPC教師を捏造しません。次のtargetは同じNPC worldで、

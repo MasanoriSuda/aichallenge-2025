@@ -487,6 +487,12 @@ MAE 0.010205 rad、独立normal MAE 0.015161 radで不合格だった。neutral�
 影響が大きい。runtimeへwinner-take-allを追加せず、次の独立変数は安定したmode選択に必要な
 時系列情報とする。
 
+current teacher/normal corpusでcausal spatial lagを3 seed再評価した結果、static
+conv5+speedの平均balanced accuracy/material方向0.8888/0.8889に対し、temporalは
+0.8601/0.8497へ全seedで悪化した。base steeringを加えた比較でもstatic 0.8991/0.9046、
+temporal 0.8737/0.8721だった。短い履歴やcompact GRUを再実装する根拠はなく、次はteacher
+correctionとproduction-normal zero labelの観測衝突を監査する。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

@@ -49,6 +49,36 @@ def sequence_balanced_chunk_weights(chunk_dataset) -> torch.Tensor:
     return values / torch.sum(values)
 
 
+def outcome_run_balanced_chunk_weights(
+    chunk_dataset,
+) -> tuple[torch.Tensor, dict[str, int]]:
+    """Assign equal total sampling mass to each certified teacher run."""
+    run_ids = []
+    chunk_counts: dict[str, int] = {}
+    for sequence_chunks in chunk_dataset.datasets:
+        certificate = sequence_chunks.sequence.metadata.get("outcome_certificate")
+        run_id = (
+            None
+            if not isinstance(certificate, dict)
+            else certificate.get("source_run_id")
+        )
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise ValueError(
+                "outcome-run balanced sampling requires certified source_run_id"
+            )
+        count = len(sequence_chunks)
+        if count <= 0:
+            raise ValueError("recurrent sequence produced no chunks")
+        run_ids.append((run_id, count))
+        chunk_counts[run_id] = chunk_counts.get(run_id, 0) + count
+
+    weights = []
+    for run_id, count in run_ids:
+        weights.extend([1.0 / chunk_counts[run_id]] * count)
+    values = torch.tensor(weights, dtype=torch.float64)
+    return values / torch.sum(values), dict(sorted(chunk_counts.items()))
+
+
 def batch_loss(model, batch, device, args) -> torch.Tensor:
     scans, speeds, targets, base = batch
     scans = scans.to(device)
@@ -333,13 +363,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--early-stop-patience", type=int, default=7)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=2026)
-    parser.add_argument(
+    sampling_group = parser.add_mutually_exclusive_group()
+    sampling_group.add_argument(
         "--sequence-balanced-successor",
         action=argparse.BooleanOptionalAction,
         default=False,
         help=(
             "Give every source run equal successor fine-tuning mass. This is "
             "off by default because failure prefixes have unequal durations."
+        ),
+    )
+    sampling_group.add_argument(
+        "--outcome-run-balanced-successor",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Give each immutable executed-teacher source_run_id equal total "
+            "sampling mass while preserving within-run chunk frequency."
         ),
     )
     return parser.parse_args()
@@ -431,6 +471,7 @@ def main() -> int:
             pin_memory=torch.cuda.is_available(),
         )
     successor_sampler = None
+    successor_sampling = {"mode": "natural", "outcome_run_chunk_counts": {}}
     if args.sequence_balanced_successor:
         successor_sampler = WeightedRandomSampler(
             sequence_balanced_chunk_weights(train_chunks),
@@ -438,6 +479,19 @@ def main() -> int:
             replacement=True,
             generator=generator,
         )
+        successor_sampling["mode"] = "sequence_balanced"
+    elif args.outcome_run_balanced_successor:
+        weights, run_chunk_counts = outcome_run_balanced_chunk_weights(train_chunks)
+        successor_sampler = WeightedRandomSampler(
+            weights,
+            num_samples=len(train_chunks),
+            replacement=True,
+            generator=generator,
+        )
+        successor_sampling = {
+            "mode": "outcome_run_balanced",
+            "outcome_run_chunk_counts": run_chunk_counts,
+        }
     distillation_loader = DataLoader(
         train_chunks,
         batch_size=args.batch_size,
@@ -612,6 +666,7 @@ def main() -> int:
         "normal_val_sequence_ids": (
             [] if normal_val_sequences is None else normal_val_sequences.sequence_ids
         ),
+        "successor_sampling": successor_sampling,
         "config": {
             key: (
                 str(value)

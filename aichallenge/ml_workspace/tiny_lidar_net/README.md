@@ -357,6 +357,15 @@ material labelの既定境界である0.02 radを先に固定し、その後に�
 Gate合格はoffline shadow候補の資格であり、runtime authority昇格ではありません。runtime接続、
 watchdog、hidden-state reset、閉ループ試走は別sliceで審査します。
 
+recurrent datasetの因果車速ageは既定で50 ms以下を要求し、より緩いdatasetを暗黙には読みません。
+実行済みteacherが別のruntime freshness契約を持つ場合だけ、学習・評価の両方へ
+`--max-speed-sync-delta-sec`を明示します。選択値はtraining manifestとevaluation reportへ保存されます。
+
+同じ成功runから複数domainのsequenceを追加した場合、sequence数を独立world数として扱いません。
+研究用の`--outcome-run-balanced-successor`は、証明済み
+`outcome_certificate.source_run_id`ごとにsampling massを均等化し、identity欠損時は拒否します。
+これはopt-inであり、自然samplingや既存のsequence-balanced modeの既定動作を変えません。
+
 runtimeはPyTorchへ依存させません。合格した`.pth`を、frozen raw TinyLidarNetとpackaged
 spatial production baselineを埋め込んだNumPy artifactへ変換します。converterは対応外の
 architecture、学習可能なproduction baseline、pressure duplicationを拒否します。

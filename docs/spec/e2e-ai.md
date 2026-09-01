@@ -563,6 +563,13 @@ teacher再適用は候補actionとして保持できるが、paired successor ro
 penalty 0・stall 0で証明する。teacher自体が合格できなければ、成功実演を持つ別policyまたは
 intervention-necessityを表すset-valued supervisionへラベル源を変更する。
 
+この不足を閉じるため、未使用seed 2031の1 ego・2 NPC環境でexact `precontact_teacher`を
+実行した。3周`103.923 / 90.295 / 99.120秒`、1位、penalty 0、stall 0、走行1,030.188 mで
+厳格Gateに合格し、base checkpoint SHAも一致した。これは現行pipelineで初めての
+`executed_teacher_success`である。次はこのrunを即座に学習へ混ぜず、result-summary、domain
+result-detail、motion analysis、control mode、checkpoint SHAをderived dataset metadataへ
+不可分に継承する。証明を失う派生datasetはhard teacher labelとして読み込ませない。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

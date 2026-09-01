@@ -115,8 +115,21 @@ post-start stall gateを通過してAWSIM `Finish`へ到達した。一方、4�
 `side-clearance` authorityを取得して横へ逃がしたが、d4には84.42秒の正加速固着が
 残った。このrunは教師データへ採用しない。既存teacherは現在の極端側方sector距離へ
 反応するだけで、相対運動や接触前の将来占有を表現しないため、side閾値の変更だけで
-productionへ移植しない。次の横回避teacherは短時間のLiDAR時系列から接触前riskを
-評価し、shadow/診断gateに合格してから抽出・再学習へ進む。
+productionへ移植しない。次の横回避teacherは接触前のcoherentなLiDAR returnを
+物理riskとして評価し、診断gateに合格してから抽出・再学習へ進む。
+
+追加のbag replayにより、旧teacherは接触前のcoherentな側方returnをwhole-sector
+10th percentileで背景へ埋没させ、risk検出後もML操舵との線形blendで障害物方向の
+commandを残すことが分かった。後継診断`precontact_teacher`は距離閾値を変えず、3点目の
+nearest returnで単発noiseと物体surfaceを分け、risk成立時は障害物方向の操舵を許さない
+projectionを行う。
+
+`make e2e-final-precontact-teacher`による`output/20260901-092811`では、d4は
+606.70秒・1949.30 mを走り、post-start low-speedおよびpositive-acceleration stallが
+ともに0秒だった。旧teacher d4の84.42秒固着は再発しなかった。ただしAWSIMの終端状態が
+得られず、production d1には別の横接触固着が発生したため、このrunからlabelを抽出せず、
+新teacherもproductionへ昇格しない。全teacher条件などでFinish・接触・stallをrun単位で
+証明することを次のadmissionとする。
 
 bag単位の固着監査は次で行う。起動待ちは除外し、一度1.0 m/s以上で走行した後の
 0.15 m/s以下の連続時間と、そのうち正加速指令中の連続時間を別々に判定する。縦安全層が

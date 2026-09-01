@@ -7,6 +7,7 @@ from tiny_lidar_net_controller.gap_teacher import (
     GapTeacherConfig,
     LidarGapTeacher,
     LidarLongitudinalSafety,
+    LidarPrecontactTeacher,
 )
 
 
@@ -91,6 +92,31 @@ def test_right_side_wall_steers_left() -> None:
     assert decision.steering_rad > 0.0
 
 
+def test_precontact_teacher_detects_narrow_supported_side_return() -> None:
+    teacher = LidarPrecontactTeacher(GapTeacherConfig(side_cluster_points=3))
+    angles = _angles()
+    ranges = np.full(750, 30.0)
+    right_side_indices = np.flatnonzero(angles <= -1.3)
+    ranges[right_side_indices[-3:]] = 1.4
+    decision = teacher.decide(ranges, -0.45, 0.6)
+    assert decision.active
+    assert decision.reason == "side-clearance"
+    assert decision.right_side_distance_m == pytest.approx(1.4)
+    assert decision.steering_rad > 0.0
+
+
+def test_precontact_teacher_rejects_two_isolated_side_rays() -> None:
+    teacher = LidarPrecontactTeacher(GapTeacherConfig(side_cluster_points=3))
+    angles = _angles()
+    ranges = np.full(750, 30.0)
+    right_side_indices = np.flatnonzero(angles <= -1.3)
+    ranges[right_side_indices[-2:]] = 0.5
+    decision = teacher.decide(ranges, -0.45, 0.6)
+    assert not decision.active
+    assert decision.reason == "front-clear"
+    assert decision.steering_rad == pytest.approx(-0.45)
+
+
 def test_no_gap_keeps_lateral_base_but_does_not_accelerate() -> None:
     teacher = LidarGapTeacher(GapTeacherConfig())
     decision = teacher.decide(np.full(750, 2.0), 0.2, 0.6)
@@ -115,3 +141,9 @@ def test_invalid_side_distance_order_is_rejected() -> None:
             side_trigger_distance_m=1.0,
             side_critical_distance_m=1.2,
         )
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 1.5])
+def test_invalid_side_cluster_points_are_rejected(value) -> None:
+    with pytest.raises(ValueError, match="side_cluster_points"):
+        GapTeacherConfig(side_cluster_points=value)

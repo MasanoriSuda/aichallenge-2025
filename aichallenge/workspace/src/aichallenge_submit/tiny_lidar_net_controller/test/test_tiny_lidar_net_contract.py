@@ -108,6 +108,25 @@ def test_gap_teacher_mode_is_explicit_and_keeps_finite_contract() -> None:
     assert not core.last_gap_teacher_decision.active
 
 
+def test_precontact_teacher_mode_is_explicit_and_keeps_finite_contract() -> None:
+    core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="precontact_teacher",
+        max_range=30.0,
+    )
+    acceleration, steering = core.process(
+        np.full(750, 30.0, dtype=np.float32)
+    )
+    assert acceleration == pytest.approx(0.6)
+    assert np.isfinite(steering)
+    assert core.last_gap_teacher_decision is not None
+    assert not core.last_gap_teacher_decision.active
+
+
 def test_fixed_lidar_brake_preserves_network_steering_and_limits_acceleration() -> None:
     fixed_core = _load_core()
     safe_core = TinyLidarNetCore(

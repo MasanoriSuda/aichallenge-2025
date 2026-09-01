@@ -45,6 +45,7 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('gap_teacher.side_start_angle_rad', 1.3)
         self.declare_parameter('gap_teacher.side_trigger_distance_m', 1.8)
         self.declare_parameter('gap_teacher.side_critical_distance_m', 0.9)
+        self.declare_parameter('gap_teacher.side_cluster_points', 3)
         self.declare_parameter('gap_teacher.brake_acceleration_mps2', -1.0)
         self.declare_parameter('debug', False)
 
@@ -99,6 +100,9 @@ class TinyLidarNetNode(Node):
             ),
             side_critical_distance_m=float(
                 self.get_parameter('gap_teacher.side_critical_distance_m').value
+            ),
+            side_cluster_points=int(
+                self.get_parameter('gap_teacher.side_cluster_points').value
             ),
             brake_acceleration_mps2=float(
                 self.get_parameter('gap_teacher.brake_acceleration_mps2').value

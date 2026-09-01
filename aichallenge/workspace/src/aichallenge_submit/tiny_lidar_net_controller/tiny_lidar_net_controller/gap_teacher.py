@@ -25,6 +25,7 @@ class GapTeacherConfig:
     side_start_angle_rad: float = 1.3
     side_trigger_distance_m: float = 1.8
     side_critical_distance_m: float = 0.9
+    side_cluster_points: int = 3
     brake_acceleration_mps2: float = -1.0
 
     def __post_init__(self) -> None:
@@ -69,6 +70,12 @@ class GapTeacherConfig:
             )
         if self.side_critical_distance_m >= self.side_trigger_distance_m:
             raise ValueError("side distances must satisfy critical < trigger")
+        if (
+            not isinstance(self.side_cluster_points, int)
+            or isinstance(self.side_cluster_points, bool)
+            or self.side_cluster_points <= 0
+        ):
+            raise ValueError("side_cluster_points must be a positive integer")
         if (
             not np.isfinite(self.brake_acceleration_mps2)
             or self.brake_acceleration_mps2 >= 0.0
@@ -183,6 +190,28 @@ class LidarGapTeacher:
         self.config = config
         self.longitudinal_safety = LidarLongitudinalSafety(config)
 
+    def _side_distance(self, values_m: np.ndarray) -> float:
+        """Historical sector aggregate retained for label provenance."""
+        return float(np.percentile(values_m, 10.0))
+
+    def _apply_side_escape(
+        self,
+        steering_rad: float,
+        side_escape_steering_rad: float,
+        left_side_risk: float,
+        right_side_risk: float,
+    ) -> float:
+        """Historical residual blend retained for label provenance."""
+        side_risk = max(left_side_risk, right_side_risk)
+        return float(
+            np.clip(
+                (1.0 - side_risk) * steering_rad
+                + side_risk * side_escape_steering_rad,
+                -self.config.max_steering_angle_rad,
+                self.config.max_steering_angle_rad,
+            )
+        )
+
     def decide(
         self,
         ranges_m: np.ndarray,
@@ -215,8 +244,8 @@ class LidarGapTeacher:
         )
         left_side_values = ranges[angles >= cfg.side_start_angle_rad]
         right_side_values = ranges[angles <= -cfg.side_start_angle_rad]
-        left_side_distance = float(np.percentile(left_side_values, 10.0))
-        right_side_distance = float(np.percentile(right_side_values, 10.0))
+        left_side_distance = self._side_distance(left_side_values)
+        right_side_distance = self._side_distance(right_side_values)
         left_side_risk = float(
             np.clip(
                 (cfg.side_trigger_distance_m - left_side_distance)
@@ -251,13 +280,11 @@ class LidarGapTeacher:
             cfg.max_steering_angle_rad * (right_side_risk - left_side_risk)
         )
         if front_distance >= cfg.trigger_distance_m:
-            steering = float(
-                np.clip(
-                    (1.0 - side_risk) * base_steering
-                    + side_risk * side_escape_steering,
-                    -cfg.max_steering_angle_rad,
-                    cfg.max_steering_angle_rad,
-                )
+            steering = self._apply_side_escape(
+                base_steering,
+                side_escape_steering,
+                left_side_risk,
+                right_side_risk,
             )
             return GapTeacherDecision(
                 active=True,
@@ -338,13 +365,11 @@ class LidarGapTeacher:
             )
         )
         if side_risk > 0.0:
-            target_steering = float(
-                np.clip(
-                    (1.0 - side_risk) * target_steering
-                    + side_risk * side_escape_steering,
-                    -cfg.max_steering_angle_rad,
-                    cfg.max_steering_angle_rad,
-                )
+            target_steering = self._apply_side_escape(
+                target_steering,
+                side_escape_steering,
+                left_side_risk,
+                right_side_risk,
             )
         severity = float(
             np.clip(
@@ -371,4 +396,42 @@ class LidarGapTeacher:
             left_side_distance_m=left_side_distance,
             right_side_distance_m=right_side_distance,
             reason="gap-selected",
+        )
+
+
+class LidarPrecontactTeacher(LidarGapTeacher):
+    """Teacher-only side safety projection using coherent nearest returns.
+
+    The historical teacher averages the side escape with the network command.
+    That allows a strong base command to continue steering toward a supported
+    side obstacle.  This diagnostic teacher treats that direction as outside
+    the admissible set while leaving clear-scene behaviour unchanged.
+    """
+
+    def _side_distance(self, values_m: np.ndarray) -> float:
+        values = np.asarray(values_m, dtype=np.float64)
+        if values.ndim != 1 or values.size == 0:
+            raise ValueError("side sector must be a non-empty one-dimensional array")
+        index = min(self.config.side_cluster_points, values.size) - 1
+        return float(np.partition(values, index)[index])
+
+    def _apply_side_escape(
+        self,
+        steering_rad: float,
+        side_escape_steering_rad: float,
+        left_side_risk: float,
+        right_side_risk: float,
+    ) -> float:
+        steering = float(steering_rad)
+        escape = float(side_escape_steering_rad)
+        if right_side_risk > left_side_risk:
+            steering = max(steering, max(0.0, escape))
+        elif left_side_risk > right_side_risk:
+            steering = min(steering, min(0.0, escape))
+        return float(
+            np.clip(
+                steering,
+                -self.config.max_steering_angle_rad,
+                self.config.max_steering_angle_rad,
+            )
         )

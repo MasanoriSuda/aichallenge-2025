@@ -7,6 +7,7 @@ from tiny_lidar_net_controller.gap_teacher import (
     GapTeacherDecision,
     LidarGapTeacher,
     LidarLongitudinalSafety,
+    LidarPrecontactTeacher,
     LongitudinalSafetyDecision,
 )
 from tiny_lidar_net_controller.model.tinylidarnet import (
@@ -28,7 +29,7 @@ class TinyLidarNetCore:
         architecture (str): Model architecture type ('large' or 'small').
         acceleration (float): Fixed acceleration value used in 'fixed' control mode.
         control_mode (str): Control strategy ('ai', 'fixed', production
-            'fixed_lidar_brake', or teacher-only 'gap_teacher').
+            'fixed_lidar_brake', or a teacher-only mode).
         max_range (float): Maximum LiDAR range used for normalization and clipping.
         model (object): The instantiated neural network model.
         logger (logging.Logger): Logger instance.
@@ -94,10 +95,11 @@ class TinyLidarNetCore:
             "fixed",
             "fixed_lidar_brake",
             "gap_teacher",
+            "precontact_teacher",
         }:
             raise ValueError(
                 "control_mode must be one of: ai, fixed, fixed_lidar_brake, "
-                "gap_teacher"
+                "gap_teacher, precontact_teacher"
             )
         if not np.isfinite(self.max_range) or self.max_range <= 0.0:
             raise ValueError("max_range must be finite and positive")
@@ -113,6 +115,10 @@ class TinyLidarNetCore:
         self.longitudinal_safety = None
         if self.control_mode == "gap_teacher":
             self.gap_teacher = LidarGapTeacher(
+                gap_teacher_config or GapTeacherConfig()
+            )
+        elif self.control_mode == "precontact_teacher":
+            self.gap_teacher = LidarPrecontactTeacher(
                 gap_teacher_config or GapTeacherConfig()
             )
         elif self.control_mode == "fixed_lidar_brake":

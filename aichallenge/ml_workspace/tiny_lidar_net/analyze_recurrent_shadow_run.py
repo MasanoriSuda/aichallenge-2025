@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate one recurrent-adapter shadow run without granting it authority."""
+"""Gate one recurrent-adapter shadow or bounded-authority run."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ CONFIG_RE = re.compile(
     r"hidden=(\d+),projection=(\d+),use_speed=([01]),"
     r"speed_embedding=(\d+),max_speed_mps=([0-9.]+),"
     r"max_correction_rad=([0-9.]+),deadband_rad=([0-9.]+)"
+    r"(?:,authority_enabled=([01]),authority_max_correction_rad=([0-9.]+))?"
 )
 
 
@@ -41,6 +42,9 @@ def parse_status_lines(log_text: str) -> list[dict]:
             continue
         tokens = dict(TOKEN_RE.findall(line))
         admitted_text, scans_text = tokens["recurrent_shadow"].split("/", 1)
+        authority_applied_text, authority_scans_text = tokens.get(
+            "recurrent_authority_applied", "0/0"
+        ).split("/", 1)
         interval = {
             "scans": int(scans_text),
             "admitted": int(admitted_text),
@@ -67,11 +71,40 @@ def parse_status_lines(log_text: str) -> list[dict]:
             "spatial_authority_enabled": bool(
                 int(tokens.get("spatial_authority_enabled", "0"))
             ),
+            "authority_telemetry_present": all(
+                key in tokens
+                for key in (
+                    "recurrent_authority_enabled",
+                    "recurrent_authority_applied",
+                    "recurrent_authority_clipped",
+                    "recurrent_authority_mean_abs_rad",
+                    "recurrent_authority_max_abs_rad",
+                )
+            ),
+            "recurrent_authority_enabled": bool(
+                int(tokens.get("recurrent_authority_enabled", "0"))
+            ),
+            "recurrent_authority_applied": int(authority_applied_text),
+            "recurrent_authority_scan_count": int(authority_scans_text),
+            "recurrent_authority_clipped": int(
+                tokens.get("recurrent_authority_clipped", "0")
+            ),
+            "recurrent_authority_mean_abs_rad": float(
+                tokens.get("recurrent_authority_mean_abs_rad", "0")
+            ),
+            "recurrent_authority_max_abs_rad": float(
+                tokens.get("recurrent_authority_max_abs_rad", "0")
+            ),
         }
         numeric = [
             value
             for key, value in interval.items()
-            if key not in {"status", "spatial_authority_enabled"}
+            if key not in {
+                "status",
+                "spatial_authority_enabled",
+                "authority_telemetry_present",
+                "recurrent_authority_enabled",
+            }
         ]
         if not np.all(np.isfinite(np.asarray(numeric, dtype=np.float64))):
             raise ValueError("recurrent shadow status has non-finite metrics")
@@ -86,9 +119,17 @@ def parse_runtime_config(log_text: str) -> dict | None:
     unique = set(matches)
     if len(unique) != 1:
         raise ValueError("ambiguous recurrent shadow runtime configuration")
-    hidden, projection, use_speed, speed_embedding, max_speed, cap, deadband = (
-        matches[0]
-    )
+    (
+        hidden,
+        projection,
+        use_speed,
+        speed_embedding,
+        max_speed,
+        cap,
+        deadband,
+        authority_enabled,
+        authority_cap,
+    ) = matches[0]
     return {
         "hidden_dim": int(hidden),
         "projection_dim": int(projection),
@@ -97,6 +138,11 @@ def parse_runtime_config(log_text: str) -> dict | None:
         "max_speed_mps": float(max_speed),
         "max_abs_correction_rad": float(cap),
         "correction_deadband_rad": float(deadband),
+        "authority_config_present": bool(authority_enabled),
+        "authority_enabled": bool(int(authority_enabled or "0")),
+        "authority_max_abs_correction_rad": (
+            float(authority_cap) if authority_cap else None
+        ),
     }
 
 
@@ -162,6 +208,32 @@ def summarize(intervals: list[dict]) -> dict:
         "spatial_authority_enabled_interval_count": sum(
             item["spatial_authority_enabled"] for item in intervals
         ),
+        "authority_telemetry_interval_count": sum(
+            item["authority_telemetry_present"] for item in intervals
+        ),
+        "authority_enabled_interval_count": sum(
+            item["recurrent_authority_enabled"] for item in intervals
+        ),
+        "authority_applied_count": sum(
+            item["recurrent_authority_applied"] for item in intervals
+        ),
+        "authority_scan_count": sum(
+            item["recurrent_authority_scan_count"] for item in intervals
+        ),
+        "authority_clipped_count": sum(
+            item["recurrent_authority_clipped"] for item in intervals
+        ),
+        "weighted_authority_mean_abs_rad": sum(
+            item["recurrent_authority_mean_abs_rad"]
+            * item["recurrent_authority_applied"]
+            for item in intervals
+        ) / max(
+            sum(item["recurrent_authority_applied"] for item in intervals),
+            1,
+        ),
+        "max_authority_abs_rad": max(
+            item["recurrent_authority_max_abs_rad"] for item in intervals
+        ),
     }
 
 
@@ -204,6 +276,24 @@ def build_report(args: argparse.Namespace) -> dict:
                 matches = actual == value
             if not matches:
                 reasons.append(f"runtime recurrent {key} contract mismatch")
+        expect_authority = args.expect_authority == "true"
+        if expect_authority and not runtime_config["authority_config_present"]:
+            reasons.append("runtime recurrent authority configuration missing")
+        elif runtime_config["authority_config_present"]:
+            if runtime_config["authority_enabled"] != expect_authority:
+                reasons.append(
+                    "runtime recurrent authority_enabled contract mismatch"
+                )
+            if not np.isclose(
+                runtime_config["authority_max_abs_correction_rad"],
+                args.expected_authority_max_abs_correction_rad,
+                rtol=0.0,
+                atol=1e-9,
+            ):
+                reasons.append(
+                    "runtime recurrent authority_max_abs_correction_rad "
+                    "contract mismatch"
+                )
     if shadow["coverage_fraction"] < args.min_coverage_fraction:
         reasons.append("recurrent shadow coverage below threshold")
     if shadow["error_count"] != 0 or shadow["non_ok_interval_count"] != 0:
@@ -220,6 +310,43 @@ def build_report(args: argparse.Namespace) -> dict:
         "interval_count"
     ]:
         reasons.append("frozen spatial production authority was not preserved")
+    expect_authority = args.expect_authority == "true"
+    current_authority_contract = bool(
+        runtime_config is not None
+        and runtime_config["authority_config_present"]
+    )
+    if (
+        expect_authority or current_authority_contract
+    ) and shadow["authority_telemetry_interval_count"] != shadow["interval_count"]:
+        reasons.append("recurrent authority telemetry missing")
+    if expect_authority:
+        if shadow["authority_enabled_interval_count"] != shadow["interval_count"]:
+            reasons.append("recurrent authority was not enabled for every interval")
+        if shadow["authority_scan_count"] != shadow["scan_count"]:
+            reasons.append("recurrent authority scan denominator mismatch")
+        if shadow["authority_applied_count"] != shadow["admitted_count"]:
+            reasons.append("recurrent authority did not own every admitted result")
+        if shadow["skipped_count"] != 0:
+            reasons.append("recurrent authority run contains skipped inference")
+        if shadow["max_authority_abs_rad"] > (
+            args.expected_authority_max_abs_correction_rad + 1e-5
+        ):
+            reasons.append("recurrent authority correction exceeded bound")
+    else:
+        authority_telemetry_present = (
+            shadow["authority_telemetry_interval_count"]
+            == shadow["interval_count"]
+        )
+        if authority_telemetry_present and shadow[
+            "authority_enabled_interval_count"
+        ] != 0:
+            reasons.append("recurrent authority unexpectedly enabled")
+        if shadow["authority_applied_count"] != 0:
+            reasons.append("recurrent authority unexpectedly changed steering")
+        if shadow["authority_clipped_count"] != 0:
+            reasons.append("disabled recurrent authority reported clipping")
+        if shadow["max_authority_abs_rad"] > 1e-9:
+            reasons.append("disabled recurrent authority reported correction")
     if not race.get("finished") or race.get("lap_count", 0) < race.get(
         "required_laps", 0
     ):
@@ -256,6 +383,10 @@ def build_report(args: argparse.Namespace) -> dict:
             "min_coverage_fraction": args.min_coverage_fraction,
             "min_scan_hz": args.min_scan_hz,
             "max_reset_count": args.max_reset_count,
+            "expect_authority": expect_authority,
+            "expected_authority_max_abs_correction_rad": (
+                args.expected_authority_max_abs_correction_rad
+            ),
         },
     }
 
@@ -272,6 +403,14 @@ def parse_args() -> argparse.Namespace:
         "--expected-use-speed", choices=("true", "false"), default="false"
     )
     parser.add_argument("--expected-deadband-rad", type=float, default=0.02)
+    parser.add_argument(
+        "--expect-authority", choices=("true", "false"), default="false"
+    )
+    parser.add_argument(
+        "--expected-authority-max-abs-correction-rad",
+        type=float,
+        default=0.24,
+    )
     parser.add_argument("--min-coverage-fraction", type=float, default=0.99)
     parser.add_argument("--min-scan-hz", type=float, default=19.0)
     parser.add_argument("--max-reset-count", type=int, default=0)

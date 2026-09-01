@@ -141,6 +141,41 @@ if [[ -n "${tiny_lidar_recurrent_shadow_expected_sha256}" ]]; then
     opts+=("tiny_lidar_recurrent_shadow_expected_sha256:=${tiny_lidar_recurrent_shadow_expected_sha256,,}")
 fi
 
+tiny_lidar_recurrent_authority_enabled="${TINY_LIDAR_RECURRENT_AUTHORITY_ENABLED:-}"
+if [[ -n "${TINY_LIDAR_RECURRENT_AUTHORITY_ENABLED+x}" ]]; then
+    case "${tiny_lidar_recurrent_authority_enabled}" in
+        true|false) ;;
+        *)
+            echo "TINY_LIDAR_RECURRENT_AUTHORITY_ENABLED must be true or false"
+            exit 1
+            ;;
+    esac
+fi
+tiny_lidar_recurrent_authority_max_abs_correction_rad="${TINY_LIDAR_RECURRENT_AUTHORITY_MAX_ABS_CORRECTION_RAD:-}"
+if [[ -n "${TINY_LIDAR_RECURRENT_AUTHORITY_MAX_ABS_CORRECTION_RAD+x}" ]]; then
+    if [[ ! "${tiny_lidar_recurrent_authority_max_abs_correction_rad}" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
+       [[ "${tiny_lidar_recurrent_authority_max_abs_correction_rad}" =~ ^0+([.]0+)?$ ]]; then
+        echo "TINY_LIDAR_RECURRENT_AUTHORITY_MAX_ABS_CORRECTION_RAD must be positive"
+        exit 1
+    fi
+fi
+if [[ "${tiny_lidar_recurrent_authority_enabled}" == "true" && \
+      -z "${tiny_lidar_recurrent_shadow_ckpt_path}" ]]; then
+    echo "recurrent authority requires TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH"
+    exit 1
+fi
+if [[ "${tiny_lidar_recurrent_authority_enabled}" == "true" && \
+      -z "${tiny_lidar_recurrent_shadow_expected_sha256}" ]]; then
+    echo "recurrent authority requires TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256"
+    exit 1
+fi
+if [[ -n "${tiny_lidar_recurrent_authority_enabled}" ]]; then
+    opts+=("tiny_lidar_recurrent_authority_enabled:=${tiny_lidar_recurrent_authority_enabled}")
+fi
+if [[ -n "${tiny_lidar_recurrent_authority_max_abs_correction_rad}" ]]; then
+    opts+=("tiny_lidar_recurrent_authority_max_abs_correction_rad:=${tiny_lidar_recurrent_authority_max_abs_correction_rad}")
+fi
+
 tiny_lidar_spatial_authority_enabled="${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED:-}"
 if [[ -n "${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED+x}" ]]; then
     case "${tiny_lidar_spatial_authority_enabled}" in

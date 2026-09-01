@@ -78,6 +78,8 @@ class TinyLidarNetCore:
         recurrent_shadow_max_speed_mps: float = 12.0,
         recurrent_shadow_max_abs_correction_rad: float = 0.64,
         recurrent_shadow_correction_deadband_rad: float = 0.02,
+        recurrent_authority_enabled: bool = False,
+        recurrent_authority_max_abs_correction_rad: float = 0.24,
     ):
         """Initializes the TinyLidarNetCore with specified parameters.
 
@@ -145,6 +147,13 @@ class TinyLidarNetCore:
         self.last_recurrent_shadow_admitted = False
         self.last_recurrent_shadow_status = "disabled"
         self.recurrent_shadow_reset_count = 0
+        self.recurrent_authority_enabled = bool(recurrent_authority_enabled)
+        self.recurrent_authority_max_abs_correction_rad = float(
+            recurrent_authority_max_abs_correction_rad
+        )
+        self.last_recurrent_authority_correction_rad = 0.0
+        self.last_recurrent_authority_applied = False
+        self.last_recurrent_authority_clipped = False
 
         if not isinstance(self.input_dim, int) or self.input_dim <= 0:
             raise ValueError("input_dim must be a positive integer")
@@ -248,6 +257,25 @@ class TinyLidarNetCore:
         if recurrent_shadow_ckpt_path and not self.spatial_authority_enabled:
             raise ValueError(
                 "recurrent shadow requires the packaged spatial production authority"
+            )
+        if (
+            not np.isfinite(self.recurrent_authority_max_abs_correction_rad)
+            or self.recurrent_authority_max_abs_correction_rad <= 0.0
+            or self.recurrent_authority_max_abs_correction_rad
+            > recurrent_shadow_max_abs_correction_rad
+        ):
+            raise ValueError(
+                "recurrent authority bound must be finite, positive and no "
+                "larger than the model correction bound"
+            )
+        if self.recurrent_authority_enabled and not recurrent_shadow_ckpt_path:
+            raise ValueError(
+                "recurrent authority requires an explicit recurrent checkpoint"
+            )
+        if self.recurrent_authority_enabled and not recurrent_shadow_expected_sha256:
+            raise ValueError(
+                "recurrent authority requires an explicit recurrent checkpoint "
+                "SHA256"
             )
 
         if self.architecture == 'small':
@@ -471,6 +499,9 @@ class TinyLidarNetCore:
         self.last_recurrent_shadow_raw_correction_rad = 0.0
         self.last_recurrent_shadow_steering_rad = 0.0
         self.last_recurrent_shadow_admitted = False
+        self.last_recurrent_authority_correction_rad = 0.0
+        self.last_recurrent_authority_applied = False
+        self.last_recurrent_authority_clipped = False
         if self.spatial_shadow_model is not None:
             if speed_mps is None:
                 self.last_spatial_shadow_status = "missing-or-stale-speed"
@@ -573,6 +604,21 @@ class TinyLidarNetCore:
                     )
                     self.last_recurrent_shadow_admitted = True
                     self.last_recurrent_shadow_status = "ok"
+                    if self.recurrent_authority_enabled:
+                        applied = float(np.clip(
+                            self.last_recurrent_shadow_correction_rad,
+                            -self.recurrent_authority_max_abs_correction_rad,
+                            self.recurrent_authority_max_abs_correction_rad,
+                        ))
+                        self.last_recurrent_authority_correction_rad = applied
+                        self.last_recurrent_authority_applied = True
+                        self.last_recurrent_authority_clipped = not np.isclose(
+                            applied,
+                            self.last_recurrent_shadow_correction_rad,
+                            rtol=0.0,
+                            atol=1e-7,
+                        )
+                        steer = float(np.clip(steer + applied, -1.0, 1.0))
                 except Exception as exc:
                     self.reset_recurrent_history()
                     self.last_recurrent_shadow_status = (

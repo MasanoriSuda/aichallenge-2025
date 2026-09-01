@@ -42,6 +42,11 @@ def test_e2e_entry_selects_tiny_lidar_net() -> None:
     assert arguments["tiny_lidar_spatial_authority_max_abs_delta_rad"] == "1.2"
     assert arguments["tiny_lidar_recurrent_shadow_ckpt_path"] == ""
     assert arguments["tiny_lidar_recurrent_shadow_expected_sha256"] == ""
+    assert arguments["tiny_lidar_recurrent_authority_enabled"] == "false"
+    assert (
+        arguments["tiny_lidar_recurrent_authority_max_abs_correction_rad"]
+        == "0.24"
+    )
 
     includes = entry.findall("include")
     assert len(includes) == 1
@@ -81,6 +86,12 @@ def test_e2e_entry_selects_tiny_lidar_net() -> None:
     assert forwarded["tiny_lidar_recurrent_shadow_expected_sha256"] == (
         "$(var tiny_lidar_recurrent_shadow_expected_sha256)"
     )
+    assert forwarded["tiny_lidar_recurrent_authority_enabled"] == (
+        "$(var tiny_lidar_recurrent_authority_enabled)"
+    )
+    assert forwarded[
+        "tiny_lidar_recurrent_authority_max_abs_correction_rad"
+    ] == "$(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"
     assert forwarded["tiny_lidar_control_mode"] == "$(var tiny_lidar_control_mode)"
 
 
@@ -136,6 +147,12 @@ def test_reference_retains_explicit_controller_switch() -> None:
     assert tiny_forwarded["recurrent_shadow_expected_sha256"] == (
         "$(var tiny_lidar_recurrent_shadow_expected_sha256)"
     )
+    assert tiny_forwarded["recurrent_authority_enabled"] == (
+        "$(var tiny_lidar_recurrent_authority_enabled)"
+    )
+    assert tiny_forwarded[
+        "recurrent_authority_max_abs_correction_rad"
+    ] == "$(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"
     assert tiny_forwarded["control_mode"] == "$(var tiny_lidar_control_mode)"
 
 
@@ -182,6 +199,12 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     assert forwarded["recurrent_shadow_expected_sha256"] == (
         "$(var recurrent_shadow_expected_sha256)"
     )
+    assert forwarded["recurrent_authority_enabled"] == (
+        "$(var recurrent_authority_enabled)"
+    )
+    assert forwarded["recurrent_authority_max_abs_correction_rad"] == (
+        "$(var recurrent_authority_max_abs_correction_rad)"
+    )
 
     controller = _parse(CONTROLLER_LAUNCH)
     controller_arguments = {
@@ -200,6 +223,11 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     assert controller_arguments["spatial_authority_max_abs_delta_rad"] == "1.2"
     assert controller_arguments["recurrent_shadow_ckpt_path"] == ""
     assert controller_arguments["recurrent_shadow_expected_sha256"] == ""
+    assert controller_arguments["recurrent_authority_enabled"] == "false"
+    assert (
+        controller_arguments["recurrent_authority_max_abs_correction_rad"]
+        == "0.24"
+    )
     assert (
         controller_arguments["control_cmd_topic"]
         == "/control/command/control_cmd"

@@ -258,7 +258,7 @@ def test_runtime_preserves_spatial_authority_default_and_one_owner() -> None:
     )
 
 
-def test_runtime_recurrent_candidate_is_opt_in_shadow_only() -> None:
+def test_runtime_recurrent_candidate_is_opt_in_and_authority_is_explicit() -> None:
     runner = read("run_autoware.bash")
     system_launch = read(
         "workspace/src/aichallenge_system/"
@@ -303,7 +303,50 @@ def test_runtime_recurrent_candidate_is_opt_in_shadow_only() -> None:
         'value="$(var tiny_lidar_recurrent_shadow_expected_sha256)"/>'
         in system_launch
     )
-    assert "recurrent checkpoint is shadow-only" in runner
+    assert (
+        'tiny_lidar_recurrent_authority_enabled='
+        '"${TINY_LIDAR_RECURRENT_AUTHORITY_ENABLED:-}"' in runner
+    )
+    assert (
+        'tiny_lidar_recurrent_authority_max_abs_correction_rad='
+        '"${TINY_LIDAR_RECURRENT_AUTHORITY_MAX_ABS_CORRECTION_RAD:-}"'
+        in runner
+    )
+    assert (
+        "recurrent authority requires TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH"
+        in runner
+    )
+    assert (
+        "recurrent authority requires "
+        "TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256" in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_recurrent_authority_enabled:'
+        '=${tiny_lidar_recurrent_authority_enabled}")' in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_recurrent_authority_max_abs_correction_rad:'
+        '=${tiny_lidar_recurrent_authority_max_abs_correction_rad}")'
+        in runner
+    )
+    assert (
+        '<arg name="tiny_lidar_recurrent_authority_enabled" default="false"/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_recurrent_authority_enabled" '
+        'value="$(var tiny_lidar_recurrent_authority_enabled)"/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_recurrent_authority_max_abs_correction_rad" '
+        'default="0.24"/>' in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_recurrent_authority_max_abs_correction_rad" '
+        'value="$(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"/>'
+        in system_launch
+    )
 
 
 def test_single_vehicle_empty_world_producer_is_simulation_only() -> None:

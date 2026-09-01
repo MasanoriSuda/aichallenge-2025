@@ -336,6 +336,34 @@ identityを厳密検証し、各scanでは検証済みのproduction Conv5特徴�
 penalty 0、frozen production Gate合格、coverage 99%以上、error 0、LiDAR 19 Hz以上、連続成功run
 でhidden reset 0、spatial production authority維持を同時に要求します。
 
+shadow Gate合格後の限定authority試験は、checkpointに加えてauthorityを明示し、補正上限を
+固定して起動します。checkpointだけを指定した場合は引き続きshadow-onlyです。既定値は
+`false`であり、recurrent artifactは提出packageへ同梱しません。
+
+```bash
+make e2e-single \
+  LOG_DIR=/output/<run> \
+  TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH=/aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<recurrent-run>/<timestamp>/candidate.npy \
+  TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256=<recurrent-candidate-sha256> \
+  TINY_LIDAR_RECURRENT_AUTHORITY_ENABLED=true \
+  TINY_LIDAR_RECURRENT_AUTHORITY_MAX_ABS_CORRECTION_RAD=0.24
+
+python3 analyze_recurrent_shadow_run.py /output/<run> \
+  --checkpoint-file checkpoints/<recurrent-run>/<timestamp>/candidate.npy \
+  --expected-checkpoint-sha256 <recurrent-candidate-sha256> \
+  --expected-runtime-checkpoint-path \
+    /aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<recurrent-run>/<timestamp>/candidate.npy \
+  --expect-authority true \
+  --expected-authority-max-abs-correction-rad 0.24 \
+  --output /output/<run>/e2e-recurrent-authority-analysis.json \
+  --fail-on-rejection
+```
+
+限定authorityは、同一周期で検証済みのspatial production操舵へ有限なrecurrent correctionだけを
+加算します。加速度、安全停止、watchdogのauthorityは持ちません。速度欠損・identity不一致・
+推論例外時はhidden stateとrecurrent authorityを破棄し、その周期のspatial production操舵を
+維持します。単車3周の後、NPC Gateでも非劣化を確認するまではproduction昇格しません。
+
 ### Qualified production spatial adapter
 
 production既定は、車輪速度とfrozen base steeringでconditionしたfull-range adapterです。

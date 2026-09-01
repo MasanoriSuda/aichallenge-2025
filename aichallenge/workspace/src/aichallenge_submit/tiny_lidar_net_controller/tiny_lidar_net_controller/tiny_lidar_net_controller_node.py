@@ -58,6 +58,10 @@ class TinyLidarNetNode(Node):
         self.declare_parameter(
             'model.recurrent_shadow_correction_deadband_rad', 0.02
         )
+        self.declare_parameter('model.recurrent_authority_enabled', False)
+        self.declare_parameter(
+            'model.recurrent_authority_max_abs_correction_rad', 0.24
+        )
         self.declare_parameter('max_range', 30.0)
         self.declare_parameter('acceleration', 0.1)
         self.declare_parameter('control_mode', 'ai')
@@ -178,6 +182,14 @@ class TinyLidarNetNode(Node):
                 'model.recurrent_shadow_correction_deadband_rad'
             ).value
         )
+        recurrent_authority_enabled = bool(
+            self.get_parameter('model.recurrent_authority_enabled').value
+        )
+        recurrent_authority_max_abs_correction_rad = float(
+            self.get_parameter(
+                'model.recurrent_authority_max_abs_correction_rad'
+            ).value
+        )
         max_range = self.get_parameter('max_range').value
         acceleration = self.get_parameter('acceleration').value
         control_mode = self.get_parameter('control_mode').value
@@ -285,6 +297,9 @@ class TinyLidarNetNode(Node):
             'model.recurrent_shadow_max_abs_correction_rad': (
                 recurrent_shadow_max_abs_correction_rad
             ),
+            'model.recurrent_authority_max_abs_correction_rad': (
+                recurrent_authority_max_abs_correction_rad
+            ),
         }
         for name, value in positive_parameters.items():
             if not np.isfinite(value) or value <= 0.0:
@@ -348,6 +363,10 @@ class TinyLidarNetNode(Node):
                 recurrent_shadow_correction_deadband_rad=(
                     recurrent_shadow_correction_deadband_rad
                 ),
+                recurrent_authority_enabled=recurrent_authority_enabled,
+                recurrent_authority_max_abs_correction_rad=(
+                    recurrent_authority_max_abs_correction_rad
+                ),
             )
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
@@ -387,7 +406,10 @@ class TinyLidarNetNode(Node):
                 "max_correction_rad="
                 f"{recurrent_shadow_max_abs_correction_rad:.6f},"
                 "deadband_rad="
-                f"{recurrent_shadow_correction_deadband_rad:.6f}"
+                f"{recurrent_shadow_correction_deadband_rad:.6f},"
+                f"authority_enabled={int(recurrent_authority_enabled)},"
+                "authority_max_correction_rad="
+                f"{recurrent_authority_max_abs_correction_rad:.6f}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")
@@ -427,6 +449,11 @@ class TinyLidarNetNode(Node):
         self.recurrent_shadow_error_count = 0
         self.last_log_recurrent_shadow_error_count = 0
         self.recurrent_shadow_corrections = []
+        self.recurrent_authority_applied_count = 0
+        self.last_log_recurrent_authority_applied_count = 0
+        self.recurrent_authority_clipped_count = 0
+        self.last_log_recurrent_authority_clipped_count = 0
+        self.recurrent_authority_corrections = []
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -508,6 +535,13 @@ class TinyLidarNetNode(Node):
                     self.recurrent_shadow_error_count += 1
                 else:
                     self.recurrent_shadow_skipped_count += 1
+                if self.core.last_recurrent_authority_applied:
+                    self.recurrent_authority_applied_count += 1
+                    self.recurrent_authority_corrections.append(
+                        self.core.last_recurrent_authority_correction_rad
+                    )
+                if self.core.last_recurrent_authority_clipped:
+                    self.recurrent_authority_clipped_count += 1
             gap_decision = self.core.last_gap_teacher_decision
             if gap_decision is not None and gap_decision.active:
                 self.gap_teacher_active_count += 1
@@ -657,6 +691,14 @@ class TinyLidarNetNode(Node):
                     self.recurrent_shadow_error_count
                     - self.last_log_recurrent_shadow_error_count
                 )
+                interval_recurrent_authority_applied = (
+                    self.recurrent_authority_applied_count
+                    - self.last_log_recurrent_authority_applied_count
+                )
+                interval_recurrent_authority_clipped = (
+                    self.recurrent_authority_clipped_count
+                    - self.last_log_recurrent_authority_clipped_count
+                )
                 scan_hz = interval_scans / elapsed_sec if elapsed_sec > 0.0 else 0.0
 
                 teacher_status = ""
@@ -776,6 +818,20 @@ class TinyLidarNetNode(Node):
                         if recurrent_corrections.size
                         else 0.0
                     )
+                    recurrent_authority_corrections = np.asarray(
+                        self.recurrent_authority_corrections,
+                        dtype=np.float64,
+                    )
+                    recurrent_authority_mean_abs = (
+                        float(np.mean(np.abs(recurrent_authority_corrections)))
+                        if recurrent_authority_corrections.size
+                        else 0.0
+                    )
+                    recurrent_authority_max_abs = (
+                        float(np.max(np.abs(recurrent_authority_corrections)))
+                        if recurrent_authority_corrections.size
+                        else 0.0
+                    )
                     recurrent_status = (
                         " recurrent_shadow="
                         f"{interval_recurrent_admitted}/{interval_scans} "
@@ -796,7 +852,17 @@ class TinyLidarNetNode(Node):
                         "recurrent_resets="
                         f"{self.core.recurrent_shadow_reset_count} "
                         "recurrent_status="
-                        f"{self.core.last_recurrent_shadow_status}"
+                        f"{self.core.last_recurrent_shadow_status} "
+                        "recurrent_authority_enabled="
+                        f"{int(self.core.recurrent_authority_enabled)} "
+                        "recurrent_authority_applied="
+                        f"{interval_recurrent_authority_applied}/{interval_scans} "
+                        "recurrent_authority_clipped="
+                        f"{interval_recurrent_authority_clipped} "
+                        "recurrent_authority_mean_abs_rad="
+                        f"{recurrent_authority_mean_abs:.5f} "
+                        "recurrent_authority_max_abs_rad="
+                        f"{recurrent_authority_max_abs:.5f}"
                     )
 
                 self.get_logger().info(
@@ -840,6 +906,13 @@ class TinyLidarNetNode(Node):
                     self.recurrent_shadow_error_count
                 )
                 self.recurrent_shadow_corrections.clear()
+                self.last_log_recurrent_authority_applied_count = (
+                    self.recurrent_authority_applied_count
+                )
+                self.last_log_recurrent_authority_clipped_count = (
+                    self.recurrent_authority_clipped_count
+                )
+                self.recurrent_authority_corrections.clear()
 
             self.last_log_time = now
 

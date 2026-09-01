@@ -261,6 +261,115 @@ def test_recurrent_shadow_rejects_wrong_embedded_base(tmp_path: Path) -> None:
         )
 
 
+def test_recurrent_authority_is_explicit_bounded_and_falls_back_to_spatial(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(
+        tmp_path, correction_rad=0.03
+    )
+    common = {
+        "input_dim": 750,
+        "output_dim": 2,
+        "architecture": "normal",
+        "ckpt_path": str(CHECKPOINT),
+        "acceleration": 0.6,
+        "control_mode": "fixed_lidar_brake",
+        "max_range": 30.0,
+        "spatial_shadow_ckpt_path": str(SPATIAL_CHECKPOINT),
+        "spatial_shadow_expected_sha256": SPATIAL_CHECKPOINT_SHA256,
+        "spatial_shadow_use_base_steering": True,
+        "spatial_shadow_max_abs_delta_rad": 1.2,
+        "spatial_authority_enabled": True,
+        "spatial_authority_max_abs_delta_rad": 1.2,
+        "recurrent_shadow_ckpt_path": str(recurrent_checkpoint),
+        "recurrent_shadow_expected_sha256": hashlib.sha256(
+            recurrent_checkpoint.read_bytes()
+        ).hexdigest(),
+    }
+    baseline = TinyLidarNetCore(**common)
+    authority = TinyLidarNetCore(
+        **common,
+        recurrent_authority_enabled=True,
+        recurrent_authority_max_abs_correction_rad=0.02,
+    )
+    scan = np.linspace(1.0, 30.0, 750, dtype=np.float32)
+    baseline_command = baseline.process(scan, speed_mps=3.0)
+    authority_command = authority.process(scan, speed_mps=3.0)
+
+    assert authority_command[0] == pytest.approx(baseline_command[0], abs=0.0)
+    assert authority_command[1] == pytest.approx(
+        baseline_command[1] + 0.02, abs=1e-6
+    )
+    assert authority.last_recurrent_authority_applied
+    assert authority.last_recurrent_authority_clipped
+    assert authority.last_recurrent_authority_correction_rad == pytest.approx(
+        0.02, abs=1e-7
+    )
+
+    fallback_command = authority.process(scan, speed_mps=None)
+    fresh_spatial_command = baseline.process(scan, speed_mps=None)
+    assert fallback_command == pytest.approx(fresh_spatial_command, abs=0.0)
+    assert not authority.last_recurrent_authority_applied
+    assert not authority.last_recurrent_authority_clipped
+
+
+def test_recurrent_authority_requires_explicit_checkpoint() -> None:
+    with pytest.raises(ValueError, match="requires an explicit recurrent"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            recurrent_authority_enabled=True,
+        )
+
+
+def test_recurrent_authority_requires_checkpoint_identity(tmp_path: Path) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(tmp_path)
+    with pytest.raises(
+        ValueError, match="requires an explicit recurrent checkpoint SHA256"
+    ):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+            spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+            spatial_shadow_use_base_steering=True,
+            spatial_shadow_max_abs_delta_rad=1.2,
+            spatial_authority_enabled=True,
+            spatial_authority_max_abs_delta_rad=1.2,
+            recurrent_shadow_ckpt_path=str(recurrent_checkpoint),
+            recurrent_authority_enabled=True,
+        )
+
+
+def test_recurrent_authority_rejects_bound_above_model(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(tmp_path)
+    with pytest.raises(ValueError, match="no larger than the model"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+            spatial_shadow_use_base_steering=True,
+            spatial_shadow_max_abs_delta_rad=1.2,
+            spatial_authority_enabled=True,
+            spatial_authority_max_abs_delta_rad=1.2,
+            recurrent_shadow_ckpt_path=str(recurrent_checkpoint),
+            recurrent_shadow_expected_sha256=hashlib.sha256(
+                recurrent_checkpoint.read_bytes()
+            ).hexdigest(),
+            recurrent_shadow_max_abs_correction_rad=0.64,
+            recurrent_authority_enabled=True,
+            recurrent_authority_max_abs_correction_rad=0.65,
+        )
+
+
 def test_missing_weight_is_rejected(tmp_path: Path) -> None:
     weights = np.load(CHECKPOINT, allow_pickle=True).item()
     weights.pop("fc4_bias")

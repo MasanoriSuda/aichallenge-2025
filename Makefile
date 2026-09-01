@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: autoware-build autoware-vehicle autoware-simulator autoware-request-initialpose autoware-request-control  awsim-request-start awsim-request-reset autoware-driver-zenoh autoware-driver-zenoh-rosbag \
-	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final e2e-final-contact-teacher e2e-final-precontact-teacher e2e-final-precontact-teacher-all driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
+	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final e2e-final-speed-aware-safety e2e-final-contact-teacher e2e-final-precontact-teacher e2e-final-precontact-teacher-all driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
 
 # Used by docker-compose.yml for build/eval artifact ownership.
 HOST_UID ?= $(shell id -u)
@@ -92,6 +92,7 @@ e2e-npc-speed-committed-teacher: SIM_MODE := e2e-npc-single
 e2e-peer-audit-mpc e2e-peer-audit-student: SIM_MODE := e2e-peer
 e2e: SIM_MODE := e2e
 e2e-final: SIM_MODE := e2e-final
+e2e-final-speed-aware-safety: SIM_MODE := e2e-final
 e2e-final-contact-teacher: SIM_MODE := e2e-final
 e2e-final-precontact-teacher: SIM_MODE := e2e-final
 e2e-final-precontact-teacher-all: SIM_MODE := e2e-final
@@ -126,6 +127,21 @@ e2e-peer-audit-mpc e2e-peer-audit-student: simulator
 e2e-final: simulator
 	@echo "Start 4-vehicle E2E final reference (Autoware on ROS_DOMAIN_ID 1..4)"
 	@for p in $$(seq 1 4); do LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=4 AIC_CONTROL_METHOD=$(AIC_CONTROL_METHOD) docker compose -p $$p up -d autoware; done
+	@echo "Start mode is sync; publish /admin/awsim/start after all vehicles are Ready."
+	@echo "To stop: make down"
+
+# Longitudinal-only A/B. Keep every lateral artifact and bound identical to
+# e2e-final while replacing the zero-acceleration slow plateau with the
+# offline-admitted stateless safe-speed envelope.
+e2e-final-speed-aware-safety: simulator
+	@echo "Start 4-vehicle E2E speed-aware longitudinal safety A/B"
+	@for p in $$(seq 1 4); do \
+		LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=4 \
+		AIC_CONTROL_METHOD=tiny_lidar_net \
+		TINY_LIDAR_CONTROL_MODE=speed_aware_lidar_brake \
+		docker compose -p $$p up -d autoware; \
+	done
+	@echo "Production defaults remain fixed_lidar_brake until this A/B passes."
 	@echo "Start mode is sync; publish /admin/awsim/start after all vehicles are Ready."
 	@echo "To stop: make down"
 

@@ -19,6 +19,10 @@ from tiny_lidar_net_controller.speed_governor import (
     ForwardSpeedGovernor,
     ForwardSpeedGovernorDecision,
 )
+from tiny_lidar_net_controller.longitudinal_safety import (
+    LidarSpeedAwareLongitudinalSafety,
+    SpeedAwareLongitudinalSafetyConfig,
+)
 from tiny_lidar_net_controller.model.tinylidarnet import (
     RecurrentSteeringAdapterNp,
     SpatialSteeringAdapterNp,
@@ -60,6 +64,9 @@ class TinyLidarNetCore:
         gap_teacher_config: Optional[GapTeacherConfig] = None,
         speed_committed_teacher_config: Optional[
             SpeedCommittedTeacherConfig
+        ] = None,
+        speed_aware_longitudinal_safety_config: Optional[
+            SpeedAwareLongitudinalSafetyConfig
         ] = None,
         residual_ckpt_path: str = '',
         residual_max_abs_delta_rad: float = 1.28,
@@ -176,12 +183,14 @@ class TinyLidarNetCore:
             "ai",
             "fixed",
             "fixed_lidar_brake",
+            "speed_aware_lidar_brake",
             "gap_teacher",
             "precontact_teacher",
             "speed_committed_teacher",
         }:
             raise ValueError(
                 "control_mode must be one of: ai, fixed, fixed_lidar_brake, "
+                "speed_aware_lidar_brake, "
                 "gap_teacher, precontact_teacher, speed_committed_teacher"
             )
         if not np.isfinite(self.max_range) or self.max_range <= 0.0:
@@ -198,6 +207,7 @@ class TinyLidarNetCore:
         if self.maximum_forward_speed_mps > 0.0 and self.control_mode not in {
             "fixed",
             "fixed_lidar_brake",
+            "speed_aware_lidar_brake",
         }:
             raise ValueError(
                 "maximum_forward_speed_mps is only supported by fixed control modes"
@@ -309,6 +319,7 @@ class TinyLidarNetCore:
         self.gap_teacher = None
         self.gap_teacher_requires_speed = False
         self.longitudinal_safety = None
+        self.longitudinal_safety_requires_speed = False
         self.speed_governor = (
             ForwardSpeedGovernor(self.maximum_forward_speed_mps)
             if self.maximum_forward_speed_mps > 0.0
@@ -332,6 +343,12 @@ class TinyLidarNetCore:
             self.longitudinal_safety = LidarLongitudinalSafety(
                 gap_teacher_config or GapTeacherConfig()
             )
+        elif self.control_mode == "speed_aware_lidar_brake":
+            self.longitudinal_safety = LidarSpeedAwareLongitudinalSafety(
+                gap_teacher_config or GapTeacherConfig(),
+                speed_aware_longitudinal_safety_config,
+            )
+            self.longitudinal_safety_requires_speed = True
 
         if not ckpt_path:
             raise ValueError("ckpt_path is required; random production weights are forbidden")
@@ -445,6 +462,7 @@ class TinyLidarNetCore:
             self.spatial_shadow_model is not None
             or self.recurrent_shadow_model is not None
             or self.gap_teacher_requires_speed
+            or self.longitudinal_safety_requires_speed
             or self.speed_governor is not None
         )
 
@@ -689,9 +707,14 @@ class TinyLidarNetCore:
             accel = decision.acceleration_mps2
             steer = decision.steering_rad
         elif self.longitudinal_safety is not None:
-            safety_decision = self.longitudinal_safety.decide(
-                physical_ranges, accel
-            )
+            if self.longitudinal_safety_requires_speed:
+                safety_decision = self.longitudinal_safety.decide(
+                    physical_ranges, accel, speed_mps
+                )
+            else:
+                safety_decision = self.longitudinal_safety.decide(
+                    physical_ranges, accel
+                )
             self.last_longitudinal_safety_decision = safety_decision
             accel = safety_decision.acceleration_mps2
 

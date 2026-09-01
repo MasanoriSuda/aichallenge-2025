@@ -566,6 +566,61 @@ def test_lidar_brake_remains_final_owner_after_speed_governor() -> None:
     assert acceleration == pytest.approx(-1.0)
 
 
+def test_speed_aware_lidar_brake_preserves_lateral_authority_and_bounds_restart() -> None:
+    legacy = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.8,
+        maximum_forward_speed_mps=4.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+    )
+    candidate = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.8,
+        maximum_forward_speed_mps=4.6,
+        control_mode="speed_aware_lidar_brake",
+        max_range=30.0,
+    )
+    scan = np.full(750, 1.7, dtype=np.float32)
+
+    legacy_acceleration, legacy_steering = legacy.process(scan, speed_mps=0.0)
+    acceleration, steering = candidate.process(scan, speed_mps=0.0)
+
+    assert legacy_acceleration == pytest.approx(0.0)
+    assert 0.0 < acceleration < 0.8
+    assert steering == pytest.approx(legacy_steering, abs=0.0)
+    assert candidate.last_longitudinal_safety_decision is not None
+    assert candidate.last_longitudinal_safety_decision.reason == "safe-speed-limit"
+
+
+def test_speed_aware_lidar_brake_is_fail_safe_without_fresh_speed() -> None:
+    core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.8,
+        control_mode="speed_aware_lidar_brake",
+        max_range=30.0,
+    )
+    acceleration, _ = core.process(
+        np.full(750, 2.0, dtype=np.float32), speed_mps=None
+    )
+    assert core.requires_wheel_speed
+    assert acceleration == pytest.approx(0.0)
+    assert core.last_longitudinal_safety_decision is not None
+    assert (
+        core.last_longitudinal_safety_decision.reason
+        == "missing-or-stale-speed"
+    )
+
+
 def test_unknown_control_mode_is_rejected() -> None:
     with pytest.raises(ValueError, match="control_mode"):
         TinyLidarNetCore(

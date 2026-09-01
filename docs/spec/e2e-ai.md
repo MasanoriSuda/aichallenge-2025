@@ -280,6 +280,14 @@ d3/d4で介入率を増やさなかった。既知の`slow-clearance`固着bag�
 bounded requestを生成した。これを専用runtime A/Bへ進めるが、元のd1/d2 wall contactを
 防ぐ証拠とは扱わず、横相互作用の課題と分離する。
 
+専用`speed_aware_lidar_brake`モードによる4台A/B
+`output/20260902-e2e-final-speed-aware-safety`では、d1が基準の0周・約180秒停止から4周・
+約11秒停止へ改善し、固定0加速度平衡を除く効果は閉ループでも確認できた。しかしd2は前方
+約8.7 m、safety=`clear`、正加速可能な状態でも壁へ物理拘束され、0周・wall約401秒だった。
+d3/d4はpenalty 0・4周を維持し、clean lapは概ね85--86秒だった。統合Gateは不合格のため
+production既定を変更せず、このmodeはdefault-offの診断用に保持する。次の主課題は縦安全
+閾値ではなく、接触前の他車相互作用を横ML authorityへ表現するデータとモデルである。
+
 2026-09-01のfrozen production candidateによるcompetition matrixでは、単車
 `output/20260901-151131`だけが3/3周、penalty 0、stall 0で合格した。runtime NPC
 `output/20260901-152109`は2/3周後に右側へ埋まり、正加速中のstallが117.05秒、wall

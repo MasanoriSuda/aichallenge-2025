@@ -80,7 +80,8 @@ def test_runtime_validates_and_propagates_tiny_lidar_control_mode() -> None:
 
     assert 'tiny_lidar_control_mode="${TINY_LIDAR_CONTROL_MODE:-}"' in runner
     assert (
-        '"fixed"|"fixed_lidar_brake"|"ai"|"gap_teacher"|'
+        '"fixed"|"fixed_lidar_brake"|"speed_aware_lidar_brake"|'
+        '"ai"|"gap_teacher"|'
         '"precontact_teacher"|"speed_committed_teacher")' in runner
     )
     assert 'opts+=("tiny_lidar_control_mode:=${tiny_lidar_control_mode}")' in runner

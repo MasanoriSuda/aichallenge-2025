@@ -13,6 +13,9 @@ from tiny_lidar_net_controller.gap_teacher import GapTeacherConfig
 from tiny_lidar_net_controller.speed_committed_teacher import (
     SpeedCommittedTeacherConfig,
 )
+from tiny_lidar_net_controller.longitudinal_safety import (
+    SpeedAwareLongitudinalSafetyConfig,
+)
 from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 
 
@@ -97,6 +100,15 @@ class TinyLidarNetNode(Node):
         )
         self.declare_parameter(
             'speed_committed_teacher.minimum_commit_speed_mps', 0.50
+        )
+        self.declare_parameter(
+            'longitudinal_safety.reaction_time_sec', 0.25
+        )
+        self.declare_parameter(
+            'longitudinal_safety.effective_deceleration_mps2', 1.0
+        )
+        self.declare_parameter(
+            'longitudinal_safety.speed_error_gain', 1.0
         )
         self.declare_parameter('debug', False)
 
@@ -278,6 +290,25 @@ class TinyLidarNetNode(Node):
                 ).value
             ),
         )
+        speed_aware_longitudinal_safety_config = (
+            SpeedAwareLongitudinalSafetyConfig(
+                reaction_time_sec=float(
+                    self.get_parameter(
+                        'longitudinal_safety.reaction_time_sec'
+                    ).value
+                ),
+                effective_deceleration_mps2=float(
+                    self.get_parameter(
+                        'longitudinal_safety.effective_deceleration_mps2'
+                    ).value
+                ),
+                speed_error_gain=float(
+                    self.get_parameter(
+                        'longitudinal_safety.speed_error_gain'
+                    ).value
+                ),
+            )
+        )
 
         self.debug = self.get_parameter('debug').value
         self.log_interval = self.get_parameter('log_interval_sec').value
@@ -327,6 +358,9 @@ class TinyLidarNetNode(Node):
                 gap_teacher_config=gap_teacher_config,
                 speed_committed_teacher_config=(
                     speed_committed_teacher_config
+                ),
+                speed_aware_longitudinal_safety_config=(
+                    speed_aware_longitudinal_safety_config
                 ),
                 residual_ckpt_path=residual_ckpt_path,
                 residual_max_abs_delta_rad=residual_max_abs_delta_rad,
@@ -753,6 +787,21 @@ class TinyLidarNetNode(Node):
                         f"front_m={safety_decision.front_distance_m:.2f} "
                         f"safety_reason={safety_decision.reason}"
                     )
+                    if hasattr(safety_decision, "safe_speed_mps"):
+                        speed_value = (
+                            "nan"
+                            if safety_decision.speed_mps is None
+                            else f"{safety_decision.speed_mps:.2f}"
+                        )
+                        safe_speed_value = (
+                            "nan"
+                            if safety_decision.safe_speed_mps is None
+                            else f"{safety_decision.safe_speed_mps:.2f}"
+                        )
+                        safety_status += (
+                            f" safety_speed_mps={speed_value}"
+                            f" safety_safe_speed_mps={safe_speed_value}"
+                        )
 
                 speed_governor_status = ""
                 governor_decision = self.core.last_speed_governor_decision

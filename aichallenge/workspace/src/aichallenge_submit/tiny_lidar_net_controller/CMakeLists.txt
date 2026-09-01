@@ -31,6 +31,10 @@ if(BUILD_TESTING)
     test_speed_governor
     test/test_speed_governor.py
   )
+  ament_add_pytest_test(
+    test_longitudinal_safety
+    test/test_longitudinal_safety.py
+  )
 endif()
 
 ament_package()

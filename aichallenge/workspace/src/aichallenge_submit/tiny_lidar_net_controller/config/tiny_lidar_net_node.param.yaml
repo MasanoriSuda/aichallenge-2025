@@ -65,6 +65,13 @@
       side_switch_confirmation_samples: 2
       minimum_commit_speed_mps: 0.50
 
+    # Stateless production-candidate envelope. It is active only when the
+    # explicit speed_aware_lidar_brake mode is selected.
+    longitudinal_safety:
+      reaction_time_sec: 0.25
+      effective_deceleration_mps2: 1.0
+      speed_error_gain: 1.0
+
     # Runtime safety contract. When LiDAR stops, do not retain the last drive command.
     sensor_timeout_sec: 0.25
     watchdog_period_sec: 0.05

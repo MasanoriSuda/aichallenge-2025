@@ -28,6 +28,8 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         use_speed: bool = False,
         max_speed_mps: float = 12.0,
         spatial_normalization: str = "layer_norm",
+        projection_dim: int = 0,
+        projection_seed: int = 2026,
     ):
         super().__init__()
         if input_dim <= 0 or hidden_dim < 2:
@@ -42,12 +44,16 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             raise ValueError(
                 f"unsupported spatial normalization: {spatial_normalization}"
             )
+        if projection_dim < 0:
+            raise ValueError("projection dimension must be non-negative")
         self.input_dim = int(input_dim)
         self.max_scan_range_m = float(max_scan_range_m)
         self.max_abs_delta_rad = float(max_abs_delta_rad)
         self.use_speed = bool(use_speed)
         self.max_speed_mps = float(max_speed_mps)
         self.spatial_normalization = spatial_normalization
+        self.projection_dim = int(projection_dim)
+        self.projection_seed = int(projection_seed)
         self.base = TinyLidarNet(input_dim=self.input_dim, output_dim=2)
         for parameter in self.base.parameters():
             parameter.requires_grad_(False)
@@ -55,13 +61,31 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             dummy = torch.zeros(1, 1, self.input_dim)
             spatial = self._extract_conv5(dummy)
             self.spatial_dim = int(spatial.flatten(start_dim=1).shape[1])
+        if self.projection_dim:
+            generator = np.random.default_rng(self.projection_seed)
+            projection = (
+                generator.standard_normal(
+                    (self.spatial_dim, self.projection_dim), dtype=np.float32
+                )
+                / np.sqrt(float(self.projection_dim))
+            ).astype(np.float32)
+            self.register_buffer(
+                "spatial_projection", torch.from_numpy(projection)
+            )
+            self.representation_dim = self.projection_dim
+        else:
+            self.representation_dim = self.spatial_dim
         if self.spatial_normalization == "layer_norm":
-            self.spatial_norm = nn.LayerNorm(self.spatial_dim)
+            self.spatial_norm = nn.LayerNorm(self.representation_dim)
         else:
             self.spatial_norm = nn.Identity()
-            self.register_buffer("spatial_mean", torch.zeros(self.spatial_dim))
-            self.register_buffer("spatial_scale", torch.ones(self.spatial_dim))
-        adapter_input_dim = self.spatial_dim + int(self.use_speed)
+            self.register_buffer(
+                "spatial_mean", torch.zeros(self.representation_dim)
+            )
+            self.register_buffer(
+                "spatial_scale", torch.ones(self.representation_dim)
+            )
+        adapter_input_dim = self.representation_dim + int(self.use_speed)
         self.spatial_head = nn.Sequential(
             nn.Linear(adapter_input_dim, hidden_dim),
             nn.ReLU(),
@@ -113,7 +137,9 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
     ) -> None:
         if self.spatial_normalization != "fixed_train_statistics":
             raise ValueError("fixed statistics require fixed normalization mode")
-        if mean.shape != (self.spatial_dim,) or scale.shape != (self.spatial_dim,):
+        if mean.shape != (self.representation_dim,) or scale.shape != (
+            self.representation_dim,
+        ):
             raise ValueError("spatial statistics dimension mismatch")
         if not torch.isfinite(mean).all() or not torch.isfinite(scale).all():
             raise ValueError("spatial statistics must be finite")
@@ -122,8 +148,14 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         self.spatial_mean.copy_(mean.to(self.spatial_mean))
         self.spatial_scale.copy_(scale.to(self.spatial_scale))
 
-    def normalized_spatial_features(self, scans_m: torch.Tensor) -> torch.Tensor:
+    def representation_features(self, scans_m: torch.Tensor) -> torch.Tensor:
         spatial = self.spatial_features(scans_m)
+        if self.projection_dim:
+            return spatial @ self.spatial_projection
+        return spatial
+
+    def normalized_spatial_features(self, scans_m: torch.Tensor) -> torch.Tensor:
+        spatial = self.representation_features(scans_m)
         if self.spatial_normalization == "fixed_train_statistics":
             return (spatial - self.spatial_mean) / self.spatial_scale
         return self.spatial_norm(spatial)

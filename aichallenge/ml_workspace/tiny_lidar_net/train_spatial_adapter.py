@@ -90,7 +90,9 @@ def fit_spatial_feature_statistics(model, loader, device) -> dict:
     model.eval()
     with torch.no_grad():
         for scans, _, _, _ in loader:
-            spatial = model.spatial_features(scans.to(device)).to(torch.float64)
+            spatial = model.representation_features(scans.to(device)).to(
+                torch.float64
+            )
             batch_total = torch.sum(spatial, dim=0)
             batch_squared_total = torch.sum(spatial * spatial, dim=0)
             total = batch_total if total is None else total + batch_total
@@ -225,6 +227,8 @@ def parse_args() -> argparse.Namespace:
         choices=SPATIAL_NORMALIZATION_MODES,
         default="layer_norm",
     )
+    parser.add_argument("--projection-dim", type=int, default=0)
+    parser.add_argument("--projection-seed", type=int, default=2026)
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--material-weight", type=float, default=5.0)
     parser.add_argument("--direction-loss-weight", type=float, default=1.0)
@@ -314,6 +318,8 @@ def main() -> int:
         use_speed=args.use_speed,
         max_speed_mps=args.max_speed_mps,
         spatial_normalization=args.spatial_normalization,
+        projection_dim=args.projection_dim,
+        projection_seed=args.projection_seed,
     )
     base_provenance = load_pretrained_weights(model.base, args.base_checkpoint)
     model.to(device)

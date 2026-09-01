@@ -78,3 +78,26 @@ def test_spatial_history_resets_each_sequence_without_speed_columns():
     assert features.shape == (3, 3)
     assert features[0].tolist() == pytest.approx([1.0, 0.0, 0.0])
     assert features[2].tolist() == pytest.approx([4.0, 2.0, 3.0])
+
+
+def test_sequence_balanced_probe_weights_give_each_run_equal_mass():
+    sequences = [
+        MODULE.ProbeSequence(
+            sequence_id="short",
+            source_bag="short",
+            features=np.zeros((2, 1), dtype=np.float32),
+            labels=np.ones(2, dtype=np.int64),
+        ),
+        MODULE.ProbeSequence(
+            sequence_id="long",
+            source_bag="long",
+            features=np.zeros((8, 1), dtype=np.float32),
+            labels=np.ones(8, dtype=np.int64),
+        ),
+    ]
+
+    weights = MODULE.probe_training_sample_weights(sequences, "sequence")
+
+    assert np.sum(weights[:2]) == pytest.approx(0.5)
+    assert np.sum(weights[2:]) == pytest.approx(0.5)
+    assert MODULE.probe_training_sample_weights(sequences, "sample") is None

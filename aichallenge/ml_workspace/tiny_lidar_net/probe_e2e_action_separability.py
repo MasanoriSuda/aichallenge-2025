@@ -35,6 +35,7 @@ VARIANTS = (
     "temporal_conv5_no_speed",
     "temporal_conv5",
 )
+TRAIN_SAMPLING_MODES = ("sample", "sequence")
 
 
 @dataclass(frozen=True)
@@ -337,6 +338,26 @@ def concatenate_sequences(
     )
 
 
+def probe_training_sample_weights(
+    sequences: Iterable[ProbeSequence], mode: str
+) -> np.ndarray | None:
+    sequence_list = list(sequences)
+    if mode not in TRAIN_SAMPLING_MODES:
+        raise ValueError(f"unsupported probe training sampling: {mode}")
+    if mode == "sample":
+        return None
+    if not sequence_list or any(len(item.features) == 0 for item in sequence_list):
+        raise ValueError("sequence-balanced probe requires non-empty sequences")
+    weights = np.concatenate(
+        [
+            np.full(len(item.features), 1.0 / len(item.features), dtype=np.float64)
+            for item in sequence_list
+        ]
+    )
+    weights /= np.sum(weights)
+    return weights
+
+
 def train_probe(
     train_features: np.ndarray,
     train_labels: np.ndarray,
@@ -348,9 +369,18 @@ def train_probe(
     batch_size: int,
     learning_rate: float,
     patience: int,
+    sample_weights: np.ndarray | None = None,
 ) -> tuple[ActionProbe, list[dict[str, float]]]:
     model = ActionProbe(train_features.shape[1]).to(device)
-    counts = np.bincount(train_labels, minlength=3).astype(np.float64)
+    if sample_weights is not None:
+        weights_array = np.asarray(sample_weights, dtype=np.float64)
+        if weights_array.shape != train_labels.shape or np.any(weights_array <= 0.0):
+            raise ValueError("probe sample weights must be positive and aligned")
+    else:
+        weights_array = None
+    counts = np.bincount(
+        train_labels, weights=weights_array, minlength=3
+    ).astype(np.float64)
     if np.any(counts == 0):
         raise ValueError(f"training split lacks an action class: {counts.tolist()}")
     weights = torch.tensor(
@@ -367,7 +397,16 @@ def train_probe(
     history = []
     for epoch in range(epochs):
         model.train()
-        order = torch.randperm(len(train_x), generator=generator)
+        order = (
+            torch.randperm(len(train_x), generator=generator)
+            if weights_array is None
+            else torch.multinomial(
+                torch.from_numpy(weights_array),
+                len(train_x),
+                replacement=True,
+                generator=generator,
+            )
+        )
         total = 0.0
         seen = 0
         for start in range(0, len(order), batch_size):
@@ -439,6 +478,9 @@ def main() -> int:
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--patience", type=int, default=6)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument(
+        "--train-sampling", choices=TRAIN_SAMPLING_MODES, default="sample"
+    )
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
     parser.add_argument("--normal-anchor-train-dir", type=Path)
     parser.add_argument("--normal-validation-dir", type=Path)
@@ -591,6 +633,9 @@ def main() -> int:
                     f"normal-anchor:{value}"
                     for value in normal_validation_source.sequence_ids
                 }
+        train_sample_weights = probe_training_sample_weights(
+            train_sequences, args.train_sampling
+        )
         train_features, train_labels = concatenate_sequences(train_sequences)
         validation_features, validation_labels = concatenate_sequences(
             validation_sequences
@@ -626,6 +671,7 @@ def main() -> int:
             args.batch_size,
             args.learning_rate,
             args.patience,
+            train_sample_weights,
         )
         validation_predictions = predict(model, validation_features, device)
         per_sequence = []
@@ -704,6 +750,7 @@ def main() -> int:
                 if args.normal_recurrent_root is None
                 else str(args.normal_recurrent_root.expanduser().resolve())
             ),
+            "train_sampling": args.train_sampling,
         },
         "variants": variant_reports,
         "comparison": {

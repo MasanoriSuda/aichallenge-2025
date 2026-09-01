@@ -80,6 +80,37 @@ def test_fixed_train_statistics_are_explicit_and_immutable_state():
         model.set_spatial_statistics(mean, torch.zeros_like(scale))
 
 
+def test_random_projection_is_seeded_frozen_candidate_state():
+    first = FrozenTinyLidarSpatialResidual(
+        input_dim=750,
+        hidden_dim=16,
+        projection_dim=32,
+        projection_seed=17,
+    )
+    second = FrozenTinyLidarSpatialResidual(
+        input_dim=750,
+        hidden_dim=16,
+        projection_dim=32,
+        projection_seed=17,
+    )
+    different = FrozenTinyLidarSpatialResidual(
+        input_dim=750,
+        hidden_dim=16,
+        projection_dim=32,
+        projection_seed=18,
+    )
+
+    assert first.representation_dim == 32
+    assert first.spatial_projection.shape == (first.spatial_dim, 32)
+    assert torch.equal(first.spatial_projection, second.spatial_projection)
+    assert not torch.equal(first.spatial_projection, different.spatial_projection)
+    assert not any(
+        name == "spatial_projection"
+        for name, _ in first.named_parameters()
+    )
+    assert "spatial_projection" in first.state_dict()
+
+
 class FakeNormalizedSequence:
     sequence_id = "normal-run"
 

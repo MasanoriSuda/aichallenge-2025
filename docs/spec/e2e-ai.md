@@ -308,6 +308,16 @@ material改善18.88%、方向精度71.28%へ悪化したため不採用とする
 主因という仮説は反証された。probeにはさらに128次元の固定random projectionがあり、full
 conv5 headとの容量差が残るため、次はその差だけを再現する。ここでもGateとproductionは固定する。
 
+probeと同じseeded 128次元projectionまで再現した候補も、material改善21.47%、方向精度
+72.41%で不採用だった。projection自体はregistered bufferとして厳密checkpointへ保存するが、
+性能原因ではなかった。続いて分類probeだけをproduction同等のsequence-balanced samplerへ
+切り替えると、実速度static spatialのmaterial-signが3 seed平均85.29%から70.32%へ低下し、
+continuous candidateの72.41%と同じ範囲になった。normal誤発火は12.18%から7.17%へ改善した。
+したがって現時点の律速はmulti-task lossより上流のsampling contractである。短い失敗prefixを
+消さない目的で各sequenceへ等しい総質量を与えた結果、722～937 sampleの局所runが4,000～
+6,000 sampleの成功runと同じ影響を持ち、未見validationの補正方向を損ねている。次はGateを
+変えず、sample分布とclass weightingを一致させた候補を1本だけ評価する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

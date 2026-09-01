@@ -134,6 +134,8 @@ def parse_args() -> argparse.Namespace:
         choices=SPATIAL_NORMALIZATION_MODES,
         default="layer_norm",
     )
+    parser.add_argument("--projection-dim", type=int, default=0)
+    parser.add_argument("--projection-seed", type=int, default=2026)
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
     parser.add_argument("--batch-size", type=int, default=512)
@@ -162,6 +164,8 @@ def main() -> int:
         use_speed=args.use_speed,
         max_speed_mps=args.max_speed_mps,
         spatial_normalization=args.spatial_normalization,
+        projection_dim=args.projection_dim,
+        projection_seed=args.projection_seed,
     )
     candidate_provenance = load_pretrained_weights(model, args.candidate)
     base_provenance = assert_embedded_base_identity(model, args.base_checkpoint)

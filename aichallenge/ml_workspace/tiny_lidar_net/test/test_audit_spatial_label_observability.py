@@ -72,3 +72,63 @@ def test_conflict_summary_uses_normal_cross_run_scale():
 
     assert report["within_normal_cross_run_p50_fraction"] == pytest.approx(2 / 3)
     assert report["within_normal_cross_run_p95_fraction"] == pytest.approx(1.0)
+
+
+def test_sample_corpus_preserves_original_sequence_local_indices():
+    class Sequence:
+        def __init__(self):
+            self.sequence_id = "run-a"
+            self.metadata = {"source": {"bag": "/output/run-a/d1/bag"}}
+            self.scans = np.arange(7500, dtype=np.float32).reshape(10, 750)
+            self.speeds = np.arange(10, dtype=np.float32)
+            self.base_steers = np.zeros(10, dtype=np.float32)
+            self.steers = np.arange(10, dtype=np.float32) / 100.0
+
+        def __len__(self):
+            return len(self.scans)
+
+    class Source:
+        datasets = [Sequence()]
+
+    sampled = MODULE.sample_corpus(Source(), "teacher", 4)
+
+    assert sampled.sample_index.tolist() == [0, 3, 6, 9]
+    assert sampled.sequence_lengths == (10,)
+    assert sampled.source_bags == ("/output/run-a/d1/bag",)
+    assert sampled.corrections_rad.tolist() == pytest.approx([0.0, 0.03, 0.06, 0.09])
+
+
+def test_per_sequence_conflict_reports_causal_tail_separately():
+    corpus = MODULE.SampledCorpus(
+        name="teacher",
+        scans_m=np.zeros((4, 750), dtype=np.float32),
+        speeds_mps=np.zeros(4, dtype=np.float32),
+        corrections_rad=np.asarray([0.1, 0.2, -0.1, -0.2], dtype=np.float32),
+        sample_index=np.asarray([0, 9, 0, 9], dtype=np.int64),
+        sequence_index=np.asarray([0, 0, 1, 1], dtype=np.int32),
+        sequence_ids=("run-a", "run-b"),
+        sequence_lengths=(10, 10),
+        source_bags=("/a", "/b"),
+    )
+
+    report = MODULE.per_sequence_conflict_summary(
+        np.asarray([0.5, 2.5, 1.5, 3.5]),
+        np.arange(4),
+        corpus,
+        np.asarray([1.0, 2.0, 3.0, 4.0]),
+        tail_samples=2,
+    )
+
+    assert report[0]["queries"]["within_normal_cross_run_p50_fraction"] == 1.0
+    assert report[0]["tail_queries"]["samples"] == 1
+    assert report[0]["tail_queries"]["within_normal_cross_run_p50_fraction"] == 1.0
+    assert report[1]["queries"]["within_normal_cross_run_p50_fraction"] == 0.5
+    assert report[1]["tail_queries"]["within_normal_cross_run_p95_fraction"] == 1.0
+
+
+def test_reason_counts_applies_aligned_conflict_mask():
+    reasons = np.asarray(["front-clear", "gap-selected", "gap-selected"])
+
+    report = MODULE.reason_counts(reasons, np.asarray([False, True, True]))
+
+    assert report == {"gap-selected": 2}

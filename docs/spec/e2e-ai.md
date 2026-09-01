@@ -506,6 +506,18 @@ zero-intervention labelが一部矛盾していることである。
 immutable sample単位でteacher/normal conflictを特定し、重要なfailure tailを保持したまま
 曖昧labelをadmission対象外にできるかをデータ契約として監査する。
 
+sample単位監査では、現行`LidarPrecontactTeacher`が保存teacher補正を最大`4.77e-7 rad`誤差で
+再現し、version driftを否定した。一方、成功normal 4,500 sampleの6.20%へmaterial補正を要求し、
+理由は`side-clearance` 169、`gap-selected` 110だった。さらに4台固着run
+`output/20260901-121938/d2`の末尾200 material sampleは、128次元projection後には60%がnormal
+p50内だが、物理geometryでは0%だった。したがってprojected距離によるconflict除外は必要な
+failure教師を削除するため禁止する。physical距離だけで除外しても、production表現が既に情報を
+失っているため根治にならない。
+
+次の独立変数はteacher thresholdやnormal比率ではなく、frozen conv5の1,088次元空間を128次元へ
+固定random projectionする契約である。同じsplit、speed、base steering、classifier、3 seed、
+focus/peer Gateでfull conv5表現を先に診断し、厳格改善がなければ学習・runtime統合へ進めない。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

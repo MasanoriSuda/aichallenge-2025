@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -26,8 +27,11 @@ class SampledCorpus:
     scans_m: np.ndarray
     speeds_mps: np.ndarray
     corrections_rad: np.ndarray
+    sample_index: np.ndarray
     sequence_index: np.ndarray
     sequence_ids: tuple[str, ...]
+    sequence_lengths: tuple[int, ...]
+    source_bags: tuple[str, ...]
 
 
 def deterministic_subsample_indices(size: int, maximum: int) -> np.ndarray:
@@ -42,8 +46,11 @@ def sample_corpus(source, name: str, maximum_per_sequence: int) -> SampledCorpus
     scans = []
     speeds = []
     corrections = []
+    sample_indices = []
     sequence_indices = []
     sequence_ids = []
+    sequence_lengths = []
+    source_bags = []
     for sequence_index, sequence in enumerate(source.datasets):
         selected = deterministic_subsample_indices(
             len(sequence), maximum_per_sequence
@@ -56,17 +63,23 @@ def sample_corpus(source, name: str, maximum_per_sequence: int) -> SampledCorpus
                 dtype=np.float32,
             )
         )
+        sample_indices.append(selected)
         sequence_indices.append(
             np.full(len(selected), sequence_index, dtype=np.int32)
         )
         sequence_ids.append(sequence.sequence_id)
+        sequence_lengths.append(len(sequence))
+        source_bags.append(str(sequence.metadata["source"]["bag"]))
     return SampledCorpus(
         name=name,
         scans_m=np.concatenate(scans),
         speeds_mps=np.concatenate(speeds),
         corrections_rad=np.concatenate(corrections),
+        sample_index=np.concatenate(sample_indices),
         sequence_index=np.concatenate(sequence_indices),
         sequence_ids=tuple(sequence_ids),
+        sequence_lengths=tuple(sequence_lengths),
+        source_bags=tuple(source_bags),
     )
 
 
@@ -234,6 +247,166 @@ def conflict_summary(
     }
 
 
+def conflict_fraction_record(distances: np.ndarray, p50: float, p95: float) -> dict:
+    values = np.asarray(distances, dtype=np.float64)
+    if values.ndim != 1:
+        raise ValueError("conflict values must be one-dimensional")
+    return {
+        "samples": int(len(values)),
+        "within_normal_cross_run_p50_fraction": (
+            None if len(values) == 0 else float(np.mean(values <= p50))
+        ),
+        "within_normal_cross_run_p95_fraction": (
+            None if len(values) == 0 else float(np.mean(values <= p95))
+        ),
+    }
+
+
+def per_sequence_conflict_summary(
+    distances: np.ndarray,
+    query_indices: np.ndarray,
+    corpus: SampledCorpus,
+    baseline: np.ndarray,
+    tail_samples: int,
+) -> list[dict]:
+    values = np.asarray(distances, dtype=np.float64)
+    queries = np.asarray(query_indices, dtype=np.int64)
+    reference = np.asarray(baseline, dtype=np.float64)
+    if len(values) != len(queries) or len(reference) == 0 or tail_samples <= 0:
+        raise ValueError("invalid grouped conflict inputs")
+    if np.any(queries < 0) or np.any(queries >= len(corpus.scans_m)):
+        raise ValueError("conflict query index is outside the sampled corpus")
+    p50 = float(np.percentile(reference, 50))
+    p95 = float(np.percentile(reference, 95))
+    query_sequence = corpus.sequence_index[queries]
+    query_sample = corpus.sample_index[queries]
+    reports = []
+    for sequence_index, sequence_id in enumerate(corpus.sequence_ids):
+        selected = query_sequence == sequence_index
+        sequence_values = values[selected]
+        tail_start = max(0, corpus.sequence_lengths[sequence_index] - tail_samples)
+        tail = selected & (query_sample >= tail_start)
+        reports.append(
+            {
+                "sequence_id": sequence_id,
+                "source_bag": corpus.source_bags[sequence_index],
+                "sequence_samples": corpus.sequence_lengths[sequence_index],
+                "queries": conflict_fraction_record(sequence_values, p50, p95),
+                "tail_start_sample_index": tail_start,
+                "tail_queries": conflict_fraction_record(values[tail], p50, p95),
+            }
+        )
+    return reports
+
+
+def nearest_conflict_examples(
+    distances: np.ndarray,
+    query_indices: np.ndarray,
+    nearest_reference_indices: np.ndarray,
+    query_corpus: SampledCorpus,
+    reference_corpus: SampledCorpus,
+    limit: int,
+) -> list[dict]:
+    values = np.asarray(distances, dtype=np.float64)
+    queries = np.asarray(query_indices, dtype=np.int64)
+    references = np.asarray(nearest_reference_indices, dtype=np.int64)
+    if (
+        len(values) != len(queries)
+        or len(values) != len(references)
+        or limit <= 0
+    ):
+        raise ValueError("invalid nearest conflict example inputs")
+    records = []
+    for offset in np.argsort(values)[:limit]:
+        query = int(queries[offset])
+        reference = int(references[offset])
+        query_sequence = int(query_corpus.sequence_index[query])
+        reference_sequence = int(reference_corpus.sequence_index[reference])
+        records.append(
+            {
+                "distance": float(values[offset]),
+                "teacher_sequence_id": query_corpus.sequence_ids[query_sequence],
+                "teacher_source_bag": query_corpus.source_bags[query_sequence],
+                "teacher_sample_index": int(query_corpus.sample_index[query]),
+                "teacher_correction_rad": float(
+                    query_corpus.corrections_rad[query]
+                ),
+                "normal_sequence_id": reference_corpus.sequence_ids[
+                    reference_sequence
+                ],
+                "normal_source_bag": reference_corpus.source_bags[
+                    reference_sequence
+                ],
+                "normal_sample_index": int(
+                    reference_corpus.sample_index[reference]
+                ),
+            }
+        )
+    return records
+
+
+def label_correction_summary(
+    correction_rad: np.ndarray, material_delta_rad: float
+) -> dict:
+    correction = np.asarray(correction_rad, dtype=np.float64)
+    if (
+        correction.ndim != 1
+        or len(correction) == 0
+        or material_delta_rad <= 0.0
+        or not np.all(np.isfinite(correction))
+    ):
+        raise ValueError("invalid label correction summary input")
+    material = np.abs(correction) >= material_delta_rad
+    return {
+        "samples": int(len(correction)),
+        "mean_abs_rad": float(np.mean(np.abs(correction))),
+        "p95_abs_rad": float(np.percentile(np.abs(correction), 95)),
+        "maximum_abs_rad": float(np.max(np.abs(correction))),
+        "material_samples": int(np.count_nonzero(material)),
+        "material_fraction": float(np.mean(material)),
+        "left_samples": int(np.count_nonzero(correction <= -material_delta_rad)),
+        "right_samples": int(np.count_nonzero(correction >= material_delta_rad)),
+    }
+
+
+def current_teacher_records(
+    scans_m: np.ndarray,
+    base_steers_rad: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    from tiny_lidar_net_controller.gap_teacher import (
+        GapTeacherConfig,
+        LidarPrecontactTeacher,
+    )
+
+    scans = np.asarray(scans_m, dtype=np.float32)
+    base = np.asarray(base_steers_rad, dtype=np.float32)
+    if scans.ndim != 2 or base.shape != (len(scans),):
+        raise ValueError("teacher replay inputs must be aligned")
+    teacher = LidarPrecontactTeacher(GapTeacherConfig())
+    corrections = []
+    reasons = []
+    for scan, base_steering in zip(scans, base):
+        decision = teacher.decide(scan, float(base_steering), 0.6)
+        corrections.append(decision.steering_rad - decision.base_steering_rad)
+        reasons.append(decision.reason)
+    return (
+        np.asarray(corrections, dtype=np.float32),
+        np.asarray(reasons, dtype=object),
+    )
+
+
+def reason_counts(reasons: np.ndarray, selected: np.ndarray | None = None) -> dict:
+    values = np.asarray(reasons, dtype=object)
+    if values.ndim != 1:
+        raise ValueError("teacher reasons must be one-dimensional")
+    if selected is not None:
+        mask = np.asarray(selected, dtype=bool)
+        if mask.shape != values.shape:
+            raise ValueError("teacher reason mask must align")
+        values = values[mask]
+    return dict(sorted(Counter(str(value) for value in values).items()))
+
+
 def correction_summary(
     predictions: np.ndarray,
     targets: np.ndarray,
@@ -261,6 +434,11 @@ def representation_conflict_report(
     normal_sequence_index: np.ndarray,
     baseline_queries: int,
     batch_size: int,
+    teacher_corpus: SampledCorpus | None = None,
+    normal_corpus: SampledCorpus | None = None,
+    tail_samples: int = 200,
+    focus_validation_token: str = "",
+    example_limit: int = 12,
 ) -> dict:
     baseline = cross_sequence_nearest_distances(
         normal_features,
@@ -268,7 +446,7 @@ def representation_conflict_report(
         baseline_queries,
         batch_size,
     )
-    _, teacher_to_normal = nearest_distances(
+    nearest_normal_indices, teacher_to_normal = nearest_distances(
         teacher_features[teacher_material_indices],
         normal_features,
         batch_size,
@@ -278,7 +456,7 @@ def representation_conflict_report(
         teacher_features[teacher_material_indices],
         batch_size,
     )
-    return {
+    report = {
         "normal_cross_run_baseline": distribution_summary(baseline),
         "material_teacher_to_normal": conflict_summary(
             teacher_to_normal, baseline
@@ -287,6 +465,41 @@ def representation_conflict_report(
             normal_to_teacher, baseline
         ),
     }
+    if (teacher_corpus is None) != (normal_corpus is None):
+        raise ValueError("both corpora are required for conflict provenance")
+    if teacher_corpus is not None and normal_corpus is not None:
+        per_sequence = per_sequence_conflict_summary(
+            teacher_to_normal,
+            teacher_material_indices,
+            teacher_corpus,
+            baseline,
+            tail_samples,
+        )
+        matching_focus = [
+            record
+            for record in per_sequence
+            if focus_validation_token
+            and focus_validation_token in record["source_bag"]
+        ]
+        if focus_validation_token and len(matching_focus) != 1:
+            raise ValueError("focus validation token must match one sequence")
+        report.update(
+            {
+                "per_teacher_sequence": per_sequence,
+                "focus_teacher_sequence": (
+                    None if not matching_focus else matching_focus[0]
+                ),
+                "nearest_conflict_examples": nearest_conflict_examples(
+                    teacher_to_normal,
+                    teacher_material_indices,
+                    nearest_normal_indices,
+                    teacher_corpus,
+                    normal_corpus,
+                    example_limit,
+                ),
+            }
+        )
+    return report
 
 
 def parse_args() -> argparse.Namespace:
@@ -302,6 +515,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-normal-queries", type=int, default=2048)
     parser.add_argument("--baseline-queries", type=int, default=1024)
     parser.add_argument("--batch-size", type=int, default=512)
+    parser.add_argument("--tail-samples", type=int, default=200)
+    parser.add_argument(
+        "--focus-validation-token", default="20260901-130837/d1"
+    )
+    parser.add_argument("--conflict-example-limit", type=int, default=12)
     return parser.parse_args()
 
 
@@ -313,6 +531,8 @@ def main() -> int:
         args.max_normal_queries,
         args.baseline_queries,
         args.batch_size,
+        args.tail_samples,
+        args.conflict_example_limit,
     ) <= 0:
         raise ValueError("audit sample limits must be positive")
     if args.material_delta_rad <= 0.0:
@@ -388,7 +608,7 @@ def main() -> int:
         len(normal_features), args.max_normal_queries
     )
 
-    nearest_normal_indices, _ = nearest_distances(
+    nearest_normal_indices, exact_teacher_to_normal = nearest_distances(
         teacher_features[material_indices], normal_features, args.batch_size
     )
     nearest_material_indices, _ = nearest_distances(
@@ -417,6 +637,11 @@ def main() -> int:
             normal.sequence_index,
             args.baseline_queries,
             args.batch_size,
+            teacher,
+            normal,
+            args.tail_samples,
+            args.focus_validation_token,
+            args.conflict_example_limit,
         ),
         "physical_binned_geometry": representation_conflict_report(
             teacher_geometry,
@@ -426,8 +651,27 @@ def main() -> int:
             normal.sequence_index,
             args.baseline_queries,
             args.batch_size,
+            teacher,
+            normal,
+            args.tail_samples,
+            args.focus_validation_token,
+            args.conflict_example_limit,
         ),
     }
+
+    teacher_current_correction, teacher_reasons = current_teacher_records(
+        teacher.scans_m, teacher_features[:, -1]
+    )
+    normal_current_correction, normal_reasons = current_teacher_records(
+        normal.scans_m, normal_features[:, -1]
+    )
+    exact_p50 = representations["exact_adapter_input"][
+        "normal_cross_run_baseline"
+    ]["p50"]
+    exact_p50_conflict = exact_teacher_to_normal <= exact_p50
+    normal_current_material = (
+        np.abs(normal_current_correction) >= args.material_delta_rad
+    )
 
     report = {
         "schema_version": SCHEMA_VERSION,
@@ -479,6 +723,40 @@ def main() -> int:
                             ]
                         )
                     )
+                ),
+            },
+        },
+        "label_contract": {
+            "teacher_replay": {
+                "maximum_stored_correction_abs_error_rad": float(
+                    np.max(
+                        np.abs(
+                            teacher_current_correction
+                            - teacher.corrections_rad
+                        )
+                    )
+                ),
+                "aggregate": label_correction_summary(
+                    teacher_current_correction, args.material_delta_rad
+                ),
+                "material_reason_counts": reason_counts(
+                    teacher_reasons,
+                    np.abs(teacher_current_correction)
+                    >= args.material_delta_rad,
+                ),
+                "exact_p50_conflict_reason_counts": reason_counts(
+                    teacher_reasons[material_indices], exact_p50_conflict
+                ),
+            },
+            "production_normal_zero_label": {
+                "stored_zero_maximum_abs_error_rad": float(
+                    np.max(np.abs(normal.corrections_rad))
+                ),
+                "current_teacher_correction": label_correction_summary(
+                    normal_current_correction, args.material_delta_rad
+                ),
+                "current_teacher_material_reason_counts": reason_counts(
+                    normal_reasons, normal_current_material
                 ),
             },
         },

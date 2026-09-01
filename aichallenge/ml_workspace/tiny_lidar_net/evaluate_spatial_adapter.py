@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import ConcatDataset, DataLoader
+from torch.utils.data import ConcatDataset, DataLoader, Subset
 
 from lib.checkpoint import load_pretrained_weights
 from lib.data import MultiSeqConcatDataset
@@ -22,7 +22,84 @@ from lib.spatial_adapter import (
 )
 
 
-def predict_paired(model, loader, device, material_delta_rad: float) -> dict:
+def runtime_bounded_metrics(
+    predicted: np.ndarray,
+    target: np.ndarray,
+    material_delta_rad: float,
+    authority_bound_rad: float,
+) -> dict:
+    """Evaluate the exact residual that runtime authority can publish."""
+    if not np.isfinite(authority_bound_rad) or authority_bound_rad <= 0.0:
+        raise ValueError("runtime authority bound must be finite and positive")
+    values = np.asarray(predicted, dtype=np.float64)
+    targets = np.asarray(target, dtype=np.float64)
+    if values.shape != targets.shape or values.ndim != 1:
+        raise ValueError("bounded residual arrays must be aligned and one-dimensional")
+    bounded = np.clip(values, -authority_bound_rad, authority_bound_rad)
+    material = np.abs(targets) >= material_delta_rad
+    material_targets = targets[material]
+    zero_mae = (
+        None if not np.any(material) else float(np.mean(np.abs(material_targets)))
+    )
+    oracle_mae = (
+        None
+        if not np.any(material)
+        else float(
+            np.mean(
+                np.abs(
+                    np.clip(
+                        material_targets,
+                        -authority_bound_rad,
+                        authority_bound_rad,
+                    )
+                    - material_targets
+                )
+            )
+        )
+    )
+    bounded_residual = residual_metrics(bounded, targets, material_delta_rad)
+    achieved_improvement = (
+        None
+        if zero_mae is None
+        else zero_mae - bounded_residual["material"]["mae_rad"]
+    )
+    attainable_improvement = (
+        None if zero_mae is None else zero_mae - oracle_mae
+    )
+    return {
+        "authority_bound_rad": authority_bound_rad,
+        "clipped_fraction": float(np.mean(np.abs(values) > authority_bound_rad)),
+        "residual": bounded_residual,
+        "material_sign_accuracy": (
+            None
+            if not np.any(material)
+            else float(
+                np.mean(np.sign(bounded[material]) == np.sign(targets[material]))
+            )
+        ),
+        "oracle": {
+            "material_mae_rad": oracle_mae,
+            "maximum_material_mae_improvement_fraction": (
+                None
+                if zero_mae is None or zero_mae <= 0.0
+                else attainable_improvement / zero_mae
+            ),
+            "attainable_improvement_utilization": (
+                None
+                if attainable_improvement is None or attainable_improvement <= 0.0
+                else achieved_improvement / attainable_improvement
+            ),
+        },
+    }
+
+
+def predict_paired(
+    model,
+    loader,
+    device,
+    material_delta_rad: float,
+    runtime_authority_bound_rad: float | None = None,
+) -> dict:
     residuals = []
     targets = []
     directions = []
@@ -43,7 +120,7 @@ def predict_paired(model, loader, device, material_delta_rad: float) -> dict:
     classes[target >= material_delta_rad] = 2
     material = classes != 1
     anchor = classes == 1
-    return {
+    report = {
         "residual": residual_metrics(predicted, target, material_delta_rad),
         "direction": {
             "accuracy": float(np.mean(predicted_direction == classes)),
@@ -68,6 +145,14 @@ def predict_paired(model, loader, device, material_delta_rad: float) -> dict:
         "prediction_abs_max_rad": float(np.max(np.abs(predicted))),
         "finite": bool(np.all(np.isfinite(predicted))),
     }
+    if runtime_authority_bound_rad is not None:
+        report["runtime_bounded"] = runtime_bounded_metrics(
+            predicted,
+            target,
+            material_delta_rad,
+            runtime_authority_bound_rad,
+        )
+    return report
 
 
 def predict_normal(model, loader, device, max_range_m: float) -> dict:
@@ -99,6 +184,31 @@ def normal_metrics(predicted: np.ndarray) -> dict:
         "max_abs_rad": float(np.max(np.abs(predicted))),
         "finite": bool(np.all(np.isfinite(predicted))),
     }
+
+
+def select_unique_source_sequence(sequences, source_token: str):
+    """Select one immutable run by source-bag token without split leakage."""
+    if not source_token:
+        return None
+    matches = [
+        sequence
+        for sequence in sequences
+        if source_token
+        in str(sequence.metadata.get("source", {}).get("bag", ""))
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"source token {source_token!r} matched {len(matches)} sequences"
+        )
+    return matches[0]
+
+
+def causal_tail(sequence, tail_samples: int):
+    """Return a non-empty causal suffix for failure-local evaluation."""
+    if tail_samples <= 0:
+        raise ValueError("tail_samples must be positive")
+    start = max(0, len(sequence) - tail_samples)
+    return Subset(sequence, range(start, len(sequence)))
 
 
 def assert_embedded_base_identity(
@@ -143,7 +253,27 @@ def parse_args() -> argparse.Namespace:
         default="signed_mixture",
     )
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
+    parser.add_argument(
+        "--runtime-authority-bound-rad",
+        type=float,
+        default=0.0,
+        help=(
+            "If positive, report and gate the residual after the exact symmetric "
+            "clip used by runtime spatial authority."
+        ),
+    )
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
+    parser.add_argument(
+        "--focus-validation-token",
+        default="",
+        help="Optional held-out source-bag token reported separately.",
+    )
+    parser.add_argument(
+        "--tail-samples",
+        type=int,
+        default=200,
+        help="Causal suffix length for the focused validation run.",
+    )
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--min-material-improvement", type=float, default=0.30)
     parser.add_argument("--min-material-sign-accuracy", type=float, default=0.80)
@@ -155,8 +285,18 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    if args.batch_size <= 0:
-        raise ValueError("spatial evaluation batch size must be positive")
+    if args.batch_size <= 0 or args.tail_samples <= 0:
+        raise ValueError("spatial evaluation batch and tail sizes must be positive")
+    if (
+        not np.isfinite(args.runtime_authority_bound_rad)
+        or args.runtime_authority_bound_rad < 0.0
+    ):
+        raise ValueError("runtime authority bound must be finite and non-negative")
+    runtime_bound = (
+        args.runtime_authority_bound_rad
+        if args.runtime_authority_bound_rad > 0.0
+        else None
+    )
     if (args.normal_dataset_dir is None) == (args.normal_recurrent_root is None):
         raise ValueError("provide exactly one normal validation source")
     if args.use_speed and args.normal_recurrent_root is None:
@@ -186,24 +326,52 @@ def main() -> int:
         shuffle=False,
     )
     aggregate = predict_paired(
-        model, validation_loader, device, args.material_delta_rad
-    )
-    peer_records = [
-        sequence
-        for sequence in validation.datasets
-        if args.peer_validation_token
-        in str(sequence.metadata.get("source", {}).get("bag", ""))
-    ]
-    if len(peer_records) != 1:
-        raise ValueError(
-            f"peer validation token matched {len(peer_records)} sequences"
-        )
-    peer = predict_paired(
         model,
-        DataLoader(peer_records[0], batch_size=args.batch_size, shuffle=False),
+        validation_loader,
         device,
         args.material_delta_rad,
+        runtime_bound,
     )
+    peer_record = select_unique_source_sequence(
+        validation.datasets, args.peer_validation_token
+    )
+    peer = predict_paired(
+        model,
+        DataLoader(peer_record, batch_size=args.batch_size, shuffle=False),
+        device,
+        args.material_delta_rad,
+        runtime_bound,
+    )
+    focus_record = select_unique_source_sequence(
+        validation.datasets, args.focus_validation_token
+    )
+    focus = None
+    if focus_record is not None:
+        focus = {
+            "sequence_id": focus_record.sequence_id,
+            "source_bag": str(focus_record.metadata["source"]["bag"]),
+            "full": predict_paired(
+                model,
+                DataLoader(
+                    focus_record, batch_size=args.batch_size, shuffle=False
+                ),
+                device,
+                args.material_delta_rad,
+                runtime_bound,
+            ),
+            "tail_samples": min(args.tail_samples, len(focus_record)),
+            "tail": predict_paired(
+                model,
+                DataLoader(
+                    causal_tail(focus_record, args.tail_samples),
+                    batch_size=args.batch_size,
+                    shuffle=False,
+                ),
+                device,
+                args.material_delta_rad,
+                runtime_bound,
+            ),
+        }
     if args.normal_recurrent_root is not None:
         normal = MultiSeqNormalAnchorDataset(
             args.normal_recurrent_root.expanduser().resolve() / "val", "val"
@@ -266,21 +434,30 @@ def main() -> int:
             peer["residual"]["anchor"]["mae_rad"] <= args.max_anchor_mae_rad
         ),
     }
+    if runtime_bound is not None:
+        gates["runtime_bounded_material_improvement"] = (
+            aggregate["runtime_bounded"]["residual"][
+                "material_mae_improvement_fraction"
+            ]
+            >= args.min_material_improvement
+        )
     report = {
         "schema_version": 1,
         "purpose": "offline gate; no runtime authority",
         "candidate": candidate_provenance,
         "base_checkpoint": base_provenance,
         "validation_sequence_ids": validation.sequence_ids,
-        "peer_sequence_id": peer_records[0].sequence_id,
+        "peer_sequence_id": peer_record.sequence_id,
         "aggregate": aggregate,
         "peer_validation": peer,
+        "focus_validation": focus,
         "independent_normal": independent_normal,
         "thresholds": {
             "min_material_improvement": args.min_material_improvement,
             "min_material_sign_accuracy": args.min_material_sign_accuracy,
             "max_anchor_mae_rad": args.max_anchor_mae_rad,
             "max_normal_mae_rad": args.max_normal_mae_rad,
+            "runtime_authority_bound_rad": runtime_bound,
         },
         "gates": gates,
         "result": "pass" if all(gates.values()) else "fail",

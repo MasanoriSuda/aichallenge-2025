@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: autoware-build autoware-vehicle autoware-simulator autoware-request-initialpose autoware-request-control  awsim-request-start awsim-request-reset autoware-driver-zenoh autoware-driver-zenoh-rosbag \
-	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final e2e-final-contact-teacher e2e-final-precontact-teacher driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
+	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final e2e-final-contact-teacher e2e-final-precontact-teacher e2e-final-precontact-teacher-all driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
 
 # Used by docker-compose.yml for build/eval artifact ownership.
 HOST_UID ?= $(shell id -u)
@@ -93,6 +93,7 @@ e2e: SIM_MODE := e2e
 e2e-final: SIM_MODE := e2e-final
 e2e-final-contact-teacher: SIM_MODE := e2e-final
 e2e-final-precontact-teacher: SIM_MODE := e2e-final
+e2e-final-precontact-teacher-all: SIM_MODE := e2e-final
 e2e-single e2e-npc-single e2e-npc-gap-teacher e2e e2e-final: AIC_CONTROL_METHOD := tiny_lidar_net
 e2e-npc-gap-teacher: TINY_LIDAR_CONTROL_MODE := gap_teacher
 e2e-teacher: AIC_CONTROL_METHOD := mpc
@@ -156,6 +157,19 @@ e2e-final-precontact-teacher: simulator
 		AIC_CONTROL_METHOD=tiny_lidar_net TINY_LIDAR_CONTROL_MODE=precontact_teacher \
 		docker compose -p 4 up -d autoware
 	@echo "Audit only: pre-contact commands are not production authority."
+	@echo "Start mode is sync; publish /admin/awsim/start after all vehicles are Grounded."
+	@echo "To stop: make down"
+
+# Run-level teacher admission.  Unlike the isolated d4 audit, all peers use the
+# same diagnostic policy so a known production contact trap cannot block Finish.
+e2e-final-precontact-teacher-all: simulator
+	@echo "Start 4-vehicle E2E final all-pre-contact-teacher admission"
+	@for p in 1 2 3 4; do \
+		LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=4 \
+		AIC_CONTROL_METHOD=tiny_lidar_net TINY_LIDAR_CONTROL_MODE=precontact_teacher \
+		docker compose -p $$p up -d autoware; \
+	done
+	@echo "Teacher labels remain inadmissible until every run-level gate passes."
 	@echo "Start mode is sync; publish /admin/awsim/start after all vehicles are Grounded."
 	@echo "To stop: make down"
 

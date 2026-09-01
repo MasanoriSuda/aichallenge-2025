@@ -131,6 +131,16 @@ projectionを行う。
 新teacherもproductionへ昇格しない。全teacher条件などでFinish・接触・stallをrun単位で
 証明することを次のadmissionとする。
 
+`make e2e-final-precontact-teacher-all`による終端run
+`output/20260901-100204`では、4 domainすべてが同じ`precontact_teacher`を使い、AWSIM
+`Finish`まで走行した。Finish時に確定した約550秒の各bagは1715.10--1770.28 mを走り、
+post-start low-speedとpositive-acceleration stallはいずれも全台0秒だった。このrunの
+teacherはoffline corrective label sourceとして採用可能とするが、production authorityと
+checkpointは変更しない。再ラベル時は旧`lidar_gap_teacher_dagger`を流用せず、
+`lidar_precontact_teacher_dagger`、`LidarPrecontactTeacher`、control modeおよび元run/domain
+をmetadataへ明記する。practice harnessはresult JSONを出さないため、新studentの昇格前に
+評価互換gateでcollision/penaltyを別途確認する。
+
 bag単位の固着監査は次で行う。起動待ちは除外し、一度1.0 m/s以上で走行した後の
 0.15 m/s以下の連続時間と、そのうち正加速指令中の連続時間を別々に判定する。縦安全層が
 正しく加速を抑止しても、その場で停止し続けるcandidateを成功扱いしない。GUIの見た目

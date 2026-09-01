@@ -385,14 +385,18 @@ python3 analyze_recurrent_shadow_run.py /output/<run> \
   --expected-checkpoint-sha256 <recurrent-candidate-sha256> \
   --expected-runtime-checkpoint-path \
     /aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<recurrent-run>/<timestamp>/candidate.npy \
+  --expect-async-shadow true \
   --output /output/<run>/e2e-recurrent-shadow-analysis.json \
   --fail-on-rejection
 ```
 
 recurrent shadowは公開操舵へ一切加算しません。起動時にembedded raw/spatial baselineの
-identityを厳密検証し、各scanでは検証済みのproduction Conv5特徴量を共有してhidden stateだけを
-更新します。車輪速度欠損、LiDAR watchdog、推論例外ではhidden stateを破棄し、古い時系列を
-次のepisodeへ持ち越しません。runtime Gateは3周完走、
+identityを厳密検証します。authority無効時は、検証済みproduction Conv5特徴量を1件だけ保持する
+latest-wins workerへ渡し、production commandをpublishした後に診断推論します。worker backlogは
+古いpending sampleをdropしますがproduction commandやwatchdogへ影響させません。車輪速度欠損は
+診断sampleをskipし、LiDAR watchdogと推論例外ではhidden stateを破棄して古いepisodeを
+持ち越しません。runtime logはsubmitted/completed/dropped/stale/errorを分離します。
+runtime Gateは3周完走、
 penalty 0、frozen production Gate合格、coverage 99%以上、error 0、LiDAR 19 Hz以上、連続成功run
 でhidden reset 0、spatial production authority維持を同時に要求します。
 

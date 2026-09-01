@@ -96,6 +96,43 @@ def parse_status_lines(log_text: str) -> list[dict]:
             "recurrent_authority_max_abs_rad": float(
                 tokens.get("recurrent_authority_max_abs_rad", "0")
             ),
+            "async_telemetry_present": all(
+                key in tokens
+                for key in (
+                    "recurrent_async",
+                    "recurrent_async_submitted",
+                    "recurrent_async_completed",
+                    "recurrent_async_dropped",
+                    "recurrent_async_stale",
+                    "recurrent_async_errors",
+                    "recurrent_async_mean_ms",
+                    "recurrent_async_max_ms",
+                )
+            ),
+            "recurrent_async": bool(
+                int(tokens.get("recurrent_async", "0"))
+            ),
+            "recurrent_async_submitted": int(
+                tokens.get("recurrent_async_submitted", "0")
+            ),
+            "recurrent_async_completed": int(
+                tokens.get("recurrent_async_completed", "0")
+            ),
+            "recurrent_async_dropped": int(
+                tokens.get("recurrent_async_dropped", "0")
+            ),
+            "recurrent_async_stale": int(
+                tokens.get("recurrent_async_stale", "0")
+            ),
+            "recurrent_async_errors": int(
+                tokens.get("recurrent_async_errors", "0")
+            ),
+            "recurrent_async_mean_ms": float(
+                tokens.get("recurrent_async_mean_ms", "0")
+            ),
+            "recurrent_async_max_ms": float(
+                tokens.get("recurrent_async_max_ms", "0")
+            ),
         }
         numeric = [
             value
@@ -105,6 +142,8 @@ def parse_status_lines(log_text: str) -> list[dict]:
                 "spatial_authority_enabled",
                 "authority_telemetry_present",
                 "recurrent_authority_enabled",
+                "async_telemetry_present",
+                "recurrent_async",
             }
         ]
         if not np.all(np.isfinite(np.asarray(numeric, dtype=np.float64))):
@@ -240,6 +279,34 @@ def summarize(intervals: list[dict]) -> dict:
         "max_authority_abs_rad": max(
             item["recurrent_authority_max_abs_rad"] for item in intervals
         ),
+        "async_telemetry_interval_count": sum(
+            item["async_telemetry_present"] for item in intervals
+        ),
+        "async_enabled_interval_count": sum(
+            item["recurrent_async"] for item in intervals
+        ),
+        "async_submitted_count": max(
+            item["recurrent_async_submitted"] for item in intervals
+        ),
+        "async_completed_count": max(
+            item["recurrent_async_completed"] for item in intervals
+        ),
+        "async_dropped_count": max(
+            item["recurrent_async_dropped"] for item in intervals
+        ),
+        "async_stale_count": max(
+            item["recurrent_async_stale"] for item in intervals
+        ),
+        "async_error_count": max(
+            item["recurrent_async_errors"] for item in intervals
+        ),
+        "weighted_async_inference_ms": sum(
+            item["recurrent_async_mean_ms"] * item["admitted"]
+            for item in intervals
+        ) / max(admitted, 1),
+        "max_async_inference_ms": max(
+            item["recurrent_async_max_ms"] for item in intervals
+        ),
     }
 
 
@@ -321,6 +388,7 @@ def build_report(args: argparse.Namespace) -> dict:
     ]:
         reasons.append("frozen spatial production authority was not preserved")
     expect_authority = args.expect_authority == "true"
+    expect_async_shadow = args.expect_async_shadow == "true"
     current_authority_contract = bool(
         runtime_config is not None
         and runtime_config["authority_config_present"]
@@ -357,6 +425,17 @@ def build_report(args: argparse.Namespace) -> dict:
             reasons.append("disabled recurrent authority reported clipping")
         if shadow["max_authority_abs_rad"] > 1e-9:
             reasons.append("disabled recurrent authority reported correction")
+    if expect_async_shadow:
+        if shadow["async_telemetry_interval_count"] != shadow["interval_count"]:
+            reasons.append("recurrent async telemetry missing")
+        if shadow["async_enabled_interval_count"] != shadow["interval_count"]:
+            reasons.append("recurrent shadow was not async for every interval")
+        if shadow["async_stale_count"] != 0:
+            reasons.append("recurrent async results became stale")
+        if shadow["async_error_count"] != 0:
+            reasons.append("recurrent async worker reported errors")
+    elif shadow["async_enabled_interval_count"] != 0:
+        reasons.append("unexpected recurrent async execution mode")
     if not race.get("finished") or race.get("lap_count", 0) < race.get(
         "required_laps", 0
     ):
@@ -395,6 +474,7 @@ def build_report(args: argparse.Namespace) -> dict:
             "min_scan_hz": args.min_scan_hz,
             "max_reset_count": args.max_reset_count,
             "expect_authority": expect_authority,
+            "expect_async_shadow": expect_async_shadow,
             "expected_authority_max_abs_correction_rad": (
                 args.expected_authority_max_abs_correction_rad
             ),
@@ -417,6 +497,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-deadband-rad", type=float, default=0.02)
     parser.add_argument(
         "--expect-authority", choices=("true", "false"), default="false"
+    )
+    parser.add_argument(
+        "--expect-async-shadow", choices=("true", "false"), default="false"
     )
     parser.add_argument(
         "--expected-authority-max-abs-correction-rad",

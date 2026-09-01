@@ -1,7 +1,9 @@
+from dataclasses import dataclass
 import hashlib
 import logging
-import numpy as np
 from typing import Optional, Tuple
+
+import numpy as np
 
 from tiny_lidar_net_controller.gap_teacher import (
     GapTeacherConfig,
@@ -30,6 +32,28 @@ from tiny_lidar_net_controller.model.tinylidarnet import (
     TinyLidarNetNp,
     TinyLidarNetSmallNp,
 )
+
+
+@dataclass(frozen=True)
+class RecurrentShadowSample:
+    """Immutable input captured from one admitted production command."""
+
+    conv5_features: np.ndarray
+    speed_mps: float
+    raw_base_steering_rad: float
+    spatial_correction_rad: float
+    production_spatial_steering_rad: float
+
+
+@dataclass(frozen=True)
+class RecurrentShadowEvaluation:
+    """One recurrent diagnostic result and its successor hidden state."""
+
+    correction_rad: float
+    raw_correction_rad: float
+    steering_rad: float
+    hidden_norm: float
+    next_hidden: np.ndarray
 
 
 class TinyLidarNetCore:
@@ -164,6 +188,8 @@ class TinyLidarNetCore:
         self.last_recurrent_shadow_hidden_norm = 0.0
         self.last_recurrent_shadow_admitted = False
         self.last_recurrent_shadow_status = "disabled"
+        self.last_recurrent_shadow_sample = None
+        self.last_recurrent_shadow_sample_status = "disabled"
         self.recurrent_shadow_reset_count = 0
         self.recurrent_authority_enabled = bool(recurrent_authority_enabled)
         self.recurrent_authority_max_abs_correction_rad = float(
@@ -517,7 +543,11 @@ class TinyLidarNetCore:
             )
 
     def process(
-        self, ranges: np.ndarray, speed_mps: Optional[float] = None
+        self,
+        ranges: np.ndarray,
+        speed_mps: Optional[float] = None,
+        *,
+        defer_recurrent_shadow: bool = False,
     ) -> Tuple[float, float]:
         """Runs the complete inference pipeline on raw LiDAR data.
 
@@ -531,6 +561,11 @@ class TinyLidarNetCore:
             Tuple[float, float]: A tuple containing (acceleration, steering_angle).
                 Values are clipped between -1.0 and 1.0.
         """
+        if defer_recurrent_shadow and self.recurrent_authority_enabled:
+            raise ValueError(
+                "recurrent authority cannot use deferred shadow execution"
+            )
+
         ranges = np.asarray(ranges, dtype=np.float32)
         if ranges.ndim != 1 or ranges.size == 0:
             raise ValueError("ranges must be a non-empty 1D array")
@@ -574,10 +609,13 @@ class TinyLidarNetCore:
         self.last_spatial_authority_correction_rad = 0.0
         self.last_spatial_authority_applied = False
         self.last_spatial_authority_clipped = False
-        self.last_recurrent_shadow_correction_rad = 0.0
-        self.last_recurrent_shadow_raw_correction_rad = 0.0
-        self.last_recurrent_shadow_steering_rad = 0.0
-        self.last_recurrent_shadow_admitted = False
+        self.last_recurrent_shadow_sample = None
+        self.last_recurrent_shadow_sample_status = "disabled"
+        if not defer_recurrent_shadow:
+            self.last_recurrent_shadow_correction_rad = 0.0
+            self.last_recurrent_shadow_raw_correction_rad = 0.0
+            self.last_recurrent_shadow_steering_rad = 0.0
+            self.last_recurrent_shadow_admitted = False
         self.last_recurrent_authority_correction_rad = 0.0
         self.last_recurrent_authority_applied = False
         self.last_recurrent_authority_clipped = False
@@ -630,59 +668,22 @@ class TinyLidarNetCore:
                     )
 
         if self.recurrent_shadow_model is not None:
-            if speed_mps is None:
-                self.reset_recurrent_history()
-                self.last_recurrent_shadow_status = "missing-or-stale-speed"
-            else:
-                try:
-                    speed = float(speed_mps)
-                    if not np.isfinite(speed) or speed < 0.0:
-                        raise ValueError(
-                            "recurrent shadow speed must be finite and non-negative"
-                        )
-                    if not self.last_spatial_shadow_admitted:
-                        raise ValueError(
-                            "recurrent shadow requires an admitted production "
-                            "spatial result"
-                        )
-                    expected_production_base = float(np.clip(
-                        raw_base_steer + self.last_spatial_shadow_correction_rad,
-                        -1.0,
-                        1.0,
-                    ))
-                    if not np.isclose(
-                        expected_production_base, steer, rtol=2e-5, atol=2e-5
-                    ):
-                        raise ValueError(
-                            "recurrent shadow production baseline mismatch: "
-                            f"embedded={expected_production_base:.8f}, "
-                            f"published_base={steer:.8f}"
-                        )
-                    correction, raw_correction, next_hidden = (
-                        self.recurrent_shadow_model.forward_correction_from_conv5_features(
-                            shared_conv5,
-                            np.asarray([speed], dtype=np.float32),
-                            self.recurrent_shadow_hidden,
-                        )
+            try:
+                sample = self._make_recurrent_shadow_sample(
+                    shared_conv5=shared_conv5,
+                    speed_mps=speed_mps,
+                    raw_base_steer=raw_base_steer,
+                    production_spatial_steer=steer,
+                )
+                self.last_recurrent_shadow_sample = sample
+                self.last_recurrent_shadow_sample_status = "ok"
+                if not defer_recurrent_shadow:
+                    evaluation = self.evaluate_recurrent_shadow_sample(
+                        sample, self.recurrent_shadow_hidden
                     )
-                    recurrent_steering = np.clip(
-                        steer + correction, -1.0, 1.0
+                    self.record_recurrent_shadow_evaluation(
+                        evaluation, retain_hidden=True
                     )
-                    self.recurrent_shadow_hidden = next_hidden.copy()
-                    self.last_recurrent_shadow_hidden_norm = float(
-                        np.linalg.norm(next_hidden)
-                    )
-                    self.last_recurrent_shadow_correction_rad = float(
-                        correction[0]
-                    )
-                    self.last_recurrent_shadow_raw_correction_rad = float(
-                        raw_correction[0]
-                    )
-                    self.last_recurrent_shadow_steering_rad = float(
-                        recurrent_steering[0]
-                    )
-                    self.last_recurrent_shadow_admitted = True
-                    self.last_recurrent_shadow_status = "ok"
                     if self.recurrent_authority_enabled:
                         applied = float(np.clip(
                             self.last_recurrent_shadow_correction_rad,
@@ -698,11 +699,14 @@ class TinyLidarNetCore:
                             atol=1e-7,
                         )
                         steer = float(np.clip(steer + applied, -1.0, 1.0))
-                except Exception as exc:
+            except Exception as exc:
+                status = f"inference-error:{type(exc).__name__}:{exc}"
+                if speed_mps is None:
+                    status = "missing-or-stale-speed"
+                self.last_recurrent_shadow_sample_status = status
+                if not defer_recurrent_shadow:
+                    self.last_recurrent_shadow_status = status
                     self.reset_recurrent_history()
-                    self.last_recurrent_shadow_status = (
-                        f"inference-error:{type(exc).__name__}:{exc}"
-                    )
 
         self.last_residual_correction_rad = 0.0
         self.last_residual_gate_probability = 0.0
@@ -751,6 +755,103 @@ class TinyLidarNetCore:
             accel = safety_decision.acceleration_mps2
 
         return accel, steer
+
+    def _make_recurrent_shadow_sample(
+        self,
+        *,
+        shared_conv5: np.ndarray,
+        speed_mps: Optional[float],
+        raw_base_steer: float,
+        production_spatial_steer: float,
+    ) -> RecurrentShadowSample:
+        """Capture recurrent input only after the production baseline is valid."""
+        if speed_mps is None:
+            raise ValueError("recurrent shadow speed is missing or stale")
+        speed = float(speed_mps)
+        if not np.isfinite(speed) or speed < 0.0:
+            raise ValueError(
+                "recurrent shadow speed must be finite and non-negative"
+            )
+        if not self.last_spatial_shadow_admitted:
+            raise ValueError(
+                "recurrent shadow requires an admitted production spatial result"
+            )
+        expected_production_base = float(np.clip(
+            raw_base_steer + self.last_spatial_shadow_correction_rad,
+            -1.0,
+            1.0,
+        ))
+        if not np.isclose(
+            expected_production_base,
+            production_spatial_steer,
+            rtol=2e-5,
+            atol=2e-5,
+        ):
+            raise ValueError(
+                "recurrent shadow production baseline mismatch: "
+                f"embedded={expected_production_base:.8f}, "
+                f"published_base={production_spatial_steer:.8f}"
+            )
+        conv5 = np.array(shared_conv5, dtype=np.float32, copy=True)
+        if conv5.ndim != 2 or not np.all(np.isfinite(conv5)):
+            raise ValueError("recurrent shadow Conv5 snapshot is invalid")
+        conv5.setflags(write=False)
+        return RecurrentShadowSample(
+            conv5_features=conv5,
+            speed_mps=speed,
+            raw_base_steering_rad=float(raw_base_steer),
+            spatial_correction_rad=float(
+                self.last_spatial_shadow_correction_rad
+            ),
+            production_spatial_steering_rad=float(production_spatial_steer),
+        )
+
+    def evaluate_recurrent_shadow_sample(
+        self,
+        sample: RecurrentShadowSample,
+        hidden: Optional[np.ndarray],
+    ) -> RecurrentShadowEvaluation:
+        """Evaluate one immutable sample without mutating production state."""
+        if self.recurrent_shadow_model is None:
+            raise ValueError("recurrent shadow model is disabled")
+        correction, raw_correction, next_hidden = (
+            self.recurrent_shadow_model.forward_correction_from_conv5_features(
+                sample.conv5_features,
+                np.asarray([sample.speed_mps], dtype=np.float32),
+                hidden,
+            )
+        )
+        recurrent_steering = np.clip(
+            sample.production_spatial_steering_rad + correction,
+            -1.0,
+            1.0,
+        )
+        next_hidden_copy = np.array(next_hidden, dtype=np.float32, copy=True)
+        return RecurrentShadowEvaluation(
+            correction_rad=float(correction[0]),
+            raw_correction_rad=float(raw_correction[0]),
+            steering_rad=float(recurrent_steering[0]),
+            hidden_norm=float(np.linalg.norm(next_hidden_copy)),
+            next_hidden=next_hidden_copy,
+        )
+
+    def record_recurrent_shadow_evaluation(
+        self,
+        evaluation: RecurrentShadowEvaluation,
+        *,
+        retain_hidden: bool,
+    ) -> None:
+        """Record a completed evaluation; async callers keep hidden ownership."""
+        if retain_hidden:
+            self.recurrent_shadow_hidden = evaluation.next_hidden.copy()
+        self.last_recurrent_shadow_hidden_norm = evaluation.hidden_norm
+        self.last_recurrent_shadow_correction_rad = evaluation.correction_rad
+        self.last_recurrent_shadow_raw_correction_rad = (
+            evaluation.raw_correction_rad
+        )
+        self.last_recurrent_shadow_steering_rad = evaluation.steering_rad
+        self.last_recurrent_shadow_admitted = True
+        self.last_recurrent_shadow_status = "ok"
 
     def reset_residual_history(self) -> None:
         """Prevent temporal context from crossing a runtime reset boundary."""

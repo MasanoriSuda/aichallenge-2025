@@ -330,6 +330,97 @@ def test_recurrent_shadow_preserves_production_output_and_tracks_state(
     assert shadow.recurrent_shadow_reset_count == 1
 
 
+def test_deferred_recurrent_shadow_is_observation_only(tmp_path: Path) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(tmp_path)
+    production = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+        spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=1.2,
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=1.2,
+    )
+    shadow = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+        spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=1.2,
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=1.2,
+        recurrent_shadow_ckpt_path=str(recurrent_checkpoint),
+    )
+    scan = np.linspace(1.0, 30.0, 750, dtype=np.float32)
+
+    assert shadow.process(
+        scan, speed_mps=3.0, defer_recurrent_shadow=True
+    ) == pytest.approx(production.process(scan, speed_mps=3.0), abs=0.0)
+    sample = shadow.last_recurrent_shadow_sample
+    assert sample is not None
+    assert not sample.conv5_features.flags.writeable
+    assert shadow.last_recurrent_shadow_sample_status == "ok"
+    assert shadow.last_recurrent_shadow_status == "waiting-speed"
+    assert shadow.recurrent_shadow_hidden is None
+
+    evaluation = shadow.evaluate_recurrent_shadow_sample(sample, hidden=None)
+    shadow.record_recurrent_shadow_evaluation(
+        evaluation, retain_hidden=False
+    )
+    assert shadow.last_recurrent_shadow_status == "ok"
+    assert shadow.last_recurrent_shadow_admitted
+    assert shadow.last_recurrent_shadow_correction_rad == pytest.approx(
+        0.03, abs=1e-6
+    )
+    assert shadow.recurrent_shadow_hidden is None
+
+
+def test_deferred_recurrent_shadow_rejects_authority(tmp_path: Path) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(tmp_path)
+    shadow = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+        spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=1.2,
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=1.2,
+        recurrent_shadow_ckpt_path=str(recurrent_checkpoint),
+        recurrent_shadow_expected_sha256=hashlib.sha256(
+            recurrent_checkpoint.read_bytes()
+        ).hexdigest(),
+        recurrent_authority_enabled=True,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="recurrent authority cannot use deferred shadow execution",
+    ):
+        shadow.process(
+            np.full(750, 30.0, dtype=np.float32),
+            speed_mps=3.0,
+            defer_recurrent_shadow=True,
+        )
+
+
 def test_recurrent_shadow_rejects_wrong_embedded_base(tmp_path: Path) -> None:
     recurrent_checkpoint = _write_recurrent_shadow_checkpoint(
         tmp_path, mismatch_base=True

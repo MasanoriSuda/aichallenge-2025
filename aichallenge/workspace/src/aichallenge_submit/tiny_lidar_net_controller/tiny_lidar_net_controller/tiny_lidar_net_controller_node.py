@@ -16,6 +16,9 @@ from tiny_lidar_net_controller.speed_committed_teacher import (
 from tiny_lidar_net_controller.longitudinal_safety import (
     SpeedAwareLongitudinalSafetyConfig,
 )
+from tiny_lidar_net_controller.recurrent_shadow_executor import (
+    LatestWinsRecurrentShadowExecutor,
+)
 from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 
 
@@ -517,6 +520,22 @@ class TinyLidarNetNode(Node):
         self.recurrent_authority_clipped_count = 0
         self.last_log_recurrent_authority_clipped_count = 0
         self.recurrent_authority_corrections = []
+        self.recurrent_shadow_executor = None
+        self.recurrent_async_inference_times = []
+        if (
+            self.core.recurrent_shadow_model is not None
+            and not self.core.recurrent_authority_enabled
+        ):
+            self.recurrent_shadow_executor = (
+                LatestWinsRecurrentShadowExecutor(
+                    self.core.evaluate_recurrent_shadow_sample,
+                    max_result_age_sec=self.sensor_timeout_sec,
+                )
+            )
+            self.get_logger().info(
+                "Recurrent shadow execution: async-latest-wins, "
+                "authority=disabled, command_path=isolated"
+            )
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -565,7 +584,11 @@ class TinyLidarNetNode(Node):
         try:
             # 2. Process via Core Logic
             accel, steer = self.core.process(
-                ranges, self._fresh_wheel_speed()
+                ranges,
+                self._fresh_wheel_speed(),
+                defer_recurrent_shadow=(
+                    self.recurrent_shadow_executor is not None
+                ),
             )
             if self.core.spatial_shadow_model is not None:
                 if self.core.last_spatial_shadow_admitted:
@@ -586,25 +609,6 @@ class TinyLidarNetNode(Node):
                     )
                 if self.core.last_spatial_authority_clipped:
                     self.spatial_authority_clipped_count += 1
-            if self.core.recurrent_shadow_model is not None:
-                if self.core.last_recurrent_shadow_admitted:
-                    self.recurrent_shadow_admitted_count += 1
-                    self.recurrent_shadow_corrections.append(
-                        self.core.last_recurrent_shadow_correction_rad
-                    )
-                elif self.core.last_recurrent_shadow_status.startswith(
-                    "inference-error:"
-                ):
-                    self.recurrent_shadow_error_count += 1
-                else:
-                    self.recurrent_shadow_skipped_count += 1
-                if self.core.last_recurrent_authority_applied:
-                    self.recurrent_authority_applied_count += 1
-                    self.recurrent_authority_corrections.append(
-                        self.core.last_recurrent_authority_correction_rad
-                    )
-                if self.core.last_recurrent_authority_clipped:
-                    self.recurrent_authority_clipped_count += 1
             gap_decision = self.core.last_gap_teacher_decision
             if gap_decision is not None and gap_decision.active:
                 self.gap_teacher_active_count += 1
@@ -628,6 +632,40 @@ class TinyLidarNetNode(Node):
             if self.sensor_stale:
                 self.get_logger().info("LiDAR stream recovered; resuming ML control")
                 self.sensor_stale = False
+
+            # Recurrent observation is accounted only after the production
+            # command has been published.  Async results never feed back into
+            # the current or a future command.
+            if self.recurrent_shadow_executor is not None:
+                self._collect_async_recurrent_results()
+                sample = self.core.last_recurrent_shadow_sample
+                if sample is None:
+                    self.recurrent_shadow_skipped_count += 1
+                else:
+                    self.recurrent_shadow_skipped_count += (
+                        self.recurrent_shadow_executor.submit(
+                            self.scan_count, sample
+                        )
+                    )
+            elif self.core.recurrent_shadow_model is not None:
+                if self.core.last_recurrent_shadow_admitted:
+                    self.recurrent_shadow_admitted_count += 1
+                    self.recurrent_shadow_corrections.append(
+                        self.core.last_recurrent_shadow_correction_rad
+                    )
+                elif self.core.last_recurrent_shadow_status.startswith(
+                    "inference-error:"
+                ):
+                    self.recurrent_shadow_error_count += 1
+                else:
+                    self.recurrent_shadow_skipped_count += 1
+                if self.core.last_recurrent_authority_applied:
+                    self.recurrent_authority_applied_count += 1
+                    self.recurrent_authority_corrections.append(
+                        self.core.last_recurrent_authority_correction_rad
+                    )
+                if self.core.last_recurrent_authority_clipped:
+                    self.recurrent_authority_clipped_count += 1
         except Exception as exc:
             self._log_inference_error(exc)
             self._publish_stop()
@@ -661,6 +699,30 @@ class TinyLidarNetNode(Node):
         if age_sec < 0.0 or age_sec > self.spatial_shadow_speed_timeout_sec:
             return None
         return self.latest_wheel_speed_mps
+
+    def _collect_async_recurrent_results(self) -> None:
+        """Move diagnostic worker results into main-thread telemetry only."""
+        if self.recurrent_shadow_executor is None:
+            return
+        for result in self.recurrent_shadow_executor.drain_completed():
+            self.recurrent_async_inference_times.append(result.inference_ms)
+            self.core.last_recurrent_shadow_admitted = False
+            self.core.last_recurrent_shadow_status = result.status
+            if result.status == "ok" and result.evaluation is not None:
+                self.core.record_recurrent_shadow_evaluation(
+                    result.evaluation, retain_hidden=False
+                )
+                self.recurrent_shadow_admitted_count += 1
+                self.recurrent_shadow_corrections.append(
+                    result.evaluation.correction_rad
+                )
+            elif result.status.startswith("inference-error:"):
+                self.recurrent_shadow_error_count += 1
+            else:
+                self.recurrent_shadow_skipped_count += 1
+        self.core.recurrent_shadow_reset_count = (
+            self.recurrent_shadow_executor.stats()["resets"]
+        )
 
     def _publish_command(self, acceleration: float, steering: float):
         """Publish one finite Ackermann command."""
@@ -698,6 +760,8 @@ class TinyLidarNetNode(Node):
             )
             self.sensor_stale = True
             self.core.reset_residual_history()
+            if self.recurrent_shadow_executor is not None:
+                self.recurrent_shadow_executor.reset_history()
         self._publish_stop()
 
     def _log_inference_error(self, exc: Exception):
@@ -965,6 +1029,41 @@ class TinyLidarNetNode(Node):
                         "recurrent_authority_max_abs_rad="
                         f"{recurrent_authority_max_abs:.5f}"
                     )
+                    if self.recurrent_shadow_executor is not None:
+                        async_stats = self.recurrent_shadow_executor.stats()
+                        async_times = np.asarray(
+                            self.recurrent_async_inference_times,
+                            dtype=np.float64,
+                        )
+                        async_mean_ms = (
+                            float(np.mean(async_times))
+                            if async_times.size
+                            else 0.0
+                        )
+                        async_max_ms = (
+                            float(np.max(async_times))
+                            if async_times.size
+                            else 0.0
+                        )
+                        recurrent_status += (
+                            " recurrent_async=1"
+                            " recurrent_async_submitted="
+                            f"{async_stats['submitted']}"
+                            " recurrent_async_completed="
+                            f"{async_stats['completed']}"
+                            " recurrent_async_dropped="
+                            f"{async_stats['dropped']}"
+                            " recurrent_async_stale="
+                            f"{async_stats['stale']}"
+                            " recurrent_async_errors="
+                            f"{async_stats['errors']}"
+                            " recurrent_async_sample_status="
+                            f"{self.core.last_recurrent_shadow_sample_status}"
+                            " recurrent_async_mean_ms="
+                            f"{async_mean_ms:.2f}"
+                            " recurrent_async_max_ms="
+                            f"{async_max_ms:.2f}"
+                        )
 
                 self.get_logger().info(
                     f"E2E_STATUS scans={self.scan_count} stale={int(self.sensor_stale)} "
@@ -1018,8 +1117,15 @@ class TinyLidarNetNode(Node):
                     self.recurrent_authority_clipped_count
                 )
                 self.recurrent_authority_corrections.clear()
+                self.recurrent_async_inference_times.clear()
 
             self.last_log_time = now
+
+    def destroy_node(self):
+        if self.recurrent_shadow_executor is not None:
+            self.recurrent_shadow_executor.close()
+            self.recurrent_shadow_executor = None
+        return super().destroy_node()
 
 
 def main(args=None):

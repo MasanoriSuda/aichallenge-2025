@@ -40,6 +40,7 @@
   <arg name="tiny_lidar_recurrent_authority_enabled" default="false"/>
   <arg name="tiny_lidar_recurrent_authority_max_abs_correction_rad" default="0.24"/>
   <arg name="tiny_lidar_control_mode" default="fixed_lidar_brake"/>
+  <arg name="tiny_lidar_acceleration" default="0.8"/>
 
   <!-- Global parameters -->
   <group scoped="false">
@@ -187,6 +188,7 @@
       <arg name="recurrent_authority_enabled" value="$(var tiny_lidar_recurrent_authority_enabled)"/>
       <arg name="recurrent_authority_max_abs_correction_rad" value="$(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"/>
       <arg name="control_mode" value="$(var tiny_lidar_control_mode)"/>
+      <arg name="acceleration" value="$(var tiny_lidar_acceleration)"/>
     </include>
   </group>
 

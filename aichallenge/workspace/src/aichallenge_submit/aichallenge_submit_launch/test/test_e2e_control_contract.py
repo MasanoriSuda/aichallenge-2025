@@ -47,6 +47,7 @@ def test_e2e_entry_selects_tiny_lidar_net() -> None:
         arguments["tiny_lidar_recurrent_authority_max_abs_correction_rad"]
         == "0.24"
     )
+    assert arguments["tiny_lidar_acceleration"] == "0.8"
 
     includes = entry.findall("include")
     assert len(includes) == 1
@@ -93,6 +94,7 @@ def test_e2e_entry_selects_tiny_lidar_net() -> None:
         "tiny_lidar_recurrent_authority_max_abs_correction_rad"
     ] == "$(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"
     assert forwarded["tiny_lidar_control_mode"] == "$(var tiny_lidar_control_mode)"
+    assert forwarded["tiny_lidar_acceleration"] == "$(var tiny_lidar_acceleration)"
 
 
 def test_reference_retains_explicit_controller_switch() -> None:
@@ -154,6 +156,7 @@ def test_reference_retains_explicit_controller_switch() -> None:
         "recurrent_authority_max_abs_correction_rad"
     ] == "$(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"
     assert tiny_forwarded["control_mode"] == "$(var tiny_lidar_control_mode)"
+    assert tiny_forwarded["acceleration"] == "$(var tiny_lidar_acceleration)"
 
 
 def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None:
@@ -164,6 +167,7 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     }
     assert arguments["model_type"] == "tiny_lidar_net"
     assert arguments["control_mode"] == "fixed_lidar_brake"
+    assert arguments["acceleration"] == "0.8"
 
     include = control.find("include")
     assert include is not None
@@ -173,6 +177,7 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     }
     assert forwarded["control_cmd_topic"] == "/control/command/control_cmd"
     assert forwarded["control_mode"] == "$(var control_mode)"
+    assert forwarded["acceleration"] == "$(var acceleration)"
     assert forwarded["residual_ckpt_path"] == "$(var residual_ckpt_path)"
     assert forwarded["residual_architecture"] == "$(var residual_architecture)"
     assert forwarded["spatial_shadow_ckpt_path"] == (
@@ -213,6 +218,7 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     }
     assert controller_arguments["scan_topic"] == "/sensing/lidar/scan"
     assert controller_arguments["control_mode"] == "fixed_lidar_brake"
+    assert controller_arguments["acceleration"] == "0.8"
     assert controller_arguments["residual_ckpt_path"] == ""
     assert controller_arguments["residual_architecture"] == "stateless"
     assert controller_arguments["spatial_shadow_ckpt_path"] == SPATIAL_CHECKPOINT
@@ -232,3 +238,10 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
         controller_arguments["control_cmd_topic"]
         == "/control/command/control_cmd"
     )
+    controller_node = controller.find("node")
+    assert controller_node is not None
+    controller_parameters = {
+        node.get("name"): node.get("value")
+        for node in controller_node.findall("param")
+    }
+    assert controller_parameters["acceleration"] == "$(var acceleration)"

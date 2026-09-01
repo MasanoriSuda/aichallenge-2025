@@ -125,6 +125,7 @@ AWSIM結果を含む最終判定は、motion JSONを生成した後にrun単位�
 ```bash
 python3 analyze_e2e_competition.py /output/<run> \
   --expected-control-mode fixed_lidar_brake \
+  --expected-acceleration-mps2 0.8 \
   --expected-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
   --checkpoint-file checkpoints/20260901_055824/candidate.npy \
@@ -133,6 +134,31 @@ python3 analyze_e2e_competition.py /output/<run> \
   --output /output/<run>/e2e-competition-analysis.json \
   --fail-on-rejection
 ```
+
+固定加速度を比較する場合は、既定値を直接編集せずrunごとに明示します。値はstartup logと
+competition analysisへ残るため、異なる加速度の結果を同じ設定として扱いません。
+
+```bash
+make e2e-single \
+  LOG_DIR=/output/<run> \
+  TINY_LIDAR_ACCELERATION=0.8
+
+python3 analyze_e2e_competition.py /output/<run> \
+  --expected-control-mode fixed_lidar_brake \
+  --expected-acceleration-mps2 0.8 \
+  --expected-checkpoint-path \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+  --checkpoint-file checkpoints/20260901_055824/candidate.npy \
+  --expected-checkpoint-sha256 \
+    de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa \
+  --output /output/<run>/e2e-competition-analysis.json \
+  --fail-on-rejection
+```
+
+packaged defaultは単車とNPCの両Gateに合格した`0.8 m/s2`です。`1.0 m/s2`は
+単車Gateに合格しましたが、NPC Gateでwall penaltyが発生したため既定値へは
+昇格していません。比較runでは必ず`TINY_LIDAR_ACCELERATION`と
+`--expected-acceleration-mps2`を対にしてruntime identityを固定します。
 
 競技runが失敗した後は、checkpointを再学習する前に失敗直前状態のcoverageを監査できます。
 `--failure`は`run:dN`形式で複数指定し、最初のpenalty前10秒をproduction学習分布と

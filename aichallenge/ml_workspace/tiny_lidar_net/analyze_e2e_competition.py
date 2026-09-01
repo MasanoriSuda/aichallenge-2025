@@ -9,6 +9,7 @@ or penalties.  This analyzer refuses to call such a run successful.
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -21,7 +22,8 @@ DETAIL_SCHEMA_VERSION = "v3"
 SUMMARY_SCHEMA_VERSION = "v2"
 DOMAIN_PATTERN = re.compile(r"^d([1-9][0-9]*)$")
 LAUNCH_VALUE_PATTERN = re.compile(
-    r"-\s+(tiny_lidar_ckpt_path|tiny_lidar_control_mode):\s*(\S+)"
+    r"-\s+(tiny_lidar_ckpt_path|tiny_lidar_control_mode|"
+    r"tiny_lidar_acceleration):\s*(\S+)"
 )
 
 
@@ -77,6 +79,7 @@ def parse_runtime_provenance(log_path: Path) -> dict[str, Any]:
     values: dict[str, set[str]] = {
         "tiny_lidar_ckpt_path": set(),
         "tiny_lidar_control_mode": set(),
+        "tiny_lidar_acceleration": set(),
     }
     try:
         lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -90,9 +93,21 @@ def parse_runtime_provenance(log_path: Path) -> dict[str, Any]:
     conflicts = {
         key: sorted(found) for key, found in values.items() if len(found) > 1
     }
+    acceleration_values = values["tiny_lidar_acceleration"]
+    acceleration_mps2 = None
+    if len(acceleration_values) == 1:
+        try:
+            acceleration_mps2 = float(next(iter(acceleration_values)))
+            if not math.isfinite(acceleration_mps2):
+                raise ValueError("non-finite acceleration")
+        except ValueError:
+            conflicts["tiny_lidar_acceleration"] = sorted(
+                acceleration_values
+            )
     return {
         "checkpoint_path": next(iter(values["tiny_lidar_ckpt_path"]), None),
         "control_mode": next(iter(values["tiny_lidar_control_mode"]), None),
+        "acceleration_mps2": acceleration_mps2,
         "conflicts": conflicts,
     }
 
@@ -152,6 +167,7 @@ def analyze_domain(
     max_penalty_count: int,
     expected_control_mode: Optional[str],
     expected_checkpoint_path: Optional[str],
+    expected_acceleration_mps2: Optional[float],
 ) -> dict[str, Any]:
     domain_dir = run_dir / f"d{domain}"
     motion_path = domain_dir / "e2e-run-analysis.json"
@@ -216,6 +232,12 @@ def analyze_domain(
         and provenance["checkpoint_path"] != expected_checkpoint_path
     ):
         reasons.append("runtime-checkpoint-path-mismatch")
+    if expected_acceleration_mps2 is not None:
+        acceleration = provenance["acceleration_mps2"]
+        if acceleration is None:
+            reasons.append("runtime-acceleration-missing")
+        elif abs(acceleration - expected_acceleration_mps2) > 1e-9:
+            reasons.append("runtime-acceleration-mismatch")
 
     return {
         "domain": domain,
@@ -257,6 +279,7 @@ def analyze_competition(
     max_penalty_count: int = 0,
     expected_control_mode: Optional[str] = None,
     expected_checkpoint_path: Optional[str] = None,
+    expected_acceleration_mps2: Optional[float] = None,
     checkpoint_file: Optional[Path] = None,
     expected_checkpoint_sha256: Optional[str] = None,
 ) -> dict[str, Any]:
@@ -310,6 +333,7 @@ def analyze_competition(
             max_penalty_count,
             expected_control_mode,
             expected_checkpoint_path,
+            expected_acceleration_mps2,
         )
         for domain in domains
     ]
@@ -329,6 +353,7 @@ def analyze_competition(
             "control_mode": expected_control_mode,
             "checkpoint_path": expected_checkpoint_path,
             "checkpoint_sha256": expected_checkpoint_sha256,
+            "acceleration_mps2": expected_acceleration_mps2,
         },
         "checkpoint_artifact": checkpoint,
         "artifacts": {
@@ -347,6 +372,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-penalty-count", type=int, default=0)
     parser.add_argument("--expected-control-mode")
     parser.add_argument("--expected-checkpoint-path")
+    parser.add_argument("--expected-acceleration-mps2", type=float)
     parser.add_argument("--checkpoint-file", type=Path)
     parser.add_argument("--expected-checkpoint-sha256")
     parser.add_argument(
@@ -361,6 +387,14 @@ def main() -> int:
     args = parse_args()
     if args.max_penalty_count < 0:
         raise SystemExit("--max-penalty-count must be non-negative")
+    if args.expected_acceleration_mps2 is not None and (
+        not math.isfinite(args.expected_acceleration_mps2)
+        or args.expected_acceleration_mps2 <= 0.0
+        or args.expected_acceleration_mps2 > 1.0
+    ):
+        raise SystemExit(
+            "--expected-acceleration-mps2 must be finite and within (0, 1]"
+        )
     run_dir = args.run_dir.expanduser().resolve()
     try:
         domains = parse_domains(run_dir, args.domains)
@@ -370,6 +404,7 @@ def main() -> int:
             max_penalty_count=args.max_penalty_count,
             expected_control_mode=args.expected_control_mode,
             expected_checkpoint_path=args.expected_checkpoint_path,
+            expected_acceleration_mps2=args.expected_acceleration_mps2,
             checkpoint_file=(
                 None
                 if args.checkpoint_file is None

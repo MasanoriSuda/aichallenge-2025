@@ -371,6 +371,7 @@ class TinyLidarNetNode(Node):
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
                 f"MaxRange: {max_range}, "
+                f"Acceleration: {float(acceleration):.6f}, "
                 f"ValidatedWeights: {self.core.loaded_parameter_count}, "
                 "ResidualWeights: "
                 f"{self.core.residual_loaded_parameter_count}, "

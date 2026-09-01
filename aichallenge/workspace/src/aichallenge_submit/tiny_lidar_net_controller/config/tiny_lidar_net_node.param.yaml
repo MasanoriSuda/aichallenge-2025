@@ -39,7 +39,9 @@
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
     control_mode: "fixed_lidar_brake"  # ML steer + LiDAR longitudinal safety
-    acceleration: 0.6            # 現AWSIMで発進・周回できる暫定baseline
+    # Conservative direct-node fallback. Participant launch owns the
+    # closed-loop-qualified packaged default (currently 0.8 m/s2).
+    acceleration: 0.6
 
     # Shared obstacle policy. Only gap_teacher may modify lateral control.
     gap_teacher:

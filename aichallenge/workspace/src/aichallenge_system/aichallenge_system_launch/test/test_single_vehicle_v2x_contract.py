@@ -349,6 +349,29 @@ def test_runtime_recurrent_candidate_is_opt_in_and_authority_is_explicit() -> No
     )
 
 
+def test_runtime_tiny_lidar_acceleration_is_explicit_and_qualified_by_gate() -> None:
+    runner = read("run_autoware.bash")
+    system_launch = read(
+        "workspace/src/aichallenge_system/"
+        "aichallenge_system_launch/launch/aichallenge_system.launch.xml"
+    )
+
+    assert 'tiny_lidar_acceleration="${TINY_LIDAR_ACCELERATION:-}"' in runner
+    assert (
+        "TINY_LIDAR_ACCELERATION is only valid with "
+        "AIC_CONTROL_METHOD=tiny_lidar_net" in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_acceleration:=${tiny_lidar_acceleration}")'
+        in runner
+    )
+    assert '<arg name="tiny_lidar_acceleration" default="0.8"/>' in system_launch
+    assert (
+        '<arg name="tiny_lidar_acceleration" '
+        'value="$(var tiny_lidar_acceleration)"/>' in system_launch
+    )
+
+
 def test_single_vehicle_empty_world_producer_is_simulation_only() -> None:
     system_launch = read(
         "workspace/src/aichallenge_system/"

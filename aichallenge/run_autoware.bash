@@ -244,6 +244,20 @@ if [[ -n "${tiny_lidar_control_mode}" ]]; then
     opts+=("tiny_lidar_control_mode:=${tiny_lidar_control_mode}")
 fi
 
+tiny_lidar_acceleration="${TINY_LIDAR_ACCELERATION:-}"
+if [[ -n "${TINY_LIDAR_ACCELERATION+x}" ]]; then
+    if [[ ! "${tiny_lidar_acceleration}" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
+       [[ "${tiny_lidar_acceleration}" =~ ^0+([.]0+)?$ ]]; then
+        echo "TINY_LIDAR_ACCELERATION must be finite and positive"
+        exit 1
+    fi
+    if [[ "${control_method}" != "tiny_lidar_net" ]]; then
+        echo "TINY_LIDAR_ACCELERATION is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"
+        exit 1
+    fi
+    opts+=("tiny_lidar_acceleration:=${tiny_lidar_acceleration}")
+fi
+
 export ROS_DOMAIN_ID=$id
 
 mkdir -p "${out_dir}"

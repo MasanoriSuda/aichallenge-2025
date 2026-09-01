@@ -14,6 +14,12 @@ from lib.model import TinyLidarNet
 
 
 RECURRENT_DATASET_SCHEMA_VERSION = 2
+RECURRENT_LABEL_SOURCES = frozenset(
+    {
+        "lidar_precontact_teacher_recurrent_direct",
+        "lidar_speed_committed_teacher_recurrent_direct",
+    }
+)
 RECURRENT_REQUIRED_ARRAYS = (
     "scans.npy",
     "speeds.npy",
@@ -63,10 +69,9 @@ class RecurrentPolicySequenceDataset(Dataset):
                 f"recurrent split mismatch: expected={expected_split}, "
                 f"actual={self.split}"
             )
-        if self.metadata.get("label_source") != (
-            "lidar_precontact_teacher_recurrent_direct"
-        ):
+        if self.metadata.get("label_source") not in RECURRENT_LABEL_SOURCES:
             raise ValueError(f"unexpected recurrent label source in {self.seq_dir}")
+        self.label_source = self.metadata["label_source"]
         if self.metadata.get("scan_shape") != [expected_input_dim]:
             raise ValueError(f"recurrent scan shape metadata mismatch in {self.seq_dir}")
         if self.metadata.get("scan_unit") != "m":

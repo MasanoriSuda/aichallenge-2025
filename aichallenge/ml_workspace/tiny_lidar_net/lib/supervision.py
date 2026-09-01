@@ -13,6 +13,9 @@ from lib.checkpoint import sha256_file
 
 
 OUTCOME_CERTIFICATE_SCHEMA_VERSION = 1
+EXECUTED_TEACHER_MODES = frozenset(
+    {"precontact_teacher", "speed_committed_teacher"}
+)
 CONTROL_MODE_PATTERN = re.compile(r"tiny_lidar_control_mode:\s*([^\s]+)")
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
@@ -106,7 +109,7 @@ def read_outcome(detail_path: Path, domain: int) -> dict[str, Any]:
 
 
 def evidence_class(control_mode: Optional[str], outcome: str) -> str:
-    teacher_executed = control_mode == "precontact_teacher"
+    teacher_executed = control_mode in EXECUTED_TEACHER_MODES
     if outcome == "outcome_unproven":
         return "outcome_unproven"
     if outcome == "certified_success":
@@ -350,6 +353,7 @@ def validate_executed_teacher_certificate(
     *,
     source_bag: Optional[Path] = None,
     checkpoint_sha256: Optional[str] = None,
+    expected_control_mode: str = "precontact_teacher",
 ) -> str:
     """Validate an embedded certificate and return its canonical digest."""
     if not isinstance(certificate, dict):
@@ -358,7 +362,9 @@ def validate_executed_teacher_certificate(
         raise ValueError("executed teacher certificate schema mismatch")
     if certificate.get("evidence_class") != "executed_teacher_success":
         raise ValueError("supervision is not an executed teacher success")
-    if certificate.get("control_mode") != "precontact_teacher":
+    if expected_control_mode not in EXECUTED_TEACHER_MODES:
+        raise ValueError("unsupported executed teacher mode")
+    if certificate.get("control_mode") != expected_control_mode:
         raise ValueError("executed teacher certificate mode mismatch")
     _require_sha256(certificate.get("checkpoint_sha256"), "certificate checkpoint")
     for key in (

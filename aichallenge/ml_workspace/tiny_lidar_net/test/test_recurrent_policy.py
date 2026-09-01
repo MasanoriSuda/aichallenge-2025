@@ -6,9 +6,12 @@ import pytest
 import torch
 
 from build_recurrent_dataset import (
+    executed_teacher_mode,
     iter_source_sequences,
+    load_embedded_causal_speed,
     load_physical_source_scans,
     longest_true_run,
+    recurrent_label_source,
     recurrent_sequence_id,
 )
 from lib.recurrent_policy import (
@@ -23,7 +26,13 @@ from lib.recurrent_policy import (
 )
 
 
-def write_sequence(root: Path, split: str, sequence_id: str, count: int = 9) -> Path:
+def write_sequence(
+    root: Path,
+    split: str,
+    sequence_id: str,
+    count: int = 9,
+    label_source: str = "lidar_precontact_teacher_recurrent_direct",
+) -> Path:
     sequence = root / split / sequence_id
     sequence.mkdir(parents=True)
     timestamps = np.arange(count, dtype=np.int64) * 100_000_000 + 1
@@ -42,7 +51,7 @@ def write_sequence(root: Path, split: str, sequence_id: str, count: int = 9) -> 
         "schema_version": RECURRENT_DATASET_SCHEMA_VERSION,
         "sequence_id": sequence_id,
         "split": split,
-        "label_source": "lidar_precontact_teacher_recurrent_direct",
+        "label_source": label_source,
         "scan_unit": "m",
         "scan_shape": [750],
         "max_scan_range_m": 30.0,
@@ -66,6 +75,79 @@ def test_recurrent_identity_binds_speed_contract() -> None:
     assert first != recurrent_sequence_id(
         "run-a", "/speed", 0.05, "a" * 64
     )
+
+
+def test_recurrent_identity_preserves_teacher_provenance() -> None:
+    assert recurrent_label_source("lidar_precontact_teacher_dagger") == (
+        "lidar_precontact_teacher_recurrent_direct"
+    )
+    assert recurrent_label_source("lidar_speed_committed_teacher_dagger") == (
+        "lidar_speed_committed_teacher_recurrent_direct"
+    )
+    assert executed_teacher_mode("lidar_speed_committed_teacher_dagger") == (
+        "speed_committed_teacher"
+    )
+    with pytest.raises(ValueError, match="unsupported recurrent source"):
+        recurrent_label_source("lidar_gap_teacher_dagger")
+
+
+class EmbeddedSpeedSource:
+    def __init__(
+        self,
+        seq_dir: Path,
+        active_only: bool = False,
+        novel_policy_only: bool = False,
+    ):
+        self.seq_dir = seq_dir
+        self.scan_timestamps_ns = np.array(
+            [100_000_000, 200_000_000, 300_000_000], dtype=np.int64
+        )
+        self.metadata = {
+            "relabeling": {
+                "control_mode": "speed_committed_teacher",
+                "active_only": active_only,
+                "novel_policy_only": novel_policy_only,
+            },
+            "speed_sync": {
+                "policy": "latest_preceding",
+                "max_delta_sec": 0.05,
+            },
+        }
+
+    def __len__(self) -> int:
+        return len(self.scan_timestamps_ns)
+
+
+def write_embedded_speed(source: EmbeddedSpeedSource) -> None:
+    speed_times = source.scan_timestamps_ns - 10_000_000
+    np.save(source.seq_dir / "speeds.npy", np.array([1.0, 2.0, 3.0]))
+    np.save(source.seq_dir / "speed_timestamps_ns.npy", speed_times)
+    np.save(
+        source.seq_dir / "speed_sync_deltas_sec.npy",
+        np.full(3, 0.01),
+    )
+
+
+def test_embedded_causal_speed_preserves_executed_sequence(tmp_path: Path) -> None:
+    source = EmbeddedSpeedSource(tmp_path)
+    write_embedded_speed(source)
+    speeds, speed_times, deltas = load_embedded_causal_speed(source, 0.05)
+    np.testing.assert_array_equal(speeds, [1.0, 2.0, 3.0])
+    assert np.all(speed_times <= source.scan_timestamps_ns)
+    np.testing.assert_allclose(deltas, 0.01)
+
+
+def test_embedded_causal_speed_rejects_temporally_filtered_source(
+    tmp_path: Path,
+) -> None:
+    source = EmbeddedSpeedSource(tmp_path, active_only=True)
+    write_embedded_speed(source)
+    with pytest.raises(ValueError, match="retain every temporal sample"):
+        load_embedded_causal_speed(source, 0.05)
+
+    source = EmbeddedSpeedSource(tmp_path, novel_policy_only=True)
+    with pytest.raises(ValueError, match="retain every temporal sample"):
+        load_embedded_causal_speed(source, 0.05)
 
 
 def write_source_identity(root: Path, split: str, sequence_id: str) -> Path:
@@ -186,6 +268,19 @@ def test_sequence_dataset_enforces_speed_sync_contract(tmp_path: Path) -> None:
     np.save(sequence / "speed_sync_deltas_sec.npy", np.full(9, 0.051))
     with pytest.raises(ValueError, match="speed sync delta violation"):
         RecurrentPolicySequenceDataset(sequence, expected_split="train")
+
+
+def test_sequence_dataset_accepts_distinct_speed_teacher_source(
+    tmp_path: Path,
+) -> None:
+    sequence = write_sequence(
+        tmp_path,
+        "val",
+        "speed-sequence",
+        label_source="lidar_speed_committed_teacher_recurrent_direct",
+    )
+    dataset = RecurrentPolicySequenceDataset(sequence, expected_split="val")
+    assert dataset.label_source == "lidar_speed_committed_teacher_recurrent_direct"
 
 
 def test_sequence_dataset_rejects_unproven_scan_units(tmp_path: Path) -> None:

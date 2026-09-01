@@ -329,15 +329,33 @@ python3 relabel_gap_teacher_bag.py /output/<admitted-run>/d1/rosbag2_autoware \
   --outdir dataset/<dagger-name>
 ```
 
+車速でside commitmentを変えるstateful teacherは、合格runの全scanを時刻順に再生する。
+`--active-only`や`--novel-policy-only`で途中状態を間引くとteacher stateを再現できないため、
+時間モデル用sourceには使わない。LiDARより未来の車速を使わない
+`latest_preceding`同期を行い、50 msを超えるscanが1件でもあればrun全体を拒否する。
+
+```bash
+python3 relabel_gap_teacher_bag.py /output/<admitted-run>/d1/rosbag2_autoware \
+  --checkpoint checkpoints/<student-run>/candidate.npy \
+  --teacher-mode speed_committed_teacher \
+  --competition-analysis /output/<admitted-run>/e2e-competition-analysis.json \
+  --require-executed-success \
+  --no-active-only \
+  --outdir dataset/<speed-committed-name>
+```
+
 `--require-executed-success`は、同じrun/domainで実際にteacherがauthorityを持ち、Finish・
 penalty 0・stall 0だったことと、checkpoint/result/motion artifact hashを再検証する。
 証明はdataset metadataとsequence identityへ含まれる。速度同期したrecurrent派生をhard labelへ
 使う場合も`build_recurrent_dataset.py --require-executed-success`を指定し、証明を失ったsourceを
-拒否する。
+拒否する。`speed_committed_teacher`由来ではraw datasetに保存された因果速度列をそのまま
+継承し、bagを別方式で再同期しない。派生label sourceも
+`lidar_speed_committed_teacher_recurrent_direct`として旧teacherと区別する。
 
-`--novel-policy-only`は同一scan・同一base steeringに対する旧`LidarGapTeacher`との差が
+`--novel-policy-only`は同一scan・同一base steeringに対する一世代前のreference teacherとの差が
 0.02 rad以上あるlabelだけを残す。新teacherに固有でない通常のgap追従を大量に再学習して
-既存の車線維持を退行させないためのdataset admissionであり、閾値はmetadataへ記録する。
+既存の車線維持を退行させないための診断・stateless dataset admissionであり、閾値はmetadataへ
+記録する。stateful recurrent sourceには使用しない。
 
 ### Frozen-base steering residual
 

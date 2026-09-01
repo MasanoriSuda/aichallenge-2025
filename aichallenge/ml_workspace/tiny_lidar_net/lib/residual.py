@@ -21,6 +21,16 @@ RESIDUAL_TARGET_FILES = (
 RESIDUAL_HISTORY_FRAMES = 8
 RESIDUAL_INPUT_MODES = ("stateless", "scan_delta", "scan_history8")
 RESIDUAL_HEAD_ARCHITECTURES = ("binary_gate", "signed_mixture")
+RESIDUAL_TEACHER_CONTRACTS = {
+    "lidar_precontact_teacher_dagger": {
+        "successor_teacher": "LidarPrecontactTeacher",
+        "diagnostic_reference_teacher": "LidarGapTeacher",
+    },
+    "lidar_speed_committed_teacher_dagger": {
+        "successor_teacher": "LidarSpeedCommittedTeacher",
+        "diagnostic_reference_teacher": "LidarPrecontactTeacher",
+    },
+}
 
 
 def residual_input_channels(input_mode: str) -> int:
@@ -94,7 +104,7 @@ class SteeringResidualSequenceDataset(ScanControlSequenceDataset):
             seq_dir,
             max_range=max_range,
             expected_input_dim=expected_input_dim,
-            allowed_label_sources=("lidar_precontact_teacher_dagger",),
+            allowed_label_sources=tuple(RESIDUAL_TEACHER_CONTRACTS),
             require_metadata=True,
             max_sync_delta_sec=0.0,
             expected_split=expected_split,
@@ -152,10 +162,14 @@ class SteeringResidualSequenceDataset(ScanControlSequenceDataset):
             raise ValueError(
                 f"Missing residual_target metadata in {self.seq_dir}"
             )
+        teacher_contract = RESIDUAL_TEACHER_CONTRACTS[self.label_source]
         expected_contract = {
             "target_definition": "successor_steering_minus_base_steering",
             "runtime_composition": "base_steering_plus_learned_residual",
-            "successor_teacher": "LidarPrecontactTeacher",
+            "successor_teacher": teacher_contract["successor_teacher"],
+            "diagnostic_reference_teacher": teacher_contract[
+                "diagnostic_reference_teacher"
+            ],
             "base_policy": "frozen_production_tiny_lidar_net",
         }
         for key, expected in expected_contract.items():

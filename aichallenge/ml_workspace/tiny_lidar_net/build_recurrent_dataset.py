@@ -8,24 +8,33 @@ from pathlib import Path
 from typing import Iterable, Sequence, Tuple
 
 import numpy as np
-from rosbags.highlevel import AnyReader
 
 from extract_data_from_bag import synchronize_data
 from lib.recurrent_policy import RECURRENT_DATASET_SCHEMA_VERSION
 from lib.residual import SteeringResidualSequenceDataset
+from lib.speed_sync import (
+    DEFAULT_SPEED_MESSAGE_TYPE,
+    DEFAULT_SPEED_TOPIC,
+    read_longitudinal_speed,
+)
 from lib.supervision import validate_executed_teacher_certificate
 
 
 # End-to-End AI may use wheel odometry, but not the GNSS/IMU-fused localization
 # state.  Keep legacy Odometry support only as an explicit audit input; newly
 # built datasets default to the AWSIM wheel-speed contract used in production.
-DEFAULT_SPEED_TOPIC = "/vehicle/status/velocity_status"
-DEFAULT_SPEED_MESSAGE_TYPE = "autoware_auto_vehicle_msgs/msg/VelocityReport"
-SUPPORTED_SPEED_MESSAGE_TYPES = {
-    "autoware_auto_vehicle_msgs/msg/VelocityReport",
-    "nav_msgs/msg/Odometry",
+RECURRENT_LABEL_SOURCES = {
+    "lidar_precontact_teacher_dagger": (
+        "lidar_precontact_teacher_recurrent_direct"
+    ),
+    "lidar_speed_committed_teacher_dagger": (
+        "lidar_speed_committed_teacher_recurrent_direct"
+    ),
 }
-RECURRENT_LABEL_SOURCE = "lidar_precontact_teacher_recurrent_direct"
+EXECUTED_TEACHER_MODES_BY_LABEL_SOURCE = {
+    "lidar_precontact_teacher_dagger": "precontact_teacher",
+    "lidar_speed_committed_teacher_dagger": "speed_committed_teacher",
+}
 
 
 def longest_true_run(mask: np.ndarray) -> Tuple[int, int]:
@@ -91,63 +100,98 @@ def load_physical_source_scans(
     return raw.astype(np.float32, copy=False)
 
 
-def read_longitudinal_speed(
-    bag_path: Path,
-    speed_topic: str,
-    expected_message_type: str,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Read finite longitudinal speeds and their bag timestamps."""
-    if expected_message_type not in SUPPORTED_SPEED_MESSAGE_TYPES:
+def recurrent_label_source(raw_label_source: str) -> str:
+    """Map one immutable raw teacher identity to its recurrent identity."""
+    try:
+        return RECURRENT_LABEL_SOURCES[raw_label_source]
+    except KeyError:
         raise ValueError(
-            "unsupported speed message type: "
-            f"{expected_message_type}; supported={sorted(SUPPORTED_SPEED_MESSAGE_TYPES)}"
-        )
-    timestamps = []
-    speeds = []
-    failures = []
-    with AnyReader([bag_path]) as reader:
-        connections = [
-            connection
-            for connection in reader.connections
-            if connection.topic == speed_topic
-        ]
-        if not connections:
-            raise ValueError(f"required speed topic missing: {speed_topic}")
-        message_types = sorted({connection.msgtype for connection in connections})
-        if message_types != [expected_message_type]:
-            raise ValueError(
-                f"speed topic type mismatch: expected={expected_message_type}, "
-                f"actual={message_types}"
-            )
-        for connection, timestamp, raw in reader.messages(connections=connections):
-            try:
-                message = reader.deserialize(raw, connection.msgtype)
-                if expected_message_type == "nav_msgs/msg/Odometry":
-                    speed = abs(float(message.twist.twist.linear.x))
-                else:
-                    speed = abs(float(message.longitudinal_velocity))
-                if not np.isfinite(speed):
-                    raise ValueError("non-finite longitudinal speed")
-                timestamps.append(timestamp)
-                speeds.append(speed)
-            except Exception as exc:  # A partial stream is not auditable evidence.
-                failures.append(
-                    f"{timestamp}:{type(exc).__name__}:{exc}"
-                )
-    if failures:
+            f"unsupported recurrent source label: {raw_label_source}"
+        ) from None
+
+
+def executed_teacher_mode(raw_label_source: str) -> str:
+    """Return the certificate mode required by one raw label source."""
+    try:
+        return EXECUTED_TEACHER_MODES_BY_LABEL_SOURCE[raw_label_source]
+    except KeyError:
         raise ValueError(
-            f"speed extraction failures={len(failures)}; first={failures[0]}"
+            f"unsupported executed teacher source: {raw_label_source}"
+        ) from None
+
+
+def load_embedded_causal_speed(
+    source: SteeringResidualSequenceDataset,
+    max_speed_sync_delta_sec: float,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Load and prove the speed sequence used by the stateful raw teacher.
+
+    A stateful teacher must be replayed on every scan in order. Re-reading its
+    bag with a different synchronizer would silently create different labels,
+    so the recurrent derivative inherits the exact causal speed arrays stored
+    by the raw relabeler.
+    """
+    relabeling = source.metadata.get("relabeling", {})
+    if relabeling.get("control_mode") != "speed_committed_teacher":
+        raise ValueError("embedded causal speed requires speed-committed source")
+    if (
+        relabeling.get("active_only") is not False
+        or relabeling.get("novel_policy_only") is not False
+    ):
+        raise ValueError(
+            "stateful speed-committed source must retain every temporal sample"
         )
-    if not timestamps:
-        raise ValueError(f"no valid speed samples on {speed_topic}")
-    timestamp_array = np.asarray(timestamps, dtype=np.int64)
-    speed_array = np.asarray(speeds, dtype=np.float32)
-    order = np.argsort(timestamp_array, kind="stable")
-    timestamp_array = timestamp_array[order]
-    speed_array = speed_array[order]
-    if np.any(np.diff(timestamp_array) <= 0):
-        raise ValueError("speed timestamps must be strictly increasing")
-    return timestamp_array, speed_array
+    speed_sync = source.metadata.get("speed_sync")
+    if not isinstance(speed_sync, dict) or speed_sync.get("policy") != (
+        "latest_preceding"
+    ):
+        raise ValueError("speed-committed source lacks causal speed provenance")
+    recorded_limit = speed_sync.get("max_delta_sec")
+    if not isinstance(recorded_limit, (int, float)) or (
+        recorded_limit > max_speed_sync_delta_sec + 1e-12
+    ):
+        raise ValueError("speed-committed source speed contract is too loose")
+
+    required = (
+        "speeds.npy",
+        "speed_timestamps_ns.npy",
+        "speed_sync_deltas_sec.npy",
+    )
+    missing = [name for name in required if not (source.seq_dir / name).is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"missing embedded causal speed arrays in {source.seq_dir}: {missing}"
+        )
+    speeds = np.load(source.seq_dir / "speeds.npy", allow_pickle=False)
+    timestamps = np.load(
+        source.seq_dir / "speed_timestamps_ns.npy", allow_pickle=False
+    )
+    deltas = np.load(
+        source.seq_dir / "speed_sync_deltas_sec.npy", allow_pickle=False
+    )
+    arrays = (speeds, timestamps, deltas)
+    if any(values.ndim != 1 or len(values) != len(source) for values in arrays):
+        raise ValueError("embedded causal speed array length mismatch")
+    if not np.all(np.isfinite(speeds)) or np.any(speeds < 0.0):
+        raise ValueError("embedded causal speeds must be finite and non-negative")
+    if not np.issubdtype(timestamps.dtype, np.integer):
+        raise ValueError("embedded speed timestamps must be integer nanoseconds")
+    if np.any(timestamps > source.scan_timestamps_ns):
+        raise ValueError("embedded causal speed contains a future sample")
+    expected_deltas = (
+        source.scan_timestamps_ns - timestamps
+    ).astype(np.float64, copy=False) / 1e9
+    if not np.allclose(deltas, expected_deltas, rtol=0.0, atol=1e-12):
+        raise ValueError("embedded causal speed age identity mismatch")
+    if np.any(deltas < 0.0) or np.any(
+        deltas > max_speed_sync_delta_sec + 1e-12
+    ):
+        raise ValueError("embedded causal speed exceeds freshness contract")
+    return (
+        speeds.astype(np.float32, copy=False),
+        timestamps.astype(np.int64, copy=False),
+        deltas.astype(np.float64, copy=False),
+    )
 
 
 def iter_source_sequences(
@@ -247,6 +291,17 @@ def build_sequence(
         expected_split=split,
         input_mode="stateless",
     )
+    raw_label_source = source.metadata["label_source"]
+    derived_label_source = recurrent_label_source(raw_label_source)
+    expected_control_mode = executed_teacher_mode(raw_label_source)
+    recorded_control_mode = source.metadata.get("relabeling", {}).get(
+        "control_mode"
+    )
+    if recorded_control_mode != expected_control_mode:
+        raise ValueError(
+            "source teacher mode/label mismatch: "
+            f"label={raw_label_source}, mode={recorded_control_mode}"
+        )
     source_bag_text = source.metadata.get("source_bag")
     if not isinstance(source_bag_text, str) or not source_bag_text:
         raise ValueError(f"source_bag missing in {source_dir}")
@@ -266,6 +321,7 @@ def build_sequence(
             checkpoint_sha256=source.metadata["relabeling"][
                 "student_checkpoint_sha256"
             ],
+            expected_control_mode=expected_control_mode,
         )
         if recorded_certificate_sha != outcome_certificate_sha:
             raise ValueError("source outcome certificate digest mismatch")
@@ -277,15 +333,36 @@ def build_sequence(
         source_dir, source.scans, max_scan_range_m
     )
 
-    speed_times, raw_speeds = read_longitudinal_speed(
-        source_bag, speed_topic, speed_message_type
-    )
-    matched_indices, deltas_ns = synchronize_data(
-        source.scan_timestamps_ns, speed_times
-    )
-    max_delta_ns = int(round(max_speed_sync_delta_sec * 1e9))
-    accepted = deltas_ns <= max_delta_ns
-    start, stop = longest_true_run(accepted)
+    if expected_control_mode == "speed_committed_teacher":
+        if source.metadata.get("topics", {}).get("speed") != speed_topic:
+            raise ValueError("speed-committed source speed topic mismatch")
+        if source.metadata.get("message_types", {}).get("speed") != (
+            speed_message_type
+        ):
+            raise ValueError("speed-committed source speed message type mismatch")
+        raw_speeds, speed_times, accepted_deltas_sec = (
+            load_embedded_causal_speed(source, max_speed_sync_delta_sec)
+        )
+        start, stop = 0, len(source)
+        accepted = np.ones(len(source), dtype=bool)
+        speed_indices = np.arange(len(source), dtype=np.int64)
+        raw_speed_sample_count = len(raw_speeds)
+    else:
+        speed_times, raw_speeds = read_longitudinal_speed(
+            source_bag, speed_topic, speed_message_type
+        )
+        matched_indices, deltas_ns = synchronize_data(
+            source.scan_timestamps_ns, speed_times
+        )
+        max_delta_ns = int(round(max_speed_sync_delta_sec * 1e9))
+        accepted = deltas_ns <= max_delta_ns
+        start, stop = longest_true_run(accepted)
+        source_slice = slice(start, stop)
+        speed_indices = matched_indices[source_slice]
+        accepted_deltas_sec = (
+            deltas_ns[source_slice].astype(np.float64, copy=False) / 1e9
+        )
+        raw_speed_sample_count = len(speed_times)
     if stop - start < minimum_contiguous_samples:
         raise ValueError(
             f"longest synchronized interval too short in {source_dir}: "
@@ -293,10 +370,6 @@ def build_sequence(
         )
 
     source_slice = slice(start, stop)
-    speed_indices = matched_indices[source_slice]
-    accepted_deltas_sec = (
-        deltas_ns[source_slice].astype(np.float64, copy=False) / 1e9
-    )
     sequence_id = recurrent_sequence_id(
         source.sequence_id,
         speed_topic,
@@ -327,7 +400,7 @@ def build_sequence(
         "schema_version": RECURRENT_DATASET_SCHEMA_VERSION,
         "sequence_id": sequence_id,
         "split": split,
-        "label_source": RECURRENT_LABEL_SOURCE,
+        "label_source": derived_label_source,
         "scan_unit": "m",
         "scan_shape": list(arrays["scans.npy"].shape[1:]),
         "max_scan_range_m": max_scan_range_m,
@@ -338,6 +411,7 @@ def build_sequence(
             "sequence_dir": str(source_dir),
             "bag": str(source_bag),
             "label_source": source.metadata["label_source"],
+            "control_mode": expected_control_mode,
             "successor_teacher": source_residual["successor_teacher"],
             "base_policy": source_residual["base_policy"],
             "student_checkpoint": source.metadata["relabeling"][
@@ -364,7 +438,7 @@ def build_sequence(
             "rejected_before_interval": start,
             "rejected_after_interval": len(source) - stop,
             "rejected_sync_total": int(np.count_nonzero(~accepted)),
-            "raw_speed_samples": len(speed_times),
+            "raw_speed_samples": raw_speed_sample_count,
         },
         "source_interval": {"start_index": start, "stop_index": stop},
         "speed_sync_delta_sec": {

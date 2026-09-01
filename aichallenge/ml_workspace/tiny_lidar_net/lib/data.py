@@ -19,6 +19,7 @@ DEFAULT_ALLOWED_LABEL_SOURCES = (
     "lidar_gap_teacher",
     "lidar_gap_teacher_dagger",
     "lidar_precontact_teacher_dagger",
+    "lidar_speed_committed_teacher_dagger",
 )
 REQUIRED_ARRAY_FILES = (
     "scans.npy",

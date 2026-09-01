@@ -24,7 +24,12 @@ from lib.residual import (
 from tiny_lidar_net_controller.model.tinylidarnet import SteeringResidualNetNp
 
 
-def make_sequence(root: Path, *, corrupt_delta: bool = False) -> Path:
+def make_sequence(
+    root: Path,
+    *,
+    corrupt_delta: bool = False,
+    label_source: str = "lidar_precontact_teacher_dagger",
+) -> Path:
     sequence = root / "paired-sequence"
     sequence.mkdir()
     scans = np.full((2, 750), 15.0, dtype=np.float32)
@@ -54,7 +59,7 @@ def make_sequence(root: Path, *, corrupt_delta: bool = False) -> Path:
         "schema_version": 1,
         "sequence_id": sequence.name,
         "split": "train",
-        "label_source": "lidar_precontact_teacher_dagger",
+        "label_source": label_source,
         "scan_shape": [750],
         "max_scan_range_m": 30.0,
         "max_sync_delta_sec": 0.0,
@@ -65,7 +70,16 @@ def make_sequence(root: Path, *, corrupt_delta: bool = False) -> Path:
                     "successor_steering_minus_base_steering"
                 ),
                 "runtime_composition": "base_steering_plus_learned_residual",
-                "successor_teacher": "LidarPrecontactTeacher",
+                "successor_teacher": (
+                    "LidarSpeedCommittedTeacher"
+                    if label_source == "lidar_speed_committed_teacher_dagger"
+                    else "LidarPrecontactTeacher"
+                ),
+                "diagnostic_reference_teacher": (
+                    "LidarPrecontactTeacher"
+                    if label_source == "lidar_speed_committed_teacher_dagger"
+                    else "LidarGapTeacher"
+                ),
                 "base_policy": "frozen_production_tiny_lidar_net",
                 "material_delta_rad": 0.02,
             }
@@ -84,6 +98,18 @@ def test_residual_dataset_validates_runtime_composition_identity(tmp_path: Path)
     scan, target = dataset[1]
     assert scan.shape == (750,)
     assert target == pytest.approx(-0.2)
+
+
+def test_residual_dataset_accepts_speed_committed_teacher_identity(tmp_path: Path):
+    dataset = SteeringResidualSequenceDataset(
+        make_sequence(
+            tmp_path,
+            label_source="lidar_speed_committed_teacher_dagger",
+        ),
+        expected_split="train",
+    )
+
+    assert dataset.label_source == "lidar_speed_committed_teacher_dagger"
 
 
 def test_scan_delta_dataset_uses_only_previous_sample_in_same_sequence(

@@ -17,6 +17,13 @@ from lib.supervision import (
     source_domain_and_run,
     validate_executed_teacher_certificate,
 )
+from lib.speed_sync import (
+    CAUSAL_SPEED_SYNC_POLICY,
+    DEFAULT_SPEED_MESSAGE_TYPE,
+    DEFAULT_SPEED_TOPIC,
+    read_longitudinal_speed,
+    synchronize_latest_preceding,
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +48,12 @@ TEACHER_IDENTITIES = {
         label_source="lidar_precontact_teacher_dagger",
         teacher_class="LidarPrecontactTeacher",
         generated_control_type="generated/tiny_lidar_precontact_teacher",
+    ),
+    "speed_committed_teacher": TeacherIdentity(
+        control_mode="speed_committed_teacher",
+        label_source="lidar_speed_committed_teacher_dagger",
+        teacher_class="LidarSpeedCommittedTeacher",
+        generated_control_type="generated/tiny_lidar_speed_committed_teacher",
     ),
 }
 
@@ -176,15 +189,20 @@ def read_scans(bag_path: Path, topic: str, max_range_m: float) -> tuple:
 
 
 def relabel(args: argparse.Namespace) -> dict:
-    from tiny_lidar_net_controller.gap_teacher import GapTeacherConfig, LidarGapTeacher
+    from tiny_lidar_net_controller.gap_teacher import (
+        GapTeacherConfig,
+        LidarGapTeacher,
+        LidarPrecontactTeacher,
+    )
     from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 
     bag = args.bag.expanduser().resolve()
     checkpoint = args.checkpoint.expanduser().resolve()
     identity = teacher_identity(args.teacher_mode)
-    if args.novel_policy_only and args.teacher_mode != "precontact_teacher":
+    successor_modes = {"precontact_teacher", "speed_committed_teacher"}
+    if args.novel_policy_only and args.teacher_mode not in successor_modes:
         raise ValueError(
-            "--novel-policy-only requires --teacher-mode precontact_teacher"
+            "--novel-policy-only requires a successor teacher mode"
         )
     if (
         not np.isfinite(args.minimum_novel_steering_delta_rad)
@@ -201,6 +219,10 @@ def relabel(args: argparse.Namespace) -> dict:
     checkpoint_sha = sha256_file(checkpoint)
     competition_analysis = getattr(args, "competition_analysis", None)
     require_executed_success = getattr(args, "require_executed_success", False)
+    if args.teacher_mode == "speed_committed_teacher" and not require_executed_success:
+        raise ValueError(
+            "speed_committed_teacher relabeling requires executed success evidence"
+        )
     if require_executed_success and competition_analysis is None:
         raise ValueError(
             "--require-executed-success requires --competition-analysis"
@@ -221,6 +243,7 @@ def relabel(args: argparse.Namespace) -> dict:
             outcome_certificate,
             source_bag=bag,
             checkpoint_sha256=checkpoint_sha,
+            expected_control_mode=identity.control_mode,
         )
         if outcome_certificate_sha != admitted["outcome_certificate_sha256"]:
             raise RuntimeError("outcome certificate identity is inconsistent")
@@ -238,16 +261,51 @@ def relabel(args: argparse.Namespace) -> dict:
     if cutoff <= 0:
         raise ValueError("admission cutoff removed the complete sequence")
 
+    speed_values = None
+    speed_timestamps = None
+    speed_ages_sec = None
+    if args.teacher_mode == "speed_committed_teacher":
+        if (
+            not np.isfinite(args.max_speed_sync_delta_sec)
+            or args.max_speed_sync_delta_sec <= 0.0
+        ):
+            raise ValueError(
+                "max speed sync delta must be finite and positive"
+            )
+        raw_speed_timestamps, raw_speeds = read_longitudinal_speed(
+            bag,
+            args.speed_topic,
+            args.speed_message_type,
+        )
+        speed_indices, speed_ages_ns, speed_valid = synchronize_latest_preceding(
+            timestamps[:cutoff], raw_speed_timestamps
+        )
+        max_speed_age_ns = int(round(args.max_speed_sync_delta_sec * 1e9))
+        speed_admitted = speed_valid & (speed_ages_ns <= max_speed_age_ns)
+        if not np.all(speed_admitted):
+            rejected = int(np.count_nonzero(~speed_admitted))
+            first = int(np.flatnonzero(~speed_admitted)[0])
+            raise ValueError(
+                "speed-committed replay lacks causal fresh speed: "
+                f"rejected={rejected}, first_scan_index={first}"
+            )
+        speed_values = raw_speeds[speed_indices]
+        speed_timestamps = raw_speed_timestamps[speed_indices]
+        speed_ages_sec = speed_ages_ns.astype(np.float64, copy=False) / 1e9
+
     teacher_config = GapTeacherConfig()
     # A successor teacher is only meaningful relative to the historical
     # teacher evaluated on the exact same state and base steering.  Persist the
     # paired result for every precontact sample, not only when a positives-only
     # novelty filter happens to be requested.
-    reference_teacher = (
-        LidarGapTeacher(teacher_config)
-        if args.teacher_mode == "precontact_teacher"
-        else None
-    )
+    reference_teacher = None
+    reference_teacher_name = None
+    if args.teacher_mode == "precontact_teacher":
+        reference_teacher = LidarGapTeacher(teacher_config)
+        reference_teacher_name = "LidarGapTeacher"
+    elif args.teacher_mode == "speed_committed_teacher":
+        reference_teacher = LidarPrecontactTeacher(teacher_config)
+        reference_teacher_name = "LidarPrecontactTeacher"
     core = TinyLidarNetCore(
         input_dim=750,
         output_dim=2,
@@ -267,14 +325,26 @@ def relabel(args: argparse.Namespace) -> dict:
     accepted_reference_steering_delta = []
     accepted_successor_upgrade_delta = []
     accepted_timestamps = []
+    accepted_speeds = []
+    accepted_speed_timestamps = []
+    accepted_speed_ages_sec = []
     reason_counts = {}
+    supervisor_reason_counts = {}
     rejected_non_novel_samples = 0
-    for timestamp, scan in zip(timestamps[:cutoff], scans[:cutoff]):
-        acceleration, steering = core.process(scan)
+    for index, (timestamp, scan) in enumerate(
+        zip(timestamps[:cutoff], scans[:cutoff])
+    ):
+        speed = None if speed_values is None else float(speed_values[index])
+        acceleration, steering = core.process(scan, speed_mps=speed)
         decision = core.last_gap_teacher_decision
         if decision is None:
             raise RuntimeError("gap teacher did not produce an auditable decision")
         reason_counts[decision.reason] = reason_counts.get(decision.reason, 0) + 1
+        supervisor_reason = getattr(decision, "supervisor_reason", None)
+        if supervisor_reason is not None:
+            supervisor_reason_counts[supervisor_reason] = (
+                supervisor_reason_counts.get(supervisor_reason, 0) + 1
+            )
         if args.active_only and not decision.active:
             continue
         reference_decision = None
@@ -307,6 +377,10 @@ def relabel(args: argparse.Namespace) -> dict:
                 decision.steering_rad - reference_decision.steering_rad
             )
         accepted_timestamps.append(timestamp)
+        if speed_values is not None:
+            accepted_speeds.append(speed_values[index])
+            accepted_speed_timestamps.append(speed_timestamps[index])
+            accepted_speed_ages_sec.append(speed_ages_sec[index])
     if not accepted_scans:
         raise ValueError("no teacher correction samples survived admission")
 
@@ -316,6 +390,8 @@ def relabel(args: argparse.Namespace) -> dict:
         f"{timestamps[cutoff - 1]}:active={args.active_only}:"
         f"novel={args.novel_policy_only}:"
         f"novel_delta={args.minimum_novel_steering_delta_rad}:"
+        f"speed_sync={CAUSAL_SPEED_SYNC_POLICY if speed_values is not None else 'none'}:"
+        f"max_speed_age={args.max_speed_sync_delta_sec if speed_values is not None else None}:"
         f"max_duration={args.max_duration_sec}:split={args.split}"
     )
     sequence_id = make_sequence_id(sequence_identity)
@@ -334,6 +410,19 @@ def relabel(args: argparse.Namespace) -> dict:
     np.save(output_dir / "delta_times.npy", np.zeros(len(scan_array), dtype=np.float64))
     np.save(output_dir / "scan_timestamps_ns.npy", timestamp_array)
     np.save(output_dir / "control_timestamps_ns.npy", timestamp_array)
+    if speed_values is not None:
+        np.save(
+            output_dir / "speeds.npy",
+            np.asarray(accepted_speeds, dtype=np.float32),
+        )
+        np.save(
+            output_dir / "speed_timestamps_ns.npy",
+            np.asarray(accepted_speed_timestamps, dtype=np.int64),
+        )
+        np.save(
+            output_dir / "speed_sync_deltas_sec.npy",
+            np.asarray(accepted_speed_ages_sec, dtype=np.float64),
+        )
     residual_statistics = None
     if reference_teacher is not None:
         base_array = np.asarray(accepted_base_steering, dtype=np.float32)
@@ -406,7 +495,7 @@ def relabel(args: argparse.Namespace) -> dict:
             "anchor_samples": int(len(residual_array) - np.count_nonzero(material)),
             "mean_abs_delta_rad": float(np.mean(np.abs(residual_array))),
             "max_abs_delta_rad": float(np.max(np.abs(residual_array))),
-            "diagnostic_reference_teacher": "LidarGapTeacher",
+            "diagnostic_reference_teacher": reference_teacher_name,
             "reference_teacher_material_samples": int(
                 np.count_nonzero(upgrade_material)
             ),
@@ -423,10 +512,14 @@ def relabel(args: argparse.Namespace) -> dict:
         "topics": {
             "scan": args.scan_topic,
             "control": f"offline_{identity.control_mode}",
+            "speed": args.speed_topic if speed_values is not None else None,
         },
         "message_types": {
             "scan": "sensor_msgs/msg/LaserScan",
             "control": identity.generated_control_type,
+            "speed": (
+                args.speed_message_type if speed_values is not None else None
+            ),
         },
         "scan_shape": [750],
         "max_scan_range_m": args.max_scan_range,
@@ -443,6 +536,21 @@ def relabel(args: argparse.Namespace) -> dict:
             "rejected_non_novel_samples": rejected_non_novel_samples,
         },
         "sync_delta_sec": {"mean": 0.0, "p95": 0.0, "max": 0.0},
+        "speed_sync": (
+            {
+                "policy": CAUSAL_SPEED_SYNC_POLICY,
+                "max_delta_sec": args.max_speed_sync_delta_sec,
+                "mean_delta_sec": float(np.mean(accepted_speed_ages_sec)),
+                "p95_delta_sec": float(
+                    np.percentile(accepted_speed_ages_sec, 95)
+                ),
+                "max_observed_delta_sec": float(
+                    np.max(accepted_speed_ages_sec)
+                ),
+            }
+            if speed_values is not None
+            else None
+        ),
         "timestamp_ns": {
             "first_scan": int(timestamp_array[0]),
             "last_scan": int(timestamp_array[-1]),
@@ -453,16 +561,20 @@ def relabel(args: argparse.Namespace) -> dict:
             "teacher": identity.teacher_class,
             "control_mode": identity.control_mode,
             "teacher_config": asdict(teacher_config),
+            "speed_committed_teacher_config": (
+                asdict(core.gap_teacher.config)
+                if args.teacher_mode == "speed_committed_teacher"
+                else None
+            ),
             "active_only": args.active_only,
             "novel_policy_only": args.novel_policy_only,
             "minimum_novel_steering_delta_rad": (
                 args.minimum_novel_steering_delta_rad
             ),
-            "reference_teacher": (
-                "LidarGapTeacher" if reference_teacher is not None else None
-            ),
+            "reference_teacher": reference_teacher_name,
             "residual_target": residual_statistics,
             "decision_reason_counts_before_filter": reason_counts,
+            "supervisor_reason_counts_before_filter": supervisor_reason_counts,
             "contact_clearance_m": args.contact_clearance_m,
             "contact_confirmation_samples": args.contact_confirmation_samples,
             "pre_contact_margin_sec": args.pre_contact_margin_sec,
@@ -485,6 +597,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--outdir", type=Path, required=True)
     parser.add_argument("--scan-topic", default="/sensing/lidar/scan")
+    parser.add_argument("--speed-topic", default=DEFAULT_SPEED_TOPIC)
+    parser.add_argument(
+        "--speed-message-type", default=DEFAULT_SPEED_MESSAGE_TYPE
+    )
+    parser.add_argument("--max-speed-sync-delta-sec", type=float, default=0.05)
     parser.add_argument("--max-scan-range", type=float, default=30.0)
     parser.add_argument("--fixed-acceleration", type=float, default=0.6)
     parser.add_argument(
@@ -518,8 +635,8 @@ def parse_args() -> argparse.Namespace:
         "--novel-policy-only",
         action="store_true",
         help=(
-            "Keep only precontact-teacher labels that materially differ from "
-            "the historical LidarGapTeacher on the same state."
+            "Keep only successor-teacher labels that materially differ from "
+            "their historical reference teacher on the same state."
         ),
     )
     parser.add_argument(
@@ -542,7 +659,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Reject relabeling unless --competition-analysis proves that the "
-            "exact precontact teacher executed and completed the run."
+            "exact selected teacher executed and completed the run."
         ),
     )
     return parser.parse_args()

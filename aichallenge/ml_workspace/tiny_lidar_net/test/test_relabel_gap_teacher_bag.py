@@ -58,6 +58,16 @@ def test_precontact_teacher_has_distinct_provenance():
     assert precontact.generated_control_type != historical.generated_control_type
 
 
+def test_speed_committed_teacher_has_distinct_provenance():
+    precontact = MODULE.teacher_identity("precontact_teacher")
+    successor = MODULE.teacher_identity("speed_committed_teacher")
+
+    assert successor.label_source == "lidar_speed_committed_teacher_dagger"
+    assert successor.teacher_class == "LidarSpeedCommittedTeacher"
+    assert successor.control_mode == "speed_committed_teacher"
+    assert successor.generated_control_type != precontact.generated_control_type
+
+
 def test_unknown_teacher_mode_is_rejected():
     with pytest.raises(ValueError, match="unsupported teacher mode"):
         MODULE.teacher_identity("unknown")

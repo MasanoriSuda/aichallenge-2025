@@ -18,7 +18,9 @@ def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
-def write_successful_teacher_run(root: Path) -> tuple[Path, Path]:
+def write_successful_teacher_run(
+    root: Path, control_mode: str = "precontact_teacher"
+) -> tuple[Path, Path]:
     run = root / "20260901-teacher-success"
     summary = run / "result-summary.json"
     detail = run / "d1-result-details.json"
@@ -54,7 +56,7 @@ def write_successful_teacher_run(root: Path) -> tuple[Path, Path]:
         "status": "pass",
         "reasons": [],
         "expected_runtime": {
-            "control_mode": "precontact_teacher",
+            "control_mode": control_mode,
             "checkpoint_sha256": CHECKPOINT_SHA,
         },
         "checkpoint_artifact": {"sha256": CHECKPOINT_SHA},
@@ -67,7 +69,7 @@ def write_successful_teacher_run(root: Path) -> tuple[Path, Path]:
             "status": "pass",
             "reasons": [],
             "runtime": {
-                "control_mode": "precontact_teacher",
+                "control_mode": control_mode,
                 "conflicts": {},
             },
             "race": race,
@@ -103,6 +105,38 @@ def test_successful_teacher_run_emits_source_bound_certificate(tmp_path):
         source_bag=bag,
         checkpoint_sha256=CHECKPOINT_SHA,
     ) == admitted["outcome_certificate_sha256"]
+
+
+def test_speed_committed_teacher_emits_distinct_executed_certificate(tmp_path):
+    run, bag = write_successful_teacher_run(
+        tmp_path, control_mode="speed_committed_teacher"
+    )
+
+    admitted = admit_successful_run(
+        run, 1, "speed_committed_teacher", CHECKPOINT_SHA
+    )
+    certificate = admitted["outcome_certificate"]
+
+    assert certificate["evidence_class"] == "executed_teacher_success"
+    assert certificate["control_mode"] == "speed_committed_teacher"
+    assert validate_executed_teacher_certificate(
+        certificate,
+        source_bag=bag,
+        checkpoint_sha256=CHECKPOINT_SHA,
+        expected_control_mode="speed_committed_teacher",
+    ) == admitted["outcome_certificate_sha256"]
+
+
+def test_executed_certificate_rejects_expected_teacher_mode_mismatch(tmp_path):
+    run, _ = write_successful_teacher_run(
+        tmp_path, control_mode="speed_committed_teacher"
+    )
+    certificate = admit_successful_run(
+        run, 1, "speed_committed_teacher", CHECKPOINT_SHA
+    )["outcome_certificate"]
+
+    with pytest.raises(ValueError, match="mode mismatch"):
+        validate_executed_teacher_certificate(certificate)
 
 
 @pytest.mark.parametrize(

@@ -19,7 +19,8 @@
   <arg name="tiny_lidar_recurrent_authority_enabled" default="false"/>
   <arg name="tiny_lidar_recurrent_authority_max_abs_correction_rad" default="0.24"/>
   <arg name="tiny_lidar_control_mode" default="fixed_lidar_brake"/>
-  <arg name="tiny_lidar_acceleration" default="0.6"/>
+  <arg name="tiny_lidar_acceleration" default="0.8"/>
+  <arg name="tiny_lidar_maximum_forward_speed_mps" default="4.6"/>
 
   <log message="The arguments for aichallenge_submit_launch."/>
   <log message=" - simulation: $(var simulation)"/>
@@ -42,6 +43,7 @@
   <log message=" - tiny_lidar_recurrent_authority_max_abs_correction_rad: $(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"/>
   <log message=" - tiny_lidar_control_mode: $(var tiny_lidar_control_mode)"/>
   <log message=" - tiny_lidar_acceleration: $(var tiny_lidar_acceleration)"/>
+  <log message=" - tiny_lidar_maximum_forward_speed_mps: $(var tiny_lidar_maximum_forward_speed_mps)"/>
 
   <include file="$(find-pkg-share aichallenge_submit_launch)/launch/reference.launch.xml" >
     <arg name="vehicle_model" value="racing_kart"/>
@@ -66,5 +68,6 @@
     <arg name="tiny_lidar_recurrent_authority_max_abs_correction_rad" value="$(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"/>
     <arg name="tiny_lidar_control_mode" value="$(var tiny_lidar_control_mode)"/>
     <arg name="tiny_lidar_acceleration" value="$(var tiny_lidar_acceleration)"/>
+    <arg name="tiny_lidar_maximum_forward_speed_mps" value="$(var tiny_lidar_maximum_forward_speed_mps)"/>
   </include>
 </launch>

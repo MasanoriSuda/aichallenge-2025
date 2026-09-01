@@ -27,6 +27,10 @@ if(BUILD_TESTING)
     test_tiny_lidar_net_contract
     test/test_tiny_lidar_net_contract.py
   )
+  ament_add_pytest_test(
+    test_speed_governor
+    test/test_speed_governor.py
+  )
 endif()
 
 ament_package()

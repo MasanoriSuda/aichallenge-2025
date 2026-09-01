@@ -15,6 +15,7 @@ x-autoware-base: &autoware-base
     - TZ=Asia/Tokyo
     - RUN_MODE=${RUN_MODE:-}
     - SIM_MODE=${SIM_MODE:-}
+    - E2E_START_RANDOM_SEED=${E2E_START_RANDOM_SEED:-}
     - CMD=${CMD:-}
     - COLCON_TRACE=${COLCON_TRACE:-}
     - ROS_HOME=${ROS_HOME:-}
@@ -41,6 +42,7 @@ x-autoware-base: &autoware-base
     - TINY_LIDAR_RECURRENT_AUTHORITY_MAX_ABS_CORRECTION_RAD
     - TINY_LIDAR_CONTROL_MODE=${TINY_LIDAR_CONTROL_MODE:-}
     - TINY_LIDAR_ACCELERATION
+    - TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS
     - LOG_DIR=${LOG_DIR:-}
   volumes:
     - ./output:${OUTPUT_ROOT:-/output}
@@ -94,7 +96,6 @@ x-racing_kart_interface-base: &racing_kart_interface-base
     - ROS_DISTRO=humble
     - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-1}
     - LOG_DIR=${LOG_DIR:-}
-    - E2E_START_RANDOM_SEED=${E2E_START_RANDOM_SEED:-}
     - HOST_UID=${HOST_UID:-}
     - HOST_GID=${HOST_GID:-}
     - NTRIP_USERNAME=${NTRIP_USERNAME:-}

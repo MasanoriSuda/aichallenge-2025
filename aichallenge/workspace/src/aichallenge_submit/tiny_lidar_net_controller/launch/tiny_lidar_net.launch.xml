@@ -18,7 +18,8 @@
   <arg name="recurrent_authority_enabled" default="false"/>
   <arg name="recurrent_authority_max_abs_correction_rad" default="0.24"/>
   <arg name="control_mode" default="fixed_lidar_brake"/>
-  <arg name="acceleration" default="0.6"/>
+  <arg name="acceleration" default="0.8"/>
+  <arg name="maximum_forward_speed_mps" default="4.6"/>
 
   <!-- tiny_lidar_net_node -->
   <node pkg="tiny_lidar_net_controller" 
@@ -42,6 +43,7 @@
     <param name="model.recurrent_authority_max_abs_correction_rad" value="$(var recurrent_authority_max_abs_correction_rad)"/>
     <param name="control_mode" value="$(var control_mode)"/>
     <param name="acceleration" value="$(var acceleration)"/>
+    <param name="maximum_forward_speed_mps" value="$(var maximum_forward_speed_mps)"/>
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <remap from="/scan" to="$(var scan_topic)"/>
     <remap from="/control/command/control_cmd" to="$(var control_cmd_topic)"/>

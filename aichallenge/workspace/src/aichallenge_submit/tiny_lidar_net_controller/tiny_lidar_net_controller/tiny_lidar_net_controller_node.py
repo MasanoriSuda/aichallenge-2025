@@ -64,6 +64,7 @@ class TinyLidarNetNode(Node):
         )
         self.declare_parameter('max_range', 30.0)
         self.declare_parameter('acceleration', 0.1)
+        self.declare_parameter('maximum_forward_speed_mps', 0.0)
         self.declare_parameter('control_mode', 'ai')
         self.declare_parameter('sensor_timeout_sec', 0.25)
         self.declare_parameter('watchdog_period_sec', 0.05)
@@ -192,6 +193,9 @@ class TinyLidarNetNode(Node):
         )
         max_range = self.get_parameter('max_range').value
         acceleration = self.get_parameter('acceleration').value
+        maximum_forward_speed_mps = float(
+            self.get_parameter('maximum_forward_speed_mps').value
+        )
         control_mode = self.get_parameter('control_mode').value
         self.sensor_timeout_sec = float(
             self.get_parameter('sensor_timeout_sec').value
@@ -317,6 +321,7 @@ class TinyLidarNetNode(Node):
                 architecture=architecture,
                 ckpt_path=ckpt_path,
                 acceleration=acceleration,
+                maximum_forward_speed_mps=maximum_forward_speed_mps,
                 control_mode=control_mode,
                 max_range=max_range,
                 gap_teacher_config=gap_teacher_config,
@@ -372,6 +377,8 @@ class TinyLidarNetNode(Node):
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
                 f"MaxRange: {max_range}, "
                 f"Acceleration: {float(acceleration):.6f}, "
+                "MaximumForwardSpeed: "
+                f"{maximum_forward_speed_mps:.6f}, "
                 f"ValidatedWeights: {self.core.loaded_parameter_count}, "
                 "ResidualWeights: "
                 f"{self.core.residual_loaded_parameter_count}, "
@@ -424,6 +431,8 @@ class TinyLidarNetNode(Node):
         self.last_log_gap_teacher_active_count = 0
         self.longitudinal_safety_active_count = 0
         self.last_log_longitudinal_safety_active_count = 0
+        self.speed_governor_active_count = 0
+        self.last_log_speed_governor_active_count = 0
         self.last_log_time = self.get_clock().now()
         self.startup_time = self.get_clock().now()
         self.last_scan_time = None
@@ -549,6 +558,9 @@ class TinyLidarNetNode(Node):
             safety_decision = self.core.last_longitudinal_safety_decision
             if safety_decision is not None and safety_decision.active:
                 self.longitudinal_safety_active_count += 1
+            governor_decision = self.core.last_speed_governor_decision
+            if governor_decision is not None and governor_decision.active:
+                self.speed_governor_active_count += 1
             steer = float(np.clip(
                 steer,
                 -self.max_steering_angle_rad,
@@ -662,6 +674,10 @@ class TinyLidarNetNode(Node):
                     self.longitudinal_safety_active_count
                     - self.last_log_longitudinal_safety_active_count
                 )
+                interval_speed_governor_active = (
+                    self.speed_governor_active_count
+                    - self.last_log_speed_governor_active_count
+                )
                 interval_shadow_admitted = (
                     self.shadow_admitted_count
                     - self.last_log_shadow_admitted_count
@@ -736,6 +752,22 @@ class TinyLidarNetNode(Node):
                         f"{interval_safety_active}/{interval_scans} "
                         f"front_m={safety_decision.front_distance_m:.2f} "
                         f"safety_reason={safety_decision.reason}"
+                    )
+
+                speed_governor_status = ""
+                governor_decision = self.core.last_speed_governor_decision
+                if governor_decision is not None:
+                    speed_value = (
+                        "nan"
+                        if governor_decision.speed_mps is None
+                        else f"{governor_decision.speed_mps:.3f}"
+                    )
+                    speed_governor_status = (
+                        " speed_governor_active="
+                        f"{interval_speed_governor_active}/{interval_scans} "
+                        f"speed_mps={speed_value} "
+                        "speed_governor_reason="
+                        f"{governor_decision.reason}"
                     )
 
                 residual_status = ""
@@ -874,6 +906,7 @@ class TinyLidarNetNode(Node):
                     f"inference_capacity_hz={inference_capacity_hz:.2f}"
                     f"{teacher_status}"
                     f"{safety_status}"
+                    f"{speed_governor_status}"
                     f"{residual_status}"
                     f"{shadow_status}"
                     f"{recurrent_status}"
@@ -885,6 +918,9 @@ class TinyLidarNetNode(Node):
                 )
                 self.last_log_longitudinal_safety_active_count = (
                     self.longitudinal_safety_active_count
+                )
+                self.last_log_speed_governor_active_count = (
+                    self.speed_governor_active_count
                 )
                 self.last_log_shadow_admitted_count = self.shadow_admitted_count
                 self.last_log_shadow_skipped_count = self.shadow_skipped_count

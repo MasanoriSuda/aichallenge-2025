@@ -23,7 +23,7 @@ SUMMARY_SCHEMA_VERSION = "v2"
 DOMAIN_PATTERN = re.compile(r"^d([1-9][0-9]*)$")
 LAUNCH_VALUE_PATTERN = re.compile(
     r"-\s+(tiny_lidar_ckpt_path|tiny_lidar_control_mode|"
-    r"tiny_lidar_acceleration):\s*(\S+)"
+    r"tiny_lidar_acceleration|tiny_lidar_maximum_forward_speed_mps):\s*(\S+)"
 )
 
 
@@ -80,6 +80,7 @@ def parse_runtime_provenance(log_path: Path) -> dict[str, Any]:
         "tiny_lidar_ckpt_path": set(),
         "tiny_lidar_control_mode": set(),
         "tiny_lidar_acceleration": set(),
+        "tiny_lidar_maximum_forward_speed_mps": set(),
     }
     try:
         lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -104,10 +105,22 @@ def parse_runtime_provenance(log_path: Path) -> dict[str, Any]:
             conflicts["tiny_lidar_acceleration"] = sorted(
                 acceleration_values
             )
+    maximum_speed_values = values["tiny_lidar_maximum_forward_speed_mps"]
+    maximum_forward_speed_mps = None
+    if len(maximum_speed_values) == 1:
+        try:
+            maximum_forward_speed_mps = float(next(iter(maximum_speed_values)))
+            if not math.isfinite(maximum_forward_speed_mps):
+                raise ValueError("non-finite maximum forward speed")
+        except ValueError:
+            conflicts["tiny_lidar_maximum_forward_speed_mps"] = sorted(
+                maximum_speed_values
+            )
     return {
         "checkpoint_path": next(iter(values["tiny_lidar_ckpt_path"]), None),
         "control_mode": next(iter(values["tiny_lidar_control_mode"]), None),
         "acceleration_mps2": acceleration_mps2,
+        "maximum_forward_speed_mps": maximum_forward_speed_mps,
         "conflicts": conflicts,
     }
 
@@ -168,6 +181,7 @@ def analyze_domain(
     expected_control_mode: Optional[str],
     expected_checkpoint_path: Optional[str],
     expected_acceleration_mps2: Optional[float],
+    expected_maximum_forward_speed_mps: Optional[float],
 ) -> dict[str, Any]:
     domain_dir = run_dir / f"d{domain}"
     motion_path = domain_dir / "e2e-run-analysis.json"
@@ -238,6 +252,12 @@ def analyze_domain(
             reasons.append("runtime-acceleration-missing")
         elif abs(acceleration - expected_acceleration_mps2) > 1e-9:
             reasons.append("runtime-acceleration-mismatch")
+    if expected_maximum_forward_speed_mps is not None:
+        maximum_speed = provenance["maximum_forward_speed_mps"]
+        if maximum_speed is None:
+            reasons.append("runtime-maximum-forward-speed-missing")
+        elif abs(maximum_speed - expected_maximum_forward_speed_mps) > 1e-9:
+            reasons.append("runtime-maximum-forward-speed-mismatch")
 
     return {
         "domain": domain,
@@ -280,6 +300,7 @@ def analyze_competition(
     expected_control_mode: Optional[str] = None,
     expected_checkpoint_path: Optional[str] = None,
     expected_acceleration_mps2: Optional[float] = None,
+    expected_maximum_forward_speed_mps: Optional[float] = None,
     checkpoint_file: Optional[Path] = None,
     expected_checkpoint_sha256: Optional[str] = None,
 ) -> dict[str, Any]:
@@ -334,6 +355,7 @@ def analyze_competition(
             expected_control_mode,
             expected_checkpoint_path,
             expected_acceleration_mps2,
+            expected_maximum_forward_speed_mps,
         )
         for domain in domains
     ]
@@ -354,6 +376,7 @@ def analyze_competition(
             "checkpoint_path": expected_checkpoint_path,
             "checkpoint_sha256": expected_checkpoint_sha256,
             "acceleration_mps2": expected_acceleration_mps2,
+            "maximum_forward_speed_mps": expected_maximum_forward_speed_mps,
         },
         "checkpoint_artifact": checkpoint,
         "artifacts": {
@@ -373,6 +396,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-control-mode")
     parser.add_argument("--expected-checkpoint-path")
     parser.add_argument("--expected-acceleration-mps2", type=float)
+    parser.add_argument("--expected-maximum-forward-speed-mps", type=float)
     parser.add_argument("--checkpoint-file", type=Path)
     parser.add_argument("--expected-checkpoint-sha256")
     parser.add_argument(
@@ -395,6 +419,13 @@ def main() -> int:
         raise SystemExit(
             "--expected-acceleration-mps2 must be finite and within (0, 1]"
         )
+    if args.expected_maximum_forward_speed_mps is not None and (
+        not math.isfinite(args.expected_maximum_forward_speed_mps)
+        or args.expected_maximum_forward_speed_mps < 0.0
+    ):
+        raise SystemExit(
+            "--expected-maximum-forward-speed-mps must be finite and non-negative"
+        )
     run_dir = args.run_dir.expanduser().resolve()
     try:
         domains = parse_domains(run_dir, args.domains)
@@ -405,6 +436,9 @@ def main() -> int:
             expected_control_mode=args.expected_control_mode,
             expected_checkpoint_path=args.expected_checkpoint_path,
             expected_acceleration_mps2=args.expected_acceleration_mps2,
+            expected_maximum_forward_speed_mps=(
+                args.expected_maximum_forward_speed_mps
+            ),
             checkpoint_file=(
                 None
                 if args.checkpoint_file is None

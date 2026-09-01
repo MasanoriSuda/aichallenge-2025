@@ -24,6 +24,14 @@ def read(relative_path: str) -> str:
     return (AICHALLENGE_ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def test_e2e_npc_runtime_logs_the_effective_random_seed() -> None:
+    scenario = read("simulator_scripts/e2e-npc-single.sh")
+
+    assert 'start_random_seed="${E2E_START_RANDOM_SEED:-2026}"' in scenario
+    assert 'start_random_seed=${start_random_seed}' in scenario
+    assert '--start-random-seed "${start_random_seed}"' in scenario
+
+
 def test_runtime_propagates_scenario_vehicle_count_to_launch() -> None:
     runner = read("run_autoware.bash")
 
@@ -365,10 +373,40 @@ def test_runtime_tiny_lidar_acceleration_is_explicit_and_qualified_by_gate() -> 
         'opts+=("tiny_lidar_acceleration:=${tiny_lidar_acceleration}")'
         in runner
     )
-    assert '<arg name="tiny_lidar_acceleration" default="0.6"/>' in system_launch
+    assert '<arg name="tiny_lidar_acceleration" default="0.8"/>' in system_launch
     assert (
         '<arg name="tiny_lidar_acceleration" '
         'value="$(var tiny_lidar_acceleration)"/>' in system_launch
+    )
+
+
+def test_runtime_tiny_lidar_speed_governor_is_explicit_and_qualified() -> None:
+    runner = read("run_autoware.bash")
+    system_launch = read(
+        "workspace/src/aichallenge_system/"
+        "aichallenge_system_launch/launch/aichallenge_system.launch.xml"
+    )
+
+    assert (
+        'tiny_lidar_maximum_forward_speed_mps='
+        '"${TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS:-}"' in runner
+    )
+    assert (
+        "TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS is only valid with "
+        "AIC_CONTROL_METHOD=tiny_lidar_net" in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_maximum_forward_speed_mps:='
+        '${tiny_lidar_maximum_forward_speed_mps}")' in runner
+    )
+    assert (
+        '<arg name="tiny_lidar_maximum_forward_speed_mps" default="4.6"/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_maximum_forward_speed_mps" '
+        'value="$(var tiny_lidar_maximum_forward_speed_mps)"/>'
+        in system_launch
     )
 
 

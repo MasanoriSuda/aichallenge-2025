@@ -227,6 +227,20 @@ docker compose run --rm --no-deps autoware-command \
 既定はpenalty 0件を要求する。診断目的で許容数を変える場合は
 `--max-penalty-count`を明示し、production昇格の結果と混同しない。
 
+### Qualified bounded pace authority
+
+固定加速度だけを`0.8 m/s2`へ上げると定常速度まで上がり、旧試験では最高`6.515 m/s`で
+wall penaltyと長時間停止を起こした。そこで横方策や障害物距離を変更せず、正の加速度要求だけを
+`min(requested, max(0, 4.6 - speed))`で制限する速度authorityを追加した。負加速度と後段の
+LiDAR安全制動は変更せず、速度が欠損・staleなら正加速を禁止する。
+
+実AWSIM process引数でseedを確認したNPC Gateでは、seed 2035が3周256.49秒、seed 2036が
+3周255.87秒で、どちらも1位、penalty 0、stall 0だった。このためproduction既定は
+`acceleration=0.8 m/s2`、`maximum_forward_speed_mps=4.6 m/s`とする。比較runでは両値を
+startup logとcompetition analysisで照合し、速度上限だけを暗黙に無効化しない。
+昇格後に環境変数を指定せず実施したseed 2037も3周255.65秒、1位、penalty 0、stall 0で
+合格し、packaged defaultまで同じauthorityが到達することを確認した。
+
 2026-09-01のfrozen production candidateによるcompetition matrixでは、単車
 `output/20260901-151131`だけが3/3周、penalty 0、stall 0で合格した。runtime NPC
 `output/20260901-152109`は2/3周後に右側へ埋まり、正加速中のstallが117.05秒、wall

@@ -15,6 +15,10 @@ from tiny_lidar_net_controller.speed_committed_teacher import (
     LidarSpeedCommittedTeacher,
     SpeedCommittedTeacherConfig,
 )
+from tiny_lidar_net_controller.speed_governor import (
+    ForwardSpeedGovernor,
+    ForwardSpeedGovernorDecision,
+)
 from tiny_lidar_net_controller.model.tinylidarnet import (
     RecurrentSteeringAdapterNp,
     SpatialSteeringAdapterNp,
@@ -50,6 +54,7 @@ class TinyLidarNetCore:
         architecture: str = 'large',
         ckpt_path: str = '',
         acceleration: float = 0.1,
+        maximum_forward_speed_mps: float = 0.0,
         control_mode: str = 'ai',
         max_range: float = 30.0,
         gap_teacher_config: Optional[GapTeacherConfig] = None,
@@ -108,6 +113,7 @@ class TinyLidarNetCore:
         self.output_dim = output_dim
         self.architecture = architecture
         self.acceleration = acceleration
+        self.maximum_forward_speed_mps = float(maximum_forward_speed_mps)
         self.control_mode = control_mode.lower()
         self.max_range = max_range
         self.logger = logging.getLogger(__name__)
@@ -121,6 +127,9 @@ class TinyLidarNetCore:
         self.last_gap_teacher_decision: Optional[GapTeacherDecision] = None
         self.last_longitudinal_safety_decision: Optional[
             LongitudinalSafetyDecision
+        ] = None
+        self.last_speed_governor_decision: Optional[
+            ForwardSpeedGovernorDecision
         ] = None
         self.spatial_shadow_model = None
         self.spatial_shadow_loaded_parameter_count = 0
@@ -179,6 +188,20 @@ class TinyLidarNetCore:
             raise ValueError("max_range must be finite and positive")
         if not np.isfinite(self.acceleration) or not -1.0 <= self.acceleration <= 1.0:
             raise ValueError("acceleration must be finite and within [-1.0, 1.0]")
+        if (
+            not np.isfinite(self.maximum_forward_speed_mps)
+            or self.maximum_forward_speed_mps < 0.0
+        ):
+            raise ValueError(
+                "maximum_forward_speed_mps must be finite and non-negative"
+            )
+        if self.maximum_forward_speed_mps > 0.0 and self.control_mode not in {
+            "fixed",
+            "fixed_lidar_brake",
+        }:
+            raise ValueError(
+                "maximum_forward_speed_mps is only supported by fixed control modes"
+            )
         if (
             not np.isfinite(residual_max_abs_delta_rad)
             or residual_max_abs_delta_rad <= 0.0
@@ -286,6 +309,11 @@ class TinyLidarNetCore:
         self.gap_teacher = None
         self.gap_teacher_requires_speed = False
         self.longitudinal_safety = None
+        self.speed_governor = (
+            ForwardSpeedGovernor(self.maximum_forward_speed_mps)
+            if self.maximum_forward_speed_mps > 0.0
+            else None
+        )
         if self.control_mode == "gap_teacher":
             self.gap_teacher = LidarGapTeacher(
                 gap_teacher_config or GapTeacherConfig()
@@ -417,6 +445,7 @@ class TinyLidarNetCore:
             self.spatial_shadow_model is not None
             or self.recurrent_shadow_model is not None
             or self.gap_teacher_requires_speed
+            or self.speed_governor is not None
         )
 
     @staticmethod
@@ -644,6 +673,11 @@ class TinyLidarNetCore:
 
         self.last_gap_teacher_decision = None
         self.last_longitudinal_safety_decision = None
+        self.last_speed_governor_decision = None
+        if self.speed_governor is not None:
+            governor_decision = self.speed_governor.decide(speed_mps, accel)
+            self.last_speed_governor_decision = governor_decision
+            accel = governor_decision.acceleration_mps2
         if self.gap_teacher is not None:
             if self.gap_teacher_requires_speed:
                 decision = self.gap_teacher.decide(

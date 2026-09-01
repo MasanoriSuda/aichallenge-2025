@@ -8,6 +8,7 @@ if [[ ! ${start_random_seed} =~ ^[0-9]+$ ]]; then
     echo "[ERROR] E2E_START_RANDOM_SEED must be a non-negative integer" >&2
     exit 2
 fi
+echo "[INFO] E2E NPC effective start_random_seed=${start_random_seed}"
 
 # GNSS is infrastructure-only for Ready/Grounded. The TinyLidarNet controller
 # subscribes only to /scan and never consumes GNSS, IMU, or V2X.

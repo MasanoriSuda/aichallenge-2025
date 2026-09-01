@@ -17,7 +17,8 @@
   <arg name="recurrent_authority_max_abs_correction_rad" default="0.24"/>
   <arg name="model_type" default="tiny_lidar_net"/>
   <arg name="control_mode" default="fixed_lidar_brake"/>
-  <arg name="acceleration" default="0.6"/>
+  <arg name="acceleration" default="0.8"/>
+  <arg name="maximum_forward_speed_mps" default="4.6"/>
   <arg name="csv_path" default="$(find-pkg-share laserscan_generator)/map/lane.csv"/>
 
   <group if="$(var vscan_mode)">
@@ -44,6 +45,7 @@
     <arg name="model_type" value="$(var model_type)"/>
     <arg name="control_mode" value="$(var control_mode)"/>
     <arg name="acceleration" value="$(var acceleration)"/>
+    <arg name="maximum_forward_speed_mps" value="$(var maximum_forward_speed_mps)"/>
     <arg name="control_cmd_topic" value="/control/command/control_cmd"/>
   </include>
 </launch>

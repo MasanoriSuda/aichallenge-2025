@@ -125,7 +125,8 @@ AWSIM結果を含む最終判定は、motion JSONを生成した後にrun単位�
 ```bash
 python3 analyze_e2e_competition.py /output/<run> \
   --expected-control-mode fixed_lidar_brake \
-  --expected-acceleration-mps2 0.6 \
+  --expected-acceleration-mps2 0.8 \
+  --expected-maximum-forward-speed-mps 4.6 \
   --expected-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
   --checkpoint-file checkpoints/20260901_055824/candidate.npy \
@@ -155,11 +156,34 @@ python3 analyze_e2e_competition.py /output/<run> \
   --fail-on-rejection
 ```
 
-packaged defaultはcross-seed Gateに合格した`0.6 m/s2`です。`0.8 m/s2`は
-単車とNPC seed 2026/2034に合格しましたが、seed 2035でwall penaltyと長時間停止を
-起こしたためcross-seed不採用です。`1.0 m/s2`もNPC Gateのwall penaltyで
-不採用です。比較runでは必ず`TINY_LIDAR_ACCELERATION`と
-`--expected-acceleration-mps2`を対にしてruntime identityを固定します。
+無制限の`0.8 m/s2`は旧試験で最高`6.515 m/s`まで加速してwall penaltyと長時間停止を
+起こしたため不採用です。`1.0 m/s2`も同じ理由で不採用です。固定加速度だけを上げず、
+packaged defaultはcross-seed NPC Gateに合格した`0.8 m/s2`と`4.6 m/s`上限の組み合わせです。
+比較runでは`TINY_LIDAR_ACCELERATION`、`TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS`と対応する
+analyzer引数を対にしてruntime identityを固定します。
+
+前進速度上限は固定加速度の立ち上がりと定常速度を分離します。正の加速度だけを減らし、
+LiDAR安全層の制動や負加速度を弱めません。速度が欠損・staleなら正の加速度を禁止します。
+診断時に`0.0`を明示すれば無効化できますが、production既定は`4.6 m/s`です。
+
+```bash
+make e2e-npc-single \
+  LOG_DIR=/output/<run> \
+  E2E_START_RANDOM_SEED=2035 \
+  TINY_LIDAR_ACCELERATION=0.8 \
+  TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS=4.6
+
+python3 analyze_e2e_competition.py /output/<run> \
+  --expected-control-mode fixed_lidar_brake \
+  --expected-acceleration-mps2 0.8 \
+  --expected-maximum-forward-speed-mps 4.6 \
+  --fail-on-rejection
+```
+
+この組み合わせは実seed 2035/2036で各3周完走、1位、penalty 0、stall 0となったため
+productionへ昇格しました。合計周回時間はそれぞれ256.49秒、255.87秒です。昇格後に
+環境変数を指定しないpackaged defaultでもseed 2037を255.65秒、penalty/stall 0で完走し、
+launch既定値まで同じauthorityが到達することを確認しています。
 
 競技runが失敗した後は、checkpointを再学習する前に失敗直前状態のcoverageを監査できます。
 `--failure`は`run:dN`形式で複数指定し、最初のpenalty前10秒をproduction学習分布と

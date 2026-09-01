@@ -24,7 +24,8 @@
     <arg name="tiny_lidar_recurrent_authority_enabled" default="false"/>
     <arg name="tiny_lidar_recurrent_authority_max_abs_correction_rad" default="0.24"/>
     <arg name="tiny_lidar_control_mode" default="fixed_lidar_brake"/>
-    <arg name="tiny_lidar_acceleration" default="0.6"/>
+    <arg name="tiny_lidar_acceleration" default="0.8"/>
+    <arg name="tiny_lidar_maximum_forward_speed_mps" default="4.6"/>
 
     <let name="domain_id" value="$(var domain_id)"/>
     <let name="rviz_config" value="$(find-pkg-share aichallenge_system_launch)/config/autoware_vehicle.rviz"/>
@@ -57,6 +58,7 @@
     <log message=" - tiny_lidar_recurrent_authority_max_abs_correction_rad: $(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"/>
     <log message=" - tiny_lidar_control_mode: $(var tiny_lidar_control_mode)"/>
     <log message=" - tiny_lidar_acceleration: $(var tiny_lidar_acceleration)"/>
+    <log message=" - tiny_lidar_maximum_forward_speed_mps: $(var tiny_lidar_maximum_forward_speed_mps)"/>
 
     <!-- Main module of AI challenge 2025. -->
     <include file="$(find-pkg-share aichallenge_submit_launch)/launch/aichallenge_submit.launch.xml" >
@@ -80,6 +82,7 @@
         <arg name="tiny_lidar_recurrent_authority_max_abs_correction_rad" value="$(var tiny_lidar_recurrent_authority_max_abs_correction_rad)"/>
         <arg name="tiny_lidar_control_mode" value="$(var tiny_lidar_control_mode)"/>
         <arg name="tiny_lidar_acceleration" value="$(var tiny_lidar_acceleration)"/>
+        <arg name="tiny_lidar_maximum_forward_speed_mps" value="$(var tiny_lidar_maximum_forward_speed_mps)"/>
     </include>
 
     <!-- Visualization. -->

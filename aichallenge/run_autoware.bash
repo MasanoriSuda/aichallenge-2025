@@ -258,6 +258,20 @@ if [[ -n "${TINY_LIDAR_ACCELERATION+x}" ]]; then
     opts+=("tiny_lidar_acceleration:=${tiny_lidar_acceleration}")
 fi
 
+tiny_lidar_maximum_forward_speed_mps="${TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS:-}"
+if [[ -n "${TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS+x}" ]]; then
+    if [[ ! "${tiny_lidar_maximum_forward_speed_mps}" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
+       [[ "${tiny_lidar_maximum_forward_speed_mps}" =~ ^0+([.]0+)?$ ]]; then
+        echo "TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS must be finite and positive"
+        exit 1
+    fi
+    if [[ "${control_method}" != "tiny_lidar_net" ]]; then
+        echo "TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"
+        exit 1
+    fi
+    opts+=("tiny_lidar_maximum_forward_speed_mps:=${tiny_lidar_maximum_forward_speed_mps}")
+fi
+
 export ROS_DOMAIN_ID=$id
 
 mkdir -p "${out_dir}"

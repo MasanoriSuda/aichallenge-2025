@@ -137,6 +137,42 @@ def test_shipped_checkpoint_matches_runtime_model() -> None:
     assert np.isfinite(steering)
 
 
+def test_forward_speed_governor_is_an_explicit_wheel_speed_consumer() -> None:
+    core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.8,
+        maximum_forward_speed_mps=4.6,
+        control_mode="fixed",
+        max_range=30.0,
+    )
+    scan = np.full(750, 30.0, dtype=np.float32)
+
+    assert core.requires_wheel_speed
+    assert core.process(scan, speed_mps=3.0)[0] == pytest.approx(0.8)
+    assert core.process(scan, speed_mps=4.4)[0] == pytest.approx(0.2)
+    assert core.process(scan, speed_mps=4.7)[0] == pytest.approx(0.0)
+    assert core.process(scan, speed_mps=None)[0] == pytest.approx(0.0)
+    assert core.last_speed_governor_decision is not None
+    assert core.last_speed_governor_decision.reason == "missing-or-stale-speed"
+
+
+def test_forward_speed_governor_rejects_teacher_mode() -> None:
+    with pytest.raises(ValueError, match="only supported by fixed control modes"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            acceleration=0.8,
+            maximum_forward_speed_mps=4.6,
+            control_mode="gap_teacher",
+            max_range=30.0,
+        )
+
+
 def test_production_backbone_shared_feature_path_is_bit_identical() -> None:
     core = _load_core()
     scans = np.stack(
@@ -505,6 +541,29 @@ def test_fixed_lidar_brake_preserves_network_steering_and_limits_acceleration() 
     assert safe_steering == pytest.approx(fixed_steering)
     assert safe_core.last_longitudinal_safety_decision is not None
     assert safe_core.last_longitudinal_safety_decision.active
+
+
+def test_lidar_brake_remains_final_owner_after_speed_governor() -> None:
+    core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.8,
+        maximum_forward_speed_mps=4.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+    )
+
+    acceleration, _ = core.process(
+        np.full(750, 1.0, dtype=np.float32), speed_mps=4.7
+    )
+
+    assert core.last_speed_governor_decision is not None
+    assert core.last_speed_governor_decision.acceleration_mps2 == pytest.approx(0.0)
+    assert core.last_longitudinal_safety_decision is not None
+    assert core.last_longitudinal_safety_decision.active
+    assert acceleration == pytest.approx(-1.0)
 
 
 def test_unknown_control_mode_is_rejected() -> None:

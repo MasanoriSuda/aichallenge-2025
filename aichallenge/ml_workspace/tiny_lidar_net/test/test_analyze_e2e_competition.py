@@ -68,6 +68,7 @@ def create_run(tmp_path: Path, domain: int = 1) -> Path:
                 f"[INFO] [launch.user]:  - tiny_lidar_ckpt_path: {RUNTIME_CHECKPOINT}",
                 "[INFO] [launch.user]:  - tiny_lidar_control_mode: fixed_lidar_brake",
                 "[INFO] [launch.user]:  - tiny_lidar_acceleration: 0.6",
+                "[INFO] [launch.user]:  - tiny_lidar_maximum_forward_speed_mps: 0.0",
             )
         ),
         encoding="utf-8",
@@ -238,6 +239,55 @@ def test_expected_runtime_acceleration_rejects_legacy_missing_value(tmp_path):
 
     assert result["status"] == "fail"
     assert "runtime-acceleration-missing" in result["domains"][0]["reasons"]
+
+
+def test_expected_runtime_maximum_forward_speed_is_bound_to_run(tmp_path):
+    run_dir = create_run(tmp_path)
+
+    accepted = MODULE.analyze_competition(
+        run_dir,
+        [1],
+        expected_maximum_forward_speed_mps=0.0,
+    )
+    rejected = MODULE.analyze_competition(
+        run_dir,
+        [1],
+        expected_maximum_forward_speed_mps=4.6,
+    )
+
+    assert accepted["status"] == "pass"
+    runtime = accepted["domains"][0]["runtime"]
+    assert runtime["maximum_forward_speed_mps"] == 0.0
+    assert rejected["status"] == "fail"
+    assert (
+        "runtime-maximum-forward-speed-mismatch"
+        in rejected["domains"][0]["reasons"]
+    )
+
+
+def test_expected_runtime_maximum_forward_speed_rejects_missing_value(tmp_path):
+    run_dir = create_run(tmp_path)
+    log_path = run_dir / "d1" / "autoware.log"
+    log_path.write_text(
+        "\n".join(
+            line
+            for line in log_path.read_text(encoding="utf-8").splitlines()
+            if "tiny_lidar_maximum_forward_speed_mps" not in line
+        ),
+        encoding="utf-8",
+    )
+
+    result = MODULE.analyze_competition(
+        run_dir,
+        [1],
+        expected_maximum_forward_speed_mps=4.6,
+    )
+
+    assert result["status"] == "fail"
+    assert (
+        "runtime-maximum-forward-speed-missing"
+        in result["domains"][0]["reasons"]
+    )
 
 
 def test_checkpoint_hash_mismatch_fails(tmp_path):

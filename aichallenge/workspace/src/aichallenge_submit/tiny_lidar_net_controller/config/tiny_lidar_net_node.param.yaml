@@ -39,7 +39,8 @@
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
     control_mode: "fixed_lidar_brake"  # ML steer + LiDAR longitudinal safety
-    acceleration: 0.6            # cross-seed-qualified conservative baseline
+    acceleration: 0.8            # qualified bounded-pace launch acceleration
+    maximum_forward_speed_mps: 4.6  # seed 2035/2036 NPC Gate, penalty/stall zero
 
     # Shared obstacle policy. Only gap_teacher may modify lateral control.
     gap_teacher:

@@ -99,6 +99,8 @@ def test_numpy_recurrent_runtime_matches_pytorch_sequence(tmp_path: Path) -> Non
     )
     runtime = RecurrentSteeringAdapterNp(**report["runtime_config"])
     exported = np.load(output, allow_pickle=True).item()
+    artifact_config, exported = runtime.split_artifact(exported)
+    assert artifact_config == report["runtime_config"]
     assert set(exported) == set(runtime.params)
     runtime.params.update(exported)
 
@@ -147,6 +149,7 @@ def test_numpy_recurrent_runtime_matches_pytorch_sequence(tmp_path: Path) -> Non
         hidden, expected[-1].squeeze(0).numpy(), rtol=3e-5, atol=3e-5
     )
     assert report["parameter_count"] == len(runtime.params)
+    assert report["artifact_schema_version"] == 1
     assert manifest.is_file()
 
 

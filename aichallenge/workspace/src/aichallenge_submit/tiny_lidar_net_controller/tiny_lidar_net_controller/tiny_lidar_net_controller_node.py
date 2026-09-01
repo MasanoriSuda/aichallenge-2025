@@ -407,6 +407,22 @@ class TinyLidarNetNode(Node):
                     recurrent_authority_max_abs_correction_rad
                 ),
             )
+            recurrent_runtime_config = (
+                self.core.recurrent_shadow_runtime_config
+                or {
+                    "hidden_dim": recurrent_shadow_hidden_dim,
+                    "projection_dim": recurrent_shadow_projection_dim,
+                    "use_speed": recurrent_shadow_use_speed,
+                    "speed_embedding_dim": recurrent_shadow_speed_embedding_dim,
+                    "max_speed_mps": recurrent_shadow_max_speed_mps,
+                    "max_abs_correction_rad": (
+                        recurrent_shadow_max_abs_correction_rad
+                    ),
+                    "correction_deadband_rad": (
+                        recurrent_shadow_correction_deadband_rad
+                    ),
+                }
+            )
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
                 f"MaxRange: {max_range}, "
@@ -440,15 +456,18 @@ class TinyLidarNetNode(Node):
                 " RecurrentShadowEnabled: "
                 f"{self.core.recurrent_shadow_model is not None},"
                 " RecurrentShadowConfig: "
-                f"hidden={recurrent_shadow_hidden_dim},"
-                f"projection={recurrent_shadow_projection_dim},"
-                f"use_speed={int(recurrent_shadow_use_speed)},"
-                f"speed_embedding={recurrent_shadow_speed_embedding_dim},"
-                f"max_speed_mps={recurrent_shadow_max_speed_mps:.6f},"
+                f"contract={self.core.recurrent_shadow_artifact_contract},"
+                f"hidden={recurrent_runtime_config['hidden_dim']},"
+                f"projection={recurrent_runtime_config['projection_dim']},"
+                f"use_speed={int(recurrent_runtime_config['use_speed'])},"
+                "speed_embedding="
+                f"{recurrent_runtime_config['speed_embedding_dim']},"
+                "max_speed_mps="
+                f"{recurrent_runtime_config['max_speed_mps']:.6f},"
                 "max_correction_rad="
-                f"{recurrent_shadow_max_abs_correction_rad:.6f},"
+                f"{recurrent_runtime_config['max_abs_correction_rad']:.6f},"
                 "deadband_rad="
-                f"{recurrent_shadow_correction_deadband_rad:.6f},"
+                f"{recurrent_runtime_config['correction_deadband_rad']:.6f},"
                 f"authority_enabled={int(recurrent_authority_enabled)},"
                 "authority_max_correction_rad="
                 f"{recurrent_authority_max_abs_correction_rad:.6f}"

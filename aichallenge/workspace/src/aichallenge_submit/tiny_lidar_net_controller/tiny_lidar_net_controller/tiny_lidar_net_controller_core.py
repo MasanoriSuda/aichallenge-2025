@@ -155,6 +155,8 @@ class TinyLidarNetCore:
         self.last_spatial_authority_clipped = False
         self.recurrent_shadow_model = None
         self.recurrent_shadow_loaded_parameter_count = 0
+        self.recurrent_shadow_artifact_contract = "disabled"
+        self.recurrent_shadow_runtime_config = None
         self.recurrent_shadow_hidden = None
         self.last_recurrent_shadow_correction_rad = 0.0
         self.last_recurrent_shadow_raw_correction_rad = 0.0
@@ -405,33 +407,63 @@ class TinyLidarNetCore:
                 recurrent_shadow_expected_sha256,
                 "recurrent steering shadow",
             )
-            self.recurrent_shadow_model = RecurrentSteeringAdapterNp(
-                input_dim=self.input_dim,
-                hidden_dim=recurrent_shadow_hidden_dim,
-                projection_dim=recurrent_shadow_projection_dim,
-                use_speed=recurrent_shadow_use_speed,
-                speed_embedding_dim=recurrent_shadow_speed_embedding_dim,
-                max_speed_mps=recurrent_shadow_max_speed_mps,
-                max_abs_correction_rad=(
+            recurrent_weights = self._read_normalized_weights(
+                recurrent_shadow_ckpt_path
+            )
+            artifact_config, recurrent_weights = (
+                RecurrentSteeringAdapterNp.split_artifact(recurrent_weights)
+            )
+            configured_recurrent = {
+                "input_dim": self.input_dim,
+                "hidden_dim": recurrent_shadow_hidden_dim,
+                "projection_dim": recurrent_shadow_projection_dim,
+                "use_speed": recurrent_shadow_use_speed,
+                "speed_embedding_dim": recurrent_shadow_speed_embedding_dim,
+                "max_speed_mps": recurrent_shadow_max_speed_mps,
+                "max_abs_correction_rad": (
                     recurrent_shadow_max_abs_correction_rad
                 ),
-                max_abs_steering_rad=1.0,
-                correction_deadband_rad=(
+                "max_abs_steering_rad": 1.0,
+                "correction_deadband_rad": (
                     recurrent_shadow_correction_deadband_rad
                 ),
-                spatial_baseline_hidden_dim=spatial_shadow_hidden_dim,
-                spatial_baseline_projection_dim=spatial_shadow_projection_dim,
-                spatial_baseline_max_speed_mps=(
+                "spatial_baseline_hidden_dim": spatial_shadow_hidden_dim,
+                "spatial_baseline_projection_dim": (
+                    spatial_shadow_projection_dim
+                ),
+                "spatial_baseline_max_speed_mps": (
                     spatial_shadow_max_speed_mps
                 ),
-                spatial_baseline_max_abs_delta_rad=(
+                "spatial_baseline_max_abs_delta_rad": (
                     spatial_shadow_max_abs_delta_rad
                 ),
+            }
+            if artifact_config is None:
+                recurrent_config = configured_recurrent
+                self.recurrent_shadow_artifact_contract = "legacy-config"
+            else:
+                recurrent_config = artifact_config
+                self.recurrent_shadow_artifact_contract = "self-described-v1"
+            if recurrent_config["input_dim"] != self.input_dim:
+                raise ValueError(
+                    "recurrent artifact input dimension does not match production: "
+                    f"artifact={recurrent_config['input_dim']}, "
+                    f"production={self.input_dim}"
+                )
+            if recurrent_config["max_abs_steering_rad"] != 1.0:
+                raise ValueError(
+                    "recurrent artifact steering scale must match the runtime "
+                    "command contract"
+                )
+            self.recurrent_shadow_runtime_config = dict(recurrent_config)
+            self.recurrent_shadow_model = RecurrentSteeringAdapterNp(
+                **recurrent_config
             )
             self.recurrent_shadow_loaded_parameter_count = self._load_model_weights(
                 self.recurrent_shadow_model,
                 recurrent_shadow_ckpt_path,
                 "recurrent steering shadow",
+                normalized_weights=recurrent_weights,
             )
             for key, production_value in self.model.params.items():
                 recurrent_value = (
@@ -762,26 +794,34 @@ class TinyLidarNetCore:
             self.model, path, "base TinyLidarNet"
         )
 
-    def _load_model_weights(self, model, path: str, label: str) -> int:
+    @staticmethod
+    def _read_normalized_weights(path: str) -> dict:
+        weights = np.load(path, allow_pickle=True)
+        if isinstance(weights, np.lib.npyio.NpzFile):
+            weight_dict = dict(weights.items())
+            weights.close()
+        elif isinstance(weights, np.ndarray) and weights.dtype == object:
+            weight_dict = weights.item()
+        elif isinstance(weights, dict):
+            weight_dict = weights
+        else:
+            raise ValueError(f"Unsupported weight format type: {type(weights)}")
+
+        normalized_weights = {}
+        for key, value in weight_dict.items():
+            key_norm = key.replace('.', '_')
+            if key_norm in normalized_weights:
+                raise ValueError(f"duplicate normalized parameter key: {key_norm}")
+            normalized_weights[key_norm] = np.asarray(value)
+        return normalized_weights
+
+    def _load_model_weights(
+        self, model, path: str, label: str, normalized_weights=None
+    ) -> int:
         """Strictly load one NumPy model without accepting partial parameters."""
         try:
-            weights = np.load(path, allow_pickle=True)
-
-            if isinstance(weights, np.lib.npyio.NpzFile):
-                weight_dict = dict(weights.items())
-            elif isinstance(weights, np.ndarray) and weights.dtype == object:
-                weight_dict = weights.item()
-            elif isinstance(weights, dict):
-                weight_dict = weights
-            else:
-                raise ValueError(f"Unsupported weight format type: {type(weights)}")
-
-            normalized_weights = {}
-            for key, value in weight_dict.items():
-                key_norm = key.replace('.', '_')
-                if key_norm in normalized_weights:
-                    raise ValueError(f"duplicate normalized parameter key: {key_norm}")
-                normalized_weights[key_norm] = np.asarray(value)
+            if normalized_weights is None:
+                normalized_weights = self._read_normalized_weights(path)
 
             expected_keys = set(model.params)
             provided_keys = set(normalized_weights)

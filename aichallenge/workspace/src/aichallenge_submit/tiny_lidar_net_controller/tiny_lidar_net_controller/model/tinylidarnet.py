@@ -607,6 +607,123 @@ class RecurrentSteeringAdapterNp:
     supplies the previous finite state.
     """
 
+    ARTIFACT_SCHEMA_VERSION = 1
+    ARTIFACT_METADATA_PREFIX = '__recurrent_runtime_'
+    ARTIFACT_CONFIG_TYPES = {
+        'input_dim': int,
+        'hidden_dim': int,
+        'projection_dim': int,
+        'use_speed': bool,
+        'speed_embedding_dim': int,
+        'max_speed_mps': float,
+        'max_abs_correction_rad': float,
+        'max_abs_steering_rad': float,
+        'correction_deadband_rad': float,
+        'spatial_baseline_hidden_dim': int,
+        'spatial_baseline_projection_dim': int,
+        'spatial_baseline_max_speed_mps': float,
+        'spatial_baseline_max_abs_delta_rad': float,
+    }
+
+    @classmethod
+    def artifact_metadata(cls, runtime_config):
+        """Encode the construction contract alongside immutable weights."""
+        missing = sorted(set(cls.ARTIFACT_CONFIG_TYPES) - set(runtime_config))
+        if missing:
+            raise ValueError(
+                f"recurrent runtime config is incomplete: missing={missing}"
+            )
+        metadata = {
+            f'{cls.ARTIFACT_METADATA_PREFIX}schema_version': np.asarray(
+                cls.ARTIFACT_SCHEMA_VERSION, dtype=np.int64
+            )
+        }
+        for name, value_type in cls.ARTIFACT_CONFIG_TYPES.items():
+            value = runtime_config[name]
+            if value_type is bool:
+                encoded = np.asarray(int(bool(value)), dtype=np.int64)
+            elif value_type is int:
+                encoded = np.asarray(int(value), dtype=np.int64)
+            else:
+                encoded = np.asarray(float(value), dtype=np.float64)
+            metadata[f'{cls.ARTIFACT_METADATA_PREFIX}{name}'] = encoded
+        return metadata
+
+    @classmethod
+    def split_artifact(cls, weights):
+        """Return a self-described runtime config and its strict weight set.
+
+        Older diagnostic artifacts without metadata remain readable through the
+        caller's explicit configuration.  A partially described artifact is
+        rejected rather than silently mixing two architecture contracts.
+        """
+        metadata = {
+            key: value
+            for key, value in weights.items()
+            if key.startswith(cls.ARTIFACT_METADATA_PREFIX)
+        }
+        parameters = {
+            key: value
+            for key, value in weights.items()
+            if not key.startswith(cls.ARTIFACT_METADATA_PREFIX)
+        }
+        if not metadata:
+            return None, parameters
+
+        expected_keys = {
+            f'{cls.ARTIFACT_METADATA_PREFIX}schema_version',
+            *(
+                f'{cls.ARTIFACT_METADATA_PREFIX}{name}'
+                for name in cls.ARTIFACT_CONFIG_TYPES
+            ),
+        }
+        provided_keys = set(metadata)
+        if provided_keys != expected_keys:
+            raise ValueError(
+                "recurrent artifact metadata mismatch: "
+                f"missing={sorted(expected_keys - provided_keys)}, "
+                f"unexpected={sorted(provided_keys - expected_keys)}"
+            )
+
+        def scalar(name):
+            key = f'{cls.ARTIFACT_METADATA_PREFIX}{name}'
+            value = np.asarray(metadata[key])
+            if value.shape != () or not np.issubdtype(value.dtype, np.number):
+                raise ValueError(
+                    f"recurrent artifact metadata {name} must be numeric scalar"
+                )
+            numeric = value.item()
+            if not np.isfinite(numeric):
+                raise ValueError(
+                    f"recurrent artifact metadata {name} must be finite"
+                )
+            return numeric
+
+        schema_version = int(scalar('schema_version'))
+        if schema_version != cls.ARTIFACT_SCHEMA_VERSION:
+            raise ValueError(
+                "unsupported recurrent artifact schema: "
+                f"{schema_version}"
+            )
+        config = {}
+        for name, value_type in cls.ARTIFACT_CONFIG_TYPES.items():
+            value = scalar(name)
+            if value_type is bool:
+                if value not in (0, 1):
+                    raise ValueError(
+                        f"recurrent artifact metadata {name} must be 0 or 1"
+                    )
+                config[name] = bool(value)
+            elif value_type is int:
+                if int(value) != value:
+                    raise ValueError(
+                        f"recurrent artifact metadata {name} must be integral"
+                    )
+                config[name] = int(value)
+            else:
+                config[name] = float(value)
+        return config, parameters
+
     def __init__(
         self,
         input_dim=750,

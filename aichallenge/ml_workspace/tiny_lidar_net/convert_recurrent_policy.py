@@ -124,6 +124,8 @@ def convert_recurrent_checkpoint(
         if not np.all(np.isfinite(value)):
             raise ValueError(f"recurrent NumPy parameter is non-finite: {key}")
 
+    exported.update(runtime.artifact_metadata(runtime_model_config))
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     np.save(output_path, exported)
     report = {
@@ -132,7 +134,8 @@ def convert_recurrent_checkpoint(
         "source_checkpoint_sha256": sha256_file(checkpoint_path),
         "output_checkpoint": str(output_path),
         "output_checkpoint_sha256": sha256_file(output_path),
-        "parameter_count": len(exported),
+        "parameter_count": len(runtime.params),
+        "artifact_schema_version": runtime.ARTIFACT_SCHEMA_VERSION,
         "model_config": model_config,
         "runtime_config": runtime_model_config,
     }

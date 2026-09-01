@@ -75,8 +75,25 @@ def _write_recurrent_shadow_checkpoint(
     *,
     mismatch_base: bool = False,
     correction_rad: float = 0.03,
+    hidden_dim: int = 64,
+    self_described: bool = False,
 ) -> Path:
-    model = RecurrentSteeringAdapterNp()
+    runtime_config = {
+        "input_dim": 750,
+        "hidden_dim": hidden_dim,
+        "projection_dim": 128,
+        "use_speed": False,
+        "speed_embedding_dim": 16,
+        "max_speed_mps": 12.0,
+        "max_abs_correction_rad": 0.64,
+        "max_abs_steering_rad": 1.0,
+        "correction_deadband_rad": 0.02,
+        "spatial_baseline_hidden_dim": 128,
+        "spatial_baseline_projection_dim": 128,
+        "spatial_baseline_max_speed_mps": 12.0,
+        "spatial_baseline_max_abs_delta_rad": 1.2,
+    }
+    model = RecurrentSteeringAdapterNp(**runtime_config)
     weights = {key: value.copy() for key, value in model.params.items()}
     base = np.load(CHECKPOINT, allow_pickle=True).item()
     spatial = np.load(SPATIAL_CHECKPOINT, allow_pickle=True).item()
@@ -90,9 +107,47 @@ def _write_recurrent_shadow_checkpoint(
     weights["correction_output_bias"].fill(
         np.arctanh(correction_rad / model.max_abs_correction_rad)
     )
+    if self_described:
+        weights.update(model.artifact_metadata(runtime_config))
     checkpoint = tmp_path / "recurrent-shadow.npy"
     np.save(checkpoint, weights)
     return checkpoint
+
+
+def test_self_described_recurrent_artifact_owns_architecture(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(
+        tmp_path,
+        hidden_dim=7,
+        self_described=True,
+    )
+    shadow = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+        spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=1.2,
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=1.2,
+        recurrent_shadow_ckpt_path=str(recurrent_checkpoint),
+        recurrent_shadow_hidden_dim=64,
+    )
+
+    assert shadow.recurrent_shadow_artifact_contract == "self-described-v1"
+    assert shadow.recurrent_shadow_runtime_config["hidden_dim"] == 7
+    assert shadow.recurrent_shadow_model.hidden_dim == 7
+    command = shadow.process(
+        np.full(750, 30.0, dtype=np.float32), speed_mps=3.0
+    )
+    assert np.all(np.isfinite(command))
+    assert shadow.last_recurrent_shadow_admitted
 
 
 def test_base_conditioned_spatial_shadow_loads_with_trained_residual_scale(

@@ -19,6 +19,7 @@ CHECKPOINT_PATH_RE = re.compile(
 )
 CONFIG_RE = re.compile(
     r"RecurrentShadowConfig:\s*"
+    r"(?:contract=[^,]+,)?"
     r"hidden=(\d+),projection=(\d+),use_speed=([01]),"
     r"speed_embedding=(\d+),max_speed_mps=([0-9.]+),"
     r"max_correction_rad=([0-9.]+),deadband_rad=([0-9.]+)"

@@ -34,6 +34,8 @@ VARIANTS = (
     "static_conv5",
     "temporal_conv5_no_speed",
     "temporal_conv5",
+    "static_raw",
+    "temporal_raw",
 )
 TRAIN_SAMPLING_MODES = ("sample", "sequence")
 
@@ -250,7 +252,11 @@ def make_probe_sequences(
             feature_cache[sequence.sequence_id] = cached
         projected, fc3 = cached
         features = compose_probe_features(
-            variant, projected, fc3, sequence.speeds
+            variant,
+            projected,
+            fc3,
+            sequence.speeds,
+            sequence.scans,
         )
         output.append(
             ProbeSequence(
@@ -270,6 +276,7 @@ def compose_probe_features(
     projected: np.ndarray,
     fc3: np.ndarray,
     speeds_mps: np.ndarray,
+    scans_m: np.ndarray | None = None,
 ) -> np.ndarray:
     speeds = np.asarray(speeds_mps, dtype=np.float32)
     if speeds.shape != (len(projected),):
@@ -285,6 +292,18 @@ def compose_probe_features(
         return spatial_history_features(projected)
     if variant == "temporal_conv5":
         return temporal_features(projected, speeds)
+    if variant in ("static_raw", "temporal_raw"):
+        raw = np.asarray(scans_m, dtype=np.float32)
+        if raw.shape != (len(projected), 750):
+            raise ValueError(
+                "raw probe variants require physical scans with shape (N, 750)"
+            )
+        if not np.all(np.isfinite(raw)) or np.any(raw < 0.0):
+            raise ValueError("raw probe scans must be finite and non-negative")
+        normalized = np.clip(raw / 30.0, 0.0, 1.0)
+        if variant == "static_raw":
+            return np.concatenate((normalized, normalized_speed), axis=1)
+        return temporal_features(normalized, speeds)
     raise ValueError(f"unsupported probe variant: {variant}")
 
 
@@ -314,6 +333,7 @@ def make_normal_probe_sequences(
             projected,
             fc3,
             np.zeros(len(sequence), dtype=np.float32),
+            sequence.scans * sequence.max_range,
         )
         output.append(
             ProbeSequence(
@@ -482,6 +502,17 @@ def main() -> int:
         "--train-sampling", choices=TRAIN_SAMPLING_MODES, default="sample"
     )
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
+    parser.add_argument(
+        "--focus-validation-token",
+        default="",
+        help="Optional source-bag token reported separately from aggregate validation.",
+    )
+    parser.add_argument(
+        "--tail-samples",
+        type=int,
+        default=200,
+        help="Causal suffix length reported for each validation sequence.",
+    )
     parser.add_argument("--normal-anchor-train-dir", type=Path)
     parser.add_argument("--normal-validation-dir", type=Path)
     parser.add_argument(
@@ -490,7 +521,13 @@ def main() -> int:
         help="Normal-anchor root with real synchronized speed for train and val.",
     )
     args = parser.parse_args()
-    if min(args.projection_dim, args.epochs, args.batch_size, args.patience) <= 0:
+    if min(
+        args.projection_dim,
+        args.epochs,
+        args.batch_size,
+        args.patience,
+        args.tail_samples,
+    ) <= 0:
         parser.error("projection, training and patience values must be positive")
     if args.material_delta_rad <= 0.0 or args.learning_rate <= 0.0:
         parser.error("material delta and learning rate must be positive")
@@ -676,14 +713,19 @@ def main() -> int:
         validation_predictions = predict(model, validation_features, device)
         per_sequence = []
         peer_validation = None
+        focus_validation = None
         normal_predictions = []
         normal_labels = []
         for sequence in normalized_validation_sequences:
+            sequence_predictions = predict(model, sequence.features, device)
+            tail_start = max(0, len(sequence.labels) - args.tail_samples)
             record = {
                 "sequence_id": sequence.sequence_id,
                 "source_bag": sequence.source_bag,
-                "metrics": probe_metrics(
-                    predict(model, sequence.features, device), sequence.labels
+                "metrics": probe_metrics(sequence_predictions, sequence.labels),
+                "tail_samples": int(len(sequence.labels) - tail_start),
+                "tail_metrics": probe_metrics(
+                    sequence_predictions[tail_start:], sequence.labels[tail_start:]
                 ),
             }
             per_sequence.append(record)
@@ -691,6 +733,13 @@ def main() -> int:
                 if peer_validation is not None:
                     raise ValueError("peer validation token is ambiguous")
                 peer_validation = record
+            if (
+                args.focus_validation_token
+                and args.focus_validation_token in sequence.source_bag
+            ):
+                if focus_validation is not None:
+                    raise ValueError("focus validation token is ambiguous")
+                focus_validation = record
             if sequence.sequence_id in normal_validation_ids:
                 normal_predictions.append(
                     predict(model, sequence.features, device)
@@ -698,6 +747,8 @@ def main() -> int:
                 normal_labels.append(sequence.labels)
         if peer_validation is None:
             raise ValueError("peer validation token did not match a sequence")
+        if args.focus_validation_token and focus_validation is None:
+            raise ValueError("focus validation token did not match a sequence")
         variant_reports[variant] = {
             "feature_dim": int(train_features.shape[1]),
             "scaling": scaling,
@@ -707,6 +758,7 @@ def main() -> int:
             ),
             "aggregate": probe_metrics(validation_predictions, validation_labels),
             "peer_validation": peer_validation,
+            "focus_validation": focus_validation,
             "normal_validation": (
                 None
                 if not normal_labels
@@ -722,6 +774,8 @@ def main() -> int:
     spatial_no_speed = variant_reports["static_conv5_no_speed"]["aggregate"]
     spatial = variant_reports["static_conv5"]["aggregate"]
     temporal = variant_reports["temporal_conv5"]["aggregate"]
+    raw = variant_reports["static_raw"]["aggregate"]
+    raw_temporal = variant_reports["temporal_raw"]["aggregate"]
     peer_temporal = variant_reports["temporal_conv5"]["peer_validation"]["metrics"]
     report = {
         "schema_version": SCHEMA_VERSION,
@@ -735,6 +789,8 @@ def main() -> int:
             "projection_dim": args.projection_dim,
             "seed": args.seed,
             "peer_validation_token": args.peer_validation_token,
+            "focus_validation_token": args.focus_validation_token,
+            "tail_samples": args.tail_samples,
             "normal_anchor_train_dir": (
                 None
                 if args.normal_anchor_train_dir is None
@@ -779,6 +835,19 @@ def main() -> int:
             ),
             "temporal_minus_spatial_material_sign_accuracy": (
                 temporal["material_sign_accuracy"] - spatial["material_sign_accuracy"]
+            ),
+            "raw_minus_spatial_balanced_accuracy": (
+                raw["balanced_accuracy"] - spatial["balanced_accuracy"]
+            ),
+            "raw_minus_spatial_material_sign_accuracy": (
+                raw["material_sign_accuracy"] - spatial["material_sign_accuracy"]
+            ),
+            "raw_temporal_minus_raw_balanced_accuracy": (
+                raw_temporal["balanced_accuracy"] - raw["balanced_accuracy"]
+            ),
+            "raw_temporal_minus_raw_material_sign_accuracy": (
+                raw_temporal["material_sign_accuracy"]
+                - raw["material_sign_accuracy"]
             ),
             "peer_temporal_material_samples": (
                 peer_temporal["class_support"]["left"]

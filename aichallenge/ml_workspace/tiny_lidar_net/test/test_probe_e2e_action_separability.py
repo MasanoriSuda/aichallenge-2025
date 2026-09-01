@@ -80,6 +80,55 @@ def test_spatial_history_resets_each_sequence_without_speed_columns():
     assert features[2].tolist() == pytest.approx([4.0, 2.0, 3.0])
 
 
+def test_static_raw_normalizes_physical_scan_once_and_appends_speed():
+    projected = np.zeros((2, 2), dtype=np.float32)
+    compact = np.zeros((2, 10), dtype=np.float32)
+    scans = np.vstack(
+        (
+            np.full(750, 15.0, dtype=np.float32),
+            np.full(750, 30.0, dtype=np.float32),
+        )
+    )
+
+    features = MODULE.compose_probe_features(
+        "static_raw",
+        projected,
+        compact,
+        np.asarray([3.0, 6.0], dtype=np.float32),
+        scans,
+    )
+
+    assert features.shape == (2, 751)
+    assert features[0, :750].tolist() == pytest.approx([0.5] * 750)
+    assert features[1, :750].tolist() == pytest.approx([1.0] * 750)
+    assert features[:, -1].tolist() == pytest.approx([0.25, 0.5])
+
+
+def test_temporal_raw_history_is_causal_and_resets_at_sequence_start():
+    projected = np.zeros((3, 1), dtype=np.float32)
+    compact = np.zeros((3, 10), dtype=np.float32)
+    scans = np.vstack(
+        [np.full(750, value, dtype=np.float32) for value in (3.0, 6.0, 12.0)]
+    )
+
+    features = MODULE.compose_probe_features(
+        "temporal_raw",
+        projected,
+        compact,
+        np.asarray([1.0, 2.0, 4.0], dtype=np.float32),
+        scans,
+    )
+
+    assert features.shape == (3, 2253)
+    assert np.allclose(features[0, 750:2250], 0.0)
+    assert features[2, 0] == pytest.approx(0.4)
+    assert features[2, 750] == pytest.approx(0.2)
+    assert features[2, 1500] == pytest.approx(0.3)
+    assert features[2, -3:].tolist() == pytest.approx(
+        [4.0 / 12.0, 2.0 / 12.0, 3.0 / 12.0]
+    )
+
+
 def test_sequence_balanced_probe_weights_give_each_run_equal_mass():
     sequences = [
         MODULE.ProbeSequence(

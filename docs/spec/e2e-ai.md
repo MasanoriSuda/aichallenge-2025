@@ -381,6 +381,13 @@ production checkpoint/mode gateも同時にpassした。独立した先行run `o
 可用性とheld-out遷移改善の証拠であり、production昇格ではない。次は既定OFFと0.12 rad上限を
 維持した、明示的な限定authority A/Bを1本だけ実施する。
 
+同v3を0.12 rad限定authorityへ接続した`output/20260901-185403`は3/3周、penalty/stall 0で
+完走し、coverage 99.925%、推論error 0、applied 6640 sample、clipped 97 sampleだった。
+ただし3周合計278.611秒は直前shadowの276.427秒より2.184秒遅く、単車ラップ改善は未実証で
+ある。default OFFを維持し、次はv3の目的である動的障害物対応を同一0.12 rad上限のNPC
+シナリオ1本で判定する。NPC失敗時に上限緩和やruntime特殊条件を追加してはならず、失敗前
+sequenceを固定して学習分布または表現の原因へ戻る。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

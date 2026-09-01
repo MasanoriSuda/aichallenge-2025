@@ -47,11 +47,38 @@ def recurrent_sequence_id(
     """Bind derived identity to the source run and speed synchronization contract."""
     contract = (
         f"schema={RECURRENT_DATASET_SCHEMA_VERSION}|source={source_sequence_id}|"
-        f"speed={speed_topic}|max_delta={max_sync_delta_sec:.9f}"
+        f"speed={speed_topic}|max_delta={max_sync_delta_sec:.9f}|scan_unit=m"
     )
     digest = hashlib.sha256(contract.encode("utf-8")).hexdigest()[:12]
     readable = source_sequence_id[-72:]
     return f"{readable}-recurrent-{digest}"
+
+
+def load_physical_source_scans(
+    source_dir: Path,
+    normalized_scans: np.ndarray,
+    max_scan_range_m: float,
+) -> np.ndarray:
+    """Recover the immutable metre array and prove its normalized identity."""
+    raw_path = source_dir / "scans.npy"
+    raw = np.load(raw_path, allow_pickle=False)
+    if raw.shape != normalized_scans.shape or raw.ndim != 2:
+        raise ValueError(f"source physical scan shape mismatch: {raw_path}")
+    if not np.all(np.isfinite(raw)) or np.any(raw < 0.0) or np.any(
+        raw > max_scan_range_m
+    ):
+        raise ValueError(f"invalid source physical scans: {raw_path}")
+    expected_normalized = raw / max_scan_range_m
+    if not np.allclose(
+        expected_normalized,
+        normalized_scans,
+        rtol=1e-6,
+        atol=1e-7,
+    ):
+        raise ValueError(
+            f"source physical/normalized scan identity mismatch: {raw_path}"
+        )
+    return raw.astype(np.float32, copy=False)
 
 
 def read_odometry_speed(
@@ -139,6 +166,10 @@ def build_sequence(
     source_bag = Path(source_bag_text)
     if not source_bag.is_dir() or not (source_bag / "metadata.yaml").is_file():
         raise FileNotFoundError(f"source bag unavailable: {source_bag}")
+    max_scan_range_m = float(source.metadata["max_scan_range_m"])
+    physical_scans = load_physical_source_scans(
+        source_dir, source.scans, max_scan_range_m
+    )
 
     speed_times, raw_speeds = read_odometry_speed(
         source_bag, speed_topic, speed_message_type
@@ -169,7 +200,7 @@ def build_sequence(
     output_dir.mkdir(parents=True)
 
     arrays = {
-        "scans.npy": source.scans[source_slice].astype(np.float32, copy=False),
+        "scans.npy": physical_scans[source_slice],
         "speeds.npy": raw_speeds[speed_indices].astype(np.float32, copy=False),
         "steers.npy": source.steers[source_slice].astype(np.float32, copy=False),
         "base_steers.npy": source.base_steers[source_slice].astype(
@@ -188,8 +219,9 @@ def build_sequence(
         "sequence_id": sequence_id,
         "split": split,
         "label_source": RECURRENT_LABEL_SOURCE,
+        "scan_unit": "m",
         "scan_shape": list(arrays["scans.npy"].shape[1:]),
-        "max_scan_range_m": float(source.metadata["max_scan_range_m"]),
+        "max_scan_range_m": max_scan_range_m,
         "max_speed_sync_delta_sec": max_speed_sync_delta_sec,
         "source": {
             "dataset_root": str(source_dataset_root),

@@ -11,7 +11,9 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
+from lib.checkpoint import load_pretrained_weights
 from lib.recurrent_policy import (
+    FrozenTinyLidarRecurrentAdapter,
     MultiSeqRecurrentPolicyDataset,
     RecurrentDirectSteeringPolicy,
     recurrent_chunk_dataset,
@@ -100,6 +102,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-dir", type=Path, required=True)
     parser.add_argument("--val-dir", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
+    parser.add_argument(
+        "--model-type",
+        choices=("pressure_gru", "frozen_tinylidar_adapter"),
+        default="pressure_gru",
+    )
+    parser.add_argument("--base-checkpoint", type=Path)
+    parser.add_argument(
+        "--adapter-pressure-tokens",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
     parser.add_argument("--input-dim", type=int, default=750)
     parser.add_argument("--speed-embedding-dim", type=int, default=64)
     parser.add_argument("--hidden-dim", type=int, default=512)
@@ -139,7 +152,7 @@ def main() -> int:
         or not 0 <= args.burn_in_steps < args.chunk_length
         or args.batch_size <= 0
         or args.epochs <= 0
-        or args.distillation_epochs <= 0
+        or args.distillation_epochs < 0
         or args.num_workers < 0
         or args.learning_rate <= 0.0
         or args.weight_decay < 0.0
@@ -198,14 +211,50 @@ def main() -> int:
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_config = {
-        "input_dim": args.input_dim,
-        "speed_embedding_dim": args.speed_embedding_dim,
-        "hidden_dim": args.hidden_dim,
-        "max_speed_mps": args.max_speed_mps,
-        "max_abs_steering_rad": args.max_abs_steering_rad,
-    }
-    model = RecurrentDirectSteeringPolicy(**model_config).to(device)
+    if args.model_type == "pressure_gru":
+        model_config = {
+            "model_type": args.model_type,
+            "input_dim": args.input_dim,
+            "speed_embedding_dim": args.speed_embedding_dim,
+            "hidden_dim": args.hidden_dim,
+            "max_speed_mps": args.max_speed_mps,
+            "max_abs_steering_rad": args.max_abs_steering_rad,
+        }
+        model = RecurrentDirectSteeringPolicy(
+            **{
+                key: value
+                for key, value in model_config.items()
+                if key != "model_type"
+            }
+        ).to(device)
+        base_provenance = None
+        if args.distillation_epochs <= 0:
+            raise ValueError("pressure_gru requires positive distillation epochs")
+    else:
+        if args.base_checkpoint is None:
+            raise ValueError("frozen adapter requires --base-checkpoint")
+        model_config = {
+            "model_type": args.model_type,
+            "input_dim": args.input_dim,
+            "speed_embedding_dim": args.speed_embedding_dim,
+            "hidden_dim": args.hidden_dim,
+            "max_scan_range_m": 30.0,
+            "max_speed_mps": args.max_speed_mps,
+            "max_abs_correction_rad": 0.64,
+            "max_abs_steering_rad": args.max_abs_steering_rad,
+            "include_pressure_tokens": args.adapter_pressure_tokens,
+        }
+        model = FrozenTinyLidarRecurrentAdapter(
+            **{
+                key: value
+                for key, value in model_config.items()
+                if key != "model_type"
+            }
+        )
+        base_provenance = load_pretrained_weights(model.base, args.base_checkpoint)
+        model.to(device)
+        if args.distillation_epochs != 0:
+            raise ValueError("frozen adapter must use --distillation-epochs 0")
     output_dir = (
         args.output_root.expanduser().resolve()
         / datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -216,6 +265,7 @@ def main() -> int:
         "model": type(model).__name__,
         "model_config": model_config,
         "device": str(device),
+        "base_checkpoint": base_provenance,
         "train_sequence_ids": train_sequences.sequence_ids,
         "val_sequence_ids": val_sequences.sequence_ids,
         "train_chunks": len(train_chunks),
@@ -229,57 +279,70 @@ def main() -> int:
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
-    distilled_path = output_dir / "distilled_model.pth"
-    distillation_optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
-    )
-    best_distillation_loss = evaluate_distillation_objective(
-        model, val_loader, device, args
-    )
-    torch.save(
-        {"model_config": model_config, "model_state_dict": model.state_dict()},
-        distilled_path,
-    )
     distillation_history = []
-    for epoch in range(args.distillation_epochs):
-        model.train()
-        total_loss = 0.0
-        batches = 0
-        for batch in distillation_loader:
-            distillation_optimizer.zero_grad(set_to_none=True)
-            loss = base_distillation_loss(model, batch, device, args)
-            if not torch.isfinite(loss):
-                raise FloatingPointError(
-                    f"non-finite distillation loss at epoch {epoch}"
+    best_distillation_loss = None
+    if args.distillation_epochs > 0:
+        distilled_path = output_dir / "distilled_model.pth"
+        distillation_optimizer = torch.optim.AdamW(
+            (parameter for parameter in model.parameters() if parameter.requires_grad),
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay,
+        )
+        best_distillation_loss = evaluate_distillation_objective(
+            model, val_loader, device, args
+        )
+        torch.save(
+            {"model_config": model_config, "model_state_dict": model.state_dict()},
+            distilled_path,
+        )
+        for epoch in range(args.distillation_epochs):
+            model.train()
+            total_loss = 0.0
+            batches = 0
+            for batch in distillation_loader:
+                distillation_optimizer.zero_grad(set_to_none=True)
+                loss = base_distillation_loss(model, batch, device, args)
+                if not torch.isfinite(loss):
+                    raise FloatingPointError(
+                        f"non-finite distillation loss at epoch {epoch}"
+                    )
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    (
+                        parameter
+                        for parameter in model.parameters()
+                        if parameter.requires_grad
+                    ),
+                    args.gradient_clip_norm,
                 )
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_norm)
-            distillation_optimizer.step()
-            total_loss += float(loss.item())
-            batches += 1
-        train_loss = total_loss / max(batches, 1)
-        val_loss = evaluate_distillation_objective(model, val_loader, device, args)
-        distillation_history.append(
-            {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss}
-        )
-        print(
-            f"distill_epoch={epoch:03d} train={train_loss:.8f} "
-            f"val={val_loss:.8f} best={best_distillation_loss:.8f}"
-        )
-        if val_loss < best_distillation_loss - 1e-10:
-            best_distillation_loss = val_loss
-            torch.save(
-                {
-                    "model_config": model_config,
-                    "model_state_dict": model.state_dict(),
-                },
-                distilled_path,
+                distillation_optimizer.step()
+                total_loss += float(loss.item())
+                batches += 1
+            train_loss = total_loss / max(batches, 1)
+            val_loss = evaluate_distillation_objective(model, val_loader, device, args)
+            distillation_history.append(
+                {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss}
             )
-    distilled = torch.load(distilled_path, map_location=device, weights_only=True)
-    model.load_state_dict(distilled["model_state_dict"], strict=True)
+            print(
+                f"distill_epoch={epoch:03d} train={train_loss:.8f} "
+                f"val={val_loss:.8f} best={best_distillation_loss:.8f}"
+            )
+            if val_loss < best_distillation_loss - 1e-10:
+                best_distillation_loss = val_loss
+                torch.save(
+                    {
+                        "model_config": model_config,
+                        "model_state_dict": model.state_dict(),
+                    },
+                    distilled_path,
+                )
+        distilled = torch.load(distilled_path, map_location=device, weights_only=True)
+        model.load_state_dict(distilled["model_state_dict"], strict=True)
 
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
+        (parameter for parameter in model.parameters() if parameter.requires_grad),
+        lr=args.learning_rate,
+        weight_decay=args.weight_decay,
     )
     best_path = output_dir / "best_model.pth"
     best_loss = evaluate_objective(model, val_loader, device, args)
@@ -299,7 +362,10 @@ def main() -> int:
             if not torch.isfinite(loss):
                 raise FloatingPointError(f"non-finite recurrent loss at epoch {epoch}")
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_norm)
+            torch.nn.utils.clip_grad_norm_(
+                (parameter for parameter in model.parameters() if parameter.requires_grad),
+                args.gradient_clip_norm,
+            )
             optimizer.step()
             total_loss += float(loss.item())
             batches += 1

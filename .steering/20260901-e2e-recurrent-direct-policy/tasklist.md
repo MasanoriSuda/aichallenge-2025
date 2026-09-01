@@ -7,4 +7,7 @@
 - [x] Implement pressure-token GRU and chunked sequence training
 - [x] Train and evaluate all offline gates
 - [x] Prohibit runtime shadow because offline gates failed
+- [x] Mark the result superseded after detecting the derived scan-unit defect
+- [x] Enforce physical-metre identity and reject schema-v1 derived data
+- [x] Repeat the direct-policy comparison on corrected schema-v2 data
 - [x] Record evidence and run regression tests

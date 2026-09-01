@@ -5,8 +5,13 @@ import numpy as np
 import pytest
 import torch
 
-from build_recurrent_dataset import longest_true_run, recurrent_sequence_id
+from build_recurrent_dataset import (
+    load_physical_source_scans,
+    longest_true_run,
+    recurrent_sequence_id,
+)
 from lib.recurrent_policy import (
+    FrozenTinyLidarRecurrentAdapter,
     RECURRENT_DATASET_SCHEMA_VERSION,
     MultiSeqRecurrentPolicyDataset,
     RecurrentDirectSteeringPolicy,
@@ -37,6 +42,7 @@ def write_sequence(root: Path, split: str, sequence_id: str, count: int = 9) -> 
         "sequence_id": sequence_id,
         "split": split,
         "label_source": "lidar_precontact_teacher_recurrent_direct",
+        "scan_unit": "m",
         "scan_shape": [750],
         "max_scan_range_m": 30.0,
         "max_speed_sync_delta_sec": 0.05,
@@ -58,6 +64,15 @@ def test_recurrent_identity_binds_speed_contract() -> None:
     assert first != recurrent_sequence_id("run-a", "/other-speed", 0.05)
 
 
+def test_physical_scan_loader_rejects_normalization_mismatch(tmp_path: Path) -> None:
+    physical = np.array([[0.0, 15.0, 30.0]], dtype=np.float32)
+    np.save(tmp_path / "scans.npy", physical)
+    loaded = load_physical_source_scans(tmp_path, physical / 30.0, 30.0)
+    np.testing.assert_array_equal(loaded, physical)
+    with pytest.raises(ValueError, match="physical/normalized scan identity"):
+        load_physical_source_scans(tmp_path, physical, 30.0)
+
+
 def test_sequence_dataset_enforces_speed_sync_contract(tmp_path: Path) -> None:
     sequence = write_sequence(tmp_path, "train", "sequence-a")
     dataset = RecurrentPolicySequenceDataset(sequence, expected_split="train")
@@ -70,6 +85,16 @@ def test_sequence_dataset_enforces_speed_sync_contract(tmp_path: Path) -> None:
 
     np.save(sequence / "speed_sync_deltas_sec.npy", np.full(9, 0.051))
     with pytest.raises(ValueError, match="speed sync delta violation"):
+        RecurrentPolicySequenceDataset(sequence, expected_split="train")
+
+
+def test_sequence_dataset_rejects_unproven_scan_units(tmp_path: Path) -> None:
+    sequence = write_sequence(tmp_path, "train", "sequence-a")
+    metadata_path = sequence / "metadata.json"
+    metadata = json.loads(metadata_path.read_text())
+    metadata.pop("scan_unit")
+    metadata_path.write_text(json.dumps(metadata))
+    with pytest.raises(ValueError, match="scan unit must be metres"):
         RecurrentPolicySequenceDataset(sequence, expected_split="train")
 
 
@@ -141,3 +166,36 @@ def test_direct_policy_loss_weights_material_and_honors_burn_in() -> None:
         torch.tensor(0.0), torch.tensor(0.3), reduction="none"
     )
     assert loss == pytest.approx(float((anchor + material * 10.0) / 11.0))
+
+
+def test_frozen_adapter_starts_exactly_at_base_policy() -> None:
+    torch.manual_seed(7)
+    model = FrozenTinyLidarRecurrentAdapter(
+        input_dim=750, speed_embedding_dim=4, hidden_dim=8
+    )
+    scans = torch.rand(2, 3, 750) * 30.0
+    speeds = torch.rand(2, 3, 1) * 5.0
+    predictions, corrections, base, hidden = model.forward_components(
+        scans, speeds
+    )
+    torch.testing.assert_close(corrections, torch.zeros_like(corrections))
+    torch.testing.assert_close(predictions, base, rtol=0.0, atol=0.0)
+    torch.testing.assert_close(model.base_steering(scans), base)
+    assert hidden.shape == (1, 2, 8)
+    assert all(not parameter.requires_grad for parameter in model.base.parameters())
+
+
+def test_pressure_adapter_preserves_initial_base_identity() -> None:
+    model = FrozenTinyLidarRecurrentAdapter(
+        input_dim=750,
+        speed_embedding_dim=2,
+        hidden_dim=4,
+        include_pressure_tokens=True,
+    )
+    scans = torch.linspace(0.0, 30.0, 750).view(1, 1, 750)
+    speeds = torch.tensor([[[2.0]]])
+    predictions, corrections, base, _ = model.forward_components(scans, speeds)
+    torch.testing.assert_close(corrections, torch.zeros_like(corrections))
+    torch.testing.assert_close(predictions, base, rtol=0.0, atol=0.0)
+    pressure = model.pressure_tokens(scans)
+    assert torch.all(pressure[..., :-1] >= pressure[..., 1:])

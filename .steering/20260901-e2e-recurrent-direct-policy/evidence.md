@@ -1,5 +1,10 @@
 # Evidence
 
+> Superseded: a later audit found that this generated dataset stored scans
+> normalized to `[0, 1]` while declaring a 30 m physical-range contract.  The
+> candidate metrics below are not valid architecture evidence.  Production was
+> unchanged, so no runtime rollback is required.
+
 ## Derived dataset
 
 Source dataset:
@@ -52,16 +57,51 @@ rad.  The base-only distilled checkpoint also produced 0.14977 rad aggregate
 MAE, proving that successor weighting was not the only failure.
 
 All candidates remained finite and bounded, but every accuracy/generalization
-gate failed.  Production and runtime shadow were therefore unchanged.
+gate failed.  Production and runtime shadow were therefore unchanged.  The
+unit mismatch, rather than the model, is the earliest proven cause.
 
-## Verification
+## Corrected physical-metre rerun
+
+The schema was advanced to version 2 and now requires `scan_unit=m`.  The
+builder reloads each immutable source `scans.npy`, proves
+`physical_scans / max_scan_range_m == parent_loader_scans`, and only then writes
+the recurrent sequence.  Old schema-v1 data is rejected rather than silently
+reinterpreted.
+
+Corrected generated dataset:
+
+`aichallenge/ml_workspace/tiny_lidar_net/dataset/recurrent_direct_v2`
+
+- 10 immutable sequences: 7 train, 3 validation;
+- 34,735 samples;
+- maximum speed synchronization delta 47.305 ms;
+- validation physical LiDAR minima 1.410, 0.889 and 0.563 m, with 30 m maxima;
+- production/runtime remained frozen throughout the rerun.
+
+Corrected checkpoint:
+
+`checkpoints/recurrent-direct-v3/20260901_140328/best_model.pth`
+
+| validation subset | frozen base MAE | candidate MAE | improvement |
+|---|---:|---:|---:|
+| all | 0.01333 rad | 0.08031 rad | -502.5% |
+| anchor | 0.00101 rad | 0.07422 rad | -7253.8% |
+| material | 0.12999 rad | 0.13801 rad | -6.2% |
+
+On unseen seed 2028, full-run MAE was 0.06911 rad versus the frozen
+base's 0.00944 rad; material MAE was also 15.4% worse.  The candidate stayed
+finite and bounded, but full-validation, material-improvement, anchor and unseen
+gates all failed.  This is the valid architecture result; no runtime shadow or
+production change is permitted.
+
+## Regression verification
 
 ```text
 python3 -m pytest -q test/test_recurrent_policy.py test/test_extract_data_contract.py
-16 passed
+20 passed
 ```
 
 ```text
 python3 -m pytest -q
-82 passed
+86 passed
 ```

@@ -10,6 +10,7 @@ import numpy as np
 import torch
 
 from lib.recurrent_policy import (
+    FrozenTinyLidarRecurrentAdapter,
     MultiSeqRecurrentPolicyDataset,
     RecurrentDirectSteeringPolicy,
     direct_policy_metrics,
@@ -54,7 +55,16 @@ def main() -> int:
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     if set(checkpoint) != {"model_config", "model_state_dict"}:
         raise ValueError("unexpected recurrent checkpoint contract")
-    model = RecurrentDirectSteeringPolicy(**checkpoint["model_config"])
+    model_config = dict(checkpoint["model_config"])
+    model_type = model_config.pop("model_type", "pressure_gru")
+    model_class = (
+        RecurrentDirectSteeringPolicy
+        if model_type == "pressure_gru"
+        else FrozenTinyLidarRecurrentAdapter
+    )
+    if model_type not in {"pressure_gru", "frozen_tinylidar_adapter"}:
+        raise ValueError(f"unsupported recurrent model type: {model_type}")
+    model = model_class(**model_config)
     model.load_state_dict(checkpoint["model_state_dict"], strict=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)

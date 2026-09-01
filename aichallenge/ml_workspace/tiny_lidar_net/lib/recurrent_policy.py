@@ -10,8 +10,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import ConcatDataset, Dataset
 
+from lib.model import TinyLidarNet
 
-RECURRENT_DATASET_SCHEMA_VERSION = 1
+
+RECURRENT_DATASET_SCHEMA_VERSION = 2
 RECURRENT_REQUIRED_ARRAYS = (
     "scans.npy",
     "speeds.npy",
@@ -67,6 +69,8 @@ class RecurrentPolicySequenceDataset(Dataset):
             raise ValueError(f"unexpected recurrent label source in {self.seq_dir}")
         if self.metadata.get("scan_shape") != [expected_input_dim]:
             raise ValueError(f"recurrent scan shape metadata mismatch in {self.seq_dir}")
+        if self.metadata.get("scan_unit") != "m":
+            raise ValueError(f"recurrent scan unit must be metres in {self.seq_dir}")
         if not np.isclose(
             self.metadata.get("max_scan_range_m", np.nan), max_scan_range_m
         ):
@@ -292,6 +296,158 @@ class RecurrentDirectSteeringPolicy(nn.Module):
         steering = (
             torch.tanh(self.decoder(recurrent)).squeeze(-1)
             * self.max_abs_steering_rad
+        )
+        return steering, next_hidden
+
+
+class FrozenTinyLidarRecurrentAdapter(nn.Module):
+    """Preserve an admitted base policy and learn only temporal corrections."""
+
+    def __init__(
+        self,
+        input_dim: int = 750,
+        speed_embedding_dim: int = 32,
+        hidden_dim: int = 128,
+        max_scan_range_m: float = 30.0,
+        max_speed_mps: float = 12.0,
+        max_abs_correction_rad: float = 0.64,
+        max_abs_steering_rad: float = 1.0,
+        include_pressure_tokens: bool = False,
+    ):
+        super().__init__()
+        if min(input_dim, speed_embedding_dim, hidden_dim) <= 0:
+            raise ValueError("recurrent adapter dimensions must be positive")
+        if min(
+            max_scan_range_m,
+            max_speed_mps,
+            max_abs_correction_rad,
+            max_abs_steering_rad,
+        ) <= 0.0:
+            raise ValueError("recurrent adapter physical scales must be positive")
+        self.input_dim = int(input_dim)
+        self.max_scan_range_m = float(max_scan_range_m)
+        self.max_speed_mps = float(max_speed_mps)
+        self.max_abs_correction_rad = float(max_abs_correction_rad)
+        self.max_abs_steering_rad = float(max_abs_steering_rad)
+        self.include_pressure_tokens = bool(include_pressure_tokens)
+        self.base = TinyLidarNet(input_dim=self.input_dim, output_dim=2)
+        for parameter in self.base.parameters():
+            parameter.requires_grad_(False)
+        self.speed_mlp = nn.Sequential(
+            nn.Linear(1, speed_embedding_dim),
+            nn.ReLU(),
+        )
+        if self.include_pressure_tokens:
+            initial_k = 0.1
+            inverse_softplus = np.log(np.expm1(initial_k))
+            self.pressure_log_k = nn.Parameter(
+                torch.full((self.input_dim,), float(inverse_softplus))
+            )
+        else:
+            self.register_parameter("pressure_log_k", None)
+        self.gru = nn.GRU(
+            input_size=(
+                10
+                + speed_embedding_dim
+                + (self.input_dim if self.include_pressure_tokens else 0)
+            ),
+            hidden_size=hidden_dim,
+            num_layers=1,
+            batch_first=True,
+            bidirectional=False,
+        )
+        self.correction_hidden = nn.Linear(hidden_dim, 64)
+        self.correction_output = nn.Linear(64, 1)
+        self._initialize_adapter()
+
+    def _initialize_adapter(self) -> None:
+        for module in (self.speed_mlp[0], self.correction_hidden):
+            nn.init.xavier_uniform_(module.weight)
+            nn.init.zeros_(module.bias)
+        for name, parameter in self.gru.named_parameters():
+            if "weight" in name:
+                nn.init.xavier_uniform_(parameter)
+            elif "bias" in name:
+                nn.init.zeros_(parameter)
+        # Exact zero makes the composed candidate identical to the admitted base.
+        nn.init.zeros_(self.correction_output.weight)
+        nn.init.zeros_(self.correction_output.bias)
+
+    def _base_features_and_steering(
+        self, scans_m: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        batch, time, _ = scans_m.shape
+        normalized = torch.clamp(
+            scans_m / self.max_scan_range_m, 0.0, 1.0
+        ).reshape(batch * time, 1, self.input_dim)
+        # Frozen features need no activation tape during adapter training.
+        with torch.no_grad():
+            features = F.relu(self.base.conv1(normalized))
+            features = F.relu(self.base.conv2(features))
+            features = F.relu(self.base.conv3(features))
+            features = F.relu(self.base.conv4(features))
+            features = F.relu(self.base.conv5(features))
+            features = torch.flatten(features, start_dim=1)
+            features = F.relu(self.base.fc1(features))
+            features = F.relu(self.base.fc2(features))
+            features = F.relu(self.base.fc3(features))
+            base_output = torch.tanh(self.base.fc4(features))[:, 1]
+        return (
+            features.reshape(batch, time, -1),
+            base_output.reshape(batch, time),
+        )
+
+    def base_steering(self, scans_m: torch.Tensor) -> torch.Tensor:
+        if scans_m.ndim != 3 or scans_m.shape[-1] != self.input_dim:
+            raise ValueError("adapter scans must have shape (batch, time, input_dim)")
+        _, steering = self._base_features_and_steering(scans_m)
+        return steering
+
+    def pressure_tokens(self, scans_m: torch.Tensor) -> torch.Tensor:
+        if not self.include_pressure_tokens or self.pressure_log_k is None:
+            raise RuntimeError("adapter pressure tokens are disabled")
+        k = F.softplus(self.pressure_log_k).view(1, 1, -1)
+        return 2.0 * (1.0 - torch.sigmoid(k * scans_m))
+
+    def forward_components(
+        self,
+        scans_m: torch.Tensor,
+        speeds_mps: torch.Tensor,
+        hidden: Optional[torch.Tensor] = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        if scans_m.ndim != 3 or scans_m.shape[-1] != self.input_dim:
+            raise ValueError("adapter scans must have shape (batch, time, input_dim)")
+        if speeds_mps.shape != scans_m.shape[:2] + (1,):
+            raise ValueError("adapter speeds must have shape (batch, time, 1)")
+        features, base_steering = self._base_features_and_steering(scans_m)
+        speed = torch.clamp(speeds_mps / self.max_speed_mps, 0.0, 1.5)
+        recurrent_inputs = [features, self.speed_mlp(speed)]
+        if self.include_pressure_tokens:
+            recurrent_inputs.append(self.pressure_tokens(scans_m))
+        recurrent, next_hidden = self.gru(
+            torch.cat(recurrent_inputs, dim=-1), hidden
+        )
+        correction = (
+            torch.tanh(
+                self.correction_output(F.relu(self.correction_hidden(recurrent)))
+            ).squeeze(-1)
+            * self.max_abs_correction_rad
+        )
+        steering = torch.clamp(
+            base_steering + correction,
+            -self.max_abs_steering_rad,
+            self.max_abs_steering_rad,
+        )
+        return steering, correction, base_steering, next_hidden
+
+    def forward(
+        self,
+        scans_m: torch.Tensor,
+        speeds_mps: torch.Tensor,
+        hidden: Optional[torch.Tensor] = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        steering, _, _, next_hidden = self.forward_components(
+            scans_m, speeds_mps, hidden
         )
         return steering, next_hidden
 

@@ -62,8 +62,13 @@ direct policy cannot have exact zero error relative to another learned policy.
 
 ## Resulting decision
 
-Neither the run-balanced model nor the two-stage model passed offline
-admission.  Base-only distillation also missed the frozen base by more than an
-order of magnitude on validation, so runtime integration is prohibited.  This
-Slice records a negative architecture result rather than adding another runtime
-fallback or residual gate.
+The initial comparison is superseded by a subsequent unit audit.  The derived
+builder copied scans after the parent loader had normalized them by 30 m, while
+the recurrent metadata and model treated them as physical metres.  The recorded
+metrics remain useful symptoms, but they cannot reject the architecture.  A new
+dataset identity with an explicit `scan_unit=m` contract was therefore generated
+and the experiment repeated before making a runtime decision.
+
+The corrected comparison still failed every accuracy/generalization gate other
+than finite bounded output.  It therefore rejects the from-scratch recurrent
+policy on the admitted data, without changing production or runtime shadow.

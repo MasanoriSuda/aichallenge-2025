@@ -7,5 +7,5 @@
 - [x] Add unit and interface contract tests.
 - [x] Replay seed 2032 and inspect intervention timing/chatter.
 - [x] Build and run the complete package tests.
-- [ ] Run a new closed-loop unseen-seed gate.
-- [ ] Admit or reject the candidate from immutable run evidence.
+- [x] Run a new closed-loop unseen-seed gate.
+- [x] Admit or reject the candidate from immutable run evidence.

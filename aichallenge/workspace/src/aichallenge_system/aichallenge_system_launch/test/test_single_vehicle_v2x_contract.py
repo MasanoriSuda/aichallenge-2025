@@ -24,6 +24,35 @@ def read(relative_path: str) -> str:
     return (AICHALLENGE_ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def test_e2e_peer_gate_isolates_tiny_lidar_overrides_from_mpc_peers() -> None:
+    makefile = (AICHALLENGE_ROOT.parent / "Makefile").read_text(encoding="utf-8")
+    peer_gate = makefile.split(
+        "e2e-peer-audit-mpc e2e-peer-audit-student: simulator", maxsplit=1
+    )[1].split("\ne2e-final: simulator", maxsplit=1)[0]
+
+    assert "$(E2E_MPC_PEER_ENV)" in peer_gate
+    assert "AIC_CONTROL_METHOD=mpc" in peer_gate
+    for variable in (
+        "TINY_LIDAR_CKPT_PATH",
+        "TINY_LIDAR_RESIDUAL_CKPT_PATH",
+        "TINY_LIDAR_RESIDUAL_ARCHITECTURE",
+        "TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH",
+        "TINY_LIDAR_SPATIAL_SHADOW_EXPECTED_SHA256",
+        "TINY_LIDAR_SPATIAL_SHADOW_USE_BASE_STEERING",
+        "TINY_LIDAR_SPATIAL_SHADOW_MAX_ABS_DELTA_RAD",
+        "TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED",
+        "TINY_LIDAR_SPATIAL_AUTHORITY_MAX_ABS_DELTA_RAD",
+        "TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH",
+        "TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256",
+        "TINY_LIDAR_RECURRENT_AUTHORITY_ENABLED",
+        "TINY_LIDAR_RECURRENT_AUTHORITY_MAX_ABS_CORRECTION_RAD",
+        "TINY_LIDAR_CONTROL_MODE",
+        "TINY_LIDAR_ACCELERATION",
+        "TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS",
+    ):
+        assert f"-u {variable}" in makefile
+
+
 def test_e2e_npc_runtime_logs_the_effective_random_seed() -> None:
     scenario = read("simulator_scripts/e2e-npc-single.sh")
 

@@ -121,10 +121,34 @@ e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committe
 	@echo "Start E2E simulation (SIM_MODE=$(SIM_MODE), controller=$(AIC_CONTROL_METHOD))"
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
 
+# A mixed-controller peer gate must not leak TinyLidar experiment overrides
+# into the MPC peers.  In particular, recurrent shadow paths are intentionally
+# rejected by run_autoware.bash when AIC_CONTROL_METHOD=mpc.  Keep this list at
+# the controller boundary rather than requiring every experiment invocation to
+# sanitize its parent shell.
+E2E_MPC_PEER_ENV := env \
+	-u TINY_LIDAR_CKPT_PATH \
+	-u TINY_LIDAR_RESIDUAL_CKPT_PATH \
+	-u TINY_LIDAR_RESIDUAL_ARCHITECTURE \
+	-u TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH \
+	-u TINY_LIDAR_SPATIAL_SHADOW_EXPECTED_SHA256 \
+	-u TINY_LIDAR_SPATIAL_SHADOW_USE_BASE_STEERING \
+	-u TINY_LIDAR_SPATIAL_SHADOW_MAX_ABS_DELTA_RAD \
+	-u TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED \
+	-u TINY_LIDAR_SPATIAL_AUTHORITY_MAX_ABS_DELTA_RAD \
+	-u TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH \
+	-u TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256 \
+	-u TINY_LIDAR_RECURRENT_AUTHORITY_ENABLED \
+	-u TINY_LIDAR_RECURRENT_AUTHORITY_MAX_ABS_CORRECTION_RAD \
+	-u TINY_LIDAR_CONTROL_MODE \
+	-u TINY_LIDAR_ACCELERATION \
+	-u TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS
+
 e2e-peer-audit-mpc e2e-peer-audit-student: simulator
 	@echo "Start deterministic 3-vehicle E2E peer gate (ego=domain 3, mode=$@)"
 	@for p in 1 2; do \
-		LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=3 AIC_CONTROL_METHOD=mpc \
+		$(E2E_MPC_PEER_ENV) \
+			LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=3 AIC_CONTROL_METHOD=mpc \
 			docker compose -p $$p up -d autoware; \
 	done
 	@LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=3 AIC_VEHICLE_COUNT=3 \

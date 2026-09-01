@@ -318,6 +318,14 @@ continuous candidateの72.41%と同じ範囲になった。normal誤発火は12.
 6,000 sampleの成功runと同じ影響を持ち、未見validationの補正方向を損ねている。次はGateを
 変えず、sample分布とclass weightingを一致させた候補を1本だけ評価する。
 
+sample samplerとaggregate class massを一致させたprojection候補では、material改善30.51%、
+方向精度84.51%となり、sequence samplerで失った両Gateを回復した。sampler root causeは確認
+できた。一方、teacher anchor MAEは0.01086 rad、独立normal MAEは0.01486 radで不合格だった。
+3-class softmaxがneutral activationとleft/right homotopyを同時に所有しているため、normalを
+優先したsequence samplerとmaterialを一般化したsample samplerの間にtrade-offが生じている。
+次はsampling質量や閾値を再調整せず、補正activationとconditional signをfactorizeしたheadを
+同じrepresentation、data、sample sampler、continuous loss、Gateで1本だけ評価する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

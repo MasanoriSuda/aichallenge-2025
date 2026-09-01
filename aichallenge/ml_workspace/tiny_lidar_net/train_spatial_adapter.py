@@ -29,6 +29,9 @@ from lib.spatial_adapter import (
 )
 
 
+SAMPLING_MODES = ("sample", "sequence")
+
+
 class ZeroResidualAnchorSequence(torch.utils.data.Dataset):
     """Expose one production sequence as physical scans with zero correction."""
 
@@ -63,21 +66,38 @@ def seed_everything(seed: int) -> torch.Generator:
     return generator
 
 
-def direction_class_weights(source, material_delta_rad: float) -> torch.Tensor:
-    masses = []
+def sequence_direction_counts(sequence, material_delta_rad: float) -> torch.Tensor:
+    if isinstance(sequence, ZeroResidualAnchorSequence):
+        corrections = sequence.correction_targets()
+    else:
+        corrections = sequence.steers - sequence.base_steers
+    targets = torch.from_numpy(corrections)
+    classes = signed_direction_targets(targets, material_delta_rad)
+    return torch.bincount(classes, minlength=3).to(dtype=torch.float64)
+
+
+def direction_class_weights(
+    source, material_delta_rad: float, sampling_mode: str
+) -> torch.Tensor:
+    if sampling_mode not in SAMPLING_MODES:
+        raise ValueError(f"unsupported spatial adapter sampling: {sampling_mode}")
+    counts_by_sequence = []
     for sequence in source:
-        if isinstance(sequence, ZeroResidualAnchorSequence):
-            corrections = sequence.correction_targets()
-        else:
-            corrections = sequence.steers - sequence.base_steers
-        targets = torch.from_numpy(corrections)
-        classes = signed_direction_targets(targets, material_delta_rad)
-        counts = torch.bincount(classes, minlength=3).to(dtype=torch.float64)
-        masses.append(counts / counts.sum())
-    mean_mass = torch.stack(masses).mean(dim=0)
-    if torch.any(mean_mass <= 0.0):
-        raise ValueError(f"spatial adapter split lacks a direction: {mean_mass}")
-    inverse = 1.0 / mean_mass
+        counts_by_sequence.append(
+            sequence_direction_counts(sequence, material_delta_rad)
+        )
+    if sampling_mode == "sequence":
+        sampling_mass = torch.stack(
+            [counts / counts.sum() for counts in counts_by_sequence]
+        ).mean(dim=0)
+    else:
+        aggregate = torch.stack(counts_by_sequence).sum(dim=0)
+        sampling_mass = aggregate / aggregate.sum()
+    if torch.any(sampling_mass <= 0.0):
+        raise ValueError(
+            f"spatial adapter split lacks a direction: {sampling_mass}"
+        )
+    inverse = 1.0 / sampling_mass
     return (inverse / inverse.mean()).to(dtype=torch.float32)
 
 
@@ -238,6 +258,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--patience", type=int, default=7)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument(
+        "--sampling-mode", choices=SAMPLING_MODES, default="sequence"
+    )
     return parser.parse_args()
 
 
@@ -283,18 +306,22 @@ def main() -> int:
         raise ValueError("spatial adapter train sequence identity collision")
     train_dataset = ConcatDataset(train_sequences)
     validation_dataset = ConcatDataset(validation_source.datasets)
-    sampler = WeightedRandomSampler(
-        sequence_balanced_sample_weights(
-            [len(sequence) for sequence in train_sequences]
-        ),
-        num_samples=len(train_dataset),
-        replacement=True,
-        generator=generator,
-    )
+    sampler = None
+    if args.sampling_mode == "sequence":
+        sampler = WeightedRandomSampler(
+            sequence_balanced_sample_weights(
+                [len(sequence) for sequence in train_sequences]
+            ),
+            num_samples=len(train_dataset),
+            replacement=True,
+            generator=generator,
+        )
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         sampler=sampler,
+        shuffle=sampler is None,
+        generator=generator if sampler is None else None,
         num_workers=0,
     )
     validation_loader = DataLoader(
@@ -331,7 +358,7 @@ def main() -> int:
     trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
     optimizer = torch.optim.AdamW(trainable, lr=args.learning_rate, weight_decay=1e-5)
     class_weights = direction_class_weights(
-        train_sequences, args.material_delta_rad
+        train_sequences, args.material_delta_rad, args.sampling_mode
     ).to(device)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = args.output_root.expanduser().resolve() / timestamp

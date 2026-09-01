@@ -288,6 +288,17 @@ d3/d4はpenalty 0・4周を維持し、clean lapは概ね85--86秒だった。�
 production既定を変更せず、このmodeはdefault-offの診断用に保持する。次の主課題は縦安全
 閾値ではなく、接触前の他車相互作用を横ML authorityへ表現するデータとモデルである。
 
+同じ4台runをproduction spatial candidateとdiagnostic pre-contact teacherで因果replayした。
+停止したd2は停止前10秒にside-hazard 42 sample / 2 episodeと、同一episode内のescape側反転を
+1回持っていた。しかしteacher方向への0.05 rad以上の不足はd2の76.2%に対し、完走したd3/d4
+でも86.0% / 77.8%だった。d3には同一episode内反転も2回あり、d1の停止前10秒にはside-hazard
+自体がなかった。したがって既存teacherへの追従強化やside commit閾値追加を根治と扱わない。
+次の学習には、4台相互作用で実際に実行されrun Gateへ合格したteacher軌跡を先に要求する。
+
+上位GMPCCの`.steering/ano` bagはcontrol、odometry、acceleration、V2X、clockだけを含み、
+LiDAR/imageを含まない。このため連続的な相手回避、速度、非同期左右branchのbehavior reference
+には使えるが、LiDARから横制御までをMLで行うE2Eの直接教師には使用しない。
+
 2026-09-01のfrozen production candidateによるcompetition matrixでは、単車
 `output/20260901-151131`だけが3/3周、penalty 0、stall 0で合格した。runtime NPC
 `output/20260901-152109`は2/3周後に右側へ埋まり、正加速中のstallが117.05秒、wall

@@ -447,6 +447,23 @@ make e2e-npc-gap-teacher
 
 このmodeは教師収集専用です。run admission後のbagだけを、明示的な出所で抽出します。
 
+4台runの停止前に、production spatial candidateとdiagnostic pre-contact
+teacherの差を同一bag上で比較する場合は、次のoffline監査を使います。停止runだけでなく同じ
+worldのclean domainも必ず指定します。`comparison_window_kind`は停止domainでは停止前10秒、
+clean domainでは発進後60秒です。teacherとの差はground truthではなく、成功runでも同じ差が
+出るなら学習targetへ使いません。
+
+```bash
+python3 audit_interaction_divergence.py \
+  --candidate checkpoints/<spatial-run>/candidate.npy \
+  --candidate-use-base-steering \
+  --case d1=/output/<run>/d1/rosbag2_autoware/rosbag2_autoware_0.mcap \
+  --case d2=/output/<run>/d2/rosbag2_autoware/rosbag2_autoware_0.mcap \
+  --case d3=/output/<run>/d3/rosbag2_autoware/rosbag2_autoware_0.mcap \
+  --case d4=/output/<run>/d4/rosbag2_autoware/rosbag2_autoware_0.mcap \
+  --output /output/<run>/interaction-divergence.json
+```
+
 ```bash
 python3 extract_data_from_bag.py \
   --seq-dirs /output/<run>/d1/rosbag2_autoware \

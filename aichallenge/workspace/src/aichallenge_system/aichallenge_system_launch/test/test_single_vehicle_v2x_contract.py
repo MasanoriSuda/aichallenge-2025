@@ -11,6 +11,13 @@ def find_aichallenge_root() -> Path:
 
 
 AICHALLENGE_ROOT = find_aichallenge_root()
+SPATIAL_CHECKPOINT = (
+    "$(find-pkg-share tiny_lidar_net_controller)/ckpt/"
+    "spatial_steering_adapter.npy"
+)
+SPATIAL_SHA256 = (
+    "f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c"
+)
 
 
 def read(relative_path: str) -> str:
@@ -115,7 +122,7 @@ def test_runtime_propagates_only_an_explicit_residual_checkpoint() -> None:
     )
 
 
-def test_runtime_propagates_only_an_explicit_spatial_shadow_checkpoint() -> None:
+def test_runtime_preserves_packaged_spatial_default_and_explicit_overrides() -> None:
     runner = read("run_autoware.bash")
     system_launch = read(
         "workspace/src/aichallenge_system/"
@@ -134,17 +141,73 @@ def test_runtime_propagates_only_an_explicit_spatial_shadow_checkpoint() -> None
         '=${tiny_lidar_spatial_shadow_ckpt_path}")' in runner
     )
     assert (
-        '<arg name="tiny_lidar_spatial_shadow_ckpt_path" default=""/>'
-        in system_launch
+        '<arg name="tiny_lidar_spatial_shadow_ckpt_path" '
+        f'default="{SPATIAL_CHECKPOINT}"/>' in system_launch
     )
     assert (
         '<arg name="tiny_lidar_spatial_shadow_ckpt_path" '
         'value="$(var tiny_lidar_spatial_shadow_ckpt_path)"/>'
         in system_launch
     )
+    assert (
+        'tiny_lidar_spatial_shadow_expected_sha256='
+        '"${TINY_LIDAR_SPATIAL_SHADOW_EXPECTED_SHA256:-}"' in runner
+    )
+    assert (
+        'TINY_LIDAR_SPATIAL_SHADOW_EXPECTED_SHA256 requires '
+        'TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH' in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_spatial_shadow_expected_sha256:'
+        '=${tiny_lidar_spatial_shadow_expected_sha256,,}")' in runner
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_shadow_expected_sha256" '
+        f'default="{SPATIAL_SHA256}"/>' in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_shadow_expected_sha256" '
+        'value="$(var tiny_lidar_spatial_shadow_expected_sha256)"/>'
+        in system_launch
+    )
+    assert (
+        'tiny_lidar_spatial_shadow_use_base_steering='
+        '"${TINY_LIDAR_SPATIAL_SHADOW_USE_BASE_STEERING:-false}"' in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_spatial_shadow_use_base_steering:'
+        '=${tiny_lidar_spatial_shadow_use_base_steering}")' in runner
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_shadow_use_base_steering" '
+        'default="true"/>' in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_shadow_use_base_steering" '
+        'value="$(var tiny_lidar_spatial_shadow_use_base_steering)"/>'
+        in system_launch
+    )
+    assert (
+        'tiny_lidar_spatial_shadow_max_abs_delta_rad='
+        '"${TINY_LIDAR_SPATIAL_SHADOW_MAX_ABS_DELTA_RAD:-1.2}"' in runner
+    )
+    assert '^0+([.]0+)?$' in runner
+    assert (
+        'opts+=("tiny_lidar_spatial_shadow_max_abs_delta_rad:'
+        '=${tiny_lidar_spatial_shadow_max_abs_delta_rad}")' in runner
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_shadow_max_abs_delta_rad" default="1.2"/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_shadow_max_abs_delta_rad" '
+        'value="$(var tiny_lidar_spatial_shadow_max_abs_delta_rad)"/>'
+        in system_launch
+    )
 
 
-def test_runtime_requires_explicit_spatial_authority_and_one_owner() -> None:
+def test_runtime_preserves_spatial_authority_default_and_one_owner() -> None:
     runner = read("run_autoware.bash")
     system_launch = read(
         "workspace/src/aichallenge_system/"
@@ -152,7 +215,7 @@ def test_runtime_requires_explicit_spatial_authority_and_one_owner() -> None:
     )
     assert (
         'tiny_lidar_spatial_authority_enabled='
-        '"${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED:-false}"' in runner
+        '"${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED:-}"' in runner
     )
     assert 'true|false) ;;' in runner
     assert (
@@ -168,12 +231,29 @@ def test_runtime_requires_explicit_spatial_authority_and_one_owner() -> None:
         '=${tiny_lidar_spatial_authority_enabled}")' in runner
     )
     assert (
-        '<arg name="tiny_lidar_spatial_authority_enabled" default="false"/>'
+        'tiny_lidar_spatial_authority_max_abs_delta_rad='
+        '"${TINY_LIDAR_SPATIAL_AUTHORITY_MAX_ABS_DELTA_RAD:-}"' in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_spatial_authority_max_abs_delta_rad:'
+        '=${tiny_lidar_spatial_authority_max_abs_delta_rad}")' in runner
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_authority_enabled" default="true"/>'
         in system_launch
     )
     assert (
         '<arg name="tiny_lidar_spatial_authority_enabled" '
         'value="$(var tiny_lidar_spatial_authority_enabled)"/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_authority_max_abs_delta_rad" '
+        'default="1.2"/>' in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_authority_max_abs_delta_rad" '
+        'value="$(var tiny_lidar_spatial_authority_max_abs_delta_rad)"/>'
         in system_launch
     )
 

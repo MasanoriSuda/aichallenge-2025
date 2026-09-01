@@ -20,7 +20,7 @@ from build_recurrent_dataset import (
     DEFAULT_SPEED_MESSAGE_TYPE,
     DEFAULT_SPEED_TOPIC,
     longest_true_run,
-    read_odometry_speed,
+    read_longitudinal_speed,
 )
 from extract_data_from_bag import synchronize_data
 from lib.normal_anchor import (
@@ -204,7 +204,7 @@ def build_sequence(
     minimum_contiguous_samples: int,
 ) -> dict[str, Any]:
     scan_times, scans = read_scans(admitted["bag"], scan_topic, max_scan_range_m)
-    speed_times, speeds = read_odometry_speed(
+    speed_times, speeds = read_longitudinal_speed(
         admitted["bag"], speed_topic, speed_message_type
     )
     matched_indices, deltas_ns = synchronize_data(scan_times, speed_times)

@@ -94,6 +94,7 @@ def parse_runtime_config(log_text: str) -> dict | None:
     matches = re.findall(
         r"SpatialShadowConfig:\s*"
         r"hidden=(\d+),projection=(\d+),use_speed=([01]),"
+        r"(?:use_base_steering=([01]),)?"
         r"max_speed_mps=([0-9.]+),max_delta_rad=([0-9.]+),"
         r"speed_timeout_sec=([0-9.]+)"
         r"(?:,authority_enabled=([01]),"
@@ -109,6 +110,7 @@ def parse_runtime_config(log_text: str) -> dict | None:
         hidden,
         projection,
         use_speed,
+        use_base_steering,
         max_speed,
         max_delta,
         timeout,
@@ -119,6 +121,7 @@ def parse_runtime_config(log_text: str) -> dict | None:
         "hidden_dim": int(hidden),
         "projection_dim": int(projection),
         "use_speed": bool(int(use_speed)),
+        "use_base_steering": bool(int(use_base_steering or "0")),
         "max_speed_mps": float(max_speed),
         "max_abs_delta_rad": float(max_delta),
         "speed_timeout_sec": float(timeout),
@@ -127,6 +130,37 @@ def parse_runtime_config(log_text: str) -> dict | None:
             None if not authority_max_delta else float(authority_max_delta)
         ),
     }
+
+
+def load_runtime_log_text(run_dir: Path) -> tuple[str, list[str], bool]:
+    """Load one run's spatial evidence without double-counting ROS output.
+
+    ``autoware.log`` is the canonical source.  A Docker stop can, however,
+    leave a later launch attempt in that file while the completed controller
+    process output remains in ``ROS_LOG_DIR``.  Only when the canonical log no
+    longer contains spatial status intervals do we join the per-process ROS
+    logs and launch logs from the same run.  This preserves the evidence rather
+    than silently treating a log-lifecycle failure as a model failure.
+    """
+
+    primary_path = run_dir / "d1" / "autoware.log"
+    primary_text = primary_path.read_text(encoding="utf-8", errors="replace")
+    if parse_status_lines(primary_text):
+        return primary_text, [str(primary_path)], False
+
+    ros_log_root = run_dir / "d1" / "ros" / "log"
+    fallback_paths = sorted(ros_log_root.glob("python3_*.log"))
+    fallback_paths.extend(sorted(ros_log_root.glob("*/launch.log")))
+    fallback_texts = [primary_text]
+    used_paths = [primary_path]
+    for path in fallback_paths:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "E2E_STATUS" in text or "SpatialShadowConfig" in text or (
+            "tiny_lidar_spatial_shadow_ckpt_path" in text
+        ):
+            fallback_texts.append(text)
+            used_paths.append(path)
+    return "\n".join(fallback_texts), [str(path) for path in used_paths], True
 
 
 def summarize_intervals(intervals: list[dict]) -> dict:
@@ -187,15 +221,15 @@ def summarize_intervals(intervals: list[dict]) -> dict:
 
 def build_report(args: argparse.Namespace) -> dict:
     run_dir = args.run_dir.resolve()
-    log_path = run_dir / "d1" / "autoware.log"
     result_path = run_dir / "d1-result-details.json"
     competition_path = run_dir / "e2e-competition-analysis.json"
     checkpoint = args.checkpoint_file.resolve()
-    log_text = log_path.read_text(encoding="utf-8", errors="replace")
+    log_text, log_sources, used_ros_log_fallback = load_runtime_log_text(run_dir)
     intervals = parse_status_lines(log_text)
     summary = summarize_intervals(intervals)
     runtime_config = parse_runtime_config(log_text)
     expected_authority_enabled = args.expected_authority_enabled == "true"
+    expected_use_base_steering = args.expected_use_base_steering == "true"
     path_matches = set(SHADOW_PATH_RE.findall(ANSI_RE.sub("", log_text)))
     race = json.loads(result_path.read_text(encoding="utf-8"))
     competition = json.loads(competition_path.read_text(encoding="utf-8"))
@@ -207,8 +241,21 @@ def build_report(args: argparse.Namespace) -> dict:
         reasons.append("runtime shadow checkpoint path missing or ambiguous")
     if runtime_config is None:
         reasons.append("runtime shadow configuration missing")
-    elif runtime_config["authority_enabled"] != expected_authority_enabled:
-        reasons.append("spatial authority mode mismatch")
+    else:
+        if runtime_config["authority_enabled"] != expected_authority_enabled:
+            reasons.append("spatial authority mode mismatch")
+        if runtime_config["use_base_steering"] != expected_use_base_steering:
+            reasons.append("spatial base-steering feature contract mismatch")
+        if (
+            args.expected_max_abs_delta_rad is not None
+            and not np.isclose(
+                runtime_config["max_abs_delta_rad"],
+                args.expected_max_abs_delta_rad,
+                rtol=0.0,
+                atol=1e-9,
+            )
+        ):
+            reasons.append("spatial residual scale contract mismatch")
     if summary["coverage_fraction"] < args.min_coverage_fraction:
         reasons.append("shadow coverage below threshold")
     if summary["error_count"] != 0 or summary["non_ok_interval_count"] != 0:
@@ -250,6 +297,10 @@ def build_report(args: argparse.Namespace) -> dict:
         "status": "pass" if not reasons else "reject",
         "reasons": reasons,
         "run_dir": str(run_dir),
+        "runtime_evidence": {
+            "log_sources": log_sources,
+            "used_ros_log_fallback": used_ros_log_fallback,
+        },
         "shadow_checkpoint": {
             "artifact_path": str(checkpoint),
             "runtime_path": sorted(path_matches),
@@ -283,6 +334,12 @@ def parse_args() -> argparse.Namespace:
         choices=("true", "false"),
         default="false",
     )
+    parser.add_argument(
+        "--expected-use-base-steering",
+        choices=("true", "false"),
+        default="false",
+    )
+    parser.add_argument("--expected-max-abs-delta-rad", type=float)
     parser.add_argument("--min-coverage-fraction", type=float, default=0.99)
     parser.add_argument("--min-scan-hz", type=float, default=19.0)
     parser.add_argument("--output", type=Path, required=True)

@@ -27,6 +27,7 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         max_scan_range_m: float = 30.0,
         max_abs_delta_rad: float = 1.2,
         use_speed: bool = False,
+        use_base_steering: bool = False,
         max_speed_mps: float = 12.0,
         spatial_normalization: str = "layer_norm",
         projection_dim: int = 0,
@@ -54,6 +55,7 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         self.max_scan_range_m = float(max_scan_range_m)
         self.max_abs_delta_rad = float(max_abs_delta_rad)
         self.use_speed = bool(use_speed)
+        self.use_base_steering = bool(use_base_steering)
         self.max_speed_mps = float(max_speed_mps)
         self.spatial_normalization = spatial_normalization
         self.projection_dim = int(projection_dim)
@@ -90,7 +92,11 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             self.register_buffer(
                 "spatial_scale", torch.ones(self.representation_dim)
             )
-        adapter_input_dim = self.representation_dim + int(self.use_speed)
+        adapter_input_dim = (
+            self.representation_dim
+            + int(self.use_speed)
+            + int(self.use_base_steering)
+        )
         self.spatial_head = nn.Sequential(
             nn.Linear(adapter_input_dim, hidden_dim),
             nn.ReLU(),
@@ -176,20 +182,34 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             return (spatial - self.spatial_mean) / self.spatial_scale
         return self.spatial_norm(spatial)
 
+    def base_steering(self, scans_m: torch.Tensor) -> torch.Tensor:
+        """Evaluate the immutable embedded base on the same physical scan."""
+        if scans_m.ndim != 2 or scans_m.shape[1] != self.input_dim:
+            raise ValueError("spatial adapter scans must have shape (batch, input_dim)")
+        if not torch.isfinite(scans_m).all():
+            raise ValueError("spatial adapter scans must be finite")
+        normalized = torch.clamp(
+            scans_m / self.max_scan_range_m, 0.0, 1.0
+        ).unsqueeze(1)
+        with torch.no_grad():
+            return self.base(normalized)[:, 1]
+
     def _adapter_features(
         self, scans_m: torch.Tensor, speeds_mps: torch.Tensor | None
     ) -> torch.Tensor:
         spatial = self.normalized_spatial_features(scans_m)
-        if not self.use_speed:
-            return spatial
-        if speeds_mps is None or speeds_mps.shape != (len(scans_m),):
-            raise ValueError("speed-enabled adapter requires one speed per scan")
-        if not torch.isfinite(speeds_mps).all() or torch.any(speeds_mps < 0.0):
-            raise ValueError("spatial adapter speed must be finite and non-negative")
-        normalized_speed = torch.clamp(
-            speeds_mps / self.max_speed_mps, 0.0, 1.5
-        ).unsqueeze(1)
-        return torch.cat((spatial, normalized_speed), dim=1)
+        features = [spatial]
+        if self.use_speed:
+            if speeds_mps is None or speeds_mps.shape != (len(scans_m),):
+                raise ValueError("speed-enabled adapter requires one speed per scan")
+            if not torch.isfinite(speeds_mps).all() or torch.any(speeds_mps < 0.0):
+                raise ValueError("spatial adapter speed must be finite and non-negative")
+            features.append(
+                torch.clamp(speeds_mps / self.max_speed_mps, 0.0, 1.5).unsqueeze(1)
+            )
+        if self.use_base_steering:
+            features.append(self.base_steering(scans_m).unsqueeze(1))
+        return torch.cat(features, dim=1)
 
     def forward_components(
         self,

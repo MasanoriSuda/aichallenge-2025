@@ -17,6 +17,7 @@ from lib.residual import (
     residual_training_loss,
     sequence_balanced_sample_weights,
     signed_direction_targets,
+    signed_expert_training_loss,
     signed_mixture_training_loss,
     weighted_residual_smooth_l1,
 )
@@ -212,6 +213,34 @@ def test_signed_mixture_loss_prefers_correct_direction_classes():
         direction_loss_weight=1.0,
         anchor_leakage_weight=0.5,
     )
+    assert correct < wrong
+
+
+def test_signed_expert_loss_separates_selector_from_material_magnitude():
+    targets = torch.tensor([-0.3, 0.0, 0.4])
+    magnitudes = torch.tensor([[0.3, 0.1], [0.9, 0.9], [0.1, 0.4]])
+    correct_logits = torch.tensor(
+        [[5.0, 0.0, -5.0], [0.0, 5.0, 0.0], [-5.0, 0.0, 5.0]]
+    )
+    wrong_logits = torch.flip(correct_logits, dims=(1,))
+
+    correct = signed_expert_training_loss(
+        magnitudes,
+        correct_logits,
+        targets,
+        material_delta_rad=0.02,
+        direction_class_weights=torch.ones(3),
+        direction_loss_weight=1.0,
+    )
+    wrong = signed_expert_training_loss(
+        magnitudes,
+        wrong_logits,
+        targets,
+        material_delta_rad=0.02,
+        direction_class_weights=torch.ones(3),
+        direction_loss_weight=1.0,
+    )
+
     assert correct < wrong
 
 

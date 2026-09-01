@@ -80,6 +80,64 @@ def test_spatial_history_resets_each_sequence_without_speed_columns():
     assert features[2].tolist() == pytest.approx([4.0, 2.0, 3.0])
 
 
+def test_static_base_conditioning_appends_embedded_base_steering():
+    projected = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    compact = np.zeros((2, 10), dtype=np.float32)
+
+    features = MODULE.compose_probe_features(
+        "static_conv5_base",
+        projected,
+        compact,
+        np.asarray([3.0, 6.0], dtype=np.float32),
+        base_steering_rad=np.asarray([-0.2, 0.4], dtype=np.float32),
+    )
+
+    assert features.shape == (2, 4)
+    assert features[0].tolist() == pytest.approx([1.0, 2.0, 0.25, -0.2])
+    assert features[1].tolist() == pytest.approx([3.0, 4.0, 0.5, 0.4])
+
+
+def test_temporal_base_conditioning_is_causal_and_tracks_base_delta():
+    projected = np.asarray([[1.0], [2.0], [4.0]], dtype=np.float32)
+    compact = np.zeros((3, 10), dtype=np.float32)
+
+    features = MODULE.compose_probe_features(
+        "temporal_conv5_base",
+        projected,
+        compact,
+        np.asarray([1.0, 2.0, 4.0], dtype=np.float32),
+        base_steering_rad=np.asarray([0.1, 0.2, -0.3], dtype=np.float32),
+    )
+
+    assert features.shape == (3, 9)
+    assert features[0].tolist() == pytest.approx(
+        [1.0, 0.1, 0.0, 0.0, 0.0, 0.0, 1.0 / 12.0, 0.0, 0.0]
+    )
+    assert features[2].tolist() == pytest.approx(
+        [
+            4.0,
+            -0.3,
+            2.0,
+            -0.5,
+            3.0,
+            -0.4,
+            4.0 / 12.0,
+            2.0 / 12.0,
+            3.0 / 12.0,
+        ]
+    )
+
+
+def test_base_conditioned_probe_rejects_missing_base_input():
+    with pytest.raises(ValueError, match="requires base steering"):
+        MODULE.compose_probe_features(
+            "static_conv5_base",
+            np.zeros((2, 1), dtype=np.float32),
+            np.zeros((2, 10), dtype=np.float32),
+            np.zeros(2, dtype=np.float32),
+        )
+
+
 def test_static_raw_normalizes_physical_scan_once_and_appends_speed():
     projected = np.zeros((2, 2), dtype=np.float32)
     compact = np.zeros((2, 10), dtype=np.float32)

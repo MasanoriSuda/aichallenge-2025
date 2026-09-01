@@ -13,8 +13,12 @@
     <arg name="tiny_lidar_ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/tinylidarnet_weights.npy"/>
     <arg name="tiny_lidar_residual_ckpt_path" default=""/>
     <arg name="tiny_lidar_residual_architecture" default="stateless"/>
-    <arg name="tiny_lidar_spatial_shadow_ckpt_path" default=""/>
-    <arg name="tiny_lidar_spatial_authority_enabled" default="false"/>
+    <arg name="tiny_lidar_spatial_shadow_ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/spatial_steering_adapter.npy"/>
+    <arg name="tiny_lidar_spatial_shadow_expected_sha256" default="f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c"/>
+    <arg name="tiny_lidar_spatial_shadow_use_base_steering" default="true"/>
+    <arg name="tiny_lidar_spatial_shadow_max_abs_delta_rad" default="1.2"/>
+    <arg name="tiny_lidar_spatial_authority_enabled" default="true"/>
+    <arg name="tiny_lidar_spatial_authority_max_abs_delta_rad" default="1.2"/>
     <arg name="tiny_lidar_control_mode" default="fixed_lidar_brake"/>
 
     <let name="domain_id" value="$(var domain_id)"/>
@@ -37,7 +41,11 @@
     <log message=" - tiny_lidar_residual_ckpt_path: $(var tiny_lidar_residual_ckpt_path)"/>
     <log message=" - tiny_lidar_residual_architecture: $(var tiny_lidar_residual_architecture)"/>
     <log message=" - tiny_lidar_spatial_shadow_ckpt_path: $(var tiny_lidar_spatial_shadow_ckpt_path)"/>
+    <log message=" - tiny_lidar_spatial_shadow_expected_sha256: $(var tiny_lidar_spatial_shadow_expected_sha256)"/>
+    <log message=" - tiny_lidar_spatial_shadow_use_base_steering: $(var tiny_lidar_spatial_shadow_use_base_steering)"/>
+    <log message=" - tiny_lidar_spatial_shadow_max_abs_delta_rad: $(var tiny_lidar_spatial_shadow_max_abs_delta_rad)"/>
     <log message=" - tiny_lidar_spatial_authority_enabled: $(var tiny_lidar_spatial_authority_enabled)"/>
+    <log message=" - tiny_lidar_spatial_authority_max_abs_delta_rad: $(var tiny_lidar_spatial_authority_max_abs_delta_rad)"/>
     <log message=" - tiny_lidar_control_mode: $(var tiny_lidar_control_mode)"/>
 
     <!-- Main module of AI challenge 2025. -->
@@ -51,7 +59,11 @@
         <arg name="tiny_lidar_residual_ckpt_path" value="$(var tiny_lidar_residual_ckpt_path)"/>
         <arg name="tiny_lidar_residual_architecture" value="$(var tiny_lidar_residual_architecture)"/>
         <arg name="tiny_lidar_spatial_shadow_ckpt_path" value="$(var tiny_lidar_spatial_shadow_ckpt_path)"/>
+        <arg name="tiny_lidar_spatial_shadow_expected_sha256" value="$(var tiny_lidar_spatial_shadow_expected_sha256)"/>
+        <arg name="tiny_lidar_spatial_shadow_use_base_steering" value="$(var tiny_lidar_spatial_shadow_use_base_steering)"/>
+        <arg name="tiny_lidar_spatial_shadow_max_abs_delta_rad" value="$(var tiny_lidar_spatial_shadow_max_abs_delta_rad)"/>
         <arg name="tiny_lidar_spatial_authority_enabled" value="$(var tiny_lidar_spatial_authority_enabled)"/>
+        <arg name="tiny_lidar_spatial_authority_max_abs_delta_rad" value="$(var tiny_lidar_spatial_authority_max_abs_delta_rad)"/>
         <arg name="tiny_lidar_control_mode" value="$(var tiny_lidar_control_mode)"/>
     </include>
 

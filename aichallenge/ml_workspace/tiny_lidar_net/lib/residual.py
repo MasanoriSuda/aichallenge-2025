@@ -484,6 +484,53 @@ def signed_mixture_training_loss(
     )
 
 
+def signed_expert_training_loss(
+    magnitudes: torch.Tensor,
+    direction_logits: torch.Tensor,
+    targets: torch.Tensor,
+    material_delta_rad: float,
+    direction_class_weights: torch.Tensor,
+    direction_loss_weight: float,
+) -> torch.Tensor:
+    """Train a categorical expert selector and side magnitudes independently.
+
+    Runtime winner-take-all decoding emits exactly zero for the neutral class,
+    so probability mass must not also serve as an implicit magnitude gate.
+    This objective keeps homotopy classification and material magnitude as two
+    explicit responsibilities.
+    """
+    if magnitudes.shape != (targets.shape[0], 2):
+        raise ValueError("signed expert magnitudes must have shape (batch, 2)")
+    if direction_logits.shape != (targets.shape[0], 3):
+        raise ValueError("signed expert logits must have shape (batch, 3)")
+    if direction_class_weights.shape != (3,):
+        raise ValueError("direction_class_weights must have shape (3,)")
+    if direction_loss_weight <= 0.0:
+        raise ValueError("signed expert direction loss weight must be positive")
+
+    classes = signed_direction_targets(targets, material_delta_rad)
+    direction_loss = F.cross_entropy(
+        direction_logits,
+        classes,
+        weight=direction_class_weights.to(
+            device=direction_logits.device, dtype=direction_logits.dtype
+        ),
+    )
+    material = classes != 1
+    if torch.any(material):
+        selected_magnitudes = torch.where(
+            classes[material] == 0,
+            magnitudes[material, 0],
+            magnitudes[material, 1],
+        )
+        magnitude_loss = F.smooth_l1_loss(
+            selected_magnitudes, torch.abs(targets[material])
+        )
+    else:
+        magnitude_loss = torch.zeros((), device=targets.device, dtype=targets.dtype)
+    return magnitude_loss + direction_loss_weight * direction_loss
+
+
 def weighted_residual_smooth_l1(
     predictions: torch.Tensor,
     targets: torch.Tensor,

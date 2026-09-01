@@ -151,7 +151,12 @@ python3 analyze_e2e_state_coverage.py \
 
 異なるadmitted sourceを時間datasetへまとめる場合、配列をコピーして出所を失わないよう
 `--additional-source-root`を繰り返します。builderは全source identityを出力前に検査し、
-重複runを拒否します。
+重複runを拒否します。速度入力の既定はE2E許可入力である
+`/vehicle/status/velocity_status`（`autoware_auto_vehicle_msgs/msg/VelocityReport`）です。
+`/localization/kinematic_state`はfused localizationなので、新しいproduction datasetや
+runtime inputには使用しません。holdoutを再学習から隔離する場合は
+`--exclude-source-sequence-id`へimmutable sequence IDを指定し、存在しないIDや重複指定は
+builderに拒否させます。
 
 ```bash
 python3 build_recurrent_dataset.py \
@@ -257,6 +262,27 @@ python3 analyze_spatial_shadow_run.py /output/<run> \
 shadow Gateは3周完走、penalty 0、frozen production Gate合格、coverage 99%以上、error 0、
 LiDAR 19 Hz以上、watchdog stale 0、finiteかつ非zeroの診断出力を同時に要求します。shadowの
 補正は`/control/command/control_cmd`へ加算されません。
+
+### Qualified production spatial adapter
+
+production既定は、車輪速度とfrozen base steeringでconditionしたfull-range adapterです。
+提出package内のartifactは
+`tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy`、SHA256は
+`f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c`です。modelとruntimeの
+補正範囲は`+/-1.2 rad`です。旧`+/-0.12 rad`候補はNPCで必要な操舵を表現できなかったため
+fallbackとしてもproductionへ残していません。
+
+通常の`make e2e-single`はparticipant launchのpackaged defaultを使います。ML workspaceの
+checkpoint pathやhost環境変数は不要です。明示的なrollbackは次です。
+
+```bash
+make e2e-single TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED=false
+```
+
+別candidateを診断するときは、checkpoint pathを指定しただけではauthorityを得られません。
+まずshadowでGateを通し、限定authority試験を行う場合だけ
+`TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED=true`も明示します。これにより開発用artifactが
+production既定のauthorityを暗黙に継承することを防ぎます。
 
 ### Runtime NPC corrective teacher
 

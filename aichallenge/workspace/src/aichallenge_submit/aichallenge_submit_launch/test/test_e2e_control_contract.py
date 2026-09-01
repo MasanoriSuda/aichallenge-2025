@@ -15,6 +15,13 @@ CONTROLLER_LAUNCH = (
     / "launch"
     / "tiny_lidar_net.launch.xml"
 )
+SPATIAL_CHECKPOINT = (
+    "$(find-pkg-share tiny_lidar_net_controller)/ckpt/"
+    "spatial_steering_adapter.npy"
+)
+SPATIAL_SHA256 = (
+    "f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c"
+)
 
 
 def _parse(path: Path) -> ET.Element:
@@ -28,6 +35,11 @@ def test_e2e_entry_selects_tiny_lidar_net() -> None:
         for node in entry.findall("arg")
     }
     assert arguments["control_method"] == "tiny_lidar_net"
+    assert arguments["tiny_lidar_spatial_shadow_ckpt_path"] == SPATIAL_CHECKPOINT
+    assert arguments["tiny_lidar_spatial_shadow_expected_sha256"] == SPATIAL_SHA256
+    assert arguments["tiny_lidar_spatial_shadow_use_base_steering"] == "true"
+    assert arguments["tiny_lidar_spatial_authority_enabled"] == "true"
+    assert arguments["tiny_lidar_spatial_authority_max_abs_delta_rad"] == "1.2"
 
     includes = entry.findall("include")
     assert len(includes) == 1
@@ -46,8 +58,20 @@ def test_e2e_entry_selects_tiny_lidar_net() -> None:
     assert forwarded["tiny_lidar_spatial_shadow_ckpt_path"] == (
         "$(var tiny_lidar_spatial_shadow_ckpt_path)"
     )
+    assert forwarded["tiny_lidar_spatial_shadow_expected_sha256"] == (
+        "$(var tiny_lidar_spatial_shadow_expected_sha256)"
+    )
+    assert forwarded["tiny_lidar_spatial_shadow_use_base_steering"] == (
+        "$(var tiny_lidar_spatial_shadow_use_base_steering)"
+    )
+    assert forwarded["tiny_lidar_spatial_shadow_max_abs_delta_rad"] == (
+        "$(var tiny_lidar_spatial_shadow_max_abs_delta_rad)"
+    )
     assert forwarded["tiny_lidar_spatial_authority_enabled"] == (
         "$(var tiny_lidar_spatial_authority_enabled)"
+    )
+    assert forwarded["tiny_lidar_spatial_authority_max_abs_delta_rad"] == (
+        "$(var tiny_lidar_spatial_authority_max_abs_delta_rad)"
     )
     assert forwarded["tiny_lidar_control_mode"] == "$(var tiny_lidar_control_mode)"
 
@@ -83,8 +107,20 @@ def test_reference_retains_explicit_controller_switch() -> None:
     assert tiny_forwarded["spatial_shadow_ckpt_path"] == (
         "$(var tiny_lidar_spatial_shadow_ckpt_path)"
     )
+    assert tiny_forwarded["spatial_shadow_expected_sha256"] == (
+        "$(var tiny_lidar_spatial_shadow_expected_sha256)"
+    )
+    assert tiny_forwarded["spatial_shadow_use_base_steering"] == (
+        "$(var tiny_lidar_spatial_shadow_use_base_steering)"
+    )
+    assert tiny_forwarded["spatial_shadow_max_abs_delta_rad"] == (
+        "$(var tiny_lidar_spatial_shadow_max_abs_delta_rad)"
+    )
     assert tiny_forwarded["spatial_authority_enabled"] == (
         "$(var tiny_lidar_spatial_authority_enabled)"
+    )
+    assert tiny_forwarded["spatial_authority_max_abs_delta_rad"] == (
+        "$(var tiny_lidar_spatial_authority_max_abs_delta_rad)"
     )
     assert tiny_forwarded["control_mode"] == "$(var tiny_lidar_control_mode)"
 
@@ -111,8 +147,20 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     assert forwarded["spatial_shadow_ckpt_path"] == (
         "$(var spatial_shadow_ckpt_path)"
     )
+    assert forwarded["spatial_shadow_expected_sha256"] == (
+        "$(var spatial_shadow_expected_sha256)"
+    )
+    assert forwarded["spatial_shadow_use_base_steering"] == (
+        "$(var spatial_shadow_use_base_steering)"
+    )
+    assert forwarded["spatial_shadow_max_abs_delta_rad"] == (
+        "$(var spatial_shadow_max_abs_delta_rad)"
+    )
     assert forwarded["spatial_authority_enabled"] == (
         "$(var spatial_authority_enabled)"
+    )
+    assert forwarded["spatial_authority_max_abs_delta_rad"] == (
+        "$(var spatial_authority_max_abs_delta_rad)"
     )
 
     controller = _parse(CONTROLLER_LAUNCH)
@@ -124,8 +172,12 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     assert controller_arguments["control_mode"] == "fixed_lidar_brake"
     assert controller_arguments["residual_ckpt_path"] == ""
     assert controller_arguments["residual_architecture"] == "stateless"
-    assert controller_arguments["spatial_shadow_ckpt_path"] == ""
-    assert controller_arguments["spatial_authority_enabled"] == "false"
+    assert controller_arguments["spatial_shadow_ckpt_path"] == SPATIAL_CHECKPOINT
+    assert controller_arguments["spatial_shadow_expected_sha256"] == SPATIAL_SHA256
+    assert controller_arguments["spatial_shadow_use_base_steering"] == "true"
+    assert controller_arguments["spatial_shadow_max_abs_delta_rad"] == "1.2"
+    assert controller_arguments["spatial_authority_enabled"] == "true"
+    assert controller_arguments["spatial_authority_max_abs_delta_rad"] == "1.2"
     assert (
         controller_arguments["control_cmd_topic"]
         == "/control/command/control_cmd"

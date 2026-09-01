@@ -4,6 +4,7 @@ import importlib.util
 
 import numpy as np
 import pytest
+import torch
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "evaluate_spatial_adapter.py"
@@ -83,3 +84,33 @@ def test_runtime_bounded_metrics_reject_invalid_contract():
         MODULE.runtime_bounded_metrics(
             np.asarray([0.1]), np.asarray([0.2, 0.3]), 0.02, 0.12
         )
+
+
+def test_winner_take_all_decode_uses_selected_expert_and_neutral_zero():
+    residual = torch.tensor([0.01, -0.02, 0.03], dtype=torch.float32)
+    magnitudes = torch.tensor(
+        [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]], dtype=torch.float32
+    )
+    logits = torch.tensor(
+        [[3.0, 1.0, 0.0], [0.0, 4.0, 1.0], [0.0, 1.0, 5.0]],
+        dtype=torch.float32,
+    )
+
+    decoded = MODULE.decode_spatial_components(
+        residual, magnitudes, logits, "winner_take_all"
+    )
+
+    assert decoded.tolist() == pytest.approx([-0.1, 0.0, 0.6])
+
+
+def test_soft_decode_preserves_trained_mixture_output():
+    residual = torch.tensor([0.01, -0.02], dtype=torch.float32)
+
+    decoded = MODULE.decode_spatial_components(
+        residual,
+        torch.zeros((2, 2), dtype=torch.float32),
+        torch.zeros((2, 3), dtype=torch.float32),
+        "soft_mixture",
+    )
+
+    torch.testing.assert_close(decoded, residual)

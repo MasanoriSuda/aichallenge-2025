@@ -14,7 +14,7 @@ from build_recurrent_dataset import (
     iter_source_sequences,
     load_physical_source_scans,
     longest_true_run,
-    read_odometry_speed,
+    read_longitudinal_speed,
 )
 from extract_data_from_bag import synchronize_data
 from lib.data import ScanControlSequenceDataset
@@ -58,7 +58,7 @@ def build_sequence(
     physical_scans = load_physical_source_scans(
         source_dir, source.scans, source.max_range
     )
-    speed_times, raw_speeds = read_odometry_speed(
+    speed_times, raw_speeds = read_longitudinal_speed(
         source_bag, speed_topic, speed_message_type
     )
     matched_indices, deltas_ns = synchronize_data(

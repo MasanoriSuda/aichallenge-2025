@@ -69,9 +69,26 @@ if [[ -n "${tiny_lidar_residual_ckpt_path}" ]]; then
     opts+=("tiny_lidar_residual_architecture:=${tiny_lidar_residual_architecture}")
 fi
 
-# A spatial candidate can run beside production without owning the command.
-# Empty keeps the production callback bit-for-bit on its admitted path.
+# The participant launch owns the admitted spatial production defaults.  The
+# environment is an override boundary only; leaving an override unset must not
+# silently replace those defaults with the old shadow-only values.
+tiny_lidar_control_mode="${TINY_LIDAR_CONTROL_MODE:-}"
 tiny_lidar_spatial_shadow_ckpt_path="${TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH:-}"
+tiny_lidar_spatial_shadow_expected_sha256="${TINY_LIDAR_SPATIAL_SHADOW_EXPECTED_SHA256:-}"
+tiny_lidar_spatial_shadow_use_base_steering="${TINY_LIDAR_SPATIAL_SHADOW_USE_BASE_STEERING:-false}"
+tiny_lidar_spatial_shadow_max_abs_delta_rad="${TINY_LIDAR_SPATIAL_SHADOW_MAX_ABS_DELTA_RAD:-1.2}"
+case "${tiny_lidar_spatial_shadow_use_base_steering}" in
+    true|false) ;;
+    *)
+        echo "TINY_LIDAR_SPATIAL_SHADOW_USE_BASE_STEERING must be true or false"
+        exit 1
+        ;;
+esac
+if [[ ! "${tiny_lidar_spatial_shadow_max_abs_delta_rad}" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
+   [[ "${tiny_lidar_spatial_shadow_max_abs_delta_rad}" =~ ^0+([.]0+)?$ ]]; then
+    echo "TINY_LIDAR_SPATIAL_SHADOW_MAX_ABS_DELTA_RAD must be positive"
+    exit 1
+fi
 if [[ -n "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
     if [[ "${control_method}" != "tiny_lidar_net" ]]; then
         echo "TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"
@@ -82,32 +99,72 @@ if [[ -n "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
         exit 1
     fi
     opts+=("tiny_lidar_spatial_shadow_ckpt_path:=${tiny_lidar_spatial_shadow_ckpt_path}")
+    opts+=("tiny_lidar_spatial_shadow_use_base_steering:=${tiny_lidar_spatial_shadow_use_base_steering}")
+    opts+=("tiny_lidar_spatial_shadow_max_abs_delta_rad:=${tiny_lidar_spatial_shadow_max_abs_delta_rad}")
 fi
-
-tiny_lidar_spatial_authority_enabled="${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED:-false}"
-case "${tiny_lidar_spatial_authority_enabled}" in
-    true|false) ;;
-    *)
-        echo "TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED must be true or false"
-        exit 1
-        ;;
-esac
-if [[ "${tiny_lidar_spatial_authority_enabled}" == "true" ]]; then
-    if [[ -z "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
-        echo "spatial authority requires TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH"
+if [[ -n "${tiny_lidar_spatial_shadow_expected_sha256}" ]]; then
+    if [[ ! "${tiny_lidar_spatial_shadow_expected_sha256}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo "TINY_LIDAR_SPATIAL_SHADOW_EXPECTED_SHA256 must be 64 hexadecimal characters"
         exit 1
     fi
+    if [[ -z "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
+        echo "TINY_LIDAR_SPATIAL_SHADOW_EXPECTED_SHA256 requires TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH"
+        exit 1
+    fi
+    opts+=("tiny_lidar_spatial_shadow_expected_sha256:=${tiny_lidar_spatial_shadow_expected_sha256,,}")
+fi
+
+tiny_lidar_spatial_authority_enabled="${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED:-}"
+if [[ -n "${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED+x}" ]]; then
+    case "${tiny_lidar_spatial_authority_enabled}" in
+        true|false) ;;
+        *)
+            echo "TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED must be true or false"
+            exit 1
+            ;;
+    esac
+elif [[ -n "${TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH+x}" || \
+        -n "${tiny_lidar_residual_ckpt_path}" ]]; then
+    # Supplying an experiment artifact without an explicit authority grant is
+    # shadow/diagnostic by construction.
+    tiny_lidar_spatial_authority_enabled="false"
+elif [[ "${tiny_lidar_control_mode}" == "gap_teacher" || \
+        "${tiny_lidar_control_mode}" == "precontact_teacher" ]]; then
+    # Teacher steering is diagnostic authority and must not inherit the
+    # participant production adapter merely because it shares the node.
+    tiny_lidar_spatial_authority_enabled="false"
+fi
+
+tiny_lidar_spatial_authority_max_abs_delta_rad="${TINY_LIDAR_SPATIAL_AUTHORITY_MAX_ABS_DELTA_RAD:-}"
+if [[ -n "${TINY_LIDAR_SPATIAL_AUTHORITY_MAX_ABS_DELTA_RAD+x}" ]]; then
+    if [[ ! "${tiny_lidar_spatial_authority_max_abs_delta_rad}" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
+       [[ "${tiny_lidar_spatial_authority_max_abs_delta_rad}" =~ ^0+([.]0+)?$ ]]; then
+        echo "TINY_LIDAR_SPATIAL_AUTHORITY_MAX_ABS_DELTA_RAD must be positive"
+        exit 1
+    fi
+fi
+if [[ "${tiny_lidar_spatial_authority_enabled}" == "true" && \
+      -n "${TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH+x}" && \
+      -z "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
+    echo "spatial authority requires TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH"
+    exit 1
+fi
+if [[ "${tiny_lidar_spatial_authority_enabled}" == "true" ]]; then
     if [[ -n "${tiny_lidar_residual_ckpt_path}" ]]; then
         echo "spatial authority cannot be combined with TINY_LIDAR_RESIDUAL_CKPT_PATH"
         exit 1
     fi
 fi
-opts+=("tiny_lidar_spatial_authority_enabled:=${tiny_lidar_spatial_authority_enabled}")
+if [[ -n "${tiny_lidar_spatial_authority_enabled}" ]]; then
+    opts+=("tiny_lidar_spatial_authority_enabled:=${tiny_lidar_spatial_authority_enabled}")
+fi
+if [[ -n "${tiny_lidar_spatial_authority_max_abs_delta_rad}" ]]; then
+    opts+=("tiny_lidar_spatial_authority_max_abs_delta_rad:=${tiny_lidar_spatial_authority_max_abs_delta_rad}")
+fi
 
 # The gap teacher is an explicit data-collection mode under the existing
 # tiny_lidar_net interface. It cannot be selected accidentally by another
 # controller or by an unknown spelling.
-tiny_lidar_control_mode="${TINY_LIDAR_CONTROL_MODE:-}"
 if [[ -n "${tiny_lidar_control_mode}" ]]; then
     if [[ "${control_method}" != "tiny_lidar_net" ]]; then
         echo "TINY_LIDAR_CONTROL_MODE is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"

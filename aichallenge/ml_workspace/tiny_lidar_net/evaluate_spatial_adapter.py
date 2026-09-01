@@ -22,6 +22,30 @@ from lib.spatial_adapter import (
 )
 
 
+SPATIAL_DECODE_MODES = ("soft_mixture", "winner_take_all")
+
+
+def decode_spatial_components(
+    residual: torch.Tensor,
+    magnitudes: torch.Tensor,
+    direction_logits: torch.Tensor,
+    decode_mode: str,
+) -> torch.Tensor:
+    """Decode one trained mixture without changing its learned parameters."""
+    if decode_mode not in SPATIAL_DECODE_MODES:
+        raise ValueError(f"unsupported spatial decode mode: {decode_mode}")
+    if decode_mode == "soft_mixture":
+        return residual
+    if magnitudes.ndim != 2 or magnitudes.shape[1] != 2:
+        raise ValueError("spatial magnitudes must have left and right columns")
+    if direction_logits.shape != (len(magnitudes), 3):
+        raise ValueError("spatial direction logits must have three classes")
+    direction = torch.argmax(direction_logits, dim=1)
+    decoded = torch.zeros_like(residual)
+    decoded = torch.where(direction == 0, -magnitudes[:, 0], decoded)
+    return torch.where(direction == 2, magnitudes[:, 1], decoded)
+
+
 def runtime_bounded_metrics(
     predicted: np.ndarray,
     target: np.ndarray,
@@ -99,6 +123,7 @@ def predict_paired(
     device,
     material_delta_rad: float,
     runtime_authority_bound_rad: float | None = None,
+    decode_mode: str = "soft_mixture",
 ) -> dict:
     residuals = []
     targets = []
@@ -106,10 +131,14 @@ def predict_paired(
     model.eval()
     with torch.no_grad():
         for scans, speeds, teacher, base in loader:
-            residual, _, logits, _ = model.forward_components(
+            residual, magnitudes, logits, _ = model.forward_components(
                 scans.to(device), speeds.to(device)
             )
-            residuals.append(residual.cpu().numpy())
+            residuals.append(
+                decode_spatial_components(
+                    residual, magnitudes, logits, decode_mode
+                ).cpu().numpy()
+            )
             targets.append((teacher - base).numpy())
             directions.append(torch.argmax(logits, dim=1).cpu().numpy())
     predicted = np.concatenate(residuals)
@@ -155,23 +184,37 @@ def predict_paired(
     return report
 
 
-def predict_normal(model, loader, device, max_range_m: float) -> dict:
+def predict_normal(
+    model, loader, device, max_range_m: float, decode_mode: str
+) -> dict:
     values = []
     model.eval()
     with torch.no_grad():
         for normalized_scans, _ in loader:
             physical_scans = normalized_scans.to(device) * max_range_m
-            values.append(model(physical_scans).cpu().numpy())
+            residual, magnitudes, logits, _ = model.forward_components(
+                physical_scans
+            )
+            values.append(
+                decode_spatial_components(
+                    residual, magnitudes, logits, decode_mode
+                ).cpu().numpy()
+            )
     return normal_metrics(np.concatenate(values))
 
 
-def predict_recurrent_normal(model, loader, device) -> dict:
+def predict_recurrent_normal(model, loader, device, decode_mode: str) -> dict:
     values = []
     model.eval()
     with torch.no_grad():
         for scans, speeds, _, _ in loader:
+            residual, magnitudes, logits, _ = model.forward_components(
+                scans.to(device), speeds.to(device)
+            )
             values.append(
-                model(scans.to(device), speeds.to(device)).cpu().numpy()
+                decode_spatial_components(
+                    residual, magnitudes, logits, decode_mode
+                ).cpu().numpy()
             )
     return normal_metrics(np.concatenate(values))
 
@@ -240,6 +283,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-abs-delta-rad", type=float, default=1.2)
     parser.add_argument("--max-speed-mps", type=float, default=12.0)
     parser.add_argument("--use-speed", action="store_true")
+    parser.add_argument("--use-base-steering", action="store_true")
     parser.add_argument(
         "--spatial-normalization",
         choices=SPATIAL_NORMALIZATION_MODES,
@@ -260,6 +304,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "If positive, report and gate the residual after the exact symmetric "
             "clip used by runtime spatial authority."
+        ),
+    )
+    parser.add_argument(
+        "--runtime-decode-mode",
+        choices=SPATIAL_DECODE_MODES,
+        default="soft_mixture",
+        help=(
+            "Exact runtime decoding contract to gate. winner_take_all emits "
+            "zero for neutral and the selected side magnitude otherwise."
         ),
     )
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
@@ -308,6 +361,7 @@ def main() -> int:
         max_scan_range_m=args.max_range_m,
         max_abs_delta_rad=args.max_abs_delta_rad,
         use_speed=args.use_speed,
+        use_base_steering=args.use_base_steering,
         max_speed_mps=args.max_speed_mps,
         spatial_normalization=args.spatial_normalization,
         projection_dim=args.projection_dim,
@@ -331,7 +385,25 @@ def main() -> int:
         device,
         args.material_delta_rad,
         runtime_bound,
+        args.runtime_decode_mode,
     )
+    per_sequence = [
+        {
+            "sequence_id": sequence.sequence_id,
+            "source_bag": str(sequence.metadata["source"]["bag"]),
+            "metrics": predict_paired(
+                model,
+                DataLoader(
+                    sequence, batch_size=args.batch_size, shuffle=False
+                ),
+                device,
+                args.material_delta_rad,
+                runtime_bound,
+                args.runtime_decode_mode,
+            ),
+        }
+        for sequence in validation.datasets
+    ]
     peer_record = select_unique_source_sequence(
         validation.datasets, args.peer_validation_token
     )
@@ -341,6 +413,7 @@ def main() -> int:
         device,
         args.material_delta_rad,
         runtime_bound,
+        args.runtime_decode_mode,
     )
     focus_record = select_unique_source_sequence(
         validation.datasets, args.focus_validation_token
@@ -358,6 +431,7 @@ def main() -> int:
                 device,
                 args.material_delta_rad,
                 runtime_bound,
+                args.runtime_decode_mode,
             ),
             "tail_samples": min(args.tail_samples, len(focus_record)),
             "tail": predict_paired(
@@ -370,6 +444,7 @@ def main() -> int:
                 device,
                 args.material_delta_rad,
                 runtime_bound,
+                args.runtime_decode_mode,
             ),
         }
     if args.normal_recurrent_root is not None:
@@ -384,6 +459,7 @@ def main() -> int:
                 shuffle=False,
             ),
             device,
+            args.runtime_decode_mode,
         )
     else:
         normal = MultiSeqConcatDataset(
@@ -397,6 +473,7 @@ def main() -> int:
             DataLoader(normal, batch_size=args.batch_size, shuffle=False),
             device,
             args.max_range_m,
+            args.runtime_decode_mode,
         )
     material_improvement = aggregate["residual"][
         "material_mae_improvement_fraction"
@@ -447,6 +524,7 @@ def main() -> int:
         "candidate": candidate_provenance,
         "base_checkpoint": base_provenance,
         "validation_sequence_ids": validation.sequence_ids,
+        "validation_sequences": per_sequence,
         "peer_sequence_id": peer_record.sequence_id,
         "aggregate": aggregate,
         "peer_validation": peer,
@@ -458,6 +536,7 @@ def main() -> int:
             "max_anchor_mae_rad": args.max_anchor_mae_rad,
             "max_normal_mae_rad": args.max_normal_mae_rad,
             "runtime_authority_bound_rad": runtime_bound,
+            "runtime_decode_mode": args.runtime_decode_mode,
         },
         "gates": gates,
         "result": "pass" if all(gates.values()) else "fail",

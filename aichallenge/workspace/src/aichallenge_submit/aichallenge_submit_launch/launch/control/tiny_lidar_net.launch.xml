@@ -5,8 +5,12 @@
   <arg name="ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/tinylidarnet_weights.npy"/>
   <arg name="residual_ckpt_path" default=""/>
   <arg name="residual_architecture" default="stateless"/>
-  <arg name="spatial_shadow_ckpt_path" default=""/>
-  <arg name="spatial_authority_enabled" default="false"/>
+  <arg name="spatial_shadow_ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/spatial_steering_adapter.npy"/>
+  <arg name="spatial_shadow_expected_sha256" default="f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c"/>
+  <arg name="spatial_shadow_use_base_steering" default="true"/>
+  <arg name="spatial_shadow_max_abs_delta_rad" default="1.2"/>
+  <arg name="spatial_authority_enabled" default="true"/>
+  <arg name="spatial_authority_max_abs_delta_rad" default="1.2"/>
   <arg name="model_type" default="tiny_lidar_net"/>
   <arg name="control_mode" default="fixed_lidar_brake"/>
   <arg name="csv_path" default="$(find-pkg-share laserscan_generator)/map/lane.csv"/>
@@ -23,7 +27,11 @@
     <arg name="residual_ckpt_path" value="$(var residual_ckpt_path)"/>
     <arg name="residual_architecture" value="$(var residual_architecture)"/>
     <arg name="spatial_shadow_ckpt_path" value="$(var spatial_shadow_ckpt_path)"/>
+    <arg name="spatial_shadow_expected_sha256" value="$(var spatial_shadow_expected_sha256)"/>
+    <arg name="spatial_shadow_use_base_steering" value="$(var spatial_shadow_use_base_steering)"/>
+    <arg name="spatial_shadow_max_abs_delta_rad" value="$(var spatial_shadow_max_abs_delta_rad)"/>
     <arg name="spatial_authority_enabled" value="$(var spatial_authority_enabled)"/>
+    <arg name="spatial_authority_max_abs_delta_rad" value="$(var spatial_authority_max_abs_delta_rad)"/>
     <arg name="model_type" value="$(var model_type)"/>
     <arg name="control_mode" value="$(var control_mode)"/>
     <arg name="control_cmd_topic" value="/control/command/control_cmd"/>

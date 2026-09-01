@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import numpy as np
 from typing import Optional, Tuple
@@ -51,9 +52,11 @@ class TinyLidarNetCore:
         residual_max_abs_delta_rad: float = 1.28,
         residual_architecture: str = 'stateless',
         spatial_shadow_ckpt_path: str = '',
+        spatial_shadow_expected_sha256: str = '',
         spatial_shadow_hidden_dim: int = 128,
         spatial_shadow_projection_dim: int = 128,
         spatial_shadow_use_speed: bool = True,
+        spatial_shadow_use_base_steering: bool = False,
         spatial_shadow_max_speed_mps: float = 12.0,
         spatial_shadow_max_abs_delta_rad: float = 1.2,
         spatial_authority_enabled: bool = False,
@@ -182,6 +185,10 @@ class TinyLidarNetCore:
             raise ValueError(
                 "legacy residual and spatial authority cannot own steering together"
             )
+        if spatial_shadow_expected_sha256 and not spatial_shadow_ckpt_path:
+            raise ValueError(
+                "spatial shadow expected SHA256 requires a spatial shadow checkpoint"
+            )
 
         if self.architecture == 'small':
             self.model = TinyLidarNetSmallNp(input_dim=self.input_dim, output_dim=self.output_dim)
@@ -221,11 +228,17 @@ class TinyLidarNetCore:
             )
 
         if spatial_shadow_ckpt_path:
+            self._verify_file_sha256(
+                spatial_shadow_ckpt_path,
+                spatial_shadow_expected_sha256,
+                "spatial steering shadow",
+            )
             self.spatial_shadow_model = SpatialSteeringAdapterNp(
                 input_dim=self.input_dim,
                 hidden_dim=spatial_shadow_hidden_dim,
                 projection_dim=spatial_shadow_projection_dim,
                 use_speed=spatial_shadow_use_speed,
+                use_base_steering=spatial_shadow_use_base_steering,
                 max_speed_mps=spatial_shadow_max_speed_mps,
                 max_abs_delta_rad=spatial_shadow_max_abs_delta_rad,
             )
@@ -245,6 +258,24 @@ class TinyLidarNetCore:
                         f"parameter: {key}"
                     )
             self.last_spatial_shadow_status = "waiting-speed"
+
+    @staticmethod
+    def _verify_file_sha256(path: str, expected_sha256: str, label: str) -> None:
+        """Reject a promoted artifact when its immutable identity changed."""
+        expected = expected_sha256.strip().lower()
+        if not expected:
+            return
+        if len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
+            raise ValueError(f"{label} expected SHA256 must be 64 hexadecimal characters")
+        digest = hashlib.sha256()
+        with open(path, "rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        actual = digest.hexdigest()
+        if actual != expected:
+            raise ValueError(
+                f"{label} SHA256 mismatch: expected {expected}, got {actual}"
+            )
 
     def process(
         self, ranges: np.ndarray, speed_mps: Optional[float] = None

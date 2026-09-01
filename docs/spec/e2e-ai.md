@@ -290,9 +290,11 @@ normal anchorを含めた3 seed分類では、速度なしstatic spatialはmater
 採用根拠にしない。次のAI platform作業は元bagからnormal train/validationの速度を同一契約で
 同期したimmutable datasetを生成し、実速度で分離性を再監査することとする。
 
-元bagの`/localization/kinematic_state`をLiDAR時刻へ同期した専用normal schemaは、train
-3 sequence、validation 1 sequence、計19,714 sampleとなり、同期差最大36.12 msで50 ms
-契約を満たした。実速度を使った3 seed分類では、static spatialの未見normal誤発火が
+歴史的なv1監査では元bagの`/localization/kinematic_state`をLiDAR時刻へ同期した専用normal
+schemaを使ったが、このtopicはfused localizationでありE2Eの許可入力ではない。その結果は
+モデル構造の比較に限って残し、production候補の学習・実行根拠には使わない。v1はtrain
+3 sequence、validation 1 sequence、計19,714 sample、同期差最大36.12 msだった。実速度を
+使った3 seed分類では、static spatialの未見normal誤発火が
 14.17%から12.18%へ下がった一方、material-signは85.99%から85.29%へ、balanced
 accuracyは86.30%から86.02%へ僅かに低下した。速度は補助信号ではあるが単独の解決策ではない。
 
@@ -407,6 +409,64 @@ runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`とし�
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に
 domain結果として採用しない。
+
+### Wheel-speed input correction
+
+E2E runtime input contractの再監査により、spatial adapterの速度入力を
+`/localization/kinematic_state`から
+`/vehicle/status/velocity_status`（`VelocityReport.longitudinal_velocity`）へ変更した。
+dataset builderの既定topic/typeも同じ値へ統一し、旧Odometryは明示的なlegacy再現時にだけ
+選択できる。held-out authority failure sequenceはimmutable sequence IDでtrainから除外した。
+
+同じv3 architecture、frozen base、0.12 rad authority上限で再学習したwheel-speed v4のSHAは
+`838565279cedf8f29539005d90ff9ad06d031a608939ebc06c48331fc2fa780f`である。単車run
+`output/20260901-193157`は3/3周、penalty/stall 0、3周合計276.902秒で、旧v3 authorityの
+278.611秒より1.709秒速く、authority OFF基準との差は0.475秒だった。runtime coverageは
+100%、error/stale 0、最小scan 19.88 Hzである。NPC 2 seedを通過し、提出package内のartifact
+SHA、launch既定値、rollback、tar内容を検証するまではproduction昇格と扱わない。
+
+### Full-steering spatial authority promotion
+
+wheel-speed v4とbase-conditioned v10は、NPC失敗時に必要な教師補正が
+`+0.83--0.88 rad`であるのに対し、modelとruntimeの補正範囲が`+/-0.12 rad`だったため
+productionへ昇格しない。v10は失敗区間で正しい回避方向を選んだが、平均補正が
+`+0.11986 rad`に張り付いた。これは閾値やタイムアウトでは解決できない表現能力の不足である。
+
+この根本原因に対し、frozen base steeringを入力に含めたまま補正範囲を`+/-1.2 rad`へ拡張した
+v11を学習した。外部ML入力は2D LiDARと
+`/vehicle/status/velocity_status`の車輪速度だけである。qualified artifactは
+`spatial_steering_adapter.npy`、SHA256は
+`f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c`である。
+
+厳格offline監査では、aggregate material MAE改善35.99%、runtime-bounded方向一致94.95%、
+peer改善68.53%・方向一致100%、held-out focus改善37.59%・方向一致95.68%、独立normal
+MAE 0.009699 radで全Gateを通過した。shadow単車、authority単車、NPC seed 2026/2027は
+いずれも3周完走、penalty/stall 0、coverage 100%、inference error/stale 0だった。NPC 2本は
+ともに1位で、最大実補正は0.86176 radだった。したがって旧0.12 rad候補はfallbackとしても
+残さず、v11だけをlearned steering correction ownerとする。
+
+participant launchは提出package内のartifact path、期待SHA、base-steering conditioning、
+model/runtime上限1.2 rad、authority ONをproduction既定として所有する。DockerとMakefileの
+未指定環境変数はこの既定値を空値で上書きしない。明示的なcustom artifactはauthorityを同時に
+明示しない限りshadow-onlyであり、`gap_teacher`と`precontact_teacher`は通常起動経路で
+authorityを継承しない。legacy residual pathは空のままとする。
+
+提出package既定だけを使った
+`output/20260901-e2e-full-steering-packaged-default-single`は、3周
+`101.069 / 89.156 / 90.400秒`、penalty/stall 0、6439/6439 authority適用、
+clipping/stale/error 0で合格した。source、install、提出tar内artifactのSHAは一致し、tarの
+最上位は`aichallenge_submit/`だけである。
+
+明示的なrollbackは次で行う。この場合もmodelをshadow観測には利用できるが、最終操舵は
+frozen baseへbit-for-bitで戻る。
+
+```bash
+make e2e-single TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED=false
+```
+
+authority単車はshadow基準より約6秒/3周遅いため、周回速度は後続Sliceの課題である。ただし
+性能調整のために、物理的に教師を表現できない0.12 rad制約へ戻したり、障害物固有のtriggerを
+追加したりしてはならない。
 
 ## Submission Artifacts
 

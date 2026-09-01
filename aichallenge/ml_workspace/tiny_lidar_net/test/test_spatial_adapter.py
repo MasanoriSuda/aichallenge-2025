@@ -80,6 +80,21 @@ def test_speed_enabled_adapter_requires_valid_aligned_speed():
     )
 
 
+def test_base_steering_conditioning_is_frozen_and_shape_explicit():
+    model = FrozenTinyLidarSpatialResidual(
+        input_dim=750,
+        hidden_dim=16,
+        projection_dim=32,
+        use_base_steering=True,
+    )
+    scans = torch.rand(3, 750) * 30.0
+
+    assert model.spatial_head[0].in_features == 33
+    assert model.base_steering(scans).shape == (3,)
+    assert torch.equal(model(scans), torch.zeros(3))
+    assert all(not parameter.requires_grad for parameter in model.base.parameters())
+
+
 def test_fixed_train_statistics_are_explicit_and_immutable_state():
     model = FrozenTinyLidarSpatialResidual(
         input_dim=750,
@@ -185,6 +200,7 @@ def test_numpy_spatial_shadow_matches_exported_pytorch_candidate(
         projection_dim=32,
         projection_seed=17,
         use_speed=True,
+        use_base_steering=True,
         max_speed_mps=12.0,
         max_abs_delta_rad=1.2,
         spatial_normalization="fixed_train_statistics",
@@ -208,6 +224,7 @@ def test_numpy_spatial_shadow_matches_exported_pytorch_candidate(
         hidden_dim=16,
         projection_dim=32,
         use_speed=True,
+        use_base_steering=True,
         max_speed_mps=12.0,
         max_abs_delta_rad=1.2,
     )

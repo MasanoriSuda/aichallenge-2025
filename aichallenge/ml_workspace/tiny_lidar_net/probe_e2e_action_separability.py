@@ -32,8 +32,10 @@ VARIANTS = (
     "static_fc3",
     "static_conv5_no_speed",
     "static_conv5",
+    "static_conv5_base",
     "temporal_conv5_no_speed",
     "temporal_conv5",
+    "temporal_conv5_base",
     "static_raw",
     "temporal_raw",
 )
@@ -203,12 +205,13 @@ def frozen_features(
     model: TinyLidarNet,
     scans_m: np.ndarray,
     device: torch.device,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     scans = np.asarray(scans_m, dtype=np.float32)
     if scans.ndim != 2 or scans.shape[1] != 750:
         raise ValueError("frozen feature input must have shape (N, 750)")
     conv5_outputs = []
     fc3_outputs = []
+    base_steering_outputs = []
     model.eval()
     with torch.no_grad():
         for start in range(0, len(scans), 512):
@@ -225,9 +228,13 @@ def frozen_features(
             compact = F.relu(model.fc2(compact))
             compact = F.relu(model.fc3(compact))
             fc3_outputs.append(compact.cpu().numpy())
+            base_steering_outputs.append(
+                torch.tanh(model.fc4(compact))[:, 1].cpu().numpy()
+            )
     return (
         np.concatenate(conv5_outputs).astype(np.float32, copy=False),
         np.concatenate(fc3_outputs).astype(np.float32, copy=False),
+        np.concatenate(base_steering_outputs).astype(np.float32, copy=False),
     )
 
 
@@ -238,25 +245,28 @@ def make_probe_sequences(
     projection: np.ndarray,
     material_delta_rad: float,
     device: torch.device,
-    feature_cache: dict[str, tuple[np.ndarray, np.ndarray]],
+    feature_cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
 ) -> list[ProbeSequence]:
     output = []
     for sequence in source.datasets:
         cached = feature_cache.get(sequence.sequence_id)
         if cached is None:
-            conv5, fc3 = frozen_features(model, sequence.scans, device)
+            conv5, fc3, base_steering = frozen_features(
+                model, sequence.scans, device
+            )
             if conv5.shape[1] != projection.shape[0]:
                 raise ValueError("conv5 projection dimension mismatch")
             projected = conv5 @ projection
-            cached = (projected, fc3)
+            cached = (projected, fc3, base_steering)
             feature_cache[sequence.sequence_id] = cached
-        projected, fc3 = cached
+        projected, fc3, base_steering = cached
         features = compose_probe_features(
             variant,
             projected,
             fc3,
             sequence.speeds,
             sequence.scans,
+            base_steering,
         )
         output.append(
             ProbeSequence(
@@ -277,21 +287,44 @@ def compose_probe_features(
     fc3: np.ndarray,
     speeds_mps: np.ndarray,
     scans_m: np.ndarray | None = None,
+    base_steering_rad: np.ndarray | None = None,
 ) -> np.ndarray:
     speeds = np.asarray(speeds_mps, dtype=np.float32)
     if speeds.shape != (len(projected),):
         raise ValueError("probe speed feature must align with spatial features")
     normalized_speed = np.clip(speeds / 12.0, 0.0, 1.5)[:, None]
+    base_steering = None
+    if base_steering_rad is not None:
+        base_steering = np.asarray(base_steering_rad, dtype=np.float32)
+        if base_steering.shape != (len(projected),) or not np.all(
+            np.isfinite(base_steering)
+        ):
+            raise ValueError(
+                "probe base steering must be finite and align with spatial features"
+            )
     if variant == "static_fc3":
         return np.concatenate((fc3, normalized_speed), axis=1)
     if variant == "static_conv5_no_speed":
         return projected
     if variant == "static_conv5":
         return np.concatenate((projected, normalized_speed), axis=1)
+    if variant == "static_conv5_base":
+        if base_steering is None:
+            raise ValueError("base-conditioned probe requires base steering")
+        return np.concatenate(
+            (projected, normalized_speed, base_steering[:, None]), axis=1
+        )
     if variant == "temporal_conv5_no_speed":
         return spatial_history_features(projected)
     if variant == "temporal_conv5":
         return temporal_features(projected, speeds)
+    if variant == "temporal_conv5_base":
+        if base_steering is None:
+            raise ValueError("base-conditioned probe requires base steering")
+        return temporal_features(
+            np.concatenate((projected, base_steering[:, None]), axis=1),
+            speeds,
+        )
     if variant in ("static_raw", "temporal_raw"):
         raw = np.asarray(scans_m, dtype=np.float32)
         if raw.shape != (len(projected), 750):
@@ -313,27 +346,28 @@ def make_normal_probe_sequences(
     variant: str,
     projection: np.ndarray,
     device: torch.device,
-    feature_cache: dict[str, tuple[np.ndarray, np.ndarray]],
+    feature_cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
 ) -> list[ProbeSequence]:
     output = []
     for sequence in source.datasets:
         cache_key = f"normal-anchor:{sequence.sequence_id}"
         cached = feature_cache.get(cache_key)
         if cached is None:
-            conv5, fc3 = frozen_features(
+            conv5, fc3, base_steering = frozen_features(
                 model, sequence.scans * sequence.max_range, device
             )
             if conv5.shape[1] != projection.shape[0]:
                 raise ValueError("normal conv5 projection dimension mismatch")
-            cached = (conv5 @ projection, fc3)
+            cached = (conv5 @ projection, fc3, base_steering)
             feature_cache[cache_key] = cached
-        projected, fc3 = cached
+        projected, fc3, base_steering = cached
         features = compose_probe_features(
             variant,
             projected,
             fc3,
             np.zeros(len(sequence), dtype=np.float32),
             sequence.scans * sequence.max_range,
+            base_steering,
         )
         output.append(
             ProbeSequence(
@@ -596,7 +630,7 @@ def main() -> int:
             raise ValueError(f"normal probe sequence overlap: {sorted(normal_overlap)}")
 
     variant_reports = {}
-    feature_cache: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    feature_cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
     normal_validation_ids = (
         set()
         if normal_validation_source is None
@@ -773,7 +807,9 @@ def main() -> int:
     static = variant_reports["static_fc3"]["aggregate"]
     spatial_no_speed = variant_reports["static_conv5_no_speed"]["aggregate"]
     spatial = variant_reports["static_conv5"]["aggregate"]
+    spatial_base = variant_reports["static_conv5_base"]["aggregate"]
     temporal = variant_reports["temporal_conv5"]["aggregate"]
+    temporal_base = variant_reports["temporal_conv5_base"]["aggregate"]
     raw = variant_reports["static_raw"]["aggregate"]
     raw_temporal = variant_reports["temporal_raw"]["aggregate"]
     peer_temporal = variant_reports["temporal_conv5"]["peer_validation"]["metrics"]
@@ -835,6 +871,21 @@ def main() -> int:
             ),
             "temporal_minus_spatial_material_sign_accuracy": (
                 temporal["material_sign_accuracy"] - spatial["material_sign_accuracy"]
+            ),
+            "spatial_base_minus_spatial_balanced_accuracy": (
+                spatial_base["balanced_accuracy"] - spatial["balanced_accuracy"]
+            ),
+            "spatial_base_minus_spatial_material_sign_accuracy": (
+                spatial_base["material_sign_accuracy"]
+                - spatial["material_sign_accuracy"]
+            ),
+            "temporal_base_minus_spatial_base_balanced_accuracy": (
+                temporal_base["balanced_accuracy"]
+                - spatial_base["balanced_accuracy"]
+            ),
+            "temporal_base_minus_spatial_base_material_sign_accuracy": (
+                temporal_base["material_sign_accuracy"]
+                - spatial_base["material_sign_accuracy"]
             ),
             "raw_minus_spatial_balanced_accuracy": (
                 raw["balanced_accuracy"] - spatial["balanced_accuracy"]

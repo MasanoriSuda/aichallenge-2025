@@ -392,6 +392,7 @@ class SpatialSteeringAdapterNp:
         hidden_dim=128,
         projection_dim=128,
         use_speed=True,
+        use_base_steering=False,
         max_speed_mps=12.0,
         max_abs_delta_rad=1.2,
     ):
@@ -405,12 +406,17 @@ class SpatialSteeringAdapterNp:
         self.hidden_dim = int(hidden_dim)
         self.projection_dim = int(projection_dim)
         self.use_speed = bool(use_speed)
+        self.use_base_steering = bool(use_base_steering)
         self.max_speed_mps = float(max_speed_mps)
         self.max_abs_delta_rad = float(max_abs_delta_rad)
         self.base = TinyLidarNetNp(input_dim=self.input_dim, output_dim=2)
         self.strides = self.base.strides
         self.spatial_dim = self.base.shapes['fc1_weight'][1]
-        adapter_input_dim = self.projection_dim + int(self.use_speed)
+        adapter_input_dim = (
+            self.projection_dim
+            + int(self.use_speed)
+            + int(self.use_base_steering)
+        )
         self.shapes = {
             'spatial_projection': (self.spatial_dim, self.projection_dim),
             'spatial_mean': (self.projection_dim,),
@@ -464,17 +470,40 @@ class SpatialSteeringAdapterNp:
         scale = self.params['spatial_scale']
         if not np.all(np.isfinite(scale)) or np.any(scale <= 0.0):
             raise ValueError("spatial adapter scale must be finite and positive")
-        features = (projected - self.params['spatial_mean']) / scale
+        features = [(projected - self.params['spatial_mean']) / scale]
         if self.use_speed:
             speed = np.asarray(speeds_mps, dtype=np.float32)
-            if speed.shape != (len(features),):
+            if speed.shape != (len(spatial),):
                 raise ValueError("speed-enabled shadow requires one speed per scan")
             if not np.all(np.isfinite(speed)) or np.any(speed < 0.0):
                 raise ValueError("spatial shadow speed must be finite and non-negative")
             normalized_speed = np.clip(
                 speed / self.max_speed_mps, 0.0, 1.5
             )[:, None]
-            features = np.concatenate((features, normalized_speed), axis=1)
+            features.append(normalized_speed)
+        if self.use_base_steering:
+            base_hidden = relu(linear(
+                spatial,
+                self.params['base_fc1_weight'],
+                self.params['base_fc1_bias'],
+            ))
+            base_hidden = relu(linear(
+                base_hidden,
+                self.params['base_fc2_weight'],
+                self.params['base_fc2_bias'],
+            ))
+            base_hidden = relu(linear(
+                base_hidden,
+                self.params['base_fc3_weight'],
+                self.params['base_fc3_bias'],
+            ))
+            base_output = tanh(linear(
+                base_hidden,
+                self.params['base_fc4_weight'],
+                self.params['base_fc4_bias'],
+            ))
+            features.append(base_output[:, 1:2])
+        features = np.concatenate(features, axis=1)
         hidden = relu(linear(
             features,
             self.params['spatial_head_0_weight'],

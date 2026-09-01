@@ -91,6 +91,42 @@ def test_multiple_source_roots_preserve_unique_sequence_identity(tmp_path: Path)
     ]
 
 
+def test_additional_source_may_be_train_only_when_explicitly_allowed(
+    tmp_path: Path,
+) -> None:
+    primary = tmp_path / "primary"
+    additional = tmp_path / "additional"
+    write_source_identity(primary, "train", "primary-train")
+    write_source_identity(primary, "val", "primary-val")
+    write_source_identity(additional, "train", "additional-train")
+
+    discovered = list(
+        iter_source_sequences(
+            [primary, additional], allow_partial_additional_roots=True
+        )
+    )
+
+    assert [item[2].name for item in discovered] == [
+        "primary-train",
+        "primary-val",
+        "additional-train",
+    ]
+
+
+def test_primary_source_still_requires_both_splits_in_partial_mode(
+    tmp_path: Path,
+) -> None:
+    primary = tmp_path / "primary"
+    write_source_identity(primary, "train", "primary-train")
+
+    with pytest.raises(FileNotFoundError, match="missing source split"):
+        list(
+            iter_source_sequences(
+                [primary], allow_partial_additional_roots=True
+            )
+        )
+
+
 def test_multiple_source_roots_reject_duplicate_sequence_identity(tmp_path: Path) -> None:
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -100,6 +136,29 @@ def test_multiple_source_roots_reject_duplicate_sequence_identity(tmp_path: Path
 
     with pytest.raises(ValueError, match="duplicate source sequence identity shared"):
         list(iter_source_sequences([first, second]))
+
+
+def test_source_exclusion_is_explicit_and_must_match(tmp_path: Path) -> None:
+    root = tmp_path / "source"
+    write_source_identity(root, "train", "keep-train")
+    write_source_identity(root, "val", "exclude-val")
+
+    discovered = list(iter_source_sequences([root], ["exclude-val"]))
+    assert [item[2].name for item in discovered] == ["keep-train"]
+
+    with pytest.raises(ValueError, match="was not found"):
+        list(iter_source_sequences([root], ["missing"]))
+
+    duplicate = tmp_path / "duplicate-source"
+    write_source_identity(duplicate, "val", "exclude-val")
+    with pytest.raises(ValueError, match="is ambiguous"):
+        list(
+            iter_source_sequences(
+                [root, duplicate],
+                ["exclude-val"],
+                allow_partial_additional_roots=True,
+            )
+        )
 
 
 def test_physical_scan_loader_rejects_normalization_mismatch(tmp_path: Path) -> None:

@@ -20,6 +20,7 @@ from lib.residual import (
     save_numpy_state,
     sequence_balanced_sample_weights,
     signed_direction_targets,
+    signed_expert_training_loss,
     signed_mixture_training_loss,
     write_json,
 )
@@ -31,6 +32,7 @@ from lib.spatial_adapter import (
 
 
 SAMPLING_MODES = ("sample", "sequence")
+TRAINING_OBJECTIVES = ("composed_mixture", "categorical_expert")
 
 
 class ZeroResidualAnchorSequence(torch.utils.data.Dataset):
@@ -142,6 +144,15 @@ def adapter_loss(model, scans, speeds, teacher, base, args, class_weights):
     residual, magnitudes, direction_logits, _ = model.forward_components(
         scans, speeds
     )
+    if args.training_objective == "categorical_expert":
+        return signed_expert_training_loss(
+            magnitudes,
+            direction_logits,
+            targets,
+            args.material_delta_rad,
+            class_weights,
+            args.direction_loss_weight,
+        )
     return signed_mixture_training_loss(
         residual,
         magnitudes,
@@ -244,6 +255,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-speed-mps", type=float, default=12.0)
     parser.add_argument("--use-speed", action="store_true")
     parser.add_argument(
+        "--use-base-steering",
+        action="store_true",
+        help=(
+            "Condition the correction on the immutable embedded base steering. "
+            "This matches the admitted teacher input contract without a new ROS input."
+        ),
+    )
+    parser.add_argument(
         "--spatial-normalization",
         choices=SPATIAL_NORMALIZATION_MODES,
         default="layer_norm",
@@ -254,6 +273,15 @@ def parse_args() -> argparse.Namespace:
         "--head-architecture",
         choices=SPATIAL_HEAD_ARCHITECTURES,
         default="signed_mixture",
+    )
+    parser.add_argument(
+        "--training-objective",
+        choices=TRAINING_OBJECTIVES,
+        default="composed_mixture",
+        help=(
+            "categorical_expert trains direction and side magnitude as separate "
+            "responsibilities for winner-take-all runtime decoding."
+        ),
     )
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--material-weight", type=float, default=5.0)
@@ -276,6 +304,13 @@ def main() -> int:
         raise ValueError("spatial adapter dimensions and iterations must be positive")
     if args.learning_rate <= 0.0 or args.material_weight < 1.0:
         raise ValueError("invalid spatial adapter optimizer configuration")
+    if (
+        args.training_objective == "categorical_expert"
+        and args.head_architecture != "signed_mixture"
+    ):
+        raise ValueError(
+            "categorical expert objective requires signed_mixture head"
+        )
     generator = seed_everything(args.seed)
     root = args.dataset.expanduser().resolve()
     train_source = MultiSeqRecurrentPolicyDataset(root / "train", "train")
@@ -349,6 +384,7 @@ def main() -> int:
         max_scan_range_m=args.max_range_m,
         max_abs_delta_rad=args.max_abs_delta_rad,
         use_speed=args.use_speed,
+        use_base_steering=args.use_base_steering,
         max_speed_mps=args.max_speed_mps,
         spatial_normalization=args.spatial_normalization,
         projection_dim=args.projection_dim,

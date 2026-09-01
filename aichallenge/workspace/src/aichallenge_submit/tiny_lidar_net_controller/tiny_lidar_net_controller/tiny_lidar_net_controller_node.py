@@ -6,8 +6,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import LaserScan
-from nav_msgs.msg import Odometry
 from autoware_auto_control_msgs.msg import AckermannControlCommand
+from autoware_auto_vehicle_msgs.msg import VelocityReport
 
 from tiny_lidar_net_controller.gap_teacher import GapTeacherConfig
 from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
@@ -33,9 +33,11 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('model.residual_max_abs_delta_rad', 1.28)
         self.declare_parameter('model.residual_architecture', 'stateless')
         self.declare_parameter('model.spatial_shadow_ckpt_path', '')
+        self.declare_parameter('model.spatial_shadow_expected_sha256', '')
         self.declare_parameter('model.spatial_shadow_hidden_dim', 128)
         self.declare_parameter('model.spatial_shadow_projection_dim', 128)
         self.declare_parameter('model.spatial_shadow_use_speed', True)
+        self.declare_parameter('model.spatial_shadow_use_base_steering', False)
         self.declare_parameter('model.spatial_shadow_max_speed_mps', 12.0)
         self.declare_parameter('model.spatial_shadow_max_abs_delta_rad', 1.2)
         self.declare_parameter('model.spatial_authority_enabled', False)
@@ -79,6 +81,9 @@ class TinyLidarNetNode(Node):
         spatial_shadow_ckpt_path = str(
             self.get_parameter('model.spatial_shadow_ckpt_path').value
         )
+        spatial_shadow_expected_sha256 = str(
+            self.get_parameter('model.spatial_shadow_expected_sha256').value
+        )
         spatial_shadow_hidden_dim = int(
             self.get_parameter('model.spatial_shadow_hidden_dim').value
         )
@@ -87,6 +92,11 @@ class TinyLidarNetNode(Node):
         )
         spatial_shadow_use_speed = bool(
             self.get_parameter('model.spatial_shadow_use_speed').value
+        )
+        spatial_shadow_use_base_steering = bool(
+            self.get_parameter(
+                'model.spatial_shadow_use_base_steering'
+            ).value
         )
         spatial_shadow_max_speed_mps = float(
             self.get_parameter('model.spatial_shadow_max_speed_mps').value
@@ -200,9 +210,13 @@ class TinyLidarNetNode(Node):
                 residual_max_abs_delta_rad=residual_max_abs_delta_rad,
                 residual_architecture=residual_architecture,
                 spatial_shadow_ckpt_path=spatial_shadow_ckpt_path,
+                spatial_shadow_expected_sha256=spatial_shadow_expected_sha256,
                 spatial_shadow_hidden_dim=spatial_shadow_hidden_dim,
                 spatial_shadow_projection_dim=spatial_shadow_projection_dim,
                 spatial_shadow_use_speed=spatial_shadow_use_speed,
+                spatial_shadow_use_base_steering=(
+                    spatial_shadow_use_base_steering
+                ),
                 spatial_shadow_max_speed_mps=spatial_shadow_max_speed_mps,
                 spatial_shadow_max_abs_delta_rad=(
                     spatial_shadow_max_abs_delta_rad
@@ -228,6 +242,8 @@ class TinyLidarNetNode(Node):
                 f"hidden={spatial_shadow_hidden_dim},"
                 f"projection={spatial_shadow_projection_dim},"
                 f"use_speed={int(spatial_shadow_use_speed)},"
+                "use_base_steering="
+                f"{int(spatial_shadow_use_base_steering)},"
                 f"max_speed_mps={spatial_shadow_max_speed_mps:.6f},"
                 f"max_delta_rad={spatial_shadow_max_abs_delta_rad:.6f},"
                 "speed_timeout_sec="
@@ -280,8 +296,8 @@ class TinyLidarNetNode(Node):
         self.sub_shadow_speed = None
         if self.core.spatial_shadow_model is not None:
             self.sub_shadow_speed = self.create_subscription(
-                Odometry,
-                "/localization/kinematic_state",
+                VelocityReport,
+                "/vehicle/status/velocity_status",
                 self._shadow_speed_callback,
                 1,
             )
@@ -365,8 +381,9 @@ class TinyLidarNetNode(Node):
         self.inference_times.append(duration_ms)
         self._log_performance_metrics()
 
-    def _shadow_speed_callback(self, msg: Odometry):
-        speed = abs(float(msg.twist.twist.linear.x))
+    def _shadow_speed_callback(self, msg: VelocityReport):
+        """Retain fresh wheel odometry without consuming fused localization."""
+        speed = abs(float(msg.longitudinal_velocity))
         if not np.isfinite(speed):
             self.latest_shadow_speed_mps = None
             self.latest_shadow_speed_time = None

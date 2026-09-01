@@ -11,11 +11,14 @@
       residual_ckpt_path: ""
       residual_max_abs_delta_rad: 1.28
       residual_architecture: stateless
-      # Diagnostic only. Empty keeps the admitted production path unchanged.
+      # Conservative direct-node template. Participant launch owns the
+      # qualified packaged production defaults and overrides these values.
       spatial_shadow_ckpt_path: ""
+      spatial_shadow_expected_sha256: ""
       spatial_shadow_hidden_dim: 128
       spatial_shadow_projection_dim: 128
       spatial_shadow_use_speed: true
+      spatial_shadow_use_base_steering: false
       spatial_shadow_max_speed_mps: 12.0
       spatial_shadow_max_abs_delta_rad: 1.2
       spatial_authority_enabled: false

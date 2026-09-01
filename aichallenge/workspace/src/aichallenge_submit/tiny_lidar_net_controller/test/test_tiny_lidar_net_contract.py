@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Contract tests for the E2E TinyLidarNet deployment artifact."""
 
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,10 @@ from tiny_lidar_net_controller.model.tinylidarnet import (
 
 PACKAGE_ROOT = Path(__file__).parents[1]
 CHECKPOINT = PACKAGE_ROOT / "ckpt" / "tinylidarnet_weights.npy"
+SPATIAL_CHECKPOINT = PACKAGE_ROOT / "ckpt" / "spatial_steering_adapter.npy"
+SPATIAL_CHECKPOINT_SHA256 = (
+    "f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c"
+)
 
 
 def _load_core(checkpoint: Path = CHECKPOINT) -> TinyLidarNetCore:
@@ -34,14 +39,18 @@ def _write_spatial_shadow_checkpoint(
     tmp_path: Path,
     *,
     mismatch_base: bool = False,
+    use_base_steering: bool = False,
+    max_abs_delta_rad: float = 1.2,
+    correction_rad: float = 0.2,
 ) -> Path:
     model = SpatialSteeringAdapterNp(
         input_dim=750,
         hidden_dim=128,
         projection_dim=128,
         use_speed=True,
+        use_base_steering=use_base_steering,
         max_speed_mps=12.0,
-        max_abs_delta_rad=1.2,
+        max_abs_delta_rad=max_abs_delta_rad,
     )
     weights = {key: value.copy() for key, value in model.params.items()}
     base = np.load(CHECKPOINT, allow_pickle=True).item()
@@ -51,7 +60,7 @@ def _write_spatial_shadow_checkpoint(
         weights["base_fc4_bias"][0] += 0.01
     weights["spatial_scale"].fill(1.0)
     weights["direction_head_bias"][:] = (-20.0, -20.0, 20.0)
-    magnitude_fraction = 0.2 / 1.2
+    magnitude_fraction = correction_rad / max_abs_delta_rad
     weights["magnitude_head_bias"].fill(
         np.log(magnitude_fraction / (1.0 - magnitude_fraction))
     )
@@ -60,11 +69,74 @@ def _write_spatial_shadow_checkpoint(
     return checkpoint
 
 
+def test_base_conditioned_spatial_shadow_loads_with_trained_residual_scale(
+    tmp_path: Path,
+) -> None:
+    shadow_checkpoint = _write_spatial_shadow_checkpoint(
+        tmp_path,
+        use_base_steering=True,
+        max_abs_delta_rad=0.12,
+        correction_rad=0.06,
+    )
+    base = _load_core()
+    shadow = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(shadow_checkpoint),
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=0.12,
+    )
+    scan = np.linspace(1.0, 30.0, 750, dtype=np.float32)
+
+    assert shadow.process(scan, speed_mps=4.0) == pytest.approx(
+        base.process(scan), abs=0.0
+    )
+    assert shadow.last_spatial_shadow_admitted
+    assert shadow.last_spatial_shadow_status == "ok"
+    assert shadow.last_spatial_shadow_correction_rad == pytest.approx(
+        0.06, abs=1e-6
+    )
+
+
 def test_shipped_checkpoint_matches_runtime_model() -> None:
     core = _load_core()
     assert core.loaded_parameter_count == len(core.model.params) == 18
     acceleration, steering = core.process(np.full(750, 30.0, dtype=np.float32))
     assert acceleration == pytest.approx(0.6)
+    assert np.isfinite(steering)
+
+
+def test_shipped_spatial_checkpoint_matches_promoted_contract() -> None:
+    assert hashlib.sha256(SPATIAL_CHECKPOINT.read_bytes()).hexdigest() == (
+        SPATIAL_CHECKPOINT_SHA256
+    )
+    core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+        spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=1.2,
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=1.2,
+    )
+    acceleration, steering = core.process(
+        np.full(750, 30.0, dtype=np.float32), speed_mps=3.0
+    )
+    assert core.spatial_shadow_loaded_parameter_count == 29
+    assert core.last_spatial_shadow_status == "ok"
+    assert core.last_spatial_authority_applied
+    assert np.isfinite(acceleration)
     assert np.isfinite(steering)
 
 
@@ -375,6 +447,48 @@ def test_spatial_shadow_embedded_base_mismatch_is_rejected(
             architecture="normal",
             ckpt_path=str(CHECKPOINT),
             spatial_shadow_ckpt_path=str(shadow_checkpoint),
+        )
+
+
+def test_spatial_shadow_expected_sha256_accepts_exact_artifact(
+    tmp_path: Path,
+) -> None:
+    shadow_checkpoint = _write_spatial_shadow_checkpoint(tmp_path)
+    expected = hashlib.sha256(shadow_checkpoint.read_bytes()).hexdigest()
+    core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        spatial_shadow_ckpt_path=str(shadow_checkpoint),
+        spatial_shadow_expected_sha256=expected,
+    )
+    assert core.spatial_shadow_loaded_parameter_count == 29
+
+
+def test_spatial_shadow_expected_sha256_rejects_wrong_artifact(
+    tmp_path: Path,
+) -> None:
+    shadow_checkpoint = _write_spatial_shadow_checkpoint(tmp_path)
+    with pytest.raises(ValueError, match="SHA256 mismatch"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            spatial_shadow_ckpt_path=str(shadow_checkpoint),
+            spatial_shadow_expected_sha256="0" * 64,
+        )
+
+
+def test_spatial_shadow_expected_sha256_requires_checkpoint() -> None:
+    with pytest.raises(ValueError, match="requires a spatial shadow checkpoint"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            spatial_shadow_expected_sha256="0" * 64,
         )
 
 

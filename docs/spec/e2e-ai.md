@@ -480,6 +480,13 @@ zero-residual normal anchorとして追加したv12は、独立normal MAEを0.00
 大補正を同時に分離する能力にある。次候補はneutral/no-interventionを明示的に学習する出力
 構造、または時系列表現を独立Sliceで評価し、凍結failure replayを必須Gateに含める。
 
+明示neutralを持つ`categorical_expert`を同じdata/representationで1本評価したが、
+winner-take-all decodeはaggregate material改善34.33%、方向89.73%を維持する一方、anchor
+MAE 0.010205 rad、独立normal MAE 0.015161 radで不合格だった。neutral選択時は厳密に0となるが、
+約5.78%のfalse left/right選択で完全なside magnitudeを出すため、soft mixtureより誤分類の
+影響が大きい。runtimeへwinner-take-allを追加せず、次の独立変数は安定したmode選択に必要な
+時系列情報とする。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

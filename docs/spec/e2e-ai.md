@@ -539,6 +539,18 @@ spatiotemporal geometry encoderによるcausal observabilityである。これ�
 3 seed分類で先に診断し、不合格ならLiDAR/speed観測に対するteacher/zero-normal label契約自体を
 再設計する。
 
+物理LiDARを局所1D CNNで符号化し、車輪速度とfrozen base steeringを加えたtokenを
+unidirectional GRUへ入力するcausal probeを3 seed評価した。aggregate balanced/material方向は
+0.92462/0.94894まで改善したが、成功normalへのfalse-materialはstatic baselineの0.08959から
+0.11574へ全seedで悪化し、凍結focus末尾の方向精度も1 seedで0.50へ落ちた。よってruntime
+checkpointやcontinuous residual候補へ昇格しない。
+
+projected/full frozen conv5、raw/geometry MLP、trainable local CNN、短期lag、causal local
+CNN+GRUまで反証したため、同じlabelのままモデル容量を増やす探索はここで終了する。次は成功runの
+zero-interventionとheuristic teacherの補正要求を単純に混合せず、run outcomeと「介入が必要だった
+か」を明示する教師・正常ラベル契約を独立Sliceで設計する。failure tailを最近傍除外すること、
+runtime thresholdを追加すること、normal比率だけを再調整することは禁止する。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

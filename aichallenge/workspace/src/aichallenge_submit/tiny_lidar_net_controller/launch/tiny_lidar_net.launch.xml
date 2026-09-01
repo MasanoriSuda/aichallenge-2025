@@ -8,6 +8,7 @@
   <arg name="residual_ckpt_path" default=""/>
   <arg name="residual_architecture" default="stateless"/>
   <arg name="spatial_shadow_ckpt_path" default=""/>
+  <arg name="spatial_authority_enabled" default="false"/>
   <arg name="control_mode" default="fixed_lidar_brake"/>
 
   <!-- tiny_lidar_net_node -->
@@ -21,6 +22,7 @@
     <param name="model.residual_ckpt_path" value="$(var residual_ckpt_path)"/>
     <param name="model.residual_architecture" value="$(var residual_architecture)"/>
     <param name="model.spatial_shadow_ckpt_path" value="$(var spatial_shadow_ckpt_path)"/>
+    <param name="model.spatial_authority_enabled" value="$(var spatial_authority_enabled)"/>
     <param name="control_mode" value="$(var control_mode)"/>
     <param name="use_sim_time" value="$(var use_sim_time)"/>
     <remap from="/scan" to="$(var scan_topic)"/>

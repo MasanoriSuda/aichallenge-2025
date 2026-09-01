@@ -56,6 +56,8 @@ class TinyLidarNetCore:
         spatial_shadow_use_speed: bool = True,
         spatial_shadow_max_speed_mps: float = 12.0,
         spatial_shadow_max_abs_delta_rad: float = 1.2,
+        spatial_authority_enabled: bool = False,
+        spatial_authority_max_abs_delta_rad: float = 0.12,
     ):
         """Initializes the TinyLidarNetCore with specified parameters.
 
@@ -106,6 +108,13 @@ class TinyLidarNetCore:
         )
         self.last_spatial_shadow_admitted = False
         self.last_spatial_shadow_status = "disabled"
+        self.spatial_authority_enabled = bool(spatial_authority_enabled)
+        self.spatial_authority_max_abs_delta_rad = float(
+            spatial_authority_max_abs_delta_rad
+        )
+        self.last_spatial_authority_correction_rad = 0.0
+        self.last_spatial_authority_applied = False
+        self.last_spatial_authority_clipped = False
 
         if not isinstance(self.input_dim, int) or self.input_dim <= 0:
             raise ValueError("input_dim must be a positive integer")
@@ -155,6 +164,24 @@ class TinyLidarNetCore:
             or spatial_shadow_max_abs_delta_rad <= 0.0
         ):
             raise ValueError("spatial shadow bounds must be finite and positive")
+        if (
+            not np.isfinite(self.spatial_authority_max_abs_delta_rad)
+            or self.spatial_authority_max_abs_delta_rad <= 0.0
+            or self.spatial_authority_max_abs_delta_rad
+            > spatial_shadow_max_abs_delta_rad
+        ):
+            raise ValueError(
+                "spatial authority bound must be finite, positive and no "
+                "larger than the model correction bound"
+            )
+        if self.spatial_authority_enabled and not spatial_shadow_ckpt_path:
+            raise ValueError(
+                "spatial authority requires an explicit spatial shadow checkpoint"
+            )
+        if self.spatial_authority_enabled and residual_ckpt_path:
+            raise ValueError(
+                "legacy residual and spatial authority cannot own steering together"
+            )
 
         if self.architecture == 'small':
             self.model = TinyLidarNetSmallNp(input_dim=self.input_dim, output_dim=self.output_dim)
@@ -264,6 +291,9 @@ class TinyLidarNetCore:
         self.last_spatial_shadow_admitted = False
         self.last_spatial_shadow_correction_rad = 0.0
         self.last_spatial_shadow_direction_probabilities.fill(0.0)
+        self.last_spatial_authority_correction_rad = 0.0
+        self.last_spatial_authority_applied = False
+        self.last_spatial_authority_clipped = False
         if self.spatial_shadow_model is not None:
             if speed_mps is None:
                 self.last_spatial_shadow_status = "missing-or-stale-speed"
@@ -288,6 +318,21 @@ class TinyLidarNetCore:
                     )
                     self.last_spatial_shadow_admitted = True
                     self.last_spatial_shadow_status = "ok"
+                    if self.spatial_authority_enabled:
+                        applied = float(np.clip(
+                            self.last_spatial_shadow_correction_rad,
+                            -self.spatial_authority_max_abs_delta_rad,
+                            self.spatial_authority_max_abs_delta_rad,
+                        ))
+                        self.last_spatial_authority_correction_rad = applied
+                        self.last_spatial_authority_applied = True
+                        self.last_spatial_authority_clipped = not np.isclose(
+                            applied,
+                            self.last_spatial_shadow_correction_rad,
+                            rtol=0.0,
+                            atol=1e-7,
+                        )
+                        steer = float(np.clip(steer + applied, -1.0, 1.0))
                 except Exception as exc:
                     # Shadow execution is diagnostic and must never override a
                     # valid production command.

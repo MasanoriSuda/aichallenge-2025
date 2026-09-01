@@ -38,6 +38,8 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('model.spatial_shadow_use_speed', True)
         self.declare_parameter('model.spatial_shadow_max_speed_mps', 12.0)
         self.declare_parameter('model.spatial_shadow_max_abs_delta_rad', 1.2)
+        self.declare_parameter('model.spatial_authority_enabled', False)
+        self.declare_parameter('model.spatial_authority_max_abs_delta_rad', 0.12)
         self.declare_parameter('max_range', 30.0)
         self.declare_parameter('acceleration', 0.1)
         self.declare_parameter('control_mode', 'ai')
@@ -91,6 +93,14 @@ class TinyLidarNetNode(Node):
         )
         spatial_shadow_max_abs_delta_rad = float(
             self.get_parameter('model.spatial_shadow_max_abs_delta_rad').value
+        )
+        spatial_authority_enabled = bool(
+            self.get_parameter('model.spatial_authority_enabled').value
+        )
+        spatial_authority_max_abs_delta_rad = float(
+            self.get_parameter(
+                'model.spatial_authority_max_abs_delta_rad'
+            ).value
         )
         max_range = self.get_parameter('max_range').value
         acceleration = self.get_parameter('acceleration').value
@@ -160,6 +170,9 @@ class TinyLidarNetNode(Node):
             'startup_grace_sec': self.startup_grace_sec,
             'max_steering_angle_rad': self.max_steering_angle_rad,
             'model.residual_max_abs_delta_rad': residual_max_abs_delta_rad,
+            'model.spatial_authority_max_abs_delta_rad': (
+                spatial_authority_max_abs_delta_rad
+            ),
             'spatial_shadow_speed_timeout_sec': (
                 self.spatial_shadow_speed_timeout_sec
             ),
@@ -194,6 +207,10 @@ class TinyLidarNetNode(Node):
                 spatial_shadow_max_abs_delta_rad=(
                     spatial_shadow_max_abs_delta_rad
                 ),
+                spatial_authority_enabled=spatial_authority_enabled,
+                spatial_authority_max_abs_delta_rad=(
+                    spatial_authority_max_abs_delta_rad
+                ),
             )
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
@@ -214,7 +231,10 @@ class TinyLidarNetNode(Node):
                 f"max_speed_mps={spatial_shadow_max_speed_mps:.6f},"
                 f"max_delta_rad={spatial_shadow_max_abs_delta_rad:.6f},"
                 "speed_timeout_sec="
-                f"{self.spatial_shadow_speed_timeout_sec:.6f}"
+                f"{self.spatial_shadow_speed_timeout_sec:.6f},"
+                f"authority_enabled={int(spatial_authority_enabled)},"
+                "authority_max_delta_rad="
+                f"{spatial_authority_max_abs_delta_rad:.6f}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")
@@ -242,6 +262,11 @@ class TinyLidarNetNode(Node):
         self.shadow_error_count = 0
         self.last_log_shadow_error_count = 0
         self.shadow_corrections = []
+        self.spatial_authority_applied_count = 0
+        self.last_log_spatial_authority_applied_count = 0
+        self.spatial_authority_clipped_count = 0
+        self.last_log_spatial_authority_clipped_count = 0
+        self.spatial_authority_corrections = []
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -304,6 +329,13 @@ class TinyLidarNetNode(Node):
                     self.shadow_error_count += 1
                 else:
                     self.shadow_skipped_count += 1
+                if self.core.last_spatial_authority_applied:
+                    self.spatial_authority_applied_count += 1
+                    self.spatial_authority_corrections.append(
+                        self.core.last_spatial_authority_correction_rad
+                    )
+                if self.core.last_spatial_authority_clipped:
+                    self.spatial_authority_clipped_count += 1
             gap_decision = self.core.last_gap_teacher_decision
             if gap_decision is not None and gap_decision.active:
                 self.gap_teacher_active_count += 1
@@ -432,6 +464,14 @@ class TinyLidarNetNode(Node):
                 interval_shadow_errors = (
                     self.shadow_error_count - self.last_log_shadow_error_count
                 )
+                interval_authority_applied = (
+                    self.spatial_authority_applied_count
+                    - self.last_log_spatial_authority_applied_count
+                )
+                interval_authority_clipped = (
+                    self.spatial_authority_clipped_count
+                    - self.last_log_spatial_authority_clipped_count
+                )
                 scan_hz = interval_scans / elapsed_sec if elapsed_sec > 0.0 else 0.0
 
                 teacher_status = ""
@@ -483,6 +523,19 @@ class TinyLidarNetNode(Node):
                     probabilities = (
                         self.core.last_spatial_shadow_direction_probabilities
                     )
+                    authority_corrections = np.asarray(
+                        self.spatial_authority_corrections, dtype=np.float64
+                    )
+                    authority_mean_abs = (
+                        float(np.mean(np.abs(authority_corrections)))
+                        if authority_corrections.size
+                        else 0.0
+                    )
+                    authority_max_abs = (
+                        float(np.max(np.abs(authority_corrections)))
+                        if authority_corrections.size
+                        else 0.0
+                    )
                     shadow_status = (
                         " spatial_shadow="
                         f"{interval_shadow_admitted}/{interval_scans} "
@@ -496,7 +549,17 @@ class TinyLidarNetNode(Node):
                         f"{probabilities[0]:.3f},"
                         f"{probabilities[1]:.3f},"
                         f"{probabilities[2]:.3f} "
-                        f"shadow_status={self.core.last_spatial_shadow_status}"
+                        f"shadow_status={self.core.last_spatial_shadow_status} "
+                        "spatial_authority_enabled="
+                        f"{int(self.core.spatial_authority_enabled)} "
+                        "spatial_authority_applied="
+                        f"{interval_authority_applied}/{interval_scans} "
+                        "spatial_authority_clipped="
+                        f"{interval_authority_clipped} "
+                        "spatial_authority_mean_abs_rad="
+                        f"{authority_mean_abs:.5f} "
+                        "spatial_authority_max_abs_rad="
+                        f"{authority_max_abs:.5f}"
                     )
 
                 self.get_logger().info(
@@ -522,6 +585,13 @@ class TinyLidarNetNode(Node):
                 self.last_log_shadow_skipped_count = self.shadow_skipped_count
                 self.last_log_shadow_error_count = self.shadow_error_count
                 self.shadow_corrections.clear()
+                self.last_log_spatial_authority_applied_count = (
+                    self.spatial_authority_applied_count
+                )
+                self.last_log_spatial_authority_clipped_count = (
+                    self.spatial_authority_clipped_count
+                )
+                self.spatial_authority_corrections.clear()
 
             self.last_log_time = now
 

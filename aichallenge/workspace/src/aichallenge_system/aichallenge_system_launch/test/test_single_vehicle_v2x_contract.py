@@ -144,6 +144,40 @@ def test_runtime_propagates_only_an_explicit_spatial_shadow_checkpoint() -> None
     )
 
 
+def test_runtime_requires_explicit_spatial_authority_and_one_owner() -> None:
+    runner = read("run_autoware.bash")
+    system_launch = read(
+        "workspace/src/aichallenge_system/"
+        "aichallenge_system_launch/launch/aichallenge_system.launch.xml"
+    )
+    assert (
+        'tiny_lidar_spatial_authority_enabled='
+        '"${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED:-false}"' in runner
+    )
+    assert 'true|false) ;;' in runner
+    assert (
+        'spatial authority requires TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH'
+        in runner
+    )
+    assert (
+        'spatial authority cannot be combined with '
+        'TINY_LIDAR_RESIDUAL_CKPT_PATH' in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_spatial_authority_enabled:'
+        '=${tiny_lidar_spatial_authority_enabled}")' in runner
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_authority_enabled" default="false"/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_spatial_authority_enabled" '
+        'value="$(var tiny_lidar_spatial_authority_enabled)"/>'
+        in system_launch
+    )
+
+
 def test_single_vehicle_empty_world_producer_is_simulation_only() -> None:
     system_launch = read(
         "workspace/src/aichallenge_system/"

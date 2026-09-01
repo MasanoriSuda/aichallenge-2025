@@ -403,3 +403,70 @@ def test_spatial_shadow_inference_failure_isolated_from_production(
     assert shadow.last_spatial_shadow_status.startswith(
         "inference-error:ValueError:"
     )
+
+
+def test_spatial_authority_is_explicit_bounded_and_uses_fresh_inference(
+    tmp_path: Path,
+) -> None:
+    shadow_checkpoint = _write_spatial_shadow_checkpoint(tmp_path)
+    base = _load_core()
+    authority = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(shadow_checkpoint),
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=0.12,
+    )
+    scan = np.linspace(1.0, 30.0, 750, dtype=np.float32)
+    base_command = base.process(scan)
+
+    authority_command = authority.process(scan, speed_mps=4.0)
+    assert authority_command[0] == pytest.approx(base_command[0], abs=0.0)
+    assert authority_command[1] == pytest.approx(
+        base_command[1] + 0.12, abs=1e-6
+    )
+    assert authority.last_spatial_authority_applied
+    assert authority.last_spatial_authority_clipped
+    assert authority.last_spatial_authority_correction_rad == pytest.approx(
+        0.12, abs=1e-7
+    )
+
+    missing_speed_command = authority.process(scan)
+    assert missing_speed_command == pytest.approx(base_command, abs=0.0)
+    assert not authority.last_spatial_authority_applied
+    assert not authority.last_spatial_authority_clipped
+
+
+def test_spatial_authority_requires_checkpoint() -> None:
+    with pytest.raises(ValueError, match="requires an explicit"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            spatial_authority_enabled=True,
+        )
+
+
+def test_spatial_authority_rejects_second_learned_steering_owner(
+    tmp_path: Path,
+) -> None:
+    shadow_checkpoint = _write_spatial_shadow_checkpoint(tmp_path)
+    residual_model = SteeringResidualNetNp(input_dim=750)
+    residual_checkpoint = tmp_path / "residual.npy"
+    np.save(residual_checkpoint, residual_model.params)
+    with pytest.raises(ValueError, match="cannot own steering together"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            residual_ckpt_path=str(residual_checkpoint),
+            spatial_shadow_ckpt_path=str(shadow_checkpoint),
+            spatial_authority_enabled=True,
+        )

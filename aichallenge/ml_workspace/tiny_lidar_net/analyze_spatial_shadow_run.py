@@ -55,11 +55,33 @@ def parse_status_lines(log_text: str) -> list[dict]:
             "last_correction_rad": float(tokens["shadow_last_rad"]),
             "direction_probabilities_lnr": probabilities,
             "status": tokens["shadow_status"],
+            "authority_enabled": bool(
+                int(tokens.get("spatial_authority_enabled", "0"))
+            ),
+            "authority_applied": 0,
+            "authority_scans": int(scans_text),
+            "authority_clipped": int(
+                tokens.get("spatial_authority_clipped", "0")
+            ),
+            "authority_mean_abs_correction_rad": float(
+                tokens.get("spatial_authority_mean_abs_rad", "0")
+            ),
+            "authority_max_abs_correction_rad": float(
+                tokens.get("spatial_authority_max_abs_rad", "0")
+            ),
         }
+        authority_applied = tokens.get("spatial_authority_applied", "0/0")
+        applied_text, authority_scans_text = authority_applied.split("/", 1)
+        interval["authority_applied"] = int(applied_text)
+        interval["authority_scans"] = int(authority_scans_text)
         numeric_values = [
             value
             for key, value in interval.items()
-            if key not in {"status", "direction_probabilities_lnr"}
+            if key not in {
+                "status",
+                "direction_probabilities_lnr",
+                "authority_enabled",
+            }
         ] + probabilities
         if not np.all(np.isfinite(np.asarray(numeric_values, dtype=np.float64))):
             raise ValueError("shadow status contains non-finite metrics")
@@ -73,7 +95,9 @@ def parse_runtime_config(log_text: str) -> dict | None:
         r"SpatialShadowConfig:\s*"
         r"hidden=(\d+),projection=(\d+),use_speed=([01]),"
         r"max_speed_mps=([0-9.]+),max_delta_rad=([0-9.]+),"
-        r"speed_timeout_sec=([0-9.]+)",
+        r"speed_timeout_sec=([0-9.]+)"
+        r"(?:,authority_enabled=([01]),"
+        r"authority_max_delta_rad=([0-9.]+))?",
         clean,
     )
     if not matches:
@@ -81,7 +105,16 @@ def parse_runtime_config(log_text: str) -> dict | None:
     unique = set(matches)
     if len(unique) != 1:
         raise ValueError("ambiguous spatial shadow runtime configuration")
-    hidden, projection, use_speed, max_speed, max_delta, timeout = matches[0]
+    (
+        hidden,
+        projection,
+        use_speed,
+        max_speed,
+        max_delta,
+        timeout,
+        authority_enabled,
+        authority_max_delta,
+    ) = matches[0]
     return {
         "hidden_dim": int(hidden),
         "projection_dim": int(projection),
@@ -89,6 +122,10 @@ def parse_runtime_config(log_text: str) -> dict | None:
         "max_speed_mps": float(max_speed),
         "max_abs_delta_rad": float(max_delta),
         "speed_timeout_sec": float(timeout),
+        "authority_enabled": bool(int(authority_enabled or "0")),
+        "authority_max_abs_delta_rad": (
+            None if not authority_max_delta else float(authority_max_delta)
+        ),
     }
 
 
@@ -128,6 +165,23 @@ def summarize_intervals(intervals: list[dict]) -> dict:
             item["p95_abs_correction_rad"] > 1e-6 for item in intervals
         ),
         "non_ok_interval_count": sum(item["status"] != "ok" for item in intervals),
+        "authority_enabled_interval_count": sum(
+            item["authority_enabled"] for item in intervals
+        ),
+        "authority_applied_count": sum(
+            item["authority_applied"] for item in intervals
+        ),
+        "authority_clipped_count": sum(
+            item["authority_clipped"] for item in intervals
+        ),
+        "authority_weighted_mean_abs_correction_rad": sum(
+            item["authority_mean_abs_correction_rad"]
+            * item["authority_applied"]
+            for item in intervals
+        ) / max(sum(item["authority_applied"] for item in intervals), 1),
+        "authority_max_abs_correction_rad": max(
+            item["authority_max_abs_correction_rad"] for item in intervals
+        ),
     }
 
 
@@ -141,6 +195,7 @@ def build_report(args: argparse.Namespace) -> dict:
     intervals = parse_status_lines(log_text)
     summary = summarize_intervals(intervals)
     runtime_config = parse_runtime_config(log_text)
+    expected_authority_enabled = args.expected_authority_enabled == "true"
     path_matches = set(SHADOW_PATH_RE.findall(ANSI_RE.sub("", log_text)))
     race = json.loads(result_path.read_text(encoding="utf-8"))
     competition = json.loads(competition_path.read_text(encoding="utf-8"))
@@ -152,6 +207,8 @@ def build_report(args: argparse.Namespace) -> dict:
         reasons.append("runtime shadow checkpoint path missing or ambiguous")
     if runtime_config is None:
         reasons.append("runtime shadow configuration missing")
+    elif runtime_config["authority_enabled"] != expected_authority_enabled:
+        reasons.append("spatial authority mode mismatch")
     if summary["coverage_fraction"] < args.min_coverage_fraction:
         reasons.append("shadow coverage below threshold")
     if summary["error_count"] != 0 or summary["non_ok_interval_count"] != 0:
@@ -162,6 +219,24 @@ def build_report(args: argparse.Namespace) -> dict:
         reasons.append("scan frequency below threshold")
     if summary["nonzero_interval_count"] == 0:
         reasons.append("shadow produced no material diagnostic output")
+    if expected_authority_enabled:
+        authority_bound = (
+            None
+            if runtime_config is None
+            else runtime_config["authority_max_abs_delta_rad"]
+        )
+        if summary["authority_enabled_interval_count"] != summary[
+            "interval_count"
+        ]:
+            reasons.append("authority was not enabled in every status interval")
+        if summary["authority_applied_count"] == 0:
+            reasons.append("spatial authority was never applied")
+        if authority_bound is None or summary[
+            "authority_max_abs_correction_rad"
+        ] > authority_bound + 1e-6:
+            reasons.append("applied spatial correction exceeded authority bound")
+    elif summary["authority_applied_count"] != 0:
+        reasons.append("shadow-only run unexpectedly applied spatial authority")
     if not race.get("finished") or race.get("lap_count", 0) < race.get(
         "required_laps", 0
     ):
@@ -203,6 +278,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint-file", type=Path, required=True)
     parser.add_argument("--expected-checkpoint-sha256", required=True)
     parser.add_argument("--expected-runtime-checkpoint-path", required=True)
+    parser.add_argument(
+        "--expected-authority-enabled",
+        choices=("true", "false"),
+        default="false",
+    )
     parser.add_argument("--min-coverage-fraction", type=float, default=0.99)
     parser.add_argument("--min-scan-hz", type=float, default=19.0)
     parser.add_argument("--output", type=Path, required=True)

@@ -84,6 +84,26 @@ if [[ -n "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
     opts+=("tiny_lidar_spatial_shadow_ckpt_path:=${tiny_lidar_spatial_shadow_ckpt_path}")
 fi
 
+tiny_lidar_spatial_authority_enabled="${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED:-false}"
+case "${tiny_lidar_spatial_authority_enabled}" in
+    true|false) ;;
+    *)
+        echo "TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED must be true or false"
+        exit 1
+        ;;
+esac
+if [[ "${tiny_lidar_spatial_authority_enabled}" == "true" ]]; then
+    if [[ -z "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
+        echo "spatial authority requires TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH"
+        exit 1
+    fi
+    if [[ -n "${tiny_lidar_residual_ckpt_path}" ]]; then
+        echo "spatial authority cannot be combined with TINY_LIDAR_RESIDUAL_CKPT_PATH"
+        exit 1
+    fi
+fi
+opts+=("tiny_lidar_spatial_authority_enabled:=${tiny_lidar_spatial_authority_enabled}")
+
 # The gap teacher is an explicit data-collection mode under the existing
 # tiny_lidar_net interface. It cannot be selected accidentally by another
 # controller or by an unknown spelling.

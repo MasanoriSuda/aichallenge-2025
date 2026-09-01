@@ -18,6 +18,8 @@
       spatial_shadow_use_speed: true
       spatial_shadow_max_speed_mps: 12.0
       spatial_shadow_max_abs_delta_rad: 1.2
+      spatial_authority_enabled: false
+      spatial_authority_max_abs_delta_rad: 0.12
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
     control_mode: "fixed_lidar_brake"  # ML steer + LiDAR longitudinal safety

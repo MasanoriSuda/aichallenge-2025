@@ -252,6 +252,13 @@ geometryの37.9%がp95外で、明確なcoverage不足だった。
 不足状態のseed-disjoint teacher coverageを組み合わせ、閉ループ試験前に失敗状態とnormal anchorの
 識別改善をofflineで証明する。
 
+競技失敗bagは最初のpenaltyより前、かつ0.5 m未満のconfirmed contactより1秒前で切り、
+`competition_failure_teacher_v1`として再ラベルした。NPC d1とpeer d1はtrain、peer d3は
+validationに固定する。既存10 sequenceとmulti-rootで結合した`recurrent_direct_v3`は、train
+9 sequence/29304 sample、validation 4 sequence/12313 sample、同期差最大47.305 msである。
+scan最小値は0.4993 mでcontact suffixを含まず、split identity重複もない。次のoffline比較で
+peer d3をtrainへ移すことは禁止する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

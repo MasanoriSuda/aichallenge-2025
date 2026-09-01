@@ -5,7 +5,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import Iterable, Sequence, Tuple
 
 import numpy as np
 from rosbags.highlevel import AnyReader
@@ -132,16 +132,50 @@ def read_odometry_speed(
     return timestamp_array, speed_array
 
 
-def iter_source_sequences(source_root: Path) -> Iterable[Tuple[str, Path]]:
-    for split in ("train", "val"):
-        split_root = source_root / split
-        if not split_root.is_dir():
-            raise FileNotFoundError(f"missing source split: {split_root}")
-        sequence_dirs = sorted(path for path in split_root.iterdir() if path.is_dir())
-        if not sequence_dirs:
-            raise ValueError(f"source split has no sequences: {split_root}")
-        for sequence_dir in sequence_dirs:
-            yield split, sequence_dir
+def iter_source_sequences(
+    source_roots: Sequence[Path],
+) -> Iterable[Tuple[Path, str, Path]]:
+    """Discover immutable sources and reject run identity reuse up front."""
+    if not source_roots:
+        raise ValueError("at least one source dataset root is required")
+    seen_roots = set()
+    seen_sequences = {}
+    discovered = []
+    for source_root in source_roots:
+        resolved_root = source_root.expanduser().resolve()
+        if resolved_root in seen_roots:
+            raise ValueError(f"duplicate source dataset root: {resolved_root}")
+        seen_roots.add(resolved_root)
+        for split in ("train", "val"):
+            split_root = resolved_root / split
+            if not split_root.is_dir():
+                raise FileNotFoundError(f"missing source split: {split_root}")
+            sequence_dirs = sorted(
+                path for path in split_root.iterdir() if path.is_dir()
+            )
+            if not sequence_dirs:
+                raise ValueError(f"source split has no sequences: {split_root}")
+            for sequence_dir in sequence_dirs:
+                try:
+                    metadata = json.loads(
+                        (sequence_dir / "metadata.json").read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ValueError(
+                        f"failed to read source metadata {sequence_dir}: {exc}"
+                    ) from exc
+                sequence_id = metadata.get("sequence_id")
+                if not isinstance(sequence_id, str) or not sequence_id:
+                    raise ValueError(f"missing source sequence identity: {sequence_dir}")
+                previous = seen_sequences.get(sequence_id)
+                if previous is not None:
+                    raise ValueError(
+                        f"duplicate source sequence identity {sequence_id}: "
+                        f"{previous} and {sequence_dir}"
+                    )
+                seen_sequences[sequence_id] = sequence_dir
+                discovered.append((resolved_root, split, sequence_dir))
+    return discovered
 
 
 def build_sequence(
@@ -274,6 +308,16 @@ def build_sequence(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, required=True)
+    parser.add_argument(
+        "--additional-source-root",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Additional immutable source dataset; may be repeated. Sequence "
+            "identities must remain unique across every root."
+        ),
+    )
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--speed-topic", default=DEFAULT_SPEED_TOPIC)
     parser.add_argument("--speed-message-type", default=DEFAULT_SPEED_MESSAGE_TYPE)
@@ -284,7 +328,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    source_root = args.source_root.expanduser().resolve()
+    source_roots = [
+        args.source_root.expanduser().resolve(),
+        *(path.expanduser().resolve() for path in args.additional_source_root),
+    ]
     output_root = args.output_root.expanduser().resolve()
     if output_root.exists():
         raise FileExistsError(
@@ -298,7 +345,7 @@ def main() -> int:
         raise ValueError("invalid recurrent synchronization configuration")
 
     results = []
-    for split, source_dir in iter_source_sequences(source_root):
+    for source_root, split, source_dir in iter_source_sequences(source_roots):
         metadata = build_sequence(
             source_dir=source_dir,
             output_root=output_root,
@@ -317,7 +364,10 @@ def main() -> int:
 
     manifest = {
         "schema_version": RECURRENT_DATASET_SCHEMA_VERSION,
-        "source_dataset_root": str(source_root),
+        "source_dataset_root": str(source_roots[0]),
+        "additional_source_dataset_roots": [
+            str(path) for path in source_roots[1:]
+        ],
         "speed_topic": args.speed_topic,
         "speed_message_type": args.speed_message_type,
         "max_speed_sync_delta_sec": args.max_speed_sync_delta_sec,

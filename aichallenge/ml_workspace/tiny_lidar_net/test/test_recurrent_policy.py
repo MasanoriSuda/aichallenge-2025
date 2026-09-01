@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from build_recurrent_dataset import (
+    iter_source_sequences,
     load_physical_source_scans,
     longest_true_run,
     recurrent_sequence_id,
@@ -62,6 +63,43 @@ def test_recurrent_identity_binds_speed_contract() -> None:
     assert first == recurrent_sequence_id("run-a", "/speed", 0.05)
     assert first != recurrent_sequence_id("run-a", "/speed", 0.04)
     assert first != recurrent_sequence_id("run-a", "/other-speed", 0.05)
+
+
+def write_source_identity(root: Path, split: str, sequence_id: str) -> Path:
+    sequence = root / split / sequence_id
+    sequence.mkdir(parents=True)
+    (sequence / "metadata.json").write_text(
+        json.dumps({"sequence_id": sequence_id}), encoding="utf-8"
+    )
+    return sequence
+
+
+def test_multiple_source_roots_preserve_unique_sequence_identity(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    for root, prefix in ((first, "a"), (second, "b")):
+        write_source_identity(root, "train", f"{prefix}-train")
+        write_source_identity(root, "val", f"{prefix}-val")
+
+    discovered = list(iter_source_sequences([first, second]))
+
+    assert [item[2].name for item in discovered] == [
+        "a-train",
+        "a-val",
+        "b-train",
+        "b-val",
+    ]
+
+
+def test_multiple_source_roots_reject_duplicate_sequence_identity(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    for root in (first, second):
+        write_source_identity(root, "train", "shared")
+        write_source_identity(root, "val", f"unique-{root.name}")
+
+    with pytest.raises(ValueError, match="duplicate source sequence identity shared"):
+        list(iter_source_sequences([first, second]))
 
 
 def test_physical_scan_loader_rejects_normalization_mismatch(tmp_path: Path) -> None:

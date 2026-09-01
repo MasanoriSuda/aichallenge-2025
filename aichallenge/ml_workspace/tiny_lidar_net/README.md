@@ -149,6 +149,17 @@ python3 analyze_e2e_state_coverage.py \
   --output /output/e2e-state-coverage-audit.json
 ```
 
+異なるadmitted sourceを時間datasetへまとめる場合、配列をコピーして出所を失わないよう
+`--additional-source-root`を繰り返します。builderは全source identityを出力前に検査し、
+重複runを拒否します。
+
+```bash
+python3 build_recurrent_dataset.py \
+  --source-root dataset/precontact_residual_base_v4 \
+  --additional-source-root dataset/competition_failure_teacher_v1 \
+  --output-root dataset/recurrent_direct_v3
+```
+
 ### Runtime NPC corrective teacher
 
 runtime NPCはV2Xへ現れないため、MPC教師を捏造しません。次のtargetは同じNPC worldで、

@@ -134,6 +134,21 @@ python3 analyze_e2e_competition.py /output/<run> \
   --fail-on-rejection
 ```
 
+競技runが失敗した後は、checkpointを再学習する前に失敗直前状態のcoverageを監査できます。
+`--failure`は`run:dN`形式で複数指定し、最初のpenalty前10秒をproduction学習分布と
+admitted precontact-teacher分布へ照合します。出力は診断専用で、checkpoint昇格を許可しません。
+
+```bash
+python3 analyze_e2e_state_coverage.py \
+  --checkpoint checkpoints/20260901_055824/candidate.npy \
+  --production-dataset dataset/dagger_aggregate_v2 \
+  --teacher-dataset dataset/precontact_residual_base_v4 \
+  --failure /output/<npc-run>:d1 \
+  --failure /output/<peer-run>:d1 \
+  --failure /output/<peer-run>:d3 \
+  --output /output/e2e-state-coverage-audit.json
+```
+
 ### Runtime NPC corrective teacher
 
 runtime NPCはV2Xへ現れないため、MPC教師を捏造しません。次のtargetは同じNPC worldで、

@@ -240,6 +240,18 @@ threshold変更や既存candidateの即時再学習ではなく、失敗直前�
 単一scanに逆向きactionが必要なobservation aliasingなのかをtrain/validationおよび
 seed-disjoint teacher runと比較して判定する。判定が終わるまでproduction checkpointを固定する。
 
+`analyze_e2e_state_coverage.py`による上記3失敗の監査では、原因は一種類ではなかった。NPC d1は
+物理geometryではproduction/teacherのcross-run p95内だが、frozen policy embeddingでは
+全sampleがp95外で、successor teacherが全sampleにmaterial correctionを要求した。peer d1は
+物理geometryが既知である一方、近い別runのteacher actionが51.1%で正負に分かれ、単一scanの
+observation aliasingが支持された。peer d3はproduction物理geometryの100%、teacher
+geometryの37.9%がp95外で、明確なcoverage不足だった。
+
+この結果から、同じdatasetへのepoch追加、clearance/brake閾値変更、過去のrecurrent候補昇格は
+行わない。次のcandidateは、per-beam geometryを保持した表現、許可されたtemporal/state入力、
+不足状態のseed-disjoint teacher coverageを組み合わせ、閉ループ試験前に失敗状態とnormal anchorの
+識別改善をofflineで証明する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

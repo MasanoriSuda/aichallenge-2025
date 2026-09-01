@@ -171,6 +171,25 @@ python3 probe_e2e_action_separability.py \
   --output /output/e2e-action-separability-probe.json
 ```
 
+probeが空間表現を支持した場合も、次の候補はoffline限定で学習・評価します。candidate
+artifactにfrozen baseを含め、評価時にbase tensorの同一性、teacher validation、peer subset、
+独立normal leakageを同時に検査します。
+
+```bash
+python3 train_spatial_adapter.py \
+  --dataset dataset/recurrent_direct_v3 \
+  --base-checkpoint checkpoints/20260901_055824/candidate.npy \
+  --output-root checkpoints/spatial-adapter-v1
+
+python3 evaluate_spatial_adapter.py \
+  --dataset dataset/recurrent_direct_v3 \
+  --candidate checkpoints/spatial-adapter-v1/<run>/candidate.npy \
+  --base-checkpoint checkpoints/20260901_055824/candidate.npy \
+  --normal-dataset-dir dataset/dagger_aggregate_v2/val \
+  --output /output/e2e-static-spatial-adapter-gate.json \
+  --fail-on-gate
+```
+
 ### Runtime NPC corrective teacher
 
 runtime NPCはV2Xへ現れないため、MPC教師を捏造しません。次のtargetは同じNPC worldで、

@@ -18,6 +18,7 @@ The generated reports remain outside git at
 | representation | mean balanced accuracy | mean material-sign accuracy | interpretation |
 |---|---:|---:|---|
 | frozen `fc3` + speed | 0.5245 | 0.4656 | compact policy embedding collapses corrective geometry |
+| frozen spatial `conv5` only | 0.8709 | 0.8617 | LiDAR geometry alone retains the signal |
 | frozen spatial `conv5` + speed | 0.8779 | 0.8654 | corrective direction is strongly separable |
 | frozen spatial `conv5` + short deltas + speed | 0.8420 | 0.8227 | history deltas do not improve the spatial feature |
 
@@ -25,6 +26,9 @@ Across seeds, spatial `conv5` improves balanced accuracy over compact `fc3` by
 0.3534 and material-sign accuracy by 0.3998.  Temporal deltas reduce those
 metrics relative to static spatial input by 0.0359 and 0.0426 respectively.
 This ordering is identical in all three seeds.
+Adding speed changes balanced accuracy by only +0.0070 and material-sign
+accuracy by +0.0038 on average.  The bounded candidate therefore keeps the
+current LiDAR-only ROS input contract instead of adding odometry.
 
 The peer-d3 validation sequence contains only 16 material samples and all are
 right corrections.  The static spatial probe classifies all 16 correctly in

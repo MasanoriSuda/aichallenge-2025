@@ -268,6 +268,14 @@ featureを使うstatic adapterである。分類probeはcheckpointではなく�
 normal anchor、seed-disjoint評価を通るまでruntimeへ接続しない。peer d3のmaterial supportは
 右補正16 sampleだけなので、双方向の回避能力を証明したとは扱わない。
 
+速度を除いた`conv5`空間mapも3 seed平均balanced accuracy 0.8709、material-sign
+accuracy 0.8617であり、速度ありとの差はそれぞれ+0.0070、+0.0038に留まった。このため
+最初のbounded adapterはROS入力を増やさずLiDAR-onlyとした。候補はvalidation material
+MAEを36.68%、peer d3を56.63%改善したが、独立normal validationへの補正MAEが0.01939 rad
+となり0.01 rad Gateに不合格だった。runtimeへは接続しない。次のデータ契約ではtrain split
+のnormal candidate3状態をzero-residual anchorとして明示し、独立normal validation、teacher
+validation、peer d3の割当と全Gateを固定したまま再評価する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

@@ -26,7 +26,12 @@ from lib.recurrent_policy import MultiSeqRecurrentPolicyDataset
 
 
 SCHEMA_VERSION = 1
-VARIANTS = ("static_fc3", "static_conv5", "temporal_conv5")
+VARIANTS = (
+    "static_fc3",
+    "static_conv5_no_speed",
+    "static_conv5",
+    "temporal_conv5",
+)
 
 
 @dataclass(frozen=True)
@@ -230,6 +235,8 @@ def make_probe_sequences(
                 (fc3, np.clip(sequence.speeds / 12.0, 0.0, 1.5)[:, None]),
                 axis=1,
             )
+        elif variant == "static_conv5_no_speed":
+            features = projected
         elif variant == "static_conv5":
             features = np.concatenate(
                 (projected, np.clip(sequence.speeds / 12.0, 0.0, 1.5)[:, None]),
@@ -486,6 +493,7 @@ def main() -> int:
         }
 
     static = variant_reports["static_fc3"]["aggregate"]
+    spatial_no_speed = variant_reports["static_conv5_no_speed"]["aggregate"]
     spatial = variant_reports["static_conv5"]["aggregate"]
     temporal = variant_reports["temporal_conv5"]["aggregate"]
     peer_temporal = variant_reports["temporal_conv5"]["peer_validation"]["metrics"]
@@ -509,6 +517,14 @@ def main() -> int:
             ),
             "spatial_minus_compact_material_sign_accuracy": (
                 spatial["material_sign_accuracy"] - static["material_sign_accuracy"]
+            ),
+            "spatial_speed_minus_no_speed_balanced_accuracy": (
+                spatial["balanced_accuracy"]
+                - spatial_no_speed["balanced_accuracy"]
+            ),
+            "spatial_speed_minus_no_speed_material_sign_accuracy": (
+                spatial["material_sign_accuracy"]
+                - spatial_no_speed["material_sign_accuracy"]
             ),
             "temporal_minus_static_balanced_accuracy": (
                 temporal["balanced_accuracy"] - static["balanced_accuracy"]

@@ -9,9 +9,10 @@ The label is successor-teacher correction relative to frozen candidate3:
 Variants:
 
 1. `static_fc3`: admitted 10-dimensional policy embedding plus speed;
-2. `static_conv5`: frozen conv5 spatial map projected deterministically to 128
+2. `static_conv5_no_speed`: the projected spatial map without odometry;
+3. `static_conv5`: frozen conv5 spatial map projected deterministically to 128
    dimensions plus speed;
-3. `temporal_conv5`: the same spatial feature plus 1/8-step feature and speed
+4. `temporal_conv5`: the same spatial feature plus 1/8-step feature and speed
    differences.
 
 Each variant trains only a small weighted three-class MLP.  This is deliberately

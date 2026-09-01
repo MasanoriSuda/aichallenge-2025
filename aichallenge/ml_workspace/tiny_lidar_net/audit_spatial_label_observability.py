@@ -568,6 +568,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-candidate-sha256", default="")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
+    parser.add_argument(
+        "--max-speed-sync-delta-sec",
+        type=float,
+        default=0.05,
+        help=(
+            "Maximum causal speed age admitted by recurrent teacher data. "
+            "Runtime-matched contracts above 50 ms must be explicit."
+        ),
+    )
     parser.add_argument("--max-per-sequence", type=int, default=1500)
     parser.add_argument("--max-material-queries", type=int, default=4096)
     parser.add_argument("--max-normal-queries", type=int, default=2048)
@@ -595,6 +604,11 @@ def main() -> int:
         raise ValueError("audit sample limits must be positive")
     if args.material_delta_rad <= 0.0:
         raise ValueError("material delta must be positive")
+    if (
+        not np.isfinite(args.max_speed_sync_delta_sec)
+        or args.max_speed_sync_delta_sec <= 0.0
+    ):
+        raise ValueError("max speed sync delta must be finite and positive")
 
     candidate_path = args.candidate.expanduser().resolve()
     candidate_sha = sha256_file(candidate_path)
@@ -623,9 +637,16 @@ def main() -> int:
     for split in ("train", "val"):
         teacher_sources.extend(
             MultiSeqRecurrentPolicyDataset(
-                teacher_root / split, expected_split=split
+                teacher_root / split,
+                expected_split=split,
+                max_speed_sync_delta_sec=args.max_speed_sync_delta_sec,
             ).datasets
         )
+    teacher_label_sources = sorted(
+        {source.label_source for source in teacher_sources}
+    )
+    if len(teacher_label_sources) != 1:
+        raise ValueError("observability audit requires one teacher label contract")
     normal_root = args.normal_dataset.expanduser().resolve()
     normal_sources = []
     for split in ("train", "val"):
@@ -742,19 +763,77 @@ def main() -> int:
         ),
     }
 
-    teacher_current_correction, teacher_reasons = current_teacher_records(
-        teacher.scans_m, teacher_features[:, -1]
-    )
-    normal_current_correction, normal_reasons = current_teacher_records(
-        normal.scans_m, normal_features[:, -1]
-    )
-    exact_p50 = representations["exact_adapter_input"][
-        "normal_cross_run_baseline"
-    ]["p50"]
-    exact_p50_conflict = exact_teacher_to_normal <= exact_p50
-    normal_current_material = (
-        np.abs(normal_current_correction) >= args.material_delta_rad
-    )
+    if teacher_label_sources == ["lidar_precontact_teacher_recurrent_direct"]:
+        teacher_current_correction, teacher_reasons = current_teacher_records(
+            teacher.scans_m, teacher_features[:, -1]
+        )
+        normal_current_correction, normal_reasons = current_teacher_records(
+            normal.scans_m, normal_features[:, -1]
+        )
+        exact_p50 = representations["exact_adapter_input"][
+            "normal_cross_run_baseline"
+        ]["p50"]
+        exact_p50_conflict = exact_teacher_to_normal <= exact_p50
+        normal_current_material = (
+            np.abs(normal_current_correction) >= args.material_delta_rad
+        )
+        label_contract = {
+            "teacher_replay": {
+                "status": "replayed",
+                "maximum_stored_correction_abs_error_rad": float(
+                    np.max(
+                        np.abs(
+                            teacher_current_correction
+                            - teacher.corrections_rad
+                        )
+                    )
+                ),
+                "aggregate": label_correction_summary(
+                    teacher_current_correction, args.material_delta_rad
+                ),
+                "material_reason_counts": reason_counts(
+                    teacher_reasons,
+                    np.abs(teacher_current_correction)
+                    >= args.material_delta_rad,
+                ),
+                "exact_p50_conflict_reason_counts": reason_counts(
+                    teacher_reasons[material_indices], exact_p50_conflict
+                ),
+            },
+            "production_normal_zero_label": {
+                "stored_zero_maximum_abs_error_rad": float(
+                    np.max(np.abs(normal.corrections_rad))
+                ),
+                "current_teacher_correction": label_correction_summary(
+                    normal_current_correction, args.material_delta_rad
+                ),
+                "current_teacher_material_reason_counts": reason_counts(
+                    normal_reasons, normal_current_material
+                ),
+            },
+        }
+    elif teacher_label_sources == [
+        "lidar_speed_committed_teacher_recurrent_direct"
+    ]:
+        label_contract = {
+            "teacher_replay": {
+                "status": "not_applicable",
+                "reason": (
+                    "speed-committed teacher is stateful and cannot be "
+                    "replayed after deterministic audit subsampling"
+                ),
+            },
+            "production_normal_zero_label": {
+                "stored_zero_maximum_abs_error_rad": float(
+                    np.max(np.abs(normal.corrections_rad))
+                ),
+                "counterfactual_teacher_replay": "not_applicable",
+            },
+        }
+    else:
+        raise ValueError(
+            f"unsupported observability label contract: {teacher_label_sources}"
+        )
 
     report = {
         "schema_version": SCHEMA_VERSION,
@@ -766,12 +845,14 @@ def main() -> int:
             "projection_dim": 128,
             "wheel_speed": True,
             "embedded_base_steering": True,
+            "max_speed_sync_delta_sec": args.max_speed_sync_delta_sec,
             "full_conv5_diagnostic_standardization": (
                 full_conv5_standardization
             ),
         },
         "corpora": {
             "teacher": {
+                "label_sources": teacher_label_sources,
                 "sequence_ids": list(teacher.sequence_ids),
                 "samples": int(len(teacher.scans_m)),
                 "material_samples_before_query_cap": int(
@@ -812,40 +893,7 @@ def main() -> int:
                 ),
             },
         },
-        "label_contract": {
-            "teacher_replay": {
-                "maximum_stored_correction_abs_error_rad": float(
-                    np.max(
-                        np.abs(
-                            teacher_current_correction
-                            - teacher.corrections_rad
-                        )
-                    )
-                ),
-                "aggregate": label_correction_summary(
-                    teacher_current_correction, args.material_delta_rad
-                ),
-                "material_reason_counts": reason_counts(
-                    teacher_reasons,
-                    np.abs(teacher_current_correction)
-                    >= args.material_delta_rad,
-                ),
-                "exact_p50_conflict_reason_counts": reason_counts(
-                    teacher_reasons[material_indices], exact_p50_conflict
-                ),
-            },
-            "production_normal_zero_label": {
-                "stored_zero_maximum_abs_error_rad": float(
-                    np.max(np.abs(normal.corrections_rad))
-                ),
-                "current_teacher_correction": label_correction_summary(
-                    normal_current_correction, args.material_delta_rad
-                ),
-                "current_teacher_material_reason_counts": reason_counts(
-                    normal_reasons, normal_current_material
-                ),
-            },
-        },
+        "label_contract": label_contract,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

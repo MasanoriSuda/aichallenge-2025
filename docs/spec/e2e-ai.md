@@ -583,6 +583,15 @@ seed 2031からは全6,244 sampleを証明付きtrain sourceとして抽出し�
 ただしrun-disjoint validationを構成する第2の`executed_teacher_success`がまだないため、ここでは
 学習・checkpoint作成・production昇格を行わない。
 
+続く未見seed 2032は3周`104.302 / 90.070 / 110.709秒`を完走しstall 0だったが、3周目に
+crash penalty 1件（10.125秒）が発生しstrict Gateを不合格とした。接触直前は約3.79 m/sで
+frontal clearance 2.00 mまで進んだ後に操舵側を切り替え、0.40秒以内に+0.64 rad操舵と
+-1.0 m/s2制動へ飽和しても0.035 mまで接近した。これは結果証明を追加すれば解決する問題では
+なく、現precontact teacherが速度に対する必要回避距離とgap-side commitmentを持たないという
+policy-levelの反証である。seed 2032はhard labelへ抽出せずheld-out failure evidenceとする。
+別seedを成功するまで選別してvalidationへ使うことも禁止し、次は速度依存の回避可否と時間的な
+side commitmentを持つteacher候補を独立に設計・実行してからラベル生成を再開する。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

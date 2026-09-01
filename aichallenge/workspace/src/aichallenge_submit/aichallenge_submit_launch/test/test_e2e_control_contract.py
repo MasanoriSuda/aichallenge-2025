@@ -252,6 +252,11 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     )
     controller_node = controller.find("node")
     assert controller_node is not None
+    controller_environment = {
+        node.get("name"): node.get("value")
+        for node in controller_node.findall("env")
+    }
+    assert controller_environment == {"OPENBLAS_NUM_THREADS": "1"}
     controller_parameters = {
         node.get("name"): node.get("value")
         for node in controller_node.findall("param")

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import time
 import numpy as np
 
@@ -473,7 +474,9 @@ class TinyLidarNetNode(Node):
                 f"{recurrent_runtime_config['correction_deadband_rad']:.6f},"
                 f"authority_enabled={int(recurrent_authority_enabled)},"
                 "authority_max_correction_rad="
-                f"{recurrent_authority_max_abs_correction_rad:.6f}"
+                f"{recurrent_authority_max_abs_correction_rad:.6f},"
+                " OpenBLASThreads: "
+                f"{os.environ.get('OPENBLAS_NUM_THREADS', 'unset')}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")

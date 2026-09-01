@@ -397,6 +397,11 @@ def test_runtime_tiny_lidar_speed_governor_is_explicit_and_qualified() -> None:
         "AIC_CONTROL_METHOD=tiny_lidar_net" in runner
     )
     assert (
+        "TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS must be finite and non-negative"
+        in runner
+    )
+    assert '[[ "${tiny_lidar_maximum_forward_speed_mps}" =~ ^0+' not in runner
+    assert (
         'opts+=("tiny_lidar_maximum_forward_speed_mps:='
         '${tiny_lidar_maximum_forward_speed_mps}")' in runner
     )

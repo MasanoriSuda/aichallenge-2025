@@ -5,7 +5,7 @@
 ## 呼び出しの仕組み
 
 ```
-make simulator-<mode> / make dev / make dev2..dev4 / make gate1..gate3 / make e2e-single / make e2e-teacher / make e2e-npc-single / make e2e-npc-gap-teacher / make e2e-peer-audit-mpc / make e2e-peer-audit-student / make e2e-final-contact-teacher / make e2e-final-precontact-teacher / make e2e-final-precontact-teacher-all
+make simulator-<mode> / make dev / make dev2..dev4 / make gate1..gate3 / make e2e-single / make e2e-teacher / make e2e-npc-single / make e2e-npc-gap-teacher / make e2e-peer-audit-mpc / make e2e-peer-audit-student / make e2e-final-contact-teacher / make e2e-final-precontact-teacher / make e2e-final-precontact-teacher-all / make e2e-final-speed-committed-teacher-all
   → docker compose up simulator (SIM_MODE=<mode>)
     → run_simulator.bash <mode> [args...]
       → simulator_scripts/<mode>.sh [args...]
@@ -21,7 +21,7 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 - Makefile は `*.sh` を wildcard で拾って `make simulator-<mode>` を自動生成する。
   `dev2..dev4` / `gate1..gate3` のエイリアスも `SIM_MODES` に追加してあり、
   `make simulator-dev2` / `make simulator-gate1` のように使える（AWSIM のみ起動）。
-- `make dev` / `make gate1..gate3` / `make e2e-single` / `make e2e-teacher` / `make e2e-npc-single` / `make e2e-npc-gap-teacher` / `make e2e-peer-audit-mpc` / `make e2e-peer-audit-student` / `make e2e` / `make e2e-final` / `make e2e-final-contact-teacher` / `make e2e-final-precontact-teacher` / `make e2e-final-precontact-teacher-all` は AWSIM に加えて Autoware も起動する複合ターゲット。
+- `make dev` / `make gate1..gate3` / `make e2e-single` / `make e2e-teacher` / `make e2e-npc-single` / `make e2e-npc-gap-teacher` / `make e2e-peer-audit-mpc` / `make e2e-peer-audit-student` / `make e2e` / `make e2e-final` / `make e2e-final-contact-teacher` / `make e2e-final-precontact-teacher` / `make e2e-final-precontact-teacher-all` / `make e2e-final-speed-committed-teacher-all` は AWSIM に加えて Autoware も起動する複合ターゲット。
   `make dev2..dev4`、`make e2e-final`、各`e2e-final-*-teacher*`は N 台分の autoware を別 compose
   プロジェクト（ROS_DOMAIN_ID=1..N）で起動する。`e2e-final` はsync開始のため、全車Ready後に
   `make awsim-request-start` を実行する。
@@ -62,6 +62,11 @@ run-level gate合格までは教師データへ採用しない。
 `make e2e-final-precontact-teacher-all`は次のrun-level admissionであり、4 domainすべてを
 `precontact_teacher`にする。個別d4回避ではなく、対称なteacher同士がFinishまで競合を
 解消できるかを確認する。1台でもstall/contact/terminal gateを満たさなければ抽出しない。
+
+`make e2e-final-speed-committed-teacher-all`は、NPC環境で合格済みの後継teacherを4 domain
+すべてへ適用する反証試験である。速度依存previewとencounter内のside commitが、実際のpeer
+相互作用でも完走可能な実演を作れるかだけを検証する。全domainのFinish、penalty 0、stall 0
+を満たすまで、bagをhard labelへ抽出しない。
 | `multiplay-server.sh` | Multiplay 専用サーバー | - | `-batchmode -nographics`、port 7777 |
 | `multiplay-host.sh` | Multiplay ホスト | - | 127.0.0.1:7777、vehicle-index 1 |
 | `multiplay-client.sh` | Multiplay クライアント | - | 127.0.0.1:7777、vehicle-index 1 |

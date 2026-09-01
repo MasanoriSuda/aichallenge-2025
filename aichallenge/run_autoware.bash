@@ -260,9 +260,8 @@ fi
 
 tiny_lidar_maximum_forward_speed_mps="${TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS:-}"
 if [[ -n "${TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS+x}" ]]; then
-    if [[ ! "${tiny_lidar_maximum_forward_speed_mps}" =~ ^[0-9]+([.][0-9]+)?$ ]] || \
-       [[ "${tiny_lidar_maximum_forward_speed_mps}" =~ ^0+([.]0+)?$ ]]; then
-        echo "TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS must be finite and positive"
+    if [[ ! "${tiny_lidar_maximum_forward_speed_mps}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        echo "TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS must be finite and non-negative"
         exit 1
     fi
     if [[ "${control_method}" != "tiny_lidar_net" ]]; then

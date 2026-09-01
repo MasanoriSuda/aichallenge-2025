@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: autoware-build autoware-vehicle autoware-simulator autoware-request-initialpose autoware-request-control  awsim-request-start awsim-request-reset autoware-driver-zenoh autoware-driver-zenoh-rosbag \
-	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final e2e-final-speed-aware-safety e2e-final-contact-teacher e2e-final-precontact-teacher e2e-final-precontact-teacher-all driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
+	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final e2e-final-speed-aware-safety e2e-final-contact-teacher e2e-final-precontact-teacher e2e-final-precontact-teacher-all e2e-final-speed-committed-teacher-all driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
 
 # Used by docker-compose.yml for build/eval artifact ownership.
 HOST_UID ?= $(shell id -u)
@@ -96,9 +96,20 @@ e2e-final-speed-aware-safety: SIM_MODE := e2e-final
 e2e-final-contact-teacher: SIM_MODE := e2e-final
 e2e-final-precontact-teacher: SIM_MODE := e2e-final
 e2e-final-precontact-teacher-all: SIM_MODE := e2e-final
+e2e-final-speed-committed-teacher-all: SIM_MODE := e2e-final
 e2e-single e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher e2e e2e-final: AIC_CONTROL_METHOD := tiny_lidar_net
 e2e-npc-gap-teacher: TINY_LIDAR_CONTROL_MODE := gap_teacher
 e2e-npc-speed-committed-teacher: TINY_LIDAR_CONTROL_MODE := speed_committed_teacher
+# Production owns a 4.6 m/s fixed-mode governor.  Teacher modes reject that
+# authority and reproduce their certified policy only with an explicit 0.0.
+E2E_TEACHER_TARGETS := \
+	e2e-npc-gap-teacher \
+	e2e-npc-speed-committed-teacher \
+	e2e-final-contact-teacher \
+	e2e-final-precontact-teacher \
+	e2e-final-precontact-teacher-all \
+	e2e-final-speed-committed-teacher-all
+$(E2E_TEACHER_TARGETS): export TINY_LIDAR_MAXIMUM_FORWARD_SPEED_MPS := 0.0
 e2e-teacher: AIC_CONTROL_METHOD := mpc
 e2e-single e2e-teacher e2e: AIC_VEHICLE_COUNT := 1
 # vehicle_count is the complete simulated world count for the launch contract,
@@ -188,6 +199,20 @@ e2e-final-precontact-teacher-all: simulator
 		docker compose -p $$p up -d autoware; \
 	done
 	@echo "Teacher labels remain inadmissible until every run-level gate passes."
+	@echo "Start mode is sync; publish /admin/awsim/start after all vehicles are Grounded."
+	@echo "To stop: make down"
+
+# Outcome-qualified interaction-teacher audit.  All four domains execute the
+# same speed-aware, temporally committed policy.  This is not a production
+# default and its labels remain inadmissible until the complete race gate passes.
+e2e-final-speed-committed-teacher-all: simulator
+	@echo "Start 4-vehicle E2E final all-speed-committed-teacher admission"
+	@for p in 1 2 3 4; do \
+		LOG_DIR=$(LOG_DIR) ROS_DOMAIN_ID=$$p AIC_VEHICLE_COUNT=4 \
+		AIC_CONTROL_METHOD=tiny_lidar_net TINY_LIDAR_CONTROL_MODE=speed_committed_teacher \
+		docker compose -p $$p up -d autoware; \
+	done
+	@echo "Diagnostic only: do not extract labels before the strict race gate passes."
 	@echo "Start mode is sync; publish /admin/awsim/start after all vehicles are Grounded."
 	@echo "To stop: make down"
 

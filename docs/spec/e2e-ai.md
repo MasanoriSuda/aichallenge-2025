@@ -551,6 +551,18 @@ zero-interventionとheuristic teacherの補正要求を単純に混合せず、r
 か」を明示する教師・正常ラベル契約を独立Sliceで設計する。failure tailを最近傍除外すること、
 runtime thresholdを追加すること、normal比率だけを再調整することは禁止する。
 
+教師・正常ラベルをrun outcomeへ遡って監査すると、正常3系列17,747 sampleは全てbase系policyが
+Finish・penalty 0を達成したzero-action実証だった。一方、教師15系列53,708 sampleには、現行
+precontact teacherを実際に実行して厳格race gateへ合格したhard demonstrationが0本だった。
+内訳は、失敗runへのcounterfactual再適用3系列6,884 sample、別policyが成功した状態へのoffline
+提案2系列12,431 sample、result-detail不在でoutcome未証明10系列34,393 sampleである。
+
+したがって現行teacher correctionを排他的な単一正解として扱う契約は不成立である。失敗runへの
+teacher再適用は候補actionとして保持できるが、paired successor rolloutまたは実行済み成功証明
+なしにhard targetへ昇格させない。次の学習前に、同一precontact teacherを実行したrunをFinish・
+penalty 0・stall 0で証明する。teacher自体が合格できなければ、成功実演を持つ別policyまたは
+intervention-necessityを表すset-valued supervisionへラベル源を変更する。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

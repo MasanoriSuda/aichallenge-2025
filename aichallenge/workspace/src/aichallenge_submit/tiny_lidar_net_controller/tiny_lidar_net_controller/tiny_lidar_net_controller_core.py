@@ -16,6 +16,7 @@ from tiny_lidar_net_controller.speed_committed_teacher import (
     SpeedCommittedTeacherConfig,
 )
 from tiny_lidar_net_controller.model.tinylidarnet import (
+    RecurrentSteeringAdapterNp,
     SpatialSteeringAdapterNp,
     SteeringResidualNetNp,
     TinyLidarNetNp,
@@ -68,6 +69,15 @@ class TinyLidarNetCore:
         spatial_shadow_max_abs_delta_rad: float = 1.2,
         spatial_authority_enabled: bool = False,
         spatial_authority_max_abs_delta_rad: float = 0.12,
+        recurrent_shadow_ckpt_path: str = '',
+        recurrent_shadow_expected_sha256: str = '',
+        recurrent_shadow_hidden_dim: int = 64,
+        recurrent_shadow_projection_dim: int = 128,
+        recurrent_shadow_use_speed: bool = False,
+        recurrent_shadow_speed_embedding_dim: int = 16,
+        recurrent_shadow_max_speed_mps: float = 12.0,
+        recurrent_shadow_max_abs_correction_rad: float = 0.64,
+        recurrent_shadow_correction_deadband_rad: float = 0.02,
     ):
         """Initializes the TinyLidarNetCore with specified parameters.
 
@@ -125,6 +135,16 @@ class TinyLidarNetCore:
         self.last_spatial_authority_correction_rad = 0.0
         self.last_spatial_authority_applied = False
         self.last_spatial_authority_clipped = False
+        self.recurrent_shadow_model = None
+        self.recurrent_shadow_loaded_parameter_count = 0
+        self.recurrent_shadow_hidden = None
+        self.last_recurrent_shadow_correction_rad = 0.0
+        self.last_recurrent_shadow_raw_correction_rad = 0.0
+        self.last_recurrent_shadow_steering_rad = 0.0
+        self.last_recurrent_shadow_hidden_norm = 0.0
+        self.last_recurrent_shadow_admitted = False
+        self.last_recurrent_shadow_status = "disabled"
+        self.recurrent_shadow_reset_count = 0
 
         if not isinstance(self.input_dim, int) or self.input_dim <= 0:
             raise ValueError("input_dim must be a positive integer")
@@ -196,6 +216,38 @@ class TinyLidarNetCore:
         if spatial_shadow_expected_sha256 and not spatial_shadow_ckpt_path:
             raise ValueError(
                 "spatial shadow expected SHA256 requires a spatial shadow checkpoint"
+            )
+        if (
+            not isinstance(recurrent_shadow_hidden_dim, int)
+            or recurrent_shadow_hidden_dim <= 0
+            or not isinstance(recurrent_shadow_projection_dim, int)
+            or recurrent_shadow_projection_dim <= 0
+            or not isinstance(recurrent_shadow_speed_embedding_dim, int)
+            or recurrent_shadow_speed_embedding_dim <= 0
+        ):
+            raise ValueError("recurrent shadow dimensions must be positive integers")
+        if (
+            not np.isfinite(recurrent_shadow_max_speed_mps)
+            or recurrent_shadow_max_speed_mps <= 0.0
+            or not np.isfinite(recurrent_shadow_max_abs_correction_rad)
+            or recurrent_shadow_max_abs_correction_rad <= 0.0
+            or not np.isfinite(recurrent_shadow_correction_deadband_rad)
+            or recurrent_shadow_correction_deadband_rad < 0.0
+            or recurrent_shadow_correction_deadband_rad
+            > recurrent_shadow_max_abs_correction_rad
+        ):
+            raise ValueError("recurrent shadow scales or deadband are invalid")
+        if recurrent_shadow_expected_sha256 and not recurrent_shadow_ckpt_path:
+            raise ValueError(
+                "recurrent shadow expected SHA256 requires a recurrent checkpoint"
+            )
+        if recurrent_shadow_ckpt_path and not spatial_shadow_ckpt_path:
+            raise ValueError(
+                "recurrent shadow requires the frozen production spatial checkpoint"
+            )
+        if recurrent_shadow_ckpt_path and not self.spatial_authority_enabled:
+            raise ValueError(
+                "recurrent shadow requires the packaged spatial production authority"
             )
 
         if self.architecture == 'small':
@@ -274,8 +326,69 @@ class TinyLidarNetCore:
                     )
             self.last_spatial_shadow_status = "waiting-speed"
 
+        if recurrent_shadow_ckpt_path:
+            self._verify_file_sha256(
+                recurrent_shadow_ckpt_path,
+                recurrent_shadow_expected_sha256,
+                "recurrent steering shadow",
+            )
+            self.recurrent_shadow_model = RecurrentSteeringAdapterNp(
+                input_dim=self.input_dim,
+                hidden_dim=recurrent_shadow_hidden_dim,
+                projection_dim=recurrent_shadow_projection_dim,
+                use_speed=recurrent_shadow_use_speed,
+                speed_embedding_dim=recurrent_shadow_speed_embedding_dim,
+                max_speed_mps=recurrent_shadow_max_speed_mps,
+                max_abs_correction_rad=(
+                    recurrent_shadow_max_abs_correction_rad
+                ),
+                max_abs_steering_rad=1.0,
+                correction_deadband_rad=(
+                    recurrent_shadow_correction_deadband_rad
+                ),
+                spatial_baseline_hidden_dim=spatial_shadow_hidden_dim,
+                spatial_baseline_projection_dim=spatial_shadow_projection_dim,
+                spatial_baseline_max_speed_mps=(
+                    spatial_shadow_max_speed_mps
+                ),
+                spatial_baseline_max_abs_delta_rad=(
+                    spatial_shadow_max_abs_delta_rad
+                ),
+            )
+            self.recurrent_shadow_loaded_parameter_count = self._load_model_weights(
+                self.recurrent_shadow_model,
+                recurrent_shadow_ckpt_path,
+                "recurrent steering shadow",
+            )
+            for key, production_value in self.model.params.items():
+                recurrent_value = (
+                    self.recurrent_shadow_model.embedded_base_parameters().get(key)
+                )
+                if recurrent_value is None or not np.array_equal(
+                    recurrent_value, production_value
+                ):
+                    raise ValueError(
+                        "recurrent shadow embedded base does not match production "
+                        f"parameter: {key}"
+                    )
+            recurrent_spatial = (
+                self.recurrent_shadow_model.embedded_spatial_parameters()
+            )
+            for key, production_value in self.spatial_shadow_model.params.items():
+                recurrent_value = recurrent_spatial.get(key)
+                if recurrent_value is None or not np.array_equal(
+                    recurrent_value, production_value
+                ):
+                    raise ValueError(
+                        "recurrent shadow embedded spatial baseline does not "
+                        f"match production parameter: {key}"
+                    )
+            self.last_recurrent_shadow_status = "waiting-speed"
+
         self.requires_wheel_speed = bool(
-            self.spatial_shadow_model is not None or self.gap_teacher_requires_speed
+            self.spatial_shadow_model is not None
+            or self.recurrent_shadow_model is not None
+            or self.gap_teacher_requires_speed
         )
 
     @staticmethod
@@ -323,8 +436,17 @@ class TinyLidarNetCore:
         # Prepare input tensor: (1, 1, input_dim)
         x = np.expand_dims(np.expand_dims(processed_ranges, axis=0), axis=1)
 
-        # 2. Inference
-        outputs = np.asarray(self.model(x)[0], dtype=np.float32)
+        # 2. Inference.  The production Conv5 backbone is the canonical
+        # feature owner.  Optional adapters embed byte-identical copies that
+        # were verified at load time, so reuse the canonical features instead
+        # of evaluating the same CNN several times in the control callback.
+        shared_conv5 = None
+        if isinstance(self.model, TinyLidarNetNp):
+            shared_conv5 = self.model.forward_conv5_features(x)
+            model_outputs = self.model.forward_from_conv5_features(shared_conv5)
+        else:
+            model_outputs = self.model(x)
+        outputs = np.asarray(model_outputs[0], dtype=np.float32)
         if outputs.shape != (2,):
             raise ValueError(f"model output must have shape (2,), got {outputs.shape}")
         if not np.all(np.isfinite(outputs)):
@@ -337,6 +459,7 @@ class TinyLidarNetCore:
             accel = self.acceleration
 
         steer = float(np.clip(outputs[1], -1.0, 1.0))
+        raw_base_steer = steer
 
         self.last_spatial_shadow_admitted = False
         self.last_spatial_shadow_correction_rad = 0.0
@@ -344,6 +467,10 @@ class TinyLidarNetCore:
         self.last_spatial_authority_correction_rad = 0.0
         self.last_spatial_authority_applied = False
         self.last_spatial_authority_clipped = False
+        self.last_recurrent_shadow_correction_rad = 0.0
+        self.last_recurrent_shadow_raw_correction_rad = 0.0
+        self.last_recurrent_shadow_steering_rad = 0.0
+        self.last_recurrent_shadow_admitted = False
         if self.spatial_shadow_model is not None:
             if speed_mps is None:
                 self.last_spatial_shadow_status = "missing-or-stale-speed"
@@ -359,8 +486,10 @@ class TinyLidarNetCore:
                         _,
                         _,
                         direction_probabilities,
-                    ) = self.spatial_shadow_model.forward_components(
-                        x, np.asarray([speed], dtype=np.float32)
+                    ) = self.spatial_shadow_model.forward_components_from_spatial_features(
+                        shared_conv5,
+                        np.asarray([speed], dtype=np.float32),
+                        np.asarray([raw_base_steer], dtype=np.float32),
                     )
                     self.last_spatial_shadow_correction_rad = float(residual[0])
                     self.last_spatial_shadow_direction_probabilities = (
@@ -387,6 +516,66 @@ class TinyLidarNetCore:
                     # Shadow execution is diagnostic and must never override a
                     # valid production command.
                     self.last_spatial_shadow_status = (
+                        f"inference-error:{type(exc).__name__}:{exc}"
+                    )
+
+        if self.recurrent_shadow_model is not None:
+            if speed_mps is None:
+                self.reset_recurrent_history()
+                self.last_recurrent_shadow_status = "missing-or-stale-speed"
+            else:
+                try:
+                    speed = float(speed_mps)
+                    if not np.isfinite(speed) or speed < 0.0:
+                        raise ValueError(
+                            "recurrent shadow speed must be finite and non-negative"
+                        )
+                    if not self.last_spatial_shadow_admitted:
+                        raise ValueError(
+                            "recurrent shadow requires an admitted production "
+                            "spatial result"
+                        )
+                    expected_production_base = float(np.clip(
+                        raw_base_steer + self.last_spatial_shadow_correction_rad,
+                        -1.0,
+                        1.0,
+                    ))
+                    if not np.isclose(
+                        expected_production_base, steer, rtol=2e-5, atol=2e-5
+                    ):
+                        raise ValueError(
+                            "recurrent shadow production baseline mismatch: "
+                            f"embedded={expected_production_base:.8f}, "
+                            f"published_base={steer:.8f}"
+                        )
+                    correction, raw_correction, next_hidden = (
+                        self.recurrent_shadow_model.forward_correction_from_conv5_features(
+                            shared_conv5,
+                            np.asarray([speed], dtype=np.float32),
+                            self.recurrent_shadow_hidden,
+                        )
+                    )
+                    recurrent_steering = np.clip(
+                        steer + correction, -1.0, 1.0
+                    )
+                    self.recurrent_shadow_hidden = next_hidden.copy()
+                    self.last_recurrent_shadow_hidden_norm = float(
+                        np.linalg.norm(next_hidden)
+                    )
+                    self.last_recurrent_shadow_correction_rad = float(
+                        correction[0]
+                    )
+                    self.last_recurrent_shadow_raw_correction_rad = float(
+                        raw_correction[0]
+                    )
+                    self.last_recurrent_shadow_steering_rad = float(
+                        recurrent_steering[0]
+                    )
+                    self.last_recurrent_shadow_admitted = True
+                    self.last_recurrent_shadow_status = "ok"
+                except Exception as exc:
+                    self.reset_recurrent_history()
+                    self.last_recurrent_shadow_status = (
                         f"inference-error:{type(exc).__name__}:{exc}"
                     )
 
@@ -431,8 +620,16 @@ class TinyLidarNetCore:
     def reset_residual_history(self) -> None:
         """Prevent temporal context from crossing a runtime reset boundary."""
         self.previous_residual_scan = None
+        self.reset_recurrent_history()
         if self.gap_teacher is not None and hasattr(self.gap_teacher, "reset"):
             self.gap_teacher.reset()
+
+    def reset_recurrent_history(self) -> None:
+        """Drop recurrent state without changing the production controller."""
+        if self.recurrent_shadow_hidden is not None:
+            self.recurrent_shadow_reset_count += 1
+        self.recurrent_shadow_hidden = None
+        self.last_recurrent_shadow_hidden_norm = 0.0
 
     def _compose_residual_input(self, processed_ranges: np.ndarray) -> np.ndarray:
         current = np.asarray(processed_ranges, dtype=np.float32)

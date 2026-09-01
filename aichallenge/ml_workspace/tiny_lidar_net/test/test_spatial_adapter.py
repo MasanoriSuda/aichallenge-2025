@@ -241,6 +241,13 @@ def test_numpy_spatial_shadow_matches_exported_pytorch_candidate(
         scans_m.numpy()[:, None, :] / 30.0,
         speeds_mps.numpy(),
     )
+    shared_features = runtime._spatial_features(
+        scans_m.numpy()[:, None, :] / 30.0
+    )
+    shared = runtime.forward_components_from_spatial_features(
+        shared_features,
+        speeds_mps.numpy(),
+    )
 
     for expected_value, actual_value in zip(expected, actual):
         np.testing.assert_allclose(
@@ -249,3 +256,5 @@ def test_numpy_spatial_shadow_matches_exported_pytorch_candidate(
             rtol=2e-5,
             atol=2e-5,
         )
+    for standalone_value, shared_value in zip(actual, shared):
+        np.testing.assert_array_equal(shared_value, standalone_value)

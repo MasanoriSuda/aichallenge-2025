@@ -19,6 +19,8 @@
     <arg name="tiny_lidar_spatial_shadow_max_abs_delta_rad" default="1.2"/>
     <arg name="tiny_lidar_spatial_authority_enabled" default="true"/>
     <arg name="tiny_lidar_spatial_authority_max_abs_delta_rad" default="1.2"/>
+    <arg name="tiny_lidar_recurrent_shadow_ckpt_path" default=""/>
+    <arg name="tiny_lidar_recurrent_shadow_expected_sha256" default=""/>
     <arg name="tiny_lidar_control_mode" default="fixed_lidar_brake"/>
 
     <let name="domain_id" value="$(var domain_id)"/>
@@ -46,6 +48,8 @@
     <log message=" - tiny_lidar_spatial_shadow_max_abs_delta_rad: $(var tiny_lidar_spatial_shadow_max_abs_delta_rad)"/>
     <log message=" - tiny_lidar_spatial_authority_enabled: $(var tiny_lidar_spatial_authority_enabled)"/>
     <log message=" - tiny_lidar_spatial_authority_max_abs_delta_rad: $(var tiny_lidar_spatial_authority_max_abs_delta_rad)"/>
+    <log message=" - tiny_lidar_recurrent_shadow_ckpt_path: $(var tiny_lidar_recurrent_shadow_ckpt_path)"/>
+    <log message=" - tiny_lidar_recurrent_shadow_expected_sha256: $(var tiny_lidar_recurrent_shadow_expected_sha256)"/>
     <log message=" - tiny_lidar_control_mode: $(var tiny_lidar_control_mode)"/>
 
     <!-- Main module of AI challenge 2025. -->
@@ -64,6 +68,8 @@
         <arg name="tiny_lidar_spatial_shadow_max_abs_delta_rad" value="$(var tiny_lidar_spatial_shadow_max_abs_delta_rad)"/>
         <arg name="tiny_lidar_spatial_authority_enabled" value="$(var tiny_lidar_spatial_authority_enabled)"/>
         <arg name="tiny_lidar_spatial_authority_max_abs_delta_rad" value="$(var tiny_lidar_spatial_authority_max_abs_delta_rad)"/>
+        <arg name="tiny_lidar_recurrent_shadow_ckpt_path" value="$(var tiny_lidar_recurrent_shadow_ckpt_path)"/>
+        <arg name="tiny_lidar_recurrent_shadow_expected_sha256" value="$(var tiny_lidar_recurrent_shadow_expected_sha256)"/>
         <arg name="tiny_lidar_control_mode" value="$(var tiny_lidar_control_mode)"/>
     </include>
 

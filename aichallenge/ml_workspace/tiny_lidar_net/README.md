@@ -306,6 +306,36 @@ material labelの既定境界である0.02 radを先に固定し、その後に�
 Gate合格はoffline shadow候補の資格であり、runtime authority昇格ではありません。runtime接続、
 watchdog、hidden-state reset、閉ループ試走は別sliceで審査します。
 
+runtimeはPyTorchへ依存させません。合格した`.pth`を、frozen raw TinyLidarNetとpackaged
+spatial production baselineを埋め込んだNumPy artifactへ変換します。converterは対応外の
+architecture、学習可能なproduction baseline、pressure duplicationを拒否します。
+
+```bash
+python3 convert_recurrent_policy.py \
+  --checkpoint checkpoints/<recurrent-run>/<timestamp>/best_model.pth \
+  --output checkpoints/<recurrent-run>/<timestamp>/candidate.npy \
+  --manifest checkpoints/<recurrent-run>/<timestamp>/candidate-manifest.json
+
+make e2e-single \
+  TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH=/aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<recurrent-run>/<timestamp>/candidate.npy \
+  TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256=<recurrent-candidate-sha256>
+
+python3 analyze_recurrent_shadow_run.py /output/<run> \
+  --checkpoint-file checkpoints/<recurrent-run>/<timestamp>/candidate.npy \
+  --expected-checkpoint-sha256 <recurrent-candidate-sha256> \
+  --expected-runtime-checkpoint-path \
+    /aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<recurrent-run>/<timestamp>/candidate.npy \
+  --output /output/<run>/e2e-recurrent-shadow-analysis.json \
+  --fail-on-rejection
+```
+
+recurrent shadowは公開操舵へ一切加算しません。起動時にembedded raw/spatial baselineの
+identityを厳密検証し、各scanでは検証済みのproduction Conv5特徴量を共有してhidden stateだけを
+更新します。車輪速度欠損、LiDAR watchdog、推論例外ではhidden stateを破棄し、古い時系列を
+次のepisodeへ持ち越しません。runtime Gateは3周完走、
+penalty 0、frozen production Gate合格、coverage 99%以上、error 0、LiDAR 19 Hz以上、連続成功run
+でhidden reset 0、spatial production authority維持を同時に要求します。
+
 ### Qualified production spatial adapter
 
 production既定は、車輪速度とfrozen base steeringでconditionしたfull-range adapterです。

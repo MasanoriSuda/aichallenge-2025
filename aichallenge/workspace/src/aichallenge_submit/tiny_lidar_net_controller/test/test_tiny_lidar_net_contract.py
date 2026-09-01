@@ -9,6 +9,7 @@ import pytest
 
 from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 from tiny_lidar_net_controller.model.tinylidarnet import (
+    RecurrentSteeringAdapterNp,
     SpatialSteeringAdapterNp,
     SteeringResidualNetNp,
     TinyLidarNetNp,
@@ -69,6 +70,31 @@ def _write_spatial_shadow_checkpoint(
     return checkpoint
 
 
+def _write_recurrent_shadow_checkpoint(
+    tmp_path: Path,
+    *,
+    mismatch_base: bool = False,
+    correction_rad: float = 0.03,
+) -> Path:
+    model = RecurrentSteeringAdapterNp()
+    weights = {key: value.copy() for key, value in model.params.items()}
+    base = np.load(CHECKPOINT, allow_pickle=True).item()
+    spatial = np.load(SPATIAL_CHECKPOINT, allow_pickle=True).item()
+    for key, value in base.items():
+        weights[f"base_{key}"] = value.copy()
+    for key, value in spatial.items():
+        weights[f"spatial_baseline_{key}"] = value.copy()
+    if mismatch_base:
+        weights["base_fc4_bias"][0] += 0.01
+    weights["spatial_scale"].fill(1.0)
+    weights["correction_output_bias"].fill(
+        np.arctanh(correction_rad / model.max_abs_correction_rad)
+    )
+    checkpoint = tmp_path / "recurrent-shadow.npy"
+    np.save(checkpoint, weights)
+    return checkpoint
+
+
 def test_base_conditioned_spatial_shadow_loads_with_trained_residual_scale(
     tmp_path: Path,
 ) -> None:
@@ -111,6 +137,21 @@ def test_shipped_checkpoint_matches_runtime_model() -> None:
     assert np.isfinite(steering)
 
 
+def test_production_backbone_shared_feature_path_is_bit_identical() -> None:
+    core = _load_core()
+    scans = np.stack(
+        (
+            np.linspace(0.0, 1.0, 750, dtype=np.float32),
+            np.linspace(1.0, 0.0, 750, dtype=np.float32),
+        )
+    )[:, None, :]
+    direct = core.model(scans)
+    shared = core.model.forward_from_conv5_features(
+        core.model.forward_conv5_features(scans)
+    )
+    np.testing.assert_array_equal(shared, direct)
+
+
 def test_shipped_spatial_checkpoint_matches_promoted_contract() -> None:
     assert hashlib.sha256(SPATIAL_CHECKPOINT.read_bytes()).hexdigest() == (
         SPATIAL_CHECKPOINT_SHA256
@@ -138,6 +179,86 @@ def test_shipped_spatial_checkpoint_matches_promoted_contract() -> None:
     assert core.last_spatial_authority_applied
     assert np.isfinite(acceleration)
     assert np.isfinite(steering)
+
+
+def test_recurrent_shadow_preserves_production_output_and_tracks_state(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(tmp_path)
+    production = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+        spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=1.2,
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=1.2,
+    )
+    shadow = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+        spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=1.2,
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=1.2,
+        recurrent_shadow_ckpt_path=str(recurrent_checkpoint),
+    )
+    scans = [
+        np.linspace(1.0 + index, 30.0, 750, dtype=np.float32)
+        for index in range(3)
+    ]
+
+    for scan in scans:
+        assert shadow.process(scan, speed_mps=3.0) == pytest.approx(
+            production.process(scan, speed_mps=3.0), abs=0.0
+        )
+        assert shadow.last_recurrent_shadow_admitted
+        assert shadow.last_recurrent_shadow_status == "ok"
+        assert shadow.last_recurrent_shadow_correction_rad == pytest.approx(
+            0.03, abs=1e-6
+        )
+    assert shadow.recurrent_shadow_hidden is not None
+    assert shadow.last_recurrent_shadow_hidden_norm >= 0.0
+
+    shadow.process(scans[-1], speed_mps=None)
+    assert shadow.recurrent_shadow_hidden is None
+    assert shadow.last_recurrent_shadow_status == "missing-or-stale-speed"
+    assert shadow.recurrent_shadow_reset_count == 1
+
+
+def test_recurrent_shadow_rejects_wrong_embedded_base(tmp_path: Path) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(
+        tmp_path, mismatch_base=True
+    )
+    with pytest.raises(ValueError, match="embedded base does not match"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            acceleration=0.6,
+            control_mode="fixed_lidar_brake",
+            max_range=30.0,
+            spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+            spatial_shadow_use_base_steering=True,
+            spatial_shadow_max_abs_delta_rad=1.2,
+            spatial_authority_enabled=True,
+            spatial_authority_max_abs_delta_rad=1.2,
+            recurrent_shadow_ckpt_path=str(recurrent_checkpoint),
+        )
 
 
 def test_missing_weight_is_rejected(tmp_path: Path) -> None:

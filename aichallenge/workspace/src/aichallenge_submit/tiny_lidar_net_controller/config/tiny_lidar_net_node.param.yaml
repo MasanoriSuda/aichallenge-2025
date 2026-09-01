@@ -23,6 +23,17 @@
       spatial_shadow_max_abs_delta_rad: 1.2
       spatial_authority_enabled: false
       spatial_authority_max_abs_delta_rad: 0.12
+      # Opt-in diagnostic only. The recurrent candidate never owns the
+      # published command; it is evaluated beside the admitted spatial policy.
+      recurrent_shadow_ckpt_path: ""
+      recurrent_shadow_expected_sha256: ""
+      recurrent_shadow_hidden_dim: 64
+      recurrent_shadow_projection_dim: 128
+      recurrent_shadow_use_speed: false
+      recurrent_shadow_speed_embedding_dim: 16
+      recurrent_shadow_max_speed_mps: 12.0
+      recurrent_shadow_max_abs_correction_rad: 0.64
+      recurrent_shadow_correction_deadband_rad: 0.02
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
     control_mode: "fixed_lidar_brake"  # ML steer + LiDAR longitudinal safety

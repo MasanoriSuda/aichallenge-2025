@@ -114,6 +114,33 @@ if [[ -n "${tiny_lidar_spatial_shadow_expected_sha256}" ]]; then
     opts+=("tiny_lidar_spatial_shadow_expected_sha256:=${tiny_lidar_spatial_shadow_expected_sha256,,}")
 fi
 
+# A recurrent checkpoint is shadow-only. Merely supplying it cannot demote or
+# replace the packaged spatial production authority.
+tiny_lidar_recurrent_shadow_ckpt_path="${TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH:-}"
+tiny_lidar_recurrent_shadow_expected_sha256="${TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256:-}"
+if [[ -n "${tiny_lidar_recurrent_shadow_ckpt_path}" ]]; then
+    if [[ "${control_method}" != "tiny_lidar_net" ]]; then
+        echo "TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"
+        exit 1
+    fi
+    if [[ ! -f "${tiny_lidar_recurrent_shadow_ckpt_path}" ]]; then
+        echo "TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH does not exist in the runtime container: ${tiny_lidar_recurrent_shadow_ckpt_path}"
+        exit 1
+    fi
+    opts+=("tiny_lidar_recurrent_shadow_ckpt_path:=${tiny_lidar_recurrent_shadow_ckpt_path}")
+fi
+if [[ -n "${tiny_lidar_recurrent_shadow_expected_sha256}" ]]; then
+    if [[ ! "${tiny_lidar_recurrent_shadow_expected_sha256}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo "TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256 must be 64 hexadecimal characters"
+        exit 1
+    fi
+    if [[ -z "${tiny_lidar_recurrent_shadow_ckpt_path}" ]]; then
+        echo "TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256 requires TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH"
+        exit 1
+    fi
+    opts+=("tiny_lidar_recurrent_shadow_expected_sha256:=${tiny_lidar_recurrent_shadow_expected_sha256,,}")
+fi
+
 tiny_lidar_spatial_authority_enabled="${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED:-}"
 if [[ -n "${TINY_LIDAR_SPATIAL_AUTHORITY_ENABLED+x}" ]]; then
     case "${tiny_lidar_spatial_authority_enabled}" in

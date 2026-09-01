@@ -258,6 +258,54 @@ def test_runtime_preserves_spatial_authority_default_and_one_owner() -> None:
     )
 
 
+def test_runtime_recurrent_candidate_is_opt_in_shadow_only() -> None:
+    runner = read("run_autoware.bash")
+    system_launch = read(
+        "workspace/src/aichallenge_system/"
+        "aichallenge_system_launch/launch/aichallenge_system.launch.xml"
+    )
+
+    assert (
+        'tiny_lidar_recurrent_shadow_ckpt_path='
+        '"${TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH:-}"' in runner
+    )
+    assert (
+        'if [[ ! -f "${tiny_lidar_recurrent_shadow_ckpt_path}" ]]; then'
+        in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_recurrent_shadow_ckpt_path:'
+        '=${tiny_lidar_recurrent_shadow_ckpt_path}")' in runner
+    )
+    assert (
+        'TINY_LIDAR_RECURRENT_SHADOW_EXPECTED_SHA256 requires '
+        'TINY_LIDAR_RECURRENT_SHADOW_CKPT_PATH' in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_recurrent_shadow_expected_sha256:'
+        '=${tiny_lidar_recurrent_shadow_expected_sha256,,}")' in runner
+    )
+    assert (
+        '<arg name="tiny_lidar_recurrent_shadow_ckpt_path" default=""/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_recurrent_shadow_ckpt_path" '
+        'value="$(var tiny_lidar_recurrent_shadow_ckpt_path)"/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_recurrent_shadow_expected_sha256" '
+        'default=""/>' in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_recurrent_shadow_expected_sha256" '
+        'value="$(var tiny_lidar_recurrent_shadow_expected_sha256)"/>'
+        in system_launch
+    )
+    assert "recurrent checkpoint is shadow-only" in runner
+
+
 def test_single_vehicle_empty_world_producer_is_simulation_only() -> None:
     system_launch = read(
         "workspace/src/aichallenge_system/"

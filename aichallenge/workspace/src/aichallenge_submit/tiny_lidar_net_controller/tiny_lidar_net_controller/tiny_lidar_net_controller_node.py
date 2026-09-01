@@ -45,6 +45,19 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('model.spatial_shadow_max_abs_delta_rad', 1.2)
         self.declare_parameter('model.spatial_authority_enabled', False)
         self.declare_parameter('model.spatial_authority_max_abs_delta_rad', 0.12)
+        self.declare_parameter('model.recurrent_shadow_ckpt_path', '')
+        self.declare_parameter('model.recurrent_shadow_expected_sha256', '')
+        self.declare_parameter('model.recurrent_shadow_hidden_dim', 64)
+        self.declare_parameter('model.recurrent_shadow_projection_dim', 128)
+        self.declare_parameter('model.recurrent_shadow_use_speed', False)
+        self.declare_parameter('model.recurrent_shadow_speed_embedding_dim', 16)
+        self.declare_parameter('model.recurrent_shadow_max_speed_mps', 12.0)
+        self.declare_parameter(
+            'model.recurrent_shadow_max_abs_correction_rad', 0.64
+        )
+        self.declare_parameter(
+            'model.recurrent_shadow_correction_deadband_rad', 0.02
+        )
         self.declare_parameter('max_range', 30.0)
         self.declare_parameter('acceleration', 0.1)
         self.declare_parameter('control_mode', 'ai')
@@ -128,6 +141,41 @@ class TinyLidarNetNode(Node):
         spatial_authority_max_abs_delta_rad = float(
             self.get_parameter(
                 'model.spatial_authority_max_abs_delta_rad'
+            ).value
+        )
+        recurrent_shadow_ckpt_path = str(
+            self.get_parameter('model.recurrent_shadow_ckpt_path').value
+        )
+        recurrent_shadow_expected_sha256 = str(
+            self.get_parameter(
+                'model.recurrent_shadow_expected_sha256'
+            ).value
+        )
+        recurrent_shadow_hidden_dim = int(
+            self.get_parameter('model.recurrent_shadow_hidden_dim').value
+        )
+        recurrent_shadow_projection_dim = int(
+            self.get_parameter('model.recurrent_shadow_projection_dim').value
+        )
+        recurrent_shadow_use_speed = bool(
+            self.get_parameter('model.recurrent_shadow_use_speed').value
+        )
+        recurrent_shadow_speed_embedding_dim = int(
+            self.get_parameter(
+                'model.recurrent_shadow_speed_embedding_dim'
+            ).value
+        )
+        recurrent_shadow_max_speed_mps = float(
+            self.get_parameter('model.recurrent_shadow_max_speed_mps').value
+        )
+        recurrent_shadow_max_abs_correction_rad = float(
+            self.get_parameter(
+                'model.recurrent_shadow_max_abs_correction_rad'
+            ).value
+        )
+        recurrent_shadow_correction_deadband_rad = float(
+            self.get_parameter(
+                'model.recurrent_shadow_correction_deadband_rad'
             ).value
         )
         max_range = self.get_parameter('max_range').value
@@ -231,6 +279,12 @@ class TinyLidarNetNode(Node):
             'spatial_shadow_speed_timeout_sec': (
                 self.spatial_shadow_speed_timeout_sec
             ),
+            'model.recurrent_shadow_max_speed_mps': (
+                recurrent_shadow_max_speed_mps
+            ),
+            'model.recurrent_shadow_max_abs_correction_rad': (
+                recurrent_shadow_max_abs_correction_rad
+            ),
         }
         for name, value in positive_parameters.items():
             if not np.isfinite(value) or value <= 0.0:
@@ -273,6 +327,27 @@ class TinyLidarNetNode(Node):
                 spatial_authority_max_abs_delta_rad=(
                     spatial_authority_max_abs_delta_rad
                 ),
+                recurrent_shadow_ckpt_path=recurrent_shadow_ckpt_path,
+                recurrent_shadow_expected_sha256=(
+                    recurrent_shadow_expected_sha256
+                ),
+                recurrent_shadow_hidden_dim=recurrent_shadow_hidden_dim,
+                recurrent_shadow_projection_dim=(
+                    recurrent_shadow_projection_dim
+                ),
+                recurrent_shadow_use_speed=recurrent_shadow_use_speed,
+                recurrent_shadow_speed_embedding_dim=(
+                    recurrent_shadow_speed_embedding_dim
+                ),
+                recurrent_shadow_max_speed_mps=(
+                    recurrent_shadow_max_speed_mps
+                ),
+                recurrent_shadow_max_abs_correction_rad=(
+                    recurrent_shadow_max_abs_correction_rad
+                ),
+                recurrent_shadow_correction_deadband_rad=(
+                    recurrent_shadow_correction_deadband_rad
+                ),
             )
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
@@ -298,7 +373,21 @@ class TinyLidarNetNode(Node):
                 f"{self.spatial_shadow_speed_timeout_sec:.6f},"
                 f"authority_enabled={int(spatial_authority_enabled)},"
                 "authority_max_delta_rad="
-                f"{spatial_authority_max_abs_delta_rad:.6f}"
+                f"{spatial_authority_max_abs_delta_rad:.6f},"
+                " RecurrentShadowWeights: "
+                f"{self.core.recurrent_shadow_loaded_parameter_count},"
+                " RecurrentShadowEnabled: "
+                f"{self.core.recurrent_shadow_model is not None},"
+                " RecurrentShadowConfig: "
+                f"hidden={recurrent_shadow_hidden_dim},"
+                f"projection={recurrent_shadow_projection_dim},"
+                f"use_speed={int(recurrent_shadow_use_speed)},"
+                f"speed_embedding={recurrent_shadow_speed_embedding_dim},"
+                f"max_speed_mps={recurrent_shadow_max_speed_mps:.6f},"
+                "max_correction_rad="
+                f"{recurrent_shadow_max_abs_correction_rad:.6f},"
+                "deadband_rad="
+                f"{recurrent_shadow_correction_deadband_rad:.6f}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")
@@ -331,6 +420,13 @@ class TinyLidarNetNode(Node):
         self.spatial_authority_clipped_count = 0
         self.last_log_spatial_authority_clipped_count = 0
         self.spatial_authority_corrections = []
+        self.recurrent_shadow_admitted_count = 0
+        self.last_log_recurrent_shadow_admitted_count = 0
+        self.recurrent_shadow_skipped_count = 0
+        self.last_log_recurrent_shadow_skipped_count = 0
+        self.recurrent_shadow_error_count = 0
+        self.last_log_recurrent_shadow_error_count = 0
+        self.recurrent_shadow_corrections = []
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -400,6 +496,18 @@ class TinyLidarNetNode(Node):
                     )
                 if self.core.last_spatial_authority_clipped:
                     self.spatial_authority_clipped_count += 1
+            if self.core.recurrent_shadow_model is not None:
+                if self.core.last_recurrent_shadow_admitted:
+                    self.recurrent_shadow_admitted_count += 1
+                    self.recurrent_shadow_corrections.append(
+                        self.core.last_recurrent_shadow_correction_rad
+                    )
+                elif self.core.last_recurrent_shadow_status.startswith(
+                    "inference-error:"
+                ):
+                    self.recurrent_shadow_error_count += 1
+                else:
+                    self.recurrent_shadow_skipped_count += 1
             gap_decision = self.core.last_gap_teacher_decision
             if gap_decision is not None and gap_decision.active:
                 self.gap_teacher_active_count += 1
@@ -537,6 +645,18 @@ class TinyLidarNetNode(Node):
                     self.spatial_authority_clipped_count
                     - self.last_log_spatial_authority_clipped_count
                 )
+                interval_recurrent_admitted = (
+                    self.recurrent_shadow_admitted_count
+                    - self.last_log_recurrent_shadow_admitted_count
+                )
+                interval_recurrent_skipped = (
+                    self.recurrent_shadow_skipped_count
+                    - self.last_log_recurrent_shadow_skipped_count
+                )
+                interval_recurrent_errors = (
+                    self.recurrent_shadow_error_count
+                    - self.last_log_recurrent_shadow_error_count
+                )
                 scan_hz = interval_scans / elapsed_sec if elapsed_sec > 0.0 else 0.0
 
                 teacher_status = ""
@@ -641,6 +761,44 @@ class TinyLidarNetNode(Node):
                         f"{authority_max_abs:.5f}"
                     )
 
+                recurrent_status = ""
+                if self.core.recurrent_shadow_model is not None:
+                    recurrent_corrections = np.asarray(
+                        self.recurrent_shadow_corrections, dtype=np.float64
+                    )
+                    recurrent_mean_abs = (
+                        float(np.mean(np.abs(recurrent_corrections)))
+                        if recurrent_corrections.size
+                        else 0.0
+                    )
+                    recurrent_p95_abs = (
+                        float(np.percentile(np.abs(recurrent_corrections), 95))
+                        if recurrent_corrections.size
+                        else 0.0
+                    )
+                    recurrent_status = (
+                        " recurrent_shadow="
+                        f"{interval_recurrent_admitted}/{interval_scans} "
+                        "recurrent_skipped="
+                        f"{interval_recurrent_skipped} "
+                        "recurrent_errors="
+                        f"{interval_recurrent_errors} "
+                        "recurrent_mean_abs_rad="
+                        f"{recurrent_mean_abs:.5f} "
+                        "recurrent_p95_abs_rad="
+                        f"{recurrent_p95_abs:.5f} "
+                        "recurrent_last_rad="
+                        f"{self.core.last_recurrent_shadow_correction_rad:.5f} "
+                        "recurrent_raw_last_rad="
+                        f"{self.core.last_recurrent_shadow_raw_correction_rad:.5f} "
+                        "recurrent_hidden_norm="
+                        f"{self.core.last_recurrent_shadow_hidden_norm:.5f} "
+                        "recurrent_resets="
+                        f"{self.core.recurrent_shadow_reset_count} "
+                        "recurrent_status="
+                        f"{self.core.last_recurrent_shadow_status}"
+                    )
+
                 self.get_logger().info(
                     f"E2E_STATUS scans={self.scan_count} stale={int(self.sensor_stale)} "
                     f"scan_hz={scan_hz:.2f} "
@@ -651,6 +809,7 @@ class TinyLidarNetNode(Node):
                     f"{safety_status}"
                     f"{residual_status}"
                     f"{shadow_status}"
+                    f"{recurrent_status}"
                 )
                 self.inference_times.clear()
                 self.last_log_scan_count = self.scan_count
@@ -671,6 +830,16 @@ class TinyLidarNetNode(Node):
                     self.spatial_authority_clipped_count
                 )
                 self.spatial_authority_corrections.clear()
+                self.last_log_recurrent_shadow_admitted_count = (
+                    self.recurrent_shadow_admitted_count
+                )
+                self.last_log_recurrent_shadow_skipped_count = (
+                    self.recurrent_shadow_skipped_count
+                )
+                self.last_log_recurrent_shadow_error_count = (
+                    self.recurrent_shadow_error_count
+                )
+                self.recurrent_shadow_corrections.clear()
 
             self.last_log_time = now
 

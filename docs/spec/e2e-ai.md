@@ -241,6 +241,18 @@ startup logとcompetition analysisで照合し、速度上限だけを暗黙に�
 昇格後に環境変数を指定せず実施したseed 2037も3周255.65秒、1位、penalty 0、stall 0で
 合格し、packaged defaultまで同じauthorityが到達することを確認した。
 
+同じpackaged defaultを4台・6周・420秒の最終参考worldで実行した
+`output/20260902-e2e-final-packaged`は競技Gateを不合格とした。d1/d2は約48 m走行後、
+race time約21.1秒でwall penaltyとなり0/6周、d2のwall状態は約398.7秒継続した。両者とも
+sensor staleや推論errorではなく、前方LiDARが約0.4--0.7 mの`stop-clearance`となり
+`-1.0 m/s2`を出したまま停止している。d3/d4はpenalty・stall 0だったが4/6周でtimeoutし、
+平均lapはそれぞれ86.82秒、85.64秒だった。
+
+したがってbounded paceは単車/NPCの再現性を改善したが、4台競技Acceptanceを満たしたとは
+扱わない。接触組とclean timeout組は別原因であり、速度上限だけで同時解決しない。次は横ML
+authorityを変更せず、現在の距離固定制動を実速度・反応遅れ・制動能力に対応させる。その後、
+接触前横回避dataと4台Gateを再評価してから、4.6 m/sを超えるpace学習へ進む。
+
 2026-09-01のfrozen production candidateによるcompetition matrixでは、単車
 `output/20260901-151131`だけが3/3周、penalty 0、stall 0で合格した。runtime NPC
 `output/20260901-152109`は2/3周後に右側へ埋まり、正加速中のstallが117.05秒、wall

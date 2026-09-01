@@ -149,6 +149,15 @@ checkpointは変更しない。再ラベル時は旧`lidar_gap_teacher_dagger`�
 行わない。全層候補はproduction overrideなしの診断候補として単車Finishを確認した後、
 4台worldでのみ追加判定し、失敗時はbase policyを固定したML residualなどへ分離する。
 
+全層候補の4台診断`output/20260901-103656`では、d1/d3/d4にpost-start stallは
+なかったが、d2が走行開始後280.70秒からbag終端まで123.51秒停止した。停止中は前方
+LiDARが約1.45--1.66 m、右側が約1.00 mで、`fixed_lidar_brake`は正しく加速度を0へ
+抑止していた。したがって縦安全層を緩和せず、候補checkpointもproductionへ昇格しない。
+全層fine-tuneは通常走行を退行させながら接触前横回避を十分再現できず、最終層だけでは
+補正表現力が不足したため、以後の局所解はproduction baseをfreezeし、新旧teacher差分を
+zero-output正常anchorと共に学ぶML steering residualとして分離する。residualはoffline
+評価と閉ループgateを通るまでruntime既定で無効とする。
+
 bag単位の固着監査は次で行う。起動待ちは除外し、一度1.0 m/s以上で走行した後の
 0.15 m/s以下の連続時間と、そのうち正加速指令中の連続時間を別々に判定する。縦安全層が
 正しく加速を抑止しても、その場で停止し続けるcandidateを成功扱いしない。GUIの見た目

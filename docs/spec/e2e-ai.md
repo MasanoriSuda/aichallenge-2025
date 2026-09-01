@@ -396,6 +396,13 @@ direction-transition改善は閉ループでも支持された。ただし単発
 candidate3＋`fixed_lidar_brake`、spatial authority OFFのままとする。次は同一設定の独立repeatを
 行い、再現した場合だけpromotion可否を判断する。
 
+独立repeatとして開始配置seedを2027へ変更した`output/20260901-191114`も、egoが3/3周を
+`102.423 / 89.655 / 102.593秒`で完走し1位、penalty/stall 0となった。最小LiDAR距離は
+left-front 0.770 mまで低下したが固着せず、coverage 99.932%、推論error 0だった。seed 2026と
+2027の2本平均は3周合計290.827秒である。これによりv3の動的障害物改善は再現したと判定する。
+次は値調整ではなく、v3 artifactを提出package内へ固定し、single learned steering owner、
+SHA検証、既定値、rollbackを含むpromotion contractを監査してからproduction昇格を判断する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

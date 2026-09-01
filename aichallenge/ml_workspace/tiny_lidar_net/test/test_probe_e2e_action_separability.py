@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "probe_e2e_action_separability.py"
@@ -207,6 +208,37 @@ def test_static_full_conv5_appends_speed_and_base_without_projection():
         features,
         [[1.0, 2.0, 3.0, 0.5, -0.2], [4.0, 5.0, 6.0, 1.0, 0.3]]
     )
+
+
+def test_convolutional_probe_input_preserves_scan_speed_and_base():
+    projected = np.zeros((2, 2), dtype=np.float32)
+    compact = np.zeros((2, 10), dtype=np.float32)
+    scans = np.vstack(
+        (np.full(750, 3.0, dtype=np.float32), np.full(750, 15.0, dtype=np.float32))
+    )
+
+    features = MODULE.compose_probe_features(
+        "trainable_scan_cnn_base",
+        projected,
+        compact,
+        np.asarray([6.0, 12.0], dtype=np.float32),
+        scans_m=scans,
+        base_steering_rad=np.asarray([-0.2, 0.3], dtype=np.float32),
+    )
+
+    assert features.shape == (2, 752)
+    assert np.allclose(features[0, :750], 0.1)
+    assert np.allclose(features[1, :750], 0.5)
+    assert np.allclose(features[:, 750:], [[0.5, -0.2], [1.0, 0.3]])
+
+
+def test_convolutional_probe_produces_three_finite_logits():
+    model = MODULE.ConvolutionalActionProbe(752)
+
+    output = model(torch.zeros(4, 752))
+
+    assert output.shape == (4, 3)
+    assert torch.isfinite(output).all()
 
 
 def test_temporal_raw_history_is_causal_and_resets_at_sequence_start():

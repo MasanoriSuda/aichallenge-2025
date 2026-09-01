@@ -528,6 +528,17 @@ materialは0.08959から0.08802へ僅かに改善しただけで、full-map adap
 correction専用action probeを3 seed評価する。raw/geometry MLPとfrozen conv5の両方を厳格に
 上回れない場合、static LiDAR＋speed＋base契約の限界と判定し、値調整へ戻らない。
 
+物理scanのangular localityを保持する4層1D CNN action probeも、3 seed平均で
+balanced/material方向が0.83441/0.84131、normal false-materialが0.12795となり、projected
+frozen+baseの0.89906/0.90455/0.08959を全て悪化させた。focus tail方向も2 seedで失敗したため、
+static correction専用CNNからauthority candidateを作らない。
+
+これによりstatic表現についてはprojected/full frozen conv5、raw/geometry MLP、trainable local
+CNNを反証した。次の独立変数は幅やprojectionではなく、sequence境界とego motionを守る
+spatiotemporal geometry encoderによるcausal observabilityである。これも同じrun-disjoint
+3 seed分類で先に診断し、不合格ならLiDAR/speed観測に対するteacher/zero-normal label契約自体を
+再設計する。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

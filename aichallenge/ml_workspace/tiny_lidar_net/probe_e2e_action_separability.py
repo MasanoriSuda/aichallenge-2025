@@ -38,6 +38,7 @@ VARIANTS = (
     "temporal_conv5",
     "temporal_conv5_base",
     "static_geometry_base",
+    "trainable_scan_cnn_base",
     "static_raw",
     "temporal_raw",
 )
@@ -65,6 +66,39 @@ class ActionProbe(nn.Module):
 
     def forward(self, values: torch.Tensor) -> torch.Tensor:
         return self.network(values)
+
+
+class ConvolutionalActionProbe(nn.Module):
+    """Diagnostic correction classifier that preserves LiDAR angular locality."""
+
+    def __init__(self, input_dim: int):
+        super().__init__()
+        if input_dim != 752:
+            raise ValueError("convolutional probe requires scan[750]+speed+base")
+        self.encoder = nn.Sequential(
+            nn.Conv1d(1, 16, kernel_size=9, stride=3),
+            nn.ReLU(),
+            nn.Conv1d(16, 24, kernel_size=7, stride=3),
+            nn.ReLU(),
+            nn.Conv1d(24, 32, kernel_size=5, stride=2),
+            nn.ReLU(),
+            nn.Conv1d(32, 32, kernel_size=3),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool1d(16),
+        )
+        self.head = nn.Sequential(
+            nn.Linear(32 * 16 + 2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 3),
+        )
+
+    def forward(self, values: torch.Tensor) -> torch.Tensor:
+        if values.ndim != 2 or values.shape[1] != 752:
+            raise ValueError("convolutional probe input must have shape (N, 752)")
+        scan = values[:, :750].unsqueeze(1)
+        context = values[:, 750:]
+        encoded = self.encoder(scan).flatten(start_dim=1)
+        return self.head(torch.cat((encoded, context), dim=1))
 
 
 def seed_everything(seed: int) -> torch.Generator:
@@ -356,6 +390,18 @@ def compose_probe_features(
         return np.concatenate(
             (geometry, normalized_speed, base_steering[:, None]), axis=1
         ).astype(np.float32, copy=False)
+    if variant == "trainable_scan_cnn_base":
+        if base_steering is None:
+            raise ValueError("convolutional probe requires base steering")
+        raw = np.asarray(scans_m, dtype=np.float32)
+        if raw.shape != (len(projected), 750):
+            raise ValueError(
+                "convolutional probe requires physical scans with shape (N, 750)"
+            )
+        normalized = np.clip(raw / 30.0, 0.0, 1.0)
+        return np.concatenate(
+            (normalized, normalized_speed, base_steering[:, None]), axis=1
+        ).astype(np.float32, copy=False)
     if variant in ("static_raw", "temporal_raw"):
         raw = np.asarray(scans_m, dtype=np.float32)
         if raw.shape != (len(projected), 750):
@@ -458,8 +504,14 @@ def train_probe(
     learning_rate: float,
     patience: int,
     sample_weights: np.ndarray | None = None,
-) -> tuple[ActionProbe, list[dict[str, float]]]:
-    model = ActionProbe(train_features.shape[1]).to(device)
+    model_kind: str = "mlp",
+) -> tuple[nn.Module, list[dict[str, float]]]:
+    if model_kind == "mlp":
+        model = ActionProbe(train_features.shape[1]).to(device)
+    elif model_kind == "scan_cnn":
+        model = ConvolutionalActionProbe(train_features.shape[1]).to(device)
+    else:
+        raise ValueError(f"unsupported action probe model: {model_kind}")
     if sample_weights is not None:
         weights_array = np.asarray(sample_weights, dtype=np.float64)
         if weights_array.shape != train_labels.shape or np.any(weights_array <= 0.0):
@@ -536,7 +588,7 @@ def train_probe(
     return model, history
 
 
-def predict(model: ActionProbe, features: np.ndarray, device: torch.device) -> np.ndarray:
+def predict(model: nn.Module, features: np.ndarray, device: torch.device) -> np.ndarray:
     model.eval()
     outputs = []
     with torch.no_grad():
@@ -747,9 +799,16 @@ def main() -> int:
         validation_features, validation_labels = concatenate_sequences(
             validation_sequences
         )
-        train_features, validation_features, scaling = standardize_from_train(
-            train_features, validation_features
-        )
+        if variant == "trainable_scan_cnn_base":
+            scaling = {
+                "mode": "physical-range-normalized",
+                "mean_abs": 0.0,
+                "minimum_scale": 1.0,
+            }
+        else:
+            train_features, validation_features, scaling = standardize_from_train(
+                train_features, validation_features
+            )
         offset = 0
         normalized_validation_sequences = []
         for sequence in validation_sequences:
@@ -779,6 +838,7 @@ def main() -> int:
             args.learning_rate,
             args.patience,
             train_sample_weights,
+            "scan_cnn" if variant == "trainable_scan_cnn_base" else "mlp",
         )
         validation_predictions = predict(model, validation_features, device)
         per_sequence = []
@@ -849,6 +909,7 @@ def main() -> int:
     temporal_base = variant_reports["temporal_conv5_base"]["aggregate"]
     raw = variant_reports["static_raw"]["aggregate"]
     geometry = variant_reports["static_geometry_base"]["aggregate"]
+    correction_cnn = variant_reports["trainable_scan_cnn_base"]["aggregate"]
     raw_temporal = variant_reports["temporal_raw"]["aggregate"]
     peer_temporal = variant_reports["temporal_conv5"]["peer_validation"]["metrics"]
     report = {
@@ -945,6 +1006,14 @@ def main() -> int:
             ),
             "full_conv5_minus_projected_base_material_sign_accuracy": (
                 spatial_full_base["material_sign_accuracy"]
+                - spatial_base["material_sign_accuracy"]
+            ),
+            "correction_cnn_minus_spatial_base_balanced_accuracy": (
+                correction_cnn["balanced_accuracy"]
+                - spatial_base["balanced_accuracy"]
+            ),
+            "correction_cnn_minus_spatial_base_material_sign_accuracy": (
+                correction_cnn["material_sign_accuracy"]
                 - spatial_base["material_sign_accuracy"]
             ),
             "raw_temporal_minus_raw_balanced_accuracy": (

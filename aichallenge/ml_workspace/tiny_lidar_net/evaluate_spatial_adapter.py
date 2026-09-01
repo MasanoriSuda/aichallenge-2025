@@ -12,6 +12,7 @@ from torch.utils.data import ConcatDataset, DataLoader
 from lib.checkpoint import load_pretrained_weights
 from lib.data import MultiSeqConcatDataset
 from lib.model import TinyLidarNet
+from lib.normal_anchor import MultiSeqNormalAnchorDataset
 from lib.recurrent_policy import MultiSeqRecurrentPolicyDataset
 from lib.residual import residual_metrics, write_json
 from lib.spatial_adapter import FrozenTinyLidarSpatialResidual
@@ -23,8 +24,10 @@ def predict_paired(model, loader, device, material_delta_rad: float) -> dict:
     directions = []
     model.eval()
     with torch.no_grad():
-        for scans, _, teacher, base in loader:
-            residual, _, logits, _ = model.forward_components(scans.to(device))
+        for scans, speeds, teacher, base in loader:
+            residual, _, logits, _ = model.forward_components(
+                scans.to(device), speeds.to(device)
+            )
             residuals.append(residual.cpu().numpy())
             targets.append((teacher - base).numpy())
             directions.append(torch.argmax(logits, dim=1).cpu().numpy())
@@ -70,7 +73,21 @@ def predict_normal(model, loader, device, max_range_m: float) -> dict:
         for normalized_scans, _ in loader:
             physical_scans = normalized_scans.to(device) * max_range_m
             values.append(model(physical_scans).cpu().numpy())
-    predicted = np.concatenate(values)
+    return normal_metrics(np.concatenate(values))
+
+
+def predict_recurrent_normal(model, loader, device) -> dict:
+    values = []
+    model.eval()
+    with torch.no_grad():
+        for scans, speeds, _, _ in loader:
+            values.append(
+                model(scans.to(device), speeds.to(device)).cpu().numpy()
+            )
+    return normal_metrics(np.concatenate(values))
+
+
+def normal_metrics(predicted: np.ndarray) -> dict:
     return {
         "samples": len(predicted),
         "mae_rad": float(np.mean(np.abs(predicted))),
@@ -100,12 +117,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--base-checkpoint", type=Path, required=True)
-    parser.add_argument("--normal-dataset-dir", type=Path, required=True)
+    parser.add_argument("--normal-dataset-dir", type=Path)
+    parser.add_argument("--normal-recurrent-root", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--input-dim", type=int, default=750)
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--max-range-m", type=float, default=30.0)
     parser.add_argument("--max-abs-delta-rad", type=float, default=1.2)
+    parser.add_argument("--max-speed-mps", type=float, default=12.0)
+    parser.add_argument("--use-speed", action="store_true")
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
     parser.add_argument("--batch-size", type=int, default=512)
@@ -121,12 +141,18 @@ def main() -> int:
     args = parse_args()
     if args.batch_size <= 0:
         raise ValueError("spatial evaluation batch size must be positive")
+    if (args.normal_dataset_dir is None) == (args.normal_recurrent_root is None):
+        raise ValueError("provide exactly one normal validation source")
+    if args.use_speed and args.normal_recurrent_root is None:
+        raise ValueError("speed-enabled evaluation requires synchronized normal data")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = FrozenTinyLidarSpatialResidual(
         input_dim=args.input_dim,
         hidden_dim=args.hidden_dim,
         max_scan_range_m=args.max_range_m,
         max_abs_delta_rad=args.max_abs_delta_rad,
+        use_speed=args.use_speed,
+        max_speed_mps=args.max_speed_mps,
     )
     candidate_provenance = load_pretrained_weights(model, args.candidate)
     base_provenance = assert_embedded_base_identity(model, args.base_checkpoint)
@@ -158,18 +184,32 @@ def main() -> int:
         device,
         args.material_delta_rad,
     )
-    normal = MultiSeqConcatDataset(
-        args.normal_dataset_dir,
-        expected_split="val",
-        max_range=args.max_range_m,
-        expected_input_dim=args.input_dim,
-    )
-    normal_metrics = predict_normal(
-        model,
-        DataLoader(normal, batch_size=args.batch_size, shuffle=False),
-        device,
-        args.max_range_m,
-    )
+    if args.normal_recurrent_root is not None:
+        normal = MultiSeqNormalAnchorDataset(
+            args.normal_recurrent_root.expanduser().resolve() / "val", "val"
+        )
+        independent_normal = predict_recurrent_normal(
+            model,
+            DataLoader(
+                ConcatDataset(normal.datasets),
+                batch_size=args.batch_size,
+                shuffle=False,
+            ),
+            device,
+        )
+    else:
+        normal = MultiSeqConcatDataset(
+            args.normal_dataset_dir,
+            expected_split="val",
+            max_range=args.max_range_m,
+            expected_input_dim=args.input_dim,
+        )
+        independent_normal = predict_normal(
+            model,
+            DataLoader(normal, batch_size=args.batch_size, shuffle=False),
+            device,
+            args.max_range_m,
+        )
     material_improvement = aggregate["residual"][
         "material_mae_improvement_fraction"
     ]
@@ -179,7 +219,7 @@ def main() -> int:
         "embedded_base_identity": True,
         "finite_and_bounded": (
             aggregate["finite"]
-            and normal_metrics["finite"]
+            and independent_normal["finite"]
             and aggregate["prediction_abs_max_rad"]
             <= args.max_abs_delta_rad + 1e-6
         ),
@@ -196,7 +236,7 @@ def main() -> int:
             <= args.max_anchor_mae_rad
         ),
         "independent_normal_leakage": (
-            normal_metrics["mae_rad"] <= args.max_normal_mae_rad
+            independent_normal["mae_rad"] <= args.max_normal_mae_rad
         ),
         "peer_direction": (
             peer_material_sign is not None
@@ -215,7 +255,7 @@ def main() -> int:
         "peer_sequence_id": peer_records[0].sequence_id,
         "aggregate": aggregate,
         "peer_validation": peer,
-        "independent_normal": normal_metrics,
+        "independent_normal": independent_normal,
         "thresholds": {
             "min_material_improvement": args.min_material_improvement,
             "min_material_sign_accuracy": args.min_material_sign_accuracy,

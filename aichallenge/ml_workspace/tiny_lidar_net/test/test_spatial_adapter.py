@@ -45,6 +45,22 @@ def test_spatial_adapter_validates_physical_scan_contract():
         model(invalid)
 
 
+def test_speed_enabled_adapter_requires_valid_aligned_speed():
+    model = FrozenTinyLidarSpatialResidual(
+        input_dim=750, hidden_dim=16, use_speed=True
+    )
+    scans = torch.rand(3, 750) * 30.0
+
+    with pytest.raises(ValueError, match="one speed per scan"):
+        model(scans)
+    with pytest.raises(ValueError, match="non-negative"):
+        model(scans, torch.tensor([1.0, -0.1, 2.0]))
+    assert torch.equal(
+        model(scans, torch.tensor([1.0, 2.0, 3.0])),
+        torch.zeros(3),
+    )
+
+
 class FakeNormalizedSequence:
     sequence_id = "normal-run"
 

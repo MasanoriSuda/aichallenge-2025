@@ -13,6 +13,7 @@ from torch.utils.data import ConcatDataset, DataLoader, WeightedRandomSampler
 
 from lib.checkpoint import load_pretrained_weights, sha256_file
 from lib.data import MultiSeqConcatDataset
+from lib.normal_anchor import MultiSeqNormalAnchorDataset
 from lib.recurrent_policy import MultiSeqRecurrentPolicyDataset
 from lib.residual import (
     residual_metrics,
@@ -77,9 +78,11 @@ def direction_class_weights(source, material_delta_rad: float) -> torch.Tensor:
     return (inverse / inverse.mean()).to(dtype=torch.float32)
 
 
-def adapter_loss(model, scans, teacher, base, args, class_weights):
+def adapter_loss(model, scans, speeds, teacher, base, args, class_weights):
     targets = teacher - base
-    residual, magnitudes, direction_logits, _ = model.forward_components(scans)
+    residual, magnitudes, direction_logits, _ = model.forward_components(
+        scans, speeds
+    )
     return signed_mixture_training_loss(
         residual,
         magnitudes,
@@ -98,11 +101,14 @@ def validation_loss(model, loader, device, args, class_weights) -> float:
     total = 0.0
     samples = 0
     with torch.no_grad():
-        for scans, _, teacher, base in loader:
+        for scans, speeds, teacher, base in loader:
             scans = scans.to(device)
+            speeds = speeds.to(device)
             teacher = teacher.to(device)
             base = base.to(device)
-            loss = adapter_loss(model, scans, teacher, base, args, class_weights)
+            loss = adapter_loss(
+                model, scans, speeds, teacher, base, args, class_weights
+            )
             total += float(loss.item()) * len(scans)
             samples += len(scans)
     if samples == 0:
@@ -116,8 +122,10 @@ def infer(model, loader, device, material_delta_rad: float) -> dict:
     targets = []
     predicted_classes = []
     with torch.no_grad():
-        for scans, _, teacher, base in loader:
-            residual, _, logits, _ = model.forward_components(scans.to(device))
+        for scans, speeds, teacher, base in loader:
+            residual, _, logits, _ = model.forward_components(
+                scans.to(device), speeds.to(device)
+            )
             residuals.append(residual.cpu().numpy())
             targets.append((teacher - base).numpy())
             predicted_classes.append(torch.argmax(logits, dim=1).cpu().numpy())
@@ -164,11 +172,18 @@ def parse_args() -> argparse.Namespace:
             "whose scans receive exact zero residual targets."
         ),
     )
+    parser.add_argument(
+        "--normal-recurrent-root",
+        type=Path,
+        help="Normal-anchor root with synchronized train/val speed.",
+    )
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--input-dim", type=int, default=750)
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--max-range-m", type=float, default=30.0)
     parser.add_argument("--max-abs-delta-rad", type=float, default=1.2)
+    parser.add_argument("--max-speed-mps", type=float, default=12.0)
+    parser.add_argument("--use-speed", action="store_true")
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--material-weight", type=float, default=5.0)
     parser.add_argument("--direction-loss-weight", type=float, default=1.0)
@@ -195,7 +210,16 @@ def main() -> int:
     if overlap:
         raise ValueError(f"spatial adapter sequence overlap: {sorted(overlap)}")
     normal_anchor_sequences = []
-    if args.normal_anchor_train_dir is not None:
+    if args.normal_anchor_train_dir is not None and args.normal_recurrent_root is not None:
+        raise ValueError("legacy and recurrent normal anchors are mutually exclusive")
+    if args.use_speed and args.normal_recurrent_root is None:
+        raise ValueError("speed-enabled adapter requires synchronized normal anchors")
+    if args.normal_recurrent_root is not None:
+        normal_source = MultiSeqNormalAnchorDataset(
+            args.normal_recurrent_root.expanduser().resolve() / "train", "train"
+        )
+        normal_anchor_sequences = normal_source.datasets
+    elif args.normal_anchor_train_dir is not None:
         normal_source = MultiSeqConcatDataset(
             args.normal_anchor_train_dir,
             expected_split="train",
@@ -240,6 +264,8 @@ def main() -> int:
         hidden_dim=args.hidden_dim,
         max_scan_range_m=args.max_range_m,
         max_abs_delta_rad=args.max_abs_delta_rad,
+        use_speed=args.use_speed,
+        max_speed_mps=args.max_speed_mps,
     )
     base_provenance = load_pretrained_weights(model.base, args.base_checkpoint)
     model.to(device)
@@ -283,12 +309,15 @@ def main() -> int:
         model.train()
         total = 0.0
         samples = 0
-        for scans, _, teacher, base in train_loader:
+        for scans, speeds, teacher, base in train_loader:
             scans = scans.to(device)
+            speeds = speeds.to(device)
             teacher = teacher.to(device)
             base = base.to(device)
             optimizer.zero_grad(set_to_none=True)
-            loss = adapter_loss(model, scans, teacher, base, args, class_weights)
+            loss = adapter_loss(
+                model, scans, speeds, teacher, base, args, class_weights
+            )
             if not torch.isfinite(loss):
                 raise FloatingPointError("non-finite spatial adapter loss")
             loss.backward()

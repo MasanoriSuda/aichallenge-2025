@@ -23,6 +23,7 @@ import torch.nn.functional as F
 from lib.checkpoint import load_pretrained_weights
 from lib.data import MultiSeqConcatDataset
 from lib.model import TinyLidarNet
+from lib.normal_anchor import MultiSeqNormalAnchorDataset
 from lib.recurrent_policy import MultiSeqRecurrentPolicyDataset
 
 
@@ -441,6 +442,11 @@ def main() -> int:
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
     parser.add_argument("--normal-anchor-train-dir", type=Path)
     parser.add_argument("--normal-validation-dir", type=Path)
+    parser.add_argument(
+        "--normal-recurrent-root",
+        type=Path,
+        help="Normal-anchor root with real synchronized speed for train and val.",
+    )
     args = parser.parse_args()
     if min(args.projection_dim, args.epochs, args.batch_size, args.patience) <= 0:
         parser.error("projection, training and patience values must be positive")
@@ -471,13 +477,27 @@ def main() -> int:
         conv5 = F.relu(base_model.conv5(conv5))
         conv5_dim = int(torch.flatten(conv5, start_dim=1).shape[1])
     projection = random_projection(conv5_dim, args.projection_dim, args.seed)
+    if args.normal_recurrent_root is not None and (
+        args.normal_anchor_train_dir is not None
+        or args.normal_validation_dir is not None
+    ):
+        parser.error("normal recurrent and legacy normal inputs are mutually exclusive")
     if (args.normal_anchor_train_dir is None) != (
         args.normal_validation_dir is None
     ):
         parser.error("normal train and validation directories must be supplied together")
     normal_train_source = None
     normal_validation_source = None
-    if args.normal_anchor_train_dir is not None:
+    normal_has_synchronized_speed = args.normal_recurrent_root is not None
+    if normal_has_synchronized_speed:
+        normal_root = args.normal_recurrent_root.expanduser().resolve()
+        normal_train_source = MultiSeqNormalAnchorDataset(
+            normal_root / "train", "train"
+        )
+        normal_validation_source = MultiSeqNormalAnchorDataset(
+            normal_root / "val", "val"
+        )
+    elif args.normal_anchor_train_dir is not None:
         normal_train_source = MultiSeqConcatDataset(
             args.normal_anchor_train_dir,
             expected_split="train",
@@ -498,6 +518,11 @@ def main() -> int:
 
     variant_reports = {}
     feature_cache: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    normal_validation_ids = (
+        set()
+        if normal_validation_source is None
+        else set(normal_validation_source.sequence_ids)
+    )
     for variant in VARIANTS:
         train_sequences = make_probe_sequences(
             train_source,
@@ -518,26 +543,54 @@ def main() -> int:
             feature_cache,
         )
         if normal_train_source is not None:
-            train_sequences.extend(
-                make_normal_probe_sequences(
-                    normal_train_source,
-                    base_model,
-                    variant,
-                    projection,
-                    device,
-                    feature_cache,
+            if normal_has_synchronized_speed:
+                train_sequences.extend(
+                    make_probe_sequences(
+                        normal_train_source,
+                        base_model,
+                        variant,
+                        projection,
+                        args.material_delta_rad,
+                        device,
+                        feature_cache,
+                    )
                 )
-            )
-            validation_sequences.extend(
-                make_normal_probe_sequences(
-                    normal_validation_source,
-                    base_model,
-                    variant,
-                    projection,
-                    device,
-                    feature_cache,
+                validation_sequences.extend(
+                    make_probe_sequences(
+                        normal_validation_source,
+                        base_model,
+                        variant,
+                        projection,
+                        args.material_delta_rad,
+                        device,
+                        feature_cache,
+                    )
                 )
-            )
+            else:
+                train_sequences.extend(
+                    make_normal_probe_sequences(
+                        normal_train_source,
+                        base_model,
+                        variant,
+                        projection,
+                        device,
+                        feature_cache,
+                    )
+                )
+                validation_sequences.extend(
+                    make_normal_probe_sequences(
+                        normal_validation_source,
+                        base_model,
+                        variant,
+                        projection,
+                        device,
+                        feature_cache,
+                    )
+                )
+                normal_validation_ids = {
+                    f"normal-anchor:{value}"
+                    for value in normal_validation_source.sequence_ids
+                }
         train_features, train_labels = concatenate_sequences(train_sequences)
         validation_features, validation_labels = concatenate_sequences(
             validation_sequences
@@ -592,7 +645,7 @@ def main() -> int:
                 if peer_validation is not None:
                     raise ValueError("peer validation token is ambiguous")
                 peer_validation = record
-            if sequence.source_bag.startswith("normal-anchor:"):
+            if sequence.sequence_id in normal_validation_ids:
                 normal_predictions.append(
                     predict(model, sequence.features, device)
                 )
@@ -645,6 +698,11 @@ def main() -> int:
                 None
                 if args.normal_validation_dir is None
                 else str(args.normal_validation_dir.expanduser().resolve())
+            ),
+            "normal_recurrent_root": (
+                None
+                if args.normal_recurrent_root is None
+                else str(args.normal_recurrent_root.expanduser().resolve())
             ),
         },
         "variants": variant_reports,

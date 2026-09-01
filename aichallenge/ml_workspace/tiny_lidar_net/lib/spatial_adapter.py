@@ -22,6 +22,8 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         hidden_dim: int = 128,
         max_scan_range_m: float = 30.0,
         max_abs_delta_rad: float = 1.2,
+        use_speed: bool = False,
+        max_speed_mps: float = 12.0,
     ):
         super().__init__()
         if input_dim <= 0 or hidden_dim < 2:
@@ -30,9 +32,13 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             raise ValueError("maximum scan range must be finite and positive")
         if not np.isfinite(max_abs_delta_rad) or max_abs_delta_rad <= 0.0:
             raise ValueError("maximum correction must be finite and positive")
+        if not np.isfinite(max_speed_mps) or max_speed_mps <= 0.0:
+            raise ValueError("maximum speed must be finite and positive")
         self.input_dim = int(input_dim)
         self.max_scan_range_m = float(max_scan_range_m)
         self.max_abs_delta_rad = float(max_abs_delta_rad)
+        self.use_speed = bool(use_speed)
+        self.max_speed_mps = float(max_speed_mps)
         self.base = TinyLidarNet(input_dim=self.input_dim, output_dim=2)
         for parameter in self.base.parameters():
             parameter.requires_grad_(False)
@@ -41,8 +47,9 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             spatial = self._extract_conv5(dummy)
             self.spatial_dim = int(spatial.flatten(start_dim=1).shape[1])
         self.spatial_norm = nn.LayerNorm(self.spatial_dim)
+        adapter_input_dim = self.spatial_dim + int(self.use_speed)
         self.spatial_head = nn.Sequential(
-            nn.Linear(self.spatial_dim, hidden_dim),
+            nn.Linear(adapter_input_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
@@ -86,11 +93,27 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             spatial = self._extract_conv5(normalized).flatten(start_dim=1)
         return spatial
 
-    def forward_components(
-        self, scans_m: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _adapter_features(
+        self, scans_m: torch.Tensor, speeds_mps: torch.Tensor | None
+    ) -> torch.Tensor:
         spatial = self.spatial_norm(self.spatial_features(scans_m))
-        hidden = self.spatial_head(spatial)
+        if not self.use_speed:
+            return spatial
+        if speeds_mps is None or speeds_mps.shape != (len(scans_m),):
+            raise ValueError("speed-enabled adapter requires one speed per scan")
+        if not torch.isfinite(speeds_mps).all() or torch.any(speeds_mps < 0.0):
+            raise ValueError("spatial adapter speed must be finite and non-negative")
+        normalized_speed = torch.clamp(
+            speeds_mps / self.max_speed_mps, 0.0, 1.5
+        ).unsqueeze(1)
+        return torch.cat((spatial, normalized_speed), dim=1)
+
+    def forward_components(
+        self,
+        scans_m: torch.Tensor,
+        speeds_mps: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        hidden = self.spatial_head(self._adapter_features(scans_m, speeds_mps))
         direction_logits = self.direction_head(hidden)
         direction_probabilities = torch.softmax(direction_logits, dim=-1)
         magnitudes = (
@@ -102,6 +125,8 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         )
         return residual, magnitudes, direction_logits, direction_probabilities
 
-    def forward(self, scans_m: torch.Tensor) -> torch.Tensor:
-        residual, _, _, _ = self.forward_components(scans_m)
+    def forward(
+        self, scans_m: torch.Tensor, speeds_mps: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        residual, _, _, _ = self.forward_components(scans_m, speeds_mps)
         return residual

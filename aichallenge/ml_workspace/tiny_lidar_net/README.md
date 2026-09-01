@@ -184,6 +184,21 @@ python3 probe_e2e_action_separability.py \
   --output /output/e2e-spatial-normal-separability.json
 ```
 
+元bagの実速度を使うnormal contractは、direct-policy labelと別schemaで生成します。
+生成物には操舵labelを保存せず、各LiDAR時刻へ50 ms以内で同期できるspeedだけを追加します。
+
+```bash
+python3 build_normal_anchor_recurrent_dataset.py \
+  --source-root dataset/dagger_aggregate_v2 \
+  --output-root dataset/normal_anchor_recurrent_v1
+
+python3 probe_e2e_action_separability.py \
+  --dataset dataset/recurrent_direct_v3 \
+  --checkpoint checkpoints/20260901_055824/candidate.npy \
+  --normal-recurrent-root dataset/normal_anchor_recurrent_v1 \
+  --output /output/e2e-spatial-normal-speed-separability.json
+```
+
 probeが空間表現を支持した場合も、次の候補はoffline限定で学習・評価します。candidate
 artifactにfrozen baseを含め、評価時にbase tensorの同一性、teacher validation、peer subset、
 独立normal leakageを同時に検査します。
@@ -200,6 +215,27 @@ python3 evaluate_spatial_adapter.py \
   --base-checkpoint checkpoints/20260901_055824/candidate.npy \
   --normal-dataset-dir dataset/dagger_aggregate_v2/val \
   --output /output/e2e-static-spatial-adapter-gate.json \
+  --fail-on-gate
+```
+
+速度ありcandidateもまずoffline限定で評価します。`--use-speed`時は、速度を0で代用した
+legacy normal datasetを禁止し、同期済みnormal recurrent rootを必須とします。
+
+```bash
+python3 train_spatial_adapter.py \
+  --dataset dataset/recurrent_direct_v3 \
+  --base-checkpoint checkpoints/20260901_055824/candidate.npy \
+  --normal-recurrent-root dataset/normal_anchor_recurrent_v1 \
+  --use-speed \
+  --output-root checkpoints/spatial-speed-adapter-v1
+
+python3 evaluate_spatial_adapter.py \
+  --dataset dataset/recurrent_direct_v3 \
+  --candidate checkpoints/spatial-speed-adapter-v1/<run>/candidate.npy \
+  --base-checkpoint checkpoints/20260901_055824/candidate.npy \
+  --normal-recurrent-root dataset/normal_anchor_recurrent_v1 \
+  --use-speed \
+  --output /output/e2e-spatial-speed-adapter-gate.json \
   --fail-on-gate
 ```
 

@@ -290,6 +290,18 @@ normal anchorを含めた3 seed分類では、速度なしstatic spatialはmater
 採用根拠にしない。次のAI platform作業は元bagからnormal train/validationの速度を同一契約で
 同期したimmutable datasetを生成し、実速度で分離性を再監査することとする。
 
+元bagの`/localization/kinematic_state`をLiDAR時刻へ同期した専用normal schemaは、train
+3 sequence、validation 1 sequence、計19,714 sampleとなり、同期差最大36.12 msで50 ms
+契約を満たした。実速度を使った3 seed分類では、static spatialの未見normal誤発火が
+14.17%から12.18%へ下がった一方、material-signは85.99%から85.29%へ、balanced
+accuracyは86.30%から86.02%へ僅かに低下した。速度は補助信号ではあるが単独の解決策ではない。
+
+frozen base＋full spatial map＋実速度のcontinuous adapterを同じ固定Gateで評価すると、独立
+normal MAEは0.00873 radで合格したが、material改善27.82%と方向精度77.28%がそれぞれ
+30%/80% Gateを下回った。candidateはruntimeへ接続しない。分類probeが使うtrain-feature
+単位の固定標準化と、continuous adapterが使うsample単位LayerNormの契約差を次に監査し、
+Gateやruntime brake閾値は変更しない。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

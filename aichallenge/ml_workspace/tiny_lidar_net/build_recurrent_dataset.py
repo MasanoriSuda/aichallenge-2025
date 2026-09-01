@@ -1,0 +1,308 @@
+#!/usr/bin/env python3
+"""Derive a speed-synchronized recurrent policy dataset from admitted runs."""
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+from typing import Iterable, Tuple
+
+import numpy as np
+from rosbags.highlevel import AnyReader
+
+from extract_data_from_bag import synchronize_data
+from lib.recurrent_policy import RECURRENT_DATASET_SCHEMA_VERSION
+from lib.residual import SteeringResidualSequenceDataset
+
+
+DEFAULT_SPEED_TOPIC = "/localization/kinematic_state"
+DEFAULT_SPEED_MESSAGE_TYPE = "nav_msgs/msg/Odometry"
+RECURRENT_LABEL_SOURCE = "lidar_precontact_teacher_recurrent_direct"
+
+
+def longest_true_run(mask: np.ndarray) -> Tuple[int, int]:
+    """Return the half-open bounds of the longest contiguous accepted run."""
+    accepted = np.asarray(mask, dtype=bool)
+    if accepted.ndim != 1:
+        raise ValueError("acceptance mask must be one-dimensional")
+    best_start = best_stop = run_start = 0
+    in_run = False
+    for index, value in enumerate(accepted):
+        if value and not in_run:
+            run_start = index
+            in_run = True
+        if in_run and (not value or index == len(accepted) - 1):
+            run_stop = index if not value else index + 1
+            if run_stop - run_start > best_stop - best_start:
+                best_start, best_stop = run_start, run_stop
+            in_run = False
+    return best_start, best_stop
+
+
+def recurrent_sequence_id(
+    source_sequence_id: str,
+    speed_topic: str,
+    max_sync_delta_sec: float,
+) -> str:
+    """Bind derived identity to the source run and speed synchronization contract."""
+    contract = (
+        f"schema={RECURRENT_DATASET_SCHEMA_VERSION}|source={source_sequence_id}|"
+        f"speed={speed_topic}|max_delta={max_sync_delta_sec:.9f}"
+    )
+    digest = hashlib.sha256(contract.encode("utf-8")).hexdigest()[:12]
+    readable = source_sequence_id[-72:]
+    return f"{readable}-recurrent-{digest}"
+
+
+def read_odometry_speed(
+    bag_path: Path,
+    speed_topic: str,
+    expected_message_type: str,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Read finite longitudinal speeds and their bag timestamps."""
+    timestamps = []
+    speeds = []
+    failures = []
+    with AnyReader([bag_path]) as reader:
+        connections = [
+            connection
+            for connection in reader.connections
+            if connection.topic == speed_topic
+        ]
+        if not connections:
+            raise ValueError(f"required speed topic missing: {speed_topic}")
+        message_types = sorted({connection.msgtype for connection in connections})
+        if message_types != [expected_message_type]:
+            raise ValueError(
+                f"speed topic type mismatch: expected={expected_message_type}, "
+                f"actual={message_types}"
+            )
+        for connection, timestamp, raw in reader.messages(connections=connections):
+            try:
+                message = reader.deserialize(raw, connection.msgtype)
+                speed = abs(float(message.twist.twist.linear.x))
+                if not np.isfinite(speed):
+                    raise ValueError("non-finite longitudinal speed")
+                timestamps.append(timestamp)
+                speeds.append(speed)
+            except Exception as exc:  # A partial stream is not auditable evidence.
+                failures.append(
+                    f"{timestamp}:{type(exc).__name__}:{exc}"
+                )
+    if failures:
+        raise ValueError(
+            f"speed extraction failures={len(failures)}; first={failures[0]}"
+        )
+    if not timestamps:
+        raise ValueError(f"no valid speed samples on {speed_topic}")
+    timestamp_array = np.asarray(timestamps, dtype=np.int64)
+    speed_array = np.asarray(speeds, dtype=np.float32)
+    order = np.argsort(timestamp_array, kind="stable")
+    timestamp_array = timestamp_array[order]
+    speed_array = speed_array[order]
+    if np.any(np.diff(timestamp_array) <= 0):
+        raise ValueError("speed timestamps must be strictly increasing")
+    return timestamp_array, speed_array
+
+
+def iter_source_sequences(source_root: Path) -> Iterable[Tuple[str, Path]]:
+    for split in ("train", "val"):
+        split_root = source_root / split
+        if not split_root.is_dir():
+            raise FileNotFoundError(f"missing source split: {split_root}")
+        sequence_dirs = sorted(path for path in split_root.iterdir() if path.is_dir())
+        if not sequence_dirs:
+            raise ValueError(f"source split has no sequences: {split_root}")
+        for sequence_dir in sequence_dirs:
+            yield split, sequence_dir
+
+
+def build_sequence(
+    source_dir: Path,
+    output_root: Path,
+    split: str,
+    source_dataset_root: Path,
+    speed_topic: str,
+    speed_message_type: str,
+    max_speed_sync_delta_sec: float,
+    minimum_contiguous_samples: int,
+) -> dict:
+    """Build one sequence, preserving source labels and temporal continuity."""
+    source = SteeringResidualSequenceDataset(
+        source_dir,
+        expected_split=split,
+        input_mode="stateless",
+    )
+    source_bag_text = source.metadata.get("source_bag")
+    if not isinstance(source_bag_text, str) or not source_bag_text:
+        raise ValueError(f"source_bag missing in {source_dir}")
+    source_bag = Path(source_bag_text)
+    if not source_bag.is_dir() or not (source_bag / "metadata.yaml").is_file():
+        raise FileNotFoundError(f"source bag unavailable: {source_bag}")
+
+    speed_times, raw_speeds = read_odometry_speed(
+        source_bag, speed_topic, speed_message_type
+    )
+    matched_indices, deltas_ns = synchronize_data(
+        source.scan_timestamps_ns, speed_times
+    )
+    max_delta_ns = int(round(max_speed_sync_delta_sec * 1e9))
+    accepted = deltas_ns <= max_delta_ns
+    start, stop = longest_true_run(accepted)
+    if stop - start < minimum_contiguous_samples:
+        raise ValueError(
+            f"longest synchronized interval too short in {source_dir}: "
+            f"samples={stop - start}, minimum={minimum_contiguous_samples}"
+        )
+
+    source_slice = slice(start, stop)
+    speed_indices = matched_indices[source_slice]
+    accepted_deltas_sec = (
+        deltas_ns[source_slice].astype(np.float64, copy=False) / 1e9
+    )
+    sequence_id = recurrent_sequence_id(
+        source.sequence_id, speed_topic, max_speed_sync_delta_sec
+    )
+    output_dir = output_root / split / sequence_id
+    if output_dir.exists():
+        raise FileExistsError(f"derived output already exists: {output_dir}")
+    output_dir.mkdir(parents=True)
+
+    arrays = {
+        "scans.npy": source.scans[source_slice].astype(np.float32, copy=False),
+        "speeds.npy": raw_speeds[speed_indices].astype(np.float32, copy=False),
+        "steers.npy": source.steers[source_slice].astype(np.float32, copy=False),
+        "base_steers.npy": source.base_steers[source_slice].astype(
+            np.float32, copy=False
+        ),
+        "scan_timestamps_ns.npy": source.scan_timestamps_ns[source_slice],
+        "speed_timestamps_ns.npy": speed_times[speed_indices],
+        "speed_sync_deltas_sec.npy": accepted_deltas_sec,
+    }
+    for filename, values in arrays.items():
+        np.save(output_dir / filename, values)
+
+    source_residual = source.metadata["relabeling"]["residual_target"]
+    metadata = {
+        "schema_version": RECURRENT_DATASET_SCHEMA_VERSION,
+        "sequence_id": sequence_id,
+        "split": split,
+        "label_source": RECURRENT_LABEL_SOURCE,
+        "scan_shape": list(arrays["scans.npy"].shape[1:]),
+        "max_scan_range_m": float(source.metadata["max_scan_range_m"]),
+        "max_speed_sync_delta_sec": max_speed_sync_delta_sec,
+        "source": {
+            "dataset_root": str(source_dataset_root),
+            "sequence_id": source.sequence_id,
+            "sequence_dir": str(source_dir),
+            "bag": str(source_bag),
+            "label_source": source.metadata["label_source"],
+            "successor_teacher": source_residual["successor_teacher"],
+            "base_policy": source_residual["base_policy"],
+            "student_checkpoint": source.metadata["relabeling"][
+                "student_checkpoint"
+            ],
+            "student_checkpoint_sha256": source.metadata["relabeling"][
+                "student_checkpoint_sha256"
+            ],
+        },
+        "topics": {
+            "scan": source.metadata["topics"]["scan"],
+            "speed": speed_topic,
+        },
+        "message_types": {
+            "scan": source.metadata["message_types"]["scan"],
+            "speed": speed_message_type,
+        },
+        "counts": {
+            "source_samples": len(source),
+            "accepted_samples": stop - start,
+            "rejected_before_interval": start,
+            "rejected_after_interval": len(source) - stop,
+            "rejected_sync_total": int(np.count_nonzero(~accepted)),
+            "raw_speed_samples": len(speed_times),
+        },
+        "source_interval": {"start_index": start, "stop_index": stop},
+        "speed_sync_delta_sec": {
+            "mean": float(np.mean(accepted_deltas_sec)),
+            "p95": float(np.percentile(accepted_deltas_sec, 95)),
+            "max": float(np.max(accepted_deltas_sec)),
+        },
+        "timestamp_ns": {
+            "first_scan": int(arrays["scan_timestamps_ns.npy"][0]),
+            "last_scan": int(arrays["scan_timestamps_ns.npy"][-1]),
+        },
+    }
+    (output_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return metadata
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-root", type=Path, required=True)
+    parser.add_argument("--output-root", type=Path, required=True)
+    parser.add_argument("--speed-topic", default=DEFAULT_SPEED_TOPIC)
+    parser.add_argument("--speed-message-type", default=DEFAULT_SPEED_MESSAGE_TYPE)
+    parser.add_argument("--max-speed-sync-delta-sec", type=float, default=0.05)
+    parser.add_argument("--minimum-contiguous-samples", type=int, default=64)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    source_root = args.source_root.expanduser().resolve()
+    output_root = args.output_root.expanduser().resolve()
+    if output_root.exists():
+        raise FileExistsError(
+            f"output root already exists; use a new immutable root: {output_root}"
+        )
+    if (
+        not np.isfinite(args.max_speed_sync_delta_sec)
+        or args.max_speed_sync_delta_sec <= 0.0
+        or args.minimum_contiguous_samples <= 1
+    ):
+        raise ValueError("invalid recurrent synchronization configuration")
+
+    results = []
+    for split, source_dir in iter_source_sequences(source_root):
+        metadata = build_sequence(
+            source_dir=source_dir,
+            output_root=output_root,
+            split=split,
+            source_dataset_root=source_root,
+            speed_topic=args.speed_topic,
+            speed_message_type=args.speed_message_type,
+            max_speed_sync_delta_sec=args.max_speed_sync_delta_sec,
+            minimum_contiguous_samples=args.minimum_contiguous_samples,
+        )
+        results.append(metadata)
+        print(
+            f"built split={split} sequence={metadata['sequence_id']} "
+            f"samples={metadata['counts']['accepted_samples']}"
+        )
+
+    manifest = {
+        "schema_version": RECURRENT_DATASET_SCHEMA_VERSION,
+        "source_dataset_root": str(source_root),
+        "speed_topic": args.speed_topic,
+        "speed_message_type": args.speed_message_type,
+        "max_speed_sync_delta_sec": args.max_speed_sync_delta_sec,
+        "minimum_contiguous_samples": args.minimum_contiguous_samples,
+        "sequence_ids": [metadata["sequence_id"] for metadata in results],
+        "summary": {
+            "sequences": len(results),
+            "train_sequences": sum(item["split"] == "train" for item in results),
+            "val_sequences": sum(item["split"] == "val" for item in results),
+            "samples": sum(item["counts"]["accepted_samples"] for item in results),
+        },
+    }
+    (output_root / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

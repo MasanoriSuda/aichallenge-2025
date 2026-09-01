@@ -162,6 +162,32 @@ def test_static_raw_normalizes_physical_scan_once_and_appends_speed():
     assert features[:, -1].tolist() == pytest.approx([0.25, 0.5])
 
 
+def test_static_geometry_preserves_binned_min_mean_speed_and_base():
+    projected = np.zeros((2, 2), dtype=np.float32)
+    compact = np.zeros((2, 10), dtype=np.float32)
+    scans = np.vstack(
+        (
+            np.full(750, 3.0, dtype=np.float32),
+            np.full(750, 15.0, dtype=np.float32),
+        )
+    )
+
+    features = MODULE.compose_probe_features(
+        "static_geometry_base",
+        projected,
+        compact,
+        np.asarray([6.0, 12.0], dtype=np.float32),
+        scans,
+        np.asarray([-0.2, 0.3], dtype=np.float32),
+    )
+
+    assert features.shape == (2, 102)
+    assert np.allclose(features[0, :100], 0.1)
+    assert features[0, 100:].tolist() == pytest.approx([0.5, -0.2])
+    assert np.allclose(features[1, :100], 0.5)
+    assert features[1, 100:].tolist() == pytest.approx([1.0, 0.3])
+
+
 def test_temporal_raw_history_is_causal_and_resets_at_sequence_start():
     projected = np.zeros((3, 1), dtype=np.float32)
     compact = np.zeros((3, 10), dtype=np.float32)

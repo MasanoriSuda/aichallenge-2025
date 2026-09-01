@@ -493,6 +493,19 @@ conv5+speedの平均balanced accuracy/material方向0.8888/0.8889に対し、tem
 temporal 0.8737/0.8721だった。短い履歴やcompact GRUを再実装する根拠はなく、次はteacher
 correctionとproduction-normal zero labelの観測衝突を監査する。
 
+同じv11入力でteacher materialとproduction-normal zero labelの最近傍を監査したところ、
+material teacher状態の8.23%が成功normal run間の自然距離p50内、29.32%がp95内に入った。
+逆向きも7.62% / 44.04%である。random projectionを使わない50-binのLiDAR最小・平均距離、
+車輪速度、base steeringでも3.20% / 19.80%と2.98% / 28.08%の衝突が残った。したがって
+圧縮表現は衝突を増幅するが、根本はstatic observationに対するteacher補正と成功normalの
+zero-intervention labelが一部矛盾していることである。
+
+物理geometry表現を同一classifier protocolで3 seed評価してもbalanced accuracyは全seedで
+既存spatial+baseを下回り、normal false-materialは2 seedで増加し、凍結failure tail方向精度も
+不安定だった。このため新modelの学習やruntime threshold追加は行わずv11を維持する。次は
+immutable sample単位でteacher/normal conflictを特定し、重要なfailure tailを保持したまま
+曖昧labelをadmission対象外にできるかをデータ契約として監査する。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

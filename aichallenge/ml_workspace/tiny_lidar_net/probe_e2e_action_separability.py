@@ -36,6 +36,7 @@ VARIANTS = (
     "temporal_conv5_no_speed",
     "temporal_conv5",
     "temporal_conv5_base",
+    "static_geometry_base",
     "static_raw",
     "temporal_raw",
 )
@@ -325,6 +326,22 @@ def compose_probe_features(
             np.concatenate((projected, base_steering[:, None]), axis=1),
             speeds,
         )
+    if variant == "static_geometry_base":
+        if base_steering is None:
+            raise ValueError("geometry probe requires base steering")
+        raw = np.asarray(scans_m, dtype=np.float32)
+        if raw.shape != (len(projected), 750):
+            raise ValueError(
+                "geometry probe requires physical scans with shape (N, 750)"
+            )
+        normalized = np.clip(raw / 30.0, 0.0, 1.0)
+        binned = normalized.reshape(len(raw), 50, 15)
+        geometry = np.concatenate(
+            (np.min(binned, axis=2), np.mean(binned, axis=2)), axis=1
+        )
+        return np.concatenate(
+            (geometry, normalized_speed, base_steering[:, None]), axis=1
+        ).astype(np.float32, copy=False)
     if variant in ("static_raw", "temporal_raw"):
         raw = np.asarray(scans_m, dtype=np.float32)
         if raw.shape != (len(projected), 750):
@@ -811,6 +828,7 @@ def main() -> int:
     temporal = variant_reports["temporal_conv5"]["aggregate"]
     temporal_base = variant_reports["temporal_conv5_base"]["aggregate"]
     raw = variant_reports["static_raw"]["aggregate"]
+    geometry = variant_reports["static_geometry_base"]["aggregate"]
     raw_temporal = variant_reports["temporal_raw"]["aggregate"]
     peer_temporal = variant_reports["temporal_conv5"]["peer_validation"]["metrics"]
     report = {
@@ -892,6 +910,14 @@ def main() -> int:
             ),
             "raw_minus_spatial_material_sign_accuracy": (
                 raw["material_sign_accuracy"] - spatial["material_sign_accuracy"]
+            ),
+            "geometry_minus_spatial_base_balanced_accuracy": (
+                geometry["balanced_accuracy"]
+                - spatial_base["balanced_accuracy"]
+            ),
+            "geometry_minus_spatial_base_material_sign_accuracy": (
+                geometry["material_sign_accuracy"]
+                - spatial_base["material_sign_accuracy"]
             ),
             "raw_temporal_minus_raw_balanced_accuracy": (
                 raw_temporal["balanced_accuracy"] - raw["balanced_accuracy"]

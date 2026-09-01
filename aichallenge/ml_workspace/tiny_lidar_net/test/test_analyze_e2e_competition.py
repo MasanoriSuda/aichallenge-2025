@@ -161,6 +161,28 @@ def test_result_detail_must_match_domain_identity(tmp_path):
     assert "result-detail-domain-mismatch" in result["domains"][0]["reasons"]
 
 
+def test_npc_summary_duplicate_vehicle_numbers_use_detail_as_identity(tmp_path):
+    run_dir = create_run(tmp_path)
+    summary_path = run_dir / "result-summary.json"
+    summary = MODULE.load_json(summary_path)
+    summary["vehicles"].extend(
+        [
+            {"vehicle_number": 1, "finished": False, "lap_count": 1},
+            {"vehicle_number": 1, "finished": False, "lap_count": 0},
+        ]
+    )
+    write_json(summary_path, summary)
+
+    result = analyze(run_dir)
+
+    assert result["status"] == "pass"
+    assert result["domains"][0]["summary_crosscheck"] == {
+        "domain_entries": 3,
+        "matching_race_entries": 1,
+        "identity_ambiguous": True,
+    }
+
+
 def test_conflicting_runtime_provenance_fails(tmp_path):
     run_dir = create_run(tmp_path)
     log_path = run_dir / "d1" / "autoware.log"

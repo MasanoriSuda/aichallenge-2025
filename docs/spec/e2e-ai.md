@@ -227,6 +227,24 @@ docker compose run --rm --no-deps autoware-command \
 既定はpenalty 0件を要求する。診断目的で許容数を変える場合は
 `--max-penalty-count`を明示し、production昇格の結果と混同しない。
 
+2026-09-01のfrozen production candidateによるcompetition matrixでは、単車
+`output/20260901-151131`だけが3/3周、penalty 0、stall 0で合格した。runtime NPC
+`output/20260901-152109`は2/3周後に右側へ埋まり、正加速中のstallが117.05秒、wall
+penaltyが1件発生した。4台`output/20260901-153143`は全台未完走で、d1は0/6周かつ
+wall penalty 361.79秒、d3にもwall penalty 77.02秒が発生した。d2/d4はstall・penalty
+なしだったが、clean lapが約90秒で4/6周のままtimeoutした。
+
+これらの失敗中もcheckpoint、`fixed_lidar_brake`、推論出力は維持され、d1では前方8 m
+以上が開いた状態で正加速しながら右壁へ拘束されていた。したがって次のmodel Sliceは
+threshold変更や既存candidateの即時再学習ではなく、失敗直前状態が学習分布外なのか、同じ
+単一scanに逆向きactionが必要なobservation aliasingなのかをtrain/validationおよび
+seed-disjoint teacher runと比較して判定する。判定が終わるまでproduction checkpointを固定する。
+
+runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
+ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
+Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に
+domain結果として採用しない。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

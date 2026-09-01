@@ -134,16 +134,15 @@ def validate_detail(
     return reasons
 
 
-def summary_vehicle(summary: dict[str, Any], domain: int) -> Optional[dict[str, Any]]:
+def summary_vehicles(summary: dict[str, Any], domain: int) -> list[dict[str, Any]]:
     vehicles = summary.get("vehicles")
     if not isinstance(vehicles, list):
-        return None
-    matches = [
+        return []
+    return [
         item
         for item in vehicles
         if isinstance(item, dict) and item.get("vehicle_number") == domain
     ]
-    return matches[0] if len(matches) == 1 else None
 
 
 def analyze_domain(
@@ -187,13 +186,19 @@ def analyze_domain(
 
     reasons.extend(validate_motion(motion))
     reasons.extend(validate_detail(detail, domain, max_penalty_count))
-    vehicle = summary_vehicle(summary, domain)
-    if vehicle is None:
-        reasons.append("result-summary-domain-missing-or-duplicate")
-    else:
-        for key in ("finished", "lap_count"):
-            if vehicle.get(key) != detail.get(key):
-                reasons.append(f"result-summary-{key}-mismatch")
+    summary_candidates = summary_vehicles(summary, domain)
+    summary_matches = [
+        vehicle
+        for vehicle in summary_candidates
+        if all(
+            vehicle.get(key) == detail.get(key)
+            for key in ("finished", "lap_count")
+        )
+    ]
+    if not summary_candidates:
+        reasons.append("result-summary-domain-missing")
+    elif not summary_matches:
+        reasons.append("result-summary-race-mismatch")
 
     if provenance["conflicts"]:
         reasons.append("runtime-provenance-conflict")
@@ -224,6 +229,13 @@ def analyze_domain(
             "result_detail_sha256": sha256_file(detail_path),
         },
         "runtime": provenance,
+        "summary_crosscheck": {
+            "domain_entries": len(summary_candidates),
+            "matching_race_entries": len(summary_matches),
+            # Bundled AWSIM reports runtime NPCs with vehicle_number=1 as well.
+            # The per-domain v3 detail remains the identity authority.
+            "identity_ambiguous": len(summary_candidates) > 1,
+        },
         "race": {
             "finished": detail.get("finished"),
             "lap_count": detail.get("lap_count"),

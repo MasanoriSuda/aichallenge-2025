@@ -251,6 +251,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--normal-recurrent-root", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
+    parser.add_argument(
+        "--max-speed-sync-delta-sec",
+        type=float,
+        default=0.05,
+        help=(
+            "Maximum causal speed age admitted by the validation dataset. "
+            "This must match the explicitly selected runtime/data contract."
+        ),
+    )
     parser.add_argument("--minimum-material-improvement", type=float, default=0.30)
     parser.add_argument("--maximum-anchor-mae-rad", type=float, default=0.03)
     parser.add_argument("--maximum-normal-mae-rad", type=float, default=0.01)
@@ -268,6 +277,11 @@ def main() -> int:
     args = parse_args()
     if not np.isfinite(args.correction_deadband_rad) or args.correction_deadband_rad < 0.0:
         raise ValueError("correction deadband must be finite and non-negative")
+    if (
+        not np.isfinite(args.max_speed_sync_delta_sec)
+        or args.max_speed_sync_delta_sec <= 0.0
+    ):
+        raise ValueError("max speed sync delta must be finite and positive")
     checkpoint_path = args.checkpoint.expanduser().resolve()
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     if set(checkpoint) != {"model_config", "model_state_dict"}:
@@ -310,7 +324,9 @@ def main() -> int:
     model.to(device)
 
     validation = MultiSeqRecurrentPolicyDataset(
-        args.val_dir, expected_split="val"
+        args.val_dir,
+        expected_split="val",
+        max_speed_sync_delta_sec=args.max_speed_sync_delta_sec,
     )
     all_predictions = []
     all_targets = []
@@ -454,6 +470,7 @@ def main() -> int:
             "maximum_anchor_mae_rad": args.maximum_anchor_mae_rad,
             "maximum_normal_mae_rad": args.maximum_normal_mae_rad,
             "correction_deadband_rad": args.correction_deadband_rad,
+            "max_speed_sync_delta_sec": args.max_speed_sync_delta_sec,
         },
         "gates": gates,
         "admitted": all(gates.values()),

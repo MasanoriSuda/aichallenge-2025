@@ -305,6 +305,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--speed-embedding-dim", type=int, default=64)
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--max-speed-mps", type=float, default=12.0)
+    parser.add_argument(
+        "--max-speed-sync-delta-sec",
+        type=float,
+        default=0.05,
+        help=(
+            "Maximum causal speed age admitted by successor datasets. The "
+            "default preserves the original 50 ms dataset contract; a looser "
+            "runtime contract must be selected explicitly and is recorded in "
+            "the training manifest."
+        ),
+    )
     parser.add_argument("--max-abs-steering-rad", type=float, default=1.0)
     parser.add_argument("--chunk-length", type=int, default=64)
     parser.add_argument("--chunk-stride", type=int, default=32)
@@ -350,15 +361,21 @@ def main() -> int:
         or args.early_stop_patience <= 0
         or args.normal_anchor_weight < 0.0
         or args.direction_loss_weight <= 0.0
+        or not np.isfinite(args.max_speed_sync_delta_sec)
+        or args.max_speed_sync_delta_sec <= 0.0
     ):
         raise ValueError("invalid recurrent training configuration")
 
     generator = seed_everything(args.seed)
     train_sequences = MultiSeqRecurrentPolicyDataset(
-        args.train_dir, expected_split="train"
+        args.train_dir,
+        expected_split="train",
+        max_speed_sync_delta_sec=args.max_speed_sync_delta_sec,
     )
     val_sequences = MultiSeqRecurrentPolicyDataset(
-        args.val_dir, expected_split="val"
+        args.val_dir,
+        expected_split="val",
+        max_speed_sync_delta_sec=args.max_speed_sync_delta_sec,
     )
     overlap = set(train_sequences.sequence_ids) & set(val_sequences.sequence_ids)
     if overlap:

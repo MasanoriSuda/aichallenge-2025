@@ -166,6 +166,7 @@ class MultiSeqRecurrentPolicyDataset:
         dataset_root: Union[str, Path],
         expected_split: str,
         include: Optional[Sequence[str]] = None,
+        max_speed_sync_delta_sec: float = 0.05,
     ):
         root = Path(dataset_root)
         sequence_dirs = [
@@ -176,7 +177,11 @@ class MultiSeqRecurrentPolicyDataset:
         if not sequence_dirs:
             raise RuntimeError(f"no recurrent sequences found in {root}")
         self.datasets = [
-            RecurrentPolicySequenceDataset(path, expected_split=expected_split)
+            RecurrentPolicySequenceDataset(
+                path,
+                expected_split=expected_split,
+                max_speed_sync_delta_sec=max_speed_sync_delta_sec,
+            )
             for path in sequence_dirs
         ]
         self.sequence_ids = [dataset.sequence_id for dataset in self.datasets]

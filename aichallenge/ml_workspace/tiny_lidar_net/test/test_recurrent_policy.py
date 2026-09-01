@@ -79,6 +79,26 @@ def test_recurrent_identity_binds_speed_contract() -> None:
     )
 
 
+def test_recurrent_loader_requires_explicit_looser_speed_contract(
+    tmp_path: Path,
+) -> None:
+    sequence = write_sequence(tmp_path, "train", "runtime-speed-contract")
+    metadata_path = sequence / "metadata.json"
+    metadata = json.loads(metadata_path.read_text())
+    metadata["max_speed_sync_delta_sec"] = 0.1
+    metadata_path.write_text(json.dumps(metadata))
+
+    with pytest.raises(ValueError, match="speed sync contract too loose"):
+        MultiSeqRecurrentPolicyDataset(tmp_path / "train", "train")
+
+    loaded = MultiSeqRecurrentPolicyDataset(
+        tmp_path / "train",
+        "train",
+        max_speed_sync_delta_sec=0.1,
+    )
+    assert loaded.sequence_ids == ["runtime-speed-contract"]
+
+
 def test_recurrent_identity_preserves_teacher_provenance() -> None:
     assert recurrent_label_source("lidar_precontact_teacher_dagger") == (
         "lidar_precontact_teacher_recurrent_direct"

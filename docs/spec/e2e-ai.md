@@ -104,6 +104,20 @@ production checkpointのSHA-256は
 `de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa`である。
 単一の成功runでは昇格せず、通常走行と未見配置を含む閉ループgateを必須とする。
 
+同checkpointの6周練習参考`output/20260901-084641`は2018.59 m、584.09秒を走り、
+post-start stall gateを通過してAWSIM `Finish`へ到達した。一方、4台決勝参考
+`output/20260901-085903`ではd1のみstallなしで、d2/d4は前方が7〜8 m開き正加速を
+指令したまま約1.5 mの車体間隔で横接触固着した。これは縦停止閾値や起動契約ではなく、
+対称な他車相互作用に対する横方策の未汎化として扱う。
+
+診断専用`make e2e-final-contact-teacher`は同じ4台worldのd4だけを既存
+`gap_teacher`へ置換する。`output/20260901-090729`ではteacherが実際に
+`side-clearance` authorityを取得して横へ逃がしたが、d4には84.42秒の正加速固着が
+残った。このrunは教師データへ採用しない。既存teacherは現在の極端側方sector距離へ
+反応するだけで、相対運動や接触前の将来占有を表現しないため、side閾値の変更だけで
+productionへ移植しない。次の横回避teacherは短時間のLiDAR時系列から接触前riskを
+評価し、shadow/診断gateに合格してから抽出・再学習へ進む。
+
 bag単位の固着監査は次で行う。起動待ちは除外し、一度1.0 m/s以上で走行した後の
 0.15 m/s以下の連続時間と、そのうち正加速指令中の連続時間を別々に判定する。縦安全層が
 正しく加速を抑止しても、その場で停止し続けるcandidateを成功扱いしない。GUIの見た目

@@ -5,7 +5,7 @@
 ## 呼び出しの仕組み
 
 ```
-make simulator-<mode> / make dev / make dev2..dev4 / make gate1..gate3 / make e2e-single / make e2e-teacher / make e2e-npc-single / make e2e-npc-gap-teacher / make e2e-peer-audit-mpc / make e2e-peer-audit-student
+make simulator-<mode> / make dev / make dev2..dev4 / make gate1..gate3 / make e2e-single / make e2e-teacher / make e2e-npc-single / make e2e-npc-gap-teacher / make e2e-peer-audit-mpc / make e2e-peer-audit-student / make e2e-final-contact-teacher
   → docker compose up simulator (SIM_MODE=<mode>)
     → run_simulator.bash <mode> [args...]
       → simulator_scripts/<mode>.sh [args...]
@@ -21,8 +21,8 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 - Makefile は `*.sh` を wildcard で拾って `make simulator-<mode>` を自動生成する。
   `dev2..dev4` / `gate1..gate3` のエイリアスも `SIM_MODES` に追加してあり、
   `make simulator-dev2` / `make simulator-gate1` のように使える（AWSIM のみ起動）。
-- `make dev` / `make gate1..gate3` / `make e2e-single` / `make e2e-teacher` / `make e2e-npc-single` / `make e2e-npc-gap-teacher` / `make e2e-peer-audit-mpc` / `make e2e-peer-audit-student` / `make e2e` / `make e2e-final` は AWSIM に加えて Autoware も起動する複合ターゲット。
-  `make dev2..dev4` と `make e2e-final` は N 台分の autoware を別 compose
+- `make dev` / `make gate1..gate3` / `make e2e-single` / `make e2e-teacher` / `make e2e-npc-single` / `make e2e-npc-gap-teacher` / `make e2e-peer-audit-mpc` / `make e2e-peer-audit-student` / `make e2e` / `make e2e-final` / `make e2e-final-contact-teacher` は AWSIM に加えて Autoware も起動する複合ターゲット。
+  `make dev2..dev4`、`make e2e-final`、`make e2e-final-contact-teacher` は N 台分の autoware を別 compose
   プロジェクト（ROS_DOMAIN_ID=1..N）で起動する。`e2e-final` はsync開始のため、全車Ready後に
   `make awsim-request-start` を実行する。
 
@@ -48,6 +48,11 @@ make eval → run_evaluation.bash → evaluation.launch.xml
 再現可能なrun-level train/validation分割では、例えば
 `make e2e-npc-gap-teacher E2E_START_RANDOM_SEED=2027`のようにseedを明示する。
 未指定時は従来どおり2026であり、整数以外はAWSIM起動前に拒否する。
+
+`make e2e-final-contact-teacher`は`e2e-final.sh`の決定論的worldを使う診断専用A/Bである。
+domain 1〜3はproductionの`fixed_lidar_brake`、domain 4だけをteacher-only
+`gap_teacher`にする。全Domainが`Grounded`になった後に`make awsim-request-start`で開始する。
+domain 4のbagはFinish・接触・stall gateを通るまで学習データへ採用しない。
 | `multiplay-server.sh` | Multiplay 専用サーバー | - | `-batchmode -nographics`、port 7777 |
 | `multiplay-host.sh` | Multiplay ホスト | - | 127.0.0.1:7777、vehicle-index 1 |
 | `multiplay-client.sh` | Multiplay クライアント | - | 127.0.0.1:7777、vehicle-index 1 |

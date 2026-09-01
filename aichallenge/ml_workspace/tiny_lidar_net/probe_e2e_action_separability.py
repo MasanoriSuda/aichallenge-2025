@@ -33,6 +33,7 @@ VARIANTS = (
     "static_conv5_no_speed",
     "static_conv5",
     "static_conv5_base",
+    "static_conv5_full_base",
     "temporal_conv5_no_speed",
     "temporal_conv5",
     "temporal_conv5_base",
@@ -246,7 +247,9 @@ def make_probe_sequences(
     projection: np.ndarray,
     material_delta_rad: float,
     device: torch.device,
-    feature_cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
+    feature_cache: dict[
+        str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+    ],
 ) -> list[ProbeSequence]:
     output = []
     for sequence in source.datasets:
@@ -258,9 +261,9 @@ def make_probe_sequences(
             if conv5.shape[1] != projection.shape[0]:
                 raise ValueError("conv5 projection dimension mismatch")
             projected = conv5 @ projection
-            cached = (projected, fc3, base_steering)
+            cached = (conv5, projected, fc3, base_steering)
             feature_cache[sequence.sequence_id] = cached
-        projected, fc3, base_steering = cached
+        conv5, projected, fc3, base_steering = cached
         features = compose_probe_features(
             variant,
             projected,
@@ -268,6 +271,7 @@ def make_probe_sequences(
             sequence.speeds,
             sequence.scans,
             base_steering,
+            conv5,
         )
         output.append(
             ProbeSequence(
@@ -289,6 +293,7 @@ def compose_probe_features(
     speeds_mps: np.ndarray,
     scans_m: np.ndarray | None = None,
     base_steering_rad: np.ndarray | None = None,
+    full_conv5: np.ndarray | None = None,
 ) -> np.ndarray:
     speeds = np.asarray(speeds_mps, dtype=np.float32)
     if speeds.shape != (len(projected),):
@@ -314,6 +319,15 @@ def compose_probe_features(
             raise ValueError("base-conditioned probe requires base steering")
         return np.concatenate(
             (projected, normalized_speed, base_steering[:, None]), axis=1
+        )
+    if variant == "static_conv5_full_base":
+        if base_steering is None:
+            raise ValueError("full conv5 probe requires base steering")
+        full = np.asarray(full_conv5, dtype=np.float32)
+        if full.ndim != 2 or len(full) != len(projected):
+            raise ValueError("full conv5 features must align with probe samples")
+        return np.concatenate(
+            (full, normalized_speed, base_steering[:, None]), axis=1
         )
     if variant == "temporal_conv5_no_speed":
         return spatial_history_features(projected)
@@ -363,7 +377,9 @@ def make_normal_probe_sequences(
     variant: str,
     projection: np.ndarray,
     device: torch.device,
-    feature_cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
+    feature_cache: dict[
+        str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+    ],
 ) -> list[ProbeSequence]:
     output = []
     for sequence in source.datasets:
@@ -375,9 +391,9 @@ def make_normal_probe_sequences(
             )
             if conv5.shape[1] != projection.shape[0]:
                 raise ValueError("normal conv5 projection dimension mismatch")
-            cached = (conv5 @ projection, fc3, base_steering)
+            cached = (conv5, conv5 @ projection, fc3, base_steering)
             feature_cache[cache_key] = cached
-        projected, fc3, base_steering = cached
+        conv5, projected, fc3, base_steering = cached
         features = compose_probe_features(
             variant,
             projected,
@@ -385,6 +401,7 @@ def make_normal_probe_sequences(
             np.zeros(len(sequence), dtype=np.float32),
             sequence.scans * sequence.max_range,
             base_steering,
+            conv5,
         )
         output.append(
             ProbeSequence(
@@ -647,7 +664,9 @@ def main() -> int:
             raise ValueError(f"normal probe sequence overlap: {sorted(normal_overlap)}")
 
     variant_reports = {}
-    feature_cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+    feature_cache: dict[
+        str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+    ] = {}
     normal_validation_ids = (
         set()
         if normal_validation_source is None
@@ -825,6 +844,7 @@ def main() -> int:
     spatial_no_speed = variant_reports["static_conv5_no_speed"]["aggregate"]
     spatial = variant_reports["static_conv5"]["aggregate"]
     spatial_base = variant_reports["static_conv5_base"]["aggregate"]
+    spatial_full_base = variant_reports["static_conv5_full_base"]["aggregate"]
     temporal = variant_reports["temporal_conv5"]["aggregate"]
     temporal_base = variant_reports["temporal_conv5_base"]["aggregate"]
     raw = variant_reports["static_raw"]["aggregate"]
@@ -917,6 +937,14 @@ def main() -> int:
             ),
             "geometry_minus_spatial_base_material_sign_accuracy": (
                 geometry["material_sign_accuracy"]
+                - spatial_base["material_sign_accuracy"]
+            ),
+            "full_conv5_minus_projected_base_balanced_accuracy": (
+                spatial_full_base["balanced_accuracy"]
+                - spatial_base["balanced_accuracy"]
+            ),
+            "full_conv5_minus_projected_base_material_sign_accuracy": (
+                spatial_full_base["material_sign_accuracy"]
                 - spatial_base["material_sign_accuracy"]
             ),
             "raw_temporal_minus_raw_balanced_accuracy": (

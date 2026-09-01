@@ -518,6 +518,16 @@ failure教師を削除するため禁止する。physical距離だけで除外�
 固定random projectionする契約である。同じsplit、speed、base steering、classifier、3 seed、
 focus/peer Gateでfull conv5表現を先に診断し、厳格改善がなければ学習・runtime統合へ進めない。
 
+full conv5診断ではaggregate p50 conflictが8.26%から5.97%へ減ったが、4台固着run d2末尾は
+60%から61%となり改善しなかった。3 seed分類でもprojected+baseの平均balanced/material方向
+0.89906/0.90455に対し、full conv5+baseは0.89370/0.89382で全seed悪化した。normal false-
+materialは0.08959から0.08802へ僅かに改善しただけで、full-map adapterを学習する根拠はない。
+
+固定projectionはaggregate衝突の一因だが、通常走行用に凍結したbase conv5自体が既知failureの
+回避幾何を保持していない。次はruntime modelを変えず、物理LiDARへ局所畳み込みを学習する
+correction専用action probeを3 seed評価する。raw/geometry MLPとfrozen conv5の両方を厳格に
+上回れない場合、static LiDAR＋speed＋base契約の限界と判定し、値調整へ戻らない。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

@@ -132,3 +132,21 @@ def test_reason_counts_applies_aligned_conflict_mask():
     report = MODULE.reason_counts(reasons, np.asarray([False, True, True]))
 
     assert report == {"gap-selected": 2}
+
+
+def test_standardize_from_reference_uses_reference_statistics_only():
+    query = np.asarray([[3.0, 5.0]], dtype=np.float32)
+    reference = np.asarray([[1.0, 2.0], [3.0, 2.0]], dtype=np.float32)
+
+    normalized_query, normalized_reference, provenance = (
+        MODULE.standardize_from_reference(query, reference)
+    )
+
+    assert normalized_reference[:, 0].tolist() == pytest.approx([-1.0, 1.0])
+    assert normalized_reference[:, 1].tolist() == pytest.approx([0.0, 0.0])
+    assert np.allclose(normalized_query, [[1.0, 3_000_000.0]])
+    assert provenance == {
+        "feature_dim": 2,
+        "minimum_scale": 1e-6,
+        "floored_dimensions": 1,
+    }

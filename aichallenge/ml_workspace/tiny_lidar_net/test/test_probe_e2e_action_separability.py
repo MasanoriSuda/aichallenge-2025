@@ -188,6 +188,27 @@ def test_static_geometry_preserves_binned_min_mean_speed_and_base():
     assert features[1, 100:].tolist() == pytest.approx([1.0, 0.3])
 
 
+def test_static_full_conv5_appends_speed_and_base_without_projection():
+    projected = np.zeros((2, 2), dtype=np.float32)
+    compact = np.zeros((2, 10), dtype=np.float32)
+    full = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+
+    features = MODULE.compose_probe_features(
+        "static_conv5_full_base",
+        projected,
+        compact,
+        np.asarray([6.0, 12.0], dtype=np.float32),
+        base_steering_rad=np.asarray([-0.2, 0.3], dtype=np.float32),
+        full_conv5=full,
+    )
+
+    assert features.shape == (2, 5)
+    assert np.allclose(
+        features,
+        [[1.0, 2.0, 3.0, 0.5, -0.2], [4.0, 5.0, 6.0, 1.0, 0.3]]
+    )
+
+
 def test_temporal_raw_history_is_causal_and_resets_at_sequence_start():
     projected = np.zeros((3, 1), dtype=np.float32)
     compact = np.zeros((3, 10), dtype=np.float32)

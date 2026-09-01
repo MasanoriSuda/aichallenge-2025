@@ -119,6 +119,64 @@ def exact_adapter_features(
     return result_features, result_predictions
 
 
+def full_conv5_features(
+    model: FrozenTinyLidarSpatialResidual,
+    scans_m: np.ndarray,
+    speeds_mps: np.ndarray,
+    batch_size: int,
+) -> np.ndarray:
+    if len(scans_m) != len(speeds_mps):
+        raise ValueError("scan and speed arrays must be aligned")
+    features = []
+    model.eval()
+    with torch.no_grad():
+        for start in range(0, len(scans_m), batch_size):
+            stop = min(start + batch_size, len(scans_m))
+            scans = torch.from_numpy(scans_m[start:stop])
+            speeds = torch.from_numpy(speeds_mps[start:stop])
+            spatial = model.spatial_features(scans)
+            base = model.base_steering(scans).unsqueeze(1)
+            normalized_speed = torch.clamp(
+                speeds / model.max_speed_mps, 0.0, 1.5
+            ).unsqueeze(1)
+            features.append(
+                torch.cat((spatial, normalized_speed, base), dim=1).numpy()
+            )
+    result = np.concatenate(features).astype(np.float32, copy=False)
+    if not np.all(np.isfinite(result)):
+        raise ValueError("full conv5 audit produced non-finite features")
+    return result
+
+
+def standardize_from_reference(
+    query: np.ndarray,
+    reference: np.ndarray,
+    minimum_scale: float = 1e-6,
+) -> tuple[np.ndarray, np.ndarray, dict]:
+    queries = np.asarray(query, dtype=np.float32)
+    references = np.asarray(reference, dtype=np.float32)
+    if (
+        queries.ndim != 2
+        or references.ndim != 2
+        or queries.shape[1] != references.shape[1]
+        or len(references) == 0
+        or minimum_scale <= 0.0
+    ):
+        raise ValueError("standardization arrays must share a non-empty dimension")
+    mean = np.mean(references, axis=0, dtype=np.float64).astype(np.float32)
+    raw_scale = np.std(references, axis=0, dtype=np.float64).astype(np.float32)
+    scale = np.maximum(raw_scale, minimum_scale)
+    return (
+        ((queries - mean) / scale).astype(np.float32, copy=False),
+        ((references - mean) / scale).astype(np.float32, copy=False),
+        {
+            "feature_dim": int(references.shape[1]),
+            "minimum_scale": float(minimum_scale),
+            "floored_dimensions": int(np.count_nonzero(raw_scale < minimum_scale)),
+        },
+    )
+
+
 def physical_geometry_features(
     scans_m: np.ndarray,
     speeds_mps: np.ndarray,
@@ -593,6 +651,17 @@ def main() -> int:
     normal_features, normal_predictions = exact_adapter_features(
         model, normal.scans_m, normal.speeds_mps, args.batch_size
     )
+    teacher_full_conv5 = full_conv5_features(
+        model, teacher.scans_m, teacher.speeds_mps, args.batch_size
+    )
+    normal_full_conv5 = full_conv5_features(
+        model, normal.scans_m, normal.speeds_mps, args.batch_size
+    )
+    (
+        teacher_full_conv5,
+        normal_full_conv5,
+        full_conv5_standardization,
+    ) = standardize_from_reference(teacher_full_conv5, normal_full_conv5)
 
     material_indices = np.flatnonzero(
         np.abs(teacher.corrections_rad) >= args.material_delta_rad
@@ -657,6 +726,20 @@ def main() -> int:
             args.focus_validation_token,
             args.conflict_example_limit,
         ),
+        "full_conv5_normal_standardized": representation_conflict_report(
+            teacher_full_conv5,
+            normal_full_conv5,
+            material_indices,
+            normal_query_indices,
+            normal.sequence_index,
+            args.baseline_queries,
+            args.batch_size,
+            teacher,
+            normal,
+            args.tail_samples,
+            args.focus_validation_token,
+            args.conflict_example_limit,
+        ),
     }
 
     teacher_current_correction, teacher_reasons = current_teacher_records(
@@ -683,6 +766,9 @@ def main() -> int:
             "projection_dim": 128,
             "wheel_speed": True,
             "embedded_base_steering": True,
+            "full_conv5_diagnostic_standardization": (
+                full_conv5_standardization
+            ),
         },
         "corpora": {
             "teacher": {

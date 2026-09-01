@@ -468,6 +468,18 @@ authority単車はshadow基準より約6秒/3周遅いため、周回速度は�
 性能調整のために、物理的に教師を表現できない0.12 rad制約へ戻したり、障害物固有のtriggerを
 追加したりしてはならない。
 
+周回速度低下の後続監査では、authority走行の加速度指令にshadowとの差や負加速度はなく、
+操舵total variationが約11.6%増えていた。current-distributionのbase-authority runを
+zero-residual normal anchorとして追加したv12は、独立normal MAEを0.009699から
+0.007926 radへ改善した一方、凍結した壁回避failure末尾のmaterial改善を96.01%から
+12.55%へ悪化させた。中間のsequence balanceを使ったv13もmaterial改善28.75%で既存Gateに
+不合格だった。
+
+このため、normal anchorの比率調整はここで打ち切り、v11をproductionに維持する。現状の
+課題はruntime閾値ではなく、static single-frame soft mixtureがnormalの無介入とfailure時の
+大補正を同時に分離する能力にある。次候補はneutral/no-interventionを明示的に学習する出力
+構造、または時系列表現を独立Sliceで評価し、凍結failure replayを必須Gateに含める。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

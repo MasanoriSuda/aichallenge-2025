@@ -264,6 +264,48 @@ shadow Gateは3周完走、penalty 0、frozen production Gate合格、coverage 9
 LiDAR 19 Hz以上、watchdog stale 0、finiteかつ非zeroの診断出力を同時に要求します。shadowの
 補正は`/control/command/control_cmd`へ加算されません。
 
+### Offline projected-conv5 recurrent adapter
+
+stateful teacherの時間方向の判断を候補化するときは、productionをraw TinyLidarNetへ戻さず、
+packaged spatial adapterまで含む現在のproduction steeringを固定baseとして扱います。
+recurrent側へ渡す空間表現は、診断probeで選定したfrozen `conv5`の決定論的random projectionです。
+projectionとtrain-only normalization statisticsはcheckpoint bufferへ保存し、raw TinyLidarNetと
+spatial adapterの全tensorを学習対象から外します。独立production-normal train/val runでは、
+記録済みcommandを架空の教師にせず、recurrent correctionが厳密に0へ戻ることを学習・評価します。
+
+```bash
+python3 train_recurrent_policy.py \
+  --train-dir dataset/<speed-recurrent>/train \
+  --val-dir dataset/<speed-recurrent>/val \
+  --normal-recurrent-root dataset/<production-normal> \
+  --model-type frozen_tinylidar_adapter \
+  --base-checkpoint \
+    /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+  --production-spatial-checkpoint checkpoints/<production-spatial>/candidate.npy \
+  --adapter-spatial-features projected_conv5 \
+  --adapter-spatial-normalization fixed_train_statistics \
+  --no-adapter-use-speed \
+  --distillation-epochs 0 \
+  --output-root checkpoints/<recurrent-run>
+
+python3 evaluate_recurrent_policy.py \
+  --checkpoint checkpoints/<recurrent-run>/<timestamp>/best_model.pth \
+  --base-checkpoint \
+    /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+  --production-spatial-checkpoint checkpoints/<production-spatial>/candidate.npy \
+  --val-dir dataset/<unseen-speed-recurrent>/val \
+  --normal-recurrent-root dataset/<production-normal> \
+  --correction-deadband-rad 0.02 \
+  --unseen-source-bag-token <immutable-run-token> \
+  --output /output/<run>/recurrent-offline-gate.json
+```
+
+`--correction-deadband-rad`はraw recurrent correctionへ適用してからproduction baseと合成し、
+最後にsteering範囲へclampするdeployment契約です。validationに合わせてdeadbandを探索し続けず、
+material labelの既定境界である0.02 radを先に固定し、その後に取得した未見runで一度だけGateする。
+Gate合格はoffline shadow候補の資格であり、runtime authority昇格ではありません。runtime接続、
+watchdog、hidden-state reset、閉ループ試走は別sliceで審査します。
+
 ### Qualified production spatial adapter
 
 production既定は、車輪速度とfrozen base steeringでconditionしたfull-range adapterです。

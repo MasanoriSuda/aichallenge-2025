@@ -1,10 +1,12 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 import torch
 
+from evaluate_recurrent_policy import infer_sequence
 from build_recurrent_dataset import (
     executed_teacher_mode,
     iter_source_sequences,
@@ -406,3 +408,175 @@ def test_pressure_adapter_preserves_initial_base_identity() -> None:
     torch.testing.assert_close(predictions, base, rtol=0.0, atol=0.0)
     pressure = model.pressure_tokens(scans)
     assert torch.all(pressure[..., :-1] >= pressure[..., 1:])
+
+
+def test_recurrent_deadband_decodes_raw_correction_before_output_clamp() -> None:
+    model = FrozenTinyLidarRecurrentAdapter(
+        input_dim=750,
+        speed_embedding_dim=2,
+        hidden_dim=4,
+    )
+    with torch.no_grad():
+        model.base.fc4.weight.zero_()
+        model.base.fc4.bias.zero_()
+        model.base.fc4.bias[1] = 4.0
+        model.correction_output.weight.zero_()
+        model.correction_output.bias.fill_(
+            float(np.arctanh(0.01 / model.max_abs_correction_rad))
+        )
+    sequence = SimpleNamespace(
+        sequence_id="deadband-clamp",
+        scans=np.full((2, 750), 30.0, dtype=np.float32),
+        speeds=np.ones(2, dtype=np.float32),
+        steers=np.ones(2, dtype=np.float32),
+        base_steers=np.zeros(2, dtype=np.float32),
+    )
+
+    retained, base, classes = infer_sequence(
+        model, sequence, torch.device("cpu"), correction_deadband_rad=0.005
+    )
+    suppressed, _, _ = infer_sequence(
+        model, sequence, torch.device("cpu"), correction_deadband_rad=0.02
+    )
+
+    np.testing.assert_allclose(retained, 1.0, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(suppressed, base, rtol=0.0, atol=0.0)
+    assert classes is None
+
+
+def test_projected_conv5_adapter_preserves_base_and_spatial_geometry() -> None:
+    torch.manual_seed(11)
+    model = FrozenTinyLidarRecurrentAdapter(
+        input_dim=750,
+        speed_embedding_dim=4,
+        hidden_dim=8,
+        spatial_features="projected_conv5",
+        spatial_projection_dim=16,
+        spatial_projection_seed=2034,
+        spatial_normalization="fixed_train_statistics",
+        use_speed=False,
+    )
+    scans = torch.rand(2, 3, 750) * 30.0
+    speeds = torch.rand(2, 3, 1) * 5.0
+    projected = model.projected_spatial_features(scans)
+    assert projected.shape == (2, 3, 16)
+    scale = torch.std(projected.reshape(-1, 16), dim=0).clamp(min=1e-4)
+    model.set_spatial_statistics(
+        torch.mean(projected.reshape(-1, 16), dim=0), scale
+    )
+
+    predictions, corrections, base, hidden = model.forward_components(
+        scans, speeds
+    )
+
+    torch.testing.assert_close(corrections, torch.zeros_like(corrections))
+    torch.testing.assert_close(predictions, base, rtol=0.0, atol=0.0)
+    assert hidden.shape == (1, 2, 8)
+    assert model.gru.input_size == 16
+
+
+def test_projected_conv5_adapter_checkpoint_round_trip() -> None:
+    config = {
+        "input_dim": 750,
+        "speed_embedding_dim": 3,
+        "hidden_dim": 7,
+        "spatial_features": "projected_conv5",
+        "spatial_projection_dim": 12,
+        "spatial_projection_seed": 99,
+        "spatial_normalization": "fixed_train_statistics",
+        "use_speed": True,
+    }
+    source = FrozenTinyLidarRecurrentAdapter(**config)
+    source.set_spatial_statistics(torch.arange(12.0), torch.arange(1.0, 13.0))
+    restored = FrozenTinyLidarRecurrentAdapter(**config)
+    restored.load_state_dict(source.state_dict(), strict=True)
+
+    scans = torch.rand(1, 2, 750) * 30.0
+    speeds = torch.rand(1, 2, 1)
+    expected, _ = source(scans, speeds)
+    actual, _ = restored(scans, speeds)
+    torch.testing.assert_close(actual, expected, rtol=0.0, atol=0.0)
+    torch.testing.assert_close(restored.spatial_mean, torch.arange(12.0))
+
+
+def test_recurrent_zero_correction_preserves_full_spatial_baseline() -> None:
+    spatial_config = {
+        "input_dim": 750,
+        "hidden_dim": 16,
+        "max_scan_range_m": 30.0,
+        "max_abs_delta_rad": 1.2,
+        "use_speed": True,
+        "use_base_steering": True,
+        "max_speed_mps": 12.0,
+        "spatial_normalization": "fixed_train_statistics",
+        "projection_dim": 8,
+        "projection_seed": 2026,
+        "head_architecture": "signed_mixture",
+    }
+    model = FrozenTinyLidarRecurrentAdapter(
+        input_dim=750,
+        speed_embedding_dim=3,
+        hidden_dim=7,
+        spatial_features="projected_conv5",
+        spatial_projection_dim=12,
+        spatial_normalization="fixed_train_statistics",
+        frozen_spatial_baseline_config=spatial_config,
+    )
+    scans = torch.rand(1, 2, 750) * 30.0
+    speeds = torch.rand(1, 2, 1) * 4.0
+    predictions, corrections, full_base, _ = model.forward_components(
+        scans, speeds
+    )
+
+    with torch.no_grad():
+        raw = model.base((scans / 30.0).reshape(2, 1, 750))[:, 1]
+        spatial = model.spatial_baseline(
+            scans.reshape(2, 750), speeds.reshape(2)
+        )
+        expected = torch.clamp(raw + spatial, -1.0, 1.0).reshape(1, 2)
+    torch.testing.assert_close(full_base, expected)
+    torch.testing.assert_close(model.base_steering(scans, speeds), expected)
+    torch.testing.assert_close(corrections, torch.zeros_like(corrections))
+    torch.testing.assert_close(predictions, full_base, rtol=0.0, atol=0.0)
+    assert all(
+        not parameter.requires_grad
+        for parameter in model.spatial_baseline.parameters()
+    )
+
+
+def test_projected_conv5_rejects_duplicate_pressure_representation() -> None:
+    with pytest.raises(ValueError, match="must not duplicate"):
+        FrozenTinyLidarRecurrentAdapter(
+            spatial_features="projected_conv5",
+            spatial_normalization="fixed_train_statistics",
+            include_pressure_tokens=True,
+        )
+
+
+def test_signed_expert_adapter_starts_with_exact_neutral_correction() -> None:
+    model = FrozenTinyLidarRecurrentAdapter(
+        input_dim=750,
+        speed_embedding_dim=3,
+        hidden_dim=7,
+        spatial_features="projected_conv5",
+        spatial_projection_dim=12,
+        spatial_normalization="fixed_train_statistics",
+        correction_head="signed_expert",
+    )
+    scans = torch.rand(2, 3, 750) * 30.0
+    speeds = torch.rand(2, 3, 1)
+    (
+        predictions,
+        corrections,
+        base,
+        magnitudes,
+        direction_logits,
+        hidden,
+    ) = model.forward_correction_components(scans, speeds)
+
+    assert magnitudes.shape == (2, 3, 2)
+    assert direction_logits.shape == (2, 3, 3)
+    assert torch.all(torch.argmax(direction_logits, dim=-1) == 1)
+    torch.testing.assert_close(corrections, torch.zeros_like(corrections))
+    torch.testing.assert_close(predictions, base, rtol=0.0, atol=0.0)
+    assert hidden.shape == (1, 2, 7)

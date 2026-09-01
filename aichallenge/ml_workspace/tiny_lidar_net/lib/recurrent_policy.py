@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from torch.utils.data import ConcatDataset, Dataset
 
 from lib.model import TinyLidarNet
+from lib.spatial_adapter import FrozenTinyLidarSpatialResidual
 
 
 RECURRENT_DATASET_SCHEMA_VERSION = 2
@@ -29,6 +30,9 @@ RECURRENT_REQUIRED_ARRAYS = (
     "speed_timestamps_ns.npy",
     "speed_sync_deltas_sec.npy",
 )
+RECURRENT_ADAPTER_SPATIAL_FEATURES = ("compact_fc3", "projected_conv5")
+RECURRENT_ADAPTER_SPATIAL_NORMALIZATIONS = ("none", "fixed_train_statistics")
+RECURRENT_ADAPTER_CORRECTION_HEADS = ("direct", "signed_expert")
 
 
 def _read_metadata(path: Path) -> dict:
@@ -318,6 +322,13 @@ class FrozenTinyLidarRecurrentAdapter(nn.Module):
         max_abs_correction_rad: float = 0.64,
         max_abs_steering_rad: float = 1.0,
         include_pressure_tokens: bool = False,
+        spatial_features: str = "compact_fc3",
+        spatial_projection_dim: int = 128,
+        spatial_projection_seed: int = 2026,
+        spatial_normalization: str = "none",
+        use_speed: bool = True,
+        frozen_spatial_baseline_config: Optional[dict] = None,
+        correction_head: str = "direct",
     ):
         super().__init__()
         if min(input_dim, speed_embedding_dim, hidden_dim) <= 0:
@@ -329,19 +340,88 @@ class FrozenTinyLidarRecurrentAdapter(nn.Module):
             max_abs_steering_rad,
         ) <= 0.0:
             raise ValueError("recurrent adapter physical scales must be positive")
+        if spatial_features not in RECURRENT_ADAPTER_SPATIAL_FEATURES:
+            raise ValueError(f"unsupported recurrent spatial features: {spatial_features}")
+        if spatial_normalization not in RECURRENT_ADAPTER_SPATIAL_NORMALIZATIONS:
+            raise ValueError(
+                f"unsupported recurrent spatial normalization: {spatial_normalization}"
+            )
+        if spatial_projection_dim <= 0:
+            raise ValueError("recurrent spatial projection dimension must be positive")
+        if spatial_features == "compact_fc3" and spatial_normalization != "none":
+            raise ValueError("legacy compact recurrent features require no normalization")
+        if spatial_features == "projected_conv5" and include_pressure_tokens:
+            raise ValueError("projected conv5 must not duplicate raw pressure tokens")
+        if correction_head not in RECURRENT_ADAPTER_CORRECTION_HEADS:
+            raise ValueError(f"unsupported recurrent correction head: {correction_head}")
         self.input_dim = int(input_dim)
         self.max_scan_range_m = float(max_scan_range_m)
         self.max_speed_mps = float(max_speed_mps)
         self.max_abs_correction_rad = float(max_abs_correction_rad)
         self.max_abs_steering_rad = float(max_abs_steering_rad)
         self.include_pressure_tokens = bool(include_pressure_tokens)
+        self.spatial_features = spatial_features
+        self.spatial_projection_dim = int(spatial_projection_dim)
+        self.spatial_projection_seed = int(spatial_projection_seed)
+        self.spatial_normalization = spatial_normalization
+        self.use_speed = bool(use_speed)
+        self.correction_head = correction_head
         self.base = TinyLidarNet(input_dim=self.input_dim, output_dim=2)
         for parameter in self.base.parameters():
             parameter.requires_grad_(False)
-        self.speed_mlp = nn.Sequential(
-            nn.Linear(1, speed_embedding_dim),
-            nn.ReLU(),
+        self.frozen_spatial_baseline_config = (
+            None
+            if frozen_spatial_baseline_config is None
+            else dict(frozen_spatial_baseline_config)
         )
+        if self.frozen_spatial_baseline_config is not None:
+            if self.frozen_spatial_baseline_config.get("input_dim") != self.input_dim:
+                raise ValueError("frozen spatial baseline input dimension mismatch")
+            if not self.frozen_spatial_baseline_config.get("use_speed", False):
+                raise ValueError("frozen production spatial baseline must use speed")
+            self.spatial_baseline = FrozenTinyLidarSpatialResidual(
+                **self.frozen_spatial_baseline_config
+            )
+            for parameter in self.spatial_baseline.parameters():
+                parameter.requires_grad_(False)
+        else:
+            self.spatial_baseline = None
+        if self.use_speed:
+            self.speed_mlp = nn.Sequential(
+                nn.Linear(1, speed_embedding_dim),
+                nn.ReLU(),
+            )
+        else:
+            self.speed_mlp = None
+        if self.spatial_features == "projected_conv5":
+            with torch.no_grad():
+                dummy = torch.zeros(1, 1, self.input_dim)
+                conv5 = self._extract_conv5(dummy).flatten(start_dim=1)
+                self.conv5_dim = int(conv5.shape[1])
+            generator = np.random.default_rng(self.spatial_projection_seed)
+            projection = (
+                generator.standard_normal(
+                    (self.conv5_dim, self.spatial_projection_dim),
+                    dtype=np.float32,
+                )
+                / np.sqrt(float(self.spatial_projection_dim))
+            ).astype(np.float32)
+            self.register_buffer(
+                "spatial_projection", torch.from_numpy(projection)
+            )
+            self.register_buffer(
+                "spatial_mean", torch.zeros(self.spatial_projection_dim)
+            )
+            self.register_buffer(
+                "spatial_scale", torch.ones(self.spatial_projection_dim)
+            )
+            recurrent_spatial_dim = self.spatial_projection_dim
+        else:
+            self.conv5_dim = int(self.base.flatten_dim)
+            self.register_buffer("spatial_projection", None)
+            self.register_buffer("spatial_mean", None)
+            self.register_buffer("spatial_scale", None)
+            recurrent_spatial_dim = 10
         if self.include_pressure_tokens:
             initial_k = 0.1
             inverse_softplus = np.log(np.expm1(initial_k))
@@ -352,8 +432,8 @@ class FrozenTinyLidarRecurrentAdapter(nn.Module):
             self.register_parameter("pressure_log_k", None)
         self.gru = nn.GRU(
             input_size=(
-                10
-                + speed_embedding_dim
+                recurrent_spatial_dim
+                + (speed_embedding_dim if self.use_speed else 0)
                 + (self.input_dim if self.include_pressure_tokens else 0)
             ),
             hidden_size=hidden_dim,
@@ -362,11 +442,21 @@ class FrozenTinyLidarRecurrentAdapter(nn.Module):
             bidirectional=False,
         )
         self.correction_hidden = nn.Linear(hidden_dim, 64)
-        self.correction_output = nn.Linear(64, 1)
+        if self.correction_head == "direct":
+            self.correction_output = nn.Linear(64, 1)
+            self.direction_output = None
+            self.magnitude_output = None
+        else:
+            self.correction_output = None
+            self.direction_output = nn.Linear(64, 3)
+            self.magnitude_output = nn.Linear(64, 2)
         self._initialize_adapter()
 
     def _initialize_adapter(self) -> None:
-        for module in (self.speed_mlp[0], self.correction_hidden):
+        modules = [self.correction_hidden]
+        if self.speed_mlp is not None:
+            modules.append(self.speed_mlp[0])
+        for module in modules:
             nn.init.xavier_uniform_(module.weight)
             nn.init.zeros_(module.bias)
         for name, parameter in self.gru.named_parameters():
@@ -375,11 +465,27 @@ class FrozenTinyLidarRecurrentAdapter(nn.Module):
             elif "bias" in name:
                 nn.init.zeros_(parameter)
         # Exact zero makes the composed candidate identical to the admitted base.
-        nn.init.zeros_(self.correction_output.weight)
-        nn.init.zeros_(self.correction_output.bias)
+        if self.correction_head == "direct":
+            nn.init.zeros_(self.correction_output.weight)
+            nn.init.zeros_(self.correction_output.bias)
+        else:
+            nn.init.zeros_(self.direction_output.weight)
+            nn.init.zeros_(self.direction_output.bias)
+            # Neutral wins the initial categorical decode deterministically.
+            with torch.no_grad():
+                self.direction_output.bias[1] = 1.0
+            nn.init.zeros_(self.magnitude_output.weight)
+            nn.init.zeros_(self.magnitude_output.bias)
+
+    def _extract_conv5(self, normalized: torch.Tensor) -> torch.Tensor:
+        features = F.relu(self.base.conv1(normalized))
+        features = F.relu(self.base.conv2(features))
+        features = F.relu(self.base.conv3(features))
+        features = F.relu(self.base.conv4(features))
+        return F.relu(self.base.conv5(features))
 
     def _base_features_and_steering(
-        self, scans_m: torch.Tensor
+        self, scans_m: torch.Tensor, speeds_mps: Optional[torch.Tensor] = None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         batch, time, _ = scans_m.shape
         normalized = torch.clamp(
@@ -387,25 +493,77 @@ class FrozenTinyLidarRecurrentAdapter(nn.Module):
         ).reshape(batch * time, 1, self.input_dim)
         # Frozen features need no activation tape during adapter training.
         with torch.no_grad():
-            features = F.relu(self.base.conv1(normalized))
-            features = F.relu(self.base.conv2(features))
-            features = F.relu(self.base.conv3(features))
-            features = F.relu(self.base.conv4(features))
-            features = F.relu(self.base.conv5(features))
-            features = torch.flatten(features, start_dim=1)
-            features = F.relu(self.base.fc1(features))
-            features = F.relu(self.base.fc2(features))
-            features = F.relu(self.base.fc3(features))
-            base_output = torch.tanh(self.base.fc4(features))[:, 1]
+            conv5 = torch.flatten(self._extract_conv5(normalized), start_dim=1)
+            compact = F.relu(self.base.fc1(conv5))
+            compact = F.relu(self.base.fc2(compact))
+            compact = F.relu(self.base.fc3(compact))
+            base_output = torch.tanh(self.base.fc4(compact))[:, 1]
+            if self.spatial_baseline is not None:
+                if speeds_mps is None or speeds_mps.shape != scans_m.shape[:2] + (1,):
+                    raise ValueError(
+                        "frozen production spatial baseline requires causal speed"
+                    )
+                spatial_residual = self.spatial_baseline(
+                    scans_m.reshape(batch * time, self.input_dim),
+                    speeds_mps.reshape(batch * time),
+                )
+                base_output = torch.clamp(
+                    base_output + spatial_residual,
+                    -self.max_abs_steering_rad,
+                    self.max_abs_steering_rad,
+                )
+            if self.spatial_features == "projected_conv5":
+                features = conv5 @ self.spatial_projection
+                if self.spatial_normalization == "fixed_train_statistics":
+                    features = (features - self.spatial_mean) / self.spatial_scale
+            else:
+                features = compact
         return (
             features.reshape(batch, time, -1),
             base_output.reshape(batch, time),
         )
 
-    def base_steering(self, scans_m: torch.Tensor) -> torch.Tensor:
+    def projected_spatial_features(self, scans_m: torch.Tensor) -> torch.Tensor:
+        """Return unnormalized frozen projected-conv5 features for statistics."""
+        if self.spatial_features != "projected_conv5":
+            raise RuntimeError("projected spatial features are disabled")
+        if scans_m.ndim not in {2, 3} or scans_m.shape[-1] != self.input_dim:
+            raise ValueError("adapter scans must end with input_dim")
+        leading = scans_m.shape[:-1]
+        normalized = torch.clamp(
+            scans_m / self.max_scan_range_m, 0.0, 1.0
+        ).reshape(-1, 1, self.input_dim)
+        with torch.no_grad():
+            conv5 = torch.flatten(self._extract_conv5(normalized), start_dim=1)
+            projected = conv5 @ self.spatial_projection
+        return projected.reshape(*leading, self.spatial_projection_dim)
+
+    def set_spatial_statistics(
+        self, mean: torch.Tensor, scale: torch.Tensor
+    ) -> None:
+        if (
+            self.spatial_features != "projected_conv5"
+            or self.spatial_normalization != "fixed_train_statistics"
+        ):
+            raise ValueError("fixed projected statistics are not enabled")
+        expected = (self.spatial_projection_dim,)
+        if mean.shape != expected or scale.shape != expected:
+            raise ValueError("recurrent spatial statistics dimension mismatch")
+        if not torch.isfinite(mean).all() or not torch.isfinite(scale).all():
+            raise ValueError("recurrent spatial statistics must be finite")
+        if torch.any(scale <= 0.0):
+            raise ValueError("recurrent spatial scale must be positive")
+        self.spatial_mean.copy_(mean.to(self.spatial_mean))
+        self.spatial_scale.copy_(scale.to(self.spatial_scale))
+
+    def base_steering(
+        self,
+        scans_m: torch.Tensor,
+        speeds_mps: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         if scans_m.ndim != 3 or scans_m.shape[-1] != self.input_dim:
             raise ValueError("adapter scans must have shape (batch, time, input_dim)")
-        _, steering = self._base_features_and_steering(scans_m)
+        _, steering = self._base_features_and_steering(scans_m, speeds_mps)
         return steering
 
     def pressure_tokens(self, scans_m: torch.Tensor) -> torch.Tensor:
@@ -414,36 +572,83 @@ class FrozenTinyLidarRecurrentAdapter(nn.Module):
         k = F.softplus(self.pressure_log_k).view(1, 1, -1)
         return 2.0 * (1.0 - torch.sigmoid(k * scans_m))
 
+    def forward_correction_components(
+        self,
+        scans_m: torch.Tensor,
+        speeds_mps: torch.Tensor,
+        hidden: Optional[torch.Tensor] = None,
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        Optional[torch.Tensor],
+        Optional[torch.Tensor],
+        torch.Tensor,
+    ]:
+        if scans_m.ndim != 3 or scans_m.shape[-1] != self.input_dim:
+            raise ValueError("adapter scans must have shape (batch, time, input_dim)")
+        if speeds_mps.shape != scans_m.shape[:2] + (1,):
+            raise ValueError("adapter speeds must have shape (batch, time, 1)")
+        features, base_steering = self._base_features_and_steering(
+            scans_m, speeds_mps
+        )
+        recurrent_inputs = [features]
+        if self.use_speed:
+            speed = torch.clamp(speeds_mps / self.max_speed_mps, 0.0, 1.5)
+            recurrent_inputs.append(self.speed_mlp(speed))
+        if self.include_pressure_tokens:
+            recurrent_inputs.append(self.pressure_tokens(scans_m))
+        recurrent, next_hidden = self.gru(
+            torch.cat(recurrent_inputs, dim=-1), hidden
+        )
+        correction_features = F.relu(self.correction_hidden(recurrent))
+        magnitudes = None
+        direction_logits = None
+        if self.correction_head == "direct":
+            correction = (
+                torch.tanh(self.correction_output(correction_features)).squeeze(-1)
+                * self.max_abs_correction_rad
+            )
+        else:
+            direction_logits = self.direction_output(correction_features)
+            magnitudes = (
+                torch.sigmoid(self.magnitude_output(correction_features))
+                * self.max_abs_correction_rad
+            )
+            classes = torch.argmax(direction_logits, dim=-1)
+            correction = torch.where(
+                classes == 0,
+                -magnitudes[..., 0],
+                torch.where(
+                    classes == 2,
+                    magnitudes[..., 1],
+                    torch.zeros_like(magnitudes[..., 0]),
+                ),
+            )
+        steering = torch.clamp(
+            base_steering + correction,
+            -self.max_abs_steering_rad,
+            self.max_abs_steering_rad,
+        )
+        return (
+            steering,
+            correction,
+            base_steering,
+            magnitudes,
+            direction_logits,
+            next_hidden,
+        )
+
     def forward_components(
         self,
         scans_m: torch.Tensor,
         speeds_mps: torch.Tensor,
         hidden: Optional[torch.Tensor] = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        if scans_m.ndim != 3 or scans_m.shape[-1] != self.input_dim:
-            raise ValueError("adapter scans must have shape (batch, time, input_dim)")
-        if speeds_mps.shape != scans_m.shape[:2] + (1,):
-            raise ValueError("adapter speeds must have shape (batch, time, 1)")
-        features, base_steering = self._base_features_and_steering(scans_m)
-        speed = torch.clamp(speeds_mps / self.max_speed_mps, 0.0, 1.5)
-        recurrent_inputs = [features, self.speed_mlp(speed)]
-        if self.include_pressure_tokens:
-            recurrent_inputs.append(self.pressure_tokens(scans_m))
-        recurrent, next_hidden = self.gru(
-            torch.cat(recurrent_inputs, dim=-1), hidden
+        steering, correction, base, _, _, next_hidden = (
+            self.forward_correction_components(scans_m, speeds_mps, hidden)
         )
-        correction = (
-            torch.tanh(
-                self.correction_output(F.relu(self.correction_hidden(recurrent)))
-            ).squeeze(-1)
-            * self.max_abs_correction_rad
-        )
-        steering = torch.clamp(
-            base_steering + correction,
-            -self.max_abs_steering_rad,
-            self.max_abs_steering_rad,
-        )
-        return steering, correction, base_steering, next_hidden
+        return steering, correction, base, next_hidden
 
     def forward(
         self,

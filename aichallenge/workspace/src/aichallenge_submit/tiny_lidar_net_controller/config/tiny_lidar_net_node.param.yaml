@@ -42,6 +42,15 @@
       side_cluster_points: 3
       brake_acceleration_mps2: -1.0
 
+    # Diagnostic successor to precontact_teacher. It consumes fresh wheel
+    # speed, grows the physical preview envelope and prevents late side flips.
+    speed_committed_teacher:
+      reaction_time_sec: 0.25
+      preview_time_sec: 0.50
+      release_confirmation_samples: 5
+      side_switch_confirmation_samples: 2
+      minimum_commit_speed_mps: 0.50
+
     # Runtime safety contract. When LiDAR stops, do not retain the last drive command.
     sensor_timeout_sec: 0.25
     watchdog_period_sec: 0.05

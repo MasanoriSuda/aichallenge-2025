@@ -129,7 +129,8 @@ elif [[ -n "${TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH+x}" || \
     # shadow/diagnostic by construction.
     tiny_lidar_spatial_authority_enabled="false"
 elif [[ "${tiny_lidar_control_mode}" == "gap_teacher" || \
-        "${tiny_lidar_control_mode}" == "precontact_teacher" ]]; then
+        "${tiny_lidar_control_mode}" == "precontact_teacher" || \
+        "${tiny_lidar_control_mode}" == "speed_committed_teacher" ]]; then
     # Teacher steering is diagnostic authority and must not inherit the
     # participant production adapter merely because it shares the node.
     tiny_lidar_spatial_authority_enabled="false"
@@ -171,7 +172,7 @@ if [[ -n "${tiny_lidar_control_mode}" ]]; then
         exit 1
     fi
     case "${tiny_lidar_control_mode}" in
-    "fixed"|"fixed_lidar_brake"|"ai"|"gap_teacher"|"precontact_teacher")
+    "fixed"|"fixed_lidar_brake"|"ai"|"gap_teacher"|"precontact_teacher"|"speed_committed_teacher")
         ;;
     *)
         echo "invalid TINY_LIDAR_CONTROL_MODE '${tiny_lidar_control_mode}'"

@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 .PHONY: autoware-build autoware-vehicle autoware-simulator autoware-request-initialpose autoware-request-control  awsim-request-start awsim-request-reset autoware-driver-zenoh autoware-driver-zenoh-rosbag \
-	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final e2e-final-contact-teacher e2e-final-precontact-teacher e2e-final-precontact-teacher-all driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
+	simulator dev dev2 dev3 dev4 e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher e2e-peer-audit-mpc e2e-peer-audit-student e2e e2e-final e2e-final-contact-teacher e2e-final-precontact-teacher e2e-final-precontact-teacher-all driver zenoh download rviz2 down down_all ps autoware-attach autoware-bash eval
 
 # Used by docker-compose.yml for build/eval artifact ownership.
 HOST_UID ?= $(shell id -u)
@@ -88,22 +88,24 @@ e2e-single: SIM_MODE := e2e-single
 e2e-teacher: SIM_MODE := e2e-teacher
 e2e-npc-single: SIM_MODE := e2e-npc-single
 e2e-npc-gap-teacher: SIM_MODE := e2e-npc-single
+e2e-npc-speed-committed-teacher: SIM_MODE := e2e-npc-single
 e2e-peer-audit-mpc e2e-peer-audit-student: SIM_MODE := e2e-peer
 e2e: SIM_MODE := e2e
 e2e-final: SIM_MODE := e2e-final
 e2e-final-contact-teacher: SIM_MODE := e2e-final
 e2e-final-precontact-teacher: SIM_MODE := e2e-final
 e2e-final-precontact-teacher-all: SIM_MODE := e2e-final
-e2e-single e2e-npc-single e2e-npc-gap-teacher e2e e2e-final: AIC_CONTROL_METHOD := tiny_lidar_net
+e2e-single e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher e2e e2e-final: AIC_CONTROL_METHOD := tiny_lidar_net
 e2e-npc-gap-teacher: TINY_LIDAR_CONTROL_MODE := gap_teacher
+e2e-npc-speed-committed-teacher: TINY_LIDAR_CONTROL_MODE := speed_committed_teacher
 e2e-teacher: AIC_CONTROL_METHOD := mpc
 e2e-single e2e-teacher e2e: AIC_VEHICLE_COUNT := 1
 # vehicle_count is the complete simulated world count for the launch contract,
 # not the number of Autoware containers started by these one-ego targets. Counting
 # both runtime NPCs prevents the single-vehicle empty-V2X producer from masking
 # privileged teacher observations.
-e2e-npc-single e2e-npc-gap-teacher: AIC_VEHICLE_COUNT := 3
-e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e: simulator autoware-simulator
+e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher: AIC_VEHICLE_COUNT := 3
+e2e-single e2e-teacher e2e-npc-single e2e-npc-gap-teacher e2e-npc-speed-committed-teacher e2e: simulator autoware-simulator
 	@echo "Start E2E simulation (SIM_MODE=$(SIM_MODE), controller=$(AIC_CONTROL_METHOD))"
 	@echo "To stop: make down  (docker compose down --remove-orphans)"
 

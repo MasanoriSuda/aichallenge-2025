@@ -592,6 +592,20 @@ policy-levelの反証である。seed 2032はhard labelへ抽出せずheld-out f
 別seedを成功するまで選別してvalidationへ使うことも禁止し、次は速度依存の回避可否と時間的な
 side commitmentを持つteacher候補を独立に設計・実行してからラベル生成を再開する。
 
+この反証に対する診断modeとして`speed_committed_teacher`を追加した。旧teacherと既存labelは
+変更せず、旧teacherがfront/side hazardを検出した区間に限って、車輪速度と設定済み制動加速度
+から停止・先読み距離を計算して現在scanを再評価する。左右候補の変更は2 scan連続で確認して
+から採用し、3.0 m以内で初めて現れた反対候補は横断せず制動する。候補sideとseverity blend後の
+実操舵符号が一致しない場合も、選択済み候補側へprojectionする。
+
+最初に試した「動的trigger内ではsideを固定する」案は、seed 2032全体のoffline replayで575/
+6,479 sampleをside conflictとして制動し、通常の曲率変化まで障害物競合と誤認したため棄却した。
+確認付き切替へ改訂後は、旧teacher比でactive sample数は同じ1,557、brakeは19から24、coastは
+14から21に留まった。接触episodeでは旧teacherがfront 1.80 mで初めて左へ切り替えたのに対し、
+候補はfront 9.78 mで左候補を取得し、9.55 mで実操舵も左へ一致、9.34 mからbilateral pinch
+制動を開始した。これはrecorded stateに対する反実仮想であり成功証明ではない。閉ループ未見seed
+がFinish・penalty 0・stall 0を満たすまで、学習dataやproduction authorityへ昇格しない。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

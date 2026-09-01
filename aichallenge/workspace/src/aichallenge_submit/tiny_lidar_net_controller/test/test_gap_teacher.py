@@ -9,6 +9,10 @@ from tiny_lidar_net_controller.gap_teacher import (
     LidarLongitudinalSafety,
     LidarPrecontactTeacher,
 )
+from tiny_lidar_net_controller.speed_committed_teacher import (
+    LidarSpeedCommittedTeacher,
+    SpeedCommittedTeacherConfig,
+)
 
 
 def _angles(size: int = 750) -> np.ndarray:
@@ -141,6 +145,116 @@ def test_invalid_side_distance_order_is_rejected() -> None:
             side_trigger_distance_m=1.0,
             side_critical_distance_m=1.2,
         )
+
+
+def _front_obstacle_with_preferred_side(side_sign: int) -> np.ndarray:
+    angles = _angles()
+    ranges = np.full(750, 12.0)
+    ranges[np.abs(angles) <= 0.18] = 5.0
+    if side_sign > 0:
+        ranges[angles < -0.18] = 4.0
+    else:
+        ranges[angles > 0.18] = 4.0
+    return ranges
+
+
+def test_speed_committed_distances_follow_braking_physics() -> None:
+    teacher = LidarSpeedCommittedTeacher(GapTeacherConfig())
+    stopped = teacher.dynamic_distances(0.0)
+    moving = teacher.dynamic_distances(4.0)
+    assert stopped == pytest.approx((1.5, 3.0, 7.0))
+    assert moving == pytest.approx((10.5, 11.5, 13.5))
+    assert moving[0] > stopped[0]
+    assert moving[0] < moving[1] < moving[2]
+
+
+def test_speed_committed_teacher_requires_speed() -> None:
+    teacher = LidarSpeedCommittedTeacher(GapTeacherConfig())
+    with pytest.raises(ValueError, match="requires fresh wheel speed"):
+        teacher.decide(np.full(750, 30.0), 0.1, 0.6, None)
+
+
+def test_speed_committed_clear_scene_preserves_base_command() -> None:
+    teacher = LidarSpeedCommittedTeacher(GapTeacherConfig())
+    decision = teacher.decide(np.full(750, 30.0), 0.17, 0.6, 4.0)
+    assert not decision.active
+    assert decision.steering_rad == pytest.approx(0.17)
+    assert decision.acceleration_mps2 == pytest.approx(0.6)
+    assert decision.committed_side_sign == 0
+    assert decision.supervisor_reason == "clear"
+
+
+def test_speed_committed_teacher_confirms_early_side_reversal() -> None:
+    teacher = LidarSpeedCommittedTeacher(GapTeacherConfig())
+    first = teacher.decide(
+        _front_obstacle_with_preferred_side(1), 0.0, 0.6, 3.0
+    )
+    assert first.proposed_side_sign == 1
+    assert first.committed_side_sign == 1
+
+    pending = teacher.decide(
+        _front_obstacle_with_preferred_side(-1), 0.0, 0.6, 3.0
+    )
+    assert pending.proposed_side_sign == -1
+    assert pending.committed_side_sign == 1
+    assert pending.supervisor_reason == "side-switch-pending"
+    assert pending.steering_rad == pytest.approx(0.0)
+    assert pending.acceleration_mps2 == pytest.approx(0.0)
+
+    confirmed = teacher.decide(
+        _front_obstacle_with_preferred_side(-1), 0.0, 0.6, 3.0
+    )
+    assert confirmed.committed_side_sign == -1
+    assert confirmed.supervisor_reason == "side-switch-confirmed"
+    assert confirmed.steering_rad < 0.0
+    assert np.sign(confirmed.steering_rad) == confirmed.proposed_side_sign
+
+
+def test_speed_committed_teacher_blocks_side_reversal_inside_slow_envelope() -> None:
+    teacher = LidarSpeedCommittedTeacher(GapTeacherConfig())
+    teacher.decide(_front_obstacle_with_preferred_side(1), 0.0, 0.6, 3.0)
+    close_opposite = _front_obstacle_with_preferred_side(-1)
+    close_opposite[np.abs(_angles()) <= 0.18] = 2.0
+    blocked = teacher.decide(close_opposite, 0.0, 0.6, 3.0)
+    assert blocked.supervisor_reason == "late-side-switch-blocked"
+    assert blocked.steering_rad == pytest.approx(0.0)
+    assert blocked.acceleration_mps2 == pytest.approx(-1.0)
+
+
+def test_speed_committed_teacher_releases_only_after_confirmed_clear() -> None:
+    config = SpeedCommittedTeacherConfig(release_confirmation_samples=3)
+    teacher = LidarSpeedCommittedTeacher(GapTeacherConfig(), config)
+    teacher.decide(_front_obstacle_with_preferred_side(1), 0.0, 0.6, 3.0)
+    for expected_count in (1, 2):
+        decision = teacher.decide(np.full(750, 30.0), 0.1, 0.6, 3.0)
+        assert decision.committed_side_sign == 1
+        assert decision.clear_confirmation_samples == expected_count
+    released = teacher.decide(np.full(750, 30.0), 0.1, 0.6, 3.0)
+    assert released.committed_side_sign == 0
+    assert released.clear_confirmation_samples == 0
+
+
+def test_speed_committed_teacher_brakes_for_bilateral_side_pinch() -> None:
+    teacher = LidarSpeedCommittedTeacher(GapTeacherConfig())
+    angles = _angles()
+    ranges = np.full(750, 30.0)
+    ranges[angles >= 1.3] = 1.5
+    ranges[angles <= -1.3] = 1.5
+    decision = teacher.decide(ranges, 0.0, 0.6, 3.0)
+    assert decision.supervisor_reason == "bilateral-side-pinch"
+    assert decision.acceleration_mps2 == pytest.approx(-1.0)
+
+
+def test_speed_committed_teacher_extends_geometry_only_for_detected_hazard() -> None:
+    teacher = LidarSpeedCommittedTeacher(GapTeacherConfig())
+    angles = _angles()
+    ranges = np.full(750, 12.0)
+    ranges[np.abs(angles) <= 0.18] = 8.5
+    ranges[angles >= 1.3] = 1.5
+    decision = teacher.decide(ranges, 0.0, 0.6, 3.0)
+    assert decision.front_distance_m < decision.dynamic_trigger_distance_m
+    assert decision.reason == "gap-selected"
+    assert decision.active
 
 
 @pytest.mark.parametrize("value", [0, -1, True, 1.5])

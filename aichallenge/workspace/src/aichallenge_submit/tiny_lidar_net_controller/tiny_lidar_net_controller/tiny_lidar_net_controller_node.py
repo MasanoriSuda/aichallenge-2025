@@ -10,6 +10,9 @@ from autoware_auto_control_msgs.msg import AckermannControlCommand
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 
 from tiny_lidar_net_controller.gap_teacher import GapTeacherConfig
+from tiny_lidar_net_controller.speed_committed_teacher import (
+    SpeedCommittedTeacherConfig,
+)
 from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 
 
@@ -62,6 +65,21 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('gap_teacher.side_critical_distance_m', 0.9)
         self.declare_parameter('gap_teacher.side_cluster_points', 3)
         self.declare_parameter('gap_teacher.brake_acceleration_mps2', -1.0)
+        self.declare_parameter(
+            'speed_committed_teacher.reaction_time_sec', 0.25
+        )
+        self.declare_parameter(
+            'speed_committed_teacher.preview_time_sec', 0.50
+        )
+        self.declare_parameter(
+            'speed_committed_teacher.release_confirmation_samples', 5
+        )
+        self.declare_parameter(
+            'speed_committed_teacher.side_switch_confirmation_samples', 2
+        )
+        self.declare_parameter(
+            'speed_committed_teacher.minimum_commit_speed_mps', 0.50
+        )
         self.declare_parameter('debug', False)
 
         # --- Initialization ---
@@ -169,7 +187,34 @@ class TinyLidarNetNode(Node):
                 self.get_parameter('gap_teacher.brake_acceleration_mps2').value
             ),
         )
-        
+        speed_committed_teacher_config = SpeedCommittedTeacherConfig(
+            reaction_time_sec=float(
+                self.get_parameter(
+                    'speed_committed_teacher.reaction_time_sec'
+                ).value
+            ),
+            preview_time_sec=float(
+                self.get_parameter(
+                    'speed_committed_teacher.preview_time_sec'
+                ).value
+            ),
+            release_confirmation_samples=int(
+                self.get_parameter(
+                    'speed_committed_teacher.release_confirmation_samples'
+                ).value
+            ),
+            side_switch_confirmation_samples=int(
+                self.get_parameter(
+                    'speed_committed_teacher.side_switch_confirmation_samples'
+                ).value
+            ),
+            minimum_commit_speed_mps=float(
+                self.get_parameter(
+                    'speed_committed_teacher.minimum_commit_speed_mps'
+                ).value
+            ),
+        )
+
         self.debug = self.get_parameter('debug').value
         self.log_interval = self.get_parameter('log_interval_sec').value
 
@@ -206,6 +251,9 @@ class TinyLidarNetNode(Node):
                 control_mode=control_mode,
                 max_range=max_range,
                 gap_teacher_config=gap_teacher_config,
+                speed_committed_teacher_config=(
+                    speed_committed_teacher_config
+                ),
                 residual_ckpt_path=residual_ckpt_path,
                 residual_max_abs_delta_rad=residual_max_abs_delta_rad,
                 residual_architecture=residual_architecture,
@@ -269,8 +317,8 @@ class TinyLidarNetNode(Node):
         self.last_scan_time = None
         self.sensor_stale = False
         self.last_error_log_time = 0.0
-        self.latest_shadow_speed_mps = None
-        self.latest_shadow_speed_time = None
+        self.latest_wheel_speed_mps = None
+        self.latest_wheel_speed_time = None
         self.shadow_admitted_count = 0
         self.last_log_shadow_admitted_count = 0
         self.shadow_skipped_count = 0
@@ -293,12 +341,12 @@ class TinyLidarNetNode(Node):
         self.sub_scan = self.create_subscription(
             LaserScan, "/scan", self.scan_callback, qos
         )
-        self.sub_shadow_speed = None
-        if self.core.spatial_shadow_model is not None:
-            self.sub_shadow_speed = self.create_subscription(
+        self.sub_wheel_speed = None
+        if self.core.requires_wheel_speed:
+            self.sub_wheel_speed = self.create_subscription(
                 VelocityReport,
                 "/vehicle/status/velocity_status",
-                self._shadow_speed_callback,
+                self._wheel_speed_callback,
                 1,
             )
         self.pub_control = self.create_publisher(
@@ -331,7 +379,7 @@ class TinyLidarNetNode(Node):
         try:
             # 2. Process via Core Logic
             accel, steer = self.core.process(
-                ranges, self._fresh_shadow_speed()
+                ranges, self._fresh_wheel_speed()
             )
             if self.core.spatial_shadow_model is not None:
                 if self.core.last_spatial_shadow_admitted:
@@ -381,30 +429,30 @@ class TinyLidarNetNode(Node):
         self.inference_times.append(duration_ms)
         self._log_performance_metrics()
 
-    def _shadow_speed_callback(self, msg: VelocityReport):
+    def _wheel_speed_callback(self, msg: VelocityReport):
         """Retain fresh wheel odometry without consuming fused localization."""
         speed = abs(float(msg.longitudinal_velocity))
         if not np.isfinite(speed):
-            self.latest_shadow_speed_mps = None
-            self.latest_shadow_speed_time = None
+            self.latest_wheel_speed_mps = None
+            self.latest_wheel_speed_time = None
             return
-        self.latest_shadow_speed_mps = speed
-        self.latest_shadow_speed_time = self.get_clock().now()
+        self.latest_wheel_speed_mps = speed
+        self.latest_wheel_speed_time = self.get_clock().now()
 
-    def _fresh_shadow_speed(self):
-        if self.core.spatial_shadow_model is None:
+    def _fresh_wheel_speed(self):
+        if not self.core.requires_wheel_speed:
             return None
         if (
-            self.latest_shadow_speed_mps is None
-            or self.latest_shadow_speed_time is None
+            self.latest_wheel_speed_mps is None
+            or self.latest_wheel_speed_time is None
         ):
             return None
         age_sec = (
-            self.get_clock().now() - self.latest_shadow_speed_time
+            self.get_clock().now() - self.latest_wheel_speed_time
         ).nanoseconds / 1e9
         if age_sec < 0.0 or age_sec > self.spatial_shadow_speed_timeout_sec:
             return None
-        return self.latest_shadow_speed_mps
+        return self.latest_wheel_speed_mps
 
     def _publish_command(self, acceleration: float, steering: float):
         """Publish one finite Ackermann command."""
@@ -502,6 +550,20 @@ class TinyLidarNetNode(Node):
                         f"gap_angle_rad={decision.target_angle_rad:.2f} "
                         f"gap_reason={decision.reason}"
                     )
+                    if hasattr(decision, "supervisor_reason"):
+                        teacher_status += (
+                            " teacher_speed_mps="
+                            f"{decision.speed_mps:.2f} "
+                            "teacher_stop_m="
+                            f"{decision.required_stop_distance_m:.2f} "
+                            "teacher_trigger_m="
+                            f"{decision.dynamic_trigger_distance_m:.2f} "
+                            "teacher_side="
+                            f"{decision.committed_side_sign}/"
+                            f"{decision.proposed_side_sign} "
+                            "teacher_supervisor="
+                            f"{decision.supervisor_reason}"
+                        )
 
                 safety_status = ""
                 safety_decision = self.core.last_longitudinal_safety_decision

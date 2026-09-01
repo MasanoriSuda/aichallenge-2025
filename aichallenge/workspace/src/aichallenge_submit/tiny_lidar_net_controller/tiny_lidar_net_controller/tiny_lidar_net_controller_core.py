@@ -11,6 +11,10 @@ from tiny_lidar_net_controller.gap_teacher import (
     LidarPrecontactTeacher,
     LongitudinalSafetyDecision,
 )
+from tiny_lidar_net_controller.speed_committed_teacher import (
+    LidarSpeedCommittedTeacher,
+    SpeedCommittedTeacherConfig,
+)
 from tiny_lidar_net_controller.model.tinylidarnet import (
     SpatialSteeringAdapterNp,
     SteeringResidualNetNp,
@@ -48,6 +52,9 @@ class TinyLidarNetCore:
         control_mode: str = 'ai',
         max_range: float = 30.0,
         gap_teacher_config: Optional[GapTeacherConfig] = None,
+        speed_committed_teacher_config: Optional[
+            SpeedCommittedTeacherConfig
+        ] = None,
         residual_ckpt_path: str = '',
         residual_max_abs_delta_rad: float = 1.28,
         residual_architecture: str = 'stateless',
@@ -133,10 +140,11 @@ class TinyLidarNetCore:
             "fixed_lidar_brake",
             "gap_teacher",
             "precontact_teacher",
+            "speed_committed_teacher",
         }:
             raise ValueError(
                 "control_mode must be one of: ai, fixed, fixed_lidar_brake, "
-                "gap_teacher, precontact_teacher"
+                "gap_teacher, precontact_teacher, speed_committed_teacher"
             )
         if not np.isfinite(self.max_range) or self.max_range <= 0.0:
             raise ValueError("max_range must be finite and positive")
@@ -196,6 +204,7 @@ class TinyLidarNetCore:
             self.model = TinyLidarNetNp(input_dim=self.input_dim, output_dim=self.output_dim)
 
         self.gap_teacher = None
+        self.gap_teacher_requires_speed = False
         self.longitudinal_safety = None
         if self.control_mode == "gap_teacher":
             self.gap_teacher = LidarGapTeacher(
@@ -205,6 +214,12 @@ class TinyLidarNetCore:
             self.gap_teacher = LidarPrecontactTeacher(
                 gap_teacher_config or GapTeacherConfig()
             )
+        elif self.control_mode == "speed_committed_teacher":
+            self.gap_teacher = LidarSpeedCommittedTeacher(
+                gap_teacher_config or GapTeacherConfig(),
+                speed_committed_teacher_config,
+            )
+            self.gap_teacher_requires_speed = True
         elif self.control_mode == "fixed_lidar_brake":
             self.longitudinal_safety = LidarLongitudinalSafety(
                 gap_teacher_config or GapTeacherConfig()
@@ -258,6 +273,10 @@ class TinyLidarNetCore:
                         f"parameter: {key}"
                     )
             self.last_spatial_shadow_status = "waiting-speed"
+
+        self.requires_wheel_speed = bool(
+            self.spatial_shadow_model is not None or self.gap_teacher_requires_speed
+        )
 
     @staticmethod
     def _verify_file_sha256(path: str, expected_sha256: str, label: str) -> None:
@@ -391,7 +410,12 @@ class TinyLidarNetCore:
         self.last_gap_teacher_decision = None
         self.last_longitudinal_safety_decision = None
         if self.gap_teacher is not None:
-            decision = self.gap_teacher.decide(physical_ranges, steer, accel)
+            if self.gap_teacher_requires_speed:
+                decision = self.gap_teacher.decide(
+                    physical_ranges, steer, accel, speed_mps
+                )
+            else:
+                decision = self.gap_teacher.decide(physical_ranges, steer, accel)
             self.last_gap_teacher_decision = decision
             accel = decision.acceleration_mps2
             steer = decision.steering_rad
@@ -407,6 +431,8 @@ class TinyLidarNetCore:
     def reset_residual_history(self) -> None:
         """Prevent temporal context from crossing a runtime reset boundary."""
         self.previous_residual_scan = None
+        if self.gap_teacher is not None and hasattr(self.gap_teacher, "reset"):
+            self.gap_teacher.reset()
 
     def _compose_residual_input(self, processed_ranges: np.ndarray) -> np.ndarray:
         current = np.asarray(processed_ranges, dtype=np.float32)

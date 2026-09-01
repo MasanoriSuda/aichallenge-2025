@@ -372,6 +372,15 @@ production checkpoint/mode gateも同時にpassした。独立した先行run `o
 も3/3周、penalty/stall 0である。これによりshadow実行基盤と候補のruntime可用性は合格とするが、
 操舵性能の改善はまだ実証していない。次は既定OFFを維持した限定authority A/Bで判断する。
 
+限定authorityの成功runだけを追加学習し、失敗runをheld-out validationへ固定したDAgger v3は、
+失敗直前200 sampleのmaterial方向精度を89.8%から93.9%へ改善し、右側へ開口が変わった後の
+5 sample継続応答遅延を0.450秒から0秒へ短縮した。失敗runはgradientにもearly stoppingにも
+使っていない。`output/20260901-184620`のshadow再生では3/3周、penalty/stall 0、coverage
+99.968%、shadow error 0、最小scan 19.94 Hz、平均推論6.24 msで合格した。checkpoint SHAは
+`3b30f567d9a6bdf5384611ff8dfd759d79c8ed683c34e326e7d940afb2e67a5f`である。これはruntime
+可用性とheld-out遷移改善の証拠であり、production昇格ではない。次は既定OFFと0.12 rad上限を
+維持した、明示的な限定authority A/Bを1本だけ実施する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

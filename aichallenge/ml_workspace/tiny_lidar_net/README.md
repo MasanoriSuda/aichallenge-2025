@@ -151,7 +151,8 @@ python3 analyze_e2e_state_coverage.py \
 
 異なるadmitted sourceを時間datasetへまとめる場合、配列をコピーして出所を失わないよう
 `--additional-source-root`を繰り返します。builderは全source identityを出力前に検査し、
-重複runを拒否します。速度入力の既定はE2E許可入力である
+重複runを拒否します。各immutable rootがtrainまたはvalの片方だけを持つことは許しますが、
+全rootの集合に両splitが揃わなければ拒否します。速度入力の既定はE2E許可入力である
 `/vehicle/status/velocity_status`（`autoware_auto_vehicle_msgs/msg/VelocityReport`）です。
 `/localization/kinematic_state`はfused localizationなので、新しいproduction datasetや
 runtime inputには使用しません。holdoutを再学習から隔離する場合は

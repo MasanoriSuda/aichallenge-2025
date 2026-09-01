@@ -199,7 +199,11 @@ def iter_source_sequences(
     excluded_sequence_ids: Sequence[str] = (),
     allow_partial_additional_roots: bool = False,
 ) -> Iterable[Tuple[Path, str, Path]]:
-    """Discover immutable sources and reject run identity reuse up front."""
+    """Discover immutable sources and reject run identity reuse up front.
+
+    In partial-root mode, one immutable run root may contain only its assigned
+    split, but the complete aggregate must still contain both train and val.
+    """
     if not source_roots:
         raise ValueError("at least one source dataset root is required")
     excluded = set(excluded_sequence_ids)
@@ -209,7 +213,7 @@ def iter_source_sequences(
     seen_roots = set()
     seen_sequences = {}
     discovered = []
-    for root_index, source_root in enumerate(source_roots):
+    for source_root in source_roots:
         resolved_root = source_root.expanduser().resolve()
         if resolved_root in seen_roots:
             raise ValueError(f"duplicate source dataset root: {resolved_root}")
@@ -218,14 +222,14 @@ def iter_source_sequences(
         for split in ("train", "val"):
             split_root = resolved_root / split
             if not split_root.is_dir():
-                if allow_partial_additional_roots and root_index > 0:
+                if allow_partial_additional_roots:
                     continue
                 raise FileNotFoundError(f"missing source split: {split_root}")
             sequence_dirs = sorted(
                 path for path in split_root.iterdir() if path.is_dir()
             )
             if not sequence_dirs:
-                if allow_partial_additional_roots and root_index > 0:
+                if allow_partial_additional_roots:
                     continue
                 raise ValueError(f"source split has no sequences: {split_root}")
             for sequence_dir in sequence_dirs:
@@ -258,8 +262,14 @@ def iter_source_sequences(
                 seen_sequences[sequence_id] = sequence_dir
                 discovered.append((resolved_root, split, sequence_dir))
         if root_sequence_count == 0:
-            raise ValueError(
-                f"additional source root has no sequences: {resolved_root}"
+            raise ValueError(f"source root has no sequences: {resolved_root}")
+    if allow_partial_additional_roots:
+        discovered_splits = {split for _, split, _ in discovered}
+        missing_splits = sorted({"train", "val"} - discovered_splits)
+        if missing_splits:
+            raise FileNotFoundError(
+                "aggregate source dataset is missing splits: "
+                f"{missing_splits}"
             )
     missing_exclusions = {
         sequence_id

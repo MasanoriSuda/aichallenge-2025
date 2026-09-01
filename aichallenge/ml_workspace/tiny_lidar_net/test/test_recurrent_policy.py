@@ -198,18 +198,30 @@ def test_additional_source_may_be_train_only_when_explicitly_allowed(
     ]
 
 
-def test_primary_source_still_requires_both_splits_in_partial_mode(
+def test_partial_roots_must_be_split_complete_in_aggregate(
     tmp_path: Path,
 ) -> None:
     primary = tmp_path / "primary"
     write_source_identity(primary, "train", "primary-train")
 
-    with pytest.raises(FileNotFoundError, match="missing source split"):
+    with pytest.raises(FileNotFoundError, match="aggregate source dataset"):
         list(
             iter_source_sequences(
                 [primary], allow_partial_additional_roots=True
             )
         )
+
+    validation = tmp_path / "validation"
+    write_source_identity(validation, "val", "validation-val")
+    discovered = list(
+        iter_source_sequences(
+            [primary, validation], allow_partial_additional_roots=True
+        )
+    )
+    assert [(split, sequence.name) for _, split, sequence in discovered] == [
+        ("train", "primary-train"),
+        ("val", "validation-val"),
+    ]
 
 
 def test_multiple_source_roots_reject_duplicate_sequence_identity(tmp_path: Path) -> None:

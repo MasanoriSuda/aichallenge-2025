@@ -111,6 +111,27 @@ def test_random_projection_is_seeded_frozen_candidate_state():
     assert "spatial_projection" in first.state_dict()
 
 
+def test_factorized_head_starts_at_exact_zero_with_neutral_factorization():
+    model = FrozenTinyLidarSpatialResidual(
+        input_dim=750,
+        hidden_dim=16,
+        head_architecture="factorized_gate",
+    )
+    scans = torch.rand(4, 750) * 30.0
+
+    residual, magnitudes, logits, probabilities = model.forward_components(scans)
+
+    assert torch.equal(residual, torch.zeros_like(residual))
+    assert magnitudes.shape == (4, 2)
+    assert logits.shape == (4, 3)
+    assert probabilities[:, 1].tolist() == pytest.approx([0.5] * 4)
+    assert probabilities[:, 0].tolist() == pytest.approx([0.25] * 4)
+    assert probabilities[:, 2].tolist() == pytest.approx([0.25] * 4)
+    assert "activation_head.weight" in model.state_dict()
+    assert "sign_head.weight" in model.state_dict()
+    assert "direction_head.weight" not in model.state_dict()
+
+
 class FakeNormalizedSequence:
     sequence_id = "normal-run"
 

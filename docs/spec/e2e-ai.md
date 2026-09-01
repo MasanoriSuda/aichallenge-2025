@@ -326,6 +326,13 @@ sample samplerとaggregate class massを一致させたprojection候補では、
 次はsampling質量や閾値を再調整せず、補正activationとconditional signをfactorizeしたheadを
 同じrepresentation、data、sample sampler、continuous loss、Gateで1本だけ評価する。
 
+activationとconditional signをfactorizeした候補では、material方向84.07%とteacher anchor
+MAE 0.00988 radは合格したが、material改善26.16%、独立normal MAE 0.01355 radで不合格
+だった。factorizationはteacher split内のneutral競合を軽減したが、未見normalとの両立を
+解決しなかった。sampler、正規化、projection、head分離を独立に反証したため、次にloss重み
+やGateを調整することは禁止する。normalへ一律zero residualを与える契約とfailure teacher
+残差が、同じLiDAR＋speed観測へ矛盾したlabelを与えていないか、teacher生成経路を監査する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

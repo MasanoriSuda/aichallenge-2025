@@ -24,6 +24,7 @@ from lib.residual import (
     write_json,
 )
 from lib.spatial_adapter import (
+    SPATIAL_HEAD_ARCHITECTURES,
     SPATIAL_NORMALIZATION_MODES,
     FrozenTinyLidarSpatialResidual,
 )
@@ -249,6 +250,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--projection-dim", type=int, default=0)
     parser.add_argument("--projection-seed", type=int, default=2026)
+    parser.add_argument(
+        "--head-architecture",
+        choices=SPATIAL_HEAD_ARCHITECTURES,
+        default="signed_mixture",
+    )
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--material-weight", type=float, default=5.0)
     parser.add_argument("--direction-loss-weight", type=float, default=1.0)
@@ -347,6 +353,7 @@ def main() -> int:
         spatial_normalization=args.spatial_normalization,
         projection_dim=args.projection_dim,
         projection_seed=args.projection_seed,
+        head_architecture=args.head_architecture,
     )
     base_provenance = load_pretrained_weights(model.base, args.base_checkpoint)
     model.to(device)

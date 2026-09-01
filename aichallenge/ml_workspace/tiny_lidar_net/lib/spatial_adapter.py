@@ -9,6 +9,7 @@ from lib.model import TinyLidarNet
 
 
 SPATIAL_NORMALIZATION_MODES = ("layer_norm", "fixed_train_statistics")
+SPATIAL_HEAD_ARCHITECTURES = ("signed_mixture", "factorized_gate")
 
 
 class FrozenTinyLidarSpatialResidual(nn.Module):
@@ -30,6 +31,7 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         spatial_normalization: str = "layer_norm",
         projection_dim: int = 0,
         projection_seed: int = 2026,
+        head_architecture: str = "signed_mixture",
     ):
         super().__init__()
         if input_dim <= 0 or hidden_dim < 2:
@@ -46,6 +48,8 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             )
         if projection_dim < 0:
             raise ValueError("projection dimension must be non-negative")
+        if head_architecture not in SPATIAL_HEAD_ARCHITECTURES:
+            raise ValueError(f"unsupported spatial head: {head_architecture}")
         self.input_dim = int(input_dim)
         self.max_scan_range_m = float(max_scan_range_m)
         self.max_abs_delta_rad = float(max_abs_delta_rad)
@@ -54,6 +58,7 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         self.spatial_normalization = spatial_normalization
         self.projection_dim = int(projection_dim)
         self.projection_seed = int(projection_seed)
+        self.head_architecture = head_architecture
         self.base = TinyLidarNet(input_dim=self.input_dim, output_dim=2)
         for parameter in self.base.parameters():
             parameter.requires_grad_(False)
@@ -92,8 +97,13 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
         )
-        self.direction_head = nn.Linear(hidden_dim // 2, 3)
-        self.magnitude_head = nn.Linear(hidden_dim // 2, 2)
+        if self.head_architecture == "signed_mixture":
+            self.direction_head = nn.Linear(hidden_dim // 2, 3)
+            self.magnitude_head = nn.Linear(hidden_dim // 2, 2)
+        else:
+            self.activation_head = nn.Linear(hidden_dim // 2, 1)
+            self.sign_head = nn.Linear(hidden_dim // 2, 2)
+            self.magnitude_head = nn.Linear(hidden_dim // 2, 1)
         self._initialize_adapter()
 
     def _initialize_adapter(self) -> None:
@@ -108,8 +118,14 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             nn.init.zeros_(self.spatial_norm.bias)
         # Equal left/right probabilities and magnitudes cancel exactly.  The
         # untrained composition therefore preserves candidate3 for every scan.
-        nn.init.zeros_(self.direction_head.weight)
-        nn.init.zeros_(self.direction_head.bias)
+        if self.head_architecture == "signed_mixture":
+            nn.init.zeros_(self.direction_head.weight)
+            nn.init.zeros_(self.direction_head.bias)
+        else:
+            nn.init.zeros_(self.activation_head.weight)
+            nn.init.zeros_(self.activation_head.bias)
+            nn.init.zeros_(self.sign_head.weight)
+            nn.init.zeros_(self.sign_head.bias)
         nn.init.zeros_(self.magnitude_head.weight)
         nn.init.zeros_(self.magnitude_head.bias)
 
@@ -181,15 +197,39 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         speeds_mps: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         hidden = self.spatial_head(self._adapter_features(scans_m, speeds_mps))
-        direction_logits = self.direction_head(hidden)
-        direction_probabilities = torch.softmax(direction_logits, dim=-1)
-        magnitudes = (
-            torch.sigmoid(self.magnitude_head(hidden)) * self.max_abs_delta_rad
-        )
-        residual = (
-            direction_probabilities[:, 2] * magnitudes[:, 1]
-            - direction_probabilities[:, 0] * magnitudes[:, 0]
-        )
+        if self.head_architecture == "signed_mixture":
+            direction_logits = self.direction_head(hidden)
+            direction_probabilities = torch.softmax(direction_logits, dim=-1)
+            magnitudes = (
+                torch.sigmoid(self.magnitude_head(hidden))
+                * self.max_abs_delta_rad
+            )
+            residual = (
+                direction_probabilities[:, 2] * magnitudes[:, 1]
+                - direction_probabilities[:, 0] * magnitudes[:, 0]
+            )
+        else:
+            activation = torch.sigmoid(self.activation_head(hidden)).squeeze(1)
+            sign_probabilities = torch.softmax(self.sign_head(hidden), dim=-1)
+            magnitude = (
+                torch.sigmoid(self.magnitude_head(hidden)).squeeze(1)
+                * self.max_abs_delta_rad
+            )
+            direction_probabilities = torch.stack(
+                (
+                    activation * sign_probabilities[:, 0],
+                    1.0 - activation,
+                    activation * sign_probabilities[:, 1],
+                ),
+                dim=1,
+            )
+            direction_logits = torch.log(
+                torch.clamp(direction_probabilities, min=1e-7)
+            )
+            magnitudes = torch.stack((magnitude, magnitude), dim=1)
+            residual = activation * (
+                sign_probabilities[:, 1] - sign_probabilities[:, 0]
+            ) * magnitude
         return residual, magnitudes, direction_logits, direction_probabilities
 
     def forward(

@@ -16,6 +16,7 @@ from lib.normal_anchor import MultiSeqNormalAnchorDataset
 from lib.recurrent_policy import MultiSeqRecurrentPolicyDataset
 from lib.residual import residual_metrics, write_json
 from lib.spatial_adapter import (
+    SPATIAL_HEAD_ARCHITECTURES,
     SPATIAL_NORMALIZATION_MODES,
     FrozenTinyLidarSpatialResidual,
 )
@@ -136,6 +137,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--projection-dim", type=int, default=0)
     parser.add_argument("--projection-seed", type=int, default=2026)
+    parser.add_argument(
+        "--head-architecture",
+        choices=SPATIAL_HEAD_ARCHITECTURES,
+        default="signed_mixture",
+    )
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
     parser.add_argument("--batch-size", type=int, default=512)
@@ -166,6 +172,7 @@ def main() -> int:
         spatial_normalization=args.spatial_normalization,
         projection_dim=args.projection_dim,
         projection_seed=args.projection_seed,
+        head_architecture=args.head_architecture,
     )
     candidate_provenance = load_pretrained_weights(model, args.candidate)
     base_provenance = assert_embedded_base_identity(model, args.base_checkpoint)

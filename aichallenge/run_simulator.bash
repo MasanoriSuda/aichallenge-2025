@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_DIR="$(dirname "$0")/simulator_scripts"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")/simulator_scripts" && pwd)"
 mode="${1:-${SIM_MODE:-simulator}}"
 [ $# -gt 0 ] && shift
 
@@ -16,7 +16,12 @@ fi
 
 log_dir="${LOG_DIR:-/output}"
 mkdir -p "${log_dir}"
+log_dir="$(cd -- "${log_dir}" && pwd)"
 exec >"${log_dir}/awsim.log" 2>&1
 
 echo "[INFO] Starting AWSIM: ${mode}.sh $*"
+# AWSIM writes result-summary.json and dN-result-details.json to its current
+# working directory.  Keep the process cwd inside this immutable run directory
+# so separate runs cannot overwrite /aichallenge/result-summary.json.
+cd -- "${log_dir}"
 exec bash "${script}" "$@"

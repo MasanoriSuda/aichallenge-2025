@@ -198,6 +198,35 @@ docker compose run --rm --no-deps autoware-command \
   /output/<run>/d1/rosbag2_autoware --fail-on-stall
 ```
 
+### Competition run acceptance
+
+`analyze_e2e_run.py`の合格は「bag上で長時間固着していない」ことだけを表し、完走、周回数、
+接触・壁ペナルティを証明しない。production候補の最終判定には、同一runに属するAWSIM結果、
+motion analysis、起動時provenanceを`analyze_e2e_competition.py`で統合する。
+
+AWSIMは結果JSONをprocess cwdへ書くため、`run_simulator.bash`はAWSIMのcwdを必ず
+`/output/<run_id>/`へ変更する。リポジトリ直下の`aichallenge/result-summary.json`等は過去runに
+上書きされた可能性があり、competition acceptanceの根拠に使用しない。古いrunにAWSIM結果が
+残っていない場合はmotion gateがpassでも`incomplete`とする。
+
+```bash
+docker compose run --rm --no-deps autoware-command \
+  python3 /aichallenge/ml_workspace/tiny_lidar_net/analyze_e2e_competition.py \
+  /output/<run> \
+  --expected-control-mode fixed_lidar_brake \
+  --expected-checkpoint-path \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+  --checkpoint-file \
+    /aichallenge/ml_workspace/tiny_lidar_net/checkpoints/20260901_055824/candidate.npy \
+  --expected-checkpoint-sha256 \
+    de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa \
+  --output /output/<run>/e2e-competition-analysis.json \
+  --fail-on-rejection
+```
+
+既定はpenalty 0件を要求する。診断目的で許容数を変える場合は
+`--max-penalty-count`を明示し、production昇格の結果と混同しない。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

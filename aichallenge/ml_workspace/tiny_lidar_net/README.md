@@ -119,6 +119,21 @@ docker compose run --rm --no-deps autoware-command \
   --fail-on-stall
 ```
 
+AWSIM結果を含む最終判定は、motion JSONを生成した後にrun単位で実行します。結果JSONを
+持たない旧runは成功扱いせず`incomplete`になります。
+
+```bash
+python3 analyze_e2e_competition.py /output/<run> \
+  --expected-control-mode fixed_lidar_brake \
+  --expected-checkpoint-path \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+  --checkpoint-file checkpoints/20260901_055824/candidate.npy \
+  --expected-checkpoint-sha256 \
+    de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa \
+  --output /output/<run>/e2e-competition-analysis.json \
+  --fail-on-rejection
+```
+
 ### Runtime NPC corrective teacher
 
 runtime NPCはV2Xへ現れないため、MPC教師を捏造しません。次のtargetは同じNPC worldで、

@@ -1,9 +1,9 @@
 # Log設計メモ（/output 配下に集約）
 
-> 仕様ドキュメント（現仕様の正）。最終確認: 2026-08-19。文書運用方針は [docs/README.md](../README.md) を参照。
+> 仕様ドキュメント（現仕様の正）。最終確認: 2026-09-01。文書運用方針は [docs/README.md](../README.md) を参照。
 
 作成日: 2026-01-27  
-更新日: 2026-08-23
+更新日: 2026-09-01
 
 対象: `docker-compose.yml`（make 経由 / 主要パス）・`aichallenge/run_evaluation.bash`（評価オーケストレータ）
 
@@ -75,7 +75,19 @@ rosbag compose サービスには `stop_grace_period: 10s` を設定してあり
 
 `latest/` は `autostart_orchestrator_node.py`（`_refresh_latest_artifact_links`）が評価完了時に更新する実ディレクトリ。`latest/d<N>/` 配下に最新 run の成果物を指す symlink が置かれる。`docker_build.log` / `docker_run.log` については `docker_build.sh` / `docker_run.sh` が `latest/` 直下に symlink を直接作成する。`topic_check.sh` が `output/latest/topic_check.txt` を出力する用途も引き続き有効。
 
-### 3.4 追い越しDecision Trace
+### 3.4 AWSIM result provenance
+
+AWSIMは`result-summary.json`と`dN-result-details.json`をprocess cwdへ書き出す。
+`run_simulator.bash`はstdoutの出力先を変えるだけでなく、AWSIM起動前にcwdを正規化済みの
+`LOG_DIR`（通常`/output/<run_id>/`）へ変更する。これによりAWSIM結果、`awsim.log`、各
+`d<N>/`を同じrun identityへ閉じ込める。
+
+リポジトリ直下の`aichallenge/result-summary.json`や`dN-result-details.json`をdev runの
+根拠として参照しない。これらはcwd契約修正前のrunにより上書きされ、別時刻の車両結果が
+混在し得る。結果JSONを持たない古いrunは、bagが残っていてもcompetition acceptance上は
+`incomplete`とする。
+
+### 3.5 追い越しDecision Trace
 
 追い越しの候補生成、制御実行、実行中の代替側切替は、`autoware.log` の
 `Overtake decision trace:` で相関できるようにする。記録段階は次の3種類とする。
@@ -117,7 +129,7 @@ change判定へ含めない。runtime-failoverの自由文 `reason`、および�
 3. 候補は成立したがauthority/admissionで採用されない
 4. 実行中に現側が失効し、代替側へ切り替えた／切り替えられなかった
 
-### 3.5 追い越しExecution AuthorityとEpisode Summary
+### 3.6 追い越しExecution AuthorityとEpisode Summary
 
 個別の候補判定だけでなく、MPC問題へ適用する直前の最終所有者を
 `Overtake execution authority:`へ記録する。主要項目は次のとおり。
@@ -141,7 +153,7 @@ front-cap解除とFollow capなどの組合せをsilentに通過させない。
 DynamicMissionWait／ContactEscape回数、終了理由を含める。これを追い越し完遂率と
 外れ走行の一次集計単位とする。
 
-### 3.6 AWSIM衝突指標と静的壁証明の相関
+### 3.7 AWSIM衝突指標と静的壁証明の相関
 
 開発用rosbagのallowlistには`/aichallenge/pitstop/condition`を含める。topicが存在する環境では
 制御器は初回値を

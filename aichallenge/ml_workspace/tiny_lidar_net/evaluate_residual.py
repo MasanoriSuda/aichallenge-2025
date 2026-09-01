@@ -13,7 +13,9 @@ from lib.checkpoint import load_pretrained_weights
 from lib.data import MultiSeqConcatDataset
 from lib.residual import (
     MultiSeqResidualDataset,
+    RESIDUAL_HEAD_ARCHITECTURES,
     RESIDUAL_INPUT_MODES,
+    SignedMixtureSteeringResidualNet,
     SteeringResidualNet,
     adapt_concat_dataset_input,
     residual_metrics,
@@ -42,25 +44,39 @@ def predict(model, loader, device, paired: bool) -> tuple[np.ndarray, np.ndarray
     return np.concatenate(predictions), np.concatenate(targets)
 
 
-def predict_paired_components(model, loader, device):
+def predict_paired_components(model, loader, device, head_architecture):
     """Expose whether a failure comes from correction capacity or gate collapse."""
     model.eval()
     residuals = []
     corrections = []
     gate_probabilities = []
+    direction_probabilities = []
     targets = []
     with torch.no_grad():
         for scans, target in loader:
-            residual, correction, gate_logits = model.forward_components(
-                as_model_input(scans).to(device)
-            )
+            components = model.forward_components(as_model_input(scans).to(device))
+            if head_architecture == "binary_gate":
+                residual, correction, gate_logits = components
+                gate_probability = torch.sigmoid(gate_logits)
+            else:
+                residual, magnitudes, _, direction_probability = components
+                correction = magnitudes[:, 1] - magnitudes[:, 0]
+                gate_probability = 1.0 - direction_probability[:, 1]
+                direction_probabilities.append(
+                    direction_probability.cpu().numpy()
+                )
             residuals.append(residual.cpu().numpy())
             corrections.append(correction.cpu().numpy())
-            gate_probabilities.append(torch.sigmoid(gate_logits).cpu().numpy())
+            gate_probabilities.append(gate_probability.cpu().numpy())
             targets.append(target.numpy())
-    return tuple(
+    combined = tuple(
         np.concatenate(values)
         for values in (residuals, corrections, gate_probabilities, targets)
+    )
+    return combined + (
+        None
+        if not direction_probabilities
+        else np.concatenate(direction_probabilities),
     )
 
 
@@ -94,6 +110,11 @@ def parse_args() -> argparse.Namespace:
         choices=RESIDUAL_INPUT_MODES,
         default="stateless",
     )
+    parser.add_argument(
+        "--head-architecture",
+        choices=RESIDUAL_HEAD_ARCHITECTURES,
+        default="binary_gate",
+    )
     parser.add_argument("--max-range-m", type=float, default=30.0)
     parser.add_argument("--max-abs-delta-rad", type=float, default=1.28)
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
@@ -121,7 +142,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SteeringResidualNet(
+    model_type = (
+        SteeringResidualNet
+        if args.head_architecture == "binary_gate"
+        else SignedMixtureSteeringResidualNet
+    )
+    model = model_type(
         input_dim=args.input_dim,
         max_abs_delta_rad=args.max_abs_delta_rad,
         input_channels=residual_input_channels(args.architecture),
@@ -144,8 +170,16 @@ def main() -> int:
     paired_loader = DataLoader(
         evaluated_dataset, batch_size=args.batch_size, shuffle=False
     )
-    predictions, corrections, gate_probabilities, targets = (
-        predict_paired_components(model, paired_loader, device)
+    (
+        predictions,
+        corrections,
+        gate_probabilities,
+        targets,
+        direction_probabilities,
+    ) = (
+        predict_paired_components(
+            model, paired_loader, device, args.head_architecture
+        )
     )
     paired_metrics = residual_metrics(
         predictions, targets, args.material_delta_rad
@@ -155,6 +189,7 @@ def main() -> int:
     )
     material_mask = np.abs(targets) >= args.material_delta_rad
     component_diagnostics = {
+        "head_architecture": args.head_architecture,
         "ungated_correction_metrics": correction_metrics,
         "gate_probability": {
             "material_mean": (
@@ -169,6 +204,24 @@ def main() -> int:
             ),
         },
     }
+    if direction_probabilities is not None:
+        class_targets = np.ones(targets.shape, dtype=np.int64)
+        class_targets[targets <= -args.material_delta_rad] = 0
+        class_targets[targets >= args.material_delta_rad] = 2
+        component_diagnostics["direction_class"] = {
+            "accuracy": float(
+                np.mean(np.argmax(direction_probabilities, axis=1) == class_targets)
+            ),
+            "negative_probability_mean": float(
+                np.mean(direction_probabilities[:, 0])
+            ),
+            "anchor_probability_mean": float(
+                np.mean(direction_probabilities[:, 1])
+            ),
+            "positive_probability_mean": float(
+                np.mean(direction_probabilities[:, 2])
+            ),
+        }
 
     normal_metrics = None
     if args.normal_dataset_dir is not None:
@@ -209,6 +262,7 @@ def main() -> int:
         "schema_version": 1,
         "checkpoint": provenance,
         "architecture": args.architecture,
+        "head_architecture": args.head_architecture,
         "paired_sequence_ids": paired_dataset.sequence_ids,
         "tail_sec": args.tail_sec,
         "paired_metrics": paired_metrics,

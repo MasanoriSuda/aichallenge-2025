@@ -19,6 +19,7 @@ RESIDUAL_TARGET_FILES = (
     "steering_deltas.npy",
 )
 RESIDUAL_INPUT_MODES = ("stateless", "scan_delta")
+RESIDUAL_HEAD_ARCHITECTURES = ("binary_gate", "signed_mixture")
 
 
 def residual_input_channels(input_mode: str) -> int:
@@ -308,6 +309,144 @@ class SteeringResidualNet(nn.Module):
     def forward(self, scans: torch.Tensor) -> torch.Tensor:
         residual, _, _ = self.forward_components(scans)
         return residual
+
+
+class SignedMixtureSteeringResidualNet(nn.Module):
+    """Three-way residual which does not regress opposing actions together."""
+
+    def __init__(
+        self,
+        input_dim: int = 750,
+        max_abs_delta_rad: float = 1.28,
+        input_channels: int = 1,
+    ):
+        super().__init__()
+        if input_dim <= 0:
+            raise ValueError("input_dim must be positive")
+        if not np.isfinite(max_abs_delta_rad) or max_abs_delta_rad <= 0.0:
+            raise ValueError("max_abs_delta_rad must be finite and positive")
+        if input_channels not in (1, 2):
+            raise ValueError("input_channels must be 1 or 2")
+        self.max_abs_delta_rad = float(max_abs_delta_rad)
+        self.input_channels = int(input_channels)
+        self.conv1 = nn.Conv1d(self.input_channels, 16, kernel_size=10, stride=4)
+        self.conv2 = nn.Conv1d(16, 24, kernel_size=8, stride=4)
+        self.conv3 = nn.Conv1d(24, 32, kernel_size=4, stride=2)
+        with torch.no_grad():
+            dummy = torch.zeros(1, self.input_channels, input_dim)
+            encoded = self.conv3(self.conv2(self.conv1(dummy)))
+            flatten_dim = encoded.flatten(start_dim=1).shape[1]
+        self.fc1 = nn.Linear(flatten_dim, 64)
+        self.fc2 = nn.Linear(64, 16)
+        self.direction_head = nn.Linear(16, 3)
+        self.magnitude_head = nn.Linear(16, 2)
+        self._initialize_weights()
+
+    def _initialize_weights(self) -> None:
+        for layer in (self.conv1, self.conv2, self.conv3, self.fc1, self.fc2):
+            nn.init.kaiming_normal_(layer.weight, mode="fan_out", nonlinearity="relu")
+            nn.init.zeros_(layer.bias)
+        # Equal negative/positive probabilities and magnitudes cancel exactly,
+        # preserving the frozen base policy before training.
+        nn.init.zeros_(self.direction_head.weight)
+        nn.init.zeros_(self.direction_head.bias)
+        nn.init.zeros_(self.magnitude_head.weight)
+        nn.init.zeros_(self.magnitude_head.bias)
+
+    def _encode(self, scans: torch.Tensor) -> torch.Tensor:
+        features = F.relu(self.conv1(scans))
+        features = F.relu(self.conv2(features))
+        features = F.relu(self.conv3(features))
+        features = torch.flatten(features, start_dim=1)
+        features = F.relu(self.fc1(features))
+        return F.relu(self.fc2(features))
+
+    def forward_components(
+        self, scans: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        features = self._encode(scans)
+        direction_logits = self.direction_head(features)
+        direction_probabilities = torch.softmax(direction_logits, dim=-1)
+        magnitudes = torch.sigmoid(self.magnitude_head(features)) * self.max_abs_delta_rad
+        residual = (
+            direction_probabilities[:, 2] * magnitudes[:, 1]
+            - direction_probabilities[:, 0] * magnitudes[:, 0]
+        )
+        return residual, magnitudes, direction_logits, direction_probabilities
+
+    def forward(self, scans: torch.Tensor) -> torch.Tensor:
+        residual, _, _, _ = self.forward_components(scans)
+        return residual
+
+
+def signed_direction_targets(
+    targets: torch.Tensor, material_delta_rad: float
+) -> torch.Tensor:
+    """Map correction targets to negative/anchor/positive class IDs."""
+    if material_delta_rad <= 0.0:
+        raise ValueError("material_delta_rad must be positive")
+    classes = torch.ones_like(targets, dtype=torch.long)
+    classes = torch.where(targets <= -material_delta_rad, 0, classes)
+    return torch.where(targets >= material_delta_rad, 2, classes)
+
+
+def signed_mixture_training_loss(
+    residual: torch.Tensor,
+    magnitudes: torch.Tensor,
+    direction_logits: torch.Tensor,
+    targets: torch.Tensor,
+    material_delta_rad: float,
+    material_weight: float,
+    direction_class_weights: torch.Tensor,
+    direction_loss_weight: float,
+    anchor_leakage_weight: float,
+) -> torch.Tensor:
+    """Train direction separately so opposite homotopies are not averaged."""
+    if residual.shape != targets.shape:
+        raise ValueError("signed mixture residual and targets must match")
+    if magnitudes.shape != (targets.shape[0], 2):
+        raise ValueError("signed mixture magnitudes must have shape (batch, 2)")
+    if direction_logits.shape != (targets.shape[0], 3):
+        raise ValueError("signed mixture logits must have shape (batch, 3)")
+    if direction_class_weights.shape != (3,):
+        raise ValueError("direction_class_weights must have shape (3,)")
+    if direction_loss_weight < 0.0 or anchor_leakage_weight < 0.0:
+        raise ValueError("signed mixture loss weights must be non-negative")
+
+    classes = signed_direction_targets(targets, material_delta_rad)
+    composed_loss = weighted_residual_smooth_l1(
+        residual, targets, material_delta_rad, material_weight
+    )
+    direction_loss = F.cross_entropy(
+        direction_logits,
+        classes,
+        weight=direction_class_weights.to(
+            device=direction_logits.device, dtype=direction_logits.dtype
+        ),
+    )
+    material = classes != 1
+    if torch.any(material):
+        selected_magnitudes = torch.where(
+            classes[material] == 0,
+            magnitudes[material, 0],
+            magnitudes[material, 1],
+        )
+        magnitude_loss = F.smooth_l1_loss(
+            selected_magnitudes, torch.abs(targets[material])
+        )
+    else:
+        magnitude_loss = torch.zeros((), device=targets.device, dtype=targets.dtype)
+    anchors = ~material
+    if torch.any(anchors):
+        anchor_loss = torch.mean(torch.abs(residual[anchors]))
+    else:
+        anchor_loss = torch.zeros((), device=targets.device, dtype=targets.dtype)
+    return (
+        composed_loss
+        + magnitude_loss
+        + direction_loss_weight * direction_loss
+        + anchor_leakage_weight * anchor_loss
+    )
 
 
 def weighted_residual_smooth_l1(

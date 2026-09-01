@@ -7,6 +7,7 @@ import torch
 
 from lib.residual import (
     RESIDUAL_INPUT_MODES,
+    SignedMixtureSteeringResidualNet,
     SteeringResidualNet,
     SteeringResidualSequenceDataset,
     compose_residual_input,
@@ -14,6 +15,8 @@ from lib.residual import (
     residual_input_channels,
     residual_training_loss,
     sequence_balanced_sample_weights,
+    signed_direction_targets,
+    signed_mixture_training_loss,
     weighted_residual_smooth_l1,
 )
 from tiny_lidar_net_controller.model.tinylidarnet import SteeringResidualNetNp
@@ -132,6 +135,53 @@ def test_residual_model_is_exactly_zero_before_training():
     model = SteeringResidualNet(input_dim=750)
     output = model(torch.rand(4, 1, 750))
     torch.testing.assert_close(output, torch.zeros(4), rtol=0.0, atol=0.0)
+
+
+def test_signed_mixture_is_exactly_zero_before_training():
+    model = SignedMixtureSteeringResidualNet(input_dim=750, input_channels=2)
+    output = model(torch.rand(4, 2, 750))
+    torch.testing.assert_close(output, torch.zeros(4), rtol=0.0, atol=0.0)
+
+
+def test_signed_direction_targets_keep_opposing_actions_separate():
+    classes = signed_direction_targets(
+        torch.tensor([-0.2, -0.01, 0.0, 0.01, 0.2]),
+        material_delta_rad=0.02,
+    )
+    assert classes.tolist() == [0, 1, 1, 1, 2]
+
+
+def test_signed_mixture_loss_prefers_correct_direction_classes():
+    targets = torch.tensor([-0.3, 0.0, 0.4])
+    magnitudes = torch.tensor([[0.3, 0.1], [0.1, 0.1], [0.1, 0.4]])
+    correct_logits = torch.tensor(
+        [[5.0, 0.0, -5.0], [0.0, 5.0, 0.0], [-5.0, 0.0, 5.0]]
+    )
+    wrong_logits = torch.flip(correct_logits, dims=(1,))
+    weights = torch.ones(3)
+    correct = signed_mixture_training_loss(
+        residual=torch.tensor([-0.3, 0.0, 0.4]),
+        magnitudes=magnitudes,
+        direction_logits=correct_logits,
+        targets=targets,
+        material_delta_rad=0.02,
+        material_weight=20.0,
+        direction_class_weights=weights,
+        direction_loss_weight=1.0,
+        anchor_leakage_weight=0.5,
+    )
+    wrong = signed_mixture_training_loss(
+        residual=torch.tensor([0.3, 0.0, -0.4]),
+        magnitudes=magnitudes,
+        direction_logits=wrong_logits,
+        targets=targets,
+        material_delta_rad=0.02,
+        material_weight=20.0,
+        direction_class_weights=weights,
+        direction_loss_weight=1.0,
+        anchor_leakage_weight=0.5,
+    )
+    assert correct < wrong
 
 
 def test_numpy_runtime_matches_torch_residual_model():

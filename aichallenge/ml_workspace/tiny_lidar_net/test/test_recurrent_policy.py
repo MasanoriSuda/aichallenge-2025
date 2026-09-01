@@ -63,6 +63,9 @@ def test_recurrent_identity_binds_speed_contract() -> None:
     assert first == recurrent_sequence_id("run-a", "/speed", 0.05)
     assert first != recurrent_sequence_id("run-a", "/speed", 0.04)
     assert first != recurrent_sequence_id("run-a", "/other-speed", 0.05)
+    assert first != recurrent_sequence_id(
+        "run-a", "/speed", 0.05, "a" * 64
+    )
 
 
 def write_source_identity(root: Path, split: str, sequence_id: str) -> Path:

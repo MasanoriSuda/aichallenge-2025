@@ -323,9 +323,17 @@ run-level admissionを通った`precontact_teacher`を使う場合は、旧teach
 python3 relabel_gap_teacher_bag.py /output/<admitted-run>/d1/rosbag2_autoware \
   --checkpoint checkpoints/<student-run>/candidate.npy \
   --teacher-mode precontact_teacher \
+  --competition-analysis /output/<admitted-run>/e2e-competition-analysis.json \
+  --require-executed-success \
   --novel-policy-only \
   --outdir dataset/<dagger-name>
 ```
+
+`--require-executed-success`は、同じrun/domainで実際にteacherがauthorityを持ち、Finish・
+penalty 0・stall 0だったことと、checkpoint/result/motion artifact hashを再検証する。
+証明はdataset metadataとsequence identityへ含まれる。速度同期したrecurrent派生をhard labelへ
+使う場合も`build_recurrent_dataset.py --require-executed-success`を指定し、証明を失ったsourceを
+拒否する。
 
 `--novel-policy-only`は同一scan・同一base steeringに対する旧`LidarGapTeacher`との差が
 0.02 rad以上あるlabelだけを残す。新teacherに固有でない通常のgap追従を大量に再学習して

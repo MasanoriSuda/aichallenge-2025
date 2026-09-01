@@ -570,6 +570,19 @@ intervention-necessityを表すset-valued supervisionへラベル源を変更す
 result-detail、motion analysis、control mode、checkpoint SHAをderived dataset metadataへ
 不可分に継承する。証明を失う派生datasetはhard teacher labelとして読み込ませない。
 
+教師dataset schemaはrun-level outcome certificateを持つ。certificate生成時はcompetition
+analysisのglobal/domain status、実行control mode、checkpoint SHA、3周Finish、penalty 0、
+stall 0を再検証し、result-summary、result-detail、motion analysisの実ファイルhashも照合する。
+certificate自体のcanonical SHAをsource sequence identityへ含め、recurrent派生時にも同じ
+certificateをそのまま継承する。新しいhard-label pipelineは
+`--require-executed-success`を指定し、証明なし・改変・別run/domain/mode/checkpointをfail-closedで
+拒否する。旧datasetは監査用に読み取り可能なまま残すが、このstrict pathへ混入させない。
+
+seed 2031からは全6,244 sampleを証明付きtrain sourceとして抽出した。0.02 rad以上のbase補正は
+660 sample（10.57%）、平均絶対補正0.01170 rad、p95 0.05437 rad、最大1.05587 radだった。
+ただしrun-disjoint validationを構成する第2の`executed_teacher_success`がまだないため、ここでは
+学習・checkpoint作成・production昇格を行わない。
+
 ## Submission Artifacts
 
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、

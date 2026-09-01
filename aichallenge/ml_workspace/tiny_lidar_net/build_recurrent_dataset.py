@@ -13,6 +13,7 @@ from rosbags.highlevel import AnyReader
 from extract_data_from_bag import synchronize_data
 from lib.recurrent_policy import RECURRENT_DATASET_SCHEMA_VERSION
 from lib.residual import SteeringResidualSequenceDataset
+from lib.supervision import validate_executed_teacher_certificate
 
 
 # End-to-End AI may use wheel odometry, but not the GNSS/IMU-fused localization
@@ -50,11 +51,13 @@ def recurrent_sequence_id(
     source_sequence_id: str,
     speed_topic: str,
     max_sync_delta_sec: float,
+    outcome_certificate_sha256: str | None = None,
 ) -> str:
     """Bind derived identity to the source run and speed synchronization contract."""
     contract = (
         f"schema={RECURRENT_DATASET_SCHEMA_VERSION}|source={source_sequence_id}|"
         f"speed={speed_topic}|max_delta={max_sync_delta_sec:.9f}|scan_unit=m"
+        f"|outcome={outcome_certificate_sha256 or 'unproven'}"
     )
     digest = hashlib.sha256(contract.encode("utf-8")).hexdigest()[:12]
     readable = source_sequence_id[-72:]
@@ -236,6 +239,7 @@ def build_sequence(
     speed_message_type: str,
     max_speed_sync_delta_sec: float,
     minimum_contiguous_samples: int,
+    require_executed_success: bool = False,
 ) -> dict:
     """Build one sequence, preserving source labels and temporal continuity."""
     source = SteeringResidualSequenceDataset(
@@ -250,6 +254,25 @@ def build_sequence(
     if not source_bag.is_dir() or not (source_bag / "metadata.yaml").is_file():
         raise FileNotFoundError(f"source bag unavailable: {source_bag}")
     max_scan_range_m = float(source.metadata["max_scan_range_m"])
+    outcome_certificate = source.metadata.get("outcome_certificate")
+    recorded_certificate_sha = source.metadata.get(
+        "outcome_certificate_sha256"
+    )
+    outcome_certificate_sha = None
+    if outcome_certificate is not None:
+        outcome_certificate_sha = validate_executed_teacher_certificate(
+            outcome_certificate,
+            source_bag=source_bag,
+            checkpoint_sha256=source.metadata["relabeling"][
+                "student_checkpoint_sha256"
+            ],
+        )
+        if recorded_certificate_sha != outcome_certificate_sha:
+            raise ValueError("source outcome certificate digest mismatch")
+    elif require_executed_success:
+        raise ValueError(
+            f"source lacks executed teacher success certificate: {source_dir}"
+        )
     physical_scans = load_physical_source_scans(
         source_dir, source.scans, max_scan_range_m
     )
@@ -275,7 +298,10 @@ def build_sequence(
         deltas_ns[source_slice].astype(np.float64, copy=False) / 1e9
     )
     sequence_id = recurrent_sequence_id(
-        source.sequence_id, speed_topic, max_speed_sync_delta_sec
+        source.sequence_id,
+        speed_topic,
+        max_speed_sync_delta_sec,
+        outcome_certificate_sha,
     )
     output_dir = output_root / split / sequence_id
     if output_dir.exists():
@@ -320,7 +346,10 @@ def build_sequence(
             "student_checkpoint_sha256": source.metadata["relabeling"][
                 "student_checkpoint_sha256"
             ],
+            "outcome_certificate_sha256": outcome_certificate_sha,
         },
+        "outcome_certificate": outcome_certificate,
+        "outcome_certificate_sha256": outcome_certificate_sha,
         "topics": {
             "scan": source.metadata["topics"]["scan"],
             "speed": speed_topic,
@@ -381,6 +410,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-speed-sync-delta-sec", type=float, default=0.05)
     parser.add_argument("--minimum-contiguous-samples", type=int, default=64)
+    parser.add_argument(
+        "--require-executed-success",
+        action="store_true",
+        help=(
+            "Reject every source sequence that lacks a valid embedded "
+            "executed_teacher_success certificate."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -417,6 +454,7 @@ def main() -> int:
             speed_message_type=args.speed_message_type,
             max_speed_sync_delta_sec=args.max_speed_sync_delta_sec,
             minimum_contiguous_samples=args.minimum_contiguous_samples,
+            require_executed_success=args.require_executed_success,
         )
         results.append(metadata)
         print(
@@ -434,6 +472,7 @@ def main() -> int:
         "speed_message_type": args.speed_message_type,
         "max_speed_sync_delta_sec": args.max_speed_sync_delta_sec,
         "minimum_contiguous_samples": args.minimum_contiguous_samples,
+        "require_executed_success": args.require_executed_success,
         "excluded_source_sequence_ids": sorted(
             args.exclude_source_sequence_id
         ),

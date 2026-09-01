@@ -25,46 +25,61 @@ def write_admitted_run(root: Path) -> Path:
     detail = run / "d1-result-details.json"
     motion = run / "d1" / "e2e-run-analysis.json"
     write_json(summary, {"schema_version": "v2"})
-    write_json(detail, {"schema_version": "v3"})
+    race = {
+        "finished": True,
+        "lap_count": 3,
+        "required_laps": 3,
+        "penalty_count": 0,
+    }
+    motion_evidence = {
+        "longest_low_speed_sec": 0.0,
+        "longest_positive_accel_stall_sec": 0.0,
+    }
+    write_json(detail, {
+        "schema_version": "v3",
+        "vehicle_number": 1,
+        **race,
+    })
     write_json(
         motion,
         {
             "schema_version": 2,
             "admission": {"result": "pass"},
+            "motion": motion_evidence,
         },
     )
     bag = run / "d1" / "rosbag2_autoware"
     bag.mkdir()
     (bag / "metadata.yaml").write_text("rosbag2_bagfile_information: {}\n")
     report = {
+        "schema_version": 1,
         "status": "pass",
+        "reasons": [],
         "run_dir": str(run.resolve()),
         "expected_runtime": {
             "control_mode": "fixed_lidar_brake",
             "checkpoint_sha256": CHECKPOINT_SHA,
         },
         "checkpoint_artifact": {"sha256": CHECKPOINT_SHA},
-        "artifacts": {"result_summary_sha256": sha256_file(summary)},
+        "artifacts": {
+            "result_summary": str(summary.resolve()),
+            "result_summary_sha256": sha256_file(summary),
+        },
         "domains": [
             {
                 "domain": 1,
                 "status": "pass",
+                "reasons": [],
                 "runtime": {
                     "control_mode": "fixed_lidar_brake",
                     "conflicts": {},
                 },
-                "race": {
-                    "finished": True,
-                    "lap_count": 3,
-                    "required_laps": 3,
-                    "penalty_count": 0,
-                },
-                "motion": {
-                    "longest_low_speed_sec": 0.0,
-                    "longest_positive_accel_stall_sec": 0.0,
-                },
+                "race": race,
+                "motion": motion_evidence,
                 "artifacts": {
+                    "result_detail": str(detail.resolve()),
                     "result_detail_sha256": sha256_file(detail),
+                    "motion_analysis": str(motion.resolve()),
                     "motion_sha256": sha256_file(motion),
                 },
             }

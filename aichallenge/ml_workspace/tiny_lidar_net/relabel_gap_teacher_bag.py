@@ -12,6 +12,11 @@ import numpy as np
 
 from extract_data_from_bag import clean_scan_array, make_sequence_id
 from lib.checkpoint import sha256_file
+from lib.supervision import (
+    admit_successful_run,
+    source_domain_and_run,
+    validate_executed_teacher_certificate,
+)
 
 
 @dataclass(frozen=True)
@@ -193,6 +198,33 @@ def relabel(args: argparse.Namespace) -> dict:
     if not checkpoint.is_file():
         raise FileNotFoundError(f"checkpoint not found: {checkpoint}")
 
+    checkpoint_sha = sha256_file(checkpoint)
+    competition_analysis = getattr(args, "competition_analysis", None)
+    require_executed_success = getattr(args, "require_executed_success", False)
+    if require_executed_success and competition_analysis is None:
+        raise ValueError(
+            "--require-executed-success requires --competition-analysis"
+        )
+    outcome_certificate = None
+    outcome_certificate_sha = None
+    if competition_analysis is not None:
+        domain, run_dir = source_domain_and_run(bag)
+        admitted = admit_successful_run(
+            run_dir,
+            domain,
+            identity.control_mode,
+            checkpoint_sha,
+            report_path=competition_analysis,
+        )
+        outcome_certificate = admitted["outcome_certificate"]
+        outcome_certificate_sha = validate_executed_teacher_certificate(
+            outcome_certificate,
+            source_bag=bag,
+            checkpoint_sha256=checkpoint_sha,
+        )
+        if outcome_certificate_sha != admitted["outcome_certificate_sha256"]:
+            raise RuntimeError("outcome certificate identity is inconsistent")
+
     timestamps, scans = read_scans(bag, args.scan_topic, args.max_scan_range)
     minima = minimum_observed_ranges(scans)
     breach_index = first_confirmed_breach(
@@ -278,9 +310,9 @@ def relabel(args: argparse.Namespace) -> dict:
     if not accepted_scans:
         raise ValueError("no teacher correction samples survived admission")
 
-    checkpoint_sha = sha256_file(checkpoint)
     sequence_identity = (
         f"{bag}:dagger:{identity.control_mode}:{checkpoint_sha}:"
+        f"outcome={outcome_certificate_sha or 'unproven'}:"
         f"{timestamps[cutoff - 1]}:active={args.active_only}:"
         f"novel={args.novel_policy_only}:"
         f"novel_delta={args.minimum_novel_steering_delta_rad}:"
@@ -400,6 +432,8 @@ def relabel(args: argparse.Namespace) -> dict:
         "max_scan_range_m": args.max_scan_range,
         "max_sync_delta_sec": 0.0,
         "label_source": identity.label_source,
+        "outcome_certificate": outcome_certificate,
+        "outcome_certificate_sha256": outcome_certificate_sha,
         "counts": {
             "raw_scans": int(len(scans)),
             "pre_contact_scans": int(cutoff),
@@ -493,6 +527,23 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.02,
         help="Minimum steering difference for --novel-policy-only.",
+    )
+    parser.add_argument(
+        "--competition-analysis",
+        type=Path,
+        help=(
+            "Strict run-level outcome evidence. When supplied it must belong "
+            "to the source bag and match the teacher mode, checkpoint, race "
+            "and motion artifacts."
+        ),
+    )
+    parser.add_argument(
+        "--require-executed-success",
+        action="store_true",
+        help=(
+            "Reject relabeling unless --competition-analysis proves that the "
+            "exact precontact teacher executed and completed the run."
+        ),
     )
     return parser.parse_args()
 

@@ -15,7 +15,6 @@ from typing import Any
 
 import numpy as np
 
-from analyze_e2e_competition import load_json, sha256_file
 from build_recurrent_dataset import (
     DEFAULT_SPEED_MESSAGE_TYPE,
     DEFAULT_SPEED_TOPIC,
@@ -27,6 +26,7 @@ from lib.normal_anchor import (
     NORMAL_ANCHOR_LABEL_SOURCE,
     NORMAL_ANCHOR_SCHEMA_VERSION,
 )
+from lib.supervision import admit_successful_run
 from relabel_gap_teacher_bag import read_scans
 
 
@@ -46,15 +46,6 @@ def parse_run_spec(value: str) -> tuple[str, Path]:
     return split, Path(path_text).expanduser().resolve()
 
 
-def _require_sha(path: Path, expected: Any, label: str) -> str:
-    if not path.is_file():
-        raise FileNotFoundError(f"{label} missing: {path}")
-    actual = sha256_file(path)
-    if expected != actual:
-        raise ValueError(f"{label} hash mismatch")
-    return actual
-
-
 def admit_production_run(
     run_dir: Path,
     split: str,
@@ -63,118 +54,15 @@ def admit_production_run(
     expected_checkpoint_sha256: str,
 ) -> dict[str, Any]:
     """Validate one run before any sample can enter the normal corpus."""
-    run_dir = run_dir.expanduser().resolve()
     if split not in {"train", "val"}:
         raise ValueError(f"unsupported split: {split!r}")
-    if domain <= 0:
-        raise ValueError("domain must be positive")
-    report_path = run_dir / "e2e-competition-analysis.json"
-    report = load_json(report_path)
-    if report.get("status") != "pass":
-        raise ValueError(f"production run was not admitted: {run_dir}")
-    # Reports can be generated at the host path or through the container's
-    # /output bind mount.  The immutable run directory name plus local artifact
-    # hashes is the portable identity; comparing absolute mount prefixes would
-    # reject the same physical run across those two namespaces.
-    reported_run = Path(str(report.get("run_dir", "")))
-    if not reported_run.is_absolute() or reported_run.name != run_dir.name:
-        raise ValueError("competition report run identity mismatch")
-
-    expected_runtime = report.get("expected_runtime")
-    checkpoint_artifact = report.get("checkpoint_artifact")
-    global_artifacts = report.get("artifacts")
-    if not isinstance(expected_runtime, dict) or not isinstance(
-        checkpoint_artifact, dict
-    ) or not isinstance(global_artifacts, dict):
-        raise ValueError("competition report lacks frozen runtime proof")
-    expected_hash = expected_checkpoint_sha256.lower()
-    if expected_runtime.get("control_mode") != expected_control_mode:
-        raise ValueError("competition report control mode mismatch")
-    if expected_runtime.get("checkpoint_sha256") != expected_hash:
-        raise ValueError("competition report checkpoint expectation mismatch")
-    if checkpoint_artifact.get("sha256") != expected_hash:
-        raise ValueError("competition report checkpoint artifact mismatch")
-
-    domains = report.get("domains")
-    matching = (
-        [
-            item
-            for item in domains
-            if isinstance(item, dict) and item.get("domain") == domain
-        ]
-        if isinstance(domains, list)
-        else []
+    admitted = admit_successful_run(
+        run_dir,
+        domain,
+        expected_control_mode,
+        expected_checkpoint_sha256,
     )
-    if len(matching) != 1 or matching[0].get("status") != "pass":
-        raise ValueError("requested production domain was not admitted")
-    domain_report = matching[0]
-    runtime = domain_report.get("runtime")
-    race = domain_report.get("race")
-    motion = domain_report.get("motion")
-    artifacts = domain_report.get("artifacts")
-    if not all(
-        isinstance(item, dict) for item in (runtime, race, motion, artifacts)
-    ):
-        raise ValueError("production domain evidence is incomplete")
-    if (
-        runtime.get("control_mode") != expected_control_mode
-        or runtime.get("conflicts")
-    ):
-        raise ValueError("runtime controller identity is not unique")
-    lap_count = race.get("lap_count")
-    required_laps = race.get("required_laps")
-    if (
-        not race.get("finished")
-        or not isinstance(lap_count, int)
-        or not isinstance(required_laps, int)
-        or lap_count < required_laps
-    ):
-        raise ValueError("production run did not finish required laps")
-    if race.get("penalty_count") != 0:
-        raise ValueError("penalized run cannot be a production-normal anchor")
-    for key in ("longest_low_speed_sec", "longest_positive_accel_stall_sec"):
-        value = motion.get(key)
-        if (
-            not isinstance(value, (int, float))
-            or not np.isfinite(value)
-            or value > 0.0
-        ):
-            raise ValueError(f"production-normal motion violation: {key}")
-
-    summary_path = run_dir / "result-summary.json"
-    detail_path = run_dir / f"d{domain}-result-details.json"
-    motion_path = run_dir / f"d{domain}" / "e2e-run-analysis.json"
-    _require_sha(
-        summary_path,
-        global_artifacts.get("result_summary_sha256"),
-        "result summary",
-    )
-    _require_sha(detail_path, artifacts.get("result_detail_sha256"), "result detail")
-    _require_sha(motion_path, artifacts.get("motion_sha256"), "motion analysis")
-    motion_document = load_json(motion_path)
-    admission = motion_document.get("admission")
-    if not isinstance(admission, dict) or admission.get("result") != "pass":
-        raise ValueError("motion analysis admission failed")
-
-    bag = run_dir / f"d{domain}" / "rosbag2_autoware"
-    if not (bag / "metadata.yaml").is_file():
-        raise FileNotFoundError(f"finalized production bag missing: {bag}")
-    return {
-        "split": split,
-        "run_dir": run_dir,
-        "run_id": run_dir.name,
-        "domain": domain,
-        "bag": bag.resolve(),
-        "report_path": report_path,
-        "report_sha256": sha256_file(report_path),
-        "result_summary_sha256": sha256_file(summary_path),
-        "result_detail_sha256": sha256_file(detail_path),
-        "motion_analysis_sha256": sha256_file(motion_path),
-        "checkpoint_sha256": expected_hash,
-        "control_mode": expected_control_mode,
-        "race": race,
-        "motion": motion,
-    }
+    return {"split": split, **admitted}
 
 
 def production_normal_sequence_id(
@@ -258,6 +146,8 @@ def build_sequence(
             "result_detail_sha256": admitted["result_detail_sha256"],
             "motion_analysis_sha256": admitted["motion_analysis_sha256"],
         },
+        "outcome_certificate": admitted["outcome_certificate"],
+        "outcome_certificate_sha256": admitted["outcome_certificate_sha256"],
         "race": admitted["race"],
         "motion": admitted["motion"],
         "topics": {"scan": scan_topic, "speed": speed_topic},

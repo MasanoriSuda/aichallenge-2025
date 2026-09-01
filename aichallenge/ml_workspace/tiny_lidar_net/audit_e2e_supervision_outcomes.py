@@ -7,120 +7,20 @@ import argparse
 from collections import Counter
 import json
 from pathlib import Path
-import re
 
 import numpy as np
 
+from lib.supervision import (
+    evidence_class,
+    load_json_object,
+    read_control_mode,
+    read_outcome,
+    resolve_recorded_path,
+    source_domain_and_run,
+)
+
 
 SCHEMA_VERSION = 1
-CONTROL_MODE_PATTERN = re.compile(r"tiny_lidar_control_mode:\s*([^\s]+)")
-
-
-def load_json_object(path: Path) -> dict:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"invalid JSON object {path}: {exc}") from exc
-    if not isinstance(value, dict):
-        raise ValueError(f"JSON root must be an object: {path}")
-    return value
-
-
-def resolve_recorded_path(recorded: str, output_root: Path) -> Path:
-    path = Path(recorded)
-    if path.is_absolute() and len(path.parts) >= 2 and path.parts[1] == "output":
-        return output_root.joinpath(*path.parts[2:])
-    return path
-
-
-def source_domain_and_run(bag: Path) -> tuple[int, Path]:
-    domain_name = bag.parent.name
-    if not re.fullmatch(r"d[1-9][0-9]*", domain_name):
-        raise ValueError(f"source bag does not belong to a domain directory: {bag}")
-    return int(domain_name[1:]), bag.parents[1]
-
-
-def read_control_mode(log_path: Path) -> tuple[str | None, str]:
-    if not log_path.is_file():
-        return None, "missing-autoware-log"
-    modes = set(CONTROL_MODE_PATTERN.findall(log_path.read_text(errors="ignore")))
-    if not modes:
-        return None, "control-mode-not-recorded"
-    if len(modes) != 1:
-        return None, "ambiguous-control-mode"
-    return modes.pop(), "ok"
-
-
-def read_outcome(detail_path: Path, domain: int) -> dict:
-    if not detail_path.is_file():
-        return {
-            "classification": "outcome_unproven",
-            "reason": "missing-result-detail",
-        }
-    try:
-        detail = load_json_object(detail_path)
-    except ValueError as exc:
-        return {
-            "classification": "outcome_unproven",
-            "reason": str(exc),
-        }
-    required = ("vehicle_number", "finished", "lap_count", "required_laps", "penalty_count")
-    if detail.get("schema_version") != "v3" or any(key not in detail for key in required):
-        return {
-            "classification": "outcome_unproven",
-            "reason": "invalid-result-detail-contract",
-        }
-    if detail["vehicle_number"] != domain:
-        return {
-            "classification": "outcome_unproven",
-            "reason": "result-domain-mismatch",
-        }
-    scalar_contract = (
-        isinstance(detail["finished"], bool)
-        and isinstance(detail["lap_count"], int)
-        and isinstance(detail["required_laps"], int)
-        and isinstance(detail["penalty_count"], int)
-        and detail["lap_count"] >= 0
-        and detail["required_laps"] > 0
-        and detail["penalty_count"] >= 0
-    )
-    if not scalar_contract:
-        return {
-            "classification": "outcome_unproven",
-            "reason": "invalid-result-detail-values",
-        }
-    passed = (
-        detail["finished"]
-        and detail["lap_count"] >= detail["required_laps"]
-        and detail["penalty_count"] == 0
-    )
-    return {
-        "classification": "certified_success" if passed else "certified_failure",
-        "reason": "finish-zero-penalty" if passed else "race-gate-failed",
-        "finished": detail["finished"],
-        "lap_count": detail["lap_count"],
-        "required_laps": detail["required_laps"],
-        "penalty_count": detail["penalty_count"],
-    }
-
-
-def evidence_class(control_mode: str | None, outcome: str) -> str:
-    teacher_executed = control_mode == "precontact_teacher"
-    if outcome == "outcome_unproven":
-        return "outcome_unproven"
-    if outcome == "certified_success":
-        return (
-            "executed_teacher_success"
-            if teacher_executed
-            else "successful_alternative_policy"
-        )
-    if outcome == "certified_failure":
-        return (
-            "executed_teacher_failure"
-            if teacher_executed
-            else "counterfactual_teacher_on_failure"
-        )
-    raise ValueError(f"unknown outcome classification: {outcome}")
 
 
 def correction_summary(sequence_dir: Path, material_delta_rad: float) -> dict:

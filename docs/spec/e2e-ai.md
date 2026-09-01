@@ -333,6 +333,17 @@ MAE 0.00988 radは合格したが、material改善26.16%、独立normal MAE 0.01
 やGateを調整することは禁止する。normalへ一律zero residualを与える契約とfailure teacher
 残差が、同じLiDAR＋speed観測へ矛盾したlabelを与えていないか、teacher生成経路を監査する。
 
+全corpusへ現行precontact teacherを再適用した結果、保存済みteacher train/validationはbase・
+successor steeringとも最大誤差0.0 radで再現し、version driftはなかった。一方、zero-normal
+trainの14.03%、validationの10.81%へmaterial補正を要求し、validation平均絶対補正は
+0.01970 radだった。さらにzero-normalの元`dagger_aggregate_v2`は4 sequenceすべてが
+`lidar_gap_teacher`または`lidar_gap_teacher_dagger`で、production candidate3走行ではなかった。
+従来normal anchorと独立normal Gateは誤った状態分布を使用していたため、その結果をcandidate
+昇格判断へ使わない。今後のnormal sourceは、checkpoint SHAがcandidate3と一致し、runtime
+modeが`fixed_lidar_brake`、所定lap完走、penalty/stall 0を満たすrunだけとする。既存の
+`output/20260901-151131`はこの条件を満たすが、run-disjoint train/validationのため追加の
+production合格runを収集してからnormal datasetを再構築する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

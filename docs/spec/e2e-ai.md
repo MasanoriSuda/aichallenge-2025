@@ -344,6 +344,25 @@ modeが`fixed_lidar_brake`、所定lap完走、penalty/stall 0を満たすrunだ
 `output/20260901-151131`はこの条件を満たすが、run-disjoint train/validationのため追加の
 production合格runを収集してからnormal datasetを再構築する。
 
+追加のfrozen production試走`output/20260901-170521`は3/3周、penalty 0、stall 0で完走し、
+最速87.626秒、平均91.911秒だった。これをtrain、既存`output/20260901-151131`をvalidation
+として、両bagから直接LiDARと実速度を同期した`production_normal_anchor_v1`を生成した。
+train 5920 sample、validation 5927 sampleで、同期差最大はそれぞれ17.54 ms、18.38 msである。
+builderはcompetition report、runtime mode、checkpoint SHA、Finish/lap、penalty、motion admission、
+result hashを再検証し、run/bagのsplit再利用を拒否する。旧gap-teacher由来normal corpusは今後の
+candidate admissionに使用しない。
+
+現行precontact teacherを新production normalへ再適用すると、material補正要求はtrain 6.13%、
+validation 6.33%残った。これは成功したcandidate3方策とsuccessor teacherが同じ観測でも異なる
+ことを示し、teacher補正を通常状態の正解へ一律昇格できない根拠である。sample sampler、full
+spatial map、実速度の候補を新contractで学習すると、material改善34.23%、方向84.42%、normal
+MAE 0.00994 radだったが、teacher-neutral MAE 0.01104 radで不合格だった。原因に対応して
+neutral leakage lossだけを0.5から1.0へ変更した限定A/Bは、material改善30.10%、方向84.94%、
+teacher-neutral MAE 0.00847 rad、production normal MAE 0.00586 rad、peer方向100%で全offline
+Gateを通過した。checkpoint SHAは
+`6ae9d618ea8093b1ff7d212cae760e90c71f84749f986af479681f5f729155d1`であるが、productionへは
+未接続であり、次の段階は出力を適用しないshadow runtimeで計算時間と実走分布を確認する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

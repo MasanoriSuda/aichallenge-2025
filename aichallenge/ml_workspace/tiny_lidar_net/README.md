@@ -171,33 +171,30 @@ python3 probe_e2e_action_separability.py \
   --output /output/e2e-action-separability-probe.json
 ```
 
-通常走行との同時分離を調べる場合は、train/validationを必ず対で渡します。古いnormal
-datasetは速度を保存していないため、この指定で有効な比較は`*_no_speed`だけです。速度あり
-結果を使うには、元bagから同じ同期契約でnormal recurrent datasetを作る必要があります。
+通常走行との同時分離に使うnormal sourceは、teacher rolloutではなく、frozen production
+checkpoint自身が完走したrunに限定します。`e2e-competition-analysis.json`がpassで、runtime
+mode/checkpointが一致し、所定lap完走、penalty 0、stall 0であることをbuilderが再検証します。
+train/validationへ同じrunまたはbagを再利用できません。生成物には操舵labelを保存せず、
+各LiDAR時刻へ50 ms以内で同期できる実速度と、run/result/checkpointのhash provenanceだけを
+保存します。
 
 ```bash
-python3 probe_e2e_action_separability.py \
-  --dataset dataset/recurrent_direct_v3 \
-  --checkpoint checkpoints/20260901_055824/candidate.npy \
-  --normal-anchor-train-dir dataset/dagger_aggregate_v2/train \
-  --normal-validation-dir dataset/dagger_aggregate_v2/val \
-  --output /output/e2e-spatial-normal-separability.json
-```
-
-元bagの実速度を使うnormal contractは、direct-policy labelと別schemaで生成します。
-生成物には操舵labelを保存せず、各LiDAR時刻へ50 ms以内で同期できるspeedだけを追加します。
-
-```bash
-python3 build_normal_anchor_recurrent_dataset.py \
-  --source-root dataset/dagger_aggregate_v2 \
-  --output-root dataset/normal_anchor_recurrent_v1
+python3 build_production_normal_anchor_dataset.py \
+  --run train:/output/<admitted-production-run-a> \
+  --run val:/output/<admitted-production-run-b> \
+  --expected-checkpoint-sha256 <frozen-checkpoint-sha256> \
+  --output-root dataset/production_normal_anchor_v1
 
 python3 probe_e2e_action_separability.py \
   --dataset dataset/recurrent_direct_v3 \
   --checkpoint checkpoints/20260901_055824/candidate.npy \
-  --normal-recurrent-root dataset/normal_anchor_recurrent_v1 \
+  --normal-recurrent-root dataset/production_normal_anchor_v1 \
   --output /output/e2e-spatial-normal-speed-separability.json
 ```
+
+`build_normal_anchor_recurrent_dataset.py`と`dagger_aggregate_v2`由来のnormal corpusは過去結果の
+再現・監査専用です。gap-teacherが作った状態をfrozen productionのzero residualとして扱うため、
+新candidateのadmissionには使用しません。
 
 probeが空間表現を支持した場合も、次の候補はoffline限定で学習・評価します。candidate
 artifactにfrozen baseを含め、評価時にbase tensorの同一性、teacher validation、peer subset、
@@ -225,7 +222,7 @@ legacy normal datasetを禁止し、同期済みnormal recurrent rootを必須�
 python3 train_spatial_adapter.py \
   --dataset dataset/recurrent_direct_v3 \
   --base-checkpoint checkpoints/20260901_055824/candidate.npy \
-  --normal-recurrent-root dataset/normal_anchor_recurrent_v1 \
+  --normal-recurrent-root dataset/production_normal_anchor_v1 \
   --use-speed \
   --output-root checkpoints/spatial-speed-adapter-v1
 
@@ -233,7 +230,7 @@ python3 evaluate_spatial_adapter.py \
   --dataset dataset/recurrent_direct_v3 \
   --candidate checkpoints/spatial-speed-adapter-v1/<run>/candidate.npy \
   --base-checkpoint checkpoints/20260901_055824/candidate.npy \
-  --normal-recurrent-root dataset/normal_anchor_recurrent_v1 \
+  --normal-recurrent-root dataset/production_normal_anchor_v1 \
   --use-speed \
   --output /output/e2e-spatial-speed-adapter-gate.json \
   --fail-on-gate

@@ -388,6 +388,14 @@ production checkpoint/mode gateも同時にpassした。独立した先行run `o
 シナリオ1本で判定する。NPC失敗時に上限緩和やruntime特殊条件を追加してはならず、失敗前
 sequenceを固定して学習分布または表現の原因へ戻る。
 
+v3限定authorityのruntime NPC試走`output/20260901-190146`では、egoが3/3周を
+`102.363 / 89.086 / 95.532秒`で完走し1位、penalty/stall 0となった。coverage 99.954%、
+推論error 0、clippedは8758 applied sample中136だった。v2の同シナリオ
+`output/20260901-180313`は2/3周後にwall penalty 137.35秒で未完だったため、held-out
+direction-transition改善は閉ループでも支持された。ただし単発runであり、production既定は
+candidate3＋`fixed_lidar_brake`、spatial authority OFFのままとする。次は同一設定の独立repeatを
+行い、再現した場合だけpromotion可否を判断する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

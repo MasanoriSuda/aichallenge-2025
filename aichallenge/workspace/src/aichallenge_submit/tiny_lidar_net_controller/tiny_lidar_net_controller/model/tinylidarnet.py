@@ -315,17 +315,20 @@ class TinyLidarNetSmallNp:
 class SteeringResidualNetNp:
     """NumPy inference counterpart of the offline two-head residual model."""
 
-    def __init__(self, input_dim=750, max_abs_delta_rad=1.28):
+    def __init__(self, input_dim=750, max_abs_delta_rad=1.28, input_channels=1):
         if input_dim <= 0:
             raise ValueError("input_dim must be positive")
         if not np.isfinite(max_abs_delta_rad) or max_abs_delta_rad <= 0.0:
             raise ValueError("max_abs_delta_rad must be finite and positive")
+        if input_channels not in (1, 2):
+            raise ValueError("input_channels must be 1 or 2")
         self.input_dim = input_dim
+        self.input_channels = int(input_channels)
         self.max_abs_delta_rad = float(max_abs_delta_rad)
         self.params = {}
         self.strides = {'conv1': 4, 'conv2': 4, 'conv3': 2}
         self.shapes = {
-            'conv1_weight': (16, 1, 10), 'conv1_bias': (16,),
+            'conv1_weight': (16, self.input_channels, 10), 'conv1_bias': (16,),
             'conv2_weight': (24, 16, 8), 'conv2_bias': (24,),
             'conv3_weight': (32, 24, 4), 'conv3_bias': (32,),
         }

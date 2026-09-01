@@ -48,6 +48,7 @@ class TinyLidarNetCore:
         gap_teacher_config: Optional[GapTeacherConfig] = None,
         residual_ckpt_path: str = '',
         residual_max_abs_delta_rad: float = 1.28,
+        residual_architecture: str = 'stateless',
     ):
         """Initializes the TinyLidarNetCore with specified parameters.
 
@@ -84,6 +85,8 @@ class TinyLidarNetCore:
         self.residual_model = None
         self.last_residual_correction_rad = 0.0
         self.last_residual_gate_probability = 0.0
+        self.residual_architecture = residual_architecture.lower()
+        self.previous_residual_scan: Optional[np.ndarray] = None
         self.last_gap_teacher_decision: Optional[GapTeacherDecision] = None
         self.last_longitudinal_safety_decision: Optional[
             LongitudinalSafetyDecision
@@ -119,6 +122,10 @@ class TinyLidarNetCore:
             raise ValueError(
                 "residual_max_abs_delta_rad must be finite and positive"
             )
+        if self.residual_architecture not in {"stateless", "scan_delta"}:
+            raise ValueError(
+                "residual_architecture must be one of: stateless, scan_delta"
+            )
 
         if self.architecture == 'small':
             self.model = TinyLidarNetSmallNp(input_dim=self.input_dim, output_dim=self.output_dim)
@@ -147,6 +154,9 @@ class TinyLidarNetCore:
             self.residual_model = SteeringResidualNetNp(
                 input_dim=self.input_dim,
                 max_abs_delta_rad=residual_max_abs_delta_rad,
+                input_channels=(
+                    1 if self.residual_architecture == "stateless" else 2
+                ),
             )
             self.residual_loaded_parameter_count = self._load_model_weights(
                 self.residual_model,
@@ -197,7 +207,10 @@ class TinyLidarNetCore:
         self.last_residual_correction_rad = 0.0
         self.last_residual_gate_probability = 0.0
         if self.residual_model is not None:
-            residual, _, gate_logit = self.residual_model.forward_components(x)
+            residual_input = self._compose_residual_input(processed_ranges)
+            residual, _, gate_logit = self.residual_model.forward_components(
+                residual_input
+            )
             residual_value = float(residual[0, 0])
             gate_value = float(
                 1.0 / (1.0 + np.exp(-np.clip(gate_logit[0, 0], -60.0, 60.0)))
@@ -223,6 +236,24 @@ class TinyLidarNetCore:
             accel = safety_decision.acceleration_mps2
 
         return accel, steer
+
+    def reset_residual_history(self) -> None:
+        """Prevent temporal context from crossing a runtime reset boundary."""
+        self.previous_residual_scan = None
+
+    def _compose_residual_input(self, processed_ranges: np.ndarray) -> np.ndarray:
+        current = np.asarray(processed_ranges, dtype=np.float32)
+        if self.residual_architecture == "stateless":
+            model_input = current[np.newaxis, np.newaxis, :]
+        else:
+            previous = (
+                current
+                if self.previous_residual_scan is None
+                else self.previous_residual_scan
+            )
+            model_input = np.stack((current, current - previous))[np.newaxis, :, :]
+        self.previous_residual_scan = current.copy()
+        return model_input.astype(np.float32, copy=False)
 
     def _load_weights(self, path: str) -> None:
         """Loads model weights from a file into the model parameters.

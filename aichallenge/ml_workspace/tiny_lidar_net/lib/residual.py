@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import ConcatDataset
+from torch.utils.data import ConcatDataset, Dataset
 
 from lib.data import ScanControlSequenceDataset
 
@@ -18,6 +18,32 @@ RESIDUAL_TARGET_FILES = (
     "reference_steers.npy",
     "steering_deltas.npy",
 )
+RESIDUAL_INPUT_MODES = ("stateless", "scan_delta")
+
+
+def residual_input_channels(input_mode: str) -> int:
+    if input_mode not in RESIDUAL_INPUT_MODES:
+        raise ValueError(
+            f"unsupported residual input mode: {input_mode}; "
+            f"expected one of {RESIDUAL_INPUT_MODES}"
+        )
+    return 1 if input_mode == "stateless" else 2
+
+
+def compose_residual_input(
+    current_scan: np.ndarray,
+    previous_scan: np.ndarray,
+    input_mode: str,
+) -> np.ndarray:
+    """Build the exact offline/runtime temporal feature contract."""
+    current = np.asarray(current_scan, dtype=np.float32)
+    previous = np.asarray(previous_scan, dtype=np.float32)
+    if current.shape != previous.shape or current.ndim != 1:
+        raise ValueError("residual scan inputs must be equal one-dimensional arrays")
+    if input_mode == "stateless":
+        return current
+    residual_input_channels(input_mode)
+    return np.stack((current, current - previous)).astype(np.float32, copy=False)
 
 
 class SteeringResidualSequenceDataset(ScanControlSequenceDataset):
@@ -30,6 +56,7 @@ class SteeringResidualSequenceDataset(ScanControlSequenceDataset):
         expected_input_dim: int = 750,
         expected_split: Optional[str] = None,
         material_delta_rad: float = 0.02,
+        input_mode: str = "stateless",
     ):
         super().__init__(
             seq_dir,
@@ -42,6 +69,8 @@ class SteeringResidualSequenceDataset(ScanControlSequenceDataset):
         )
         if not np.isfinite(material_delta_rad) or material_delta_rad <= 0.0:
             raise ValueError("material_delta_rad must be finite and positive")
+        residual_input_channels(input_mode)
+        self.input_mode = input_mode
         missing = [
             name for name in RESIDUAL_TARGET_FILES
             if not (self.seq_dir / name).is_file()
@@ -114,7 +143,9 @@ class SteeringResidualSequenceDataset(ScanControlSequenceDataset):
 
     def __getitem__(self, idx: int):
         scan, _ = super().__getitem__(idx)
-        return scan, np.float32(self.steering_deltas[idx])
+        previous_scan = scan if idx == 0 else self.scans[idx - 1]
+        model_input = compose_residual_input(scan, previous_scan, self.input_mode)
+        return model_input, np.float32(self.steering_deltas[idx])
 
 
 class MultiSeqResidualDataset(ConcatDataset):
@@ -128,6 +159,7 @@ class MultiSeqResidualDataset(ConcatDataset):
         expected_input_dim: int = 750,
         material_delta_rad: float = 0.02,
         include: Optional[Sequence[str]] = None,
+        input_mode: str = "stateless",
     ):
         root = Path(dataset_root)
         if not root.is_dir():
@@ -147,6 +179,7 @@ class MultiSeqResidualDataset(ConcatDataset):
                 expected_input_dim=expected_input_dim,
                 expected_split=expected_split,
                 material_delta_rad=material_delta_rad,
+                input_mode=input_mode,
             )
             for path in sequence_dirs
         ]
@@ -154,6 +187,38 @@ class MultiSeqResidualDataset(ConcatDataset):
         if len(self.sequence_ids) != len(set(self.sequence_ids)):
             raise ValueError(f"Duplicate residual sequence IDs: {self.sequence_ids}")
         super().__init__(datasets)
+
+
+class ResidualInputSequenceView(Dataset):
+    """Apply temporal input construction without crossing one run boundary."""
+
+    def __init__(self, dataset: Dataset, input_mode: str):
+        residual_input_channels(input_mode)
+        self.dataset = dataset
+        self.input_mode = input_mode
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getitem__(self, idx: int):
+        current_scan, target = self.dataset[idx]
+        previous_scan = (
+            current_scan if idx == 0 else self.dataset[idx - 1][0]
+        )
+        return (
+            compose_residual_input(current_scan, previous_scan, self.input_mode),
+            target,
+        )
+
+
+def adapt_concat_dataset_input(dataset: ConcatDataset, input_mode: str):
+    """Adapt every child independently so history cannot leak across runs."""
+    residual_input_channels(input_mode)
+    if input_mode == "stateless":
+        return dataset
+    return ConcatDataset(
+        [ResidualInputSequenceView(child, input_mode) for child in dataset.datasets]
+    )
 
 
 def sequence_balanced_sample_weights(
@@ -180,18 +245,26 @@ def sequence_balanced_sample_weights(
 class SteeringResidualNet(nn.Module):
     """A bounded LiDAR steering correction with an exact zero initial policy."""
 
-    def __init__(self, input_dim: int = 750, max_abs_delta_rad: float = 1.28):
+    def __init__(
+        self,
+        input_dim: int = 750,
+        max_abs_delta_rad: float = 1.28,
+        input_channels: int = 1,
+    ):
         super().__init__()
         if input_dim <= 0:
             raise ValueError("input_dim must be positive")
         if not np.isfinite(max_abs_delta_rad) or max_abs_delta_rad <= 0.0:
             raise ValueError("max_abs_delta_rad must be finite and positive")
+        if input_channels not in (1, 2):
+            raise ValueError("input_channels must be 1 or 2")
         self.max_abs_delta_rad = float(max_abs_delta_rad)
-        self.conv1 = nn.Conv1d(1, 16, kernel_size=10, stride=4)
+        self.input_channels = int(input_channels)
+        self.conv1 = nn.Conv1d(self.input_channels, 16, kernel_size=10, stride=4)
         self.conv2 = nn.Conv1d(16, 24, kernel_size=8, stride=4)
         self.conv3 = nn.Conv1d(24, 32, kernel_size=4, stride=2)
         with torch.no_grad():
-            dummy = torch.zeros(1, 1, input_dim)
+            dummy = torch.zeros(1, self.input_channels, input_dim)
             encoded = self.conv3(self.conv2(self.conv1(dummy)))
             flatten_dim = encoded.flatten(start_dim=1).shape[1]
         self.fc1 = nn.Linear(flatten_dim, 64)

@@ -4,6 +4,7 @@
   <arg name="vscan_mode" default="false"/>
   <arg name="ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/tinylidarnet_weights.npy"/>
   <arg name="residual_ckpt_path" default=""/>
+  <arg name="residual_architecture" default="stateless"/>
   <arg name="model_type" default="tiny_lidar_net"/>
   <arg name="control_mode" default="fixed_lidar_brake"/>
   <arg name="csv_path" default="$(find-pkg-share laserscan_generator)/map/lane.csv"/>
@@ -18,6 +19,7 @@
   <include file="$(find-pkg-share tiny_lidar_net_controller)/launch/tiny_lidar_net.launch.xml">
     <arg name="ckpt_path" value="$(var ckpt_path)"/>
     <arg name="residual_ckpt_path" value="$(var residual_ckpt_path)"/>
+    <arg name="residual_architecture" value="$(var residual_architecture)"/>
     <arg name="model_type" value="$(var model_type)"/>
     <arg name="control_mode" value="$(var control_mode)"/>
     <arg name="control_cmd_topic" value="/control/command/control_cmd"/>

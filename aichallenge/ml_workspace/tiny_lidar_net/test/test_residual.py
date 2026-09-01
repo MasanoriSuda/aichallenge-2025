@@ -6,9 +6,12 @@ import pytest
 import torch
 
 from lib.residual import (
+    RESIDUAL_INPUT_MODES,
     SteeringResidualNet,
     SteeringResidualSequenceDataset,
+    compose_residual_input,
     residual_metrics,
+    residual_input_channels,
     residual_training_loss,
     sequence_balanced_sample_weights,
     weighted_residual_smooth_l1,
@@ -78,6 +81,34 @@ def test_residual_dataset_validates_runtime_composition_identity(tmp_path: Path)
     assert target == pytest.approx(-0.2)
 
 
+def test_scan_delta_dataset_uses_only_previous_sample_in_same_sequence(
+    tmp_path: Path,
+):
+    sequence = make_sequence(tmp_path)
+    scans = np.load(sequence / "scans.npy")
+    scans[0] = 6.0
+    scans[1] = 12.0
+    np.save(sequence / "scans.npy", scans)
+    dataset = SteeringResidualSequenceDataset(
+        sequence, expected_split="train", input_mode="scan_delta"
+    )
+    first, _ = dataset[0]
+    second, _ = dataset[1]
+    assert first.shape == (2, 750)
+    np.testing.assert_allclose(first[0], 0.2)
+    np.testing.assert_allclose(first[1], 0.0)
+    np.testing.assert_allclose(second[0], 0.4)
+    np.testing.assert_allclose(second[1], 0.2)
+
+
+def test_residual_input_mode_contract_is_explicit():
+    assert RESIDUAL_INPUT_MODES == ("stateless", "scan_delta")
+    assert residual_input_channels("stateless") == 1
+    assert residual_input_channels("scan_delta") == 2
+    with pytest.raises(ValueError, match="unsupported residual input mode"):
+        compose_residual_input(np.zeros(2), np.zeros(2), "history-ish")
+
+
 def test_residual_target_does_not_use_diagnostic_reference_teacher(tmp_path: Path):
     dataset = SteeringResidualSequenceDataset(
         make_sequence(tmp_path), expected_split="train"
@@ -115,6 +146,27 @@ def test_numpy_runtime_matches_torch_residual_model():
         for key, value in model.state_dict().items()
     })
     sample = np.linspace(0.0, 1.0, 750, dtype=np.float32)[None, None, :]
+    expected = model(torch.from_numpy(sample)).detach().numpy()
+    actual = runtime(sample).reshape(-1)
+    np.testing.assert_allclose(actual, expected, rtol=2e-4, atol=2e-5)
+
+
+def test_numpy_runtime_matches_torch_scan_delta_residual_model():
+    torch.manual_seed(11)
+    model = SteeringResidualNet(input_dim=750, input_channels=2)
+    with torch.no_grad():
+        model.correction_head.weight.normal_(0.0, 0.1)
+        model.gate_head.weight.normal_(0.0, 0.1)
+    runtime = SteeringResidualNetNp(input_dim=750, input_channels=2)
+    runtime.params.update({
+        key.replace(".", "_"): value.detach().numpy()
+        for key, value in model.state_dict().items()
+    })
+    current = np.linspace(0.0, 1.0, 750, dtype=np.float32)
+    previous = np.linspace(0.1, 0.9, 750, dtype=np.float32)
+    sample = compose_residual_input(
+        current, previous, "scan_delta"
+    )[None, :, :]
     expected = model(torch.from_numpy(sample)).detach().numpy()
     actual = runtime(sample).reshape(-1)
     np.testing.assert_allclose(actual, expected, rtol=2e-4, atol=2e-5)

@@ -10,6 +10,7 @@
       # Empty by default: production remains the admitted base policy.
       residual_ckpt_path: ""
       residual_max_abs_delta_rad: 1.28
+      residual_architecture: stateless
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
     control_mode: "fixed_lidar_brake"  # ML steer + LiDAR longitudinal safety

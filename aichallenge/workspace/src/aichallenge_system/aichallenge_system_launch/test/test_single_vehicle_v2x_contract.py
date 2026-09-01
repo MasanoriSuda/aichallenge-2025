@@ -95,10 +95,22 @@ def test_runtime_propagates_only_an_explicit_residual_checkpoint() -> None:
         'opts+=("tiny_lidar_residual_ckpt_path:=${tiny_lidar_residual_ckpt_path}")'
         in runner
     )
+    assert (
+        'tiny_lidar_residual_architecture='
+        '"${TINY_LIDAR_RESIDUAL_ARCHITECTURE:-stateless}"' in runner
+    )
+    assert (
+        'opts+=("tiny_lidar_residual_architecture:'
+        '=${tiny_lidar_residual_architecture}")' in runner
+    )
     assert '<arg name="tiny_lidar_residual_ckpt_path" default=""/>' in system_launch
     assert (
         '<arg name="tiny_lidar_residual_ckpt_path" '
         'value="$(var tiny_lidar_residual_ckpt_path)"/>'
+        in system_launch
+    )
+    assert (
+        '<arg name="tiny_lidar_residual_architecture" default="stateless"/>'
         in system_launch
     )
 

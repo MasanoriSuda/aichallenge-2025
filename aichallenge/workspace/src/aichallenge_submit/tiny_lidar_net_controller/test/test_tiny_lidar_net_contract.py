@@ -216,3 +216,60 @@ def test_partial_residual_checkpoint_is_rejected(tmp_path: Path) -> None:
             ckpt_path=str(CHECKPOINT),
             residual_ckpt_path=str(residual_checkpoint),
         )
+
+
+def test_scan_delta_residual_checkpoint_and_history_are_explicit(
+    tmp_path: Path,
+) -> None:
+    residual_model = SteeringResidualNetNp(input_dim=750, input_channels=2)
+    residual_checkpoint = tmp_path / "scan-delta-residual.npy"
+    np.save(
+        residual_checkpoint,
+        {key: value.copy() for key, value in residual_model.params.items()},
+    )
+    core = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        residual_ckpt_path=str(residual_checkpoint),
+        residual_architecture="scan_delta",
+        acceleration=0.6,
+        control_mode="fixed",
+        max_range=30.0,
+    )
+    first = core._compose_residual_input(np.full(750, 0.2, dtype=np.float32))
+    second = core._compose_residual_input(np.full(750, 0.4, dtype=np.float32))
+    assert first.shape == (1, 2, 750)
+    np.testing.assert_allclose(first[:, 1], 0.0)
+    np.testing.assert_allclose(second[:, 0], 0.4)
+    np.testing.assert_allclose(second[:, 1], 0.2)
+    core.reset_residual_history()
+    reset = core._compose_residual_input(np.full(750, 0.4, dtype=np.float32))
+    np.testing.assert_allclose(reset[:, 1], 0.0)
+
+
+def test_residual_architecture_mismatch_is_rejected(tmp_path: Path) -> None:
+    stateless = SteeringResidualNetNp(input_dim=750, input_channels=1)
+    residual_checkpoint = tmp_path / "stateless-residual.npy"
+    np.save(residual_checkpoint, stateless.params)
+    with pytest.raises(ValueError, match="weight shape mismatch for conv1_weight"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            residual_ckpt_path=str(residual_checkpoint),
+            residual_architecture="scan_delta",
+        )
+
+
+def test_unknown_residual_architecture_is_rejected() -> None:
+    with pytest.raises(ValueError, match="residual_architecture"):
+        TinyLidarNetCore(
+            input_dim=750,
+            output_dim=2,
+            architecture="normal",
+            ckpt_path=str(CHECKPOINT),
+            residual_architecture="maybe-temporal",
+        )

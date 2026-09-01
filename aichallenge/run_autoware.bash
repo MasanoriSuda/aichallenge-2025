@@ -55,6 +55,7 @@ fi
 # The learned residual is a separately gated A/B artifact.  Empty means the
 # admitted base policy remains bit-for-bit unchanged.
 tiny_lidar_residual_ckpt_path="${TINY_LIDAR_RESIDUAL_CKPT_PATH:-}"
+tiny_lidar_residual_architecture="${TINY_LIDAR_RESIDUAL_ARCHITECTURE:-stateless}"
 if [[ -n "${tiny_lidar_residual_ckpt_path}" ]]; then
     if [[ "${control_method}" != "tiny_lidar_net" ]]; then
         echo "TINY_LIDAR_RESIDUAL_CKPT_PATH is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"
@@ -65,6 +66,7 @@ if [[ -n "${tiny_lidar_residual_ckpt_path}" ]]; then
         exit 1
     fi
     opts+=("tiny_lidar_residual_ckpt_path:=${tiny_lidar_residual_ckpt_path}")
+    opts+=("tiny_lidar_residual_architecture:=${tiny_lidar_residual_architecture}")
 fi
 
 # The gap teacher is an explicit data-collection mode under the existing

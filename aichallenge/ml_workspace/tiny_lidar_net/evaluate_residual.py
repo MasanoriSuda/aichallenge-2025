@@ -13,10 +13,21 @@ from lib.checkpoint import load_pretrained_weights
 from lib.data import MultiSeqConcatDataset
 from lib.residual import (
     MultiSeqResidualDataset,
+    RESIDUAL_INPUT_MODES,
     SteeringResidualNet,
+    adapt_concat_dataset_input,
     residual_metrics,
+    residual_input_channels,
     write_json,
 )
+
+
+def as_model_input(scans: torch.Tensor) -> torch.Tensor:
+    if scans.ndim == 2:
+        return scans.unsqueeze(1)
+    if scans.ndim == 3:
+        return scans
+    raise ValueError(f"unexpected residual scan batch shape: {tuple(scans.shape)}")
 
 
 def predict(model, loader, device, paired: bool) -> tuple[np.ndarray, np.ndarray]:
@@ -25,7 +36,7 @@ def predict(model, loader, device, paired: bool) -> tuple[np.ndarray, np.ndarray
     targets = []
     with torch.no_grad():
         for scans, target in loader:
-            output = model(scans.unsqueeze(1).to(device)).cpu().numpy()
+            output = model(as_model_input(scans).to(device)).cpu().numpy()
             predictions.append(output)
             targets.append(target.numpy() if paired else np.zeros_like(output))
     return np.concatenate(predictions), np.concatenate(targets)
@@ -41,7 +52,7 @@ def predict_paired_components(model, loader, device):
     with torch.no_grad():
         for scans, target in loader:
             residual, correction, gate_logits = model.forward_components(
-                scans.unsqueeze(1).to(device)
+                as_model_input(scans).to(device)
             )
             residuals.append(residual.cpu().numpy())
             corrections.append(correction.cpu().numpy())
@@ -78,6 +89,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", choices=("train", "val"), default="val")
     parser.add_argument("--normal-dataset-dir", type=Path)
     parser.add_argument("--input-dim", type=int, default=750)
+    parser.add_argument(
+        "--architecture",
+        choices=RESIDUAL_INPUT_MODES,
+        default="stateless",
+    )
     parser.add_argument("--max-range-m", type=float, default=30.0)
     parser.add_argument("--max-abs-delta-rad", type=float, default=1.28)
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
@@ -108,6 +124,7 @@ def main() -> int:
     model = SteeringResidualNet(
         input_dim=args.input_dim,
         max_abs_delta_rad=args.max_abs_delta_rad,
+        input_channels=residual_input_channels(args.architecture),
     ).to(device)
     provenance = load_pretrained_weights(model, args.checkpoint)
     paired_dataset = MultiSeqResidualDataset(
@@ -117,6 +134,7 @@ def main() -> int:
         expected_input_dim=args.input_dim,
         material_delta_rad=args.material_delta_rad,
         include=args.include_sequence_id,
+        input_mode=args.architecture,
     )
     evaluated_dataset = (
         paired_dataset
@@ -160,6 +178,9 @@ def main() -> int:
             max_range=args.max_range_m,
             expected_input_dim=args.input_dim,
         )
+        normal_dataset = adapt_concat_dataset_input(
+            normal_dataset, args.architecture
+        )
         normal_loader = DataLoader(
             normal_dataset, batch_size=args.batch_size, shuffle=False
         )
@@ -187,6 +208,7 @@ def main() -> int:
     result = {
         "schema_version": 1,
         "checkpoint": provenance,
+        "architecture": args.architecture,
         "paired_sequence_ids": paired_dataset.sequence_ids,
         "tail_sec": args.tail_sec,
         "paired_metrics": paired_metrics,

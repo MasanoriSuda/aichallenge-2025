@@ -15,13 +15,23 @@ from lib.checkpoint import load_pretrained_weights, sha256_file
 from lib.data import assert_disjoint_sequence_ids
 from lib.residual import (
     MultiSeqResidualDataset,
+    RESIDUAL_INPUT_MODES,
     SteeringResidualNet,
     residual_metrics,
+    residual_input_channels,
     residual_training_loss,
     save_numpy_state,
     sequence_balanced_sample_weights,
     write_json,
 )
+
+
+def as_model_input(scans: torch.Tensor) -> torch.Tensor:
+    if scans.ndim == 2:
+        return scans.unsqueeze(1)
+    if scans.ndim == 3:
+        return scans
+    raise ValueError(f"unexpected residual scan batch shape: {tuple(scans.shape)}")
 
 
 def seed_everything(seed: int) -> torch.Generator:
@@ -43,7 +53,7 @@ def infer(model, loader, device) -> tuple[np.ndarray, np.ndarray]:
     targets = []
     with torch.no_grad():
         for scans, target in loader:
-            output = model(scans.unsqueeze(1).to(device)).cpu().numpy()
+            output = model(as_model_input(scans).to(device)).cpu().numpy()
             predictions.append(output)
             targets.append(target.numpy())
     return np.concatenate(predictions), np.concatenate(targets)
@@ -57,7 +67,7 @@ def validation_objective(model, loader, device, args) -> float:
     with torch.no_grad():
         for scans, targets in loader:
             predictions, corrections, gate_logits = model.forward_components(
-                scans.unsqueeze(1).to(device)
+                as_model_input(scans).to(device)
             )
             loss = residual_training_loss(
                 predictions,
@@ -90,6 +100,11 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--input-dim", type=int, default=750)
+    parser.add_argument(
+        "--architecture",
+        choices=RESIDUAL_INPUT_MODES,
+        default="stateless",
+    )
     parser.add_argument("--max-range-m", type=float, default=30.0)
     parser.add_argument("--max-abs-delta-rad", type=float, default=1.28)
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
@@ -128,6 +143,7 @@ def main() -> int:
         max_range=args.max_range_m,
         expected_input_dim=args.input_dim,
         material_delta_rad=args.material_delta_rad,
+        input_mode=args.architecture,
     )
     val_dataset = MultiSeqResidualDataset(
         args.val_dir,
@@ -135,6 +151,7 @@ def main() -> int:
         max_range=args.max_range_m,
         expected_input_dim=args.input_dim,
         material_delta_rad=args.material_delta_rad,
+        input_mode=args.architecture,
     )
     assert_disjoint_sequence_ids(
         train_dataset.sequence_ids, val_dataset.sequence_ids
@@ -172,6 +189,7 @@ def main() -> int:
     model = SteeringResidualNet(
         input_dim=args.input_dim,
         max_abs_delta_rad=args.max_abs_delta_rad,
+        input_channels=residual_input_channels(args.architecture),
     ).to(device)
     initialization = None
     if args.init_checkpoint is not None:
@@ -184,6 +202,7 @@ def main() -> int:
     manifest = {
         "schema_version": 1,
         "model": "SteeringResidualNet",
+        "architecture": args.architecture,
         "target": "precontact_teacher_minus_frozen_production_base_steering_rad",
         "initialization": initialization,
         "train_sequence_ids": train_dataset.sequence_ids,
@@ -209,7 +228,7 @@ def main() -> int:
         train_batches = 0
         for scans, targets in train_loader:
             predictions, corrections, gate_logits = model.forward_components(
-                scans.unsqueeze(1).to(device)
+                as_model_input(scans).to(device)
             )
             targets = targets.to(device)
             loss = residual_training_loss(

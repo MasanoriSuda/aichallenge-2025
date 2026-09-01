@@ -30,6 +30,7 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('model.ckpt_path', '')
         self.declare_parameter('model.residual_ckpt_path', '')
         self.declare_parameter('model.residual_max_abs_delta_rad', 1.28)
+        self.declare_parameter('model.residual_architecture', 'stateless')
         self.declare_parameter('max_range', 30.0)
         self.declare_parameter('acceleration', 0.1)
         self.declare_parameter('control_mode', 'ai')
@@ -61,6 +62,9 @@ class TinyLidarNetNode(Node):
         ).value
         residual_max_abs_delta_rad = float(
             self.get_parameter('model.residual_max_abs_delta_rad').value
+        )
+        residual_architecture = str(
+            self.get_parameter('model.residual_architecture').value
         )
         max_range = self.get_parameter('max_range').value
         acceleration = self.get_parameter('acceleration').value
@@ -149,6 +153,7 @@ class TinyLidarNetNode(Node):
                 gap_teacher_config=gap_teacher_config,
                 residual_ckpt_path=residual_ckpt_path,
                 residual_max_abs_delta_rad=residual_max_abs_delta_rad,
+                residual_architecture=residual_architecture,
             )
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
@@ -156,7 +161,8 @@ class TinyLidarNetNode(Node):
                 f"ValidatedWeights: {self.core.loaded_parameter_count}, "
                 "ResidualWeights: "
                 f"{self.core.residual_loaded_parameter_count}, "
-                f"ResidualEnabled: {self.core.residual_model is not None}"
+                f"ResidualEnabled: {self.core.residual_model is not None}, "
+                f"ResidualArchitecture: {self.core.residual_architecture}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")
@@ -279,6 +285,7 @@ class TinyLidarNetNode(Node):
                 "publishing stop"
             )
             self.sensor_stale = True
+            self.core.reset_residual_history()
         self._publish_stop()
 
     def _log_inference_error(self, exc: Exception):

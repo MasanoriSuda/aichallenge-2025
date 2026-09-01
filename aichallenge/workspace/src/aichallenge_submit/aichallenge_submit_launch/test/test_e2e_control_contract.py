@@ -43,6 +43,9 @@ def test_e2e_entry_selects_tiny_lidar_net() -> None:
     assert forwarded["tiny_lidar_residual_architecture"] == (
         "$(var tiny_lidar_residual_architecture)"
     )
+    assert forwarded["tiny_lidar_spatial_shadow_ckpt_path"] == (
+        "$(var tiny_lidar_spatial_shadow_ckpt_path)"
+    )
     assert forwarded["tiny_lidar_control_mode"] == "$(var tiny_lidar_control_mode)"
 
 
@@ -74,6 +77,9 @@ def test_reference_retains_explicit_controller_switch() -> None:
     assert tiny_forwarded["residual_architecture"] == (
         "$(var tiny_lidar_residual_architecture)"
     )
+    assert tiny_forwarded["spatial_shadow_ckpt_path"] == (
+        "$(var tiny_lidar_spatial_shadow_ckpt_path)"
+    )
     assert tiny_forwarded["control_mode"] == "$(var tiny_lidar_control_mode)"
 
 
@@ -96,6 +102,9 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     assert forwarded["control_mode"] == "$(var control_mode)"
     assert forwarded["residual_ckpt_path"] == "$(var residual_ckpt_path)"
     assert forwarded["residual_architecture"] == "$(var residual_architecture)"
+    assert forwarded["spatial_shadow_ckpt_path"] == (
+        "$(var spatial_shadow_ckpt_path)"
+    )
 
     controller = _parse(CONTROLLER_LAUNCH)
     controller_arguments = {
@@ -106,6 +115,7 @@ def test_tiny_lidar_net_uses_awsim_lidar_topic_and_final_command_topic() -> None
     assert controller_arguments["control_mode"] == "fixed_lidar_brake"
     assert controller_arguments["residual_ckpt_path"] == ""
     assert controller_arguments["residual_architecture"] == "stateless"
+    assert controller_arguments["spatial_shadow_ckpt_path"] == ""
     assert (
         controller_arguments["control_cmd_topic"]
         == "/control/command/control_cmd"

@@ -69,6 +69,21 @@ if [[ -n "${tiny_lidar_residual_ckpt_path}" ]]; then
     opts+=("tiny_lidar_residual_architecture:=${tiny_lidar_residual_architecture}")
 fi
 
+# A spatial candidate can run beside production without owning the command.
+# Empty keeps the production callback bit-for-bit on its admitted path.
+tiny_lidar_spatial_shadow_ckpt_path="${TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH:-}"
+if [[ -n "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
+    if [[ "${control_method}" != "tiny_lidar_net" ]]; then
+        echo "TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH is only valid with AIC_CONTROL_METHOD=tiny_lidar_net"
+        exit 1
+    fi
+    if [[ ! -f "${tiny_lidar_spatial_shadow_ckpt_path}" ]]; then
+        echo "TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH does not exist in the runtime container: ${tiny_lidar_spatial_shadow_ckpt_path}"
+        exit 1
+    fi
+    opts+=("tiny_lidar_spatial_shadow_ckpt_path:=${tiny_lidar_spatial_shadow_ckpt_path}")
+fi
+
 # The gap teacher is an explicit data-collection mode under the existing
 # tiny_lidar_net interface. It cannot be selected accidentally by another
 # controller or by an unknown spelling.

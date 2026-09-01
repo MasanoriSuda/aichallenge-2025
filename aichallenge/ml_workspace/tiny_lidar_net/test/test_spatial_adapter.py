@@ -1,9 +1,28 @@
+from pathlib import Path
+import sys
+
 import pytest
 import numpy as np
 import torch
 
 from lib.spatial_adapter import FrozenTinyLidarSpatialResidual
+from lib.residual import save_numpy_state
 from train_spatial_adapter import ZeroResidualAnchorSequence
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+RUNTIME_SOURCE = (
+    REPOSITORY_ROOT
+    / "aichallenge"
+    / "workspace"
+    / "src"
+    / "aichallenge_submit"
+    / "tiny_lidar_net_controller"
+)
+sys.path.insert(0, str(RUNTIME_SOURCE))
+from tiny_lidar_net_controller.model.tinylidarnet import (  # noqa: E402
+    SpatialSteeringAdapterNp,
+)
 
 
 def make_model() -> FrozenTinyLidarSpatialResidual:
@@ -154,3 +173,62 @@ def test_zero_residual_anchor_ignores_labels_and_restores_metres():
     assert scan.tolist() == pytest.approx([15.0] * 750)
     assert (speed, teacher, base) == (0.0, 0.0, 0.0)
     assert anchor.correction_targets().tolist() == [0.0, 0.0]
+
+
+def test_numpy_spatial_shadow_matches_exported_pytorch_candidate(
+    tmp_path: Path,
+):
+    torch.manual_seed(2042)
+    model = FrozenTinyLidarSpatialResidual(
+        input_dim=750,
+        hidden_dim=16,
+        projection_dim=32,
+        projection_seed=17,
+        use_speed=True,
+        max_speed_mps=12.0,
+        max_abs_delta_rad=1.2,
+        spatial_normalization="fixed_train_statistics",
+        head_architecture="signed_mixture",
+    )
+    mean = torch.linspace(-0.2, 0.2, model.representation_dim)
+    scale = torch.linspace(0.5, 1.5, model.representation_dim)
+    model.set_spatial_statistics(mean, scale)
+    with torch.no_grad():
+        model.direction_head.weight.normal_(mean=0.0, std=0.05)
+        model.direction_head.bias.copy_(torch.tensor([-0.2, 0.1, 0.3]))
+        model.magnitude_head.weight.normal_(mean=0.0, std=0.03)
+        model.magnitude_head.bias.copy_(torch.tensor([-0.4, 0.2]))
+    model.eval()
+
+    checkpoint = tmp_path / "candidate.npy"
+    save_numpy_state(model, checkpoint)
+    exported = np.load(checkpoint, allow_pickle=True).item()
+    runtime = SpatialSteeringAdapterNp(
+        input_dim=750,
+        hidden_dim=16,
+        projection_dim=32,
+        use_speed=True,
+        max_speed_mps=12.0,
+        max_abs_delta_rad=1.2,
+    )
+    assert set(exported) == set(runtime.params)
+    runtime.params.update(
+        {key: np.asarray(value, dtype=np.float32) for key, value in exported.items()}
+    )
+
+    scans_m = torch.rand(3, 750) * 30.0
+    speeds_mps = torch.tensor([0.0, 4.2, 13.0], dtype=torch.float32)
+    with torch.no_grad():
+        expected = model.forward_components(scans_m, speeds_mps)
+    actual = runtime.forward_components(
+        scans_m.numpy()[:, None, :] / 30.0,
+        speeds_mps.numpy(),
+    )
+
+    for expected_value, actual_value in zip(expected, actual):
+        np.testing.assert_allclose(
+            actual_value,
+            expected_value.numpy(),
+            rtol=2e-5,
+            atol=2e-5,
+        )

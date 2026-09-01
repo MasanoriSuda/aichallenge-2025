@@ -13,6 +13,7 @@
     <arg name="tiny_lidar_ckpt_path" default="$(find-pkg-share tiny_lidar_net_controller)/ckpt/tinylidarnet_weights.npy"/>
     <arg name="tiny_lidar_residual_ckpt_path" default=""/>
     <arg name="tiny_lidar_residual_architecture" default="stateless"/>
+    <arg name="tiny_lidar_spatial_shadow_ckpt_path" default=""/>
     <arg name="tiny_lidar_control_mode" default="fixed_lidar_brake"/>
 
     <let name="domain_id" value="$(var domain_id)"/>
@@ -34,6 +35,7 @@
     <log message=" - tiny_lidar_ckpt_path: $(var tiny_lidar_ckpt_path)"/>
     <log message=" - tiny_lidar_residual_ckpt_path: $(var tiny_lidar_residual_ckpt_path)"/>
     <log message=" - tiny_lidar_residual_architecture: $(var tiny_lidar_residual_architecture)"/>
+    <log message=" - tiny_lidar_spatial_shadow_ckpt_path: $(var tiny_lidar_spatial_shadow_ckpt_path)"/>
     <log message=" - tiny_lidar_control_mode: $(var tiny_lidar_control_mode)"/>
 
     <!-- Main module of AI challenge 2025. -->
@@ -46,6 +48,7 @@
         <arg name="tiny_lidar_ckpt_path" value="$(var tiny_lidar_ckpt_path)"/>
         <arg name="tiny_lidar_residual_ckpt_path" value="$(var tiny_lidar_residual_ckpt_path)"/>
         <arg name="tiny_lidar_residual_architecture" value="$(var tiny_lidar_residual_architecture)"/>
+        <arg name="tiny_lidar_spatial_shadow_ckpt_path" value="$(var tiny_lidar_spatial_shadow_ckpt_path)"/>
         <arg name="tiny_lidar_control_mode" value="$(var tiny_lidar_control_mode)"/>
     </include>
 

@@ -361,7 +361,16 @@ neutral leakage lossだけを0.5から1.0へ変更した限定A/Bは、material�
 teacher-neutral MAE 0.00847 rad、production normal MAE 0.00586 rad、peer方向100%で全offline
 Gateを通過した。checkpoint SHAは
 `6ae9d618ea8093b1ff7d212cae760e90c71f84749f986af479681f5f729155d1`であるが、productionへは
-未接続であり、次の段階は出力を適用しないshadow runtimeで計算時間と実走分布を確認する。
+未接続である。出力を適用しないshadow runtimeを追加し、candidate内のfrozen baseとproduction
+baseの全tensor完全一致、freshな実速度、PyTorch/NumPy数値一致を必須とした。runtime例外や
+速度欠損はproduction指令へ波及せず、既定のshadow pathは空である。
+
+最終shadow run `output/20260901-174303`は3/3周、penalty/stall 0で完走し、coverage 99.927%、
+shadow error 0、最小scan 19.94 Hz、平均callback 5.90 ms、最大48.04 msだった。補正の区間p95
+最大は0.35843 rad、非zero区間は68中64で、候補は実走分布でも単なるzero outputではない。
+production checkpoint/mode gateも同時にpassした。独立した先行run `output/20260901-173425`
+も3/3周、penalty/stall 0である。これによりshadow実行基盤と候補のruntime可用性は合格とするが、
+操舵性能の改善はまだ実証していない。次は既定OFFを維持した限定authority A/Bで判断する。
 
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ

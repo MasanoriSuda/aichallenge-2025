@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""Gate one spatial-adapter shadow run without granting control authority."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+from pathlib import Path
+
+import numpy as np
+
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+TOKEN_RE = re.compile(r"([a-zA-Z0-9_]+)=([^\s]+)")
+SHADOW_PATH_RE = re.compile(
+    r"tiny_lidar_spatial_shadow_ckpt_path:\s*(\S+)"
+)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def parse_status_lines(log_text: str) -> list[dict]:
+    intervals = []
+    for raw_line in log_text.splitlines():
+        line = ANSI_RE.sub("", raw_line)
+        if "E2E_STATUS" not in line or "spatial_shadow=" not in line:
+            continue
+        tokens = dict(TOKEN_RE.findall(line))
+        admitted_text, scans_text = tokens["spatial_shadow"].split("/", 1)
+        probabilities = [
+            float(value) for value in tokens["shadow_prob_lnr"].split(",")
+        ]
+        if len(probabilities) != 3:
+            raise ValueError("shadow_prob_lnr must contain left,neutral,right")
+        interval = {
+            "scans": int(scans_text),
+            "admitted": int(admitted_text),
+            "skipped": int(tokens["shadow_skipped"]),
+            "errors": int(tokens["shadow_errors"]),
+            "stale": int(tokens["stale"]),
+            "scan_hz": float(tokens["scan_hz"]),
+            "avg_inference_ms": float(tokens["avg_inference_ms"]),
+            "max_inference_ms": float(tokens["max_inference_ms"]),
+            "inference_capacity_hz": float(tokens["inference_capacity_hz"]),
+            "mean_abs_correction_rad": float(tokens["shadow_mean_abs_rad"]),
+            "p95_abs_correction_rad": float(tokens["shadow_p95_abs_rad"]),
+            "last_correction_rad": float(tokens["shadow_last_rad"]),
+            "direction_probabilities_lnr": probabilities,
+            "status": tokens["shadow_status"],
+        }
+        numeric_values = [
+            value
+            for key, value in interval.items()
+            if key not in {"status", "direction_probabilities_lnr"}
+        ] + probabilities
+        if not np.all(np.isfinite(np.asarray(numeric_values, dtype=np.float64))):
+            raise ValueError("shadow status contains non-finite metrics")
+        intervals.append(interval)
+    return intervals
+
+
+def parse_runtime_config(log_text: str) -> dict | None:
+    clean = ANSI_RE.sub("", log_text)
+    matches = re.findall(
+        r"SpatialShadowConfig:\s*"
+        r"hidden=(\d+),projection=(\d+),use_speed=([01]),"
+        r"max_speed_mps=([0-9.]+),max_delta_rad=([0-9.]+),"
+        r"speed_timeout_sec=([0-9.]+)",
+        clean,
+    )
+    if not matches:
+        return None
+    unique = set(matches)
+    if len(unique) != 1:
+        raise ValueError("ambiguous spatial shadow runtime configuration")
+    hidden, projection, use_speed, max_speed, max_delta, timeout = matches[0]
+    return {
+        "hidden_dim": int(hidden),
+        "projection_dim": int(projection),
+        "use_speed": bool(int(use_speed)),
+        "max_speed_mps": float(max_speed),
+        "max_abs_delta_rad": float(max_delta),
+        "speed_timeout_sec": float(timeout),
+    }
+
+
+def summarize_intervals(intervals: list[dict]) -> dict:
+    if not intervals:
+        raise ValueError("no spatial shadow E2E_STATUS intervals found")
+    scans = sum(item["scans"] for item in intervals)
+    admitted = sum(item["admitted"] for item in intervals)
+    if scans <= 0:
+        raise ValueError("shadow interval scan count must be positive")
+    weighted_mean_abs = sum(
+        item["mean_abs_correction_rad"] * item["admitted"]
+        for item in intervals
+    ) / max(admitted, 1)
+    weighted_inference = sum(
+        item["avg_inference_ms"] * item["scans"] for item in intervals
+    ) / scans
+    return {
+        "interval_count": len(intervals),
+        "scan_count": scans,
+        "admitted_count": admitted,
+        "skipped_count": sum(item["skipped"] for item in intervals),
+        "error_count": sum(item["errors"] for item in intervals),
+        "coverage_fraction": admitted / scans,
+        "stale_interval_count": sum(item["stale"] != 0 for item in intervals),
+        "min_scan_hz": min(item["scan_hz"] for item in intervals),
+        "weighted_avg_inference_ms": weighted_inference,
+        "max_inference_ms": max(item["max_inference_ms"] for item in intervals),
+        "min_inference_capacity_hz": min(
+            item["inference_capacity_hz"] for item in intervals
+        ),
+        "weighted_mean_abs_correction_rad": weighted_mean_abs,
+        "max_interval_p95_abs_correction_rad": max(
+            item["p95_abs_correction_rad"] for item in intervals
+        ),
+        "nonzero_interval_count": sum(
+            item["p95_abs_correction_rad"] > 1e-6 for item in intervals
+        ),
+        "non_ok_interval_count": sum(item["status"] != "ok" for item in intervals),
+    }
+
+
+def build_report(args: argparse.Namespace) -> dict:
+    run_dir = args.run_dir.resolve()
+    log_path = run_dir / "d1" / "autoware.log"
+    result_path = run_dir / "d1-result-details.json"
+    competition_path = run_dir / "e2e-competition-analysis.json"
+    checkpoint = args.checkpoint_file.resolve()
+    log_text = log_path.read_text(encoding="utf-8", errors="replace")
+    intervals = parse_status_lines(log_text)
+    summary = summarize_intervals(intervals)
+    runtime_config = parse_runtime_config(log_text)
+    path_matches = set(SHADOW_PATH_RE.findall(ANSI_RE.sub("", log_text)))
+    race = json.loads(result_path.read_text(encoding="utf-8"))
+    competition = json.loads(competition_path.read_text(encoding="utf-8"))
+    actual_sha = sha256_file(checkpoint)
+    reasons = []
+    if actual_sha != args.expected_checkpoint_sha256:
+        reasons.append("shadow checkpoint SHA mismatch")
+    if path_matches != {args.expected_runtime_checkpoint_path}:
+        reasons.append("runtime shadow checkpoint path missing or ambiguous")
+    if runtime_config is None:
+        reasons.append("runtime shadow configuration missing")
+    if summary["coverage_fraction"] < args.min_coverage_fraction:
+        reasons.append("shadow coverage below threshold")
+    if summary["error_count"] != 0 or summary["non_ok_interval_count"] != 0:
+        reasons.append("shadow inference error or non-ok interval")
+    if summary["stale_interval_count"] != 0:
+        reasons.append("production sensor watchdog became stale")
+    if summary["min_scan_hz"] < args.min_scan_hz:
+        reasons.append("scan frequency below threshold")
+    if summary["nonzero_interval_count"] == 0:
+        reasons.append("shadow produced no material diagnostic output")
+    if not race.get("finished") or race.get("lap_count", 0) < race.get(
+        "required_laps", 0
+    ):
+        reasons.append("race did not finish required laps")
+    if race.get("penalty_count") != 0:
+        reasons.append("race contains penalties")
+    if competition.get("status") != "pass":
+        reasons.append("frozen production competition gate failed")
+    return {
+        "schema_version": 1,
+        "status": "pass" if not reasons else "reject",
+        "reasons": reasons,
+        "run_dir": str(run_dir),
+        "shadow_checkpoint": {
+            "artifact_path": str(checkpoint),
+            "runtime_path": sorted(path_matches),
+            "sha256": actual_sha,
+        },
+        "runtime_config": runtime_config,
+        "shadow": summary,
+        "race": {
+            "finished": race.get("finished"),
+            "lap_count": race.get("lap_count"),
+            "required_laps": race.get("required_laps"),
+            "laps": race.get("laps"),
+            "penalty_count": race.get("penalty_count"),
+        },
+        "production_gate_status": competition.get("status"),
+        "thresholds": {
+            "min_coverage_fraction": args.min_coverage_fraction,
+            "min_scan_hz": args.min_scan_hz,
+        },
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("run_dir", type=Path)
+    parser.add_argument("--checkpoint-file", type=Path, required=True)
+    parser.add_argument("--expected-checkpoint-sha256", required=True)
+    parser.add_argument("--expected-runtime-checkpoint-path", required=True)
+    parser.add_argument("--min-coverage-fraction", type=float, default=0.99)
+    parser.add_argument("--min-scan-hz", type=float, default=19.0)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--fail-on-rejection", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    report = build_report(args)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return int(args.fail_on_rejection and report["status"] != "pass")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

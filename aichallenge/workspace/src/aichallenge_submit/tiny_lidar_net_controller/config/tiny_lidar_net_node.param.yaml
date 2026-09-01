@@ -11,6 +11,13 @@
       residual_ckpt_path: ""
       residual_max_abs_delta_rad: 1.28
       residual_architecture: stateless
+      # Diagnostic only. Empty keeps the admitted production path unchanged.
+      spatial_shadow_ckpt_path: ""
+      spatial_shadow_hidden_dim: 128
+      spatial_shadow_projection_dim: 128
+      spatial_shadow_use_speed: true
+      spatial_shadow_max_speed_mps: 12.0
+      spatial_shadow_max_abs_delta_rad: 1.2
 
     max_range: 30.0              # LiDARの最大レンジ（メートル）
     control_mode: "fixed_lidar_brake"  # ML steer + LiDAR longitudinal safety
@@ -35,6 +42,7 @@
     watchdog_period_sec: 0.05
     startup_grace_sec: 2.0
     stale_brake_acceleration: -1.0
+    spatial_shadow_speed_timeout_sec: 0.1
     max_steering_angle_rad: 0.64
 
     debug: false

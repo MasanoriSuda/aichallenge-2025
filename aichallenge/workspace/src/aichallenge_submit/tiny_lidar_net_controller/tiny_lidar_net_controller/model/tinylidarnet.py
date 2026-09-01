@@ -8,6 +8,8 @@ from . import (
     conv1d,
     linear,
     relu,
+    sigmoid,
+    softmax,
     tanh,
     flatten,
     kaiming_normal_init,
@@ -372,4 +374,141 @@ class SteeringResidualNetNp:
 
     def __call__(self, x):
         residual, _, _ = self.forward_components(x)
+        return residual
+
+
+class SpatialSteeringAdapterNp:
+    """NumPy shadow counterpart of the offline signed spatial adapter.
+
+    The checkpoint contains a frozen TinyLidarNet, a deterministic spatial
+    projection, fixed train statistics and the correction head.  The embedded
+    base is checked by :class:`TinyLidarNetCore` before shadow inference is
+    enabled; this model never owns the published command.
+    """
+
+    def __init__(
+        self,
+        input_dim=750,
+        hidden_dim=128,
+        projection_dim=128,
+        use_speed=True,
+        max_speed_mps=12.0,
+        max_abs_delta_rad=1.2,
+    ):
+        if input_dim <= 0 or hidden_dim < 2 or projection_dim <= 0:
+            raise ValueError("spatial adapter dimensions must be positive")
+        if not np.isfinite(max_speed_mps) or max_speed_mps <= 0.0:
+            raise ValueError("spatial adapter maximum speed must be positive")
+        if not np.isfinite(max_abs_delta_rad) or max_abs_delta_rad <= 0.0:
+            raise ValueError("spatial adapter correction bound must be positive")
+        self.input_dim = int(input_dim)
+        self.hidden_dim = int(hidden_dim)
+        self.projection_dim = int(projection_dim)
+        self.use_speed = bool(use_speed)
+        self.max_speed_mps = float(max_speed_mps)
+        self.max_abs_delta_rad = float(max_abs_delta_rad)
+        self.base = TinyLidarNetNp(input_dim=self.input_dim, output_dim=2)
+        self.strides = self.base.strides
+        self.spatial_dim = self.base.shapes['fc1_weight'][1]
+        adapter_input_dim = self.projection_dim + int(self.use_speed)
+        self.shapes = {
+            'spatial_projection': (self.spatial_dim, self.projection_dim),
+            'spatial_mean': (self.projection_dim,),
+            'spatial_scale': (self.projection_dim,),
+            **{
+                f'base_{key}': shape
+                for key, shape in self.base.shapes.items()
+            },
+            'spatial_head_0_weight': (self.hidden_dim, adapter_input_dim),
+            'spatial_head_0_bias': (self.hidden_dim,),
+            'spatial_head_2_weight': (self.hidden_dim // 2, self.hidden_dim),
+            'spatial_head_2_bias': (self.hidden_dim // 2,),
+            'direction_head_weight': (3, self.hidden_dim // 2),
+            'direction_head_bias': (3,),
+            'magnitude_head_weight': (2, self.hidden_dim // 2),
+            'magnitude_head_bias': (2,),
+        }
+        self.params = {
+            name: zeros_init(shape) for name, shape in self.shapes.items()
+        }
+
+    def embedded_base_parameters(self):
+        return {
+            key.removeprefix('base_'): value
+            for key, value in self.params.items()
+            if key.startswith('base_')
+        }
+
+    def _spatial_features(self, normalized_scans):
+        values = np.asarray(normalized_scans, dtype=np.float32)
+        if values.ndim != 3 or values.shape[1:] != (1, self.input_dim):
+            raise ValueError(
+                "spatial adapter scan input must have shape "
+                f"(batch, 1, {self.input_dim})"
+            )
+        if not np.all(np.isfinite(values)):
+            raise ValueError("spatial adapter scan input must be finite")
+        values = np.clip(values, 0.0, 1.0)
+        for index in range(1, 6):
+            values = relu(conv1d(
+                values,
+                self.params[f'base_conv{index}_weight'],
+                self.params[f'base_conv{index}_bias'],
+                self.strides[f'conv{index}'],
+            ))
+        return flatten(values)
+
+    def forward_components(self, normalized_scans, speeds_mps=None):
+        spatial = self._spatial_features(normalized_scans)
+        projected = spatial @ self.params['spatial_projection']
+        scale = self.params['spatial_scale']
+        if not np.all(np.isfinite(scale)) or np.any(scale <= 0.0):
+            raise ValueError("spatial adapter scale must be finite and positive")
+        features = (projected - self.params['spatial_mean']) / scale
+        if self.use_speed:
+            speed = np.asarray(speeds_mps, dtype=np.float32)
+            if speed.shape != (len(features),):
+                raise ValueError("speed-enabled shadow requires one speed per scan")
+            if not np.all(np.isfinite(speed)) or np.any(speed < 0.0):
+                raise ValueError("spatial shadow speed must be finite and non-negative")
+            normalized_speed = np.clip(
+                speed / self.max_speed_mps, 0.0, 1.5
+            )[:, None]
+            features = np.concatenate((features, normalized_speed), axis=1)
+        hidden = relu(linear(
+            features,
+            self.params['spatial_head_0_weight'],
+            self.params['spatial_head_0_bias'],
+        ))
+        hidden = relu(linear(
+            hidden,
+            self.params['spatial_head_2_weight'],
+            self.params['spatial_head_2_bias'],
+        ))
+        direction_logits = linear(
+            hidden,
+            self.params['direction_head_weight'],
+            self.params['direction_head_bias'],
+        )
+        direction_probabilities = softmax(direction_logits)
+        magnitudes = sigmoid(linear(
+            hidden,
+            self.params['magnitude_head_weight'],
+            self.params['magnitude_head_bias'],
+        )) * self.max_abs_delta_rad
+        residual = (
+            direction_probabilities[:, 2] * magnitudes[:, 1]
+            - direction_probabilities[:, 0] * magnitudes[:, 0]
+        )
+        if not all(
+            np.all(np.isfinite(value))
+            for value in (residual, magnitudes, direction_probabilities)
+        ):
+            raise ValueError("spatial shadow output contains non-finite values")
+        return residual, magnitudes, direction_logits, direction_probabilities
+
+    def __call__(self, normalized_scans, speeds_mps=None):
+        residual, _, _, _ = self.forward_components(
+            normalized_scans, speeds_mps
+        )
         return residual

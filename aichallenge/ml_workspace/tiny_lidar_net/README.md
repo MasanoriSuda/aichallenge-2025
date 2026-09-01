@@ -236,6 +236,28 @@ python3 evaluate_spatial_adapter.py \
   --fail-on-gate
 ```
 
+offline Gate合格後もcandidateを直接productionへ接続しません。まずcandidate3を公開制御のまま
+維持し、空間adapterをshadowとして実行します。checkpoint内の`base_*`がproduction baseと
+1 tensorでも異なる場合は起動を拒否します。速度が100 ms以内に届かないsampleは0 m/sで代用
+せずshadowだけskipします。
+
+```bash
+make e2e-single \
+  TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH=/aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<spatial-run>/candidate.npy
+
+python3 analyze_spatial_shadow_run.py /output/<run> \
+  --checkpoint-file checkpoints/<spatial-run>/candidate.npy \
+  --expected-checkpoint-sha256 <spatial-candidate-sha256> \
+  --expected-runtime-checkpoint-path \
+    /aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<spatial-run>/candidate.npy \
+  --output /output/<run>/e2e-spatial-shadow-analysis.json \
+  --fail-on-rejection
+```
+
+shadow Gateは3周完走、penalty 0、frozen production Gate合格、coverage 99%以上、error 0、
+LiDAR 19 Hz以上、watchdog stale 0、finiteかつ非zeroの診断出力を同時に要求します。shadowの
+補正は`/control/command/control_cmd`へ加算されません。
+
 ### Runtime NPC corrective teacher
 
 runtime NPCはV2Xへ現れないため、MPC教師を捏造しません。次のtargetは同じNPC worldで、

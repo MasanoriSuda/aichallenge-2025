@@ -11,6 +11,7 @@ from tiny_lidar_net_controller.gap_teacher import (
     LongitudinalSafetyDecision,
 )
 from tiny_lidar_net_controller.model.tinylidarnet import (
+    SpatialSteeringAdapterNp,
     SteeringResidualNetNp,
     TinyLidarNetNp,
     TinyLidarNetSmallNp,
@@ -49,6 +50,12 @@ class TinyLidarNetCore:
         residual_ckpt_path: str = '',
         residual_max_abs_delta_rad: float = 1.28,
         residual_architecture: str = 'stateless',
+        spatial_shadow_ckpt_path: str = '',
+        spatial_shadow_hidden_dim: int = 128,
+        spatial_shadow_projection_dim: int = 128,
+        spatial_shadow_use_speed: bool = True,
+        spatial_shadow_max_speed_mps: float = 12.0,
+        spatial_shadow_max_abs_delta_rad: float = 1.2,
     ):
         """Initializes the TinyLidarNetCore with specified parameters.
 
@@ -91,6 +98,14 @@ class TinyLidarNetCore:
         self.last_longitudinal_safety_decision: Optional[
             LongitudinalSafetyDecision
         ] = None
+        self.spatial_shadow_model = None
+        self.spatial_shadow_loaded_parameter_count = 0
+        self.last_spatial_shadow_correction_rad = 0.0
+        self.last_spatial_shadow_direction_probabilities = np.zeros(
+            3, dtype=np.float32
+        )
+        self.last_spatial_shadow_admitted = False
+        self.last_spatial_shadow_status = "disabled"
 
         if not isinstance(self.input_dim, int) or self.input_dim <= 0:
             raise ValueError("input_dim must be a positive integer")
@@ -126,6 +141,20 @@ class TinyLidarNetCore:
             raise ValueError(
                 "residual_architecture must be one of: stateless, scan_delta"
             )
+        if (
+            not isinstance(spatial_shadow_hidden_dim, int)
+            or spatial_shadow_hidden_dim < 2
+            or not isinstance(spatial_shadow_projection_dim, int)
+            or spatial_shadow_projection_dim <= 0
+        ):
+            raise ValueError("spatial shadow dimensions must be positive integers")
+        if (
+            not np.isfinite(spatial_shadow_max_speed_mps)
+            or spatial_shadow_max_speed_mps <= 0.0
+            or not np.isfinite(spatial_shadow_max_abs_delta_rad)
+            or spatial_shadow_max_abs_delta_rad <= 0.0
+        ):
+            raise ValueError("spatial shadow bounds must be finite and positive")
 
         if self.architecture == 'small':
             self.model = TinyLidarNetSmallNp(input_dim=self.input_dim, output_dim=self.output_dim)
@@ -164,7 +193,35 @@ class TinyLidarNetCore:
                 "steering residual",
             )
 
-    def process(self, ranges: np.ndarray) -> Tuple[float, float]:
+        if spatial_shadow_ckpt_path:
+            self.spatial_shadow_model = SpatialSteeringAdapterNp(
+                input_dim=self.input_dim,
+                hidden_dim=spatial_shadow_hidden_dim,
+                projection_dim=spatial_shadow_projection_dim,
+                use_speed=spatial_shadow_use_speed,
+                max_speed_mps=spatial_shadow_max_speed_mps,
+                max_abs_delta_rad=spatial_shadow_max_abs_delta_rad,
+            )
+            self.spatial_shadow_loaded_parameter_count = self._load_model_weights(
+                self.spatial_shadow_model,
+                spatial_shadow_ckpt_path,
+                "spatial steering shadow",
+            )
+            embedded_base = self.spatial_shadow_model.embedded_base_parameters()
+            for key, production_value in self.model.params.items():
+                embedded_value = embedded_base.get(key)
+                if embedded_value is None or not np.array_equal(
+                    embedded_value, production_value
+                ):
+                    raise ValueError(
+                        "spatial shadow embedded base does not match production "
+                        f"parameter: {key}"
+                    )
+            self.last_spatial_shadow_status = "waiting-speed"
+
+    def process(
+        self, ranges: np.ndarray, speed_mps: Optional[float] = None
+    ) -> Tuple[float, float]:
         """Runs the complete inference pipeline on raw LiDAR data.
 
         This method handles data cleaning (NaN/Inf removal), resizing, normalization,
@@ -203,6 +260,40 @@ class TinyLidarNetCore:
             accel = self.acceleration
 
         steer = float(np.clip(outputs[1], -1.0, 1.0))
+
+        self.last_spatial_shadow_admitted = False
+        self.last_spatial_shadow_correction_rad = 0.0
+        self.last_spatial_shadow_direction_probabilities.fill(0.0)
+        if self.spatial_shadow_model is not None:
+            if speed_mps is None:
+                self.last_spatial_shadow_status = "missing-or-stale-speed"
+            else:
+                try:
+                    speed = float(speed_mps)
+                    if not np.isfinite(speed) or speed < 0.0:
+                        raise ValueError(
+                            "spatial shadow speed must be finite and non-negative"
+                        )
+                    (
+                        residual,
+                        _,
+                        _,
+                        direction_probabilities,
+                    ) = self.spatial_shadow_model.forward_components(
+                        x, np.asarray([speed], dtype=np.float32)
+                    )
+                    self.last_spatial_shadow_correction_rad = float(residual[0])
+                    self.last_spatial_shadow_direction_probabilities = (
+                        direction_probabilities[0].astype(np.float32, copy=True)
+                    )
+                    self.last_spatial_shadow_admitted = True
+                    self.last_spatial_shadow_status = "ok"
+                except Exception as exc:
+                    # Shadow execution is diagnostic and must never override a
+                    # valid production command.
+                    self.last_spatial_shadow_status = (
+                        f"inference-error:{type(exc).__name__}:{exc}"
+                    )
 
         self.last_residual_correction_rad = 0.0
         self.last_residual_gate_probability = 0.0

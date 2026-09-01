@@ -6,6 +6,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import Odometry
 from autoware_auto_control_msgs.msg import AckermannControlCommand
 
 from tiny_lidar_net_controller.gap_teacher import GapTeacherConfig
@@ -31,6 +32,12 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('model.residual_ckpt_path', '')
         self.declare_parameter('model.residual_max_abs_delta_rad', 1.28)
         self.declare_parameter('model.residual_architecture', 'stateless')
+        self.declare_parameter('model.spatial_shadow_ckpt_path', '')
+        self.declare_parameter('model.spatial_shadow_hidden_dim', 128)
+        self.declare_parameter('model.spatial_shadow_projection_dim', 128)
+        self.declare_parameter('model.spatial_shadow_use_speed', True)
+        self.declare_parameter('model.spatial_shadow_max_speed_mps', 12.0)
+        self.declare_parameter('model.spatial_shadow_max_abs_delta_rad', 1.2)
         self.declare_parameter('max_range', 30.0)
         self.declare_parameter('acceleration', 0.1)
         self.declare_parameter('control_mode', 'ai')
@@ -38,6 +45,7 @@ class TinyLidarNetNode(Node):
         self.declare_parameter('watchdog_period_sec', 0.05)
         self.declare_parameter('startup_grace_sec', 2.0)
         self.declare_parameter('stale_brake_acceleration', -1.0)
+        self.declare_parameter('spatial_shadow_speed_timeout_sec', 0.1)
         self.declare_parameter('max_steering_angle_rad', 0.64)
         self.declare_parameter('gap_teacher.trigger_distance_m', 7.0)
         self.declare_parameter('gap_teacher.slow_distance_m', 3.0)
@@ -66,6 +74,24 @@ class TinyLidarNetNode(Node):
         residual_architecture = str(
             self.get_parameter('model.residual_architecture').value
         )
+        spatial_shadow_ckpt_path = str(
+            self.get_parameter('model.spatial_shadow_ckpt_path').value
+        )
+        spatial_shadow_hidden_dim = int(
+            self.get_parameter('model.spatial_shadow_hidden_dim').value
+        )
+        spatial_shadow_projection_dim = int(
+            self.get_parameter('model.spatial_shadow_projection_dim').value
+        )
+        spatial_shadow_use_speed = bool(
+            self.get_parameter('model.spatial_shadow_use_speed').value
+        )
+        spatial_shadow_max_speed_mps = float(
+            self.get_parameter('model.spatial_shadow_max_speed_mps').value
+        )
+        spatial_shadow_max_abs_delta_rad = float(
+            self.get_parameter('model.spatial_shadow_max_abs_delta_rad').value
+        )
         max_range = self.get_parameter('max_range').value
         acceleration = self.get_parameter('acceleration').value
         control_mode = self.get_parameter('control_mode').value
@@ -80,6 +106,9 @@ class TinyLidarNetNode(Node):
         )
         self.stale_brake_acceleration = float(
             self.get_parameter('stale_brake_acceleration').value
+        )
+        self.spatial_shadow_speed_timeout_sec = float(
+            self.get_parameter('spatial_shadow_speed_timeout_sec').value
         )
         self.max_steering_angle_rad = float(
             self.get_parameter('max_steering_angle_rad').value
@@ -131,6 +160,9 @@ class TinyLidarNetNode(Node):
             'startup_grace_sec': self.startup_grace_sec,
             'max_steering_angle_rad': self.max_steering_angle_rad,
             'model.residual_max_abs_delta_rad': residual_max_abs_delta_rad,
+            'spatial_shadow_speed_timeout_sec': (
+                self.spatial_shadow_speed_timeout_sec
+            ),
         }
         for name, value in positive_parameters.items():
             if not np.isfinite(value) or value <= 0.0:
@@ -154,6 +186,14 @@ class TinyLidarNetNode(Node):
                 residual_ckpt_path=residual_ckpt_path,
                 residual_max_abs_delta_rad=residual_max_abs_delta_rad,
                 residual_architecture=residual_architecture,
+                spatial_shadow_ckpt_path=spatial_shadow_ckpt_path,
+                spatial_shadow_hidden_dim=spatial_shadow_hidden_dim,
+                spatial_shadow_projection_dim=spatial_shadow_projection_dim,
+                spatial_shadow_use_speed=spatial_shadow_use_speed,
+                spatial_shadow_max_speed_mps=spatial_shadow_max_speed_mps,
+                spatial_shadow_max_abs_delta_rad=(
+                    spatial_shadow_max_abs_delta_rad
+                ),
             )
             self.get_logger().info(
                 f"Core initialized. Arch: {architecture}, Input: {input_dim}, "
@@ -162,7 +202,19 @@ class TinyLidarNetNode(Node):
                 "ResidualWeights: "
                 f"{self.core.residual_loaded_parameter_count}, "
                 f"ResidualEnabled: {self.core.residual_model is not None}, "
-                f"ResidualArchitecture: {self.core.residual_architecture}"
+                f"ResidualArchitecture: {self.core.residual_architecture}, "
+                "SpatialShadowWeights: "
+                f"{self.core.spatial_shadow_loaded_parameter_count}, "
+                "SpatialShadowEnabled: "
+                f"{self.core.spatial_shadow_model is not None}, "
+                "SpatialShadowConfig: "
+                f"hidden={spatial_shadow_hidden_dim},"
+                f"projection={spatial_shadow_projection_dim},"
+                f"use_speed={int(spatial_shadow_use_speed)},"
+                f"max_speed_mps={spatial_shadow_max_speed_mps:.6f},"
+                f"max_delta_rad={spatial_shadow_max_abs_delta_rad:.6f},"
+                "speed_timeout_sec="
+                f"{self.spatial_shadow_speed_timeout_sec:.6f}"
             )
         except Exception as e:
             self.get_logger().error(f"Failed to initialize core logic: {e}")
@@ -181,6 +233,15 @@ class TinyLidarNetNode(Node):
         self.last_scan_time = None
         self.sensor_stale = False
         self.last_error_log_time = 0.0
+        self.latest_shadow_speed_mps = None
+        self.latest_shadow_speed_time = None
+        self.shadow_admitted_count = 0
+        self.last_log_shadow_admitted_count = 0
+        self.shadow_skipped_count = 0
+        self.last_log_shadow_skipped_count = 0
+        self.shadow_error_count = 0
+        self.last_log_shadow_error_count = 0
+        self.shadow_corrections = []
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -191,6 +252,14 @@ class TinyLidarNetNode(Node):
         self.sub_scan = self.create_subscription(
             LaserScan, "/scan", self.scan_callback, qos
         )
+        self.sub_shadow_speed = None
+        if self.core.spatial_shadow_model is not None:
+            self.sub_shadow_speed = self.create_subscription(
+                Odometry,
+                "/localization/kinematic_state",
+                self._shadow_speed_callback,
+                1,
+            )
         self.pub_control = self.create_publisher(
             AckermannControlCommand, "/control/command/control_cmd", 1
         )
@@ -220,7 +289,21 @@ class TinyLidarNetNode(Node):
 
         try:
             # 2. Process via Core Logic
-            accel, steer = self.core.process(ranges)
+            accel, steer = self.core.process(
+                ranges, self._fresh_shadow_speed()
+            )
+            if self.core.spatial_shadow_model is not None:
+                if self.core.last_spatial_shadow_admitted:
+                    self.shadow_admitted_count += 1
+                    self.shadow_corrections.append(
+                        self.core.last_spatial_shadow_correction_rad
+                    )
+                elif self.core.last_spatial_shadow_status.startswith(
+                    "inference-error:"
+                ):
+                    self.shadow_error_count += 1
+                else:
+                    self.shadow_skipped_count += 1
             gap_decision = self.core.last_gap_teacher_decision
             if gap_decision is not None and gap_decision.active:
                 self.gap_teacher_active_count += 1
@@ -249,6 +332,30 @@ class TinyLidarNetNode(Node):
         duration_ms = (time.monotonic() - start_time) * 1000.0
         self.inference_times.append(duration_ms)
         self._log_performance_metrics()
+
+    def _shadow_speed_callback(self, msg: Odometry):
+        speed = abs(float(msg.twist.twist.linear.x))
+        if not np.isfinite(speed):
+            self.latest_shadow_speed_mps = None
+            self.latest_shadow_speed_time = None
+            return
+        self.latest_shadow_speed_mps = speed
+        self.latest_shadow_speed_time = self.get_clock().now()
+
+    def _fresh_shadow_speed(self):
+        if self.core.spatial_shadow_model is None:
+            return None
+        if (
+            self.latest_shadow_speed_mps is None
+            or self.latest_shadow_speed_time is None
+        ):
+            return None
+        age_sec = (
+            self.get_clock().now() - self.latest_shadow_speed_time
+        ).nanoseconds / 1e9
+        if age_sec < 0.0 or age_sec > self.spatial_shadow_speed_timeout_sec:
+            return None
+        return self.latest_shadow_speed_mps
 
     def _publish_command(self, acceleration: float, steering: float):
         """Publish one finite Ackermann command."""
@@ -315,6 +422,16 @@ class TinyLidarNetNode(Node):
                     self.longitudinal_safety_active_count
                     - self.last_log_longitudinal_safety_active_count
                 )
+                interval_shadow_admitted = (
+                    self.shadow_admitted_count
+                    - self.last_log_shadow_admitted_count
+                )
+                interval_shadow_skipped = (
+                    self.shadow_skipped_count - self.last_log_shadow_skipped_count
+                )
+                interval_shadow_errors = (
+                    self.shadow_error_count - self.last_log_shadow_error_count
+                )
                 scan_hz = interval_scans / elapsed_sec if elapsed_sec > 0.0 else 0.0
 
                 teacher_status = ""
@@ -348,6 +465,40 @@ class TinyLidarNetNode(Node):
                         f"{self.core.last_residual_gate_probability:.3f}"
                     )
 
+                shadow_status = ""
+                if self.core.spatial_shadow_model is not None:
+                    corrections = np.asarray(
+                        self.shadow_corrections, dtype=np.float64
+                    )
+                    mean_abs = (
+                        float(np.mean(np.abs(corrections)))
+                        if corrections.size
+                        else 0.0
+                    )
+                    p95_abs = (
+                        float(np.percentile(np.abs(corrections), 95))
+                        if corrections.size
+                        else 0.0
+                    )
+                    probabilities = (
+                        self.core.last_spatial_shadow_direction_probabilities
+                    )
+                    shadow_status = (
+                        " spatial_shadow="
+                        f"{interval_shadow_admitted}/{interval_scans} "
+                        f"shadow_skipped={interval_shadow_skipped} "
+                        f"shadow_errors={interval_shadow_errors} "
+                        f"shadow_mean_abs_rad={mean_abs:.5f} "
+                        f"shadow_p95_abs_rad={p95_abs:.5f} "
+                        "shadow_last_rad="
+                        f"{self.core.last_spatial_shadow_correction_rad:.5f} "
+                        "shadow_prob_lnr="
+                        f"{probabilities[0]:.3f},"
+                        f"{probabilities[1]:.3f},"
+                        f"{probabilities[2]:.3f} "
+                        f"shadow_status={self.core.last_spatial_shadow_status}"
+                    )
+
                 self.get_logger().info(
                     f"E2E_STATUS scans={self.scan_count} stale={int(self.sensor_stale)} "
                     f"scan_hz={scan_hz:.2f} "
@@ -357,6 +508,7 @@ class TinyLidarNetNode(Node):
                     f"{teacher_status}"
                     f"{safety_status}"
                     f"{residual_status}"
+                    f"{shadow_status}"
                 )
                 self.inference_times.clear()
                 self.last_log_scan_count = self.scan_count
@@ -366,6 +518,10 @@ class TinyLidarNetNode(Node):
                 self.last_log_longitudinal_safety_active_count = (
                     self.longitudinal_safety_active_count
                 )
+                self.last_log_shadow_admitted_count = self.shadow_admitted_count
+                self.last_log_shadow_skipped_count = self.shadow_skipped_count
+                self.last_log_shadow_error_count = self.shadow_error_count
+                self.shadow_corrections.clear()
 
             self.last_log_time = now
 

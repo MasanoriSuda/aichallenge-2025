@@ -147,13 +147,18 @@ def parse_runtime_config(log_text: str) -> dict | None:
     }
 
 
-def load_runtime_log_text(run_dir: Path) -> tuple[str, list[str], bool]:
-    primary_path = run_dir / "d1" / "autoware.log"
+def load_runtime_log_text(
+    run_dir: Path, domain: int = 1
+) -> tuple[str, list[str], bool]:
+    if domain <= 0:
+        raise ValueError("domain must be positive")
+    domain_dir = run_dir / f"d{domain}"
+    primary_path = domain_dir / "autoware.log"
     primary_text = primary_path.read_text(encoding="utf-8", errors="replace")
     if parse_status_lines(primary_text):
         return primary_text, [str(primary_path)], False
 
-    ros_log_root = run_dir / "d1" / "ros" / "log"
+    ros_log_root = domain_dir / "ros" / "log"
     fallback_paths = sorted(ros_log_root.glob("python3_*.log"))
     fallback_paths.extend(sorted(ros_log_root.glob("*/launch.log")))
     texts = [primary_text]
@@ -241,7 +246,9 @@ def summarize(intervals: list[dict]) -> dict:
 def build_report(args: argparse.Namespace) -> dict:
     run_dir = args.run_dir.resolve()
     checkpoint = args.checkpoint_file.resolve()
-    log_text, log_sources, used_fallback = load_runtime_log_text(run_dir)
+    log_text, log_sources, used_fallback = load_runtime_log_text(
+        run_dir, args.domain
+    )
     intervals = parse_status_lines(log_text)
     shadow = summarize(intervals)
     runtime_config = parse_runtime_config(log_text)
@@ -249,7 +256,9 @@ def build_report(args: argparse.Namespace) -> dict:
         CHECKPOINT_PATH_RE.findall(ANSI_RE.sub("", log_text))
     )
     race = json.loads(
-        (run_dir / "d1-result-details.json").read_text(encoding="utf-8")
+        (run_dir / f"d{args.domain}-result-details.json").read_text(
+            encoding="utf-8"
+        )
     )
     competition = json.loads(
         (run_dir / "e2e-competition-analysis.json").read_text(encoding="utf-8")
@@ -361,6 +370,7 @@ def build_report(args: argparse.Namespace) -> dict:
         "status": "pass" if not reasons else "reject",
         "reasons": reasons,
         "run_dir": str(run_dir),
+        "domain": args.domain,
         "runtime_evidence": {
             "log_sources": log_sources,
             "used_ros_log_fallback": used_fallback,
@@ -395,6 +405,7 @@ def build_report(args: argparse.Namespace) -> dict:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("run_dir", type=Path)
+    parser.add_argument("--domain", type=int, default=1)
     parser.add_argument("--checkpoint-file", type=Path, required=True)
     parser.add_argument("--expected-checkpoint-sha256", required=True)
     parser.add_argument("--expected-runtime-checkpoint-path", required=True)

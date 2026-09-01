@@ -1,6 +1,31 @@
 import analyze_recurrent_shadow_run as analyzer
 
 
+def test_runtime_log_loader_selects_requested_domain(tmp_path) -> None:
+    status = (
+        "E2E_STATUS scans=1 stale=0 scan_hz=20.0 "
+        "avg_inference_ms=1.0 max_inference_ms=2.0 "
+        "inference_capacity_hz=500.0 recurrent_shadow=1/1 "
+        "recurrent_skipped=0 recurrent_errors=0 "
+        "recurrent_mean_abs_rad=0.01 recurrent_p95_abs_rad=0.02 "
+        "recurrent_last_rad=0.01 recurrent_raw_last_rad=0.01 "
+        "recurrent_hidden_norm=1.0 recurrent_resets=0 recurrent_status=ok"
+    )
+    for domain in (1, 3):
+        domain_dir = tmp_path / f"d{domain}"
+        domain_dir.mkdir()
+        (domain_dir / "autoware.log").write_text(
+            f"d{domain} {status}\n",
+            encoding="utf-8",
+        )
+
+    text, paths, used_fallback = analyzer.load_runtime_log_text(tmp_path, 3)
+
+    assert text.startswith("d3 ")
+    assert paths == [str(tmp_path / "d3" / "autoware.log")]
+    assert not used_fallback
+
+
 def test_status_parser_preserves_shadow_and_authority_contract() -> None:
     text = (
         "E2E_STATUS scans=100 stale=0 scan_hz=20.00 "

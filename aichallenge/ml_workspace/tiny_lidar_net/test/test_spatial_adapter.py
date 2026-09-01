@@ -1,7 +1,9 @@
 import pytest
+import numpy as np
 import torch
 
 from lib.spatial_adapter import FrozenTinyLidarSpatialResidual
+from train_spatial_adapter import ZeroResidualAnchorSequence
 
 
 def make_model() -> FrozenTinyLidarSpatialResidual:
@@ -41,3 +43,27 @@ def test_spatial_adapter_validates_physical_scan_contract():
     invalid[0, 0] = float("nan")
     with pytest.raises(ValueError, match="finite"):
         model(invalid)
+
+
+class FakeNormalizedSequence:
+    sequence_id = "normal-run"
+
+    def __init__(self):
+        self.values = np.full((2, 750), 0.5, dtype=np.float32)
+
+    def __len__(self):
+        return len(self.values)
+
+    def __getitem__(self, index):
+        return self.values[index], np.asarray([1.0, -0.2], dtype=np.float32)
+
+
+def test_zero_residual_anchor_ignores_labels_and_restores_metres():
+    anchor = ZeroResidualAnchorSequence(FakeNormalizedSequence(), 30.0)
+
+    scan, speed, teacher, base = anchor[0]
+
+    assert anchor.sequence_id == "normal-anchor:normal-run"
+    assert scan.tolist() == pytest.approx([15.0] * 750)
+    assert (speed, teacher, base) == (0.0, 0.0, 0.0)
+    assert anchor.correction_targets().tolist() == [0.0, 0.0]

@@ -276,6 +276,13 @@ MAEを36.68%、peer d3を56.63%改善したが、独立normal validationへの�
 のnormal candidate3状態をzero-residual anchorとして明示し、独立normal validation、teacher
 validation、peer d3の割当と全Gateを固定したまま再評価する。
 
+normal train 3 sequenceをzero-residual anchorとして追加した再評価では、独立normal MAEは
+0.00992 radへ改善してGateを通った一方、material改善は26.44%、方向精度は75.81%へ低下し、
+固定した30%/80% Gateに不合格だった。したがってnormal漏れだけを直す重み調整には進まない。
+次は同じtrain-only normal anchorと未変更validationを使う分類probeで、通常状態と補正方向が
+空間表現上で同時に分離可能かを確認する。分離不能ならinput/data、分離可能ならcontinuous
+head/lossの問題として扱う。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

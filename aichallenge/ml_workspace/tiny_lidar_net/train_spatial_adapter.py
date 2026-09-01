@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import ConcatDataset, DataLoader, WeightedRandomSampler
 
 from lib.checkpoint import load_pretrained_weights, sha256_file
+from lib.data import MultiSeqConcatDataset
 from lib.recurrent_policy import MultiSeqRecurrentPolicyDataset
 from lib.residual import (
     residual_metrics,
@@ -22,6 +23,27 @@ from lib.residual import (
     write_json,
 )
 from lib.spatial_adapter import FrozenTinyLidarSpatialResidual
+
+
+class ZeroResidualAnchorSequence(torch.utils.data.Dataset):
+    """Expose one production sequence as physical scans with zero correction."""
+
+    def __init__(self, sequence, max_range_m: float):
+        self.sequence = sequence
+        self.sequence_id = f"normal-anchor:{sequence.sequence_id}"
+        self.max_range_m = float(max_range_m)
+
+    def __len__(self) -> int:
+        return len(self.sequence)
+
+    def __getitem__(self, index: int):
+        normalized_scan, _ = self.sequence[index]
+        scan_m = normalized_scan * self.max_range_m
+        zero = np.float32(0.0)
+        return scan_m, zero, zero, zero
+
+    def correction_targets(self) -> np.ndarray:
+        return np.zeros(len(self), dtype=np.float32)
 
 
 def seed_everything(seed: int) -> torch.Generator:
@@ -39,8 +61,12 @@ def seed_everything(seed: int) -> torch.Generator:
 
 def direction_class_weights(source, material_delta_rad: float) -> torch.Tensor:
     masses = []
-    for sequence in source.datasets:
-        targets = torch.from_numpy(sequence.steers - sequence.base_steers)
+    for sequence in source:
+        if isinstance(sequence, ZeroResidualAnchorSequence):
+            corrections = sequence.correction_targets()
+        else:
+            corrections = sequence.steers - sequence.base_steers
+        targets = torch.from_numpy(corrections)
         classes = signed_direction_targets(targets, material_delta_rad)
         counts = torch.bincount(classes, minlength=3).to(dtype=torch.float64)
         masses.append(counts / counts.sum())
@@ -130,6 +156,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--base-checkpoint", type=Path, required=True)
+    parser.add_argument(
+        "--normal-anchor-train-dir",
+        type=Path,
+        help=(
+            "Optional train-only production corpus whose labels are ignored and "
+            "whose scans receive exact zero residual targets."
+        ),
+    )
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--input-dim", type=int, default=750)
     parser.add_argument("--hidden-dim", type=int, default=128)
@@ -160,11 +194,29 @@ def main() -> int:
     overlap = set(train_source.sequence_ids) & set(validation_source.sequence_ids)
     if overlap:
         raise ValueError(f"spatial adapter sequence overlap: {sorted(overlap)}")
-    train_dataset = ConcatDataset(train_source.datasets)
+    normal_anchor_sequences = []
+    if args.normal_anchor_train_dir is not None:
+        normal_source = MultiSeqConcatDataset(
+            args.normal_anchor_train_dir,
+            expected_split="train",
+            max_range=args.max_range_m,
+            expected_input_dim=args.input_dim,
+        )
+        normal_anchor_sequences = [
+            ZeroResidualAnchorSequence(sequence, args.max_range_m)
+            for sequence in normal_source.datasets
+        ]
+    train_sequences = [*train_source.datasets, *normal_anchor_sequences]
+    all_train_ids = [
+        getattr(sequence, "sequence_id", "") for sequence in train_sequences
+    ]
+    if len(all_train_ids) != len(set(all_train_ids)):
+        raise ValueError("spatial adapter train sequence identity collision")
+    train_dataset = ConcatDataset(train_sequences)
     validation_dataset = ConcatDataset(validation_source.datasets)
     sampler = WeightedRandomSampler(
         sequence_balanced_sample_weights(
-            [len(sequence) for sequence in train_source.datasets]
+            [len(sequence) for sequence in train_sequences]
         ),
         num_samples=len(train_dataset),
         replacement=True,
@@ -194,7 +246,7 @@ def main() -> int:
     trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
     optimizer = torch.optim.AdamW(trainable, lr=args.learning_rate, weight_decay=1e-5)
     class_weights = direction_class_weights(
-        train_source, args.material_delta_rad
+        train_sequences, args.material_delta_rad
     ).to(device)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = args.output_root.expanduser().resolve() / timestamp
@@ -205,6 +257,9 @@ def main() -> int:
         "base_checkpoint": base_provenance,
         "base_checkpoint_sha256": sha256_file(args.base_checkpoint),
         "train_sequence_ids": train_source.sequence_ids,
+        "zero_residual_anchor_sequence_ids": [
+            sequence.sequence_id for sequence in normal_anchor_sequences
+        ],
         "validation_sequence_ids": validation_source.sequence_ids,
         "train_samples": len(train_dataset),
         "validation_samples": len(validation_dataset),

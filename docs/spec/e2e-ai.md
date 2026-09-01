@@ -272,6 +272,14 @@ speed-committed teacherから学習済みのdefault-off recurrent候補だけを
 deadlockを別々に扱う。production spatial authorityとrecurrent既定OFFは維持し、次は速度依存
 制動候補を失敗bagとclean bagへoffline replayしてからruntime変更を判断する。
 
+固定bagによる速度依存制動の比較では、全距離へ停止距離包絡線を適用する案を棄却した。
+無事故のd3/d4でも走行sampleの約10--75%へ介入し、カーブ壁を前方障害物として扱う領域を
+広げすぎるためである。一方、現行と同じ3.0 m以内だけを連続safe-speedへ置換する案は、clean
+d3/d4で介入率を増やさなかった。既知の`slow-clearance`固着bagでは、現行がfront中央値
+1.64 mで178 sampleすべて`0.0 m/s2`だったのに対し、限定候補は`0.30--0.34 m/s2`の
+bounded requestを生成した。これを専用runtime A/Bへ進めるが、元のd1/d2 wall contactを
+防ぐ証拠とは扱わず、横相互作用の課題と分離する。
+
 2026-09-01のfrozen production candidateによるcompetition matrixでは、単車
 `output/20260901-151131`だけが3/3周、penalty 0、stall 0で合格した。runtime NPC
 `output/20260901-152109`は2/3周後に右側へ埋まり、正加速中のstallが117.05秒、wall

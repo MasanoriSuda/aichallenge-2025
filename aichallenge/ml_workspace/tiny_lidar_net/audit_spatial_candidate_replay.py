@@ -27,6 +27,7 @@ from lib.spatial_adapter import FrozenTinyLidarSpatialResidual
 SCAN_TOPIC = "/sensing/lidar/scan"
 WHEEL_SPEED_TOPIC = "/vehicle/status/velocity_status"
 FUSED_SPEED_TOPIC = "/localization/kinematic_state"
+CONTROL_TOPIC = "/control/command/control_cmd"
 
 
 def clean_and_resize_ranges(
@@ -57,7 +58,15 @@ def read_replay_inputs(bag_path: Path) -> dict:
     wheel_speeds = []
     fused_times = []
     fused_speeds = []
-    required = {SCAN_TOPIC, WHEEL_SPEED_TOPIC, FUSED_SPEED_TOPIC}
+    control_times = []
+    control_steering = []
+    control_acceleration = []
+    required = {
+        SCAN_TOPIC,
+        WHEEL_SPEED_TOPIC,
+        FUSED_SPEED_TOPIC,
+        CONTROL_TOPIC,
+    }
     with AnyReader([bag_path]) as reader:
         available = {connection.topic for connection in reader.connections}
         missing = sorted(required - available)
@@ -76,9 +85,17 @@ def read_replay_inputs(bag_path: Path) -> dict:
             elif connection.topic == WHEEL_SPEED_TOPIC:
                 wheel_times.append(timestamp)
                 wheel_speeds.append(abs(float(message.longitudinal_velocity)))
-            else:
+            elif connection.topic == FUSED_SPEED_TOPIC:
                 fused_times.append(timestamp)
                 fused_speeds.append(abs(float(message.twist.twist.linear.x)))
+            else:
+                control_times.append(timestamp)
+                control_steering.append(
+                    float(message.lateral.steering_tire_angle)
+                )
+                control_acceleration.append(
+                    float(message.longitudinal.acceleration)
+                )
     arrays = {
         "scan_times_ns": np.asarray(scan_times, dtype=np.int64),
         "scans_m": np.asarray(scans, dtype=np.float32),
@@ -86,6 +103,11 @@ def read_replay_inputs(bag_path: Path) -> dict:
         "wheel_speeds_mps": np.asarray(wheel_speeds, dtype=np.float32),
         "fused_times_ns": np.asarray(fused_times, dtype=np.int64),
         "fused_speeds_mps": np.asarray(fused_speeds, dtype=np.float32),
+        "control_times_ns": np.asarray(control_times, dtype=np.int64),
+        "control_steering_rad": np.asarray(control_steering, dtype=np.float32),
+        "control_acceleration_mps2": np.asarray(
+            control_acceleration, dtype=np.float32
+        ),
     }
     if len(arrays["scan_times_ns"]) == 0:
         raise ValueError("replay bag contains no LiDAR frames")
@@ -96,6 +118,17 @@ def read_replay_inputs(bag_path: Path) -> dict:
             raise ValueError(f"{prefix} speed stream is empty or misaligned")
         if np.any(np.diff(times) <= 0) or not np.all(np.isfinite(values)):
             raise ValueError(f"{prefix} speed stream violates replay contract")
+    if (
+        len(arrays["control_times_ns"]) == 0
+        or len(arrays["control_times_ns"])
+        != len(arrays["control_steering_rad"])
+        or len(arrays["control_times_ns"])
+        != len(arrays["control_acceleration_mps2"])
+        or np.any(np.diff(arrays["control_times_ns"]) <= 0)
+        or not np.all(np.isfinite(arrays["control_steering_rad"]))
+        or not np.all(np.isfinite(arrays["control_acceleration_mps2"]))
+    ):
+        raise ValueError("control stream is empty, misaligned, or non-finite")
     scan_times_array = arrays["scan_times_ns"]
     arrays["wheel_at_scan_mps"] = nearest_values(
         scan_times_array,
@@ -106,6 +139,16 @@ def read_replay_inputs(bag_path: Path) -> dict:
         scan_times_array,
         arrays["fused_times_ns"],
         arrays["fused_speeds_mps"],
+    ).astype(np.float32)
+    arrays["published_steering_at_scan_rad"] = nearest_values(
+        scan_times_array,
+        arrays["control_times_ns"],
+        arrays["control_steering_rad"],
+    ).astype(np.float32)
+    arrays["published_acceleration_at_scan_mps2"] = nearest_values(
+        scan_times_array,
+        arrays["control_times_ns"],
+        arrays["control_acceleration_mps2"],
     ).astype(np.float32)
     arrays["relative_time_sec"] = (
         scan_times_array - arrays["wheel_times_ns"][0]
@@ -156,6 +199,24 @@ def predict(
     return np.concatenate(residuals), np.concatenate(directions)
 
 
+def predict_base_steering(
+    model: FrozenTinyLidarSpatialResidual,
+    scans_m: np.ndarray,
+    batch_size: int,
+) -> np.ndarray:
+    """Evaluate the immutable embedded base on the exact replay frames."""
+    values = []
+    with torch.no_grad():
+        for start in range(0, len(scans_m), batch_size):
+            stop = min(start + batch_size, len(scans_m))
+            values.append(
+                model.base_steering(
+                    torch.from_numpy(scans_m[start:stop])
+                ).numpy()
+            )
+    return np.concatenate(values).astype(np.float32, copy=False)
+
+
 def longest_true_samples(mask: np.ndarray) -> int:
     longest = current = 0
     for value in np.asarray(mask, dtype=bool):
@@ -199,6 +260,71 @@ def summarize_prediction(
         "mean_direction_probability_lnr": [
             float(value) for value in np.mean(selected_probabilities, axis=0)
         ],
+    }
+
+
+def summarize_signal(values: np.ndarray, mask: np.ndarray) -> dict:
+    """Summarize one scalar signal without assigning it causal meaning."""
+    selected = np.asarray(values, dtype=np.float32)[mask]
+    if len(selected) == 0:
+        return {"samples": 0}
+    return {
+        "samples": int(len(selected)),
+        "mean": float(np.mean(selected)),
+        "mean_abs": float(np.mean(np.abs(selected))),
+        "minimum": float(np.min(selected)),
+        "p05": float(np.quantile(selected, 0.05)),
+        "p50": float(np.quantile(selected, 0.50)),
+        "p95": float(np.quantile(selected, 0.95)),
+        "maximum": float(np.max(selected)),
+    }
+
+
+def summarize_composition(
+    base_steering_rad: np.ndarray,
+    residual_rad: np.ndarray,
+    published_steering_rad: np.ndarray,
+    mask: np.ndarray,
+    max_abs_steering_rad: float = 0.64,
+) -> dict:
+    """Compare offline base+residual with the nearest published command.
+
+    Published-command alignment is diagnostic only: the ROS topics are sampled
+    independently, so a non-zero error does not by itself prove a runtime
+    implementation mismatch.
+    """
+    base = np.asarray(base_steering_rad, dtype=np.float32)[mask]
+    residual = np.asarray(residual_rad, dtype=np.float32)[mask]
+    published = np.asarray(published_steering_rad, dtype=np.float32)[mask]
+    if len(base) == 0:
+        return {"samples": 0}
+    if not np.isfinite(max_abs_steering_rad) or max_abs_steering_rad <= 0.0:
+        raise ValueError("maximum steering must be finite and positive")
+    raw = base + residual
+    composed = np.clip(
+        raw, -max_abs_steering_rad, max_abs_steering_rad
+    )
+    error = composed - published
+    return {
+        "samples": int(len(base)),
+        "base": summarize_signal(base, np.ones(len(base), dtype=bool)),
+        "residual": summarize_signal(
+            residual, np.ones(len(residual), dtype=bool)
+        ),
+        "composed": summarize_signal(
+            composed, np.ones(len(composed), dtype=bool)
+        ),
+        "published": summarize_signal(
+            published, np.ones(len(published), dtype=bool)
+        ),
+        "maximum_steering_rad": float(max_abs_steering_rad),
+        "composition_clip_fraction": float(
+            np.mean(np.abs(raw) > max_abs_steering_rad)
+        ),
+        "nearest_published_mae_rad": float(np.mean(np.abs(error))),
+        "nearest_published_p95_abs_error_rad": float(
+            np.quantile(np.abs(error), 0.95)
+        ),
     }
 
 
@@ -322,6 +448,12 @@ def main() -> int:
     )
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument(
+        "--maximum-steering-rad",
+        type=float,
+        default=0.64,
+        help="Final node-level steering clamp used for composition parity.",
+    )
+    parser.add_argument(
         "--teacher-base-checkpoint",
         type=Path,
         help=(
@@ -338,6 +470,7 @@ def main() -> int:
         args.authority_bound_rad <= 0.0
         or args.candidate_max_abs_delta_rad <= 0.0
         or args.material_delta_rad <= 0.0
+        or args.maximum_steering_rad <= 0.0
         or args.batch_size <= 0
     ):
         raise ValueError("invalid replay authority or batch configuration")
@@ -402,6 +535,9 @@ def main() -> int:
             "use_base_steering": args.candidate_use_base_steering,
         }
         predictions[name] = {}
+        base_steering = predict_base_steering(
+            model, arrays["scans_m"], args.batch_size
+        )
         for speed_name in ("wheel", "fused"):
             residual, probabilities = predict(
                 model,
@@ -415,6 +551,16 @@ def main() -> int:
                     probabilities,
                     mask,
                     args.authority_bound_rad,
+                )
+                for window, mask in windows.items()
+            }
+            predictions[name][speed_name]["composition"] = {
+                window: summarize_composition(
+                    base_steering,
+                    residual,
+                    arrays["published_steering_at_scan_rad"],
+                    mask,
+                    args.maximum_steering_rad,
                 )
                 for window, mask in windows.items()
             }
@@ -446,6 +592,20 @@ def main() -> int:
             "mae_mps": float(np.mean(np.abs(speed_delta))),
             "p95_abs_mps": float(np.quantile(np.abs(speed_delta), 0.95)),
             "max_abs_mps": float(np.max(np.abs(speed_delta))),
+        },
+        "observed_signals": {
+            window: {
+                "wheel_speed_mps": summarize_signal(
+                    arrays["wheel_at_scan_mps"], mask
+                ),
+                "published_acceleration_mps2": summarize_signal(
+                    arrays["published_acceleration_at_scan_mps2"], mask
+                ),
+                "published_steering_rad": summarize_signal(
+                    arrays["published_steering_at_scan_rad"], mask
+                ),
+            }
+            for window, mask in windows.items()
         },
         "candidate_artifacts": artifacts,
         "teacher_contract": teacher_artifact,

@@ -4,7 +4,9 @@ from audit_spatial_candidate_replay import (
     clean_and_resize_ranges,
     load_candidate,
     longest_true_samples,
+    summarize_composition,
     summarize_prediction,
+    summarize_signal,
     summarize_teacher_alignment,
 )
 
@@ -93,3 +95,27 @@ def test_teacher_alignment_separates_material_sign_failure():
     assert report["material_samples"] == 3
     assert np.isclose(report["material_sign_accuracy"], 2.0 / 3.0)
     assert np.isclose(report["material_opposite_sign_fraction"], 1.0 / 3.0)
+
+
+def test_signal_summary_preserves_signed_distribution():
+    report = summarize_signal(
+        np.asarray([-0.4, 0.2, 0.6], dtype=np.float32),
+        np.asarray([True, False, True]),
+    )
+    assert report["samples"] == 2
+    assert np.isclose(report["mean"], 0.1)
+    assert np.isclose(report["mean_abs"], 0.5)
+    assert np.isclose(report["minimum"], -0.4)
+    assert np.isclose(report["maximum"], 0.6)
+
+
+def test_composition_summary_reports_clipping_and_published_alignment():
+    report = summarize_composition(
+        np.asarray([0.7, -0.2], dtype=np.float32),
+        np.asarray([0.5, 0.1], dtype=np.float32),
+        np.asarray([0.64, -0.1], dtype=np.float32),
+        np.asarray([True, True]),
+    )
+    assert report["samples"] == 2
+    assert report["composition_clip_fraction"] == 0.5
+    assert np.isclose(report["nearest_published_mae_rad"], 0.0, atol=1e-6)

@@ -253,6 +253,25 @@ sensor staleや推論errorではなく、前方LiDARが約0.4--0.7 mの`stop-cle
 authorityを変更せず、現在の距離固定制動を実速度・反応遅れ・制動能力に対応させる。その後、
 接触前横回避dataと4台Gateを再評価してから、4.6 m/sを超えるpace学習へ進む。
 
+この最終worldの最初の失敗を再監査した。従来のmotion reportが示した約281秒は、録画中の
+最長low-speed segmentであり最初の停止ではなかった。最初の持続停止はd1で42.875秒、d2で
+43.511秒である。修正したbag replayでは、failure前のembedded base、spatial residual、node
+clamp後の合成操舵が実publish値とsub-microradianで一致し、wheel/fused速度差もp95 0.11 m/s
+未満だった。runtime合成や速度topicの不整合は主因ではない。
+
+同じ区間をcleanなd3/d4と比較すると、d3/d4は約3.3--3.8 m/sと4--9 mの前方余裕で通過する
+一方、後続d1/d2は先行peerへ接近したhairpinで前方余裕が約1.5--1.9 mへ崩れ、ほぼ同時に壁へ
+到達していた。したがって単純なコース追従不良ではなく、多台数相互作用時の回避可能性が律速で
+ある。
+
+speed-committed teacherから学習済みのdefault-off recurrent候補だけを`+/-0.24 rad`で有効化
+した短時間A/B `output/20260902-e2e-final-recurrent-024`も棄却した。d2は最初の罠を越えたが、d1は
+基準より早いrace time 16.45秒でcrashし、cleanだったd3にも12.87秒で新規crashが発生した。
+またd1はfront約1.64 m、速度0の`slow-clearance`に入り、正加速が連続して0へ置換されたため、
+操舵だけでは脱出できなかった。時系列候補の単純昇格ではなく、接触前data不足と停止時の縦安全
+deadlockを別々に扱う。production spatial authorityとrecurrent既定OFFは維持し、次は速度依存
+制動候補を失敗bagとclean bagへoffline replayしてからruntime変更を判断する。
+
 2026-09-01のfrozen production candidateによるcompetition matrixでは、単車
 `output/20260901-151131`だけが3/3周、penalty 0、stall 0で合格した。runtime NPC
 `output/20260901-152109`は2/3周後に右側へ埋まり、正加速中のstallが117.05秒、wall

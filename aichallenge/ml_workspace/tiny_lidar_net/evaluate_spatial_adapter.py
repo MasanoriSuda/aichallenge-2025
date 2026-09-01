@@ -15,7 +15,10 @@ from lib.model import TinyLidarNet
 from lib.normal_anchor import MultiSeqNormalAnchorDataset
 from lib.recurrent_policy import MultiSeqRecurrentPolicyDataset
 from lib.residual import residual_metrics, write_json
-from lib.spatial_adapter import FrozenTinyLidarSpatialResidual
+from lib.spatial_adapter import (
+    SPATIAL_NORMALIZATION_MODES,
+    FrozenTinyLidarSpatialResidual,
+)
 
 
 def predict_paired(model, loader, device, material_delta_rad: float) -> dict:
@@ -126,6 +129,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-abs-delta-rad", type=float, default=1.2)
     parser.add_argument("--max-speed-mps", type=float, default=12.0)
     parser.add_argument("--use-speed", action="store_true")
+    parser.add_argument(
+        "--spatial-normalization",
+        choices=SPATIAL_NORMALIZATION_MODES,
+        default="layer_norm",
+    )
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--peer-validation-token", default="20260901-153143/d3")
     parser.add_argument("--batch-size", type=int, default=512)
@@ -153,6 +161,7 @@ def main() -> int:
         max_abs_delta_rad=args.max_abs_delta_rad,
         use_speed=args.use_speed,
         max_speed_mps=args.max_speed_mps,
+        spatial_normalization=args.spatial_normalization,
     )
     candidate_provenance = load_pretrained_weights(model, args.candidate)
     base_provenance = assert_embedded_base_identity(model, args.base_checkpoint)

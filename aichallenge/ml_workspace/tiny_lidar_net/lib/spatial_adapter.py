@@ -8,6 +8,9 @@ import torch.nn.functional as F
 from lib.model import TinyLidarNet
 
 
+SPATIAL_NORMALIZATION_MODES = ("layer_norm", "fixed_train_statistics")
+
+
 class FrozenTinyLidarSpatialResidual(nn.Module):
     """Learn a correction without changing the admitted base representation.
 
@@ -24,6 +27,7 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
         max_abs_delta_rad: float = 1.2,
         use_speed: bool = False,
         max_speed_mps: float = 12.0,
+        spatial_normalization: str = "layer_norm",
     ):
         super().__init__()
         if input_dim <= 0 or hidden_dim < 2:
@@ -34,11 +38,16 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             raise ValueError("maximum correction must be finite and positive")
         if not np.isfinite(max_speed_mps) or max_speed_mps <= 0.0:
             raise ValueError("maximum speed must be finite and positive")
+        if spatial_normalization not in SPATIAL_NORMALIZATION_MODES:
+            raise ValueError(
+                f"unsupported spatial normalization: {spatial_normalization}"
+            )
         self.input_dim = int(input_dim)
         self.max_scan_range_m = float(max_scan_range_m)
         self.max_abs_delta_rad = float(max_abs_delta_rad)
         self.use_speed = bool(use_speed)
         self.max_speed_mps = float(max_speed_mps)
+        self.spatial_normalization = spatial_normalization
         self.base = TinyLidarNet(input_dim=self.input_dim, output_dim=2)
         for parameter in self.base.parameters():
             parameter.requires_grad_(False)
@@ -46,7 +55,12 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             dummy = torch.zeros(1, 1, self.input_dim)
             spatial = self._extract_conv5(dummy)
             self.spatial_dim = int(spatial.flatten(start_dim=1).shape[1])
-        self.spatial_norm = nn.LayerNorm(self.spatial_dim)
+        if self.spatial_normalization == "layer_norm":
+            self.spatial_norm = nn.LayerNorm(self.spatial_dim)
+        else:
+            self.spatial_norm = nn.Identity()
+            self.register_buffer("spatial_mean", torch.zeros(self.spatial_dim))
+            self.register_buffer("spatial_scale", torch.ones(self.spatial_dim))
         adapter_input_dim = self.spatial_dim + int(self.use_speed)
         self.spatial_head = nn.Sequential(
             nn.Linear(adapter_input_dim, hidden_dim),
@@ -65,8 +79,9 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
                     module.weight, mode="fan_out", nonlinearity="relu"
                 )
                 nn.init.zeros_(module.bias)
-        nn.init.ones_(self.spatial_norm.weight)
-        nn.init.zeros_(self.spatial_norm.bias)
+        if isinstance(self.spatial_norm, nn.LayerNorm):
+            nn.init.ones_(self.spatial_norm.weight)
+            nn.init.zeros_(self.spatial_norm.bias)
         # Equal left/right probabilities and magnitudes cancel exactly.  The
         # untrained composition therefore preserves candidate3 for every scan.
         nn.init.zeros_(self.direction_head.weight)
@@ -93,10 +108,30 @@ class FrozenTinyLidarSpatialResidual(nn.Module):
             spatial = self._extract_conv5(normalized).flatten(start_dim=1)
         return spatial
 
+    def set_spatial_statistics(
+        self, mean: torch.Tensor, scale: torch.Tensor
+    ) -> None:
+        if self.spatial_normalization != "fixed_train_statistics":
+            raise ValueError("fixed statistics require fixed normalization mode")
+        if mean.shape != (self.spatial_dim,) or scale.shape != (self.spatial_dim,):
+            raise ValueError("spatial statistics dimension mismatch")
+        if not torch.isfinite(mean).all() or not torch.isfinite(scale).all():
+            raise ValueError("spatial statistics must be finite")
+        if torch.any(scale <= 0.0):
+            raise ValueError("spatial feature scale must be positive")
+        self.spatial_mean.copy_(mean.to(self.spatial_mean))
+        self.spatial_scale.copy_(scale.to(self.spatial_scale))
+
+    def normalized_spatial_features(self, scans_m: torch.Tensor) -> torch.Tensor:
+        spatial = self.spatial_features(scans_m)
+        if self.spatial_normalization == "fixed_train_statistics":
+            return (spatial - self.spatial_mean) / self.spatial_scale
+        return self.spatial_norm(spatial)
+
     def _adapter_features(
         self, scans_m: torch.Tensor, speeds_mps: torch.Tensor | None
     ) -> torch.Tensor:
-        spatial = self.spatial_norm(self.spatial_features(scans_m))
+        spatial = self.normalized_spatial_features(scans_m)
         if not self.use_speed:
             return spatial
         if speeds_mps is None or speeds_mps.shape != (len(scans_m),):

@@ -302,6 +302,12 @@ normal MAEは0.00873 radで合格したが、material改善27.82%と方向精度
 単位の固定標準化と、continuous adapterが使うsample単位LayerNormの契約差を次に監査し、
 Gateやruntime brake閾値は変更しない。
 
+分類probeとの正規化差を切り分けるため、teacher/normalのtrain-only conv5統計をcandidate
+bufferへ固定したcontinuous adapterも1本評価した。独立normal MAEは0.00927 radで合格したが、
+material改善18.88%、方向精度71.28%へ悪化したため不採用とする。per-sample LayerNormが
+主因という仮説は反証された。probeにはさらに128次元の固定random projectionがあり、full
+conv5 headとの容量差が残るため、次はその差だけを再現する。ここでもGateとproductionは固定する。
+
 runtime NPCを含むAWSIM v2 summaryは複数vehicleを`vehicle_number=1`として出力する場合が
 ある。この場合、domain identityの正本はv3の`dN-result-details.json`とし、summaryは同じ
 Finish/lap状態のentryが存在することだけをcross-checkする。summaryの先頭entryを無条件に

@@ -61,6 +61,25 @@ def test_speed_enabled_adapter_requires_valid_aligned_speed():
     )
 
 
+def test_fixed_train_statistics_are_explicit_and_immutable_state():
+    model = FrozenTinyLidarSpatialResidual(
+        input_dim=750,
+        hidden_dim=16,
+        spatial_normalization="fixed_train_statistics",
+    )
+    mean = torch.linspace(0.0, 1.0, model.spatial_dim)
+    scale = torch.linspace(0.5, 1.5, model.spatial_dim)
+
+    model.set_spatial_statistics(mean, scale)
+
+    assert torch.equal(model.spatial_mean, mean)
+    assert torch.equal(model.spatial_scale, scale)
+    assert "spatial_mean" in model.state_dict()
+    assert "spatial_scale" in model.state_dict()
+    with pytest.raises(ValueError, match="positive"):
+        model.set_spatial_statistics(mean, torch.zeros_like(scale))
+
+
 class FakeNormalizedSequence:
     sequence_id = "normal-run"
 

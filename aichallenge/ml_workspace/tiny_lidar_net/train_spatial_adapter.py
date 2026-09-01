@@ -23,7 +23,10 @@ from lib.residual import (
     signed_mixture_training_loss,
     write_json,
 )
-from lib.spatial_adapter import FrozenTinyLidarSpatialResidual
+from lib.spatial_adapter import (
+    SPATIAL_NORMALIZATION_MODES,
+    FrozenTinyLidarSpatialResidual,
+)
 
 
 class ZeroResidualAnchorSequence(torch.utils.data.Dataset):
@@ -76,6 +79,39 @@ def direction_class_weights(source, material_delta_rad: float) -> torch.Tensor:
         raise ValueError(f"spatial adapter split lacks a direction: {mean_mass}")
     inverse = 1.0 / mean_mass
     return (inverse / inverse.mean()).to(dtype=torch.float32)
+
+
+def fit_spatial_feature_statistics(model, loader, device) -> dict:
+    if model.spatial_normalization != "fixed_train_statistics":
+        raise ValueError("statistics fit requires fixed spatial normalization")
+    count = 0
+    total = None
+    squared_total = None
+    model.eval()
+    with torch.no_grad():
+        for scans, _, _, _ in loader:
+            spatial = model.spatial_features(scans.to(device)).to(torch.float64)
+            batch_total = torch.sum(spatial, dim=0)
+            batch_squared_total = torch.sum(spatial * spatial, dim=0)
+            total = batch_total if total is None else total + batch_total
+            squared_total = (
+                batch_squared_total
+                if squared_total is None
+                else squared_total + batch_squared_total
+            )
+            count += len(spatial)
+    if count == 0 or total is None or squared_total is None:
+        raise RuntimeError("spatial statistics loader is empty")
+    mean = total / count
+    variance = torch.clamp(squared_total / count - mean * mean, min=0.0)
+    scale = torch.clamp(torch.sqrt(variance), min=1e-4)
+    model.set_spatial_statistics(mean.to(torch.float32), scale.to(torch.float32))
+    return {
+        "samples": count,
+        "minimum_scale": float(torch.min(scale).item()),
+        "maximum_scale": float(torch.max(scale).item()),
+        "mean_abs": float(torch.mean(torch.abs(mean)).item()),
+    }
 
 
 def adapter_loss(model, scans, speeds, teacher, base, args, class_weights):
@@ -184,6 +220,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-abs-delta-rad", type=float, default=1.2)
     parser.add_argument("--max-speed-mps", type=float, default=12.0)
     parser.add_argument("--use-speed", action="store_true")
+    parser.add_argument(
+        "--spatial-normalization",
+        choices=SPATIAL_NORMALIZATION_MODES,
+        default="layer_norm",
+    )
     parser.add_argument("--material-delta-rad", type=float, default=0.02)
     parser.add_argument("--material-weight", type=float, default=5.0)
     parser.add_argument("--direction-loss-weight", type=float, default=1.0)
@@ -258,6 +299,12 @@ def main() -> int:
         shuffle=False,
         num_workers=0,
     )
+    statistics_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=0,
+    )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = FrozenTinyLidarSpatialResidual(
         input_dim=args.input_dim,
@@ -266,9 +313,15 @@ def main() -> int:
         max_abs_delta_rad=args.max_abs_delta_rad,
         use_speed=args.use_speed,
         max_speed_mps=args.max_speed_mps,
+        spatial_normalization=args.spatial_normalization,
     )
     base_provenance = load_pretrained_weights(model.base, args.base_checkpoint)
     model.to(device)
+    spatial_statistics = None
+    if args.spatial_normalization == "fixed_train_statistics":
+        spatial_statistics = fit_spatial_feature_statistics(
+            model, statistics_loader, device
+        )
     trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
     optimizer = torch.optim.AdamW(trainable, lr=args.learning_rate, weight_decay=1e-5)
     class_weights = direction_class_weights(
@@ -290,6 +343,7 @@ def main() -> int:
         "train_samples": len(train_dataset),
         "validation_samples": len(validation_dataset),
         "direction_class_weights": class_weights.cpu().tolist(),
+        "spatial_feature_statistics": spatial_statistics,
         "config": {
             key: str(value) if isinstance(value, Path) else value
             for key, value in vars(args).items()

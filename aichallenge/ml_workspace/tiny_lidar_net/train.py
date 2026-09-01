@@ -18,6 +18,36 @@ from lib.loss import WeightedSmoothL1Loss
 from lib.model import TinyLidarNet, TinyLidarNetSmall
 
 
+def select_trainable_parameters(
+    model: torch.nn.Module, trainable_layers
+) -> tuple[list[torch.nn.Parameter], list[str]]:
+    """Freeze all but explicitly selected top-level layers.
+
+    An empty selection preserves historical full-network fine tuning.  Keeping
+    the selection in the training manifest makes a sparse corrective update
+    auditable rather than an implicit optimizer side effect.
+    """
+    selected_layers = tuple(str(layer) for layer in trainable_layers)
+    known_layers = {name for name, _ in model.named_children()}
+    unknown = sorted(set(selected_layers) - known_layers)
+    if unknown:
+        raise ValueError(
+            f"Unknown trainable layers: {unknown}; known={sorted(known_layers)}"
+        )
+
+    trainable = []
+    trainable_names = []
+    for name, parameter in model.named_parameters():
+        layer = name.split(".", 1)[0]
+        parameter.requires_grad = not selected_layers or layer in selected_layers
+        if parameter.requires_grad:
+            trainable.append(parameter)
+            trainable_names.append(name)
+    if not trainable:
+        raise ValueError("trainable layer selection produced no parameters")
+    return trainable, trainable_names
+
+
 
 def clean_numerical_tensor(x: torch.Tensor) -> torch.Tensor:
     """NaN, infを安全に除去"""
@@ -139,7 +169,15 @@ def main(cfg: DictConfig):
         steer_weight=cfg.train.loss.steer_weight,
         accel_weight=cfg.train.loss.accel_weight
     )
-    optimizer = optim.Adam(model.parameters(), lr=cfg.train.lr)
+    trainable_parameters, trainable_names = select_trainable_parameters(
+        model, cfg.train.get("trainable_layers", [])
+    )
+    print(
+        "[INFO] Trainable parameters: "
+        f"{sum(parameter.numel() for parameter in trainable_parameters)} "
+        f"in {trainable_names}"
+    )
+    optimizer = optim.Adam(trainable_parameters, lr=cfg.train.lr)
 
     # === Logging & Save dirs ===
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

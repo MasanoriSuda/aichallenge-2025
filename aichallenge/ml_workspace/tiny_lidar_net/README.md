@@ -45,7 +45,7 @@ trainerは学習開始前に次を検証します。
 - 750点LiDAR、30 m range契約
 - scan/controlの同期差が50 ms以下
 - `label_source`が`mpc`、`mpcc`、`human`、`lidar_gap_teacher`、
-  `lidar_gap_teacher_dagger`のいずれか
+  `lidar_gap_teacher_dagger`、`lidar_precontact_teacher_dagger`のいずれか
 - 全配列の長さ、finite値、timestamp順序
 - train/validation間のsequence ID非重複
 
@@ -58,6 +58,9 @@ MLがsteeringを所有し、`fixed_lidar_brake`が固定加速度をLiDAR前方�
 `.npy/.npz`weightも指定できます。全parameterのkey、shape、finite値を検証してから
 warm-startします。各学習runはtimestamp directoryへ保存され、dataset sequence ID、設定、
 pretrained checkpointのSHA-256を`training-manifest.json`へ記録します。
+希少なcorrective labelで既存feature extractorを壊したくない場合は、
+`train.trainable_layers=[fc4]`のように最終層だけを明示できる。空配列は従来どおり全層を
+学習し、選択内容はmanifestへ保存される。
 
 ```bash
 python3 train.py \
@@ -147,3 +150,18 @@ python3 relabel_gap_teacher_bag.py /output/<failed-run>/d1/rosbag2_autoware \
   --checkpoint checkpoints/<student-run>/candidate.npy \
   --outdir dataset/<dagger-name>
 ```
+
+run-level admissionを通った`precontact_teacher`を使う場合は、旧teacherのprovenanceを
+流用せず明示的に選択する。
+
+```bash
+python3 relabel_gap_teacher_bag.py /output/<admitted-run>/d1/rosbag2_autoware \
+  --checkpoint checkpoints/<student-run>/candidate.npy \
+  --teacher-mode precontact_teacher \
+  --novel-policy-only \
+  --outdir dataset/<dagger-name>
+```
+
+`--novel-policy-only`は同一scan・同一base steeringに対する旧`LidarGapTeacher`との差が
+0.02 rad以上あるlabelだけを残す。新teacherに固有でない通常のgap追従を大量に再学習して
+既存の車線維持を退行させないためのdataset admissionであり、閾値はmetadataへ記録する。

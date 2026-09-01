@@ -141,6 +141,14 @@ checkpointは変更しない。再ラベル時は旧`lidar_gap_teacher_dagger`�
 をmetadataへ明記する。practice harnessはresult JSONを出さないため、新studentの昇格前に
 評価互換gateでcollision/penaltyを別途確認する。
 
+このrunのactive label全5417件を再学習すると、旧teacherと同じgap追従まで重複して
+独立validation MAEが28.2%悪化した。新旧teacherのsteering差が0.02 rad以上ある418件だけに
+限定しても、全層fine-tuneは新補正MAEを53.1%改善する一方で通常MAEを21.6%悪化させた。
+最終層だけの更新は通常RMSEを0.27%悪化に抑えたが、新補正MAEの改善が2.6%しかなく、
+表現力が不足した。したがってteacher labelの大量追加やproduction checkpointの即時置換は
+行わない。全層候補はproduction overrideなしの診断候補として単車Finishを確認した後、
+4台worldでのみ追加判定し、失敗時はbase policyを固定したML residualなどへ分離する。
+
 bag単位の固着監査は次で行う。起動待ちは除外し、一度1.0 m/s以上で走行した後の
 0.15 m/s以下の連続時間と、そのうち正加速指令中の連続時間を別々に判定する。縦安全層が
 正しく加速を抑止しても、その場で停止し続けるcandidateを成功扱いしない。GUIの見た目

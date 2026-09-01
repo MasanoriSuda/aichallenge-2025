@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Relabel pre-contact student LiDAR states with the runtime gap teacher."""
+"""Relabel admitted LiDAR states with an explicitly identified runtime teacher."""
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 import sys
@@ -12,6 +12,55 @@ import numpy as np
 
 from extract_data_from_bag import clean_scan_array, make_sequence_id
 from lib.checkpoint import sha256_file
+
+
+@dataclass(frozen=True)
+class TeacherIdentity:
+    """Fields that jointly define the provenance of an offline teacher."""
+
+    control_mode: str
+    label_source: str
+    teacher_class: str
+    generated_control_type: str
+
+
+TEACHER_IDENTITIES = {
+    "gap_teacher": TeacherIdentity(
+        control_mode="gap_teacher",
+        label_source="lidar_gap_teacher_dagger",
+        teacher_class="LidarGapTeacher",
+        generated_control_type="generated/tiny_lidar_gap_teacher",
+    ),
+    "precontact_teacher": TeacherIdentity(
+        control_mode="precontact_teacher",
+        label_source="lidar_precontact_teacher_dagger",
+        teacher_class="LidarPrecontactTeacher",
+        generated_control_type="generated/tiny_lidar_precontact_teacher",
+    ),
+}
+
+
+def teacher_identity(mode: str) -> TeacherIdentity:
+    """Resolve all provenance fields from one validated control mode."""
+    try:
+        return TEACHER_IDENTITIES[mode]
+    except KeyError:
+        raise ValueError(f"unsupported teacher mode: {mode}") from None
+
+
+def is_novel_policy_sample(
+    teacher_steering_rad: float,
+    reference_steering_rad: float,
+    minimum_delta_rad: float,
+) -> bool:
+    """Return whether a successor teacher materially differs from its reference."""
+    values = np.asarray(
+        [teacher_steering_rad, reference_steering_rad, minimum_delta_rad],
+        dtype=np.float64,
+    )
+    if not np.all(np.isfinite(values)) or minimum_delta_rad < 0.0:
+        raise ValueError("novel-policy steering values must be finite and non-negative")
+    return abs(teacher_steering_rad - reference_steering_rad) >= minimum_delta_rad
 
 
 def first_confirmed_breach(
@@ -98,11 +147,23 @@ def read_scans(bag_path: Path, topic: str, max_range_m: float) -> tuple:
 
 
 def relabel(args: argparse.Namespace) -> dict:
-    from tiny_lidar_net_controller.gap_teacher import GapTeacherConfig
+    from tiny_lidar_net_controller.gap_teacher import GapTeacherConfig, LidarGapTeacher
     from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 
     bag = args.bag.expanduser().resolve()
     checkpoint = args.checkpoint.expanduser().resolve()
+    identity = teacher_identity(args.teacher_mode)
+    if args.novel_policy_only and args.teacher_mode != "precontact_teacher":
+        raise ValueError(
+            "--novel-policy-only requires --teacher-mode precontact_teacher"
+        )
+    if (
+        not np.isfinite(args.minimum_novel_steering_delta_rad)
+        or args.minimum_novel_steering_delta_rad < 0.0
+    ):
+        raise ValueError(
+            "minimum novel steering delta must be finite and non-negative"
+        )
     if not (bag / "metadata.yaml").is_file():
         raise ValueError(f"not a ROS 2 bag directory: {bag}")
     if not checkpoint.is_file():
@@ -118,13 +179,16 @@ def relabel(args: argparse.Namespace) -> dict:
         raise ValueError("contact cutoff removed the complete sequence")
 
     teacher_config = GapTeacherConfig()
+    reference_teacher = (
+        LidarGapTeacher(teacher_config) if args.novel_policy_only else None
+    )
     core = TinyLidarNetCore(
         input_dim=750,
         output_dim=2,
         architecture="normal",
         ckpt_path=str(checkpoint),
         acceleration=args.fixed_acceleration,
-        control_mode="gap_teacher",
+        control_mode=identity.control_mode,
         max_range=args.max_scan_range,
         gap_teacher_config=teacher_config,
     )
@@ -133,6 +197,7 @@ def relabel(args: argparse.Namespace) -> dict:
     accepted_acceleration = []
     accepted_timestamps = []
     reason_counts = {}
+    rejected_non_novel_samples = 0
     for timestamp, scan in zip(timestamps[:cutoff], scans[:cutoff]):
         acceleration, steering = core.process(scan)
         decision = core.last_gap_teacher_decision
@@ -141,6 +206,19 @@ def relabel(args: argparse.Namespace) -> dict:
         reason_counts[decision.reason] = reason_counts.get(decision.reason, 0) + 1
         if args.active_only and not decision.active:
             continue
+        if reference_teacher is not None:
+            reference_decision = reference_teacher.decide(
+                scan,
+                decision.base_steering_rad,
+                args.fixed_acceleration,
+            )
+            if not is_novel_policy_sample(
+                decision.steering_rad,
+                reference_decision.steering_rad,
+                args.minimum_novel_steering_delta_rad,
+            ):
+                rejected_non_novel_samples += 1
+                continue
         accepted_scans.append(scan)
         accepted_steering.append(steering)
         accepted_acceleration.append(acceleration)
@@ -149,8 +227,13 @@ def relabel(args: argparse.Namespace) -> dict:
         raise ValueError("no teacher correction samples survived admission")
 
     checkpoint_sha = sha256_file(checkpoint)
-    identity = f"{bag}:dagger:{checkpoint_sha}:{timestamps[cutoff - 1]}"
-    sequence_id = make_sequence_id(identity)
+    sequence_identity = (
+        f"{bag}:dagger:{identity.control_mode}:{checkpoint_sha}:"
+        f"{timestamps[cutoff - 1]}:active={args.active_only}:"
+        f"novel={args.novel_policy_only}:"
+        f"novel_delta={args.minimum_novel_steering_delta_rad}"
+    )
+    sequence_id = make_sequence_id(sequence_identity)
     output_dir = args.outdir.expanduser().resolve() / "train" / sequence_id
     if output_dir.exists():
         raise FileExistsError(f"output already exists: {output_dir}")
@@ -172,21 +255,25 @@ def relabel(args: argparse.Namespace) -> dict:
         "sequence_id": sequence_id,
         "split": "train",
         "source_bag": str(bag),
-        "topics": {"scan": args.scan_topic, "control": "offline_gap_teacher"},
+        "topics": {
+            "scan": args.scan_topic,
+            "control": f"offline_{identity.control_mode}",
+        },
         "message_types": {
             "scan": "sensor_msgs/msg/LaserScan",
-            "control": "generated/tiny_lidar_gap_teacher",
+            "control": identity.generated_control_type,
         },
         "scan_shape": [750],
         "max_scan_range_m": args.max_scan_range,
         "max_sync_delta_sec": 0.0,
-        "label_source": "lidar_gap_teacher_dagger",
+        "label_source": identity.label_source,
         "counts": {
             "raw_scans": int(len(scans)),
             "pre_contact_scans": int(cutoff),
             "accepted_samples": int(len(scan_array)),
             "rejected_sync_samples": 0,
             "message_failures": 0,
+            "rejected_non_novel_samples": rejected_non_novel_samples,
         },
         "sync_delta_sec": {"mean": 0.0, "p95": 0.0, "max": 0.0},
         "timestamp_ns": {
@@ -196,9 +283,17 @@ def relabel(args: argparse.Namespace) -> dict:
         "relabeling": {
             "student_checkpoint": str(checkpoint),
             "student_checkpoint_sha256": checkpoint_sha,
-            "teacher": "LidarGapTeacher",
+            "teacher": identity.teacher_class,
+            "control_mode": identity.control_mode,
             "teacher_config": asdict(teacher_config),
             "active_only": args.active_only,
+            "novel_policy_only": args.novel_policy_only,
+            "minimum_novel_steering_delta_rad": (
+                args.minimum_novel_steering_delta_rad
+            ),
+            "reference_teacher": (
+                "LidarGapTeacher" if reference_teacher is not None else None
+            ),
             "decision_reason_counts_before_filter": reason_counts,
             "contact_clearance_m": args.contact_clearance_m,
             "contact_confirmation_samples": args.contact_confirmation_samples,
@@ -221,11 +316,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scan-topic", default="/sensing/lidar/scan")
     parser.add_argument("--max-scan-range", type=float, default=30.0)
     parser.add_argument("--fixed-acceleration", type=float, default=0.6)
+    parser.add_argument(
+        "--teacher-mode",
+        choices=tuple(TEACHER_IDENTITIES),
+        default="gap_teacher",
+        help="Offline teacher policy and its immutable dataset provenance.",
+    )
     parser.add_argument("--contact-clearance-m", type=float, default=0.5)
     parser.add_argument("--contact-confirmation-samples", type=int, default=3)
     parser.add_argument("--pre-contact-margin-sec", type=float, default=1.0)
     parser.add_argument(
         "--active-only", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--novel-policy-only",
+        action="store_true",
+        help=(
+            "Keep only precontact-teacher labels that materially differ from "
+            "the historical LidarGapTeacher on the same state."
+        ),
+    )
+    parser.add_argument(
+        "--minimum-novel-steering-delta-rad",
+        type=float,
+        default=0.02,
+        help="Minimum steering difference for --novel-policy-only.",
     )
     return parser.parse_args()
 

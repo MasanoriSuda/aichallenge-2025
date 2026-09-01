@@ -33,6 +33,42 @@ def test_minimum_observed_ranges_treats_empty_scan_as_blocked():
     assert minima.tolist() == pytest.approx([0.0, 0.8])
 
 
+def test_precontact_teacher_has_distinct_provenance():
+    historical = MODULE.teacher_identity("gap_teacher")
+    precontact = MODULE.teacher_identity("precontact_teacher")
+
+    assert historical.label_source == "lidar_gap_teacher_dagger"
+    assert historical.teacher_class == "LidarGapTeacher"
+    assert precontact.label_source == "lidar_precontact_teacher_dagger"
+    assert precontact.teacher_class == "LidarPrecontactTeacher"
+    assert precontact.control_mode == "precontact_teacher"
+    assert precontact.generated_control_type != historical.generated_control_type
+
+
+def test_unknown_teacher_mode_is_rejected():
+    with pytest.raises(ValueError, match="unsupported teacher mode"):
+        MODULE.teacher_identity("unknown")
+
+
+@pytest.mark.parametrize(
+    ("teacher", "reference", "minimum", "expected"),
+    [
+        (0.10, 0.08, 0.02, True),
+        (0.10, 0.081, 0.02, False),
+        (-0.20, 0.10, 0.02, True),
+    ],
+)
+def test_novel_policy_sample_uses_material_steering_delta(
+    teacher, reference, minimum, expected
+):
+    assert MODULE.is_novel_policy_sample(teacher, reference, minimum) is expected
+
+
+def test_novel_policy_sample_rejects_invalid_threshold():
+    with pytest.raises(ValueError):
+        MODULE.is_novel_policy_sample(0.0, 0.0, -0.1)
+
+
 @pytest.mark.parametrize("confirmation", [0, -1])
 def test_first_confirmed_breach_rejects_invalid_confirmation(confirmation):
     with pytest.raises(ValueError):

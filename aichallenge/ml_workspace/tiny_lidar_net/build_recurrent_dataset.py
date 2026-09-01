@@ -198,14 +198,26 @@ def iter_source_sequences(
     source_roots: Sequence[Path],
     excluded_sequence_ids: Sequence[str] = (),
     allow_partial_additional_roots: bool = False,
+    required_splits: Sequence[str] = ("train", "val"),
 ) -> Iterable[Tuple[Path, str, Path]]:
     """Discover immutable sources and reject run identity reuse up front.
 
     In partial-root mode, one immutable run root may contain only its assigned
-    split, but the complete aggregate must still contain both train and val.
+    split, but the complete aggregate must still contain every explicitly
+    required split.  The default preserves the historical train/val contract;
+    callers building an evaluation-only corpus must request ``("val",)``.
     """
     if not source_roots:
         raise ValueError("at least one source dataset root is required")
+    requested_splits = tuple(required_splits)
+    if (
+        not requested_splits
+        or len(set(requested_splits)) != len(requested_splits)
+        or any(split not in {"train", "val"} for split in requested_splits)
+    ):
+        raise ValueError(
+            "required splits must be a unique non-empty train/val subset"
+        )
     excluded = set(excluded_sequence_ids)
     if len(excluded) != len(excluded_sequence_ids):
         raise ValueError("duplicate excluded source sequence identity")
@@ -219,7 +231,7 @@ def iter_source_sequences(
             raise ValueError(f"duplicate source dataset root: {resolved_root}")
         seen_roots.add(resolved_root)
         root_sequence_count = 0
-        for split in ("train", "val"):
+        for split in requested_splits:
             split_root = resolved_root / split
             if not split_root.is_dir():
                 if allow_partial_additional_roots:
@@ -265,7 +277,7 @@ def iter_source_sequences(
             raise ValueError(f"source root has no sequences: {resolved_root}")
     if allow_partial_additional_roots:
         discovered_splits = {split for _, split, _ in discovered}
-        missing_splits = sorted({"train", "val"} - discovered_splits)
+        missing_splits = sorted(set(requested_splits) - discovered_splits)
         if missing_splits:
             raise FileNotFoundError(
                 "aggregate source dataset is missing splits: "
@@ -495,6 +507,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-speed-sync-delta-sec", type=float, default=0.05)
     parser.add_argument("--minimum-contiguous-samples", type=int, default=64)
     parser.add_argument(
+        "--split",
+        choices=("train", "val"),
+        action="append",
+        dest="required_splits",
+        help=(
+            "Build only the selected split; may be repeated. The default "
+            "requires both train and val. Use '--split val' for an explicit "
+            "validation-only derivative."
+        ),
+    )
+    parser.add_argument(
         "--require-executed-success",
         action="store_true",
         help=(
@@ -522,12 +545,16 @@ def main() -> int:
         or args.minimum_contiguous_samples <= 1
     ):
         raise ValueError("invalid recurrent synchronization configuration")
+    required_splits = tuple(args.required_splits or ("train", "val"))
+    if len(set(required_splits)) != len(required_splits):
+        raise ValueError("duplicate recurrent split selection")
 
     results = []
     for source_root, split, source_dir in iter_source_sequences(
         source_roots,
         args.exclude_source_sequence_id,
         allow_partial_additional_roots=True,
+        required_splits=required_splits,
     ):
         metadata = build_sequence(
             source_dir=source_dir,
@@ -557,6 +584,7 @@ def main() -> int:
         "max_speed_sync_delta_sec": args.max_speed_sync_delta_sec,
         "minimum_contiguous_samples": args.minimum_contiguous_samples,
         "require_executed_success": args.require_executed_success,
+        "required_splits": list(required_splits),
         "excluded_source_sequence_ids": sorted(
             args.exclude_source_sequence_id
         ),

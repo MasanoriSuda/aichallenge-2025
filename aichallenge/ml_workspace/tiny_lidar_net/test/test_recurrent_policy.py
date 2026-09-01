@@ -246,6 +246,42 @@ def test_partial_roots_must_be_split_complete_in_aggregate(
     ]
 
 
+def test_validation_only_source_requires_explicit_split_selection(
+    tmp_path: Path,
+) -> None:
+    validation = tmp_path / "validation"
+    write_source_identity(validation, "val", "validation-val")
+
+    with pytest.raises(FileNotFoundError, match="aggregate source dataset"):
+        list(
+            iter_source_sequences(
+                [validation], allow_partial_additional_roots=True
+            )
+        )
+
+    discovered = list(
+        iter_source_sequences(
+            [validation],
+            allow_partial_additional_roots=True,
+            required_splits=("val",),
+        )
+    )
+    assert [(split, sequence.name) for _, split, sequence in discovered] == [
+        ("val", "validation-val"),
+    ]
+
+
+def test_required_split_selection_rejects_invalid_or_duplicate_values(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "source"
+    write_source_identity(root, "val", "validation-val")
+
+    for required_splits in ((), ("val", "val"), ("test",)):
+        with pytest.raises(ValueError, match="required splits"):
+            list(iter_source_sequences([root], required_splits=required_splits))
+
+
 def test_multiple_source_roots_reject_duplicate_sequence_identity(tmp_path: Path) -> None:
     first = tmp_path / "first"
     second = tmp_path / "second"

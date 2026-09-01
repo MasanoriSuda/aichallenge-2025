@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from lib.residual import (
+    RESIDUAL_HISTORY_FRAMES,
     RESIDUAL_INPUT_MODES,
     SignedMixtureSteeringResidualNet,
     SteeringResidualNet,
@@ -105,11 +106,33 @@ def test_scan_delta_dataset_uses_only_previous_sample_in_same_sequence(
 
 
 def test_residual_input_mode_contract_is_explicit():
-    assert RESIDUAL_INPUT_MODES == ("stateless", "scan_delta")
+    assert RESIDUAL_INPUT_MODES == (
+        "stateless",
+        "scan_delta",
+        "scan_history8",
+    )
     assert residual_input_channels("stateless") == 1
     assert residual_input_channels("scan_delta") == 2
+    assert residual_input_channels("scan_history8") == RESIDUAL_HISTORY_FRAMES
     with pytest.raises(ValueError, match="unsupported residual input mode"):
         compose_residual_input(np.zeros(2), np.zeros(2), "history-ish")
+
+
+def test_scan_history_dataset_pads_with_first_real_frame(tmp_path: Path):
+    sequence = make_sequence(tmp_path)
+    scans = np.load(sequence / "scans.npy")
+    scans[0] = 6.0
+    scans[1] = 12.0
+    np.save(sequence / "scans.npy", scans)
+    dataset = SteeringResidualSequenceDataset(
+        sequence, expected_split="train", input_mode="scan_history8"
+    )
+    first, _ = dataset[0]
+    second, _ = dataset[1]
+    assert first.shape == (RESIDUAL_HISTORY_FRAMES, 750)
+    np.testing.assert_allclose(first, 0.2)
+    np.testing.assert_allclose(second[:-1], 0.2)
+    np.testing.assert_allclose(second[-1], 0.4)
 
 
 def test_residual_target_does_not_use_diagnostic_reference_teacher(tmp_path: Path):
@@ -140,6 +163,14 @@ def test_residual_model_is_exactly_zero_before_training():
 def test_signed_mixture_is_exactly_zero_before_training():
     model = SignedMixtureSteeringResidualNet(input_dim=750, input_channels=2)
     output = model(torch.rand(4, 2, 750))
+    torch.testing.assert_close(output, torch.zeros(4), rtol=0.0, atol=0.0)
+
+
+def test_history_signed_mixture_is_exactly_zero_before_training():
+    model = SignedMixtureSteeringResidualNet(
+        input_dim=750, input_channels=RESIDUAL_HISTORY_FRAMES
+    )
+    output = model(torch.rand(4, RESIDUAL_HISTORY_FRAMES, 750))
     torch.testing.assert_close(output, torch.zeros(4), rtol=0.0, atol=0.0)
 
 

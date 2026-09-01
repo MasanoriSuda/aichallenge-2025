@@ -18,7 +18,8 @@ RESIDUAL_TARGET_FILES = (
     "reference_steers.npy",
     "steering_deltas.npy",
 )
-RESIDUAL_INPUT_MODES = ("stateless", "scan_delta")
+RESIDUAL_HISTORY_FRAMES = 8
+RESIDUAL_INPUT_MODES = ("stateless", "scan_delta", "scan_history8")
 RESIDUAL_HEAD_ARCHITECTURES = ("binary_gate", "signed_mixture")
 
 
@@ -28,7 +29,38 @@ def residual_input_channels(input_mode: str) -> int:
             f"unsupported residual input mode: {input_mode}; "
             f"expected one of {RESIDUAL_INPUT_MODES}"
         )
-    return 1 if input_mode == "stateless" else 2
+    return {
+        "stateless": 1,
+        "scan_delta": 2,
+        "scan_history8": RESIDUAL_HISTORY_FRAMES,
+    }[input_mode]
+
+
+def compose_residual_history_input(
+    scan_history: np.ndarray,
+    input_mode: str,
+) -> np.ndarray:
+    """Build one residual input without inventing or crossing history."""
+    history = np.asarray(scan_history, dtype=np.float32)
+    if history.ndim != 2 or history.shape[0] == 0 or history.shape[1] == 0:
+        raise ValueError("residual scan history must be a non-empty 2D array")
+    channels = residual_input_channels(input_mode)
+    current = history[-1]
+    if input_mode == "stateless":
+        return current
+    if input_mode == "scan_delta":
+        previous = current if history.shape[0] == 1 else history[-2]
+        return np.stack((current, current - previous)).astype(
+            np.float32, copy=False
+        )
+
+    retained = history[-channels:]
+    if retained.shape[0] < channels:
+        padding = np.repeat(
+            retained[:1], channels - retained.shape[0], axis=0
+        )
+        retained = np.concatenate((padding, retained), axis=0)
+    return retained.astype(np.float32, copy=False)
 
 
 def compose_residual_input(
@@ -41,10 +73,9 @@ def compose_residual_input(
     previous = np.asarray(previous_scan, dtype=np.float32)
     if current.shape != previous.shape or current.ndim != 1:
         raise ValueError("residual scan inputs must be equal one-dimensional arrays")
-    if input_mode == "stateless":
-        return current
-    residual_input_channels(input_mode)
-    return np.stack((current, current - previous)).astype(np.float32, copy=False)
+    return compose_residual_history_input(
+        np.stack((previous, current)), input_mode
+    )
 
 
 class SteeringResidualSequenceDataset(ScanControlSequenceDataset):
@@ -143,9 +174,11 @@ class SteeringResidualSequenceDataset(ScanControlSequenceDataset):
             )
 
     def __getitem__(self, idx: int):
-        scan, _ = super().__getitem__(idx)
-        previous_scan = scan if idx == 0 else self.scans[idx - 1]
-        model_input = compose_residual_input(scan, previous_scan, self.input_mode)
+        history_frames = residual_input_channels(self.input_mode)
+        history_start = max(0, idx - history_frames + 1)
+        model_input = compose_residual_history_input(
+            self.scans[history_start:idx + 1], self.input_mode
+        )
         return model_input, np.float32(self.steering_deltas[idx])
 
 
@@ -202,12 +235,14 @@ class ResidualInputSequenceView(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx: int):
-        current_scan, target = self.dataset[idx]
-        previous_scan = (
-            current_scan if idx == 0 else self.dataset[idx - 1][0]
+        _, target = self.dataset[idx]
+        history_frames = residual_input_channels(self.input_mode)
+        history_start = max(0, idx - history_frames + 1)
+        history = np.stack(
+            [self.dataset[index][0] for index in range(history_start, idx + 1)]
         )
         return (
-            compose_residual_input(current_scan, previous_scan, self.input_mode),
+            compose_residual_history_input(history, self.input_mode),
             target,
         )
 
@@ -257,8 +292,8 @@ class SteeringResidualNet(nn.Module):
             raise ValueError("input_dim must be positive")
         if not np.isfinite(max_abs_delta_rad) or max_abs_delta_rad <= 0.0:
             raise ValueError("max_abs_delta_rad must be finite and positive")
-        if input_channels not in (1, 2):
-            raise ValueError("input_channels must be 1 or 2")
+        if input_channels not in (1, 2, RESIDUAL_HISTORY_FRAMES):
+            raise ValueError("unsupported residual input channel count")
         self.max_abs_delta_rad = float(max_abs_delta_rad)
         self.input_channels = int(input_channels)
         self.conv1 = nn.Conv1d(self.input_channels, 16, kernel_size=10, stride=4)
@@ -325,8 +360,8 @@ class SignedMixtureSteeringResidualNet(nn.Module):
             raise ValueError("input_dim must be positive")
         if not np.isfinite(max_abs_delta_rad) or max_abs_delta_rad <= 0.0:
             raise ValueError("max_abs_delta_rad must be finite and positive")
-        if input_channels not in (1, 2):
-            raise ValueError("input_channels must be 1 or 2")
+        if input_channels not in (1, 2, RESIDUAL_HISTORY_FRAMES):
+            raise ValueError("unsupported residual input channel count")
         self.max_abs_delta_rad = float(max_abs_delta_rad)
         self.input_channels = int(input_channels)
         self.conv1 = nn.Conv1d(self.input_channels, 16, kernel_size=10, stride=4)

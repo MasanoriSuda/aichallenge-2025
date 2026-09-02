@@ -19,6 +19,9 @@ from tiny_lidar_net_controller.longitudinal_safety import (
 from tiny_lidar_net_controller.recurrent_shadow_executor import (
     LatestWinsRecurrentShadowExecutor,
 )
+from tiny_lidar_net_controller.recurrent_shadow_process import (
+    RecurrentShadowSubprocessEvaluator,
+)
 from tiny_lidar_net_controller.tiny_lidar_net_controller_core import TinyLidarNetCore
 
 
@@ -521,21 +524,50 @@ class TinyLidarNetNode(Node):
         self.last_log_recurrent_authority_clipped_count = 0
         self.recurrent_authority_corrections = []
         self.recurrent_shadow_executor = None
-        self.recurrent_async_inference_times = []
-        if (
+        self.recurrent_shadow_process_identity = None
+        self.defer_recurrent_shadow = bool(
             self.core.recurrent_shadow_model is not None
             and not self.core.recurrent_authority_enabled
-        ):
-            self.recurrent_shadow_executor = (
-                LatestWinsRecurrentShadowExecutor(
-                    self.core.evaluate_recurrent_shadow_sample,
-                    max_result_age_sec=self.sensor_timeout_sec,
+        )
+        self.recurrent_async_inference_times = []
+        if self.defer_recurrent_shadow:
+            recurrent_evaluator = None
+            try:
+                recurrent_evaluator = RecurrentShadowSubprocessEvaluator(
+                    checkpoint_path=recurrent_shadow_ckpt_path,
+                    expected_sha256=recurrent_shadow_expected_sha256,
+                    expected_runtime_config=recurrent_runtime_config,
+                    response_timeout_sec=self.sensor_timeout_sec,
                 )
-            )
-            self.get_logger().info(
-                "Recurrent shadow execution: async-latest-wins, "
-                "authority=disabled, command_path=isolated"
-            )
+                self.recurrent_shadow_process_identity = (
+                    recurrent_evaluator.identity
+                )
+                self.recurrent_shadow_executor = (
+                    LatestWinsRecurrentShadowExecutor(
+                        recurrent_evaluator,
+                        max_result_age_sec=self.sensor_timeout_sec,
+                    )
+                )
+                identity = self.recurrent_shadow_process_identity
+                self.get_logger().info(
+                    "Recurrent shadow execution: process-async-latest-wins, "
+                    "authority=disabled, command_path=isolated, "
+                    f"worker_pid={identity.pid}, "
+                    "worker_openblas_threads="
+                    f"{identity.openblas_threads}, "
+                    f"artifact_sha256={identity.sha256}, "
+                    f"artifact_contract={identity.artifact_contract}, "
+                    "loaded_parameters="
+                    f"{identity.loaded_parameter_count}"
+                )
+            except Exception as exc:
+                if recurrent_evaluator is not None:
+                    recurrent_evaluator.close()
+                self.recurrent_shadow_error_count += 1
+                self.get_logger().error(
+                    "Recurrent shadow process unavailable; production "
+                    f"command remains active without observation: {exc}"
+                )
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -586,9 +618,7 @@ class TinyLidarNetNode(Node):
             accel, steer = self.core.process(
                 ranges,
                 self._fresh_wheel_speed(),
-                defer_recurrent_shadow=(
-                    self.recurrent_shadow_executor is not None
-                ),
+                defer_recurrent_shadow=self.defer_recurrent_shadow,
             )
             if self.core.spatial_shadow_model is not None:
                 if self.core.last_spatial_shadow_admitted:
@@ -1047,6 +1077,7 @@ class TinyLidarNetNode(Node):
                         )
                         recurrent_status += (
                             " recurrent_async=1"
+                            " recurrent_async_process=1"
                             " recurrent_async_submitted="
                             f"{async_stats['submitted']}"
                             " recurrent_async_completed="

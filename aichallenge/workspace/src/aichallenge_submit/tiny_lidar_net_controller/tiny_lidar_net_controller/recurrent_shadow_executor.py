@@ -127,6 +127,11 @@ class LatestWinsRecurrentShadowExecutor:
                 self._dropped_count += 1
             self._condition.notify_all()
         self._thread.join(timeout=max(0.0, float(timeout_sec)))
+        close_evaluator = getattr(self._evaluator, "close", None)
+        if callable(close_evaluator):
+            close_evaluator()
+        if self._thread.is_alive():
+            self._thread.join(timeout=max(0.0, float(timeout_sec)))
 
     def _run(self) -> None:
         while True:

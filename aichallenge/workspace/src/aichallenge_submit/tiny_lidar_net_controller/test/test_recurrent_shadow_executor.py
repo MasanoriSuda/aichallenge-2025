@@ -110,3 +110,60 @@ def test_reset_supersedes_running_result_without_reusing_hidden() -> None:
     finally:
         release.set()
         executor.close()
+
+
+def test_executor_closes_owned_evaluator() -> None:
+    class ClosableEvaluator:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def __call__(self, sample, hidden):
+            return _evaluation(float(sample.conv5_features[0, 0]))
+
+        def close(self) -> None:
+            self.closed = True
+
+    evaluator = ClosableEvaluator()
+    executor = LatestWinsRecurrentShadowExecutor(
+        evaluator, max_result_age_sec=2.0
+    )
+    executor.close()
+    assert evaluator.closed
+
+
+def test_inference_failure_remains_diagnostic_and_resets_hidden() -> None:
+    call_count = 0
+
+    def evaluate(sample, hidden):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            raise RuntimeError("worker unavailable")
+        return _evaluation(float(sample.conv5_features[0, 0]))
+
+    executor = LatestWinsRecurrentShadowExecutor(
+        evaluate, max_result_age_sec=2.0
+    )
+    try:
+        executor.submit(1, _sample(1.0))
+        deadline = time.monotonic() + 2.0
+        completions = []
+        while not completions and time.monotonic() < deadline:
+            completions.extend(executor.drain_completed())
+            time.sleep(0.01)
+        assert completions[0].status == "ok"
+
+        executor.submit(2, _sample(2.0))
+        deadline = time.monotonic() + 2.0
+        completions = []
+        while not completions and time.monotonic() < deadline:
+            completions.extend(executor.drain_completed())
+            time.sleep(0.01)
+        assert completions[0].status.startswith(
+            "inference-error:RuntimeError:worker unavailable"
+        )
+        assert completions[0].evaluation is None
+        assert executor.stats()["errors"] == 1
+        assert executor.stats()["resets"] == 1
+    finally:
+        executor.close()

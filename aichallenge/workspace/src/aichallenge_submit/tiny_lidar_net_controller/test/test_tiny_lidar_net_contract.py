@@ -14,6 +14,9 @@ from tiny_lidar_net_controller.model.tinylidarnet import (
     SteeringResidualNetNp,
     TinyLidarNetNp,
 )
+from tiny_lidar_net_controller.recurrent_shadow_process import (
+    RecurrentShadowSubprocessEvaluator,
+)
 
 
 PACKAGE_ROOT = Path(__file__).parents[1]
@@ -385,6 +388,80 @@ def test_deferred_recurrent_shadow_is_observation_only(tmp_path: Path) -> None:
         0.03, abs=1e-6
     )
     assert shadow.recurrent_shadow_hidden is None
+
+
+def test_recurrent_shadow_subprocess_has_exact_identity_and_one_thread(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(
+        tmp_path,
+        hidden_dim=7,
+        self_described=True,
+    )
+    expected_sha256 = hashlib.sha256(
+        recurrent_checkpoint.read_bytes()
+    ).hexdigest()
+    shadow = TinyLidarNetCore(
+        input_dim=750,
+        output_dim=2,
+        architecture="normal",
+        ckpt_path=str(CHECKPOINT),
+        acceleration=0.6,
+        control_mode="fixed_lidar_brake",
+        max_range=30.0,
+        spatial_shadow_ckpt_path=str(SPATIAL_CHECKPOINT),
+        spatial_shadow_expected_sha256=SPATIAL_CHECKPOINT_SHA256,
+        spatial_shadow_use_base_steering=True,
+        spatial_shadow_max_abs_delta_rad=1.2,
+        spatial_authority_enabled=True,
+        spatial_authority_max_abs_delta_rad=1.2,
+        recurrent_shadow_ckpt_path=str(recurrent_checkpoint),
+        recurrent_shadow_expected_sha256=expected_sha256,
+    )
+    shadow.process(
+        np.full(750, 30.0, dtype=np.float32),
+        speed_mps=3.0,
+        defer_recurrent_shadow=True,
+    )
+    sample = shadow.last_recurrent_shadow_sample
+    assert sample is not None
+
+    evaluator = RecurrentShadowSubprocessEvaluator(
+        checkpoint_path=str(recurrent_checkpoint),
+        expected_sha256=expected_sha256,
+        expected_runtime_config=shadow.recurrent_shadow_runtime_config,
+        response_timeout_sec=2.0,
+    )
+    try:
+        assert evaluator.identity.pid > 0
+        assert evaluator.identity.openblas_threads == "1"
+        assert evaluator.identity.sha256 == expected_sha256
+        assert evaluator.identity.artifact_contract == "self-described-v1"
+        assert evaluator.identity.loaded_parameter_count == (
+            shadow.recurrent_shadow_loaded_parameter_count
+        )
+        evaluation = evaluator(sample, hidden=None)
+        assert evaluation.correction_rad == pytest.approx(0.03, abs=1e-6)
+        assert evaluation.next_hidden.shape == (1, 7)
+        assert np.all(np.isfinite(evaluation.next_hidden))
+    finally:
+        evaluator.close()
+
+
+def test_recurrent_shadow_subprocess_rejects_wrong_identity(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(
+        tmp_path,
+        self_described=True,
+    )
+    with pytest.raises(RuntimeError, match="SHA256 mismatch"):
+        RecurrentShadowSubprocessEvaluator(
+            checkpoint_path=str(recurrent_checkpoint),
+            expected_sha256="0" * 64,
+            expected_runtime_config={},
+            response_timeout_sec=2.0,
+        )
 
 
 def test_deferred_recurrent_shadow_rejects_authority(tmp_path: Path) -> None:

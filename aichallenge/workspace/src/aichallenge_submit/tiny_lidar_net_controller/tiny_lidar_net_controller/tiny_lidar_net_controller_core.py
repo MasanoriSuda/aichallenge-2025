@@ -25,8 +25,8 @@ from tiny_lidar_net_controller.longitudinal_safety import (
     LidarSpeedAwareLongitudinalSafety,
     SpeedAwareLongitudinalSafetyConfig,
 )
+from tiny_lidar_net_controller.recurrent_runtime import load_recurrent_runtime
 from tiny_lidar_net_controller.model.tinylidarnet import (
-    RecurrentSteeringAdapterNp,
     SpatialSteeringAdapterNp,
     SteeringResidualNetNp,
     TinyLidarNetNp,
@@ -428,17 +428,6 @@ class TinyLidarNetCore:
             self.last_spatial_shadow_status = "waiting-speed"
 
         if recurrent_shadow_ckpt_path:
-            self._verify_file_sha256(
-                recurrent_shadow_ckpt_path,
-                recurrent_shadow_expected_sha256,
-                "recurrent steering shadow",
-            )
-            recurrent_weights = self._read_normalized_weights(
-                recurrent_shadow_ckpt_path
-            )
-            artifact_config, recurrent_weights = (
-                RecurrentSteeringAdapterNp.split_artifact(recurrent_weights)
-            )
             configured_recurrent = {
                 "input_dim": self.input_dim,
                 "hidden_dim": recurrent_shadow_hidden_dim,
@@ -464,12 +453,12 @@ class TinyLidarNetCore:
                     spatial_shadow_max_abs_delta_rad
                 ),
             }
-            if artifact_config is None:
-                recurrent_config = configured_recurrent
-                self.recurrent_shadow_artifact_contract = "legacy-config"
-            else:
-                recurrent_config = artifact_config
-                self.recurrent_shadow_artifact_contract = "self-described-v1"
+            loaded_recurrent = load_recurrent_runtime(
+                recurrent_shadow_ckpt_path,
+                recurrent_shadow_expected_sha256,
+                legacy_runtime_config=configured_recurrent,
+            )
+            recurrent_config = loaded_recurrent.runtime_config
             if recurrent_config["input_dim"] != self.input_dim:
                 raise ValueError(
                     "recurrent artifact input dimension does not match production: "
@@ -482,14 +471,12 @@ class TinyLidarNetCore:
                     "command contract"
                 )
             self.recurrent_shadow_runtime_config = dict(recurrent_config)
-            self.recurrent_shadow_model = RecurrentSteeringAdapterNp(
-                **recurrent_config
+            self.recurrent_shadow_artifact_contract = (
+                loaded_recurrent.artifact_contract
             )
-            self.recurrent_shadow_loaded_parameter_count = self._load_model_weights(
-                self.recurrent_shadow_model,
-                recurrent_shadow_ckpt_path,
-                "recurrent steering shadow",
-                normalized_weights=recurrent_weights,
+            self.recurrent_shadow_model = loaded_recurrent.model
+            self.recurrent_shadow_loaded_parameter_count = (
+                loaded_recurrent.loaded_parameter_count
             )
             for key, production_value in self.model.params.items():
                 recurrent_value = (

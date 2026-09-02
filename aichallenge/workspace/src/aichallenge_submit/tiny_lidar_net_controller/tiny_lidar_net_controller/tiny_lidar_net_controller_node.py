@@ -524,45 +524,77 @@ class TinyLidarNetNode(Node):
         self.last_log_recurrent_authority_clipped_count = 0
         self.recurrent_authority_corrections = []
         self.recurrent_shadow_executor = None
+        self.recurrent_authority_process_evaluator = None
         self.recurrent_shadow_process_identity = None
         self.defer_recurrent_shadow = bool(
             self.core.recurrent_shadow_model is not None
             and not self.core.recurrent_authority_enabled
         )
         self.recurrent_async_inference_times = []
-        if self.defer_recurrent_shadow:
+        if self.core.recurrent_shadow_model is not None:
             recurrent_evaluator = None
             try:
                 recurrent_evaluator = RecurrentShadowSubprocessEvaluator(
                     checkpoint_path=recurrent_shadow_ckpt_path,
                     expected_sha256=recurrent_shadow_expected_sha256,
                     expected_runtime_config=recurrent_runtime_config,
-                    response_timeout_sec=self.sensor_timeout_sec,
+                    response_timeout_sec=(
+                        watchdog_period_sec
+                        if self.core.recurrent_authority_enabled
+                        else self.sensor_timeout_sec
+                    ),
                 )
                 self.recurrent_shadow_process_identity = (
                     recurrent_evaluator.identity
                 )
-                self.recurrent_shadow_executor = (
-                    LatestWinsRecurrentShadowExecutor(
-                        recurrent_evaluator,
-                        max_result_age_sec=self.sensor_timeout_sec,
-                    )
-                )
                 identity = self.recurrent_shadow_process_identity
-                self.get_logger().info(
-                    "Recurrent shadow execution: process-async-latest-wins, "
-                    "authority=disabled, command_path=isolated, "
-                    f"worker_pid={identity.pid}, "
-                    "worker_openblas_threads="
-                    f"{identity.openblas_threads}, "
-                    f"artifact_sha256={identity.sha256}, "
-                    f"artifact_contract={identity.artifact_contract}, "
-                    "loaded_parameters="
-                    f"{identity.loaded_parameter_count}"
-                )
+                if self.core.recurrent_authority_enabled:
+                    self.core.bind_recurrent_authority_evaluator(
+                        recurrent_evaluator
+                    )
+                    self.recurrent_authority_process_evaluator = (
+                        recurrent_evaluator
+                    )
+                    self.get_logger().info(
+                        "Recurrent authority execution: "
+                        "process-synchronous-current-sample, "
+                        "delayed_result_authority=forbidden, "
+                        "response_deadline_sec="
+                        f"{watchdog_period_sec:.6f}, "
+                        f"worker_pid={identity.pid}, "
+                        "worker_openblas_threads="
+                        f"{identity.openblas_threads}, "
+                        f"artifact_sha256={identity.sha256}, "
+                        f"artifact_contract={identity.artifact_contract}, "
+                        "loaded_parameters="
+                        f"{identity.loaded_parameter_count}"
+                    )
+                else:
+                    self.recurrent_shadow_executor = (
+                        LatestWinsRecurrentShadowExecutor(
+                            recurrent_evaluator,
+                            max_result_age_sec=self.sensor_timeout_sec,
+                        )
+                    )
+                    self.get_logger().info(
+                        "Recurrent shadow execution: "
+                        "process-async-latest-wins, authority=disabled, "
+                        "command_path=isolated, "
+                        f"worker_pid={identity.pid}, "
+                        "worker_openblas_threads="
+                        f"{identity.openblas_threads}, "
+                        f"artifact_sha256={identity.sha256}, "
+                        f"artifact_contract={identity.artifact_contract}, "
+                        "loaded_parameters="
+                        f"{identity.loaded_parameter_count}"
+                    )
             except Exception as exc:
                 if recurrent_evaluator is not None:
                     recurrent_evaluator.close()
+                if self.core.recurrent_authority_enabled:
+                    raise RuntimeError(
+                        "recurrent authority process unavailable"
+                    ) from exc
                 self.recurrent_shadow_error_count += 1
                 self.get_logger().error(
                     "Recurrent shadow process unavailable; production "
@@ -1156,6 +1188,9 @@ class TinyLidarNetNode(Node):
         if self.recurrent_shadow_executor is not None:
             self.recurrent_shadow_executor.close()
             self.recurrent_shadow_executor = None
+        if self.recurrent_authority_process_evaluator is not None:
+            self.recurrent_authority_process_evaluator.close()
+            self.recurrent_authority_process_evaluator = None
         return super().destroy_node()
 
 

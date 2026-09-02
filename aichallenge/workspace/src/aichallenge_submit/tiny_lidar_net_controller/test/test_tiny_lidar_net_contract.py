@@ -464,6 +464,67 @@ def test_recurrent_shadow_subprocess_rejects_wrong_identity(
         )
 
 
+def test_recurrent_authority_uses_current_sample_subprocess(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(
+        tmp_path,
+        hidden_dim=7,
+        correction_rad=0.03,
+        self_described=True,
+    )
+    expected_sha256 = hashlib.sha256(
+        recurrent_checkpoint.read_bytes()
+    ).hexdigest()
+    common = {
+        "input_dim": 750,
+        "output_dim": 2,
+        "architecture": "normal",
+        "ckpt_path": str(CHECKPOINT),
+        "acceleration": 0.6,
+        "control_mode": "fixed_lidar_brake",
+        "max_range": 30.0,
+        "spatial_shadow_ckpt_path": str(SPATIAL_CHECKPOINT),
+        "spatial_shadow_expected_sha256": SPATIAL_CHECKPOINT_SHA256,
+        "spatial_shadow_use_base_steering": True,
+        "spatial_shadow_max_abs_delta_rad": 1.2,
+        "spatial_authority_enabled": True,
+        "spatial_authority_max_abs_delta_rad": 1.2,
+        "recurrent_shadow_ckpt_path": str(recurrent_checkpoint),
+        "recurrent_shadow_expected_sha256": expected_sha256,
+    }
+    spatial = TinyLidarNetCore(**common)
+    authority = TinyLidarNetCore(
+        **common,
+        recurrent_authority_enabled=True,
+        recurrent_authority_max_abs_correction_rad=0.02,
+    )
+    evaluator = RecurrentShadowSubprocessEvaluator(
+        checkpoint_path=str(recurrent_checkpoint),
+        expected_sha256=expected_sha256,
+        expected_runtime_config=authority.recurrent_shadow_runtime_config,
+        response_timeout_sec=2.0,
+    )
+    try:
+        authority.bind_recurrent_authority_evaluator(evaluator)
+        scan = np.linspace(1.0, 30.0, 750, dtype=np.float32)
+        spatial_command = spatial.process(scan, speed_mps=3.0)
+        authority_command = authority.process(scan, speed_mps=3.0)
+
+        assert evaluator.identity.openblas_threads == "1"
+        assert authority_command[0] == pytest.approx(
+            spatial_command[0], abs=0.0
+        )
+        assert authority_command[1] == pytest.approx(
+            spatial_command[1] + 0.02, abs=1e-6
+        )
+        assert authority.last_recurrent_authority_applied
+        assert authority.recurrent_shadow_hidden is not None
+        assert authority.recurrent_shadow_hidden.shape == (1, 7)
+    finally:
+        evaluator.close()
+
+
 def test_deferred_recurrent_shadow_rejects_authority(tmp_path: Path) -> None:
     recurrent_checkpoint = _write_recurrent_shadow_checkpoint(tmp_path)
     shadow = TinyLidarNetCore(
@@ -551,6 +612,9 @@ def test_recurrent_authority_is_explicit_bounded_and_falls_back_to_spatial(
         recurrent_authority_enabled=True,
         recurrent_authority_max_abs_correction_rad=0.02,
     )
+    authority.bind_recurrent_authority_evaluator(
+        authority.evaluate_recurrent_shadow_sample
+    )
     scan = np.linspace(1.0, 30.0, 750, dtype=np.float32)
     baseline_command = baseline.process(scan, speed_mps=3.0)
     authority_command = authority.process(scan, speed_mps=3.0)
@@ -570,6 +634,109 @@ def test_recurrent_authority_is_explicit_bounded_and_falls_back_to_spatial(
     assert fallback_command == pytest.approx(fresh_spatial_command, abs=0.0)
     assert not authority.last_recurrent_authority_applied
     assert not authority.last_recurrent_authority_clipped
+
+
+def test_recurrent_authority_requires_bound_current_sample_evaluator(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(
+        tmp_path, correction_rad=0.03
+    )
+    common = {
+        "input_dim": 750,
+        "output_dim": 2,
+        "architecture": "normal",
+        "ckpt_path": str(CHECKPOINT),
+        "acceleration": 0.6,
+        "control_mode": "fixed_lidar_brake",
+        "max_range": 30.0,
+        "spatial_shadow_ckpt_path": str(SPATIAL_CHECKPOINT),
+        "spatial_shadow_expected_sha256": SPATIAL_CHECKPOINT_SHA256,
+        "spatial_shadow_use_base_steering": True,
+        "spatial_shadow_max_abs_delta_rad": 1.2,
+        "spatial_authority_enabled": True,
+        "spatial_authority_max_abs_delta_rad": 1.2,
+        "recurrent_shadow_ckpt_path": str(recurrent_checkpoint),
+        "recurrent_shadow_expected_sha256": hashlib.sha256(
+            recurrent_checkpoint.read_bytes()
+        ).hexdigest(),
+    }
+    spatial = TinyLidarNetCore(**common)
+    authority = TinyLidarNetCore(
+        **common,
+        recurrent_authority_enabled=True,
+        recurrent_authority_max_abs_correction_rad=0.02,
+    )
+    scan = np.linspace(1.0, 30.0, 750, dtype=np.float32)
+
+    assert authority.process(scan, speed_mps=3.0) == pytest.approx(
+        spatial.process(scan, speed_mps=3.0), abs=0.0
+    )
+    assert authority.last_recurrent_shadow_status.startswith(
+        "inference-error:RuntimeError:recurrent authority evaluator is not bound"
+    )
+    assert not authority.last_recurrent_authority_applied
+
+    authority.bind_recurrent_authority_evaluator(
+        authority.evaluate_recurrent_shadow_sample
+    )
+    with pytest.raises(ValueError, match="already bound"):
+        authority.bind_recurrent_authority_evaluator(
+            authority.evaluate_recurrent_shadow_sample
+        )
+
+    command = authority.process(scan, speed_mps=3.0)
+    spatial_command = spatial.process(scan, speed_mps=3.0)
+    assert command[0] == pytest.approx(spatial_command[0], abs=0.0)
+    assert command[1] == pytest.approx(
+        spatial_command[1] + 0.02, abs=1e-6
+    )
+    assert authority.last_recurrent_authority_applied
+
+
+def test_recurrent_authority_evaluator_failure_keeps_spatial_command(
+    tmp_path: Path,
+) -> None:
+    recurrent_checkpoint = _write_recurrent_shadow_checkpoint(tmp_path)
+    common = {
+        "input_dim": 750,
+        "output_dim": 2,
+        "architecture": "normal",
+        "ckpt_path": str(CHECKPOINT),
+        "acceleration": 0.6,
+        "control_mode": "fixed_lidar_brake",
+        "max_range": 30.0,
+        "spatial_shadow_ckpt_path": str(SPATIAL_CHECKPOINT),
+        "spatial_shadow_expected_sha256": SPATIAL_CHECKPOINT_SHA256,
+        "spatial_shadow_use_base_steering": True,
+        "spatial_shadow_max_abs_delta_rad": 1.2,
+        "spatial_authority_enabled": True,
+        "spatial_authority_max_abs_delta_rad": 1.2,
+        "recurrent_shadow_ckpt_path": str(recurrent_checkpoint),
+        "recurrent_shadow_expected_sha256": hashlib.sha256(
+            recurrent_checkpoint.read_bytes()
+        ).hexdigest(),
+    }
+    spatial = TinyLidarNetCore(**common)
+    authority = TinyLidarNetCore(
+        **common,
+        recurrent_authority_enabled=True,
+    )
+
+    def unavailable(_sample, _hidden):
+        raise TimeoutError("current-sample deadline exceeded")
+
+    authority.bind_recurrent_authority_evaluator(unavailable)
+    scan = np.linspace(1.0, 30.0, 750, dtype=np.float32)
+
+    assert authority.process(scan, speed_mps=3.0) == pytest.approx(
+        spatial.process(scan, speed_mps=3.0), abs=0.0
+    )
+    assert authority.last_recurrent_shadow_status.startswith(
+        "inference-error:TimeoutError:current-sample deadline exceeded"
+    )
+    assert not authority.last_recurrent_authority_applied
+    assert authority.recurrent_shadow_hidden is None
 
 
 def test_recurrent_authority_requires_explicit_checkpoint() -> None:

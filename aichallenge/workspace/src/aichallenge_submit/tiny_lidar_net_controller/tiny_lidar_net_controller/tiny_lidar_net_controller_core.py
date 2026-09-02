@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import hashlib
 import logging
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
@@ -198,6 +198,12 @@ class TinyLidarNetCore:
         self.last_recurrent_authority_correction_rad = 0.0
         self.last_recurrent_authority_applied = False
         self.last_recurrent_authority_clipped = False
+        self._recurrent_authority_evaluator: Optional[
+            Callable[
+                [RecurrentShadowSample, Optional[np.ndarray]],
+                RecurrentShadowEvaluation,
+            ]
+        ] = None
 
         if not isinstance(self.input_dim, int) or self.input_dim <= 0:
             raise ValueError("input_dim must be a positive integer")
@@ -529,6 +535,31 @@ class TinyLidarNetCore:
                 f"{label} SHA256 mismatch: expected {expected}, got {actual}"
             )
 
+    def bind_recurrent_authority_evaluator(
+        self,
+        evaluator: Callable[
+            [RecurrentShadowSample, Optional[np.ndarray]],
+            RecurrentShadowEvaluation,
+        ],
+    ) -> None:
+        """Bind the sole current-sample evaluator used by recurrent authority.
+
+        Observation may still use the local model or the asynchronous shadow
+        executor.  Steering authority is intentionally different: production
+        must bind its resource-isolated evaluator before the first callback,
+        so the historical in-process authority route cannot be selected by an
+        experiment flag alone.
+        """
+        if not self.recurrent_authority_enabled:
+            raise ValueError(
+                "recurrent authority evaluator requires enabled authority"
+            )
+        if not callable(evaluator):
+            raise TypeError("recurrent authority evaluator must be callable")
+        if self._recurrent_authority_evaluator is not None:
+            raise ValueError("recurrent authority evaluator is already bound")
+        self._recurrent_authority_evaluator = evaluator
+
     def process(
         self,
         ranges: np.ndarray,
@@ -665,7 +696,14 @@ class TinyLidarNetCore:
                 self.last_recurrent_shadow_sample = sample
                 self.last_recurrent_shadow_sample_status = "ok"
                 if not defer_recurrent_shadow:
-                    evaluation = self.evaluate_recurrent_shadow_sample(
+                    evaluator = self.evaluate_recurrent_shadow_sample
+                    if self.recurrent_authority_enabled:
+                        evaluator = self._recurrent_authority_evaluator
+                        if evaluator is None:
+                            raise RuntimeError(
+                                "recurrent authority evaluator is not bound"
+                            )
+                    evaluation = evaluator(
                         sample, self.recurrent_shadow_hidden
                     )
                     self.record_recurrent_shadow_evaluation(

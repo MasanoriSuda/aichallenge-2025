@@ -33,6 +33,8 @@
 ## docs/guide/ 一覧
 
 - `beginner-deck.marp.md` — リポジトリの構造と基本操作を10分で把握する初学者向け Marp スライド。
+- `e2e-preliminary-submission.marp.md` — E2E予選提出用の証拠連結済みMarp下書き。
+- `e2e-video-checklist.md` — packaged productionの走行動画を再現・採否判定する手順。
 
 ## docs/interface/ 一覧
 

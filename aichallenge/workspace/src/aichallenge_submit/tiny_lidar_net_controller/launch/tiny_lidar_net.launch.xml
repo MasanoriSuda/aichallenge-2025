@@ -27,9 +27,6 @@
         name="tiny_lidar_net_controller_node"
         output="screen">
 
-    <!-- Batch-one NumPy inference is faster and has a bounded tail with one
-         OpenBLAS worker.  Scope this to the ML node; do not alter MPC peers. -->
-    <env name="OPENBLAS_NUM_THREADS" value="1"/>
     <param from="$(var tiny_lidar_net_node_param)"/>
     <param name="model.ckpt_path" value="$(var ckpt_path)"/>
     <param name="model.residual_ckpt_path" value="$(var residual_ckpt_path)"/>

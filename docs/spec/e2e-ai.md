@@ -220,9 +220,25 @@ docker compose run --rm --no-deps autoware-command \
     /aichallenge/ml_workspace/tiny_lidar_net/checkpoints/20260901_055824/candidate.npy \
   --expected-checkpoint-sha256 \
     de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa \
+  --expected-residual-checkpoint-path '' \
+  --expected-spatial-checkpoint-path \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+  --spatial-checkpoint-file \
+    /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+  --expected-spatial-checkpoint-sha256 \
+    f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c \
+  --expected-spatial-use-base-steering true \
+  --expected-spatial-authority-enabled true \
+  --expected-spatial-authority-max-abs-delta-rad 1.2 \
+  --expected-recurrent-checkpoint-path '' \
+  --expected-recurrent-authority-enabled false \
   --output /output/<run>/e2e-competition-analysis.json \
   --fail-on-rejection
 ```
+
+提出証拠ではraw checkpointだけでなくspatial artifactとauthority状態、recurrent無効状態を
+すべて期待値として指定する。省略可能な引数は旧run診断との互換用であり、提出identityの
+証明を緩めるためには使用しない。
 
 既定はpenalty 0件を要求する。診断目的で許容数を変える場合は
 `--max-penalty-count`を明示し、production昇格の結果と混同しない。
@@ -693,6 +709,9 @@ side commitmentを持つteacher候補を独立に設計・実行してからラ�
 反対側成立」を観測したが、同じ候補bankは成功runの候補を13.89--17.48%しか表現できない。
 zero-steer Stop suffixと反実仮想でないsensor viewが交絡するため、分類は
 `inconclusive-candidate-bank-misses-success`とし、label生成およびruntime入力を禁止する。
+
+readiness auditでは、混走motionだけでなくFinish、lap、penaltyを含む混走competition reportも
+独立に要求する。両方がpassでない限り`multi-vehicle-candidate`へ昇格しない。
 
 `audit_e2e_submission_readiness.py`による現在判定は
 `single-vehicle-candidate-only`である。単車走行と研究成果の提出材料には利用できるが、混走回避を

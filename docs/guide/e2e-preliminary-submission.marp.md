@@ -46,7 +46,7 @@ style: |
 - 地図・自己位置・V2XをE2E推論へ入れない
 - 2D LiDARから直接steeringを出す
 - 他車や障害物があっても停止・回避できる
-- 同じseedだけでなく未見配置でも再現する
+- 学習に使わない開始seedでも再現する
 
 </div>
 
@@ -77,7 +77,8 @@ LiDAR freshness / 前方距離 ────────────────�
 
 - 横方向authorityはML出力のみ
 - runtime許可入力: LiDAR、車輪速度
-- spatial adapterはbaseを壊さず、必要時だけ最大`1.2 rad`補正
+- spatial adapterは全scanで補正を推論し、normal anchorで通常時を0付近へ抑える
+- 最終操舵: `clip(base steering + spatial correction, -0.64, +0.64 rad)`
 - watchdogはstale LiDAR時に前進指令を保持しない
 - production: `0.8 m/s²`、速度上限`4.6 m/s`
 
@@ -130,7 +131,7 @@ LiDAR freshness / 前方距離 ────────────────�
 
 - egoがNPCへ接近
 - ML steeringで空間を選択
-- 必要時はLiDAR制動
+- 縦安全の作動状況を併記し、作動した場合だけLiDAR制動と表記
 - 接触・wall・stallなしで3周完走
 
 </div>
@@ -143,12 +144,12 @@ LiDAR freshness / 前方距離 ────────────────�
 | Gate | 条件 | 結果 |
 |---|---|---:|
 | packaged単車 | 3周、既定設定 | **252.230秒 / penalty 0 / stall 0** |
-| NPC seed 2035 | 3周、未見配置 | **256.488秒 / 1位 / penalty 0** |
-| NPC seed 2036 | 3周、独立seed | **255.873秒 / 1位 / penalty 0** |
+| NPC seed 2035 | 3周、学習未使用の開始seed | **256.488秒 / 1位 / penalty 0** |
+| NPC seed 2036 | 3周、学習未使用の開始seed | **255.873秒 / 1位 / penalty 0** |
 | packaged NPC seed 2037 | 環境overrideなし | **255.648秒 / 1位 / penalty 0** |
-| controllable peer | 3台相互作用 | **不合格: 長時間固着** |
+| controllable peer | 2 MPC peer + 1 E2E student | **不合格: low-speed 54.914秒** |
 
-- NPC 3 seedの合計差は`0.840秒`
+- NPC 3 seedの3周合計タイム最大–最小幅は`0.840秒`
 - runtime推論error/staleなし、モデルSHA一致
 - peer不合格は提出で隠さず、動的相互作用の残課題として扱う
 

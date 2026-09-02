@@ -132,9 +132,25 @@ python3 analyze_e2e_competition.py /output/<run> \
   --checkpoint-file checkpoints/20260901_055824/candidate.npy \
   --expected-checkpoint-sha256 \
     de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa \
+  --expected-residual-checkpoint-path '' \
+  --expected-spatial-checkpoint-path \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+  --spatial-checkpoint-file \
+    /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+  --expected-spatial-checkpoint-sha256 \
+    f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c \
+  --expected-spatial-use-base-steering true \
+  --expected-spatial-authority-enabled true \
+  --expected-spatial-authority-max-abs-delta-rad 1.2 \
+  --expected-recurrent-checkpoint-path '' \
+  --expected-recurrent-authority-enabled false \
   --output /output/<run>/e2e-competition-analysis.json \
   --fail-on-rejection
 ```
+
+提出動画とproduction freezeではraw artifactだけでなく、spatial path/SHA/authorityと
+recurrent無効状態まで同じコマンドで固定する。これらの期待値を省略した解析はhistorical runの
+診断には使えるが、提出動画のidentity証明としては扱わない。
 
 固定加速度を比較する場合は、既定値を直接編集せずrunごとに明示します。値はstartup logと
 competition analysisへ残るため、異なる加速度の結果を同じ設定として扱いません。
@@ -605,9 +621,10 @@ python3 audit_future_occupancy_maneuver.py \
 
 提出候補をfreezeするときは、単車合格と混走合格を同じ意味に扱わない。
 `audit_e2e_submission_readiness.py`へartifact、単車competition report、混走motion report、
-privileged oracleを渡すと、`reject`、`single-vehicle-candidate-only`、
+混走competition report、privileged oracleを渡すと、`reject`、`single-vehicle-candidate-only`、
 `multi-vehicle-candidate`のいずれかを出力する。`--require-multivehicle`を付けた場合、
-single-onlyはexit 3でfail-closedとなる。
+single-onlyはexit 3でfail-closedとなる。混走はmotionとcompetitionの両方がpassでなければ
+昇格しないため、走行継続だけで未完走・penaltyありのrunを合格扱いしない。
 
 ```bash
 python3 audit_e2e_submission_readiness.py \
@@ -617,6 +634,7 @@ python3 audit_e2e_submission_readiness.py \
   --expected-spatial-sha256 <sha256> \
   --single-competition /output/<single>/e2e-competition-analysis.json \
   --peer-motion /output/<peer>/d3/e2e-run-analysis.json \
+  --peer-competition /output/<peer>/e2e-competition-analysis.json \
   --future-oracle /output/<peer>/future-occupancy-maneuver-audit.json \
   --output /output/<peer>/e2e-submission-readiness.json
 ```

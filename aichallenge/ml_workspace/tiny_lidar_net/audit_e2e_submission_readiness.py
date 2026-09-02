@@ -24,6 +24,18 @@ def read_json(path: Path) -> dict:
     return value
 
 
+def competition_gate_pass(report: dict) -> bool:
+    domains = report.get("domains", [])
+    return bool(
+        report.get("status") == "pass"
+        and domains
+        and all(
+            isinstance(domain, dict) and domain.get("status") == "pass"
+            for domain in domains
+        )
+    )
+
+
 def audit_submission_readiness(
     *,
     raw_checkpoint: Path,
@@ -32,6 +44,7 @@ def audit_submission_readiness(
     expected_spatial_sha256: str,
     single_competition: dict,
     peer_motion: dict,
+    peer_competition: dict,
     future_oracle: dict,
 ) -> dict:
     raw_sha = sha256_file(raw_checkpoint)
@@ -41,13 +54,12 @@ def audit_submission_readiness(
         and spatial_sha == expected_spatial_sha256
     )
 
-    single_domains = single_competition.get("domains", [])
-    single_pass = bool(
-        single_competition.get("status") == "pass"
-        and single_domains
-        and all(domain.get("status") == "pass" for domain in single_domains)
+    single_pass = competition_gate_pass(single_competition)
+    peer_motion_pass = bool(
+        peer_motion.get("admission", {}).get("result") == "pass"
     )
-    peer_pass = bool(peer_motion.get("admission", {}).get("result") == "pass")
+    peer_competition_pass = competition_gate_pass(peer_competition)
+    peer_pass = peer_motion_pass and peer_competition_pass
     oracle_comparison = future_oracle.get("comparison", {})
     oracle_discriminates = bool(
         oracle_comparison.get("future_occupancy_discriminates_failure", False)
@@ -65,8 +77,10 @@ def audit_submission_readiness(
         reasons.append("production artifact identity mismatch")
     if not single_pass:
         reasons.append("single-vehicle competition Gate failed")
-    if artifact_identity_pass and single_pass and not peer_pass:
+    if artifact_identity_pass and single_pass and not peer_motion_pass:
         reasons.append("mixed-peer motion Gate failed")
+    if artifact_identity_pass and single_pass and not peer_competition_pass:
+        reasons.append("mixed-peer competition Gate failed")
     if not oracle_discriminates:
         reasons.append("privileged future-occupancy oracle is inconclusive")
     if oracle_label_permitted or oracle_runtime_permitted:
@@ -80,11 +94,13 @@ def audit_submission_readiness(
         classification = "single-vehicle-candidate-only"
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "classification": classification,
         "artifact_identity_pass": artifact_identity_pass,
         "single_vehicle_gate_pass": single_pass,
         "mixed_peer_gate_pass": peer_pass,
+        "mixed_peer_motion_gate_pass": peer_motion_pass,
+        "mixed_peer_competition_gate_pass": peer_competition_pass,
         "privileged_oracle": {
             "classification": oracle_comparison.get("classification"),
             "discriminates_failure": oracle_discriminates,
@@ -111,6 +127,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-spatial-sha256", required=True)
     parser.add_argument("--single-competition", type=Path, required=True)
     parser.add_argument("--peer-motion", type=Path, required=True)
+    parser.add_argument("--peer-competition", type=Path, required=True)
     parser.add_argument("--future-oracle", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--require-multivehicle", action="store_true")
@@ -124,6 +141,7 @@ def main() -> int:
         args.spatial_adapter,
         args.single_competition,
         args.peer_motion,
+        args.peer_competition,
         args.future_oracle,
     )
     missing = [str(path) for path in paths if not path.is_file()]
@@ -136,6 +154,7 @@ def main() -> int:
         expected_spatial_sha256=args.expected_spatial_sha256,
         single_competition=read_json(args.single_competition),
         peer_motion=read_json(args.peer_motion),
+        peer_competition=read_json(args.peer_competition),
         future_oracle=read_json(args.future_oracle),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)

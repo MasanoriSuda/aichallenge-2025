@@ -14,6 +14,13 @@ RUNTIME_CHECKPOINT = (
     "/aichallenge/workspace/install/tiny_lidar_net_controller/share/"
     "tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy"
 )
+RUNTIME_SPATIAL_CHECKPOINT = (
+    "/aichallenge/workspace/install/tiny_lidar_net_controller/share/"
+    "tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy"
+)
+SPATIAL_SHA256 = (
+    "f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c"
+)
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -69,6 +76,21 @@ def create_run(tmp_path: Path, domain: int = 1) -> Path:
                 "[INFO] [launch.user]:  - tiny_lidar_control_mode: fixed_lidar_brake",
                 "[INFO] [launch.user]:  - tiny_lidar_acceleration: 0.6",
                 "[INFO] [launch.user]:  - tiny_lidar_maximum_forward_speed_mps: 0.0",
+                "[INFO] [launch.user]:  - tiny_lidar_residual_ckpt_path: ",
+                "[INFO] [launch.user]:  - tiny_lidar_spatial_shadow_ckpt_path: "
+                f"{RUNTIME_SPATIAL_CHECKPOINT}",
+                "[INFO] [launch.user]:  - tiny_lidar_spatial_shadow_expected_sha256: "
+                f"{SPATIAL_SHA256}",
+                "[INFO] [launch.user]:  - "
+                "tiny_lidar_spatial_shadow_use_base_steering: true",
+                "[INFO] [launch.user]:  - "
+                "tiny_lidar_spatial_authority_enabled: true",
+                "[INFO] [launch.user]:  - "
+                "tiny_lidar_spatial_authority_max_abs_delta_rad: 1.2",
+                "[INFO] [launch.user]:  - "
+                "tiny_lidar_recurrent_shadow_ckpt_path: ",
+                "[INFO] [launch.user]:  - "
+                "tiny_lidar_recurrent_authority_enabled: false",
             )
         ),
         encoding="utf-8",
@@ -304,6 +326,129 @@ def test_checkpoint_hash_mismatch_fails(tmp_path):
 
     assert result["status"] == "fail"
     assert result["reasons"] == ["checkpoint-sha256-mismatch"]
+
+
+def test_spatial_checkpoint_hash_mismatch_fails(tmp_path):
+    run_dir = create_run(tmp_path)
+    checkpoint = tmp_path / "spatial.npy"
+    checkpoint.write_bytes(b"unexpected-spatial")
+
+    result = MODULE.analyze_competition(
+        run_dir,
+        [1],
+        spatial_checkpoint_file=checkpoint,
+        expected_spatial_checkpoint_sha256="0" * 64,
+    )
+
+    assert result["status"] == "fail"
+    assert result["reasons"] == ["spatial-checkpoint-sha256-mismatch"]
+
+
+def test_submission_runtime_binds_spatial_and_recurrent_contract(tmp_path):
+    run_dir = create_run(tmp_path)
+    spatial_checkpoint = tmp_path / "spatial.npy"
+    spatial_checkpoint.write_bytes(b"spatial-production")
+    spatial_sha = MODULE.sha256_file(spatial_checkpoint)
+    log_path = run_dir / "d1" / "autoware.log"
+    log_path.write_text(
+        log_path.read_text(encoding="utf-8").replace(
+            SPATIAL_SHA256, spatial_sha
+        ),
+        encoding="utf-8",
+    )
+
+    result = MODULE.analyze_competition(
+        run_dir,
+        [1],
+        expected_spatial_checkpoint_path=RUNTIME_SPATIAL_CHECKPOINT,
+        spatial_checkpoint_file=spatial_checkpoint,
+        expected_spatial_checkpoint_sha256=spatial_sha,
+        expected_residual_checkpoint_path="",
+        expected_spatial_use_base_steering=True,
+        expected_spatial_authority_enabled=True,
+        expected_spatial_authority_max_abs_delta_rad=1.2,
+        expected_recurrent_checkpoint_path="",
+        expected_recurrent_authority_enabled=False,
+    )
+
+    assert result["status"] == "pass"
+    assert result["spatial_checkpoint_artifact"]["sha256"] == spatial_sha
+    runtime = result["domains"][0]["runtime"]
+    assert runtime["spatial_authority_enabled"] is True
+    assert runtime["recurrent_checkpoint_path"] == ""
+    assert runtime["recurrent_authority_enabled"] is False
+
+
+def test_submission_runtime_rejects_disabled_spatial_authority(tmp_path):
+    run_dir = create_run(tmp_path)
+    log_path = run_dir / "d1" / "autoware.log"
+    log_path.write_text(
+        log_path.read_text(encoding="utf-8").replace(
+            "tiny_lidar_spatial_authority_enabled: true",
+            "tiny_lidar_spatial_authority_enabled: false",
+        ),
+        encoding="utf-8",
+    )
+
+    result = MODULE.analyze_competition(
+        run_dir,
+        [1],
+        expected_spatial_authority_enabled=True,
+    )
+
+    assert result["status"] == "fail"
+    assert (
+        "runtime-spatial-authority-enabled-mismatch"
+        in result["domains"][0]["reasons"]
+    )
+
+
+def test_submission_runtime_rejects_enabled_recurrent_authority(tmp_path):
+    run_dir = create_run(tmp_path)
+    log_path = run_dir / "d1" / "autoware.log"
+    log_path.write_text(
+        log_path.read_text(encoding="utf-8").replace(
+            "tiny_lidar_recurrent_authority_enabled: false",
+            "tiny_lidar_recurrent_authority_enabled: true",
+        ),
+        encoding="utf-8",
+    )
+
+    result = MODULE.analyze_competition(
+        run_dir,
+        [1],
+        expected_recurrent_authority_enabled=False,
+    )
+
+    assert result["status"] == "fail"
+    assert (
+        "runtime-recurrent-authority-enabled-mismatch"
+        in result["domains"][0]["reasons"]
+    )
+
+
+def test_submission_runtime_rejects_custom_residual_artifact(tmp_path):
+    run_dir = create_run(tmp_path)
+    log_path = run_dir / "d1" / "autoware.log"
+    log_path.write_text(
+        log_path.read_text(encoding="utf-8").replace(
+            "tiny_lidar_residual_ckpt_path: ",
+            "tiny_lidar_residual_ckpt_path: /tmp/custom-residual.npy",
+        ),
+        encoding="utf-8",
+    )
+
+    result = MODULE.analyze_competition(
+        run_dir,
+        [1],
+        expected_residual_checkpoint_path="",
+    )
+
+    assert result["status"] == "fail"
+    assert (
+        "runtime-residual-checkpoint-path-mismatch"
+        in result["domains"][0]["reasons"]
+    )
 
 
 def test_parse_domains_discovers_and_sorts_domain_directories(tmp_path):

@@ -21,9 +21,22 @@ MOTION_SCHEMA_VERSION = 2
 DETAIL_SCHEMA_VERSION = "v3"
 SUMMARY_SCHEMA_VERSION = "v2"
 DOMAIN_PATTERN = re.compile(r"^d([1-9][0-9]*)$")
+RUNTIME_LAUNCH_KEYS = (
+    "tiny_lidar_ckpt_path",
+    "tiny_lidar_control_mode",
+    "tiny_lidar_acceleration",
+    "tiny_lidar_maximum_forward_speed_mps",
+    "tiny_lidar_residual_ckpt_path",
+    "tiny_lidar_spatial_shadow_ckpt_path",
+    "tiny_lidar_spatial_shadow_expected_sha256",
+    "tiny_lidar_spatial_shadow_use_base_steering",
+    "tiny_lidar_spatial_authority_enabled",
+    "tiny_lidar_spatial_authority_max_abs_delta_rad",
+    "tiny_lidar_recurrent_shadow_ckpt_path",
+    "tiny_lidar_recurrent_authority_enabled",
+)
 LAUNCH_VALUE_PATTERN = re.compile(
-    r"-\s+(tiny_lidar_ckpt_path|tiny_lidar_control_mode|"
-    r"tiny_lidar_acceleration|tiny_lidar_maximum_forward_speed_mps):\s*(\S+)"
+    r"-\s+(" + "|".join(RUNTIME_LAUNCH_KEYS) + r"):\s*(\S*)\s*$"
 )
 
 
@@ -76,12 +89,7 @@ def result_detail_path(run_dir: Path, domain: int) -> Optional[Path]:
 
 
 def parse_runtime_provenance(log_path: Path) -> dict[str, Any]:
-    values: dict[str, set[str]] = {
-        "tiny_lidar_ckpt_path": set(),
-        "tiny_lidar_control_mode": set(),
-        "tiny_lidar_acceleration": set(),
-        "tiny_lidar_maximum_forward_speed_mps": set(),
-    }
+    values: dict[str, set[str]] = {key: set() for key in RUNTIME_LAUNCH_KEYS}
     try:
         lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError as exc:
@@ -94,35 +102,91 @@ def parse_runtime_provenance(log_path: Path) -> dict[str, Any]:
     conflicts = {
         key: sorted(found) for key, found in values.items() if len(found) > 1
     }
-    acceleration_values = values["tiny_lidar_acceleration"]
-    acceleration_mps2 = None
-    if len(acceleration_values) == 1:
+
+    def unique_value(key: str) -> Optional[str]:
+        found = values[key]
+        return next(iter(found)) if len(found) == 1 else None
+
+    def finite_float(key: str) -> Optional[float]:
+        found = values[key]
+        if len(found) != 1:
+            return None
         try:
-            acceleration_mps2 = float(next(iter(acceleration_values)))
-            if not math.isfinite(acceleration_mps2):
-                raise ValueError("non-finite acceleration")
+            parsed = float(next(iter(found)))
+            if not math.isfinite(parsed):
+                raise ValueError("non-finite value")
+            return parsed
         except ValueError:
-            conflicts["tiny_lidar_acceleration"] = sorted(
-                acceleration_values
-            )
-    maximum_speed_values = values["tiny_lidar_maximum_forward_speed_mps"]
-    maximum_forward_speed_mps = None
-    if len(maximum_speed_values) == 1:
-        try:
-            maximum_forward_speed_mps = float(next(iter(maximum_speed_values)))
-            if not math.isfinite(maximum_forward_speed_mps):
-                raise ValueError("non-finite maximum forward speed")
-        except ValueError:
-            conflicts["tiny_lidar_maximum_forward_speed_mps"] = sorted(
-                maximum_speed_values
-            )
+            conflicts[key] = sorted(found)
+            return None
+
+    def boolean_value(key: str) -> Optional[bool]:
+        found = values[key]
+        if len(found) != 1:
+            return None
+        text = next(iter(found)).lower()
+        if text == "true":
+            return True
+        if text == "false":
+            return False
+        conflicts[key] = sorted(found)
+        return None
+
     return {
-        "checkpoint_path": next(iter(values["tiny_lidar_ckpt_path"]), None),
-        "control_mode": next(iter(values["tiny_lidar_control_mode"]), None),
-        "acceleration_mps2": acceleration_mps2,
-        "maximum_forward_speed_mps": maximum_forward_speed_mps,
+        "checkpoint_path": unique_value("tiny_lidar_ckpt_path"),
+        "control_mode": unique_value("tiny_lidar_control_mode"),
+        "acceleration_mps2": finite_float("tiny_lidar_acceleration"),
+        "maximum_forward_speed_mps": finite_float(
+            "tiny_lidar_maximum_forward_speed_mps"
+        ),
+        "residual_checkpoint_path": unique_value(
+            "tiny_lidar_residual_ckpt_path"
+        ),
+        "spatial_checkpoint_path": unique_value(
+            "tiny_lidar_spatial_shadow_ckpt_path"
+        ),
+        "spatial_expected_sha256": unique_value(
+            "tiny_lidar_spatial_shadow_expected_sha256"
+        ),
+        "spatial_use_base_steering": boolean_value(
+            "tiny_lidar_spatial_shadow_use_base_steering"
+        ),
+        "spatial_authority_enabled": boolean_value(
+            "tiny_lidar_spatial_authority_enabled"
+        ),
+        "spatial_authority_max_abs_delta_rad": finite_float(
+            "tiny_lidar_spatial_authority_max_abs_delta_rad"
+        ),
+        "recurrent_checkpoint_path": unique_value(
+            "tiny_lidar_recurrent_shadow_ckpt_path"
+        ),
+        "recurrent_authority_enabled": boolean_value(
+            "tiny_lidar_recurrent_authority_enabled"
+        ),
         "conflicts": conflicts,
     }
+
+
+def validate_runtime_value(
+    *,
+    reasons: list[str],
+    actual: Any,
+    expected: Any,
+    reason_name: str,
+    tolerance: Optional[float] = None,
+) -> None:
+    """Fail closed when an explicitly expected runtime value is absent or wrong."""
+    if expected is None:
+        return
+    if actual is None:
+        reasons.append(f"runtime-{reason_name}-missing")
+        return
+    if tolerance is not None:
+        if abs(float(actual) - float(expected)) > tolerance:
+            reasons.append(f"runtime-{reason_name}-mismatch")
+        return
+    if actual != expected:
+        reasons.append(f"runtime-{reason_name}-mismatch")
 
 
 def validate_motion(value: dict[str, Any]) -> list[str]:
@@ -182,6 +246,14 @@ def analyze_domain(
     expected_checkpoint_path: Optional[str],
     expected_acceleration_mps2: Optional[float],
     expected_maximum_forward_speed_mps: Optional[float],
+    expected_residual_checkpoint_path: Optional[str],
+    expected_spatial_checkpoint_path: Optional[str],
+    expected_spatial_checkpoint_sha256: Optional[str],
+    expected_spatial_use_base_steering: Optional[bool],
+    expected_spatial_authority_enabled: Optional[bool],
+    expected_spatial_authority_max_abs_delta_rad: Optional[float],
+    expected_recurrent_checkpoint_path: Optional[str],
+    expected_recurrent_authority_enabled: Optional[bool],
 ) -> dict[str, Any]:
     domain_dir = run_dir / f"d{domain}"
     motion_path = domain_dir / "e2e-run-analysis.json"
@@ -246,18 +318,71 @@ def analyze_domain(
         and provenance["checkpoint_path"] != expected_checkpoint_path
     ):
         reasons.append("runtime-checkpoint-path-mismatch")
-    if expected_acceleration_mps2 is not None:
-        acceleration = provenance["acceleration_mps2"]
-        if acceleration is None:
-            reasons.append("runtime-acceleration-missing")
-        elif abs(acceleration - expected_acceleration_mps2) > 1e-9:
-            reasons.append("runtime-acceleration-mismatch")
-    if expected_maximum_forward_speed_mps is not None:
-        maximum_speed = provenance["maximum_forward_speed_mps"]
-        if maximum_speed is None:
-            reasons.append("runtime-maximum-forward-speed-missing")
-        elif abs(maximum_speed - expected_maximum_forward_speed_mps) > 1e-9:
-            reasons.append("runtime-maximum-forward-speed-mismatch")
+    runtime_expectations = (
+        ("acceleration_mps2", expected_acceleration_mps2, "acceleration", 1e-9),
+        (
+            "maximum_forward_speed_mps",
+            expected_maximum_forward_speed_mps,
+            "maximum-forward-speed",
+            1e-9,
+        ),
+        (
+            "residual_checkpoint_path",
+            expected_residual_checkpoint_path,
+            "residual-checkpoint-path",
+            None,
+        ),
+        (
+            "spatial_checkpoint_path",
+            expected_spatial_checkpoint_path,
+            "spatial-checkpoint-path",
+            None,
+        ),
+        (
+            "spatial_expected_sha256",
+            expected_spatial_checkpoint_sha256,
+            "spatial-checkpoint-sha256",
+            None,
+        ),
+        (
+            "spatial_use_base_steering",
+            expected_spatial_use_base_steering,
+            "spatial-use-base-steering",
+            None,
+        ),
+        (
+            "spatial_authority_enabled",
+            expected_spatial_authority_enabled,
+            "spatial-authority-enabled",
+            None,
+        ),
+        (
+            "spatial_authority_max_abs_delta_rad",
+            expected_spatial_authority_max_abs_delta_rad,
+            "spatial-authority-max-abs-delta",
+            1e-9,
+        ),
+        (
+            "recurrent_checkpoint_path",
+            expected_recurrent_checkpoint_path,
+            "recurrent-checkpoint-path",
+            None,
+        ),
+        (
+            "recurrent_authority_enabled",
+            expected_recurrent_authority_enabled,
+            "recurrent-authority-enabled",
+            None,
+        ),
+    )
+    for key, expected, reason_name, tolerance in runtime_expectations:
+        validate_runtime_value(
+            reasons=reasons,
+            actual=provenance[key],
+            expected=expected,
+            reason_name=reason_name,
+            tolerance=tolerance,
+        )
 
     return {
         "domain": domain,
@@ -303,6 +428,15 @@ def analyze_competition(
     expected_maximum_forward_speed_mps: Optional[float] = None,
     checkpoint_file: Optional[Path] = None,
     expected_checkpoint_sha256: Optional[str] = None,
+    expected_residual_checkpoint_path: Optional[str] = None,
+    expected_spatial_checkpoint_path: Optional[str] = None,
+    spatial_checkpoint_file: Optional[Path] = None,
+    expected_spatial_checkpoint_sha256: Optional[str] = None,
+    expected_spatial_use_base_steering: Optional[bool] = None,
+    expected_spatial_authority_enabled: Optional[bool] = None,
+    expected_spatial_authority_max_abs_delta_rad: Optional[float] = None,
+    expected_recurrent_checkpoint_path: Optional[str] = None,
+    expected_recurrent_authority_enabled: Optional[bool] = None,
 ) -> dict[str, Any]:
     summary_path = run_dir / "result-summary.json"
     if not summary_path.is_file():
@@ -346,6 +480,25 @@ def analyze_competition(
     elif expected_checkpoint_sha256 is not None:
         global_reasons.append("checkpoint-file-required-for-sha256")
 
+    spatial_checkpoint = None
+    if spatial_checkpoint_file is not None:
+        if not spatial_checkpoint_file.is_file():
+            global_reasons.append("spatial-checkpoint-file-missing")
+        else:
+            spatial_checkpoint_hash = sha256_file(spatial_checkpoint_file)
+            spatial_checkpoint = {
+                "path": str(spatial_checkpoint_file),
+                "sha256": spatial_checkpoint_hash,
+            }
+            if (
+                expected_spatial_checkpoint_sha256 is not None
+                and spatial_checkpoint_hash
+                != expected_spatial_checkpoint_sha256.lower()
+            ):
+                global_reasons.append("spatial-checkpoint-sha256-mismatch")
+    elif expected_spatial_checkpoint_sha256 is not None:
+        global_reasons.append("spatial-checkpoint-file-required-for-sha256")
+
     domain_results = [
         analyze_domain(
             run_dir,
@@ -356,6 +509,14 @@ def analyze_competition(
             expected_checkpoint_path,
             expected_acceleration_mps2,
             expected_maximum_forward_speed_mps,
+            expected_residual_checkpoint_path,
+            expected_spatial_checkpoint_path,
+            expected_spatial_checkpoint_sha256,
+            expected_spatial_use_base_steering,
+            expected_spatial_authority_enabled,
+            expected_spatial_authority_max_abs_delta_rad,
+            expected_recurrent_checkpoint_path,
+            expected_recurrent_authority_enabled,
         )
         for domain in domains
     ]
@@ -377,8 +538,19 @@ def analyze_competition(
             "checkpoint_sha256": expected_checkpoint_sha256,
             "acceleration_mps2": expected_acceleration_mps2,
             "maximum_forward_speed_mps": expected_maximum_forward_speed_mps,
+            "residual_checkpoint_path": expected_residual_checkpoint_path,
+            "spatial_checkpoint_path": expected_spatial_checkpoint_path,
+            "spatial_checkpoint_sha256": expected_spatial_checkpoint_sha256,
+            "spatial_use_base_steering": expected_spatial_use_base_steering,
+            "spatial_authority_enabled": expected_spatial_authority_enabled,
+            "spatial_authority_max_abs_delta_rad": (
+                expected_spatial_authority_max_abs_delta_rad
+            ),
+            "recurrent_checkpoint_path": expected_recurrent_checkpoint_path,
+            "recurrent_authority_enabled": expected_recurrent_authority_enabled,
         },
         "checkpoint_artifact": checkpoint,
+        "spatial_checkpoint_artifact": spatial_checkpoint,
         "artifacts": {
             "result_summary": str(summary_path),
             "result_summary_sha256": sha256_file(summary_path),
@@ -399,6 +571,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-maximum-forward-speed-mps", type=float)
     parser.add_argument("--checkpoint-file", type=Path)
     parser.add_argument("--expected-checkpoint-sha256")
+    parser.add_argument("--expected-residual-checkpoint-path")
+    parser.add_argument("--expected-spatial-checkpoint-path")
+    parser.add_argument("--spatial-checkpoint-file", type=Path)
+    parser.add_argument("--expected-spatial-checkpoint-sha256")
+    parser.add_argument(
+        "--expected-spatial-use-base-steering", choices=("true", "false")
+    )
+    parser.add_argument(
+        "--expected-spatial-authority-enabled", choices=("true", "false")
+    )
+    parser.add_argument(
+        "--expected-spatial-authority-max-abs-delta-rad", type=float
+    )
+    parser.add_argument("--expected-recurrent-checkpoint-path")
+    parser.add_argument(
+        "--expected-recurrent-authority-enabled", choices=("true", "false")
+    )
     parser.add_argument(
         "--fail-on-rejection",
         action="store_true",
@@ -426,6 +615,14 @@ def main() -> int:
         raise SystemExit(
             "--expected-maximum-forward-speed-mps must be finite and non-negative"
         )
+    if args.expected_spatial_authority_max_abs_delta_rad is not None and (
+        not math.isfinite(args.expected_spatial_authority_max_abs_delta_rad)
+        or args.expected_spatial_authority_max_abs_delta_rad <= 0.0
+    ):
+        raise SystemExit(
+            "--expected-spatial-authority-max-abs-delta-rad must be finite "
+            "and positive"
+        )
     run_dir = args.run_dir.expanduser().resolve()
     try:
         domains = parse_domains(run_dir, args.domains)
@@ -448,6 +645,43 @@ def main() -> int:
                 None
                 if args.expected_checkpoint_sha256 is None
                 else args.expected_checkpoint_sha256.lower()
+            ),
+            expected_residual_checkpoint_path=(
+                args.expected_residual_checkpoint_path
+            ),
+            expected_spatial_checkpoint_path=(
+                args.expected_spatial_checkpoint_path
+            ),
+            spatial_checkpoint_file=(
+                None
+                if args.spatial_checkpoint_file is None
+                else args.spatial_checkpoint_file.expanduser().resolve()
+            ),
+            expected_spatial_checkpoint_sha256=(
+                None
+                if args.expected_spatial_checkpoint_sha256 is None
+                else args.expected_spatial_checkpoint_sha256.lower()
+            ),
+            expected_spatial_use_base_steering=(
+                None
+                if args.expected_spatial_use_base_steering is None
+                else args.expected_spatial_use_base_steering == "true"
+            ),
+            expected_spatial_authority_enabled=(
+                None
+                if args.expected_spatial_authority_enabled is None
+                else args.expected_spatial_authority_enabled == "true"
+            ),
+            expected_spatial_authority_max_abs_delta_rad=(
+                args.expected_spatial_authority_max_abs_delta_rad
+            ),
+            expected_recurrent_checkpoint_path=(
+                args.expected_recurrent_checkpoint_path
+            ),
+            expected_recurrent_authority_enabled=(
+                None
+                if args.expected_recurrent_authority_enabled is None
+                else args.expected_recurrent_authority_enabled == "true"
             ),
         )
     except (OSError, ValueError) as exc:

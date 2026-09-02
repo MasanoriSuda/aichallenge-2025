@@ -10,3 +10,4 @@
 - [x] Run focused and complete test suites.
 - [x] Replay frozen single and peer evidence without modifying `output/`.
 - [x] Record evidence, review the diff, and commit the slice.
+- [x] Replay packaged production on seed 2037 and run the strict Gates.

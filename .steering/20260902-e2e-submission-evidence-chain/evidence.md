@@ -50,6 +50,30 @@ The final schema-v3 readiness classification is therefore still
 previous conclusion while proving the production runtime contract and actual
 spatial execution.
 
+## Post-commit production replay
+
+After committing the evidence tooling as `10234bbf`, the packaged production
+defaults were replayed with NPC seed 2037 into
+`output/e2e-preliminary-video-seed2037`:
+
+- final position: 1/3;
+- laps: `86.1973 / 83.8785 / 85.5626 s`;
+- total lap time: `255.6384 s`;
+- finished laps: `3 / 3`;
+- crash/wall/over penalties: `0 / 0 / 0`;
+- longest low-speed and positive-acceleration stall: `0.0 / 0.0 s`;
+- motion distance: `1029.1612 m`;
+- spatial coverage: `9062 / 9062 = 1.0`;
+- spatial error/non-ok/stale: `0 / 0 / 0`;
+- spatial authority applied: `9062` scans.
+
+The fresh motion, competition, and spatial Gates all passed.  A schema-v3
+readiness replay combined that fresh single-vehicle evidence with the frozen
+peer evidence.  Artifact identity and both single-vehicle Gates passed; the
+peer motion, competition, and spatial Gates remained failed.  The final
+classification remains `single-vehicle-candidate-only` for the intended
+reason.
+
 ## Tests
 
 Focused host tests with third-party pytest auto-loading disabled:
@@ -69,8 +93,8 @@ Complete TinyLidarNet suite in the Autoware development image:
 
 ## Remaining submission work
 
-- Record the final seed-2037 video after the evidence tooling is committed.
-- Run the same strict competition and spatial Gates on that fresh recording.
+- Record or edit the public-facing video from an evidence-equivalent
+  production run; the headless seed-2037 candidate evidence is complete.
 - Fill the team name and public video URL, render the Marp PDF, and generate
   the final submission archive and archive SHA.
 - Do not claim mixed-peer qualification; its frozen Gate remains failed.

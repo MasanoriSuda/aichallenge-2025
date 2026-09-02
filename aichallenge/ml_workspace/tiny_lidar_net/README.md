@@ -551,6 +551,21 @@ python3 build_recurrent_dataset.py \
 既存の車線維持を退行させないための診断・stateless dataset admissionであり、閾値はmetadataへ
 記録する。stateful recurrent sourceには使用しない。
 
+`speed_committed_teacher`が失敗した場合、`required_stop_distance_m`をそのまま制動閾値へ
+昇格させない。合格runにも同じ条件が存在するため、成功bagと失敗bagを同時に逐次再生して、
+瞬時gapと完全な退避軌道を混同していないかを次で監査する。この出力は診断専用で、label抽出や
+runtime authorityを許可しない。
+
+```bash
+python3 audit_speed_committed_escape_contract.py \
+  --case success=/output/<successful-run>/d3/rosbag2_autoware \
+  --case failure=/output/<failed-run>/d3/rosbag2_autoware \
+  --failed-label failure \
+  --failure-start-sec <stall-start-sec> \
+  --checkpoint /path/to/tinylidarnet_weights.npy \
+  --output /output/<failed-run>/teacher-escape-contract-audit.json
+```
+
 ### Frozen-base steering residual
 
 production TinyLidarNetを変更せず、`precontact_teacher - frozen base`だけを学ぶ場合は

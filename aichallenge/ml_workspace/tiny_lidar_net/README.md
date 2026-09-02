@@ -603,6 +603,24 @@ python3 audit_future_occupancy_maneuver.py \
   --output /output/<failed-run>/future-occupancy-maneuver-audit.json
 ```
 
+提出候補をfreezeするときは、単車合格と混走合格を同じ意味に扱わない。
+`audit_e2e_submission_readiness.py`へartifact、単車competition report、混走motion report、
+privileged oracleを渡すと、`reject`、`single-vehicle-candidate-only`、
+`multi-vehicle-candidate`のいずれかを出力する。`--require-multivehicle`を付けた場合、
+single-onlyはexit 3でfail-closedとなる。
+
+```bash
+python3 audit_e2e_submission_readiness.py \
+  --raw-checkpoint /path/to/tinylidarnet_weights.npy \
+  --expected-raw-sha256 <sha256> \
+  --spatial-adapter /path/to/spatial_steering_adapter.npy \
+  --expected-spatial-sha256 <sha256> \
+  --single-competition /output/<single>/e2e-competition-analysis.json \
+  --peer-motion /output/<peer>/d3/e2e-run-analysis.json \
+  --future-oracle /output/<peer>/future-occupancy-maneuver-audit.json \
+  --output /output/<peer>/e2e-submission-readiness.json
+```
+
 ### Frozen-base steering residual
 
 production TinyLidarNetを変更せず、`precontact_teacher - frozen base`だけを学ぶ場合は

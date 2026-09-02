@@ -680,6 +680,25 @@ side commitmentを持つteacher候補を独立に設計・実行してからラ�
 
 ## Submission Artifacts
 
+### 2026-09-02 submission-readiness freeze
+
+現在のproduction raw checkpoint
+`de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa`とspatial adapter
+`f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c`は、packaged-default
+単車Gateで3周合計252.2303秒、penalty/stall 0を達成した。一方、同一identityの3台Gateは
+54.914秒のlow-speed intervalで不合格である。既存`speed_committed_teacher`とMPC/MPCC
+混走教師もrun-level Gateに不合格で、現在scanのswept rolloutは失敗を識別できなかった。
+
+記録済み未来LiDAR/odometryを使うprivileged oracleでは失敗末尾の17.65%で「選択側不成立・
+反対側成立」を観測したが、同じ候補bankは成功runの候補を13.89--17.48%しか表現できない。
+zero-steer Stop suffixと反実仮想でないsensor viewが交絡するため、分類は
+`inconclusive-candidate-bank-misses-success`とし、label生成およびruntime入力を禁止する。
+
+`audit_e2e_submission_readiness.py`による現在判定は
+`single-vehicle-candidate-only`である。単車走行と研究成果の提出材料には利用できるが、混走回避を
+合格機能として扱わない。締切前に閾値・clearance・別seed選別で不合格を隠さず、混走改善を再開する
+場合はcourse-following successorを持つ成功実演または反実仮想幾何を備えた教師から再開する。
+
 公開案内では、取り組みスライドと走行動画を提出する。スライドには少なくとも、
 走行データ、他車両への回避・停止、モデル構成、学習データと評価、独自性を記載する。
 提出フォーマットと期限は WIP のため、最新の公式ページと運営連絡を提出前に再確認する。

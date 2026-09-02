@@ -566,6 +566,26 @@ python3 audit_speed_committed_escape_contract.py \
   --output /output/<failed-run>/teacher-escape-contract-audit.json
 ```
 
+瞬時gapの方向が車体寸法上も実行不能かを切り分ける場合は、同じbag群を
+`audit_swept_maneuver_certificate.py`で監査する。これは現在scanをbase linkへ戻し、
+shift/counter-shiftと完全停止suffixをkinematic bicycleでrolloutして、全時刻の矩形車体
+clearanceを検査する。成功bagにも同一条件を適用し、失敗bagだけを識別できなければlabel生成へ
+進まない。
+
+```bash
+python3 audit_swept_maneuver_certificate.py \
+  --case success=/output/<successful-run>/d3/rosbag2_autoware \
+  --case failure=/output/<failed-run>/d3/rosbag2_autoware \
+  --failed-label failure \
+  --failure-start-sec <stall-start-sec> \
+  --checkpoint /path/to/tinylidarnet_weights.npy \
+  --output /output/<failed-run>/swept-maneuver-certificate-audit.json
+```
+
+この証明はcurrent scanを静止点群として扱うため、動くpeer、遮蔽された壁、未来のscanを
+証明しない。`selected_infeasible_opposite_feasible`が失敗run固有でない場合、閾値や操舵offsetを
+調整せず、時系列の動的占有を持つteacherへ進む。
+
 ### Frozen-base steering residual
 
 production TinyLidarNetを変更せず、`precontact_teacher - frozen base`だけを学ぶ場合は

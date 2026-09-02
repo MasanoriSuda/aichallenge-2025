@@ -6,6 +6,7 @@
 - [x] Preserve authority-disabled async observation unchanged.
 - [x] Add evaluator, failure, lifecycle and interface tests.
 - [x] Build and run focused Docker tests.
-- [ ] Pass the single-vehicle authority Gate.
-- [ ] Pass the domain-3 peer authority Gate only if single passes.
-- [ ] Record accept/reject without changing packaged defaults.
+- [x] Pass the single-vehicle authority Gate.
+- [x] Run the domain-3 peer authority Gate after the single pass; record its
+  strict rejection (`32` skips/resets, one non-ok interval).
+- [x] Record rejection without changing packaged defaults.

@@ -217,14 +217,14 @@ docker compose run --rm --no-deps autoware-command \
   --expected-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
   --checkpoint-file \
-    /aichallenge/ml_workspace/tiny_lidar_net/checkpoints/20260901_055824/candidate.npy \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
   --expected-checkpoint-sha256 \
     de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa \
   --expected-residual-checkpoint-path '' \
   --expected-spatial-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
   --spatial-checkpoint-file \
-    /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
   --expected-spatial-checkpoint-sha256 \
     f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c \
   --expected-spatial-use-base-steering true \
@@ -712,6 +712,15 @@ zero-steer Stop suffixと反実仮想でないsensor viewが交絡するため�
 
 readiness auditでは、混走motionだけでなくFinish、lap、penaltyを含む混走competition reportも
 独立に要求する。両方がpassでない限り`multi-vehicle-candidate`へ昇格しない。
+
+`d666b934`後の証跡チェーン監査では、competition reportの`status=pass`だけでは、期待runtime
+引数を省略して生成した緩いreportをreadinessが受理できることを確認した。readinessは以後、
+明示したproduction runtime契約をreportの`expected_runtime`と各Domainのruntime provenanceへ
+再照合し、raw/spatialのinstall artifactとsource artifactを独立にhashする。さらに
+`analyze_spatial_shadow_run.py`の実行reportを必須とし、coverage 99%以上、error/non-ok/stale 0、
+全intervalでauthority ON、authority適用1回以上を単車合格条件とする。混走昇格にはE2E Domainの
+同じspatial実行証明も必要である。これらはoffline evidenceのfail-closed化であり、controller、
+model、launch既定値、走行parameterは変更しない。
 
 `audit_e2e_submission_readiness.py`による現在判定は
 `single-vehicle-candidate-only`である。単車走行と研究成果の提出材料には利用できるが、混走回避を

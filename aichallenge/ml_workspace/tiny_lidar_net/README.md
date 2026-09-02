@@ -129,14 +129,15 @@ python3 analyze_e2e_competition.py /output/<run> \
   --expected-maximum-forward-speed-mps 4.6 \
   --expected-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
-  --checkpoint-file checkpoints/20260901_055824/candidate.npy \
+  --checkpoint-file \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
   --expected-checkpoint-sha256 \
     de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa \
   --expected-residual-checkpoint-path '' \
   --expected-spatial-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
   --spatial-checkpoint-file \
-    /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
   --expected-spatial-checkpoint-sha256 \
     f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c \
   --expected-spatial-use-base-steering true \
@@ -319,6 +320,8 @@ make e2e-single \
   TINY_LIDAR_SPATIAL_SHADOW_CKPT_PATH=/aichallenge/ml_workspace/tiny_lidar_net/checkpoints/<spatial-run>/candidate.npy
 
 python3 analyze_spatial_shadow_run.py /output/<run> \
+  --domain 1 \
+  --competition-report /output/<run>/e2e-competition-analysis.json \
   --checkpoint-file checkpoints/<spatial-run>/candidate.npy \
   --expected-checkpoint-sha256 <spatial-candidate-sha256> \
   --expected-runtime-checkpoint-path \
@@ -620,21 +623,39 @@ python3 audit_future_occupancy_maneuver.py \
 ```
 
 提出候補をfreezeするときは、単車合格と混走合格を同じ意味に扱わない。
-`audit_e2e_submission_readiness.py`へartifact、単車competition report、混走motion report、
-混走competition report、privileged oracleを渡すと、`reject`、`single-vehicle-candidate-only`、
-`multi-vehicle-candidate`のいずれかを出力する。`--require-multivehicle`を付けた場合、
-single-onlyはexit 3でfail-closedとなる。混走はmotionとcompetitionの両方がpassでなければ
-昇格しないため、走行継続だけで未完走・penaltyありのrunを合格扱いしない。
+`audit_e2e_submission_readiness.py`へinstall/source artifact、production runtime契約、
+単車competition/spatial report、混走motion/competition/spatial report、privileged oracleを
+渡すと、`reject`、`single-vehicle-candidate-only`、`multi-vehicle-candidate`のいずれかを
+出力する。reportの`status=pass`だけは信用せず、analyzerへ渡した期待runtime、各Domainで
+観測したruntime、raw/spatial SHA、Spatial coverage/error/stale/authority適用を再照合する。
+`--require-multivehicle`を付けた場合、single-onlyはexit 3でfail-closedとなる。
 
 ```bash
 python3 audit_e2e_submission_readiness.py \
-  --raw-checkpoint /path/to/tinylidarnet_weights.npy \
+  --raw-checkpoint /install/path/tinylidarnet_weights.npy \
+  --source-raw-checkpoint /source/path/tinylidarnet_weights.npy \
   --expected-raw-sha256 <sha256> \
-  --spatial-adapter /path/to/spatial_steering_adapter.npy \
+  --spatial-adapter /install/path/spatial_steering_adapter.npy \
+  --source-spatial-adapter /source/path/spatial_steering_adapter.npy \
   --expected-spatial-sha256 <sha256> \
+  --expected-control-mode fixed_lidar_brake \
+  --expected-runtime-raw-checkpoint-path /install/path/tinylidarnet_weights.npy \
+  --expected-acceleration-mps2 0.8 \
+  --expected-maximum-forward-speed-mps 4.6 \
+  --expected-residual-checkpoint-path '' \
+  --expected-runtime-spatial-checkpoint-path /install/path/spatial_steering_adapter.npy \
+  --expected-spatial-use-base-steering true \
+  --expected-spatial-authority-enabled true \
+  --expected-spatial-max-abs-delta-rad 1.2 \
+  --expected-spatial-authority-max-abs-delta-rad 1.2 \
+  --expected-recurrent-checkpoint-path '' \
+  --expected-recurrent-authority-enabled false \
   --single-competition /output/<single>/e2e-competition-analysis.json \
+  --single-spatial /output/<single>/e2e-spatial-shadow-analysis.json \
   --peer-motion /output/<peer>/d3/e2e-run-analysis.json \
   --peer-competition /output/<peer>/e2e-competition-analysis.json \
+  --peer-spatial /output/<peer>/e2e-spatial-shadow-analysis.json \
+  --peer-domain 3 \
   --future-oracle /output/<peer>/future-occupancy-maneuver-audit.json \
   --output /output/<peer>/e2e-submission-readiness.json
 ```

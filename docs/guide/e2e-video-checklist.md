@@ -16,6 +16,12 @@ make e2e-npc-single \
 ```bash
 make autoware-bash
 cd /aichallenge/ml_workspace/tiny_lidar_net
+sha256sum \
+  /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+  /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+  /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+  /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy
+
 python3 analyze_e2e_run.py \
   /output/e2e-preliminary-video-seed2037/d1/rosbag2_autoware \
   --output /output/e2e-preliminary-video-seed2037/d1/e2e-run-analysis.json \
@@ -29,14 +35,14 @@ python3 analyze_e2e_competition.py \
   --expected-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
   --checkpoint-file \
-    /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/tinylidarnet_weights.npy \
   --expected-checkpoint-sha256 \
     de5f156b271e292a7457d6c474de1267c0a0cf086c428ae5e6f8de4c5a0f4faa \
   --expected-residual-checkpoint-path '' \
   --expected-spatial-checkpoint-path \
     /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
   --spatial-checkpoint-file \
-    /aichallenge/workspace/src/aichallenge_submit/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
   --expected-spatial-checkpoint-sha256 \
     f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c \
   --expected-spatial-use-base-steering true \
@@ -45,6 +51,25 @@ python3 analyze_e2e_competition.py \
   --expected-recurrent-checkpoint-path '' \
   --expected-recurrent-authority-enabled false \
   --output /output/e2e-preliminary-video-seed2037/e2e-competition-analysis.json \
+  --fail-on-rejection
+
+python3 analyze_spatial_shadow_run.py \
+  /output/e2e-preliminary-video-seed2037 \
+  --domain 1 \
+  --competition-report \
+    /output/e2e-preliminary-video-seed2037/e2e-competition-analysis.json \
+  --checkpoint-file \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+  --expected-checkpoint-sha256 \
+    f3921c265677761bcf9458c61758d997b94d0b2045e87ebcee37ca94f3ed412c \
+  --expected-runtime-checkpoint-path \
+    /aichallenge/workspace/install/tiny_lidar_net_controller/share/tiny_lidar_net_controller/ckpt/spatial_steering_adapter.npy \
+  --expected-authority-enabled true \
+  --expected-use-base-steering true \
+  --expected-max-abs-delta-rad 1.2 \
+  --min-coverage-fraction 0.99 \
+  --min-scan-hz 19.0 \
+  --output /output/e2e-preliminary-video-seed2037/e2e-spatial-shadow-analysis.json \
   --fail-on-rejection
 ```
 
@@ -57,6 +82,8 @@ python3 analyze_e2e_competition.py \
 - [ ] runtime control modeが`fixed_lidar_brake`
 - [ ] accelerationが`0.8 m/s²`、speed capが`4.6 m/s`
 - [ ] raw/spatial artifact SHAがfreezeと一致
+- [ ] raw/spatialのsourceとinstall SHAがそれぞれ一致
+- [ ] spatial coverage 99%以上、error/stale 0、authority適用あり
 - [ ] recurrent authority、teacher mode、custom artifactが無効
 - [ ] NPCへの接近、横回避、抜けた後の復帰が画面で確認できる
 - [ ] LiDAR制動を説明する場合は、実際の作動と速度・距離をログで確認した

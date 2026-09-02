@@ -118,3 +118,29 @@ def test_runtime_log_loader_does_not_duplicate_primary_status(tmp_path):
     assert used_fallback is False
     assert len(parse_status_lines(text)) == 1
     assert sources == [str(domain / "autoware.log")]
+
+
+def test_runtime_log_loader_selects_requested_domain(tmp_path):
+    run = tmp_path / "run"
+    d1 = run / "d1"
+    d3 = run / "d3"
+    d1.mkdir(parents=True)
+    d3.mkdir(parents=True)
+    (d1 / "autoware.log").write_text(
+        "[node] domain one contains no spatial evidence\n", encoding="utf-8"
+    )
+    d3_status = (
+        "[node] E2E_STATUS scans=100 stale=0 scan_hz=20.00 "
+        "avg_inference_ms=5.00 max_inference_ms=12.00 "
+        "inference_capacity_hz=200.00 spatial_shadow=100/100 "
+        "shadow_skipped=0 shadow_errors=0 shadow_mean_abs_rad=0.01000 "
+        "shadow_p95_abs_rad=0.10000 shadow_last_rad=0.00000 "
+        "shadow_prob_lnr=0.1,0.8,0.1 shadow_status=ok\n"
+    )
+    (d3 / "autoware.log").write_text(d3_status, encoding="utf-8")
+
+    text, sources, used_fallback = load_runtime_log_text(run, domain=3)
+
+    assert used_fallback is False
+    assert len(parse_status_lines(text)) == 1
+    assert sources == [str(d3 / "autoware.log")]

@@ -45,7 +45,7 @@ style: |
 
 - 地図・自己位置・V2XをE2E推論へ入れない
 - 2D LiDARから直接steeringを出す
-- 他車や障害物があっても停止・回避できる
+- NPC環境で停止・横回避をclosed-loop実証する
 - 学習に使わない開始seedでも再現する
 
 </div>
@@ -77,12 +77,28 @@ LiDAR freshness / 前方距離 ────────────────�
 
 - 横方向authorityはML出力のみ
 - runtime許可入力: LiDAR、車輪速度
-- spatial adapterは全scanで補正を推論し、normal anchorで通常時を0付近へ抑える
+- spatial adapterはfreshなadmitted scanで補正を推論し、normal anchorで通常時を0付近へ抑える
 - 最終操舵: `clip(base steering + spatial correction, -0.64, +0.64 rad)`
 - watchdogはstale LiDAR時に前進指令を保持しない
 - production: `0.8 m/s²`、速度上限`4.6 m/s`
 
 <p class="small muted">GNSS、IMU、V2X、地図trajectory、MPC出力はE2E推論入力に未使用。</p>
+
+---
+
+## 開発前後の比較
+
+| | 初期TinyLidarNet | 現在のfrozen base + spatial ML |
+|---|---|---|
+| 通常走行 | 単一scanから直接操舵 | baseを凍結し通常走行を維持 |
+| 障害物対応 | 前方距離による縦停止が中心 | LiDAR空間特徴と車輪速度で横補正 |
+| 観測結果 | 約150秒後に前方約1.5 mで長時間停止 | NPC 3 seedを各3周、1位・penalty 0 |
+| 品質管理 | sample単位評価 | run分離、closed-loop、artifact SHA、実行coverage |
+
+改善はモデルを全面再学習するのではなく、失敗をrun outcomeまで遡り、凍結baseへ必要な
+横補正だけを追加することで得た。
+
+<p class="small muted">初期runと最終runは同一seedの厳密A/Bではないため、観測された開発段階比較として記載。</p>
 
 ---
 

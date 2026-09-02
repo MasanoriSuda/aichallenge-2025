@@ -132,7 +132,9 @@ def parse_runtime_config(log_text: str) -> dict | None:
     }
 
 
-def load_runtime_log_text(run_dir: Path) -> tuple[str, list[str], bool]:
+def load_runtime_log_text(
+    run_dir: Path, domain: int = 1
+) -> tuple[str, list[str], bool]:
     """Load one run's spatial evidence without double-counting ROS output.
 
     ``autoware.log`` is the canonical source.  A Docker stop can, however,
@@ -143,12 +145,13 @@ def load_runtime_log_text(run_dir: Path) -> tuple[str, list[str], bool]:
     than silently treating a log-lifecycle failure as a model failure.
     """
 
-    primary_path = run_dir / "d1" / "autoware.log"
+    domain_dir = run_dir / f"d{domain}"
+    primary_path = domain_dir / "autoware.log"
     primary_text = primary_path.read_text(encoding="utf-8", errors="replace")
     if parse_status_lines(primary_text):
         return primary_text, [str(primary_path)], False
 
-    ros_log_root = run_dir / "d1" / "ros" / "log"
+    ros_log_root = domain_dir / "ros" / "log"
     fallback_paths = sorted(ros_log_root.glob("python3_*.log"))
     fallback_paths.extend(sorted(ros_log_root.glob("*/launch.log")))
     fallback_texts = [primary_text]
@@ -221,10 +224,17 @@ def summarize_intervals(intervals: list[dict]) -> dict:
 
 def build_report(args: argparse.Namespace) -> dict:
     run_dir = args.run_dir.resolve()
-    result_path = run_dir / "d1-result-details.json"
-    competition_path = run_dir / "e2e-competition-analysis.json"
+    domain = args.domain
+    result_path = run_dir / f"d{domain}-result-details.json"
+    competition_path = (
+        run_dir / "e2e-competition-analysis.json"
+        if args.competition_report is None
+        else args.competition_report.resolve()
+    )
     checkpoint = args.checkpoint_file.resolve()
-    log_text, log_sources, used_ros_log_fallback = load_runtime_log_text(run_dir)
+    log_text, log_sources, used_ros_log_fallback = load_runtime_log_text(
+        run_dir, domain
+    )
     intervals = parse_status_lines(log_text)
     summary = summarize_intervals(intervals)
     runtime_config = parse_runtime_config(log_text)
@@ -297,9 +307,12 @@ def build_report(args: argparse.Namespace) -> dict:
         "status": "pass" if not reasons else "reject",
         "reasons": reasons,
         "run_dir": str(run_dir),
+        "domain": domain,
         "runtime_evidence": {
             "log_sources": log_sources,
             "used_ros_log_fallback": used_ros_log_fallback,
+            "competition_report": str(competition_path),
+            "competition_report_sha256": sha256_file(competition_path),
         },
         "shadow_checkpoint": {
             "artifact_path": str(checkpoint),
@@ -326,6 +339,8 @@ def build_report(args: argparse.Namespace) -> dict:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("run_dir", type=Path)
+    parser.add_argument("--domain", type=int, default=1)
+    parser.add_argument("--competition-report", type=Path)
     parser.add_argument("--checkpoint-file", type=Path, required=True)
     parser.add_argument("--expected-checkpoint-sha256", required=True)
     parser.add_argument("--expected-runtime-checkpoint-path", required=True)
@@ -349,6 +364,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.domain <= 0:
+        raise SystemExit("--domain must be positive")
     report = build_report(args)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

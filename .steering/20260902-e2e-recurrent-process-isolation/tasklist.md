@@ -7,6 +7,6 @@
   removal in a separate authority Slice.
 - [x] Add lifecycle, failure-isolation and launch/contract tests.
 - [x] Build and run focused Docker tests.
-- [ ] Pass single-vehicle recurrent shadow Gate.
-- [ ] Pass three-vehicle domain-3 recurrent shadow Gate.
-- [ ] Record decision without enabling recurrent authority.
+- [x] Pass single-vehicle recurrent shadow Gate.
+- [x] Pass three-vehicle domain-3 recurrent shadow Gate.
+- [x] Record decision without enabling recurrent authority.

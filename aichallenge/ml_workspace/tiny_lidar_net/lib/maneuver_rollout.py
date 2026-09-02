@@ -260,19 +260,34 @@ def evaluate_candidate(
             float(np.min(point_clearance_to_footprint(points, state, config)))
             for state in states
         )
+    return _candidate_from_states(
+        states,
+        steering_offset_rad,
+        minimum_clearance,
+        config,
+    )
+
+
+def _candidate_from_states(
+    states: np.ndarray,
+    steering_offset_rad: float,
+    minimum_clearance_m: float,
+    config: ManeuverRolloutConfig,
+) -> ManeuverCandidate:
+    """Build one immutable result from a rollout and clearance proof."""
     offset = float(steering_offset_rad)
     side_sign = 0 if abs(offset) <= 1e-9 else (1 if offset > 0.0 else -1)
     terminal = states[-1]
     feasible = bool(
         terminal[3] <= 1e-6
-        and minimum_clearance >= config.clearance_margin_m
+        and minimum_clearance_m >= config.clearance_margin_m
         and np.all(np.isfinite(terminal))
     )
     return ManeuverCandidate(
         steering_offset_rad=offset,
         side_sign=side_sign,
         feasible=feasible,
-        minimum_clearance_m=minimum_clearance,
+        minimum_clearance_m=minimum_clearance_m,
         required_clearance_m=config.clearance_margin_m,
         terminal_x_m=float(terminal[0]),
         terminal_y_m=float(terminal[1]),
@@ -280,6 +295,43 @@ def evaluate_candidate(
         terminal_speed_mps=float(terminal[3]),
         sample_count=int(len(states)),
         states=states,
+    )
+
+
+def evaluate_candidate_against_time_indexed_points(
+    point_clouds_xy_m: Iterable[np.ndarray],
+    speed_mps: float,
+    base_steering_rad: float,
+    steering_offset_rad: float,
+    config: ManeuverRolloutConfig,
+) -> ManeuverCandidate:
+    """Evaluate one rollout against one obstacle point cloud per state.
+
+    Point cloud `k` represents occupancy at the same time as rollout state
+    `k`.  The caller owns synchronization and coordinate transforms.
+    """
+    states = rollout_lane_change_stop(
+        speed_mps,
+        base_steering_rad,
+        steering_offset_rad,
+        config,
+    )
+    point_clouds = [np.asarray(points, dtype=np.float64) for points in point_clouds_xy_m]
+    if len(point_clouds) != len(states):
+        raise ValueError("time-indexed point clouds must align with rollout states")
+    minima = []
+    for points, state in zip(point_clouds, states):
+        if points.ndim != 2 or points.shape[1:] != (2,) or not np.all(np.isfinite(points)):
+            raise ValueError("each time-indexed point cloud must be a finite Nx2 array")
+        if len(points) == 0:
+            continue
+        minima.append(float(np.min(point_clearance_to_footprint(points, state, config))))
+    minimum_clearance = math.inf if not minima else min(minima)
+    return _candidate_from_states(
+        states,
+        steering_offset_rad,
+        minimum_clearance,
+        config,
     )
 
 
@@ -319,4 +371,3 @@ def select_best_candidate(
         )
 
     return max(feasible, key=score)
-

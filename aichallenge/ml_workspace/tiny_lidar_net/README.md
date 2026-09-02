@@ -586,6 +586,23 @@ python3 audit_swept_maneuver_certificate.py \
 証明しない。`selected_infeasible_opposite_feasible`が失敗run固有でない場合、閾値や操舵offsetを
 調整せず、時系列の動的占有を持つteacherへ進む。
 
+時間情報そのものに識別力があるかを調べる場合だけ、`audit_future_occupancy_maneuver.py`を
+privileged offline oracleとして使う。各rollout時刻へ記録済みの未来LiDARとodometryを合わせ、
+現在base frameへ変換して同じ候補bankを検査する。未来入力はruntimeへ使用できず、記録された
+実走経路からのscanは反実仮想候補の視点でもない。また、成功runの半数以上を同じ候補bankが
+表現できなければ、失敗runとの率差があっても`inconclusive-candidate-bank-misses-success`として
+label生成を拒否する。
+
+```bash
+python3 audit_future_occupancy_maneuver.py \
+  --case success=/output/<successful-run>/d3/rosbag2_autoware \
+  --case failure=/output/<failed-run>/d3/rosbag2_autoware \
+  --failed-label failure \
+  --failure-start-sec <stall-start-sec> \
+  --checkpoint /path/to/tinylidarnet_weights.npy \
+  --output /output/<failed-run>/future-occupancy-maneuver-audit.json
+```
+
 ### Frozen-base steering residual
 
 production TinyLidarNetを変更せず、`precontact_teacher - frozen base`だけを学ぶ場合は

@@ -6,6 +6,7 @@ import pytest
 from lib.maneuver_rollout import (
     ManeuverRolloutConfig,
     evaluate_candidate,
+    evaluate_candidate_against_time_indexed_points,
     point_clearance_to_footprint,
     rollout_lane_change_stop,
     scan_points_in_base,
@@ -75,6 +76,25 @@ def test_open_side_candidate_is_selected_over_blocked_side() -> None:
     assert selected is left
 
 
+def test_time_indexed_points_do_not_freeze_a_departing_obstacle() -> None:
+    config = ManeuverRolloutConfig(clearance_margin_m=0.15)
+    static_obstacle = np.asarray([[4.0, 0.0]])
+    frozen = evaluate_candidate(static_obstacle, 2.0, 0.0, 0.0, config)
+    states = rollout_lane_change_stop(2.0, 0.0, 0.0, config)
+    time_indexed = [static_obstacle] + [np.empty((0, 2))] * (len(states) - 1)
+
+    moving = evaluate_candidate_against_time_indexed_points(
+        time_indexed,
+        2.0,
+        0.0,
+        0.0,
+        config,
+    )
+
+    assert not frozen.feasible
+    assert moving.feasible
+
+
 def test_invalid_physical_contract_is_rejected() -> None:
     with pytest.raises(ValueError, match="scan range bounds"):
         ManeuverRolloutConfig(
@@ -88,4 +108,3 @@ def test_invalid_physical_contract_is_rejected() -> None:
             0.0,
             ManeuverRolloutConfig(),
         )
-

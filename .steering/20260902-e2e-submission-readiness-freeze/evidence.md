@@ -36,3 +36,26 @@ This candidate may be used for the qualified single-vehicle video and as the
 frozen baseline in the submission material.  It must not be described as a
 qualified multi-vehicle avoidance policy.  No production parameter, launch
 default, checkpoint or runtime authority was changed in this Slice.
+
+## Submission archive verification
+
+`./create_submit_file.bash` generated `submit/aichallenge_submit.tar.gz` after
+the freeze.
+
+- size: `5,432,462 bytes`;
+- archive SHA-256:
+  `7bd172d732512eef0677e718b674e27d83a8c201275802677cdf87385770e9a6`;
+- entries: `590`;
+- unique top-level directory: `aichallenge_submit/`;
+- embedded raw/spatial SHA-256 values match the frozen identities;
+- embedded checkpoint directory contains only the raw and spatial production
+  artifacts;
+- no dataset, output, rosbag, MCAP or DB3 artifact is present.
+
+The packaged launch keeps `fixed_lidar_brake`, acceleration `0.8 m/s2`, speed
+cap `4.6 m/s`, spatial authority enabled at `1.2 rad`, and recurrent authority
+disabled.  The archive is a mechanically valid package of the single-vehicle
+candidate; archive validity does not override the mixed-peer rejection.
+
+After packaging, the installed-space TinyLidar controller tests and E2E launch
+contract were rerun in the development container: `95 passed`.

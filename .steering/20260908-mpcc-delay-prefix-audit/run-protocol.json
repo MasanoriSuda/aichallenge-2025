@@ -1,0 +1,20 @@
+{
+  "planned_repetitions": 3,
+  "kind": "observe actual published source at first loss; not a controller repair",
+  "rules": [
+    "Six laps; retain all failures/penalties.",
+    "No concurrent build/replay.",
+    "Record original artifact independently from re-solving its original input.",
+    "No guard, delay, model or tuning changes."
+  ],
+  "binaries": {
+    "aichallenge/workspace/build/multi_purpose_mpc_ros/mpc_controller_cpp": "18df8ab763bffa3a0e79ecb8b6e620a894476b7af5423e7928b618829f69cabc",
+    "aichallenge/workspace/build/multi_purpose_mpc_ros/mpcc_architecture_compare": "8a59e36584593eac8db7b32b32aa8373146ea56bdd4c96a098990024206b9c5c"
+  },
+  "runner_sha256": "4bf73e2f88124c357578bcf8575d4d6409191d6817413692ed9745615622e85a",
+  "amendment_after_r1": "R1 completed cleanly without triggering authority-loss capture. Allow at most2additional same-settings diagnostics solely to obtain the missing actual published-source evidence; stop further repeats after evidence is captured. All outcomes retained, no integrated acceptance inferred.",
+  "amendment_after_r2": "R2reproduced terminal authority loss but source capture was omitted for Cruise. V2removes only the observation producer intent filter, preserving all7normal source snapshots. Final third trial uses this new sealed binary after validation; no controller-acceptance inference.",
+  "closed": true,
+  "completed_trials": 3,
+  "closing_reason": "R3 captured actual published source6782/artifact and failure7405. Further unchanged diagnostic repetitions are not planned. Controller acceptance remains rejected."
+}

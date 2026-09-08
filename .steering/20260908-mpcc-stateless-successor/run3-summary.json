@@ -1,0 +1,40 @@
+{
+  "d1": {
+    "phase_transitions": [
+      "[mpc_controller_cpp-10] [INFO] [1788793003.972454647] [mpc_controller]: OvertakeLine: Idle -> ShiftOut, episode=1, side=-1, ey=-0.86, wp_id=35, reason=overtake selected, pause_cause=n/a",
+      "[mpc_controller_cpp-10] [INFO] [1788793039.721929194] [mpc_controller]: OvertakeLine: ShiftOut -> Recovery, episode=1, side=-1, ey=-2.27, wp_id=185, reason=Pass entry physical gate has no valid current-side prefix, pause_cause=n/a",
+      "[mpc_controller_cpp-10] [INFO] [1788793041.121090586] [mpc_controller]: OvertakeLine: Recovery -> Idle, episode=1, side=-1, wp_id=186, reason=recovery stalled"
+    ],
+    "certified_stop_publications": 0,
+    "published_stop_successor_selections": 0,
+    "sibling_adoptions": [
+      "[mpc_controller_cpp-10] [WARN] [1788793015.080026484] [mpc_controller]: Published stateless sibling Bundle adopted: target=d2, generation=1, side=-1->1, sequence=1094, phase=ShiftOut",
+      "[mpc_controller_cpp-10] [WARN] [1788793018.850979669] [mpc_controller]: Published stateless sibling Bundle adopted: target=d2, generation=1, side=1->-1, sequence=1244, phase=ShiftOut",
+      "[mpc_controller_cpp-10] [WARN] [1788793020.602248885] [mpc_controller]: Published stateless sibling Bundle adopted: target=d2, generation=1, side=-1->1, sequence=1315, phase=ShiftOut",
+      "[mpc_controller_cpp-10] [WARN] [1788793022.527427598] [mpc_controller]: Published stateless sibling Bundle adopted: target=d2, generation=1, side=1->-1, sequence=1391, phase=ShiftOut",
+      "[mpc_controller_cpp-10] [WARN] [1788793027.505157796] [mpc_controller]: Published stateless sibling Bundle adopted: target=d2, generation=1, side=-1->1, sequence=1591, phase=ShiftOut",
+      "[mpc_controller_cpp-10] [WARN] [1788793029.459228019] [mpc_controller]: Published stateless sibling Bundle adopted: target=d2, generation=1, side=1->-1, sequence=1669, phase=ShiftOut",
+      "[mpc_controller_cpp-10] [WARN] [1788793031.103401505] [mpc_controller]: Published stateless sibling Bundle adopted: target=d2, generation=1, side=-1->1, sequence=1734, phase=ShiftOut",
+      "[mpc_controller_cpp-10] [WARN] [1788793035.799403184] [mpc_controller]: Published stateless sibling Bundle adopted: target=d2, generation=1, side=1->-1, sequence=1895, phase=ShiftOut"
+    ],
+    "pass_deferrals": [
+      "[mpc_controller_cpp-10] [INFO] [1788793020.146085661] [mpc_controller]: OvertakeLine Pass authority deferred before phase mutation: target=d2, generation=1, side=-1, completion=1/1, proposal=0/0, reason=proposal-incomplete, action=retain-certified-shiftout, wp_id=80",
+      "[mpc_controller_cpp-10] [INFO] [1788793029.073573319] [mpc_controller]: OvertakeLine Pass authority deferred before phase mutation: target=d2, generation=1, side=1, completion=1/1, proposal=0/0, reason=proposal-incomplete, action=retain-certified-shiftout, wp_id=130",
+      "[mpc_controller_cpp-10] [INFO] [1788793037.946244904] [mpc_controller]: OvertakeLine Pass authority deferred before phase mutation: target=d2, generation=1, side=-1, completion=1/1, proposal=0/0, reason=proposal-incomplete, action=retain-certified-shiftout, wp_id=174",
+      "[mpc_controller_cpp-10] [INFO] [1788793038.448013309] [mpc_controller]: OvertakeLine Pass authority deferred before phase mutation: target=d2, generation=1, side=-1, completion=1/1, proposal=0/0, reason=proposal-incomplete, action=retain-certified-shiftout, wp_id=177",
+      "[mpc_controller_cpp-10] [INFO] [1788793038.971718686] [mpc_controller]: OvertakeLine Pass authority deferred before phase mutation: target=d2, generation=1, side=-1, completion=1/1, proposal=0/0, reason=proposal-incomplete, action=retain-certified-shiftout, wp_id=180",
+      "[mpc_controller_cpp-10] [INFO] [1788793039.496781825] [mpc_controller]: OvertakeLine Pass authority deferred before phase mutation: target=d2, generation=1, side=-1, completion=1/1, proposal=0/0, reason=proposal-incomplete, action=retain-certified-shiftout, wp_id=184"
+    ],
+    "callback_max_ms": 26.26,
+    "callback_overruns": 1
+  },
+  "d2": {
+    "phase_transitions": [],
+    "certified_stop_publications": 0,
+    "published_stop_successor_selections": 0,
+    "sibling_adoptions": [],
+    "pass_deferrals": [],
+    "callback_max_ms": 25.241,
+    "callback_overruns": 1
+  }
+}

@@ -309,6 +309,34 @@ TEST(MpccRateResolvedCertifiedPlan, RejectsFullIdentityMismatch)
   EXPECT_EQ(result.plan, nullptr);
 }
 
+TEST(MpccRateResolvedCertifiedPlan, CertifiedStopLabelPreservesTwoTickPublicationClock)
+{
+  // Ledger-only test: physical Stop certification is independently required
+  // before this publication boundary. A label must not discard that evidence.
+  certified::Store store;
+  const auto selected = build_plan(5U);
+  ASSERT_NE(selected.plan, nullptr);
+  ASSERT_EQ(store.mark_executed(selected.plan, 1905U, 10.0, 0.05),
+    certified::StoreReason::Accepted);
+  if (contract::publication_interrupts_execution_ledger(
+      contract::ControlIntent::Stop, false, 1905U, 1905U))
+  {
+    store.clear();
+  }
+  const auto next_tick = store.executed_snapshot();
+  ASSERT_NE(next_tick.plan, nullptr);
+  EXPECT_EQ(next_tick.plan, selected.plan);
+  EXPECT_DOUBLE_EQ(next_tick.first_published_control_origin_sec, 10.0);
+  EXPECT_DOUBLE_EQ(next_tick.first_published_artifact_elapsed_sec, 0.05);
+  // An external Stop on the next decision must still discard the old clock.
+  if (contract::publication_interrupts_execution_ledger(
+      contract::ControlIntent::Stop, false, 1906U, 1905U))
+  {
+    store.clear();
+  }
+  EXPECT_EQ(store.executed_snapshot().plan, nullptr);
+}
+
 TEST(MpccRateResolvedCertifiedPlan, CertificationDoesNotImplyExecution)
 {
   certified::Store store;

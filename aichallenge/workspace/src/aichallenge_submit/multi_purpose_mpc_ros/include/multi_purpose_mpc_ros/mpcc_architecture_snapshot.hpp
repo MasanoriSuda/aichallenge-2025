@@ -2,6 +2,7 @@
 #define MULTI_PURPOSE_MPC_ROS__MPCC_ARCHITECTURE_SNAPSHOT_HPP_
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
@@ -72,6 +73,32 @@ RecordResult record_proof_failure(
   const mpcc_rate_resolved_shadow::Snapshot & source,
   PipelineStage pipeline_stage,
   const std::string & failure_outcome,
+  const std::string & failure_detail,
+  const std::filesystem::path & output_root =
+  std::filesystem::path{"mpcc_architecture_snapshots"}) noexcept;
+
+/// Observation of the publication ledger at a later authority-loss boundary.
+/// Bundle-source evidence is explicitly distinct from an executed trajectory.
+/// The failure fingerprint joins this record to its current-world snapshot.
+struct PublicationEvidence
+{
+  std::uint64_t failure_decision_id{};
+  std::uint64_t failure_interaction_fingerprint{};
+  double failure_observation_sec{};
+  double failure_control_origin_sec{};
+  std::string source_kind;
+  std::uint64_t publication_decision_id{};
+  double publication_control_origin_sec{};
+  double publication_artifact_elapsed_sec{};
+};
+
+/// Save the original solver input AND the actual immutable artifact, without
+/// resolving the input again. Shares the existing bounded failure deduplication
+/// and atomic writer. Neither the artifact nor this evidence grants authority.
+RecordResult record_published_execution(
+  const mpcc_rate_resolved_shadow::Snapshot & source,
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const PublicationEvidence & publication,
   const std::string & failure_detail,
   const std::filesystem::path & output_root =
   std::filesystem::path{"mpcc_architecture_snapshots"}) noexcept;

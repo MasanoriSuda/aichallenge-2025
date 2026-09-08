@@ -528,3 +528,31 @@ def test_adjustment_honours_cooperative_cancellation(tmp_path: Path) -> None:
             ),
             cancel_requested=lambda: True,
         )
+
+
+@pytest.mark.parametrize('preserve', [True, False])
+def test_calibrated_map_preserves_declared_occupied_cell(tmp_path: Path, preserve: bool) -> None:
+    pixels = _free_pixels(5, 5)
+    _set_map_cell(pixels, 5, 5, 2, 2, 0)
+    path = _write_map(tmp_path, width=5, height=5, pixels=pixels)
+    path.write_text(path.read_text() + f'\npreserve_occupied_cells: {str(preserve).lower()}\n')
+    grid = load_occupancy_grid(path)
+    expected = CellState.OCCUPIED if preserve else CellState.FREE
+    assert grid.state(2, 2) is expected
+
+
+@pytest.mark.parametrize('invalid', ['1', 'arbitrary', '[]'])
+def test_rejects_invalid_occupancy_preservation_metadata(tmp_path: Path, invalid: str) -> None:
+    path = _write_map(tmp_path, width=2, height=2, pixels=_free_pixels(2, 2))
+    path.write_text(path.read_text() + f'\npreserve_occupied_cells: {invalid}\n')
+    with pytest.raises(ValueError, match='preserve_occupied_cells'):
+        load_occupancy_grid(path)
+
+
+def test_local_awsim_reconstructed_wall_contact_is_occupied() -> None:
+    root = Path(__file__).resolve().parents[1]
+    grid = load_occupancy_grid(root / 'env/final_ver3/occupancy_grid_map.yaml')
+    # Independent 3D body/scene reconstruction: static mesh108 triangles81055/81056,
+    # failure run20260908-mpcc-stop-reference-single-r3, source250.649994397.
+    # Expected occupancy is a physical witness, not derived from the raster.
+    assert grid.state_at_world(89668.65526570712, 43168.54996447149) is CellState.OCCUPIED

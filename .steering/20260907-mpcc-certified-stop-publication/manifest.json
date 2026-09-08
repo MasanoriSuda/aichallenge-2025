@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260907-dev2-d1-decision-1905",
+  "run_id": "20260907-mpcc-stop-feasibility-dev2",
+  "domain_id": 1,
+  "decision_id": 1905,
+  "replay_ready": false,
+  "incomplete_reason": "Source/world complete; live accepted Stop bundle1284 and predecessor1267 are not serialized. Publication lifecycle is independently reproduced by two-tick ledger test.",
+  "baseline_manifest": ".steering/20260907-mpcc-pass-terminal-audit/dev2-manifest.json",
+  "files": [
+    {
+      "path": "output/20260907-mpcc-stop-feasibility-dev2/d1/mpcc_architecture_snapshots/000000001905-679d9e4f79c19413-shiftout-side-negative-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "sha256": "262e1e5ac075bd3d59f2277f452696db0afc7563ab35c700b7ba4e6d8d37430b",
+      "bytes": 40592
+    },
+    {
+      "path": "output/20260907-mpcc-stop-feasibility-dev2/d1/mpcc_architecture_snapshots/000000001905-679d9e4f79c19413-shiftout-side-negative-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "bytes": 570009
+    },
+    {
+      "path": "output/20260907-mpcc-stop-feasibility-dev2/d1/autoware.log",
+      "sha256": "8be1c8b014c5645c0b39baa00d77caa899dfdba9aaff4feadff11fbcfe2491a7",
+      "bytes": 2526311
+    },
+    {
+      "path": "output/20260907-mpcc-stop-feasibility-dev2/d2/autoware.log",
+      "sha256": "039e4b67242267d2477e001d32e1fe34e3d5453b7dc533983178859a0799c118",
+      "bytes": 1129804
+    },
+    {
+      "path": "output/20260907-mpcc-stop-feasibility-dev2/bag-analysis.json",
+      "sha256": "64242fa063ecaa627e240abe9eff0d51dcb17e8128a681bc711f6b652ab35f4a",
+      "bytes": 363309
+    }
+  ]
+}

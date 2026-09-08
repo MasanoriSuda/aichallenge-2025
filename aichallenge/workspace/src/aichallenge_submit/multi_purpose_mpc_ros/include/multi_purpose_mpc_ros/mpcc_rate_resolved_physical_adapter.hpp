@@ -178,6 +178,10 @@ struct StopLateralTargetProfile
 bool stop_lateral_target_profile_valid(
   const StopLateralTargetProfile & profile) noexcept;
 
+/// Copy artifact-local solved geometry without extrapolation or resampling.
+std::optional<StopLateralTargetProfile> build_normal_path_stop_profile(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & execution) noexcept;
+
 /// Linearly sample a validated immutable profile.  Values within tolerance of
 /// either endpoint are clamped to that endpoint; values outside the certified
 /// interval are rejected rather than retaining or extrapolating old geometry.

@@ -2,6 +2,7 @@
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -70,6 +71,12 @@ Result refine(const Request & request) noexcept
     horizon <= 0 || !longitudinal_topology_valid ||
     request.pass_side_sign < -1 ||
     request.pass_side_sign > 1 ||
+    (request.witness_physical_separation &&
+    (!request.physical_separation_geometry.has_value() || forced_longitudinal ||
+    request.forced_first_pass_side_stage.has_value() ||
+    request.forced_first_ahead_stage.has_value() ||
+    request.forced_constraint_fraction.has_value() ||
+    request.forced_diagonal_start_stage.has_value())) ||
     (forced_longitudinal &&
     (request.pass_side_sign != 0 ||
     request.forced_first_pass_side_stage.has_value() ||
@@ -590,6 +597,43 @@ Result refine(const Request & request) noexcept
     }
     problem::DynamicObstacleConstraint constraint;
     constraint.state_stage = stage + 1;
+    if (request.witness_physical_separation) {
+      const int state = (stage + 1) * model::kStateDimension;
+      const double heading = request.wall_only_primal[state + model::kHeadingIndex];
+      const double cosine = std::cos(heading);
+      const double sine = std::sin(heading);
+      const double relative_progress = prediction.target_progress_m -
+        request.wall_only_primal[state + model::kProgressIndex] -
+        request.wall_only_primal[state + model::kLagIndex];
+      const double relative_lateral = prediction.target_lateral_m -
+        request.wall_only_primal[state + model::kLateralIndex];
+      const double body_forward = cosine * relative_progress + sine * relative_lateral;
+      const double body_left = -sine * relative_progress + cosine * relative_lateral;
+      const auto & geometry = *physical_geometry;
+      const double forward_gap = body_forward - std::clamp(
+        body_forward, -geometry.ego_rear_extent_m - geometry.ego_margin_m,
+        geometry.ego_front_extent_m + geometry.ego_margin_m);
+      const double left_gap = body_left - std::clamp(
+        body_left, -geometry.ego_right_extent_m - geometry.ego_margin_m,
+        geometry.ego_left_extent_m + geometry.ego_margin_m);
+      const double gap_norm = std::hypot(forward_gap, left_gap);
+      if (!std::isfinite(gap_norm) || gap_norm <= 0.0) {
+        result.reason = Reason::InvalidInput;
+        return result;
+      }
+      const double progress_normal = (cosine * forward_gap - sine * left_gap) / gap_norm;
+      const double lateral_normal = (sine * forward_gap + cosine * left_gap) / gap_norm;
+      constraint.axis = problem::DynamicObstacleConstraintAxis::CoupledLateralProgress;
+      constraint.effective_progress_coefficient = progress_normal;
+      constraint.lateral_coefficient = lateral_normal;
+      constraint.upper = progress_normal * prediction.target_progress_m +
+        lateral_normal * prediction.target_lateral_m -
+        physical_support(stage, progress_normal, lateral_normal);
+      ++result.diagonal_row_count;
+      result.physical_diagonal_guidance_applied = true;
+      refined.dynamic_obstacle_constraints.push_back(constraint);
+      continue;
+    }
     if (forced_longitudinal) {
       constraint.axis =
         problem::DynamicObstacleConstraintAxis::EffectiveProgress;

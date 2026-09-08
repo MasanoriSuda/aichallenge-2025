@@ -1964,6 +1964,97 @@ bool interaction_snapshot_matches_fingerprint(
          fingerprint_interaction_snapshot(source) == expected_fingerprint;
 }
 
+YAML::Node execution_evidence_node(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & value,
+  const PublicationEvidence & publication)
+{
+  YAML::Node node;
+  node["schema"] = "mpcc-published-execution-evidence/v1";
+  // Identity is exactly the enclosing source identity (checked before writing).
+  node["source_sequence"] = value.identity.sequence;
+  node["source_problem_fingerprint"] = value.identity.source_context.fingerprint;
+  node["source_snapshot_sec"] = value.identity.snapshot_sec;
+  node["prediction_origin_sec"] = value.prediction_origin_sec;
+  node["publication_interval_sec"] = value.publication_interval_sec;
+  node["completed_sec"] = value.completed_sec;
+  node["course_progress_origin_m"] = value.course_progress_origin_m;
+  node["semantic_initial_steering_rad"] = value.semantic_initial_steering_rad;
+  node["semantic_initial_response_steering_rad"] = value.semantic_initial_response_steering_rad;
+  node["wheelbase_m"] = value.wheelbase_m;
+  node["yaw_response_gain"] = value.yaw_response_gain;
+  node["yaw_response_time_constant_sec"] = value.yaw_response_time_constant_sec;
+  node["minimum_frenet_denominator"] = value.minimum_frenet_denominator;
+  node["maximum_abs_steering_rad"] = value.maximum_abs_steering_rad;
+  node["maximum_abs_steering_rate_radps"] = value.maximum_abs_steering_rate_radps;
+  node["physical_global_tolerance"] = value.physical_global_tolerance;
+  node["maximum_constraint_violation"] = value.maximum_constraint_violation;
+  node["maximum_normalized_constraint_violation"] = value.maximum_normalized_constraint_violation;
+  node["terminal_intent_contract"]["active"] =
+    value.terminal_intent_contract.active;
+  node["terminal_intent_contract"]["lateral_reference_m"] =
+    value.terminal_intent_contract.lateral_reference_m;
+  node["terminal_intent_contract"]["lateral_tolerance_m"] =
+    value.terminal_intent_contract.lateral_tolerance_m;
+  node["terminal_intent_contract"]["heading_reference_rad"] =
+    value.terminal_intent_contract.heading_reference_rad;
+  node["terminal_intent_contract"]["heading_tolerance_rad"] =
+    value.terminal_intent_contract.heading_tolerance_rad;
+  node["terminal_intent_certificate"]["active"] =
+    value.terminal_intent_certificate.active;
+  node["terminal_intent_certificate"]["solved_horizon_steps"] =
+    value.terminal_intent_certificate.solved_horizon_steps;
+  node["terminal_intent_certificate"]["solved_lateral_m"] =
+    value.terminal_intent_certificate.solved_lateral_m;
+  node["terminal_intent_certificate"]["solved_heading_rad"] =
+    value.terminal_intent_certificate.solved_heading_rad;
+  node["predicted_states"] = YAML::Node(YAML::NodeType::Sequence);
+  for (const auto & item : value.predicted_states) {
+    YAML::Node entry;
+    entry["lateral_m"] = item.lateral_m;
+    entry["lag_m"] = item.lag_m;
+    entry["heading_offset_rad"] = item.heading_offset_rad;
+    entry["velocity_mps"] = item.velocity_mps;
+    entry["progress_m"] = item.progress_m;
+    entry["steering_rad"] = item.steering_rad;
+    entry["response_steering_rad"] = item.response_steering_rad;
+    node["predicted_states"].push_back(entry);
+  }
+  node["control_stages"] = YAML::Node(YAML::NodeType::Sequence);
+  for (const auto & item : value.control_stages) {
+    YAML::Node entry;
+    entry["acceleration_mps2"] = item.acceleration_mps2;
+    entry["steering_rate_radps"] = item.steering_rate_radps;
+    entry["virtual_progress_speed_mps"] = item.virtual_progress_speed_mps;
+    entry["duration_sec"] = item.duration_sec;
+    entry["virtual_progress_lower_mps"] = item.virtual_progress_lower_mps;
+    entry["virtual_progress_upper_mps"] = item.virtual_progress_upper_mps;
+    entry["acceleration_lower_mps2"] = item.acceleration_lower_mps2;
+    entry["acceleration_upper_mps2"] = item.acceleration_upper_mps2;
+    entry["path_curvature_radpm"] = item.path_curvature_radpm;
+    node["control_stages"].push_back(entry);
+  }
+  node["nominal_path_distance_m"] = value.nominal_path_distance_m;
+  node["lateral_lower_m"] = value.lateral_lower_m;
+  node["lateral_upper_m"] = value.lateral_upper_m;
+  node["publication"]["failure_decision_id"] =
+    publication.failure_decision_id;
+  node["publication"]["failure_interaction_fingerprint"] =
+    publication.failure_interaction_fingerprint;
+  node["publication"]["failure_observation_sec"] =
+    publication.failure_observation_sec;
+  node["publication"]["failure_control_origin_sec"] =
+    publication.failure_control_origin_sec;
+  node["publication"]["source_kind"] =
+    publication.source_kind;
+  node["publication"]["publication_decision_id"] =
+    publication.publication_decision_id;
+  node["publication"]["publication_control_origin_sec"] =
+    publication.publication_control_origin_sec;
+  node["publication"]["publication_artifact_elapsed_sec"] =
+    publication.publication_artifact_elapsed_sec;
+  return node;
+}
+
 static RecordResult record_snapshot(
   const shadow::Snapshot & source,
   const problem::AssemblyRequest * const assembly_request,
@@ -1973,7 +2064,8 @@ static RecordResult record_snapshot(
   const PipelineStage pipeline_stage,
   const std::string & failure_outcome,
   const std::string & failure_detail,
-  const std::filesystem::path & output_root) noexcept
+  const std::filesystem::path & output_root,
+  const YAML::Node & execution_evidence = YAML::Node()) noexcept
 {
   RecordResult result;
   try {
@@ -2082,6 +2174,9 @@ static RecordResult record_snapshot(
       source, source.wall_grid != nullptr ? grid_payload : "");
     root["interaction_fingerprint"] =
       fingerprint_interaction_snapshot(source);
+    if (execution_evidence.IsMap()) {
+      root["execution_evidence"] = execution_evidence;
+    }
     if (exact_problem != nullptr) {
       root["assembly_request"] = assembly_request_node(*assembly_request);
       root["exact_qp"] = exact_problem_node(*exact_problem);
@@ -2167,6 +2262,44 @@ RecordResult record_proof_failure(
   return record_snapshot(
     source, nullptr, nullptr, nullptr, nullptr, pipeline_stage,
     failure_outcome, failure_detail, output_root);
+}
+
+RecordResult record_published_execution(
+  const shadow::Snapshot & source,
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const PublicationEvidence & publication,
+  const std::string & failure_detail,
+  const std::filesystem::path & output_root) noexcept
+{
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  try {
+    if (
+      fingerprint_interaction_snapshot(source) == 0U ||
+      !execution::same_identity(source.identity, artifact.identity) ||
+      execution::validate(artifact) != execution::RejectReason::None ||
+      publication.failure_decision_id == 0U ||
+      publication.failure_interaction_fingerprint == 0U ||
+      (publication.source_kind != "exact-executed" &&
+      publication.source_kind != "current-world-bundle") ||
+      publication.publication_decision_id == 0U ||
+      !std::isfinite(publication.failure_observation_sec) ||
+      !std::isfinite(publication.failure_control_origin_sec) ||
+      !std::isfinite(publication.publication_control_origin_sec) ||
+      !std::isfinite(publication.publication_artifact_elapsed_sec) ||
+      publication.publication_artifact_elapsed_sec < 0.0)
+    {
+      return {RecordStatus::InvalidInput, {},
+        "invalid published execution identity, artifact or clock"};
+    }
+    return record_snapshot(
+      source, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
+      "published-source-at-authority-loss", failure_detail, output_root,
+      execution_evidence_node(artifact, publication));
+  } catch (const std::exception & exception) {
+    return {RecordStatus::IoFailure, {}, exception.what()};
+  } catch (...) {
+    return {RecordStatus::IoFailure, {}, "unknown execution evidence exception"};
+  }
 }
 
 std::optional<RecordedQp> load_recorded_qp(

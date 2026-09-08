@@ -1,0 +1,20 @@
+{
+  "selected_faces": 50963,
+  "projected_faces": 27779,
+  "changed_cells": 4567,
+  "newly_occupied_free_cells": 4567,
+  "original_occupied_preserved": true,
+  "contact_faces_covered": true,
+  "projection_scope": "All heights; abs(normal.z)<=0.5; additive union with original map",
+  "baseline_map_sha256": "c24af2130a8df96047a49d5b7759af7a0b29645c023e7f3bc6d4ba436275725a",
+  "calibrated_map_sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211",
+  "metadata": "preserve_occupied_cells:true; native center-origin convention",
+  "source_assets": {
+    "aichallenge/simulator/AWSIM/AWSIM_Data/level1": "036a04a672f8f06196d1039579416871a2d11692e42220e1ae1e38d2003f7818",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/resources.assets": "dec0d2102432811a69972ce8cfd64699ea42fe22c6e4459e8f266a5a703c0f12",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/sharedassets1.assets": "593fab4cc85683fb153e91f14fb5626d43ad0ed4243722d98dd7d60d162cf3b2"
+  },
+  "method_at_diagnostic_generation": "Diagnostic additive projection of near-vertical static collision faces.\n\nNot a production map: all heights are projected, and faces with abs(normal.z)\nabove0.5 are omitted. This tests map feasibility/coverage, not a claim that\nevery possible body contact is represented by the selected face class.\n",
+  "method": "Additive near-vertical static collision mesh projection, native center-origin cells; original occupancy union preserved.",
+  "adoption_status": "Applied to working-tree final_ver3 map for locally verified geometry correction. Dynamic integrated acceptance rejected at10699/10700; full3D coverage not established."
+}

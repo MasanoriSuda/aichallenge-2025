@@ -1,0 +1,55 @@
+{
+  "run_id": "20260908-mpcc-stop-reference-single-r3",
+  "artifacts": [
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/manifest.json",
+      "sha256": "4c233a58b366087eda85f8b801ccbed43f305fbae8d1e02d2c10eeb18d6feb66",
+      "size_bytes": 4894
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/mpcc-source.patch",
+      "sha256": "c49460afe165040cfc67dc041f4fdfbea4eead1e3016192563bde81bce2f4c6e",
+      "size_bytes": 126917
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/monitor-summary.json",
+      "sha256": "49ec8386cfa8f3d865b662e8cbb7aa3a112a9451e94a38ca0fdf1b368d496533",
+      "size_bytes": 717
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/log-summary.json",
+      "sha256": "8a693ccc510215f6590d081bedbd22d11c40a51b5495c8d6105fc2bdddafcb3a",
+      "size_bytes": 56157
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/bag-analysis.json",
+      "sha256": "5ea2285e7348b91586a59d28f3018a91b069e4401f6d266678f5e2158fb92b5e",
+      "size_bytes": 215842
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/d1/autoware.log",
+      "sha256": "647ffca302440b03347d8ab8af7e8de4f5a068da296f55dc15b9bc78e5163c9e",
+      "size_bytes": 5008538
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/d1/result-summary.json",
+      "sha256": "55844c64c26deb8b31d7a504988861d1b29d136a51fee9645a5420427eeb39ec",
+      "size_bytes": 1001
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/d1/d1-result-details.json",
+      "sha256": "d388a46cdcba348e974a097e2b890407731f4c43e073de61f6f99949cae907f3",
+      "size_bytes": 1025
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/d1/rosbag2_autoware/metadata.yaml",
+      "sha256": "3fba1b42141a76f497a27463009f27a9ea5aaa2701debde2e070bdbbed19e88f",
+      "size_bytes": 8536
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "95078313a6f01ea254eff8c244d051572fde5efd266bd690e4192005b46590c1",
+      "size_bytes": 86264319
+    }
+  ]
+}

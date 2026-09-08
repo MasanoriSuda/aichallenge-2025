@@ -13,6 +13,20 @@ namespace contract = multi_purpose_mpc_ros::mpcc_execution_contract;
 namespace
 {
 
+TEST(MpccExecutionContract, CertifiedStopPublicationRetainsItsExecutionLedger)
+{
+  EXPECT_FALSE(contract::publication_interrupts_execution_ledger(
+    contract::ControlIntent::Stop, false, 1905U, 1905U));
+  EXPECT_TRUE(contract::publication_interrupts_execution_ledger(
+    contract::ControlIntent::Stop, false, 1906U, 1905U));
+  EXPECT_TRUE(contract::publication_interrupts_execution_ledger(
+    contract::ControlIntent::Stop, false, 0U, 0U));
+  EXPECT_TRUE(contract::publication_interrupts_execution_ledger(
+    contract::ControlIntent::Stop, true, 1905U, 1905U));
+  EXPECT_TRUE(contract::publication_interrupts_execution_ledger(
+    contract::ControlIntent::ShiftOut, true, 1905U, 1905U));
+}
+
 TEST(MpccExecutionContract, ProspectiveOvertakeIntentDefaultsToShiftOut)
 {
   EXPECT_EQ(

@@ -1,0 +1,4 @@
+services:
+  simulator:
+    volumes:
+      - /home/msuda/workspace/automotive_ai_challenge_2025/aichallenge-2025/.steering/20260908-mpcc-stop-reference-feasibility/dev-six-lap.sh:/aichallenge/simulator_scripts/dev.sh:ro

@@ -1,0 +1,37 @@
+{
+  "snapshot_id": "20260908-single-d1-decision-9401",
+  "run_id": "20260908-mpcc-normal-path-stop-observation",
+  "domain_id": 1,
+  "decision_id": 9401,
+  "baseline_manifest": ".steering/20260908-mpcc-single-stop-horizon/observation-manifest.json",
+  "replay_ready": false,
+  "current_problem_architecture_replay_ready": true,
+  "incomplete_reason": "Actual current-world comparison is logged for sequence8769; source9401 is sealed, but that executed artifact is not serialized. First aggregate production failure is later9407/sequence8770.",
+  "files": [
+    {
+      "path": "output/20260908-mpcc-normal-path-stop-observation/d1/mpcc_architecture_snapshots/000000009401-4db788e2c90c092b-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 35365,
+      "sha256": "81aab60fe12e245745894ef48da47ec87580aa043cfc8a09168e5e04412ea71f"
+    },
+    {
+      "path": "output/20260908-mpcc-normal-path-stop-observation/d1/mpcc_architecture_snapshots/000000009401-4db788e2c90c092b-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98"
+    },
+    {
+      "path": "output/20260908-mpcc-normal-path-stop-observation/d1/autoware.log",
+      "bytes": 2449340,
+      "sha256": "225317fc22cf76e092282ca2720e2524f1b5a503b63e10bd00ae1c826e0a2dc4"
+    },
+    {
+      "path": "output/20260908-mpcc-normal-path-stop-observation/first-counterfactual-boundary.log",
+      "bytes": 5519,
+      "sha256": "77f1058935892e39d0abd9c7aedf335163b4afedb4946eaf17ec28d7ab06f41f"
+    },
+    {
+      "path": "output/20260908-mpcc-normal-path-stop-observation/monitor-summary.json",
+      "bytes": 934,
+      "sha256": "eefe3ebf17d8c073651c9c52508a850b294faa7e14deab55dc002738e5d41631"
+    }
+  ]
+}

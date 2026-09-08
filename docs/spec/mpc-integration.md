@@ -1182,7 +1182,15 @@ MPC コントローラはノード起動時にCSVのXY geometryを読み、内�
 再計算する。最小曲率lineとoccupancy grid自体はoffline生成物なので、
 **コースが変わった場合はこの手順で再生成が必要**。
 
-現在は `env/final_ver3/` に計算済みのファイルが格納されており、同じコースであればそのまま使える。
+現在は `env/final_ver3/` に計算済みのファイルが格納されている。コース名が同じでも、
+使用中AWSIMのcollision mesh・座標系との整合確認が必要。
+2026-09-08の単車3回目では実壁の接触候補位置が校正前mapのfree cellに入り、
+native C++のセル中心原点規約では最寄りoccupied cell中心まで約0.600m、
+セル境界まで約0.548mあった（当初の約0.555m中心距離はcorner原点で計算した値）。
+現在はcollision meshの近鉛直面を追加投影した地図を検証中。元の占有を全て保持し、
+4,567セルを追加した。選択外の3D形状まで含む完全な被覆は保証しない。
+自己位置側のUNKNOWN GNSS共分散は[校正仕様](localization-calibration.md)、
+車体寸法とV2X・壁の未解決点は[形状校正](mpcc-geometry-calibration.md)を参照。
 
 ### データ生成フロー
 
@@ -3310,6 +3318,72 @@ geometryを現在worldから再構築できるが、ReplayWorldのglobal velocit
 ReplayWorldは引き続きdense timed exact dynamic certificateの独立入力である。近似QP tubeとexact physical proofを別表現にする
 ことは許すが、同一control epoch内で二つの近似target predictorを持たせない。
 
+#### CurrentTargetTubeのsemantic時間所有（2026-09-07、2025由来の暫定）
+
+CurrentTargetTubeのstage到着時刻は、seven-state入力と同じ`progress_stage_dt_sec`の累積値から生成する。
+Track/Cruise/Follow等で旧progress-contouring executionが非activeでも、normal MPCCのsemantic metadataは
+有効になり得る。旧dynamics組立の`model->Ts`やpublisher周期を障害物予測の時間列へ流用しない。
+metadataが欠けた場合は空の時間列としてtubeを不成立にし、別のclockへ切り替えない。
+
+`output/20260831-192221/d1` decision 1187では、MPCC入力が0.25秒刻みなのにtarget tubeが0.025秒刻みであり、
+約3.9 m/sのtargetがQP上で約0.39 m/sに見えた。凍結source fingerprint `13608911548693048044`はstage 3の
+coupled obstacle rowで棄却された。既存のlateral予測上限1秒、予測打切り3秒、world、solver、wall/dynamic/terminal
+証明を維持してsamplingだけを整合したcandidate `17803104293055415054`は全証明を通過した。
+これは局所原因の受入れであり、全intent・多車両のrace受入れとは別である。
+
+比較ツールの`--target-stage-time-only <recorded-dt> <lateral-horizon> <max-time>`は観測専用である。
+記録されたuntruncated affine tubeを検証してからresampleし、candidate fingerprintを付け直す。
+時間引数は保存sceneの根拠から与え、publication周期から推定しない。有限wall-course windowへの再投影や
+ReplayWorldの加速度・control origin変更は行わない。実行authorityへの昇格経路を持たない。
+
+詳細: [semantic-time slice](../../.steering/20260907-mpcc-semantic-target-time/results.md)。
+
+#### 最大制動Stopの実行可能性問題（2026-09-07、2025由来の暫定）
+
+現在worldから作る最大制動Stopは、速度列を停止まで固定したseven-state実行可能性問題として扱う。
+走行Missionのlateral／heading／progress目的、線形報酬、入力・入力差分costを引き継がない。
+線形化のreferenceと全hard bound、model、dt、world、control originは保つ。これはStopの目的定義であり、
+通常走行のweight設定やsolverの許容誤差を変更するものではない。
+
+完全horizon、costなし、非増加の固定速度列、整合する加速度reference、終端速度0というsealed契約を
+満たすStopでは、automatic obstacle topologyを各stageの車体矩形と相手円の完全な支持面で表現する。
+車体の向き・非対称extent・marginはimmutable ReplayWorld由来とし、角の斜めの離隔を「全stageで真後ろ」
+へ置き換えない。未定義の分離法線やgeometry欠落は棄却する。明示的なlongitudinal／transition契約は維持する。
+QP後のnonlinear rollout、exact swept wall、timed dynamic、停止終点証明とcurrent-world joinは従来どおり必須である。
+
+`20260907-mpcc-semantic-time-dev2` D1 decision 4166の4通りの凍結比較では、旧目的のみの変更・
+支持面のみの変更はいずれも棄却され、両方を揃えたcandidate `11485209961842629289`だけがcertified Stopとなった。
+本番のStop workerは既存の`DirectSevenStateOnly`を継続する。新authorityやretry populationを追加しない。
+局所受入れとrace受入れは分け、最新の検証状況は[Stop監査結果](../../.steering/20260907-mpcc-pass-terminal-audit/results.md)に記録する。
+
+#### certified Stopの公開後の実行記録（2026-09-07、2025由来の暫定）
+
+証明済みterminal Stopは、元のnormal問題のintent／fingerprintをprovenanceとして持ち、公開authorityはStopになる。
+serializer一致と既存の実行ledgerへの登録が同じdecisionで成立した場合、そのStopラベルを理由に実行記録を削除しない。
+同じ有限artifactを次周期もcurrent-worldで再検証し、採用時にはStop authorityを保つ。初回公開のcontrol originとartifact
+cursorを更新し直さない。新しいnormal候補への復帰は既存のidentity／到達可能性／全物理証明によるjoinを必要とする。
+
+外部Emergency、Recovery等の上書き、当該decisionのserialized commitがないStopでは、従来どおり実行clockを破棄する。
+Stopからさらに別のStop候補を生成する観測workerは無効化する。追加store、lease、猶予時間、publisherは設けない。
+
+`20260907-mpcc-stop-feasibility-dev2` D1 decision1905ではcertified Stop bundle1284がjoinしたが、旧処理は
+Stopをnormal実行記録の対象外にし、全Stopでledgerをclearした。1906にはplanが欠落し、別のEmergency Stopになった。
+修正前に2周期のledger再現テストが失敗し、修正後は時計の保持と外部停止時の破棄を確認した。
+実走行の受入れ状況は[公開継続slice](../../.steering/20260907-mpcc-certified-stop-publication/tasklist.md)で管理する。
+
+#### stateless公開後のPass／Return候補生成（2026-09-08、2025由来の暫定）
+
+反対側の認証済みBundleを公開すると、古いMissionの固定経路は破棄する。その後のPass／Return候補生成は、
+既存のpublisher-boundなstateless encounterからも要求できる。固定Missionの有無は候補生成の前提にしない。
+workerは現在worldからprospective問題を構築し、Missionがない場合は古いselected_missionを引き継がない。
+Returnには従来どおり現在位置からのpreflight経路を要求する。
+
+この条件はdraft生成だけを許す。target provenance、同じ周期でserializeした先行command、seven-state solve、
+wall／dynamic／terminal証明とcurrent-world Gate Aが揃うまで、live phaseとcommand authorityは移さない。
+`20260907-mpcc-stop-ledger-dev2` D1では、decision1695のstateless採用直後から旧Mission依存条件により
+Pass draft生成が止まり、2677までShiftOutが継続した。最終状態の方式比較は全棄却であり、物理的不成立の証明ではない。
+検証状況は[後続候補生成slice](../../.steering/20260908-mpcc-stateless-successor/tasklist.md)で管理する。
+
 #### current-world候補のencounter topology所有（2026-08-31、2025由来の暫定）
 
 stateless current-world candidateの時間構造は、capture元の失敗candidateやpersistent Missionではなく、同じepochで
@@ -3607,6 +3681,83 @@ authorityは共有したままとする。したがって別publisherや別autho
 Return候補は物理的にも成立したため、このfailureはcandidate-generation defectではなく
 worker head-of-line scheduling defectと分類する。別runで観測したShiftOutのwall／corridor failureは
 このReturn修正へ混ぜず、個別のfrozen snapshotとして監査する。
+
+### 2026-09-08 単車の停止境界
+
+`20260908-mpcc-single-six-lap`は6周266.276642秒で完走したが、最終周に壁penalty1回
+（集計8.210140秒）があり、安全受入れは未達。decision11046で通常継続と基準線追従Stopの
+壁証明が失われ、Emergency／stuck Recoveryを経て11464でcertified Cruiseへ復帰した。
+受信周期の50ms超欠落と25ms callback overrunは0。完走と安全合格を区別する。
+
+独立Stop producerには、通常horizonが短い場合に末尾速度だけ0へ上書きする不整合があった。
+同sourceは初速8.209698m/s、horizon1.792348秒で、減速上限3m/s2では停止できない。
+最大減速則の終端速度が正なら`InvalidBrakingEnvelope`とし、矛盾する候補をQPへ渡さない。
+通常horizonの延長はpeer予測の時間軸も変えるため、このproducer内では行わない。
+現行独立Stop workerはShiftOut/Pass対象であり、この不整合を単車衝突の直接原因とはしない。
+
+単車snapshotの方式比較では、通常SQPは解けるが基準線追従Stopが壁で失敗する。
+通常軌道の横位置profileを使うStopと有界な横目標scanはオフライン物理証明を通った。
+peer不在時だけの最大dt比較はQPが解けても壁証明で失敗した。B/C/Dの追い越しgeneratorは
+targetなしでは対象外であり、物理的不可能性の証明として扱わない。
+
+`20260908-mpcc-normal-path-stop-observation`では、decision9401／sequence8769／
+control219.729995秒／8.131m/sの同一current-world入力に対し、従来の基準線Stopが失敗し、
+通常軌道profileのStopが物理証明を通った。観測計算は0.446ms、`selected=0`。
+集約したnormal authority喪失は後の9407／sequence8770であり、この二つを混同しない。
+
+この根拠から、停止参照を通常軌道profile、基準線の最大2候補として完全検証する構成へ修正。
+通常軌道profileを先に検証し、停止証明まで到達して失敗した場合だけ基準線も独立に検証する。
+短い／静止したnormal horizonが停止まで覆わない場合でもprofileの外挿は行わない。
+identity・現在状態・操舵接続・publisher prefixの失敗には別参照を使わず、証明のない指令は出さない。
+選択された一つのStop軌道と操舵列を従来のProof／Bundleに結び付ける。実行中の
+counterfactual呼出しは削除し、`terminal_reference`と参照試行数を既存ログへ記録する。
+64件のretained回帰、2318件のpackage test、25packageの全体buildが通過。
+固定binary試験`20260908-mpcc-stop-reference-single-r1`は6周249.293030秒、penalty0。
+走行中のmoving Emergency／Recoveryはなく、終了後のStopはAWSIM `finish`観測後。
+callback最大20.905ms・overrun0、指令受信間隔最大33.506155ms・50ms超0。
+同条件のr2も6周250.933380秒・penalty0だったが、r3は最終周に停止し、5周で600秒timeout、
+壁penalty1回となった。3回反復の統合受入れは不合格。r3ではsource250.6秒の車両速度急減が
+指令速度の低下より先であり、後のRecovery10713・authority喪失10714とは分けて監査する。
+地図・自己位置・実際の車体との対応は未解明。r3のcallback最大18.061ms・overrun0、
+指令受信間隔最大33.190966ms・50ms超0。多車両・Stop公開継続へはまだ進めない。
+詳細と削除境界は
+[監査design](../../.steering/20260908-mpcc-single-stop-horizon/design.md)、
+[停止参照design](../../.steering/20260908-mpcc-stop-reference-feasibility/design.md)、
+[反復後の物理停止監査](../../.steering/20260908-mpcc-single-physical-stop-audit/design.md)、
+[単車結果](../../.steering/20260908-mpcc-single-six-lap/results.md)、中央registryを参照。
+
+### 2026-09-08 校正後の公開済み軌道の監査
+
+[GNSS校正](localization-calibration.md)と[車体・壁map校正](mpcc-geometry-calibration.md)の
+局所検証は通過した。壁map校正後の`20260908-wall-map-single-r1`は6周253.198868秒・
+penalty0だが、走行中のdecision10699/10700でEmergencyとなり、統合受入れは未達。
+10699では公開済みsequence10073からのdelay prefixが0.105秒で壁のhard reserveに入り、
+通常継続と停止末端の検証へ到達しない。callback最大19.623ms、overrun0、受信50ms超欠落0。
+
+現在問題のsnapshotだけでは、以前に採用したartifactの実行を再現できない。この観測欠落には、
+既存の非同期failure recorderで元のsolver sourceと実際のartifactを同じworker jobから保存する。
+`execution_evidence`は状態・入力・model・certificateの値、公開台帳の種類・時刻・cursorと、
+現在failureのfingerprintを保持する。solver sourceは通常動作の全intentで計画workerが保持し、
+従来のShiftOut/Pass限定による観測欠落を除く。exact-executedの時刻は最初の公開に対応し、
+current-world-bundleは元入力の証拠として区別する。別のsourceとのidentity混合は拒否する。
+これは観測専用で、sourceを再計算した結果に実行権限を与えない。制御器のmargin・delayは変更しない。
+結果と方式比較は[delay-prefix監査](../../.steering/20260908-mpcc-delay-prefix-audit/design.md)と
+中央registryに記録する。完遂順序は[最新状況](../../.steering/20260905-mpcc-completion-plan/current-status.md)を参照。
+多車両と提出物の受入れは引き続き未完。
+
+観測campaignの3走行目`20260908-execution-evidence-single-r3`で、公開済みsequence6782の
+実artifactとfailure7405の組を取得した。6周259.300171秒・penalty0だが走行中Emergencyがあり、
+統合受入れは棄却。callback最大21.207ms・overrun0、制御受信間隔最大35.177231msだった。
+同条件での追加観測走行は終了した。
+
+保存指令と現行C++関数の独立検証から、virtual progressを持つFrenet運動式とworld座標復元の
+不整合が確認された。停止車両でも仮想進捗により0.1秒で約4cm動く反例があり、実artifactでは
+45.123ms後にCartesian車体運動との位置差47.078mmが生じる。同一grid・footprint・hard reserveを
+使ったnative壁判定でも、現行軌道はclear、Cartesian軌道は最初の4.512ms判定点でreserve違反となる。
+車体接触を示す結果ではない。回転座標の式だけの変更では経路補間との不整合が残るため、
+SQP・artifact・通常/Stop/retainedの運動計算・座標復元・model identityを一体で修正する必要がある。
+現時点では本番運動式は未修正で、[再現証拠と修正設計](../../.steering/20260908-mpcc-delay-prefix-audit/frame-model-audit.md)
+を正本の未解決事項として保持する。観測成功や既存package test成功を、この問題の解決とは扱わない。
 
 ### 提出ファイルへの影響
 

@@ -1,0 +1,17 @@
+{
+  "scenario": "existing evaluation.launch.xml/eval.sh,Domain0AWSIM/Domain1Autoware,1vehicle,6laps,600s sim timeout",
+  "planned_repetitions": 3,
+  "rules": [
+    "Same verified controller/config/map for every repetition.",
+    "Stop campaign after a failed completed trial; investigate before repeating.",
+    "A run requires finished=true,6laps,penalty_count=0 and no unexplained moving normal authority failure.",
+    "Keep pre-race/after-finish Emergency separate; do not suppress in logs.",
+    "Record full callback and MCAP receive timing; no concurrent build/replay during simulation."
+  ],
+  "runner": ".steering/20260908-mpcc-stop-reference-feasibility/run_single_acceptance.py",
+  "runner_sha256": "54140d80556b4997f03f4c35911cafaf7e8567ac2c3d9dacceb0e2e06fd2a409",
+  "binaries": {
+    "aichallenge/workspace/build/multi_purpose_mpc_ros/mpc_controller_cpp": "5b65133ad69c424ff3c1954cc73b778b9d9aef283aff0d05586ac90f6ef0ae96",
+    "aichallenge/workspace/build/multi_purpose_mpc_ros/mpcc_architecture_compare": "9bcb744f18e40d810373e02fb3fff7c91e0720d4c1b3ef4147d8eeab5b684826"
+  }
+}

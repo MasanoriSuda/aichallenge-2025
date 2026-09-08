@@ -49,6 +49,14 @@ ControlIntent resolve_published_authority_intent(
   ControlIntent source_intent,
   bool certified_terminal_contingency_selected) noexcept;
 
+/// Publication labels alone do not distinguish a certified Stop suffix from
+/// an external emergency. The commit ID is recorded only after exact wire
+/// equality and execution-ledger admission in the current decision.
+bool publication_interrupts_execution_ledger(
+  ControlIntent authority_intent, bool publication_overridden,
+  std::uint64_t current_decision_id,
+  std::uint64_t certified_commit_decision_id) noexcept;
+
 enum class AtomicIntentAdmissionReason
 {
   ProposedAccepted,

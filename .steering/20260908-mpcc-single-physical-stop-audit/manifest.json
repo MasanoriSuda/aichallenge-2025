@@ -1,0 +1,170 @@
+{
+  "run_id": "20260908-mpcc-stop-reference-single-r3",
+  "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+  "controller_sha256": "5b65133ad69c424ff3c1954cc73b778b9d9aef283aff0d05586ac90f6ef0ae96",
+  "image_id": "sha256:7bac4849bcba25616c7301f2186be3d856753d1f14ed421b50918978b04ca3a9",
+  "replay_ready": false,
+  "reason": "Snapshot10714 is after physical slowdown and Recovery; exact executed artifact at first sensor slowdown is absent. Partial MCAP contains complete records around source250.6s; full finalized MCAP timing is separately sealed.",
+  "artifacts": [
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/d1/mpcc_architecture_snapshots/000000010714-96331d2607288436-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "42bea644d19813c42c546d181d4fc0eac920ed5b0b50cb08a6e2014edee69967",
+      "size_bytes": 35322
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/d1/mpcc_architecture_snapshots/000000010714-96331d2607288436-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "size_bytes": 570009
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/first-failure-motion.json",
+      "sha256": "b620bc409867f9377d6ab0667f9383be11c2161840665e6751a72b13be657ec1",
+      "size_bytes": 397411
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/first-failure-map.png",
+      "sha256": "beaa0048c0320d1deee9134b9602d4655e79f30f17f7b234cf56364421beb70d",
+      "size_bytes": 103899
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/Player-first-failure.log",
+      "sha256": "38ad125b5d03c80b3759417f5f9bfa19de547837b4cb5cf97f0c45fd07bd9904",
+      "size_bytes": 103922
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/first-failure-partial-bag/failure-prefix.mcap",
+      "sha256": "f7797902c4b294a5bb316350f429a705889ee2b0757b789bfd4faebf5dc827e3",
+      "size_bytes": 56258560
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/d1/d1-result-details.json",
+      "sha256": "d388a46cdcba348e974a097e2b890407731f4c43e073de61f6f99949cae907f3",
+      "size_bytes": 1025
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/bag-analysis.json",
+      "sha256": "5ea2285e7348b91586a59d28f3018a91b069e4401f6d266678f5e2158fb92b5e",
+      "size_bytes": 215842
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/log-summary.json",
+      "sha256": "8a693ccc510215f6590d081bedbd22d11c40a51b5495c8d6105fc2bdddafcb3a",
+      "size_bytes": 56157
+    },
+    {
+      "path": ".steering/20260908-mpcc-stop-reference-feasibility/single-r3-first-boundary.log",
+      "sha256": "7cb38da900e3e87af78794784a807481233cd09dab13b288191f6b63753ef045",
+      "size_bytes": 150438
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/first-failure-raw-sensors.json",
+      "sha256": "63eb8d34695250b1eb87163ccf1aea7f74bcc65cc98edbfbbd8c68c1197470fb",
+      "size_bytes": 29371
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/first-failure-covariance.json",
+      "sha256": "3531c36798d2f204c9b47feaa6d8a159ab0fbb94580789b85a90f956399539dc",
+      "size_bytes": 96767
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/unity-collider-geometry.json",
+      "sha256": "02ab898a6f8e7241017fe65ff8ec0f465c7483ae84bb84f288c829712d896b32",
+      "size_bytes": 277135
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/unity-track-collision.npz",
+      "sha256": "d6bf1740f68e3359ab766d04a8864b999f19f1e13309ccdbe739cf1370f9f2b6",
+      "size_bytes": 6066450
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/unity-wall-near-failure.npz",
+      "sha256": "d110c1d7abb82ccad965b7cef6e1bc28b9b2c999bc6a6e78be2c3a0ace10ff57",
+      "size_bytes": 9424
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/unity-sensor-cil.txt",
+      "sha256": "75c88fb87b748c804a33796fc768fc59a7bf374670f0bfca6a33d7c8e017b2b6",
+      "size_bytes": 20262
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/reconstructed-body-wall-intersections.json",
+      "sha256": "083511318906aae557283d5f14a87f069d67ca237f7573a20cb2d68706397fb6",
+      "size_bytes": 13472
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/covariance-consumer-comparison.json",
+      "sha256": "612f4e1b8afde939c3523690b32178662e3ff226fdf0f2bc8156f377b29ee742",
+      "size_bytes": 135473
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/covariance-replay-recorded100.log",
+      "sha256": "cd4d3cb167b1598c46a27a0976ad17fab04218aa54ce4721ea3ebcefa25cb9ef",
+      "size_bytes": 210
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/covariance-replay-calibrated01.log",
+      "sha256": "5ee4e40c05eaefafaab350d77fe881dae0704d7b579ce6e2286102f71f6ec6d0",
+      "size_bytes": 211
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/level1",
+      "sha256": "036a04a672f8f06196d1039579416871a2d11692e42220e1ae1e38d2003f7818",
+      "size_bytes": 177552
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/globalgamemanagers.assets",
+      "sha256": "2593fdeb33cfd30cefc105ea8e6ffba99a6bf2e2a8f865b54329ff1d6ae02df6",
+      "size_bytes": 38293360
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/resources.assets",
+      "sha256": "dec0d2102432811a69972ce8cfd64699ea42fe22c6e4459e8f266a5a703c0f12",
+      "size_bytes": 108928192
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/sharedassets1.assets",
+      "sha256": "593fab4cc85683fb153e91f14fb5626d43ad0ed4243722d98dd7d60d162cf3b2",
+      "size_bytes": 307113644
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll",
+      "sha256": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172",
+      "size_bytes": 811520
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220",
+      "size_bytes": 4245
+    },
+    {
+      "path": ".steering/20260908-mpcc-single-physical-stop-audit/replay_pose_covariance.py",
+      "sha256": "142f3b493c0029de8c0e8d22442cd9a8246542934961ba77b687a3b209904801",
+      "size_bytes": 6108
+    },
+    {
+      "path": ".steering/20260908-mpcc-single-physical-stop-audit/extract_scene_geometry.py",
+      "sha256": "a18988aa462e0db55c356d7b6b0029199e856a1c65191807886683d483893fc3",
+      "size_bytes": 2054
+    },
+    {
+      "path": ".steering/20260908-mpcc-single-physical-stop-audit/disassemble_sensors.py",
+      "sha256": "49a2c996611ef871cca6c5998b245950d248da768cb6ca899b85bd4291c15152",
+      "size_bytes": 1902
+    },
+    {
+      "path": ".steering/20260908-mpcc-single-physical-stop-audit/extract_colliders.py",
+      "sha256": "d3c1041c10a59948789ab1415638b4feb5fbaa5b02d470c3fc42518655e0e69b",
+      "size_bytes": 3699
+    },
+    {
+      "path": ".steering/20260908-mpcc-single-physical-stop-audit/reconstruct_contact.py",
+      "sha256": "0ee7e648fdec991ea2231b56679ed19a6149858552270f2b49df084791671c1e",
+      "size_bytes": 3832
+    },
+    {
+      "path": ".steering/20260908-mpcc-single-physical-stop-audit/analysis-requirements.txt",
+      "sha256": "fe7b4d057912003fcc76285791db0cdd76353d0444b43df090a0d17746a5b29b",
+      "size_bytes": 379
+    }
+  ]
+}

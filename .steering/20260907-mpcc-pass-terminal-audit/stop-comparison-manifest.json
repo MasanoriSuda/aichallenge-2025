@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "scope": "frozen current-problem Stop comparison; historical retained artifact unavailable",
+  "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+  "source_manifest": ".steering/20260907-mpcc-pass-terminal-audit/manifest.json",
+  "files": [
+    {
+      "path": "output/20260907-mpcc-stop-factorial-audit/comparison.log",
+      "bytes": 3954,
+      "sha256": "381638fc6e1cecd92be929a004aff245113aecc3653f1c7c423705a18936c1f6"
+    },
+    {
+      "path": "output/20260907-mpcc-stop-factorial-audit/stop-objective-before.log",
+      "bytes": 1079,
+      "sha256": "ff7738fdaf6ade1aac0bd3533cb46ced99cb37fe1f4bcd87bea7ef18a313d0e9"
+    },
+    {
+      "path": "output/20260907-mpcc-stop-production-replay/comparison.log",
+      "bytes": 4392,
+      "sha256": "931c3843da33b6f5565bd024605c4565735efa303df478ce5897e3015ddcce5a"
+    },
+    {
+      "path": "output/20260907-mpcc-pass-terminal-audit/support-before.log",
+      "bytes": 11324,
+      "sha256": "4c0e295469f2bca9e7d637e97f7737619f7f6a2cc0e250f81ede3c4e2a65343f"
+    },
+    {
+      "path": "output/20260907-mpcc-pass-terminal-audit/support-after.log",
+      "bytes": 5054,
+      "sha256": "e24bf18edd8b0b913b351b284048237aca530c86f159e3485ab45c6f03df97bc"
+    },
+    {
+      "path": "output/20260907-mpcc-free-stop-support-qp/affine-feasibility.json",
+      "bytes": 451,
+      "sha256": "7c460f46eb2ed3330fffef6eb0a08163ba2f97d40a6ada74b202eb655c409926"
+    },
+    {
+      "path": "output/20260907-mpcc-free-stop-support-qp/affine-physical-proof.log",
+      "bytes": 615,
+      "sha256": "924b14ce538a77c4def025775e7e72fa9cb3bb5a3d7afd3be453a3c93cbb72ea"
+    }
+  ]
+}

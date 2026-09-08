@@ -188,6 +188,94 @@ std::filesystem::path output_root(const std::string & name)
     ("mpcc-architecture-snapshot-" + name);
 }
 
+TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)
+{
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  auto source = make_interaction_snapshot(
+    mpcc_execution_contract::ControlIntent::Cruise);
+  // The generic snapshot fixture carries an Overtake execution side. Cruise
+  // has neutral intent geometry even when a dynamic-obstacle homotopy exists.
+  source.identity.source_context.execution_side_sign = 0;
+  source.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
+  source.request.current_steering_rad = 0.0;
+  source.request.current_response_steering_rad = 0.0;
+  source.request.initial_state[3] = 2.0;
+  execution::ExecutionArtifact artifact;
+  artifact.identity = source.identity;
+  artifact.prediction_origin_sec = source.control_prediction_origin_sec;
+  artifact.publication_interval_sec = 0.025;
+  artifact.completed_sec = source.identity.snapshot_sec + 0.01;
+  artifact.course_progress_origin_m = source.course_progress_origin_m;
+  artifact.wheelbase_m = 1.0;
+  artifact.maximum_abs_steering_rad = 0.5;
+  artifact.maximum_abs_steering_rate_radps = 1.0;
+  artifact.physical_global_tolerance = 1e-6;
+  artifact.maximum_constraint_violation = 1e-8;
+  artifact.maximum_normalized_constraint_violation = 0.1;
+  artifact.predicted_states = {
+    {0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0},
+    {0.0, 0.0, 0.0, 2.0, 0.2, 0.0, 0.0}};
+  artifact.control_stages = {{0.0, 0.0, 2.0, 0.1, 0.0, 4.0, -3.0, 1.37, 0.0}};
+  artifact.nominal_path_distance_m = {0.0, 0.2};
+  artifact.lateral_lower_m = {-1.0, -1.0};
+  artifact.lateral_upper_m = {1.0, 1.0};
+  ASSERT_EQ(execution::validate(artifact), execution::RejectReason::None);
+  PublicationEvidence publication;
+  publication.failure_decision_id = 55U;
+  publication.failure_interaction_fingerprint = 12345U;
+  publication.failure_observation_sec = 12.61;
+  publication.failure_control_origin_sec = 12.74;
+  publication.source_kind = "exact-executed";
+  publication.publication_decision_id = 54U;
+  publication.publication_control_origin_sec = 12.65;
+  publication.publication_artifact_elapsed_sec = 0.03712345678901234;
+  const auto root = output_root("published-execution");
+  std::filesystem::remove_all(root);
+
+  // An unrelated fresh problem cannot be relabelled as the executed source.
+  auto wrong_source = source;
+  ++wrong_source.identity.sequence;
+  EXPECT_EQ(
+    record_published_execution(
+      wrong_source, artifact, publication, "delay-prefix-blocked", root).status,
+    RecordStatus::InvalidInput);
+  ASSERT_FALSE(std::filesystem::exists(root));
+
+  const auto written = record_published_execution(
+    source, artifact, publication, "delay-prefix-blocked", root);
+  ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
+  std::string detail;
+  const auto loaded = load_recorded_interaction_snapshot(written.snapshot_file, &detail);
+  ASSERT_TRUE(loaded.has_value()) << detail;
+  EXPECT_EQ(loaded->source.identity.sequence, artifact.identity.sequence);
+  EXPECT_FALSE(loaded->recorded_qp.has_value());
+  const auto yaml = YAML::LoadFile(written.snapshot_file.string());
+  const auto evidence = yaml["execution_evidence"];
+  ASSERT_EQ(evidence["schema"].as<std::string>(), "mpcc-published-execution-evidence/v1");
+  EXPECT_EQ(evidence["source_problem_fingerprint"].as<std::uint64_t>(),
+    artifact.identity.source_context.fingerprint);
+  const auto clock = evidence["publication"];
+  EXPECT_EQ(clock["failure_interaction_fingerprint"].as<std::uint64_t>(), 12345U);
+  EXPECT_DOUBLE_EQ(clock["failure_control_origin_sec"].as<double>(), 12.74);
+  EXPECT_DOUBLE_EQ(clock["publication_control_origin_sec"].as<double>(), 12.65);
+  EXPECT_DOUBLE_EQ(clock["publication_artifact_elapsed_sec"].as<double>(),
+    publication.publication_artifact_elapsed_sec);
+  EXPECT_DOUBLE_EQ(evidence["prediction_origin_sec"].as<double>(), 12.6);
+  // These are the accepted primal states and controls, not request references.
+  ASSERT_EQ(evidence["predicted_states"].size(), 2U);
+  EXPECT_DOUBLE_EQ(evidence["predicted_states"][1]["progress_m"].as<double>(), 0.2);
+  EXPECT_DOUBLE_EQ(evidence["predicted_states"][1]["velocity_mps"].as<double>(), 2.0);
+  ASSERT_EQ(evidence["control_stages"].size(), 1U);
+  EXPECT_DOUBLE_EQ(evidence["control_stages"][0]["duration_sec"].as<double>(), 0.1);
+  EXPECT_DOUBLE_EQ(evidence["control_stages"][0]["virtual_progress_speed_mps"].as<double>(), 2.0);
+  EXPECT_DOUBLE_EQ(evidence["lateral_lower_m"][1].as<double>(), -1.0);
+  EXPECT_EQ(record_published_execution(
+      source, artifact, publication, "delay-prefix-blocked", root).status,
+    RecordStatus::Duplicate);
+  std::filesystem::remove_all(root);
+}
+
 TEST(MpccArchitectureSnapshot, WritesLoadsAndReplaysExactProblem)
 {
   const auto root = output_root("roundtrip");

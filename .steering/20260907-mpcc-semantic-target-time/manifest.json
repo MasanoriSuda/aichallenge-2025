@@ -1,0 +1,56 @@
+{
+  "schema": "mpcc-local-audit-manifest/v1",
+  "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+  "image_id": "sha256:7bac4849bcba25616c7301f2186be3d856753d1f14ed421b50918978b04ca3a9",
+  "historical_run": "20260831-192221",
+  "domain": 1,
+  "decision": 1187,
+  "interaction_fingerprint": 13608911548693048044,
+  "source_equal": true,
+  "wall_equal": true,
+  "historical_build_identity": "Unknown: original run has no binary manifest",
+  "historical_seed": "Unknown: frozen replay does not use a random seed",
+  "baseline_build_log": "/tmp/mpcc-20260907-baseline-build.log",
+  "files": [
+    {
+      "path": "output/20260831-192221/d1/mpcc_architecture_snapshots/000000001187-bcdc90f34f8f6aec-follow-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 39314,
+      "sha256": "909f23b096e9fba696c0ce935d341bb069d452ff86a50ccd803fe4bc6b8679c4"
+    },
+    {
+      "path": "aichallenge/mpcc_architecture_snapshots/000000001187-bcdc90f34f8f6aec-follow-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 254919,
+      "sha256": "e5c1b0646eb603e28a94a8d856816fbdb5f16605403631af85e33f2bee9de2da"
+    },
+    {
+      "path": "output/20260831-192221/d1/mpcc_architecture_snapshots/000000001187-bcdc90f34f8f6aec-follow-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98"
+    },
+    {
+      "path": "aichallenge/mpcc_architecture_snapshots/000000001187-bcdc90f34f8f6aec-follow-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2933302,
+      "sha256": "f82d4ca8b485c6a3d3e8e20be9f61f435cfd45b007bbfa855147dbce47d12daf"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86183,
+      "sha256": "a9c261dc04ee28a347f4dd0570c2c541a611ae3bc410c4fab7d2793a53b808cd"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 80944,
+      "sha256": "47bd0bbffe56182a5aa53b3bd4969b60fe9a7ad889d1358847ca0d5cf8dac59f"
+    },
+    {
+      "path": "aichallenge/workspace/build/multi_purpose_mpc_ros/mpcc_architecture_compare",
+      "bytes": 1369568,
+      "sha256": "10e8c8218b375927c017ecd3236f90130140a3b1808385f90a7fb7aee97821e9"
+    }
+  ]
+}

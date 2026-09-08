@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "000000003800-9e2c6962173873f9-pass-side-positive-successive-linearization-solve-rejected",
+  "baseline_commits": [
+    "3fca7d4393bb63fb676547fb09b248d93a83bd55"
+  ],
+  "evidence_type": "historical-registry-reconciliation",
+  "replay_ready": false,
+  "incomplete_reason": "Historical reference reconciled from existing evidence; not independently replay-validated in this slice.",
+  "local_payloads": [
+    {
+      "path": "output/20260830-162637/d1/mpcc_architecture_snapshots/000000003800-9e2c6962173873f9-pass-side-positive-successive-linearization-solve-rejected/snapshot.yaml",
+      "sha256": "f9df9e739c719b5e2b058b014deeadf63fadd7f94b3dc48c4e364cfd43aa006c",
+      "size_bytes": 256396
+    },
+    {
+      "path": "output/20260830-162637/d1/mpcc_architecture_snapshots/000000003800-9e2c6962173873f9-pass-side-positive-successive-linearization-solve-rejected/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "size_bytes": 570009
+    }
+  ]
+}

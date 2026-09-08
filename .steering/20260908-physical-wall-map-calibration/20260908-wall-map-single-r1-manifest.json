@@ -1,0 +1,131 @@
+{
+  "run_id": "20260908-wall-map-single-r1",
+  "kind": "single-six-lap-wall-map-diagnostic",
+  "command": "source /aichallenge/workspace/install/setup.bash && export ROS_HOME=/output/20260908-wall-map-single-r1/d1/ros && export ROS_LOG_DIR=/output/20260908-wall-map-single-r1/d1/ros/log && mkdir -p /output/20260908-wall-map-single-r1/d1/ros/log && cd /output/20260908-wall-map-single-r1/d1 && exec ros2 launch aichallenge_system_launch evaluation.launch.xml domain_id:=1 vehicle_count:=1 sim_mode:=eval log_dir:=/output/20260908-wall-map-single-r1/d1 capture:=true rosbag:=true simulation:=true use_sim_time:=true run_rviz:=true > /output/20260908-wall-map-single-r1/d1/autoware.log 2>&1",
+  "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+  "working_tree_patch_sha256": "65c7a2080c4f1ba50584a440a248573b3b936f0b1211a70036dff2885714f1cf",
+  "seed": "AWSIM default, explicit seed not exposed by dev.sh; not claimed deterministic",
+  "initial_conditions": "existing simulator_scripts/eval.sh: sync start,1 vehicle,0 NPCs,2 boosts,6 laps,600s timeout,collisions on,handicap off,wall recovery off,Domain0 AWSIM/manager,Domain1 Autoware",
+  "termination": "six-lap finish or420s diagnostic deadline; geometry acceptance remains open",
+  "files": [
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "sha256": "8cad4fbb1b3f8e9daf258228627ea510d0ac0644da9390d56a26d69876b2ebc4"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "sha256": "2dcc65bab57888f4f4d0176f9fb5782c53bd24fba618f99592f7b6eb90ae4885"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "docker-compose.gpu.yml",
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "docker-compose.sound.yml",
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "aichallenge/simulator_scripts/dev.sh",
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "docker-entrypoint.sh",
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "aichallenge/simulator_scripts/eval.sh",
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "sha256": "09ea17484854ac8b323cb606ffe4871f0f5308b1f46e959e0a2fcef2ef79e1da"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "sha256": "23c509c645b8ff3c61652c10477cf8e0a8b94697ec0ef150e468a84f21693112"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "sha256": "09ea17484854ac8b323cb606ffe4871f0f5308b1f46e959e0a2fcef2ef79e1da"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "sha256": "23c509c645b8ff3c61652c10477cf8e0a8b94697ec0ef150e468a84f21693112"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    }
+  ],
+  "binaries": [
+    {
+      "install_path": "aichallenge/workspace/install/multi_purpose_mpc_ros/lib/multi_purpose_mpc_ros/mpc_controller_cpp",
+      "container_real_path": "/aichallenge/workspace/build/multi_purpose_mpc_ros/mpc_controller_cpp",
+      "local_real_path": "aichallenge/workspace/build/multi_purpose_mpc_ros/mpc_controller_cpp",
+      "sha256": "8af0ea61a7784e0b3ca0c7f6f130c601e677d4713d21b66098813c826bb447bd",
+      "preserved_path": "output/20260908-wall-map-single-r1/binaries/mpc_controller_cpp"
+    },
+    {
+      "install_path": "aichallenge/workspace/install/multi_purpose_mpc_ros/lib/multi_purpose_mpc_ros/mpcc_architecture_compare",
+      "container_real_path": "/aichallenge/workspace/build/multi_purpose_mpc_ros/mpcc_architecture_compare",
+      "local_real_path": "aichallenge/workspace/build/multi_purpose_mpc_ros/mpcc_architecture_compare",
+      "sha256": "9bcb744f18e40d810373e02fb3fff7c91e0720d4c1b3ef4147d8eeab5b684826",
+      "preserved_path": "output/20260908-wall-map-single-r1/binaries/mpcc_architecture_compare"
+    }
+  ],
+  "build_log": "/tmp/mpcc-20260908-wall-map-build.log",
+  "tests": "output/20260908-physical-wall-map-calibration/package-test-results.log",
+  "acceptance_scope": "Additive local wall coverage and occupied-cell preservation. Full peer enclosure and omitted 3D geometry remain unresolved even if this diagnostic finishes six laps."
+}

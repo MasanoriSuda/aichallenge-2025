@@ -1,0 +1,120 @@
+{
+  "run_id": "20260908-footprint-single-r1",
+  "artifacts": [
+    {
+      "path": "output/20260908-footprint-single-r1/bag-analysis.json",
+      "sha256": "2b7dab693e19a06f44c2b325755dff65b7fa11c213cbc3bc21f2ae72e5e01720",
+      "size_bytes": 104384
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/monitor-summary.json",
+      "sha256": "6cd859eb8f0a541747bc94027c9dc9ca097687c40fb0926f0529b4f3b344b5a4",
+      "size_bytes": 1764
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/log-summary.json",
+      "sha256": "2774efd14a5ae400c5c0b22dd7b2087d1e3462e3b31654b21d88189c9a2623b2",
+      "size_bytes": 9109
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/manifest.json",
+      "sha256": "2a0e717c80851e35e131b618aaf9551ce29bf410169aedc71917c7259c8d2779",
+      "size_bytes": 7400
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/build.log",
+      "sha256": "5d4622e001a03cdd6d31cac696583bcc24da7cf6e0a0be21bf904899086fb0af",
+      "size_bytes": 4577
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/awsim.log",
+      "sha256": "e75662763d5f9723ff8b2883f9fd5a16194fb6ab96713ac77f04e82a43dfe17d",
+      "size_bytes": 1773
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/monitor.log",
+      "sha256": "f8d2172167fed70660a5ff42e7680c4aa17affb53253492e232cc8d7700a2adc",
+      "size_bytes": 15355
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/participant-source.patch",
+      "sha256": "c20ecc889761a33d2d1927c83c8f99a3e36aa5a6bc991ecb12fe2f554a095eae",
+      "size_bytes": 142404
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/mpcc-source.patch",
+      "sha256": "b67beb73774fc4dbcfc6397e5ab5ed297a5a37f8993845fcbc66de0a7b06a252",
+      "size_bytes": 132092
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/binaries/libgnss_poser_node.so",
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1",
+      "size_bytes": 2222776
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/binaries/mpc_controller_cpp",
+      "sha256": "dd7434c8b250534a8e9d4a41a1a3d1afee255225c8594fc799dfa935f63ba15e",
+      "size_bytes": 8836872
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/binaries/mpcc_architecture_compare",
+      "sha256": "9bcb744f18e40d810373e02fb3fff7c91e0720d4c1b3ef4147d8eeab5b684826",
+      "size_bytes": 1392608
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/d1/autoware.log",
+      "sha256": "6d82046e1649cfc04f7356d410e0b904dfc6631407e98894405642b1770d9db5",
+      "size_bytes": 2614158
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/d1/result-summary.json",
+      "sha256": "4592c22ba794983cbd87692249ec97ccbb142bb60abf56390732f037d9974259",
+      "size_bytes": 1060
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/d1/d1-result-details.json",
+      "sha256": "1887c001670c8ff252f7fe9bc963383d028b5cf697da7916768da43e0212059d",
+      "size_bytes": 859
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "cb4c810d5ca46913633edb275633dfcf9ed094ce1c87a4350f2f53710ad1e4d5",
+      "size_bytes": 37364872
+    },
+    {
+      "path": "output/20260908-footprint-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "sha256": "a09e2a410fcd63fd105385614c3ace7c024152b33f75f9c44a1370e9cc81532b",
+      "size_bytes": 8525
+    },
+    {
+      "path": ".steering/20260908-awsim-footprint-enclosure/run_single.py",
+      "sha256": "f04fd1413d051f0b5b3a58e7b3d0eb4687584f65c9f24c50ed16b8c020b69955",
+      "size_bytes": 5654
+    },
+    {
+      "path": ".steering/20260908-awsim-footprint-enclosure/before-combined-distance-test.log",
+      "sha256": "f2fa77417c23454860332785e4099070b30b7afc0dc26c28201133bb35ed93b4",
+      "size_bytes": 2854
+    },
+    {
+      "path": ".steering/20260908-awsim-footprint-enclosure/after-test.log",
+      "sha256": "fcf1b724974cf94fa115ce0fb713838bcca3f4efcc521650b415b044cd6ff440",
+      "size_bytes": 98
+    },
+    {
+      "path": ".steering/20260908-awsim-footprint-enclosure/before-test.log",
+      "sha256": "f35fc324d51715e5ccb03ff8888ff31b2cc3069cbe6d9c1c74a5b5f9bd61725a",
+      "size_bytes": 4684
+    },
+    {
+      "path": "output/20260908-awsim-footprint-enclosure/package-tests.log",
+      "sha256": "c9449c6b8a27d29de336423a07a970e3222427b21702392fb323ec790719875c",
+      "size_bytes": 484440
+    },
+    {
+      "path": "output/20260908-awsim-footprint-enclosure/package-test-results.log",
+      "sha256": "afec8093a00d623dae308b6e23c4f101a30b76d26928e1ef550bafb776ffbe1c",
+      "size_bytes": 53
+    }
+  ]
+}

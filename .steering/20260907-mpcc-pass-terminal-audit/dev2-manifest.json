@@ -1,0 +1,78 @@
+{
+  "run_id": "20260907-mpcc-stop-feasibility-dev2",
+  "kind": "bounded-diagnostic-dev2-not-formal-race-acceptance",
+  "command": "make dev2 LOG_DIR=/output/20260907-mpcc-stop-feasibility-dev2",
+  "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+  "working_tree_patch_sha256": "38c39e6c7f8124294fa1e954ddf5a2e63183786d2dfb0c25501be3231a3aa018",
+  "seed": "AWSIM default, explicit seed not exposed by dev.sh; not claimed deterministic",
+  "initial_conditions": "dev.sh --vehicles 2 --npcs 0 --boosts 2 --collisions on --handicap off --wall-recovery off; canonical Domain 0/1/2 separation",
+  "termination": "Stop after first repeated unexplained authority loss or six minutes; no automatic formal acceptance.",
+  "files": [
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "sha256": "a9c261dc04ee28a347f4dd0570c2c541a611ae3bc410c4fab7d2793a53b808cd"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "sha256": "47bd0bbffe56182a5aa53b3bd4969b60fe9a7ad889d1358847ca0d5cf8dac59f"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "sha256": "c24af2130a8df96047a49d5b7759af7a0b29645c023e7f3bc6d4ba436275725a"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "sha256": "39d5aba44234c1e09fc57421d467d64c1769259cd3c3656032f008d2db4e6a79"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "docker-compose.gpu.yml",
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "docker-compose.sound.yml",
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "aichallenge/simulator_scripts/dev.sh",
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "docker-entrypoint.sh",
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    }
+  ],
+  "binaries": [
+    {
+      "install_path": "aichallenge/workspace/install/multi_purpose_mpc_ros/lib/multi_purpose_mpc_ros/mpc_controller_cpp",
+      "container_real_path": "/aichallenge/workspace/build/multi_purpose_mpc_ros/mpc_controller_cpp",
+      "local_real_path": "aichallenge/workspace/build/multi_purpose_mpc_ros/mpc_controller_cpp",
+      "sha256": "564f7a03aaf44c9adf2180736e79d8c6986fe7212d86d92085fb5dc41ca6e8e6",
+      "preserved_path": "output/20260907-mpcc-stop-feasibility-dev2/binaries/mpc_controller_cpp"
+    },
+    {
+      "install_path": "aichallenge/workspace/install/multi_purpose_mpc_ros/lib/multi_purpose_mpc_ros/mpcc_architecture_compare",
+      "container_real_path": "/aichallenge/workspace/build/multi_purpose_mpc_ros/mpcc_architecture_compare",
+      "local_real_path": "aichallenge/workspace/build/multi_purpose_mpc_ros/mpcc_architecture_compare",
+      "sha256": "fc847d7cfa5372936a23b0df0895ece0d76748d9d6c10cd6405ace82a53cdf73",
+      "preserved_path": "output/20260907-mpcc-stop-feasibility-dev2/binaries/mpcc_architecture_compare"
+    }
+  ],
+  "build_log": "/tmp/mpcc-20260907-stop-feasibility-build.log",
+  "tests": "output/20260907-mpcc-stop-production-replay/package-test-results.log: 2309 tests, 0 errors/failures/skips"
+}

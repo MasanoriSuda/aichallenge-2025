@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iterator>
 #include <limits>
+#include <utility>
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter
 {
@@ -175,6 +176,26 @@ bool stop_lateral_target_profile_valid(
     }
   }
   return true;
+}
+
+std::optional<StopLateralTargetProfile> build_normal_path_stop_profile(
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & execution) noexcept
+{
+  namespace artifact = mpcc_rate_resolved_execution_artifact;
+  if (artifact::validate(execution) != artifact::RejectReason::None ||
+    execution.predicted_states.size() < 2U)
+  {
+    return std::nullopt;
+  }
+  StopLateralTargetProfile profile;
+  profile.progress_m.reserve(execution.predicted_states.size());
+  profile.lateral_m.reserve(execution.predicted_states.size());
+  for (const auto & state : execution.predicted_states) {
+    profile.progress_m.push_back(state.progress_m);
+    profile.lateral_m.push_back(state.lateral_m);
+  }
+  return stop_lateral_target_profile_valid(profile) ?
+    std::optional<StopLateralTargetProfile>{std::move(profile)} : std::nullopt;
 }
 
 std::optional<double> sample_stop_lateral_target(

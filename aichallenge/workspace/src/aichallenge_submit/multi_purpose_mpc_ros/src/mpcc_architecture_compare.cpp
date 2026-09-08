@@ -15,8 +15,17 @@ namespace comparison =
 
 int main(int argc, char ** argv)
 {
+  const bool target_stage_time_only =
+    argc == 6 && std::string{argv[2]} == "--target-stage-time-only";
+  const bool stop_schedule_only =
+    argc == 6 && (std::string{argv[2]} == "--stop-control-schedule" ||
+    std::string{argv[2]} == "--stop-control-support-schedule");
   const bool wall_restoration_only =
     argc == 3 && std::string{argv[2]} == "--wall-restoration-only";
+  const bool stop_physical_support_only =
+    argc == 3 && std::string{argv[2]} == "--stop-physical-support-only";
+  const bool stop_horizon_only =
+    argc == 3 && std::string{argv[2]} == "--target-free-stop-horizon-only";
   const bool wall_buckets_only =
     argc == 3 && std::string{argv[2]} == "--wall-buckets-only";
   const bool physical_dynamic_sqp_only =
@@ -35,6 +44,9 @@ int main(int argc, char ** argv)
   const bool external_primal_physical_only =
     argc == 4 && std::string{argv[2]} ==
     "--external-primal-physical-nonlinear-oracle";
+  const bool external_primal_stop_only =
+    argc == 4 && std::string{argv[2]} ==
+    "--external-primal-solved-stop-nonlinear-oracle";
   const bool rejected_primal_only =
     argc == 3 && std::string{argv[2]} == "--rejected-primal-only";
   const bool rejected_primal_physical_only =
@@ -49,23 +61,30 @@ int main(int argc, char ** argv)
     argc == 3 && std::string{argv[2]} ==
     "--terminal-stop-lateral-contract-only";
   if (
-    argc != 2 && !wall_restoration_only && !wall_buckets_only &&
+    argc != 2 && !target_stage_time_only && !stop_schedule_only &&
+    !wall_restoration_only && !wall_buckets_only &&
     !physical_dynamic_sqp_only && !proof_guided_dynamic_sqp_only &&
-    !external_primal && !external_primal_omit_heading &&
+    !external_primal && !external_primal_stop_only && !external_primal_omit_heading &&
     !external_primal_omit_lag && !external_primal_physical_only &&
     !rejected_primal_only && !rejected_primal_physical_only &&
     !warm_start_primal_physical_only &&
     !kkt_equilibration_only &&
-    !terminal_stop_lateral_only)
+    !terminal_stop_lateral_only && !stop_physical_support_only && !stop_horizon_only)
   {
     std::cerr << "usage: mpcc_architecture_compare <snapshot.yaml> "
-                 "[--wall-restoration-only | --wall-buckets-only | "
+                 "[--target-stage-time-only <recorded-dt> <lateral-horizon> <max-time> | "
+                 "--stop-control-schedule <sign> <first-switch> <second-switch> | "
+                 "--stop-control-support-schedule <sign> <first-switch> <second-switch> | "
+                 "--stop-physical-support-only | "
+                 "--target-free-stop-horizon-only | "
+                 "--wall-restoration-only | --wall-buckets-only | "
                  "--physical-dynamic-sqp-only | "
                  "--proof-guided-dynamic-sqp-only | "
                  "--external-primal <values.txt> | "
                  "--external-primal-omit-wall-heading-bucket <values.txt> | "
                  "--external-primal-omit-wall-lag-bucket <values.txt> | "
                  "--external-primal-physical-nonlinear-oracle "
+                 "<values.txt> | --external-primal-solved-stop-nonlinear-oracle "
                  "<values.txt> | --rejected-primal-only | "
                  "--rejected-primal-physical-nonlinear-oracle | "
                  "--warm-start-primal-physical-nonlinear-oracle | "
@@ -81,7 +100,28 @@ int main(int argc, char ** argv)
     return 3;
   }
   comparison::Report report;
-  if (terminal_stop_lateral_only) {
+  if (stop_horizon_only) {
+    report = comparison::compare_target_free_stop_horizon(recorded.value());
+  } else if (stop_physical_support_only) {
+    report = comparison::compare_stop_physical_support(recorded.value());
+  } else if (stop_schedule_only) {
+    try {
+      report = comparison::compare_stop_schedule(
+        recorded.value(), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]),
+        std::string{argv[2]} == "--stop-control-support-schedule");
+    } catch (const std::exception &) {
+      std::cerr << "invalid Stop schedule arguments\n";
+      return 2;
+    }
+  } else if (target_stage_time_only) {
+    try {
+      report = comparison::compare_target_stage_time(
+        recorded.value(), std::stod(argv[3]), std::stod(argv[4]), std::stod(argv[5]));
+    } catch (const std::exception &) {
+      std::cerr << "invalid target-stage timing arguments\n";
+      return 2;
+    }
+  } else if (terminal_stop_lateral_only) {
     report = comparison::compare_terminal_stop_lateral_contract(
       recorded.value());
   } else if (kkt_equilibration_only) {
@@ -118,7 +158,7 @@ int main(int argc, char ** argv)
       comparison::ExternalPrimalConstraintPolicy::ExactRecorded);
   } else if (
     external_primal || external_primal_omit_heading ||
-    external_primal_omit_lag || external_primal_physical_only)
+    external_primal_omit_lag || external_primal_physical_only || external_primal_stop_only)
   {
     std::ifstream input{argv[3]};
     std::vector<double> values;
@@ -142,6 +182,8 @@ int main(int argc, char ** argv)
       policy = comparison::ExternalPrimalConstraintPolicy::OmitWallLagBucket;
     } else if (external_primal_physical_only) {
       policy = comparison::ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle;
+    } else if (external_primal_stop_only) {
+      policy = comparison::ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle;
     }
     report = comparison::verify_external_primal(
       recorded.value(), primal, policy);

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cmath>
 #include <limits>
 
 namespace dynamic_obstacle =
@@ -34,6 +35,73 @@ dynamic_obstacle::Request request_with_lateral_suffix()
 }
 
 }  // namespace
+
+TEST(MpccRateResolvedDynamicObstacle, PhysicalWitnessPreservesRoundedCornerClearance)
+{
+  for (const int side : {-1, 1}) {
+    auto request = request_with_lateral_suffix();
+    request.pass_side_sign = side;
+    request.wall_only_primal.setZero();
+    request.stages.assign(4, dynamic_obstacle::StagePrediction{
+      true, 1.4, -side * 0.9, 1.5, 1.0});
+    request.physical_separation_geometry =
+      dynamic_obstacle::PhysicalSeparationGeometry{1.0, 1.0, 0.5, 0.5, 0.0, 0.5};
+    request.witness_physical_separation = true;
+    const auto result = dynamic_obstacle::refine(request);
+    ASSERT_TRUE(result.problem.has_value());
+    for (const auto & row : result.problem->dynamic_obstacle_constraints) {
+      EXPECT_EQ(row.axis, problem::DynamicObstacleConstraintAxis::CoupledLateralProgress);
+      // Both axis disjuncts exclude ego=(0,0), but the exact distance from
+      // the rectangle corner to the peer circle is sqrt(.4^2+.4^2)-.5 > 0.
+      EXPECT_GT(row.upper, 0.0);
+      EXPECT_NEAR(row.effective_progress_coefficient, std::sqrt(0.5), 1e-12);
+      EXPECT_NEAR(row.lateral_coefficient, -side * std::sqrt(0.5), 1e-12);
+      // Moving onto the target must violate the unchanged full support row.
+      EXPECT_GT(row.effective_progress_coefficient * 1.4 +
+        row.lateral_coefficient * (-side * 0.9), row.upper);
+    }
+  }
+}
+
+TEST(MpccRateResolvedDynamicObstacle, PhysicalWitnessUsesRotatedAsymmetricBodyAndMargin)
+{
+  for (const double heading : {-1.0, -0.4, 0.0, 0.4, 1.0}) {
+    auto request = request_with_lateral_suffix();
+    request.wall_only_primal.setZero();
+    for (int stage = 0; stage <= 4; ++stage) {
+      request.wall_only_primal[stage * model::kStateDimension + model::kHeadingIndex] = heading;
+    }
+    const double cosine = std::cos(heading);
+    const double sine = std::sin(heading);
+    // Front-left expanded corner=(1.3,.8), gap=(.3,.4), circle radius=.45.
+    request.stages.assign(4, dynamic_obstacle::StagePrediction{
+      true, cosine * 1.6 - sine * 1.2, sine * 1.6 + cosine * 1.2, 9.0, 9.0});
+    request.physical_separation_geometry =
+      dynamic_obstacle::PhysicalSeparationGeometry{1.2, 0.8, 0.7, 0.4, 0.1, 0.45};
+    request.witness_physical_separation = true;
+    const auto result = dynamic_obstacle::refine(request);
+    ASSERT_TRUE(result.problem.has_value());
+    for (const auto & row : result.problem->dynamic_obstacle_constraints) {
+      EXPECT_NEAR(row.upper, 0.05, 1e-12);
+      EXPECT_NEAR(row.effective_progress_coefficient, cosine * 0.6 - sine * 0.8, 1e-12);
+      EXPECT_NEAR(row.lateral_coefficient, sine * 0.6 + cosine * 0.8, 1e-12);
+    }
+  }
+}
+
+TEST(MpccRateResolvedDynamicObstacle, PhysicalWitnessRejectsMissingGeometryAndUndefinedNormal)
+{
+  auto request = request_with_lateral_suffix();
+  request.witness_physical_separation = true;
+  EXPECT_EQ(dynamic_obstacle::refine(request).reason, dynamic_obstacle::Reason::InvalidInput);
+  request.physical_separation_geometry =
+    dynamic_obstacle::PhysicalSeparationGeometry{1.0, 1.0, 0.5, 0.5, 0.0, 0.5};
+  request.wall_only_primal.setZero();
+  request.stages.assign(4, dynamic_obstacle::StagePrediction{true, 0.0, 0.0, 1.5, 1.0});
+  const auto result = dynamic_obstacle::refine(request);
+  EXPECT_EQ(result.reason, dynamic_obstacle::Reason::InvalidInput);
+  EXPECT_FALSE(result.problem.has_value());
+}
 
 TEST(MpccRateResolvedDynamicObstacle, HoldsProgressUntilLateralSuffixIsReachable)
 {

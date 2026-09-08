@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260907-dev2-d1-decision-4166",
+  "run_id": "20260907-mpcc-semantic-time-dev2",
+  "domain_id": 1,
+  "decision_id": 4166,
+  "interaction_fingerprint": 4152773746297489873,
+  "baseline_manifest": ".steering/20260907-mpcc-semantic-target-time/dev2-manifest.json",
+  "replay_ready": false,
+  "current_problem_architecture_replay_ready": true,
+  "incomplete_reason": "Current semantic problem and world are complete, but live retained artifact 3492 and exact warm start/adoption mailbox are not serialized in this failure snapshot. Do not equate a new cold solve with live continuation replay.",
+  "files": [
+    {
+      "path": "output/20260907-mpcc-semantic-time-dev2/d1/mpcc_architecture_snapshots/000000004166-39a19db84ca149d1-pass-side-negative-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 39751,
+      "sha256": "ca486480746af2a74da991beb7960b4ede9ee6f9c9c87bd189ea4d614b60eea9"
+    },
+    {
+      "path": "output/20260907-mpcc-semantic-time-dev2/d1/mpcc_architecture_snapshots/000000004166-39a19db84ca149d1-pass-side-negative-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98"
+    },
+    {
+      "path": "output/20260907-mpcc-semantic-time-dev2/d1/autoware.log",
+      "bytes": 2881700,
+      "sha256": "a9d7a0cac22b00c39fc33997fc2eb22d118e3e0da863000b3ef7378679f212da"
+    },
+    {
+      "path": "output/20260907-mpcc-semantic-time-dev2/d2/autoware.log",
+      "bytes": 1662655,
+      "sha256": "442acb2892ba482c2a06e412e9a415fc0fa6c75a5bf2a9f815702e1a5ec51555"
+    },
+    {
+      "path": "output/20260907-mpcc-semantic-time-dev2/bag-analysis.json",
+      "bytes": 450635,
+      "sha256": "ed5b7affd5fdd2e0582620d53627c5b645a7129b49ee4151d7a4fd2b486a8e0b"
+    }
+  ]
+}

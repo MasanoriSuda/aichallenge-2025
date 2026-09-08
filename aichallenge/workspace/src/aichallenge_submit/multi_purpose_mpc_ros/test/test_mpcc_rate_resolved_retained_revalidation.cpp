@@ -303,6 +303,81 @@ TEST(
   EXPECT_FALSE(retained::build_follow_target_observation(request).has_value());
 }
 
+TEST(MpccRateResolvedRetainedRevalidation, NormalPathObservationCannotExtrapolateOrChangeProduction)
+{
+  const auto request = accepted_request(certified_plan());
+  const auto before = retained::evaluate(request);
+  ASSERT_EQ(before.reason, retained::Reason::Accepted);
+  EXPECT_FALSE(before.proof->terminal_stop_normal_path_reference);
+  EXPECT_EQ(before.terminal_stop_reference_attempts, 2U);
+  const auto observation = retained::observe_normal_path_stop(request);
+  EXPECT_TRUE(observation.profile_available);
+  // The solved path ends at 0.4 m; physical braking needs more distance.
+  EXPECT_FALSE(observation.accepted);
+  EXPECT_EQ(observation.reason, retained::Reason::TerminalContingencyUnavailable);
+  EXPECT_EQ(
+    observation.terminal_reason,
+    multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::
+    StopContingencyRejectReason::InvalidLateralPolicy);
+  const auto after = retained::evaluate(request);
+  ASSERT_TRUE(after.proof.has_value());
+  EXPECT_EQ(after.reason, before.reason);
+  EXPECT_EQ(after.proof->actuation.steering_rad, before.proof->actuation.steering_rad);
+  EXPECT_EQ(after.proof->terminal_stop_trajectory.lateral_m,
+    before.proof->terminal_stop_trajectory.lateral_m);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, NormalPathObservationKeepsCurrentWorldIdentityChecks)
+{
+  auto request = accepted_request(certified_plan());
+  request.current_wall_grid = free_grid();
+  auto changed = std::make_shared<recovery::OccupancyGrid>(*request.current_wall_grid);
+  changed->cells.front() = recovery::CellState::Occupied;
+  request.current_wall_grid = changed;
+  const auto observation = retained::observe_normal_path_stop(request);
+  EXPECT_TRUE(observation.profile_available);
+  EXPECT_FALSE(observation.accepted);
+  EXPECT_EQ(observation.reason, retained::Reason::StaticWorldMismatch);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, StopCertificateTracksTheSolvedNormalGeometry)
+{
+  namespace adapter = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter;
+  auto value = execution_artifact();
+  // This synthetic vehicle can stop inside the fixture's 0.4 m solved path.
+  // Both the artifact and request declare its braking bound; no production
+  // parameter or physical acceptance tolerance is changed.
+  for (auto & control : value.control_stages) {
+    control.acceleration_lower_mps2 = -10.0;
+  }
+  const auto execution = std::make_shared<const artifact::ExecutionArtifact>(value);
+  const auto snapshot = source_snapshot(execution->identity);
+  const auto built = certified::build(execution, snapshot, accepted_result(snapshot));
+  ASSERT_EQ(built.reason, certified::RejectReason::None);
+  auto request = accepted_request(built.plan);
+  request.minimum_acceleration_mps2 = -10.0;
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof.has_value());
+  const auto profile = adapter::build_normal_path_stop_profile(*execution);
+  EXPECT_TRUE(result.proof->terminal_stop_normal_path_reference);
+  EXPECT_EQ(result.terminal_stop_reference_attempts, 1U);
+  ASSERT_TRUE(profile.has_value());
+  const auto & initial = result.current_control_state;
+  const auto expected = adapter::build_stop_contingency(
+    *execution, result.proof->cursor, result.proof->actuation,
+    adapter::ContinuationInitialState{
+      initial.lateral_m, initial.lag_m, initial.heading_offset_rad,
+      initial.velocity_mps, initial.progress_m, result.proof->actuation.steering_rad,
+      request.current_response_steering_rad},
+    snapshot.terminal_stop_course_geometry, request.stop_lateral_policy,
+    request.minimum_acceleration_mps2, 0.0, &profile.value());
+  ASSERT_TRUE(expected.exact_trajectory.has_value());
+  EXPECT_EQ(result.proof->terminal_stop_trajectory.lateral_m,
+    expected.exact_trajectory->lateral_m);
+  EXPECT_EQ(result.proof->terminal_stop_actuation_samples.back().end_steering_rad,
+    expected.actuation_samples.back().end_steering_rad);
+}
+
 TEST(MpccRateResolvedRetainedRevalidation, AcceptsCurrentWorldJoin)
 {
   const auto plan = certified_plan();

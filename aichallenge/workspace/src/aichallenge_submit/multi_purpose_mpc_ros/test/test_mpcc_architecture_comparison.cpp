@@ -478,6 +478,79 @@ TEST(MpccArchitectureComparison, MissingImmutableStopContractRejectsAllArms)
   }
 }
 
+TEST(MpccArchitectureComparison, TargetTimingUsesSemanticStagesAndPreservesWorld)
+{
+  auto source = source_snapshot();
+  source.request.inputs[0].stage_dt_sec = 0.25;
+  source.request.inputs[1].stage_dt_sec = 0.15;
+  source.request.inputs[2].stage_dt_sec = 0.20;
+  for (std::size_t index = 0U; index < 3U; ++index) {
+    const double time = (index + 1U) * 0.025;
+    source.dynamic_obstacle_stages[index].target_progress_m = 3.0 + 4.0 * time;
+    source.dynamic_obstacle_stages[index].target_lateral_m = 5.0 + 0.5 * time;
+  }
+  const auto original = recorded(source);
+  const auto candidate = resample_target_stage_time(original, 0.025, 1.0, 3.0);
+  ASSERT_TRUE(candidate.has_value());
+  EXPECT_NE(architecture::fingerprint_interaction_snapshot(*candidate),
+    original.interaction_fingerprint);
+  EXPECT_NEAR(candidate->dynamic_obstacle_stages[0].target_progress_m, 4.0, 1.0e-10);
+  EXPECT_NEAR(candidate->dynamic_obstacle_stages[1].target_progress_m, 4.6, 1.0e-10);
+  EXPECT_NEAR(candidate->dynamic_obstacle_stages[2].target_progress_m, 5.4, 1.0e-10);
+  EXPECT_NEAR(candidate->dynamic_obstacle_stages[2].target_lateral_m, 5.3, 1.0e-10);
+  EXPECT_EQ(candidate->control_prediction_origin_sec, source.control_prediction_origin_sec);
+  EXPECT_EQ(candidate->publication_interval_sec, source.publication_interval_sec);
+  EXPECT_EQ(candidate->wall_grid, source.wall_grid);
+  auto restored = *candidate;
+  restored.dynamic_obstacle_stages = source.dynamic_obstacle_stages;
+  EXPECT_EQ(architecture::fingerprint_interaction_snapshot(restored),
+    original.interaction_fingerprint);
+  EXPECT_EQ(architecture::fingerprint_interaction_snapshot(original.source),
+    original.interaction_fingerprint);
+}
+
+TEST(MpccArchitectureComparison, TargetTimingPreservesLateralClampAndTruncation)
+{
+  auto source = source_snapshot();
+  for (std::size_t index = 0U; index < 3U; ++index) {
+    source.request.inputs[index].stage_dt_sec = 0.25;
+    source.dynamic_obstacle_stages[index].target_progress_m = 3.0;
+    source.dynamic_obstacle_stages[index].target_lateral_m = 5.0 + (index + 1U) * 0.025;
+  }
+  const auto candidate = resample_target_stage_time(recorded(source), 0.025, 0.25, 0.5);
+  ASSERT_TRUE(candidate.has_value());
+  EXPECT_TRUE(candidate->dynamic_obstacle_stages[1].valid);
+  EXPECT_FALSE(candidate->dynamic_obstacle_stages[2].valid);
+  EXPECT_NEAR(candidate->dynamic_obstacle_stages[2].target_lateral_m, 5.25, 1.0e-10);
+  EXPECT_NEAR(candidate->dynamic_obstacle_stages[1].target_progress_m, 3.0, 1.0e-10);
+}
+
+TEST(MpccArchitectureComparison, TargetTimingRejectsNonAffineOrUnsealedEvidence)
+{
+  auto source = source_snapshot();
+  source.dynamic_obstacle_stages.back().target_progress_m += 1.0;
+  EXPECT_FALSE(resample_target_stage_time(recorded(source), 0.025, 1.0, 3.0));
+  auto snapshot = recorded(source_snapshot());
+  snapshot.source.replay_world->observation_generation += 1U;
+  EXPECT_FALSE(resample_target_stage_time(snapshot, 0.025, 1.0, 3.0));
+  EXPECT_FALSE(resample_target_stage_time(recorded(source_snapshot()), 0.0, 1.0, 3.0));
+}
+
+TEST(MpccArchitectureComparison, TargetTimingComparisonResealsOnlyCandidate)
+{
+  auto source = source_snapshot();
+  for (std::size_t index = 0U; index < 3U; ++index) {
+    source.dynamic_obstacle_stages[index].target_progress_m += (index + 1U) * 0.025;
+  }
+  const auto report = compare_target_stage_time(recorded(source), 0.025, 1.0, 3.0);
+  ASSERT_TRUE(report.source_accepted) << report.detail;
+  ASSERT_EQ(report.arms.size(), 2U);
+  EXPECT_EQ(report.arms[1].arm, Arm::SemanticTargetTimeX);
+  EXPECT_EQ(report.arms[0].candidate_fingerprint, report.source_interaction_fingerprint);
+  EXPECT_NE(report.arms[1].candidate_fingerprint, report.source_interaction_fingerprint);
+  EXPECT_EQ(report.arms[1].source_interaction_fingerprint, report.source_interaction_fingerprint);
+}
+
 TEST(MpccArchitectureComparison, FollowComparesPersistentThroughOfflineLattice)
 {
   auto source = source_snapshot();
@@ -693,39 +766,12 @@ TEST(MpccArchitectureComparison, DeclaredStopLateralAuditHasNoAuthorityEdge)
   EXPECT_GE(report.arms[6].terminal_stop_target_attempt_count, 1U);
   EXPECT_NE(report.arms[3].stage, Stage::SourceRejected);
   EXPECT_NE(report.arms[7].stage, Stage::SourceRejected);
-  EXPECT_NE(report.arms[8].stage, Stage::SourceRejected);
-  EXPECT_NE(report.arms[9].stage, Stage::SourceRejected);
-  EXPECT_GT(report.arms[9].candidate_count, 0U);
-  if (report.arms[8].stage == Stage::Accepted) {
-    ASSERT_FALSE(report.arms[8].solved_acceleration_mps2.empty());
-    EXPECT_LE(report.arms[8].solved_acceleration_max_mps2, 1e-9);
-    for (const double acceleration_mps2 :
-      report.arms[8].solved_acceleration_mps2)
-    {
-      EXPECT_LE(acceleration_mps2, 1e-9);
-    }
-  }
-  if (report.arms[9].stage == Stage::Accepted) {
-    const auto & lattice = report.arms[9];
-    ASSERT_FALSE(lattice.solved_steering_rate_radps.empty());
-    ASSERT_EQ(
-      lattice.solved_steering_rate_radps.size(),
-      lattice.solved_acceleration_mps2.size());
-    const double initial_sign =
-      lattice.candidate_source == "positive-negative-hold" ? 1.0 : -1.0;
-    for (std::size_t stage = 0U;
-      stage < lattice.solved_steering_rate_radps.size(); ++stage)
-    {
-      const double rate = lattice.solved_steering_rate_radps[stage];
-      if (static_cast<int>(stage) < lattice.lattice_transition_stage) {
-        EXPECT_GT(initial_sign * rate, 0.1);
-      } else if (static_cast<int>(stage) < lattice.lattice_ahead_stage) {
-        EXPECT_LT(initial_sign * rate, -0.1);
-      } else {
-        EXPECT_NEAR(rate, 0.0, 1e-6);
-      }
-    }
-    EXPECT_LE(lattice.solved_acceleration_max_mps2, 1e-9);
+  // This source's 0.3 s normal horizon cannot reach rest. Stop-only arms
+  // must reject the candidate before attempting either solver or lattice.
+  for (const std::size_t index : {8U, 9U}) {
+    EXPECT_EQ(report.arms[index].stage, Stage::CandidateRejected);
+    EXPECT_FALSE(report.arms[index].bundle.has_value());
+    EXPECT_EQ(report.arms[index].candidate_count, 0U);
   }
 }
 
@@ -757,9 +803,55 @@ TEST(
     << report.arms[9].detail;
 }
 
-TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
+TEST(MpccArchitectureComparison, TargetFreeHorizonAuditChangesOnlyTheSemanticClock)
+{
+  auto source = stoppable_source_snapshot();
+  auto & context = source.identity.source_context;
+  context.intent = contract::ControlIntent::Cruise;
+  context.target_id.clear();
+  context.target_obstacle_generation = 0U;
+  context.execution_side_sign = 0;
+  context.dynamic_obstacle_constraint_active = false;
+  context.dynamic_obstacle_id.clear();
+  context.dynamic_obstacle_generation = 0U;
+  context.dynamic_obstacle_side_sign = 0;
+  context = contract::seal_problem_context(context);
+  source.dynamic_obstacle_refinement_active = false;
+  source.dynamic_obstacle_pass_side_sign = 0;
+  source.dynamic_obstacle_stages.clear();
+  source.replay_world->obstacles.clear();
+  ASSERT_TRUE(architecture::interaction_snapshot_complete(source));
+  const auto fingerprint = architecture::fingerprint_interaction_snapshot(source);
+  const auto candidate = build_target_free_stop_horizon_audit_source(source);
+  ASSERT_TRUE(candidate.has_value());
+  EXPECT_NE(architecture::fingerprint_interaction_snapshot(*candidate), fingerprint);
+  auto restored = *candidate;
+  for (std::size_t i = 0U; i < source.request.inputs.size(); ++i) {
+    EXPECT_EQ(candidate->request.inputs[i].stage_dt_sec, source.request.maximum_stage_dt_sec);
+    restored.request.inputs[i].stage_dt_sec = source.request.inputs[i].stage_dt_sec;
+  }
+  EXPECT_EQ(architecture::fingerprint_interaction_snapshot(restored), fingerprint);
+  EXPECT_EQ(architecture::fingerprint_interaction_snapshot(source), fingerprint);
+  // Even a non-target peer would need its source-clock prediction rebuilt.
+  source.replay_world->obstacles.push_back(source_snapshot().replay_world->obstacles.front());
+  EXPECT_FALSE(build_target_free_stop_horizon_audit_source(source).has_value());
+  EXPECT_FALSE(build_target_free_stop_horizon_audit_source(stoppable_source_snapshot()).has_value());
+}
+
+TEST(MpccArchitectureComparison, MaximumBrakingStopRejectsUnreachableTerminalRest)
 {
   const auto source = source_snapshot();
+  shadow::SolverContext solver;
+  // 2 m/s, three 0.1 s stages and no more than 2 m/s2 braking cannot reach rest.
+  const auto stop = stop_lattice::build_current_world_maximum_braking_candidate(
+    source, solver.physical_constraint_tolerance());
+  EXPECT_FALSE(stop.accepted());
+  EXPECT_EQ(stop.reason, stop_lattice::Reason::InvalidBrakingEnvelope);
+}
+
+TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
+{
+  const auto source = stoppable_source_snapshot();
   shadow::SolverContext solver;
   const auto normal = solver.evaluate(source);
   ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
@@ -789,7 +881,7 @@ TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
       mpcc_rate_resolved_adapter::kLegacyStateDimension>(),
     stop.candidate.request.initial_state);
   double previous_velocity =
-    stop.candidate.request.states.front().lower[model::kVelocityIndex];
+    stop.candidate.request.initial_state[model::kVelocityIndex];
   for (std::size_t stage = 1U;
     stage < stop.candidate.request.states.size(); ++stage)
   {
@@ -798,9 +890,79 @@ TEST(MpccArchitectureComparison, SharedStopLatticeRebasesMaximumBrakingLaw)
       state.lower[model::kVelocityIndex],
       state.upper[model::kVelocityIndex]);
     EXPECT_LE(state.lower[model::kVelocityIndex], previous_velocity + 1e-12);
+    const auto & input = stop.candidate.request.inputs[stage - 1U];
+    EXPECT_NEAR(
+      state.lower[model::kVelocityIndex],
+      previous_velocity + input.reference[model::kAccelerationIndex] * input.stage_dt_sec,
+      1e-12);
     previous_velocity = state.lower[model::kVelocityIndex];
   }
   EXPECT_NEAR(previous_velocity, 0.0, 1e-12);
+}
+
+TEST(MpccArchitectureComparison, MaximumBrakingStopHasFeasibilityObjectiveAndPreservesHardBounds)
+{
+  auto source = stoppable_source_snapshot();
+  for (auto & state : source.request.states) {
+    state.weight.setConstant(3.0);
+    state.linear_cost.setConstant(-1.0);
+  }
+  for (auto & input : source.request.inputs) {
+    input.weight.setConstant(2.0);
+    input.linear_cost.setConstant(0.5);
+  }
+  source.request.input_delta_weight.setConstant(4.0);
+  const auto source_fingerprint = architecture::fingerprint_interaction_snapshot(source);
+  shadow::SolverContext solver;
+  const auto stop = stop_lattice::build_current_world_maximum_braking_candidate(
+    source, solver.physical_constraint_tolerance());
+  ASSERT_TRUE(stop.accepted()) << stop.detail;
+  const auto adapted = mpcc_rate_resolved_adapter::build(
+    stop.candidate.request, solver.physical_constraint_tolerance());
+  ASSERT_TRUE(adapted.has_value());
+  EXPECT_TRUE(adapted->problem.state_weight.isZero(0.0));
+  EXPECT_TRUE(adapted->problem.input_weight.isZero(0.0));
+  EXPECT_TRUE(adapted->problem.additional_linear_cost.isZero(0.0));
+  EXPECT_TRUE(adapted->problem.input_delta_weight.isZero(0.0));
+  EXPECT_TRUE(mpcc_rate_resolved_adapter::is_braking_feasibility_request(stop.candidate.request));
+  EXPECT_EQ(source_fingerprint, architecture::fingerprint_interaction_snapshot(source));
+  EXPECT_NE(source_fingerprint, architecture::fingerprint_interaction_snapshot(stop.candidate));
+  for (std::size_t i = 0; i < source.request.inputs.size(); ++i) {
+    EXPECT_EQ(source.request.inputs[i].lower, stop.candidate.request.inputs[i].lower);
+    EXPECT_EQ(source.request.inputs[i].upper, stop.candidate.request.inputs[i].upper);
+    EXPECT_EQ(source.request.inputs[i].stage_dt_sec, stop.candidate.request.inputs[i].stage_dt_sec);
+  }
+  for (std::size_t i = 0; i < source.request.states.size(); ++i) {
+    for (const int k : {model::kLateralIndex, model::kLagIndex,
+      model::kHeadingIndex, model::kProgressIndex})
+    {
+      EXPECT_EQ(source.request.states[i].lower[k], stop.candidate.request.states[i].lower[k]);
+      EXPECT_EQ(source.request.states[i].upper[k], stop.candidate.request.states[i].upper[k]);
+    }
+  }
+}
+
+TEST(MpccArchitectureComparison, BrakingFeasibilityClassificationRejectsOtherMissions)
+{
+  shadow::SolverContext solver;
+  const auto stop = stop_lattice::build_current_world_maximum_braking_candidate(
+    stoppable_source_snapshot(), solver.physical_constraint_tolerance());
+  ASSERT_TRUE(stop.accepted()) << stop.detail;
+  const auto valid = stop.candidate.request;
+  ASSERT_TRUE(mpcc_rate_resolved_adapter::is_braking_feasibility_request(valid));
+  for (const int mutation : {0, 1, 2, 3, 4, 5}) {
+    auto changed = valid;
+    switch (mutation) {
+      case 0: changed.states.back().lower[model::kVelocityIndex] = 0.1; break;
+      case 1: changed.states[1].upper[model::kVelocityIndex] += 0.1; break;
+      case 2: changed.states.back().linear_cost[model::kProgressIndex] = -1.0; break;
+      case 3: changed.inputs[0].reference[model::kAccelerationIndex] += 0.1; break;
+      case 4: changed.inputs.pop_back(); break;
+      case 5: changed.states[0].weight[model::kLateralIndex] = 1.0; break;
+    }
+    EXPECT_FALSE(mpcc_rate_resolved_adapter::is_braking_feasibility_request(changed))
+      << mutation;
+  }
 }
 
 TEST(MpccArchitectureComparison, CurrentWorldStopDoesNotRebaseControlOrigin)
@@ -831,9 +993,41 @@ TEST(MpccArchitectureComparison, CurrentWorldStopDoesNotRebaseControlOrigin)
     stop.candidate.request.states.back().upper[model::kVelocityIndex], 0.0);
 }
 
+TEST(MpccArchitectureComparison, StopLatticeRatesSatisfyCanonicalCumulativeSteeringRows)
+{
+  auto source = stoppable_source_snapshot();
+  source.request.current_steering_rad = 0.27761979514445506;
+  source.request.maximum_abs_steering_rad = 0.3665;
+  source.request.maximum_abs_steering_rate_radps = 0.7317073170731707;
+  for (auto & input : source.request.inputs) {
+    input.stage_dt_sec = 0.25;
+  }
+  shadow::SolverContext tolerance_owner;
+  const auto tolerance = tolerance_owner.physical_constraint_tolerance();
+  const auto stop = stop_lattice::build_current_world_maximum_braking_candidate(source, tolerance);
+  ASSERT_TRUE(stop.accepted()) << stop.detail;
+  const auto canonical = mpcc_rate_resolved_adapter::build(stop.candidate.request, tolerance);
+  ASSERT_TRUE(canonical.has_value());
+  ASSERT_TRUE(canonical->problem.steering_rate_prefix_bounds.has_value());
+  const auto & prefix = *canonical->problem.steering_rate_prefix_bounds;
+  for (const int sign : {-1, 1}) {
+    const auto schedule = stop_lattice::build_schedule(stop.candidate, sign, 2, 6, tolerance);
+    ASSERT_TRUE(schedule.accepted()) << schedule.detail;
+    double cumulative_delta = 0.0;
+    for (std::size_t stage = 0U; stage < schedule.schedule.steering_rate_radps.size(); ++stage) {
+      const double rate = schedule.schedule.steering_rate_radps[stage];
+      cumulative_delta += rate * stop.candidate.request.inputs[stage].stage_dt_sec;
+      EXPECT_GE(cumulative_delta, prefix.minimum_cumulative_delta_rad - 1e-12) << stage;
+      EXPECT_LE(cumulative_delta, prefix.maximum_cumulative_delta_rad + 1e-12) << stage;
+      EXPECT_GE(rate, canonical->problem.input_lower[3 * stage + model::kSteeringRateIndex] - 1e-12);
+      EXPECT_LE(rate, canonical->problem.input_upper[3 * stage + model::kSteeringRateIndex] + 1e-12);
+    }
+  }
+}
+
 TEST(MpccArchitectureComparison, SharedStopLatticePopulationIsDeterministic)
 {
-  const auto source = source_snapshot();
+  const auto source = stoppable_source_snapshot();
   shadow::SolverContext solver;
   const auto normal = solver.evaluate(source);
   ASSERT_EQ(normal.outcome, shadow::Outcome::Solved) << normal.detail;
@@ -1173,6 +1367,56 @@ TEST(MpccArchitectureComparison, LiveStopShadowMailboxUsesDecisionChronology)
   EXPECT_EQ(state.accepted_count, 2U);
   EXPECT_EQ(state.decision_rollback_count, 1U);
   EXPECT_EQ(state.latest_decision_id, 1832U);
+}
+
+TEST(MpccArchitectureComparison, NonlinearStopOracleRequiresDeclaredFullStop)
+{
+  auto [input, primal] = recorded_with_solved_qp(source_snapshot());
+  const auto report = verify_external_primal(
+    input, primal, ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle);
+  ASSERT_EQ(report.arms.size(), 1U);
+  EXPECT_EQ(report.arms.front().stage, Stage::SourceRejected);
+}
+
+TEST(MpccArchitectureComparison, NonlinearStopOracleCertifiesItsOwnBrakingLaw)
+{
+  shadow::SolverContext tolerance_owner;
+  const auto stop = stop_lattice::build_current_world_maximum_braking_candidate(
+    stoppable_source_snapshot(), tolerance_owner.physical_constraint_tolerance());
+  ASSERT_TRUE(stop.accepted()) << stop.detail;
+  auto [input, primal] = recorded_with_solved_qp(stop.candidate);
+  const int offset = model::kStateDimension * (stop.candidate.request.horizon_steps + 1);
+  for (int stage = 0; stage < stop.candidate.request.horizon_steps; ++stage) {
+    const auto & reference = stop.candidate.request.inputs[stage].reference;
+    primal[offset + model::kInputDimension * stage + model::kAccelerationIndex] =
+      reference[model::kAccelerationIndex];
+    primal[offset + model::kInputDimension * stage + model::kSteeringRateIndex] = 0.0;
+    primal[offset + model::kInputDimension * stage + model::kVirtualProgressSpeedIndex] =
+      reference[model::kVirtualProgressSpeedIndex];
+  }
+  const auto accepted = verify_external_primal(
+    input, primal, ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle);
+  ASSERT_EQ(accepted.arms.size(), 1U);
+  EXPECT_EQ(accepted.arms.front().stage, Stage::Accepted) << accepted.arms.front().detail;
+  ASSERT_TRUE(accepted.arms.front().bundle.has_value());
+  EXPECT_NEAR(accepted.arms.front().bundle->terminal_stop_trajectory.velocity_mps.back(), 0.0, 1e-9);
+
+  auto moving = primal;
+  moving[offset + model::kAccelerationIndex] += 0.1;
+  const auto rejected = verify_external_primal(
+    input, moving, ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle);
+  ASSERT_EQ(rejected.arms.size(), 1U);
+  EXPECT_FALSE(rejected.arms.front().bundle.has_value());
+
+  auto occupied = std::make_shared<recovery::OccupancyGrid>(*input.source.wall_grid);
+  occupied->cells.assign(occupied->cells.size(), recovery::CellState::Occupied);
+  input.source.wall_grid = occupied;
+  input.source.replay_world->wall_grid_fingerprint = recovery::occupancy_grid_fingerprint(*occupied);
+  input.interaction_fingerprint = architecture::fingerprint_interaction_snapshot(input.source);
+  const auto blocked = verify_external_primal(
+    input, primal, ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle);
+  ASSERT_EQ(blocked.arms.size(), 1U);
+  EXPECT_EQ(blocked.arms.front().stage, Stage::WallProofRejected) << blocked.arms.front().detail;
 }
 
 TEST(MpccArchitectureComparison, ExternalPrimalUsesExactPhysicalProofChain)

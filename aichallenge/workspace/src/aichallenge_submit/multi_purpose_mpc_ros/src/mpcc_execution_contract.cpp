@@ -272,6 +272,17 @@ ControlIntent resolve_published_authority_intent(
     ControlIntent::Stop : source_intent;
 }
 
+bool publication_interrupts_execution_ledger(
+  const ControlIntent authority_intent, const bool publication_overridden,
+  const std::uint64_t current_decision_id,
+  const std::uint64_t certified_commit_decision_id) noexcept
+{
+  const bool current_certified_commit = current_decision_id != 0U &&
+    certified_commit_decision_id == current_decision_id;
+  return publication_overridden ||
+         (authority_intent == ControlIntent::Stop && !current_certified_commit);
+}
+
 const char * to_string(const AtomicIntentAdmissionReason reason) noexcept
 {
   switch (reason) {

@@ -559,10 +559,13 @@ const char * to_string(const DynamicObstacleProofScope scope) noexcept
   return "unknown";
 }
 
-Result evaluate(const Request & request)
+static Result evaluate_with_stop_profile(
+  const Request & request,
+  const mpcc_rate_resolved_physical_adapter::StopLateralTargetProfile * const stop_profile)
 {
   const auto evaluation_started = SteadyClock::now();
   Result result;
+  result.terminal_stop_normal_path_reference = stop_profile != nullptr;
   result.execution_clock_kind = request.execution_clock.kind;
   result.first_published_control_origin_sec =
     request.execution_clock.first_published_control_origin_sec;
@@ -1243,6 +1246,7 @@ Result evaluate(const Request & request)
     // and current-world rebasing can invalidate it before another worker
     // result arrives.
     result.terminal_stop_attempted = true;
+    result.terminal_stop_reference_attempts = 1U;
     const auto terminal_build_started = SteadyClock::now();
     const auto terminal_stop =
       mpcc_rate_resolved_physical_adapter::build_stop_contingency(
@@ -1257,7 +1261,7 @@ Result evaluate(const Request & request)
         request.current_response_steering_rad},
       source.terminal_stop_course_geometry,
       request.stop_lateral_policy,
-      request.minimum_acceleration_mps2);
+      request.minimum_acceleration_mps2, 0.0, stop_profile);
     const auto terminal_built = SteadyClock::now();
     result.runtime.terminal_build_ms = elapsed_ms(
       terminal_build_started, terminal_built);
@@ -1478,6 +1482,7 @@ Result evaluate(const Request & request)
   proof.follow_checked_state_count = result.follow_checked_state_count;
   proof.follow_minimum_gap_m = result.follow_minimum_gap_m;
   proof.terminal_stop_certified = result.terminal_stop_certified;
+  proof.terminal_stop_normal_path_reference = result.terminal_stop_normal_path_reference;
   proof.terminal_stop_static_checked_pose_count =
     terminal_stop_clearance.checked_pose_count;
   proof.terminal_stop_dynamic_checked_pose_count =
@@ -1498,6 +1503,68 @@ Result evaluate(const Request & request)
   result.reason = Reason::Accepted;
   result.proof = std::move(proof);
   return result;
+}
+
+Result evaluate(const Request & request)
+{
+  if (request.plan == nullptr || request.plan->execution_artifact == nullptr) {
+    return evaluate_with_stop_profile(request, nullptr);
+  }
+  const auto profile = mpcc_rate_resolved_physical_adapter::build_normal_path_stop_profile(
+    *request.plan->execution_artifact);
+  if (!profile.has_value()) {
+    return evaluate_with_stop_profile(request, nullptr);
+  }
+  auto normal_path = evaluate_with_stop_profile(request, &profile.value());
+  // Latest-state feedback preserves SteeringUnreachable as its outer failure
+  // label. Use the proof stage itself, rather than that presentation label,
+  // to distinguish a terminal-reference failure from a failed command join.
+  if (!normal_path.terminal_stop_attempted || normal_path.terminal_stop_certified) {
+    return normal_path;
+  }
+  // Stop is a feasibility obligation. The solved path owns the preferred
+  // lateral reference, but its declared domain need not cover braking to
+  // rest. The track reference is a second, independently proved hypothesis;
+  // it never supplies authority when its own complete current-world proof fails.
+  auto track = evaluate_with_stop_profile(request, nullptr);
+  track.terminal_stop_reference_attempts += normal_path.terminal_stop_reference_attempts;
+  using Runtime = Result::RuntimeBreakdown;
+  for (const auto field : {
+    &Runtime::pre_continuation_ms, &Runtime::continuation_build_ms,
+    &Runtime::continuation_proof_ms, &Runtime::continuation_delay_wall_ms,
+    &Runtime::continuation_dynamic_ms, &Runtime::continuation_wall_ms,
+    &Runtime::terminal_build_ms, &Runtime::terminal_dynamic_ms, &Runtime::terminal_wall_ms})
+  {
+    track.runtime.*field += normal_path.runtime.*field;
+  }
+  return track;
+}
+
+NormalPathStopObservation observe_normal_path_stop(const Request & request)
+{
+  const auto started = SteadyClock::now();
+  NormalPathStopObservation observation;
+  if (request.plan == nullptr || request.plan->execution_artifact == nullptr) {
+    return observation;
+  }
+  const auto profile = mpcc_rate_resolved_physical_adapter::build_normal_path_stop_profile(
+    *request.plan->execution_artifact);
+  if (!profile.has_value()) {
+    observation.reason = Reason::TerminalContingencyUnavailable;
+    observation.terminal_reason = mpcc_rate_resolved_physical_adapter::
+      StopContingencyRejectReason::InvalidLateralPolicy;
+    return observation;
+  }
+  observation.profile_available = true;
+  const auto result = evaluate_with_stop_profile(request, &profile.value());
+  observation.accepted = result.proof.has_value();
+  observation.reason = result.reason;
+  observation.terminal_reason = result.terminal_stop_reason;
+  observation.wall_valid = result.terminal_stop_path_clearance.valid;
+  observation.wall_clear = result.terminal_stop_path_clearance.clear;
+  observation.dynamic_checked = result.terminal_stop_dynamic_checked_pose_count;
+  observation.elapsed_ms = elapsed_ms(started, SteadyClock::now());
+  return observation;
 }
 
 const char * to_string(const StopSuccessorReason reason) noexcept

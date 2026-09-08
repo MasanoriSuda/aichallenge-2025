@@ -158,7 +158,8 @@ std::optional<problem::Problem> external_primal_problem(
   auto qp = recorded.recorded_qp->problem;
   if (
     policy == ExternalPrimalConstraintPolicy::ExactRecorded ||
-    policy == ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle)
+    policy == ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle ||
+    policy == ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle)
   {
     return qp;
   }
@@ -205,7 +206,8 @@ ExternalArtifactBuild build_external_artifact(
   namespace model = mpcc_rate_resolved;
   ExternalArtifactBuild result;
   const bool enforce_affine_rows =
-    policy != ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle;
+    policy != ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle &&
+    policy != ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle;
   const int horizon = snapshot.request.horizon_steps;
   const int execution_horizon = snapshot.execution_prefix_steps;
   const int state_values = model::kStateDimension * (horizon + 1);
@@ -679,28 +681,6 @@ enum class TerminalStopLateralAuditMode
   SolvedStopTrajectory,
 };
 
-std::optional<physical::StopLateralTargetProfile>
-build_normal_path_stop_profile(
-  const artifact::ExecutionArtifact & execution) noexcept
-{
-  if (
-    artifact::validate(execution) != artifact::RejectReason::None ||
-    execution.predicted_states.size() < 2U)
-  {
-    return std::nullopt;
-  }
-  physical::StopLateralTargetProfile profile;
-  profile.progress_m.reserve(execution.predicted_states.size());
-  profile.lateral_m.reserve(execution.predicted_states.size());
-  for (const auto & state : execution.predicted_states) {
-    profile.progress_m.push_back(state.progress_m);
-    profile.lateral_m.push_back(state.lateral_m);
-  }
-  return physical::stop_lateral_target_profile_valid(profile) ?
-    std::optional<physical::StopLateralTargetProfile>{std::move(profile)} :
-    std::nullopt;
-}
-
 TerminalStopCertificate certify_terminal_stop(
   const shadow::Snapshot & candidate,
   const artifact::ExecutionArtifact & execution,
@@ -800,7 +780,8 @@ ArmResult evaluate_arm(
   const std::size_t physical_dynamic_sqp_audit_iteration_count = 0U,
   const TerminalStopLateralAuditMode terminal_stop_lateral_audit_mode =
   TerminalStopLateralAuditMode::RacingLine,
-  const std::vector<double> * const fixed_steering_rate_radps = nullptr)
+  const std::vector<double> * const fixed_steering_rate_radps = nullptr,
+  const bool witness_physical_separation_audit = false)
 {
   ArmResult arm_result;
   arm_result.arm = arm;
@@ -827,7 +808,7 @@ ArmResult evaluate_arm(
   auto & solver = solver_context == nullptr ? local_solver : *solver_context;
   const auto solved = fixed_steering_rate_radps != nullptr ?
     solver.evaluate_fixed_steering_rate_audit(
-    candidate, *fixed_steering_rate_radps) :
+    candidate, *fixed_steering_rate_radps, witness_physical_separation_audit) :
     (physical_dynamic_sqp_audit_iteration_count > 0U ?
     solver.evaluate_physical_dynamic_sqp_audit(
       candidate, physical_dynamic_sqp_audit_iteration_count) :
@@ -836,7 +817,8 @@ ArmResult evaluate_arm(
       candidate, wall_bucket_audit_mode.value()) :
     (wall_restoration_audit ?
     solver.evaluate_wall_feasibility_restoration_audit(candidate) :
-    solver.evaluate(candidate))));
+    (witness_physical_separation_audit ?
+    solver.evaluate_stop_physical_support_audit(candidate) : solver.evaluate(candidate)))));
   arm_result.solver_outcome = solved.outcome;
   arm_result.solver_compute_ms = solved.compute_ms;
   arm_result.terminal_progress_m = solved.terminal_progress_m;
@@ -1006,7 +988,7 @@ ArmResult evaluate_arm(
     TerminalStopLateralAuditMode::NormalPathProfile)
   {
     terminal_stop_target_attempt_count = 1U;
-    const auto profile = build_normal_path_stop_profile(
+    const auto profile = physical::build_normal_path_stop_profile(
       *solved.execution_artifact);
     if (!profile.has_value()) {
       terminal_stop.detail = "normal-path Stop profile unavailable";
@@ -1795,6 +1777,8 @@ const char * to_string(const Arm arm) noexcept
       return "seven-state-stop-control-lattice-v";
     case Arm::FollowStayBehindW:
       return "follow-stay-behind-w";
+    case Arm::SemanticTargetTimeX:
+      return "semantic-target-time-x";
   }
   return "unknown";
 }
@@ -2192,6 +2176,287 @@ Report compare(
   return report;
 }
 
+std::optional<shadow::Snapshot> resample_target_stage_time(
+  const architecture::RecordedInteractionSnapshot & recorded,
+  const double recorded_stage_interval_sec,
+  const double lateral_prediction_horizon_sec,
+  const double maximum_prediction_time_sec) noexcept
+{
+  const auto & source = recorded.source;
+  const auto & stages = source.dynamic_obstacle_stages;
+  if (!architecture::interaction_snapshot_complete(source) ||
+    !architecture::interaction_snapshot_matches_fingerprint(
+      source, recorded.interaction_fingerprint) ||
+    !source.dynamic_obstacle_refinement_active || stages.size() < 2U ||
+    stages.size() != source.request.inputs.size() ||
+    source.nominal_path_distance_m.size() != stages.size() + 1U ||
+    !std::isfinite(recorded_stage_interval_sec) || recorded_stage_interval_sec <= 0.0 ||
+    !std::isfinite(lateral_prediction_horizon_sec) ||
+    !std::isfinite(maximum_prediction_time_sec) ||
+    maximum_prediction_time_sec < lateral_prediction_horizon_sec ||
+    stages.size() * recorded_stage_interval_sec > lateral_prediction_horizon_sec)
+  {
+    return std::nullopt;
+  }
+  const double progress_rate =
+    (stages[1].target_progress_m - stages[0].target_progress_m) /
+    recorded_stage_interval_sec;
+  const double lateral_rate =
+    (stages[1].target_lateral_m - stages[0].target_lateral_m) /
+    recorded_stage_interval_sec;
+  const double initial_progress =
+    stages[0].target_progress_m - progress_rate * recorded_stage_interval_sec;
+  const double initial_lateral =
+    stages[0].target_lateral_m - lateral_rate * recorded_stage_interval_sec;
+  for (std::size_t index = 0U; index < stages.size(); ++index) {
+    const double recorded_time = (index + 1U) * recorded_stage_interval_sec;
+    const auto & stage = stages[index];
+    // Reject curved, clamped or otherwise non-affine historical payloads:
+    // reconstructing them would introduce another prediction hypothesis.
+    if (!stage.valid ||
+      !std::isfinite(stage.target_progress_m) ||
+      !std::isfinite(stage.target_lateral_m) ||
+      std::abs(stage.target_progress_m - initial_progress -
+        progress_rate * recorded_time) > 1.0e-8 ||
+      std::abs(stage.target_lateral_m - initial_lateral -
+        lateral_rate * recorded_time) > 1.0e-8)
+    {
+      return std::nullopt;
+    }
+  }
+  auto candidate = source;
+  double semantic_time = 0.0;
+  for (std::size_t index = 0U; index < stages.size(); ++index) {
+    const double dt = source.request.inputs[index].stage_dt_sec;
+    if (!std::isfinite(dt) || dt <= 0.0) {
+      return std::nullopt;
+    }
+    semantic_time += dt;
+    const double prediction_time = std::min(semantic_time, maximum_prediction_time_sec);
+    auto & stage = candidate.dynamic_obstacle_stages[index];
+    stage.valid = semantic_time <= maximum_prediction_time_sec + 1.0e-9;
+    // Preserve the original producer's distance-relative truncated expression.
+    stage.target_progress_m = initial_progress + progress_rate * prediction_time +
+      source.nominal_path_distance_m[index + 1U] * (1.0 - prediction_time / semantic_time);
+    stage.target_lateral_m = initial_lateral + lateral_rate *
+      std::min(prediction_time, lateral_prediction_horizon_sec);
+  }
+  return candidate;
+}
+
+Report compare_target_stage_time(
+  const architecture::RecordedInteractionSnapshot & recorded,
+  const double recorded_stage_interval_sec,
+  const double lateral_prediction_horizon_sec,
+  const double maximum_prediction_time_sec) noexcept
+{
+  Report report;
+  report.source_interaction_fingerprint = recorded.interaction_fingerprint;
+  const auto candidate = resample_target_stage_time(
+    recorded, recorded_stage_interval_sec, lateral_prediction_horizon_sec,
+    maximum_prediction_time_sec);
+  if (!candidate.has_value()) {
+    report.detail = "recorded affine target timing unavailable or inconsistent";
+    return report;
+  }
+  report.source_accepted = true;
+  report.detail = "sampling-time-only comparison";
+  report.arms.push_back(evaluate_arm(
+    Arm::PersistentA, recorded.source, recorded.interaction_fingerprint,
+    recorded.interaction_fingerprint, resolve_audit_terminal_successor(recorded.source)));
+  report.arms.push_back(evaluate_arm(
+    Arm::SemanticTargetTimeX, *candidate, recorded.interaction_fingerprint,
+    architecture::fingerprint_interaction_snapshot(*candidate),
+    resolve_audit_terminal_successor(*candidate)));
+  return report;
+}
+
+Report compare_stop_schedule(
+  const architecture::RecordedInteractionSnapshot & recorded,
+  const int initial_rate_sign, const int first_switch_stage,
+  const int second_switch_stage,
+  const bool witness_physical_separation_audit) noexcept
+{
+  Report report;
+  report.source_interaction_fingerprint = recorded.interaction_fingerprint;
+  if (!architecture::interaction_snapshot_complete(recorded.source) ||
+    !architecture::interaction_snapshot_matches_fingerprint(
+      recorded.source, recorded.interaction_fingerprint))
+  {
+    report.detail = "source interaction snapshot rejected";
+    return report;
+  }
+  shadow::SolverContext solver;
+  const auto stop = stop_lattice::build_current_world_maximum_braking_candidate(
+    recorded.source, solver.physical_constraint_tolerance());
+  if (!stop.accepted()) {
+    report.detail = stop.detail;
+    return report;
+  }
+  const auto schedule = stop_lattice::build_schedule(
+    stop.candidate, initial_rate_sign, first_switch_stage, second_switch_stage,
+    solver.physical_constraint_tolerance());
+  if (!schedule.accepted()) {
+    report.detail = schedule.detail;
+    return report;
+  }
+  auto fingerprint = architecture::fingerprint_interaction_snapshot(stop.candidate);
+  for (const double rate : schedule.schedule.steering_rate_radps) {
+    append_fingerprint_double(fingerprint, rate);
+  }
+  if (witness_physical_separation_audit) {
+    append_fingerprint_double(fingerprint, 1.0);
+  }
+  report.source_accepted = true;
+  report.detail = witness_physical_separation_audit ?
+    "single Stop physical-support schedule audit" : "single Stop schedule audit";
+  report.arms.push_back(evaluate_arm(
+    Arm::SevenStateStopControlLatticeV, stop.candidate,
+    recorded.interaction_fingerprint, fingerprint,
+    resolve_audit_terminal_successor(stop.candidate),
+    first_switch_stage, second_switch_stage, nullptr, false, std::nullopt, 0U,
+    TerminalStopLateralAuditMode::SolvedStopTrajectory,
+    &schedule.schedule.steering_rate_radps, witness_physical_separation_audit));
+  return report;
+}
+
+Report compare_stop_physical_support(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  Report report;
+  report.source_interaction_fingerprint = recorded.interaction_fingerprint;
+  if (!architecture::interaction_snapshot_complete(recorded.source) ||
+    !architecture::interaction_snapshot_matches_fingerprint(
+      recorded.source, recorded.interaction_fingerprint))
+  {
+    report.detail = "source interaction snapshot rejected";
+    return report;
+  }
+  shadow::SolverContext solver;
+  auto stop = stop_lattice::build_current_world_maximum_braking_candidate(
+    recorded.source, solver.physical_constraint_tolerance());
+  if (!stop.accepted()) {
+    report.detail = stop.detail;
+    return report;
+  }
+  // Reconstruct the historical inherited objective for the first two arms.
+  // Current production Stop construction now owns a feasibility mission.
+  for (std::size_t i = 0; i < stop.candidate.request.states.size(); ++i) {
+    stop.candidate.request.states[i].weight = recorded.source.request.states[i].weight;
+    stop.candidate.request.states[i].linear_cost = recorded.source.request.states[i].linear_cost;
+  }
+  for (std::size_t i = 0; i < stop.candidate.request.inputs.size(); ++i) {
+    stop.candidate.request.inputs[i].weight = recorded.source.request.inputs[i].weight;
+    stop.candidate.request.inputs[i].linear_cost = recorded.source.request.inputs[i].linear_cost;
+  }
+  stop.candidate.request.input_delta_weight = recorded.source.request.input_delta_weight;
+  auto fingerprint = architecture::fingerprint_interaction_snapshot(stop.candidate);
+  report.source_accepted = true;
+  report.detail = "free Stop: support-only, historical, explicit feasibility, production feasibility";
+  const auto successor = resolve_audit_terminal_successor(stop.candidate);
+  auto support_fingerprint = fingerprint;
+  append_fingerprint_double(support_fingerprint, 1.0);
+  // Capture the new failed QP first; the legacy arm remains the paired
+  // comparison but must not consume the process-local diagnostic slot.
+  report.arms.push_back(evaluate_arm(
+    Arm::SevenStateStopU, stop.candidate, recorded.interaction_fingerprint,
+    support_fingerprint, successor, -1, -1, nullptr, false, std::nullopt, 0U,
+    TerminalStopLateralAuditMode::SolvedStopTrajectory, nullptr, true));
+  report.arms.push_back(evaluate_arm(
+    Arm::SevenStateStopU, stop.candidate, recorded.interaction_fingerprint,
+    fingerprint, successor, -1, -1, nullptr, false, std::nullopt, 0U,
+    TerminalStopLateralAuditMode::SolvedStopTrajectory));
+  // Architecture hypothesis: maximum-braking Stop is a feasibility mission.
+  // Keep its complete dynamics, bounds, references and physical proofs while
+  // removing the inherited racing objective. This remains standalone only.
+  auto feasibility_stop = stop.candidate;
+  for (auto & state : feasibility_stop.request.states) {
+    state.weight.setZero();
+    state.linear_cost.setZero();
+  }
+  for (auto & input : feasibility_stop.request.inputs) {
+    input.weight.setZero();
+    input.linear_cost.setZero();
+  }
+  feasibility_stop.request.input_delta_weight.setZero();
+  auto feasibility_fingerprint =
+    architecture::fingerprint_interaction_snapshot(feasibility_stop);
+  append_fingerprint_double(feasibility_fingerprint, 1.0);
+  report.arms.push_back(evaluate_arm(
+    Arm::SevenStateStopU, feasibility_stop, recorded.interaction_fingerprint,
+    feasibility_fingerprint, resolve_audit_terminal_successor(feasibility_stop),
+    -1, -1, nullptr, false, std::nullopt, 0U,
+    TerminalStopLateralAuditMode::SolvedStopTrajectory, nullptr, true));
+  report.arms.push_back(evaluate_arm(
+    Arm::SevenStateStopU, feasibility_stop, recorded.interaction_fingerprint,
+    architecture::fingerprint_interaction_snapshot(feasibility_stop),
+    resolve_audit_terminal_successor(feasibility_stop),
+    -1, -1, nullptr, false, std::nullopt, 0U,
+    TerminalStopLateralAuditMode::SolvedStopTrajectory));
+  return report;
+}
+
+std::optional<shadow::Snapshot> build_target_free_stop_horizon_audit_source(
+  const shadow::Snapshot & source) noexcept
+{
+  const auto & context = source.identity.source_context;
+  if (!architecture::interaction_snapshot_complete(source) ||
+    !source.replay_world.has_value() || !source.replay_world->obstacles.empty() ||
+    !context.target_id.empty() || context.target_obstacle_generation != 0U ||
+    context.dynamic_obstacle_constraint_active || !context.dynamic_obstacle_id.empty() ||
+    context.dynamic_obstacle_generation != 0U || source.dynamic_obstacle_refinement_active ||
+    !source.dynamic_obstacle_stages.empty() ||
+    !std::isfinite(source.request.maximum_stage_dt_sec) ||
+    source.request.maximum_stage_dt_sec < source.request.minimum_stage_dt_sec)
+  {
+    return std::nullopt;
+  }
+  auto candidate = source;
+  for (auto & input : candidate.request.inputs) {
+    input.stage_dt_sec = candidate.request.maximum_stage_dt_sec;
+  }
+  // Observation, prediction origin, geometry and hard bounds are unchanged.
+  // The caller seals the changed semantic clock as a new interaction identity.
+  return candidate;
+}
+
+Report compare_target_free_stop_horizon(
+  const architecture::RecordedInteractionSnapshot & recorded) noexcept
+{
+  Report report;
+  report.source_interaction_fingerprint = recorded.interaction_fingerprint;
+  if (!architecture::interaction_snapshot_matches_fingerprint(
+      recorded.source, recorded.interaction_fingerprint))
+  {
+    report.detail = "source interaction snapshot rejected";
+    return report;
+  }
+  const auto extended = build_target_free_stop_horizon_audit_source(recorded.source);
+  if (!extended.has_value()) {
+    report.detail = "target-free Stop horizon audit requires a complete peer-free source";
+    return report;
+  }
+  report.source_accepted = true;
+  report.detail = "observation-only Stop horizon: source clock, source maximum stage dt";
+  shadow::SolverContext solver;
+  for (const auto * source : {&recorded.source, &extended.value()}) {
+    const auto stop = stop_lattice::build_current_world_maximum_braking_candidate(
+      *source, solver.physical_constraint_tolerance());
+    if (!stop.accepted()) {
+      report.arms.push_back(rejected_arm(
+        Arm::SevenStateStopU, Stage::CandidateRejected,
+        architecture::fingerprint_interaction_snapshot(*source), stop.detail));
+      continue;
+    }
+    report.arms.push_back(evaluate_arm(
+      Arm::SevenStateStopU, stop.candidate, recorded.interaction_fingerprint,
+      architecture::fingerprint_interaction_snapshot(stop.candidate),
+      resolve_audit_terminal_successor(stop.candidate), -1, -1, nullptr, false,
+      std::nullopt, 0U, TerminalStopLateralAuditMode::SolvedStopTrajectory));
+  }
+  return report;
+}
+
 Report compare_wall_restoration(
   const architecture::RecordedInteractionSnapshot & recorded) noexcept
 {
@@ -2410,6 +2675,16 @@ Report verify_external_primal(
     }
     report.source_accepted = true;
     report.detail = "accepted/external-primal-proof-only";
+    const bool solved_stop_oracle =
+      policy == ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle;
+    if (solved_stop_oracle &&
+      (source.execution_prefix_steps != source.request.horizon_steps ||
+      source.request.states.back().lower[mpcc_rate_resolved::kVelocityIndex] != 0.0 ||
+      source.request.states.back().upper[mpcc_rate_resolved::kVelocityIndex] != 0.0))
+    {
+      return reject_source(Stage::SourceRejected,
+        "solved Stop oracle requires a full-horizon declared rest boundary");
+    }
     if (!recorded.recorded_qp.has_value()) {
       return reject_source(
         Stage::SourceRejected,
@@ -2513,8 +2788,30 @@ Report verify_external_primal(
       return report;
     }
 
-    const auto terminal_stop = certify_terminal_stop(
-      source, built.value.value(), physical_snapshot);
+    TerminalStopCertificate terminal_stop;
+    if (solved_stop_oracle) {
+      // Match the existing solved Stop candidate's proof owner. A braking
+      // trajectory is its own contingency, rather than a new racing-line
+      // steering law synthesized from the same initial state.
+      bool velocity_contract = !exact.velocity_mps.empty() &&
+        std::abs(exact.velocity_mps.back()) <= 1.0e-9;
+      const auto & states = built.value->predicted_states;
+      for (std::size_t stage = 0U; stage < states.size(); ++stage) {
+        const auto & bounds = source.request.states[stage];
+        velocity_contract = velocity_contract &&
+          states[stage].velocity_mps >= bounds.lower[mpcc_rate_resolved::kVelocityIndex] - 1.0e-9 &&
+          states[stage].velocity_mps <= bounds.upper[mpcc_rate_resolved::kVelocityIndex] + 1.0e-9;
+      }
+      terminal_stop.accepted = velocity_contract;
+      terminal_stop.detail = velocity_contract ?
+        "accepted/nonlinear-solved-stop" : "nonlinear Stop velocity law rejected";
+      terminal_stop.trajectory = exact;
+      terminal_stop.wall_certificate = wall_result;
+      terminal_stop.dynamic_certificate = dynamic_result;
+    } else {
+      terminal_stop = certify_terminal_stop(
+        source, built.value.value(), physical_snapshot);
+    }
     if (!terminal_stop.accepted) {
       arm_result.stage = Stage::TerminalSuccessorRejected;
       arm_result.detail = terminal_stop.detail;
@@ -2554,6 +2851,10 @@ Report verify_external_primal(
       case ExternalPrimalConstraintPolicy::PhysicalNonlinearOracle:
         arm_result.detail =
           "accepted/external-primal-physical-nonlinear-oracle/exact-proofs";
+        break;
+      case ExternalPrimalConstraintPolicy::PhysicalNonlinearStopOracle:
+        arm_result.detail =
+          "accepted/external-primal-nonlinear-solved-stop/exact-proofs";
         break;
     }
     arm_result.bundle = std::move(bundle);

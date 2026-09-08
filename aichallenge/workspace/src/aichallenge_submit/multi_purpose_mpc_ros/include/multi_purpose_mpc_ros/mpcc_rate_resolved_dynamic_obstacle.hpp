@@ -80,6 +80,10 @@ struct Request
   /// obstacle-free wall witness.
   std::optional<PhysicalSeparationGeometry>
     physical_separation_geometry;
+  /// Declared braking-feasibility Stop: use the nearest oriented body support
+  /// at each solved witness pose. These are full separating planes, not
+  /// relaxed axis rows. Nonlinear wall/dynamic proof still owns acceptance.
+  bool witness_physical_separation{false};
   std::vector<StagePrediction> stages;
   /// Physically solved witness used only to classify the reachable convex
   /// obstacle branch. Its progress trust buckets must not implicitly become

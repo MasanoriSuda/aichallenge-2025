@@ -285,6 +285,7 @@ struct Proof
   /// A partial normal prefix may own exactly one publisher interval only when
   /// this current-decision Stop trajectory is independently certified.
   bool terminal_stop_certified{false};
+  bool terminal_stop_normal_path_reference{false};
   std::size_t terminal_stop_static_checked_pose_count{};
   std::size_t terminal_stop_dynamic_checked_pose_count{};
   double terminal_stop_minimum_dynamic_clearance_m{
@@ -339,6 +340,8 @@ struct Result
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
   bool terminal_stop_attempted{false};
   bool terminal_stop_certified{false};
+  bool terminal_stop_normal_path_reference{false};
+  unsigned terminal_stop_reference_attempts{};
   bool terminal_stop_approximate_support_exceeded{false};
   int terminal_stop_first_approximate_support_exceeded_sample{-1};
   double terminal_stop_maximum_approximate_support_violation_m{};
@@ -457,6 +460,22 @@ struct Result
 /// Revalidate only the current-world join to an immutable, already physically
 /// certified suffix.  This function deliberately cannot produce a command.
 Result evaluate(const Request & request);
+
+/// Current-world counterfactual only. No Proof/plan/command escapes this API.
+struct NormalPathStopObservation
+{
+  bool profile_available{false};
+  bool accepted{false};
+  Reason reason{Reason::MissingPlan};
+  mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason terminal_reason{
+    mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason::InvalidArtifact};
+  bool wall_valid{false};
+  bool wall_clear{false};
+  std::size_t dynamic_checked{};
+  double elapsed_ms{};
+};
+
+NormalPathStopObservation observe_normal_path_stop(const Request & request);
 
 /// Observation-only result for the terminal successor of the last actually
 /// published normal Bundle. It deliberately owns no publisher command:

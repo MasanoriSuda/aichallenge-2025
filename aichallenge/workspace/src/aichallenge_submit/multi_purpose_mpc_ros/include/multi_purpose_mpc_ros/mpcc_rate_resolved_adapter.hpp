@@ -90,6 +90,11 @@ struct Result
   double first_steering_rate_certificate_margin_radps{};
 };
 
+/// Recognize the sealed feasibility contract: no tracking objective, a fixed
+/// nonincreasing velocity law, matching acceleration references, and rest.
+/// Full execution-horizon ownership is checked by the snapshot consumer.
+bool is_braking_feasibility_request(const Request & request) noexcept;
+
 /// Solver-coordinate interval whose accepted residual still lies inside the
 /// exact physical boundary.  Any temporal reachability envelope derived from
 /// an optimized input must use this interval, not the uninset actuator limit.
@@ -103,6 +108,11 @@ struct ExactPhysicalBoundaryBounds
 std::optional<ExactPhysicalBoundaryBounds>
 resolve_exact_physical_boundary_bounds(
   double physical_lower, double physical_upper,
+  const persistent_osqp::PhysicalConstraintTolerance & tolerance) noexcept;
+
+/// Shared cumulative steering-delta box for QP rows and fixed-input producers.
+std::optional<ExactPhysicalBoundaryBounds> resolve_steering_prefix_bounds(
+  double initial_steering_rad, double maximum_abs_steering_rad,
   const persistent_osqp::PhysicalConstraintTolerance & tolerance) noexcept;
 
 enum class RejectReason

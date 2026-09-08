@@ -1,0 +1,181 @@
+{
+  "snapshot_ids": [
+    "20260908-wall-map-worker-10074",
+    "20260908-wall-map-worker-10081",
+    "20260908-wall-map-decision-10699"
+  ],
+  "run_id": "20260908-wall-map-single-r1",
+  "domain_id": 1,
+  "baseline_manifest": ".steering/20260908-physical-wall-map-calibration/20260908-wall-map-single-r1-manifest.json",
+  "replay_ready": false,
+  "current_problem_architecture_replay_ready": true,
+  "incomplete_reason": "The current10699problem and earlier fresh10074/10081problems replay; actual previously published10073artifact is absent. Do not label their re-solves as exact executed replay.",
+  "files": [
+    {
+      "path": "output/20260908-wall-map-single-r1/bag-analysis.json",
+      "bytes": 159960,
+      "sha256": "287666cb9b9078cdf875047845581a6bdbeda0df9a5d5fff09f9c6b16f2cb01e"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/comparison-10699.txt",
+      "bytes": 5786,
+      "sha256": "f157302e12ebc966281054f9b0332f408fae72fed914febfe2756c22b10c79cb"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/autoware.log",
+      "bytes": 2659475,
+      "sha256": "10456a0eddb4c48e297043f3db3502f65da80f6dfc0241881814869c061bb850"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000000002-f123373de70b2fe2-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 245464,
+      "sha256": "8a65152b2410e42f2b203a163d475ad670b8cbd4c9e099fcba5a46e4efa2f714"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000000002-f123373de70b2fe2-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000000035-cde44a7addede683-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 243118,
+      "sha256": "238629c37d1b0f5669408e6015325b49f32f36551010a628fbd731bdc07f93af"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000000035-cde44a7addede683-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000000100-284f6244aa1798fd-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 242507,
+      "sha256": "2e1028a8443916b57e7fec96485256a8d59b37926e38e47768d6a7c4faa49e30"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000000100-284f6244aa1798fd-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000000121-492980978a1538e2-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 245736,
+      "sha256": "539250f639b50783d1c1cdc520343c473b961e44e0ff5ea94da7630ff39742b5"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000000121-492980978a1538e2-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000010074-4626e00197765c5e-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 257974,
+      "sha256": "8f39fd336ada53a66e89f051edfeeaca46eb406ce594f3fab55d7f80f3ca937a"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000010074-4626e00197765c5e-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000010081-27528552313bf1b9-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 35360,
+      "sha256": "9d9291895c4d21c7a232d0fc2fb8fd666f3ffe11701bc63cf626dead2c50a1c4"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000010081-27528552313bf1b9-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000010699-cb941400001e0c8f-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35440,
+      "sha256": "d74095291d44c579fed8512cb606b1e2be7816b036f1c901fe90b86adc01c440"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000010699-cb941400001e0c8f-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/delay-prefix-motion.json",
+      "bytes": 433824,
+      "sha256": "f911b31b13600741d7f1747aaa55f32cc538c79aa61ff2f22b08598e838f5c2a"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/localization-analysis.json",
+      "bytes": 1870555,
+      "sha256": "5008082cd329f067f262bef18c71f8c7ea60b1746e289c14337dac1fa604bd70"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/log-summary.json",
+      "bytes": 8365,
+      "sha256": "a4a13578ad33f11d60349ccf511650214392ddba357837131463ee46f51326a7"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/manifest.json",
+      "bytes": 7388,
+      "sha256": "92f532610a2c159d385c21008ddd3c845cd0b62c574b3d752607a28c9bd01fc1"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/monitor-summary.json",
+      "bytes": 1769,
+      "sha256": "afa0ced0d8927ce79bf96365977ceed0810ede17ff49efead699aa728fbd2719"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10074-rejected-primal-physical-nonlinear-oracle.txt",
+      "bytes": 607,
+      "sha256": "dd15e0d0bb6e20d1f501f0cccd75b63d753bcb9a69cff237fbaca344ddaae4c5"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10074-wall-restoration-only.txt",
+      "bytes": 1281,
+      "sha256": "aab60b179ffeddb3a45f04d913f2b05e42fffad0234a44d13f11046113e95e1a"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10074-warm-start-primal-physical-nonlinear-oracle.txt",
+      "bytes": 865,
+      "sha256": "07eb1cdf1bb8135d434dae5252301cde42881a33e0e26f310de8d9fe029c193b"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10081-rejected-primal-physical-nonlinear-oracle.txt",
+      "bytes": 50,
+      "sha256": "c4f18b9ca7142f8cf556bdf4038a325d100553188026942c10512b2e2303bc8b"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10081-wall-restoration-only.txt",
+      "bytes": 661,
+      "sha256": "68a15bbe60acb438e6a8cdcffec4c5481fe5a1739b87dd1c0956a67cb3b605a9"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10081-warm-start-primal-physical-nonlinear-oracle.txt",
+      "bytes": 39,
+      "sha256": "52e05d5677a10dff148ba25bf1dd10031b6715453b9feb9f5d8bc7aeae70a777"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10699-rejected-primal-physical-nonlinear-oracle.txt",
+      "bytes": 50,
+      "sha256": "c4f18b9ca7142f8cf556bdf4038a325d100553188026942c10512b2e2303bc8b"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10699-wall-restoration-only.txt",
+      "bytes": 1283,
+      "sha256": "66242680bd07d1469be17c0109d1b8d3e92a826e12dd79b2ae914caf6564e964"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/offline-comparisons/10699-warm-start-primal-physical-nonlinear-oracle.txt",
+      "bytes": 39,
+      "sha256": "52e05d5677a10dff148ba25bf1dd10031b6715453b9feb9f5d8bc7aeae70a777"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/prefix-contact-cell-height.json",
+      "bytes": 1031,
+      "sha256": "cb31454e4dbe4f0f4e269c3e49b01a3c5039acf0da19ea512f5d47556617d343"
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/prefix-grid-contacts.json",
+      "bytes": 5435,
+      "sha256": "f0fa049d576489ee215c34348b1215380decf9f0b66541cb1d8ea8049ce21b01"
+    }
+  ],
+  "schema": "mpcc-local-audit-manifest/v1"
+}

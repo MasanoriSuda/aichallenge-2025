@@ -1,0 +1,55 @@
+{
+  "run_id": "20260908-mpcc-stop-reference-single-r1",
+  "artifacts": [
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/manifest.json",
+      "sha256": "245fb043aa5b6d974bb8a107a6649924f10c0c4284d12fbcee6e60afba91245f",
+      "size_bytes": 4894
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/mpcc-source.patch",
+      "sha256": "c49460afe165040cfc67dc041f4fdfbea4eead1e3016192563bde81bce2f4c6e",
+      "size_bytes": 126917
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/monitor-summary.json",
+      "sha256": "a7510af888e14e84978337ebb61e70573a74adb7aedb5ed786002ef788b7c7ca",
+      "size_bytes": 1775
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/log-summary.json",
+      "sha256": "f5d1af5d924c0fb6879ab2aed5f33e49eb7274bf2b5da0f6c93f98ecf70f9e9b",
+      "size_bytes": 8371
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/bag-analysis.json",
+      "sha256": "3d35cadddc477d93e0a4dfce47d970bd43cef49430ef99a024de17a69e1af5da",
+      "size_bytes": 102475
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/d1/autoware.log",
+      "sha256": "8fec3ae57456af7b5bf669884689f2931a366ab7fdc7dd9dab53fc739a4f8096",
+      "size_bytes": 2708669
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/d1/result-summary.json",
+      "sha256": "c3a739affb9d4c51e5f05459fb7e4c3e056a4a4cba8d6e53ca3ae439d117a3e1",
+      "size_bytes": 1071
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/d1/d1-result-details.json",
+      "sha256": "910a2cb4697c2b5bf858a526b6e1278e05a2d736bb694b0516a48a3c7ab9c556",
+      "size_bytes": 864
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "5bc909873bcd99c39a637c074478c17aeb6b84413a2e5b4f6f3a1db24cae5513",
+      "size_bytes": 37348227
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "sha256": "98844931ce1e44adceae776c9b90f150ceaf775d5afcef986a237c62a826b498",
+      "size_bytes": 8525
+    }
+  ]
+}

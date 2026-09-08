@@ -1,0 +1,47 @@
+{
+  "snapshot_id": "20260908-dev2-d1-decision-3465",
+  "run_id": "20260908-mpcc-stateless-successor-dev2",
+  "domain_id": 1,
+  "decision_id": 3465,
+  "baseline_manifest": ".steering/20260908-mpcc-stateless-successor/dev2-manifest.json",
+  "replay_ready": false,
+  "current_problem_architecture_replay_ready": true,
+  "incomplete_reason": "Snapshot taken after Pass-to-Recovery transition. Earlier accepted Pass plan2877 and full async history are absent. Diagnostic course projection differs from runtime projector.",
+  "files": [
+    {
+      "path": "output/20260908-mpcc-stateless-successor-dev2/d1/mpcc_architecture_snapshots/000000003465-e081ed4fbe89a5ff-pass-side-negative-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 40605,
+      "sha256": "f19123c9f2d18a3574c52d3ddcad2ce91c2af81886d47e23966832f0c5c4e47c"
+    },
+    {
+      "path": "output/20260908-mpcc-stateless-successor-dev2/d1/mpcc_architecture_snapshots/000000003465-e081ed4fbe89a5ff-pass-side-negative-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98"
+    },
+    {
+      "path": "output/20260908-mpcc-stateless-successor-dev2/d1/autoware.log",
+      "bytes": 1743495,
+      "sha256": "3022499b93b39f488d91eb422b0563998a251692bb4e019c90f11d106748ac76"
+    },
+    {
+      "path": "output/20260908-mpcc-stateless-successor-dev2/d2/autoware.log",
+      "bytes": 901981,
+      "sha256": "791d1632f8c11717e428a4dd2480136e4c5967ad8b3281983e4872d985f12057"
+    },
+    {
+      "path": "output/20260908-mpcc-stateless-successor-dev2/bag-analysis.json",
+      "bytes": 367989,
+      "sha256": "887d786d47c77e525f4fc2a97b5f4c2ef39c9083f2761d510e03f8bd396c261b"
+    },
+    {
+      "path": "output/20260908-mpcc-stateless-successor-dev2/motion.json",
+      "bytes": 1136290,
+      "sha256": "629f6fbad2632dc5bc04744d6e929f019e3c2f8f8ab4b8291fc730b3b0692810"
+    },
+    {
+      "path": "output/20260908-mpcc-stateless-successor-dev2/course-motion.json",
+      "bytes": 470871,
+      "sha256": "1a5fa2a5be5dd002f213f595e74281864112dc113785ae0c42ebd1d6af836213"
+    }
+  ]
+}

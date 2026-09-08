@@ -1,0 +1,37 @@
+{
+  "snapshot_id": "20260908-dev2-d1-decision-2677",
+  "run_id": "20260907-mpcc-stop-ledger-dev2",
+  "domain_id": 1,
+  "decision_id": 2677,
+  "baseline_manifest": ".steering/20260907-mpcc-certified-stop-publication/dev2-manifest.json",
+  "replay_ready": false,
+  "current_problem_architecture_replay_ready": true,
+  "incomplete_reason": "Source/world are sealed; historical executed plan2017 and the earlier sibling adoption/async mailbox are not serialized. Cold architecture solve does not replay those lifecycle events.",
+  "files": [
+    {
+      "path": "output/20260907-mpcc-stop-ledger-dev2/d1/mpcc_architecture_snapshots/000000002677-4e8374a2c0f8199d-shiftout-side-negative-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 40657,
+      "sha256": "28a8c4eab641ae5afd9b6097eb56d33387add35a97cb285c834b8863af816a56"
+    },
+    {
+      "path": "output/20260907-mpcc-stop-ledger-dev2/d1/mpcc_architecture_snapshots/000000002677-4e8374a2c0f8199d-shiftout-side-negative-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98"
+    },
+    {
+      "path": "output/20260907-mpcc-stop-ledger-dev2/d1/autoware.log",
+      "bytes": 3111535,
+      "sha256": "9a4d4d99d4bf5682d4be798fc8a91742e6628e071f9dba86f8ea355565aaefa2"
+    },
+    {
+      "path": "output/20260907-mpcc-stop-ledger-dev2/d2/autoware.log",
+      "bytes": 1901335,
+      "sha256": "e879e893821125b095a6ecdb74b52d2ae67ded04620ef07a56dd37326df4808e"
+    },
+    {
+      "path": "output/20260907-mpcc-stop-ledger-dev2/bag-analysis.json",
+      "bytes": 367430,
+      "sha256": "9547340d49ab029c1d6e20e4d3d9a531b72d35264dee313dc39f97e3fd42f582"
+    }
+  ]
+}

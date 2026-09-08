@@ -94,6 +94,19 @@ LEGACY_BOOST_SURFACE = "\n".join(
 )
 
 
+def test_normal_target_tube_has_no_legacy_dynamics_clock() -> None:
+    # Decision 1187: a 25 ms legacy clock made a 3.9 m/s peer appear to move
+    # at 0.39 m/s in the 250 ms semantic problem. Keep that deleted owner out
+    # of the production wiring; the frozen time-only replay covers behaviour.
+    clock = SOURCE.split(
+        "std::vector<double> progress_execution_stage_arrival_time_sec;", 1
+    )[1].split("const auto current_target_tube =", 1)[0]
+    clock = re.sub(r"//[^\n]*", "", clock)
+    assert "dynamics_stage_dt_sec" not in clock
+    assert "model->Ts" not in clock
+    assert "progress_stage_dt_sec" in clock
+
+
 def test_wall_bucket_relaxation_is_architecture_audit_only() -> None:
     audit_entry = "evaluate_wall_bucket_audit("
     assert audit_entry not in SOURCE
@@ -1097,6 +1110,7 @@ def test_certified_terminal_contingency_publishes_stop_not_normal_evidence() -> 
     production = SOURCE[production_start:production_end]
     assert "resolve_published_authority_intent(" in production
     assert "normal_execution_evidence" in production
+    assert "promote_certified_stop_to_executed" in production
     assert (
         "canonical_normal_intent_supported(" in production
     )
@@ -1135,6 +1149,26 @@ def test_certified_terminal_contingency_publishes_stop_not_normal_evidence() -> 
     stop_observation = SOURCE[stop_observation_start:stop_observation_end]
     assert "published.published_authority_intent" in stop_observation
     assert "invalidate_published_stop_lattice_observation();" in stop_observation
+
+
+def test_certified_stop_publication_preserves_the_single_execution_ledger() -> None:
+    """Decision1905's proved Stop may not become external solely by its label."""
+    start = SOURCE.index("void record_canonical_normal_final_command(")
+    end = SOURCE.index("void record_final_published_authority(", start)
+    commit = SOURCE[start:end]
+    marker = "last_committed_canonical_publication_decision_id_ = decision_id"
+    assert commit.index("canonical_normal_command_matches_serialized_actuation(") < commit.index(marker)
+    assert commit.index("mark_executed(") < commit.index(marker)
+    recorder = SOURCE[end:SOURCE.index("last_overtake_authority_trace()", end)]
+    assert "publication_interrupts_execution_ledger(" in recorder
+    assert "last_committed_canonical_publication_decision_id_" in recorder
+    assert not re.search(r"publication_overridden\s*\|\|\s*authority_intent\s*==", recorder)
+    retained = SOURCE[SOURCE.index("evaluate_rate_resolved_track_cruise_retained_shadow(") :]
+    finish = retained[retained.index("const auto finish_retained ="):]
+    finish = finish[:finish.index("if (rate_resolved_track_cruise_certified_plan_store_")]
+    assert "evaluation.selected_from_executed" in finish
+    assert "evaluation.production_authority.has_value()" in finish
+    assert "evaluation.certified_terminal_contingency_selected = true" in finish
 
 
 def test_rate_resolved_solver_is_owned_only_by_the_async_worker() -> None:
@@ -3971,7 +4005,12 @@ def test_final_normal_authority_loss_is_frozen_without_control_authority() -> No
     assert "retained.production_authority.has_value()" in recorder
     assert "published_stop_retained" in recorder
     assert '"normal-authority-unavailable"' in recorder
-    assert "certified_plan_store" not in recorder
+    # The observation may read the publication ledger before Emergency clears
+    # it; no Store mutation or alternate authority is permitted here.
+    store_calls = re.findall(
+        r"certified_plan_store_->\s*(\w+)\(", recorder
+    )
+    assert store_calls == ["latest_published_source_snapshot"]
     assert "mailbox" not in recorder
     assert "canonical_normal_emergency_stop(" not in recorder
 
@@ -4062,3 +4101,30 @@ def test_terminal_stop_geometry_rejection_reports_every_shape_owner() -> None:
     assert '<< "/wall_upper=" << solver_snapshot.wall_upper_m.size()' in SOURCE
     assert '<< "/wall_refinement="' in SOURCE
     assert '<< "/wall_diagnostic="' in SOURCE
+
+
+def test_stateless_successors_do_not_require_retired_mission_geometry():
+    """A published sibling retires Mission but must still request Pass/Return."""
+    draft_start = SOURCE.index("  build_rate_resolved_preentry_execution_draft(")
+    draft = SOURCE[
+        draft_start:SOURCE.index("    const bool active_execution =", draft_start)
+    ]
+    pass_start = SOURCE.index("  build_prospective_pass_problem(")
+    return_start = SOURCE.index("  build_prospective_return_problem(")
+    pass_worker = SOURCE[pass_start:return_start]
+    return_worker = SOURCE[
+        return_start:SOURCE.index("    model->get_current_waypoint();", return_start)
+    ]
+    # Both producer boundaries must accept the already published stateless
+    # encounter. No fixed Mission is reconstructed as an admission workaround.
+    for block in (draft, pass_worker, return_worker):
+        assert "overtake_successor_reference_available()" in block
+        assert "!overtake_line_state_.mission_path_frozen" not in block
+    assert draft.count("overtake_successor_reference_available()") == 2
+    assert "mission_return_preflight_reference_active" in draft
+    assert "mission_return_preflight_reference_active" in return_worker
+    assert "behavior.overtake_selected_mission.reset();" in pass_worker
+    helper_start = SOURCE.index("  bool overtake_successor_reference_available()")
+    helper = SOURCE[helper_start:SOURCE.index("  void ", helper_start)]
+    assert "publisher_bound_stateless_overtake_source_active()" in helper
+    assert "mission_plan->valid" in helper

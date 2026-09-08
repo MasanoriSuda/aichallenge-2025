@@ -1,0 +1,97 @@
+{
+  "snapshot_id": "20260908-single-d1-decision-11046",
+  "run_id": "20260908-mpcc-single-six-lap",
+  "domain_id": 1,
+  "decision_id": 11046,
+  "baseline_manifest": ".steering/20260908-mpcc-single-six-lap/manifest.json",
+  "replay_ready": false,
+  "current_problem_architecture_replay_ready": true,
+  "incomplete_reason": "Current world/problem sealed; executed sequence10415 and its publication history are not serialized. Cold comparison does not reproduce retained lifecycle.",
+  "files": [
+    {
+      "path": "output/20260908-mpcc-single-six-lap/d1/mpcc_architecture_snapshots/000000011046-34b1e13eda3fd936-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35369,
+      "sha256": "b76f0a0a17ea8968f87a534559d20166abb21043b369e3bd74c3103ea2971d16"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/d1/mpcc_architecture_snapshots/000000011046-34b1e13eda3fd936-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/d1/autoware.log",
+      "bytes": 2960888,
+      "sha256": "eb7974af83be27f0b5cb5385d7bff0d379fa39aac4a7c2d892e08d0119b23214"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/d1/result-summary.json",
+      "bytes": 1066,
+      "sha256": "481721c1fcca090dadf91fbc9c69295e2253763a4cb8e2fdaa79887b87ad3de6"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/d1/d1-result-details.json",
+      "bytes": 1051,
+      "sha256": "315600120b5165dcae73c83e7b9d997ba713cd3792c6e12d1e60c9ecadd23ba1"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 39751466,
+      "sha256": "eccb879213eaf180cf57323071bffa3f2aee225e2b5305e7712c71c4dca03cce"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/log-summary.json",
+      "bytes": 808,
+      "sha256": "9efaee0993a6bcfe96221c9debb27c0ac1ab5e9a08b86450eabc5bcbc10d268a"
+    },
+    {
+      "path": "output/20260908-mpcc-single-architecture/comparison.log",
+      "bytes": 5795,
+      "sha256": "c7f911b6975633e8c869dcae40f686b00fa5692752d6299b72d221c5a619a7bb"
+    },
+    {
+      "path": "output/20260908-mpcc-single-stop-audit/comparison.log",
+      "bytes": 3690,
+      "sha256": "1b7ddc27da8e86946096343b56c739e0d01ce1e50e85b5384a711c8c71946d8b"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/bag-analysis.json",
+      "bytes": 226358,
+      "sha256": "5688e1868260d36aa79130b83ded64c99aa46e9780b07a592ccdb2e3b82da229"
+    },
+    {
+      "path": "output/20260908-mpcc-single-terminal-contract/comparison.log",
+      "bytes": 6994,
+      "sha256": "03eb46bdb0599cc643a439ab7a9da2ee350eee000144b4bbfc8061401ac7e9a8"
+    },
+    {
+      "path": "output/20260908-mpcc-single-retimed-stop/comparison.log",
+      "bytes": 1904,
+      "sha256": "13e7bb06fa3017f54d1d061a26c997fde018f52c1cfe106c9f4d03d1c8a8ab11"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/horizon-before.log",
+      "bytes": 1896,
+      "sha256": "c16c02ab986b75b45df2e71baee9122aad8813b2cc4895d13d6488e2553b4a2b"
+    },
+    {
+      "path": "output/20260908-mpcc-short-stop-after/comparison.log",
+      "bytes": 141,
+      "sha256": "3cda8924c461f8ef823712cf750073c51ab3cba3badc120f7d80eb82bf195569"
+    },
+    {
+      "path": "output/20260908-mpcc-long-stop-regression/comparison.log",
+      "bytes": 4392,
+      "sha256": "200537dfe095ede27b3ac57eda83e33db55eac5505a3ed9d19806b9990a230a2"
+    },
+    {
+      "path": "output/20260908-mpcc-single-six-lap/horizon-package-test-results.log",
+      "bytes": 53,
+      "sha256": "a3748ea54f7f649397d380ddcecbce6f014ac6f9f6395ba0013b51cea7224462"
+    },
+    {
+      "path": "/tmp/mpcc-20260908-stop-horizon-observation-build2.log",
+      "bytes": 4577,
+      "sha256": "c37404c2f76d2ad515350244115a8bbf3245411e7b4c13dd2f90b8b53724908b"
+    }
+  ]
+}

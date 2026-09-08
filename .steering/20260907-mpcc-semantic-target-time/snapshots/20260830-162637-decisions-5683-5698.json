@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "20260830-162637-decisions-5683-5698",
+  "baseline_commits": [
+    "3fca7d4393bb63fb676547fb09b248d93a83bd55"
+  ],
+  "evidence_type": "historical-registry-reconciliation",
+  "replay_ready": false,
+  "incomplete_reason": "Log-only historical observation; no exact immutable replay payload identified.",
+  "local_payloads": [],
+  "runtime_logs": [
+    {
+      "path": "output/20260830-162637/d1/autoware.log",
+      "sha256": "31f54046d56357de84bdbfd33257203f961a67b4d50547001527cafa520db97c",
+      "size_bytes": 3504740
+    },
+    {
+      "path": "output/20260830-162637/d2/autoware.log",
+      "sha256": "9b2fb3d84ba6d9fd9d915361dbbb49183247a43655829e7405c853066ca7d2cb",
+      "size_bytes": 1754889
+    }
+  ]
+}

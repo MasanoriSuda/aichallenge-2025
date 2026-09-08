@@ -58,6 +58,7 @@ enum class Arm
   SevenStateStopU,
   SevenStateStopControlLatticeV,
   FollowStayBehindW,
+  SemanticTargetTimeX,
 };
 
 const char * to_string(Arm arm) noexcept;
@@ -156,6 +157,36 @@ Report compare(
   const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded)
   noexcept;
 
+/// Observation-only resampling of a recorded, untruncated affine target tube.
+/// Explicit historical timing is required; it is not inferred from publisher
+/// rate. No world projection, acceleration or control-origin change is made.
+std::optional<mpcc_rate_resolved_shadow::Snapshot> resample_target_stage_time(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded,
+  double recorded_stage_interval_sec, double lateral_prediction_horizon_sec,
+  double maximum_prediction_time_sec) noexcept;
+
+Report compare_target_stage_time(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded,
+  double recorded_stage_interval_sec, double lateral_prediction_horizon_sec,
+  double maximum_prediction_time_sec) noexcept;
+
+/// Replay one predeclared Stop schedule, allowing its exact failed QP to be
+/// captured without an earlier normal arm consuming the diagnostic slot.
+Report compare_stop_schedule(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded,
+  int initial_rate_sign, int first_switch_stage, int second_switch_stage,
+  bool witness_physical_separation_audit = false) noexcept;
+
+Report compare_stop_physical_support(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded) noexcept;
+
+/// Observation only: use the source's maximum permitted stage duration. No
+/// peer/tube may be retimed without its original prediction owner.
+std::optional<mpcc_rate_resolved_shadow::Snapshot> build_target_free_stop_horizon_audit_source(
+  const mpcc_rate_resolved_shadow::Snapshot & source) noexcept;
+Report compare_target_free_stop_horizon(
+  const mpcc_architecture_snapshot::RecordedInteractionSnapshot & recorded) noexcept;
+
 /// Replay only the audit-only wall feasibility restoration arm. This avoids
 /// enumerating the full A--G lattice when iterating on a frozen wall failure.
 Report compare_wall_restoration(
@@ -203,6 +234,7 @@ enum class ExternalPrimalConstraintPolicy
   OmitWallHeadingBucket,
   OmitWallLagBucket,
   PhysicalNonlinearOracle,
+  PhysicalNonlinearStopOracle,
 };
 
 /// Certify an independently solved primal against the exact recorded QP and

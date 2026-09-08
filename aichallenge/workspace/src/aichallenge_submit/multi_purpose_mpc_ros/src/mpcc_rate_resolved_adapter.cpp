@@ -110,6 +110,20 @@ resolve_exact_physical_boundary_bounds(
   return ExactPhysicalBoundaryBounds{solver_lower, solver_upper, margin};
 }
 
+std::optional<ExactPhysicalBoundaryBounds> resolve_steering_prefix_bounds(
+  const double initial_steering_rad, const double maximum_abs_steering_rad,
+  const persistent_osqp::PhysicalConstraintTolerance & tolerance) noexcept
+{
+  if (!std::isfinite(initial_steering_rad) ||
+    !std::isfinite(maximum_abs_steering_rad) || maximum_abs_steering_rad <= 0.0)
+  {
+    return std::nullopt;
+  }
+  return resolve_exact_physical_boundary_bounds(
+    -maximum_abs_steering_rad - initial_steering_rad,
+    maximum_abs_steering_rad - initial_steering_rad, tolerance);
+}
+
 const char * to_string(const RejectReason reason) noexcept
 {
   switch (reason) {
@@ -145,6 +159,45 @@ const char * to_string(const RelinearizationReason reason) noexcept
       return "linearization-unavailable";
   }
   return "unknown";
+}
+
+bool is_braking_feasibility_request(const Request & request) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  if (request.horizon_steps <= 0 ||
+    request.inputs.size() != static_cast<std::size_t>(request.horizon_steps) ||
+    request.states.size() != request.inputs.size() + 1U ||
+    !request.input_delta_weight.isZero(0.0))
+  {
+    return false;
+  }
+  for (const auto & state : request.states) {
+    if (!state.weight.isZero(0.0) || !state.linear_cost.isZero(0.0)) {
+      return false;
+    }
+  }
+  double previous = request.initial_state[model::kVelocityIndex];
+  if (!std::isfinite(previous) || previous < 0.0) {
+    return false;
+  }
+  for (std::size_t stage = 0; stage < request.inputs.size(); ++stage) {
+    const auto & input = request.inputs[stage];
+    const auto & state = request.states[stage + 1U];
+    const double velocity = state.lower[model::kVelocityIndex];
+    if (!input.weight.isZero(0.0) || !input.linear_cost.isZero(0.0) ||
+      !std::isfinite(input.stage_dt_sec) || input.stage_dt_sec <= 0.0 ||
+      !std::isfinite(velocity) || velocity < 0.0 || velocity > previous ||
+      state.upper[model::kVelocityIndex] != velocity ||
+      state.reference[model::kVelocityIndex] != velocity ||
+      !std::isfinite(input.reference[model::kAccelerationIndex]) ||
+      std::abs(input.reference[model::kAccelerationIndex] -
+      (velocity - previous) / input.stage_dt_sec) > 1e-9)
+    {
+      return false;
+    }
+    previous = velocity;
+  }
+  return previous == 0.0;
 }
 
 std::optional<Result> build(
@@ -263,8 +316,8 @@ std::optional<Result> build(
     -request.maximum_abs_steering_rad - request.current_steering_rad;
   const double physical_prefix_upper =
     request.maximum_abs_steering_rad - request.current_steering_rad;
-  const auto solver_prefix_bounds = resolve_exact_physical_boundary_bounds(
-    physical_prefix_lower, physical_prefix_upper, solver_tolerance);
+  const auto solver_prefix_bounds = resolve_steering_prefix_bounds(
+    request.current_steering_rad, request.maximum_abs_steering_rad, solver_tolerance);
   if (!solver_prefix_bounds.has_value()) {
     return reject(
       RejectReason::SteeringPrefixInsetUnavailable, -1,

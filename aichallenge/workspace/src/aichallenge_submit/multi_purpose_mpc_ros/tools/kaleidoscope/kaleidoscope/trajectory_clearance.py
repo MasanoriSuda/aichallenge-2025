@@ -584,6 +584,10 @@ def load_occupancy_grid(
     if raw_negate not in {"0", "1", "false", "true"}:
         raise ValueError("map negate must be 0/1 or false/true")
     negate = raw_negate in {"1", "true"}
+    raw_preserve = document.get("preserve_occupied_cells", "false")
+    if raw_preserve not in ("false", "true"):
+        raise ValueError("preserve_occupied_cells must be true or false")
+    preserve_occupied_cells = raw_preserve == "true"
     width, height, max_value, pixels = _read_pgm(image_path)
     # OpenCV runtime normalizes by the maximum value present in the image,
     # rather than solely trusting the PGM header max value.
@@ -603,12 +607,13 @@ def load_occupancy_grid(
             cells.append(CellState.FREE)
         else:
             cells.append(CellState.UNKNOWN)
-    _remove_small_occupied_islands(
-        cells,
-        width,
-        height,
-        options.fill_free_holes_below_cells,
-    )
+    if not preserve_occupied_cells:
+        _remove_small_occupied_islands(
+            cells,
+            width,
+            height,
+            options.fill_free_holes_below_cells,
+        )
     digest = hashlib.sha256()
     digest.update(yaml_path.read_bytes())
     digest.update(b"\0")

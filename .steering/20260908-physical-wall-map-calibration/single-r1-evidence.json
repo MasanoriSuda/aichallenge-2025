@@ -1,0 +1,121 @@
+{
+  "run_id": "20260908-wall-map-single-r1",
+  "artifacts": [
+    {
+      "path": "output/20260908-wall-map-single-r1/delay-prefix-motion.json",
+      "sha256": "f911b31b13600741d7f1747aaa55f32cc538c79aa61ff2f22b08598e838f5c2a",
+      "size_bytes": 433824
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/localization-analysis.json",
+      "sha256": "5008082cd329f067f262bef18c71f8c7ea60b1746e289c14337dac1fa604bd70",
+      "size_bytes": 1870555
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/bag-analysis.json",
+      "sha256": "287666cb9b9078cdf875047845581a6bdbeda0df9a5d5fff09f9c6b16f2cb01e",
+      "size_bytes": 159960
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/monitor-summary.json",
+      "sha256": "afa0ced0d8927ce79bf96365977ceed0810ede17ff49efead699aa728fbd2719",
+      "size_bytes": 1769
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/log-summary.json",
+      "sha256": "a4a13578ad33f11d60349ccf511650214392ddba357837131463ee46f51326a7",
+      "size_bytes": 8365
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/manifest.json",
+      "sha256": "92f532610a2c159d385c21008ddd3c845cd0b62c574b3d752607a28c9bd01fc1",
+      "size_bytes": 7388
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/localization-summary.log",
+      "sha256": "eaa51e640fee8f6ad777b5ca64664542867cde636717de3329e3752fa1d91d74",
+      "size_bytes": 1190
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/delay-prefix-motion-summary.log",
+      "sha256": "d3104de7f3f36bc561c79a3dfee7495cf0346bbd98e2d93a57c67f14d0204987",
+      "size_bytes": 3467
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/build.log",
+      "sha256": "fbb31aad4534057309dfa14797cb9fe4bb48d850bd14770b1e82061227778a60",
+      "size_bytes": 4577
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/awsim.log",
+      "sha256": "e75662763d5f9723ff8b2883f9fd5a16194fb6ab96713ac77f04e82a43dfe17d",
+      "size_bytes": 1773
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/monitor.log",
+      "sha256": "c9a18042fa7dd34955ffba19a07fc04e03f1855bb3235f20824f64827e1aa29e",
+      "size_bytes": 15352
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/participant-source.patch",
+      "sha256": "cd699ba0bd08d42d6ed4f916cb54d55409f6d59db61696a3d7e64de5560873ba",
+      "size_bytes": 148742
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/mpcc-source.patch",
+      "sha256": "65c7a2080c4f1ba50584a440a248573b3b936f0b1211a70036dff2885714f1cf",
+      "size_bytes": 138430
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/binaries/libgnss_poser_node.so",
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1",
+      "size_bytes": 2222776
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/binaries/mpc_controller_cpp",
+      "sha256": "8af0ea61a7784e0b3ca0c7f6f130c601e677d4713d21b66098813c826bb447bd",
+      "size_bytes": 8836872
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/binaries/mpcc_architecture_compare",
+      "sha256": "9bcb744f18e40d810373e02fb3fff7c91e0720d4c1b3ef4147d8eeab5b684826",
+      "size_bytes": 1392608
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/autoware.log",
+      "sha256": "10456a0eddb4c48e297043f3db3502f65da80f6dfc0241881814869c061bb850",
+      "size_bytes": 2659475
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/result-summary.json",
+      "sha256": "58540a37e51dd3c19f9e6771684e5a934dce367f29cec0d37851fb12ecef82c3",
+      "size_bytes": 1065
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/d1-result-details.json",
+      "sha256": "6c5efcc202e6798217e92c9441867545227eeaf50cb0bc9b126d11b593eab122",
+      "size_bytes": 862
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "5747f2bdd591af3851997908cf2026cf25d033bbdde196d419c8d968dd0f2aef",
+      "size_bytes": 37870714
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "sha256": "50b3e0f6e1b577b95f49d378974af0fbd666317111e6e14c46c8c88a5120ab58",
+      "size_bytes": 8525
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000010699-cb941400001e0c8f-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "d74095291d44c579fed8512cb606b1e2be7816b036f1c901fe90b86adc01c440",
+      "size_bytes": 35440
+    },
+    {
+      "path": "output/20260908-wall-map-single-r1/d1/mpcc_architecture_snapshots/000000010699-cb941400001e0c8f-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "size_bytes": 570009
+    }
+  ],
+  "summary_finalization": "Recomputed log-summary after container shutdown; raw log and all other previously sealed artifacts unchanged."
+}

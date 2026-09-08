@@ -60,6 +60,116 @@
       "snapshot_id": "20260831-sequence-904-canonical-tube",
       "manifest": ".steering/20260831-canonical-target-tube-owner/snapshots/20260831-sequence-904-canonical-tube.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected",
+      "manifest": ".steering/20260907-mpcc-semantic-target-time/snapshots/000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "000000000992-da79aec4f6fc1402-shiftout-side-negative-dynamic-obstacle-refinement-solve-rejected",
+      "manifest": ".steering/20260907-mpcc-semantic-target-time/snapshots/000000000992-da79aec4f6fc1402-shiftout-side-negative-dynamic-obstacle-refinement-solve-rejected.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "000000001690-e6ec62c038f0c03b-pass-side-positive-physical-proof-terminal-contingency-unavailable",
+      "manifest": ".steering/20260907-mpcc-semantic-target-time/snapshots/000000001690-e6ec62c038f0c03b-pass-side-positive-physical-proof-terminal-contingency-unavailable.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "000000003800-9e2c6962173873f9-pass-side-positive-successive-linearization-solve-rejected",
+      "manifest": ".steering/20260907-mpcc-semantic-target-time/snapshots/000000003800-9e2c6962173873f9-pass-side-positive-successive-linearization-solve-rejected.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260830-162637-decisions-5683-5698",
+      "manifest": ".steering/20260907-mpcc-semantic-target-time/snapshots/20260830-162637-decisions-5683-5698.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260831-074836-decisions-1492-1580",
+      "manifest": ".steering/20260907-mpcc-semantic-target-time/snapshots/20260831-074836-decisions-1492-1580.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260831-081212-d2-decision-3379",
+      "manifest": ".steering/20260907-mpcc-semantic-target-time/snapshots/20260831-081212-d2-decision-3379.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260831-192221-d1-decision-1187",
+      "manifest": ".steering/20260907-mpcc-semantic-target-time/manifest.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260907-dev2-d1-decision-4166",
+      "manifest": ".steering/20260907-mpcc-pass-terminal-audit/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260907-dev2-d1-decision-1905",
+      "manifest": ".steering/20260907-mpcc-certified-stop-publication/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-dev2-d1-decision-2677",
+      "manifest": ".steering/20260908-mpcc-stateless-successor/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-single-d1-decision-11046",
+      "manifest": ".steering/20260908-mpcc-single-stop-horizon/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-dev2-d1-decision-3465",
+      "manifest": ".steering/20260908-mpcc-pass-progress-audit/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-single-d1-decision-9401",
+      "manifest": ".steering/20260908-mpcc-single-stop-horizon/live-boundary-manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-single-r3-d1-decision-10714",
+      "manifest": ".steering/20260908-mpcc-single-physical-stop-audit/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-wall-map-worker-10074",
+      "manifest": ".steering/20260908-mpcc-delay-prefix-audit/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-wall-map-worker-10081",
+      "manifest": ".steering/20260908-mpcc-delay-prefix-audit/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-wall-map-decision-10699",
+      "manifest": ".steering/20260908-mpcc-delay-prefix-audit/manifest.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-observation-r2-d1-decision-8995",
+      "manifest": ".steering/20260908-mpcc-delay-prefix-audit/single-r2-evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-observation-r2-d1-decision-9005",
+      "manifest": ".steering/20260908-mpcc-delay-prefix-audit/single-r2-evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-observation-r3-d1-published-source-6782",
+      "manifest": ".steering/20260908-mpcc-delay-prefix-audit/single-r3-evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260908-observation-r3-d1-decision-7405",
+      "manifest": ".steering/20260908-mpcc-delay-prefix-audit/single-r3-evidence.json",
+      "replay_ready": false
     }
   ],
   "experiments": [
@@ -685,7 +795,7 @@
     },
     {
       "experiment_id": "20260831-current-world-candidate-topology",
-      "baseline_commit": "d72843c4",
+      "baseline_commit": "d72843c40012729fc88d3a053f2251cdbf2d46fc",
       "snapshot_ids": [
         "000000000992-da79aec4f6fc1402-shiftout-side-negative-dynamic-obstacle-refinement-solve-rejected"
       ],
@@ -703,7 +813,7 @@
     },
     {
       "experiment_id": "20260831-post-solve-dynamic-proof-ownership",
-      "baseline_commit": "041b0fa4",
+      "baseline_commit": "041b0fa4244107f79931aeeb1bb54922817d2d67",
       "snapshot_ids": [
         "000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected",
         "000000001690-e6ec62c038f0c03b-pass-side-positive-physical-proof-terminal-contingency-unavailable"
@@ -720,7 +830,7 @@
     },
     {
       "experiment_id": "20260831-shiftout-pass-atomic-handoff",
-      "baseline_commit": "bfc75b19",
+      "baseline_commit": "bfc75b19b3f3f921fe55efbcd8421591d0527182",
       "snapshot_ids": [
         "20260831-074836-decisions-1492-1580",
         "20260831-081212-d2-decision-3379"
@@ -734,6 +844,521 @@
         "tactical-only ShiftOut-to-Pass phase mutation without certified successor authority"
       ],
       "revisit_condition": "phase=Pass is again observed with retained intent=shiftout authority, a mismatched target/generation/side Pass proposal is admitted, or Pass Gate A prevents a physically certified transition from joining"
+    },
+    {
+      "experiment_id": "20260831-follow-dynamic-topology-audit",
+      "baseline_commit": "79ff9f888e1c7402ae600f4f1705e29424afb556",
+      "snapshot_ids": [
+        "20260831-192221-d1-decision-1187"
+      ],
+      "hypothesis": "Follow authority loss is caused solely by Automatic obstacle topology instead of StayBehind.",
+      "changed_dimension": "follow_obstacle_longitudinal_topology_only",
+      "result": "rejected",
+      "reason": "Both topologies reject; the actual warm-start nonlinear physical oracle passes. Reproduced at a8b968ac on 2026-09-07.",
+      "production_impact": "Observation-only comparison; production topology unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "A new immutable scene falsifies the identified target-stage timing mismatch."
+    },
+    {
+      "experiment_id": "20260907-semantic-target-time",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260831-192221-d1-decision-1187"
+      ],
+      "hypothesis": "CurrentTargetTube uses legacy 25 ms stages while the canonical problem uses semantic 250 ms stages.",
+      "changed_dimension": "target_sampling_time_only_preserving_existing_lateral_clamp_and_prediction_truncation",
+      "result": "accepted",
+      "reason": "Original fingerprint 13608911548693048044 rejects coupled obstacle row at stage 3. Candidate 17803104293055415054 passes solve, exact wall/dynamic and terminal Stop proof; terminal progress 16.5671 m, speed 3.29412 m/s. Local causal replay acceptance only; dynamic/integration pending.",
+      "production_impact": "CurrentTargetTube arrival-time accumulation consumes progress_stage_dt_sec; immutable world, proof, authority, solver/config remain unchanged.",
+      "deleted_code": [
+        "legacy dynamics_stage_dt_sec as CurrentTargetTube clock owner"
+      ],
+      "revisit_condition": "A current semantic-time tube reproduces the same failure, or the production time-aligned candidate fails independent exact physical proof."
+    },
+    {
+      "experiment_id": "20260907-pass-stop-physical-feasibility",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260907-dev2-d1-decision-4166"
+      ],
+      "hypothesis": "No same-model physical Stop exists after Pass terminal viability is lost at decision 4166.",
+      "changed_dimension": "bounded_offline_nonlinear_Stop_controls_with_declared_velocity_law",
+      "result": "rejected",
+      "reason": "All original architecture arms and 68 QP Stop schedules reject, but six of seven declared-law nonlinear Stop controls pass full wall/dynamic proof through rest. One colliding control rejects at 0.84 s. New observer verifies solved Stop itself rather than synthesizing another racing-line law.",
+      "production_impact": "Observation-only; no executable authority, model, world, clearance or solver tolerance changed.",
+      "deleted_code": [],
+      "revisit_condition": "A matched immutable scene lacks a full-horizon certified nonlinear Stop witness, or an oracle input violates its declared braking/actuator contract."
+    },
+    {
+      "experiment_id": "20260907-stop-lattice-cumulative-steering",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260907-dev2-d1-decision-4166"
+      ],
+      "hypothesis": "Stop lattice fixed inputs contradict the canonical cumulative steering-prefix box because their producer only insets per-stage rate.",
+      "changed_dimension": "shared_cumulative_steering_box_and_fixed_rate_intersection",
+      "result": "accepted",
+      "reason": "Failing independent adapter-vs-schedule regression reproduced both-sign prefix violations. Repair passes all 41 comparison tests and moves the frozen Stop rejection from steering-rate-prefix to a separate dynamic-obstacle-effective-progress row. Local invariant repair only; Stop/race acceptance still incomplete.",
+      "production_impact": "Adapter and Stop lattice share the existing prefix-bound resolver. QP/proof tolerances, margins, population size and authority are unchanged. The current live worker uses DirectSevenStateOnly, so repaired fixed schedules are not invoked by that worker; no live improvement is attributed to this fix.",
+      "deleted_code": [
+        "rate-only saturation as a substitute for cumulative steering-prefix feasibility"
+      ],
+      "revisit_condition": "A generated Stop schedule violates the canonical prefix/input rows or the unchanged QP boundary differs after the shared resolver extraction."
+    },
+    {
+      "experiment_id": "20260907-fixed-stop-oriented-support",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260907-dev2-d1-decision-4166"
+      ],
+      "hypothesis": "The all-behind axis branch excludes a physically clear braking trajectory at the rounded body/circle corner.",
+      "changed_dimension": "offline_fixed_stop_complete_oriented_support_planes",
+      "result": "accepted",
+      "reason": "Same negative steering schedule (-1,2,6) rejected effective-progress rows by 0.1551/0.1488 m while its C++ nonlinear Stop oracle passed. Nearest oriented-body support rows solve and pass full wall/dynamic/rest proof. Both-side, rotated asymmetric-body and invalid-geometry regressions pass (25 dynamic tests, 41 comparison tests). Free-control Stop comparison still rejects numerically and is not accepted.",
+      "production_impact": "None: witness physical separation is enabled only by standalone comparison entry points, with the current live Stop worker unchanged.",
+      "deleted_code": [],
+      "revisit_condition": "A paired current-problem replay contradicts the fixed-control physical certificate, the geometry/margin provenance changes, or a free-control/live promotion is separately justified."
+    },
+    {
+      "experiment_id": "20260907-stop-feasibility-mission-and-support",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260907-dev2-d1-decision-4166"
+      ],
+      "hypothesis": "A maximum-braking Stop needs a feasibility mission and complete oriented body separation; inherited racing objectives and all-behind rows jointly prevent certification.",
+      "changed_dimension": "declared_stop_mission_and_body_support_factorial_comparison",
+      "result": "accepted",
+      "reason": "In the four-arm frozen comparison, old objective/axes, old objective/support, and feasibility/axes reject. Feasibility/support passes the canonical solver plus full wall/dynamic/rest proof. After producer repair the ordinary production evaluate entry also certifies fingerprint 8040571064917241556. Objective regression failed before repair; integrated acceptance pending.",
+      "production_impact": "Maximum-braking Stop drops inherited racing objective terms and automatic topology uses complete oriented supports only for a sealed full-horizon fixed-velocity-to-rest feasibility contract. Explicit topology, hard bounds, proof, current-world join and DirectSevenStateOnly scheduling remain. No solver settings, runtime flag, population or publisher change.",
+      "deleted_code": [
+        "inherited racing objective as maximum-braking Stop mission",
+        "all-behind axis ownership over rounded-corner-clear automatic Stop trajectories"
+      ],
+      "revisit_condition": "Stop misclassification, changed hard constraint/proof, free Stop certification failure, unacceptable live computation/adoption timing, or a dynamic regression under the repaired producer."
+    },
+    {
+      "experiment_id": "20260907-stop-numerical-only-comparisons",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260907-dev2-d1-decision-4166"
+      ],
+      "hypothesis": "A numerical-only change can certify the free Stop while retaining its inherited racing objective.",
+      "changed_dimension": "offline_equilibration_equality_condensation_and_global_objective_units",
+      "result": "rejected",
+      "reason": "Exact support QP is affine feasible (HiGHS residual 5.22e-15; its Stop physical oracle accepts). Canonical internal equilibration still hits 4000 iterations. Row-normalized equality condensation also hits the limit; its independent nonlinear oracle rejects progress regression. A positive global objective unit produces only solved-inaccurate with remaining row violation. None establishes a canonical certified production solution. See output/20260907-mpcc-free-stop-support-qp/.",
+      "production_impact": "None; solver settings/backend/scaling remain unchanged. Independent scripts are diagnostic only.",
+      "deleted_code": [],
+      "revisit_condition": "A separately justified solver-coordinate contract supplies a fully verified solution under unchanged physical tolerances and passes architecture and timing acceptance."
+    },
+    {
+      "experiment_id": "20260907-certified-stop-publication-ledger",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260907-dev2-d1-decision-1905"
+      ],
+      "hypothesis": "A successfully serialized certified Stop is discarded because ledger recording excludes Stop and final publication clears every Stop as external.",
+      "changed_dimension": "certified_stop_publication_and_existing_execution_ledger",
+      "result": "inconclusive",
+      "reason": "D1 decision1905 publishes certified Stop bundle1284; 1906 has no executed plan and emits external Emergency, before wall-margin Recovery at1957. The two-tick ledger test fails before repair and passes after; 77 contract tests, 31 ledger tests and 103 source tests pass. Full build and dynamic continuation acceptance pending. Run3 selected no certified Stop, so multi-tick dynamic acceptance remains unobserved. Separate stateless-to-successor source mismatch is tracked in .steering/20260908-mpcc-stateless-successor.",
+      "production_impact": "Certified Stop commits to the existing ledger after serialized actuation checks, retains its clock and Stop authority when rejoined; external/overridden Stop clears the ledger. No new store, retry, lease, solver or proof tolerance.",
+      "deleted_code": [
+        "blanket Stop-label execution-ledger invalidation",
+        "normal-only ledger recording for certified terminal contingencies"
+      ],
+      "revisit_condition": "Current-world Stop continuation fails, a stale/external/overridden publication preserves an execution clock, or a Stop suffix is reported as ordinary tactical progress."
+    },
+    {
+      "experiment_id": "20260907-1905-existing-stateless-feasibility",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260907-dev2-d1-decision-1905"
+      ],
+      "hypothesis": "The repeated ShiftOut boundary requires a new maneuver generator because existing candidates cannot certify the immutable world.",
+      "changed_dimension": "preserved_binary_architecture_comparison_A_through_H",
+      "result": "rejected",
+      "reason": "Preserved pre-publication-repair binary: A/A2 wall-reject, existing right B and production-right G certify; right C/D each23 accepted and right E/F each150 accepted. Same-side stateless candidate15805243363498696483 is certified. Physical/generator impossibility is falsified; historical async availability and publication continuation remain separate. Summary: output/20260907-mpcc-stop-publication-architecture/summary.json.",
+      "production_impact": "None; no generator replacement or parameter change. Publication lifecycle is repaired in its own slice.",
+      "deleted_code": [],
+      "revisit_condition": "A new sealed scene rejects all existing candidates or runtime evidence shows the certified same-context candidate cannot be generated/adopted through its intended path."
+    },
+    {
+      "experiment_id": "20260908-2677-architecture-comparison",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-dev2-d1-decision-2677"
+      ],
+      "hypothesis": "A current-world normal maneuver remains certifiable by an existing architecture at the final ShiftOut terminal-wall boundary.",
+      "changed_dimension": "preserved_binary_architecture_comparison_A_through_H",
+      "result": "inconclusive",
+      "reason": "No accepted arm: A/A2 and right B wall-reject, left B solver-reject, all C/D and E/F reject solver or wall, both production G reject. Bounded physical infeasibility is not established. output/20260908-mpcc-stateless-pass-architecture/summary.json. This source snapshot does not replay the earlier sibling-adoption lifecycle.",
+      "production_impact": "No candidate, constraint or parameter changes from this comparison. The independently reproduced earlier Pass draft eligibility defect is a separate repair.",
+      "deleted_code": [],
+      "revisit_condition": "An earlier sealed world/accepted artifact or bounded nonlinear witness identifies a certifiable candidate; do not repeat unchanged comparison."
+    },
+    {
+      "experiment_id": "20260908-2677-production-stop-feasibility",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-dev2-d1-decision-2677"
+      ],
+      "hypothesis": "The production braking-feasibility Stop certifies the final2677 world after normal candidate loss.",
+      "changed_dimension": "maximum_braking_mission_cost_and_support_four_arm_replay",
+      "result": "rejected",
+      "reason": "All four Stop arms solve but fail exact wall proof. Production candidate2671118850129113752 fails at stage3, wp184, contact pose(89627.076,43186.196,0.051). No physical impossibility claim. output/20260908-mpcc-stateless-boundary-stop/comparison.log.",
+      "production_impact": "None; no failed candidate is promoted. Earlier stateless successor draft-source defect is repaired separately.",
+      "deleted_code": [],
+      "revisit_condition": "New evidence identifies an earlier certifiable intervention or an independently certified control trajectory under unchanged physical constraints."
+    },
+    {
+      "experiment_id": "20260908-stateless-successor-draft-source",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-dev2-d1-decision-2677"
+      ],
+      "hypothesis": "Discarding frozen Mission on stateless sibling publication also disables Pass/Return draft generation.",
+      "changed_dimension": "successor_draft_and_worker_reference_source_admission",
+      "result": "accepted",
+      "reason": "Run3 Pass submission ends at first sibling1695. Source deletion regression fails before repair. Run4 publishes sibling796, continues generating Pass and enters atomically certified Pass at1788793856.402930008. 2313 tests and25-package build pass. Return not observed; full overtake later ends on longitudinal progress watchdog. See .steering/20260908-mpcc-stateless-successor/results.md.",
+      "production_impact": "Both draft and worker admit the existing publisher-bound stateless reference; no command/phase authority without unchanged current-world proof. Frozen Mission is not recreated.",
+      "deleted_code": [
+        "Frozen-Mission-only prerequisites in Pass/Return draft and prospective worker admission",
+        "Unconditional dereference of retired Mission in Pass worker"
+      ],
+      "revisit_condition": "Return source admission must be dynamically observed, and an integrated passing campaign must complete; do not equate local Pass admission with race acceptance."
+    },
+    {
+      "experiment_id": "20260908-single-six-lap-acceptance",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-d1-decision-11046"
+      ],
+      "hypothesis": "Current repaired controller safely finishes six laps in a target-free scene.",
+      "changed_dimension": "integrated_single_six_lap",
+      "result": "rejected",
+      "reason": "Six laps finish in266.276642s, one wall penalty onlap6 (aggregate8.210140s). Decision11046 loses normal and terminal wall proof; stuck Recovery follows, Cruise resumes11464. No callback overruns or receive gaps>50ms. Same-run evidence in .steering/20260908-mpcc-single-six-lap/results.md.",
+      "production_impact": "No race acceptance or submission-image claim.",
+      "deleted_code": [],
+      "revisit_condition": "Repeat after a causal stop/authority repair, with fixed binary/config and same six-lap scenario."
+    },
+    {
+      "experiment_id": "20260908-single-target-free-architecture",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-d1-decision-11046"
+      ],
+      "hypothesis": "Existing alternative candidate generators resolve Cruise11046.",
+      "changed_dimension": "persistent_stateless_rough_offline_comparison",
+      "result": "inconclusive",
+      "reason": "A solves normal but terminal Stop hits wall. B/C/D/G require a target and cannot exercise this target-free scene. This is unsupported coverage, not all-method physical infeasibility. output/20260908-mpcc-single-architecture/comparison.log.",
+      "production_impact": "Observation only; no new target or authority.",
+      "deleted_code": [],
+      "revisit_condition": "Use generators genuinely applicable to target-free Stop/Cruise; do not insert a fictitious peer."
+    },
+    {
+      "experiment_id": "20260908-single-terminal-reference",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-d1-decision-11046"
+      ],
+      "hypothesis": "A certified normal-path lateral profile can supply a clear Stop where zero-lateral tracking fails.",
+      "changed_dimension": "terminal_lateral_representation",
+      "result": "accepted",
+      "reason": "Frozen current problem: baseline/declaredzero Stop wall-rejected; bounded lateral scan and normal-path profile both exact-wall/dynamic accepted. Optimized full Stop and lattice instead numerical-rejected because their horizon is too short. output/20260908-mpcc-single-terminal-contract/comparison.log.",
+      "production_impact": "Offline hypothesis only. Exact old executed10415 and live join have not been replayed; the profile is not a production command.",
+      "deleted_code": [],
+      "revisit_condition": "Measure the same profile against the actual retained plan/current world before considering promotion; then full Stop authority and dynamic regressions."
+    },
+    {
+      "experiment_id": "20260908-single-stop-horizon",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-d1-decision-11046"
+      ],
+      "hypothesis": "Using the existing maximum stage dt repairs the optimized Stop from Cruise11046.",
+      "changed_dimension": "peer_free_semantic_stop_horizon",
+      "result": "rejected",
+      "reason": "Original1.792347522s horizon creates terminal acceleration-26.7572m/s2. Offline5s horizon solves but exact wall proof rejects. Candidate5901616693210163779, output/20260908-mpcc-single-retimed-stop/comparison.log.",
+      "production_impact": "Retiming is standalone only and rejects any target/tube/peer; production factory instead rejects unreachable rest. No collision fix claimed.",
+      "deleted_code": [],
+      "revisit_condition": "Revisit only with a different proven candidate-generation/convexification cause, preserving clock-owned peer predictions and exact wall proof."
+    },
+    {
+      "experiment_id": "20260908-pass-progress-motion-audit",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-dev2-d1-decision-3465"
+      ],
+      "hypothesis": "Pass failure is explained by a large target-speed or clock-estimation bias.",
+      "changed_dimension": "same_source_time_odom_and_v2x_motion",
+      "result": "rejected",
+      "reason": "Own odometry/position and V2X-derived speed agree. D1 spends more travel on lateral motion; gap decreases but then stalls. Legacy horizon feasibility/front-cap ownership remains unproved. See .steering/20260908-mpcc-pass-progress-audit/results.md.",
+      "production_impact": "Read-only; no changes to gains, speed or progress watchdog.",
+      "deleted_code": [],
+      "revisit_condition": "New time-synchronized evidence of target-speed bias, or a sealed counterfactual of reference/horizon ownership."
+    },
+    {
+      "experiment_id": "20260908-stop-unreachable-terminal-rest",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-d1-decision-11046"
+      ],
+      "hypothesis": "The Stop producer must reject a horizon that cannot reach zero speed without violating acceleration.",
+      "changed_dimension": "terminal_velocity_producer_invariant",
+      "result": "accepted",
+      "reason": "Failing regression accepts impossible2m/s over0.3s before fix. Terminal-only overwrite removed; fixed source11046 now rejects before QP. Long Stop4166 still certifies identical candidates11485209961842629289 and8040571064917241556.25-package build and2317 package tests pass.",
+      "production_impact": "Reject inconsistent full-Stop candidates before solving. No horizon retiming, change in worker intent scope or weaker proof. Does not repair the live Cruise collision.",
+      "deleted_code": [
+        "Unconditional terminal velocity/reference/bounds overwrite to zero after the reachable braking law"
+      ],
+      "revisit_condition": "New evidence of a reachable bounded source rejected by the producer; preserve full-horizon velocity/acceleration consistency."
+    },
+    {
+      "experiment_id": "20260908-live-normal-path-stop-counterfactual",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-d1-decision-9401"
+      ],
+      "hypothesis": "The normal-path Stop profile can pass the exact live retained-plan/current-world proof where hardcoded zero target fails.",
+      "changed_dimension": "terminal_lateral_reference_same_live_plan",
+      "result": "accepted",
+      "reason": "D1 decision9401/sequence8769, control219.729995s, speed8.131m/s: zero-reference production fails; profile observation accepts complete wall/dynamic proof in0.446ms, selected0. Later9407/8770 loses aggregate authority. Monitor terminates after positive observation; no six-lap results.",
+      "production_impact": "Observation only in this run. Promotion is separately tracked in .steering/20260908-mpcc-stop-reference-feasibility/.",
+      "deleted_code": [],
+      "revisit_condition": "Production reference selection must preserve full physical proof and bounded support, then pass fixed-binary single and multi-vehicle acceptance. Do not claim the observation commanded the vehicle."
+    },
+    {
+      "experiment_id": "20260908-production-stop-reference-feasibility",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-d1-decision-11046",
+        "20260908-single-d1-decision-9401"
+      ],
+      "hypothesis": "A bounded solved-normal-path/track-reference Stop feasibility set removes the fixed-zero-reference false rejection while retaining complete physical proof.",
+      "changed_dimension": "terminal_stop_reference_selection",
+      "result": "accepted",
+      "reason": "Local reference-selection regression,64 retained tests,2318 package tests and25-package build pass. Fixed-binary single repetitions1/2 finish six laps249.293030/250.933380s withpenalty0;repetition3 times out after5laps withwallpenalty1. The physical speed collapse precedes normal authority loss. Integrated three-repeat acceptance FAILED; no dev2 promotion.",
+      "production_impact": "Local reference selection retained for diagnosis; overall single campaign rejected. No authority/proof relaxation. See separate physical-stop audit for the earliest sensor event rather than attributing it to the later terminal/steering rejection.",
+      "deleted_code": [
+        "Hardcoded single zero-lateral terminal feasibility choice",
+        "Temporary live normal-path Stop counterfactual call"
+      ],
+      "revisit_condition": "Resolve repetition3 sensor/pose/collider/map boundary before changing policy or repeating the campaign. All three results remain recorded."
+    },
+    {
+      "experiment_id": "20260908-stop-reference-single-three-repeat-acceptance",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-r3-d1-decision-10714"
+      ],
+      "hypothesis": "The fixed Stop-reference binary safely completes three identical single six-lap trials.",
+      "changed_dimension": "fixed_binary_repeated_dynamic_acceptance",
+      "result": "rejected",
+      "reason": "Trials1/2 six laps/penalty0;trial3 finished=false,5laps,600s timeout,wallpenalty1(total8.110138s,event8.115005s) onlap6/race242.938812s. Vehicle-status7.796716->0.852230m/s over35ms precedes reduced speed command;Recovery10713 and authority-loss10714 are downstream. Receive max33.190966ms/0gaps>50ms,callbackmax18.061ms/0overruns.",
+      "production_impact": "Stop the single campaign and defer prepared dev2 continuation. No additional production change selected.",
+      "deleted_code": [],
+      "revisit_condition": "Establish and repair the physical slowdown cause with sensor/pose/collider evidence. Snapshot10714 alone is after the event and cannot replay the earliest executing artifact."
+    },
+    {
+      "experiment_id": "20260908-physical-body-wall-map-correspondence",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-r3-d1-decision-10714"
+      ],
+      "hypothesis": "The sensor slowdown is consistent with actual body-wall contact omitted by the declared occupancy world.",
+      "changed_dimension": "read_only_sensor_and_unity_geometry_reconstruction",
+      "result": "accepted",
+      "reason": "Raw IMU rotation/lever arm and GNSS altitude reconstruct 3D body. No triangle overlap through250.60s; triangles81055/81056 overlap at250.65..250.75s, consistent with speed collapse250.60->250.635s. Depth3.5..4.7mm is comparable to MGRS quantization; direct PhysX contact event is absent. The wall location is free in the old map,0.600m from the nearest occupied-cell center and0.548m from its boundary under the native center-origin grid convention. Body front1.614851m exceeds declared1.49+0.05m; side contact is not attributed to front undercoverage.",
+      "production_impact": "Diagnostics establish wall-map and body-envelope modeling defects; no geometry/margin replacement is selected yet. UNKNOWN GNSS calibration is a separate producer slice.",
+      "deleted_code": [],
+      "revisit_condition": "Generate and validate complete collision geometry coverage; preserve measurement quantization and PhysX-contact limitations. Do not call local 3D reconstruction an exact engine replay."
+    },
+    {
+      "experiment_id": "20260908-gnss-covariance-consumer-comparison",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-r3-d1-decision-10714"
+      ],
+      "hypothesis": "The UNKNOWN10->100m2 covariance chain weakens otherwise accurate local AWSIM GNSS enough to contribute to lateral localization error.",
+      "changed_dimension": "position_measurement_covariance_only_same_seeded_ekf",
+      "result": "accepted",
+      "reason": "Same recorded pose/twist/clock, two identical EKF binaries initialized from the same240s pose/covariance. At250.605s, changing only100->0.1m2 changes Y43169.6645->43169.1254m; reconstructed bodyY43169.0679. Original hidden EKF history is absent, so this is a consumer intervention, not exact race replay. ROS pub/sub regression fails10!=0.1 before fix; explicit calibration implemented with standalone/vehicle10m2 defaults preserved.25-package build and22 package tests,0failures/skips.",
+      "production_impact": "Replace the GNSSPoser hardcoded UNKNOWN fallback by finite-positive explicit sensor calibration. Simulation uses0.1m2; known covariance and real-vehicle default remain unchanged. One dynamic diagnostic completes6laps248.777924s/penalty0 with no active-race moving override and0callback overruns. Recorded EKF input0.1m2;movingXYmean0.0332m/p950.0679m versus failed trial0.2020m/0.3535m. Map/body coverage and integrated acceptance remain open.",
+      "deleted_code": [
+        "Hardcoded10m2 UNKNOWN fallback at all three position covariance assignments"
+      ],
+      "revisit_condition": "Recalibrate for a changed AWSIM noise/model; accept closed-loop behavior only with complete geometry and repeated run evidence."
+    },
+    {
+      "experiment_id": "20260908-measured-ego-footprint-enclosure",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-r3-d1-decision-10714"
+      ],
+      "hypothesis": "Nominal footprint encloses the independently extracted local AWSIM body without consuming margin; coupled lateral accounting must not shrink the peer.",
+      "changed_dimension": "measured_nominal_ego_extents_and_coupled_lateral_distance",
+      "result": "accepted",
+      "reason": "Both configs fail13hull vertices before correction; combined-distance regression fails0.682m peer half width after ego-only change.4regressions pass after front1.615/side0.768/combined1.536.25packages build;2263package-local testcase records plus60CTest aggregates (2323reported total),0failures/skips. New-binary diagnostic6laps249.613098s/penalty0; no active-race moving override;callbackmax24.708ms/0overruns;receive max31.618595ms/0gaps>50ms.",
+      "production_impact": "Nominal measured ego envelope and matching defaults applied; all margins/prediction times/authority requirements unchanged. Full peer enclosure and wall coverage remain open; one run is not repeated acceptance.",
+      "deleted_code": [
+        "Under-enclosing nominal front/side constants",
+        "Combined lateral distance inconsistent with corrected ego width"
+      ],
+      "revisit_condition": "Recalibrate if simulator body/transform changes; resolve full wall/peer geometry before integrated multi-vehicle acceptance."
+    },
+    {
+      "experiment_id": "20260908-native-wall-map-calibration",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-r3-d1-decision-10714"
+      ],
+      "hypothesis": "Existing occupied map omits measured static wall contact faces; corridor filtering additionally drops calibrated singleton cells.",
+      "changed_dimension": "additive_measured_wall_occupancy_and_preservation_metadata",
+      "result": "accepted",
+      "reason": "4567occupied cells added, all old occupancy retained. Known contact faces covered;25Python tests pass after5before-failures. Actual native Map regression fails before and passes after;570009native/editor cells agree. Continuous reference sweep clears nominal body plus0.25m.25package build;60CTest groups/2269package-local testcase records,0failures/skips.",
+      "production_impact": "Applied additive final_ver3 map and explicit preserve_occupied_cells metadata, with legacy filtering default elsewhere. Final physical proof already uses raw pixels; the filter correction aligns corridor/reference generation with proof. All-height near-vertical projection remains conservative and incomplete for other face classes. Integrated dynamic acceptance remains rejected.",
+      "deleted_code": [
+        "Unconditional small-component removal for maps explicitly requiring preservation"
+      ],
+      "revisit_condition": "Recalibrate for changed assets or newly proved missing/contact geometry; do not reduce occupancy or margins to pass a run."
+    },
+    {
+      "experiment_id": "20260908-wall-map-single-diagnostic",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-wall-map-worker-10074",
+        "20260908-wall-map-worker-10081",
+        "20260908-wall-map-decision-10699"
+      ],
+      "hypothesis": "Controller with measured ego/GNSS/wall calibration retains certified normal authority through a six-lap single-vehicle run.",
+      "changed_dimension": "calibrated_wall_geometry_new_binary_same_race_protocol",
+      "result": "rejected",
+      "reason": "Run20260908-wall-map-single-r1 finishes6laps253.198868s/penalty0, but moving Emergency10699/10700at7.53/7.55m/s violates acceptance. Earliest rejection delay-prefix-blocked at0.105s from observation252.154994, published10073. Full continuation/terminal Stop is not reached. Callbackmax19.623ms/0overruns;receive10604msgs,max32.982349ms/0gaps>50ms. Later11333/11334are after finish.",
+      "production_impact": "No guard or delay change. Exact previous published artifact is missing; add bounded observation of original solver source, actual artifact and publication clock before another causal repair.",
+      "deleted_code": [],
+      "revisit_condition": "New causal repair or bounded new evidence of the actual executed source; do not rerun unchanged settings solely to obtain a pass."
+    },
+    {
+      "experiment_id": "20260908-delay-prefix-frozen-comparison",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-wall-map-worker-10074",
+        "20260908-wall-map-worker-10081",
+        "20260908-wall-map-decision-10699"
+      ],
+      "hypothesis": "A numerical approximation alone explains corrected-map authority loss, with an already wall-clear trajectory available.",
+      "changed_dimension": "same_frozen_inputs_existing_architecture_and_physical_oracle_arms",
+      "result": "inconclusive",
+      "reason": "10074warm-primal actual nonlinear path contacts the hard wall reserve at stage1; restoring wall solves still fails row374.10081restoration solves numerically but exact prefix collides at13.10699currentproblem A/restoration rejects wallrow374; other target-based arms are inapplicable. First contacted grid cells contain wall faces at body height, falsifying overhead-only projection here. Actual10073artifact unavailable. No feasible alternative or bounded physical infeasibility certificate established.",
+      "production_impact": "No solver, clearance, model or timeout change. Preserve all comparison outputs; capture actual executed provenance for timing/model audit.",
+      "deleted_code": [],
+      "revisit_condition": "Actual executed artifact and publication clocks become available, or a new independently bounded feasible/infeasible comparison is established."
+    },
+    {
+      "experiment_id": "20260908-published-execution-observation-r1",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-wall-map-decision-10699"
+      ],
+      "hypothesis": "Actual previously published source/artifact can be captured when the unresolved authority-loss boundary recurs.",
+      "changed_dimension": "bounded_observation_only_no_control_or_parameter_change",
+      "result": "inconclusive",
+      "reason": "New serializer identity/clock/actual-state regression passes;25-package build and2270package-local test records0errors/failures/skips. Diagnostic20260908-execution-evidence-single-r1 finishes6laps250.508286s/penalty0 without active-race moving override. Callback20.701ms/0overruns;receive10504messages,max35.215855ms/0gaps>50ms. Boundary did not recur, so no actual published artifact captured and live serialization is not yet demonstrated.",
+      "production_impact": "Existing asynchronous failure worker now saves original solver source and actual immutable artifact with publication ledger and failure fingerprint. Read-only Store access; no solver, new clock, authority, tuning or guard change.",
+      "deleted_code": [],
+      "revisit_condition": "At most2additional fixed-settings diagnostic trials to obtain the missing failing boundary. Stop repeating when captured; retain all outcomes. No claim of integrated acceptance from successful trials."
+    },
+    {
+      "experiment_id": "20260908-peer-body-envelope-counterexample",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-single-r3-d1-decision-10714"
+      ],
+      "hypothesis": "Current V2X peer circle encloses the actual body about the published GNSS point.",
+      "changed_dimension": "independent_asset_enclosure_and_actual_native_collision_predicate",
+      "result": "rejected",
+      "reason": "Local GNSS-to-V2X origin proved through CIL/scene transforms for all4kart bodies. Nominal full3D radius1.875424947m requires outward1.876m.527of705vertices exceed existing0.768m nominal radius. Same-heading peer GNSS(0,0),ego base(2.2,0) has2D projected body overlap while actual C++ circle predicate reports+0.822m clearance using0.818m radius. This is not a3Dengine collision or complete command bypass; other guards may mask it.",
+      "production_impact": "No peer-production fix yet. Separate complete body enclosure from combined lateral spacing and uncertainty; current-world, serialized replay and recovery consumers all need consistent geometry. Do not shrink body radius for passing feasibility.",
+      "deleted_code": [],
+      "revisit_condition": "Measured complete peer envelope or an explicitly observed/bounded orientation contract is implemented and validated; retain multi-vehicle acceptance as open."
+    },
+    {
+      "experiment_id": "20260908-published-execution-observation-r2",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-observation-r2-d1-decision-8995",
+        "20260908-observation-r2-d1-decision-9005"
+      ],
+      "hypothesis": "The v1recorder captures original executed Cruise input at the reproduced authority-loss boundary.",
+      "changed_dimension": "same_v1_observation_binary_second_bounded_trial",
+      "result": "rejected",
+      "reason": "Run20260908-execution-evidence-single-r2 finishes6laps252.718750s/penalty0 but Emergency9005/9006at7.65m/s. Earliest aggregate9005has clear delay prefix and20-stage continuation; both terminal Stop references fail wall proof. Source8390exists as executed evidence but its solver_source_snapshot is null because the producer retains only ShiftOut/Pass inputs. Current failure saved; no actual artifact/source pair captured. Native probe of actual capture prolog confirms5of7normal intents missing before correction,7of7owned after.",
+      "production_impact": "Remove worker-side intent filter for immutable provenance only; audit all source-pointer consumers for observation-only use. First saved failure logs missing plan/source/artifact explicitly. No controller parameter, solver, wall/certificate or authority policy changed. Subsequent v2build/fullpackage validation passes; final r3captures source6782. See v2observation acceptance and r3integrated rejection records.",
+      "deleted_code": [
+        "ShiftOut/Pass-only source-capture filter"
+      ],
+      "revisit_condition": "Run the final planned diagnostic with the corrected provenance producer after build/tests. Do not re-solve a fresh problem and call it the executed artifact."
+    },
+    {
+      "experiment_id": "20260908-published-execution-observation-v2",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-observation-r3-d1-published-source-6782",
+        "20260908-observation-r3-d1-decision-7405"
+      ],
+      "hypothesis": "All normal intents preserve original source, allowing actual published Cruise artifact capture at failure.",
+      "changed_dimension": "all_intent_immutable_source_capture_only",
+      "result": "accepted",
+      "reason": "25packages build,60CTest groups/2270package-local records0errors/failures/skips. Final bounded trial r3captures exact-executed source6782and actual artifact paired to7405with independent first-publication clock. Actual physical adapter reconstructs it without a solve. External-primal architecture oracle is unavailable without exact QP; return4is retained and not a feasibility result.",
+      "production_impact": "Observation producer only. New source/artifact/clock diagnostics are exercised live; no new normal authority, parameters or physical guards. Three-trial capture campaign is closed.",
+      "deleted_code": [
+        "ShiftOut/Pass-only source-capture filter"
+      ],
+      "revisit_condition": "Changed artifact/source schema or missing provenance in another actual ledger kind; do not repeat unchanged races after required capture succeeds."
+    },
+    {
+      "experiment_id": "20260908-published-execution-single-r3-acceptance",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-observation-r3-d1-published-source-6782",
+        "20260908-observation-r3-d1-decision-7405"
+      ],
+      "hypothesis": "Current corrected-map controller maintains normal authority during the final six-lap observation run.",
+      "changed_dimension": "same_control_parameters_v2_observation_binary",
+      "result": "rejected",
+      "reason": "Sixlaps259.300170898s/penalty0, but active-race Emergency7405/7406at7.53m/s. Earliest prefix collision index24/25elapsed0.120s; continuation/terminal proof not reached. No Recovery. Callback13457reportedcycles,max21.207ms,0overruns. Control receive10859messages,max35.177231ms,0gaps>50ms; source21nonpositive intervals and2>50ms. Finish-phase overrides11575/11576kept separate.",
+      "production_impact": "No controller-acceptance claim and no new repeated run. Captured source6782now supports fixed-input model analysis.",
+      "deleted_code": [],
+      "revisit_condition": "Complete causal model/coordinate repair and fixed-input physical acceptance before the next dynamic campaign."
+    },
+    {
+      "experiment_id": "20260908-virtual-frame-physical-invariance",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-observation-r3-d1-published-source-6782",
+        "20260908-observation-r3-d1-decision-7405"
+      ],
+      "hypothesis": "The current seven-state temporal Frenet transition and world reconstruction describe Cartesian motion independent of virtual progress.",
+      "changed_dimension": "actual_native_transition_vs_analytical_motion_and_saved_control_cartesian_ode",
+      "result": "rejected",
+      "reason": "Native analytical test fails14of24cases. Stationary body,kappa0.2/m,lag-0.3,nu4for0.1s moves39.9899mm. With actual6782controls, native versus independent Cartesian mismatch47.0783mm at45.123430ms. Same recorded grid/body/margins and native swept predicate: native full path clear, Cartesian enters hard reserve at first sampled4.512343ms; body-plus-raster-margin remains clear. Full horizon is conditional, not actual post-Emergency execution.",
+      "production_impact": "Production model unchanged. Proved physical-coordinate and wall-proof defect requires joint dynamics/reference-frame/SQP/artifact/Stop/retained/identity repair; timing attribution of live7405remains incomplete.",
+      "deleted_code": [],
+      "revisit_condition": "Compare complete coordinate-consistent seven-state formulations on sealed worlds, keep failing analytical tests and require independent physical proof before promotion."
+    },
+    {
+      "experiment_id": "20260908-arc-length-equation-only-comparison",
+      "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+      "snapshot_ids": [
+        "20260908-observation-r3-d1-published-source-6782",
+        "20260908-observation-r3-d1-decision-7405"
+      ],
+      "hypothesis": "Adding the rotating-frame terms while retaining stored stage curvature is sufficient to make physical rollout consistent.",
+      "changed_dimension": "fixed_controls_offline_coordinate_equations_only",
+      "result": "rejected",
+      "reason": "On6782, covariant arc-length equations still differ from Cartesian by16.0719mm at45.123430ms and392.6348mm maximum over1.794944s. First stored curvature-0.166609279/m differs from actual interpolated heading derivative-0.149090895/m; linearly interpolated XY is not tangent to interpolated heading throughout the segment. Full actual-frame derivatives match Cartesian within1.8e-9m offline. These local coordinate arms are not full Mission/ManeuverBundle architecture comparisons or solved feasible candidates.",
+      "production_impact": "Do not apply a two-line partial model patch. Preserve current dynamics while designing a complete immutable frame/physical-state contract and model-version invalidation.",
+      "deleted_code": [],
+      "revisit_condition": "Complete physical-coordinate formulation and its native Jacobian/artifact/Stop/retained regression on the same snapshots; no tuning substitute."
     }
   ]
 }

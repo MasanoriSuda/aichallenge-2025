@@ -1,0 +1,39 @@
+{
+  "run_id": "20260907-mpcc-stop-feasibility-dev2",
+  "formal_acceptance": false,
+  "termination": "diagnostic stopped after repeated ShiftOut failures; no Pass/Return completion",
+  "domains": {
+    "d1": {
+      "phase_transitions": [
+        "[mpc_controller_cpp-10] [INFO] [1788792010.768898570] [mpc_controller]: OvertakeLine: Idle -> ShiftOut, episode=1, side=-1, ey=-0.84, wp_id=34, reason=overtake selected, pause_cause=n/a",
+        "[mpc_controller_cpp-10] [INFO] [1788792027.992965528] [mpc_controller]: OvertakeLine: ShiftOut -> Recovery, episode=1, side=-1, ey=-0.83, wp_id=106, reason=actual footprint wall margin violated, pause_cause=n/a",
+        "[mpc_controller_cpp-10] [INFO] [1788792029.993666081] [mpc_controller]: OvertakeLine: Recovery -> Idle, episode=1, side=-1, wp_id=107, reason=recovery stalled",
+        "[mpc_controller_cpp-10] [INFO] [1788792051.345194178] [mpc_controller]: OvertakeLine: Idle -> ShiftOut, episode=2, side=-1, ey=-0.19, wp_id=185, reason=overtake selected, pause_cause=n/a",
+        "[mpc_controller_cpp-10] [INFO] [1788792055.392661417] [mpc_controller]: OvertakeLine: ShiftOut -> FollowPrepare, episode=2, side=-1, ey=-1.24, wp_id=208, reason=dynamic Mission wait: live overtake corridor unavailable, pause_cause=DynamicMissionWait",
+        "[mpc_controller_cpp-10] [INFO] [1788792055.468085695] [mpc_controller]: OvertakeLine: FollowPrepare -> Recovery, episode=2, side=-1, ey=-1.20, wp_id=208, reason=static wall clearance margin infeasible, pause_cause=n/a",
+        "[mpc_controller_cpp-10] [INFO] [1788792056.619347082] [mpc_controller]: OvertakeLine: Recovery -> Idle, episode=2, side=-1, wp_id=214, reason=recovery distance complete after terminal Mission abort",
+        "[mpc_controller_cpp-10] [INFO] [1788792057.394684225] [mpc_controller]: OvertakeLine: Idle -> ShiftOut, episode=3, side=1, ey=0.11, wp_id=219, reason=overtake selected, pause_cause=n/a",
+        "[mpc_controller_cpp-10] [INFO] [1788792061.192548192] [mpc_controller]: OvertakeLine: ShiftOut -> Recovery, episode=3, side=-1, ey=0.68, wp_id=239, reason=selected pass side became occupied, pause_cause=n/a",
+        "[mpc_controller_cpp-10] [INFO] [1788792061.517567806] [mpc_controller]: OvertakeLine: Recovery -> FollowPrepare, episode=3, side=-1, ey=0.11, wp_id=240, reason=recovery complete; committed pass mission retained, pause_cause=RecoveryRetention",
+        "[mpc_controller_cpp-10] [INFO] [1788792061.544075855] [mpc_controller]: OvertakeLine: FollowPrepare -> Idle, episode=3, side=-1, wp_id=240, reason=retained pass mission still infeasible after recovery",
+        "[mpc_controller_cpp-10] [INFO] [1788792063.172491295] [mpc_controller]: OvertakeLine: Idle -> ShiftOut, episode=4, side=-1, ey=-0.41, wp_id=244, reason=overtake selected, pause_cause=n/a",
+        "[mpc_controller_cpp-10] [INFO] [1788792081.567380848] [mpc_controller]: OvertakeLine: ShiftOut -> Recovery, episode=4, side=-1, ey=0.79, wp_id=319, reason=selected pass side became occupied, pause_cause=n/a",
+        "[mpc_controller_cpp-10] [INFO] [1788792081.917300845] [mpc_controller]: OvertakeLine: Recovery -> FollowPrepare, episode=4, side=-1, ey=0.18, wp_id=321, reason=recovery complete; committed pass mission retained, pause_cause=RecoveryRetention",
+        "[mpc_controller_cpp-10] [INFO] [1788792081.943727161] [mpc_controller]: OvertakeLine: FollowPrepare -> Idle, episode=4, side=-1, wp_id=321, reason=retained pass mission still infeasible after recovery"
+      ],
+      "stop_accepted_in_logged_windows": 1168,
+      "stop_lattice_bridge_selected_log_count": 0,
+      "published_stop_successor_accepted_log_count": 2,
+      "callback_max_ms": 37.101,
+      "callback_overruns": 5.0
+    },
+    "d2": {
+      "phase_transitions": [],
+      "stop_accepted_in_logged_windows": 0,
+      "stop_lattice_bridge_selected_log_count": 0,
+      "published_stop_successor_accepted_log_count": 0,
+      "callback_max_ms": 32.354,
+      "callback_overruns": 2.0
+    }
+  }
+}

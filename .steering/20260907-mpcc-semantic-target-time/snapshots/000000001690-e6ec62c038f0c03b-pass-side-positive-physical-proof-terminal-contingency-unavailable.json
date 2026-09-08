@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "000000001690-e6ec62c038f0c03b-pass-side-positive-physical-proof-terminal-contingency-unavailable",
+  "baseline_commits": [
+    "041b0fa4"
+  ],
+  "evidence_type": "historical-registry-reconciliation",
+  "replay_ready": false,
+  "incomplete_reason": "Historical reference reconciled from existing evidence; not independently replay-validated in this slice.",
+  "local_payloads": [
+    {
+      "path": "output/20260831-072258/d1/mpcc_architecture_snapshots/000000001690-e6ec62c038f0c03b-pass-side-positive-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "sha256": "0ce6601340dd127f3d8becf969e5079717452c8373d3aa1e1be73b643b83a96c",
+      "size_bytes": 40422
+    },
+    {
+      "path": "output/20260831-072258/d1/mpcc_architecture_snapshots/000000001690-e6ec62c038f0c03b-pass-side-positive-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "size_bytes": 570009
+    }
+  ]
+}

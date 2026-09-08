@@ -12,6 +12,7 @@
 
 ## docs/spec/ 一覧
 
+- `codex-harness.md` — GPT-6 Astra向けAGENTS/Skillsの責務分担、reasoning設定と検証方針。
 - `host-uid-containers.md` — 全 dev サービスをホスト UID/GID で実行する設計（rocker 相当を docker compose の `user:` / `HOME=/tmp` / `group_add` で再現）。実装状況・差異（sound.yml は simulator のみ、group_add は数値 GID）も記載。
 - `architecture.md` — リポジトリ構成 / Compose トポロジ / ドメイン・Launch 階層 / 評価フローのテキスト図。
 - `competition-rules.md` — Automotive AI Challenge 2026 / SW 部門ルールの公式ページ要約と、このリポジトリへの影響。
@@ -20,6 +21,8 @@
 - `how-to-setup.md` — 環境構築（Ubuntu 22.04 想定）。`setup.bash` による対話一括セットアップから起動確認まで。
 - `introduction.md` — 初学者向け `make dev` / `make eval` 入門。ホストでコマンドを実行し docker compose で AWSIM と Autoware を動かす全体像。
 - `log-design.md` — `/output` 配下へログを集約する設計（compose / `run_evaluation.bash` の出力レイアウト）。
+- `localization-calibration.md` — UNKNOWN GNSS共分散の明示校正、simulation/実車の既定値と検証根拠。
+- `mpcc-geometry-calibration.md` — ローカルAWSIMの車体外形、横寸法、壁地図の校正と未解決点。
 - `makefile-target-naming.md` — Makefile ターゲットの `<service>-<command>` 命名ガイドライン。
 - `mpc-integration.md` — `multi_purpose_mpc_ros` のインテグレーション設計。
 - `mpcc-experiment-governance.md` — MPCC failure snapshot、Algorithm Pivot Gate、A〜D方式比較、Slice 7移行条件。

@@ -178,10 +178,28 @@ StopCandidateResult impose_maximum_braking_law(
     next_state.lower[model::kVelocityIndex] = stage_end_velocity_mps;
     next_state.upper[model::kVelocityIndex] = stage_end_velocity_mps;
   }
-  auto & terminal = candidate.request.states.back();
-  terminal.reference[model::kVelocityIndex] = 0.0;
-  terminal.lower[model::kVelocityIndex] = 0.0;
-  terminal.upper[model::kVelocityIndex] = 0.0;
+  if (candidate.request.states.back().reference[model::kVelocityIndex] > 0.0) {
+    // A normal horizon can end before braking reaches rest. Overwriting only
+    // its terminal velocity would contradict the final acceleration/dynamics.
+    // Retiming also changes every peer prediction, so this producer must not
+    // silently extend the immutable source clock to manufacture a Stop.
+    return reject_stop(
+      Reason::InvalidBrakingEnvelope,
+      "maximum-braking Stop horizon ends before terminal rest");
+  }
+  // The maximum-braking law is already hard. Stop's remaining task is to
+  // find a physically clear trajectory through rest; continuing to optimize
+  // the inherited racing-line/progress objective gives it a different mission.
+  // References remain numerical seeds and every source hard bound is retained.
+  for (auto & state : candidate.request.states) {
+    state.weight.setZero();
+    state.linear_cost.setZero();
+  }
+  for (auto & input : candidate.request.inputs) {
+    input.weight.setZero();
+    input.linear_cost.setZero();
+  }
+  candidate.request.input_delta_weight.setZero();
   if (!architecture::interaction_snapshot_complete(candidate)) {
     return reject_stop(
       Reason::InvalidSource,
@@ -396,6 +414,12 @@ ScheduleResult build_schedule(
       Reason::InvalidSchedule,
       "initial Stop lattice steering non-finite");
   }
+  const auto prefix_bounds = mpcc_rate_resolved_adapter::resolve_steering_prefix_bounds(
+    steering_rad, maximum_braking_stop.request.maximum_abs_steering_rad, solver_tolerance);
+  if (!prefix_bounds.has_value()) {
+    return reject_schedule(Reason::InvalidSchedule, "Stop lattice steering prefix unavailable");
+  }
+  const double initial_steering_rad = steering_rad;
   ScheduleResult result;
   result.schedule.initial_rate_sign = initial_rate_sign;
   result.schedule.first_switch_stage = first_switch_stage;
@@ -434,9 +458,20 @@ ScheduleResult build_schedule(
       stage_index < first_switch_stage ?
       initial_rate_sign :
       (stage_index < second_switch_stage ? -initial_rate_sign : 0);
+    // A rate inset is measured in rad/s; it cannot also stand in for the
+    // cumulative radian inset enforced by the QP. Intersect both contracts
+    // before fixing the input, otherwise saturation makes the QP infeasible.
+    const double cumulative_delta_rad = steering_rad - initial_steering_rad;
+    const double lower_rate = std::max(steering_rate_bounds->lower,
+      (prefix_bounds->lower - cumulative_delta_rad) / input.stage_dt_sec);
+    const double upper_rate = std::min(steering_rate_bounds->upper,
+      (prefix_bounds->upper - cumulative_delta_rad) / input.stage_dt_sec);
+    if (lower_rate > upper_rate) {
+      return reject_schedule(Reason::InvalidSchedule, "Stop lattice rate/prefix intersection empty");
+    }
     const double steering_rate_radps =
-      rate_sign > 0 ? steering_rate_bounds->upper :
-      (rate_sign < 0 ? steering_rate_bounds->lower : 0.0);
+      rate_sign > 0 ? upper_rate :
+      (rate_sign < 0 ? lower_rate : std::clamp(0.0, lower_rate, upper_rate));
     const double next_steering_rad =
       steering_rad + steering_rate_radps * input.stage_dt_sec;
     if (!std::isfinite(next_steering_rad) ||

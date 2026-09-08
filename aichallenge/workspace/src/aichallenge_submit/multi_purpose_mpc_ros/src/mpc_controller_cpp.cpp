@@ -421,6 +421,12 @@ struct Map
     negate = map_data["negate"] ? map_data["negate"].as<int>() : 0;
     resolution = map_data["resolution"].as<double>();
     origin = map_data["origin"].as<std::vector<double>>();
+    const std::string preserve_occupied = map_data["preserve_occupied_cells"] ?
+      map_data["preserve_occupied_cells"].as<std::string>() : "false";
+    if (preserve_occupied != "true" && preserve_occupied != "false") {
+      throw std::runtime_error("preserve_occupied_cells must be true or false");
+    }
+    preserve_occupied_cells = preserve_occupied == "true";
 
     const std::filesystem::path yaml_path(map_yaml_path);
     const auto pgm_file_path = yaml_path.parent_path() / map_data["image"].as<std::string>();
@@ -471,7 +477,9 @@ struct Map
         data.at<double>(r, c) = data.at<double>(r, c) >= threshold_occupied ? 1.0 : 0.0;
       }
     }
-    remove_small_holes();
+    if (!preserve_occupied_cells) {
+      remove_small_holes();
+    }
     data.convertTo(data, CV_8S);
   }
 
@@ -552,6 +560,7 @@ struct Map
   double threshold_occupied{};
   double threshold_free{};
   int negate{};
+  bool preserve_occupied_cells{};
   cv::Mat data;
   cv::Mat data_backup;
   cv::Mat raw_normalized_data;
@@ -1250,7 +1259,8 @@ struct BicycleModel
 struct V2XGapPlannerConfig
 {
   bool enabled{false};
-  double vehicle_radius{1.25};
+  // Combined nominal lateral extents for the calibrated local AWSIM kart pair.
+  double vehicle_radius{1.536};
   double vehicle_length{2.0};
   double prediction_margin{0.2};
   double prediction_time{3.0};
@@ -6410,15 +6420,11 @@ RateResolvedPipelineEvaluation evaluate_rate_resolved_pipeline(
   const std::size_t dynamic_sqp_depth = 0U)
 {
   RateResolvedPipelineEvaluation evaluation;
-  if (
-    snapshot.identity.source_context.intent ==
-    mpcc_contract::ControlIntent::ShiftOut ||
-    snapshot.identity.source_context.intent ==
-    mpcc_contract::ControlIntent::Pass)
-  {
-    evaluation.solver_source_snapshot =
-      std::make_shared<const rate_resolved_shadow::Snapshot>(snapshot);
-  }
+  // Every certified normal plan needs immutable provenance for later failure
+  // observation. Copy on the planning worker; the large wall grid stays shared.
+  // This source pointer is never an alternate control or Stop authority.
+  evaluation.solver_source_snapshot =
+    std::make_shared<const rate_resolved_shadow::Snapshot>(snapshot);
   evaluation.dynamic_sqp_depth = dynamic_sqp_depth;
   const auto solver_started = SteadyClock::now();
   try {
@@ -7707,6 +7713,8 @@ struct RateResolvedRetainedShadowEvaluation
   double follow_minimum_gap_m{std::numeric_limits<double>::infinity()};
   bool terminal_stop_attempted{false};
   bool terminal_stop_certified{false};
+  bool terminal_stop_normal_path_reference{false};
+  unsigned terminal_stop_reference_attempts{};
   bool terminal_stop_approximate_support_exceeded{false};
   int terminal_stop_first_approximate_support_exceeded_sample{-1};
   double terminal_stop_maximum_approximate_support_violation_m{};
@@ -9590,6 +9598,18 @@ struct MPC
       overtake_line_state_.mission_generation > 0U;
   }
 
+  bool overtake_successor_reference_available() const noexcept
+  {
+    // This admits a worker draft, never a command or a phase transition.
+    // A published stateless sibling retires the frozen Mission geometry;
+    // its encounter must still be able to request a fresh Pass/Return solve.
+    return
+      (overtake_line_state_.mission_path_frozen &&
+      overtake_line_state_.mission_plan.has_value() &&
+      overtake_line_state_.mission_plan->valid) ||
+      publisher_bound_stateless_overtake_source_active();
+  }
+
   void invalidate_published_stop_lattice_observation() noexcept
   {
     rate_resolved_stop_lattice_published_source_identity_.reset();
@@ -9842,6 +9862,7 @@ struct MPC
     // Update this ledger only after the exact serialized command has joined
     // and any newly certified candidate has become the executed plan.
     last_published_canonical_intent_ = pending.command.intent;
+    last_committed_canonical_publication_decision_id_ = decision_id;
     if (
       pending.published_authority_intent !=
       mpcc_contract::ControlIntent::Stop &&
@@ -9976,15 +9997,16 @@ struct MPC
     const bool publication_overridden) noexcept
   {
     const bool normal_execution_interrupted =
-      publication_overridden ||
-      authority_intent == mpcc_contract::ControlIntent::Stop;
+      mpcc_contract::publication_interrupts_execution_ledger(
+      authority_intent, publication_overridden, active_control_decision_id_,
+      last_committed_canonical_publication_decision_id_);
     if (
       normal_execution_interrupted &&
       rate_resolved_track_cruise_certified_plan_store_ != nullptr &&
       rate_resolved_track_cruise_certified_plan_store_->clear())
     {
       // PublishedPlan is an execution ledger, not a lease. Once another
-      // authority crosses the publisher, elapsed wall time can no longer be
+      // external authority crosses the publisher, elapsed wall time can no longer be
       // used to advance skipped normal controls. Keep the independently
       // certified candidate bank, but require its existing current-world join
       // before normal authority can return.
@@ -10347,9 +10369,7 @@ struct MPC
     reject_reason.clear();
     if (
       overtake_line_state_.phase != OvertakeLinePhase::ShiftOut ||
-      !overtake_line_state_.mission_path_frozen ||
-      !overtake_line_state_.mission_plan.has_value() ||
-      !overtake_line_state_.mission_plan->valid ||
+      !overtake_successor_reference_available() ||
       overtake_line_state_.mission_generation == 0U ||
       overtake_line_state_.target_vehicle_id.empty() ||
       (overtake_line_state_.pass_side_sign != -1 &&
@@ -10389,8 +10409,14 @@ struct MPC
     behavior.allow_gap_planner = true;
     behavior.overtake_pass_side_sign = overtake_line_state_.pass_side_sign;
     behavior.overtake_gap_available = true;
-    behavior.overtake_selected_mission =
-      overtake_line_state_.mission_plan->mission;
+    if (overtake_line_state_.mission_plan.has_value()) {
+      behavior.overtake_selected_mission =
+        overtake_line_state_.mission_plan->mission;
+    } else {
+      // The stateless source owns no frozen geometry. init_problem builds
+      // the prospective Pass from this worker's current-world snapshot.
+      behavior.overtake_selected_mission.reset();
+    }
     behavior.overtake_committed_execution_active = true;
     behavior.overtake_committed_pass_active = true;
     behavior.overtake_line_owns_locked_target_speed = true;
@@ -10439,7 +10465,7 @@ struct MPC
     reject_reason.clear();
     if (
       overtake_line_state_.phase != OvertakeLinePhase::Pass ||
-      !overtake_line_state_.mission_path_frozen ||
+      !overtake_successor_reference_available() ||
       !overtake_line_state_.mission_return_preflight_reference_active ||
       overtake_line_state_.mission_return_preflight_path_distances_m.size() < 2U ||
       overtake_line_state_.mission_return_preflight_path_distances_m.size() !=
@@ -10756,9 +10782,7 @@ struct MPC
     reject_reason.clear();
     const bool prospective_pass_requested =
       overtake_line_state_.phase == OvertakeLinePhase::ShiftOut &&
-      overtake_line_state_.mission_path_frozen &&
-      overtake_line_state_.mission_plan.has_value() &&
-      overtake_line_state_.mission_plan->valid &&
+      overtake_successor_reference_available() &&
       overtake_line_state_.mission_generation > 0U &&
       !overtake_line_state_.target_vehicle_id.empty() &&
       (overtake_line_state_.pass_side_sign == -1 ||
@@ -10809,7 +10833,7 @@ struct MPC
     }
     const bool prospective_return_requested =
       overtake_line_state_.phase == OvertakeLinePhase::Pass &&
-      overtake_line_state_.mission_path_frozen &&
+      overtake_successor_reference_available() &&
       overtake_line_state_.mission_return_preflight_reference_active &&
       overtake_line_state_.mission_return_preflight_path_distances_m.size() >= 2U &&
       overtake_line_state_.mission_return_preflight_path_distances_m.size() ==
@@ -22304,11 +22328,14 @@ struct MPC
       cfg.progress_contouring.refinement_wall_cache_miss_skip_threshold});
     std::vector<double> progress_execution_stage_arrival_time_sec;
     progress_execution_stage_arrival_time_sec.reserve(
-      static_cast<std::size_t>(N));
+      progress_stage_dt_sec.size());
     double progress_execution_arrival_time_sec = 0.0;
-    for (int stage = 0; stage < N; ++stage) {
-      progress_execution_arrival_time_sec +=
-        dynamics_stage_dt_sec[static_cast<std::size_t>(stage)];
+    // All canonical intents use the semantic MPCC input clock. The legacy
+    // dynamics clock remains at model->Ts outside tactical overtake execution
+    // and must not make a moving peer appear stationary in a longer horizon.
+    // Missing semantic metadata leaves an empty tube and fails closed below.
+    for (const double stage_dt_sec : progress_stage_dt_sec) {
+      progress_execution_arrival_time_sec += stage_dt_sec;
       progress_execution_stage_arrival_time_sec.push_back(
         progress_execution_arrival_time_sec);
     }
@@ -25278,7 +25305,8 @@ struct MPC
     rate_resolved_shadow::Snapshot snapshot,
     const std::uint64_t decision_id,
     const mpcc_contract::ControlIntent intent,
-    std::string outcome, std::string detail)
+    std::string outcome, std::string detail,
+    rate_resolved_certified::LatestPublishedSourceSnapshot published_source = {})
   {
     if (rate_resolved_terminal_failure_snapshot_worker_ == nullptr) {
       return false;
@@ -25286,7 +25314,8 @@ struct MPC
     const auto submission =
       rate_resolved_terminal_failure_snapshot_worker_->submit_latest(
       [snapshot = std::move(snapshot), decision_id, intent,
-        outcome = std::move(outcome), detail = std::move(detail)]() {
+        outcome = std::move(outcome), detail = std::move(detail),
+        published_source = std::move(published_source)]() {
         const auto recorded =
           mpcc_architecture_snapshot::record_proof_failure(
           snapshot,
@@ -25315,7 +25344,57 @@ struct MPC
             "decision=%lu, intent=%s, outcome=%s, detail=%s",
             static_cast<unsigned long>(decision_id),
             mpcc_contract::to_string(intent), outcome.c_str(),
-            recorded.detail.c_str());
+          recorded.detail.c_str());
+        }
+        // Preserve the existing publication ledger before Emergency clears
+        // it. Both observations use one worker job so submit_latest cannot
+        // replace the current failure with its source evidence.
+        const auto & plan = published_source.plan;
+        if (recorded.status == mpcc_architecture_snapshot::RecordStatus::Written &&
+          (plan == nullptr || plan->solver_source_snapshot == nullptr ||
+          plan->execution_artifact == nullptr))
+        {
+          RCLCPP_WARN(
+            rclcpp::get_logger("mpc_controller"),
+            "Rate-resolved published execution observation unavailable: "
+            "decision=%lu, plan=%d, source=%d, artifact=%d",
+            static_cast<unsigned long>(decision_id), plan != nullptr ? 1 : 0,
+            plan != nullptr && plan->solver_source_snapshot != nullptr ? 1 : 0,
+            plan != nullptr && plan->execution_artifact != nullptr ? 1 : 0);
+        }
+        if (plan != nullptr && plan->solver_source_snapshot != nullptr &&
+          plan->execution_artifact != nullptr)
+        {
+          mpcc_architecture_snapshot::PublicationEvidence publication;
+          publication.failure_decision_id = decision_id;
+          publication.failure_interaction_fingerprint =
+            mpcc_architecture_snapshot::fingerprint_interaction_snapshot(snapshot);
+          publication.failure_observation_sec = snapshot.identity.snapshot_sec;
+          publication.failure_control_origin_sec = snapshot.control_prediction_origin_sec;
+          publication.source_kind = rate_resolved_certified::to_string(published_source.kind);
+          publication.publication_decision_id = published_source.publication_decision_id;
+          publication.publication_control_origin_sec =
+            published_source.publication_control_origin_sec;
+          publication.publication_artifact_elapsed_sec =
+            published_source.publication_artifact_elapsed_sec;
+          const auto execution_recorded =
+            mpcc_architecture_snapshot::record_published_execution(
+            *plan->solver_source_snapshot, *plan->execution_artifact,
+            publication, detail);
+          if (execution_recorded.status !=
+            mpcc_architecture_snapshot::RecordStatus::Duplicate)
+          {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "Rate-resolved published execution observation: "
+              "decision=%lu, source=%lu, kind=%s, status=%s, file=%s, detail=%s",
+              static_cast<unsigned long>(decision_id),
+              static_cast<unsigned long>(plan->execution_artifact->identity.sequence),
+              publication.source_kind.c_str(),
+              mpcc_architecture_snapshot::to_string(execution_recorded.status),
+              execution_recorded.snapshot_file.string().c_str(),
+              execution_recorded.detail.c_str());
+          }
         }
       });
     return submission.accepted;
@@ -25542,7 +25621,10 @@ struct MPC
            << "/decision=" << active_control_decision_id_;
     if (!submit_rate_resolved_architecture_failure_snapshot(
         std::move(source.value()), active_control_decision_id_,
-        requested_intent, "normal-authority-unavailable", detail.str()))
+        requested_intent, "normal-authority-unavailable", detail.str(),
+        rate_resolved_track_cruise_certified_plan_store_ != nullptr ?
+        rate_resolved_track_cruise_certified_plan_store_->latest_published_source_snapshot() :
+        rate_resolved_certified::LatestPublishedSourceSnapshot{}))
     {
       reject("snapshot observation worker rejected submission");
     }
@@ -26888,6 +26970,8 @@ struct MPC
     evaluation.follow_minimum_gap_m = result.follow_minimum_gap_m;
     evaluation.terminal_stop_attempted = result.terminal_stop_attempted;
     evaluation.terminal_stop_certified = result.terminal_stop_certified;
+    evaluation.terminal_stop_normal_path_reference = result.terminal_stop_normal_path_reference;
+    evaluation.terminal_stop_reference_attempts = result.terminal_stop_reference_attempts;
     evaluation.terminal_stop_approximate_support_exceeded =
       result.terminal_stop_approximate_support_exceeded;
     evaluation.terminal_stop_first_approximate_support_exceeded_sample =
@@ -26992,6 +27076,15 @@ struct MPC
       };
     const auto finish_retained = [&] (
       RateResolvedRetainedShadowEvaluation evaluation) {
+        // A joined executed Stop keeps its publication role even though its
+        // immutable problem identity retains the upstream normal intent.
+        // A newly accepted normal candidate is free to replace it through
+        // the existing current-world join and publication transaction.
+        if (last_published_authority_intent_ == mpcc_contract::ControlIntent::Stop &&
+          evaluation.selected_from_executed && evaluation.production_authority.has_value())
+        {
+          evaluation.certified_terminal_contingency_selected = true;
+        }
         const double elapsed_ms = std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started).count();
         evaluation.aggregate_runtime = aggregate_runtime;
@@ -27882,7 +27975,7 @@ struct MPC
           "terminal_stop=attempted:%d/certified:%d/"
           "approx_support_exceeded:%d/approx_first:%d/approx_max:%.6f/"
           "model:%s/exact:%s/"
-          "policy:track-reference-path/exact_reject_sample:%d/"
+          "policy:%s/reference_attempts:%u/exact_reject_sample:%d/"
           "steering_handoff:%.6f/steering_final:%.6f/"
           "wall_valid:%d/wall_clear:%d/wall_reason:%s/wall_checked:%lu/"
           "wall_reject_index:%lu/wall_reject_pose:%d/(%.3f,%.3f,%.3f)/"
@@ -27972,6 +28065,8 @@ struct MPC
           rate_resolved_physical::to_string(retained.terminal_stop_reason),
           race_mpcc::exact_physical_execution_trajectory_reason_name(
             retained.terminal_stop_exact_reason),
+          retained.terminal_stop_normal_path_reference ? "normal-path-profile" : "track-reference-path",
+          retained.terminal_stop_reference_attempts,
           retained.terminal_stop_rejected_sample,
           retained.terminal_stop_publisher_interval_end_steering_rad,
           retained.terminal_stop_final_steering_rad,
@@ -28496,6 +28591,7 @@ struct MPC
       "last:%d/source:%lu/command:%lu/advance:%.6f, "
       "time=%.3f/%.3fms(avg/max), "
       "last=seq:%lu/stage:%lu/reason:%s/cursor:%s/actuation:%s/"
+      "terminal_reference:%s/stop_reference_attempts:%u/"
       "time=observation:%.6f/control:%.6f/delay:%.6f/cursor_elapsed:%.6f/"
       "progress=control_physical:%.6f/lifted:%.6f/"
       "expected_physical:%.6f/expected_theta:%.6f/delta:%.6f/"
@@ -28606,6 +28702,9 @@ struct MPC
         window.last_retained.cursor_reason),
       rate_resolved_shadow::artifact::to_string(
         window.last_retained.actuation_reason),
+      window.last_retained.terminal_stop_normal_path_reference ?
+      "normal-path-profile" : "track-reference-path",
+      window.last_retained.terminal_stop_reference_attempts,
       window.last_retained.observation_origin_sec,
       window.last_retained.control_origin_sec,
       window.last_retained.prediction_delay_sec,
@@ -29841,15 +29940,20 @@ struct MPC
     const bool normal_execution_evidence =
       mpcc_contract::canonical_normal_intent_supported(
       published_authority_intent);
+    const bool promote_normal_to_executed =
+      normal_execution_evidence && !retained.selected_from_executed &&
+      !retained.stateless_current_world_bundle;
+    const bool promote_certified_stop_to_executed =
+      retained.certified_terminal_contingency_selected &&
+      !retained.selected_from_executed;
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id, command, published_authority_intent,
       retained.selected_plan,
-      retained.selected_sibling_plan,
+      normal_execution_evidence ? retained.selected_sibling_plan : nullptr,
       retained.selected_plan != nullptr ?
       retained.selected_plan->solver_source_snapshot : nullptr,
       retained.control_origin_sec, retained.cursor_elapsed_sec,
-      normal_execution_evidence && !retained.selected_from_executed &&
-      !retained.stateless_current_world_bundle,
+      promote_normal_to_executed || promote_certified_stop_to_executed,
       normal_execution_evidence && retained.stateless_current_world_bundle,
       normal_execution_evidence ?
       retained.overtake_sibling_adoption_token : std::nullopt,
@@ -30437,7 +30541,8 @@ struct MPC
         mpcc_contract::to_string(intent), draft_reject_reason.c_str());
     }
     if (!preentry_execution_draft.has_value() &&
-      (last_v2x_behavior_output_.overtake_selected_mission.has_value() ||
+      (overtake_successor_reference_available() ||
+      last_v2x_behavior_output_.overtake_selected_mission.has_value() ||
       last_v2x_behavior_output_.
       rate_resolved_preentry_selected_mission_hint.has_value()))
     {
@@ -31332,6 +31437,7 @@ struct MPC
   /// the normal ledger above, this includes explicit external Stop.
   mpcc_contract::ControlIntent last_published_authority_intent_{
     mpcc_contract::ControlIntent::Unknown};
+  std::uint64_t last_committed_canonical_publication_decision_id_{};
   bool retained_execution_identity_was_selected_{false};
   std::uint64_t retained_execution_identity_last_sequence_{0U};
   std::uint64_t solution_contract_sequence_{0U};
@@ -48988,10 +49094,11 @@ struct StuckRecoveryAdapterConfig
   bool side_escape_enabled{true};
   double side_escape_min_contact_reduction_ratio{0.05};
   std::size_t side_escape_steering_samples{5U};
-  double front_extent_m{1.49};
+  // Nominal enclosure of the calibrated local AWSIM solid body; margin is separate.
+  double front_extent_m{1.615};
   double rear_extent_m{0.51};
-  double left_extent_m{0.725};
-  double right_extent_m{0.725};
+  double left_extent_m{0.768};
+  double right_extent_m{0.768};
   double footprint_margin_m{0.05};
   double sweep_interpolation_step_m{0.05};
   double rejoin_static_lookahead_m{0.8};

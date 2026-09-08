@@ -1,0 +1,46 @@
+{
+  "d1": {
+    "logged_decision_authorities": {
+      "unavailable": 3,
+      "emergency-override": 28,
+      "certified-normal-solution": 82
+    },
+    "transitions": [
+      "[mpc_controller_cpp-10] [INFO] [1788788962.620102683] [mpc_controller]: OvertakeLine: Idle -> ShiftOut, episode=1, side=-1, ey=-0.78, wp_id=35, reason=overtake selected, pause_cause=n/a",
+      "[mpc_controller_cpp-10] [INFO] [1788788967.094281742] [mpc_controller]: OvertakeLine: ShiftOut -> Pass, episode=1, side=-1, ey=-1.23, wp_id=42, reason=shift complete (selected_side_physical_separation) with atomic current-world Pass authority, pause_cause=n/a",
+      "[mpc_controller_cpp-10] [INFO] [1788789034.143875334] [mpc_controller]: OvertakeLine: Pass -> FollowPrepare, episode=1, side=-1, ey=-0.82, wp_id=325, reason=committed pass paused by safety brake, pause_cause=SafetyBrake",
+      "[mpc_controller_cpp-10] [INFO] [1788789038.169050759] [mpc_controller]: OvertakeLine: FollowPrepare -> Idle, episode=1, side=-1, wp_id=326, reason=FollowPrepare mission time limit",
+      "[mpc_controller_cpp-10] [INFO] [1788789067.174011733] [mpc_controller]: OvertakeLine: Idle -> ShiftOut, episode=2, side=-1, ey=-0.42, wp_id=76, reason=overtake selected, pause_cause=n/a",
+      "[mpc_controller_cpp-10] [INFO] [1788789067.673609153] [mpc_controller]: OvertakeLine: ShiftOut -> FollowPrepare, episode=2, side=-1, ey=-1.09, wp_id=80, reason=dynamic Mission wait: live overtake corridor unavailable, pause_cause=DynamicMissionWait",
+      "[mpc_controller_cpp-10] [INFO] [1788789068.047649185] [mpc_controller]: OvertakeLine: FollowPrepare -> ShiftOut, episode=2, side=-1, ey=-1.19, wp_id=82, reason=dynamic wait selected fresh same-side Mission, pause_cause=n/a"
+    ],
+    "normal_loss_snapshots": [
+      "[mpc_controller_cpp-10] [WARN] [1788788946.389265461] [mpc_controller]: Rate-resolved architecture snapshot recorded asynchronously: decision=666, intent=track, outcome=normal-authority-unavailable, file=mpcc_architecture_snapshots/000000000666-3c791800a61b84ff-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "[mpc_controller_cpp-10] [WARN] [1788788957.091011429] [mpc_controller]: Rate-resolved architecture snapshot recorded asynchronously: decision=1094, intent=cruise, outcome=normal-authority-unavailable, file=mpcc_architecture_snapshots/000000001094-c9a328f9ce683594-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "[mpc_controller_cpp-10] [WARN] [1788789033.924544271] [mpc_controller]: Rate-resolved architecture snapshot recorded asynchronously: decision=4166, intent=pass, outcome=normal-authority-unavailable, file=mpcc_architecture_snapshots/000000004166-39a19db84ca149d1-pass-side-negative-physical-proof-normal-authority-unavailable/snapshot.yaml"
+    ],
+    "callback_windows": 153,
+    "callback_cycles": 6218.0,
+    "callback_weighted_mean_ms": 5.53218687680926,
+    "callback_max_ms": 57.037,
+    "callback_overrun_cycles": 8.0,
+    "limitation": "Summary windows and throttled decision logs; no p95/p99 or zero-unproved-publication assertion from logs."
+  },
+  "d2": {
+    "logged_decision_authorities": {
+      "unavailable": 1,
+      "emergency-override": 16,
+      "certified-normal-solution": 11
+    },
+    "transitions": [],
+    "normal_loss_snapshots": [
+      "[mpc_controller_cpp-10] [WARN] [1788788955.175163073] [mpc_controller]: Rate-resolved architecture snapshot recorded asynchronously: decision=1001, intent=cruise, outcome=normal-authority-unavailable, file=mpcc_architecture_snapshots/000000001001-6e3cedf48ac6cf1d-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml"
+    ],
+    "callback_windows": 158,
+    "callback_cycles": 6411.0,
+    "callback_weighted_mean_ms": 3.2189870535017944,
+    "callback_max_ms": 27.516,
+    "callback_overrun_cycles": 2.0,
+    "limitation": "Summary windows and throttled decision logs; no p95/p99 or zero-unproved-publication assertion from logs."
+  }
+}

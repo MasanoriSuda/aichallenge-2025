@@ -7,3 +7,5 @@ origin:
 - 43117.15165326744
 - 0.0
 resolution: 0.1
+# Local AWSIM collision-mesh additions are physical occupancy, not raster noise.
+preserve_occupied_cells: true

@@ -2889,10 +2889,12 @@ Result SolverContext::evaluate_physical_dynamic_sqp_audit(
 
 Result SolverContext::evaluate_fixed_steering_rate_audit(
   const Snapshot & snapshot,
-  const std::vector<double> & steering_rate_radps)
+  const std::vector<double> & steering_rate_radps,
+  const bool witness_physical_separation_audit)
 {
-  return evaluate_fixed_steering_rate_shadow(
-    snapshot, steering_rate_radps);
+  return evaluate_impl(
+    snapshot, false, std::nullopt, 0U, &steering_rate_radps,
+    witness_physical_separation_audit);
 }
 
 Result SolverContext::evaluate_fixed_steering_rate_shadow(
@@ -2903,16 +2905,32 @@ Result SolverContext::evaluate_fixed_steering_rate_shadow(
     snapshot, false, std::nullopt, 0U, &steering_rate_radps);
 }
 
+Result SolverContext::evaluate_stop_physical_support_audit(const Snapshot & snapshot)
+{
+  return evaluate_impl(snapshot, false, std::nullopt, 0U, nullptr, true);
+}
+
 Result SolverContext::evaluate_impl(
   const Snapshot & snapshot,
   const bool wall_feasibility_restoration_audit,
   const std::optional<WallBucketAuditMode> wall_bucket_audit_mode,
   const std::size_t physical_dynamic_sqp_audit_iteration_count,
-  const std::vector<double> * const fixed_steering_rate_radps)
+  const std::vector<double> * const fixed_steering_rate_radps,
+  const bool witness_physical_separation_audit)
 {
   const auto started = SteadyClock::now();
   Result result;
   result.identity = snapshot.identity;
+  if (witness_physical_separation_audit &&
+    (snapshot.request.states.empty() ||
+    snapshot.execution_prefix_steps != snapshot.request.horizon_steps ||
+    snapshot.request.states.back().lower[mpcc_rate_resolved::kVelocityIndex] != 0.0 ||
+    snapshot.request.states.back().upper[mpcc_rate_resolved::kVelocityIndex] != 0.0))
+  {
+    result.outcome = Outcome::BuildRejected;
+    result.detail = "physical-support audit requires a full-horizon declared Stop";
+    return result;
+  }
   result.wall_feasibility_restoration_requested =
     wall_feasibility_restoration_audit;
   result.physical_dynamic_sqp_audit_requested =
@@ -3773,6 +3791,20 @@ Result SolverContext::evaluate_impl(
         "physical obstacle guidance requires immutable replay world";
       return finish();
     }
+    // A complete, sealed braking-feasibility mission has no pass suffix to
+    // acquire. Preserve its physically separated corner trajectory instead
+    // of requiring every future pose to stay entirely behind the peer.
+    // Explicit longitudinal/transition contracts still retain their rows.
+    const bool automatic_topology =
+      dynamic_request.longitudinal_topology ==
+      mpcc_rate_resolved_dynamic_obstacle::LongitudinalTopology::Automatic &&
+      !dynamic_request.forced_first_pass_side_stage.has_value() &&
+      !dynamic_request.forced_first_ahead_stage.has_value() &&
+      !dynamic_request.forced_diagonal_start_stage.has_value();
+    dynamic_request.witness_physical_separation =
+      witness_physical_separation_audit ||
+      (automatic_topology && snapshot.execution_prefix_steps == snapshot.request.horizon_steps &&
+      mpcc_rate_resolved_adapter::is_braking_feasibility_request(snapshot.request));
     dynamic_request.stages = snapshot.dynamic_obstacle_stages;
     dynamic_request.wall_only_problem = adapted->problem;
     dynamic_request.wall_only_primal = outcome.result->primal;

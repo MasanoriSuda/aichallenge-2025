@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected",
+  "baseline_commits": [
+    "041b0fa4"
+  ],
+  "evidence_type": "historical-registry-reconciliation",
+  "replay_ready": false,
+  "incomplete_reason": "Historical reference reconciled from existing evidence; not independently replay-validated in this slice.",
+  "local_payloads": [
+    {
+      "path": "aichallenge/mpcc_architecture_snapshots/000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "sha256": "5149990da064005e052b7268b387b3c0147eb2156641892fc743461933610473",
+      "size_bytes": 265766
+    },
+    {
+      "path": "mpcc_architecture_snapshots/000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "sha256": "7193bb3f9cd3d69f697a390e93b814917645f0b53f5e2b739068a82e76a40e92",
+      "size_bytes": 265786
+    },
+    {
+      "path": "output/20260831-072258/d1/mpcc_architecture_snapshots/000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "sha256": "7ff57ae3bd37a9979c42db3d46c3b8371a9f02f8e75e1b79d354e923c826d592",
+      "size_bytes": 265763
+    },
+    {
+      "path": "aichallenge/mpcc_architecture_snapshots/000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "size_bytes": 570009
+    },
+    {
+      "path": "mpcc_architecture_snapshots/000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "size_bytes": 570009
+    },
+    {
+      "path": "output/20260831-072258/d1/mpcc_architecture_snapshots/000000000942-c4f0cb78823e85e5-pass-side-negative-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "sha256": "f32d3bb9f6ac8aebc03689aa7d70e6779d13de8a4000251f2f5c34106576de98",
+      "size_bytes": 570009
+    }
+  ]
+}

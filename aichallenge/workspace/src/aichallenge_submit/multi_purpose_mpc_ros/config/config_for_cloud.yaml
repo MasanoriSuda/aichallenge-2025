@@ -186,11 +186,12 @@ stuck_recovery:
     # rejoin-timeout reassessment. Independent distance/time gates remain active.
     max_attempts: 3
   footprint:
-    # Pose-to-collider correspondence is still TBD; these are current vehicle-sheet estimates.
-    front_extent_m: 1.49
+    # Local AWSIM solid body in base_link, rounded outward to 1 mm (2026-09-08).
+    # See test/fixtures/awsim_body_projection.json; tracking reserve is separate.
+    front_extent_m: 1.615
     rear_extent_m: 0.51
-    left_extent_m: 0.725
-    right_extent_m: 0.725
+    left_extent_m: 0.768
+    right_extent_m: 0.768
     margin_m: 0.05
     sweep_interpolation_step_m: 0.05
   rear_safety:
@@ -359,9 +360,9 @@ mpc:
   # V2X-based rule gap planner. Keep disabled for baseline trajectory tracking.
   use_v2x_gap_planner: true
   # Forbidden lateral radius for ego center around a V2X vehicle.
-  # 1.45m = other vehicle half width 0.725m + ego half width 0.725m.
-  # Add a small buffer for low-speed side pass stability.
-  v2x_vehicle_radius: 1.45
+  # Measured local AWSIM nominal half widths: peer 0.768m + ego 0.768m.
+  # Uncertainty remains in v2x_prediction_margin, separate from body dimensions.
+  v2x_vehicle_radius: 1.536
   v2x_vehicle_length: 2.0
   v2x_prediction_margin: 0.05
   v2x_prediction_time: 1.0

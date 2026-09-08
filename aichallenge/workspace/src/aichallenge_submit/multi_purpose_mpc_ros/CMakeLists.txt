@@ -143,6 +143,7 @@ target_include_directories(${PROJECT_NAME}_mpcc_architecture_snapshot PUBLIC
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_architecture_snapshot
   ${PROJECT_NAME}_mpcc_rate_resolved_adapter
+  ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
   ${PROJECT_NAME}_mpcc_execution_contract
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_recovery_footprint
@@ -1150,6 +1151,9 @@ if(BUILD_TESTING)
   )
   ament_add_pytest_test(test_localization_scope
     test/test_localization_scope.py
+  )
+  ament_add_pytest_test(test_awsim_footprint_calibration
+    test/test_awsim_footprint_calibration.py
   )
   ament_add_pytest_test(test_single_authority_source_contract
     test/test_single_authority_source_contract.py

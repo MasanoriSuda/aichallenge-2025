@@ -16,7 +16,7 @@
 | クロスドメイン通信 | `domain_bridge` は廃止、`/v2x/vehicle_positions` のみ | 公式インターフェース側では `domain_bridge` 記載がある可能性 | 2026 評価環境で `domain_bridge` が必要か |
 | LiDAR topic | `/scan` | `/sensing/lidar/scan` の可能性 | 正式 topic 名と型 |
 | Camera topic | `/image_raw` | `/sensing/camera/image_raw` の可能性 | 正式 topic 名と型 |
-| V2X topic | `/v2x/vehicle_positions` | V2X 他車両位置情報 | 正式 topic 名、型、座標系、周期 |
+| V2X topic | `/v2x/vehicle_positions` | 2026-09-09に公式SIM仕様でtopic名と100〜200msの可変遅延を確認 | 型、座標系、周期、各車両stampの意味。姿勢の提供は未確認 |
 | Safety gates | `make gate1/2/3` | 障害物停止、NPC 追い越し、車線維持 | gate 対応関係と合否基準 |
 | Result schema | 現行 `result-summary.json` v2 / `dN-result-details.json` v3 | 2026 レース順位・ペナルティ対応 | schema 変更の有無 |
 | Submission | `submit/aichallenge_submit.tar.gz` | 公式プラットフォーム提出 | 提出先、回数制限、評価環境 |
@@ -37,6 +37,11 @@
 | 実車停止手順 | オペレータ停止、遠隔操作、緊急停止の公式手順。 |
 
 ## Resolved 2026 Interfaces
+
+### V2X部分確認（2026-09-09）
+
+topic名と伝送遅延は[公式シミュレーター仕様](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/specifications/simulator.html)で確認した。
+message型・座標系・姿勢観測などの未解決項目は残す。詳細は[V2X方針](v2x-multivehicle.md)。
 
 ### Gear（2026-07-12確認）
 

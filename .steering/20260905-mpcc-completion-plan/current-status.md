@@ -10,19 +10,25 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: compare rear-peer-aware stopping candidates on sealed D2
-world1629, with actual published1100and exact publication clock. Observation
-bundle repair passes25packages/60CTestgroups/2362records and native14/source104.
-The new dev2 diagnostic captures the exact source atomically and reproduces the
-first dynamic rejection without re-solving: track terminal clearance-0.006771m
-at1.555s against rear D1. Delay and continuation are clear; wall proof is not
-reached. Same-world four Stop methods solve but reject dynamic proof. Normal A
-rejects stage19linearization; B/C/D/G lack a front-target tube for this rear-only
-scene. Physical feasibility remains Unknown. Held-out future GNSS still overlaps
-complete Stop and includes later D1braking, so no predictor-only repair is proved.
-Each Domain reports1178cycles with0overruns (D1max16.038ms/D2max21.060ms);
-command receiptmax34.994841/40.645838ms,0gaps>50ms. D1one65ms source gap remains.
-No complete multi-car race. See [atomic observation results](../20260909-mpcc-failure-observation-bundle/results.md).
+Current next step: preserve and revalidate complete solved trajectories through rest.
+The tangent-domain repair passes19native tests,25packages and2364package records.
+Normal A now solves world1629, but its generated terminal maximum-braking path
+still rejects the rear peer.164lateral maximum-brake candidates and8rear-QP
+methods reject;3of4free-control through-rest methods certify offline. These are
+new physical feasibility witnesses, not publication authority. Retained proof
+currently regenerates maximum braking even for a through-rest artifact; exact
+publication/current-state and next-cycle proof must be established before promotion.
+
+Fresh single-r1finishes6laps253.328888s/penalty0, moving override0, callbackmax
+12.671ms and control receiptmax33.745289ms. Fresh dev2-r1rejects at D2decision968,
+speed1.762816m/s: terminal wall contact, dynamic clearance+0.725731m. Actual354
+is captured atomically. Fresh Stop435fails steering join; independent published
+Stop successor certifies but bundle439fails terminal reproof. This is a new
+sealed wall/reproof scene, not a recurrence attributed to the rear peer.
+Each Domain365reportedcycles/0overruns; control receiptmax37.057638/36.897898ms.
+Source clock/sensor pauses persist. See [tangent and candidate results](../20260909-mpcc-rear-peer-stop/results.md).
+Previous actual1100/world1629 remains reproducible without solving; no earlier
+failure or missing historical artifact is replaced. Complete MPCC acceptance remains open.
 
 The preceding paired longitudinal observer/clock commit6c4875ed passes one
 single six-lap trial253.768982s/penalty0, moving override0, callbackmax16.564ms,
@@ -136,8 +142,8 @@ is conditional: Emergency supersedes actual publication aroundcursor0.05s.
 
 ## Order to finish
 
-1. Complete the current rear-peer stopping feasibility audit with a sealed
-   candidate comparison, then repair only demonstrated producer limitations.
+1. Complete through-rest publication/revalidation from the sealed feasible
+   witnesses and new world968, then repair only demonstrated producer limitations.
    Observation bundle and longitudinal observer/clock slices are validated. Coordinate-consistent integration, semantic initial state,
    whole-body peer enclosure and Cartesian peer-plane repairs are implemented
    and committed. Do not repeat their completed native/build work without a

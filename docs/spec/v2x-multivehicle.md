@@ -2,13 +2,23 @@
 
 > Automotive AI Challenge 2026 の 3〜4 台同時走行と V2X 利用に関する現行方針。
 >
-> 確認日: 2026-07-01
+> 確認日: 2026-09-09（V2X提供情報・遅延と後方情報の用途を再確認）
 
 ## Source Of Truth
 
 公式ルールでは、走行は 3〜4 台同時のレース形式で、利用可能なセンサに V2X 情報（他車両の位置情報）が含まれる。
 
 公式ルール: <https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/competition/sw-class.html>
+
+2026-09-09確認: [公式シミュレーター仕様](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/specifications/simulator.html)は
+`/v2x/vehicle_positions`と、車両ごとに100〜200msで変動する伝送遅延を明記している。
+配列stampだけでの速度計算には注意が必要である。正確なmessage型・座標系・各車両stampの
+意味は引き続き確認対象。姿勢・操舵・公開計画の提供は確認できていない。
+
+[公式禁止事項](https://automotiveaichallenge.github.io/aichallenge-documentation-racingkart/competition/sw-class.html)は、
+後方V2Xを使う進路妨害や不要な減速を禁止し、安全確認のための参照は認めている。
+後方車の検査が失敗した事実だけで不要な減速を正当化せず、原因と安全上の必要性を記録する。
+相手のraw topicや未観測姿勢で形状を狭める設計にはしない。
 
 ## Current Local Contract
 
@@ -78,7 +88,7 @@ simulationかつ車両数1の場合だけ、各vehicle Domain内の
 以下は 2026 公式インターフェースとの整合確認が必要。
 
 - 公式評価環境で `domain_bridge` を使うかどうか。
-- V2X message の正確な型と topic 名。
-- 他車両位置情報の更新周期、遅延、座標系。
+- V2X message の正確な型（topic名は公式シミュレーター仕様で確認済み）。
+- 他車両位置情報の更新周期、座標系、各車両stampの意味と実環境での遅延特性。
 - 参加者が subscribe してよい V2X topic の範囲。
 - 他車両通信の盗み見・偽データ送信とみなされる境界。

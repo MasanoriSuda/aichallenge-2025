@@ -1,0 +1,1748 @@
+{
+  "baseline_commit": "4afa9948",
+  "scope": "tangent domain repair accepted locally; free-controls-through-rest witnesses offline only; integrated dev2 rejected",
+  "build_packages": 25,
+  "ctest_groups": 60,
+  "colcon_records": 2364,
+  "focused_native_cases": 19,
+  "errors": 0,
+  "failures": 0,
+  "skipped": 0,
+  "artifacts": [
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/compare_free_stop.cpp",
+      "bytes": 5266,
+      "sha256": "362a1b94305c764743c8aac53bc2f7d9224b97a14ec2ecf131b97b75b5179bd8"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/compare_free_stop.py",
+      "bytes": 1228,
+      "sha256": "f6a409ca8166d6d773159ce678a139a9a56384e19aff168533379da68437a6b8"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/compare_production.py",
+      "bytes": 1445,
+      "sha256": "84d1ea92889ed83ceae2542940aeb0eebecc2c6882fdcf2efce274133618d03e"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/compare_rear_constraint.cpp",
+      "bytes": 4299,
+      "sha256": "35cf79730d7336145a2905574832a42b72e8bee35d458b6b17b5bcb9f737f261"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/compare_rear_constraint.py",
+      "bytes": 1235,
+      "sha256": "97a0f6270edb5a44c294777b4913477ef645fda25cbf91a13f8c46f0d6727e69"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/probe_domain_comparison.cpp",
+      "bytes": 1272,
+      "sha256": "77ae362c0f1ad3876f1117e0e5a1c9df7f7ca032e5af8943d6a991c9c707de1f"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/probe_domain_comparison.py",
+      "bytes": 1372,
+      "sha256": "034c1fdcaac97db06fd05bd8f7ba68ba68799d8b8b7a6c58ce8c103175c36805"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/probe_linearization.cpp",
+      "bytes": 1682,
+      "sha256": "058e9bc87807ee86ecb56c7ae366b7d54e6d95999c284a5bbb60ae1890cd9808"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/probe_linearization.py",
+      "bytes": 3742,
+      "sha256": "57c9407a4b72517f0b1e8618aa8a4931b599090dac71eda2fc0171af7274fc16"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/register_results.py",
+      "bytes": 3402,
+      "sha256": "c751219bcac8df0986ee099483e9ae050dda4b18faec912cddfaa7e177dccff6"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/run_campaign.py",
+      "bytes": 11194,
+      "sha256": "4f9a9d111522671c9a9da49c356653b356c454f308a7efa95af63f3de62c50e6"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/scan_execution.cpp",
+      "bytes": 17937,
+      "sha256": "7124fc71850a00d0fa5d6ed5ebb2419128e4711f1093d0974281a0eda69df9f4"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/scan_execution.py",
+      "bytes": 5429,
+      "sha256": "e599a05aa7d55784cd69eb0016f9a572932caa37debd37ed7a54f48668f8032b"
+    },
+    {
+      "path": ".steering/20260909-mpcc-rear-peer-stop/seal_evidence.py",
+      "bytes": 1734,
+      "sha256": "4eff8d6cc27c7a702875a5fb885b1a41e81e84866de7bb21bfd7314db8b0d3a3"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/compare",
+      "bytes": 1440328,
+      "sha256": "f59d3a1ad1b2b4b558ed2dbf76aeaaa3e371b3243041adf612470c4d05a39025"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/manifest.json",
+      "bytes": 16511,
+      "sha256": "7b08a8d9b590eab36177e645394e5e8c3eca3c0599f0ba3146220c1c6f9901be"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/mpcc_architecture_snapshots/000000001629-bae4c2151e7fb272-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 284839,
+      "sha256": "667a04392b796280d05b8c8217b43bb98e9e9441db8a29e55e9f6a925fb64386"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/mpcc_architecture_snapshots/000000001629-bae4c2151e7fb272-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/mpcc_architecture_snapshots/000000001629-cba4e05aa8d66002-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 243910,
+      "sha256": "a90d46185d7ac5bcf67a5b2353e7361943085382b1873b87109675705572dc55"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/mpcc_architecture_snapshots/000000001629-cba4e05aa8d66002-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/native.log",
+      "bytes": 3607,
+      "sha256": "18f5502feaa3f4058f3b631a06f015c1c7d6bf2692513c5eaa5329d076b5552c"
+    },
+    {
+      "path": "output/20260909-rear-peer-constraint-comparison/report.yaml",
+      "bytes": 3941,
+      "sha256": "fb740e12ebf8bd4944bce7001fc60bb54e0e09c7d60e624c522b1b5328ddf343"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "b95667c1513e558206fdc09b23866898f564f2d7473568d53131dafaa56392bb"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/authority-timing-summary.json",
+      "bytes": 12361,
+      "sha256": "a9055c6a83e846cfe0202d2ec5c150b6aa0c1343e708a377b9821b8f96980bc1"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/awsim.log",
+      "bytes": 1773,
+      "sha256": "b1f92de8740aa9e35705833c3528bec4503886f283e386d94f81ac97426d559b"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/binaries/mpc_controller_cpp",
+      "bytes": 8590792,
+      "sha256": "47c298b1fd85fc6380df392c4a7c35bd2c3857c93accdc20480b043af9ced005"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1436648,
+      "sha256": "25d96b872d2fe9d7e8b372fa4b904a84797960280558f65ec438b54bace9fc8e"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/build.log",
+      "bytes": 4283,
+      "sha256": "39b75aa7bfbb66f78280a157b5df80219694e46b8629823b5da2d247e198dd87"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/compose-six-lap.yml",
+      "bytes": 202,
+      "sha256": "3d3ebc284c0b6eb376b3a4841b99be850f117c5d8cf7a3ab1d1659b23fdc23a1"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/autoware.log",
+      "bytes": 261707,
+      "sha256": "656c488f3b2b0224933a8f91e452dcf7313b0a0354617deac4a4cb785e004e50"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/motion_analytics-26-09-09-07-34-04.html",
+      "bytes": 4851203,
+      "sha256": "6994c0a80bfffc4ae27952b90491e8d139990de2917c58c39d1c0afc593f6f38"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000215-04efb87f3529d133-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 250893,
+      "sha256": "0f8889bf6f5a57a36ceabd50526cd8403f5c14cd0b1008868d8cb15a730cb2eb"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000215-04efb87f3529d133-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000244-b77147bc895a4db4-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 251176,
+      "sha256": "0c1150dfc34e13fe16331f2353317aacb31dd21120965746c5ad068c5d212b1f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000244-b77147bc895a4db4-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000299-373261d5942d5883-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271672,
+      "sha256": "5b07dd930afd79d6f55d88545109946363939624da3df79f36e6d5c10cf5cc72"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000299-373261d5942d5883-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000363-8dae0bd59793bb9c-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 263608,
+      "sha256": "6d155620f71a2dc592fc49fbfe0a9f372153cb399ed97c8cbb6ab863ad2c95c8"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000363-8dae0bd59793bb9c-cruise-side-negative-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000390-2bd471ab5e01dbd6-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 261208,
+      "sha256": "753ad570dae8d9329cadc5758dae735470684bfd8cb671a730494953ddbd70e3"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000390-2bd471ab5e01dbd6-cruise-side-negative-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000390-5b6ba57df67b7a29-cruise-side-positive-initial-solve-rejected/snapshot.yaml",
+      "bytes": 261227,
+      "sha256": "5029f552350b80f41afa7403c3c07c3f1cccca9a2cc010b6055674b3c20bbff4"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000390-5b6ba57df67b7a29-cruise-side-positive-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000390-b2d23a495839d33e-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271958,
+      "sha256": "6cd41a0c09a78fa7ea6059f465164db5741eec71d22301adf3cc20f58964c330"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000390-b2d23a495839d33e-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000442-1debc959ae9a450b-cruise-side-positive-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 286717,
+      "sha256": "797a1aee6368cdec139d8a41a8974ddeb4a69e3ce92917cc966ea75d62f9d0e4"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000442-1debc959ae9a450b-cruise-side-positive-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000550-9038fe2d0b3a27f3-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35870,
+      "sha256": "f2de2fb655c82a129e1722ac34d10a6ee2f24dd892fc7046edcb24a2dad86d4e"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000550-9038fe2d0b3a27f3-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000647-4b68ed4524590333-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 245575,
+      "sha256": "570ad09ed22ed6f31f25192d2a717b7ae9804302c71eac1f879acdd67b3aaa84"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000647-4b68ed4524590333-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000848-431294a1fe2d2bb7-cruise-side-neutral-physical-proof-normal-authority-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000848-431294a1fe2d2bb7-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 101045,
+      "sha256": "a16b1288eae53048c81c5bec427e56da991b77cd3ad9bfc23aa2d708b56f537f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/mpcc_architecture_snapshots/000000000848-431294a1fe2d2bb7-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/2026-09-09-07-33-30-177434-msuda-System-Product-Name-69/launch.log",
+      "bytes": 18595,
+      "sha256": "96e5e211f98cb4d78f3a2bf13fc7fabc20acd4448b9b43ad3d1e428dcf63b940"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/component_container_102_1788906811415.log",
+      "bytes": 1488,
+      "sha256": "e150b9f2b15920af32da5b911538be81f591ab29b7908ebff70c246814d731b1"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/ekf_localizer_94_1788906811414.log",
+      "bytes": 65,
+      "sha256": "a049568ce3c142275674260e46c3933b59b0d683445cc2686df69be409986c38"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/gnss_poser_88_1788906811404.log",
+      "bytes": 205,
+      "sha256": "27417df6c12d87aad67087d8b688a2a7f1f9682dda7a7126519112fb1399755b"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/gyro_odometer_90_1788906811410.log",
+      "bytes": 65,
+      "sha256": "91f7675b12d5542499838cabcfe6b88906718ca54490fb30671ac49b96d36f12"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/imu_corrector_86_1788906811432.log",
+      "bytes": 65,
+      "sha256": "522e63787992b7373734ef5b154e3068e77c161f81affa07216b257ee4135758"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/imu_gnss_poser_node_92_1788906811406.log",
+      "bytes": 977,
+      "sha256": "394e263646e092a65cf51a050949b41f6a7dc77ac46741123b0490f69d57ca3b"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/mpc_controller_cpp_100_1788906811604.log",
+      "bytes": 229068,
+      "sha256": "c62eb4c3fc3be1a07c63692bae9169e744d1426fc9e335d0b155cbbe9837e8a1"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/python3_108_1788906811644.log",
+      "bytes": 4123,
+      "sha256": "c28d39ac62f819fc482f50f8972d614c0035c07dd18ef9c5ca93137179357d53"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/python3_110_1788906811674.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/python3_338_1788906828192.log",
+      "bytes": 2711,
+      "sha256": "cbfdb92348490ebcdb8e4f4c0ea421bc666e41f2066edef71adda866e19aa366"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/python3_69_1788906811288.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/relay_106_1788906811453.log",
+      "bytes": 65,
+      "sha256": "62f2626d1b2cfb14ce2d11b7eb5ab09291e16b89f6cc94b7df5bd703ade04835"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/robot_state_publisher_82_1788906811438.log",
+      "bytes": 705,
+      "sha256": "500a7c2f5e7668dbff8a558337a38c1e711bf47aa922612276c8ade3bc2f4cfe"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/rviz2_104_1788906811534.log",
+      "bytes": 744,
+      "sha256": "f4a3d41288eefbca8919ffd1c347df096be0cf5ddf2d7699fe8f0b9ba02e2e3b"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/simple_trajectory_generator_node_98_1788906811440.log",
+      "bytes": 1415,
+      "sha256": "dcf026a5892527a922ac21dc91a4f6affff422cc62c7851248a061af82c2019f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/twist2accel_96_1788906811409.log",
+      "bytes": 65,
+      "sha256": "a7a23ffba9adb16241bf46a68ef94078b6bceb1ae3694d02f8c30ff6fbb356d4"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/ros/log/vehicle_velocity_converter_84_1788906811404.log",
+      "bytes": 65,
+      "sha256": "3776301e0b2385411331aea312e24341f1320c6d5914598a439c4bf45805cb00"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "64cd94f1af5beb853213692a8e25c40ef97997dbc96349186a03e4683b3cc766"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2144084,
+      "sha256": "b9f2f4c81f82c4e669290229ea1da72917f026f6c2c10ce5378f15a0ba31bf94"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "b46b37ec02e4da23b8d170d9f89f6dda02c386207e67a94cd38008b33a02b118"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d1-topic-timing.json",
+      "bytes": 2363,
+      "sha256": "40eda542979cb963e56e0f0b6ca53d499fb4a56bc7d62738f94d6fbccf6fbdf5"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/autoware.log",
+      "bytes": 292231,
+      "sha256": "3557727173686585efd5649cd9f4e711cd477bfadfea3d72d82dda733de1678b"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/motion_analytics-26-09-09-07-34-04.html",
+      "bytes": 4851255,
+      "sha256": "82aeb05512d134d7234dbb315ff8c17730e5687190973aa53f0ac77ae3918497"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000185-9c3298cf65f9a24f-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 249878,
+      "sha256": "0af4ce641b5de024a4d7bda601e63caa8a52fe7aee7f32859cbbae13e80af3d0"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000185-9c3298cf65f9a24f-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000235-abdda658eefaaf2c-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 251934,
+      "sha256": "9d419bd2b30c749620bac26b36c69967ffed5000c3c8025ba56f1176b35ce3dd"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000235-abdda658eefaaf2c-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-7abfd37b28a9915a-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273069,
+      "sha256": "1863ad8a595d6d0cf2e5905dd3ccf5feb5bc2b4cc6afdb1e0be1b8a20f65907d"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-7abfd37b28a9915a-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-87e8f734163dccc1-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 272875,
+      "sha256": "a8a525a8a92cfcddf8089b524fcf1fd87831ce484331d9ff4f087269152f0714"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-87e8f734163dccc1-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000401-b718835abd701990-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 250611,
+      "sha256": "8b42281a1af4a532b1a2d8af6387ddd3fad112923caf15658de391bf75bf0be9"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000401-b718835abd701990-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000443-d6dea58c754ec19b-cruise-side-negative-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 40225,
+      "sha256": "e9101b568c7000ee830ba93fe2371539f994af2431400381caed3900e9df4cf9"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000443-d6dea58c754ec19b-cruise-side-negative-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000507-93a5a774dde02071-cruise-side-negative-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 275553,
+      "sha256": "22c5dee5b10e49c8b77336ff25d5b8170796eae370840be53c5670d5cc032299"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000507-93a5a774dde02071-cruise-side-negative-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000531-b74514406705271b-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35889,
+      "sha256": "9126c05eadd938e83e5d113834f3a25f4b1e4a16a43e1e7c8a8913503ddc8a88"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000531-b74514406705271b-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000541-b497e85516e6e3de-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 259278,
+      "sha256": "263649662daf9a7d0b392a62a3fd39271c5eef564b81a7d559e791549b397189"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000541-b497e85516e6e3de-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000667-eb1f0a07f59c38ab-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 269811,
+      "sha256": "c7e0d5d78b0a6af3814400f71b69a520ece83e06de95df232001379350be7c4d"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000667-eb1f0a07f59c38ab-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000968-3e39742a143103a1-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000968-3e39742a143103a1-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 102082,
+      "sha256": "c65b04f03696a70230641527f6e3e249fae86cbdfb5413ce50bae62f5a9d718d"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000968-3e39742a143103a1-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000970-f5a5d728206169d7-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 40127,
+      "sha256": "8deedf7a9706c2a8f61f78ee452e8aa9217bddcf4fbc8f3db11e61f5f4d01ecc"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/mpcc_architecture_snapshots/000000000970-f5a5d728206169d7-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/2026-09-09-07-33-30-498035-msuda-System-Product-Name-69/launch.log",
+      "bytes": 18595,
+      "sha256": "a889851818bf8f4e2d81acc75c1d421cbb56cf8036ebc59e30a6d22bec8d1694"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/component_container_102_1788906811917.log",
+      "bytes": 1488,
+      "sha256": "7079c0d30821a28629bbb1f25e4f5c2f98142cdd3f729e1d616bcbc41213e30c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/ekf_localizer_94_1788906811869.log",
+      "bytes": 65,
+      "sha256": "17f8da95b09f3b80606c85728e6665e4b5be2bfa7cad009091607b33fa05e286"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/gnss_poser_88_1788906811889.log",
+      "bytes": 205,
+      "sha256": "486a19babc9f76e5d65cdc6402a7fa6360f67ac9744893ccff5e2f4fc802534e"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/gyro_odometer_90_1788906811868.log",
+      "bytes": 65,
+      "sha256": "bfac1e4af717c117a345cbcee01e24dbf5f56c302ab46ca406f67fa0c958409c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/imu_corrector_86_1788906811885.log",
+      "bytes": 65,
+      "sha256": "2f066d56ccfa3e67a52ca0c509bce213a01313e1f08226e6554677e0653daa1f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/imu_gnss_poser_node_92_1788906811874.log",
+      "bytes": 977,
+      "sha256": "29c9d1e3564fca485c56f4468faa3798e1b5458652ac2b0a132c25a00cef0ac0"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/mpc_controller_cpp_100_1788906812094.log",
+      "bytes": 257710,
+      "sha256": "1f6eb644fc2732c575566ee55a545371e89b911a88d62d1fe4dd603bba91066c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/python3_108_1788906812129.log",
+      "bytes": 4123,
+      "sha256": "fdb10ef594026fe71ed84968bb7d11057eff39aee77f8bf516ca961f7e2ed9e6"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/python3_110_1788906812139.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/python3_338_1788906827821.log",
+      "bytes": 2711,
+      "sha256": "a4c3986ed9168c4097b60a37d835189a1066717b90d2237d4561ac955224c479"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/python3_69_1788906811711.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/relay_106_1788906811952.log",
+      "bytes": 65,
+      "sha256": "221ed06fdc834d3c50f5af5cfef0ca913b5b54ab9978e27f9765acc4a2a3b441"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/robot_state_publisher_82_1788906811887.log",
+      "bytes": 705,
+      "sha256": "d1cd2f43559efaead68d118c06369d9aa1040d194281bbbc79be1157f0c9dd97"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/rviz2_104_1788906812094.log",
+      "bytes": 744,
+      "sha256": "5deb25bd138d1575602d28567c916cbfc3c8bd3114e9d5953bcbaa122795713c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/simple_trajectory_generator_node_98_1788906811872.log",
+      "bytes": 1415,
+      "sha256": "23cc69672094421b8ea60a3012dfe8e93c83df015a19e75b988cf238f9235171"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/twist2accel_96_1788906811865.log",
+      "bytes": 65,
+      "sha256": "f5fc1a9203d54e72e0d8897228614daa56adf1dd2bd85f15b4079b68265f6b93"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/ros/log/vehicle_velocity_converter_84_1788906811939.log",
+      "bytes": 65,
+      "sha256": "524b5e6ba399b3c29241c26fd28ba7824dba8bcde83c33641a5ccff0c885aa83"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "25dd616c0534ef40cc1fb69d37d330da4d8fd0bc204b3b3d2363d1d8bb5f9e1f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2101006,
+      "sha256": "47039fbfcf32be6415e47d150fab65f42f8288ec204926f6197333e8c154d0fc"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "bed76cf38e238739bc7e9f4b1b22fe64d97e6def172e93d52b86ae786d32e970"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/d2-topic-timing.json",
+      "bytes": 2367,
+      "sha256": "c079b1fd7bdd3cf33f1fb85671df38dc7b64b423ab885a660c3dc6d34d4bb673"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/down.log",
+      "bytes": 466,
+      "sha256": "35e5c6b4c1e49e171ec645d7071b8f18f6745f257a41d01612d3e7ed4ec6e355"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/generated-user-path-results/result-summary.json",
+      "bytes": 928,
+      "sha256": "57596bb6dab1e0eb18a63bffbd4663622df82f1ef6542281fa154082bb9db03e"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2222776,
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12951,
+      "sha256": "23c509c645b8ff3c61652c10477cf8e0a8b94697ec0ef150e468a84f21693112"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39429,
+      "sha256": "2601fdc9552112addbca7368618bcecdf8906c21b82e680584c82aa4f482433f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 7768,
+      "sha256": "b26181ca1fb1d81e4ba78b8883ca42eae3e168a4ec1d5c87a11e04f783352d9d"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2940833,
+      "sha256": "77d91648b46d5a685abb0a4c61f5d6ba00d7d9c96c627c0af49e106477a37e2a"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 108147,
+      "sha256": "9ac43b304518130a6516d25c9dd29b3ef46fa9b31ed1e7871bdc629c312b514f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 30680,
+      "sha256": "984530a3c48f9978e7b9b41e6beced4c0cffa053ddaf44d74a6bd2567a979077"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 48543,
+      "sha256": "e2b22307544f3b037b01537146cad494efcfcb6a30a22ea764f7e50777a2dc61"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 212577,
+      "sha256": "1b8777c87930ac88f1e5abbb14c97a589965528a991f3a5950790137f3e790fa"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 26204,
+      "sha256": "c8ac7a2ad63f8cf3f32c7bc30c3e6a5ac88b9aa2f9a923be7aed01ada2a91bf6"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16757,
+      "sha256": "c99a0d9e81b8a706b5fbed0ebefae0bdd5091ecc60af662d8fc21f44e17a7177"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 69384,
+      "sha256": "95b6d26a280217725c0926921052418166c1d2064a3fe13b42f6febe43384f95"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 39448,
+      "sha256": "fceaf14b1565a281c1ba9eb79ba67f2a31fe142d90eebf1b1bb641524062eb39"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_adapter.cpp",
+      "bytes": 29652,
+      "sha256": "fb3c59a465454f6fe8722e16a745f156e2db77034e56ff2142dd75fba4ae08c9"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 36145,
+      "sha256": "3613dced6d83d36f1fc19d5b4b166d13fe62b2fa292672073ede9d9c05941117"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 67403,
+      "sha256": "390c1e51d0ba2b3b5f040ea818fc0dda0c4d5edb8fce011277aaf87da564ed86"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 180382,
+      "sha256": "5a66550276030073717898dcde13b163670d2dd6337ef0c9190e6e9f61e827d5"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17288,
+      "sha256": "09ea17484854ac8b323cb606ffe4871f0f5308b1f46e959e0a2fcef2ef79e1da"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/launch.log",
+      "bytes": 694,
+      "sha256": "2c89b887fa5608ae153371258c7cfce5780afa9ec7033c06c420278853f12907"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/manifest.json",
+      "bytes": 23626,
+      "sha256": "7513ada0b0693b9585dc9e366779db87942f1ca39ad2816c6eac8af8efb9d803"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/monitor-summary.json",
+      "bytes": 1868,
+      "sha256": "404cb50edc9c52a178360cb9f214152d258fad4802be4916d773e1ccb3d2c545"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/mpcc-source.patch",
+      "bytes": 7760,
+      "sha256": "ad53dd35b155f2cdd1cc0c225e7e02e24c382329eaa1ab57f376f6b341cebfa6"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/package.log",
+      "bytes": 491198,
+      "sha256": "cdf541a447f9f91d13757fb1d43abb9b2387a4c73882732690fe6f3953114663"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/run_campaign.py",
+      "bytes": 11194,
+      "sha256": "4f9a9d111522671c9a9da49c356653b356c454f308a7efa95af63f3de62c50e6"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-rear-peer-dev2-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-rear-peer-domain-comparison/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-domain-comparison/compare",
+      "bytes": 1496920,
+      "sha256": "ad403650545bf64ccbc39c311363756de74c488f2722c73039f6da66e80160b1"
+    },
+    {
+      "path": "output/20260909-rear-peer-domain-comparison/manifest.json",
+      "bytes": 16587,
+      "sha256": "3c53a06f6915737be52c8f8ee604b04100076360bf40cd0cf51c3c1e258ead78"
+    },
+    {
+      "path": "output/20260909-rear-peer-domain-comparison/native.log",
+      "bytes": 2531,
+      "sha256": "45ab23e7399d759a10fc58cd8f3266e44a1b69f87535756939e947492f18bb34"
+    },
+    {
+      "path": "output/20260909-rear-peer-domain-comparison/report.yaml",
+      "bytes": 2829,
+      "sha256": "7696676d6442d6fef2a364acf36afa4bce86240a8339407d40cdca62828c3a92"
+    },
+    {
+      "path": "output/20260909-rear-peer-free-stop-comparison/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-free-stop-comparison/compare",
+      "bytes": 1436520,
+      "sha256": "6a4c98eabbc6b51c5159d3400431a30e299462e13957bf2d8639e1e3d7fee391"
+    },
+    {
+      "path": "output/20260909-rear-peer-free-stop-comparison/manifest.json",
+      "bytes": 16504,
+      "sha256": "88af48f052b49932ce8c62870f2ec9d63248b743c6235ca032942f67d3ad7ae0"
+    },
+    {
+      "path": "output/20260909-rear-peer-free-stop-comparison/native.log",
+      "bytes": 6726,
+      "sha256": "51fbc9011226e55e8287e3c180d7b7d700674c3500dd4ff00abaefbb52ab44ae"
+    },
+    {
+      "path": "output/20260909-rear-peer-free-stop-comparison/report.yaml",
+      "bytes": 7728,
+      "sha256": "8747b9ae10ee934cbf58f7cf5ab92fa13d27ae8bd9ccc5373d20a9350f265228"
+    },
+    {
+      "path": "output/20260909-rear-peer-linearization-domain/adapter_probe.cpp",
+      "bytes": 30776,
+      "sha256": "3a147d6119a303dbd4f48f80ff938dab6f2fe0cd40288589352592ac4931d5b0"
+    },
+    {
+      "path": "output/20260909-rear-peer-linearization-domain/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-linearization-domain/manifest.json",
+      "bytes": 16668,
+      "sha256": "d813ec06c835d58f21d5a2ab7f465656c1c3ed86195afb05ef107d438c690549"
+    },
+    {
+      "path": "output/20260909-rear-peer-linearization-domain/native.log",
+      "bytes": 526,
+      "sha256": "e08daa0d48847bec65563988ca26c34a2c7da8eb616ca8fee2a5f3baf3b52ef7"
+    },
+    {
+      "path": "output/20260909-rear-peer-linearization-domain/probe",
+      "bytes": 1139432,
+      "sha256": "ceb8dccffdaa2bf1054e7845af42326a23c12c2634a7a9254ec23618a8979137"
+    },
+    {
+      "path": "output/20260909-rear-peer-linearization-domain/report.yaml",
+      "bytes": 15053,
+      "sha256": "057c44508e62928c15d7e9a4cc21cc5de3b7f54a0648d51bc75af71bf348187d"
+    },
+    {
+      "path": "output/20260909-rear-peer-production-architectures/manifest.json",
+      "bytes": 745,
+      "sha256": "b0f4555e16b42e98ff2dafbc53cf74028e9ca0031070ab01875409bbcf3f704a"
+    },
+    {
+      "path": "output/20260909-rear-peer-production-architectures/normal/comparison.log",
+      "bytes": 5509,
+      "sha256": "df48e5153cc0bdad2bb27471204fab4fc852580af17f5ae27eaa5fc42803708c"
+    },
+    {
+      "path": "output/20260909-rear-peer-production-architectures/stop/comparison.log",
+      "bytes": 4200,
+      "sha256": "996c727c6719960c0b2e580679db0d364ee56bdc530caa5c59eb27f225dee808"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "60c9b3d5cef69cbfcf146f5fef6f3943a1e08d699cdb8554085137b81da76468"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/authority-timing-summary.json",
+      "bytes": 49834,
+      "sha256": "56c19491d89163d2bc0b5fca67c4753998fb733554df59c0f3286fb7e7482740"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/awsim.log",
+      "bytes": 1772,
+      "sha256": "cd3cb4e7930170b932419c7d1804f47ef183b22f81ab7b8c2cf72f8690a9fe9f"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/binaries/mpc_controller_cpp",
+      "bytes": 8590792,
+      "sha256": "47c298b1fd85fc6380df392c4a7c35bd2c3857c93accdc20480b043af9ced005"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1436648,
+      "sha256": "25d96b872d2fe9d7e8b372fa4b904a84797960280558f65ec438b54bace9fc8e"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/build.log",
+      "bytes": 4283,
+      "sha256": "39b75aa7bfbb66f78280a157b5df80219694e46b8629823b5da2d247e198dd87"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/compose-six-lap.yml",
+      "bytes": 204,
+      "sha256": "1d6ac60fc74cbff4fbf74cdc5920e0f6e71b24179c52cceb0cdbda1b6a56ae17"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/autoware.log",
+      "bytes": 2785693,
+      "sha256": "e50ee5c50b0a03452901ccd6552d5ba29733176f1dec3398a6c3320e2d66558e"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/motion_analytics-26-09-09-07-29-58.html",
+      "bytes": 4920329,
+      "sha256": "e52ef8a9597781f1b0b51226ab742a85470e7ff71c64d2e0b69a09583a19c197"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000194-4768e0c061b77fec-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 250773,
+      "sha256": "7e235ddfcb3ca28a7aa302a2cce4f1f07d593d0d47a6ad5e94baa990a9626f29"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000194-4768e0c061b77fec-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000307-55e57e9f84b33f37-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 255976,
+      "sha256": "ded93918e533d703e5f4d905e5e4b03c3349f6c2bbd969eedc99978c940feb62"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000307-55e57e9f84b33f37-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000385-68b8ef7e3cd45a82-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 256478,
+      "sha256": "e2b145ae023c2b2c7070a46daedb692036628065452df22ff708319252095231"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000385-68b8ef7e3cd45a82-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000459-12c04086f903ee2f-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 271322,
+      "sha256": "766c9edbadb9779ec2e4d07e883268bf206daf33b4b68dabd87fc199d0c50459"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000459-12c04086f903ee2f-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000534-5a2efd194bcc1d84-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35495,
+      "sha256": "afbc98586e8a9342aa8a0e56a3fa1661e52427fc830b0e2f68905fb77caaff96"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000534-5a2efd194bcc1d84-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000836-5fb7e713e615efbe-cruise-side-neutral-physical-proof-normal-authority-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000836-5fb7e713e615efbe-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 91770,
+      "sha256": "8d0ce858811916711da5e59218cc7e0a8795480b1d840080e809632fb5c29ced"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/mpcc_architecture_snapshots/000000000836-5fb7e713e615efbe-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/2026-09-09-07-24-57-972810-msuda-System-Product-Name-69/launch.log",
+      "bytes": 16835,
+      "sha256": "26c2660d21941d64fe4b72aedffaeeba4d44db4f9dc86bc5b94786694d6433c4"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/component_container_102_1788906299181.log",
+      "bytes": 1488,
+      "sha256": "5c3b25de19fc0d66c701f05803245d3b8bd98992b59c8fd3e1a03d211864ebb4"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/ekf_localizer_94_1788906299197.log",
+      "bytes": 65,
+      "sha256": "e2e79a6bb31a8a84b0a48f4559a08c3b8c8aa7d4551f7e9cf0b9df73c6368521"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/gnss_poser_88_1788906299172.log",
+      "bytes": 205,
+      "sha256": "92218ddf30bc3e4a413ec36872dd2dd7be235f7d32b3e0542c18e9f682ef09fb"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/gyro_odometer_90_1788906299186.log",
+      "bytes": 65,
+      "sha256": "5f8b71bab823809b7c1f2644fbdb8dfdd30cf291e52057f29bec6469edc5526b"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/imu_corrector_86_1788906299173.log",
+      "bytes": 65,
+      "sha256": "d20521d0ca60e6b4511cf9b10ead7ebfcf4f6eba64101d178df8e47468cf1007"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/imu_gnss_poser_node_92_1788906299176.log",
+      "bytes": 977,
+      "sha256": "9ef584cd3a059348630676ef55c4135e59bdd8f77ef85ec19ea32a9118f3f767"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/mpc_controller_cpp_100_1788906299366.log",
+      "bytes": 2657612,
+      "sha256": "b589578fc11e68306b29fc7cbc5df90a1ba3c8d4f43fa0cc7605f3fc0bdb3f3a"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/python3_108_1788906299415.log",
+      "bytes": 4026,
+      "sha256": "a2eef0911be6ff79f4f399d46ab5f7e4b86c765e4ba47aa45f269aaf198b1620"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/python3_110_1788906299460.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/python3_112_1788906299370.log",
+      "bytes": 143,
+      "sha256": "8b37576c3362e734272546fbab9360e64145ec54a39af5c0a768c79c75b6b806"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/python3_360_1788906315474.log",
+      "bytes": 2711,
+      "sha256": "9402d518b6b807db71a3a851aefa50a41a547f6571a25fd138e6d821365701ef"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/python3_69_1788906299057.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/relay_106_1788906299225.log",
+      "bytes": 65,
+      "sha256": "561afd4518aa708536475c08f66a218f1242be20c1e42de6458bab0cd5a4389c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/robot_state_publisher_82_1788906299182.log",
+      "bytes": 705,
+      "sha256": "cdd0f70664bb085da0cc8c0a28a412bd62b8e3d3da45149e2c23585313791e62"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/rviz2_104_1788906299324.log",
+      "bytes": 744,
+      "sha256": "1b44b606953b2d959491bb63ce970e053661de56644e72f3fbf657df62399f31"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/simple_trajectory_generator_node_98_1788906299196.log",
+      "bytes": 1915,
+      "sha256": "13a55bf8f1077de49e8d64f82fa1e25df40f38e9a379efa45c034ebe77a0edb3"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/twist2accel_96_1788906299183.log",
+      "bytes": 65,
+      "sha256": "e3aa5ef0a6871c623fdf46b6402a9d54b774de6809f9e250076b3b54475b55da"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/ros/log/vehicle_velocity_converter_84_1788906299172.log",
+      "bytes": 65,
+      "sha256": "52ae4c2f643594ccbca7751d4f71f5c6f0231a466156bb70950535db5068305d"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8525,
+      "sha256": "39152aac0d253072cf591b508bb9807ccbfdc41499436b87c11ab4f543b24744"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 37973300,
+      "sha256": "147a3f8adf962674e3abb2b835b2c8299afdb68cdf1d3d5a72e0c9a11ac60348"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "93e397fee2a441d85d433099d6defb16e905f3a5a082d66f7bc6eab881fcca1d"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/d1-topic-timing.json",
+      "bytes": 2381,
+      "sha256": "b5cbf19bc09f5fd434de50673e976bbf9746606593f832c83bf50830e62abdda"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/down.log",
+      "bytes": 501,
+      "sha256": "383e693fdd37bcd48d3e70f8ce90fab9f1518cfc786843b437f281ed9f7d5de0"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/finish-results/d1-result-details.json",
+      "bytes": 863,
+      "sha256": "cc7fe3dd52d9dcce1856161c74fa8d0fa5d8017674379c192450e093aeba1a7f"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/generated-user-path-results/result-summary.json",
+      "bytes": 1067,
+      "sha256": "9de8ebebd87fe4a5e995413484d4f153f1d6f198becdb97a30a1a822857c719d"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2222776,
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12951,
+      "sha256": "23c509c645b8ff3c61652c10477cf8e0a8b94697ec0ef150e468a84f21693112"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39429,
+      "sha256": "2601fdc9552112addbca7368618bcecdf8906c21b82e680584c82aa4f482433f"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 7768,
+      "sha256": "b26181ca1fb1d81e4ba78b8883ca42eae3e168a4ec1d5c87a11e04f783352d9d"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2940833,
+      "sha256": "77d91648b46d5a685abb0a4c61f5d6ba00d7d9c96c627c0af49e106477a37e2a"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 108147,
+      "sha256": "9ac43b304518130a6516d25c9dd29b3ef46fa9b31ed1e7871bdc629c312b514f"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 30680,
+      "sha256": "984530a3c48f9978e7b9b41e6beced4c0cffa053ddaf44d74a6bd2567a979077"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 48543,
+      "sha256": "e2b22307544f3b037b01537146cad494efcfcb6a30a22ea764f7e50777a2dc61"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 212577,
+      "sha256": "1b8777c87930ac88f1e5abbb14c97a589965528a991f3a5950790137f3e790fa"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 26204,
+      "sha256": "c8ac7a2ad63f8cf3f32c7bc30c3e6a5ac88b9aa2f9a923be7aed01ada2a91bf6"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16757,
+      "sha256": "c99a0d9e81b8a706b5fbed0ebefae0bdd5091ecc60af662d8fc21f44e17a7177"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 69384,
+      "sha256": "95b6d26a280217725c0926921052418166c1d2064a3fe13b42f6febe43384f95"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 39448,
+      "sha256": "fceaf14b1565a281c1ba9eb79ba67f2a31fe142d90eebf1b1bb641524062eb39"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_adapter.cpp",
+      "bytes": 29652,
+      "sha256": "fb3c59a465454f6fe8722e16a745f156e2db77034e56ff2142dd75fba4ae08c9"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 36145,
+      "sha256": "3613dced6d83d36f1fc19d5b4b166d13fe62b2fa292672073ede9d9c05941117"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 67403,
+      "sha256": "390c1e51d0ba2b3b5f040ea818fc0dda0c4d5edb8fce011277aaf87da564ed86"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 180382,
+      "sha256": "5a66550276030073717898dcde13b163670d2dd6337ef0c9190e6e9f61e827d5"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17288,
+      "sha256": "09ea17484854ac8b323cb606ffe4871f0f5308b1f46e959e0a2fcef2ef79e1da"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/launch.log",
+      "bytes": 760,
+      "sha256": "2167e737e83d2bc1afb940a79a5978fb5ea25a6b7e956f4e400fc37d341e1950"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/manifest.json",
+      "bytes": 23681,
+      "sha256": "6b8238be988d074616a728488c4160173da0fa58ac60cb2ecbed94d033fc6db9"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/monitor-summary.json",
+      "bytes": 1439,
+      "sha256": "7c175a2ec4dc1023329f677d0bb5fb3c4b720e1c7d2ee6091f19fbdc1bc4d1c1"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/mpcc-source.patch",
+      "bytes": 7760,
+      "sha256": "ad53dd35b155f2cdd1cc0c225e7e02e24c382329eaa1ab57f376f6b341cebfa6"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/package.log",
+      "bytes": 491198,
+      "sha256": "cdf541a447f9f91d13757fb1d43abb9b2387a4c73882732690fe6f3953114663"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/run_campaign.py",
+      "bytes": 11194,
+      "sha256": "4f9a9d111522671c9a9da49c356653b356c454f308a7efa95af63f3de62c50e6"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-rear-peer-single-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-rear-peer-stop-profile-scan/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-rear-peer-stop-profile-scan/input.yaml",
+      "bytes": 739,
+      "sha256": "fcddc8ff396b32fbc32d92cd9f099183b34b66c2181fe4685772d6ad02c250d9"
+    },
+    {
+      "path": "output/20260909-rear-peer-stop-profile-scan/manifest.json",
+      "bytes": 17097,
+      "sha256": "77d4b33d56a0eaa8e1347f89ba394af6e65fc374f5ed811132bc4fe9f4b1e9be"
+    },
+    {
+      "path": "output/20260909-rear-peer-stop-profile-scan/native.log",
+      "bytes": 17,
+      "sha256": "3fddecef78a6c8261012d821bad0a96c929674207e8a815d67bd8b1312c2057c"
+    },
+    {
+      "path": "output/20260909-rear-peer-stop-profile-scan/reconstruct_execution",
+      "bytes": 1588840,
+      "sha256": "ac9cb5b4431696203c35f42a67cca5f47d28de57be31160cd4a9cc1e93b8fb90"
+    },
+    {
+      "path": "output/20260909-rear-peer-stop-profile-scan/report.yaml",
+      "bytes": 5728204,
+      "sha256": "b08c78ea42f76ce891b7c0f85e6db4f21b84a84a9b934777f6cc1cffb44a0ff6"
+    },
+    {
+      "path": "output/20260909-rear-peer-stop-profile-scan/retained_revalidation_instrumented.cpp",
+      "bytes": 78990,
+      "sha256": "c172ae67799df6dc36b79537a73588e4ae884ae13f75025ebba839618d7b0a2a"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-constraint.log",
+      "bytes": 3751,
+      "sha256": "17f78df83aab7f2d3b4af314d52a099b45d9f54f91f4f1373478fbf34970cfb8"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-dev2-r1-run.log",
+      "bytes": 2478,
+      "sha256": "23748bbf6c153b7bfafb53956f760917f8d1fa73bb3b6c6513220c9531d61632"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-dev2-timing.log",
+      "bytes": 4869,
+      "sha256": "a43badd7a7aa477ed375ede41b9e33b2f0bf28d71d0626c6a1414835a8f7820b"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-domain-comparison.log",
+      "bytes": 2675,
+      "sha256": "08f21be6d85e71092dd423047c91abf3f562ed192d06b4129998637d70918892"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-free-stop.log",
+      "bytes": 9251,
+      "sha256": "915c278ad7f2600f864c4f1d7a5c9bebad32dc280345b3d58a9e2e001cd52851"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-full-build.log",
+      "bytes": 4283,
+      "sha256": "39b75aa7bfbb66f78280a157b5df80219694e46b8629823b5da2d247e198dd87"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-linearization.log",
+      "bytes": 670,
+      "sha256": "44cd1443b0c469bfd3bbca2eed9b2bd2033b9856f477df087ff84864ea91836e"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-package.log",
+      "bytes": 491198,
+      "sha256": "cdf541a447f9f91d13757fb1d43abb9b2387a4c73882732690fe6f3953114663"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-production-comparison.log",
+      "bytes": 269,
+      "sha256": "3a9c52e08b528859bc4d98870d5f43123b8070cf3e3c4de226ef7a788bf46fd9"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-profile-scan.log",
+      "bytes": 200,
+      "sha256": "829815e355fd9583032fc7e0965be52cba9fdf0926d1b8f9ef614ddb8555025f"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-single-r1-run.log",
+      "bytes": 7145,
+      "sha256": "afce4c252984c091fd66fbd6012d69f54ba294406f4ee821ca6d25c3594df5f5"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-tangent-after.log",
+      "bytes": 4698,
+      "sha256": "7a17b864cefa57bd1bce0066e5e80fbfd690c5e612cfc2daecd323b75d3eb447"
+    },
+    {
+      "path": "output/20260909-rear-peer-validation/mpcc-rear-peer-tangent-before.log",
+      "bytes": 2239,
+      "sha256": "f3f21467d406d9be72e81cab18e399754851553fa6e438a1866a0415ec65e933"
+    }
+  ]
+}

@@ -270,6 +270,26 @@
       "snapshot_id": "20260909-failure-bundle-world1629-executed1100",
       "manifest": ".steering/20260909-mpcc-failure-observation-bundle/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-rear-peer-native",
+      "manifest": ".steering/20260909-mpcc-rear-peer-stop/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-rear-peer-world1629",
+      "manifest": ".steering/20260909-mpcc-rear-peer-stop/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-rear-peer-single-r1",
+      "manifest": ".steering/20260909-mpcc-rear-peer-stop/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-rear-peer-dev2-world968-executed354",
+      "manifest": ".steering/20260909-mpcc-rear-peer-stop/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -2108,6 +2128,106 @@
       "production_impact": "observation only; integrated MPCC acceptance remains open",
       "deleted_code": [],
       "revisit_condition": "causal peer prediction evidence before intervention, or new physical trajectory candidate"
+    },
+    {
+      "experiment_id": "20260909-rear-peer-profile164",
+      "baseline_commit": "4afa9948",
+      "snapshot_ids": [
+        "20260909-rear-peer-world1629"
+      ],
+      "hypothesis": "lateral references make maximum-brake terminal feasible",
+      "changed_dimension": "tangent-domain repair or named offline terminal architecture; see sealed per-method manifest",
+      "result": "rejected",
+      "reason": "All164complete terminal paths reject rear d1; no physical infeasibility claim.",
+      "production_impact": "tangent producer only; coupled acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "different longitudinal/terminal architecture"
+    },
+    {
+      "experiment_id": "20260909-rear-peer-tangent-domain",
+      "baseline_commit": "4afa9948",
+      "snapshot_ids": [
+        "20260909-rear-peer-native"
+      ],
+      "hypothesis": "selected tangent transition stays in immutable model domain",
+      "changed_dimension": "tangent-domain repair or named offline terminal architecture; see sealed per-method manifest",
+      "result": "accepted",
+      "reason": "Old native regression fails;19native/2364package records/25build packages pass after tangent-only intersection. Raw primal/hard bounds unchanged.",
+      "production_impact": "tangent producer only; coupled acceptance remains open",
+      "deleted_code": [
+        "independent-only progress/input tangent selection"
+      ],
+      "revisit_condition": "new tangent-domain violation"
+    },
+    {
+      "experiment_id": "20260909-rear-peer-same-world-normal",
+      "baseline_commit": "4afa9948",
+      "snapshot_ids": [
+        "20260909-rear-peer-world1629"
+      ],
+      "hypothesis": "tangent repair closes full rear-peer failure",
+      "changed_dimension": "tangent-domain repair or named offline terminal architecture; see sealed per-method manifest",
+      "result": "rejected",
+      "reason": "A solves and horizon certifies, terminal dynamic minimum-0.000656495m. Other normal arms lack front target; four Stop methods reject.",
+      "production_impact": "tangent producer only; coupled acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "terminal candidate architecture change"
+    },
+    {
+      "experiment_id": "20260909-rear-peer-rear-qp8",
+      "baseline_commit": "4afa9948",
+      "snapshot_ids": [
+        "20260909-rear-peer-world1629"
+      ],
+      "hypothesis": "rear peer QP guidance closes full stopping proof",
+      "changed_dimension": "tangent-domain repair or named offline terminal architecture; see sealed per-method manifest",
+      "result": "rejected",
+      "reason": "Eight methods reject terminal/physical/QP proof; none promoted.",
+      "production_impact": "tangent producer only; coupled acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "changed terminal control family"
+    },
+    {
+      "experiment_id": "20260909-rear-peer-free-controls4",
+      "baseline_commit": "4afa9948",
+      "snapshot_ids": [
+        "20260909-rear-peer-world1629"
+      ],
+      "hypothesis": "complete free controls through rest admit a physical witness",
+      "changed_dimension": "tangent-domain repair or named offline terminal architecture; see sealed per-method manifest",
+      "result": "accepted",
+      "reason": "Automatic0/3 and StayAhead3 accepted, StayAhead0 assembly rejected;3/4. Full wall/peer/rest proof unchanged. Offline only, no publication artifact claim.",
+      "production_impact": "tangent producer only; coupled acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "exact artifact/current-world multicycle publication audit"
+    },
+    {
+      "experiment_id": "20260909-rear-peer-single-r1",
+      "baseline_commit": "4afa9948",
+      "snapshot_ids": [
+        "20260909-rear-peer-single-r1"
+      ],
+      "hypothesis": "tangent repair preserves single six-lap acceptance",
+      "changed_dimension": "tangent-domain repair or named offline terminal architecture; see sealed per-method manifest",
+      "result": "accepted",
+      "reason": "6laps253.328887939s/penalty0, moving override0;10423reportedcycles max12.671ms/0overruns. Receiptmax33.745289ms. Source timing anomalies retained.",
+      "production_impact": "tangent producer only; coupled acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "new production change"
+    },
+    {
+      "experiment_id": "20260909-rear-peer-dev2-r1",
+      "baseline_commit": "4afa9948",
+      "snapshot_ids": [
+        "20260909-rear-peer-dev2-world968-executed354"
+      ],
+      "hypothesis": "tangent repair establishes coupled acceptance",
+      "changed_dimension": "tangent-domain repair or named offline terminal architecture; see sealed per-method manifest",
+      "result": "rejected",
+      "reason": "D2decision968at1.762816m/s terminal wall reject33; dynamic clear+0.725731m. Actual354captured. Stop435steering join rejected; independently certified successor bundle439terminal reproof rejected. No finish. Each365cycles/0overruns.",
+      "production_impact": "tangent producer only; coupled acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "demonstrated current-world terminal producer repair"
     }
   ]
 }

@@ -437,6 +437,90 @@ TEST(
   EXPECT_EQ(result.reason, adapter::RelinearizationReason::Accepted);
 }
 
+TEST(MpccRateResolvedAdapter, SelectsTangentTransitionInsideImmutableCourseDomain)
+{
+  namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;
+  for (const double last_dt : {0.10, 0.23937229491124654}) {
+    SCOPED_TRACE(last_dt);
+    auto request = curved_request(2);
+    const double terminal_progress = 0.3 + 3.0 * last_dt;
+    for (auto & state : request.states) {
+      state.lower[4] = 0.0;
+      state.upper[4] = terminal_progress;
+    }
+    request.states.back().reference[4] = terminal_progress;
+    for (auto & input : request.inputs) {
+      input.path_curvature_radpm = 0.0;
+      input.reference[adapter::kLegacyCurvatureIndex] = 0.0;
+    }
+    request.inputs.back().stage_dt_sec = last_dt;
+    request.course_frame = {
+      std::make_shared<const std::vector<geometry::CourseFrameKnot>>(
+        std::vector<geometry::CourseFrameKnot>{
+          {50.0, 89613.0, 43161.0, 0.0, 0},
+          {50.3, 89613.3, 43161.0, 0.0, 1},
+          {50.0 + terminal_progress, 89613.0 + terminal_progress, 43161.0, 0.0, 2}}),
+      50.0};
+    auto adapted = adapter::build(request, kSolverTolerance);
+    ASSERT_TRUE(adapted.has_value());
+    constexpr int state_values = 3 * model::kStateDimension;
+    Eigen::VectorXd primal(state_values + 2 * model::kInputDimension);
+    primal.head(state_values) = adapted->problem.state_reference;
+    primal.tail(2 * model::kInputDimension) = adapted->problem.input_reference;
+    // Same failure as source1629: individual boxes are respected at the
+    // tangent origin, but its transition endpoint carries a solver residual.
+    const int last_input = state_values + model::kInputDimension;
+    primal[last_input + model::kVirtualProgressSpeedIndex] += 1.2e-8 / last_dt;
+    primal[2 * model::kStateDimension + model::kProgressIndex] += 1.2e-8;
+    const Eigen::VectorXd original = primal;
+    const auto lower = adapted->problem.state_lower;
+    const auto upper = adapted->problem.input_upper;
+    const auto original_frame = *request.course_frame.knots;
+
+    const auto result = adapter::relinearize_around_primal(request, primal, adapted->problem);
+
+    ASSERT_TRUE(result.applied);
+    EXPECT_TRUE((primal.array() == original.array()).all());
+    EXPECT_TRUE((adapted->problem.state_lower.array() == lower.array()).all());
+    EXPECT_TRUE((adapted->problem.input_upper.array() == upper.array()).all());
+    EXPECT_TRUE(model::course_frame_matches(request.course_frame, original_frame, 50.0));
+    // The affine progress equation still exposes the original residual; a
+    // tangent-domain selection must not rewrite the raw predicted trajectory.
+    const auto & tangent = adapted->problem.linearizations.back();
+    const auto next = tangent.state_matrix * primal.segment<model::kStateDimension>(model::kStateDimension) +
+      tangent.input_matrix * primal.segment<model::kInputDimension>(last_input) - tangent.equality_offset;
+    EXPECT_GT(next[model::kProgressIndex], terminal_progress + 1e-9);
+  }
+}
+
+TEST(MpccRateResolvedAdapter, RejectsEmptyTangentInputAndCourseDomainIntersection)
+{
+  namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;
+  auto request = curved_request(2);
+  for (auto & input : request.inputs) {
+    input.path_curvature_radpm = 0.0;
+    input.reference[adapter::kLegacyCurvatureIndex] = 0.0;
+  }
+  request.course_frame = {
+    std::make_shared<const std::vector<geometry::CourseFrameKnot>>(
+      std::vector<geometry::CourseFrameKnot>{{0.0, 0.0, 0.0, 0.0, 0}, {0.6, 0.6, 0.0, 0.0, 1}}), 0.0};
+  auto adapted = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(adapted.has_value());
+  constexpr int state_values = 3 * model::kStateDimension;
+  Eigen::VectorXd primal(state_values + 2 * model::kInputDimension);
+  primal.head(state_values) = adapted->problem.state_reference;
+  primal.tail(2 * model::kInputDimension) = adapted->problem.input_reference;
+  adapted->problem.input_lower[model::kInputDimension + model::kVirtualProgressSpeedIndex] = 4.0;
+  const auto original = adapted->problem.linearizations.back().equality_offset;
+
+  const auto result = adapter::relinearize_around_primal(request, primal, adapted->problem);
+
+  EXPECT_FALSE(result.applied);
+  EXPECT_EQ(result.reason, adapter::RelinearizationReason::LinearizationUnavailable);
+  EXPECT_EQ(result.stage, 1);
+  EXPECT_TRUE((adapted->problem.linearizations.back().equality_offset.array() == original.array()).all());
+}
+
 TEST(MpccRateResolvedAdapter, RejectsMalformedOrUnphysicalSnapshots)
 {
   auto request = curved_request();

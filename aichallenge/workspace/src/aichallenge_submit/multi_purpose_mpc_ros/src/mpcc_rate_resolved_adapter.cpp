@@ -611,6 +611,40 @@ RelinearizationResult relinearize_around_primal(
         problem.input_lower[problem_input + element],
         problem.input_upper[problem_input + element]);
     }
+    if (request.course_frame.knots) {
+      // The nonlinear transition owns a coupled domain: theta + nu * dt
+      // must remain inside the immutable course. Separate state/input boxes
+      // can leave its tangent endpoint outside that domain by an accepted QP
+      // residual. Select a valid tangent input without modifying the raw
+      // iterate, hard constraints, course geometry or physical tolerances.
+      const auto & frame = request.course_frame;
+      const auto & knots = *frame.knots;
+      if (knots.size() < 2U || !std::isfinite(semantic_input.stage_dt_sec) ||
+        semantic_input.stage_dt_sec <= 0.0)
+      {
+        result.reason = RelinearizationReason::LinearizationUnavailable;
+        result.stage = stage;
+        return result;
+      }
+      const double progress = linearization_state[model::kProgressIndex];
+      const double minimum_speed = std::max(
+        problem.input_lower[problem_input + model::kVirtualProgressSpeedIndex],
+        (knots.front().progress_m - frame.progress_origin_m - progress) /
+        semantic_input.stage_dt_sec);
+      const double maximum_speed = std::min(
+        problem.input_upper[problem_input + model::kVirtualProgressSpeedIndex],
+        (knots.back().progress_m - frame.progress_origin_m - progress) /
+        semantic_input.stage_dt_sec);
+      if (!std::isfinite(minimum_speed) || !std::isfinite(maximum_speed) ||
+        minimum_speed > maximum_speed)
+      {
+        result.reason = RelinearizationReason::LinearizationUnavailable;
+        result.stage = stage;
+        return result;
+      }
+      auto & virtual_speed = linearization_input[model::kVirtualProgressSpeedIndex];
+      virtual_speed = std::clamp(virtual_speed, minimum_speed, maximum_speed);
+    }
     const auto linearization = model::linearize_temporal_frenet(
       model::LinearizationRequest{
         linearization_state[model::kLateralIndex],

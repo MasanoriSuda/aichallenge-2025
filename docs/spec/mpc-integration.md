@@ -3893,6 +3893,19 @@ dev2でD2 decision1629の失敗worldと実行元1100を同時保存し、再求�
 壁検査には進んでいない。これは観測欠落の修正であり、多車両走行の受入れは未完。
 [記録境界の監査](../../.steering/20260909-mpcc-failure-observation-bundle/validation-notes.md)を参照。
 
+### 2026-09-09 線形化点のコース定義域
+
+SQPの線形化点は状態・入力それぞれのboxに加え、immutableなコース内で
+`theta + nu * dt`が定義される必要がある。保存world1629では、許容されたQP残差により
+この末端がコース境界を約12nm越え、通常Aのstage19線形化が失敗した。
+adapterは線形化に使うvirtual speedだけを、元の入力boxとコース末端条件の共通範囲から
+選ぶ。共通範囲が空なら拒否する。raw primal、QP制約、モデル、コース、物理許容差を
+変更せず、実行軌道の後段検証も維持する。
+
+同worldのオフライン比較で通常Aは求解と壁・他車horizon証明に進むが、停止末端のD1との
+動的証明は失敗する。この局所修正と後方車を含む多車両受入れは区別する。
+[停止候補と定義域の監査](../../.steering/20260909-mpcc-rear-peer-stop/design.md)を参照。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。
@@ -3909,3 +3922,11 @@ dev2でD2 decision1629の失敗worldと実行元1100を同時保存し、再求�
 | MPC 起動方式 | `<include control/mpc.launch.xml>` 経由で `mpc_controller_cpp` を起動（インライン node ではない） |
 | パッケージ配置 | `aichallenge_submit/` 配下に統合済み（追加作業不要） |
 | ビルド注意 | C++ MPC は `osqp_vendor` を使用。補助 Python venv 作成（pip install）によるビルド時間増加は残る |
+
+停止候補比較では、最大制動を固定した164横形状と後方peerを追加した8方式は不合格。
+同じ物理制約で停止までの操作を解く4方式中3方式が完全停止・壁・peer証明に合格した。
+これはオフラインの実行可能例で、公開権限は持たない。最大制動固定の候補群の不足と、
+停止済みsuffixにも最大制動を再生成する現行再証明の境界を次に調べる。
+接線修正は19native/2364package records/25packages合格、単独6周253.328888秒・penalty0。
+新dev2はD2decision968でterminal壁判定により不合格。actual354と時刻を保存済み。
+後方peer失敗1629とは区別し、[全結果](../../.steering/20260909-mpcc-rear-peer-stop/results.md)を保持する。

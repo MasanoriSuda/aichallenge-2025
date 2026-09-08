@@ -564,6 +564,7 @@ ContinuationResult build_continuation(
   race::ExactPhysicalExecutionTrajectory exact;
   exact.progress_origin_m = artifact.course_progress_origin_m;
   exact.elapsed_time_sec.reserve(rollout_sample_count);
+  result.actuation_samples.reserve(rollout_sample_count);
   exact.path_distance_m.reserve(rollout_sample_count);
   exact.lateral_m.reserve(rollout_sample_count);
   exact.lag_m.reserve(rollout_sample_count);
@@ -592,6 +593,7 @@ ContinuationResult build_continuation(
       retain_prefix(exact.lag_m);
       retain_prefix(exact.heading_offset_rad);
       retain_prefix(exact.velocity_mps);
+      retain_prefix(result.actuation_samples);
       retain_prefix(exact.progress_m);
       retain_prefix(exact.lateral_lower_m);
       retain_prefix(exact.lateral_upper_m);
@@ -708,6 +710,25 @@ ContinuationResult build_continuation(
       exact.lag_m.push_back(nonlinear.lag_m);
       exact.heading_offset_rad.push_back(nonlinear.heading_offset_rad);
       exact.velocity_mps.push_back(nonlinear.velocity_mps);
+      std::size_t command_interval_index = 0U;
+      if (!result.actuation_samples.empty()) {
+        const auto & previous = result.actuation_samples.back();
+        command_interval_index = previous.command_interval_index;
+        if (previous.acceleration_mps2 != applied_control.acceleration_mps2 ||
+          previous.steering_rate_radps != applied_control.steering_rate_radps ||
+          previous.virtual_progress_speed_mps != applied_control.virtual_progress_speed_mps ||
+          previous.path_curvature_radpm != applied_control.path_curvature_radpm)
+        {
+          ++command_interval_index;
+        }
+      }
+      result.actuation_samples.push_back(PhysicalActuationSample{
+        elapsed_sec, step_sec, applied_control.acceleration_mps2,
+        applied_control.acceleration_mps2, applied_control.steering_rate_radps,
+        nonlinear.velocity_mps, nonlinear.steering_rad, nonlinear.response_steering_rad,
+        applied_control.path_curvature_radpm, applied_control.virtual_progress_speed_mps,
+        command_interval_index});
+
       exact.progress_m.push_back(
         artifact.course_progress_origin_m + nonlinear.progress_m);
       exact.lateral_lower_m.push_back(lower_m);

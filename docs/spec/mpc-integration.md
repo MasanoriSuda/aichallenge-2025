@@ -3930,3 +3930,25 @@ adapterは線形化に使うvirtual speedだけを、元の入力boxとコース
 接線修正は19native/2364package records/25packages合格、単独6周253.328888秒・penalty0。
 新dev2はD2decision968でterminal壁判定により不合格。actual354と時刻を保存済み。
 後方peer失敗1629とは区別し、[全結果](../../.steering/20260909-mpcc-rear-peer-stop/results.md)を保持する。
+
+#### Stop初期姿勢と完全停止suffixの所有（2026-09-09、局所検証済み）
+
+`evaluate_stop_successor`がFrenet投影後に参照progressだけを更新し、bundleでも
+associated progressからlagを引き直していた。world968では現在位置から37.925041 mm
+ずれた車体でStopを証明していた。参照座標を一度選択し、その座標で投影した姿勢とともに
+`initial_course_progress_m`として保持する。修正後は位置差0、同Stopは壁判定で拒否される。
+
+現在状態から全残操作を再積分し、全suffixの壁・全peer・Follow条件と完全停止、
+公開interval、およびactiveなterminal intentを証明できた場合は、その同じ軌道を
+terminal Stop証明として使う。denseな実適用操作も同じcontinuationから保持する。
+元の計画上の停止や、公開intervalだけの証明には適用しない。速度が現在値から変わって
+停止が成立しなくなった場合は受け入れない。診断は`solved-stop-suffix`。
+移動中で終わる通常prefixには既存terminal generatorの独立した証明が引き続き必要。
+自由な操作で停止まで解く候補の本番生成はまだ導入していない。
+[進行中の検証](../../.steering/20260909-mpcc-complete-stop-suffix/design.md)を参照。
+
+この修正は67native/60CTestgroups/2366recordsと25packagebuildに合格。
+条件付きモデル検証は1つの解で188公開intervalを通じて停止に到達し、単独走行も
+6周253.323883秒・penalty0・移動中override0。一方、dev2はD1decision4264で
+生成Stopが壁判定により不合格。actual3695と現在worldを保存し、次の候補生成の課題として
+保持する。[全結果](../../.steering/20260909-mpcc-complete-stop-suffix/results.md)を参照。

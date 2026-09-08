@@ -2807,7 +2807,9 @@ def test_certified_stop_successor_is_observed_only_after_publication_join() -> N
         package / "src/mpcc_rate_resolved_production_adapter.cpp"
     ).read_text(encoding="utf-8")
 
-    assert "struct ActuationSample" in physical_header
+    assert "struct PhysicalActuationSample" in physical_header
+    assert "using ActuationSample = PhysicalActuationSample;" in physical_header
+    assert "std::vector<PhysicalActuationSample> actuation_samples;" in physical_header
     assert "publisher_interval_sample_count" in physical_header
     assert "struct CertifiedStopSuccessorEvidence" in production_header
     assert "certified_stop_successor" in production_header

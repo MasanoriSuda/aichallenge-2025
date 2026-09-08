@@ -10,25 +10,31 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: preserve and revalidate complete solved trajectories through rest.
-The tangent-domain repair passes19native tests,25packages and2364package records.
-Normal A now solves world1629, but its generated terminal maximum-braking path
-still rejects the rear peer.164lateral maximum-brake candidates and8rear-QP
-methods reject;3of4free-control through-rest methods certify offline. These are
-new physical feasibility witnesses, not publication authority. Retained proof
-currently regenerates maximum braking even for a through-rest artifact; exact
-publication/current-state and next-cycle proof must be established before promotion.
+Current next step: complete-rest candidate generation and real async promotion.
+The current consumer now preserves a complete current-state stopping suffix
+instead of replacing it by maximum braking. On world1629the captured free
+candidate joins with dynamic clearance2.491691m; conditional one-solve188tick
+replay reaches rest (170solved suffix/18existing generated terminal). The free
+candidate producer is still offline. Distinct immutable terminal semantics,
+all-peer QP guidance and actual async adoption must be verified before promotion.
 
-Fresh single-r1finishes6laps253.328888s/penalty0, moving override0, callbackmax
-12.671ms and control receiptmax33.745289ms. Fresh dev2-r1rejects at D2decision968,
-speed1.762816m/s: terminal wall contact, dynamic clearance+0.725731m. Actual354
-is captured atomically. Fresh Stop435fails steering join; independent published
-Stop successor certifies but bundle439fails terminal reproof. This is a new
-sealed wall/reproof scene, not a recurrence attributed to the rear peer.
-Each Domain365reportedcycles/0overruns; control receiptmax37.057638/36.897898ms.
-Source clock/sensor pauses persist. See [tangent and candidate results](../20260909-mpcc-rear-peer-stop/results.md).
-Previous actual1100/world1629 remains reproducible without solving; no earlier
-failure or missing historical artifact is replaced. Complete MPCC acceptance remains open.
+A separate Stop pose producer displaced world968's body37.925mm; its stale
+projection/bundle coordinate is repaired. The corrected successor correctly
+rejects wall. Native wrong-pose150mm and25ms-boundary regressions are preserved.
+Final67retained cases/60CTestgroups/2366records and25packagebuild pass.
+Single-r1finishes6laps253.323883s/penalty0, moving override0, callbackmax12.918ms
+and command receiptmax34.149647ms; source gapmax35ms/no duplicates in this run.
+Dev2-r1rejects D1decision4264at8.72m/s: terminal wall reject13 and independent
+Stop wall reject, while actual3695is atomically preserved. Retained wall proof
+only covers the publisher interval, so it cannot discharge the new terminal
+condition. No finished race. Each Domain88reportedwindows,3564/3573cycles,
+callbackmax20.292/20.403ms and0overruns. See [complete Stop proof results](../20260909-mpcc-complete-stop-suffix/results.md).
+
+Previous tangent fix8d6ebf8apasses its own single6laps but dev2world968failed.
+All164maximum-brake profiles and8rear-QPmethods remain rejected;3of4free-rest
+methods are offline positive witnesses. Actual1100/world1629and all older
+missing-artifact/solver/clock failures remain separate evidence. Earlier
+source/sensor delivery pauses are not erased by the new single clean clocks.
 
 The preceding paired longitudinal observer/clock commit6c4875ed passes one
 single six-lap trial253.768982s/penalty0, moving override0, callbackmax16.564ms,
@@ -142,8 +148,8 @@ is conditional: Emergency supersedes actual publication aroundcursor0.05s.
 
 ## Order to finish
 
-1. Complete through-rest publication/revalidation from the sealed feasible
-   witnesses and new world968, then repair only demonstrated producer limitations.
+1. Complete current-world full-rest candidate generation and async promotion
+   using the sealed witnesses and new world4264, with all-peer physical proofs.
    Observation bundle and longitudinal observer/clock slices are validated. Coordinate-consistent integration, semantic initial state,
    whole-body peer enclosure and Cartesian peer-plane repairs are implemented
    and committed. Do not repeat their completed native/build work without a

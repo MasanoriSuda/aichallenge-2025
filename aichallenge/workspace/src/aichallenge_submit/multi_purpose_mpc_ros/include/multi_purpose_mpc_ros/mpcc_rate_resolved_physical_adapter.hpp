@@ -95,6 +95,35 @@ enum class ContinuationProofScope
 
 const char * to_string(ContinuationProofScope scope) noexcept;
 
+struct PhysicalActuationSample
+{
+  double elapsed_time_sec{std::numeric_limits<double>::quiet_NaN()};
+  double duration_sec{std::numeric_limits<double>::quiet_NaN()};
+  /// Acceleration command owned by this serialized command interval.
+  double acceleration_mps2{std::numeric_limits<double>::quiet_NaN()};
+  /// Acceleration used by the nonlinear plant after applying its zero-speed
+  /// saturation.  It may become zero without creating a new command.
+  double effective_acceleration_mps2{
+    std::numeric_limits<double>::quiet_NaN()};
+  double steering_rate_radps{std::numeric_limits<double>::quiet_NaN()};
+  double end_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
+  double end_steering_rad{std::numeric_limits<double>::quiet_NaN()};
+  /// Effective yaw-producing steering after this physical integration
+  /// sample.  This cannot be reconstructed from the serialized steering
+  /// endpoint when actuator response lag is nonzero.
+  double end_response_steering_rad{
+    std::numeric_limits<double>::quiet_NaN()};
+  /// Course-frame inputs used by the exact nonlinear integration sample.
+  double path_curvature_radpm{
+    std::numeric_limits<double>::quiet_NaN()};
+  double virtual_progress_speed_mps{
+    std::numeric_limits<double>::quiet_NaN()};
+  /// Consecutive dense samples with the same command interval share this
+  /// index.  It allows an exact physical rollout to be reified into the
+  /// publisher-sized control stages owned by ExecutionArtifact.
+  std::size_t command_interval_index{};
+};
+
 struct ContinuationResult
 {
   ContinuationRejectReason reason{
@@ -119,6 +148,8 @@ struct ContinuationResult
   /// rebuilds a different command/speed horizon from the old affine states.
   std::vector<double> stage_end_velocity_mps;
   std::vector<double> stage_end_steering_rad;
+  /// Applied controls and actuator states aligned with every dense sample.
+  std::vector<PhysicalActuationSample> actuation_samples;
 };
 
 /// Replay the unconsumed control suffix from the current physical state.
@@ -250,34 +281,7 @@ struct StopContingencyResult
     std::numeric_limits<double>::quiet_NaN()};
   double initial_lateral_upper_m{
     std::numeric_limits<double>::quiet_NaN()};
-  struct ActuationSample
-  {
-    double elapsed_time_sec{std::numeric_limits<double>::quiet_NaN()};
-    double duration_sec{std::numeric_limits<double>::quiet_NaN()};
-    /// Acceleration command owned by this serialized command interval.
-    double acceleration_mps2{std::numeric_limits<double>::quiet_NaN()};
-    /// Acceleration used by the nonlinear plant after applying its zero-speed
-    /// saturation.  It may become zero without creating a new command.
-    double effective_acceleration_mps2{
-      std::numeric_limits<double>::quiet_NaN()};
-    double steering_rate_radps{std::numeric_limits<double>::quiet_NaN()};
-    double end_velocity_mps{std::numeric_limits<double>::quiet_NaN()};
-    double end_steering_rad{std::numeric_limits<double>::quiet_NaN()};
-    /// Effective yaw-producing steering after this physical integration
-    /// sample.  This cannot be reconstructed from the serialized steering
-    /// endpoint when actuator response lag is nonzero.
-    double end_response_steering_rad{
-      std::numeric_limits<double>::quiet_NaN()};
-    /// Course-frame inputs used by the exact nonlinear integration sample.
-    double path_curvature_radpm{
-      std::numeric_limits<double>::quiet_NaN()};
-    double virtual_progress_speed_mps{
-      std::numeric_limits<double>::quiet_NaN()};
-    /// Consecutive dense samples with the same command interval share this
-    /// index.  It allows an exact physical rollout to be reified into the
-    /// publisher-sized control stages owned by ExecutionArtifact.
-    std::size_t command_interval_index{};
-  };
+  using ActuationSample = PhysicalActuationSample;
   /// Input/state samples aligned one-to-one with exact_trajectory.  The
   /// certificate can otherwise prove states which no publisher can reproduce.
   std::vector<ActuationSample> actuation_samples;

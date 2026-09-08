@@ -284,6 +284,7 @@ struct Proof
   /// this current-decision Stop trajectory is independently certified.
   bool terminal_stop_certified{false};
   bool terminal_stop_normal_path_reference{false};
+  bool terminal_stop_uses_solved_suffix{false};
   std::size_t terminal_stop_static_checked_pose_count{};
   std::size_t terminal_stop_dynamic_checked_pose_count{};
   double terminal_stop_minimum_dynamic_clearance_m{
@@ -339,6 +340,7 @@ struct Result
   bool terminal_stop_attempted{false};
   bool terminal_stop_certified{false};
   bool terminal_stop_normal_path_reference{false};
+  bool terminal_stop_uses_solved_suffix{false};
   unsigned terminal_stop_reference_attempts{};
   bool terminal_stop_approximate_support_exceeded{false};
   int terminal_stop_first_approximate_support_exceeded_sample{-1};
@@ -516,6 +518,11 @@ struct StopSuccessorResult
     ActuationSample> actuation_samples;
   std::vector<recovery::Pose2D> world_path;
   double lifted_control_origin_progress_m{
+    std::numeric_limits<double>::quiet_NaN()};
+  /// Exact reference-frame coordinate at which initial Frenet coordinates
+  /// were projected. Association progress and physical lag cannot recreate
+  /// this coordinate after the projection without moving the physical body.
+  double initial_course_progress_m{
     std::numeric_limits<double>::quiet_NaN()};
   double initial_lateral_m{std::numeric_limits<double>::quiet_NaN()};
   double initial_lag_m{std::numeric_limits<double>::quiet_NaN()};

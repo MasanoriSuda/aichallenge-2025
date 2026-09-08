@@ -290,6 +290,31 @@
       "snapshot_id": "20260909-rear-peer-dev2-world968-executed354",
       "manifest": ".steering/20260909-mpcc-rear-peer-stop/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-stop-native",
+      "manifest": ".steering/20260909-mpcc-complete-stop-suffix/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-complete-stop-free-artifact",
+      "manifest": ".steering/20260909-mpcc-complete-stop-suffix/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-stop-free-multicycle",
+      "manifest": ".steering/20260909-mpcc-complete-stop-suffix/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-stop-single-r1",
+      "manifest": ".steering/20260909-mpcc-complete-stop-suffix/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-stop-world4264-executed3695",
+      "manifest": ".steering/20260909-mpcc-complete-stop-suffix/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -2228,6 +2253,140 @@
       "production_impact": "tangent producer only; coupled acceptance remains open",
       "deleted_code": [],
       "revisit_condition": "demonstrated current-world terminal producer repair"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-968-initial-pose",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-rear-peer-dev2-world968-executed354"
+      ],
+      "hypothesis": "certified successor starts at actual current pose",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "rejected",
+      "reason": "Native original bundle displaced37.925041mm/yaw-0.002027228rad. Correct current-world reproof rejects wall; original positive successor was a false witness.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "exact projection-frame ownership repair"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-pose-producer",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-complete-stop-native",
+        "20260909-rear-peer-dev2-world968-executed354"
+      ],
+      "hypothesis": "one owned reference coordinate preserves current body",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "accepted",
+      "reason": "Native before translates150mm; repair removes stale iteration and derived bundle coordinate. Correct968pose error0and static-path-blocked. No new availability claim.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [
+        "stale Stop projection iteration and derived bundle coordinate"
+      ],
+      "revisit_condition": "new frame/body round-trip mismatch"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-free-before",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-complete-stop-native",
+        "20260909-complete-stop-free-artifact"
+      ],
+      "hypothesis": "old terminal consumer preserves feasible complete stopping suffix",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "rejected",
+      "reason": "Full current-world wall/peer continuation passes; separately generated maximum brake rejects d1at-0.006402223m. Independent rear-peer native witness also rejects.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "current-state complete-suffix terminal ownership"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-complete-terminal",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-complete-stop-native",
+        "20260909-complete-stop-free-artifact"
+      ],
+      "hypothesis": "same complete current-state trajectory can prove terminal rest",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "accepted",
+      "reason": "67retained cases/60CTestgroups/2366records/25packages pass. Free candidate current-world and command adapter pass, dynamic min2.491691m. Speed perturbations reject old planned-rest reuse. Free producer remains offline.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [
+        "unconditional replacement of already proved complete stopping suffix"
+      ],
+      "revisit_condition": "new physical or identity mismatch"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-initial-multicycle",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-complete-stop-free-multicycle"
+      ],
+      "hypothesis": "initial repeated-publication helper completes through rest",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "inconclusive",
+      "reason": "Helper stopped with publisher interval mismatch before summary; native fixture then proves35msmetadata versus25msclock under0.016physical tolerance. Binary/input/log preserved.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "exact command-clock metadata correction"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-publisher-clock",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-complete-stop-native",
+        "20260909-complete-stop-free-multicycle"
+      ],
+      "hypothesis": "terminal metadata owns exactly one publisher interval",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "accepted",
+      "reason": "Native before/after and conditional replay verify exact25ms; physical tolerance no longer determines the new suffix command count. Existing physical margins unchanged.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new command-boundary mismatch"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-conditional188",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-complete-stop-free-multicycle"
+      ],
+      "hypothesis": "one frozen source supports repeated current-model joins through rest",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "accepted",
+      "reason": "188joins and command conversions accepted;170solved suffix/18existing generated terminal proofs.130msdelay retained. CV/model observations, interpolated early current speed and fixed steering diagnostic; no future sensor truth/live publication.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "actual async/runtime adoption or changed candidate producer"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-single-r1",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-complete-stop-single-r1"
+      ],
+      "hypothesis": "consumer repairs preserve single six-lap acceptance",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "accepted",
+      "reason": "6laps253.323883s/penalty0, moving override0.10413reportedcycles/12.918msmax/0overruns. Command receiptmax34.149647ms; source gapmax35ms/no duplicates.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new production change"
+    },
+    {
+      "experiment_id": "20260909-complete-stop-dev2-r1",
+      "baseline_commit": "8d6ebf8a",
+      "snapshot_ids": [
+        "20260909-complete-stop-world4264-executed3695"
+      ],
+      "hypothesis": "consumer repairs establish coupled race acceptance",
+      "changed_dimension": "named Stop pose/terminal consumer invariant or conditional offline replay",
+      "result": "rejected",
+      "reason": "D1first4264at8.72m/s terminal wall reject13, independent correct-pose Stop wall reject. Actual3695captured. No finish;3564/3573reportedcycles max20.292/20.403ms/0overruns. Candidate generation remains unresolved.",
+      "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "demonstrated current-world candidate producer change or required bounded causal replay"
     }
   ]
 }

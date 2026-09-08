@@ -161,6 +161,7 @@ Result build(
     !finite(stop_successor.initial_lag_m) ||
     !finite(stop_successor.initial_heading_offset_rad) ||
     !finite(stop_successor.lifted_control_origin_progress_m) ||
+    !finite(stop_successor.initial_course_progress_m) ||
     !finite(stop_successor.initial_lateral_lower_m) ||
     !finite(stop_successor.initial_lateral_upper_m) ||
     stop_successor.initial_lateral_lower_m >
@@ -288,8 +289,7 @@ Result build(
     source_artifact.maximum_normalized_constraint_violation;
 
   const double initial_course_progress_m =
-    stop_successor.lifted_control_origin_progress_m -
-    stop_successor.initial_lag_m;
+    stop_successor.initial_course_progress_m;
   execution->predicted_states.push_back(artifact::PredictedState{
     stop_successor.initial_lateral_m,
     stop_successor.initial_lag_m,

@@ -1226,7 +1226,63 @@ static Result evaluate_with_stop_profile(
   std::size_t terminal_stop_publisher_interval_sample_count{};
   recovery::PathClearanceResult terminal_stop_clearance;
   dynamic_proof::Result terminal_stop_dynamic;
-  {
+  const auto & terminal_intent = execution.terminal_intent_contract;
+  const bool current_terminal_intent_satisfied = !terminal_intent.active ||
+    (std::abs(continuation_trajectory.lateral_m.back() -
+      terminal_intent.lateral_reference_m) <= terminal_intent.lateral_tolerance_m &&
+    std::abs(wrap_to_pi(continuation_trajectory.heading_offset_rad.back() -
+      terminal_intent.heading_reference_rad)) <= terminal_intent.heading_tolerance_rad);
+  // Command interval ownership uses the execution clock. The conservative
+  // footprint prefix index above includes a physical residual allowance and
+  // cannot identify the exact end of a serialized publisher interval.
+  const std::size_t stop_publisher_sample_count = static_cast<std::size_t>(
+    std::upper_bound(continuation_trajectory.elapsed_time_sec.begin(),
+      continuation_trajectory.elapsed_time_sec.end(),
+      publisher_interval_sec + kIdentityTolerance) -
+    continuation_trajectory.elapsed_time_sec.begin());
+  const bool complete_current_stop_suffix =
+    result.continuation_scope ==
+    mpcc_rate_resolved_physical_adapter::ContinuationProofScope::FullSuffix &&
+    result.static_wall_scope == StaticWallProofScope::FullSuffix &&
+    result.dynamic_obstacle_scope == DynamicObstacleProofScope::FullSuffix &&
+    result.proved_control_stage_count == command_cursor.remaining_control_stage_count &&
+    continuation.actuation_samples.size() == continuation_trajectory.elapsed_time_sec.size() &&
+    stop_publisher_sample_count > 0U &&
+    stop_publisher_sample_count <= continuation.actuation_samples.size() &&
+    std::abs(continuation_trajectory.elapsed_time_sec[stop_publisher_sample_count - 1U] -
+      publisher_interval_sec) <= kIdentityTolerance &&
+    std::abs(continuation_trajectory.velocity_mps.back()) <=
+    std::max(kIdentityTolerance, execution.physical_global_tolerance) &&
+    current_terminal_intent_satisfied;
+  if (complete_current_stop_suffix) {
+    // The same current-world controls already prove the publisher interval
+    // and the complete path through rest. Replacing them by immediate maximum
+    // braking can create a rear-peer collision absent from this certified
+    // trajectory. Carry this exact suffix and its applied actuator samples;
+    // neither planned rest nor a publisher-only proof satisfies this branch.
+    terminal_stop_trajectory = continuation_trajectory;
+    terminal_stop_actuation_samples = continuation.actuation_samples;
+    terminal_stop_publisher_interval_sample_count = stop_publisher_sample_count;
+    terminal_stop_clearance = continuation_clearance;
+    terminal_stop_dynamic = dynamic;
+    result.terminal_stop_attempted = true;
+    result.terminal_stop_certified = true;
+    result.terminal_stop_uses_solved_suffix = true;
+    result.terminal_stop_normal_path_reference = false;
+    result.terminal_stop_reference_attempts = 0U;
+    result.terminal_stop_reason =
+      mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason::None;
+    result.terminal_stop_exact_reason = continuation.exact_reason;
+    result.terminal_stop_publisher_interval_end_steering_rad =
+      continuation.actuation_samples[stop_publisher_sample_count - 1U].end_steering_rad;
+    result.terminal_stop_final_steering_rad =
+      continuation.actuation_samples.back().end_steering_rad;
+    result.terminal_stop_path_clearance = continuation_clearance;
+    result.terminal_stop_dynamic_checked_pose_count = dynamic.checked_pose_count;
+    result.terminal_stop_minimum_dynamic_clearance_m = dynamic.minimum_clearance_m;
+    result.terminal_stop_follow_checked_state_count = result.follow_checked_state_count;
+    result.terminal_stop_follow_minimum_gap_m = result.follow_minimum_gap_m;
+  } else {
     // Publication is causal: the current serialized command can remain on the
     // actuator for one publisher interval even if the next solve fails. Every
     // retained normal transaction therefore receives authority only when that
@@ -1474,6 +1530,7 @@ static Result evaluate_with_stop_profile(
   proof.follow_minimum_gap_m = result.follow_minimum_gap_m;
   proof.terminal_stop_certified = result.terminal_stop_certified;
   proof.terminal_stop_normal_path_reference = result.terminal_stop_normal_path_reference;
+  proof.terminal_stop_uses_solved_suffix = result.terminal_stop_uses_solved_suffix;
   proof.terminal_stop_static_checked_pose_count =
     terminal_stop_clearance.checked_pose_count;
   proof.terminal_stop_dynamic_checked_pose_count =
@@ -1664,7 +1721,8 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
 
   // The normal prefix may already be exhausted, so no artifact cursor is
   // consulted.  Lift the fresh physical progress near the source horizon,
-  // then solve the course coordinate and lag directly from the measured pose.
+  // then project the measured pose at that exact reference coordinate. The
+  // association chooses a coordinate frame, not an alternate physical pose.
   const auto & source_trajectory = source.trajectory;
   if (
     source_trajectory.progress_m.empty() ||
@@ -1684,28 +1742,25 @@ StopSuccessorResult evaluate_stop_successor(const Request & request)
     return result;
   }
   result.lifted_control_origin_progress_m = lifted.progress_m;
-  double absolute_progress_m = lifted.progress_m;
-  std::optional<contract::FrenetPose> current_frenet;
-  for (int iteration = 0; iteration < 2; ++iteration) {
-    const auto frame = mpc_stage_geometry::sample_course_frame(
-      source.course_frame_knots, absolute_progress_m,
-      std::max(kIdentityTolerance, source.bound_tolerance_m));
-    if (!frame.has_value()) {
-      result.reason = StopSuccessorReason::CourseFrameUnavailable;
-      return result;
-    }
-    current_frenet = contract::project_planar_pose_to_frenet(
-      contract::PlanarPose{
-        request.control_pose.x_m, request.control_pose.y_m,
-        request.control_pose.yaw_rad},
-      contract::PlanarPose{
-        frame->x_m, frame->y_m, frame->heading_rad});
-    if (!current_frenet.has_value()) {
-      result.reason = StopSuccessorReason::CourseFrameUnavailable;
-      return result;
-    }
-    absolute_progress_m = lifted.progress_m - current_frenet->lag_m;
+  const double absolute_progress_m = lifted.progress_m;
+  const auto frame = mpc_stage_geometry::sample_course_frame(
+    source.course_frame_knots, absolute_progress_m,
+    std::max(kIdentityTolerance, source.bound_tolerance_m));
+  if (!frame.has_value()) {
+    result.reason = StopSuccessorReason::CourseFrameUnavailable;
+    return result;
   }
+  const auto current_frenet = contract::project_planar_pose_to_frenet(
+    contract::PlanarPose{
+      request.control_pose.x_m, request.control_pose.y_m,
+      request.control_pose.yaw_rad},
+    contract::PlanarPose{
+      frame->x_m, frame->y_m, frame->heading_rad});
+  if (!current_frenet.has_value()) {
+    result.reason = StopSuccessorReason::CourseFrameUnavailable;
+    return result;
+  }
+  result.initial_course_progress_m = absolute_progress_m;
   result.initial_lateral_m = current_frenet->lateral_m;
   result.initial_lag_m = current_frenet->lag_m;
   result.initial_heading_offset_rad = current_frenet->heading_offset_rad;

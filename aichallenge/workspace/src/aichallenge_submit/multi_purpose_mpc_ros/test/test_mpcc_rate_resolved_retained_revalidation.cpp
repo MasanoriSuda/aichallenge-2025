@@ -1499,6 +1499,128 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
+  StopSuccessorPreservesCurrentPoseWhenProgressAssociationHasLag)
+{
+  auto request = accepted_request(certified_plan());
+  request.now_sec = 2.0;
+  request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.60, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.measured_to_control_elapsed_sec = {0.0};
+  request.current_speed_mps = 2.0;
+  request.control_origin_speed_mps = 2.0;
+  request.current_steering_rad = 0.10;
+  request.current_response_steering_rad = 0.10;
+  request.previous_published_steering_rad = 0.10;
+
+  const auto successor = retained::evaluate_stop_successor(request);
+  ASSERT_TRUE(successor.accepted());
+  const auto bundle = stop_bundle::build(request, successor, 101U);
+  ASSERT_NE(bundle.plan, nullptr);
+  const auto & execution = *bundle.plan->execution_artifact;
+  ASSERT_TRUE(execution.semantic_initial_state.has_value());
+  const auto & initial = *execution.semantic_initial_state;
+  const double course_progress = execution.course_progress_origin_m + initial.progress_m;
+  const auto frame = multi_purpose_mpc_ros::mpc_stage_geometry::sample_course_frame(
+    bundle.plan->physical_snapshot->course_frame_knots, course_progress);
+  ASSERT_TRUE(frame.has_value());
+  const auto reconstructed = contract::reconstruct_planar_pose_from_frenet(
+    {frame->x_m, frame->y_m, frame->heading_rad},
+    {initial.lateral_m, initial.lag_m, initial.heading_offset_rad});
+  ASSERT_TRUE(reconstructed.has_value());
+  EXPECT_NEAR(reconstructed->x_m, request.control_pose.x_m, 1e-10);
+  EXPECT_NEAR(reconstructed->y_m, request.control_pose.y_m, 1e-10);
+  EXPECT_NEAR(reconstructed->yaw_rad, request.control_pose.yaw_rad, 1e-10);
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
+  CompleteCurrentWorldSuffixThroughRestOwnsItsTerminalProof)
+{
+  auto execution = std::make_shared<artifact::ExecutionArtifact>(execution_artifact());
+  execution->physical_global_tolerance = 0.016;
+  execution->semantic_initial_steering_rad = 0.0;
+  execution->semantic_initial_response_steering_rad = 0.0;
+  execution->predicted_states = {
+    {0.0, 0.10, 0.0, 2.0, 0.0, 0.0, 0.0},
+    {0.0, 0.10, 0.0, 3.2, 3.12, 0.0, 0.0},
+    {0.0, 0.10, 0.0, 0.0, 3.12 + 1.6 * (3.2 / 3.0), 0.0, 0.0},
+  };
+  execution->semantic_initial_state = execution->predicted_states.front();
+  execution->control_stages = {
+    {1.0, 0.0, 2.6, 1.2, 0.0, 4.0, -3.0, 1.37},
+    {-3.0, 0.0, 1.6, 3.2 / 3.0, 0.0, 4.0, -3.0, 1.37},
+  };
+  execution->nominal_path_distance_m =
+    {0.0, 3.12, execution->predicted_states.back().progress_m};
+  auto snapshot = source_snapshot(execution->identity);
+  snapshot.course_frame_knots.back() = {57.0, 57.0, 0.0, 0.0, 7};
+  snapshot.terminal_stop_course_geometry.progress_m = {0.0, 3.0, 7.0};
+  const auto exact = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::build(
+    *execution, execution->identity.source_context.intent,
+    execution->identity.source_context.stage_geometry_id);
+  ASSERT_TRUE(exact.exact_trajectory.has_value());
+  snapshot.trajectory = *exact.exact_trajectory;
+  snapshot.current_pose = {50.10, 0.0, 0.0};
+  snapshot.control_prefix = {snapshot.current_pose};
+  const auto plan = certified::build(execution, snapshot, physical::evaluate(snapshot));
+  ASSERT_NE(plan.plan, nullptr);
+  auto request = accepted_request(plan.plan);
+  request.now_sec = execution->prediction_origin_sec;
+  request.control_origin_sec = request.now_sec;
+  request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, 0.0, 0.0};
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.10;
+  request.control_pose = snapshot.current_pose;
+  request.measured_to_control_path = {request.control_pose};
+  request.current_speed_mps = 2.0;
+  request.control_origin_speed_mps = 2.0;
+  request.current_time_steering_rad = 0.0;
+  request.current_steering_rad = 0.0;
+  request.current_response_steering_rad = 0.0;
+  request.previous_published_steering_rad = 0.0;
+  request.obstacles.obstacles.push_back({"rear", {49.60, 0.0, 2.2, 0.0, 0.05}});
+
+  const auto result = retained::evaluate(request);
+  ASSERT_EQ(result.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(result.proof.has_value());
+  EXPECT_EQ(result.static_wall_scope, retained::StaticWallProofScope::FullSuffix);
+  EXPECT_EQ(result.dynamic_obstacle_scope, retained::DynamicObstacleProofScope::FullSuffix);
+  EXPECT_TRUE(result.terminal_stop_certified);
+  EXPECT_TRUE(result.terminal_stop_uses_solved_suffix);
+  EXPECT_DOUBLE_EQ(result.terminal_stop_publisher_interval_end_steering_rad, 0.0);
+  EXPECT_DOUBLE_EQ(result.terminal_stop_final_steering_rad, 0.0);
+  EXPECT_EQ(result.proof->terminal_stop_trajectory.elapsed_time_sec,
+    result.proof->continuation_trajectory.elapsed_time_sec);
+  EXPECT_EQ(result.proof->terminal_stop_trajectory.velocity_mps,
+    result.proof->continuation_trajectory.velocity_mps);
+  ASSERT_GT(result.proof->terminal_stop_publisher_interval_sample_count, 0U);
+  EXPECT_NEAR(result.proof->terminal_stop_actuation_samples[
+    result.proof->terminal_stop_publisher_interval_sample_count - 1U].elapsed_time_sec,
+    execution->publication_interval_sec, 1e-12);
+  EXPECT_NEAR(result.proof->terminal_stop_trajectory.velocity_mps.back(), 0.0, 1e-8);
+  const auto authority = production::build(result);
+  ASSERT_TRUE(authority.authority.has_value());
+  EXPECT_DOUBLE_EQ(authority.authority->command.acceleration_mps2, 1.0);
+
+  // The original solved endpoint is still rest, but fresh velocity changes
+  // either leave residual motion or exhaust the braking law before its end.
+  // Neither an old rest label nor a clear first interval grants this proof.
+  for (const double speed : {1.95, 2.05}) {
+    auto changed = request;
+    changed.current_speed_mps = speed;
+    changed.control_origin_speed_mps = speed;
+    const auto rejected = retained::evaluate(changed);
+    EXPECT_NE(rejected.reason, retained::Reason::Accepted);
+    EXPECT_FALSE(rejected.terminal_stop_uses_solved_suffix);
+    EXPECT_FALSE(rejected.proof.has_value());
+  }
+}
+
+TEST(
+  MpccRateResolvedRetainedRevalidation,
   DoesNotRelabelStopEndpointAsReturnCompletion)
 {
   const auto plan = certified_plan(

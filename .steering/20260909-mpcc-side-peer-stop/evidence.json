@@ -1,0 +1,253 @@
+{
+  "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+  "source": "output/20260909-side-peer-stop-audit/zero/mpcc_architecture_snapshots/000000000396-4592b4159b47e475-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+  "source_sha256": "37d45f935924debb2c428dd5e722fc53994baece98ac70f9a6439a6cd25d26c7",
+  "scope": "offline architecture comparison, no runtime promotion; subsequent production repair incomplete",
+  "artifacts": [
+    {
+      "path": ".steering/20260909-mpcc-side-peer-stop/probe.cpp",
+      "bytes": 6213,
+      "sha256": "049c384df53bc2eb3a7104280591e41307d8c711e73c4a2ffc266143cf0345b2"
+    },
+    {
+      "path": ".steering/20260909-mpcc-side-peer-stop/world_probe.cpp",
+      "bytes": 11286,
+      "sha256": "42eb6836dff675f44427b9b8cfc686afe3ac506a27e75a1233289674df1a1168"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/coordinate-audit.json",
+      "bytes": 8534,
+      "sha256": "b74e86c394e8c22f55e056f0c4a6338931aeb8ca49e18bb851e8f22073753040"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/equality-comparison/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/equality-comparison/original/probe.log",
+      "bytes": 85,
+      "sha256": "95347fd9d9d4e7ece547360962ddbc06be3c98785cd58d530a71b40f40c44630"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/equality-comparison/original/report.yaml",
+      "bytes": 205856,
+      "sha256": "3ca7488bd5a6b2bfc44fe8b2d62592e03953ea1ccac1bacd296a9ff7ccfe94a2"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/equality-comparison/probe",
+      "bytes": 1506264,
+      "sha256": "63526e4ad9431b022387646b121cfb36c9a5f54e239db87b97f807dbeea310cc"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/equality-comparison/world/probe.log",
+      "bytes": 82,
+      "sha256": "010e1583943762068259e9f6bed26275994e55327d9154ebfe5a4edf3c94aa4e"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/equality-comparison/world/report.yaml",
+      "bytes": 220099,
+      "sha256": "6d4629d5e7de12f20878408df9f342c905821e37da3160fe2c7806ab1b00c984"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/historical/input/000000000396-d207420eacc8b73c-cruise-side-neutral-physical-proof-offline-stop-candidate-input/snapshot.yaml",
+      "bytes": 39239,
+      "sha256": "aa094722380e763d6df43cf63b4eb88f342545d5ad7a4908eef0af29a07eb090"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/historical/input/000000000396-d207420eacc8b73c-cruise-side-neutral-physical-proof-offline-stop-candidate-input/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/historical/probe.log",
+      "bytes": 69,
+      "sha256": "204ceacdd82460a4e0f951925535bfcb9a9f6a7f91b1d25a0e9b6ab2207e849a"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/historical/report.yaml",
+      "bytes": 15503,
+      "sha256": "149c98679d20cc533ec62b2a22ddc810ab99a014f97431619351f4f07fdafed0"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/manifest.json",
+      "bytes": 429,
+      "sha256": "2ae8acaf0c7fa3619f3daebe5fcb85021c9b18712b0fe9fd69e41124718a98c5"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/native-regression-before.log",
+      "bytes": 9920,
+      "sha256": "2b0d3f2a25b59d20d84f820a7f55f3482d56a1afb06cb392e455d24f88cfe0d5"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/native-stop-proof/build.log",
+      "bytes": 773,
+      "sha256": "b7e8db94083b83594d4d24f81b40488b32e5203090b9673b86e45ce0e7f97dc9"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/native-stop-proof-r2/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/native-stop-proof-r2/original/probe.log",
+      "bytes": 86,
+      "sha256": "4795c29f39fee3965a16ca6849a12bf1cc9d3baa7ca123768d00c70263b84181"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/native-stop-proof-r2/original/report.yaml",
+      "bytes": 215188,
+      "sha256": "1da14339bb0068b3b2fd4dc5e2b25ee94662e27de70082845ba3b61cad6a4ac2"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/native-stop-proof-r2/probe",
+      "bytes": 1541544,
+      "sha256": "61b75f0c4f65ccac35efa98427daab8cb631b605ff46a8fef5408b2d335743bc"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/native-stop-proof-r2/world/probe.log",
+      "bytes": 83,
+      "sha256": "9d643533c97596aa6de6ecd43616d1438eafc95db33a77b2e3a1e4126772361c"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/native-stop-proof-r2/world/report.yaml",
+      "bytes": 1034503,
+      "sha256": "2a9e8d3ef9522690293861b8ab7f3537e8b72da1dd1a999897e1fcdd56700118"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/probe",
+      "bytes": 1138648,
+      "sha256": "3771185709da99c210fe2a811669ec14457236a31d09544eae37085746aac4b5"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/world-comparison/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/world-comparison/probe",
+      "bytes": 1449864,
+      "sha256": "bb6e97dc312d3f42d0e0b0a86ca381d5da04dc10cc14fc36c0f9c4f58001b477"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/world-comparison/probe.log",
+      "bytes": 73,
+      "sha256": "13068a33445b5066f02cd8ce831594fc70f3e3e0d3cab91f8c82a7fa64bba281"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/world-comparison/report.yaml",
+      "bytes": 17434,
+      "sha256": "7a408dd145b7520d25fd066f68bf15f6126e6fd1fd4cb6baadc9c65da94521b0"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/input/000000000396-4592b4159b47e475-cruise-side-neutral-physical-proof-offline-stop-candidate-input/snapshot.yaml",
+      "bytes": 38933,
+      "sha256": "4c2246f22706e234a86f9aae579872ac33001c3fef89debbae8dbf6703307ce7"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/input/000000000396-4592b4159b47e475-cruise-side-neutral-physical-proof-offline-stop-candidate-input/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/mpcc_architecture_snapshots/000000000396-4592b4159b47e475-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 240377,
+      "sha256": "37d45f935924debb2c428dd5e722fc53994baece98ac70f9a6439a6cd25d26c7"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/mpcc_architecture_snapshots/000000000396-4592b4159b47e475-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/probe.log",
+      "bytes": 63,
+      "sha256": "a03ce6645e4d815aa56587b3216d0a2117a6830da58fae473c11253d407585de"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/equilibrated-cold--external-primal-solved-stop-nonlinear-oracle.log",
+      "bytes": 609,
+      "sha256": "66ee815709fa8faf39b65a848b89cbaad6016e36eaf7aea207b1e4d6eaf9322d"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/equilibrated-cold--external-primal.log",
+      "bytes": 706,
+      "sha256": "b377507a73560747f07c3c3457a7731e1f9d797a9e4b45aba47e20920bce0258"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/equilibrated-cold-primal.txt",
+      "bytes": 4483,
+      "sha256": "069f784754feb5962225b702a7f04cca8d6e61825c3620a555ff9a30216efdf7"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/equilibrated-warm--external-primal-solved-stop-nonlinear-oracle.log",
+      "bytes": 612,
+      "sha256": "55da58c96bc96cb0cb8a48cc70353bb176d844f5c3a7a45190e428d89791d92d"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/equilibrated-warm--external-primal.log",
+      "bytes": 674,
+      "sha256": "13daa33f9bf80c474a1f825ab29aff31d8e08d83e0f804db9347d8075b26c879"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/equilibrated-warm-primal.txt",
+      "bytes": 4403,
+      "sha256": "98fc7a11e9187aee27e5033cf968c75244a04ca9749d1bc694ceb342e49845de"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/normalized-cold--external-primal-solved-stop-nonlinear-oracle.log",
+      "bytes": 685,
+      "sha256": "cd0d836c6a53516f4d0a876f4c38b71071ea84598f0d3bab2a30ed7da8507b86"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/normalized-cold--external-primal.log",
+      "bytes": 701,
+      "sha256": "a293574a0e344153fd7e6a8919ec995e2e6212de7ab60570946bebd04342efc4"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/normalized-cold-primal.txt",
+      "bytes": 4464,
+      "sha256": "3e77420e227639cdac596e765249925a870f5cea35a3e2b6499bd7b0af283cc0"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/normalized-warm--external-primal-solved-stop-nonlinear-oracle.log",
+      "bytes": 612,
+      "sha256": "a6d5852078e27765cd5566daae6448ce93bd3d97b9221abcef3d827eb1c8b67d"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/normalized-warm--external-primal.log",
+      "bytes": 672,
+      "sha256": "d2020c87b06cd27dbbaad193af0e91dcce4b25a8f826212c84d5fbeb37f697d9"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/normalized-warm-primal.txt",
+      "bytes": 4398,
+      "sha256": "f1dc36de81abdc23f063254ed25e0fc113e128ed047904fd40ea9ae7de8f50cc"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/physical-comparison.log",
+      "bytes": 787,
+      "sha256": "c8a556094c5448641fc496e7892d62db2d2e16a0be05d575b3e9ff3b5a10f7a5"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/probe.log",
+      "bytes": 68,
+      "sha256": "77d2abb95f4414fa42dd5af375277ede4ba2aff000623cdd4123ffc976bf19e0"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/qp-0/report.yaml",
+      "bytes": 45655,
+      "sha256": "69e45ab78e2361f5290def724f3832e8205698b931dc1ada89b486ef54c02b52"
+    },
+    {
+      "path": "output/20260909-side-peer-stop-audit/zero/report.yaml",
+      "bytes": 1211,
+      "sha256": "e6b1846f47de0a9ded9de54a534af90486503c5f5687e01f3277e5cefa22b060"
+    }
+  ]
+}

@@ -592,18 +592,19 @@ RelinearizationResult relinearize_around_primal(
   std::vector<model::Linearization> linearizations;
   linearizations.reserve(static_cast<std::size_t>(horizon));
   for (int stage = 0; stage < horizon; ++stage) {
-    const int state = model::kStateDimension * stage;
     const int input = state_values + model::kInputDimension * stage;
     const int problem_input = model::kInputDimension * stage;
     const auto & semantic_input =
       request.inputs[static_cast<std::size_t>(stage)];
-    Eigen::Matrix<double, model::kStateDimension, 1> linearization_state;
-    Eigen::Matrix<double, model::kInputDimension, 1> linearization_input;
-    for (int element = 0; element < model::kStateDimension; ++element) {
-      linearization_state[element] = std::clamp(
-        primal[state + element], problem.state_lower[state + element],
-        problem.state_upper[state + element]);
+    const auto selected_state = mpcc_rate_resolved_problem::select_linearization_state(
+      problem, primal, stage);
+    if (!selected_state) {
+      result.reason = RelinearizationReason::InvalidPrimal;
+      result.stage = stage;
+      return result;
     }
+    const auto & linearization_state = *selected_state;
+    Eigen::Matrix<double, model::kInputDimension, 1> linearization_input;
     for (int element = 0; element < model::kInputDimension; ++element) {
       linearization_input[element] = std::clamp(
         primal[input + element],

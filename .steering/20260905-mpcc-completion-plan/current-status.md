@@ -1,20 +1,36 @@
 # Current status and remaining completion work
 
-2026-09-09JST. Working baseline5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5.
+2026-09-09JST. Calibration baseline b530883997e80cd78aa7e70bcd53bf2b6bcf93fc;
+the subsequent side-peer/Stop slice is fixed by its source/binary/run manifests.
 The complete MPCC acceptance is NOT achieved. Preserve previous failed trials.
 The user authorised autonomous execution through completion on2026-09-09.
 Local commits bc01ff2f,ca38bf18,d54822c9preserve the previous completed work.
-Commit5cfc50bcpreserves the coordinate repair and its evidence. The subsequent
-peer-body patch is locally validated but coupled acceptance has failed.
+Commit5cfc50bcpreserves the coordinate repair and its evidence. Commit b5308839
+preserves complete peer-body geometry and separate semantic physical initial state.
+The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
+locally validated; coupled acceptance remains open.
 
-Current next step: fixed-input audit of missing side-peer constraints and Stop
-support/conditioning. The raw-primal initial course-window boundary is repaired
+Current next step: preserve the missing published Stop source/artifact/current
+world at the first failure, and audit convex-branch feasibility on sealed input.
+The side-peer/Stop repair passes 25-package build and all 60 CTest groups / 2346
+records. Changed-input dev2 is rejected at Domain 2 decision 978: the adopted
+Stop's current-world continuation loses wall reserve. Stop source 442 is missing
+because the authority-loss recorder incorrectly skips the external Stop label.
+See [dev2 result](../20260909-mpcc-side-peer-stop/dev2-results.md).
+See [side-peer/Stop results](../20260909-mpcc-side-peer-stop/results.md).
+The exact same full-body source now admits a native production zero-objective
+Stop with unchanged hard constraints, approximately 8.0 ms offline. Old normal A
+still fails. New dev2 normal source 381 has an exact rational certificate that its
+affine convex branch is infeasible even with current row tolerances; this says
+nothing conclusive about physical-scene feasibility. The older normal A's earlier
+invalid tangent is repaired with the model adapter's existing declared-box rule.
+The raw-primal initial course-window boundary is repaired
 with a required separate semantic physical state:25packages/60CTestgroups/
 2339records pass. One single trial finishes six laps253.944031s/penalty0,
 active moving override0, callbackmax18.913ms/0overruns, receiptmax35.070181ms.
 Same-run source/clock publication pauses remain separately documented.
-A complete-body offline Stop is certified; current zero-objective Stop still
-fails. See[initial-state results](../20260909-mpcc-semantic-physical-initial/results.md).
+See[initial-state results](../20260909-mpcc-semantic-physical-initial/results.md)
+for the earlier zero-objective failure and its baseline evidence.
 The first complete-bodydev2run is
 rejected with moving Emergency/Recovery and one lap per vehicle. See
 [peer results](../20260908-peer-envelope-audit/dev2-results.md). Do not advance

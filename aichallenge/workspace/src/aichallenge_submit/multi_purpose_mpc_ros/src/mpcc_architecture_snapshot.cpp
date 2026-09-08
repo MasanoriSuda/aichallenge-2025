@@ -235,6 +235,9 @@ YAML::Node assembly_request_node(const problem::AssemblyRequest & request)
     item["lateral_coefficient"] = constraint.lateral_coefficient;
     item["effective_progress_coefficient"] =
       constraint.effective_progress_coefficient;
+    if (constraint.physical_state_coefficients) {
+      item["physical_state_coefficients"] = fixed_vector_node(*constraint.physical_state_coefficients);
+    }
     obstacles.push_back(item);
   }
   node["dynamic_obstacle_constraints"] = obstacles;
@@ -354,6 +357,8 @@ YAML::Node outcome_node(const persistent_osqp::SolveOutcome & outcome)
   telemetry["scaled_termination"] = outcome.telemetry.scaled_termination;
   telemetry["row_tolerance_preconditioned"] =
     outcome.telemetry.row_tolerance_preconditioned;
+  telemetry["feasibility_equalities_augmented"] =
+    outcome.telemetry.feasibility_equalities_augmented;
   telemetry["variable_coordinate_scaled"] =
     outcome.telemetry.variable_coordinate_scaled;
   telemetry["minimum_variable_scale"] =
@@ -895,6 +900,15 @@ std::optional<problem::AssemblyRequest> load_assembly_request(
         item["lower"].as<double>(), item["upper"].as<double>(),
         item["lateral_coefficient"].as<double>(),
         item["effective_progress_coefficient"].as<double>()});
+    if (item["physical_state_coefficients"]) {
+      const auto coefficients = load_vector(item["physical_state_coefficients"]);
+      if (!coefficients || coefficients->size() != mpcc_rate_resolved::kStateDimension ||
+        !coefficients->allFinite() || coefficients->isZero(0.0))
+      {
+        return std::nullopt;
+      }
+      request.dynamic_obstacle_constraints.back().physical_state_coefficients = *coefficients;
+    }
   }
   return request;
 }

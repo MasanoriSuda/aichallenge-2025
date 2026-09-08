@@ -1140,15 +1140,11 @@ def test_certified_terminal_contingency_publishes_stop_not_normal_evidence() -> 
     assert "pending.published_authority_intent !=" in record
     assert "mpcc_contract::ControlIntent::Stop" in record
 
-    stop_observation_start = SOURCE.index(
-        "void update_published_stop_lattice_observation("
-    )
-    stop_observation_end = SOURCE.index(
-        "void record_canonical_normal_final_command(", stop_observation_start
-    )
-    stop_observation = SOURCE[stop_observation_start:stop_observation_end]
-    assert "published.published_authority_intent" in stop_observation
-    assert "invalidate_published_stop_lattice_observation();" in stop_observation
+    final_start = SOURCE.index("void record_final_published_authority(")
+    final_end = SOURCE.index("const std::optional<overtake_orchestrator::AuthorityTrace>", final_start)
+    final = SOURCE[final_start:final_end]
+    assert "authority_intent == mpcc_contract::ControlIntent::Stop" in final
+    assert "invalidate_current_world_stop_observation();" in final
 
 
 def test_certified_stop_publication_preserves_the_single_execution_ledger() -> None:
@@ -2941,35 +2937,21 @@ def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
     assert "solver_source_snapshot" not in stop_submit
     assert "ExecutionArtifact" not in stop_submit
 
-    publication_start = SOURCE.index(
-        "void update_published_stop_lattice_observation("
-    )
-    publication_end = SOURCE.index(
-        "void record_canonical_normal_final_command(", publication_start
-    )
-    publication = SOURCE[publication_start:publication_end]
-    assert "published.solver_source_snapshot" not in publication
-    assert "submit_latest(" not in publication
-    assert "evaluate(" not in publication
-    assert "same_tactical_stop_scope(" in publication
-    assert "invalidate_published_stop_lattice_observation()" in publication
-    assert "rate_resolved_stop_lattice_published_source_identity_ = identity" in publication
+    assert "rate_resolved_artifact::supports_intent(intent)" in stop_submit
+    assert "same_current_world_stop_scope(" in stop_submit
+    assert "rate_resolved_stop_lattice_submitted_source_identity_ = source->identity" in stop_submit
+    assert stop_submit.index("submit_latest(") < stop_submit.index("if (submission.accepted)")
+    assert "invalidate_current_world_stop_observation();" in stop_submit
+    assert "update_published_stop_lattice_observation(" not in SOURCE
+    assert "rate_resolved_stop_lattice_published_source_identity_" not in SOURCE
 
-    final_start = publication_end
+    final_start = SOURCE.index("void record_canonical_normal_final_command(")
     final_end = SOURCE.index(
-        "const std::optional<overtake_orchestrator::AuthorityTrace>",
-        final_start,
+        "const std::optional<overtake_orchestrator::AuthorityTrace>", final_start
     )
     final_publication = SOURCE[final_start:final_end]
-    observation_update = final_publication.index(
-        "update_published_stop_lattice_observation(pending)"
-    )
-    assert final_publication.index("mark_executed(") < observation_update
-    assert (
-        final_publication.index("record_published_bundle_source(")
-        < observation_update
-    )
-    assert "invalidate_published_stop_lattice_observation();" in final_publication
+    assert "rate_resolved_stop_lattice_submitted_source_identity_ =" not in final_publication
+    assert "invalidate_current_world_stop_observation();" in final_publication
 
     observe_start = SOURCE.index(
         "void record_rate_resolved_stop_lattice_shadow("
@@ -3030,8 +3012,8 @@ def test_live_stop_lattice_bridge_has_one_canonical_authority_edge() -> None:
         mailbox_start,
     )
     mailbox = SOURCE[mailbox_start:mailbox_end]
-    assert "current_tactical_scope_result" in mailbox
-    assert "same_tactical_stop_scope(" in mailbox
+    assert "current_source_scope_result" in mailbox
+    assert "same_current_world_stop_scope(" in mailbox
     assert "result->source_normal_identity" in mailbox
     assert "observe_rate_resolved_stop_lattice_current_world_join(" not in SOURCE
 
@@ -3339,7 +3321,7 @@ def test_overtake_sibling_authority_commits_only_after_exact_publication() -> No
         "bool publisher_bound_stateless_overtake_source_active() const noexcept"
     )
     source_predicate_end = SOURCE.index(
-        "void invalidate_published_stop_lattice_observation()", source_predicate_start
+        "void invalidate_current_world_stop_observation()", source_predicate_start
     )
     source_predicate = SOURCE[source_predicate_start:source_predicate_end]
     assert "stateless_sibling_authority_active" in source_predicate

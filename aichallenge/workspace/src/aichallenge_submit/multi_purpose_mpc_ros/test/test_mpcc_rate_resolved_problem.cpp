@@ -76,6 +76,34 @@ problem::AssemblyRequest straight_request(const int horizon = 3)
 
 }  // namespace
 
+TEST(MpccRateResolvedProblem, AssemblesPhysicalPlaneHeadingAndProgressIndependently)
+{
+  auto request = straight_request();
+  problem::DynamicObstacleConstraint row;
+  row.state_stage = 2;
+  row.axis = problem::DynamicObstacleConstraintAxis::Lateral;
+  row.upper = 1.5;
+  Eigen::Matrix<double, model::kStateDimension, 1> coefficients;
+  coefficients << 0.3, 0.7, -0.2, 0.0, 0.9, 0.0, 0.0;
+  row.physical_state_coefficients = coefficients;
+  request.dynamic_obstacle_constraints.push_back(row);
+  const auto qp = problem::assemble(request);
+  ASSERT_TRUE(qp.has_value());
+  const int last = qp->constraints.rows() - 1;
+  for (int element = 0; element < model::kStateDimension; ++element) {
+    EXPECT_DOUBLE_EQ(qp->constraints.coeff(last, 2 * model::kStateDimension + element), coefficients[element]);
+  }
+  EXPECT_DOUBLE_EQ(qp->upper_bound[last], 1.5);
+  const auto semantic = problem::decode_row(last, request.horizon_steps, false, false, 0,
+    &request.dynamic_obstacle_constraints);
+  EXPECT_EQ(semantic.kind, problem::RowKind::DynamicObstaclePhysicalPlane);
+  request.dynamic_obstacle_constraints.front().physical_state_coefficients->setZero();
+  EXPECT_FALSE(problem::assemble(request).has_value());
+  (*request.dynamic_obstacle_constraints.front().physical_state_coefficients)[0] =
+    std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(problem::assemble(request).has_value());
+}
+
 TEST(MpccRateResolvedProblem, ResolvesPreviousInputFromSerializedPublication)
 {
   const auto previous_input = problem::resolve_serialized_previous_input(

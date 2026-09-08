@@ -112,6 +112,9 @@ struct PreparedProblem
   Eigen::VectorXd constraint_row_scale;
   /// D_jj in physical_primal = D * solver_primal.
   Eigen::VectorXd variable_scale;
+  bool feasibility_equalities_augmented{false};
+  Eigen::VectorXd equality_dual_factor;
+  Eigen::VectorXd equality_rhs;
   std::vector<c_float> quadratic_values;
   std::vector<c_int> quadratic_rows;
   std::vector<c_int> quadratic_columns;
@@ -287,6 +290,45 @@ std::optional<PreparedProblem> prepare_problem(
       return std::nullopt;
     }
   }
+  Eigen::VectorXd solver_linear_cost = linear_cost.cwiseProduct(problem.variable_scale);
+  if (row_tolerance_normalized(preconditioning_policy) &&
+    problem.quadratic_cost.norm() == 0.0 && linear_cost.isZero(0.0))
+  {
+    // A feasibility QP has a flat objective. With an equality-feasible
+    // bootstrap, ADMM can lose its residual scale and stall even when the
+    // original hard rows admit a solution. Add ||S_eq(A_eq*x-b_eq)||^2,
+    // which is identically zero on the same exact feasible set. The equalities
+    // stay hard, and S is the existing physical row normalization: there is
+    // no new weight, slack, relaxed tolerance, retry or preferred trajectory.
+    Eigen::VectorXd mask = Eigen::VectorXd::Zero(problem.constraints.rows());
+    Eigen::VectorXd target = mask;
+    problem.equality_dual_factor = mask;
+    problem.equality_rhs = mask;
+    for (Eigen::Index row = 0; row < lower_bound.size(); ++row) {
+      if (std::isfinite(lower_bound[row]) && lower_bound[row] == upper_bound[row]) {
+        const double scale = problem.constraint_row_scale[row];
+        mask[row] = 1.0;
+        target[row] = scale * lower_bound[row];
+        problem.equality_rhs[row] = lower_bound[row];
+        problem.equality_dual_factor[row] = 2.0 * scale * scale;
+      }
+    }
+    Eigen::SparseMatrix<double> residual = mask.asDiagonal() * problem.solver_constraints;
+    residual.prune(0.0);
+    if (residual.nonZeros() > 0) {
+      const Eigen::SparseMatrix<double> curvature = 2.0 * residual.transpose() * residual;
+      problem.solver_quadratic_cost = curvature.triangularView<Eigen::Upper>();
+      solver_linear_cost -= 2.0 * residual.transpose() * target;
+      problem.feasibility_equalities_augmented = true;
+      if (!sparse_values_are_finite(problem.solver_quadratic_cost) ||
+        !solver_linear_cost.allFinite())
+      {
+        failure_detail = "stage=preconditioning, reason=non-finite feasibility equality objective";
+        return std::nullopt;
+      }
+    }
+  }
+  problem.solver_quadratic_cost.makeCompressed();
   problem.quadratic_values.resize(
     static_cast<std::size_t>(problem.solver_quadratic_cost.nonZeros()));
   problem.quadratic_rows.resize(problem.quadratic_values.size());
@@ -327,8 +369,7 @@ std::optional<PreparedProblem> prepare_problem(
       }
       return destination;
     };
-  problem.linear_cost = copy_dense(
-    linear_cost.cwiseProduct(problem.variable_scale));
+  problem.linear_cost = copy_dense(solver_linear_cost);
   Eigen::VectorXd solver_lower_bound = lower_bound;
   Eigen::VectorXd solver_upper_bound = upper_bound;
   for (Eigen::Index row = 0; row < lower_bound.size(); ++row) {
@@ -861,6 +902,8 @@ SolveOutcome PersistentOsqpSolver::solve(
     outcome.telemetry.maximum_row_scale =
       prepared->constraint_row_scale.maxCoeff();
   }
+  outcome.telemetry.feasibility_equalities_augmented =
+    prepared->feasibility_equalities_augmented;
   if (prepared->variable_scale.size() > 0) {
     outcome.telemetry.minimum_variable_scale =
       prepared->variable_scale.minCoeff();
@@ -915,13 +958,18 @@ SolveOutcome PersistentOsqpSolver::solve(
         static_cast<std::size_t>(warm_start->primal.size()));
       std::vector<c_float> dual(
         static_cast<std::size_t>(warm_start->dual.size()));
+      Eigen::VectorXd physical_dual = warm_start->dual;
+      if (prepared->feasibility_equalities_augmented) {
+        physical_dual -= prepared->equality_dual_factor.cwiseProduct(
+          prepared->constraints * warm_start->primal - prepared->equality_rhs);
+      }
       for (Eigen::Index index = 0; index < warm_start->primal.size(); ++index) {
         primal[static_cast<std::size_t>(index)] =
           static_cast<c_float>(
           warm_start->primal[index] / prepared->variable_scale[index]);
       }
       for (Eigen::Index index = 0; index < warm_start->dual.size(); ++index) {
-        const double scaled_dual = warm_start->dual[index] /
+        const double scaled_dual = physical_dual[index] /
           prepared->constraint_row_scale[index];
         dual[static_cast<std::size_t>(index)] =
           static_cast<c_float>(scaled_dual);
@@ -979,7 +1027,8 @@ SolveOutcome PersistentOsqpSolver::solve(
   outcome.telemetry.iterations = info ? static_cast<int>(info->iter) : 0;
   outcome.telemetry.status = info ? static_cast<int>(info->status_val) : 0;
   if (info != nullptr) {
-    outcome.telemetry.objective_value = static_cast<double>(info->obj_val);
+    outcome.telemetry.objective_value = prepared->feasibility_equalities_augmented ?
+      0.0 : static_cast<double>(info->obj_val);
     outcome.telemetry.primal_residual = static_cast<double>(info->pri_res);
     outcome.telemetry.dual_residual = static_cast<double>(info->dua_res);
     outcome.telemetry.rho_updates = static_cast<int>(info->rho_updates);
@@ -1078,6 +1127,12 @@ SolveOutcome PersistentOsqpSolver::solve(
     dual[index] =
       prepared->constraint_row_scale[index] *
       static_cast<double>(impl_->workspace->solution->y[index]);
+  }
+  if (prepared->feasibility_equalities_augmented) {
+    // grad(residual objective) = A^T * shift. Return duals for the original
+    // flat-objective problem, and invert this map on the next warm start.
+    dual += prepared->equality_dual_factor.cwiseProduct(
+      prepared->constraints * primal - prepared->equality_rhs);
   }
   if (!solver_primal.allFinite() || !primal.allFinite() || !dual.allFinite()) {
     outcome.failure_detail =

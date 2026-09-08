@@ -3794,6 +3794,38 @@ semantic初期値0では同じ最初の指令を積分できる。経路許容�
 併記する。完全他車形状を使う初回dev2は不合格で、多車両と提出物の統合受入れは未完。
 詳細は[初期状態の結果](../../.steering/20260909-mpcc-semantic-physical-initial/results.md)を参照。
 
+### 2026-09-09 他車制約と独立Stop候補の修正
+
+横並び相手を選んだ場合も、前方相手と同じ観測から位置・速度・跳躍・有効性を
+まとめて予測へ渡す。前方と横並びの値を混ぜない。最適化の他車支持平面は、
+immutable worldの同時刻の相手Cartesian位置と自車の参照フレームから生成する。
+別々の参照フレームに投影した進捗・横位置の単純差を車体間距離として扱わない。
+支持平面は非対称車体と方位を含み、7状態中の横偏差・lag・方位偏差・仮想進捗を
+独立に微分する。bounds schemaは
+`progress-stage-wall-cartesian-obstacle-steering-yaw-response-rate-v3`。
+数値SQPの線形化点は運動モデルと同じ宣言済み状態範囲から選び、raw primalと
+semantic物理初期状態は書き換えない。参照窓の外への外挿や物理許容値の拡大はしない。
+
+最大制動Stopの零目的QPには、既存の厳密等式と既存の行正規化だけからなる
+`||S_eq(A_eq x-b_eq)||²`をsolver内部で加える。この項は元の実行可能集合上でゼロであり、
+等式は引き続きhard constraintである。保存QP、行証明、目的値は元の問題に対するものとし、
+入出力dualはこの等価変換に合わせて相互変換する。重み・反復数・許容誤差は変更しない。
+
+独立Stop候補はcanonical normalの全7intentで、受理した同じcurrent-world入力から
+既存の専用workerへ渡す。候補を保持できる範囲は、通常指令の公開成功ではなく
+受理済み入力が所有する。intent/generation、tacticalおよびdynamic target/side、
+formulation、state/input/bounds/cost schema、horizonを照合する。観測epochの更新を
+跨ぐ候補は、既存のcurrent-world再証明を通過して初めて単一publisherの選択対象になる。
+Stop公開・外部overrideは未採用候補を無効化する。これが上記の旧
+「terminal Stopのcurrent-world producer契約」にあるpublished tactical scope所有を置き換える。
+
+保存dev2場面で本番Stopの壁・他車・停止末端の証明は通過した。25package buildと
+60CTestgroup／2346記録は合格。変更後dev2ではCruise由来Stopの採用・保持を確認したが、
+D2 decision978で移動中Stopの壁再証明が失敗し、不合格。同runの通常QP381は、
+現行許容誤差を含めてもその凸近似の制約が矛盾することを有理数dualで確認した。
+物理場面の実行不能や統合完遂は示していない。局所結果を完遂扱いにしない。
+根拠は[side-peer/Stop監査](../../.steering/20260909-mpcc-side-peer-stop/results.md)。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

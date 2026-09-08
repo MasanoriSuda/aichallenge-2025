@@ -37,6 +37,14 @@ struct PhysicalSeparationGeometry
   double opponent_radius_m{};
 };
 
+struct CartesianPrediction
+{
+  mpcc_rate_resolved::CourseFrame course_frame;
+  /// Peer centers at the exact semantic stage arrival times, in the same
+  /// immutable world used by the nonlinear certificate.
+  std::vector<Eigen::Vector2d> target_positions_m;
+};
+
 /// Longitudinal homotopy sealed by a current-world semantic producer.  It is
 /// distinct from a tactical pass side: Return behind an unpassed target and
 /// Return ahead of a rear-clear target both have no lateral pass ownership.
@@ -84,6 +92,7 @@ struct Request
   /// at each solved witness pose. These are full separating planes, not
   /// relaxed axis rows. Nonlinear wall/dynamic proof still owns acceptance.
   bool witness_physical_separation{false};
+  std::optional<CartesianPrediction> cartesian_prediction;
   std::vector<StagePrediction> stages;
   /// Physically solved witness used only to classify the reachable convex
   /// obstacle branch. Its progress trust buckets must not implicitly become

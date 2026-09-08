@@ -1,11 +1,13 @@
 #include <multi_purpose_mpc_ros/persistent_osqp.hpp>
 
 #include <gtest/gtest.h>
+#include <yaml-cpp/yaml.h>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
 #include <cmath>
+#include <filesystem>
 #include <limits>
 #include <optional>
 #include <vector>
@@ -14,6 +16,82 @@ namespace multi_purpose_mpc_ros::persistent_osqp
 {
 namespace
 {
+
+TEST(PersistentOsqpSolver, SolvesSavedZeroObjectiveStopWithItsOwnEqualityBootstrap)
+{
+  const auto path = std::filesystem::path(__FILE__).parent_path() /
+    "fixtures/mpcc_zero_stop_qp.yaml";
+  const auto data = YAML::LoadFile(path.string());
+  const auto dense = [](const YAML::Node & node) {
+      Eigen::VectorXd value(node.size());
+      for (std::size_t i = 0U; i < node.size(); ++i) {
+        value[static_cast<Eigen::Index>(i)] = node[i].as<double>();
+      }
+      return value;
+    };
+  const auto sparse = [](const YAML::Node & node) {
+      Eigen::SparseMatrix<double> value(node["rows"].as<int>(), node["columns"].as<int>());
+      std::vector<Eigen::Triplet<double>> entries;
+      for (const auto & entry : node["triplets"]) {
+        entries.emplace_back(entry[0].as<int>(), entry[1].as<int>(), entry[2].as<double>());
+      }
+      value.setFromTriplets(entries.begin(), entries.end());
+      return value;
+    };
+  const auto qp = data["exact_qp"];
+  const auto p = sparse(qp["quadratic_cost"]);
+  const auto a = sparse(qp["constraints"]);
+  const auto q = dense(qp["linear_cost"]);
+  const auto lower = dense(qp["lower_bound"]);
+  const auto upper = dense(qp["upper_bound"]);
+  const VariableCoordinateScaling scaling{dense(qp["variable_scaling"])};
+  const WarmStart warm{dense(data["warm_start"]["primal"]), dense(data["warm_start"]["dual"])};
+  ASSERT_EQ(p.nonZeros(), 0);
+  ASSERT_DOUBLE_EQ(q.norm(), 0.0);
+  for (const auto policy : {ConstraintPreconditioningPolicy::RowToleranceNormalized,
+    ConstraintPreconditioningPolicy::RowToleranceNormalizedWithInternalEquilibration})
+  {
+    for (const bool use_warm : {true, false}) {
+      SCOPED_TRACE(static_cast<int>(policy));
+      SCOPED_TRACE(use_warm);
+      PersistentOsqpSolver solver(policy);
+      const auto solved = solver.solve(p, a, q, lower, upper,
+        use_warm ? std::optional<WarmStart>(warm) : std::nullopt, scaling);
+      EXPECT_TRUE(solved.result.has_value()) << solved.failure_detail;
+      EXPECT_TRUE(solved.telemetry.feasibility_equalities_augmented);
+      EXPECT_DOUBLE_EQ(solved.telemetry.objective_value, 0.0);
+      if (solved.result) {
+        EXPECT_LE(solved.result->maximum_normalized_constraint_violation, 1.0);
+        const auto residual = evaluate_constraint_residuals(
+          a, solved.result->primal, lower, upper, 1e-3, 1e-3);
+        ASSERT_TRUE(residual.has_value());
+        EXPECT_LE(residual->maximum_normalized_violation, 1.0);
+        // Returned multipliers belong to the original zero-objective KKT
+        // equations, including the inverse equality-objective gradient map.
+        const Eigen::VectorXd stationarity = scaling.physical_units_per_solver_unit.cwiseProduct(
+          a.transpose() * solved.result->dual);
+        EXPECT_LE(stationarity.lpNorm<Eigen::Infinity>(), 1.01e-3);
+        const auto resumed = solver.solve(p, a, q, lower, upper,
+          WarmStart{solved.result->primal, solved.result->dual}, scaling);
+        EXPECT_TRUE(resumed.result.has_value()) << resumed.failure_detail;
+      }
+    }
+  }
+}
+
+TEST(PersistentOsqpSolver, FeasibilityEqualityObjectiveDoesNotRelaxContradictoryHardRows)
+{
+  Eigen::SparseMatrix<double> p(1, 1), a(2, 1);
+  const std::vector<Eigen::Triplet<double>> entries{{0, 0, 1.0}, {1, 0, 1.0}};
+  a.setFromTriplets(entries.begin(), entries.end());
+  Eigen::VectorXd lower(2), upper(2);
+  lower << 0.0, 1.0;
+  upper << 0.0, std::numeric_limits<double>::infinity();
+  PersistentOsqpSolver solver(ConstraintPreconditioningPolicy::RowToleranceNormalized);
+  const auto result = solver.solve(p, a, Eigen::VectorXd::Zero(1), lower, upper);
+  EXPECT_TRUE(result.telemetry.feasibility_equalities_augmented);
+  EXPECT_FALSE(result.result.has_value());
+}
 
 Eigen::SparseMatrix<double>
 diagonal_matrix(const std::vector<double> & diagonal)

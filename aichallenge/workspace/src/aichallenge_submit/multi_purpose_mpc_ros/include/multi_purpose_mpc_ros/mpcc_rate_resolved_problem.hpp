@@ -89,6 +89,11 @@ struct DynamicObstacleConstraint
   double upper{std::numeric_limits<double>::infinity()};
   double lateral_coefficient{};
   double effective_progress_coefficient{};
+  /// Exact Cartesian supporting-plane tangent in the seven-state course
+  /// coordinates. When present it replaces the scalar axis coefficients;
+  /// axis continues to describe the selected physical homotopy.
+  std::optional<Eigen::Matrix<double, model::kStateDimension, 1>>
+    physical_state_coefficients{};
 };
 
 struct AssemblyRequest
@@ -128,6 +133,12 @@ struct Problem
   int horizon_steps{};
 };
 
+/// Select an SQP tangent within the declared state box. This changes only a
+/// numerical linearization point, never the solved primal or physical rollout.
+std::optional<Eigen::Matrix<double, model::kStateDimension, 1>>
+select_linearization_state(
+  const AssemblyRequest & request, const Eigen::VectorXd & primal, int stage) noexcept;
+
 std::optional<Problem> assemble(const AssemblyRequest & request) noexcept;
 
 enum class RowKind
@@ -143,6 +154,7 @@ enum class RowKind
   DynamicObstacleLateral,
   DynamicObstacleEffectiveProgress,
   DynamicObstacleCoupledLateralProgress,
+  DynamicObstaclePhysicalPlane,
 };
 
 struct RowSemantic

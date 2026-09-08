@@ -977,6 +977,7 @@ if(BUILD_TESTING)
   if(TARGET test_persistent_osqp)
     target_link_libraries(test_persistent_osqp
       ${PROJECT_NAME}_persistent_osqp
+      yaml-cpp
     )
   endif()
 

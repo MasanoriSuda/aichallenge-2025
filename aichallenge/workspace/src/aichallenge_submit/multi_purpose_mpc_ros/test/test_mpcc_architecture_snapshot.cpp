@@ -358,8 +358,16 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   std::filesystem::remove_all(root);
   const auto snapshot = make_interaction_snapshot(
     mpcc_execution_contract::ControlIntent::Pass);
+  auto assembly = make_assembly_request();
+  mpcc_rate_resolved_problem::DynamicObstacleConstraint plane;
+  plane.state_stage = 1;
+  plane.upper = 0.4;
+  Eigen::Matrix<double, mpcc_rate_resolved::kStateDimension, 1> coefficients;
+  coefficients << 0.2, -0.1, 0.3, 0.0, 0.7, 0.0, 0.0;
+  plane.physical_state_coefficients = coefficients;
+  assembly.dynamic_obstacle_constraints.push_back(plane);
   const auto written = record_failure(
-    snapshot, make_assembly_request(), make_valid_problem(), std::nullopt,
+    snapshot, assembly, make_valid_problem(), std::nullopt,
     persistent_osqp::SolveOutcome{}, PipelineStage::Initial,
     "unit-interaction-roundtrip", "intentional replay-ready evidence", root);
   ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
@@ -398,6 +406,10 @@ TEST(MpccArchitectureSnapshot, RoundTripsReplayReadyInteractionSnapshot)
   EXPECT_EQ(loaded->source.replay_world->obstacles.front().id, "d2");
   EXPECT_EQ(loaded->source.wall_grid->cells.size(), 4U);
   ASSERT_TRUE(loaded->assembly_request.has_value());
+  ASSERT_FALSE(loaded->assembly_request->dynamic_obstacle_constraints.empty());
+  const auto & loaded_plane = loaded->assembly_request->dynamic_obstacle_constraints.back();
+  ASSERT_TRUE(loaded_plane.physical_state_coefficients.has_value());
+  EXPECT_TRUE(loaded_plane.physical_state_coefficients->isApprox(coefficients, 0.0));
   EXPECT_EQ(loaded->assembly_request->horizon_steps, 1);
   EXPECT_TRUE(
     loaded->assembly_request->state_reference.isApprox(

@@ -2,6 +2,16 @@
 
 最新の進捗・完遂順序は[current-status.md](current-status.md)。
 
+2026-09-09追記: b5308839に他車全体の包含とsemantic物理初期状態をローカルコミット。
+単車6周253.944031秒・penalty0を確認。現在は
+`../20260909-mpcc-side-peer-stop/`で横並び予測、共通Cartesian他車制約、
+零目的Stopの数値表現と通常全7intentへの候補供給を修正・検証中。
+同一保存場面の本番Stopは物理証明を通過。25package・60CTestgroup/2346記録が合格。
+変更後dev2はD2 decision978で採用済みStopの壁再証明が失敗して不合格。
+Stopの実artifactが観測条件で欠落しており、次は記録漏れと当該失敗を監査する。
+同runの通常QP381は厳密な有理数dual証明で凸近似の制約矛盾を確認。
+物理場面の実行不能は証明されておらず、通常候補と統合受入れは未完。
+
 2026-09-09追記: 座標モデル修正を5cfc50bcへローカルコミット。
 完全他車包含の修正は25package build・60CTestgroup/2338記録で合格。
 初回dev2は移動中Emergency/Recoveryが出て不合格。現在は

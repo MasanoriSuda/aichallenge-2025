@@ -3807,6 +3807,19 @@ Result SolverContext::evaluate_impl(
         footprint.left_extent_m, footprint.right_extent_m,
         footprint.margin_m, target->radius_m};
       dynamic_request.physical_separation_geometry = geometry;
+      mpcc_rate_resolved_dynamic_obstacle::CartesianPrediction prediction;
+      prediction.course_frame = snapshot.request.course_frame;
+      prediction.target_positions_m.reserve(snapshot.request.inputs.size());
+      double target_elapsed_sec = snapshot.control_prediction_origin_sec - world.observed_sec;
+      for (const auto & input : snapshot.request.inputs) {
+        target_elapsed_sec += input.stage_dt_sec;
+        // The exact dynamic certificate owns a constant-velocity world
+        // prediction. Use its same observation and semantic stage clock.
+        prediction.target_positions_m.emplace_back(
+          target->x_m + target->velocity_x_mps * target_elapsed_sec,
+          target->y_m + target->velocity_y_mps * target_elapsed_sec);
+      }
+      dynamic_request.cartesian_prediction = std::move(prediction);
       if (snapshot.dynamic_obstacle_forced_physical_diagonal) {
         dynamic_request.forced_physical_separation_geometry = geometry;
         dynamic_request.physical_separation_geometry.reset();

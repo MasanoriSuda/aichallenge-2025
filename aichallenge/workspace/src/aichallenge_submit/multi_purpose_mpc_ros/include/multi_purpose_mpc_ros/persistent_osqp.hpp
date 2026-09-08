@@ -89,6 +89,10 @@ struct SolveTelemetry
   int scaling_iterations{};
   bool scaled_termination{false};
   bool row_tolerance_preconditioned{false};
+  /// For a zero objective, an equivalent squared residual of existing hard
+  /// equalities stabilizes the feasibility solve. Original physical rows and
+  /// objective remain authoritative; duals are mapped back to that problem.
+  bool feasibility_equalities_augmented{false};
   bool variable_coordinate_scaled{false};
   double minimum_variable_scale{1.0};
   double maximum_variable_scale{1.0};

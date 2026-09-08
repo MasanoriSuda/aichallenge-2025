@@ -36,6 +36,112 @@ dynamic_obstacle::Request request_with_lateral_suffix()
 
 }  // namespace
 
+TEST(MpccRateResolvedDynamicObstacle, SamePhysicalBodyHasSamePeerSupportAcrossCourseFrames)
+{
+  auto request = request_with_lateral_suffix();
+  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(35, -10.0);
+  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(35, 10.0);
+  request.witness_physical_separation = true;
+  request.physical_separation_geometry =
+    dynamic_obstacle::PhysicalSeparationGeometry{1.2, 0.8, 0.7, 0.4, 0.1, 0.45};
+  auto knots = std::make_shared<std::vector<multi_purpose_mpc_ros::mpc_stage_geometry::CourseFrameKnot>>();
+  for (int i = 0; i <= 4; ++i) {
+    const double s = i;
+    knots->push_back({s, 5.0 * std::sin(s / 5.0), 5.0 * (1.0 - std::cos(s / 5.0)), s / 5.0, i});
+  }
+  const auto peer_frame = multi_purpose_mpc_ros::mpc_stage_geometry::sample_course_frame(*knots, 2.0);
+  ASSERT_TRUE(peer_frame.has_value());
+  const Eigen::Vector2d peer{
+    peer_frame->x_m + 2.6 * std::sin(peer_frame->heading_rad),
+    peer_frame->y_m - 2.6 * std::cos(peer_frame->heading_rad)};
+  request.cartesian_prediction = dynamic_obstacle::CartesianPrediction{
+    {knots, 0.0}, std::vector<Eigen::Vector2d>(4, peer)};
+  request.stages.assign(4, dynamic_obstacle::StagePrediction{true, 2.0, -2.6, 1.5, 1.0});
+  const double yaw = 0.2;
+  const double c = std::cos(yaw), s = std::sin(yaw);
+  const Eigen::Vector2d body_peer{c * peer[0] + s * peer[1], -s * peer[0] + c * peer[1]};
+  const Eigen::Vector2d nearest{
+    std::clamp(body_peer[0], -0.9, 1.3), std::clamp(body_peer[1], -0.5, 0.8)};
+  const double clearance = (body_peer - nearest).norm() - 0.45;
+  const std::array<double, 4> progress{{0.2, 0.7, 1.5, 2.2}};
+  for (int stage = 0; stage < 4; ++stage) {
+    const auto frame = multi_purpose_mpc_ros::mpc_stage_geometry::sample_course_frame(*knots, progress[stage]);
+    ASSERT_TRUE(frame.has_value());
+    const int offset = (stage + 1) * model::kStateDimension;
+    // Re-express the same world pose (0,0,yaw) under a different virtual
+    // reference. The body and peer never move in this coordinate test.
+    request.wall_only_primal[offset + model::kProgressIndex] = progress[stage];
+    request.wall_only_primal[offset + model::kLagIndex] =
+      -std::cos(frame->heading_rad) * frame->x_m - std::sin(frame->heading_rad) * frame->y_m;
+    request.wall_only_primal[offset + model::kLateralIndex] =
+      std::sin(frame->heading_rad) * frame->x_m - std::cos(frame->heading_rad) * frame->y_m;
+    request.wall_only_primal[offset + model::kHeadingIndex] = yaw - frame->heading_rad;
+  }
+  const auto result = dynamic_obstacle::refine(request);
+  ASSERT_TRUE(result.problem.has_value());
+  ASSERT_EQ(result.problem->dynamic_obstacle_constraints.size(), 4U);
+  for (const auto & row : result.problem->dynamic_obstacle_constraints) {
+    const auto state = request.wall_only_primal.segment<model::kStateDimension>(row.state_stage * model::kStateDimension);
+    const double value = row.physical_state_coefficients ? row.physical_state_coefficients->dot(state) :
+      row.lateral_coefficient * state[model::kLateralIndex] +
+      row.effective_progress_coefficient * (state[model::kLagIndex] + state[model::kProgressIndex]);
+    EXPECT_NEAR(row.upper - value, clearance, 1e-9) << "stage " << row.state_stage;
+    ASSERT_TRUE(row.physical_state_coefficients.has_value());
+    const auto physical_residual = [&](const Eigen::Matrix<double, model::kStateDimension, 1> & x) {
+        const auto f = multi_purpose_mpc_ros::mpc_stage_geometry::sample_course_frame(*knots, x[model::kProgressIndex]);
+        const double fc = std::cos(f->heading_rad), fs = std::sin(f->heading_rad);
+        const Eigen::Vector2d ego{f->x_m + fc * x[model::kLagIndex] - fs * x[model::kLateralIndex],
+          f->y_m + fs * x[model::kLagIndex] + fc * x[model::kLateralIndex]};
+        const auto delta = (peer - ego).eval();
+        const double h = f->heading_rad + x[model::kHeadingIndex];
+        const Eigen::Vector2d relative{std::cos(h) * delta[0] + std::sin(h) * delta[1],
+          -std::sin(h) * delta[0] + std::cos(h) * delta[1]};
+        const Eigen::Vector2d closest{std::clamp(relative[0], -0.9, 1.3), std::clamp(relative[1], -0.5, 0.8)};
+        return 0.45 - (relative - closest).norm();
+      };
+    for (const int element : {model::kLateralIndex, model::kLagIndex, model::kHeadingIndex, model::kProgressIndex}) {
+      Eigen::Matrix<double, model::kStateDimension, 1> plus = state, minus = state;
+      plus[element] += 1e-6;
+      minus[element] -= 1e-6;
+      EXPECT_NEAR((*row.physical_state_coefficients)[element],
+        (physical_residual(plus) - physical_residual(minus)) / 2e-6, 1e-7);
+    }
+  }
+}
+
+TEST(MpccRateResolvedDynamicObstacle, RejectsIncompleteCartesianPredictionInsteadOfUsingOldProjection)
+{
+  auto request = request_with_lateral_suffix();
+  request.physical_separation_geometry =
+    dynamic_obstacle::PhysicalSeparationGeometry{1.2, 0.8, 0.7, 0.4, 0.1, 0.45};
+  request.cartesian_prediction = dynamic_obstacle::CartesianPrediction{};
+  EXPECT_EQ(dynamic_obstacle::refine(request).reason, dynamic_obstacle::Reason::InvalidInput);
+}
+
+TEST(MpccRateResolvedDynamicObstacle, UsesDeclaredBoxForTangentWithoutChangingSolvedPrimal)
+{
+  auto request = request_with_lateral_suffix();
+  request.witness_physical_separation = true;
+  request.physical_separation_geometry =
+    dynamic_obstacle::PhysicalSeparationGeometry{1.2, 0.8, 0.7, 0.4, 0.1, 0.45};
+  auto knots = std::make_shared<std::vector<multi_purpose_mpc_ros::mpc_stage_geometry::CourseFrameKnot>>(
+    std::initializer_list<multi_purpose_mpc_ros::mpc_stage_geometry::CourseFrameKnot>{{0, 0, 0, 0, 0}, {5, 5, 0, 0, 1}});
+  request.cartesian_prediction = dynamic_obstacle::CartesianPrediction{
+    {knots, 0.0}, std::vector<Eigen::Vector2d>(4, Eigen::Vector2d{2.0, -2.6})};
+  request.wall_only_problem.state_lower = Eigen::VectorXd::Constant(35, -10.0);
+  request.wall_only_problem.state_upper = Eigen::VectorXd::Constant(35, 10.0);
+  request.wall_only_problem.state_lower[7 + model::kProgressIndex] = 0.0;
+  request.wall_only_primal[7 + model::kProgressIndex] = -2.215132146736506e-9;
+  const auto original = request.wall_only_primal;
+  EXPECT_TRUE(dynamic_obstacle::refine(request).problem.has_value());
+  EXPECT_TRUE(request.wall_only_primal.isApprox(original, 0.0));
+  // A semantic box that actually permits an unavailable frame is still
+  // rejected. Numerical tangent selection must not extrapolate that frame.
+  request.wall_only_problem.state_lower[7 + model::kProgressIndex] = -1.0;
+  request.wall_only_primal[7 + model::kProgressIndex] = -0.2;
+  EXPECT_EQ(dynamic_obstacle::refine(request).reason, dynamic_obstacle::Reason::InvalidInput);
+}
+
 TEST(MpccRateResolvedDynamicObstacle, PhysicalWitnessPreservesRoundedCornerClearance)
 {
   for (const int side : {-1, 1}) {

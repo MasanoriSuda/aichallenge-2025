@@ -88,24 +88,33 @@ const char * to_string(const Reason reason) noexcept
   return "unknown";
 }
 
-bool same_tactical_stop_scope(
+bool same_current_world_stop_scope(
   const artifact::Identity & lhs,
   const artifact::Identity & rhs) noexcept
 {
   const auto & lhs_context = lhs.source_context;
   const auto & rhs_context = rhs.source_context;
-  const bool lhs_execution_intent =
-    lhs_context.intent == mpcc_execution_contract::ControlIntent::ShiftOut ||
-    lhs_context.intent == mpcc_execution_contract::ControlIntent::Pass;
+  const bool execution_side_required =
+    mpcc_execution_contract::canonical_normal_intent_requires_execution_side(lhs_context.intent);
+  const bool target_required =
+    mpcc_execution_contract::canonical_normal_intent_requires_target(lhs_context.intent);
   return
-    lhs_execution_intent && lhs_context.intent == rhs_context.intent &&
-    lhs_context.intent_generation != 0U &&
+    artifact::supports_intent(lhs_context.intent) && lhs_context.intent == rhs_context.intent &&
     lhs_context.intent_generation == rhs_context.intent_generation &&
-    !lhs_context.target_id.empty() &&
+    (!target_required || !lhs_context.target_id.empty()) &&
     lhs_context.target_id == rhs_context.target_id &&
-    (lhs_context.execution_side_sign == -1 ||
-    lhs_context.execution_side_sign == 1) &&
-    lhs_context.execution_side_sign == rhs_context.execution_side_sign;
+    (!execution_side_required || (lhs_context.intent_generation != 0U &&
+    (lhs_context.execution_side_sign == -1 || lhs_context.execution_side_sign == 1))) &&
+    lhs_context.execution_side_sign == rhs_context.execution_side_sign &&
+    lhs_context.dynamic_obstacle_constraint_active == rhs_context.dynamic_obstacle_constraint_active &&
+    lhs_context.dynamic_obstacle_id == rhs_context.dynamic_obstacle_id &&
+    lhs_context.dynamic_obstacle_side_sign == rhs_context.dynamic_obstacle_side_sign &&
+    lhs_context.formulation == rhs_context.formulation &&
+    lhs_context.horizon_steps == rhs_context.horizon_steps &&
+    lhs_context.state_schema_id == rhs_context.state_schema_id &&
+    lhs_context.input_schema_id == rhs_context.input_schema_id &&
+    lhs_context.bounds_schema_id == rhs_context.bounds_schema_id &&
+    lhs_context.cost_schema_id == rhs_context.cost_schema_id;
 }
 
 static Result evaluate_impl(

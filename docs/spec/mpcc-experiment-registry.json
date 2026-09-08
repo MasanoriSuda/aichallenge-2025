@@ -205,6 +205,26 @@
       "snapshot_id": "20260909-semantic-initial-single-r1",
       "manifest": ".steering/20260909-mpcc-semantic-physical-initial/evidence.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-side-peer-zero-stop-396",
+      "manifest": ".steering/20260909-mpcc-side-peer-stop/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-side-peer-stop-d2-normal-381",
+      "manifest": ".steering/20260909-mpcc-side-peer-stop/validation-evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-side-peer-stop-d2-before-stop-976",
+      "manifest": ".steering/20260909-mpcc-side-peer-stop/validation-evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-side-peer-stop-d2-loss-978",
+      "manifest": ".steering/20260909-mpcc-side-peer-stop/validation-evidence.json",
+      "replay_ready": false
     }
   ],
   "experiments": [
@@ -1601,6 +1621,124 @@
       "production_impact": "none; observation-only",
       "deleted_code": [],
       "revisit_condition": "a different physically supported initial convex problem or a proved numerical-conditioning defect"
+    },
+    {
+      "experiment_id": "20260909-side-peer-kkt-only",
+      "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+      "snapshot_ids": [
+        "20260909-side-peer-zero-stop-396",
+        "20260909-peer-envelope-d1-source-396"
+      ],
+      "hypothesis": "internal equilibration fixes the saved zero Stop",
+      "changed_dimension": "numerical_policy",
+      "result": "rejected",
+      "reason": "warm solve still reaches4000iterations under both policies; cold25/50solves but dynamic proof rejects",
+      "production_impact": "none from the comparison; evidenced producer repair and integrated acceptance remain open",
+      "deleted_code": [],
+      "revisit_condition": "a different mathematically equivalent numerical representation or a proved coordinate defect"
+    },
+    {
+      "experiment_id": "20260909-side-peer-common-world-only",
+      "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+      "snapshot_ids": [
+        "20260909-side-peer-zero-stop-396",
+        "20260909-peer-envelope-d1-source-396"
+      ],
+      "hypothesis": "common Cartesian geometry alone resolves the zero Stop",
+      "changed_dimension": "constraint_coordinates",
+      "result": "rejected",
+      "reason": "the exact common-frame plane corrects up to0.327006m relative-position error; all4zero-objective solves still reject",
+      "production_impact": "none from the comparison; evidenced producer repair and integrated acceptance remain open",
+      "deleted_code": [],
+      "revisit_condition": "a numerical representation that solves this same feasible problem"
+    },
+    {
+      "experiment_id": "20260909-side-peer-equality-objective-only",
+      "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+      "snapshot_ids": [
+        "20260909-side-peer-zero-stop-396",
+        "20260909-peer-envelope-d1-source-396"
+      ],
+      "hypothesis": "an equivalent equality residual objective suffices for safety",
+      "changed_dimension": "numerical_representation",
+      "result": "rejected",
+      "reason": "all4solve, but original obstacle geometry fails exact dynamic proof through8bounded SQP steps",
+      "production_impact": "none from the comparison; evidenced producer repair and integrated acceptance remain open",
+      "deleted_code": [],
+      "revisit_condition": "corrected physical obstacle coordinate/heading linearization"
+    },
+    {
+      "experiment_id": "20260909-side-peer-world-equality-stop",
+      "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+      "snapshot_ids": [
+        "20260909-side-peer-zero-stop-396",
+        "20260909-peer-envelope-d1-source-396"
+      ],
+      "hypothesis": "same-world geometry and equivalent feasibility representation admit safe Stop",
+      "changed_dimension": "coordinate_and_numerical_representation",
+      "result": "accepted",
+      "reason": "all4first QPs solve75/100iterations and pass native solved-Stop wall/dynamic/rest/certified-plan checks; clearance0.006051..0.008527m; exact hard constraints unchanged",
+      "production_impact": "none from the comparison; evidenced producer repair and integrated acceptance remain open",
+      "deleted_code": [],
+      "revisit_condition": "native production implementation, regression or additional sealed source requires validation"
+    },
+    {
+      "experiment_id": "20260909-side-peer-production-stop-final",
+      "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-396"
+      ],
+      "hypothesis": "unchanged physical world admits a production zero-objective Stop after producer repair",
+      "changed_dimension": "coordinate and equivalent numerical representation",
+      "result": "accepted",
+      "reason": "native final binary certifies candidate5013267340109276277; full package2346records pass",
+      "production_impact": "shared Cartesian plane, side prediction, numerical tangent and seven-intent Stop candidate scope repaired",
+      "deleted_code": [],
+      "revisit_condition": "a new sealed source or regression; this local result does not establish a race pass"
+    },
+    {
+      "experiment_id": "20260909-side-peer-dev2-integrated",
+      "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+      "snapshot_ids": [
+        "20260909-side-peer-stop-d2-normal-381",
+        "20260909-side-peer-stop-d2-before-stop-976",
+        "20260909-side-peer-stop-d2-loss-978"
+      ],
+      "hypothesis": "full-peer normal and certified Stop maintain current-world authority",
+      "changed_dimension": "sealed structural repair from b5308839",
+      "result": "rejected",
+      "reason": "D2decision978at1.58m/s fails wall proof after Stop442adoption; actual Stop artifact missing; no completed laps/result-details",
+      "production_impact": "preserve failure and restore user JSON; no relaxation or unchanged rerun",
+      "deleted_code": [],
+      "revisit_condition": "capture missing executed Stop tuple through an observation-only repair, or a proved structural cause"
+    },
+    {
+      "experiment_id": "20260909-side-peer-normal-381-kkt",
+      "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+      "snapshot_ids": [
+        "20260909-side-peer-stop-d2-normal-381"
+      ],
+      "hypothesis": "normal QP failure is fixed by cold or equilibrated solve",
+      "changed_dimension": "numerical policy and initialization",
+      "result": "rejected",
+      "reason": "all4arms reach4000iterations on identical recorded QP",
+      "production_impact": "none; no numerical parameter change",
+      "deleted_code": [],
+      "revisit_condition": "a proved feasible formulation or an equivalent representation with new causal evidence"
+    },
+    {
+      "experiment_id": "20260909-side-peer-normal-381-affine-certificate",
+      "baseline_commit": "b530883997e80cd78aa7e70bcd53bf2b6bcf93fc",
+      "snapshot_ids": [
+        "20260909-side-peer-stop-d2-normal-381"
+      ],
+      "hypothesis": "the selected affine branch has contradictory physical rows",
+      "changed_dimension": "independent LP and exact rational dual verification",
+      "result": "accepted",
+      "reason": "minimum normalized violation1.111762; nonpositive dual, exact state stationarity, bounded input residual, positive contradiction0.11176197374636564",
+      "production_impact": "none; certificate applies to encoded affine branch, not physical-scene infeasibility",
+      "deleted_code": [],
+      "revisit_condition": "a different sealed convex branch/trajectory generation under the same physical world"
     }
   ]
 }

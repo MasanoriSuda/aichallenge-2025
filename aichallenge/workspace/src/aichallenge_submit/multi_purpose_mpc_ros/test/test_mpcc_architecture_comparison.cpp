@@ -1285,15 +1285,62 @@ TEST(MpccArchitectureComparison, StopScopeIgnoresProducerEpochOnly)
   later.source_context.decision_id += 31U;
   later.source_context.observation_generation += 4U;
 
-  EXPECT_TRUE(stop_lattice_shadow::same_tactical_stop_scope(first, later));
+  EXPECT_TRUE(stop_lattice_shadow::same_current_world_stop_scope(first, later));
   later.source_context.target_id = "d2";
-  EXPECT_FALSE(stop_lattice_shadow::same_tactical_stop_scope(first, later));
+  EXPECT_FALSE(stop_lattice_shadow::same_current_world_stop_scope(first, later));
   later = first;
   later.source_context.execution_side_sign = 1;
-  EXPECT_FALSE(stop_lattice_shadow::same_tactical_stop_scope(first, later));
+  EXPECT_FALSE(stop_lattice_shadow::same_current_world_stop_scope(first, later));
   later = first;
   later.source_context.intent = contract::ControlIntent::Pass;
-  EXPECT_FALSE(stop_lattice_shadow::same_tactical_stop_scope(first, later));
+  EXPECT_FALSE(stop_lattice_shadow::same_current_world_stop_scope(first, later));
+}
+
+TEST(MpccArchitectureComparison, StopScopeCoversCanonicalIntentsAndRejectsChangedContracts)
+{
+  for (const auto intent : {contract::ControlIntent::Track, contract::ControlIntent::Cruise,
+      contract::ControlIntent::Follow, contract::ControlIntent::ShiftOut,
+      contract::ControlIntent::Pass, contract::ControlIntent::Return, contract::ControlIntent::Rejoin})
+  {
+    auto first = source_snapshot().identity;
+    first.source_context.intent = intent;
+    if (intent == contract::ControlIntent::Track || intent == contract::ControlIntent::Cruise) {
+      first.source_context.intent_generation = 0U;
+      first.source_context.target_id.clear();
+      first.source_context.target_obstacle_generation = 0U;
+      first.source_context.execution_side_sign = 0;
+    }
+    auto later = first;
+    later.sequence += 10U;
+    later.source_context.decision_id += 10U;
+    later.source_context.observation_generation += 10U;
+    later.source_context.dynamic_obstacle_generation += 10U;
+    EXPECT_TRUE(stop_lattice_shadow::same_current_world_stop_scope(first, later)) << contract::to_string(intent);
+    for (int mutation = 0; mutation < 9; ++mutation) {
+      auto changed = later;
+      auto & c = changed.source_context;
+      switch (mutation) {
+        case 0: c.dynamic_obstacle_id = "different-peer"; break;
+        case 1: c.dynamic_obstacle_constraint_active = false; break;
+        case 2: c.dynamic_obstacle_side_sign = -c.dynamic_obstacle_side_sign; break;
+        case 3: c.horizon_steps += 1U; break;
+        case 4: c.formulation = contract::Formulation::Unresolved; break;
+        case 5: c.state_schema_id += "-changed"; break;
+        case 6: c.input_schema_id += "-changed"; break;
+        case 7: c.bounds_schema_id += "-changed"; break;
+        case 8: c.cost_schema_id += "-changed"; break;
+      }
+      EXPECT_FALSE(stop_lattice_shadow::same_current_world_stop_scope(first, changed))
+        << contract::to_string(intent) << " mutation=" << mutation;
+    }
+  }
+  for (const auto intent : {contract::ControlIntent::Unknown, contract::ControlIntent::Hold,
+      contract::ControlIntent::Stop})
+  {
+    auto invalid = source_snapshot().identity;
+    invalid.source_context.intent = intent;
+    EXPECT_FALSE(stop_lattice_shadow::same_current_world_stop_scope(invalid, invalid));
+  }
 }
 
 TEST(MpccArchitectureComparison, DirectStopModeDoesNotEnterControlLattice)

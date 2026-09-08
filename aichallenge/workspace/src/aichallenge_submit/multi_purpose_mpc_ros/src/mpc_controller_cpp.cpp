@@ -9617,87 +9617,15 @@ struct MPC
       publisher_bound_stateless_overtake_source_active();
   }
 
-  void invalidate_published_stop_lattice_observation() noexcept
+  void invalidate_current_world_stop_observation() noexcept
   {
-    rate_resolved_stop_lattice_published_source_identity_.reset();
+    rate_resolved_stop_lattice_submitted_source_identity_.reset();
     rate_resolved_stop_lattice_current_world_alternate_plan_.reset();
     if (rate_resolved_stop_lattice_shadow_worker_ != nullptr) {
       static_cast<void>(
         rate_resolved_stop_lattice_shadow_worker_->
         invalidate_pending_and_running());
     }
-  }
-
-  void update_published_stop_lattice_observation(
-    const CanonicalNormalPendingActuation & published)
-  {
-    if (
-      published.published_authority_intent ==
-      mpcc_contract::ControlIntent::Stop)
-    {
-      // A terminal contingency has become the Stop owner. It cannot also be
-      // the normal source from which another Stop lattice is generated.
-      invalidate_published_stop_lattice_observation();
-      return;
-    }
-    const bool stop_observation_intent =
-      published.command.intent == mpcc_contract::ControlIntent::ShiftOut ||
-      published.command.intent == mpcc_contract::ControlIntent::Pass;
-    if (!stop_observation_intent) {
-      invalidate_published_stop_lattice_observation();
-      return;
-    }
-    if (
-      rate_resolved_stop_lattice_shadow_worker_ == nullptr ||
-      rate_resolved_stop_lattice_shadow_solver_context_ == nullptr ||
-      rate_resolved_stop_lattice_shadow_mailbox_ == nullptr ||
-      published.selected_plan == nullptr ||
-      published.selected_plan->execution_artifact == nullptr)
-    {
-      invalidate_published_stop_lattice_observation();
-      static rclcpp::Clock source_reject_clock{RCL_STEADY_TIME};
-      RCLCPP_ERROR_THROTTLE(
-        rclcpp::get_logger("mpc_controller"), source_reject_clock, 1000,
-        "Published Stop lattice source rejected: decision=%lu, intent=%s, "
-        "plan=%d, artifact=%d, source=%d, authority=shadow, selected=0",
-        static_cast<unsigned long>(published.decision_id),
-        mpcc_contract::to_string(published.command.intent),
-        published.selected_plan != nullptr ? 1 : 0,
-        published.selected_plan != nullptr &&
-        published.selected_plan->execution_artifact != nullptr ? 1 : 0,
-        published.selected_plan != nullptr &&
-        published.selected_plan->solver_source_snapshot != nullptr ? 1 : 0);
-      return;
-    }
-
-    const auto & identity =
-      published.selected_plan->execution_artifact->identity;
-    if (
-      rate_resolved_stop_lattice_published_source_identity_.has_value() &&
-      rate_resolved_artifact::same_identity(
-        rate_resolved_stop_lattice_published_source_identity_.value(),
-        identity))
-    {
-      return;
-    }
-
-    const bool same_tactical_scope =
-      rate_resolved_stop_lattice_published_source_identity_.has_value() &&
-      rate_resolved_stop_lattice_shadow::same_tactical_stop_scope(
-        rate_resolved_stop_lattice_published_source_identity_.value(),
-        identity);
-    if (!same_tactical_scope) {
-      rate_resolved_stop_lattice_current_world_alternate_plan_.reset();
-      static_cast<void>(
-        rate_resolved_stop_lattice_shadow_worker_->
-        invalidate_pending_and_running());
-    }
-    // Publication owns only the live tactical scope.  Stop candidate
-    // generation is submitted beside each immutable current-world normal
-    // snapshot; deriving it here from a possibly old selected normal epoch
-    // was the temporal mismatch that made a physically feasible Stop appear
-    // steering-unreachable at current-world join.
-    rate_resolved_stop_lattice_published_source_identity_ = identity;
   }
 
   void record_canonical_normal_final_command(
@@ -9789,8 +9717,6 @@ struct MPC
       rate_resolved_track_cruise_certified_plan_store_->
       supersede_published_bundle_source(decision_id);
     }
-
-    update_published_stop_lattice_observation(pending);
 
     if (pending.overtake_sibling_adoption_token.has_value()) {
       const auto & token = pending.overtake_sibling_adoption_token.value();
@@ -10025,7 +9951,7 @@ struct MPC
         publication_overridden ? 1 : 0);
     }
     if (publication_overridden) {
-      invalidate_published_stop_lattice_observation();
+      invalidate_current_world_stop_observation();
       last_published_authority_intent_ =
         mpcc_contract::ControlIntent::Unknown;
       return;
@@ -10035,12 +9961,12 @@ struct MPC
       authority_intent == mpcc_contract::ControlIntent::Stop)
     {
       if (authority_intent == mpcc_contract::ControlIntent::Stop) {
-        invalidate_published_stop_lattice_observation();
+        invalidate_current_world_stop_observation();
       }
       last_published_authority_intent_ = authority_intent;
       return;
     }
-    invalidate_published_stop_lattice_observation();
+    invalidate_current_world_stop_observation();
     last_published_authority_intent_ =
       mpcc_contract::ControlIntent::Unknown;
   }
@@ -11647,6 +11573,11 @@ struct MPC
     double nearest_side_speed = std::numeric_limits<double>::infinity();
     double nearest_side_abs_longitudinal = std::numeric_limits<double>::infinity();
     double nearest_side_course_longitudinal = std::numeric_limits<double>::infinity();
+    double nearest_side_course_lateral = std::numeric_limits<double>::infinity();
+    double nearest_side_lateral_velocity = 0.0;
+    bool nearest_side_lateral_velocity_valid = false;
+    bool nearest_side_position_jump = false;
+    bool nearest_side_course_progress_rejected = false;
     bool overtake_return_corridor_blocked = false;
     std::string overtake_return_corridor_blocker_id;
     double overtake_return_corridor_blocker_longitudinal =
@@ -12398,6 +12329,11 @@ struct MPC
           nearest_side_provenance = observed_target_provenance;
           nearest_side_course_longitudinal = use_course_progress ?
             front_longitudinal : longitudinal;
+          nearest_side_course_lateral = vehicle_course_lateral;
+          nearest_side_lateral_velocity = observed_course_lateral_velocity;
+          nearest_side_lateral_velocity_valid = observed_course_lateral_velocity_valid;
+          nearest_side_position_jump = vehicle.position_jump;
+          nearest_side_course_progress_rejected = course_progress_continuity_rejected;
         }
       }
     }
@@ -12573,10 +12509,14 @@ struct MPC
           std::isfinite(output.target_execution_predicted_lateral);
       };
     set_target_execution_prediction(
-      has_front_vehicle, nearest_front_position_jump,
-      nearest_front_course_progress_rejected, nearest_front_distance,
-      nearest_front_course_lateral, nearest_front_speed,
-      nearest_front_lateral_velocity_valid, nearest_front_lateral_velocity);
+      has_front_vehicle || has_side_vehicle,
+      has_front_vehicle ? nearest_front_position_jump : nearest_side_position_jump,
+      has_front_vehicle ? nearest_front_course_progress_rejected : nearest_side_course_progress_rejected,
+      has_front_vehicle ? nearest_front_distance : nearest_side_course_longitudinal,
+      has_front_vehicle ? nearest_front_course_lateral : nearest_side_course_lateral,
+      has_front_vehicle ? nearest_front_speed : nearest_side_speed,
+      has_front_vehicle ? nearest_front_lateral_velocity_valid : nearest_side_lateral_velocity_valid,
+      has_front_vehicle ? nearest_front_lateral_velocity : nearest_side_lateral_velocity);
     output.overtake_entry_target_speed =
       has_front_vehicle ? nearest_front_speed : nearest_side_speed;
     if (
@@ -25644,9 +25584,7 @@ struct MPC
       return false;
     }
     const auto intent = source->identity.source_context.intent;
-    if (
-      intent != mpcc_contract::ControlIntent::ShiftOut &&
-      intent != mpcc_contract::ControlIntent::Pass)
+    if (!rate_resolved_artifact::supports_intent(intent))
     {
       return false;
     }
@@ -25658,6 +25596,13 @@ struct MPC
       !mpcc_architecture_snapshot::interaction_snapshot_complete(*source))
     {
       return false;
+    }
+    const bool same_scope =
+      rate_resolved_stop_lattice_submitted_source_identity_.has_value() &&
+      rate_resolved_stop_lattice_shadow::same_current_world_stop_scope(
+        rate_resolved_stop_lattice_submitted_source_identity_.value(), source->identity);
+    if (!same_scope) {
+      invalidate_current_world_stop_observation();
     }
     const auto stop_solver = rate_resolved_stop_lattice_shadow_solver_context_;
     const auto stop_mailbox = rate_resolved_stop_lattice_shadow_mailbox_;
@@ -25671,6 +25616,12 @@ struct MPC
           DirectSevenStateOnly);
         static_cast<void>(stop_mailbox->publish(std::move(result)));
       });
+    if (submission.accepted) {
+      // The accepted immutable current-world source owns candidate compatibility.
+      // Requiring a normal publication here excludes precisely the scenes where
+      // a separately solved and current-world-certified Stop is needed.
+      rate_resolved_stop_lattice_submitted_source_identity_ = source->identity;
+    }
     return submission.accepted;
   }
 
@@ -27724,12 +27675,12 @@ struct MPC
           result->selected_solver_ms);
         window.last_result = result.value();
         window.last_result_available = true;
-        const bool current_tactical_scope_result =
-          rate_resolved_stop_lattice_published_source_identity_.has_value() &&
-          rate_resolved_stop_lattice_shadow::same_tactical_stop_scope(
-          rate_resolved_stop_lattice_published_source_identity_.value(),
+        const bool current_source_scope_result =
+          rate_resolved_stop_lattice_submitted_source_identity_.has_value() &&
+          rate_resolved_stop_lattice_shadow::same_current_world_stop_scope(
+          rate_resolved_stop_lattice_submitted_source_identity_.value(),
           result->source_normal_identity);
-        if (result->accepted() && current_tactical_scope_result) {
+        if (result->accepted() && current_source_scope_result) {
           rate_resolved_stop_lattice_current_world_alternate_plan_ =
             result->certified_stop_plan;
         }
@@ -30077,8 +30028,7 @@ struct MPC
     RateResolvedRetainedShadowEvaluation alternate;
     if (
       ordinary_retained.production_authority.has_value() ||
-      (intent != mpcc_contract::ControlIntent::ShiftOut &&
-      intent != mpcc_contract::ControlIntent::Pass))
+      !rate_resolved_artifact::supports_intent(intent))
     {
       return alternate;
     }
@@ -31205,7 +31155,7 @@ struct MPC
         context.input_schema_id =
           "accel-steering-rate-progress-rate-v1";
         context.bounds_schema_id =
-          "progress-stage-wall-obstacle-steering-yaw-response-rate-v2";
+          "progress-stage-wall-cartesian-obstacle-steering-yaw-response-rate-v3";
         context.cost_schema_id =
           "velocity-steering-yaw-response-progress-v2";
         break;
@@ -31317,7 +31267,7 @@ struct MPC
   std::shared_ptr<LatestOnlyWorker>
   rate_resolved_stop_lattice_shadow_worker_;
   std::optional<rate_resolved_artifact::Identity>
-  rate_resolved_stop_lattice_published_source_identity_;
+  rate_resolved_stop_lattice_submitted_source_identity_;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
   rate_resolved_stop_lattice_current_world_alternate_plan_;
   std::uint64_t rate_resolved_stop_lattice_shadow_last_consumed_decision_id_{};

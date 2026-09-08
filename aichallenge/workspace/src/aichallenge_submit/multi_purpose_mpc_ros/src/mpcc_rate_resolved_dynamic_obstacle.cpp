@@ -9,6 +9,148 @@
 
 namespace multi_purpose_mpc_ros::mpcc_rate_resolved_dynamic_obstacle
 {
+namespace
+{
+
+Result refine_cartesian(const Request & request) noexcept
+{
+  namespace model = mpcc_rate_resolved;
+  namespace problem = mpcc_rate_resolved_problem;
+  const auto invalid = []() {
+      Result result;
+      result.reason = Reason::InvalidInput;
+      return result;
+    };
+  const auto & prediction = *request.cartesian_prediction;
+  const auto & frame = prediction.course_frame;
+  const int horizon = request.wall_only_problem.horizon_steps;
+  const auto * geometry = request.physical_separation_geometry ?
+    &*request.physical_separation_geometry :
+    (request.forced_physical_separation_geometry ?
+    &*request.forced_physical_separation_geometry : nullptr);
+  if (horizon <= 0 || geometry == nullptr || frame.knots == nullptr ||
+    frame.knots->size() < 2U || !std::isfinite(frame.progress_origin_m) ||
+    prediction.target_positions_m.size() != static_cast<std::size_t>(horizon) ||
+    request.stages.size() != static_cast<std::size_t>(horizon) ||
+    request.wall_only_primal.size() != model::kStateDimension * (horizon + 1) +
+    model::kInputDimension * horizon || !request.wall_only_primal.allFinite())
+  {
+    return invalid();
+  }
+  // Classification and support must compare both bodies in the SAME local
+  // frame. A peer's independent course projection cannot be subtracted from
+  // an ego frame on a curve. Keep the existing physical homotopy selector.
+  auto local = request;
+  local.cartesian_prediction.reset();
+  std::vector<mpc_stage_geometry::CourseFrameSample> samples;
+  samples.reserve(static_cast<std::size_t>(horizon));
+  for (int stage = 0; stage < horizon; ++stage) {
+    const auto selected_state = problem::select_linearization_state(
+      request.wall_only_problem, request.wall_only_primal, stage + 1);
+    if (!selected_state) {
+      return invalid();
+    }
+    const auto & state = *selected_state;
+    local.wall_only_primal.segment<model::kStateDimension>(
+      (stage + 1) * model::kStateDimension) = state;
+    const auto sampled = mpc_stage_geometry::sample_course_frame(
+      *frame.knots, frame.progress_origin_m + state[model::kProgressIndex]);
+    if (!sampled || !prediction.target_positions_m[stage].allFinite()) {
+      return invalid();
+    }
+    samples.push_back(*sampled);
+    local.stages[stage].valid = true;
+    const double c = std::cos(sampled->heading_rad);
+    const double s = std::sin(sampled->heading_rad);
+    const Eigen::Vector2d relative = prediction.target_positions_m[stage] -
+      Eigen::Vector2d{sampled->x_m, sampled->y_m};
+    local.stages[stage].target_progress_m = state[model::kProgressIndex] +
+      c * relative[0] + s * relative[1];
+    local.stages[stage].target_lateral_m = -s * relative[0] + c * relative[1];
+  }
+  auto result = refine(local);
+  if (!result.problem) {
+    return result;
+  }
+  for (auto & row : result.problem->dynamic_obstacle_constraints) {
+    const int stage = row.state_stage - 1;
+    const auto state = local.wall_only_primal.segment<model::kStateDimension>(
+      row.state_stage * model::kStateDimension);
+    const auto & sampled = samples[stage];
+    const bool upper = std::isfinite(row.upper);
+    if (upper == std::isfinite(row.lower)) {
+      return invalid();
+    }
+    Eigen::Vector2d local_normal;
+    if (row.axis == problem::DynamicObstacleConstraintAxis::Lateral) {
+      local_normal = {0.0, 1.0};
+    } else if (row.axis == problem::DynamicObstacleConstraintAxis::EffectiveProgress) {
+      local_normal = {1.0, 0.0};
+    } else {
+      local_normal = {row.effective_progress_coefficient, row.lateral_coefficient};
+    }
+    const double norm = local_normal.norm();
+    if (!std::isfinite(norm) || norm <= 0.0) {
+      return invalid();
+    }
+    const double legacy_value = local_normal[0] *
+      (state[model::kProgressIndex] + state[model::kLagIndex]) +
+      local_normal[1] * state[model::kLateralIndex];
+    // Preserve explicitly declared initial-overlap escape or offline
+    // continuation offsets. Complete disjuncts have the exact physical
+    // signed separation here, since classification used the common frame.
+    const double residual = (upper ? legacy_value - row.upper : row.lower - legacy_value) / norm;
+    local_normal *= (upper ? 1.0 : -1.0) / norm;
+    const double c = std::cos(sampled.heading_rad), s = std::sin(sampled.heading_rad);
+    const Eigen::Vector2d tangent{c, s}, normal{-s, c};
+    const Eigen::Vector2d world_normal = local_normal[0] * tangent + local_normal[1] * normal;
+    const double heading = sampled.heading_rad + state[model::kHeadingIndex];
+    const double body_forward = std::cos(heading) * world_normal[0] +
+      std::sin(heading) * world_normal[1];
+    const double body_left = -std::sin(heading) * world_normal[0] +
+      std::cos(heading) * world_normal[1];
+    const double corner_forward = body_forward >= 0.0 ?
+      geometry->ego_front_extent_m + geometry->ego_margin_m :
+      -geometry->ego_rear_extent_m - geometry->ego_margin_m;
+    const double corner_left = body_left >= 0.0 ?
+      geometry->ego_left_extent_m + geometry->ego_margin_m :
+      -geometry->ego_right_extent_m - geometry->ego_margin_m;
+    const double support_heading_derivative =
+      -body_forward * corner_left + body_left * corner_forward;
+    const auto & knots = *frame.knots;
+    auto next = std::upper_bound(knots.begin(), knots.end(), sampled.progress_m,
+      [](double progress, const auto & knot) {return progress < knot.progress_m;});
+    if (next == knots.begin()) {
+      ++next;
+    } else if (next == knots.end()) {
+      --next;
+    }
+    const auto previous = std::prev(next);
+    const double ds = next->progress_m - previous->progress_m;
+    const double heading_derivative = std::atan2(
+      std::sin(next->heading_rad - previous->heading_rad),
+      std::cos(next->heading_rad - previous->heading_rad)) / ds;
+    const Eigen::Vector2d reference_derivative{
+      (next->x_m - previous->x_m) / ds, (next->y_m - previous->y_m) / ds};
+    Eigen::Matrix<double, model::kStateDimension, 1> gradient =
+      Eigen::Matrix<double, model::kStateDimension, 1>::Zero();
+    gradient[model::kLateralIndex] = local_normal[1];
+    gradient[model::kLagIndex] = local_normal[0];
+    gradient[model::kHeadingIndex] = support_heading_derivative;
+    gradient[model::kProgressIndex] = world_normal.dot(reference_derivative +
+      heading_derivative * (normal * state[model::kLagIndex] - tangent * state[model::kLateralIndex])) +
+      support_heading_derivative * heading_derivative;
+    if (!gradient.allFinite()) {
+      return invalid();
+    }
+    row.physical_state_coefficients = gradient;
+    row.lower = -std::numeric_limits<double>::infinity();
+    row.upper = gradient.dot(state) - residual;
+  }
+  return result;
+}
+
+}  // namespace
 
 const char * to_string(const Reason reason) noexcept
 {
@@ -42,6 +184,9 @@ Result refine(const Request & request) noexcept
   if (!request.active) {
     result.reason = Reason::NotRequested;
     return result;
+  }
+  if (request.cartesian_prediction) {
+    return refine_cartesian(request);
   }
   const int horizon = request.wall_only_problem.horizon_steps;
   const int state_values = model::kStateDimension * (horizon + 1);

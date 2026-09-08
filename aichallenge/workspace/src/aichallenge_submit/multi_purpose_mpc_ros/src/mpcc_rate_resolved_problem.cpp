@@ -1,5 +1,6 @@
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -97,6 +98,9 @@ bool valid_dynamic_obstacle_constraints(
     if (
       constraint.state_stage <= 0 || constraint.state_stage > horizon ||
       !supported_axis || !valid_coupled_coefficients ||
+      (constraint.physical_state_coefficients.has_value() &&
+      (!constraint.physical_state_coefficients->allFinite() ||
+      constraint.physical_state_coefficients->isZero(0.0))) ||
       std::isnan(constraint.lower) || std::isnan(constraint.upper) ||
       constraint.lower > constraint.upper)
     {
@@ -107,6 +111,30 @@ bool valid_dynamic_obstacle_constraints(
 }
 
 }  // namespace
+
+std::optional<Eigen::Matrix<double, model::kStateDimension, 1>>
+select_linearization_state(
+  const AssemblyRequest & request, const Eigen::VectorXd & primal, const int stage) noexcept
+{
+  const int states = model::kStateDimension * (request.horizon_steps + 1);
+  const int variables = states + model::kInputDimension * request.horizon_steps;
+  if (request.horizon_steps <= 0 || stage < 0 || stage > request.horizon_steps ||
+    primal.size() != variables || request.state_lower.size() != states ||
+    request.state_upper.size() != states)
+  {
+    return std::nullopt;
+  }
+  Eigen::Matrix<double, model::kStateDimension, 1> state;
+  for (int element = 0; element < model::kStateDimension; ++element) {
+    const int index = stage * model::kStateDimension + element;
+    const double lower = request.state_lower[index], upper = request.state_upper[index];
+    if (!std::isfinite(primal[index]) || std::isnan(lower) || std::isnan(upper) || lower > upper) {
+      return std::nullopt;
+    }
+    state[element] = std::clamp(primal[index], lower, upper);
+  }
+  return state.allFinite() ? std::optional{state} : std::nullopt;
+}
 
 std::optional<Eigen::Matrix<double, model::kInputDimension, 1>>
 resolve_serialized_previous_input(
@@ -302,7 +330,14 @@ std::optional<Problem> assemble(const AssemblyRequest & request) noexcept
     const auto & obstacle = request.dynamic_obstacle_constraints[index];
     const int row = dynamic_obstacle_offset + static_cast<int>(index);
     const int state = obstacle.state_stage * nx;
-    if (obstacle.axis == DynamicObstacleConstraintAxis::Lateral) {
+    if (obstacle.physical_state_coefficients.has_value()) {
+      for (int element = 0; element < nx; ++element) {
+        const double value = (*obstacle.physical_state_coefficients)[element];
+        if (value != 0.0) {
+          constraint_triplets.emplace_back(row, state + element, value);
+        }
+      }
+    } else if (obstacle.axis == DynamicObstacleConstraintAxis::Lateral) {
       constraint_triplets.emplace_back(
         row, state + model::kLateralIndex, 1.0);
     } else if (
@@ -508,7 +543,9 @@ RowSemantic decode_row(
       static_cast<std::size_t>(trailing_row)];
     RowKind kind = RowKind::DynamicObstacleCoupledLateralProgress;
     int element = -1;
-    if (obstacle.axis == DynamicObstacleConstraintAxis::Lateral) {
+    if (obstacle.physical_state_coefficients.has_value()) {
+      kind = RowKind::DynamicObstaclePhysicalPlane;
+    } else if (obstacle.axis == DynamicObstacleConstraintAxis::Lateral) {
       kind = RowKind::DynamicObstacleLateral;
       element = model::kLateralIndex;
     } else if (
@@ -541,6 +578,8 @@ const char * row_kind_name(const RowKind kind) noexcept
       return "dynamic-obstacle-effective-progress";
     case RowKind::DynamicObstacleCoupledLateralProgress:
       return "dynamic-obstacle-coupled-lateral-progress";
+    case RowKind::DynamicObstaclePhysicalPlane:
+      return "dynamic-obstacle-physical-plane";
   }
   return "unknown";
 }

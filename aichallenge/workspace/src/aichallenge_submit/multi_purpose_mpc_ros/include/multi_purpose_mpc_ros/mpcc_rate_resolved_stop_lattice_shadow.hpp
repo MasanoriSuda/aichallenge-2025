@@ -51,7 +51,7 @@ struct EvaluationControl
 enum class EvaluationMode
 {
   /// Production worker: one bounded seven-state solve from the latest
-  /// published normal state. An older control-lattice search must not block
+  /// immutable current-world state. An older control-lattice search must not block
   /// the next current-world observation from reaching the worker.
   DirectSevenStateOnly,
   /// Offline/shadow comparison: retain the broader candidate population so
@@ -62,10 +62,11 @@ enum class EvaluationMode
 const char * to_string(Reason reason) noexcept;
 
 /// Stop artifacts may be re-proved against the current world while the
-/// tactical encounter is unchanged. Decision, observation and artifact
-/// sequence are deliberately excluded: requiring exact producer identity
-/// makes every asynchronous Stop result obsolete before it completes.
-bool same_tactical_stop_scope(
+/// normal intent, encounter, schemas and horizon remain compatible. Decision,
+/// observation, geometry epoch and artifact sequence are excluded here because
+/// the retained join must re-prove the complete current physical world. This
+/// predicate only permits retaining a candidate; it does not grant authority.
+bool same_current_world_stop_scope(
   const artifact::Identity & lhs,
   const artifact::Identity & rhs) noexcept;
 

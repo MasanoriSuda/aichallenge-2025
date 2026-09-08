@@ -75,6 +75,7 @@ artifact::ExecutionArtifact execution_artifact(
     {0.10, 0.0, 0.0, 2.1, 0.2, 0.11, 0.10302380180000528},
     {0.20, 0.0, 0.0, 2.2, 0.4, 0.12, 0.10979124524044208},
   };
+  value.semantic_initial_state = value.predicted_states.front();
   value.control_stages = {
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
@@ -264,31 +265,50 @@ TEST(
 
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  ConvertsCombinedCenterExclusionToPeerOnlyCircleRadius)
+  AddsUncertaintyToCompletePeerBodyWithoutEgoSubtraction)
 {
   const recovery::FootprintExtents ego{
     1.49, 0.51, 0.725, 0.725, 0.05};
 
-  const auto radius = retained::resolve_peer_circle_radius(
-    1.45, ego, 0.05);
+  const auto radius = retained::resolve_peer_circle_radius(1.876, 0.05);
 
   ASSERT_TRUE(radius.has_value());
-  EXPECT_NEAR(radius.value(), 0.775, 1e-12);
+  EXPECT_NEAR(radius.value(), 1.926, 1e-12);
   const auto clearance = recovery::circle_obstacle_clearance_at_time(
     ego, recovery::Pose2D{0.0, 0.0, 0.0},
-    recovery::CircleObstacle{0.0, 1.55, 0.0, 0.0, radius.value()}, 0.0);
+    recovery::CircleObstacle{0.0, 2.701, 0.0, 0.0, radius.value()}, 0.0);
   ASSERT_TRUE(clearance.has_value());
   EXPECT_NEAR(clearance.value(), 0.0, 1e-12);
 }
 
+TEST(MpccRateResolvedRetainedRevalidation, FullPeerBodyOverlapCannotHavePositiveClearance)
+{
+  // Independently measured common kart body: peer GNSS at0, ego base_link at2.2.
+  // A peer solid-body projection vertex is inside the ego solid-body projection.
+  // The old width-derived circle incorrectly reports+0.822mclearance here.
+  const recovery::FootprintExtents ego{1.615, 0.51, 0.768, 0.768, 0.05};
+  const auto radius = retained::resolve_peer_circle_radius(1.876, 0.05);
+  ASSERT_TRUE(radius);
+  const auto clearance = recovery::circle_obstacle_clearance_at_time(
+    ego, recovery::Pose2D{2.2, 0.0, 0.0},
+    recovery::CircleObstacle{0.0, 0.0, 0.0, 0.0, *radius}, 0.0);
+  ASSERT_TRUE(clearance);
+  EXPECT_LE(*clearance, 0.0);
+}
+
 TEST(
   MpccRateResolvedRetainedRevalidation,
-  RejectsCenterExclusionSmallerThanEgoBodyExtent)
+  RejectsInvalidPeerBodyOrUncertainty)
 {
-  const recovery::FootprintExtents ego{
-    1.49, 0.51, 0.725, 0.725, 0.05};
-
-  EXPECT_FALSE(retained::resolve_peer_circle_radius(0.70, ego, 0.05).has_value());
+  EXPECT_FALSE(retained::resolve_peer_circle_radius(0.0, 0.05));
+  EXPECT_FALSE(retained::resolve_peer_circle_radius(-1.0, 0.05));
+  EXPECT_FALSE(retained::resolve_peer_circle_radius(1.876, -0.05));
+  EXPECT_FALSE(retained::resolve_peer_circle_radius(
+      std::numeric_limits<double>::infinity(), 0.05));
+  EXPECT_FALSE(retained::resolve_peer_circle_radius(
+      1.876, std::numeric_limits<double>::quiet_NaN()));
+  EXPECT_FALSE(retained::resolve_peer_circle_radius(
+      std::numeric_limits<double>::max(), std::numeric_limits<double>::max()));
 }
 
 TEST(

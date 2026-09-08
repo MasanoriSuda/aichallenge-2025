@@ -2,6 +2,12 @@
 
 最新の進捗・完遂順序は[current-status.md](current-status.md)。
 
+2026-09-09追記: 座標モデル修正を5cfc50bcへローカルコミット。
+完全他車包含の修正は25package build・60CTestgroup/2338記録で合格。
+初回dev2は移動中Emergency/Recoveryが出て不合格。現在は
+`../20260908-peer-envelope-audit/dev2-results.md`の同一入力監査を進める。
+以下の過去runの記述は履歴として保持する。
+
 2026-09-07に自律実行を開始。時間軸修正は`../20260907-mpcc-semantic-target-time/`、Stop問題の監査は
 `../20260907-mpcc-pass-terminal-audit/`、現在の公開継続修正は
 `../20260907-mpcc-certified-stop-publication/`。

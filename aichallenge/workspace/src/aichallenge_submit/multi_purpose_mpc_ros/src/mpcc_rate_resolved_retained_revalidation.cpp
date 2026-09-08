@@ -127,7 +127,7 @@ std::optional<ExactPhysicalState> sample_exact_physical_state(
     !std::isfinite(elapsed_sec) || elapsed_sec < 0.0 ||
     trajectory.elapsed_time_sec.empty() ||
     elapsed_sec > trajectory.elapsed_time_sec.back() + kIdentityTolerance ||
-    execution.predicted_states.empty() ||
+    execution.predicted_states.empty() || !execution.semantic_initial_state ||
     std::abs(
       trajectory.progress_origin_m - execution.course_progress_origin_m) >
     std::max(kIdentityTolerance, source.bound_tolerance_m))
@@ -150,7 +150,7 @@ std::optional<ExactPhysicalState> sample_exact_physical_state(
   ExactPhysicalState lower_state;
   double lower_time_sec{};
   if (upper_index == 0U) {
-    const auto & initial = execution.predicted_states.front();
+    const auto & initial = execution.semantic_initial_state.value();
     lower_state = ExactPhysicalState{
       initial.lateral_m,
       initial.lag_m,
@@ -356,27 +356,18 @@ std::optional<double> sample_follow_target_progress(
 }  // namespace
 
 std::optional<double> resolve_peer_circle_radius(
-  const double forbidden_ego_center_distance_m,
-  const recovery::FootprintExtents & ego_footprint,
+  const double nominal_peer_body_radius_m,
   const double peer_uncertainty_margin_m) noexcept
 {
   if (
-    !std::isfinite(forbidden_ego_center_distance_m) ||
-    forbidden_ego_center_distance_m < 0.0 || !ego_footprint.valid() ||
+    !std::isfinite(nominal_peer_body_radius_m) || nominal_peer_body_radius_m <= 0.0 ||
     !std::isfinite(peer_uncertainty_margin_m) ||
     peer_uncertainty_margin_m < 0.0)
   {
     return std::nullopt;
   }
-  const double ego_body_lateral_extent_m = std::max(
-    ego_footprint.left_extent_m, ego_footprint.right_extent_m);
-  const double peer_body_radius_m =
-    forbidden_ego_center_distance_m - ego_body_lateral_extent_m;
-  if (peer_body_radius_m < -kIdentityTolerance) {
-    return std::nullopt;
-  }
   const double resolved_radius_m =
-    std::max(0.0, peer_body_radius_m) + peer_uncertainty_margin_m;
+    nominal_peer_body_radius_m + peer_uncertainty_margin_m;
   return std::isfinite(resolved_radius_m) ?
     std::optional<double>{resolved_radius_m} : std::nullopt;
 }

@@ -416,7 +416,7 @@ stuck_recovery:
     # 正常なV2X messageからrace session単位で車両IDを自動学習する。
     self_filter_mode: excluded
     self_vehicle_id: ""
-    vehicle_radius_m: 1.45
+    # 公称他車形状は mpc.v2x_peer_body_radius_m で通常制御と共用する。
     prediction_margin_sec: 0.1
   recovery_mpc:
     enabled: false
@@ -1359,7 +1359,8 @@ C++ の `mpc_controller_cpp` には、`/v2x/vehicle_positions` を使って他�
 ```yaml
 mpc:
   use_v2x_gap_planner: false
-  v2x_vehicle_radius: 1.25
+  v2x_vehicle_radius: 1.536
+  v2x_peer_body_radius_m: 1.876
   v2x_prediction_margin: 0.2
   v2x_prediction_use_path_time: false
   v2x_prediction_use_course_progress: false
@@ -3779,6 +3780,19 @@ callback最大20.390ms・超過0、指令受信間隔最大39.863ms・50ms超0�
 60CTestgroup／2335colcon記録でerror・failure・skipは0。
 この最終検査を含む統合反復、多車両・提出物の受入れは引き続き未完。
 結果は[修正steering](../../.steering/20260909-mpcc-coordinate-consistency/fixed-input-results.md)に記録する。
+
+artifactは問題を定義した厳密な`semantic_initial_state`を必須項目として別に保持する。
+数値QPの等式残差を物理初期位置の変更として使わない。生のprimal・予測列・残差は変更せず、
+数値dynamicsの検査は元の予測列で行う。壁・他車の物理証明はsemantic初期状態からの
+指令の非線形再生で作る。必須初期状態が欠けたartifactを生のprimalで補わない。
+2台試験のsource396ではraw初期進捗−2.18nmが経路windowの外になり、物理積分を開始できなかった。
+semantic初期値0では同じ最初の指令を積分できる。経路許容誤差や安全余裕は変更しない。
+この局所修正と、横並びの他車制約が最適化へ渡らない問題の受入れは別に記録する。
+初期状態修正後の25package build、60CTestgroup／2339記録は合格。単車6周は
+253.944秒・penalty0、走行中Emergency／Recoveryなし、callback最大18.913ms・超過0、
+指令受信間隔最大35.070msだった。ROS元時刻の重複・飛びは同じbagのclock／sensor停止と
+併記する。完全他車形状を使う初回dev2は不合格で、多車両と提出物の統合受入れは未完。
+詳細は[初期状態の結果](../../.steering/20260909-mpcc-semantic-physical-initial/results.md)を参照。
 
 ### 提出ファイルへの影響
 

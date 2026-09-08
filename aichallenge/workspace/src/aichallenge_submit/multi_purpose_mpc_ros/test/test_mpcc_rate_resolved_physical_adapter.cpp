@@ -54,6 +54,7 @@ execution::ExecutionArtifact artifact()
     {0.1, 0.0, 0.01, 2.1, 0.2, 0.11, 0.10302380180000528},
     {0.2, 0.0, 0.02, 2.2, 0.4, 0.12, 0.10979124524044208},
   };
+  value.semantic_initial_state = value.predicted_states.front();
   value.control_stages = {
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
@@ -104,6 +105,7 @@ TEST(MpccRateResolvedPhysicalAdapter, NormalContinuationAndStopUseTheBoundCourse
     state.steering_rad = 0.0;
     state.response_steering_rad = 0.0;
   }
+  source.semantic_initial_state = source.predicted_states.front();
   for (auto & control : source.control_stages) {
     control.steering_rate_radps = 0.0;
   }
@@ -169,6 +171,42 @@ TEST(
     0.0, 1e-12);
   EXPECT_FALSE(
     adapter::sample_stop_lateral_target(profile, 3.01, 1e-3).has_value());
+}
+
+TEST(MpccRateResolvedPhysicalAdapter, EqualityResidualDoesNotRelocatePhysicalInitialState)
+{
+  namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;
+  auto source = artifact();
+  source.course_frame = {
+    std::make_shared<const std::vector<geometry::CourseFrameKnot>>(
+      std::vector<geometry::CourseFrameKnot>{
+        {50.0, 0.0, 0.0, 0.0, 1}, {53.0, 3.0, 0.0, 0.0, 2}}), 50.0};
+  // Preserve a consistent raw primal while reproducing source396's accepted
+  // initial equality residual outside the actual course support.
+  constexpr double residual = -2.1804138714481612e-9;
+  for (auto & state : source.predicted_states) {
+    state.progress_m += residual;
+  }
+  ASSERT_EQ(execution::validate(source), execution::RejectReason::None);
+  ASSERT_FALSE(geometry::sample_course_frame(
+      *source.course_frame.knots, 50.0 + source.predicted_states.front().progress_m));
+  const auto result = adapter::build(
+    source, source.identity.source_context.intent,
+    source.identity.source_context.stage_geometry_id);
+  ASSERT_TRUE(result.exact_trajectory) << adapter::to_string(result.reason);
+  EXPECT_NEAR(result.exact_trajectory->progress_m.front(), 50.02, 1e-12);
+  EXPECT_DOUBLE_EQ(source.predicted_states.front().progress_m, residual);
+  EXPECT_DOUBLE_EQ(source.semantic_initial_state->progress_m, 0.0);
+
+  auto missing = source;
+  missing.semantic_initial_state.reset();
+  EXPECT_EQ(execution::validate(missing), execution::RejectReason::InvalidSemanticInitialState);
+  EXPECT_FALSE(adapter::build(missing, missing.identity.source_context.intent,
+      missing.identity.source_context.stage_geometry_id).exact_trajectory);
+  auto outside = source;
+  outside.semantic_initial_state->progress_m = -0.01;
+  EXPECT_FALSE(adapter::build(outside, outside.identity.source_context.intent,
+      outside.identity.source_context.stage_geometry_id).exact_trajectory);
 }
 
 TEST(
@@ -645,6 +683,7 @@ TEST(
     {0.0, 0.0, 0.0, 8.0, 0.4, 0.35, 0.35},
     {0.0, 0.0, 0.0, 8.0, 0.8, 0.35, 0.35},
   };
+  source.semantic_initial_state = source.predicted_states.front();
   source.control_stages = {
     {0.0, 0.0, 8.0, 0.05, 0.0, 10.0, -3.0, 1.37},
     {0.0, 0.0, 8.0, 0.05, 0.0, 10.0, -3.0, 1.37},
@@ -683,6 +722,7 @@ TEST(
     {0.0, 0.0, 0.0, 8.0, 0.8, 0.35, 0.35},
     {0.0, 0.0, 0.0, 8.0, 1.2, 0.35, 0.35},
   };
+  source.semantic_initial_state = source.predicted_states.front();
   source.control_stages = {
     {0.0, 0.0, 8.0, 0.10, 0.0, 10.0, -3.0, 1.37},
     {0.0, 0.0, 8.0, 0.05, 0.0, 10.0, -3.0, 1.37},
@@ -721,6 +761,7 @@ TEST(
     {0.0, 0.0, 0.0, 8.0, 0.8, 0.35, 0.35},
     {0.0, 0.0, 0.0, 8.0, 1.2, 0.35, 0.35},
   };
+  source.semantic_initial_state = source.predicted_states.front();
   source.control_stages = {
     {0.0, 0.0, 8.0, 0.10, 0.0, 10.0, -3.0, 1.37},
     {0.0, 0.0, 8.0, 0.05, 0.0, 10.0, -3.0, 1.37},
@@ -752,6 +793,7 @@ TEST(MpccRateResolvedPhysicalAdapter, RejectsLinearizedStatesThatHideNonlinearWa
     {0.0, 0.0, 0.0, 8.0, 4.0, 0.35, 0.35},
     {0.0, 0.0, 0.0, 8.0, 8.0, 0.35, 0.35},
   };
+  source.semantic_initial_state = source.predicted_states.front();
   source.control_stages = {
     {0.0, 0.0, 8.0, 0.50, 0.0, 10.0, -3.0, 1.37},
     {0.0, 0.0, 8.0, 0.50, 0.0, 10.0, -3.0, 1.37},

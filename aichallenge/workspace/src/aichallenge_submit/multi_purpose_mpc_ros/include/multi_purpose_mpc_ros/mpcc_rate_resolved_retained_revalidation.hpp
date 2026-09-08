@@ -26,13 +26,11 @@ namespace race = race_mpcc_foundation;
 using DynamicObstacle = mpcc_rate_resolved_dynamic_proof::DynamicObstacle;
 using DynamicWorldObservation = mpcc_rate_resolved_dynamic_proof::WorldObservation;
 
-/// Convert the V2X planner's forbidden ego-center distance into the radius of
-/// the peer-only circle consumed by the physical footprint verifier.  The
-/// planner distance already contains the ego body half width; passing it
-/// directly as a peer radius would inflate the ego body twice.
+/// Complete peer body about the observed V2X point, plus peer uncertainty.
+/// The verifier adds the ego footprint separately. Planner lateral spacing
+/// cannot substitute for the peer body's circumscribed radius.
 std::optional<double> resolve_peer_circle_radius(
-  double forbidden_ego_center_distance_m,
-  const recovery::FootprintExtents & ego_footprint,
+  double nominal_peer_body_radius_m,
   double peer_uncertainty_margin_m) noexcept;
 
 /// Current Follow target in the same course-progress frame used to build the

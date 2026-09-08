@@ -30,20 +30,33 @@
 
 `mpc.v2x_vehicle_radius`は相手単体の半径ではなく、既存plannerが使う
 自他車の合計横距離である。両車の半幅0.768mから1.536mとする。
-旧値1.45mを維持したまま自車を広げると、`resolve_peer_circle_radius`の
-引き算で相手側が0.682mへ縮むため、この結合も回帰testで確認する。
+旧実装では1.45mを維持したまま自車を広げると、相手半径の引き算で
+相手側が0.682mへ縮んでいた。plannerの横寸法は独立した回帰testで確認する。
 prediction marginと位置不確実性は公称寸法と分け、変更しない。
 
 **この横寸法修正だけでは相手車体の前後端を円形モデルで包めない。**
 V2X messageに姿勢はなく、現在のphysical worldは相手を円で表現する。
 ローカルassetと配信コードを確認したところ、V2Xの基準点はGNSSアンテナであり、
 4台共通の全車体を同点から包む球の半径は1.875424947m（外側丸め1.876m）となる。
-現行の円は公称0.768mに不確実性を足したもので、車体投影が重なる例に対して
+修正前の円は公称0.768mに不確実性を足したもので、車体投影が重なる例に対して
 実際のC++判定が正の0.822m余裕を返す。この例は平面形状の反例であり、
 3Dエンジンの衝突や他guardも含む指令採用を実証したものではない。
 [相手形状監査](../../.steering/20260908-peer-envelope-audit/design.md)に根拠を保存する。
-相手全形状とRecoveryの半径を一貫して実装する修正は未完。
+相手全形状とRecoveryの半径を一貫して扱う修正は以下のとおり。
 多車両の安全受入れを横寸法testだけで完了扱いにしない。
+
+2026-09-09の修正では、公称全車体を`mpc.v2x_peer_body_radius_m: 1.876`へ
+分離し、通常の現在world／保存world／Recoveryで共有する。
+`mpc.v2x_vehicle_radius`は合計横距離として維持する。
+旧`stuck_recovery.rear_safety.vehicle_radius_m`は廃止し、残る設定は明示的に
+読込エラーとする。移行先は上記の共通公称半径。予測marginと位置不確実性は
+別に加算し、自車幅の引き算で相手形状を決めない。
+V2X topic・message・Domainと評価schemaは変えない。
+現在worldと保存worldには共通producerで公称半径・予測margin・位置不確実性を
+供給する。Recoveryも同じ公称値を使い、既存の位置不確実性のみを加える。
+[独立3D凸包fixture](../../aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json)
+は705頂点から202頂点へ縮約し、4台のGNSS基準点に対する包絡を確認する。
+多車両受入れはまだ未達。
 
 ## 壁マップ
 

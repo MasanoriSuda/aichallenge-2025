@@ -1,0 +1,249 @@
+{
+  "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+  "local_result": "accepted",
+  "integrated_result": "incomplete",
+  "single_run_id": "20260909-semantic-initial-single-r1",
+  "production_patch_sha256": "5dafcf8b8d4088041cfd7673d87a0816e2d6c9fe564662def345a8f06937a28c",
+  "artifacts": [
+    {
+      "path": ".steering/20260909-mpcc-semantic-physical-initial/check_before.py",
+      "bytes": 995,
+      "sha256": "9713a1383680eac8c030c032025aa400a2c0e918c202a0532a7567ea9abe1c29"
+    },
+    {
+      "path": ".steering/20260909-mpcc-semantic-physical-initial/check_separate.py",
+      "bytes": 995,
+      "sha256": "c3657057fd2dab6ed5a16c63d8266fa79f3262469a363b3fe3388ce2206fdc1f"
+    },
+    {
+      "path": ".steering/20260909-mpcc-semantic-physical-initial/replay_after.py",
+      "bytes": 1398,
+      "sha256": "9af4283e74a8591e8af853f74d525bdec1c130ad82986683673133d7c9e7230c"
+    },
+    {
+      "path": ".steering/20260909-mpcc-semantic-physical-initial/run_single.py",
+      "bytes": 6231,
+      "sha256": "73c85bc9c28f0db0b942e1a35751357e680342b7177d9913ac3fde426cbf0542"
+    },
+    {
+      "path": ".steering/20260909-mpcc-semantic-physical-initial/seal_results.py",
+      "bytes": 5614,
+      "sha256": "43520437da3e1a8fa26f5163b62c2aa9f6505fe26f7889d1a445017c894e5f6e"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/build.log",
+      "bytes": 4541,
+      "sha256": "2e6de3fa691868130a5ee07fa52cb75bde05089f8f4038e01e9c0c63bf7b2685"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/original-941/comparison.log",
+      "bytes": 5906,
+      "sha256": "cf9ac4bfee546c2b061d9b512592f603c1d451c0cd991f683c97ad166cd2d349"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/package.log",
+      "bytes": 486123,
+      "sha256": "6ccc4ba2e6b799baa11864747ac77d70be1c3157514de2aeb1d7e783fc3c4cf9"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/replay-console.log",
+      "bytes": 1240,
+      "sha256": "459376a808ec79026c5a03416f806b911807e17b87ac73ce2dd1e2e2738ac0d2"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/results.json",
+      "bytes": 1205,
+      "sha256": "895e60b4536fc5f8f7f437cab30a0ff0eecb12c212a9c07b4a3d2ba6affa401d"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/world-396-physical-sqp/comparison.log",
+      "bytes": 3983,
+      "sha256": "b1ab3aa6c62b24152aa7bf2ef4e67938e2dddf0f42bb14062d793e6545cd25f7"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/world-396-physical-sqp/mpcc_architecture_snapshots/000000000396-d3eed5ffdbedf0d0-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 266782,
+      "sha256": "893dbe5313b2a9c05c82ae95997369fc416f224465db21c6d56e4b66b288daa0"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/world-396-physical-sqp/mpcc_architecture_snapshots/000000000396-d3eed5ffdbedf0d0-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/world-396-stop-support/comparison.log",
+      "bytes": 3983,
+      "sha256": "95d6ba54d84ca1617e9aedee6c262b75d45d7bf1192638d5a5c42ae2cb063101"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/world-396-stop-support/mpcc_architecture_snapshots/000000000396-d207420eacc8b73c-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 253672,
+      "sha256": "dec68a41a68ce1788e2a1baf98f2c16f86f097852b38dd569fb6e0b1473e3553"
+    },
+    {
+      "path": "output/20260909-semantic-initial-after/world-396-stop-support/mpcc_architecture_snapshots/000000000396-d207420eacc8b73c-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-semantic-initial-before/build.log",
+      "bytes": 1143,
+      "sha256": "78de524b9b60a25f749a0455c9d6b4797723ff8104f99b02e344ea1021127658"
+    },
+    {
+      "path": "output/20260909-semantic-initial-before/result.json",
+      "bytes": 19,
+      "sha256": "4df7e306bff9cf8b6546ba28ccb1707b05fcfbd81e618b394b02855490cbb4b1"
+    },
+    {
+      "path": "output/20260909-semantic-initial-before/test.log",
+      "bytes": 5120,
+      "sha256": "0b6d3c0e885e34e96c085c027115e6bda552ab1ae6252c4373706283e3b9eaac"
+    },
+    {
+      "path": "output/20260909-semantic-initial-rejected-overwrite/build.log",
+      "bytes": 4577,
+      "sha256": "f704fd7ff46ecf9381dfc438e74c31cc7ea74004b691cfc4bfe2d2e69553372c"
+    },
+    {
+      "path": "output/20260909-semantic-initial-rejected-overwrite/final-build.log",
+      "bytes": 4283,
+      "sha256": "6607d7b59883423942ab7121e6c9c7ae02f02a171420bdf4c19edfdd8b6543b0"
+    },
+    {
+      "path": "output/20260909-semantic-initial-rejected-overwrite/package.log",
+      "bytes": 607374,
+      "sha256": "08484926e45ff26bf7eb2ed1afe24d1e384dda68f4c5843730a9e1913a7ace51"
+    },
+    {
+      "path": "output/20260909-semantic-initial-rejected-overwrite/test_mpcc_rate_resolved_shadow",
+      "bytes": 2218592,
+      "sha256": "2e96f070ff8df354fedc978294ad8de9a77e47afb78ec7b914ff46e01f569ab2"
+    },
+    {
+      "path": "output/20260909-semantic-initial-separated-focused/build.log",
+      "bytes": 5338,
+      "sha256": "92efc54bc11a7a3c76ebfed28dc3a9ff566224b0f0658100e4eb5f059908a38f"
+    },
+    {
+      "path": "output/20260909-semantic-initial-separated-focused/results.json",
+      "bytes": 326,
+      "sha256": "7734a8b38d9a0e37790bea1c6555b8226690e06815cd758cc35377a7fad574ac"
+    },
+    {
+      "path": "output/20260909-semantic-initial-separated-focused/test_mpcc_architecture_snapshot.log",
+      "bytes": 2194,
+      "sha256": "22ff719110f57a1637e362a1c47eaeb2962e1565fca7ca978b37d32c773e0e45"
+    },
+    {
+      "path": "output/20260909-semantic-initial-separated-focused/test_mpcc_rate_resolved_certified_plan.log",
+      "bytes": 6383,
+      "sha256": "f812f620d62303e57080a1505570cc82f4d9d6ae8637a3c112e05dd7d0d67b02"
+    },
+    {
+      "path": "output/20260909-semantic-initial-separated-focused/test_mpcc_rate_resolved_physical_adapter.log",
+      "bytes": 6481,
+      "sha256": "154350351446d314d7e00c87e7607547922faae7dbaee5d5bc44d30bc8ab89b4"
+    },
+    {
+      "path": "output/20260909-semantic-initial-separated-focused/test_mpcc_rate_resolved_shadow.log",
+      "bytes": 11441,
+      "sha256": "d5f0b8c94bc23df649bccaf0f537a688f9b7f3595eeaf17843472b86925e6fbd"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/awsim.log",
+      "bytes": 1773,
+      "sha256": "e75662763d5f9723ff8b2883f9fd5a16194fb6ab96713ac77f04e82a43dfe17d"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/bag-analysis.json",
+      "bytes": 174859,
+      "sha256": "c593ac9d70bfb81324ce986d70e0cf788454cdd505906006187493e3cec1d5d6"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/build.log",
+      "bytes": 4541,
+      "sha256": "2e6de3fa691868130a5ee07fa52cb75bde05089f8f4038e01e9c0c63bf7b2685"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/d1/autoware.log",
+      "bytes": 3418373,
+      "sha256": "c52069586f06f1eb9bc8f3fef393fe0221917506d8fef9b014fb885f5743a586"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/d1/d1-result-details.json",
+      "bytes": 863,
+      "sha256": "e1a46eaa9e3181792ca3c301f5ddb967a66d5b48a6495b4942e2b7f67738d6e5"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/d1/result-summary.json",
+      "bytes": 1066,
+      "sha256": "156ef63e64726a92b861021542380cfc5459b19d00c350c47960054765c8b223"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8525,
+      "sha256": "ef24c8bd9d716e60d4684c80ef212fef90e4eb0bf15f2cc72eb011a7f4dcc9b4"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 37999182,
+      "sha256": "1c9443e170ab1cb39601c09328af3c1518af6fdd9d31511e2c15888a9aef9ffb"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/d1-log-summary.json",
+      "bytes": 12236,
+      "sha256": "9753afa4ea878b92c8dfb1dbd031e196f2debbb6d3d6b783bd222e3be04065c4"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/external-monitor-summary.json",
+      "bytes": 281,
+      "sha256": "8c80b6dca1376642f2908366dc6a06ceb7e04c22449103780a91acf34a51b336"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/log-analysis-console.json",
+      "bytes": 3127,
+      "sha256": "4e880b729f1c2f5408aa8920f9a854c6870c130de433af2c1111424b2ff81dc2"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/manifest.json",
+      "bytes": 24909,
+      "sha256": "9ecbfbb686739ca1743d3828ad9e2c93c22bc8e1442be54d6d05f9ab287aa32b"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/monitor-console.log",
+      "bytes": 5563,
+      "sha256": "e2a6b60e34d779d1c4624cbea16f88c3fcf24d9ccd437010e7bf1055d8795ba1"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/monitor-summary.json",
+      "bytes": 1369,
+      "sha256": "45e7a6d5d6e5825ef9a06c0b0d0019329a07632e21b987e14ca7a204a3c088e7"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/mpcc-source.patch",
+      "bytes": 55831,
+      "sha256": "5dafcf8b8d4088041cfd7673d87a0816e2d6c9fe564662def345a8f06937a28c"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/package.log",
+      "bytes": 486123,
+      "sha256": "6ccc4ba2e6b799baa11864747ac77d70be1c3157514de2aeb1d7e783fc3c4cf9"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/run_single.py",
+      "bytes": 6202,
+      "sha256": "400bf9813f9b20e21cac8b992c1de392c7099a98b5670d31574ff66a5bdfa479"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/source-clock-anomalies.json",
+      "bytes": 3961152,
+      "sha256": "059f67a2f3e3fabc166d499d8e68f40d26bdf9716a5abb7339752499e0430e4a"
+    },
+    {
+      "path": "output/20260909-semantic-initial-single-r1/workspace-artifact-verification.json",
+      "bytes": 327,
+      "sha256": "edc1154d376a991770e6d136d09b554b2948300afaf17d2d231c0136cc6abce0"
+    }
+  ]
+}

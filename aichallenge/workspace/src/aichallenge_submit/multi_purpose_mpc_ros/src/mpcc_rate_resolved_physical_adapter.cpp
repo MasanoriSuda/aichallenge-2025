@@ -365,8 +365,8 @@ Result build(
   exact.lateral_bound_tolerance_m =
     execution::physical_lateral_bound_tolerance_m(artifact);
   // Preserve the solver certificate diagnostics, but never use its affine
-  // state samples as physical wall evidence.  They only prove the assembled
-  // QP; the exact command sequence below is independently replayed through
+  // successor state samples as physical wall evidence. The exact command
+  // sequence below is independently replayed from the semantic state0 through
   // the nonlinear Frenet/yaw-response model.
   for (std::size_t state_index = 1U; state_index < state_count; ++state_index) {
     const auto & state = artifact.predicted_states[state_index];
@@ -389,7 +389,7 @@ Result build(
         0.0, residual_bound_m * (1.0 + transition.duration_sec) -
         transition.virtual_progress_lower_mps * transition.duration_sec));
   }
-  const auto & initial = artifact.predicted_states.front();
+  const auto & initial = artifact.semantic_initial_state.value();
   NonlinearState nonlinear{
     initial.lateral_m, initial.lag_m, initial.heading_offset_rad,
     initial.velocity_mps, initial.progress_m, initial.steering_rad,

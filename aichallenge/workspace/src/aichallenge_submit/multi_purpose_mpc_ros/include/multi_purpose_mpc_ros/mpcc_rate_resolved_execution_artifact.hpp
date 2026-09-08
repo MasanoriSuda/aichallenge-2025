@@ -126,12 +126,19 @@ struct ExecutionArtifact
   double maximum_normalized_constraint_violation{};
   TerminalIntentContract terminal_intent_contract;
   TerminalIntentCertificate terminal_intent_certificate;
+  /// Unmodified solved affine states (or exact Stop successor samples).
+  /// Numerical dynamics checks use this complete, internally consistent array.
   std::vector<PredictedState> predicted_states;
   std::vector<ControlStage> control_stages;
   std::vector<double> nominal_path_distance_m;
   std::vector<double> lateral_lower_m;
   std::vector<double> lateral_upper_m;
   mpcc_rate_resolved::CourseFrame course_frame;
+  /// Required exact physical initial state from the immutable semantic input.
+  /// It is separate from predicted_states[0], whose accepted QP equality
+  /// residual must never relocate the physical body or change its controls.
+  /// Absence is invalid; no raw-primal fallback is allowed.
+  std::optional<PredictedState> semantic_initial_state;
 };
 
 enum class RejectReason
@@ -148,6 +155,7 @@ enum class RejectReason
   InvalidPathDistance,
   CorridorCountMismatch,
   InvalidPredictedState,
+  InvalidSemanticInitialState,
   InvalidControlStage,
   InvalidAccelerationControlBounds,
   InvalidProgressControlBounds,

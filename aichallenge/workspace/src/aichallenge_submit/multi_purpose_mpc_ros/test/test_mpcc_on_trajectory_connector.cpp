@@ -63,6 +63,7 @@ execution::ExecutionArtifact artifact(
     {lateral_offset_m, 0.0, 0.0, 2.0, 0.4, 0.12,
       0.10979124524044208},
   };
+  value.semantic_initial_state = value.predicted_states.front();
   value.control_stages = {
     {0.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
     {0.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},

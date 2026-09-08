@@ -381,6 +381,18 @@ ExecutionArtifactBuildResult build_execution_artifact(
       final_problem.state_upper[
         state_offset + model::kLateralIndex]);
   }
+  // An accepted numerical equality residual is not a new physical origin.
+  // Keep the raw primal in SolveOutcome/preparation, but replay these controls
+  // from the immutable x0 which defined the problem. In particular, a tiny
+  // negative primal theta must not move x0 outside its sealed course window.
+  execution_artifact.semantic_initial_state = artifact::PredictedState{
+    snapshot.request.initial_state[model::kLateralIndex],
+    snapshot.request.initial_state[model::kLagIndex],
+    snapshot.request.initial_state[model::kHeadingIndex],
+    snapshot.request.initial_state[model::kVelocityIndex],
+    snapshot.request.initial_state[model::kProgressIndex],
+    snapshot.request.current_steering_rad,
+    snapshot.request.current_response_steering_rad};
   execution_artifact.control_stages.reserve(
     static_cast<std::size_t>(execution_horizon));
   for (int stage = 0; stage < execution_horizon; ++stage) {

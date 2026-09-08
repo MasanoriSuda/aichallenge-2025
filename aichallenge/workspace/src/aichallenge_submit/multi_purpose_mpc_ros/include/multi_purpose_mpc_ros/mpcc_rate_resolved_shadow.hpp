@@ -652,6 +652,25 @@ struct Result
 bool identity_valid(const Identity & identity) noexcept;
 bool result_valid(const Result & result) noexcept;
 
+/// The physical seed is derived from this exact source, independently of the
+/// accepted affine initial-equality residual retained in predicted_states.
+inline bool semantic_initial_state_matches(
+  const Snapshot & source, const artifact::ExecutionArtifact & execution) noexcept
+{
+  if (!execution.semantic_initial_state) {
+    return false;
+  }
+  const auto & initial = *execution.semantic_initial_state;
+  const auto & request = source.request;
+  return initial.lateral_m == request.initial_state[0] &&
+         initial.lag_m == request.initial_state[1] &&
+         initial.heading_offset_rad == request.initial_state[2] &&
+         initial.velocity_mps == request.initial_state[3] &&
+         initial.progress_m == request.initial_state[4] &&
+         initial.steering_rad == request.current_steering_rad &&
+         initial.response_steering_rad == request.current_response_steering_rad;
+}
+
 /// Materialize a completed, non-executable worker rejection. Early
 /// candidate/build failures do not pass through SolverContext::evaluate(), so
 /// their completion fields must be sealed explicitly before they cross the

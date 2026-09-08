@@ -185,6 +185,26 @@
       "snapshot_id": "20260909-coordinate-v3-single-r1",
       "manifest": ".steering/20260909-mpcc-coordinate-consistency/evidence.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-peer-envelope-d1-source-394",
+      "manifest": ".steering/20260908-peer-envelope-audit/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-peer-envelope-d1-source-396",
+      "manifest": ".steering/20260908-peer-envelope-audit/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-peer-envelope-d1-source-941",
+      "manifest": ".steering/20260908-peer-envelope-audit/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-semantic-initial-single-r1",
+      "manifest": ".steering/20260909-mpcc-semantic-physical-initial/evidence.json",
+      "replay_ready": false
     }
   ],
   "experiments": [
@@ -1434,6 +1454,153 @@
       "reason": "Two targeted regressions fail before repair: mismatched/missing geometry is accepted. After explicit matches, all60CTestgroups/2335colconrecords pass. New normal/continuation/Stop regression reconstructs straight physical motion across a curved virtual reference.",
       "production_impact": "Adds rejection for geometry mismatch; no new authority or changed model/solver parameters. Final integrated dynamic runs still required.",
       "revisit_condition": "Changed geometry ownership, origin rebasing or source/certificate serialization."
+    },
+    {
+      "experiment_id": "20260909-peer-envelope-enclosure",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-394",
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-peer-envelope-d1-source-941"
+      ],
+      "hypothesis": "complete peer radius encloses all four measured bodies",
+      "changed_dimension": "peer_body_geometry",
+      "result": "accepted",
+      "reason": "old circle reports +0.822m for actual body overlap; new native predicate rejects it; independent hull/config tests and25-package build/60CTestgroups/2338records pass",
+      "production_impact": "shared1.876mnominal body plus unchanged uncertainty; retired ego-width subtraction and independent Recovery radius",
+      "deleted_code": [
+        "ego half-width subtraction from peer circle",
+        "stuck_recovery.rear_safety.vehicle_radius_m"
+      ],
+      "revisit_condition": "different body asset or V2X reference point with independently measured geometry"
+    },
+    {
+      "experiment_id": "20260909-peer-envelope-dev2-r1",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-394",
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-peer-envelope-d1-source-941"
+      ],
+      "hypothesis": "complete peer body is sufficient for coupled race acceptance",
+      "changed_dimension": "integrated_validation",
+      "result": "rejected",
+      "reason": "moving Emergency/Recovery, one lap each, D1callback26.284ms/1overrun; formal domain results absent; side peer exists in proof world but optimizer has no target tube",
+      "production_impact": "no promotion to integrated acceptance",
+      "deleted_code": [],
+      "revisit_condition": "fixed-input producer repair and successful package/build evidence justify a new sealed trial"
+    },
+    {
+      "experiment_id": "20260909-peer-envelope-original-architectures",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-394",
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-peer-envelope-d1-source-941"
+      ],
+      "hypothesis": "existing candidate architectures recover first side-peer encounter",
+      "changed_dimension": "architecture_comparison",
+      "result": "inconclusive",
+      "reason": "A394/396solves but native dynamic proof rejectsD2; A941physical-stage0rejects. B/C/D/Gcannot generate without canonical target tube; not evidence of physical infeasibility",
+      "production_impact": "none; observation-only",
+      "deleted_code": [],
+      "revisit_condition": "same-world complete target producer or proven physical-state repair with resealed identity"
+    },
+    {
+      "experiment_id": "20260909-peer-envelope-world-target-architectures",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-394",
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-peer-envelope-d1-source-941"
+      ],
+      "hypothesis": "same-world peer tube restores existing A/B/C/Dcandidate feasibility",
+      "changed_dimension": "target_constraint_producer",
+      "result": "rejected",
+      "reason": "constant-velocity peer tube with original full circle/world/dt/hard bounds is resealed; all A/B/C/D/Garms on394/396/941reject dynamic QP rows at unchanged4000iterations; feasibility remains Unknown",
+      "production_impact": "none; target producer is offline only",
+      "deleted_code": [],
+      "revisit_condition": "different bounded physical homotopy/formulation, or proof of faulty geometric/time coordinate mapping"
+    },
+    {
+      "experiment_id": "20260909-peer-envelope-raw-initial-native",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-394",
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-peer-envelope-d1-source-941"
+      ],
+      "hypothesis": "certified raw QPx0can replace semantic physical initial state",
+      "changed_dimension": "physical_initial_state",
+      "result": "rejected",
+      "reason": "source396rawtheta=-2.1804138714481612e-9rejects course sampling and first native step; semantic0with identical control/model/window accepts",
+      "production_impact": "bounded semantic-initial producer repair follows in separate steering",
+      "deleted_code": [],
+      "revisit_condition": "physical initial-state producer or course-window provenance changes"
+    },
+    {
+      "experiment_id": "20260909-semantic-initial-overwrite-affine-x0",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-semantic-initial-single-r1"
+      ],
+      "hypothesis": "overwriting affine state0can preserve numerical and physical certificates",
+      "changed_dimension": "physical_initial_state_representation",
+      "result": "rejected",
+      "reason": "35of2338testrecords fail numerical progress-dynamics checks; replacing one state breaks the raw affine residual contract",
+      "production_impact": "removed; raw affine array is retained",
+      "deleted_code": [
+        "affine-state0overwrite"
+      ],
+      "revisit_condition": "a complete alternative numerical certificate, without relaxing its accepted residual contract"
+    },
+    {
+      "experiment_id": "20260909-semantic-initial-separate-semantic-x0",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-semantic-initial-single-r1"
+      ],
+      "hypothesis": "a required source-bound physical seed fixes the raw-primal course-boundary failure",
+      "changed_dimension": "physical_initial_state_producer",
+      "result": "accepted",
+      "reason": "132focusedtests,25packages,60CTestgroups/2339records pass; original941gets past physicalstage0; one six-lap run253.944031s/penalty0/active movingoverride0/callback18.913ms/0overrun/receipt35.070181ms",
+      "production_impact": "physical replay/retained/connector/Stop use required exact semantic state; raw QP unchanged; integrated acceptance open",
+      "deleted_code": [
+        "raw affine state0as physical integration origin"
+      ],
+      "revisit_condition": "new failing seed/provenance/physical replay evidence"
+    },
+    {
+      "experiment_id": "20260909-semantic-initial-full-circle-stop-witness",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-semantic-initial-single-r1"
+      ],
+      "hypothesis": "a complete-body same-world Stop is physically feasible",
+      "changed_dimension": "stop_support_and_objective_comparison",
+      "result": "accepted",
+      "reason": "396world historical-objective Stop with full physical corner support passes native wall/dynamic/terminal proof; fingerprint9052539256127508737; current zero-objective Stop fails; no global infeasibility claim",
+      "production_impact": "none; observation-only; preserve exact witness and isolate support/conditioning before any promotion",
+      "deleted_code": [],
+      "revisit_condition": "same fixed QP or captured witness permits an independent conditioning/support comparison"
+    },
+    {
+      "experiment_id": "20260909-semantic-initial-world-physical-sqp",
+      "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+      "snapshot_ids": [
+        "20260909-peer-envelope-d1-source-396",
+        "20260909-semantic-initial-single-r1"
+      ],
+      "hypothesis": "bounded outer SQP restores the complete-body396normal candidate",
+      "changed_dimension": "convexification_schedule",
+      "result": "rejected",
+      "reason": "persistent candidate still fails the first dynamic QP; overtake-only population is inapplicable toCruise; no general physical infeasibility claim",
+      "production_impact": "none; observation-only",
+      "deleted_code": [],
+      "revisit_condition": "a different physically supported initial convex problem or a proved numerical-conditioning defect"
     }
   ]
 }

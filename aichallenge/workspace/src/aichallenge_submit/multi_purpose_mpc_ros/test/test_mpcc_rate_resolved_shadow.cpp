@@ -363,6 +363,18 @@ TEST(MpccRateResolvedShadow, SolvesAndSamplesOnePublicationInterval)
   EXPECT_NEAR(result.sampled_stage_elapsed_sec, 0.025, 1e-12);
   EXPECT_NEAR(result.certified_horizon_duration_sec, 0.30, 1e-12);
   ASSERT_NE(result.execution_artifact, nullptr);
+  ASSERT_TRUE(result.execution_artifact->semantic_initial_state);
+  const auto & physical_initial = result.execution_artifact->semantic_initial_state.value();
+  // QP equality residuals must not relocate the initial physical body outside
+  // its immutable course window (recorded source396 had theta=-2.18e-9m).
+  EXPECT_DOUBLE_EQ(physical_initial.lateral_m, input.request.initial_state[0]);
+  EXPECT_DOUBLE_EQ(physical_initial.lag_m, input.request.initial_state[1]);
+  EXPECT_DOUBLE_EQ(physical_initial.heading_offset_rad, input.request.initial_state[2]);
+  EXPECT_DOUBLE_EQ(physical_initial.velocity_mps, input.request.initial_state[3]);
+  EXPECT_DOUBLE_EQ(physical_initial.progress_m, input.request.initial_state[4]);
+  EXPECT_DOUBLE_EQ(physical_initial.steering_rad, input.request.current_steering_rad);
+  EXPECT_DOUBLE_EQ(
+    physical_initial.response_steering_rad, input.request.current_response_steering_rad);
   EXPECT_EQ(
     execution::validate(*result.execution_artifact),
     execution::RejectReason::None);
@@ -450,23 +462,19 @@ TEST(MpccRateResolvedShadow, LatestStateFeedbackResolvesOneConsistentArtifact)
     execution::validate(*result.execution_artifact),
     execution::RejectReason::None);
   ASSERT_FALSE(result.execution_artifact->predicted_states.empty());
-  const auto & solved_initial = result.execution_artifact->predicted_states.front();
-  const double state_tolerance =
-    result.execution_artifact->physical_global_tolerance;
-  EXPECT_NEAR(solved_initial.lateral_m, latest_state.lateral_m, state_tolerance);
-  EXPECT_NEAR(solved_initial.lag_m, latest_state.lag_m, state_tolerance);
-  EXPECT_NEAR(
+  ASSERT_TRUE(result.execution_artifact->semantic_initial_state);
+  const auto & solved_initial = result.execution_artifact->semantic_initial_state.value();
+  EXPECT_DOUBLE_EQ(solved_initial.lateral_m, latest_state.lateral_m);
+  EXPECT_DOUBLE_EQ(solved_initial.lag_m, latest_state.lag_m);
+  EXPECT_DOUBLE_EQ(
     solved_initial.heading_offset_rad,
-    latest_state.heading_offset_rad, state_tolerance);
-  EXPECT_NEAR(
-    solved_initial.velocity_mps, latest_state.velocity_mps, state_tolerance);
-  EXPECT_NEAR(
-    solved_initial.progress_m, latest_state.progress_m, state_tolerance);
-  EXPECT_NEAR(
-    solved_initial.steering_rad, latest_state.steering_rad, state_tolerance);
-  EXPECT_NEAR(
+    latest_state.heading_offset_rad);
+  EXPECT_DOUBLE_EQ(solved_initial.velocity_mps, latest_state.velocity_mps);
+  EXPECT_DOUBLE_EQ(solved_initial.progress_m, latest_state.progress_m);
+  EXPECT_DOUBLE_EQ(solved_initial.steering_rad, latest_state.steering_rad);
+  EXPECT_DOUBLE_EQ(
     solved_initial.response_steering_rad,
-    latest_state.response_steering_rad, state_tolerance);
+    latest_state.response_steering_rad);
   EXPECT_DOUBLE_EQ(
     result.execution_artifact->prediction_origin_sec,
     input.control_prediction_origin_sec + 0.20);

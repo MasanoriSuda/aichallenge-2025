@@ -169,9 +169,11 @@ RejectReason validate(const CertifiedPlan & plan) noexcept
   }
   if (
     plan.solver_source_snapshot != nullptr &&
+    (!shadow::semantic_initial_state_matches(
+      *plan.solver_source_snapshot, *plan.execution_artifact) ||
     !artifact::same_identity(
       plan.solver_source_snapshot->identity,
-      plan.execution_artifact->identity))
+      plan.execution_artifact->identity)))
   {
     return RejectReason::IdentityMismatch;
   }

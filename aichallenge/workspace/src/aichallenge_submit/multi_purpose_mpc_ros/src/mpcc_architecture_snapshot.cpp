@@ -1988,6 +1988,14 @@ YAML::Node execution_evidence_node(
   node["course_progress_origin_m"] = value.course_progress_origin_m;
   node["semantic_initial_steering_rad"] = value.semantic_initial_steering_rad;
   node["semantic_initial_response_steering_rad"] = value.semantic_initial_response_steering_rad;
+  const auto & initial = value.semantic_initial_state.value();
+  node["semantic_initial_state"]["lateral_m"] = initial.lateral_m;
+  node["semantic_initial_state"]["lag_m"] = initial.lag_m;
+  node["semantic_initial_state"]["heading_offset_rad"] = initial.heading_offset_rad;
+  node["semantic_initial_state"]["velocity_mps"] = initial.velocity_mps;
+  node["semantic_initial_state"]["progress_m"] = initial.progress_m;
+  node["semantic_initial_state"]["steering_rad"] = initial.steering_rad;
+  node["semantic_initial_state"]["response_steering_rad"] = initial.response_steering_rad;
   node["wheelbase_m"] = value.wheelbase_m;
   node["yaw_response_gain"] = value.yaw_response_gain;
   node["yaw_response_time_constant_sec"] = value.yaw_response_time_constant_sec;
@@ -2285,6 +2293,7 @@ RecordResult record_published_execution(
       fingerprint_interaction_snapshot(source) == 0U ||
       !execution::same_identity(source.identity, artifact.identity) ||
       execution::validate(artifact) != execution::RejectReason::None ||
+      !shadow::semantic_initial_state_matches(source, artifact) ||
       (source.physical_wall_refinement_active &&
       !mpcc_rate_resolved::course_frame_matches(
         artifact.course_frame, source.wall_course_frame_knots,

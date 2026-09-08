@@ -1,9 +1,24 @@
 # Current status and remaining completion work
 
-2026-09-09JST. Working baseline d54822c982c705098cc2fbfab4160f15e41865b0.
+2026-09-09JST. Working baseline5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5.
 The complete MPCC acceptance is NOT achieved. Preserve previous failed trials.
 The user authorised autonomous execution through completion on2026-09-09.
 Local commits bc01ff2f,ca38bf18,d54822c9preserve the previous completed work.
+Commit5cfc50bcpreserves the coordinate repair and its evidence. The subsequent
+peer-body patch is locally validated but coupled acceptance has failed.
+
+Current next step: fixed-input audit of missing side-peer constraints and Stop
+support/conditioning. The raw-primal initial course-window boundary is repaired
+with a required separate semantic physical state:25packages/60CTestgroups/
+2339records pass. One single trial finishes six laps253.944031s/penalty0,
+active moving override0, callbackmax18.913ms/0overruns, receiptmax35.070181ms.
+Same-run source/clock publication pauses remain separately documented.
+A complete-body offline Stop is certified; current zero-objective Stop still
+fails. See[initial-state results](../20260909-mpcc-semantic-physical-initial/results.md).
+The first complete-bodydev2run is
+rejected with moving Emergency/Recovery and one lap per vehicle. See
+[peer results](../20260908-peer-envelope-audit/dev2-results.md). Do not advance
+to a submission pass claim or repeat this unchanged trial.
 
 ## Completed work
 

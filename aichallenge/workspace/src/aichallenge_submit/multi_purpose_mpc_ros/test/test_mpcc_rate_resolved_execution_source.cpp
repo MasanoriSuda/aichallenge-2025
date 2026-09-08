@@ -63,6 +63,7 @@ std::shared_ptr<const certified::CertifiedPlan> plan(
     {-0.1, 0.0, 0.0, 3.1, 0.3, 0.1, 0.1},
     {-0.2, 0.0, 0.0, 3.2, 0.6, 0.1, 0.1},
   };
+  artifact.semantic_initial_state = artifact.predicted_states.front();
   artifact.control_stages = {
     {1.0, 0.0, 3.0, 0.1, 0.0, 4.0, -3.0, 1.37},
     {1.0, 0.0, 3.0, 0.1, 0.0, 4.0, -3.0, 1.37},

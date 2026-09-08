@@ -62,7 +62,7 @@ std::optional<State> sample(
   const auto & trajectory = plan.physical_snapshot->trajectory;
   const std::size_t stage = cursor.control_stage_index;
   if (
-    stage >= execution.control_stages.size() ||
+    stage >= execution.control_stages.size() || !execution.semantic_initial_state ||
     stage + 1U >= execution.predicted_states.size() ||
     trajectory.elapsed_time_sec.empty() ||
     trajectory.elapsed_time_sec.size() != trajectory.lateral_m.size() ||
@@ -90,12 +90,12 @@ std::optional<State> sample(
   const auto & affine_end = execution.predicted_states[stage + 1U];
 
   State physical_start{
-    execution.predicted_states.front().lateral_m,
-    execution.predicted_states.front().lag_m,
-    execution.predicted_states.front().heading_offset_rad,
-    execution.predicted_states.front().velocity_mps,
+    execution.semantic_initial_state->lateral_m,
+    execution.semantic_initial_state->lag_m,
+    execution.semantic_initial_state->heading_offset_rad,
+    execution.semantic_initial_state->velocity_mps,
     execution.course_progress_origin_m +
-    execution.predicted_states.front().progress_m,
+    execution.semantic_initial_state->progress_m,
     interpolate(
       affine_start.steering_rad, affine_end.steering_rad, stage_fraction),
     interpolate(

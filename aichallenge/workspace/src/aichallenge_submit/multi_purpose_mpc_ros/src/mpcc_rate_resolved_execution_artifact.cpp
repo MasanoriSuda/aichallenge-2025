@@ -150,6 +150,7 @@ const char * to_string(const RejectReason reason) noexcept
     case RejectReason::InvalidPathDistance: return "invalid-path-distance";
     case RejectReason::CorridorCountMismatch: return "corridor-count-mismatch";
     case RejectReason::InvalidPredictedState: return "invalid-predicted-state";
+    case RejectReason::InvalidSemanticInitialState: return "invalid-semantic-initial-state";
     case RejectReason::InvalidControlStage: return "invalid-control-stage";
     case RejectReason::InvalidAccelerationControlBounds:
       return "invalid-acceleration-control-bounds";
@@ -208,6 +209,11 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
   }
   if (!std::isfinite(artifact.course_progress_origin_m)) {
     return RejectReason::InvalidCourseProgressOrigin;
+  }
+  if (!artifact.semantic_initial_state ||
+    !finite_state(*artifact.semantic_initial_state))
+  {
+    return RejectReason::InvalidSemanticInitialState;
   }
   if (artifact.course_frame.knots &&
     (artifact.course_frame.progress_origin_m != artifact.course_progress_origin_m ||
@@ -353,6 +359,13 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     std::abs(
       artifact.predicted_states.front().steering_rad -
       artifact.semantic_initial_steering_rad) > tolerance)
+  {
+    return RejectReason::InitialSteeringMismatch;
+  }
+  if (artifact.semantic_initial_state->steering_rad !=
+    artifact.semantic_initial_steering_rad ||
+    artifact.semantic_initial_state->response_steering_rad !=
+    artifact.semantic_initial_response_steering_rad)
   {
     return RejectReason::InitialSteeringMismatch;
   }

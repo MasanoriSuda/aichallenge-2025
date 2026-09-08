@@ -72,6 +72,7 @@ std::shared_ptr<const certified::CertifiedPlan> certified_plan(
     {0.10, 0.0, 0.0, 2.1, 0.2, 0.11, 0.10302380180000528},
     {0.20, 0.0, 0.0, 2.2, 0.4, 0.12, 0.10979124524044208},
   };
+  execution->semantic_initial_state = execution->predicted_states.front();
   execution->control_stages = {
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},

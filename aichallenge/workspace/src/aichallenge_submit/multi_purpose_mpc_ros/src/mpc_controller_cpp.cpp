@@ -1261,6 +1261,9 @@ struct V2XGapPlannerConfig
   bool enabled{false};
   // Combined nominal lateral extents for the calibrated local AWSIM kart pair.
   double vehicle_radius{1.536};
+  // Complete nominal body about the V2X GNSS point, independent of yaw.
+  // Local AWSIM asset calibration; separate from planner lateral spacing.
+  double peer_body_radius_m{1.876};
   double vehicle_length{2.0};
   double prediction_margin{0.2};
   double prediction_time{3.0};
@@ -25227,7 +25230,7 @@ struct MPC
     replay.obstacles.reserve(dynamic_world.vehicles.size());
     for (const auto & vehicle : dynamic_world.vehicles) {
       const auto radius_m = rate_resolved_retained::resolve_peer_circle_radius(
-        cfg.v2x_gap.vehicle_radius, overtake_static_wall_footprint_,
+        cfg.v2x_gap.peer_body_radius_m,
         cfg.v2x_gap.prediction_margin +
         std::max(vehicle.covariance_x, vehicle.covariance_y));
       if (!radius_m.has_value()) {
@@ -26524,7 +26527,7 @@ struct MPC
     for (const auto & vehicle : dynamic_world.vehicles) {
       const auto peer_circle_radius_m =
         rate_resolved_retained::resolve_peer_circle_radius(
-        cfg.v2x_gap.vehicle_radius, overtake_static_wall_footprint_,
+        cfg.v2x_gap.peer_body_radius_m,
         cfg.v2x_gap.prediction_margin +
         std::max(vehicle.covariance_x, vehicle.covariance_y));
       if (!peer_circle_radius_m.has_value()) {
@@ -49067,7 +49070,6 @@ struct StuckRecoveryAdapterConfig
   double boost_status_timeout_sec{0.5};
   std::string v2x_self_filter_mode{"unknown"};
   std::string self_vehicle_id;
-  double rear_vehicle_radius_m{1.45};
   double rear_prediction_margin_sec{0.1};
   bool fast_continuous_reverse_enabled{false};
   bool continuous_contact_reverse_enabled{false};
@@ -49631,8 +49633,11 @@ Config load_config(const std::string & path)
         rear_safety["self_filter_mode"].as<std::string>() : adapter.v2x_self_filter_mode;
       adapter.self_vehicle_id = rear_safety["self_vehicle_id"] ?
         rear_safety["self_vehicle_id"].as<std::string>() : adapter.self_vehicle_id;
-      adapter.rear_vehicle_radius_m = rear_safety["vehicle_radius_m"] ?
-        rear_safety["vehicle_radius_m"].as<double>() : adapter.rear_vehicle_radius_m;
+      if (rear_safety["vehicle_radius_m"]) {
+        throw std::runtime_error(
+                "stuck_recovery.rear_safety.vehicle_radius_m is retired; "
+                "use mpc.v2x_peer_body_radius_m for the complete shared peer body");
+      }
       adapter.rear_prediction_margin_sec = rear_safety["prediction_margin_sec"] ?
         rear_safety["prediction_margin_sec"].as<double>() : adapter.rear_prediction_margin_sec;
     }
@@ -49828,7 +49833,6 @@ Config load_config(const std::string & path)
       adapter.reverse_steering_angle_rad >= 1.5707963267948966 ||
       !std::isfinite(adapter.boost_status_timeout_sec) ||
       adapter.boost_status_timeout_sec <= 0.0 ||
-      !finite_non_negative(adapter.rear_vehicle_radius_m) ||
       !finite_non_negative(adapter.rear_prediction_margin_sec) ||
       !finite_non_negative(adapter.fast_rejoin_min_reverse_distance_m) ||
       (adapter.adaptive_reverse_retry.enabled &&
@@ -50298,6 +50302,13 @@ Config load_config(const std::string & path)
   cfg.mpc.v2x_gap.vehicle_radius = std::max(
     0.0, mpc["v2x_vehicle_radius"] ? mpc["v2x_vehicle_radius"].as<double>() :
     (legacy_v2x && legacy_v2x["vehicle_radius"] ? legacy_v2x["vehicle_radius"].as<double>() : 1.25));
+  cfg.mpc.v2x_gap.peer_body_radius_m = mpc["v2x_peer_body_radius_m"] ?
+    mpc["v2x_peer_body_radius_m"].as<double>() : cfg.mpc.v2x_gap.peer_body_radius_m;
+  if (!std::isfinite(cfg.mpc.v2x_gap.peer_body_radius_m) ||
+    cfg.mpc.v2x_gap.peer_body_radius_m <= 0.0)
+  {
+    throw std::runtime_error("mpc.v2x_peer_body_radius_m must be finite and positive");
+  }
   cfg.mpc.v2x_gap.vehicle_length = std::max(
     0.0, mpc["v2x_vehicle_length"] ? mpc["v2x_vehicle_length"].as<double>() : 2.0);
   cfg.mpc.v2x_gap.prediction_margin = std::max(
@@ -56264,8 +56275,6 @@ private:
         const double corridor_max_lateral =
           cfg_.stuck_recovery.left_extent_m + cfg_.stuck_recovery.footprint_margin_m +
           selected_center_max_lateral_m;
-        const double vehicle_radius_m = cfg_.stuck_recovery.rear_vehicle_radius_m;
-
         for (const auto & vehicle : active_vehicles) {
           if (
             cfg_.stuck_recovery.v2x_self_filter_mode == "vehicle_id" &&
@@ -56293,7 +56302,15 @@ private:
             -sin_yaw * predicted_dx + cos_yaw * predicted_dy;
           const double uncertainty_margin_m =
             std::max(vehicle.covariance_x, vehicle.covariance_y);
-          const double inflated_vehicle_radius_m = vehicle_radius_m + uncertainty_margin_m;
+          const auto peer_radius = rate_resolved_retained::resolve_peer_circle_radius(
+            cfg_.mpc.v2x_gap.peer_body_radius_m, uncertainty_margin_m);
+          if (!peer_radius) {
+            snapshot.v2x_blocking_vehicle_id = vehicle.id;
+            snapshot.v2x_clearance_mode = "invalid_v2x";
+            snapshot.v2x_clearance_reason = "invalid_peer_body_or_uncertainty";
+            return {false, false};
+          }
+          const double inflated_vehicle_radius_m = *peer_radius;
           if (selected_rollout != nullptr && !selected_rollout->empty())
           {
             // The rollout evaluator predicts obstacle motion and verifies that

@@ -220,6 +220,7 @@ TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)
   artifact.predicted_states = {
     {0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0},
     {0.0, 0.0, 0.0, 2.0, 0.2, 0.0, 0.0}};
+  artifact.semantic_initial_state = artifact.predicted_states.front();
   artifact.control_stages = {{0.0, 0.0, 2.0, 0.1, 0.0, 4.0, -3.0, 1.37, 0.0}};
   artifact.nominal_path_distance_m = {0.0, 0.2};
   artifact.lateral_lower_m = {-1.0, -1.0};
@@ -273,6 +274,8 @@ TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)
   EXPECT_FALSE(loaded->recorded_qp.has_value());
   const auto yaml = YAML::LoadFile(written.snapshot_file.string());
   const auto evidence = yaml["execution_evidence"];
+  EXPECT_DOUBLE_EQ(evidence["semantic_initial_state"]["progress_m"].as<double>(), 0.0);
+  EXPECT_DOUBLE_EQ(evidence["semantic_initial_state"]["velocity_mps"].as<double>(), 2.0);
   ASSERT_EQ(evidence["schema"].as<std::string>(), "mpcc-published-execution-evidence/v1");
   EXPECT_EQ(evidence["source_problem_fingerprint"].as<std::uint64_t>(),
     artifact.identity.source_context.fingerprint);

@@ -298,6 +298,7 @@ Result build(
     initial_course_progress_m - execution->course_progress_origin_m,
     request.current_steering_rad,
     request.current_response_steering_rad});
+  execution->semantic_initial_state = execution->predicted_states.front();
   execution->nominal_path_distance_m.push_back(0.0);
   execution->lateral_lower_m.push_back(
     stop_successor.initial_lateral_lower_m);

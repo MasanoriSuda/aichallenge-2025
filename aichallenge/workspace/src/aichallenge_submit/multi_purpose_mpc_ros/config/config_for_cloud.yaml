@@ -199,7 +199,7 @@ stuck_recovery:
     # An empty learned set fails closed unless the simulation-only aggressive override is active.
     self_filter_mode: excluded
     self_vehicle_id: ""
-    vehicle_radius_m: 1.45
+    # Complete peer body is shared with normal MPCC via mpc.v2x_peer_body_radius_m.
     prediction_margin_sec: 0.1
   # Simulation-only finite-horizon Recovery controller. It guides the bounded
   # reverse/forward primitive choice and replans LowSpeedRejoin steering every cycle.
@@ -363,6 +363,8 @@ mpc:
   # Measured local AWSIM nominal half widths: peer 0.768m + ego 0.768m.
   # Uncertainty remains in v2x_prediction_margin, separate from body dimensions.
   v2x_vehicle_radius: 1.536
+  # Complete local AWSIM body about the GNSS antenna, any orientation; no margin.
+  v2x_peer_body_radius_m: 1.876
   v2x_vehicle_length: 2.0
   v2x_prediction_margin: 0.05
   v2x_prediction_time: 1.0

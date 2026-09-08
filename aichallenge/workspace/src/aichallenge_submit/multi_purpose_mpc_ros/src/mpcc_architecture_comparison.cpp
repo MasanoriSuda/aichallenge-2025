@@ -340,6 +340,11 @@ ExternalArtifactBuild build_external_artifact(
     snapshot.request.current_steering_rad;
   nonlinear_state[model::kResponseSteeringIndex] =
     snapshot.request.current_response_steering_rad;
+  execution.semantic_initial_state = artifact::PredictedState{
+    nonlinear_state[model::kLateralIndex], nonlinear_state[model::kLagIndex],
+    nonlinear_state[model::kHeadingIndex], nonlinear_state[model::kVelocityIndex],
+    nonlinear_state[model::kProgressIndex], nonlinear_state[model::kSteeringIndex],
+    nonlinear_state[model::kResponseSteeringIndex]};
   for (int stage = 0; stage <= execution_horizon; ++stage) {
     const int state = model::kStateDimension * stage;
     if (!enforce_affine_rows && stage > 0) {
@@ -389,20 +394,21 @@ ExternalArtifactBuild build_external_artifact(
       }
       nonlinear_state = advanced->next_state;
     }
+    const bool use_affine_state = enforce_affine_rows;
     execution.predicted_states.push_back(artifact::PredictedState{
-      enforce_affine_rows ? primal[state + model::kLateralIndex] :
+      use_affine_state ? primal[state + model::kLateralIndex] :
       nonlinear_state[model::kLateralIndex],
-      enforce_affine_rows ? primal[state + model::kLagIndex] :
+      use_affine_state ? primal[state + model::kLagIndex] :
       nonlinear_state[model::kLagIndex],
-      enforce_affine_rows ? primal[state + model::kHeadingIndex] :
+      use_affine_state ? primal[state + model::kHeadingIndex] :
       nonlinear_state[model::kHeadingIndex],
-      enforce_affine_rows ? primal[state + model::kVelocityIndex] :
+      use_affine_state ? primal[state + model::kVelocityIndex] :
       nonlinear_state[model::kVelocityIndex],
-      enforce_affine_rows ? primal[state + model::kProgressIndex] :
+      use_affine_state ? primal[state + model::kProgressIndex] :
       nonlinear_state[model::kProgressIndex],
-      enforce_affine_rows ? primal[state + model::kSteeringIndex] :
+      use_affine_state ? primal[state + model::kSteeringIndex] :
       nonlinear_state[model::kSteeringIndex],
-      enforce_affine_rows ? primal[state + model::kResponseSteeringIndex] :
+      use_affine_state ? primal[state + model::kResponseSteeringIndex] :
       nonlinear_state[model::kResponseSteeringIndex]});
     const int lateral_row = state_box_row + state + model::kLateralIndex;
     execution.lateral_lower_m.push_back(
@@ -698,7 +704,7 @@ TerminalStopCertificate certify_terminal_stop(
       "terminal Stop contract absent from immutable interaction snapshot";
     return result;
   }
-  if (execution.predicted_states.empty()) {
+  if (execution.predicted_states.empty() || !execution.semantic_initial_state) {
     result.detail = "terminal Stop initial state unavailable";
     return result;
   }
@@ -713,7 +719,7 @@ TerminalStopCertificate certify_terminal_stop(
     result.detail = detail.str();
     return result;
   }
-  const auto & initial = execution.predicted_states.front();
+  const auto & initial = execution.semantic_initial_state.value();
   const auto & world = candidate.replay_world.value();
   const auto terminal = physical::build_stop_contingency(
     execution, cursor, actuation.actuation.value(),

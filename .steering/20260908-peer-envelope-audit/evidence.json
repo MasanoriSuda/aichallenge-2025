@@ -1,0 +1,519 @@
+{
+  "baseline_commit": "5cfc50bc685d9ce52c489d7d9962e42ae43ec9c5",
+  "run_id": "20260909-peer-envelope-dev2-r1",
+  "integrated_result": "rejected",
+  "original_runtime_snapshot_count": 38,
+  "source_identity": "baseline plus exact peer patch/source/binary hashes in run manifest",
+  "artifacts": [
+    {
+      "path": ".steering/20260908-peer-envelope-audit/check_native_peer.py",
+      "bytes": 3325,
+      "sha256": "9c1478f89bd9719614f90a6e5b20b8eb557b692556b0b3b9736475eaf0bfab01"
+    },
+    {
+      "path": ".steering/20260908-peer-envelope-audit/compare_dev2.py",
+      "bytes": 2095,
+      "sha256": "584deda2c93b2756f9821488ee396fd363968459b48736e455f01d09b67d6dba"
+    },
+    {
+      "path": ".steering/20260908-peer-envelope-audit/compare_world_candidates.py",
+      "bytes": 1852,
+      "sha256": "864a9ee565e624142c3a6646cd51596ca4819b30295eeb02d08a533a2dd41b15"
+    },
+    {
+      "path": ".steering/20260908-peer-envelope-audit/extract_peer_envelopes.py",
+      "bytes": 4743,
+      "sha256": "11b2085d39b999b755ab6a8ec4539ce35483297b7cf118e24f522df39940213e"
+    },
+    {
+      "path": ".steering/20260908-peer-envelope-audit/generate_peer_fixture.py",
+      "bytes": 2196,
+      "sha256": "790e7935b2148c21bc700221d245d8d70d204689fce4237cbb9f07fc3dec3e1d"
+    },
+    {
+      "path": ".steering/20260908-peer-envelope-audit/prepare_world_candidates.cpp",
+      "bytes": 6976,
+      "sha256": "c046fec856b20d2737d5ecfbd58c5197a1fbb05315697a24d667cfc22e53e2c2"
+    },
+    {
+      "path": ".steering/20260908-peer-envelope-audit/run_dev2.py",
+      "bytes": 7655,
+      "sha256": "3356d8c573e5e7bea60cfd033cab36327aa6a3a216562746c5db3bdfa5fb86e8"
+    },
+    {
+      "path": ".steering/20260908-peer-envelope-audit/seal_results.py",
+      "bytes": 5758,
+      "sha256": "57abf1e31bf66d5e59380fb3ab44b2163aa058bc73e4c955f703ad4fe4ed5e2c"
+    },
+    {
+      "path": ".steering/20260908-peer-envelope-audit/summarize_dev2.py",
+      "bytes": 3281,
+      "sha256": "cfc416b733420e342e757ac42fad50d5ce4d585f88d6beb861aabb49f26e7c2d"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/awsim.log",
+      "bytes": 1773,
+      "sha256": "b1f92de8740aa9e35705833c3528bec4503886f283e386d94f81ac97426d559b"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/build.log",
+      "bytes": 4541,
+      "sha256": "06f02499cdea6e595e34a12ba893ec214259f527e7fe4e821d99818b8fc15c26"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/autoware.log",
+      "bytes": 3427317,
+      "sha256": "c8ba41807b7b5b992471a9be82f838c06c6d04d0addbb029a83eac5330139363"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000004-af1b4e69ed729acc-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 250512,
+      "sha256": "9038d41d544c11a736d1aa2cdc84ede78feef90760d944cf05f134fe535fc8ec"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000056-1aebc44fc02973c4-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 250464,
+      "sha256": "dd0fdf5d01a81a84ac9688dbdfee5aabd78ebdc42db37607f0744ef24a4d3cc5"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000102-884585c60bcec5bd-track-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 260468,
+      "sha256": "31f3ec8fef49d4fdc4a0284a388b7a30537a65b1d5adcebf6de7fd343a160cd7"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000298-1b1fc38c4cd5e777-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 249654,
+      "sha256": "a710e1e11ad6672e88f27bfe18ced84b5b4ee3244c7e9018c526ec0df14fc058"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000312-e575390f92ed7492-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 260565,
+      "sha256": "7bd3a29b0c55fad640f7a8ab0db6008635b3a23e6effd0e4686cb7000903e1ba"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000394-fc8f855c2dda3590-cruise-side-neutral-physical-proof-published-source-at-authority-loss/snapshot.yaml",
+      "bytes": 53420,
+      "sha256": "8f5e19d2d502ac3b9d760e0d90b580bff6b9cd8c98699f7d9e305c2cedbde0f6"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000396-7d804f016c99bd27-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 271123,
+      "sha256": "e79c88b8590ba3de1a4774c7792655095f7157d172b364f44052aa19f161b625"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000474-62a44d4b685d7827-cruise-side-positive-initial-solve-rejected/snapshot.yaml",
+      "bytes": 260039,
+      "sha256": "f9d75fc2e5f49d612af105acdebd72c1a6f083236abe224dae1129641549abe6"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000474-8c39aabe3c87bec2-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 260082,
+      "sha256": "e620b8526857c9e79cda26584fea21492617236472e103e82a0ade70196c4f02"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000490-54af0659eac05fde-cruise-side-positive-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 280500,
+      "sha256": "a39fc5bb19ada1b6cf5df81b6cdaab852e25e47eacd6c0bbc9b6f68fbd137963"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000490-627d718ff4b7b0f2-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 267570,
+      "sha256": "fb8741fea2010146d88b5792cd8a775a0a1b8f226ec2bcca4ffb67fff0343bf1"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000591-f28163534c60df47-cruise-side-positive-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 263520,
+      "sha256": "126df6760260957b71b6494b0938183a1adeb4b6bfe90a6577044330961df9f3"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000652-7f3297537c2e1aa9-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 268949,
+      "sha256": "57cfd4f316d05f7a5201911395900f0301ac7d0a10c2b80c3a69b8943e4e4355"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000652-edec7987a2d65513-cruise-side-negative-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 282616,
+      "sha256": "19089b10eedebba120367a52ad43fd3db857e1f68f329ed40d1dd308c29f34e0"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000723-2301ba6ecf35cbd2-cruise-side-positive-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 40459,
+      "sha256": "fcdb96837fe7f61ee9f97aa26cbf6582beed956f159b8e1786334ae4f407bcb5"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000738-ffc68849d40fb4eb-cruise-side-positive-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 272532,
+      "sha256": "f9db0322e5db957cc7d5ff9043e30a2a4c21aab7e1ae86ff3abf85d76106c315"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000787-099d0c6cfc35415a-cruise-side-negative-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 40400,
+      "sha256": "07d1e3e68ccdb7aee9f2154ccbe8470ef34671ca5ca56f60e20e94a84ea76c4a"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000787-d5e9c328c25a1406-cruise-side-negative-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 271646,
+      "sha256": "7d65858432d09d249472bd25ac7fe9247cdb771391eb0a97ec2e97f121cb3c03"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000820-8511b5fee7376284-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 261749,
+      "sha256": "5d64f96daddbc67e5ce80465a7fa712906994c5cd719e771a5b7e823c14ad05d"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000922-e811e4fcfbe8c212-cruise-side-negative-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 272366,
+      "sha256": "7a509bd621a3bccde619062cbc7caf50d34606954b495a55babe69822e37f5fc"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000939-8db0642592d0141a-cruise-side-positive-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 273016,
+      "sha256": "909d23411d45b73f6d6ee5347ebc66303271d777a0d0a6709a3336319b96687b"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000941-dbf85887119e1882-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35779,
+      "sha256": "430e8e8b822f2a97e32b0ebe58089c66146f942385b418226ade32762eb0c654"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000000941-dbf85887119e1882-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 35844,
+      "sha256": "e3847bd0e4560e840eba0316d0611b40a5bb91dce631eac6438c21a099c8ae35"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000001039-0f1bf3a85904f453-cruise-side-negative-physical-proof-published-source-at-authority-loss/snapshot.yaml",
+      "bytes": 57851,
+      "sha256": "cf2595bd25b9d5ff68907d0405828c76a978940c8bfa4f55680dcc4c6389d1ee"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000001066-b7bf78043929f9b0-follow-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 266875,
+      "sha256": "deff8c9dbf9461bd37bc15b55781720528005006725d146389ded67486dfb690"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000001066-d582f384fa68b8eb-follow-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 266870,
+      "sha256": "0a652738a842cf819c4858cb42ac9c05bbe69259a8a77d30dc1ae180d94cb1b6"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000001102-a3ae7d424895e130-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 257690,
+      "sha256": "33dfb7203583c8f7c8b670771f50f20593995f05689426a6b8a584bc4b1d8da7"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000001970-86ec71463a3fa35f-follow-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 37913,
+      "sha256": "755ccb9a2769949a841e3c1fa29a5de242e3ed94f6fd0d86784aba9c3f909ce7"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000002606-80ed8afae1d4c27d-shiftout-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 259707,
+      "sha256": "a0160d782453f6dec990dcc11ef104c77b6045cc3a61d403c62f00791df55740"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000002894-fbb8e09e100a4924-shiftout-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 259777,
+      "sha256": "784ec0c8203359f831e6a7c340e26e6621837a6703c9b2f5a6432728f505be4e"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000003026-6221582425fdebaa-shiftout-side-positive-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 264521,
+      "sha256": "ecc67fe7a7e802d2a9cc06b6d58bece93dc110aa1206c858048d1dfde9d8a883"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000004052-9127ff458497a324-follow-side-positive-physical-proof-published-source-at-authority-loss/snapshot.yaml",
+      "bytes": 57496,
+      "sha256": "eb366ca5a8bbf1a51d04be45dad97f049aabf1141a14c60cf56a7d7bc6d050ce"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1/mpcc_architecture_snapshots/000000006657-d6a4f20f64c242ec-follow-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 39785,
+      "sha256": "3361a3260f113f89f4ae05b0592defe06c1d67f0cd3ab2341c402fde9a8c16e6"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d1-log-summary.json",
+      "bytes": 318017,
+      "sha256": "18c86862e31b4aafe66370368416b157c3646f63c7e84881ce6caa97028cc951"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d2/autoware.log",
+      "bytes": 4538299,
+      "sha256": "0cd40ca60408933f721ced62630d6f8197ab485376aceabf1bfb80758936884a"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d2/mpcc_architecture_snapshots/000000000003-9398a47f5c1acecc-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 248991,
+      "sha256": "a2bf74e23ae4278244d3da720f47b6e2518cea4618491e253fd22de6b8176d15"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d2/mpcc_architecture_snapshots/000000000398-3c9a8b081cdaa73e-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 269962,
+      "sha256": "1584c0d20789e490eb4d6ffc2a0e62e783e8414bedbb8600f9215201ee4f0f3a"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d2/mpcc_architecture_snapshots/000000000937-fa42235f9b43e4f0-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 35699,
+      "sha256": "7740d49dc04477c0d57a0adf1dbfaf4cb49f580118f0a9406d8c08707cee6945"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d2/mpcc_architecture_snapshots/000000001709-a10f96b85b9d8960-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35665,
+      "sha256": "5fb329f5e81da6d6743add3621384b0a44848f32fcb0e055fa3a7284955a824f"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d2/mpcc_architecture_snapshots/000000005416-aa0c9d764c500a65-cruise-side-neutral-physical-proof-published-source-at-authority-loss/snapshot.yaml",
+      "bytes": 53315,
+      "sha256": "bb085e5162ff535b4991357b7f6223a65ee9bec48edeb090aa3d6a2f4d1ad429"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/d2-log-summary.json",
+      "bytes": 742125,
+      "sha256": "94b282809137d94a64598a432a4f4d0a9f285dcf65a92f6df10d4a1321c854ff"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/down.log",
+      "bytes": 466,
+      "sha256": "5a6920a4b52cc3ab34811d9cdd879e92a1c39cc0a683fc4461d5fc8a47bce6d3"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/external-stop-reason.json",
+      "bytes": 567,
+      "sha256": "14503c8520247db9be8e63879a2bee35e1315067dfcf58e82d35d430cf0fffea"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/first-failure-comparison/394-architectures.log",
+      "bytes": 5908,
+      "sha256": "d43c45c2c6b7c7d3cd1916a20e5f9c751e16e29c9160e636e34906fb4181f84f"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/first-failure-comparison/396-architectures.log",
+      "bytes": 5906,
+      "sha256": "c9ba975d914f52f98e6dd3442ea778a9383d0b06ec200375c334e94dce573c37"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/first-failure-comparison/396-original-physical.log",
+      "bytes": 674,
+      "sha256": "f164321d68889e56d20839ae9692f4d54e640a7077a57e3bd073f968f805ce73"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/first-failure-comparison/396-original-primal.txt",
+      "bytes": 4222,
+      "sha256": "a6c25afc7b9ecf5df71ea911aa37a4c88aa8aaaafad685331807050f2c4dd18b"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/first-failure-comparison/396-semantic-initial-physical.log",
+      "bytes": 674,
+      "sha256": "f164321d68889e56d20839ae9692f4d54e640a7077a57e3bd073f968f805ce73"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/first-failure-comparison/396-semantic-initial-primal.txt",
+      "bytes": 4198,
+      "sha256": "6d4397d542c0f46eb21b14646b5d52b66233e69317bc17476e235eec276c53d2"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/first-failure-comparison/941-architectures.log",
+      "bytes": 5643,
+      "sha256": "832abe1241ef838346e9b8bcdb4fe1ca19bf270861e96e3dbdf2c593c2330b83"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/first-failure-comparison/results.json",
+      "bytes": 2376,
+      "sha256": "3a8c81111237149d764cd8181d12885dbc72b4d7dc6193615b6adeb5e8ae81c0"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/generated-workspace-result-summary.json",
+      "bytes": 1206,
+      "sha256": "d77f0d2d4156b4e86b4e81f9368ca683218f9ee4c8b1f6e476b923ae0b9b1fc8"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/launch.log",
+      "bytes": 698,
+      "sha256": "e4d06ad595cc78044daf56d58326ab2f2a51300936dd9097aebcb379bb5b5331"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/manifest.json",
+      "bytes": 22944,
+      "sha256": "5eb873bc07fbb5a842347a3bdc27997cb006192a7901fb2a866ba0499a2b1285"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/monitor-console.log",
+      "bytes": 4500,
+      "sha256": "450c739423f8aaa27ee6b02fc44b183cfb0db20f262bb74d5692eaa1e0896a72"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/monitor-summary.json",
+      "bytes": 646,
+      "sha256": "16f4e1bf269d3415332d7fdcd43a2354388b19d1730b97209a161aaccf28b5bb"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/package.log",
+      "bytes": 485914,
+      "sha256": "9f97e36ddfc588a5d7050f6f8956414c84176e0fa4c5cabe9da18790ded31de5"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/workspace-artifact-restoration.json",
+      "bytes": 511,
+      "sha256": "1829404d4c53e6a3f981b51cf4fdd3f091eaa82d13d0683c386c9e88ff0167b4"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-comparison-console.log",
+      "bytes": 3133,
+      "sha256": "f602fd498d2f4d93bb2a0c774b4e95c99edcc888ed6963e2e579a124fbed19de"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-comparison-helper-failure.log",
+      "bytes": 1029,
+      "sha256": "128b7f9a30ccd8da636304006ceec6757d6e29e6434521fb700cb6d93ffede7c"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/architectures.log",
+      "bytes": 8290,
+      "sha256": "a15d5294df3dc347865cdc272a873b8540175ca68b39032f33fcc91b0a0a6ea4"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/candidate/000000000394-68553480860033eb-cruise-side-neutral-physical-proof-world-target-tube-audit/snapshot.yaml",
+      "bytes": 39754,
+      "sha256": "f66e8478b187a6c82f9615e3a55435e1891b8b1b41f31bd914dcb2cc33cc104a"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/mpcc_architecture_snapshots/000000000394-5c31f9f5b848c00a-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 268042,
+      "sha256": "7fa8261c0514f11a784fd6651fe22cbf72a7b66b627a1a2029658c3eed9f2742"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/mpcc_architecture_snapshots/000000000394-68553480860033eb-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 267479,
+      "sha256": "ae48d80a955d73f8941708dc429197a8e7c8b3c9bc98e4dda17e9dad6e5752fa"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/mpcc_architecture_snapshots/000000000394-7864f18acc680738-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 261967,
+      "sha256": "8ffbec983cd1e9b36fd406857d6b13b0a0b5c1e62ea06b3130795540d8f6a14f"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/mpcc_architecture_snapshots/000000000394-bd206785aae48dd2-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 267312,
+      "sha256": "2c47d021676805db6a267935e47a25941b7df924b4713eeb7d6b2325e58f43b7"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/mpcc_architecture_snapshots/000000000394-c97ac8150e65699a-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 260636,
+      "sha256": "54f4fb4b8cb7ce1b44b2a155ec72dc275892925945eec435d95a12b4af2760bf"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/mpcc_architecture_snapshots/000000000394-d6c3a678eebcb809-cruise-side-positive-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 271093,
+      "sha256": "361514b41b3e55398b63289a6490e9ac5e784bc5f83ce2f7ec9d5c29c456b5ea"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/394/report.yaml",
+      "bytes": 386,
+      "sha256": "a7ab6b3416f662e7edeb3a35fc4bd56cb94fd192d5be388d0e9b1bf10fc3ac6b"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/396/architectures.log",
+      "bytes": 8284,
+      "sha256": "07fa8dd9fc1d52effd664218e9ad4b66008ec1e6b2db51b5004e1dbe03e6c696"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/396/candidate/000000000396-d3eed5ffdbedf0d0-cruise-side-neutral-physical-proof-world-target-tube-audit/snapshot.yaml",
+      "bytes": 39705,
+      "sha256": "7f7b693076bce3f967a0984a7908c34318c9ba0ee387e3466a359337f30a24ae"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/396/mpcc_architecture_snapshots/000000000396-327d8acb4cbb19cd-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 261714,
+      "sha256": "a4ce57176eabaf0226f0eb5c7acad385e15a02845d8d2d18d230cb01350ef91f"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/396/mpcc_architecture_snapshots/000000000396-57d324000c55dece-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 260692,
+      "sha256": "7b4a1ce7bfe388eb46efa30de1b4cc3893d046408b9e27ec9578ac521335d70c"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/396/mpcc_architecture_snapshots/000000000396-58d6f7329dbfe533-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 267334,
+      "sha256": "15ff2a7687842f2ae2e69f7e2a0ffd9740303779dabbc2bd017ca6ac7829f7d7"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/396/mpcc_architecture_snapshots/000000000396-a7970c11c829cfd5-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 268806,
+      "sha256": "d5033bd5324b71c2c9068872bfa0e47ecd07bd2a8c71675d88a0f2b6ee0dcaf1"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/396/mpcc_architecture_snapshots/000000000396-d3eed5ffdbedf0d0-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 266762,
+      "sha256": "8aeb5b40839c181fb405d5988b3274b472feec9d9987c297520f2c2c59e5ac23"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/396/report.yaml",
+      "bytes": 620,
+      "sha256": "54ffa71d5a30c2473bd6e3bc3e8e4696dc36d350d42f0f20722b352d32b6071b"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/941/architectures.log",
+      "bytes": 8285,
+      "sha256": "8d89cd7e04e32e48b519b574aa984998f06849f2d35650506f6c065231640175"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/941/candidate/000000000941-3395427cbd959f09-cruise-side-neutral-physical-proof-world-target-tube-audit/snapshot.yaml",
+      "bytes": 39735,
+      "sha256": "da8bd03b509113c78d0c208e0a5bb7630444f305c7eb26366d0beb0d426fb156"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/941/mpcc_architecture_snapshots/000000000941-3395427cbd959f09-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 266799,
+      "sha256": "e576cc80a5d613fab66ca3bc3c3254cf812843d6d097174320390a1065dc1728"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/941/mpcc_architecture_snapshots/000000000941-4190e6f6461d3152-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 267359,
+      "sha256": "9daca5387ca13db0d3fcbb1dd83042daca9e132aedc074bef5648b147153d3df"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/941/mpcc_architecture_snapshots/000000000941-4d54545aff359422-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 263169,
+      "sha256": "9bfd6b695c0865c5f8db898ee93a7a7159fb431d134d896d680261dee548db15"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/941/mpcc_architecture_snapshots/000000000941-5843c847b00379a8-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 268201,
+      "sha256": "3a53be2216f71f1c252375193e00adc4acfc0e20fcdda117a03adb6a483cad91"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/941/mpcc_architecture_snapshots/000000000941-63df7615464c3e14-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 260867,
+      "sha256": "42195f7f59016fa1e8075665cd1d3f1db77905c4dd46230f4668ce77c9a50317"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/941/report.yaml",
+      "bytes": 386,
+      "sha256": "95cb634132e17acaada6987acd3ca34c5190591f499639303f43134086104e17"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-envelope-dev2-r1/world-target-comparison-r2/results.json",
+      "bytes": 1824,
+      "sha256": "046cc197cdd6789ab3fe1e3532bdb22c84cb3230f87cc9347ee6fee683340092"
+    },
+    {
+      "path": "output/20260909-peer-envelope-validation/before.log",
+      "bytes": 4662,
+      "sha256": "05261537a3e4a828279138119f10a020063d623b873cca0504de26bce83af023"
+    },
+    {
+      "path": "output/20260909-peer-envelope-validation/build.log",
+      "bytes": 4541,
+      "sha256": "06f02499cdea6e595e34a12ba893ec214259f527e7fe4e821d99818b8fc15c26"
+    },
+    {
+      "path": "output/20260909-peer-envelope-validation/package.log",
+      "bytes": 485914,
+      "sha256": "9f97e36ddfc588a5d7050f6f8956414c84176e0fa4c5cabe9da18790ded31de5"
+    }
+  ]
+}

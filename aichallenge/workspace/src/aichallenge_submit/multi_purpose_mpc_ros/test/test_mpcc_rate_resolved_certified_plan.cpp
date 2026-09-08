@@ -60,6 +60,7 @@ execution::ExecutionArtifact artifact(const std::uint64_t sequence = 1U)
     {0.1, 0.0, 0.01, 2.1, 0.2, 0.11, 0.10302380180000528},
     {0.2, 0.0, 0.02, 2.2, 0.4, 0.12, 0.10979124524044208},
   };
+  value.semantic_initial_state = value.predicted_states.front();
   value.control_stages = {
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
     {1.0, 0.10, 2.0, 0.10, 0.0, 4.0, -3.0, 1.37},
@@ -68,6 +69,18 @@ execution::ExecutionArtifact artifact(const std::uint64_t sequence = 1U)
   value.lateral_lower_m = {-1.0, -1.0, -1.0};
   value.lateral_upper_m = {1.0, 1.0, 1.0};
   return value;
+}
+
+std::shared_ptr<shadow::Snapshot> solver_source(const execution::ExecutionArtifact & value)
+{
+  auto source = std::make_shared<shadow::Snapshot>();
+  source->identity = value.identity;
+  const auto & initial = value.semantic_initial_state.value();
+  source->request.initial_state << initial.lateral_m, initial.lag_m,
+    initial.heading_offset_rad, initial.velocity_mps, initial.progress_m;
+  source->request.current_steering_rad = initial.steering_rad;
+  source->request.current_response_steering_rad = initial.response_steering_rad;
+  return source;
 }
 
 physical::Result accepted_physical(const execution::Identity & identity)
@@ -152,8 +165,7 @@ TEST(MpccRateResolvedCertifiedPlan, RejectsCoordinateFrameChangedAfterSolve)
   EXPECT_FALSE(rejected.plan);
 
   value.course_frame.knots.reset();
-  auto source = std::make_shared<shadow::Snapshot>();
-  source->identity = value.identity;
+  auto source = solver_source(value);
   source->physical_wall_refinement_active = true;
   source->course_progress_origin_m = value.course_progress_origin_m;
   source->wall_course_frame_knots = wall.course_frame_knots;
@@ -232,8 +244,7 @@ TEST(MpccRateResolvedCertifiedPlan, JoinsExactArtifactAndPhysicalProof)
 TEST(MpccRateResolvedCertifiedPlan, RetainsMatchingSolverSourceAsProvenance)
 {
   auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
-  auto source = std::make_shared<shadow::Snapshot>();
-  source->identity = value->identity;
+  auto source = solver_source(*value);
   const auto result = certified::build(
     value, physical_snapshot(value->identity),
     accepted_physical(value->identity), source);
@@ -243,6 +254,12 @@ TEST(MpccRateResolvedCertifiedPlan, RetainsMatchingSolverSourceAsProvenance)
   ASSERT_NE(result.plan->solver_source_snapshot, nullptr);
   EXPECT_TRUE(execution::same_identity(
       result.plan->solver_source_snapshot->identity, value->identity));
+  auto wrong_initial = std::make_shared<execution::ExecutionArtifact>(*value);
+  wrong_initial->semantic_initial_state->lateral_m += 0.01;
+  EXPECT_EQ(execution::validate(*wrong_initial), execution::RejectReason::None);
+  EXPECT_EQ(certified::build(wrong_initial, physical_snapshot(value->identity),
+      accepted_physical(value->identity), source).reason,
+    certified::RejectReason::IdentityMismatch);
 }
 
 TEST(MpccRateResolvedCertifiedPlan, RejectsMismatchedSolverSourceProvenance)
@@ -262,8 +279,7 @@ TEST(MpccRateResolvedCertifiedPlan, StorePreservesSolverSourceProvenance)
 {
   certified::Store store;
   auto value = std::make_shared<const execution::ExecutionArtifact>(artifact());
-  auto source = std::make_shared<shadow::Snapshot>();
-  source->identity = value->identity;
+  auto source = solver_source(*value);
   const auto admission = store.certify_and_replace(
     value, physical_snapshot(value->identity),
     accepted_physical(value->identity), source);

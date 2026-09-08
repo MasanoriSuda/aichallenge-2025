@@ -3871,6 +3871,28 @@ decision・予測・証明・最終公開の共通時刻にする。時計逆行
 Boostと独立Recovery/Rejoin、多車両の動的網羅も未完である。
 根拠と全試験結果は[縦応答予測](../../.steering/20260909-mpcc-committed-longitudinal/validation-notes.md)を参照。
 
+### 2026-09-09 失敗worldと公開実行元の同時保存
+
+失敗worldと公開実行元を独立に重複判定すると、先に起動時の実行元を記録しただけで、
+後の異なる失敗worldに対応する実行元が欠落する。単車受入れ後のdev2では、
+D1 decision4428のworldを保存した一方、実行元3834は起動時296と重複扱いになった。
+別の軌道を当該実行元として代用しない。
+
+authority失敗は、現在worldと`publication_bundle`を一つのディレクトリへ原子的に保存する。
+bundleのschemaは`mpcc-authority-loss-publication/v1`。公開済みsolver入力・実artifact・
+その固有の壁payload・公開時刻・失敗fingerprintを含め、両者のidentityを検証する。
+状態は`present/missing/invalid`で明示し、実行元が欠けても有効な失敗worldを残す。
+外側の既存snapshot schemaと読み取り互換、失敗種類ごとの記録上限を維持する。
+本番の独立した二段階writerを廃止し、一つの非同期jobが全記録を所有する。
+同じdecisionのterminal失敗を既に依頼した場合は、重複するgeneric依頼で置き換えない。
+この依頼結果は観測処理だけに用い、solver・Store・制御指令の選択へ渡さない。
+
+native記録回帰14件とsource契約104件、25package build、60CTestgroup／2362記録が合格。
+dev2でD2 decision1629の失敗worldと実行元1100を同時保存し、再求解なしで拒否を再現した。
+最初の拒否は後方D1との停止末端の動的余裕不足（track参照で1.555秒、-0.006771m）。
+壁検査には進んでいない。これは観測欠落の修正であり、多車両走行の受入れは未完。
+[記録境界の監査](../../.steering/20260909-mpcc-failure-observation-bundle/validation-notes.md)を参照。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

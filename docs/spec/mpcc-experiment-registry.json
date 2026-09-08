@@ -260,6 +260,16 @@
       "snapshot_id": "20260909-longitudinal-dev2-world4428",
       "manifest": ".steering/20260909-mpcc-committed-longitudinal/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-failure-bundle-native",
+      "manifest": ".steering/20260909-mpcc-failure-observation-bundle/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-failure-bundle-world1629-executed1100",
+      "manifest": ".steering/20260909-mpcc-failure-observation-bundle/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -1997,6 +2007,107 @@
       "production_impact": "no further control repair until new-world architecture comparison and missing source observation",
       "deleted_code": [],
       "revisit_condition": "new causal producer fix or bounded observation-only capture of the missing actual artifact"
+    },
+    {
+      "experiment_id": "20260909-failure-bundle-4428-architectures",
+      "baseline_commit": "6c4875ed4d250a44cd813935b234863e9c184701",
+      "snapshot_ids": [
+        "20260909-longitudinal-dev2-world4428"
+      ],
+      "hypothesis": "bounded A/B/C/D and fresh Stop find certified alternative",
+      "changed_dimension": "unchanged world/model/hard requirements",
+      "result": "rejected",
+      "reason": "Nine normal arms bundle0; A/B/Gleft terminal wall contact107 at6.448m; C/D/Gright dynamic QP reject. Fresh Stop input ends before rest, no arms attempted. Physical feasibility Unknown.",
+      "production_impact": "observation only; integrated MPCC acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "new candidate architecture or a demonstrated producer correction"
+    },
+    {
+      "experiment_id": "20260909-failure-bundle-independent-dedup",
+      "baseline_commit": "6c4875ed4d250a44cd813935b234863e9c184701",
+      "snapshot_ids": [
+        "20260909-failure-bundle-native"
+      ],
+      "hypothesis": "independent bounded world and source records preserve every written failure join",
+      "changed_dimension": "native old-library fixture, two distinct worlds/artifacts",
+      "result": "rejected",
+      "reason": "Second world Written but its source Duplicate under generic publication bucket. Missing actual3834cannot be reconstructed.",
+      "production_impact": "observation only; integrated MPCC acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "atomic ownership of world/source/artifact/clock"
+    },
+    {
+      "experiment_id": "20260909-failure-bundle-atomic-observation",
+      "baseline_commit": "6c4875ed4d250a44cd813935b234863e9c184701",
+      "snapshot_ids": [
+        "20260909-failure-bundle-native",
+        "20260909-failure-bundle-world1629-executed1100"
+      ],
+      "hypothesis": "one bounded transaction preserves exact publication for each written world",
+      "changed_dimension": "observation writer and its call sites only",
+      "result": "accepted",
+      "reason": "Native14/source104,25package build,60CTestgroups/2362records pass; dev2first1629world contains actual1100execution. No new authority.",
+      "production_impact": "observation only; integrated MPCC acceptance remains open",
+      "deleted_code": [
+        "independent production world/source recorder calls"
+      ],
+      "revisit_condition": "new observation mismatch or changed recorder boundary"
+    },
+    {
+      "experiment_id": "20260909-failure-bundle-dev2-r1",
+      "baseline_commit": "6c4875ed4d250a44cd813935b234863e9c184701",
+      "snapshot_ids": [
+        "20260909-failure-bundle-world1629-executed1100"
+      ],
+      "hypothesis": "unchanged control completes two-vehicle six laps",
+      "changed_dimension": "observation-only runtime diagnostic",
+      "result": "rejected",
+      "reason": "D2decision1629at4.342925m/s terminal dynamic d1 failure; D1subsequent1678Emergency. No finished result-details. Each1178reportedcycles/0overruns.",
+      "production_impact": "observation only; integrated MPCC acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "demonstrated control producer fix or a newly required bounded observation"
+    },
+    {
+      "experiment_id": "20260909-failure-bundle-1629-zero-solve",
+      "baseline_commit": "6c4875ed4d250a44cd813935b234863e9c184701",
+      "snapshot_ids": [
+        "20260909-failure-bundle-world1629-executed1100"
+      ],
+      "hypothesis": "actual published1100current-world terminal failure is exactly reproducible",
+      "changed_dimension": "recorded controls and clock, native diagnostic copy only",
+      "result": "accepted",
+      "reason": "Original horizon certifies; retained track min-0.0067710926225m at1.555s (573checks), normal-0.0061931006377m at1.56s. Delay/continuation clear; terminal wall not reached.",
+      "production_impact": "observation only; integrated MPCC acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "same captured input with a causally justified candidate architecture"
+    },
+    {
+      "experiment_id": "20260909-failure-bundle-1629-architectures",
+      "baseline_commit": "6c4875ed4d250a44cd813935b234863e9c184701",
+      "snapshot_ids": [
+        "20260909-failure-bundle-world1629-executed1100"
+      ],
+      "hypothesis": "existing normal and Stop alternatives cover rear-only Cruise scene",
+      "changed_dimension": "same sealed1629world and full peer radius",
+      "result": "rejected",
+      "reason": "Astage19linearization unavailable; B/C/D/Gfront target unavailable. Four Stop solves all dynamic reject d1near1.50409s. No physical infeasibility proof.",
+      "production_impact": "observation only; integrated MPCC acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "rear-peer-aware independent candidate construction or demonstrated linearization repair"
+    },
+    {
+      "experiment_id": "20260909-failure-bundle-held-out-peer",
+      "baseline_commit": "6c4875ed4d250a44cd813935b234863e9c184701",
+      "snapshot_ids": [
+        "20260909-failure-bundle-world1629-executed1100"
+      ],
+      "hypothesis": "replacing CV future by actual peer future explains complete terminal rejection",
+      "changed_dimension": "future GNSS scoring only; unchanged full body circle",
+      "result": "rejected",
+      "reason": "First rejected instant becomes clear, but full hypothetical Stop still overlaps by0.096/0.103m. D1future includes its later Emergency; predictor-only root cause not established.",
+      "production_impact": "observation only; integrated MPCC acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "causal peer prediction evidence before intervention, or new physical trajectory candidate"
     }
   ]
 }

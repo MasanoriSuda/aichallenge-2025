@@ -306,6 +306,180 @@ TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)
   std::filesystem::remove_all(root);
 }
 
+PublishedExecutionObservation make_publication_observation()
+{
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  auto source = make_interaction_snapshot(
+    mpcc_execution_contract::ControlIntent::Cruise);
+  // The generic snapshot fixture carries an Overtake execution side. Cruise
+  // has neutral intent geometry even when a dynamic-obstacle homotopy exists.
+  source.identity.source_context.execution_side_sign = 0;
+  source.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    source.identity.source_context);
+  source.request.current_steering_rad = 0.0;
+  source.request.current_response_steering_rad = 0.0;
+  source.request.initial_state[3] = 2.0;
+  execution::ExecutionArtifact artifact;
+  artifact.identity = source.identity;
+  artifact.prediction_origin_sec = source.control_prediction_origin_sec;
+  artifact.publication_interval_sec = 0.025;
+  artifact.completed_sec = source.identity.snapshot_sec + 0.01;
+  artifact.course_progress_origin_m = source.course_progress_origin_m;
+  artifact.course_frame = {
+    std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
+      source.wall_course_frame_knots), source.course_progress_origin_m};
+  artifact.wheelbase_m = 1.0;
+  artifact.maximum_abs_steering_rad = 0.5;
+  artifact.maximum_abs_steering_rate_radps = 1.0;
+  artifact.physical_global_tolerance = 1e-6;
+  artifact.maximum_constraint_violation = 1e-8;
+  artifact.maximum_normalized_constraint_violation = 0.1;
+  artifact.predicted_states = {
+    {0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0},
+    {0.0, 0.0, 0.0, 2.0, 0.2, 0.0, 0.0}};
+  artifact.semantic_initial_state = artifact.predicted_states.front();
+  artifact.control_stages = {{0.0, 0.0, 2.0, 0.1, 0.0, 4.0, -3.0, 1.37, 0.0}};
+  artifact.nominal_path_distance_m = {0.0, 0.2};
+  artifact.lateral_lower_m = {-1.0, -1.0};
+  artifact.lateral_upper_m = {1.0, 1.0};
+  PublicationEvidence publication;
+  publication.failure_decision_id = 55U;
+  publication.failure_interaction_fingerprint = 12345U;
+  publication.failure_observation_sec = 12.61;
+  publication.failure_control_origin_sec = 12.74;
+  publication.source_kind = "exact-executed";
+  publication.publication_decision_id = 54U;
+  publication.publication_control_origin_sec = 12.65;
+  publication.publication_artifact_elapsed_sec = 0.03712345678901234;
+  return {std::make_shared<const mpcc_rate_resolved_shadow::Snapshot>(source),
+    std::make_shared<const execution::ExecutionArtifact>(artifact), publication};
+}
+
+void bind_failure_world(
+  PublishedExecutionObservation & observation,
+  const mpcc_rate_resolved_shadow::Snapshot & world)
+{
+  observation.publication.failure_decision_id = world.identity.source_context.decision_id;
+  observation.publication.failure_interaction_fingerprint = fingerprint_interaction_snapshot(world);
+  observation.publication.failure_observation_sec = world.identity.snapshot_sec;
+  observation.publication.failure_control_origin_sec = world.control_prediction_origin_sec;
+}
+
+TEST(MpccArchitectureSnapshot, EachWrittenFailureOwnsItsActualPublishedArtifact)
+{
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  auto observed = make_publication_observation();
+  auto world = *make_publication_observation().source;
+  const auto root = output_root("atomic-distinct-publications");
+  std::filesystem::remove_all(root);
+  for (int index = 0; index < 2; ++index) {
+    auto source = *observed.source;
+    auto artifact = *observed.artifact;
+    source.identity.sequence = index == 0 ? 296U : 3834U;
+    artifact.identity = source.identity;
+    observed.source = std::make_shared<const mpcc_rate_resolved_shadow::Snapshot>(source);
+    observed.artifact = std::make_shared<const execution::ExecutionArtifact>(artifact);
+    world.identity.sequence = index == 0 ? 851U : 4428U;
+    world.identity.source_context.decision_id = world.identity.sequence;
+    world.identity.source_context = mpcc_execution_contract::seal_problem_context(
+      world.identity.source_context);
+    bind_failure_world(observed, world);
+    const std::string outcome = index == 0 ? "atomic-startup-loss" : "atomic-terminal-loss";
+    const auto recorded = record_authority_failure(world, outcome, "test boundary", observed, root);
+    ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+    std::string detail;
+    const auto current = load_recorded_interaction_snapshot(recorded.snapshot_file, &detail);
+    ASSERT_TRUE(current) << detail;
+    EXPECT_EQ(current->source.identity.sequence, world.identity.sequence);
+    auto node = YAML::LoadFile(recorded.snapshot_file.string());
+    const auto bundle = node["publication_bundle"];
+    ASSERT_EQ(bundle["status"].as<std::string>(), "present");
+    EXPECT_EQ(bundle["schema"].as<std::string>(), "mpcc-authority-loss-publication/v1");
+    EXPECT_EQ(bundle["source"]["sequence"].as<std::uint64_t>(), source.identity.sequence);
+    const auto evidence = bundle["execution_evidence"];
+    EXPECT_EQ(evidence["source_sequence"].as<std::uint64_t>(), artifact.identity.sequence);
+    EXPECT_EQ(evidence["publication"]["failure_decision_id"].as<std::uint64_t>(),
+      world.identity.sequence);
+    EXPECT_EQ(evidence["publication"]["failure_interaction_fingerprint"].as<std::uint64_t>(),
+      fingerprint_interaction_snapshot(world));
+    EXPECT_DOUBLE_EQ(evidence["control_stages"][0]["duration_sec"].as<double>(),
+      artifact.control_stages[0].duration_sec);
+    EXPECT_TRUE(std::filesystem::exists(recorded.snapshot_file.parent_path()/"published-wall-grid.bin"));
+    EXPECT_FALSE(std::filesystem::exists(recorded.snapshot_file.parent_path().string()+".tmp"));
+    // The nested original input round-trips through the unchanged interaction
+    // parser, including its own wall payload and exact immutable fingerprint.
+    node["source"] = YAML::Clone(bundle["source"]);
+    node["interaction_fingerprint"] = bundle["interaction_fingerprint"].as<std::uint64_t>();
+    node.remove("publication_bundle");
+    const auto extracted = recorded.snapshot_file.parent_path()/"published-source-test.yaml";
+    std::ofstream stream(extracted);
+    stream << node; stream.close();
+    const auto loaded_source = load_recorded_interaction_snapshot(extracted, &detail);
+    ASSERT_TRUE(loaded_source) << detail;
+    EXPECT_EQ(loaded_source->source.identity.sequence, source.identity.sequence);
+    EXPECT_EQ(loaded_source->interaction_fingerprint, fingerprint_interaction_snapshot(source));
+    EXPECT_EQ(record_authority_failure(world, outcome, "duplicate boundary", observed, root).status,
+      RecordStatus::Duplicate);
+  }
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, InvalidPublicationNeverContaminatesFailureWorld)
+{
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  const auto world = *make_publication_observation().source;
+  const auto root = output_root("atomic-invalid-publications");
+  std::filesystem::remove_all(root);
+  for (int variant = 0; variant < 6; ++variant) {
+    auto observed = make_publication_observation();
+    bind_failure_world(observed, world);
+    if (variant == 0) {
+      auto source = *observed.source; ++source.identity.sequence;
+      observed.source = std::make_shared<const mpcc_rate_resolved_shadow::Snapshot>(source);
+    } else if (variant == 1) {
+      ++observed.publication.failure_interaction_fingerprint;
+    } else if (variant == 2) {
+      ++observed.publication.failure_decision_id;
+    } else if (variant == 3) {
+      observed.publication.failure_observation_sec += 0.01;
+    } else if (variant == 4) {
+      observed.publication.failure_control_origin_sec += 0.01;
+    } else {
+      auto artifact = *observed.artifact;
+      artifact.semantic_initial_state->velocity_mps += 1.0;
+      observed.artifact = std::make_shared<const execution::ExecutionArtifact>(artifact);
+    }
+    const auto recorded = record_authority_failure(world,
+      "atomic-invalid-"+std::to_string(variant), "test boundary", observed, root);
+    ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+    const auto node = YAML::LoadFile(recorded.snapshot_file.string());
+    EXPECT_EQ(node["publication_bundle"]["status"].as<std::string>(), "invalid");
+    EXPECT_FALSE(node["publication_bundle"]["source"]);
+    EXPECT_FALSE(std::filesystem::exists(recorded.snapshot_file.parent_path()/"published-wall-grid.bin"));
+    EXPECT_TRUE(load_recorded_interaction_snapshot(recorded.snapshot_file));
+  }
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, MissingPublicationIsExplicitAndCurrentWorldStaysReplayable)
+{
+  const auto world = *make_publication_observation().source;
+  const auto root = output_root("atomic-missing-publication");
+  std::filesystem::remove_all(root);
+  const auto recorded = record_authority_failure(world,
+    "atomic-missing", "bootstrap has no published plan", {}, root);
+  ASSERT_EQ(recorded.status, RecordStatus::Written);
+  const auto node = YAML::LoadFile(recorded.snapshot_file.string());
+  EXPECT_EQ(node["publication_bundle"]["status"].as<std::string>(), "missing");
+  EXPECT_FALSE(node["publication_bundle"]["execution_evidence"]);
+  EXPECT_TRUE(load_recorded_interaction_snapshot(recorded.snapshot_file));
+  auto invalid_world = world;
+  invalid_world.request.wheelbase_m = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_EQ(record_authority_failure(invalid_world, "atomic-invalid-world", "invalid",
+      {}, root).status, RecordStatus::InvalidInput);
+  std::filesystem::remove_all(root);
+}
+
 TEST(MpccArchitectureSnapshot, WritesLoadsAndReplaysExactProblem)
 {
   const auto root = output_root("roundtrip");

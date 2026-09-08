@@ -25263,15 +25263,29 @@ struct MPC
       [snapshot = std::move(snapshot), decision_id, intent,
         outcome = std::move(outcome), detail = std::move(detail),
         published_source = std::move(published_source)]() {
-        const auto recorded =
-          mpcc_architecture_snapshot::record_proof_failure(
-          snapshot,
-          mpcc_architecture_snapshot::PipelineStage::PhysicalProof,
-          outcome, detail);
-        if (
-          recorded.status ==
-          mpcc_architecture_snapshot::RecordStatus::Written)
-        {
+        // One atomic failure record owns its publication evidence. A generic
+        // first-source bucket must never discard another failure's artifact.
+        mpcc_architecture_snapshot::PublishedExecutionObservation execution;
+        const auto & plan = published_source.plan;
+        if (plan != nullptr) {
+          execution.source = plan->solver_source_snapshot;
+          execution.artifact = plan->execution_artifact;
+        }
+        auto & publication = execution.publication;
+        publication.failure_decision_id = decision_id;
+        publication.failure_interaction_fingerprint =
+          mpcc_architecture_snapshot::fingerprint_interaction_snapshot(snapshot);
+        publication.failure_observation_sec = snapshot.identity.snapshot_sec;
+        publication.failure_control_origin_sec = snapshot.control_prediction_origin_sec;
+        publication.source_kind = rate_resolved_certified::to_string(published_source.kind);
+        publication.publication_decision_id = published_source.publication_decision_id;
+        publication.publication_control_origin_sec =
+          published_source.publication_control_origin_sec;
+        publication.publication_artifact_elapsed_sec =
+          published_source.publication_artifact_elapsed_sec;
+        const auto recorded = mpcc_architecture_snapshot::record_authority_failure(
+          snapshot, outcome, detail, execution);
+        if (recorded.status == mpcc_architecture_snapshot::RecordStatus::Written) {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "Rate-resolved architecture snapshot recorded asynchronously: "
@@ -25280,74 +25294,21 @@ struct MPC
             mpcc_contract::to_string(intent), outcome.c_str(),
             recorded.snapshot_file.string().c_str());
         } else if (
-          recorded.status ==
-          mpcc_architecture_snapshot::RecordStatus::IoFailure ||
-          recorded.status ==
-          mpcc_architecture_snapshot::RecordStatus::InvalidInput)
+          recorded.status == mpcc_architecture_snapshot::RecordStatus::IoFailure ||
+          recorded.status == mpcc_architecture_snapshot::RecordStatus::InvalidInput)
         {
           RCLCPP_WARN(
             rclcpp::get_logger("mpc_controller"),
             "Rate-resolved architecture snapshot async recorder rejected: "
             "decision=%lu, intent=%s, outcome=%s, detail=%s",
             static_cast<unsigned long>(decision_id),
-            mpcc_contract::to_string(intent), outcome.c_str(),
-          recorded.detail.c_str());
-        }
-        // Preserve the existing publication ledger before Emergency clears
-        // it. Both observations use one worker job so submit_latest cannot
-        // replace the current failure with its source evidence.
-        const auto & plan = published_source.plan;
-        if (recorded.status == mpcc_architecture_snapshot::RecordStatus::Written &&
-          (plan == nullptr || plan->solver_source_snapshot == nullptr ||
-          plan->execution_artifact == nullptr))
-        {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "Rate-resolved published execution observation unavailable: "
-            "decision=%lu, plan=%d, source=%d, artifact=%d",
-            static_cast<unsigned long>(decision_id), plan != nullptr ? 1 : 0,
-            plan != nullptr && plan->solver_source_snapshot != nullptr ? 1 : 0,
-            plan != nullptr && plan->execution_artifact != nullptr ? 1 : 0);
-        }
-        if (plan != nullptr && plan->solver_source_snapshot != nullptr &&
-          plan->execution_artifact != nullptr)
-        {
-          mpcc_architecture_snapshot::PublicationEvidence publication;
-          publication.failure_decision_id = decision_id;
-          publication.failure_interaction_fingerprint =
-            mpcc_architecture_snapshot::fingerprint_interaction_snapshot(snapshot);
-          publication.failure_observation_sec = snapshot.identity.snapshot_sec;
-          publication.failure_control_origin_sec = snapshot.control_prediction_origin_sec;
-          publication.source_kind = rate_resolved_certified::to_string(published_source.kind);
-          publication.publication_decision_id = published_source.publication_decision_id;
-          publication.publication_control_origin_sec =
-            published_source.publication_control_origin_sec;
-          publication.publication_artifact_elapsed_sec =
-            published_source.publication_artifact_elapsed_sec;
-          const auto execution_recorded =
-            mpcc_architecture_snapshot::record_published_execution(
-            *plan->solver_source_snapshot, *plan->execution_artifact,
-            publication, detail);
-          if (execution_recorded.status !=
-            mpcc_architecture_snapshot::RecordStatus::Duplicate)
-          {
-            RCLCPP_WARN(
-              rclcpp::get_logger("mpc_controller"),
-              "Rate-resolved published execution observation: "
-              "decision=%lu, source=%lu, kind=%s, status=%s, file=%s, detail=%s",
-              static_cast<unsigned long>(decision_id),
-              static_cast<unsigned long>(plan->execution_artifact->identity.sequence),
-              publication.source_kind.c_str(),
-              mpcc_architecture_snapshot::to_string(execution_recorded.status),
-              execution_recorded.snapshot_file.string().c_str(),
-              execution_recorded.detail.c_str());
-          }
+            mpcc_contract::to_string(intent), outcome.c_str(), recorded.detail.c_str());
         }
       });
     return submission.accepted;
   }
 
-  void record_rate_resolved_terminal_contingency_failure_snapshot(
+  bool record_rate_resolved_terminal_contingency_failure_snapshot(
     const MpcProblem & problem,
     const std::optional<RateResolvedTrackCruiseSubmissionDraft> &
     submission_draft,
@@ -25363,7 +25324,7 @@ struct MPC
       retained.executed_reason ==
       rate_resolved_retained::Reason::TerminalContingencyUnavailable;
     if (!terminal_failure) {
-      return;
+      return false;
     }
 
     const auto accepted_boundary_matches =
@@ -25446,7 +25407,7 @@ struct MPC
       problem, submission_draft, now_sec, snapshot_reject_reason);
     if (!source.has_value()) {
       reject(snapshot_reject_reason);
-      return;
+      return false;
     }
 
     const auto & terminal_wall = retained.terminal_stop_path_clearance;
@@ -25509,10 +25470,15 @@ struct MPC
     }
     if (!submit_rate_resolved_architecture_failure_snapshot(
         std::move(source.value()), retained.decision_id, intent,
-        "terminal-contingency-unavailable", detail.str()))
+        "terminal-contingency-unavailable", detail.str(),
+        rate_resolved_track_cruise_certified_plan_store_ != nullptr ?
+        rate_resolved_track_cruise_certified_plan_store_->latest_published_source_snapshot() :
+        rate_resolved_certified::LatestPublishedSourceSnapshot{}))
     {
       reject("snapshot observation worker rejected submission");
+      return false;
     }
+    return true;
   }
 
   void record_rate_resolved_normal_authority_failure_snapshot(
@@ -30238,7 +30204,8 @@ struct MPC
     // proposed intent.  This never solves, stores, publishes or changes
     // production authority.
     const auto failure_snapshot_started = SteadyClock::now();
-    record_rate_resolved_terminal_contingency_failure_snapshot(
+    const bool terminal_snapshot_submitted =
+      record_rate_resolved_terminal_contingency_failure_snapshot(
       problem, submission_draft, now_sec, intent, ordinary_retained);
     if (
       ordinary_retained.reason == rate_resolved_retained::Reason::Accepted &&
@@ -30476,9 +30443,13 @@ struct MPC
     // before command selection converts that missing authority into external
     // Emergency Stop.  The snapshot cannot feed any production store.
     const auto normal_authority_snapshot_started = SteadyClock::now();
-    record_rate_resolved_normal_authority_failure_snapshot(
-      problem, submission_draft, now_sec, intent, effective_intent, retained,
-      published_stop_retained);
+    // A terminal failure already enqueued this decision and its publication.
+    // A second submit_latest job could replace it with a duplicate generic key.
+    if (!terminal_snapshot_submitted) {
+      record_rate_resolved_normal_authority_failure_snapshot(
+        problem, submission_draft, now_sec, intent, effective_intent, retained,
+        published_stop_retained);
+    }
     normal_authority_snapshot_ms =
       std::chrono::duration<double, std::milli>(
       SteadyClock::now() - normal_authority_snapshot_started).count();

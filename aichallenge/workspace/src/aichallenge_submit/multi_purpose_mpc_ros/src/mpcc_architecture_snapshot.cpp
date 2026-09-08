@@ -2085,6 +2085,33 @@ YAML::Node execution_evidence_node(
   return node;
 }
 
+static bool published_execution_valid(
+  const shadow::Snapshot & source,
+  const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
+  const PublicationEvidence & publication)
+{
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  return !(
+      fingerprint_interaction_snapshot(source) == 0U ||
+      !execution::same_identity(source.identity, artifact.identity) ||
+      execution::validate(artifact) != execution::RejectReason::None ||
+      !shadow::semantic_initial_state_matches(source, artifact) ||
+      (source.physical_wall_refinement_active &&
+      !mpcc_rate_resolved::course_frame_matches(
+        artifact.course_frame, source.wall_course_frame_knots,
+        source.course_progress_origin_m)) ||
+      publication.failure_decision_id == 0U ||
+      publication.failure_interaction_fingerprint == 0U ||
+      (publication.source_kind != "exact-executed" &&
+      publication.source_kind != "current-world-bundle") ||
+      publication.publication_decision_id == 0U ||
+      !std::isfinite(publication.failure_observation_sec) ||
+      !std::isfinite(publication.failure_control_origin_sec) ||
+      !std::isfinite(publication.publication_control_origin_sec) ||
+      !std::isfinite(publication.publication_artifact_elapsed_sec) ||
+      publication.publication_artifact_elapsed_sec < 0.0);
+}
+
 static RecordResult record_snapshot(
   const shadow::Snapshot & source,
   const problem::AssemblyRequest * const assembly_request,
@@ -2095,7 +2122,9 @@ static RecordResult record_snapshot(
   const std::string & failure_outcome,
   const std::string & failure_detail,
   const std::filesystem::path & output_root,
-  const YAML::Node & execution_evidence = YAML::Node()) noexcept
+  const YAML::Node & execution_evidence = YAML::Node(),
+  const YAML::Node & publication_bundle = YAML::Node(),
+  const recovery_footprint::OccupancyGrid * const published_grid = nullptr) noexcept
 {
   RecordResult result;
   try {
@@ -2167,26 +2196,30 @@ static RecordResult record_snapshot(
     }
 
     const std::string grid_payload = "wall-grid.bin";
-    if (source.wall_grid != nullptr) {
-      std::ofstream grid(
-        temporary_directory / grid_payload,
-        std::ios::binary | std::ios::trunc);
-      if (!grid) {
-        result.status = RecordStatus::IoFailure;
-        result.detail = "cannot open wall-grid payload";
-        std::filesystem::remove_all(temporary_directory, error);
-        return result;
-      }
-      for (const auto cell : source.wall_grid->cells) {
-        const std::int8_t byte = static_cast<std::int8_t>(cell);
-        grid.write(reinterpret_cast<const char *>(&byte), sizeof(byte));
-      }
-      if (!grid) {
-        result.status = RecordStatus::IoFailure;
-        result.detail = "cannot write wall-grid payload";
-        std::filesystem::remove_all(temporary_directory, error);
-        return result;
-      }
+    const auto write_grid = [&temporary_directory](
+      const recovery_footprint::OccupancyGrid * const grid,
+      const std::string & name) {
+        if (grid == nullptr) {
+          return true;
+        }
+        std::ofstream stream(temporary_directory / name, std::ios::binary | std::ios::trunc);
+        if (!stream) {
+          return false;
+        }
+        for (const auto cell : grid->cells) {
+          const std::int8_t byte = static_cast<std::int8_t>(cell);
+          stream.write(reinterpret_cast<const char *>(&byte), sizeof(byte));
+        }
+        stream.close();
+        return static_cast<bool>(stream);
+      };
+    if (!write_grid(source.wall_grid.get(), grid_payload) ||
+      !write_grid(published_grid, "published-wall-grid.bin"))
+    {
+      result.status = RecordStatus::IoFailure;
+      result.detail = "cannot write atomic world/publication grid payloads";
+      std::filesystem::remove_all(temporary_directory, error);
+      return result;
     }
 
     YAML::Node root;
@@ -2206,6 +2239,9 @@ static RecordResult record_snapshot(
       fingerprint_interaction_snapshot(source);
     if (execution_evidence.IsMap()) {
       root["execution_evidence"] = execution_evidence;
+    }
+    if (publication_bundle.IsMap()) {
+      root["publication_bundle"] = publication_bundle;
     }
     if (exact_problem != nullptr) {
       root["assembly_request"] = assembly_request_node(*assembly_request);
@@ -2303,26 +2339,7 @@ RecordResult record_published_execution(
 {
   namespace execution = mpcc_rate_resolved_execution_artifact;
   try {
-    if (
-      fingerprint_interaction_snapshot(source) == 0U ||
-      !execution::same_identity(source.identity, artifact.identity) ||
-      execution::validate(artifact) != execution::RejectReason::None ||
-      !shadow::semantic_initial_state_matches(source, artifact) ||
-      (source.physical_wall_refinement_active &&
-      !mpcc_rate_resolved::course_frame_matches(
-        artifact.course_frame, source.wall_course_frame_knots,
-        source.course_progress_origin_m)) ||
-      publication.failure_decision_id == 0U ||
-      publication.failure_interaction_fingerprint == 0U ||
-      (publication.source_kind != "exact-executed" &&
-      publication.source_kind != "current-world-bundle") ||
-      publication.publication_decision_id == 0U ||
-      !std::isfinite(publication.failure_observation_sec) ||
-      !std::isfinite(publication.failure_control_origin_sec) ||
-      !std::isfinite(publication.publication_control_origin_sec) ||
-      !std::isfinite(publication.publication_artifact_elapsed_sec) ||
-      publication.publication_artifact_elapsed_sec < 0.0)
-    {
+    if (!published_execution_valid(source, artifact, publication)) {
       return {RecordStatus::InvalidInput, {},
         "invalid published execution identity, artifact or clock"};
     }
@@ -2334,6 +2351,56 @@ RecordResult record_published_execution(
     return {RecordStatus::IoFailure, {}, exception.what()};
   } catch (...) {
     return {RecordStatus::IoFailure, {}, "unknown execution evidence exception"};
+  }
+}
+
+RecordResult record_authority_failure(
+  const shadow::Snapshot & current_world,
+  const std::string & failure_outcome,
+  const std::string & failure_detail,
+  const PublishedExecutionObservation & published_execution,
+  const std::filesystem::path & output_root) noexcept
+{
+  try {
+    const auto failure_fingerprint = fingerprint_interaction_snapshot(current_world);
+    if (failure_fingerprint == 0U) {
+      return {RecordStatus::InvalidInput, {}, "incomplete authority-loss current world"};
+    }
+    YAML::Node bundle;
+    bundle["schema"] = "mpcc-authority-loss-publication/v1";
+    const auto & source = published_execution.source;
+    const auto & artifact = published_execution.artifact;
+    const auto & publication = published_execution.publication;
+    const recovery_footprint::OccupancyGrid * grid = nullptr;
+    if (source == nullptr || artifact == nullptr) {
+      bundle["status"] = "missing";
+      bundle["reason"] = source == nullptr ? "published solver source unavailable" :
+        "published execution artifact unavailable";
+    } else if (
+      !published_execution_valid(*source, *artifact, publication) ||
+      publication.failure_decision_id != current_world.identity.source_context.decision_id ||
+      publication.failure_interaction_fingerprint != failure_fingerprint ||
+      publication.failure_observation_sec != current_world.identity.snapshot_sec ||
+      publication.failure_control_origin_sec != current_world.control_prediction_origin_sec)
+    {
+      bundle["status"] = "invalid";
+      bundle["reason"] = "published source/artifact/clock does not join this failure world";
+    } else {
+      bundle["status"] = "present";
+      bundle["reason"] = "matching immutable publication and failure world";
+      bundle["source"] = source_node(
+        *source, source->wall_grid != nullptr ? "published-wall-grid.bin" : "");
+      bundle["interaction_fingerprint"] = fingerprint_interaction_snapshot(*source);
+      bundle["execution_evidence"] = execution_evidence_node(*artifact, publication);
+      grid = source->wall_grid.get();
+    }
+    return record_snapshot(
+      current_world, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
+      failure_outcome, failure_detail, output_root, YAML::Node(), bundle, grid);
+  } catch (const std::exception & exception) {
+    return {RecordStatus::IoFailure, {}, exception.what()};
+  } catch (...) {
+    return {RecordStatus::IoFailure, {}, "unknown authority-loss bundle exception"};
   }
 }
 

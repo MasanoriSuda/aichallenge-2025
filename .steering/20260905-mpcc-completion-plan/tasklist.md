@@ -2,6 +2,15 @@
 
 最新の進捗・完遂順序は[current-status.md](current-status.md)。
 
+2026-09-09観測bundle追記: 失敗worldと実行元を原子的に保存し、25package build・
+60CTestgroup/2362記録、native14/source104が合格。dev2 D2 decision1629で実行元1100を
+取得し、停止末端の後方D1との動的余裕不足を再求解なしで再現（1.555秒、-0.006771m）。
+壁検査は未到達。同worldのStop4方式は全て動的拒否、通常B/C/D/Gはfront target不在で
+候補生成できず、Aはstage19線形化拒否。次はrear peerを扱う独立停止候補の有界比較。
+後続D1制動を含む未来実測でも完全停止経路はpeer円と重なるため、予測変更だけで直る
+根拠はない。多車両の完走・P2残項目・P3/P4は未完。
+[観測bundleの結果](../20260909-mpcc-failure-observation-bundle/results.md)を参照。
+
 2026-09-09縦応答予測追記: 観測slice03e174e5の後、単純な公開指令への置換を
 単車全体の誤差悪化で棄却。同じodometry時刻の加速度と指令を対でfilterするproducerを
 実装した。元Stop453/world993のnative再証明は通過。初回単車1938の5ms時計逆転を

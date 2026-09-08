@@ -7,6 +7,7 @@
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -91,6 +92,26 @@ struct PublicationEvidence
   double publication_control_origin_sec{};
   double publication_artifact_elapsed_sec{};
 };
+
+struct PublishedExecutionObservation
+{
+  std::shared_ptr<const mpcc_rate_resolved_shadow::Snapshot> source;
+  std::shared_ptr<const mpcc_rate_resolved_execution_artifact::ExecutionArtifact> artifact;
+  PublicationEvidence publication;
+};
+
+/// Atomically persist one failed current world and its corresponding published
+/// source/artifact/clock. Deduplicate only the complete failure record; an
+/// unrelated earlier publication must not consume this record's source slot.
+/// Missing or invalid publication evidence is explicitly recorded while the
+/// valid current world is preserved. Has no control authority or Store effects.
+RecordResult record_authority_failure(
+  const mpcc_rate_resolved_shadow::Snapshot & current_world,
+  const std::string & failure_outcome,
+  const std::string & failure_detail,
+  const PublishedExecutionObservation & published_execution,
+  const std::filesystem::path & output_root =
+  std::filesystem::path{"mpcc_architecture_snapshots"}) noexcept;
 
 /// Save the original solver input AND the actual immutable artifact, without
 /// resolving the input again. Shares the existing bounded failure deduplication

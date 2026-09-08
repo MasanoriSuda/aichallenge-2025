@@ -3927,7 +3927,7 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
         "bool submit_rate_resolved_architecture_failure_snapshot("
     )
     submitter_end = SOURCE.index(
-        "void record_rate_resolved_terminal_contingency_failure_snapshot(",
+        "bool record_rate_resolved_terminal_contingency_failure_snapshot(",
         submitter_start,
     )
     submitter = SOURCE[submitter_start:submitter_end]
@@ -3935,14 +3935,16 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
         "rate_resolved_terminal_failure_snapshot_worker_->submit_latest("
     )
     persistence = submitter.index(
-        "mpcc_architecture_snapshot::record_proof_failure("
+        "mpcc_architecture_snapshot::record_authority_failure("
     )
     assert submission < persistence
     assert "[snapshot = std::move(snapshot)" in submitter
     assert "recorded asynchronously" in submitter
+    assert "record_published_execution(" not in submitter
+    assert "record_proof_failure(" not in submitter
 
     recorder_start = SOURCE.index(
-        "void record_rate_resolved_terminal_contingency_failure_snapshot("
+        "bool record_rate_resolved_terminal_contingency_failure_snapshot("
     )
     recorder_end = SOURCE.index(
         "void record_rate_resolved_normal_authority_failure_snapshot(",
@@ -3950,7 +3952,7 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
     )
     recorder = SOURCE[recorder_start:recorder_end]
     assert "submit_rate_resolved_architecture_failure_snapshot(" in recorder
-    assert "mpcc_architecture_snapshot::record_proof_failure(" not in recorder
+    assert "mpcc_architecture_snapshot::record_authority_failure(" not in recorder
 
     production_start = SOURCE.index(
         "MpcControlCycleResult rate_resolved_normal_production_control("
@@ -3960,7 +3962,8 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
     )
     production = SOURCE[production_start:production_end]
     assert "record_rate_resolved_terminal_contingency_failure_snapshot(" in production
-    assert "mpcc_architecture_snapshot::record_proof_failure(" not in production
+    assert "if (!terminal_snapshot_submitted)" in production
+    assert "mpcc_architecture_snapshot::record_authority_failure(" not in production
 
 
 def test_final_normal_authority_loss_is_frozen_without_control_authority() -> None:
@@ -4042,7 +4045,7 @@ def test_terminal_failure_pairs_last_accepted_same_source_before_overwrite() -> 
     """The viable boundary is observation-only and cannot consume failure state."""
 
     recorder_start = SOURCE.index(
-        "void record_rate_resolved_terminal_contingency_failure_snapshot("
+        "bool record_rate_resolved_terminal_contingency_failure_snapshot("
     )
     recorder_end = SOURCE.index(
         "bool submit_rate_resolved_track_cruise_shadow(", recorder_start

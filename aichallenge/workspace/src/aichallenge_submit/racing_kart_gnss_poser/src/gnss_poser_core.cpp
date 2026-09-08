@@ -17,7 +17,9 @@
 #include <autoware_sensing_msgs/msg/gnss_ins_orientation_stamped.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -35,9 +37,13 @@ GNSSPoser::GNSSPoser(const rclcpp::NodeOptions & node_options)
   use_gnss_ins_orientation_(declare_parameter("use_gnss_ins_orientation", true)),
   plane_zone_(declare_parameter<int>("plane_zone", 9)),
   gnss_change_threshold_(declare_parameter<double>("gnss_change_threshold")),
+  unknown_position_covariance_(declare_parameter("unknown_position_covariance", 10.0)),
   msg_gnss_ins_orientation_stamped_(
     std::make_shared<autoware_sensing_msgs::msg::GnssInsOrientationStamped>())
 {
+  if (!std::isfinite(unknown_position_covariance_) || unknown_position_covariance_ <= 0.0) {
+    throw std::invalid_argument("unknown_position_covariance must be finite and positive [m^2]");
+  }
   int coordinate_system =
     declare_parameter("coordinate_system", static_cast<int>(CoordinateSystem::MGRS));
   coordinate_system_ = static_cast<CoordinateSystem>(coordinate_system);
@@ -162,12 +168,20 @@ void GNSSPoser::callbackNavSatFix(
   geometry_msgs::msg::PoseWithCovarianceStamped gnss_base_pose_cov_msg;
   gnss_base_pose_cov_msg.header = gnss_base_pose_msg.header;
   gnss_base_pose_cov_msg.pose.pose = gnss_base_pose_msg.pose;
+  if (!canGetCovariance(*nav_sat_fix_msg_ptr)) {
+    RCLCPP_INFO_ONCE(
+      get_logger(), "GNSS covariance unknown; using configured sensor variance %.6f m^2",
+      unknown_position_covariance_);
+  }
   gnss_base_pose_cov_msg.pose.covariance[7 * 0] =
-    canGetCovariance(*nav_sat_fix_msg_ptr) ? nav_sat_fix_msg_ptr->position_covariance[0] : 10.0;
+    canGetCovariance(*nav_sat_fix_msg_ptr) ?
+    nav_sat_fix_msg_ptr->position_covariance[0] : unknown_position_covariance_;
   gnss_base_pose_cov_msg.pose.covariance[7 * 1] =
-    canGetCovariance(*nav_sat_fix_msg_ptr) ? nav_sat_fix_msg_ptr->position_covariance[4] : 10.0;
+    canGetCovariance(*nav_sat_fix_msg_ptr) ?
+    nav_sat_fix_msg_ptr->position_covariance[4] : unknown_position_covariance_;
   gnss_base_pose_cov_msg.pose.covariance[7 * 2] =
-    canGetCovariance(*nav_sat_fix_msg_ptr) ? nav_sat_fix_msg_ptr->position_covariance[8] : 10.0;
+    canGetCovariance(*nav_sat_fix_msg_ptr) ?
+    nav_sat_fix_msg_ptr->position_covariance[8] : unknown_position_covariance_;
 
   if (use_gnss_ins_orientation_) {
     gnss_base_pose_cov_msg.pose.covariance[7 * 3] =

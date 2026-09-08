@@ -35,8 +35,14 @@ The `gnss_poser` is a node that subscribes gnss sensing messages and calculates 
 | `map_frame`         | string | "map"            | frame id                                                                                                                   |
 | `coordinate_system` | int    | "4"              | coordinate system enumeration; 0: UTM, 1: MGRS, 2: Plane, 3: WGS84 Local Coordinate System, 4: UTM Local Coordinate System |
 | `plane_zone`        | int    | 9                | identification number of the plane rectangular coordinate systems.                                                         |
+| `unknown_position_covariance` | double | 10.0 | Explicit sensor position variance [m²] only when NavSatFix covariance is UNKNOWN. Must be finite and positive; known covariance is preserved. |
 
 ## Assumptions / Known limits
+
+An UNKNOWN all-zero covariance array does not indicate a perfect measurement.
+The local simulation launch supplies a calibrated fallback of0.1m²; vehicle
+and standalone defaults remain10.0m². Recalibrate when the sensor model changes.
+See [localization calibration](../../../../../docs/spec/localization-calibration.md).
 
 ## (Optional) Error detection and handling
 

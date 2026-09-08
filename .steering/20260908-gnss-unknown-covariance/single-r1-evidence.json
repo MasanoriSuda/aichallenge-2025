@@ -1,0 +1,130 @@
+{
+  "run_id": "20260908-gnss-calibration-single-r1",
+  "artifacts": [
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/gnss-after-tests.log",
+      "sha256": "7bf74951fcfaccb53211445c904b826b5dd87b0105de0dd8e3caff3569c1b966",
+      "size_bytes": 8804
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/participant-source.patch",
+      "sha256": "2648ff7bc38a3fde79a8a93c2ffafd9dfc02e0876fb7d8b2ab53f6c9bb84d5f5",
+      "size_bytes": 137229
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/localization-analysis.json",
+      "sha256": "ffed185d7a2548a6a9fcad69688b54a635bb4fa255028301b4cd656f8bce57a6",
+      "size_bytes": 1836171
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/build.log",
+      "sha256": "19261b8be84eb202609b90393bc232914827e51d18d1d2a3dcb3c3b3ec237c2f",
+      "size_bytes": 4707
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/awsim.log",
+      "sha256": "e75662763d5f9723ff8b2883f9fd5a16194fb6ab96713ac77f04e82a43dfe17d",
+      "size_bytes": 1773
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/bag-analysis.json",
+      "sha256": "74c12967bbefdafbf33ec9b6a86b4ee9a9258f15fedf1e16e0b60797cbc79fe0",
+      "size_bytes": 91495
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/monitor.log",
+      "sha256": "7160e7abb6f72c6ec1492e53308ef51367381923d6bc3dd35802a468b4d1d2ee",
+      "size_bytes": 15374
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/monitor-summary.json",
+      "sha256": "3ba84558d1dc1c204c3bf37e4b2d40080e7bffc199b0c85eb04a519ff3cadbc8",
+      "size_bytes": 1761
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/mpcc-source.patch",
+      "sha256": "c49460afe165040cfc67dc041f4fdfbea4eead1e3016192563bde81bce2f4c6e",
+      "size_bytes": 126917
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/gnss-before-test.log",
+      "sha256": "cc08fa318a3e2de7bc29315cafdd96874804d010aa3dca6ff3786a32359201b5",
+      "size_bytes": 1449
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/log-summary.json",
+      "sha256": "aec1b0589bff4d4723eb42967d8faaa3fc3c7649f2c2dd52b25686cfef589de7",
+      "size_bytes": 7160
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/gnss-after-test-results.log",
+      "sha256": "b8fcd3af0a80933bc7e5af3a18d549cfd2e72086418ab2d4101a51402092cd2e",
+      "size_bytes": 51
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/manifest.json",
+      "sha256": "57e69f4bd4e5a4344f6c2f57d661a8c7e6a8c85023f780be65baf17bc7fe604f",
+      "size_bytes": 6257
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/gnss-before-build.log",
+      "sha256": "845b3de5109ce0b18331d9c536a595c4fda4f63e2a4af9eeaa6883d1c88c34ed",
+      "size_bytes": 571
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/d1/autoware.log",
+      "sha256": "b29f81fe094221d6e8a0c893bdbc7f3386ccf283830724d83c88cd24286eade5",
+      "size_bytes": 2612264
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/d1/result-summary.json",
+      "sha256": "64d4d75c2b8507f66e15ef12dd0474657fba063899a30729c7a0916fb75c64be",
+      "size_bytes": 1057
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/d1/d1-result-details.json",
+      "sha256": "2ce73d79ccda2c634dc3d45e4dbe16c57bc36a95a9e4d7b40baccbe045335616",
+      "size_bytes": 858
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/binaries/libgnss_poser_node.so",
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1",
+      "size_bytes": 2222776
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/binaries/mpc_controller_cpp",
+      "sha256": "5b65133ad69c424ff3c1954cc73b778b9d9aef283aff0d05586ac90f6ef0ae96",
+      "size_bytes": 8836872
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/binaries/mpcc_architecture_compare",
+      "sha256": "9bcb744f18e40d810373e02fb3fff7c91e0720d4c1b3ef4147d8eeab5b684826",
+      "size_bytes": 1392608
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "9aba0d34384c882b2022d30e318128d5c21a3fced249b63c515b2828bf0c9bc4",
+      "size_bytes": 37238572
+    },
+    {
+      "path": "output/20260908-gnss-calibration-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "sha256": "520edb7fd103416e2a0e1852eaf921cee832509e09264bdf6cf02056c4056532",
+      "size_bytes": 8525
+    },
+    {
+      "path": ".steering/20260908-gnss-unknown-covariance/analyze_localization.py",
+      "sha256": "55d439cefad91cc3d61800bff4fbe82b8a5506dfeebd70e5a1fea0a0b8c0fade",
+      "size_bytes": 4403
+    },
+    {
+      "path": ".steering/20260908-gnss-unknown-covariance/run_single.py",
+      "sha256": "fae2dcd03291c47e8cf9c34acb720020f2dd16a77c6f13570ab92259631fb816",
+      "size_bytes": 5654
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/test/test_gnss_covariance.cpp",
+      "sha256": "255d0fb2666834b3a763e09e9bd5d8f147992eea60efe0a582bc763a2e895c3d",
+      "size_bytes": 4741
+    }
+  ]
+}

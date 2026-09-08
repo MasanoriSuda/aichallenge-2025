@@ -1,0 +1,43 @@
+{
+  "baseline_commit": "a8b968ac2e4a86a28432a52d132774459d355cb5",
+  "source_run": "20260908-mpcc-stop-reference-single-r3",
+  "source_manifest": ".steering/20260908-mpcc-single-physical-stop-audit/manifest.json",
+  "comparison_scope": "Same seeded EKF consumer, different declared covariance; original hidden history unavailable",
+  "artifacts": [
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/first-failure-covariance.json",
+      "sha256": "3531c36798d2f204c9b47feaa6d8a159ab0fbb94580789b85a90f956399539dc",
+      "size_bytes": 96767
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/covariance-consumer-comparison.json",
+      "sha256": "612f4e1b8afde939c3523690b32178662e3ff226fdf0f2bc8156f377b29ee742",
+      "size_bytes": 135473
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/covariance-replay-recorded100.log",
+      "sha256": "cd4d3cb167b1598c46a27a0976ad17fab04218aa54ce4721ea3ebcefa25cb9ef",
+      "size_bytes": 210
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/covariance-replay-calibrated01.log",
+      "sha256": "5ee4e40c05eaefafaab350d77fe881dae0704d7b579ce6e2286102f71f6ec6d0",
+      "size_bytes": 211
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll",
+      "sha256": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172",
+      "size_bytes": 811520
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220",
+      "size_bytes": 4245
+    },
+    {
+      "path": ".steering/20260908-mpcc-single-physical-stop-audit/replay_pose_covariance.py",
+      "sha256": "142f3b493c0029de8c0e8d22442cd9a8246542934961ba77b687a3b209904801",
+      "size_bytes": 6108
+    }
+  ]
+}

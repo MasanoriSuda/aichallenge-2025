@@ -15,6 +15,11 @@
   -->
   <arg name="simulation_pose_additional_delay" default="0.0" description="measured additional pose measurement delay for simulation [s]"/>
   <arg name="vehicle_pose_additional_delay" default="0.0" description="additional pose measurement delay for vehicle [s]"/>
+  <!-- Local AWSIM calibration; see docs/spec/localization-calibration.md. -->
+  <arg name="simulation_gnss_unknown_position_covariance" default="0.1" description="calibrated UNKNOWN GNSS variance for the local AWSIM sensor [m^2]"/>
+  <arg name="vehicle_gnss_unknown_position_covariance" default="10.0" description="uncalibrated vehicle UNKNOWN GNSS variance [m^2]"/>
+  <let name="gnss_unknown_position_covariance" value="$(var simulation_gnss_unknown_position_covariance)" if="$(var simulation)"/>
+  <let name="gnss_unknown_position_covariance" value="$(var vehicle_gnss_unknown_position_covariance)" unless="$(var simulation)"/>
   <!-- Map -->
   <arg name="lanelet2_map_file" default="lanelet2_map.osm" description="lanelet2 map file name"/>
   <arg name="pointcloud_map_file" default="pointcloud_map.pcd" description="pointcloud map file name"/>
@@ -68,6 +73,7 @@
         <arg name="output_topic_gnss_pose" value="pose"/>
         <arg name="output_topic_gnss_fixed" value="gnss_fixed"/>
         <arg name="output_topic_gnss_pose_cov" value="pose_with_covariance"/>
+        <arg name="unknown_position_covariance" value="$(var gnss_unknown_position_covariance)"/>
       </include>
     </group>
   </group>

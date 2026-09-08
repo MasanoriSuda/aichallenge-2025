@@ -35,6 +35,16 @@ rclcpp_components_register_node(gnss_poser_node
   EXECUTABLE gnss_poser
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_auto_add_gtest(test_gnss_covariance test/test_gnss_covariance.cpp)
+  target_link_libraries(test_gnss_covariance gnss_poser_node Geographic)
+  # Run the same package-wide analysis with Google Test macro definitions.
+  find_package(ament_cmake_cppcheck REQUIRED)
+  list(APPEND AMENT_LINT_AUTO_EXCLUDE ament_cmake_cppcheck)
+  ament_cppcheck(LIBRARIES googletest INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/include")
+endif()
+
 ament_auto_package(INSTALL_TO_SHARE
   launch
   config

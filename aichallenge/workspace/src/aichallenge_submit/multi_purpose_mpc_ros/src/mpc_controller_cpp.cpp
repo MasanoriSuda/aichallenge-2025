@@ -25526,13 +25526,16 @@ struct MPC
     const bool published_stop_retained)
   {
     if (
-      retained.production_authority.has_value() || published_stop_retained ||
+      retained.production_authority.has_value() ||
       requested_intent == mpcc_contract::ControlIntent::Stop ||
       requested_intent == mpcc_contract::ControlIntent::Unknown)
     {
       return;
     }
 
+    // The previous Stop label can select external Emergency after its current
+    // physical proof fails. Preserve that loss and the executed Stop before
+    // publication clears the ledger; the label itself is not a certificate.
     const auto reject = [this, requested_intent](const std::string & reason) {
         RCLCPP_WARN(
           rclcpp::get_logger("mpc_controller"),

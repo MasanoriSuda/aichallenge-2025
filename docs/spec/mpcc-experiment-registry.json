@@ -225,6 +225,16 @@
       "snapshot_id": "20260909-side-peer-stop-d2-loss-978",
       "manifest": ".steering/20260909-mpcc-side-peer-stop/validation-evidence.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-published-stop-d2-source-453",
+      "manifest": ".steering/20260909-mpcc-published-stop-audit/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-published-stop-d2-world-993",
+      "manifest": ".steering/20260909-mpcc-published-stop-audit/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -1739,6 +1749,113 @@
       "production_impact": "none; certificate applies to encoded affine branch, not physical-scene infeasibility",
       "deleted_code": [],
       "revisit_condition": "a different sealed convex branch/trajectory generation under the same physical world"
+    },
+    {
+      "experiment_id": "20260909-published-stop-observation",
+      "baseline_commit": "f3b0338cb18b8ece3a494b7438bf35cac4dd35c1",
+      "snapshot_ids": [
+        "20260909-published-stop-d2-source-453",
+        "20260909-published-stop-d2-world-993"
+      ],
+      "hypothesis": "a previous Stop label incorrectly suppresses failed-proof source capture",
+      "changed_dimension": "observation guard only",
+      "result": "accepted",
+      "reason": "native before misses2cases; after6/6; actual453/993tuple captured in unchanged-control diagnostic",
+      "production_impact": "bounded observation guard repaired; no control change",
+      "deleted_code": [
+        "published_stop_retained observation skip"
+      ],
+      "revisit_condition": "new sealed input or causal producer change; do not repeat unchanged rejected arm"
+    },
+    {
+      "experiment_id": "20260909-published-stop-dev2",
+      "baseline_commit": "f3b0338cb18b8ece3a494b7438bf35cac4dd35c1",
+      "snapshot_ids": [
+        "20260909-published-stop-d2-source-453",
+        "20260909-published-stop-d2-world-993"
+      ],
+      "hypothesis": "moving published Stop maintains current-world authority",
+      "changed_dimension": "unchanged-control diagnostic after observation repair",
+      "result": "rejected",
+      "reason": "five moving Stop publications followed by Emergency993; no completed race",
+      "production_impact": "none; failure retained; user JSON restored",
+      "deleted_code": [],
+      "revisit_condition": "new sealed input or causal producer change; do not repeat unchanged rejected arm"
+    },
+    {
+      "experiment_id": "20260909-published-stop-exact-artifact",
+      "baseline_commit": "f3b0338cb18b8ece3a494b7438bf35cac4dd35c1",
+      "snapshot_ids": [
+        "20260909-published-stop-d2-source-453",
+        "20260909-published-stop-d2-world-993"
+      ],
+      "hypothesis": "the original executed Stop has a valid physical trajectory",
+      "changed_dimension": "zero-solve native reconstruction and independent Cartesian ODE",
+      "result": "accepted",
+      "reason": "original wall/dynamic/rest pass;484ODEsamples maximum3.487751e-6m position error",
+      "production_impact": "none; fixed recorded controls",
+      "deleted_code": [],
+      "revisit_condition": "new sealed input or causal producer change; do not repeat unchanged rejected arm"
+    },
+    {
+      "experiment_id": "20260909-published-stop-current-world",
+      "baseline_commit": "f3b0338cb18b8ece3a494b7438bf35cac4dd35c1",
+      "snapshot_ids": [
+        "20260909-published-stop-d2-source-453",
+        "20260909-published-stop-d2-world-993"
+      ],
+      "hypothesis": "the captured state reproduces the wall-proof failure",
+      "changed_dimension": "same-native current-world revalidation",
+      "result": "accepted",
+      "reason": "delay/publisher prefix clear; continuation and both terminal references fail wall",
+      "production_impact": "none; rounded physical steering and unused non-seam wrap length explicit",
+      "deleted_code": [],
+      "revisit_condition": "new sealed input or causal producer change; do not repeat unchanged rejected arm"
+    },
+    {
+      "experiment_id": "20260909-published-stop-velocity-hindsight",
+      "baseline_commit": "f3b0338cb18b8ece3a494b7438bf35cac4dd35c1",
+      "snapshot_ids": [
+        "20260909-published-stop-d2-source-453",
+        "20260909-published-stop-d2-world-993"
+      ],
+      "hypothesis": "predicted velocity materially changes terminal viability",
+      "changed_dimension": "future measured velocity only, sensitivity",
+      "result": "accepted",
+      "reason": "1.913733 to1.454301m/s makes terminal proof pass",
+      "production_impact": "none; future measurement forbidden as production input",
+      "deleted_code": [],
+      "revisit_condition": "new sealed input or causal producer change; do not repeat unchanged rejected arm"
+    },
+    {
+      "experiment_id": "20260909-published-stop-committed-acceleration",
+      "baseline_commit": "f3b0338cb18b8ece3a494b7438bf35cac4dd35c1",
+      "snapshot_ids": [
+        "20260909-published-stop-d2-source-453",
+        "20260909-published-stop-d2-world-993"
+      ],
+      "hypothesis": "missing published acceleration history produces the bad predicted state",
+      "changed_dimension": "already published controls at existing declared origins; full path recomputed",
+      "result": "accepted",
+      "reason": "predicts1.522632m/s and passes first terminal proof; original predictor reconstructed within1.14e-9m",
+      "production_impact": "none; producer repair proposed, simulator application phase remains distinct",
+      "deleted_code": [],
+      "revisit_condition": "new sealed input or causal producer change; do not repeat unchanged rejected arm"
+    },
+    {
+      "experiment_id": "20260909-published-stop-architectures",
+      "baseline_commit": "f3b0338cb18b8ece3a494b7438bf35cac4dd35c1",
+      "snapshot_ids": [
+        "20260909-published-stop-d2-source-453",
+        "20260909-published-stop-d2-world-993"
+      ],
+      "hypothesis": "A/B/C/D or a fresh Stop bypasses the observed failure on the same world",
+      "changed_dimension": "sealed world993; existing bounded architectures",
+      "result": "rejected",
+      "reason": "all9normal arms and4Stop arms bundle=0; left QP rejection/right exact wall rejection; no physical infeasibility certificate",
+      "production_impact": "none; no margins, tolerances, weights, retries or delay tuning",
+      "deleted_code": [],
+      "revisit_condition": "new sealed input or causal producer change; do not repeat unchanged rejected arm"
     }
   ]
 }

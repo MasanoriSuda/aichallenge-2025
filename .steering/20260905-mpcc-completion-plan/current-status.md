@@ -10,13 +10,19 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: preserve the missing published Stop source/artifact/current
-world at the first failure, and audit convex-branch feasibility on sealed input.
-The side-peer/Stop repair passes 25-package build and all 60 CTest groups / 2346
-records. Changed-input dev2 is rejected at Domain 2 decision 978: the adopted
-Stop's current-world continuation loses wall reserve. Stop source 442 is missing
-because the authority-loss recorder incorrectly skips the external Stop label.
-See [dev2 result](../20260909-mpcc-side-peer-stop/dev2-results.md).
+Current next step: repair the committed longitudinal-input producer for latency
+prediction, with native temporal regression and unchanged physical acceptance.
+The side-peer/Stop slice is committed as f3b0338c. Observation-only dev2 now
+captures the actual published Stop 453 at Domain 2 loss 993. Zero-solve native
+replay proves the original Stop, reproduces the current-world terminal wall
+failure, and independently matches Cartesian integration within 0.003488 mm.
+The current predictor ignores already published braking and predicts 1.913733
+m/s; a causal saved-command comparison predicts 1.522632 m/s and passes the
+same terminal proof. This comparison is not a production repair. Same-world
+A/B/C/D and fresh Stop arms still reject; no physical infeasibility is proved.
+See [published Stop audit](../20260909-mpcc-published-stop-audit/results.md).
+Observation build: 25 packages; 60 CTest groups / 2346 records, zero failures.
+Older dev2 loss 978 and missing Stop 442 remain historical failures, not replaced.
 See [side-peer/Stop results](../20260909-mpcc-side-peer-stop/results.md).
 The exact same full-body source now admits a native production zero-objective
 Stop with unchanged hard constraints, approximately 8.0 ms offline. Old normal A

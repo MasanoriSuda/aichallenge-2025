@@ -1,0 +1,69 @@
+current_world: /output/20260909-published-stop-observation-dev2-r1/d2/mpcc_architecture_snapshots/000000000993-70b45b277df8282c-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml
+physical_progress_m: 32.624681247369146
+path_length_m: 1000.0
+current_speed_mps: 1.843041217111899
+current_time_steering_rad: -0.12692
+previous_published_command_age_sec: 0.015000000000000568
+maximum_acceleration_mps2: 1.37
+future_observed_speed_mps: 1.4543013478083793
+limits: physical current steering rounded from log to 6 decimals; path length 1000m
+  is a non-wrap surrogate, no lap alignment in this local window; future speed is
+  interpolation of same-run vehicle/status and sensitivity only
+current_yaw_rate_radps: -0.2844090782756894
+observed_acceleration_mps2: 0.543785436495885
+committed_acceleration_history:
+- publication_observation_sec: 11.424999744
+  control_origin_sec: 11.554999744000002
+  acceleration_mps2: 1.3295958042144775
+  receive_sec: 1788896719.8691404
+- publication_observation_sec: 11.444999744
+  control_origin_sec: 11.574999744000001
+  acceleration_mps2: 1.3295958042144775
+  receive_sec: 1788896719.8940878
+- publication_observation_sec: 11.479999743
+  control_origin_sec: 11.609999743000001
+  acceleration_mps2: 1.3295958042144775
+  receive_sec: 1788896719.9196246
+- publication_observation_sec: 11.494999743
+  control_origin_sec: 11.624999743
+  acceleration_mps2: 1.329595923423767
+  receive_sec: 1788896719.9542918
+- publication_observation_sec: 11.529999742
+  control_origin_sec: 11.659999742
+  acceleration_mps2: 1.329595923423767
+  receive_sec: 1788896719.9684348
+- publication_observation_sec: 11.544999741
+  control_origin_sec: 11.674999741
+  acceleration_mps2: 1.329595923423767
+  receive_sec: 1788896719.9933164
+- publication_observation_sec: 11.579999741
+  control_origin_sec: 11.709999741
+  acceleration_mps2: 1.329595923423767
+  receive_sec: 1788896720.0198796
+- publication_observation_sec: 11.59499974
+  control_origin_sec: 11.724999740000001
+  acceleration_mps2: 1.329595923423767
+  receive_sec: 1788896720.0431454
+- publication_observation_sec: 11.62999974
+  control_origin_sec: 11.759999740000001
+  acceleration_mps2: -2.9595959186553955
+  receive_sec: 1788896720.0761406
+- publication_observation_sec: 11.644999739
+  control_origin_sec: 11.774999739
+  acceleration_mps2: -2.9595959186553955
+  receive_sec: 1788896720.1049252
+- publication_observation_sec: 11.679999738
+  control_origin_sec: 11.809999738
+  acceleration_mps2: -2.9595959186553955
+  receive_sec: 1788896720.1286526
+- publication_observation_sec: 11.694999738
+  control_origin_sec: 11.824999738
+  acceleration_mps2: -2.9595959186553955
+  receive_sec: 1788896720.1493704
+- publication_observation_sec: 11.729999737
+  control_origin_sec: 11.859999737
+  acceleration_mps2: -2.9595959186553955
+  receive_sec: 1788896720.173745
+history_policy: 'offline candidate: use recorded committed inputs at their existing
+  t+0.13 control origins; no future control or observation used; not identified simulator
+  actuation timing'

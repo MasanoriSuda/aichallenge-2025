@@ -3986,6 +3986,10 @@ def test_final_normal_authority_loss_is_frozen_without_control_authority() -> No
     recorder = SOURCE[recorder_start:recorder_end]
     assert "retained.production_authority.has_value()" in recorder
     assert "published_stop_retained" in recorder
+    guard = recorder[recorder.index("    if ("):recorder.index("    const auto reject =")]
+    # A previous Stop label selects Emergency if current proof failed; that
+    # event must retain the actual executed Stop before the ledger is cleared.
+    assert "published_stop_retained" not in guard
     assert '"normal-authority-unavailable"' in recorder
     # The observation may read the publication ledger before Emergency clears
     # it; no Store mutation or alternate authority is permitted here.

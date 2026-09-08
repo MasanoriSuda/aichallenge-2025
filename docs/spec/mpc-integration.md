@@ -3826,6 +3826,22 @@ D2 decision978で移動中Stopの壁再証明が失敗し、不合格。同run�
 物理場面の実行不能や統合完遂は示していない。局所結果を完遂扱いにしない。
 根拠は[side-peer/Stop監査](../../.steering/20260909-mpcc-side-peer-stop/results.md)。
 
+### 2026-09-09 公開済みStopの失敗記録と遅延予測の監査
+
+過去にStopを公開したというlabelは、現在の物理証明ではない。再証明が失敗して
+外部Emergencyへ移る場合も、ledgerを消去する前に元のsolver入力・実artifact・
+公開時刻・失敗時worldを保存する。既存のbounded記録経路とidentity検査を維持する。
+
+観測修正後のdev2ではD2 decision993の失敗と実行済みStop453を対応付けた。
+再求解なしの元Stopは壁・他車・停止末端の証明を通る一方、当該current-worldでは
+停止末端の壁証明が失敗する。遅延予測が観測加速度を区間全体へ保持し、公開済みの
+制動指令を入力に持たないことを確認した。既存のcontrol originに従って公開済み
+加速度だけを積分する比較では、予測速度が1.914から1.523m/sになり同じ証明を通る。
+これは保存場面の原因比較であり、予測producerの本番修正・統合受入れはまだ行っていない。
+AWSIMの縦指令10Hz適用位相と制御側の0.13秒予測時刻は別のモデルであり、実測との
+完全一致は主張しない。同じworldのA/B/C/Dと新規Stop比較は全て拒否され、物理的な
+実行不能は未証明。詳細は[公開Stop監査](../../.steering/20260909-mpcc-published-stop-audit/results.md)。
+
 ### 提出ファイルへの影響
 
 `create_submit_file.bash` で `aichallenge_submit` 以下を tar.gz にまとめるため、`multi_purpose_mpc_ros` と `multi_purpose_mpc_ros_msgs` が `aichallenge_submit/` 配下にある必要がある。

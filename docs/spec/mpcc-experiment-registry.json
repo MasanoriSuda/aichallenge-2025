@@ -235,6 +235,31 @@
       "snapshot_id": "20260909-published-stop-d2-world-993",
       "manifest": ".steering/20260909-mpcc-published-stop-audit/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-model-comparison",
+      "manifest": ".steering/20260909-mpcc-committed-longitudinal/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-single1938",
+      "manifest": ".steering/20260909-mpcc-committed-longitudinal/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-single-r2-startup",
+      "manifest": ".steering/20260909-mpcc-committed-longitudinal/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-single-r3",
+      "manifest": ".steering/20260909-mpcc-committed-longitudinal/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-dev2-world4428",
+      "manifest": ".steering/20260909-mpcc-committed-longitudinal/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -1856,6 +1881,122 @@
       "production_impact": "none; no margins, tolerances, weights, retries or delay tuning",
       "deleted_code": [],
       "revisit_condition": "new sealed input or causal producer change; do not repeat unchanged rejected arm"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-absolute-input",
+      "baseline_commit": "03e174e568691dd8640b02baf71d37375d23fabc",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-comparison"
+      ],
+      "hypothesis": "absolute serialized acceleration can replace measured response",
+      "changed_dimension": "same old full single data, existing0.13s origins",
+      "result": "rejected",
+      "reason": "moving MAE0.0558to0.1655m/s; loses steady response/drag",
+      "production_impact": "none; absolute replacement not promoted",
+      "deleted_code": [],
+      "revisit_condition": "different causally supported model or new input"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-paired-input",
+      "baseline_commit": "03e174e568691dd8640b02baf71d37375d23fabc",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-comparison"
+      ],
+      "hypothesis": "pairing measured derivative and committed input preserves response and brake changes",
+      "changed_dimension": "single odometry callback, same0.9filter, future commands at declared origins",
+      "result": "accepted",
+      "reason": "native dev2MAE0.123640to0.074430;single0.057266to0.056996; reception replay is not exact callback order",
+      "production_impact": "native observer replaces unmatched acceleration subscription and held-acceleration path",
+      "deleted_code": [
+        "MPCC separate acceleration subscription",
+        "constant observed-acceleration production prediction"
+      ],
+      "revisit_condition": "new input or demonstrated observer invariant failure"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-physical-reproof",
+      "baseline_commit": "03e174e568691dd8640b02baf71d37375d23fabc",
+      "snapshot_ids": [
+        "20260909-published-stop-d2-source-453",
+        "20260909-published-stop-d2-world-993"
+      ],
+      "hypothesis": "paired full path resolves the old terminal rejection",
+      "changed_dimension": "zero-solve actual453/world993with causal native observer",
+      "result": "accepted",
+      "reason": "predicts1.420476467m/s; first terminal reference certifies; old rejection retained",
+      "production_impact": "producer candidate only; not integrated race acceptance",
+      "deleted_code": [],
+      "revisit_condition": "new sealed world or physical predicate"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-single-r1",
+      "baseline_commit": "03e174e568691dd8640b02baf71d37375d23fabc",
+      "snapshot_ids": [
+        "20260909-longitudinal-single1938"
+      ],
+      "hypothesis": "initial observer passes single integration",
+      "changed_dimension": "initial paired observer, old local clock producer",
+      "result": "rejected",
+      "reason": "D1decision1938at7.623776m/s; received source clock5ms ahead; strict prediction guard rejects",
+      "production_impact": "decision clock producer repair required; no wall relaxation",
+      "deleted_code": [],
+      "revisit_condition": "clock producer repaired and tests/build pass"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-clock-producer",
+      "baseline_commit": "03e174e568691dd8640b02baf71d37375d23fabc",
+      "snapshot_ids": [
+        "20260909-longitudinal-single1938"
+      ],
+      "hypothesis": "already received source time can own a causal decision despite older local cache",
+      "changed_dimension": "common exact integer stamp for decision/prediction/proof/publication",
+      "result": "accepted",
+      "reason": "27native cases including four clock-owner regressions;25packages and60CTestgroups/2359records pass",
+      "production_impact": "later causal timestamp selected; clock rollback/age/future guards retained",
+      "deleted_code": [],
+      "revisit_condition": "new same-epoch temporal counterexample"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-single-r2",
+      "baseline_commit": "03e174e568691dd8640b02baf71d37375d23fabc",
+      "snapshot_ids": [
+        "20260909-longitudinal-single-r2-startup"
+      ],
+      "hypothesis": "clock repair passes integrated six-lap trial",
+      "changed_dimension": "unchanged tested binary at startup",
+      "result": "inconclusive",
+      "reason": "AWSIM Spawned with discovered clock publisher but no clock/odometry; no driving acceptance",
+      "production_impact": "none; startup log preserved and runner shuts down/restores inputs",
+      "deleted_code": [],
+      "revisit_condition": "terminate stalled simulator and start fresh process; met by single-r3"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-single-r3",
+      "baseline_commit": "03e174e568691dd8640b02baf71d37375d23fabc",
+      "snapshot_ids": [
+        "20260909-longitudinal-single-r3"
+      ],
+      "hypothesis": "clock repair completes single six laps without moving override",
+      "changed_dimension": "fresh simulator process, same production binaries/config",
+      "result": "accepted",
+      "reason": "253.768981934s/penalty0; moving override0; callback16.564ms/0overruns; control receipt37.079096ms/0gaps>50ms; source/sensor stalls remain unresolved",
+      "production_impact": "local single-race evidence only; no peer/Boost/Recovery or full timing-cause acceptance",
+      "deleted_code": [],
+      "revisit_condition": "new structural change or a predeclared untested scenario"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-dev2-r1",
+      "baseline_commit": "03e174e568691dd8640b02baf71d37375d23fabc",
+      "snapshot_ids": [
+        "20260909-longitudinal-dev2-world4428"
+      ],
+      "hypothesis": "paired input and clock repair pass complete peer integration",
+      "changed_dimension": "same production binaries/config; two vehicles six laps",
+      "result": "rejected",
+      "reason": "D1decision4428at8.42m/s terminal wall contingency; source3834missing after startup296dedup; D2one28.758mscallbackoverrun; no finished race",
+      "production_impact": "no further control repair until new-world architecture comparison and missing source observation",
+      "deleted_code": [],
+      "revisit_condition": "new causal producer fix or bounded observation-only capture of the missing actual artifact"
     }
   ]
 }

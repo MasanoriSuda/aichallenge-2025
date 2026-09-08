@@ -4,7 +4,6 @@
 #include <autoware_auto_vehicle_msgs/msg/gear_report.hpp>
 #include <autoware_auto_vehicle_msgs/msg/steering_report.hpp>
 #include <builtin_interfaces/msg/time.hpp>
-#include <geometry_msgs/msg/accel_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
@@ -37,6 +36,7 @@
 #include <multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp>
 #include <multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp>
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
+#include <multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp>
 #include <multi_purpose_mpc_ros/mpc_stage_geometry.hpp>
 #include <multi_purpose_mpc_ros/mpc_velocity_limit.hpp>
 #include <multi_purpose_mpc_ros/mpc_waypoint_association.hpp>
@@ -112,7 +112,6 @@ using autoware_auto_planning_msgs::msg::Trajectory;
 using autoware_auto_vehicle_msgs::msg::GearCommand;
 using autoware_auto_vehicle_msgs::msg::GearReport;
 using autoware_auto_vehicle_msgs::msg::SteeringReport;
-using geometry_msgs::msg::AccelWithCovarianceStamped;
 using geometry_msgs::msg::Point;
 using geometry_msgs::msg::Pose2D;
 using geometry_msgs::msg::Quaternion;
@@ -5978,6 +5977,7 @@ struct MpcConfig
   int solver_failure_steering_hold_cycles{4};
   double odom_timeout_sec{0.5};
   double state_prediction_delay_sec{0.0};
+  double longitudinal_response_filter_gain{0.9};
   bool state_prediction_simulation_only{true};
   double yaw_response_gain{1.0};
   double yaw_response_time_constant_sec{0.13};
@@ -49975,6 +49975,16 @@ Config load_config(const std::string & path)
   cfg.mpc.state_prediction_delay_sec =
     mpc["state_prediction_delay_sec"] ?
     mpc["state_prediction_delay_sec"].as<double>() : 0.0;
+  cfg.mpc.longitudinal_response_filter_gain =
+    mpc["longitudinal_response_filter_gain"] ?
+    mpc["longitudinal_response_filter_gain"].as<double>() : 0.9;
+  if (
+    !std::isfinite(cfg.mpc.longitudinal_response_filter_gain) ||
+    cfg.mpc.longitudinal_response_filter_gain < 0.0 ||
+    cfg.mpc.longitudinal_response_filter_gain >= 1.0)
+  {
+    throw std::runtime_error("mpc.longitudinal_response_filter_gain must be within [0, 1)");
+  }
   cfg.mpc.state_prediction_simulation_only =
     mpc["state_prediction_simulation_only"] ?
     mpc["state_prediction_simulation_only"].as<bool>() : true;
@@ -52748,6 +52758,11 @@ public:
     state_prediction_active_ =
       mpc_cfg_.state_prediction_delay_sec > 0.0 &&
       (!mpc_cfg_.state_prediction_simulation_only || simulation_mode_);
+    if (state_prediction_active_) {
+      longitudinal_response_observer_ =
+        std::make_unique<mpc_state_prediction::LongitudinalResponseObserver>(
+        mpc_cfg_.longitudinal_response_filter_gain, mpc_cfg_.odom_timeout_sec);
+    }
     mpc_cfg_.steer_rate_max = mpc_cfg_.steer_rate_max / mpc_cfg_.steering_tire_angle_gain_var;
     stuck_recovery_core_ =
       std::make_unique<stuck_recovery::StuckRecoveryCore>(cfg_.stuck_recovery.core);
@@ -54019,6 +54034,13 @@ private:
         odom_ = msg;
         last_odom_receipt_steady_ = receipt_time;
         const rclcpp::Time source_stamp(msg->header.stamp);
+        if (longitudinal_response_observer_) {
+          // Own both filter updates on this exact velocity observation. A
+          // separately delivered filtered acceleration cannot establish the
+          // corresponding committed-input filter epoch.
+          longitudinal_response_observer_->observe(
+            source_stamp.seconds(), std::abs(msg->twist.twist.linear.x));
+        }
         if (source_stamp.nanoseconds() > 0) {
           if (
             !last_odom_source_stamp_.has_value() ||
@@ -54034,16 +54056,6 @@ private:
         if (abrupt_speed_loss.has_value()) {
           emit_abrupt_speed_loss_observation(abrupt_speed_loss.value());
         }
-      });
-    acceleration_sub_ = create_subscription<AccelWithCovarianceStamped>(
-      "/localization/acceleration",
-      rclcpp::QoS(rclcpp::KeepLast(10)).reliable(),
-      [this](const AccelWithCovarianceStamped::SharedPtr msg) {
-        if (!std::isfinite(msg->accel.accel.linear.x)) {
-          return;
-        }
-        acceleration_ = msg;
-        last_acceleration_receipt_steady_ = SteadyClock::now();
       });
     steering_status_sub_ = create_subscription<SteeringReport>(
       "/vehicle/status/steering_status",
@@ -54515,6 +54527,21 @@ private:
       last_commanded_recovery_gear_.value() == stuck_recovery::Gear::Reverse);
   }
 
+  void record_published_longitudinal_command(
+    const rclcpp::Time & stamp, const double serialized_acceleration_mps2)
+  {
+    if (!longitudinal_response_observer_) {
+      return;
+    }
+    if (!longitudinal_response_observer_->record_published_command(
+        stamp.seconds(), stamp.seconds() + mpc_cfg_.state_prediction_delay_sec,
+        serialized_acceleration_mps2))
+    {
+      longitudinal_response_observer_->reset();
+      RCLCPP_ERROR(get_logger(), "Invalid committed longitudinal prediction history");
+    }
+  }
+
   void publish_failsafe_command(const rclcpp::Time & stamp, const char * reason)
   {
     const bool reverse_possible = recovery_may_be_in_reverse();
@@ -54557,6 +54584,7 @@ private:
       raw_command.lateral.steering_tire_angle = 0.0;
     }
     command_pub_->publish(raw_command);
+    record_published_longitudinal_command(stamp, raw_command.longitudinal.acceleration);
     last_published_physical_steering_rad_ =
       safe_control[1];
     last_published_steering_steady_ = SteadyClock::now();
@@ -54597,6 +54625,7 @@ private:
     }
     command_raw_pub_->publish(raw_command);
     command_pub_->publish(final_command);
+    record_published_longitudinal_command(stamp, final_command.longitudinal.acceleration);
     last_published_physical_steering_rad_ =
       raw_command.lateral.steering_tire_angle;
     last_published_steering_steady_ = SteadyClock::now();
@@ -58221,7 +58250,31 @@ private:
     }
     active_control_decision_id_ = ++control_decision_sequence_;
     callback_timing.decision_id = active_control_decision_id_;
-    const auto control_time = now();
+    const auto ros_control_time = now();
+    auto control_time = ros_control_time;
+    if (state_prediction_active_) {
+      const rclcpp::Time observation_time = odom_ ?
+        rclcpp::Time(odom_->header.stamp) : ros_control_time;
+      const auto epoch = mpc_state_prediction::resolve_control_observation_epoch(
+        ros_control_time.seconds(), previous_control_ros_clock_sec_,
+        observation_time.seconds(), mpc_cfg_.odom_timeout_sec);
+      previous_control_ros_clock_sec_ = ros_control_time.seconds();
+      if (epoch.clock_regressed) {
+        odom_.reset();
+        last_odom_receipt_steady_.reset();
+        last_odom_source_stamp_.reset();
+        last_odom_source_advance_steady_.reset();
+        longitudinal_response_observer_->reset();
+      } else if (!epoch.valid) {
+        publish_failsafe_command(control_time, "odometry/control clock epoch mismatch");
+        return;
+      } else if (epoch.use_received_observation_stamp) {
+        // A received observation is causal even when the independent /clock
+        // cache is one tick behind it. Keep its original nanosecond stamp as
+        // the common decision, prediction, proof and publication time.
+        control_time = observation_time;
+      }
+    }
     const bool missing_odometry = !odom_ || !last_odom_receipt_steady_.has_value();
     const double odometry_age_sec = missing_odometry ?
       std::numeric_limits<double>::infinity() :
@@ -58269,24 +58322,17 @@ private:
       publish_failsafe_command(control_time, "non-finite odometry rejected");
       return;
     }
-    double observed_longitudinal_acceleration_mps2 = 0.0;
+    std::optional<std::vector<mpc_state_prediction::AccelerationInterval>>
+      longitudinal_prediction_intervals;
     if (state_prediction_active_) {
-      const double acceleration_age_sec =
-        acceleration_ != nullptr && last_acceleration_receipt_steady_.has_value() ?
-        std::chrono::duration<double>(
-          steady_now - last_acceleration_receipt_steady_.value()).count() :
-        std::numeric_limits<double>::infinity();
-      if (
-        acceleration_ == nullptr ||
-        acceleration_age_sec > mpc_cfg_.odom_timeout_sec ||
-        !std::isfinite(acceleration_->accel.accel.linear.x))
-      {
+      longitudinal_prediction_intervals =
+        longitudinal_response_observer_->prediction_intervals(
+        control_time.seconds(), mpc_cfg_.state_prediction_delay_sec);
+      if (!longitudinal_prediction_intervals) {
         publish_failsafe_command(
-          control_time, "missing or stale longitudinal acceleration");
+          control_time, "missing causal longitudinal response observation");
         return;
       }
-      observed_longitudinal_acceleration_mps2 =
-        acceleration_->accel.accel.linear.x;
     }
     steering_state_contract::Result physical_steering_resolution;
     if (
@@ -58379,15 +58425,15 @@ private:
         physical_steering_resolution.state.has_value())
       {
         const auto prediction_trajectory =
-          mpc_state_prediction::predict_accelerating_yaw_response_trajectory(
+          mpc_state_prediction::predict_piecewise_yaw_response_trajectory(
           mpc_state_prediction::State2D{pose.x, pose.y, pose.theta},
-          std::abs(actual_v), observed_longitudinal_acceleration_mps2,
+          std::abs(actual_v),
           response_steering_rad.value(),
           physical_steering_resolution.state->current_time_steering_rad,
           physical_steering_resolution.state->prediction_origin_steering_rad,
           car_->length, mpc_cfg_.yaw_response_gain,
           mpc_cfg_.yaw_response_time_constant_sec,
-          mpc_cfg_.state_prediction_delay_sec);
+          *longitudinal_prediction_intervals);
         const auto & predicted = prediction_trajectory.back().prediction;
         CanonicalCurrentControlPath path;
         path.poses.reserve(prediction_trajectory.size());
@@ -58408,9 +58454,13 @@ private:
         response_steering_rad = predicted.response_steering_rad;
         execution_prediction_yaw_rate_radps = predicted.yaw_rate_radps;
       } else {
-        control_origin_speed_mps = std::max(
-          0.0, std::abs(actual_v) + observed_longitudinal_acceleration_mps2 *
-          mpc_cfg_.state_prediction_delay_sec);
+        // Missing steering evidence already closes canonical physical
+        // authority. Keep this diagnostic velocity on the same input history.
+        for (const auto & interval : *longitudinal_prediction_intervals) {
+          control_origin_speed_mps = std::max(
+            0.0, control_origin_speed_mps +
+            interval.acceleration_mps2 * interval.duration_sec);
+        }
         const double average_prediction_speed_mps =
           0.5 * (std::abs(actual_v) + control_origin_speed_mps);
         const auto predicted = mpc_state_prediction::predict_constant_turn_rate(
@@ -58857,6 +58907,9 @@ private:
   bool use_sim_time_{};
   bool simulation_mode_{};
   bool state_prediction_active_{false};
+  std::unique_ptr<mpc_state_prediction::LongitudinalResponseObserver>
+    longitudinal_response_observer_;
+  std::optional<double> previous_control_ros_clock_sec_;
   bool use_obstacle_avoidance_{};
   bool use_stats_{};
   bool awsim_boost_io_enabled_{false};
@@ -58993,7 +59046,6 @@ private:
   rclcpp::Publisher<MarkerArray>::SharedPtr section_marker_pub_;
 
   rclcpp::Subscription<Odometry>::SharedPtr odom_sub_;
-  rclcpp::Subscription<AccelWithCovarianceStamped>::SharedPtr acceleration_sub_;
   rclcpp::Subscription<SteeringReport>::SharedPtr steering_status_sub_;
   rclcpp::Subscription<Bool>::SharedPtr control_mode_request_sub_;
   rclcpp::Subscription<Trajectory>::SharedPtr trajectory_sub_;
@@ -59009,11 +59061,9 @@ private:
   rclcpp::TimerBase::SharedPtr ref_vel_marker_timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
   Odometry::SharedPtr odom_;
-  AccelWithCovarianceStamped::SharedPtr acceleration_;
   SteeringReport::SharedPtr steering_report_;
   Trajectory::SharedPtr trajectory_;
   std::optional<SteadyClock::time_point> last_odom_receipt_steady_;
-  std::optional<SteadyClock::time_point> last_acceleration_receipt_steady_;
   std::optional<SteadyClock::time_point> last_steering_receipt_steady_;
   /// Last model/physical-equivalent steering request. The calibrated ROS wire
   /// value must never become the next canonical command-state origin.

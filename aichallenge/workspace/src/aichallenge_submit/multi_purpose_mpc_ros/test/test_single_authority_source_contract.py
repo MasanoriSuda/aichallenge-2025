@@ -3525,7 +3525,10 @@ def test_latency_wall_proof_reuses_the_canonical_state_prediction_trajectory() -
     control_start = SOURCE.index("void control()")
     control_end = SOURCE.index("void publish_zero_command()", control_start)
     control = SOURCE[control_start:control_end]
-    assert "predict_accelerating_yaw_response_trajectory(" in control
+    assert "predict_piecewise_yaw_response_trajectory(" in control
+    assert "longitudinal_response_observer_->prediction_intervals(" in control
+    assert "predict_accelerating_yaw_response_trajectory(" not in control
+    assert "acceleration_sub_" not in SOURCE
     assert "canonical_control_path = std::move(path);" in control
     assert "update_predicted_pose_for_execution_contract(" in control
 

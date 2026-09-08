@@ -2,6 +2,18 @@
 
 最新の進捗・完遂順序は[current-status.md](current-status.md)。
 
+2026-09-09縦応答予測追記: 観測slice03e174e5の後、単純な公開指令への置換を
+単車全体の誤差悪化で棄却。同じodometry時刻の加速度と指令を対でfilterするproducerを
+実装した。元Stop453/world993のnative再証明は通過。初回単車1938の5ms時計逆転を
+producer側で修正し、25package build・60CTestgroup/2359記録が合格。
+単車r2はAWSIM時計停止で起動不成立。r3は6周253.768982秒・penalty0、
+移動中override0、callback最大16.564ms/超過0、指令受信最大37.079096ms。
+変更後dev2はD1 decision4428、8.42m/sで停止末端の壁証明が失敗した。
+実行元3834が起動時296の記録と重複扱いになり欠落。新worldのarchitecture比較と
+失敗単位のsource/artifact同時保存を次に行う。D2 callback超過1回も未解決。
+[縦応答予測の検証記録](../20260909-mpcc-committed-longitudinal/validation-notes.md)を正とし、
+P2のdev2受入れとP3/P4は引き続き未完とする。以下は過去の時点の記録。
+
 2026-09-09最新追記: f3b0338cで横並び制約・Stop候補修正をコミット。
 観測のみの修正後、dev2 D2 decision993で実行済みStop453を捕捉した。
 元のStopは再求解なしで証明を通り、失敗時の再証明も再現した。

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <multi_purpose_mpc_ros/mpc_state_prediction.hpp>
+#include <multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp>
 
 #include <cmath>
 #include <limits>
@@ -180,4 +181,171 @@ TEST(MpcStatePrediction, ProjectsFiniteResponseOutsideReducedModelEnvelope) {
   EXPECT_DOUBLE_EQ(inferred->steering_rad, 0.6);
   EXPECT_GT(inferred->unconstrained_steering_rad, 0.6);
   EXPECT_TRUE(inferred->projected_to_model_envelope);
+}
+
+TEST(MpcLongitudinalPrediction, SavedBrakeTransitionUsesCommittedInputAndResponse) {
+  const double residual = .543785436495885 - 1.3295944422392196;
+  const auto trajectory = state_prediction::predict_piecewise_yaw_response_trajectory(
+    {0.0, 0.0, 0.0}, 1.843041217111899, 0.0, 0.0, 0.0, 1.087, .75, .13,
+    {{.015000003, 1.329595923423767 + residual},
+      {.114999997, -2.9595959186553955 + residual}});
+  ASSERT_FALSE(trajectory.empty());
+  EXPECT_NEAR(trajectory.back().elapsed_sec, .13, 1e-12);
+  EXPECT_NEAR(trajectory.back().prediction.longitudinal_velocity_mps, 1.4204764674388271, 1e-10);
+  for (std::size_t i = 1; i < trajectory.size(); ++i) {
+    EXPECT_GT(trajectory[i].elapsed_sec, trajectory[i - 1].elapsed_sec);
+  }
+}
+
+TEST(MpcLongitudinalPrediction, BothFiltersSeeTheSameAlreadyAppliedBrake) {
+  state_prediction::LongitudinalResponseObserver observer(.9, .5);
+  ASSERT_TRUE(observer.record_published_command(-.13, 0.0, 1.0));
+  EXPECT_FALSE(observer.observe(0.0, 2.0));
+  ASSERT_TRUE(observer.observe(.1, 2.1));
+  ASSERT_TRUE(observer.record_published_command(.1, .23, -3.0));
+  const auto observation = observer.observe(.25, 2.1 + .13 - .02 * 3.0);
+  ASSERT_TRUE(observation);
+  EXPECT_GT(observation->filtered_measured_acceleration_mps2, 0.0);
+  EXPECT_NEAR(observation->response_residual_mps2(), 0.0, 1e-12);
+  const auto intervals = observer.prediction_intervals(.25, .13);
+  ASSERT_TRUE(intervals);
+  ASSERT_EQ(intervals->size(), 1U);
+  EXPECT_NEAR(intervals->front().acceleration_mps2, -3.0, 1e-12);
+}
+
+TEST(MpcLongitudinalPrediction, PreservesSteadyDragWhileUsingFutureCommandChanges) {
+  state_prediction::LongitudinalResponseObserver observer(.9, .5);
+  ASSERT_TRUE(observer.record_published_command(-.13, 0.0, 1.0));
+  EXPECT_FALSE(observer.observe(0.0, 7.0));
+  for (int i = 1; i <= 300; ++i) {
+    ASSERT_TRUE(observer.observe(i * .02, 7.0));
+  }
+  auto intervals = observer.prediction_intervals(6.0, .13);
+  ASSERT_TRUE(intervals);
+  EXPECT_NEAR(intervals->front().acceleration_mps2, 0.0, 1e-12);
+  ASSERT_TRUE(observer.record_published_command(6.0, 6.13, -3.0));
+  intervals = observer.prediction_intervals(6.05, .13);
+  ASSERT_TRUE(intervals);
+  ASSERT_EQ(intervals->size(), 2U);
+  EXPECT_NEAR((*intervals)[0].duration_sec, .08, 1e-12);
+  EXPECT_NEAR((*intervals)[0].acceleration_mps2, 0.0, 1e-12);
+  EXPECT_NEAR((*intervals)[1].acceleration_mps2, -4.0, 1e-12);
+}
+
+TEST(MpcLongitudinalPrediction, DuplicateObservationDoesNotInventFilterTime) {
+  state_prediction::LongitudinalResponseObserver observer(.9, .5);
+  EXPECT_FALSE(observer.observe(1.0, 2.0));
+  const auto first = observer.observe(1.1, 2.1);
+  ASSERT_TRUE(first);
+  const auto duplicate = observer.observe(1.1, 2.105);
+  ASSERT_TRUE(duplicate);
+  EXPECT_DOUBLE_EQ(duplicate->filtered_measured_acceleration_mps2,
+    first->filtered_measured_acceleration_mps2);
+  const auto next = observer.observe(1.2, 2.205);
+  ASSERT_TRUE(next);
+  EXPECT_NEAR(next->filtered_measured_acceleration_mps2, .19, 1e-12);
+}
+
+TEST(MpcLongitudinalPrediction, DuplicatePublishedStampKeepsLatestSerializedCommand) {
+  state_prediction::LongitudinalResponseObserver observer(.9, .5);
+  EXPECT_FALSE(observer.observe(0.0, 2.0));
+  ASSERT_TRUE(observer.observe(.1, 2.0));
+  ASSERT_TRUE(observer.record_published_command(.1, .23, 1.0));
+  ASSERT_TRUE(observer.record_published_command(.1, .23, -3.0));
+  EXPECT_EQ(observer.retained_command_count(), 1U);
+  EXPECT_FALSE(observer.record_published_command(.1, .24, 1.0));
+  const auto intervals = observer.prediction_intervals(.2, .13);
+  ASSERT_TRUE(intervals);
+  ASSERT_EQ(intervals->size(), 2U);
+  EXPECT_DOUBLE_EQ(intervals->back().acceleration_mps2, -3.0);
+}
+
+TEST(MpcLongitudinalPrediction, MissingStaleAndFutureObservationsHaveNoPrediction) {
+  state_prediction::LongitudinalResponseObserver observer(.9, .5);
+  EXPECT_FALSE(observer.prediction_intervals(1.0, .13));
+  EXPECT_FALSE(observer.observe(1.0, 2.0));
+  EXPECT_FALSE(observer.prediction_intervals(1.0, .13));
+  ASSERT_TRUE(observer.observe(1.1, 2.0));
+  EXPECT_FALSE(observer.prediction_intervals(1.0, .13));
+  EXPECT_FALSE(observer.prediction_intervals(1.61, .13));
+  ASSERT_TRUE(observer.record_published_command(1.2, 1.33, -3.0));
+  EXPECT_FALSE(observer.prediction_intervals(1.15, .13));
+}
+
+TEST(MpcLongitudinalPrediction, ClockResetAndObservationGapRequireNewDerivative) {
+  state_prediction::LongitudinalResponseObserver observer(.9, .5);
+  EXPECT_FALSE(observer.observe(1.0, 2.0));
+  ASSERT_TRUE(observer.observe(1.1, 2.0));
+  ASSERT_TRUE(observer.record_published_command(1.1, 1.23, -3.0));
+  EXPECT_FALSE(observer.observe(.1, 0.0));
+  EXPECT_EQ(observer.retained_command_count(), 0U);
+  ASSERT_TRUE(observer.observe(.2, 0.0));
+  EXPECT_FALSE(observer.observe(.8, 0.0));
+  EXPECT_FALSE(observer.prediction_intervals(.8, .13));
+  ASSERT_TRUE(observer.observe(.9, 0.0));
+  ASSERT_TRUE(observer.record_published_command(.9, 1.03, 1.0));
+  ASSERT_TRUE(observer.record_published_command(.3, .43, -3.0));
+  EXPECT_FALSE(observer.prediction_intervals(.3, .13));
+}
+
+TEST(MpcLongitudinalPrediction, HistoryRetainsOnlyValidObservationWindowAndPendingInputs) {
+  state_prediction::LongitudinalResponseObserver observer(.9, .5);
+  for (int i = 0; i < 1000; ++i) {
+    ASSERT_TRUE(observer.record_published_command(i * .02, i * .02 + .13, 1.0));
+  }
+  EXPECT_LE(observer.retained_command_count(), 33U);
+  EXPECT_FALSE(observer.record_published_command(20.0, 19.9, 1.0));
+  EXPECT_FALSE(observer.record_published_command(20.0, 20.13,
+    std::numeric_limits<double>::quiet_NaN()));
+}
+
+TEST(MpcLongitudinalPrediction, PiecewiseBrakingReachesRestWithoutReverseMotion) {
+  const auto trajectory = state_prediction::predict_piecewise_yaw_response_trajectory(
+    {0.0, 0.0, 0.0}, .1, 0.0, 0.0, 0.0, 1.087, .75, .13,
+    {{.025, -3.0}, {.105, -3.0}});
+  EXPECT_DOUBLE_EQ(trajectory.back().prediction.longitudinal_velocity_mps, 0.0);
+  for (std::size_t i = 1; i < trajectory.size(); ++i) {
+    EXPECT_GE(trajectory[i].prediction.state.x, trajectory[i - 1].prediction.state.x);
+  }
+  EXPECT_THROW(state_prediction::predict_piecewise_yaw_response_trajectory(
+    {0.0, 0.0, 0.0}, .1, 0.0, 0.0, 0.0, 1.087, .75, .13, {{0.0, -3.0}}),
+    std::invalid_argument);
+}
+
+TEST(MpcLongitudinalPrediction, ReceivedObservationOwnsClockWhenRosCacheIsOneTickBehind) {
+  constexpr double ros_time = 35.444999207;
+  constexpr double observation_time = 35.449999207;
+  const auto epoch = state_prediction::resolve_control_observation_epoch(
+    ros_time, 35.419999208, observation_time, .5);
+  ASSERT_TRUE(epoch.valid);
+  EXPECT_FALSE(epoch.clock_regressed);
+  EXPECT_TRUE(epoch.use_received_observation_stamp);
+  state_prediction::LongitudinalResponseObserver observer(.9, .5);
+  EXPECT_FALSE(observer.observe(35.439999207, 7.623775546598));
+  ASSERT_TRUE(observer.observe(observation_time, 7.623775546598));
+  // The old producer's time remains rejected. Correct the producer, not this guard.
+  EXPECT_FALSE(observer.prediction_intervals(ros_time, .13));
+  const double control_time = epoch.use_received_observation_stamp ? observation_time : ros_time;
+  EXPECT_TRUE(observer.prediction_intervals(control_time, .13));
+}
+
+TEST(MpcLongitudinalPrediction, CurrentRosClockOwnsDecisionAfterOlderReceivedState) {
+  const auto epoch = state_prediction::resolve_control_observation_epoch(2.1, 2.075, 2.08, .5);
+  EXPECT_TRUE(epoch.valid);
+  EXPECT_FALSE(epoch.use_received_observation_stamp);
+  EXPECT_FALSE(epoch.clock_regressed);
+}
+
+TEST(MpcLongitudinalPrediction, ClockResetCannotRetainPreviousEpochObservation) {
+  const auto epoch = state_prediction::resolve_control_observation_epoch(.1, 35.0, 35.0, .5);
+  EXPECT_FALSE(epoch.valid);
+  EXPECT_TRUE(epoch.clock_regressed);
+  EXPECT_FALSE(epoch.use_received_observation_stamp);
+}
+
+TEST(MpcLongitudinalPrediction, ObservationClockSkewOutsideExistingAgeContractStaysInvalid) {
+  EXPECT_FALSE(state_prediction::resolve_control_observation_epoch(2.0, 1.9, 2.6, .5).valid);
+  EXPECT_FALSE(state_prediction::resolve_control_observation_epoch(2.0, 1.9, 1.4, .5).valid);
+  EXPECT_FALSE(state_prediction::resolve_control_observation_epoch(
+    2.0, std::nullopt, std::numeric_limits<double>::quiet_NaN(), .5).valid);
 }

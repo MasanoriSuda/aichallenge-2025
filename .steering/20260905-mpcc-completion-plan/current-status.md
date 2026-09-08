@@ -10,18 +10,29 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: repair the committed longitudinal-input producer for latency
-prediction, with native temporal regression and unchanged physical acceptance.
-The side-peer/Stop slice is committed as f3b0338c. Observation-only dev2 now
-captures the actual published Stop 453 at Domain 2 loss 993. Zero-solve native
-replay proves the original Stop, reproduces the current-world terminal wall
-failure, and independently matches Cartesian integration within 0.003488 mm.
-The current predictor ignores already published braking and predicts 1.913733
-m/s; a causal saved-command comparison predicts 1.522632 m/s and passes the
-same terminal proof. This comparison is not a production repair. Same-world
-A/B/C/D and fresh Stop arms still reject; no physical infeasibility is proved.
+Current next step: compare architectures on new D1world4428and repair the
+bounded failure-observation bundle before a further control change. The paired
+longitudinal observer and decision-clock producer pass25packages/60CTestgroups/
+2359records and one single six-lap trial253.768982s/penalty0, moving override0,
+callbackmax16.564ms/0overruns, control receiptmax37.079096ms/0gaps>50ms.
+Single-r1clock-owner rejection and r2Unity startup stall remain recorded;
+clock/source delivery pauses (~300ms) still need explanation.
+New dev2fails D1decision4428at8.42m/s after one lap: terminal wall contingency
+fails; delay prefix is clear. Actual published source3834was not captured
+because the separate source writer's first-bucket deduplication captured startup
+296instead. World4428exists. Do not substitute another artifact for3834.
+D2also has one callback overrun28.758msbefore shutdown. All source/config/main/
+prediction shared-library inputs and every run outcome are sealed. Multi-car
+race, pass/restart/Recovery and submission acceptance remain open.
+See [longitudinal results](../20260909-mpcc-committed-longitudinal/results.md).
+Observation slice03e174e5preserves previous actual Stop453/world993. Original
+Stop and native current-world rejection are reproduced without re-solving.
+Absolute command replacement is rejected across clean single data. The selected
+paired observer retains measured-vs-commanded response and passes the old
+same-world terminal proof at1.420476m/s. This closes the local producer defect,
+not the new integrated failure. Prior same-world A/B/C/Dand fresh Stop arms
+remain rejected without physical infeasibility proof.
 See [published Stop audit](../20260909-mpcc-published-stop-audit/results.md).
-Observation build: 25 packages; 60 CTest groups / 2346 records, zero failures.
 Older dev2 loss 978 and missing Stop 442 remain historical failures, not replaced.
 See [side-peer/Stop results](../20260909-mpcc-side-peer-stop/results.md).
 The exact same full-body source now admits a native production zero-objective
@@ -118,22 +129,17 @@ is conditional: Emergency supersedes actual publication aroundcursor0.05s.
 
 ## Order to finish
 
-1. Physical-model repair: compare complete coordinate-consistent seven-state
-   Frenet and Cartesian formulations on the sealed6782/7405world and earlier
-   failures. Align SQP, artifact, normal/Stop/retained rollout and wall/peer
-   reconstruction; version model identities and reject incompatible warm
-   starts. Native failing invariants and same-input wall-verdict comparison
-   are already available. Also finish the command/sensor/time join for the
-   live delay prefix; its linear steering interpolation remains a separate
-   hypothesis. Do not adjust margins, delay, weights or suppress Emergency.
-   Detailed scope and acceptance: [frame-model audit](../20260908-mpcc-delay-prefix-audit/frame-model-audit.md).
-2. Peer geometry: V2X position is the GNSS antenna, not base_link. All4local
-   kart bodies need a1.876m nominal spherical enclosure about that point when
-   no heading is provided. Current peer-circle predicate permits a2D body-
-   overlap counterexample with positive0.822m reported clearance. Separate
-   complete body geometry from lateral spacing/uncertainty; update every
-   current/serialized/recovery consumer consistently and check pass feasibility.
-   A tighter oriented representation requires an observed orientation contract.
+1. Complete the current longitudinal observer/clock slice: fixed single/dev2,
+   same-run authority, proof and timing evidence; repair only reproduced new
+   invariant failures. Coordinate-consistent integration, semantic initial state,
+   whole-body peer enclosure and Cartesian peer-plane repairs are implemented
+   and committed. Do not repeat their completed native/build work without a
+   changed input or newly discovered concern. Preserve the unresolved Stop
+   successor course-window boundary and the unmeasured longitudinal phase.
+2. For any new physical-versus-solve disagreement, seal the executed artifact,
+   current world, serialized inputs and independent observations, then perform
+   the bounded architecture comparison before another patch in that family.
+   Do not replace wall/peer evidence with margin, delay or solver tuning.
 3. Fresh fixed campaign: single six laps, Follow, both Pass/Return directions,
    certified multi-tick Stop/restart and Recovery/Rejoin. Then async identity,
    dev3/dev4 and gate1/2/3. Seal all inputs/binaries and all repeated results;

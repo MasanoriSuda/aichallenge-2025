@@ -49,6 +49,7 @@ ament_auto_add_library(${PROJECT_NAME}_mpc_velocity_limit SHARED
 ament_auto_add_library(${PROJECT_NAME}_mpc_state_prediction SHARED
   NO_TARGET_LINK_LIBRARIES
   src/mpc_state_prediction.cpp
+  src/mpc_longitudinal_prediction.cpp
 )
 
 ament_auto_add_library(${PROJECT_NAME}_runtime_speed_profile SHARED

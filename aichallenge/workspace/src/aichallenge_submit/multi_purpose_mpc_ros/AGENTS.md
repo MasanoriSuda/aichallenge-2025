@@ -1,141 +1,79 @@
-# MPCC single-authority engineering policy
+# MPCC engineering rules
 
-This file applies to `multi_purpose_mpc_ros`. It supplements the repository-root `AGENTS.md`.
+Repository-root AGENTS.md applies. These rules add the controller-specific contracts.
 
-## Target architecture
+## Normal authority
 
-The migration target is one canonical MPCC formulation owning all normal racing commands:
+The current normal formulation is the canonical seven-state rate-resolved MPCC.
+Track, Cruise, Follow, Hold, Stop, ShiftOut, Pass, Return and Rejoin are intents/constraints.
+Target selection, homotopy, map processing and supervision may remain separate components.
 
-- Track, Cruise, Follow, Hold, Stop, ShiftOut, Pass, Return, and Rejoin are intents and constraints,
-  not separate normal controllers.
-- Lateral and longitudinal commands come from the same certified MPCC prediction.
-- Emergency stop may override the normal command.
-- Stuck, contact, gear, and reverse Recovery remains a separate supervisor.
-- Legacy MPC, three-state progress fallback, and low-speed direct normal control are temporary
-  migration paths with explicit deletion gates.
+- A normal command requires a solved, finite, constraint-valid, physically certified trajectory.
+- Solution, executed trajectory, certificate and final command share an immutable problem fingerprint;
+  lateral and longitudinal commands share one solution ID.
+- Async adoption requires compatible observation, target, geometry, horizon, bounds and cost context.
+  Age or target ID alone is insufficient. Incompatible intent/schema/geometry changes invalidate warm starts.
+- Compare objectives only with the same horizon, state/input schema, weights, constraints and terminal meaning.
+- Shadow-only, schema-only, unattempted and uncertified candidates cannot execute.
+- Solve failure permits only bounded, same-formulation, same-context last-certified execution, then
+  Emergency Stop. Do not restore legacy MPC, three/five-state or low-speed direct normal fallback.
+- Emergency may override normal control. Stuck/contact/gear/reverse Recovery is a separate supervisor
+  and retains the upstream normal decision/failure identity.
 
-Do not interpret "single MPCC" as putting target selection, homotopy selection, map processing,
-emergency stop, or reverse Recovery inside one solver. Those components may remain separate, but they
-must not independently emit a normal racing command.
+## Task scope and causal evidence
 
-## Architecture escape-hatch
+For an audit/review/plan request, inspect and report without production changes.
+For a fix/implementation request, investigate and implement within the authorised scope without
+requesting a second approval just because the investigation finished. Past steering approval gates
+are history; use the current request and existing session authorisation.
 
-Single certified normal authority is an invariant. A specific persistent
-Mission representation, candidate generator, MPCC formulation,
-convexification schedule, or solver backend is not an invariant.
+Before a production fix, establish the earliest broken invariant, its producer, a failing test/replay,
+downstream masking behaviour, obsolete paths to remove, acceptance criteria and rollback commit.
+When evidence is missing, obtain the minimum observation or deterministic reproduction needed first.
+An observation-only result cannot become a production candidate merely because it certifies offline.
 
-Stop production changes and run a same-snapshot architecture comparison before
-the third patch in one failure family, or earlier when any of the following is
-observed:
+Repair the producer, remove obsolete masks/bypasses, then run focused and package tests, build,
+available replay and dynamic acceptance appropriate to the change. Inspect final authority telemetry.
+Use the root-cause-auditor skill for unresolved controller regressions; routine approved edits need no full audit.
 
-- two root-cause hypotheses for the same scene have been falsified;
-- ShiftOut is repeatedly demonstrated but Pass or Return has no positive
-  dynamic acceptance;
-- another resume, reconnect, replenish, retry, timeout, lease, grace or
-  fallback rule is being proposed;
-- a numerical solve and exact physical certificate repeatedly disagree;
-- fresh/retained authority disappears repeatedly for the same immutable
-  world/problem fingerprint.
+Iterations, tolerances, weights, margins, timeout/hysteresis/rates, retry/hold/grace/clamp/fallback,
+diagnostic suppression and accepting a failed test are not root-cause fixes on their own.
+Any deliberately temporary exception needs causal evidence, explicit authorisation, an expiry and a deletion test.
+Parameter tuning follows structural acceptance; do not lower safety or certificate requirements.
 
-The minimum comparison keeps production authority unchanged and evaluates the
-same immutable failure snapshot with:
+## Architecture comparison gate
 
-1. persistent Mission plus the current seven-state SQP;
-2. stateless receding ManeuverBundle plus the same SQP;
-3. a rough spline, polynomial or lattice candidate plus the same seven-state
-   refinement;
-4. a bounded offline multi-SQP or nonlinear feasibility solve.
+Keep single certified normal authority invariant; Mission representation, candidate generation,
+formulation, convexification schedule and solver backend are replaceable hypotheses.
+Before a third patch in one failure family, compare architectures on a sealed snapshot. Do this earlier if:
 
-Do not call all-method failure physical infeasibility unless an explicit
-bounded physical infeasibility certificate exists. A local optimizer failing
-to find a solution is `Unknown`.
+- two causal hypotheses for the scene were falsified;
+- ShiftOut repeats without positive Pass/Return acceptance;
+- another resume/reconnect/replenish/retry/timeout/lease/grace/fallback rule is proposed;
+- numerical solve and exact physical proof repeatedly disagree;
+- fresh/retained authority repeatedly vanishes for the same immutable world/problem.
 
-Record accepted, rejected and inconclusive comparisons in the central MPCC
-experiment registry. Do not repeat a rejected experiment unless its recorded
-revisit condition is satisfied.
+During comparison, keep production authority and runtime parameters unchanged. Compare:
 
-## Root-cause-first default
+| Arm | Method |
+|---|---|
+| A | Persistent Mission with current seven-state SQP |
+| B | Stateless receding ManeuverBundle with the same SQP |
+| C | Independent rough spline/polynomial/lattice with the same refinement |
+| D | Bounded offline multi-SQP or nonlinear feasibility solve |
 
-Controller, planner, solver, wall/corridor, authority, handoff, and recovery regressions begin in
-`AUDIT_ONLY` mode unless the user explicitly approves an implementation slice.
+Share world, state, reference, wall, peers, model and hard constraints; reseal changed candidate identities.
+All-method failure is `Unknown` without a bounded physical infeasibility certificate.
+Record accepted, rejected and inconclusive outcomes in `docs/spec/mpcc-experiment-registry.json`;
+repeat a rejected experiment only when its recorded revisit condition is met.
 
-Before changing production code or runtime config, establish:
+## Evidence and completion
 
-1. a deterministic failing test/replay, or a precise plan to obtain one;
-2. the earliest violated invariant;
-3. the producer of the invalid state;
-4. the downstream fallback/guard that masks or amplifies it;
-5. the obsolete branch/configuration the fix should remove;
-6. objective acceptance and rollback criteria.
+For each structural change, use one steering with invariant, scope, failing replay/test, changed files,
+added/deleted paths, remaining authorities, safety/timing evidence and rollback commit.
+A new normal authority requires retiring the replaced one in the same slice; an authorised shadow
+measurement instead needs a named promotion/deletion boundary.
 
-If evidence is insufficient, add or propose observation at the earliest uncertain boundary. Do not
-patch the last visible error.
-
-## Changes that are not root-cause fixes by themselves
-
-Do not use the following as the sole fix without explicit user approval, causal evidence, an expiry
-condition, and a deletion test:
-
-- increasing solver iterations or loosening tolerances;
-- changing weights, clearances, margins, timeouts, hysteresis, cooldowns, or rates;
-- adding fallback, retry, rescue, hold, grace, clamp, suppression, lease, or feature flags;
-- retaining old and new normal authorities indefinitely "for safety";
-- suppressing/downgrading diagnostics;
-- changing tests to accept the failing behavior;
-- catching an invalid state downstream instead of preventing its creation.
-
-Parameter tuning starts only after the relevant structural migration slice passes.
-
-## Authority invariants
-
-- A normal candidate may execute only when it is solved, finite, constraint-valid, and physically
-  certified.
-- The selected solution, executed trajectory, physical certificate, and final normal command must
-  share one immutable problem fingerprint.
-- Lateral and longitudinal normal commands must come from the same solution ID.
-- Async results require full context compatibility; age or target ID alone is insufficient.
-- Objectives may be compared only under the same horizon, state/input schema, weights, constraints,
-  and terminal semantics.
-- Intent, formulation, horizon, geometry, or schema changes invalidate incompatible warm starts.
-- Schema-only, shadow-only, unattempted, and uncertified candidates are never executable.
-- A normal solve failure may use only a bounded, same-formulation, same-context last-certified
-  solution, followed by Emergency Stop. Do not transfer to another normal controller.
-- Recovery entry must retain the upstream normal decision/failure identity.
-
-## Steering and implementation slices
-
-Use one `.steering/YYYYMMDD-title/` per approved vertical slice. Record:
-
-- repaired invariant and earliest violation;
-- scope and explicit non-scope;
-- failing replay/test;
-- files to change;
-- branches/configuration to delete;
-- newly added branches/configuration (normally zero);
-- remaining legacy authorities;
-- safety/timing acceptance;
-- rollback commit.
-
-Implementation order:
-
-1. demonstrate the pre-fix failure;
-2. repair the root producer;
-3. remove the downstream mask/bypass made obsolete;
-4. run focused tests, package tests, build, and available replay;
-5. verify authority/fingerprint telemetry;
-6. review the diff for new exceptional paths.
-
-A slice is incomplete if it adds a new normal authority but deletes none, unless it is an explicitly
-approved shadow-only measurement slice with a named deletion milestone.
-
-## Evidence and reporting
-
-- Code claims use `file:line`.
-- History claims use commit IDs or `git log -S/-G` evidence.
-- Runtime claims use run ID, Domain, timestamps/decision IDs, and log/rosbag evidence.
-- Label unsupported conclusions `Unknown` or `Hypothesis`.
-- Separate root cause, contributing cause, mask, detection gap, and Recovery behavior.
-- Report simulation, SIL, HIL, and physical-vehicle evidence separately. Current AWSIM evidence is not
-  real-vehicle validation.
-
-For a root-cause audit, use the repository skill `mpcc-root-cause-auditor`.
+Use file:line for code, commit IDs for history and run/Domain/time/decision IDs for runtime claims.
+Separate root cause, contributor, mask, detection gap and Recovery behaviour. Label hypotheses and unknowns.
+Simulation/SIL/HIL/vehicle results are distinct. A local fix passing does not establish integrated race acceptance.

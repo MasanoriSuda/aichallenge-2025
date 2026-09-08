@@ -1,164 +1,58 @@
-# MPCC root-cause audit workflow
+# MPCC audit workflow
 
-## 1. Fix the evidence boundary
+作業に必要な境界だけ掘り下げる。全見出しのレポート作成を毎回要求しない。
+実行権限・方式比較trigger・検証条件は対象packageのAGENTS.mdを正本とする。
 
-Record:
+## 証拠を固定する
 
-- branch and baseline commit;
-- working-tree changes to preserve;
-- run ID and Domain;
-- first abnormal timestamp/decision ID;
-- last known normal timestamp/decision ID;
-- whether evidence is source-only, unit test, replay, simulation, SIL, HIL, or vehicle.
+- branch/commitと保存すべき差分
+- run ID、Domain、最後の正常と最初の異常のtime/decision ID
+- 使用config、build/install、snapshot/replay payloadの対応
+- source、unit test、replay、simulation、SIL/HIL、実車の証拠種別
 
-Do not combine logs produced by different commits/configurations as one causal timeline.
+異なるcommit/configのログを一つの時系列にしない。実行できない再現はその理由を残す。
 
-## 2. Describe the phenomenon before causes
-
-Separate:
-
-- expected behavior;
-- actual behavior;
-- where the problem is first observable;
-- where the visible consequence occurs;
-- which input, state, solve, certificate, and output remain normal.
-
-The visible failure and the producer may be far apart.
-
-## 3. Build the authority graph
-
-Trace:
+## 失敗までの経路を追う
 
 ```text
-observation
--> target/intent
--> candidate/homotopy
--> corridor
--> admission
--> problem construction
--> solver
--> nonlinear/physical certificate
--> selection
--> post-processing
--> fallback/recovery
--> publish
+observation → target/intent → candidate/homotopy → corridor → admission
+→ problem → solver → physical certificate → selection → post-processing
+→ fallback/recovery → final publish
 ```
 
-For each node record owner, context identity, bypass, stale adoption condition, failure destination,
-and whether the destination changes formulation.
+疑わしい境界のowner、context identity、入力時刻、拒否理由、失敗後の行き先を確認する。
+特にsemantic stage時刻、観測時刻、control origin、publisher周期を混同しない。
+同じtarget IDでもgeneration・course frame・予測tube・terminal意味が一致するとは限らない。
 
-## 4. Build hypotheses
+候補仮説ごとに、支持証拠、反証条件、次に必要な観測を記す。
+solver失敗より前のproducer欠陥と、後段で問題を隠すretained/hold/retryを分ける。
+修正履歴が必要なsymbolだけ`git log -S/-G`やblameで調べ、導入理由・削除条件を確認する。
+説明不能なwipはUnknown。正当なEmergencyやretained証明をmaskという名前だけで削除しない。
 
-For each hypothesis include:
+## 再現と方式比較
 
-| Field | Required content |
+同一failure snapshotで元の失敗を再現し、まず疑わしい一つの意味・ownerだけを変えて比較する。
+不変のworldを保持し、変更されたproblem/candidate内容には新fingerprintを付ける。
+warm-start oracleにはexact QPと実際のwarm startが必要。authority喪失snapshotだけで
+それが揃うと仮定しない。snapshot間のsource/壁payloadの同一性を検証する。
+
+package AGENTSのtrigger成立時は、production authorityを固定してA/B/C/D比較を行う。
+
+| 結果 | 調べる境界 |
 |---|---|
-| Hypothesis | The upstream contract suspected to fail |
-| Supporting evidence | Source/history/log/test evidence |
-| Falsifier | Observation that would disprove it |
-| Needed observation | Earliest missing variable/certificate |
-| Confidence | High/Medium/Low with reason |
+| A失敗・B成功 | Mission lifecycle |
+| A/B失敗・C成功 | candidate生成 |
+| A/B/C失敗・D成功 | single-SQP/実時間近似 |
+| solverとexact proofが不一致 | model/certificate、時刻・座標・制約の意味 |
+| 全失敗、不成立証明なし | Unknown。観測または探索範囲を改善 |
 
-Prefer competing hypotheses. Do not start with OSQP, warm start, wall validator, or planner as the
-assumed culprit.
+accepted/rejected/inconclusiveとrevisit条件を中央registryへ残す。
+局所optimizerが見つけられないことをphysical infeasibilityの証拠にしない。
 
-## 5. Inspect patch history
+## 修正と終了
 
-Use `rg`, `git blame`, `git log -S`, and `git log -G` for relevant symbols and terms:
-
-```text
-fallback retry cooldown hold grace reentry rescue continuation
-suppress clamp lease prearm backoff handoff legacy schema-ready
-```
-
-Record introduction reason, suppressed symptom, intended invariant, dependencies, and deletion gate.
-Opaque `wip` history is `Unknown`; inspect the diff or reproduce the old failure before deletion.
-
-## 6. Check core invariants
-
-At minimum check:
-
-- selected implies solved and physically certified;
-- selected solution, executed trajectory, certificate and command share one fingerprint;
-- lateral and longitudinal normal commands share one solution;
-- async context matches observation, target, geometry, horizon, bounds and cost schema;
-- compared objectives share the same schema;
-- stage geometry is consistent across dynamics, corridor and physical validation;
-- incompatible warm starts are invalidated;
-- schema-only/shadow-only candidates cannot execute;
-- solver failure does not switch to another normal formulation;
-- Recovery records the upstream failure identity.
-
-## 7. Build causal trees
-
-For each failure, write the chain from the earliest violation to the visible symptom. Label every
-edge Root, Contributor, Mask, Detection gap, or Recovery. If two independent violations are required,
-record a minimal causal cut set rather than forcing one cause.
-
-## 8. Compare fixes
-
-Compare at least:
-
-- repair producer and delete masks;
-- retain current structure but improve checks;
-- migrate the relevant vertical slice to the canonical formulation.
-
-Evaluate authority count, branches/configuration added and removed, warm-start compatibility,
-certificate consistency, replayability, timing, migration risk, and legacy deletion gate.
-
-Reject a proposal whose main effect is threshold tuning or an additional exceptional branch unless
-the user explicitly approves it as temporary and its removal test is defined.
-
-## 8a. Architecture escape-hatch
-
-Before a third implementation Slice in the same failure family, or when the
-package `AGENTS.md` trigger fires, stop production changes and demote the
-current architecture to one candidate. Seal one immutable, replay-ready
-snapshot and compare:
-
-- A: persistent Mission pipeline plus the current canonical SQP;
-- B: stateless receding ManeuverBundle plus the same SQP;
-- C: an independently generated rough path plus the same refinement;
-- D: a bounded offline multi-SQP or nonlinear feasibility solve.
-
-The compared methods must share world/problem fingerprint, state, reference,
-wall map, peer prediction, physical model and hard constraints. Record every
-outcome in the central experiment registry. The comparison is observation-only
-and cannot publish or change production authority.
-
-Classify `all failed` as physical infeasibility only with an explicit bounded
-certificate. Otherwise classify it as `Unknown` and improve evidence or search
-coverage before changing production.
-
-## 9. Implementation gate
-
-Before an approved implementation slice, report:
-
-1. files to change;
-2. failing test/replay to add first;
-3. root producer to change;
-4. mask/bypass to delete;
-5. new branches/configuration count;
-6. remaining legacy authority;
-7. rollback commit.
-
-Then implement only that slice, verify focused tests, package tests/build, available replay, and
-authority/fingerprint telemetry. Report both added and deleted production paths.
-
-## 10. Audit report structure
-
-```markdown
-# Executive summary
-# Observed phenomenon
-# Current authority graph
-# Hypotheses and falsifiers
-# Patch ledger
-# Invariant table
-# Failure causal trees
-# Root causes versus masks
-# Candidate fixes and tradeoffs
-# Recommended migration slice
-# Pre-fix replay/test
-# Deletion plan
-# Unknowns and measurement plan
-```
+producer修復、consumer検出改善、表現/方式の置換を、削除経路・authority数・
+identity/proof・計算時間・移行リスクで比較する。
+選んだ修正は失敗するtest/replayと1対1に対応させ、不要となる経路を同時に削除する。
+必要なtest/build/replayと動的証拠を取得し、変更・残る問題・rollback commitを報告する。
+個別修正の合格と全intent/多車両の統合受入れを区別する。

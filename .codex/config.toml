@@ -1,0 +1,5 @@
+# Repository defaults for new trusted-project sessions.
+# Routine development: high. MPCC root-cause/architecture audit: override to xhigh.
+# See docs/spec/codex-harness.md for commands and migration validation.
+model = "gpt-6-astra"
+model_reasoning_effort = "high"

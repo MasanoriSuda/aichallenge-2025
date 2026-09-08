@@ -30,7 +30,8 @@ contract::MpccProblemContext source_context(const std::uint64_t sequence)
   context.horizon_steps = 2U;
   context.formulation =
     contract::Formulation::VelocitySteeringYawResponseProgress7State;
-  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.state_schema_id =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-v1";
   context.cost_schema_id = "velocity-progress-steering-rate-v1";
@@ -127,6 +128,39 @@ physical::Snapshot physical_snapshot(const execution::Identity & identity)
   snapshot.bound_tolerance_m = 1e-6;
   snapshot.swept_step_m = 0.05;
   return snapshot;
+}
+
+TEST(MpccRateResolvedCertifiedPlan, RejectsCoordinateFrameChangedAfterSolve)
+{
+  namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;
+  auto value = artifact();
+  const auto wall = physical_snapshot(value.identity);
+  value.course_frame = {
+    std::make_shared<const std::vector<geometry::CourseFrameKnot>>(
+      wall.course_frame_knots), value.course_progress_origin_m};
+  const auto accepted = accepted_physical(value.identity);
+  ASSERT_EQ(certified::build(
+      std::make_shared<const execution::ExecutionArtifact>(value), wall, accepted).reason,
+    certified::RejectReason::None);
+  auto wrong_knots = wall.course_frame_knots;
+  wrong_knots.back().heading_rad += 0.1;
+  value.course_frame.knots =
+    std::make_shared<const std::vector<geometry::CourseFrameKnot>>(wrong_knots);
+  const auto rejected = certified::build(
+    std::make_shared<const execution::ExecutionArtifact>(value), wall, accepted);
+  EXPECT_EQ(rejected.reason, certified::RejectReason::PhysicalSnapshotMismatch);
+  EXPECT_FALSE(rejected.plan);
+
+  value.course_frame.knots.reset();
+  auto source = std::make_shared<shadow::Snapshot>();
+  source->identity = value.identity;
+  source->physical_wall_refinement_active = true;
+  source->course_progress_origin_m = value.course_progress_origin_m;
+  source->wall_course_frame_knots = wall.course_frame_knots;
+  EXPECT_EQ(certified::build(
+      std::make_shared<const execution::ExecutionArtifact>(value), wall, accepted,
+      source).reason,
+    certified::RejectReason::PhysicalSnapshotMismatch);
 }
 
 certified::BuildResult build_plan(const std::uint64_t sequence = 1U)

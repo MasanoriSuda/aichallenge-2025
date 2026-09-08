@@ -7321,6 +7321,10 @@ void bind_rate_resolved_physical_wall_refinement(
   solver_snapshot.wall_footprint = clearance_footprint.value();
   solver_snapshot.wall_course_frame_knots =
     physical_snapshot.course_frame_knots;
+  solver_snapshot.request.course_frame = {
+    std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
+      solver_snapshot.wall_course_frame_knots),
+    solver_snapshot.course_progress_origin_m};
   solver_snapshot.wall_lateral_sample_step_m =
     physical_snapshot.swept_step_m;
   // The translation trust region uses the same spatial resolution as the
@@ -31194,7 +31198,7 @@ struct MPC
     switch (formulation) {
       case mpcc_contract::Formulation::VelocitySteeringYawResponseProgress7State:
         context.state_schema_id =
-          "ey-elag-epsi-v-progress-steering-yaw-response-v2";
+          multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
         context.input_schema_id =
           "accel-steering-rate-progress-rate-v1";
         context.bounds_schema_id =

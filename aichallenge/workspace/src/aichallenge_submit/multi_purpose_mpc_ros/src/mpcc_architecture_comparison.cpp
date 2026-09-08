@@ -276,6 +276,7 @@ ExternalArtifactBuild build_external_artifact(
   execution.completed_sec = std::max(
     snapshot.identity.snapshot_sec, snapshot.control_prediction_origin_sec);
   execution.course_progress_origin_m = snapshot.course_progress_origin_m;
+  execution.course_frame = snapshot.request.course_frame;
   execution.semantic_initial_steering_rad =
     snapshot.request.current_steering_rad;
   execution.semantic_initial_response_steering_rad =
@@ -377,6 +378,7 @@ ExternalArtifactBuild build_external_artifact(
         snapshot.request.minimum_frenet_denominator;
       transition.minimum_stage_dt_sec = semantic.stage_dt_sec;
       transition.maximum_stage_dt_sec = semantic.stage_dt_sec;
+      transition.course_frame = snapshot.request.course_frame;
       const auto advanced = model::evaluate_temporal_frenet_transition(
         transition);
       if (!advanced.has_value()) {

@@ -1,7 +1,9 @@
 # Current status and remaining completion work
 
-2026-09-08JST. Working baseline a8b968ac2e4a86a28432a52d132774459d355cb5.
+2026-09-09JST. Working baseline d54822c982c705098cc2fbfab4160f15e41865b0.
 The complete MPCC acceptance is NOT achieved. Preserve previous failed trials.
+The user authorised autonomous execution through completion on2026-09-09.
+Local commits bc01ff2f,ca38bf18,d54822c9preserve the previous completed work.
 
 ## Completed work
 
@@ -20,6 +22,19 @@ The complete MPCC acceptance is NOT achieved. Preserve previous failed trials.
   Latest25-package build passes;60CTest groups/2270package-local test records,
   0errors/failures/skips. All7normal intents preserve original solver source.
   Final bounded diagnostic captures actual published source6782at failure7405.
+- Coordinate repair now integrates physical Cartesian motion and projects into
+  the exact immutable reference frame, retaining the7-state solver order and
+  unchanged actuator model. Native invariants24/24pass;25packages build and
+  all60CTestgroups pass. Old model artifact identities are rejected. Fixed-control
+  source6782error against independent Cartesian ODE is0.231333mmmaximum,
+  previously651.9642mm. New solves of6782/7405stillreject wall rows; no
+  physical infeasibility claim. Initial6laps252.253662s/penalty0, no active-race
+  moving override or Recovery. Callbackmax20.390ms/0overruns, control receipt
+  max39.862633ms/0gaps>50ms. Source duplicates coincide with simulator clock
+  and sensor publication pause. Later geometry-lineage refusal checks and
+  normal/continuation/Stop binding regressions pass; final build25packages,
+  all60CTestgroups/2335colconrecords,0errors/failures/skips. The integrated
+  campaign with those final checks and peer geometry remains open.
 
 ## Current evidence
 
@@ -60,8 +75,8 @@ path rejects at the first sampled4.512msboundary while body margin stays
 clear. Correct arc-length equations alone still leave16.0719mm at45.123ms,
 because stored curvature and piecewise reference-frame derivatives disagree.
 Complete actual-frame equations agree with Cartesian integration offline.
-This is a proved model/certificate defect, not yet a production repair or a
-complete attribution of the live delay-prefix failure. Full-horizon rollout
+This was a proved model/certificate defect; the current local repair is above.
+It is not yet a complete attribution of the live delay-prefix failure. Full-horizon rollout
 is conditional: Emergency supersedes actual publication aroundcursor0.05s.
 
 ## Order to finish
@@ -91,4 +106,5 @@ is conditional: Emergency supersedes actual publication aroundcursor0.05s.
    registry and P0-P4 tasklist with actual evidence before declaring completion.
 
 Detailed current work: ../20260908-mpcc-delay-prefix-audit/ and
-../20260908-peer-envelope-audit/. Full acceptance remains P2partial/P3/P4open.
+../20260909-mpcc-coordinate-consistency/ and ../20260908-peer-envelope-audit/.
+Full acceptance remains P2partial/P3/P4open.

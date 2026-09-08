@@ -48,7 +48,8 @@ shadow::Snapshot source_snapshot()
   context.horizon_steps = 3U;
   context.formulation =
     contract::Formulation::VelocitySteeringYawResponseProgress7State;
-  context.state_schema_id = "state-7";
+  context.state_schema_id =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "input-3";
   context.bounds_schema_id = "bounds";
   context.cost_schema_id = "cost";

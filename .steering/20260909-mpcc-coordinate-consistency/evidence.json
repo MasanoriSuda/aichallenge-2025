@@ -1,0 +1,231 @@
+{
+  "baseline_commit": "d54822c982c705098cc2fbfab4160f15e41865b0",
+  "scope": "coordinate model local validation, conditional fixed-input comparison and initial dynamic acceptance; lineage-after binaries have additional rejection checks",
+  "artifacts": [
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/architectures.log",
+      "sha256": "f1f61b02662a85e29e51d3a185251ebb96d600d433a9bda3f84c25aaca722488",
+      "bytes": 5783
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/candidate/000000006782-2a89c2bbde38ec0d-cruise-side-neutral-physical-proof-coordinate-model-v3-offline-input/snapshot.yaml",
+      "sha256": "679cf31790c44a861c0abc84c4d90f49dc3a3768f84d5ecd6003b090ca5983ee",
+      "bytes": 35245
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/candidate/000000006782-2a89c2bbde38ec0d-cruise-side-neutral-physical-proof-coordinate-model-v3-offline-input/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "bytes": 570009
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/model-input-and-rollout.yaml",
+      "sha256": "ef7222feb1b186eb7f26c00d2aa72324787de58b9ae67b02cca0bb0deac7a7f1",
+      "bytes": 31797
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/mpcc_architecture_snapshots/000000006782-2a89c2bbde38ec0d-cruise-side-neutral-wall-refinement-restored-solve-rejected/snapshot.yaml",
+      "sha256": "0c03861b443a425e88ab6eddbd326bcab2b45ab49f544aed0b83b9e02529dab9",
+      "bytes": 261506
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/mpcc_architecture_snapshots/000000006782-2a89c2bbde38ec0d-cruise-side-neutral-wall-refinement-restored-solve-rejected/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "bytes": 570009
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/mpcc_architecture_snapshots/000000006782-2a89c2bbde38ec0d-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "c127ed689884f50f4ee323691be7ac8f2ee539cb9d975c15bf9402602255eab5",
+      "bytes": 265451
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/mpcc_architecture_snapshots/000000006782-2a89c2bbde38ec0d-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "bytes": 570009
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/oracle-errors.json",
+      "sha256": "8f6b0de9bca1aa82074a2ff96bb3d0bcdc8d63e4b14492d29244eb6a15dcc129",
+      "bytes": 24097
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782/wall-restoration.log",
+      "sha256": "ced4ea77d8bced15cd15e26ad775b9d77981f8ddb29e10faf552f07b50d3028f",
+      "bytes": 1279
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/6782-prepare.log",
+      "sha256": "f74a4814e65b2a9e5c7bdcfeb7e5a012cc900b5af6b64106b5ed1df054e0748d",
+      "bytes": 194
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/architectures.log",
+      "sha256": "8ff6d9bee643e9c5442ccf60e0d44098819baa67fe8c4918644f59824e7df264",
+      "bytes": 5782
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/candidate/000000007405-0f2bd84d972ac8f0-cruise-side-neutral-physical-proof-coordinate-model-v3-offline-input/snapshot.yaml",
+      "sha256": "12cc1003b40dedf38fcb5e3074371278f6e91eca51c30ba523acb07daa7538e6",
+      "bytes": 35233
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/candidate/000000007405-0f2bd84d972ac8f0-cruise-side-neutral-physical-proof-coordinate-model-v3-offline-input/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "bytes": 570009
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/model-input-and-rollout.yaml",
+      "sha256": "a180cf4e374691a0e5a634dac897f8d1421031ae48e4ac1ff5aea8b5843d11eb",
+      "bytes": 829
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/mpcc_architecture_snapshots/000000007405-0f2bd84d972ac8f0-cruise-side-neutral-wall-refinement-restored-solve-rejected/snapshot.yaml",
+      "sha256": "69634d28c17386fc5cc8e624dd673371c5b3593dccce3fc5e40e66615cdc4138",
+      "bytes": 261200
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/mpcc_architecture_snapshots/000000007405-0f2bd84d972ac8f0-cruise-side-neutral-wall-refinement-restored-solve-rejected/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "bytes": 570009
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/mpcc_architecture_snapshots/000000007405-0f2bd84d972ac8f0-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "sha256": "fe30c295d5e4cd27aa66294e48d80139c6220a60d4f958bbe945ce538e81d91f",
+      "bytes": 265078
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/mpcc_architecture_snapshots/000000007405-0f2bd84d972ac8f0-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c",
+      "bytes": 570009
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405/wall-restoration.log",
+      "sha256": "10ae18417859dffe76aff5cf4b59064edb7cd4540eacfdbd072018f0313352d1",
+      "bytes": 1275
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/7405-prepare.log",
+      "sha256": "1283368e2798e90a3a0c2f7bbf8afedfd0931d8fae819e15cdf9c00a52656a7e",
+      "bytes": 192
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/compare_saved",
+      "sha256": "91b5ff7beb62d5d5a6827fd4af5f897ca2c4aeb13700f1208817b2487f06f207",
+      "bytes": 650720
+    },
+    {
+      "path": "output/20260909-coordinate-fixed-input/results.json",
+      "sha256": "3492642a749f663aaeb5f73c695e03685f8984776a16cd3363acf7b4ae1cf7f8",
+      "bytes": 2336
+    },
+    {
+      "path": "output/20260909-coordinate-lineage-after/build.log",
+      "sha256": "344fc05537178b307a2cf1241bb9a0da3dd95ab0fd61c1c31d56634cf47d0f84",
+      "bytes": 4577
+    },
+    {
+      "path": "output/20260909-coordinate-lineage-after/package.log",
+      "sha256": "527446f76fcc5dccea0f74524f25ee65296949b33bfa532a73874577a2fa9ec9",
+      "bytes": 485725
+    },
+    {
+      "path": "output/20260909-coordinate-lineage-before/build.log",
+      "sha256": "6ecf6925e9aa725aea42669312a7cbe5acc2ce6f1169b3a5a701ebdafe299fc7",
+      "bytes": 2657
+    },
+    {
+      "path": "output/20260909-coordinate-lineage-before/results.json",
+      "sha256": "575a10b351b35c5485c0f766e9326b43620fbd793c13389324f8d8922a9ebc30",
+      "bytes": 235
+    },
+    {
+      "path": "output/20260909-coordinate-lineage-before/test_mpcc_architecture_snapshot.log",
+      "sha256": "a0a989ea7fe8804c484aafd5838a142c0c81b89e69c9bbcddfc145c57f85cb41",
+      "bytes": 1920
+    },
+    {
+      "path": "output/20260909-coordinate-lineage-before/test_mpcc_rate_resolved_certified_plan.log",
+      "sha256": "13c046f178640f077ecdc7800e07f6112fb1e887ac937ef1435b6b3ba4b9cbba",
+      "bytes": 1730
+    },
+    {
+      "path": "output/20260909-coordinate-native/after.json",
+      "sha256": "e2c8628221be3be201541ef732ff772d57d2f4a8aa28494dc6a60c88508e519f",
+      "bytes": 5500
+    },
+    {
+      "path": "output/20260909-coordinate-native/build.log",
+      "sha256": "fe006ee8d402f7e67486b7c6354effcc9a58ab032c5920c0baec6d1c7fc8d2b3",
+      "bytes": 5599
+    },
+    {
+      "path": "output/20260909-coordinate-native/check_frame_invariance",
+      "sha256": "6c8bfe706c4f4e67253749f103e5575c7419fea99df0b3f535d2d6f922cfced2",
+      "bytes": 41784
+    },
+    {
+      "path": "output/20260909-coordinate-native/focused.log",
+      "sha256": "2bf725611476d5033672752a87f77fc20d05eaacb117abb78382d0296ad85587",
+      "bytes": 1442
+    },
+    {
+      "path": "output/20260909-coordinate-native/package.log",
+      "sha256": "672a98779861b15cf350b9a3bd2e7dd2ccb51a01d3046cb74cc6394df2d1eb25",
+      "bytes": 485353
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/bag-analysis.json",
+      "sha256": "52080d7b5dd974e56c55736d62a989d27d03dcdd35d35a8f09b185a3e1a7c66b",
+      "bytes": 149242
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/d1/autoware.log",
+      "sha256": "6e1956e7c76b79a32891102ad1251a965bf50bed0f619bef3f10de1820fa25f2",
+      "bytes": 3453090
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/d1/d1-result-details.json",
+      "sha256": "b8bddc8df88e02e80afd6ae4493c5f1867f9c30604d5e07167b68f6cc2099578",
+      "bytes": 853
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/d1/result-summary.json",
+      "sha256": "e5ccc30eca285a286eccb7fb380c2209ac13e88df971244523aea45bd7fe22f0",
+      "bytes": 1043
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "sha256": "20332b28de9b04ee5e3f09a11755b062a24bb123bfa9ef3d1446f018dbb743b4",
+      "bytes": 8525
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "sha256": "932b957e5cb6903f0280e53b022d349baf6eb55218f86a9d6c35fe122e4452f9",
+      "bytes": 37765547
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/log-summary.json",
+      "sha256": "6955dc8d53d6831c784ec2fcdb121c77eccb955e44caa8f82780d4851caf8131",
+      "bytes": 12186
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/manifest.json",
+      "sha256": "1a16373450c88a8b6fa14dcd2f27ff30b9ab324a2775575ab34928b7b88a6657",
+      "bytes": 23363
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/runner.log",
+      "sha256": "b8ec5b7e83e240e47d8fb585f35a2e4ecf02f33190c0bd6083e92ceaa4235cf7",
+      "bytes": 15375
+    },
+    {
+      "path": "output/20260909-coordinate-single-r1/source-clock-anomalies.json",
+      "sha256": "ec5a46e6c2a507e6ca08864ba8a24792d9b0f36bbc6d21c7baaee0fcd3b58efd",
+      "bytes": 18078
+    }
+  ]
+}

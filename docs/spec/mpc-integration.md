@@ -3756,8 +3756,29 @@ current-world-bundleは元入力の証拠として区別する。別のsourceと
 使ったnative壁判定でも、現行軌道はclear、Cartesian軌道は最初の4.512ms判定点でreserve違反となる。
 車体接触を示す結果ではない。回転座標の式だけの変更では経路補間との不整合が残るため、
 SQP・artifact・通常/Stop/retainedの運動計算・座標復元・model identityを一体で修正する必要がある。
-現時点では本番運動式は未修正で、[再現証拠と修正設計](../../.steering/20260908-mpcc-delay-prefix-audit/frame-model-audit.md)
-を正本の未解決事項として保持する。観測成功や既存package test成功を、この問題の解決とは扱わない。
+この時点の[再現証拠](../../.steering/20260908-mpcc-delay-prefix-audit/frame-model-audit.md)を保持し、
+以下の座標モデル修正と区別する。観測成功だけでは統合受入れとしない。
+
+### 2026-09-09 座標モデルの修正と受入れ状況
+
+7状態の順序は維持し、固定した物理座標系で車体運動を積分してから、同じ不変な経路windowへ
+再投影する。仮想進捗`nu`は参照位置を更新し、車体の物理速度を変えない。実際の経路のXYと
+heading補間を使い、保存curvatureによる理想円弧で代用しない。solver・artifact・通常継続・
+Stopの共通遷移へ接続する。解析的な一定曲率の経路は単独のunit入力専用とする。
+state schemaは`ey-elag-epsi-v-progress-steering-yaw-response-cartesian-step-v3`とし、
+旧modelのartifact／warm startを再利用しない。古いsnapshotは観測資料として読み込み、
+新modelで解く場合はcontextとinteractionを再封印し、旧QPの証明を引き継がない。
+
+25package buildと60CTestgroupが通過。仮想進捗による物理移動の反例は24/24合格となり、
+保存指令6782の独立Cartesian積分との差は最大651.964mmから0.231mmへ縮小した。
+ただし同じ状態からの新規QPは6782／7405とも壁制約で棄却され、走行可能性は未確定。
+初回の単車両走行は6周252.254秒・penalty0、走行中のmoving Emergency／Recoveryなし。
+callback最大20.390ms・超過0、指令受信間隔最大39.863ms・50ms超0だった。
+その後、経路windowの取り違え／欠落を記録と証明組立ての境界で拒否する検査を加え、
+通常／継続／Stopが同じ経路を使う回帰も通過した。最終buildは25package、
+60CTestgroup／2335colcon記録でerror・failure・skipは0。
+この最終検査を含む統合反復、多車両・提出物の受入れは引き続き未完。
+結果は[修正steering](../../.steering/20260909-mpcc-coordinate-consistency/fixed-input-results.md)に記録する。
 
 ### 提出ファイルへの影響
 

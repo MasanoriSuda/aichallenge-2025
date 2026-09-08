@@ -1221,6 +1221,11 @@ std::optional<shadow::Snapshot> load_source_snapshot(
   }
   source.wall_lateral_sample_step_m =
     node["wall_lateral_sample_step_m"].as<double>();
+  if (!source.wall_course_frame_knots.empty()) {
+    source.request.course_frame = {
+      std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
+        source.wall_course_frame_knots), source.course_progress_origin_m};
+  }
   source.wall_heading_bucket_width_rad =
     node["wall_heading_bucket_width_rad"].as<double>();
   source.wall_translation_bucket_width_m =
@@ -1974,6 +1979,9 @@ YAML::Node execution_evidence_node(
   node["source_sequence"] = value.identity.sequence;
   node["source_problem_fingerprint"] = value.identity.source_context.fingerprint;
   node["source_snapshot_sec"] = value.identity.snapshot_sec;
+  node["coordinate_state_schema"] = value.identity.source_context.state_schema_id;
+  node["source_course_frame_bound"] = static_cast<bool>(value.course_frame.knots);
+  node["course_frame_progress_origin_m"] = value.course_frame.progress_origin_m;
   node["prediction_origin_sec"] = value.prediction_origin_sec;
   node["publication_interval_sec"] = value.publication_interval_sec;
   node["completed_sec"] = value.completed_sec;
@@ -2277,6 +2285,10 @@ RecordResult record_published_execution(
       fingerprint_interaction_snapshot(source) == 0U ||
       !execution::same_identity(source.identity, artifact.identity) ||
       execution::validate(artifact) != execution::RejectReason::None ||
+      (source.physical_wall_refinement_active &&
+      !mpcc_rate_resolved::course_frame_matches(
+        artifact.course_frame, source.wall_course_frame_knots,
+        source.course_progress_origin_m)) ||
       publication.failure_decision_id == 0U ||
       publication.failure_interaction_fingerprint == 0U ||
       (publication.source_kind != "exact-executed" &&

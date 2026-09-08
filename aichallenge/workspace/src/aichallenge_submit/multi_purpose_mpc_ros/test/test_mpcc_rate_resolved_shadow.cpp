@@ -42,7 +42,8 @@ contract::MpccProblemContext source_context(
   context.horizon_steps = 3U;
   context.formulation =
     contract::Formulation::VelocitySteeringYawResponseProgress7State;
-  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.state_schema_id =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-v1";
   context.cost_schema_id = "velocity-progress-steering-rate-v1";
@@ -915,7 +916,8 @@ TEST(
         semantic_input.stage_dt_sec,
         bridge.suffix.snapshot->request.minimum_frenet_denominator,
         bridge.suffix.snapshot->request.minimum_stage_dt_sec,
-        bridge.suffix.snapshot->request.maximum_stage_dt_sec});
+        bridge.suffix.snapshot->request.maximum_stage_dt_sec,
+        bridge.suffix.snapshot->request.course_frame});
     ASSERT_TRUE(transition.has_value());
     EXPECT_TRUE(
       transition->next_state.isApprox(

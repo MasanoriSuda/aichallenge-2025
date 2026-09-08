@@ -323,6 +323,7 @@ ExecutionArtifactBuildResult build_execution_artifact(
   execution_artifact.completed_sec = completed_sec;
   execution_artifact.course_progress_origin_m =
     snapshot.course_progress_origin_m;
+  execution_artifact.course_frame = snapshot.request.course_frame;
   execution_artifact.semantic_initial_steering_rad =
     snapshot.request.current_steering_rad;
   execution_artifact.semantic_initial_response_steering_rad =
@@ -1660,7 +1661,8 @@ build_reachable_bridge_feedback_problem(
           semantic.yaw_response_gain,
           semantic.yaw_response_time_constant_sec, dt_sec,
           semantic.minimum_frenet_denominator,
-          semantic.minimum_stage_dt_sec, semantic.maximum_stage_dt_sec});
+          semantic.minimum_stage_dt_sec, semantic.maximum_stage_dt_sec,
+          semantic.course_frame});
       if (!transition.has_value()) {
         return reject(
           ReachableBridgeReason::NonlinearTransitionRejected,
@@ -1929,7 +1931,8 @@ build_selected_nonlinear_interior_wall_problem_impl(
           snapshot.request.yaw_response_time_constant_sec,
           partial_duration_sec,
           snapshot.request.minimum_frenet_denominator,
-          partial_duration_sec, partial_duration_sec});
+          partial_duration_sec, partial_duration_sec,
+          snapshot.request.course_frame});
       if (!linearization.has_value()) {
         return reject(
           NonlinearInteriorWallReason::TransitionLinearizationRejected,
@@ -2911,7 +2914,7 @@ Result SolverContext::evaluate_stop_physical_support_audit(const Snapshot & snap
 }
 
 Result SolverContext::evaluate_impl(
-  const Snapshot & snapshot,
+  const Snapshot & source_snapshot,
   const bool wall_feasibility_restoration_audit,
   const std::optional<WallBucketAuditMode> wall_bucket_audit_mode,
   const std::size_t physical_dynamic_sqp_audit_iteration_count,
@@ -2919,6 +2922,14 @@ Result SolverContext::evaluate_impl(
   const bool witness_physical_separation_audit)
 {
   const auto started = SteadyClock::now();
+  // Derive the solver's physical frame from the same immutable world used by
+  // wall reconstruction. Never substitute the analytic course for a world.
+  Snapshot snapshot = source_snapshot;
+  if (snapshot.physical_wall_refinement_active) {
+    snapshot.request.course_frame = {
+      std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
+        snapshot.wall_course_frame_knots), snapshot.course_progress_origin_m};
+  }
   Result result;
   result.identity = snapshot.identity;
   if (witness_physical_separation_audit &&
@@ -2993,6 +3004,10 @@ Result SolverContext::evaluate_impl(
   }
   if (
     !artifact::identity_valid(snapshot.identity) ||
+    snapshot.identity.source_context.state_schema_id !=
+    mpcc_rate_resolved::kCoordinateStateSchema ||
+    (snapshot.physical_wall_refinement_active &&
+    snapshot.wall_course_frame_knots.size() < 2U) ||
     !std::isfinite(snapshot.control_prediction_origin_sec) ||
     snapshot.control_prediction_origin_sec < snapshot.identity.snapshot_sec ||
     !std::isfinite(snapshot.course_progress_origin_m) ||

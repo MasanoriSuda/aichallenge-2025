@@ -131,6 +131,7 @@ struct ExecutionArtifact
   std::vector<double> nominal_path_distance_m;
   std::vector<double> lateral_lower_m;
   std::vector<double> lateral_upper_m;
+  mpcc_rate_resolved::CourseFrame course_frame;
 };
 
 enum class RejectReason

@@ -189,7 +189,10 @@ double physical_lateral_bound_tolerance_m(
 RejectReason validate(const ExecutionArtifact & artifact) noexcept
 {
   constexpr double half_pi = 1.57079632679489661923;
-  if (!identity_valid(artifact.identity)) {
+  if (!identity_valid(artifact.identity) ||
+    artifact.identity.source_context.state_schema_id !=
+    mpcc_rate_resolved::kCoordinateStateSchema)
+  {
     return RejectReason::InvalidIdentity;
   }
   if (
@@ -204,6 +207,13 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
     return RejectReason::InvalidTiming;
   }
   if (!std::isfinite(artifact.course_progress_origin_m)) {
+    return RejectReason::InvalidCourseProgressOrigin;
+  }
+  if (artifact.course_frame.knots &&
+    (artifact.course_frame.progress_origin_m != artifact.course_progress_origin_m ||
+    !mpc_stage_geometry::sample_course_frame(
+      *artifact.course_frame.knots, artifact.course_progress_origin_m, 1e-9)))
+  {
     return RejectReason::InvalidCourseProgressOrigin;
   }
   if (

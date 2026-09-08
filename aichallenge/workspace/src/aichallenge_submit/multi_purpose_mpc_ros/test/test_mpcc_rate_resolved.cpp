@@ -165,6 +165,104 @@ TEST(MpccRateResolved, RejectsInvalidGeometryAndTiming)
   EXPECT_FALSE(rate::linearize_temporal_frenet(request).has_value());
 }
 
+TEST(MpccRateResolved, VirtualProgressCannotChangeAnalyticalBodyMotion)
+{
+  for (double curvature : {-0.2, 0.0, 0.2}) {
+    for (double speed : {0.0, 8.0}) {
+      for (double progress_speed : {0.0, 4.0, 8.0, 12.0}) {
+        auto request = nominal_request();
+        request.reference_lateral_m = speed == 0.0 ? 0.0 : 0.2;
+        request.reference_lag_m = -0.3;
+        request.reference_heading_rad = 0.0;
+        request.reference_progress_m = 0.0;
+        request.reference_velocity_mps = speed;
+        request.reference_steering_rad = 0.0;
+        request.reference_response_steering_rad = 0.0;
+        request.reference_steering_rate_radps = 0.0;
+        request.reference_acceleration_mps2 = 0.0;
+        request.reference_virtual_progress_speed_mps = progress_speed;
+        request.reference_path_curvature_radpm = curvature;
+        request.stage_dt_sec = 0.1;
+        const auto result = rate::evaluate_temporal_frenet_transition(request);
+        ASSERT_TRUE(result);
+        const auto & next = result->next_state;
+        const double angle = curvature * next[rate::kProgressIndex];
+        const double frame_x = curvature == 0.0 ? next[rate::kProgressIndex] :
+          std::sin(angle) / curvature;
+        const double frame_y = curvature == 0.0 ? 0.0 :
+          (1.0 - std::cos(angle)) / curvature;
+        const double x = frame_x + std::cos(angle) * next[rate::kLagIndex] -
+          std::sin(angle) * next[rate::kLateralIndex];
+        const double y = frame_y + std::sin(angle) * next[rate::kLagIndex] +
+          std::cos(angle) * next[rate::kLateralIndex];
+        EXPECT_NEAR(x, -0.3 + speed * 0.1, 1e-10);
+        EXPECT_NEAR(y, request.reference_lateral_m, 1e-10);
+        EXPECT_NEAR(angle + next[rate::kHeadingIndex], 0.0, 1e-10);
+      }
+    }
+  }
+}
+
+TEST(MpccRateResolved, PiecewiseCourseCannotDeflectStraightPhysicalMotion)
+{
+  namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;
+  // The first segment is from captured source6782. Its chord and interpolated
+  // heading have different derivatives; later knots exercise a knot crossing.
+  const auto knots = std::make_shared<const std::vector<geometry::CourseFrameKnot>>(
+    std::vector<geometry::CourseFrameKnot>{
+      {279.66607474985835, 89667.80949128, 43169.87420976, 0.26301156595296, 283},
+      {280.6442844703521, 89668.75406172, 43170.12853424, 0.11716940361073, 284},
+      {281.6442844703521, 89669.65, 43170.2, -0.02, 285},
+      {283.6442844703521, 89671.6, 43170.1, -0.08, 286}});
+  auto request = nominal_request();
+  request.course_frame = {knots, knots->front().progress_m};
+  request.reference_progress_m = 0.0;
+  request.reference_lateral_m = -0.118312279259;
+  request.reference_lag_m = -0.305091301859;
+  request.reference_heading_rad = -0.235430920532;
+  request.reference_velocity_mps = 7.4659609;
+  request.reference_acceleration_mps2 = 1.3295945;
+  request.reference_steering_rad = 0.0;
+  request.reference_response_steering_rad = 0.0;
+  request.reference_steering_rate_radps = 0.0;
+  request.reference_path_curvature_radpm = -0.166609279;
+  request.stage_dt_sec = 0.2;
+  const auto start = geometry::sample_course_frame(*knots, knots->front().progress_m);
+  ASSERT_TRUE(start);
+  const double x0 = start->x_m + request.reference_lag_m * std::cos(start->heading_rad) -
+    request.reference_lateral_m * std::sin(start->heading_rad);
+  const double y0 = start->y_m + request.reference_lag_m * std::sin(start->heading_rad) +
+    request.reference_lateral_m * std::cos(start->heading_rad);
+  const double yaw = start->heading_rad + request.reference_heading_rad;
+  const double distance = request.reference_velocity_mps * request.stage_dt_sec +
+    0.5 * request.reference_acceleration_mps2 * request.stage_dt_sec * request.stage_dt_sec;
+  for (double progress_speed : {0.0, 3.0, 7.0, 10.83925988}) {
+    request.reference_virtual_progress_speed_mps = progress_speed;
+    const auto result = rate::evaluate_temporal_frenet_transition(request);
+    ASSERT_TRUE(result);
+    const auto & next = result->next_state;
+    const auto end = geometry::sample_course_frame(
+      *knots, request.course_frame.progress_origin_m + next[rate::kProgressIndex]);
+    ASSERT_TRUE(end);
+    const double x = end->x_m + next[rate::kLagIndex] * std::cos(end->heading_rad) -
+      next[rate::kLateralIndex] * std::sin(end->heading_rad);
+    const double y = end->y_m + next[rate::kLagIndex] * std::sin(end->heading_rad) +
+      next[rate::kLateralIndex] * std::cos(end->heading_rad);
+    EXPECT_NEAR(x, x0 + distance * std::cos(yaw), 3e-10);
+    EXPECT_NEAR(y, y0 + distance * std::sin(yaw), 3e-10);
+    EXPECT_NEAR(end->heading_rad + next[rate::kHeadingIndex], yaw, 1e-12);
+    const auto tangent = rate::linearize_temporal_frenet(request);
+    ASSERT_TRUE(tangent);
+    EXPECT_TRUE(tangent->state_matrix.allFinite());
+    EXPECT_TRUE(tangent->input_matrix.allFinite());
+  }
+  request.reference_virtual_progress_speed_mps = 40.0;
+  EXPECT_FALSE(rate::evaluate_temporal_frenet_transition(request));
+  request.course_frame.knots =
+    std::make_shared<const std::vector<geometry::CourseFrameKnot>>();
+  EXPECT_FALSE(rate::evaluate_temporal_frenet_transition(request));
+}
+
 TEST(MpccRateResolved, SamplesIntermediateCertifiedSteering)
 {
   const auto sample = rate::sample_actuation(rate::ActuationSampleRequest{

@@ -43,7 +43,8 @@ mpcc_rate_resolved_shadow::Snapshot make_snapshot(
   snapshot.identity.source_context.formulation =
     mpcc_execution_contract::Formulation::
     VelocitySteeringYawResponseProgress7State;
-  snapshot.identity.source_context.state_schema_id = "state";
+  snapshot.identity.source_context.state_schema_id =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   snapshot.identity.source_context.input_schema_id = "input";
   snapshot.identity.source_context.bounds_schema_id = "bounds";
   snapshot.identity.source_context.cost_schema_id = "cost";
@@ -207,6 +208,9 @@ TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)
   artifact.publication_interval_sec = 0.025;
   artifact.completed_sec = source.identity.snapshot_sec + 0.01;
   artifact.course_progress_origin_m = source.course_progress_origin_m;
+  artifact.course_frame = {
+    std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
+      source.wall_course_frame_knots), source.course_progress_origin_m};
   artifact.wheelbase_m = 1.0;
   artifact.maximum_abs_steering_rad = 0.5;
   artifact.maximum_abs_steering_rate_radps = 1.0;
@@ -242,6 +246,23 @@ TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)
     RecordStatus::InvalidInput);
   ASSERT_FALSE(std::filesystem::exists(root));
 
+  auto wrong_frame = artifact;
+  auto knots = source.wall_course_frame_knots;
+  knots.back().y_m += 0.1;
+  wrong_frame.course_frame.knots =
+    std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(knots);
+  const auto wrong_root = output_root("published-wrong-coordinate-frame");
+  std::filesystem::remove_all(wrong_root);
+  EXPECT_EQ(record_published_execution(
+      source, wrong_frame, publication, "wrong-coordinate-frame", wrong_root).status,
+    RecordStatus::InvalidInput);
+  std::filesystem::remove_all(wrong_root);
+  wrong_frame.course_frame.knots.reset();
+  EXPECT_EQ(record_published_execution(
+      source, wrong_frame, publication, "missing-coordinate-frame", wrong_root).status,
+    RecordStatus::InvalidInput);
+  std::filesystem::remove_all(wrong_root);
+
   const auto written = record_published_execution(
     source, artifact, publication, "delay-prefix-blocked", root);
   ASSERT_EQ(written.status, RecordStatus::Written) << written.detail;
@@ -255,6 +276,12 @@ TEST(MpccArchitectureSnapshot, PreservesPublishedArtifactAndIndependentClocks)
   ASSERT_EQ(evidence["schema"].as<std::string>(), "mpcc-published-execution-evidence/v1");
   EXPECT_EQ(evidence["source_problem_fingerprint"].as<std::uint64_t>(),
     artifact.identity.source_context.fingerprint);
+  EXPECT_EQ(evidence["coordinate_state_schema"].as<std::string>(),
+    mpcc_rate_resolved::kCoordinateStateSchema);
+  EXPECT_TRUE(evidence["source_course_frame_bound"].as<bool>());
+  ASSERT_TRUE(loaded->source.request.course_frame.knots);
+  EXPECT_DOUBLE_EQ(loaded->source.request.course_frame.progress_origin_m,
+    artifact.course_frame.progress_origin_m);
   const auto clock = evidence["publication"];
   EXPECT_EQ(clock["failure_interaction_fingerprint"].as<std::uint64_t>(), 12345U);
   EXPECT_DOUBLE_EQ(clock["failure_control_origin_sec"].as<double>(), 12.74);

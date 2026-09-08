@@ -93,6 +93,9 @@ target_include_directories(${PROJECT_NAME}_mpcc_rate_resolved PUBLIC
   $<INSTALL_INTERFACE:include>
   ${EIGEN3_INCLUDE_DIRS}
 )
+target_link_libraries(${PROJECT_NAME}_mpcc_rate_resolved
+  ${PROJECT_NAME}_mpc_stage_geometry
+)
 
 add_library(${PROJECT_NAME}_mpcc_rate_resolved_problem STATIC
   src/mpcc_rate_resolved_problem.cpp

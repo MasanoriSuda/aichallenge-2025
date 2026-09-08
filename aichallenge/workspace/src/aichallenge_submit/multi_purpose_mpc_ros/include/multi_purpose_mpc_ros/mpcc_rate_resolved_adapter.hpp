@@ -74,6 +74,7 @@ struct Request
     Eigen::Matrix<double, kLegacyInputDimension, 1>::Zero()};
   Eigen::Matrix<double, kLegacyInputDimension, 1> input_delta_weight{
     Eigen::Matrix<double, kLegacyInputDimension, 1>::Zero()};
+  mpcc_rate_resolved::CourseFrame course_frame;
 };
 
 struct Result

@@ -19,6 +19,7 @@ bool transition_request_valid(const LinearizationRequest & request) noexcept
     std::isfinite(request.reference_heading_rad) &&
     std::isfinite(request.reference_velocity_mps) &&
     std::isfinite(request.reference_progress_m) &&
+    std::isfinite(request.course_frame.progress_origin_m) &&
     std::isfinite(request.reference_steering_rad) &&
     std::abs(request.reference_steering_rad) < half_pi &&
     std::isfinite(request.reference_response_steering_rad) &&
@@ -97,6 +98,22 @@ double response_steering_after_ramp(
 
 }  // namespace
 
+bool course_frame_matches(
+  const CourseFrame & frame,
+  const std::vector<mpc_stage_geometry::CourseFrameKnot> & knots,
+  const double progress_origin_m) noexcept
+{
+  return frame.knots && knots.size() >= 2U &&
+         frame.progress_origin_m == progress_origin_m &&
+         frame.knots->size() == knots.size() &&
+         std::equal(frame.knots->begin(), frame.knots->end(), knots.begin(),
+    [](const auto & lhs, const auto & rhs) {
+      return lhs.progress_m == rhs.progress_m && lhs.x_m == rhs.x_m &&
+             lhs.y_m == rhs.y_m && lhs.heading_rad == rhs.heading_rad &&
+             lhs.waypoint == rhs.waypoint;
+    });
+}
+
 std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
   const LinearizationRequest & request) noexcept
 {
@@ -110,6 +127,55 @@ std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
     request.stage_dt_sec / static_cast<double>(substep_count);
   StateVector state = request_state(request);
   const InputVector input = request_input(request);
+  // Integrate in a fixed physical frame whose origin/orientation are the
+  // initial course pose. Keeping coordinates local avoids subtractive noise
+  // in finite-difference Jacobians at large MGRS world coordinates.
+  double x_m = state[kLagIndex];
+  double y_m = state[kLateralIndex];
+  double yaw_rad = state[kHeadingIndex];
+  const double progress_delta_m =
+    input[kVirtualProgressSpeedIndex] * request.stage_dt_sec;
+  double frame_dx_m{};
+  double frame_dy_m{};
+  double frame_heading_delta_rad{};
+  if (request.course_frame.knots) {
+    const auto & knots = *request.course_frame.knots;
+    const double initial_progress_m =
+      request.course_frame.progress_origin_m + state[kProgressIndex];
+    const auto initial = mpc_stage_geometry::sample_course_frame(
+      knots, initial_progress_m, 1e-9);
+    const auto terminal = mpc_stage_geometry::sample_course_frame(
+      knots, initial_progress_m + progress_delta_m, 1e-9);
+    if (!initial || !terminal) {
+      return std::nullopt;
+    }
+    const double dx = terminal->x_m - initial->x_m;
+    const double dy = terminal->y_m - initial->y_m;
+    const double c = std::cos(initial->heading_rad);
+    const double s = std::sin(initial->heading_rad);
+    frame_dx_m = c * dx + s * dy;
+    frame_dy_m = -s * dx + c * dy;
+    frame_heading_delta_rad = std::atan2(
+      std::sin(terminal->heading_rad - initial->heading_rad),
+      std::cos(terminal->heading_rad - initial->heading_rad));
+  } else {
+    // Exact arc-length geometry, not a differential approximation to a
+    // separately interpolated world course.
+    frame_heading_delta_rad =
+      request.reference_path_curvature_radpm * progress_delta_m;
+    const double half_angle = 0.5 * frame_heading_delta_rad;
+    const double sinc = std::abs(half_angle) < 1e-8 ?
+      1.0 - half_angle * half_angle / 6.0 : std::sin(half_angle) / half_angle;
+    frame_dx_m = progress_delta_m * sinc * std::cos(half_angle);
+    frame_dy_m = progress_delta_m * sinc * std::sin(half_angle);
+  }
+  // Preserve the existing local-chart validity bound; it no longer divides
+  // physical velocity or introduces fictitious motion into lag/lateral state.
+  if (1.0 - request.reference_path_curvature_radpm * state[kLateralIndex] <
+    request.minimum_frenet_denominator)
+  {
+    return std::nullopt;
+  }
   for (std::size_t substep = 0U; substep < substep_count; ++substep) {
     const double steering = state[kSteeringIndex];
     const double response = state[kResponseSteeringIndex];
@@ -122,32 +188,20 @@ std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
       request.yaw_response_time_constant_sec);
     const double velocity_mid = state[kVelocityIndex] +
       0.5 * input[kAccelerationIndex] * step_sec;
-    const double heading_rate_mid =
+    const double yaw_rate_mid =
       request.yaw_response_gain * velocity_mid * std::tan(response_mid) /
-      request.wheelbase_m - request.reference_path_curvature_radpm *
-      input[kVirtualProgressSpeedIndex];
-    const double heading_mid = state[kHeadingIndex] +
-      0.5 * heading_rate_mid * step_sec;
-    const double lateral_rate_mid = velocity_mid * std::sin(heading_mid);
-    const double lateral_mid = state[kLateralIndex] +
-      0.5 * lateral_rate_mid * step_sec;
-    const double denominator = 1.0 -
-      request.reference_path_curvature_radpm * lateral_mid;
+      request.wheelbase_m;
+    const double yaw_mid = yaw_rad + 0.5 * yaw_rate_mid * step_sec;
     if (
       !std::isfinite(response_mid) || !std::isfinite(response_next) ||
-      !std::isfinite(velocity_mid) || !std::isfinite(heading_rate_mid) ||
-      !std::isfinite(heading_mid) || !std::isfinite(lateral_rate_mid) ||
-      !std::isfinite(denominator) ||
-      denominator < request.minimum_frenet_denominator)
+      !std::isfinite(velocity_mid) || !std::isfinite(yaw_mid) ||
+      !std::isfinite(yaw_rate_mid))
     {
       return std::nullopt;
     }
-    const double physical_progress_rate =
-      velocity_mid * std::cos(heading_mid) / denominator;
-    state[kLateralIndex] += lateral_rate_mid * step_sec;
-    state[kLagIndex] +=
-      (physical_progress_rate - input[kVirtualProgressSpeedIndex]) * step_sec;
-    state[kHeadingIndex] += heading_rate_mid * step_sec;
+    x_m += velocity_mid * std::cos(yaw_mid) * step_sec;
+    y_m += velocity_mid * std::sin(yaw_mid) * step_sec;
+    yaw_rad += yaw_rate_mid * step_sec;
     state[kVelocityIndex] += input[kAccelerationIndex] * step_sec;
     state[kProgressIndex] +=
       input[kVirtualProgressSpeedIndex] * step_sec;
@@ -156,6 +210,21 @@ std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
     if (!state.allFinite()) {
       return std::nullopt;
     }
+  }
+  const double dx = x_m - frame_dx_m;
+  const double dy = y_m - frame_dy_m;
+  const double c = std::cos(frame_heading_delta_rad);
+  const double s = std::sin(frame_heading_delta_rad);
+  state[kLagIndex] = c * dx + s * dy;
+  state[kLateralIndex] = -s * dx + c * dy;
+  state[kHeadingIndex] = std::atan2(
+    std::sin(yaw_rad - frame_heading_delta_rad),
+    std::cos(yaw_rad - frame_heading_delta_rad));
+  if (!state.allFinite() ||
+    1.0 - request.reference_path_curvature_radpm * state[kLateralIndex] <
+    request.minimum_frenet_denominator)
+  {
+    return std::nullopt;
   }
   return NonlinearTransition{state, substep_count};
 }

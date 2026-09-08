@@ -1,0 +1,17 @@
+{
+  "planned_repetitions": 1,
+  "kind": "coordinate-model repair: bounded initial single-vehicle acceptance",
+  "rules": [
+    "Six laps or420s diagnostic deadline; retain all failures and penalties.",
+    "No concurrent build, replay or production edits.",
+    "Same vehicle calibration, map, wall reserve, solver settings and evaluation setup as captured baseline.",
+    "Completion requires authority, timing and run acceptance; peer/integrated/submission phases remain open."
+  ],
+  "binaries": {
+    "aichallenge/workspace/build/multi_purpose_mpc_ros/mpc_controller_cpp": "5f1949489d9add583b0e6ad3bbe5111c7c0230695b7b3acd0174291c875bfb6c",
+    "aichallenge/workspace/build/multi_purpose_mpc_ros/mpcc_architecture_compare": "c378608ed4d6a70e9b7e473d661ca4190443228fcd53cc2e475287ecead59fe9"
+  },
+  "closed": true,
+  "completed_trials": 1,
+  "closing_reason": "Six laps252.253662109375s/penalty0; no active-race moving override or Recovery; coordinate lineage checks proceed before final integrated campaign."
+}

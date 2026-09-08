@@ -481,7 +481,8 @@ std::optional<Result> build(
         request.yaw_response_gain,
         request.yaw_response_time_constant_sec,
         legacy_input.stage_dt_sec, request.minimum_frenet_denominator,
-        request.minimum_stage_dt_sec, request.maximum_stage_dt_sec});
+        request.minimum_stage_dt_sec, request.maximum_stage_dt_sec,
+        request.course_frame});
     if (!linearization.has_value()) {
       return reject(RejectReason::LinearizationUnavailable, stage);
     }
@@ -628,7 +629,7 @@ RelinearizationResult relinearize_around_primal(
         semantic_input.stage_dt_sec,
         request.minimum_frenet_denominator,
         request.minimum_stage_dt_sec,
-        request.maximum_stage_dt_sec});
+        request.maximum_stage_dt_sec, request.course_frame});
     if (!linearization.has_value()) {
       result.reason = RelinearizationReason::LinearizationUnavailable;
       result.stage = stage;

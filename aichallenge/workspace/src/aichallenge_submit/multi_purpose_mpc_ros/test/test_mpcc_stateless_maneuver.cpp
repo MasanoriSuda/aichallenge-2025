@@ -38,7 +38,8 @@ mpcc_rate_resolved_shadow::Snapshot make_source()
   source.identity.source_context.horizon_steps = 3U;
   source.identity.source_context.formulation =
     contract::Formulation::VelocitySteeringYawResponseProgress7State;
-  source.identity.source_context.state_schema_id = "state-7";
+  source.identity.source_context.state_schema_id =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   source.identity.source_context.input_schema_id = "input-3";
   source.identity.source_context.bounds_schema_id = "bounds";
   source.identity.source_context.cost_schema_id = "cost";

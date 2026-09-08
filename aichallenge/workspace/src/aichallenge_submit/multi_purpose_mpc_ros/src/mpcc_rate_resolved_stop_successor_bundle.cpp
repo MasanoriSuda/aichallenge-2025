@@ -266,6 +266,7 @@ Result build(
   execution->completed_sec = request.control_origin_sec;
   execution->course_progress_origin_m =
     source_artifact.course_progress_origin_m;
+  execution->course_frame = source_artifact.course_frame;
   execution->semantic_initial_steering_rad = request.current_steering_rad;
   execution->semantic_initial_response_steering_rad =
     request.current_response_steering_rad;

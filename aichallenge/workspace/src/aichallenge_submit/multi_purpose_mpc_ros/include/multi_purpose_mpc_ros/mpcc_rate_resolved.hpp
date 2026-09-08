@@ -1,9 +1,12 @@
 #ifndef MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_HPP_
 #define MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_HPP_
 
+#include "multi_purpose_mpc_ros/mpc_stage_geometry.hpp"
+
 #include <Eigen/Dense>
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -29,6 +32,25 @@ inline constexpr double kMaximumPhysicalIntegrationStepSec = 0.01;
 using StateVector = Eigen::Matrix<double, kStateDimension, 1>;
 using InputVector = Eigen::Matrix<double, kInputDimension, 1>;
 
+/// Shared immutable world reference; progress remains local to the problem.
+/// An absent window denotes the explicitly analytic constant-curvature course
+/// used by isolated geometry requests. World-backed callers must bind a window.
+struct CourseFrame
+{
+  std::shared_ptr<const std::vector<mpc_stage_geometry::CourseFrameKnot>> knots;
+  double progress_origin_m{};
+};
+
+/// Match the physical model's reference to the independently owned proof world.
+/// An analytical/missing frame cannot match a world-backed course.
+bool course_frame_matches(
+  const CourseFrame & frame,
+  const std::vector<mpc_stage_geometry::CourseFrameKnot> & knots,
+  double progress_origin_m) noexcept;
+
+inline constexpr const char * kCoordinateStateSchema =
+  "ey-elag-epsi-v-progress-steering-yaw-response-cartesian-step-v3";
+
 struct LinearizationRequest
 {
   double reference_lateral_m{};
@@ -49,6 +71,7 @@ struct LinearizationRequest
   double minimum_frenet_denominator{0.20};
   double minimum_stage_dt_sec{0.01};
   double maximum_stage_dt_sec{0.25};
+  CourseFrame course_frame;
 };
 
 struct Linearization
@@ -70,7 +93,8 @@ struct NonlinearTransition
 
 /// Evaluate the canonical nonlinear seven-state transition used by both SQP
 /// tangent construction and the exact publication proof. The stage is
-/// integrated with midpoint substeps no longer than 10 ms.
+/// integrated in physical Cartesian coordinates with midpoint substeps no
+/// longer than 10 ms, then projected into the same immutable reference window.
 std::optional<NonlinearTransition> evaluate_temporal_frenet_transition(
   const LinearizationRequest & request) noexcept;
 

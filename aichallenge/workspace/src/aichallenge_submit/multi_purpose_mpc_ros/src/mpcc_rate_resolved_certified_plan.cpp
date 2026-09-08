@@ -151,6 +151,22 @@ RejectReason validate(const CertifiedPlan & plan) noexcept
   {
     return RejectReason::IdentityMismatch;
   }
+  const auto & frame = plan.execution_artifact->course_frame;
+  const auto & world = *plan.physical_snapshot;
+  if (frame.knots && !mpcc_rate_resolved::course_frame_matches(
+      frame, world.course_frame_knots,
+      plan.execution_artifact->course_progress_origin_m))
+  {
+    return RejectReason::PhysicalSnapshotMismatch;
+  }
+  if (plan.solver_source_snapshot != nullptr &&
+    plan.solver_source_snapshot->physical_wall_refinement_active &&
+    !mpcc_rate_resolved::course_frame_matches(
+      frame, plan.solver_source_snapshot->wall_course_frame_knots,
+      plan.solver_source_snapshot->course_progress_origin_m))
+  {
+    return RejectReason::PhysicalSnapshotMismatch;
+  }
   if (
     plan.solver_source_snapshot != nullptr &&
     !artifact::same_identity(

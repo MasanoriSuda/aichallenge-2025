@@ -307,6 +307,7 @@ StopCandidateResult build_maximum_braking_candidate(
   auto candidate = source;
   candidate.control_prediction_origin_sec += source.publication_interval_sec;
   candidate.course_progress_origin_m = prefix_progress_m;
+  candidate.request.course_frame.progress_origin_m = prefix_progress_m;
   candidate.request.initial_state[model::kLateralIndex] =
     prefix.lateral_m[prefix_index];
   candidate.request.initial_state[model::kLagIndex] =

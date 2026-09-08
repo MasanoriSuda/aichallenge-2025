@@ -59,6 +59,8 @@ bool advance_nonlinear_state(
   request.minimum_frenet_denominator = artifact.minimum_frenet_denominator;
   request.minimum_stage_dt_sec = step_sec;
   request.maximum_stage_dt_sec = step_sec;
+  request.course_frame = artifact.course_frame;
+  request.course_frame.progress_origin_m = artifact.course_progress_origin_m;
   const auto transition =
     mpcc_rate_resolved::evaluate_temporal_frenet_transition(request);
   if (!transition.has_value()) {

@@ -170,6 +170,21 @@
       "snapshot_id": "20260908-observation-r3-d1-decision-7405",
       "manifest": ".steering/20260908-mpcc-delay-prefix-audit/single-r3-evidence.json",
       "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-coordinate-v3-d1-source-6782",
+      "manifest": ".steering/20260909-mpcc-coordinate-consistency/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-coordinate-v3-d1-source-7405",
+      "manifest": ".steering/20260909-mpcc-coordinate-consistency/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-coordinate-v3-single-r1",
+      "manifest": ".steering/20260909-mpcc-coordinate-consistency/evidence.json",
+      "replay_ready": false
     }
   ],
   "experiments": [
@@ -1359,6 +1374,66 @@
       "production_impact": "Do not apply a two-line partial model patch. Preserve current dynamics while designing a complete immutable frame/physical-state contract and model-version invalidation.",
       "deleted_code": [],
       "revisit_condition": "Complete physical-coordinate formulation and its native Jacobian/artifact/Stop/retained regression on the same snapshots; no tuning substitute."
+    },
+    {
+      "baseline_commit": "d54822c982c705098cc2fbfab4160f15e41865b0",
+      "snapshot_ids": [
+        "20260909-coordinate-v3-d1-source-6782",
+        "20260909-coordinate-v3-d1-source-7405"
+      ],
+      "deleted_code": [
+        "previous virtual-progress-dependent physical Frenet differential law"
+      ],
+      "experiment_id": "20260909-coordinate-v3-physical-invariance",
+      "hypothesis": "The Cartesian physical step projected onto the exact immutable course restores physical motion independent of virtual progress.",
+      "changed_dimension": "coordinate_transition_and_bound_world_geometry_with_model_schema_v3",
+      "result": "accepted",
+      "reason": "Native analytical invariants24/24pass versus14failures before; actual piecewise course and Jacobian package tests pass. Source6782fixed-control rollout differs from independent Cartesian ODE by0.012789mm through55ms and0.231333mm maximum over1.794944s, previously651.9642mm. No old QP or certificate is reused.",
+      "production_impact": "New common transition reaches SQP/artifact/normal/Stop/retained producers; v2execution identities rejected. Local coordinate acceptance only; geometry lineage regression and dynamic/integrated acceptance remain open.",
+      "revisit_condition": "New physical invariance failure or changed reference/actuator/integration contract. Do not infer race acceptance from this local result."
+    },
+    {
+      "baseline_commit": "d54822c982c705098cc2fbfab4160f15e41865b0",
+      "snapshot_ids": [
+        "20260909-coordinate-v3-d1-source-6782",
+        "20260909-coordinate-v3-d1-source-7405"
+      ],
+      "deleted_code": [],
+      "experiment_id": "20260909-coordinate-v3-saved-scene-feasibility",
+      "hypothesis": "Unchanged seven-state SQP or bounded wall restoration produces a certified feasible trajectory from the captured6782and7405states under the corrected model.",
+      "changed_dimension": "resealed_model_v3_only_original_world_bounds_costs_solver_budget",
+      "result": "rejected",
+      "reason": "AandHbothreject wall-refined QP at4000iterations; violated rows378and376. B/C/D/Gtarget-dependent generators are inapplicable because these are target-free scenes. No physical infeasibility certificate; all-method result remains Unknown.",
+      "production_impact": "No candidate promoted, no tuning or margin changes. Run from initial conditions with the corrected model to determine whether it avoids the previously reached state.",
+      "revisit_condition": "New earlier causal scene or physically feasible witness under the same hard constraints; do not repeat unchanged rejected solves."
+    },
+    {
+      "baseline_commit": "d54822c982c705098cc2fbfab4160f15e41865b0",
+      "snapshot_ids": [
+        "20260909-coordinate-v3-single-r1"
+      ],
+      "deleted_code": [],
+      "experiment_id": "20260909-coordinate-v3-single-initial-acceptance",
+      "hypothesis": "Starting with the corrected model preserves certified normal authority through an initial six-lap single-vehicle trial.",
+      "changed_dimension": "coordinate_model_v3_with_same_map_vehicle_constraints_solver_settings",
+      "result": "accepted",
+      "reason": "Sixlaps252.253662109375s/penalty0. No logged active-race moving Emergency or Recovery. Finish-only11287/11288at9.13m/s. Callback12893reportedcycles/max20.390ms/0overruns;10577control receipts/max39.862633ms/0gaps>50ms. Source12duplicates/one120msgap coincide with simulator clock and sensor publication pause; separate clock evidence retained.",
+      "production_impact": "Initial single-vehicle acceptance only. Later geometry-lineage rejection checks have separate build/regression evidence. Peer geometry, integrated matrix, repeated final campaign and submission remain open.",
+      "revisit_condition": "Changed production model/geometry or a new runtime failure; final integrated campaign uses its own sealed complete configuration."
+    },
+    {
+      "baseline_commit": "d54822c982c705098cc2fbfab4160f15e41865b0",
+      "snapshot_ids": [
+        "20260909-coordinate-v3-single-r1"
+      ],
+      "deleted_code": [],
+      "experiment_id": "20260909-coordinate-v3-geometry-lineage",
+      "hypothesis": "A solved artifact cannot be recorded or certified with a missing/different physical course window.",
+      "changed_dimension": "explicit_same_course_origin_and_knot_matching_at_recorder_and_certified_plan_boundary",
+      "result": "accepted",
+      "reason": "Two targeted regressions fail before repair: mismatched/missing geometry is accepted. After explicit matches, all60CTestgroups/2335colconrecords pass. New normal/continuation/Stop regression reconstructs straight physical motion across a curved virtual reference.",
+      "production_impact": "Adds rejection for geometry mismatch; no new authority or changed model/solver parameters. Final integrated dynamic runs still required.",
+      "revisit_condition": "Changed geometry ownership, origin rebasing or source/certificate serialization."
     }
   ]
 }

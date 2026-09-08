@@ -25,7 +25,8 @@ contract::MpccProblemContext source_context()
   context.horizon_steps = 2U;
   context.formulation =
     contract::Formulation::VelocitySteeringYawResponseProgress7State;
-  context.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  context.state_schema_id =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   context.input_schema_id = "accel-steering-rate-progress-rate-v1";
   context.bounds_schema_id = "stage-wall-v1";
   context.cost_schema_id = "velocity-progress-steering-rate-v1";
@@ -79,6 +80,76 @@ adapter::StopCourseGeometry stop_course_geometry()
 }
 
 }  // namespace
+
+TEST(MpccRateResolvedPhysicalAdapter, RejectsPreviousCoordinateModelIdentity)
+{
+  auto value = artifact();
+  ASSERT_EQ(execution::validate(value), execution::RejectReason::None);
+  value.identity.source_context.state_schema_id =
+    "ey-elag-epsi-v-progress-steering-yaw-response-v2";
+  value.identity.source_context = contract::seal_problem_context(value.identity.source_context);
+  EXPECT_EQ(execution::validate(value), execution::RejectReason::InvalidIdentity);
+  EXPECT_FALSE(adapter::build(
+    value, value.identity.source_context.intent,
+    value.identity.source_context.stage_geometry_id).exact_trajectory);
+}
+
+TEST(MpccRateResolvedPhysicalAdapter, NormalContinuationAndStopUseTheBoundCourse)
+{
+  namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;
+  auto source = artifact();
+  source.semantic_initial_steering_rad = 0.0;
+  source.semantic_initial_response_steering_rad = 0.0;
+  for (auto & state : source.predicted_states) {
+    state.steering_rad = 0.0;
+    state.response_steering_rad = 0.0;
+  }
+  for (auto & control : source.control_stages) {
+    control.steering_rate_radps = 0.0;
+  }
+  source.course_frame = {
+    std::make_shared<const std::vector<geometry::CourseFrameKnot>>(
+      std::vector<geometry::CourseFrameKnot>{
+        {50.0, 0.0, 0.0, 0.0, 1}, {51.0, 1.0, 0.1, 0.2, 2},
+        {53.0, 3.0, 0.2, -0.1, 3}}), source.course_progress_origin_m};
+  const auto normal = adapter::build(
+    source, source.identity.source_context.intent,
+    source.identity.source_context.stage_geometry_id);
+  ASSERT_TRUE(normal.exact_trajectory);
+  const auto cursor = execution::resolve_cursor(source, source.prediction_origin_sec);
+  ASSERT_TRUE(cursor.available);
+  const adapter::ContinuationInitialState initial{0.0, 0.1, 0.0, 2.0, 0.0, 0.0, 0.0};
+  const auto continuation = adapter::build_continuation(source, cursor, initial);
+  ASSERT_TRUE(continuation.exact_trajectory);
+  const auto actuation = execution::extract_actuation(source, cursor);
+  ASSERT_TRUE(actuation.actuation);
+  auto policy = stop_lateral_policy();
+  // Isolate the physical producer from lateral feedback: the intended actuator
+  // command is straight, even though the virtual reference changes heading.
+  policy.lateral_gain = 0.0;
+  policy.heading_gain = 0.0;
+  const auto stop = adapter::build_stop_contingency(
+    source, cursor, *actuation.actuation, initial,
+    stop_course_geometry(), policy, -3.0);
+  ASSERT_TRUE(stop.exact_trajectory) << adapter::to_string(stop.reason);
+  EXPECT_NEAR(stop.exact_trajectory->velocity_mps.back(), 0.0, 1e-9);
+  for (const auto * path : {&*normal.exact_trajectory,
+    &*continuation.exact_trajectory, &*stop.exact_trajectory})
+  {
+    for (std::size_t i = 0; i < path->progress_m.size(); ++i) {
+      const auto frame = geometry::sample_course_frame(
+        *source.course_frame.knots, path->progress_m[i]);
+      ASSERT_TRUE(frame);
+      const double x = frame->x_m + std::cos(frame->heading_rad) * path->lag_m[i] -
+        std::sin(frame->heading_rad) * path->lateral_m[i];
+      const double y = frame->y_m + std::sin(frame->heading_rad) * path->lag_m[i] +
+        std::cos(frame->heading_rad) * path->lateral_m[i];
+      EXPECT_GT(x, 0.1);
+      EXPECT_NEAR(y, 0.0, 1e-10);
+      EXPECT_NEAR(frame->heading_rad + path->heading_offset_rad[i], 0.0, 1e-10);
+    }
+  }
+}
 
 TEST(
   MpccRateResolvedPhysicalAdapter,

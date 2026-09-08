@@ -33,7 +33,8 @@ contract::MpccProblemContext context()
   value.horizon_steps = 2U;
   value.formulation =
     contract::Formulation::VelocitySteeringYawResponseProgress7State;
-  value.state_schema_id = "ey-elag-epsi-v-progress-steering-v1";
+  value.state_schema_id =
+    multi_purpose_mpc_ros::mpcc_rate_resolved::kCoordinateStateSchema;
   value.input_schema_id = "accel-steering-rate-progress-rate-v1";
   value.bounds_schema_id = "stage-wall-v1";
   value.cost_schema_id = "velocity-progress-steering-rate-v1";

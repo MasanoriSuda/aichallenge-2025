@@ -1,0 +1,384 @@
+{
+  "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+  "control_baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+  "new_model_authority": false,
+  "full_mpcc_acceptance": false,
+  "acceptance_requirement_question_pending": true,
+  "drive_precondition_validation": {
+    "single": {
+      "records": 13455,
+      "drive_records": 13455
+    },
+    "dev2": {
+      "records": 6692,
+      "drive_records": 6692
+    }
+  },
+  "protected_user_and_simulator_artifacts": {
+    "aichallenge/result-summary.json": "170d447ece696f257ae7542903caa15a6d04762ec54847f2a43b3b1b29adddd1",
+    "aichallenge/safety-gate-result.json": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e",
+    "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+  },
+  "artifacts": [
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/actuator_contact_contract.hpp",
+      "bytes": 4903,
+      "sha256": "34301c964b05d2b0fb9be739d19fb143cdf522aa816f3e578c981e8e29ebf6a6"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/compare_base_link_models.py",
+      "bytes": 6428,
+      "sha256": "5dbe066988c8fd92d493694012204ac9064841e838b26a3cac044887597d9410"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/compare_cached_contact_model.py",
+      "bytes": 4142,
+      "sha256": "401c231dafd93fad98bcbd3d220380d205de3a5126a4b53cfc3f1ccced1b4c50"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/compare_contact_epoch.py",
+      "bytes": 3075,
+      "sha256": "c5379f92bc0fbfa1f952fbe9ab25c3547885ae86d8fb95dba62db93a6c6de4da"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/compare_contact_estimate.py",
+      "bytes": 7899,
+      "sha256": "1d9734f6e0ffeb64cbd51d482795bea18b062f62df8791e129e874f4b861b340"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/compare_public_inputs.py",
+      "bytes": 8792,
+      "sha256": "6dba639d98961dff614f5465504eebdfb646acfca9b73a56c360b99632e61015"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/compare_steering_source_epoch.py",
+      "bytes": 4511,
+      "sha256": "5b8da99902e27e71093d984af79011f9ff0bf10fe02c12cf277f8c564b83bab4"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/identify_body_coefficients.py",
+      "bytes": 5103,
+      "sha256": "1b782aa9ba644ff1b53c75bf908018befd83734c319a6d71a71adaffe05a6a78"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/read_wheel_colliders.py",
+      "bytes": 1789,
+      "sha256": "2792d5dbcf3f1934de880e28cf7e5aa7d8d9eabb3f844434347a898fec307888"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/register_results.py",
+      "bytes": 7668,
+      "sha256": "8a5ba5086d07bcf66c24e94a796a7515d59a7c8cc0fc5454d2b4cc393103ffa8"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/replay_actuator_contact.py",
+      "bytes": 3261,
+      "sha256": "0a40c4cf59a4d1b8aba8346b5f1e5601b2d4e9fad4a769cf0a63e79db9875e73"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/seal_evidence.py",
+      "bytes": 3847,
+      "sha256": "d7a263395a845e11cced18d99bbc23c3082498a58da5d61001a22f7fbfaa93df"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/test_actuator_contact_contract.cpp",
+      "bytes": 3813,
+      "sha256": "fcfbe91b5f7e9651c2f42f2613c64af6d7df6e3b51dc5280b579ca963734d327"
+    },
+    {
+      "path": ".steering/20260910-mpcc-shared-plant-model/test_application_stop_boundary.cpp",
+      "bytes": 3837,
+      "sha256": "e211e9f3e9c03a3a3430d33ed81bd93dfc5401e690e857e9f330ab115ea23007"
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll",
+      "bytes": 811520,
+      "sha256": "703e18fad4e3cf68111a559190edb7060e901988a04c409d84c80331dd45a172"
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "aichallenge/simulator/AWSIM/AWSIM_Data/level1",
+      "bytes": 177552,
+      "sha256": "036a04a672f8f06196d1039579416871a2d11692e42220e1ae1e38d2003f7818"
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/unity-collider-geometry.json",
+      "bytes": 277135,
+      "sha256": "02ab898a6f8e7241017fe65ff8ec0f465c7483ae84bb84f288c829712d896b32"
+    },
+    {
+      "path": "output/20260908-mpcc-stop-reference-single-r3/unity-kart1-tree.json",
+      "bytes": 55048,
+      "sha256": "1c06816eb1268ad3b5c0aaf83b21256df92f9a26063d105323c538739a4d66e5"
+    },
+    {
+      "path": "output/20260909-actuation-response-r1/unity-plant-cil.txt",
+      "bytes": 107446,
+      "sha256": "0f05278b8aef9eaaf20f02c65433540dfd2a626081a8aee5066eac6aaed8bc96"
+    },
+    {
+      "path": "output/20260909-force-step-analysis-dev2-r1/physics.npz",
+      "bytes": 2154865,
+      "sha256": "b3712539d33caa134a16663d7516a31ebec67c736eb7292128694c2a0e489e6b"
+    },
+    {
+      "path": "output/20260909-force-step-analysis-single-r1/physics.npz",
+      "bytes": 5166711,
+      "sha256": "7e2083c9df68f57cf81a40a7100f128be25e2c621b3c18cf1b2ff99b95aaef3b"
+    },
+    {
+      "path": "output/20260909-force-step-body-models-r1/report.json",
+      "bytes": 2757865,
+      "sha256": "08a7522a7c79d8dfa20d970e27ae34a084229d3a3dff975f5d4f35bf6a660fa1"
+    },
+    {
+      "path": "output/20260909-force-step-ros-state-dev2-r1/d1.json",
+      "bytes": 1197419,
+      "sha256": "aa9513f65b702f85744c5b6e0b6df6e98d2c033617e1cda96539164df3a6f08e"
+    },
+    {
+      "path": "output/20260909-force-step-ros-state-dev2-r1/d2.json",
+      "bytes": 1180166,
+      "sha256": "3b6ad3cb78044c8c3169cd97c00d40dc7b98adbce13b952b0dcc8792e0f2d19e"
+    },
+    {
+      "path": "output/20260909-force-step-ros-state-single-r1/d1.json",
+      "bytes": 4670466,
+      "sha256": "b37a60259e8f9ba83475ddaa5bdcf2729d405769569ddbf631face37ef0c2077"
+    },
+    {
+      "path": "output/20260909-initial-heading-node-replay-r4/d1/report.json",
+      "bytes": 252348,
+      "sha256": "0ac84b32d0098c8daa69ea4d80d851a4befa8fb9a18292ab703e495e921a9ab6"
+    },
+    {
+      "path": "output/20260909-initial-heading-node-replay-r4/d2/report.json",
+      "bytes": 262447,
+      "sha256": "5832ebc91a749bc2044419d4b2629da649d1fdd45a90541907f69d8ec16652f3"
+    },
+    {
+      "path": "output/20260909-longitudinal-model-inputs-r1/unity-wheel-cil.txt",
+      "bytes": 39577,
+      "sha256": "bb7656d7dedf321d59f82bb098efe80829492e57f049a4658cc111dfd6a12f8b"
+    },
+    {
+      "path": "output/20260910-shared-plant-base-link-models-r1/report.json",
+      "bytes": 1846613,
+      "sha256": "c0278f57885efc3e11dae2e5a55a0d013004c4af8dc0cdfcb146e6fdb88ded45"
+    },
+    {
+      "path": "output/20260910-shared-plant-body-identification-r1/heldout.json",
+      "bytes": 4134815,
+      "sha256": "6e1959f3cae173636f8eca355007aecff144664d0bc8a89709c9daa7a783799a"
+    },
+    {
+      "path": "output/20260910-shared-plant-body-identification-r1/report.json",
+      "bytes": 2192,
+      "sha256": "a656399f4f5cba3a7cb320c37c60bae5e8df30af325204b89106bb2299a60147"
+    },
+    {
+      "path": "output/20260910-shared-plant-cached-contact-r1/report.json",
+      "bytes": 1844829,
+      "sha256": "0bd52b90b031b3266e4f9121992e137894eeed9b02f65e93540959b997fb015a"
+    },
+    {
+      "path": "output/20260910-shared-plant-contact-epoch-r1/report.json",
+      "bytes": 16180,
+      "sha256": "dad6320ec1c0b5306025c0acaef7f5021ebfb17a3cadd834d155d5d3cd4dd041"
+    },
+    {
+      "path": "output/20260910-shared-plant-contact-estimate-r1/report.json",
+      "bytes": 1780598,
+      "sha256": "2e04afd2f3cf13e976896a88607ce808b93aeaa48b40a8ea6a5fad9336c8f969"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-r1/check",
+      "bytes": 36872,
+      "sha256": "85e8bc86a5dd4786e8f02be947d2343d9ce57558b42d34ee8641229228c8f894"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-r2/check",
+      "bytes": 40968,
+      "sha256": "5e244de262c1fc84e21297f08f6368e2451179b84fd62efac0f64b4fd3832d31"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r1/dev2--615963298/inputs.txt",
+      "bytes": 365815,
+      "sha256": "f6214f83c245e79f8f1b6581cfa64f492544db7ab657832ae41bab5eb0a80e8c"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r1/dev2--615963298/predictions.txt",
+      "bytes": 144167,
+      "sha256": "ec9ab6130b9943ed68c226df10006fe482b7cf5c9ed227bfc9843194d8905850"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r1/dev2-1594692888/inputs.txt",
+      "bytes": 300691,
+      "sha256": "b52b9203b8bd3b61400e0503d130a735f3709c878f643d369abfdd0fc2b570a2"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r1/dev2-1594692888/predictions.txt",
+      "bytes": 115032,
+      "sha256": "fc23495d699d8e8d2da06c2c33bb87c6ad72fc32694ae9b28587596061264be9"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r1/replay_actuator_contact.py",
+      "bytes": 3261,
+      "sha256": "dcae6a144b5d50703c6ccd8e39dc605e134e3305c3660b83e58fee6030b1b10b"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r1/report.json",
+      "bytes": 5126,
+      "sha256": "0c80572343ed3091191fc55ca44fae8fb041a38440e3f8efbecae562af660bee"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r1/single--823441338/inputs.txt",
+      "bytes": 1604475,
+      "sha256": "9ea691b08ff69377fe940c227479b83ec1a973af24c13e15b389c81bb8ab996f"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r1/single--823441338/predictions.txt",
+      "bytes": 556446,
+      "sha256": "7086ce60c535ea01b99a9f75ff3130b1f53c759482e647d9eeff18f768240432"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r2/dev2--615963298/inputs.txt",
+      "bytes": 365815,
+      "sha256": "f6214f83c245e79f8f1b6581cfa64f492544db7ab657832ae41bab5eb0a80e8c"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r2/dev2--615963298/predictions.txt",
+      "bytes": 144167,
+      "sha256": "ec9ab6130b9943ed68c226df10006fe482b7cf5c9ed227bfc9843194d8905850"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r2/dev2-1594692888/inputs.txt",
+      "bytes": 300691,
+      "sha256": "b52b9203b8bd3b61400e0503d130a735f3709c878f643d369abfdd0fc2b570a2"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r2/dev2-1594692888/predictions.txt",
+      "bytes": 115032,
+      "sha256": "fc23495d699d8e8d2da06c2c33bb87c6ad72fc32694ae9b28587596061264be9"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r2/report.json",
+      "bytes": 5126,
+      "sha256": "6e873b90e43773a67ddf6213b02c18727cac5f1e2080674c05248f5f4acd8feb"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r2/single--823441338/inputs.txt",
+      "bytes": 1604475,
+      "sha256": "9ea691b08ff69377fe940c227479b83ec1a973af24c13e15b389c81bb8ab996f"
+    },
+    {
+      "path": "output/20260910-shared-plant-native-replay-r2/single--823441338/predictions.txt",
+      "bytes": 556446,
+      "sha256": "7086ce60c535ea01b99a9f75ff3130b1f53c759482e647d9eeff18f768240432"
+    },
+    {
+      "path": "output/20260910-shared-plant-public-inputs-r1/compare_public_inputs.py",
+      "bytes": 8792,
+      "sha256": "6dba639d98961dff614f5465504eebdfb646acfca9b73a56c360b99632e61015"
+    },
+    {
+      "path": "output/20260910-shared-plant-public-inputs-r1/report.json",
+      "bytes": 4134758,
+      "sha256": "78bec29afcfdb6012070dc5b16bd407163548d02eed2b4ea86f142d3aa9cf023"
+    },
+    {
+      "path": "output/20260910-shared-plant-steering-source-r1/report.json",
+      "bytes": 1446028,
+      "sha256": "c8d29ac08b9f0e764efaff045f8406cf9b5c185b7b7f27af8cc04a11f5f01a7c"
+    },
+    {
+      "path": "output/20260910-shared-plant-stop-boundary-r1/check",
+      "bytes": 17512,
+      "sha256": "84ad20ae9cb0ed978b0cd14e26be6e85be0fcb2b2cf1c823604c68208087f7df"
+    },
+    {
+      "path": "output/20260910-shared-plant-stop-boundary-r1/report.json",
+      "bytes": 469,
+      "sha256": "43ed2d6deebd4eeee9321180bb90f1f902786efcbc0a93ac7c1ca4347a8eb5a2"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-base-link-models-r1.log",
+      "bytes": 8249,
+      "sha256": "8a2ee0f4ddd6cc1086408d72c7c0de1d917ece1fa40dad54a469bf0de8b285d7"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-body-identification-r1.log",
+      "bytes": 4597,
+      "sha256": "e7f8ee1e93fca811cf6bea188e1e860ee776c8b6fedb6f6408ba198bf94b6748"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-cached-contact-r1.log",
+      "bytes": 7492,
+      "sha256": "cf0cd3e504017471cbdde9151453378708068f7ba7c2d3b8aa97185f52c24f4b"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-contact-epoch-r1.log",
+      "bytes": 9994,
+      "sha256": "f6eebef6a0fbecb5102dc87b72e50e4e37478835cbf83dc3544132da2a35000f"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-contact-estimate-r1.log",
+      "bytes": 6990,
+      "sha256": "1e14f8e843468a399f15066551e8edc737bc899cd47919497a3f8cac83b42445"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-native-r1.log",
+      "bytes": 109,
+      "sha256": "42bc760d40cabdedba8d4b3036072461864cab6dda37db5214bbcfcd79b0a6e6"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-native-r2.log",
+      "bytes": 109,
+      "sha256": "42bc760d40cabdedba8d4b3036072461864cab6dda37db5214bbcfcd79b0a6e6"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-native-replay-r1.log",
+      "bytes": 1066,
+      "sha256": "1400f697fa78475bff216e3bba25f5133546890ebf8fae564b57fd8cefe8498f"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-native-replay-r2.log",
+      "bytes": 1066,
+      "sha256": "1400f697fa78475bff216e3bba25f5133546890ebf8fae564b57fd8cefe8498f"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-public-inputs-r1.log",
+      "bytes": 9560,
+      "sha256": "d048502e8b415407901c443c363b2c39a1a4494279e93f1aeda4d5e6a3a8a3b9"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-steering-source-r1.log",
+      "bytes": 6436,
+      "sha256": "0b159aa397aa5028872f54e3147876a77c2495671ba3b4f5ca4ab2a95f83a442"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-stop-boundary-build-r1.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-unity-reader-install.log",
+      "bytes": 2816,
+      "sha256": "a7bc7feb00570f22b200cb0bbd1c975a6d992aa498c8c0b6005d70397e41af77"
+    },
+    {
+      "path": "output/20260910-shared-plant-validation-r1/mpcc-shared-plant-wheel-colliders-r1.log",
+      "bytes": 4050,
+      "sha256": "c63277628bf57d78218702b0193650378d526d698df276f5ac4fe7d116217a43"
+    },
+    {
+      "path": "output/20260910-shared-plant-wheel-colliders-r1/report.json",
+      "bytes": 80899,
+      "sha256": "7d0ed6b37a3f80a3829527be28f602702d732d35d82a8252a3dbe1e3e98da97d"
+    }
+  ]
+}

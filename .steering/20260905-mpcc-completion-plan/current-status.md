@@ -1,15 +1,27 @@
 # Current status and remaining completion work
 
 2026-09-10JST. Continue the existing autonomous M1–M6 task; no completion claim.
-Current baseline094941b5, MPCC1c4f377e. The new measured-heading producer repair
-is locally built/tested and single-run accepted; coupled acceptance remains open.
+Current baseline9bca3af6, MPCC1c4f377e. The measured-heading producer repair
+is locally committed/built/tested and single-run accepted; coupled acceptance remains open.
 
-Current next step: shared body/actuator/application/rest model using the causal
-[force evidence](../20260909-mpcc-force-step-model/results.md). The old wire-as-net-
-acceleration law, zero lateral velocity and effective yaw surrogate are contradicted
-by physics observations. A moving-body prototype improves held-out error, but its
-initial state and future actuator output are private diagnostic inputs. Complete
-deployable source/command-history and rest contract before production promotion.
+Current next step: finish model selection at the correct base_link reference and
+with an explicit application/contact/Stop uncertainty contract, then replace all
+shared consumers. [Latest comparison](../20260910-mpcc-shared-plant-model/results.md)
+corrects a diagnostic Rigidbody/base_link origin mismatch(0.485m). GNSS horizontal
+pose independently matches physics-derived base_link within4.013mm. Wire=net
+remains contradicted; a dynamic lateral/yaw model improves held-out0.5sposition
+MAE0.194635->0.056545m but1smaximum0.675902m remains. No new model selected.
+Past-contact estimation and fitted coefficients do not generalize sufficiently;
+source-only tire propagation does not fix the application discrepancy. No tuning.
+Native actual-receiver actuator/contact law matches20147physics ticks and80588
+wheel values, with0sleep mismatch. Private contact/application replay inputs are
+not promoted to live control. M1must still bind uncertainty and complete Stop.
+Cached contact directions match the previous physics body/tire epoch far better,
+but its causal body rollout still has1smaximum0.692849m; correction alone rejected.
+Native latest-value selection gives different motion from the same25msbrake
+stream. The required distinction between empirical simulator acceptance and
+guaranteed communication/contact bounds has been asked of the user. Reply is
+pending; no empirical maximum is promoted to a guarantee in the meantime.
 
 The earlier current-state defect is repaired: local simulation body→IMU yaw+pi/2,
 exact-epoch GNSS/IMU attitude before lever arm, shared measured initial pose and

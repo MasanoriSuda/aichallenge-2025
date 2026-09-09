@@ -650,6 +650,56 @@
       "snapshot_id": "20260909-measured-heading-heading-effect",
       "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-base-link",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-public-inputs",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-contact-estimate",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-body-identification",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-steering-source",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-native",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-contact-epoch",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-cached-contact",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-stop-boundary",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-shared-plant-wheel-colliders",
+      "manifest": ".steering/20260910-mpcc-shared-plant-model/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -4580,6 +4630,174 @@
         "service source-stamp relabel"
       ],
       "revisit_condition": "Changed source/state estimator or new independent physics observation"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-root-origin-assumption",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-base-link"
+      ],
+      "hypothesis": "Rigidbody origin may be used as controller base_link without a lever-arm transform",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "rejected",
+      "reason": "Serialized base_link is0.485m rearward and0.05m upward; COM is+0.175992m forward of base_link. Earlier root-origin body scores retained but cannot establish the controller lateral-state requirement.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "changed serialized/observed pose origin or an explicit correct coordinate transform"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-absolute-gnss-position",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-base-link"
+      ],
+      "hypothesis": "Measured-heading GNSS output has the same horizontal base_link origin as independently transformed physics",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "accepted",
+      "reason": "51exact-source comparisons perDomain, fixed serialized MGRS offset, no fitted translation. Maximum XY component4.012291mm. Vertical/geodetic conversion explicitly excluded.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "changed GNSS/IMU producer, calibration, map datum or vehicle origin"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-causal-dynamic-comparison",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-public-inputs"
+      ],
+      "hypothesis": "Dynamic lateral/yaw propagation improves the declared public-input body prediction comparison",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "accepted",
+      "reason": "Corrected base_link single0.5s position/speedMAE legacy.194635/.628518, reduced force.095839/.116810, dynamic.056545/.066474. Fixed16..35scontact/physical averages; future prescribed publications only, future sensor/contact scoring only. Dynamic1smaximum.675902m remains; D2short.1s position does not improve.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "new model structure, independently frozen evaluation or new source-epoch evidence"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-past-contact-promotion",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-contact-estimate"
+      ],
+      "hypothesis": "Past public sensor least-squares contact weights improve general prediction sufficiently for promotion",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "rejected",
+      "reason": "Past.5ssensors and stable published wire;490single estimates and2missing early anchors perdev2Domain. Root-origin single.5sMAE.066253->.080008m and1smaximum.739249->1.449915m worsen; D1worse,D2better. No coefficients promoted.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "new causal contact-state information; do not retune the same observer window against this failure"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-four-coefficient-promotion",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-body-identification"
+      ],
+      "hypothesis": "Four fitted axle drive/corner weights provide a generally improved model",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "rejected",
+      "reason": "Only16..35straining,93anchors,8optimizer evaluations; training RMS.033603->.032273m equivalent. Root-origin held-out1smaximum worsens to.774864m and bothdev2speed errors worsen.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "new causal model structure or independent contact/terrain measurements"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-steering-source-only",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-steering-source"
+      ],
+      "hypothesis": "Source-propagating the last tire observation resolves the public-input discrepancy",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "rejected",
+      "reason": "Past publication history and inspected.1smechanical delay; root-origin single.5spositionMAE.066253->.067273m, little dev2change. Actual DDS/receive timing remains unknown; no delay fit.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "new source/application evidence or a distinct actuator-state contract"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-actuator-drive-parity",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-native"
+      ],
+      "hypothesis": "The inspected post-receiver steering and Drive/contact sleep law can be reproduced natively",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "accepted",
+      "reason": "Strict C++17native checks and20147physics ticks/80588wheel values pass. Maximum tire1.90735e-6degree, wheel2.88142e-7m/s2, sleep0mismatches/1641D1sleep ticks. All recordedgear=3. First.3sunknown tire history excluded. Private receiver/contact are exogenous diagnostics.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "changed simulator component/config, non-Drive requirement or new recorded component mismatch"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-previous-contact-frame",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-contact-epoch"
+      ],
+      "hypothesis": "Cached WheelHit directions correspond more closely to previous body/tire than current state",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "accepted",
+      "reason": "Separate0/1/2tick body/tire combinations. Single front directionMAE.003670/.004076->.00004180/.00004301rad forpreviousboth; rear likewise and bothdev2Domains improve. Maximum residual.003388rad remains; not exact parity or DDSdelay identification.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "changed execution order/physics or independently synchronized contact evidence"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-cached-frame-promotion",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-cached-contact"
+      ],
+      "hypothesis": "Correcting the cached contact epoch alone provides a promotable body model",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "rejected",
+      "reason": "Causal previous predicted body/tire and points, no future contact, same frozen coefficients/public initial data. Single.5spositionMAE.056545->.055794m but1sMAE.193661->.222850m,maximum.675902->.692849m worsen. Component finding is not sufficient model repair.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "new contact/terrain/force-state information or a structurally different model"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-serialized-friction",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-wheel-colliders"
+      ],
+      "hypothesis": "Serialized WheelColliders supply additional hidden tangential friction",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "rejected",
+      "reason": "Read-only local level1 extraction: all16forward/sideways friction curves/stiffness arezero. Suspension spring35000/damper3500/distance.001m remains active; no claim all normal/contact forces are absent.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "changed serialized/runtime WheelCollider values or actual tangential force evidence"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-publication-application-equivalence",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-stop-boundary"
+      ],
+      "hypothesis": "One public25msbrake stream defines one applied physical trajectory under10Hzlatest-value selection",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "rejected",
+      "reason": "Native conditional straight/all-ground component: selectionphase0vs30ms yields0.2sspeeds1.255407vs1.690412m/s fromthe same received stream. Immediatevs.5sdelayed continuous brake changes modeled stopping support. Simplified distances are not actualAWSIM measurements; unconstrained no-contact branch is not road infeasibility proof.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "explicit bounded application semantics or feedback contract, never a fitted single publication shift"
+    },
+    {
+      "experiment_id": "20260910-shared-plant-model-promotion",
+      "baseline_commit": "9bca3af6f3481622ad03e66304e0ce50faf2c784",
+      "snapshot_ids": [
+        "20260910-shared-plant-base-link"
+      ],
+      "hypothesis": "The full shared plant/Stop model is ready to replace canonical production authority",
+      "changed_dimension": "Diagnostic public-input model, corrected pose/contact epochs and conditional actuator/Stop contracts",
+      "result": "inconclusive",
+      "reason": "No candidate yet closes contact/application uncertainty or complete Stop. Currentdev2rejected; user requirement question distinguishes empirical simulator acceptance from guaranteed bounds. No reply/observed maximum is treated as authorization or guarantee. M1-M6 remain open.",
+      "production_impact": "No controller, model, solver, gain, delay, limit or authority change. Coupled/full MPCC acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "resolved acceptance requirement, selected causal model with explicit uncertainty and independent Stop/trajectory validation"
     }
   ]
 }

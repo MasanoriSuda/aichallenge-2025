@@ -51,3 +51,9 @@ This audit uncovered a simulation IMU extrinsic and initial-heading defect.
 next committed production change. Complete shared model and M2–M6 remain required.
 Failed probe builds r1permissions/r2references/r3Cecil and r4success are preserved.
 See evidence.json for hashes, inputs, reports and command logs.
+
+Correction2026-09-10: the prototype pose above is the GoKart Rigidbody origin,
+not the controller base_link, which is0.485m rearward and0.05m upward. Its COM
+is+0.175992m forward. Those root-origin results remain valid for that point, but
+cannot alone justify a controller state-dimension change. See the corrected
+[base_link/public-input comparison](../20260910-mpcc-shared-plant-model/results.md).

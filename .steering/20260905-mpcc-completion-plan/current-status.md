@@ -10,7 +10,23 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: causal audit of exact dev2 D1 world945 / actual and inspected361,
+Current next step: bounded current-world peer/terminal viability audit of new
+GNSS-repaired dev2 D1world941/actual370. Cumulative low-speed GNSS heading defect
+is locally repaired:4of5newactual-nodecasesfail before, all5pass after;
+25packages build, MPCC2371records pass, GNSS30records0failures/6cppcheckwrapper
+skips (direct cppcheck clean). Same-recorded136/144GNSSfixes update yaw and rotate
+lever arm, correcting up to0.460/0.496m versus old node output. No threshold change.
+Single6laps254.349091s/penalty0, movingoverride0, callbackmax14.674ms/0overruns.
+Dev2stillrejects D1decision941/v1.299626669m/s: exact terminal and final snapshots
+both contain370and rejected Request. Zero-solve steering join passes, terminal
+peer-0.001206851953m and independent Stop peer-0.000951979315m reject.
+D1/D2callbackoverruns0/max20.730/23.434ms; source/observation delivery remains
+separate unresolved evidence. All runtime stopped/user JSON restored.
+See [exact join and GNSS results](../20260909-mpcc-exact-join-causality/results.md).
+Full coupled/intents/dev3/dev4/gates/submission acceptance is not complete.
+
+Previous observer baseline466bba5e and its945diagnosis:
+The then-next step was causal audit of exact dev2 D1 world945 / actual and inspected361,
 now recorded with its exact rejected Request. The first-event observer repair
 passes16native/104source tests,25-package build and60CTestgroups/2371records.
 Fixed dev2 captures the first moving Emergency945at1.5802064876844846m/s.

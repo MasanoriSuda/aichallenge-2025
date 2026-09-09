@@ -400,6 +400,31 @@
       "snapshot_id": "20260909-final-authority-world1137-actual575",
       "manifest": ".steering/20260909-mpcc-final-authority-observation/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-exact-join-world945",
+      "manifest": ".steering/20260909-mpcc-exact-join-causality/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-exact-join-gnss-native",
+      "manifest": ".steering/20260909-mpcc-exact-join-causality/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-exact-join-gnss-recorded",
+      "manifest": ".steering/20260909-mpcc-exact-join-causality/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-exact-join-single-r1",
+      "manifest": ".steering/20260909-mpcc-exact-join-causality/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-exact-join-dev2-r1",
+      "manifest": ".steering/20260909-mpcc-exact-join-causality/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -2904,6 +2929,191 @@
       "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "paired source/receipt/publisher observation"
+    },
+    {
+      "experiment_id": "20260909-exact-join-predecessor",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-world945"
+      ],
+      "hypothesis": "Wrong predecessor or age explains945rejection",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "Exact previous raw command maps through sealed gain1.435to the identical serialized float32wire value;20ms source-clock age matches. Delivery/physical tracking not thereby proved.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new inconsistent publication/request boundary"
+    },
+    {
+      "experiment_id": "20260909-exact-join-normal",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-world945"
+      ],
+      "hypothesis": "Current A/B/C/D/Gnormal formulations rescue945",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "All nine normal arms solver-reject. Same immutable world and physical constraints; no feasibility impossibility certificate.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "different bounded formulation or evidenced earlier input defect"
+    },
+    {
+      "experiment_id": "20260909-exact-join-support-stop",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-world945"
+      ],
+      "hypothesis": "Existing four support Stop arms rescue945",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "Two solver-reject; two solve but exact dynamic proof rejects. Full peer bodies and wall limits unchanged.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "different bounded physical witness or earlier causal world"
+    },
+    {
+      "experiment_id": "20260909-exact-join-rest-missions",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-world945"
+      ],
+      "hypothesis": "Four full-rest formulation variants rescue945",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "Free/max-law times inherited/zero objective: all four solver-reject. Earlier923/1629positive witnesses are not reused as945acceptance.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new bounded formulation or upstream producer evidence"
+    },
+    {
+      "experiment_id": "20260909-exact-join-physical-controls",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-world945"
+      ],
+      "hypothesis": "Bounded independent stopping controls find a geometric witness",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "All45steering/braking/prefix profiles fail peer or wall proof from exact current Request. Independent5ms midpoint model does not verify every original QP state/progress box; no physical infeasibility claim.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "different control family or causally corrected physical input"
+    },
+    {
+      "experiment_id": "20260909-exact-join-gnss-before",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-gnss-native"
+      ],
+      "hypothesis": "Subthreshold samples accumulate heading and rotate extrinsics",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "Actual-node4of5newcasesfail: northyaw0andmapX+0.26insteadrotatedmapY; west/reverse/nodeindependencefail. Accepted-heading noise case passes.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "repair cumulative anchor producer"
+    },
+    {
+      "experiment_id": "20260909-exact-join-gnss-after",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-gnss-native"
+      ],
+      "hypothesis": "Node-owned accepted anchor repairs low-speed heading",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "accepted",
+      "reason": "All5newnativecasesand4covariancecasespass.25packages build; GNSS30records0failures/6cppcheck2.7wrapper skips; direct host cppcheck nofindings. MPCC2371records0errors/failures/skips.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [
+        "function-static shared previous position",
+        "unconditional reset of subthreshold heading baseline"
+      ],
+      "revisit_condition": "new heading ownership or transform regression"
+    },
+    {
+      "experiment_id": "20260909-exact-join-gnss-replay",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-gnss-recorded"
+      ],
+      "hypothesis": "Actual repaired node updates heading on original real inputs",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "accepted",
+      "reason": "D1 136fixes/136pairs,D2 144fixes/143pairs. Lastyaw0changes2.167245468/2.528737748; maximumposition difference0.459502947/0.495777010m. No EKF replay, stationary-yaw or integrated-cause claim.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new source-frame or localization integration evidence"
+    },
+    {
+      "experiment_id": "20260909-exact-join-single-race",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-single-r1"
+      ],
+      "hypothesis": "Fixed single race acceptance after GNSS heading repair",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "accepted",
+      "reason": "d1:finished=True,moving_override_traces=0,callbackmax=14.674ms/overruns=0. Source/receipt clocks and broader intent coverage are separate acceptance evidence.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new causal production change or recorded diagnostic need"
+    },
+    {
+      "experiment_id": "20260909-exact-join-single-delivery",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-single-r1"
+      ],
+      "hypothesis": "Source/observation delivery is continuous",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "d1:commandreceipt40.000378Hz/max34.098148ms; source duplicates/backward12,gaps>50ms1; odometryreceiptmax309.045553ms. Separate from heading correctness.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "paired clock/receipt/CPU diagnosis or relevant delivery repair"
+    },
+    {
+      "experiment_id": "20260909-exact-join-dev2-race",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-dev2-r1"
+      ],
+      "hypothesis": "Fixed dev2 race acceptance after GNSS heading repair",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "d1:finished=False,moving_override_traces=2,callbackmax=20.73ms/overruns=0; d2:finished=False,moving_override_traces=0,callbackmax=23.434ms/overruns=0. Source/receipt clocks and broader intent coverage are separate acceptance evidence.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new causal production change or recorded diagnostic need"
+    },
+    {
+      "experiment_id": "20260909-exact-join-dev2-delivery",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-dev2-r1"
+      ],
+      "hypothesis": "Source/observation delivery is continuous",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "rejected",
+      "reason": "d1:commandreceipt40.003499Hz/max40.470123ms; source duplicates/backward2,gaps>50ms1; odometryreceiptmax93.151808ms; d2:commandreceipt39.987405Hz/max39.546967ms; source duplicates/backward3,gaps>50ms2; odometryreceiptmax97.356081ms. Separate from heading correctness.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "paired clock/receipt/CPU diagnosis or relevant delivery repair"
+    },
+    {
+      "experiment_id": "20260909-exact-join-replay941",
+      "baseline_commit": "466bba5e",
+      "snapshot_ids": [
+        "20260909-exact-join-dev2-r1"
+      ],
+      "hypothesis": "New first moving941failure reproduces from exact observed state",
+      "changed_dimension": "Named immutable-world comparison, exact source evidence or GNSS cumulative heading producer",
+      "result": "accepted",
+      "reason": "Both terminal/final941worldfp5417572569565392666record actual/inspected370and exact Request. Zero solves: steering reachable, terminalpeer-0.001206851953m, independentStoppeer-0.000951979315m; original370wall/dynamic pass. Coupled acceptance stays rejected.",
+      "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "bounded comparison or exact prior viable observation"
     }
   ]
 }

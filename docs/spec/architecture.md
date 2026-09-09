@@ -157,10 +157,19 @@ eval イメージビルド時にこのディレクトリ全体が提出 tar.gz �
 | `pilot_net_controller` | カメラ画像入力の学習ベース制御器（Python） |
 | `racing_kart_description` | カート URDF / パラメータ |
 | `racing_kart_gnss_poser` | レーシングカート向け GNSS 自己位置推定 |
+
 | `racing_kart_sensor_kit_description` | センサキット構成記述 |
 | `simple_pure_pursuit` | Pure Pursuit 制御器（C++） |
 | `simple_trajectory_generator` | 参照軌跡生成（プランニング） |
 | `tiny_lidar_net_controller` | LiDAR スキャン入力の学習ベース制御器（Python） |
+
+`racing_kart_gnss_poser`が位置差から方位を求める場合、方位を最後に更新した位置を
+ノードごとに保持する。1サンプルの移動が`gnss_change_threshold`未満でも、
+累積変位が閾値を超えれば方位を更新し、その方位でアンテナから`base_link`への
+固定変換をmap座標へ回転する。閾値未満の受信で基準位置を上書きしない。
+停止中や最初の十分な移動より前には、この位置差だけでは方位を観測できない。
+初期化のraceline方位と`/set_initial_pose`の責務、GNSS共分散の設定は維持する。
+2026-09-09の低速方位修正は[原因と検証計画](../../.steering/20260909-mpcc-exact-join-causality/design.md)を参照。
 
 #### `aichallenge_system/`（評価インフラパッケージ群、7 パッケージ + 補助ディレクトリ）
 

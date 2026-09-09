@@ -39,6 +39,8 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_auto_add_gtest(test_gnss_covariance test/test_gnss_covariance.cpp)
   target_link_libraries(test_gnss_covariance gnss_poser_node Geographic)
+  ament_auto_add_gtest(test_gnss_heading test/test_gnss_heading.cpp)
+  target_link_libraries(test_gnss_heading gnss_poser_node Geographic)
   # Run the same package-wide analysis with Google Test macro definitions.
   find_package(ament_cmake_cppcheck REQUIRED)
   list(APPEND AMENT_LINT_AUTO_EXCLUDE ament_cmake_cppcheck)

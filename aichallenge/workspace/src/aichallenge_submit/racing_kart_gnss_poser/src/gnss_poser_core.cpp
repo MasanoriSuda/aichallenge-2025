@@ -118,22 +118,27 @@ void GNSSPoser::callbackNavSatFix(
   if (use_gnss_ins_orientation_) {
     orientation = msg_gnss_ins_orientation_stamped_->orientation.orientation;
   } else {
-    static auto prev_position_ = median_position;
+    if (!heading_reference_position_.has_value()) {
+      heading_reference_position_ = median_position;
+    }
 
     if (
-      tier4_autoware_utils::calcDistance2d(median_position, prev_position_) >
+      tier4_autoware_utils::calcDistance2d(median_position, heading_reference_position_.value()) >
       gnss_change_threshold_) {
       // If reverse, reverse orientation
-      if (gear_ == 'R')
-        orientation = getQuaternionByPositionDifference(prev_position_, median_position);
-      else
-        orientation = getQuaternionByPositionDifference(median_position, prev_position_);
+      if (gear_ == 'R') {
+        orientation = getQuaternionByPositionDifference(
+          heading_reference_position_.value(), median_position);
+      } else {
+        orientation = getQuaternionByPositionDifference(
+          median_position, heading_reference_position_.value());
+      }
       prev_orientation_ = orientation;
+      heading_reference_position_ = median_position;
       // Use previous orientation if the distance is less than the threshold
     } else {
       orientation = prev_orientation_;
     }
-    prev_position_ = median_position;
   }
 
   // generate gnss_antenna_pose

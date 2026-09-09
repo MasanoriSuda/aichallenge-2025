@@ -40,6 +40,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <optional>
 #include <string>
 
 namespace gnss_poser
@@ -103,6 +104,9 @@ private:
   boost::circular_buffer<geometry_msgs::msg::Point> position_buffer_;
 
   int plane_zone_;
+  /// Keep the last accepted heading baseline across subthreshold samples.
+  /// This observation belongs to one node, not a function-static shared state.
+  std::optional<geometry_msgs::msg::Point> heading_reference_position_;
   geometry_msgs::msg::Quaternion prev_orientation_;
   double gnss_change_threshold_;
   double unknown_position_covariance_;

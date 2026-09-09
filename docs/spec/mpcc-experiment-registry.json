@@ -570,6 +570,86 @@
       "snapshot_id": "20260909-longitudinal-model-physics",
       "manifest": ".steering/20260909-mpcc-longitudinal-model-contract/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-force-step-cil",
+      "manifest": ".steering/20260909-mpcc-force-step-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-force-step-single-dev2",
+      "manifest": ".steering/20260909-mpcc-force-step-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-force-step-uniform-contact",
+      "manifest": ".steering/20260909-mpcc-force-step-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-force-step-body-moving",
+      "manifest": ".steering/20260909-mpcc-force-step-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-force-step-body-promotion",
+      "manifest": ".steering/20260909-mpcc-force-step-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-force-step-steering",
+      "manifest": ".steering/20260909-mpcc-force-step-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-force-step-raw-state",
+      "manifest": ".steering/20260909-mpcc-force-step-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-force-step-928-architecture",
+      "manifest": ".steering/20260909-mpcc-force-step-model/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-measured-heading-counterexample",
+      "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-measured-heading-producer",
+      "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-measured-heading-validation",
+      "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-measured-heading-single",
+      "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-measured-heading-dev2",
+      "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-measured-heading-933-revalidation",
+      "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-measured-heading-933-architecture",
+      "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-measured-heading-heading-effect",
+      "manifest": ".steering/20260909-mpcc-measured-initial-heading/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -4252,6 +4332,254 @@
       "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
       "deleted_code": [],
       "revisit_condition": "different proven contact regime or a model covering contact uncertainty"
+    },
+    {
+      "experiment_id": "20260909-force-step-cil",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-force-step-cil"
+      ],
+      "hypothesis": "Generated force observation preserves original method bodies",
+      "changed_dimension": "Read-only force/state/actuator diagnostics",
+      "result": "accepted",
+      "reason": "Seven removed calls;3608normalized methods including branch/EH targets;zero differences. Initial build failures retained; no timing parity.",
+      "production_impact": "No controller/model promotion",
+      "deleted_code": [],
+      "revisit_condition": "Changed probe/binary or missing observations"
+    },
+    {
+      "experiment_id": "20260909-force-step-single-dev2",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-force-step-single-dev2"
+      ],
+      "hypothesis": "Actual force and state records expose input-to-body response",
+      "changed_dimension": "Read-only force/state/actuator diagnostics",
+      "result": "accepted",
+      "reason": "Single1lap44.6353302s/0penalty;dev2firstD1Emergency928. Horizontal wheel sum agrees with body-force delta within0.000541N; vertical/contact reaction incomplete.",
+      "production_impact": "No controller/model promotion",
+      "deleted_code": [],
+      "revisit_condition": "Changed plant or explicit missing force/epoch observation"
+    },
+    {
+      "experiment_id": "20260909-force-step-uniform-contact",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-force-step-uniform-contact"
+      ],
+      "hypothesis": "All four wheels are continuously and equally grounded",
+      "changed_dimension": "Read-only force/state/actuator diagnostics",
+      "result": "rejected",
+      "reason": "All16contact patterns observed. Force returns for airborne wheel. Current wire-as-net-speed model contradicted.",
+      "production_impact": "No controller/model promotion",
+      "deleted_code": [],
+      "revisit_condition": "A different verified contact regime"
+    },
+    {
+      "experiment_id": "20260909-force-step-body-moving",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-force-step-body-moving"
+      ],
+      "hypothesis": "Causal lateral/yaw body propagation improves held-out moving prediction",
+      "changed_dimension": "Read-only force/state/actuator diagnostics",
+      "result": "accepted",
+      "reason": "Initial private state and prescribed applied wire/tire inputs only;training16..35s,holdout35..59.54s;0.5spositionMAE0.19014->0.05376m. Independent dev2 improves. No future state/contact fitted.",
+      "production_impact": "No controller/model promotion",
+      "deleted_code": [],
+      "revisit_condition": "New independent inputs or deployable initialization/application model"
+    },
+    {
+      "experiment_id": "20260909-force-step-body-promotion",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-force-step-body-promotion"
+      ],
+      "hypothesis": "The moving diagnostic model can execute as canonical authority",
+      "changed_dimension": "Read-only force/state/actuator diagnostics",
+      "result": "inconclusive",
+      "reason": "Private initial state and future applied actuator values are not deployable. Rest/contact/application uncertainty and full shared proof/schema remain open;1spositionMAE0.18060m.",
+      "production_impact": "No controller/model promotion",
+      "deleted_code": [],
+      "revisit_condition": "Complete ROS source/history, rest/contact contract and native/replay/dynamic acceptance"
+    },
+    {
+      "experiment_id": "20260909-force-step-steering",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-force-step-steering"
+      ],
+      "hypothesis": "Post-receiver steering queue and slew are reproducible without future tire feedback",
+      "changed_dimension": "Read-only force/state/actuator diagnostics",
+      "result": "accepted",
+      "reason": "Single10321steps maximum1.90735e-6degree error;dev2each3283. Applied-input boundary;unknown initial queue excluded0.3s. No DDS/application bound claimed.",
+      "production_impact": "No controller/model promotion",
+      "deleted_code": [],
+      "revisit_condition": "Changed actuator or end-to-end published-input comparison"
+    },
+    {
+      "experiment_id": "20260909-force-step-raw-state",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-force-step-raw-state"
+      ],
+      "hypothesis": "Unmodified Odometry and VelocityReport.heading_rate supply all physical body states",
+      "changed_dimension": "Read-only force/state/actuator diagnostics",
+      "result": "rejected",
+      "reason": "Odometry lateral velocity zero and filtered speed/yaw differ;raw heading_rate Euler winding spikes. Raw COM vx/vy and calibrated IMU angular velocity match physics.",
+      "production_impact": "No controller/model promotion",
+      "deleted_code": [],
+      "revisit_condition": "Valid source-aligned body observation and initialization repair"
+    },
+    {
+      "experiment_id": "20260909-force-step-928-architecture",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-force-step-928-architecture"
+      ],
+      "hypothesis": "Existing A/B/C/D or Stop candidate architecture resolves force-run928",
+      "changed_dimension": "Read-only force/state/actuator diagnostics",
+      "result": "inconclusive",
+      "reason": "Same fp5606420468864100205;all9normal/4Stopsolver reject. Unknown, no physical infeasibility certificate.",
+      "production_impact": "No controller/model promotion",
+      "deleted_code": [],
+      "revisit_condition": "Changed model or root-cause-supported candidate structure"
+    },
+    {
+      "experiment_id": "20260909-measured-heading-counterexample",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-measured-heading-counterexample"
+      ],
+      "hypothesis": "Declared simulation extrinsic and raceline yaw represent measured initial vehicle attitude",
+      "changed_dimension": "Simulation source attitude and shared initialization producer",
+      "result": "rejected",
+      "reason": "1124source-paired physics/IMU samples require+pi/2,old-pi/2givespierror. Old path heading differs from actual starting orientation;old lever arm displaces body pose.",
+      "production_impact": "Measured-heading repair only; MPCC source/model remains1c4f377e; full acceptance open",
+      "deleted_code": [
+        "initializer raw-IMU fallback/subscription/cache",
+        "service source-stamp relabel"
+      ],
+      "revisit_condition": "Producer repair with source/frame and native/node evidence"
+    },
+    {
+      "experiment_id": "20260909-measured-heading-producer",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-measured-heading-producer"
+      ],
+      "hypothesis": "Same-source transformed attitude supplies GNSS lever arm and measured initialization",
+      "changed_dimension": "Simulation source attitude and shared initialization producer",
+      "result": "accepted",
+      "reason": "Simulation+pi/2;exactepoch pair;missingTF/invalidattitudefailclosed;source-preserving service/sharedstartup. Raw-IMU fallback removed. Vehicle chain unchanged. Generated URDF validated.",
+      "production_impact": "Measured-heading repair only; MPCC source/model remains1c4f377e; full acceptance open",
+      "deleted_code": [
+        "initializer raw-IMU fallback/subscription/cache",
+        "service source-stamp relabel"
+      ],
+      "revisit_condition": "Changed simulator/sensor frames or startup contract"
+    },
+    {
+      "experiment_id": "20260909-measured-heading-validation",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-measured-heading-validation"
+      ],
+      "hypothesis": "Changed producer preserves native and recorded-node behavior contracts",
+      "changed_dimension": "Simulation source attitude and shared initialization producer",
+      "result": "accepted",
+      "reason": "26build;GNSS39records0fail7wrapper skips,initializer11/MPCC2381pass. Finalactualnode281/281outputs;poses/initialization exactr2/r4parity. Existing directcppcheck style remains;failed fixture/launch/license attempts retained.",
+      "production_impact": "Measured-heading repair only; MPCC source/model remains1c4f377e; full acceptance open",
+      "deleted_code": [
+        "initializer raw-IMU fallback/subscription/cache",
+        "service source-stamp relabel"
+      ],
+      "revisit_condition": "Changed source, contract or unresolved test failure"
+    },
+    {
+      "experiment_id": "20260909-measured-heading-single",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-measured-heading-single"
+      ],
+      "hypothesis": "Measured-heading source completes standard uninstrumented single race",
+      "changed_dimension": "Simulation source attitude and shared initialization producer",
+      "result": "accepted",
+      "reason": "Single-r2sixlaps251.15843200683594s/penalty0/no movingoverride;maxcallback18.406ms/0overruns. Runbuildr3;laterfixstatus-onlymove verified by native and pose-exactr4replay, not a finalsameHEADcampaign.",
+      "production_impact": "Measured-heading repair only; MPCC source/model remains1c4f377e; full acceptance open",
+      "deleted_code": [
+        "initializer raw-IMU fallback/subscription/cache",
+        "service source-stamp relabel"
+      ],
+      "revisit_condition": "Changed controller/model or required final fixed campaign"
+    },
+    {
+      "experiment_id": "20260909-measured-heading-dev2",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-measured-heading-dev2"
+      ],
+      "hypothesis": "Measured-heading repair completes the coupled race",
+      "changed_dimension": "Simulation source attitude and shared initialization producer",
+      "result": "rejected",
+      "reason": "FirstD1movingEmergency933/source10.309999769/v1.8082220948765995;artifact382/fp18084597137145989003. No finish. Old933/artifact371is separate.",
+      "production_impact": "Measured-heading repair only; MPCC source/model remains1c4f377e; full acceptance open",
+      "deleted_code": [
+        "initializer raw-IMU fallback/subscription/cache",
+        "service source-stamp relabel"
+      ],
+      "revisit_condition": "Causal repair of remaining model/current-world viability failure"
+    },
+    {
+      "experiment_id": "20260909-measured-heading-933-revalidation",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-measured-heading-933-revalidation"
+      ],
+      "hypothesis": "Peer-only observation change explains932accepted to933rejected",
+      "changed_dimension": "Simulation source attitude and shared initialization producer",
+      "result": "rejected",
+      "reason": "Zero-solve artifact382terminalclearance+0.00239983282409 to-0.0000303259375765m. Peer-onlycrosssubstitutionpreservesoutcomes. Controloriginspeed1.911526vsartifact2.217185m/s;independentStoprejects.",
+      "production_impact": "Measured-heading repair only; MPCC source/model remains1c4f377e; full acceptance open",
+      "deleted_code": [
+        "initializer raw-IMU fallback/subscription/cache",
+        "service source-stamp relabel"
+      ],
+      "revisit_condition": "New exact current-world producer or model evidence"
+    },
+    {
+      "experiment_id": "20260909-measured-heading-933-architecture",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-measured-heading-933-architecture"
+      ],
+      "hypothesis": "Existing candidate architecture resolves measured-heading933",
+      "changed_dimension": "Simulation source attitude and shared initialization producer",
+      "result": "inconclusive",
+      "reason": "Nine normal A/B/C/D and four physical Stop arms all solver-reject; Unknown. No relaxed safety or physical infeasibility conclusion.",
+      "production_impact": "Measured-heading repair only; MPCC source/model remains1c4f377e; full acceptance open",
+      "deleted_code": [
+        "initializer raw-IMU fallback/subscription/cache",
+        "service source-stamp relabel"
+      ],
+      "revisit_condition": "Changed shared model or root-cause-supported architecture"
+    },
+    {
+      "experiment_id": "20260909-measured-heading-heading-effect",
+      "baseline_commit": "094941b51aa6d345ed70dd15366bc7fbbb9f4c51",
+      "snapshot_ids": [
+        "20260909-measured-heading-heading-effect"
+      ],
+      "hypothesis": "Measured pose repair removes the large pre-start yaw discrepancy",
+      "changed_dimension": "Simulation source attitude and shared initialization producer",
+      "result": "accepted",
+      "reason": "Moving D1yawMAEagainstcalibratedIMU0.285484->0.002084rad;D2.143613->.005350. Different closedloopwindows;not independent physics truthnewruns. Filtered vx discrepancy remains.",
+      "production_impact": "Measured-heading repair only; MPCC source/model remains1c4f377e; full acceptance open",
+      "deleted_code": [
+        "initializer raw-IMU fallback/subscription/cache",
+        "service source-stamp relabel"
+      ],
+      "revisit_condition": "Changed source/state estimator or new independent physics observation"
     }
   ]
 }

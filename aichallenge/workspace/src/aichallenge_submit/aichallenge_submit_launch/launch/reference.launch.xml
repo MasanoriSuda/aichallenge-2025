@@ -20,6 +20,8 @@
   <arg name="vehicle_gnss_unknown_position_covariance" default="10.0" description="uncalibrated vehicle UNKNOWN GNSS variance [m^2]"/>
   <let name="gnss_unknown_position_covariance" value="$(var simulation_gnss_unknown_position_covariance)" if="$(var simulation)"/>
   <let name="gnss_unknown_position_covariance" value="$(var vehicle_gnss_unknown_position_covariance)" unless="$(var simulation)"/>
+  <let name="initial_pose_heading_source" value="measurement" if="$(var simulation)"/>
+  <let name="initial_pose_heading_source" value="raceline" unless="$(var simulation)"/>
   <!-- Map -->
   <arg name="lanelet2_map_file" default="lanelet2_map.osm" description="lanelet2 map file name"/>
   <arg name="pointcloud_map_file" default="pointcloud_map.pcd" description="pointcloud map file name"/>
@@ -74,6 +76,7 @@
         <arg name="output_topic_gnss_fixed" value="gnss_fixed"/>
         <arg name="output_topic_gnss_pose_cov" value="pose_with_covariance"/>
         <arg name="unknown_position_covariance" value="$(var gnss_unknown_position_covariance)"/>
+        <arg name="use_imu_orientation" value="$(var simulation)"/>
       </include>
     </group>
   </group>
@@ -92,7 +95,8 @@
 
     <node pkg="imu_gnss_poser" exec="imu_gnss_poser_node" name="imu_gnss_poser" output="screen">
       <param from="$(find-pkg-share imu_gnss_poser)/config/imu_gnss_poser.param.yaml"/>
-      <!-- Keep initialization yaw on the same trajectory used by MPC. -->
+      <!-- The local simulator provides same-source GNSS/IMU body attitude. -->
+      <param name="initial_pose_heading_source" value="$(var initial_pose_heading_source)"/>
       <param name="heading_csv_path" value="$(find-pkg-share multi_purpose_mpc_ros)/env/final_ver3/traj_mincurv.csv"/>
     </node>
 

@@ -25,6 +25,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
+#include <sensor_msgs/msg/imu.hpp>
 #include <tier4_debug_msgs/msg/bool_stamped.hpp>
 
 #include <boost/circular_buffer.hpp>
@@ -52,6 +53,11 @@ public:
 
 private:
   void callbackNavSatFix(const sensor_msgs::msg::NavSatFix::ConstSharedPtr nav_sat_fix_msg_ptr);
+  void callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg);
+  void processSynchronizedImuFix();
+  void processNavSatFix(
+    const sensor_msgs::msg::NavSatFix::ConstSharedPtr nav_sat_fix_msg_ptr,
+    const std::optional<geometry_msgs::msg::Quaternion> & measured_orientation = std::nullopt);
   void callbackGnssInsOrientationStamped(
     const autoware_sensing_msgs::msg::GnssInsOrientationStamped::ConstSharedPtr msg);
 
@@ -82,6 +88,7 @@ private:
   tf2_ros::TransformBroadcaster tf2_broadcaster_;
 
   rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr nav_sat_fix_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
   rclcpp::Subscription<autoware_sensing_msgs::msg::GnssInsOrientationStamped>::SharedPtr
     autoware_orientation_sub_;
   rclcpp::Subscription<autoware_auto_vehicle_msgs::msg::GearReport>::SharedPtr gear_report_sub_;
@@ -100,6 +107,10 @@ private:
 
   sensor_msgs::msg::NavSatFix nav_sat_fix_origin_;
   bool use_gnss_ins_orientation_;
+  bool use_imu_orientation_;
+  sensor_msgs::msg::NavSatFix::ConstSharedPtr pending_imu_fix_;
+  sensor_msgs::msg::Imu::ConstSharedPtr latest_imu_;
+  std::optional<rclcpp::Time> last_imu_fix_stamp_;
 
   boost::circular_buffer<geometry_msgs::msg::Point> position_buffer_;
 

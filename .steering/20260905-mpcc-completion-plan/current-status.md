@@ -1,31 +1,41 @@
 # Current status and remaining completion work
 
-2026-09-09JST. Calibration baseline b530883997e80cd78aa7e70bcd53bf2b6bcf93fc;
-the subsequent side-peer/Stop slice is fixed by its source/binary/run manifests.
-The complete MPCC acceptance is NOT achieved. Preserve previous failed trials.
-The user authorised autonomous execution through completion on2026-09-09.
-Local commits bc01ff2f,ca38bf18,d54822c9preserve the previous completed work.
-Commit5cfc50bcpreserves the coordinate repair and its evidence. Commit b5308839
-preserves complete peer-body geometry and separate semantic physical initial state.
-The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
-locally validated; coupled acceptance remains open.
+2026-09-10JST. Continue the existing autonomous M1–M6 task; no completion claim.
+Current baseline094941b5, MPCC1c4f377e. The new measured-heading producer repair
+is locally built/tested and single-run accepted; coupled acceptance remains open.
 
-Current next step: causal longitudinal/contact/application model comparison before
-production selection. See [concrete completion plan](../20260909-mpcc-longitudinal-model-contract/completion-plan.md)
-and [new model comparisons](../20260909-mpcc-longitudinal-model-contract/results.md).
-Planning and comparison observations are complete; M1 model selection and M2–M6
-implementation/integrated/submission acceptance remain open. No controller change.
+Current next step: shared body/actuator/application/rest model using the causal
+[force evidence](../20260909-mpcc-force-step-model/results.md). The old wire-as-net-
+acceleration law, zero lateral velocity and effective yaw surrogate are contradicted
+by physics observations. A moving-body prototype improves held-out error, but its
+initial state and future actuator output are private diagnostic inputs. Complete
+deployable source/command-history and rest contract before production promotion.
 
-Native flat negative response creates unforced backward motion at rest; real
-observer at rest under -3braking estimates +2.99984residual, which cannot be reused
-as an input-independent acceleration loss for a later +1drive input. Proposal rejected.
-Measured-midpoint wheel-force fit improves held-out moving increment MAE, but has
-future-state information and unobserved contact; it is not a production predictor.
-Instrumented single6laps253.053833s/penalty0 is diagnostic only. Runtime2receiver
-physics samples confirm mass160, front sprungMass~25.881kg total, onefrontwheel
-ungrounded each. YAML grip .6 is clamped to .7 by the runtime. No gain tuning follows.
-OriginalDLL/protectedJSON restored, no containers running. Prior26build/2381tests
-are existing1c4f377e evidence, not re-run or promoted as new-model acceptance.
+The earlier current-state defect is repaired: local simulation body→IMU yaw+pi/2,
+exact-epoch GNSS/IMU attitude before lever arm, shared measured initial pose and
+source-stamped /set_initial_pose. Raw-IMU fallback removed, real vehicle mode kept.
+Final build26packages, GNSS39records0errors/0failures/7wrapper skips, initializer11
+and MPCC2381records pass. Final actual-node replay281/281outputs and initial poses
+exactly match the prior passing node version. See [repair/evidence](../20260909-mpcc-measured-initial-heading/results.md).
+
+Uninstrumented single6laps251.15843200683594s/penalty0/no moving override passes.
+Dev2first moving D1Emergency933/source10.309999769/v1.8082220948765995 rejects.
+Both runs precede only the final independent GNSSfix-status publication change;
+that change passes native and exact-output node replay. Same-HEAD final campaign
+is still required. D1heading MAE versus calibrated rawIMU falls0.28548->0.002084rad.
+
+New933 uses actual/inspectedartifact382, fp18084597137145989003. Source-free native
+replay reproduces932terminal peer+0.00239983282409m and933−0.0000303259375765m;
+independentStop−0.00178549315808m. Wall/steering join pass. Control-origin velocity
+1.91152601996m/s differs from artifact2.21718518754m/s. Peer-only substitutions
+preserve outcomes. All9normal+4Stop architecture arms reject/Unknown. Do not mix
+this new933with prior933/artifact371 or force-run928. No safety/gain/delay tuning.
+
+M1full shared model and M2replacement; M3coupled acceptance; M4all intents and
+Stop/restart/async; M5three single/dev2 trials, dev3/dev4sixlaps and gate1/2/3;
+M6same-artifact submission/eval remain required. Plan is
+[completion-plan.md](../20260909-mpcc-longitudinal-model-contract/completion-plan.md).
+OriginalDLL/protected userJSON restored; generated outputs remain outside commits.
 
 Previous direct input audit ae2efe6a:
 

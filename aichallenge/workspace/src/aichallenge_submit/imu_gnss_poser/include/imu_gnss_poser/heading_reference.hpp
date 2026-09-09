@@ -23,11 +23,11 @@ struct InitialPoseCovariance
   double yaw{};
 };
 
-struct RacelineInitialPose
+struct InitialPose
 {
   geometry_msgs::msg::PoseWithCovarianceStamped pose;
   double yaw_rad{};
-  std::size_t reference_index{};
+  std::optional<std::size_t> reference_index;
 };
 
 std::vector<Point2D> load_path_points_csv(std::istream & input);
@@ -38,9 +38,15 @@ std::optional<std::size_t> find_closest_finite_point(
 std::optional<double> compute_path_yaw(
   const std::vector<Point2D> & points, std::size_t index) noexcept;
 
-std::optional<RacelineInitialPose> make_raceline_initial_pose(
+std::optional<InitialPose> make_raceline_initial_pose(
   const geometry_msgs::msg::PoseWithCovarianceStamped & gnss_pose,
   const std::vector<Point2D> & points,
+  const InitialPoseCovariance & covariance) noexcept;
+
+/// Input is an already transformed map/base_link observation, never raw IMU.
+/// Preserve the source stamp and pose; path geometry is not a vehicle heading.
+std::optional<InitialPose> make_measurement_initial_pose(
+  const geometry_msgs::msg::PoseWithCovarianceStamped & measurement,
   const InitialPoseCovariance & covariance) noexcept;
 
 }  // namespace imu_gnss_poser

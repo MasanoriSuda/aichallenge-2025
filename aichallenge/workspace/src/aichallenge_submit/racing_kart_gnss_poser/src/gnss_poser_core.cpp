@@ -35,6 +35,7 @@ GNSSPoser::GNSSPoser(const rclcpp::NodeOptions & node_options)
   map_frame_(declare_parameter("map_frame", "map")),
   gear_('N'),
   use_gnss_ins_orientation_(declare_parameter("use_gnss_ins_orientation", true)),
+  use_imu_orientation_(declare_parameter("use_imu_orientation", false)),
   plane_zone_(declare_parameter<int>("plane_zone", 9)),
   gnss_change_threshold_(declare_parameter<double>("gnss_change_threshold")),
   unknown_position_covariance_(declare_parameter("unknown_position_covariance", 10.0)),
@@ -53,10 +54,18 @@ GNSSPoser::GNSSPoser(const rclcpp::NodeOptions & node_options)
   nav_sat_fix_origin_.altitude = declare_parameter("altitude", 0.0);
 
   int buff_epoch = declare_parameter("buff_epoch", 1);
+  if (use_imu_orientation_ && (use_gnss_ins_orientation_ || buff_epoch != 1)) {
+    throw std::invalid_argument(
+      "same-source IMU orientation requires buff_epoch=1 and use_gnss_ins_orientation=false");
+  }
   position_buffer_.set_capacity(buff_epoch);
 
   nav_sat_fix_sub_ = create_subscription<sensor_msgs::msg::NavSatFix>(
     "fix", rclcpp::QoS{1}, std::bind(&GNSSPoser::callbackNavSatFix, this, std::placeholders::_1));
+  if (use_imu_orientation_) {
+    imu_sub_ = create_subscription<sensor_msgs::msg::Imu>(
+      "imu", rclcpp::QoS{1}, std::bind(&GNSSPoser::callbackImu, this, std::placeholders::_1));
+  }
   autoware_orientation_sub_ =
     create_subscription<autoware_sensing_msgs::msg::GnssInsOrientationStamped>(
       "autoware_orientation", rclcpp::QoS{1},
@@ -83,7 +92,7 @@ GNSSPoser::GNSSPoser(const rclcpp::NodeOptions & node_options)
 void GNSSPoser::callbackNavSatFix(
   const sensor_msgs::msg::NavSatFix::ConstSharedPtr nav_sat_fix_msg_ptr)
 {
-  // check fixed topic
+  // GNSS fix status describes the receiver, independently of IMU availability.
   const bool is_fixed = isFixed(nav_sat_fix_msg_ptr->status);
 
   // publish is_fixed topic
@@ -93,12 +102,93 @@ void GNSSPoser::callbackNavSatFix(
   fixed_pub_->publish(is_fixed_msg);
 
   if (!is_fixed) {
+    pending_imu_fix_.reset();
     RCLCPP_WARN_STREAM_THROTTLE(
       this->get_logger(), *this->get_clock(), std::chrono::milliseconds(1000).count(),
       "Not Fixed Topic. Skipping Calculate.");
     return;
   }
 
+  if (!use_imu_orientation_) {
+    processNavSatFix(nav_sat_fix_msg_ptr);
+    return;
+  }
+  const auto & stamp = nav_sat_fix_msg_ptr->header.stamp;
+  if (stamp.sec < 0 || stamp.nanosec >= 1000000000U ||
+    nav_sat_fix_msg_ptr->header.frame_id != gnss_frame_)
+  {
+    return;
+  }
+  if (pending_imu_fix_ && rclcpp::Time(stamp) < rclcpp::Time(pending_imu_fix_->header.stamp)) {
+    return;
+  }
+  pending_imu_fix_ = nav_sat_fix_msg_ptr;
+  processSynchronizedImuFix();
+}
+
+void GNSSPoser::callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg)
+{
+  const auto & stamp = msg->header.stamp;
+  if (stamp.sec < 0 || stamp.nanosec >= 1000000000U ||
+    (latest_imu_ && rclcpp::Time(stamp) < rclcpp::Time(latest_imu_->header.stamp)))
+  {
+    return;
+  }
+  latest_imu_ = msg;
+  processSynchronizedImuFix();
+}
+
+void GNSSPoser::processSynchronizedImuFix()
+{
+  if (!pending_imu_fix_ || !latest_imu_) {
+    return;
+  }
+  const rclcpp::Time fix_stamp(pending_imu_fix_->header.stamp);
+  const rclcpp::Time imu_stamp(latest_imu_->header.stamp);
+  if (fix_stamp < imu_stamp || (last_imu_fix_stamp_ && fix_stamp <= *last_imu_fix_stamp_)) {
+    pending_imu_fix_.reset();
+    return;
+  }
+  if (fix_stamp != imu_stamp) {
+    return;
+  }
+  // Both subscribers use a single latest sample. No future/nearest-time attitude
+  // is substituted, and no timer renews the age of an unmatched observation.
+  const auto fix = pending_imu_fix_;
+  pending_imu_fix_.reset();
+  const auto & imu = *latest_imu_;
+  const auto & q = imu.orientation;
+  const double norm = std::hypot(std::hypot(q.x, q.y), std::hypot(q.z, q.w));
+  if (imu.header.frame_id.empty() || !std::isfinite(norm) || norm == 0.0 ||
+    !std::isfinite(imu.orientation_covariance[0]) || imu.orientation_covariance[0] < 0.0)
+  {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "IMU absolute attitude unavailable");
+    return;
+  }
+  try {
+    const auto imu_to_gnss = tf2_buffer_.lookupTransform(
+      imu.header.frame_id, gnss_frame_, tf2::TimePointZero);
+    const tf2::Quaternion world_imu(q.x / norm, q.y / norm, q.z / norm, q.w / norm);
+    tf2::Quaternion imu_gnss;
+    tf2::fromMsg(imu_to_gnss.transform.rotation, imu_gnss);
+    const double tf_norm = imu_gnss.length();
+    if (!std::isfinite(tf_norm) || tf_norm == 0.0) {
+      return;
+    }
+    // q_world_gnss = q_world_imu * q_imu_gnss, before the GNSS lever arm.
+    const auto orientation = tf2::toMsg((world_imu * imu_gnss.normalized()).normalized());
+    processNavSatFix(fix, orientation);
+    last_imu_fix_stamp_ = fix_stamp;
+  } catch (const tf2::TransformException & error) {
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 2000, "IMU/GNSS extrinsics unavailable: %s", error.what());
+  }
+}
+
+void GNSSPoser::processNavSatFix(
+  const sensor_msgs::msg::NavSatFix::ConstSharedPtr nav_sat_fix_msg_ptr,
+  const std::optional<geometry_msgs::msg::Quaternion> & measured_orientation)
+{
   // get position in coordinate_system
   const auto gnss_stat = convert(*nav_sat_fix_msg_ptr, coordinate_system_);
   const auto position = getPosition(gnss_stat);
@@ -115,7 +205,9 @@ void GNSSPoser::callbackNavSatFix(
 
   // calc gnss antenna orientation
   geometry_msgs::msg::Quaternion orientation;
-  if (use_gnss_ins_orientation_) {
+  if (measured_orientation.has_value()) {
+    orientation = measured_orientation.value();
+  } else if (use_gnss_ins_orientation_) {
     orientation = msg_gnss_ins_orientation_stamped_->orientation.orientation;
   } else {
     if (!heading_reference_position_.has_value()) {
@@ -152,8 +244,12 @@ void GNSSPoser::callbackNavSatFix(
 
   // get TF from base_link to gnss_antenna
   auto tf_gnss_antenna2base_link_msg_ptr = std::make_shared<geometry_msgs::msg::TransformStamped>();
-  getStaticTransform(
-    gnss_frame_, base_frame_, tf_gnss_antenna2base_link_msg_ptr, nav_sat_fix_msg_ptr->header.stamp);
+  if (!getStaticTransform(
+      gnss_frame_, base_frame_, tf_gnss_antenna2base_link_msg_ptr, nav_sat_fix_msg_ptr->header.stamp) &&
+    use_imu_orientation_)
+  {
+    return;
+  }
   tf2::Transform tf_gnss_antenna2base_link{};
   tf2::fromMsg(tf_gnss_antenna2base_link_msg_ptr->transform, tf_gnss_antenna2base_link);
 

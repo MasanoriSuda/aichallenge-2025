@@ -210,7 +210,9 @@ Boostを使用しない提出物に `/awsim/cmd` は必須ではない。使用�
 
 オーケストレータ（`autostart_orchestrator_node`）は起動時にこのサービスを呼び出して初期自己位置を設定します。未提供の場合は `initial_pose_service_timeout_sec` 経過後にスキップされます。
 
-サービス呼び出しが最初のGNSS受信より早く失敗した場合も、`imu_gnss_poser` は最初の有効なGNSS受信時に同じheading referenceから方位を計算して `/localization/initial_pose3d` をpublishし、その後にEKFを起動します。初期方位へGNSS/IMUの生方位を直接流用すると、起動順序によってコース逆向きの自己位置が確定し得るため、このフォールバックでもheading referenceとの整合を維持します。
+サービス呼び出しが最初のGNSS受信より早く失敗した場合も、`imu_gnss_poser` は最初の有効な位置・方位の受信時に、サービスと同じ初期化処理で `/localization/initial_pose3d` をpublishし、その後にEKFを起動します。初期姿勢は観測のsource stampを保持します。
+
+ローカルAWSIMでは、GNSS位置と同じsource stampのIMU絶対姿勢を、校正済みTFでGNSSアンテナ座標へ変換してからレバーアームを戻し、その`map`上の`base_link`姿勢で初期化します。未着・時刻不一致・無効な姿勢・TF欠落の組を公開せず、生のIMU quaternionを初期姿勢へ直接代入しません。これは2025由来のローカルセンサー契約であり、2026公式/実車の絶対方位供給を仮定しません。実車側の既定は明示された`raceline`初期化を維持します。詳細は[自己位置入力の校正](../spec/localization-calibration.md)。
 
 ### 評価可能な提出物が満たす最小インターフェース
 

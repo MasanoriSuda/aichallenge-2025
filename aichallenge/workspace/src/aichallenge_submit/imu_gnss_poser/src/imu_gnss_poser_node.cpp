@@ -16,6 +16,7 @@
 #include <cmath>
 #include <fstream>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -23,7 +24,6 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
-#include <sensor_msgs/msg/imu.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <visualization_msgs/msg/marker.hpp>
@@ -62,6 +62,10 @@ public:
     // Parameters
     declare_parameter("heading_csv_path", std::string(""));
     declare_parameter("initial_pose_service", std::string("/set_initial_pose"));
+    initial_pose_heading_source_ = declare_parameter("initial_pose_heading_source", "raceline");
+    if (initial_pose_heading_source_ != "raceline" && initial_pose_heading_source_ != "measurement") {
+      throw std::invalid_argument("initial_pose_heading_source must be raceline or measurement");
+    }
     declare_parameter("marker_topic", std::string("/heading_pose_initializer/raceline_markers"));
     declare_parameter("marker_publish_rate", 0.1);
     declare_parameter("arrow_interval", 2);
@@ -122,9 +126,6 @@ public:
     sub_gnss_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
       "/sensing/gnss/pose_with_covariance", rv_qos,
       std::bind(&ImuGnssPoser::gnss_callback, this, std::placeholders::_1));
-    sub_imu_ = create_subscription<sensor_msgs::msg::Imu>(
-      "/sensing/imu/imu_raw", rv_qos,
-      std::bind(&ImuGnssPoser::imu_callback, this, std::placeholders::_1));
 
     // EKF trigger client
     ekf_trigger_client_ = create_client<std_srvs::srv::SetBool>("/localization/trigger_node");
@@ -163,35 +164,40 @@ private:
 
   void gnss_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
   {
-    adjust_covariance(*msg);
-    apply_imu_orientation_fallback(*msg);
+    const auto valid_measurement = imu_gnss_poser::make_measurement_initial_pose(
+      *msg, {init_cov_x_, init_cov_y_, init_cov_yaw_});
+    if (!valid_measurement) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "GNSS body pose is invalid");
+      return;
+    }
+    auto observation = std::make_shared<geometry_msgs::msg::PoseWithCovarianceStamped>(*msg);
+    observation->pose.pose.orientation = valid_measurement->pose.pose.pose.orientation;
+    adjust_covariance(*observation);
 
     // Publish fused pose for EKF measurement input (GNSS/IMU yaw, not raceline)
-    pub_pose_->publish(*msg);
+    pub_pose_->publish(*observation);
 
     // Store latest for /set_initial_pose service
     {
       std::lock_guard<std::mutex> lk(gnss_mutex_);
-      last_gnss_ = msg;
+      last_gnss_ = observation;
     }
 
-    // The service may be called before the first GNSS sample. Keep the continuous
-    // GNSS/IMU measurement unchanged, but initialize EKF only with raceline yaw.
+    // Service and startup share the explicitly selected initialization source.
     if (!ekf_triggered_) {
-      const auto initial_pose = imu_gnss_poser::make_raceline_initial_pose(
-        *msg, raceline_, {init_cov_x_, init_cov_y_, init_cov_yaw_});
+      const auto initial_pose = make_initial_pose(*observation);
       if (!initial_pose.has_value()) {
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
-          "Waiting for a valid raceline-aligned initial pose; EKF trigger deferred");
+          "Waiting for a valid initial pose; EKF trigger deferred");
         return;
       }
       pub_initial_pose_3d_->publish(initial_pose->pose);
       if (!initial_pose_published_) {
         RCLCPP_INFO(
           get_logger(),
-          "Publishing raceline-aligned initial_pose3d: yaw=%.3f rad, reference_index=%zu",
-          initial_pose->yaw_rad, initial_pose->reference_index);
+          "Publishing initial_pose3d: source=%s, yaw=%.3f rad",
+          initial_pose_heading_source_.c_str(), initial_pose->yaw_rad);
         initial_pose_published_ = true;
       }
       try_trigger_ekf();
@@ -213,21 +219,14 @@ private:
     msg.pose.covariance[7 * 5] = gnss_cov_yaw_;
   }
 
-  void apply_imu_orientation_fallback(geometry_msgs::msg::PoseWithCovarianceStamped & msg) const
+  std::optional<imu_gnss_poser::InitialPose> make_initial_pose(
+    const geometry_msgs::msg::PoseWithCovarianceStamped & measurement) const
   {
-    const auto & o = msg.pose.pose.orientation;
-    if (std::isnan(o.x) || std::isnan(o.y) || std::isnan(o.z) || std::isnan(o.w) ||
-      (o.x == 0 && o.y == 0 && o.z == 0 && o.w == 0))
-    {
-      msg.pose.pose.orientation = imu_msg_.orientation;
+    const imu_gnss_poser::InitialPoseCovariance covariance{init_cov_x_, init_cov_y_, init_cov_yaw_};
+    if (initial_pose_heading_source_ == "measurement") {
+      return imu_gnss_poser::make_measurement_initial_pose(measurement, covariance);
     }
-  }
-
-  // ── IMU callback ───────────────────────────────────────────
-
-  void imu_callback(sensor_msgs::msg::Imu::SharedPtr msg)
-  {
-    imu_msg_ = *msg;
+    return imu_gnss_poser::make_raceline_initial_pose(measurement, raceline_, covariance);
   }
 
   // ── EKF trigger ────────────────────────────────────────────
@@ -256,7 +255,7 @@ private:
     const std::shared_ptr<std_srvs::srv::Trigger::Request>,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response)
   {
-    if (!has_raceline_) {
+    if (initial_pose_heading_source_ == "raceline" && !has_raceline_) {
       response->success = false;
       response->message = "heading CSV not loaded";
       RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
@@ -275,16 +274,14 @@ private:
       return;
     }
 
-    auto initial_pose = imu_gnss_poser::make_raceline_initial_pose(
-      *gnss, raceline_, {init_cov_x_, init_cov_y_, init_cov_yaw_});
+    const auto initial_pose = make_initial_pose(*gnss);
     if (!initial_pose.has_value()) {
       response->success = false;
-      response->message = "cannot compute yaw from heading reference";
+      response->message = "initial pose source is invalid";
       RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
       return;
     }
 
-    initial_pose->pose.header.stamp = this->now();
     pub_initial_pose_3d_->publish(initial_pose->pose);
     initial_pose_published_ = true;
     try_trigger_ekf();
@@ -365,6 +362,7 @@ private:
   // Raceline
   std::vector<imu_gnss_poser::Point2D> raceline_;
   bool has_raceline_{false};
+  std::string initial_pose_heading_source_;
   int64_t arrow_interval_{2};
   double arrow_length_{1.0};
 
@@ -373,14 +371,12 @@ private:
   bool ekf_triggered_{false};
   std::mutex gnss_mutex_;
   geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr last_gnss_;
-  sensor_msgs::msg::Imu imu_msg_;
 
   // ROS interfaces
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pub_pose_;
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pub_initial_pose_3d_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr sub_gnss_;
-  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;
   rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr ekf_trigger_client_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr service_;
   rclcpp::TimerBase::SharedPtr marker_timer_;

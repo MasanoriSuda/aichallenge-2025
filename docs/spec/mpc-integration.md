@@ -4150,3 +4150,27 @@ YAMLのgripSteerFactor0.6はruntimeが下限0.7へclampしていたため、実�
 モデル採用、統合多車両、全intent、gate、同じ提出tar由来のevalは未完。
 [比較結果](../../.steering/20260909-mpcc-longitudinal-model-contract/results.md)と
 [対象コード・合格条件付きの完遂計画](../../.steering/20260909-mpcc-longitudinal-model-contract/completion-plan.md)を参照する。
+
+
+### 2026-09-10: 実測初期姿勢と共有モデルの残課題
+
+ローカルAWSIM（2025由来の暫定）のsimulation専用IMU外部パラメータを実測の
+body→IMU yaw+pi/2へ修正した。同一source時刻のGNSS位置と変換済みIMU姿勢で
+アンテナのレバーアームを処理し、起動と`/set_initial_pose`は同じ観測姿勢・元時刻を
+使う。実車設定は維持する。[校正契約](localization-calibration.md)を参照する。
+
+単車6周251.158432s/penalty0を確認したが、2台走行は新D1decision933/
+artifact382で不合格。MPCCの現行seven-stateモデルは変えていない。
+旧933/artifact371・直接力観測run928と新runの証拠を混同しない。
+新933は壁・操舵joinが通る一方、terminalの他車余裕−0.00003033m、独立Stopも
+不合格。artifact速度2.21719m/sに対し制御開始予測1.91153m/sの差が残る。
+同一worldの全9normal/4Stop方式が失敗し、物理的実行不能の証明はない。
+
+直接観測はwire加速度と実際の車体加速度の差、接触状態による駆動・横力、重心と
+pose原点の違いを確認した。横速度・yaw rateを持つmovingモデルは保持データで
+改善するが、停止・gear/sleep・接触不確かさ・指令適用時刻までの共有契約が必要。
+操舵の受信後queue/delay/lagは再現できても、DDSや車体適用遅延の上限保証ではない。
+観測prototypeを通常制御へ採用したとは扱わない。
+[力モデル比較](../../.steering/20260909-mpcc-force-step-model/results.md)と
+[初期姿勢の修正・検証](../../.steering/20260909-mpcc-measured-initial-heading/results.md)
+に成功・棄却・失敗試行を記録した。共有モデルの実装、複数車・intent・gate・提出評価は未完。

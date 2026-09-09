@@ -155,7 +155,7 @@ std::optional<double> compute_path_yaw(
   return std::nullopt;
 }
 
-std::optional<RacelineInitialPose> make_raceline_initial_pose(
+std::optional<InitialPose> make_raceline_initial_pose(
   const geometry_msgs::msg::PoseWithCovarianceStamped & gnss_pose,
   const std::vector<Point2D> & points,
   const InitialPoseCovariance & covariance) noexcept
@@ -178,7 +178,7 @@ std::optional<RacelineInitialPose> make_raceline_initial_pose(
     return std::nullopt;
   }
 
-  RacelineInitialPose result;
+  InitialPose result;
   result.pose.header = gnss_pose.header;
   result.pose.pose.pose.position = position;
   result.pose.pose.pose.orientation.x = 0.0;
@@ -190,6 +190,37 @@ std::optional<RacelineInitialPose> make_raceline_initial_pose(
   result.pose.pose.covariance[7 * 5] = covariance.yaw;
   result.yaw_rad = yaw.value();
   result.reference_index = reference_index.value();
+  return result;
+}
+
+std::optional<InitialPose> make_measurement_initial_pose(
+  const geometry_msgs::msg::PoseWithCovarianceStamped & measurement,
+  const InitialPoseCovariance & covariance) noexcept
+{
+  const auto & p = measurement.pose.pose.position;
+  const auto & q = measurement.pose.pose.orientation;
+  const double norm = std::hypot(std::hypot(q.x, q.y), std::hypot(q.z, q.w));
+  if (measurement.header.frame_id.empty() || !std::isfinite(p.x) ||
+    !std::isfinite(p.y) || !std::isfinite(p.z) || !std::isfinite(norm) || norm == 0.0 ||
+    !finite_nonnegative(covariance.x) || !finite_nonnegative(covariance.y) ||
+    !finite_nonnegative(covariance.yaw))
+  {
+    return std::nullopt;
+  }
+  InitialPose result;
+  result.pose.header = measurement.header;
+  result.pose.pose.pose.position = p;
+  auto & orientation = result.pose.pose.pose.orientation;
+  orientation.x = q.x / norm;
+  orientation.y = q.y / norm;
+  orientation.z = q.z / norm;
+  orientation.w = q.w / norm;
+  result.pose.pose.covariance[0] = covariance.x;
+  result.pose.pose.covariance[7] = covariance.y;
+  result.pose.pose.covariance[35] = covariance.yaw;
+  result.yaw_rad = std::atan2(
+    2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
+    1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z));
   return result;
 }
 

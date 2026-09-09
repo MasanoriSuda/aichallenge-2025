@@ -13,6 +13,53 @@ namespace
 using imu_gnss_poser::InitialPoseCovariance;
 using imu_gnss_poser::Point2D;
 
+TEST(HeadingReference, MeasuredInitialPosePreservesVehicleHeadingAndSourceEpoch)
+{
+  geometry_msgs::msg::PoseWithCovarianceStamped observation;
+  observation.header.frame_id = "map";
+  observation.header.stamp.sec = 9;
+  observation.header.stamp.nanosec = 710000000;
+  observation.pose.pose.position.x = 10.0;
+  observation.pose.pose.position.y = 20.0;
+  observation.pose.pose.position.z = 6.2;
+  constexpr double vehicle_yaw = 2.035;
+  observation.pose.pose.orientation.z = 2.0 * std::sin(vehicle_yaw / 2.0);
+  observation.pose.pose.orientation.w = 2.0 * std::cos(vehicle_yaw / 2.0);
+  const auto original = observation;
+  const auto measured = imu_gnss_poser::make_measurement_initial_pose(
+    observation, {0.25, 0.25, 0.5});
+  const auto path = imu_gnss_poser::make_raceline_initial_pose(
+    observation, {{10.0, 20.0}, {10.0 + std::cos(2.420), 20.0 + std::sin(2.420)}},
+    {0.25, 0.25, 0.5});
+  ASSERT_TRUE(measured);
+  ASSERT_TRUE(path);
+  EXPECT_NEAR(measured->yaw_rad, vehicle_yaw, 1e-12);
+  EXPECT_NEAR(path->yaw_rad - measured->yaw_rad, 0.385, 1e-12);
+  EXPECT_EQ(measured->pose.header, observation.header);
+  EXPECT_EQ(measured->pose.pose.pose.position, observation.pose.pose.position);
+  EXPECT_FALSE(measured->reference_index);
+  EXPECT_DOUBLE_EQ(measured->pose.pose.covariance[35], 0.5);
+  EXPECT_EQ(observation, original);
+}
+
+TEST(HeadingReference, MeasuredInitialPoseRejectsInvalidObservation)
+{
+  geometry_msgs::msg::PoseWithCovarianceStamped observation;
+  observation.header.frame_id = "map";
+  observation.pose.pose.orientation.w = 0.0;
+  EXPECT_FALSE(imu_gnss_poser::make_measurement_initial_pose(observation, {0.25, 0.25, 0.5}));
+  observation.pose.pose.orientation.w = std::numeric_limits<double>::infinity();
+  EXPECT_FALSE(imu_gnss_poser::make_measurement_initial_pose(observation, {0.25, 0.25, 0.5}));
+  observation.pose.pose.orientation.w = 1.0;
+  observation.header.frame_id.clear();
+  EXPECT_FALSE(imu_gnss_poser::make_measurement_initial_pose(observation, {0.25, 0.25, 0.5}));
+  observation.header.frame_id = "map";
+  observation.pose.pose.position.x = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(imu_gnss_poser::make_measurement_initial_pose(observation, {0.25, 0.25, 0.5}));
+  observation.pose.pose.position.x = 0.0;
+  EXPECT_FALSE(imu_gnss_poser::make_measurement_initial_pose(observation, {0.25, 0.25, -0.5}));
+}
+
 TEST(HeadingReference, LoadsLegacyXYColumns)
 {
   std::istringstream csv{"x,y,z\n1.0,2.0,0.0\n3.0,4.0,0.0\n"};

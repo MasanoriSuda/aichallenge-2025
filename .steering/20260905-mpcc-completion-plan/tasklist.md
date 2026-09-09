@@ -1,5 +1,11 @@
 # Tasklist
 
+2026-09-10追記: 力・接触・操舵応答の直接観測から初期姿勢producerを修正。
+26package build、GNSS39/initializer11/MPCC2381records、281source-pair node replayを確認。
+単車6周251.158432s/penalty0、2台は新933/artifact382で停止証明を失い不合格。
+[最新状況](current-status.md)を正本とし、M1共有モデルからM6提出評価まで継続する。
+
+
 最新の進捗・完遂順序は[current-status.md](current-status.md)。
 
 2026-09-09計画具体化: [最新M1〜M6計画](../20260909-mpcc-longitudinal-model-contract/completion-plan.md)

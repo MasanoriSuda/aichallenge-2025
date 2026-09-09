@@ -1,8 +1,33 @@
 # 自己位置入力の校正
 
-2026-09-08確認。使用中のローカルAWSIMに対する校正であり、2026公式仕様や
+2026-09-09確認。使用中のローカルAWSIMに対する校正であり、2026公式仕様や
 実車GNSSの精度保証ではない。センサーモデル・ノイズ・遅延・取り付け位置を
 変更した場合は再確認する。
+
+## ローカルAWSIMの絶対姿勢と初期方位
+
+`20260909-force-step-observed-single-r1`と`dev2-r1`の同じsource時刻で、
+Rigidbody姿勢を実装のROS座標変換へ通し、raw IMU姿勢と比較した。
+1124組のbody→IMU回転はyaw **+π/2**、その固定変換との差は最大1.11e-7rad。
+従来のsimulation用TFは−π/2で、姿勢をbodyへ戻すとπradの誤りを生む。
+simulation用校正を+π/2へ修正し、実車用の校正は別に保持する。
+
+初期方位を近傍経路の接線で置換する処理も、実際の初期車体方位を表していない。
+同じ2台走行のD1では、発進中のodometry方位誤差が最大約0.3854radだった。
+ローカルAWSIMのGNSSとIMUは20Hzで同じsource stampを持つ（D1 138/138、
+D2 143/143組を記録から確認）。`use_imu_orientation=true`ではこの組だけを処理し、
+TFでIMU姿勢をGNSSアンテナ座標へ変換してからアンテナ位置をbodyへ戻す。
+ゼロ/非有限quaternion、姿勢未提供、時刻不一致、TF欠落ではposeを作らない。
+位置medianは同一時刻を保つためbuff_epoch=1を要求する。
+
+simulation起動は`initial_pose_heading_source=measurement`を使い、最初の受信と
+`/set_initial_pose`の両方で同じ観測姿勢を初期値にする。生IMU quaternionを
+別frameのGNSS姿勢へ代入する旧fallbackは削除する。共分散・EKF gainは変えない。
+nodeの明示既定と実車起動は`raceline`を維持する。2026公式環境へ移す際は、
+IMU絶対姿勢の提供・基準・取付TF・時刻契約を別途確認する。
+
+根拠と検証状況は`.steering/20260909-mpcc-measured-initial-heading/`。
+上記は実装契約であり、統合走行の受入れはその記録が揃うまで未完了。
 
 ## 共分散が不明なGNSS
 

@@ -12,4 +12,5 @@ sensor_kit_base_link:
     z: 0.0
     roll: 0.0
     pitch: 0.0
-    yaw: -1.5707963268
+    # Same-source Rigidbody/IMU attitude observation; simulation only.
+    yaw: 1.5707963267948966

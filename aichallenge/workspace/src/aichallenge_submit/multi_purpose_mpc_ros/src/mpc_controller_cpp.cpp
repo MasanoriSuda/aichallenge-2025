@@ -8292,6 +8292,7 @@ struct MPC
     }
     snapshot->overtake_static_wall_footprint_ = overtake_static_wall_footprint_;
     snapshot->actual_wall_monitor_pose_ = actual_wall_monitor_pose_;
+    snapshot->current_execution_observation_pose_ = current_execution_observation_pose_;
     snapshot->predicted_execution_pose_ = predicted_execution_pose_;
     snapshot->canonical_current_control_path_ =
       canonical_current_control_path_;
@@ -8594,11 +8595,13 @@ struct MPC
 
   void update_predicted_pose_for_execution_contract(
     const recovery_footprint::Pose2D & predicted_pose,
+    const recovery_footprint::Pose2D & current_observation_pose,
     std::optional<CanonicalCurrentControlPath> control_path,
     const double predicted_yaw_rate_radps,
     const double prediction_delay_sec)
   {
     predicted_execution_pose_ = predicted_pose;
+    current_execution_observation_pose_ = current_observation_pose;
     canonical_current_control_path_ = std::move(control_path);
     execution_prediction_yaw_rate_radps_ = predicted_yaw_rate_radps;
     execution_prediction_delay_sec_ = prediction_delay_sec;
@@ -24714,7 +24717,7 @@ struct MPC
   build_canonical_current_control_path() const
   {
     if (
-      !actual_wall_monitor_pose_.has_value() ||
+      !current_execution_observation_pose_.has_value() ||
       !predicted_execution_pose_.has_value() ||
       !canonical_current_control_path_.has_value() ||
       !canonical_current_control_path_->complete())
@@ -24725,9 +24728,9 @@ struct MPC
     const auto & first = path.poses.front();
     const auto & last = path.poses.back();
     if (
-      std::abs(first.x_m - actual_wall_monitor_pose_->x_m) > 1e-9 ||
-      std::abs(first.y_m - actual_wall_monitor_pose_->y_m) > 1e-9 ||
-      std::abs(first.yaw_rad - actual_wall_monitor_pose_->yaw_rad) > 1e-9 ||
+      std::abs(first.x_m - current_execution_observation_pose_->x_m) > 1e-9 ||
+      std::abs(first.y_m - current_execution_observation_pose_->y_m) > 1e-9 ||
+      std::abs(first.yaw_rad - current_execution_observation_pose_->yaw_rad) > 1e-9 ||
       std::abs(last.x_m - predicted_execution_pose_->x_m) > 1e-9 ||
       std::abs(last.y_m - predicted_execution_pose_->y_m) > 1e-9 ||
       std::abs(last.yaw_rad - predicted_execution_pose_->yaw_rad) > 1e-9)
@@ -24758,7 +24761,7 @@ struct MPC
     if (
       overtake_static_wall_grid_snapshot_owner_ == nullptr ||
       overtake_static_wall_grid_fingerprint_ == 0U ||
-      !actual_wall_monitor_pose_.has_value() || !std::isfinite(now_sec) ||
+      !current_execution_observation_pose_.has_value() || !std::isfinite(now_sec) ||
       solver_snapshot.request.states.empty())
     {
       rejection.detail = "physical wall pipeline snapshot unavailable";
@@ -24811,7 +24814,7 @@ struct MPC
     rate_resolved_physical_wall::Snapshot snapshot;
     snapshot.identity.artifact = solver_snapshot.identity;
     snapshot.identity.captured_sec = now_sec;
-    snapshot.current_pose = actual_wall_monitor_pose_.value();
+    snapshot.current_pose = current_execution_observation_pose_.value();
     snapshot.control_prefix = control_prefix->poses;
     snapshot.course_frame_knots = course_frame_knots.value();
     snapshot.identity.pose_snapshot_id =
@@ -30733,6 +30736,8 @@ struct MPC
   mutable bool overtake_line_runtime_observation_active_{false};
   mutable OvertakeLineRuntimeTelemetry overtake_line_runtime_telemetry_;
   std::optional<recovery_footprint::Pose2D> actual_wall_monitor_pose_;
+  // Estimated now pose for canonical proof; raw contact monitoring stays separate.
+  std::optional<recovery_footprint::Pose2D> current_execution_observation_pose_;
   std::optional<recovery_footprint::Pose2D> predicted_execution_pose_;
   std::optional<CanonicalCurrentControlPath> canonical_current_control_path_;
   std::optional<steering_state_contract::PhysicalState>
@@ -58327,6 +58332,21 @@ private:
       publish_failsafe_command(control_time, "non-finite odometry rejected");
       return;
     }
+    mpc_state_prediction::MotionObservation control_observation{
+      rclcpp::Time(odom_->header.stamp).seconds(),
+      {pose.x, pose.y, pose.theta}, actual_v, yaw_rate};
+    if (state_prediction_active_) {
+      // Own the observation-to-now interval explicitly. The actuator-delay
+      // predictor below starts at now; its fixed duration cannot also account
+      // for an older Odometry state. Body twist is held only across that age.
+      const auto aligned = mpc_state_prediction::predict_constant_twist_observation(
+        control_observation, control_time.seconds(), mpc_cfg_.odom_timeout_sec);
+      if (!aligned) {
+        publish_failsafe_command(control_time, "invalid current motion observation");
+        return;
+      }
+      control_observation = *aligned;
+    }
     std::optional<std::vector<mpc_state_prediction::AccelerationInterval>>
       longitudinal_prediction_intervals;
     if (state_prediction_active_) {
@@ -58380,7 +58400,7 @@ private:
     if (physical_steering_resolution.state.has_value()) {
       const auto response_inference =
         mpc_state_prediction::infer_response_steering(
-        actual_v, yaw_rate,
+        control_observation.longitudinal_velocity_mps, control_observation.yaw_rate_radps,
         physical_steering_resolution.state->current_time_steering_rad,
         car_->length, mpc_cfg_.yaw_response_gain,
         mpc_cfg_.min_linearization_speed_mps,
@@ -58413,8 +58433,11 @@ private:
       }
     }
     Pose2D mpc_pose = pose;
-    double control_origin_speed_mps = std::abs(actual_v);
-    double execution_prediction_yaw_rate_radps = yaw_rate;
+    mpc_pose.x = control_observation.state.x;
+    mpc_pose.y = control_observation.state.y;
+    mpc_pose.theta = control_observation.state.yaw;
+    double control_origin_speed_mps = std::abs(control_observation.longitudinal_velocity_mps);
+    double execution_prediction_yaw_rate_radps = control_observation.yaw_rate_radps;
     std::optional<CanonicalCurrentControlPath> canonical_control_path;
     if (!state_prediction_active_) {
       CanonicalCurrentControlPath path;
@@ -58431,8 +58454,8 @@ private:
       {
         const auto prediction_trajectory =
           mpc_state_prediction::predict_piecewise_yaw_response_trajectory(
-          mpc_state_prediction::State2D{pose.x, pose.y, pose.theta},
-          std::abs(actual_v),
+          control_observation.state,
+          std::abs(control_observation.longitudinal_velocity_mps),
           response_steering_rad.value(),
           physical_steering_resolution.state->current_time_steering_rad,
           physical_steering_resolution.state->prediction_origin_steering_rad,
@@ -58467,10 +58490,10 @@ private:
             interval.acceleration_mps2 * interval.duration_sec);
         }
         const double average_prediction_speed_mps =
-          0.5 * (std::abs(actual_v) + control_origin_speed_mps);
+          0.5 * (std::abs(control_observation.longitudinal_velocity_mps) + control_origin_speed_mps);
         const auto predicted = mpc_state_prediction::predict_constant_turn_rate(
-          mpc_state_prediction::State2D{pose.x, pose.y, pose.theta},
-          average_prediction_speed_mps, yaw_rate,
+          control_observation.state,
+          average_prediction_speed_mps, control_observation.yaw_rate_radps,
           mpc_cfg_.state_prediction_delay_sec);
         mpc_pose.x = predicted.x;
         mpc_pose.y = predicted.y;
@@ -58541,7 +58564,7 @@ private:
 
     car_->update_states(
       mpc_pose.x, mpc_pose.y, mpc_pose.theta, control_origin_speed_mps, dt);
-    mpc_->update_current_speed(std::abs(actual_v));
+    mpc_->update_current_speed(std::abs(control_observation.longitudinal_velocity_mps));
     mpc_->update_control_origin_speed(control_origin_speed_mps);
     // Wall clearance is a physical safety observation, so keep it on the raw
     // odometry pose even when the MPC state is projected forward for latency.
@@ -58549,6 +58572,8 @@ private:
       recovery_footprint::Pose2D{pose.x, pose.y, pose.theta});
     mpc_->update_predicted_pose_for_execution_contract(
       recovery_footprint::Pose2D{mpc_pose.x, mpc_pose.y, mpc_pose.theta},
+      recovery_footprint::Pose2D{control_observation.state.x, control_observation.state.y,
+        control_observation.state.yaw},
       std::move(canonical_control_path),
       execution_prediction_yaw_rate_radps,
       state_prediction_active_ ? mpc_cfg_.state_prediction_delay_sec : 0.0);

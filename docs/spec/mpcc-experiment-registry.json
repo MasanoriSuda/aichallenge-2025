@@ -505,6 +505,26 @@
       "snapshot_id": "20260909-peer-epochs-dev2-r1",
       "manifest": ".steering/20260909-mpcc-peer-observation-epochs/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-viability-old931",
+      "manifest": ".steering/20260909-mpcc-stop-viability-epochs/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-viability-native-epoch",
+      "manifest": ".steering/20260909-mpcc-stop-viability-epochs/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-viability-single-r1",
+      "manifest": ".steering/20260909-mpcc-stop-viability-epochs/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-viability-dev2-r1",
+      "manifest": ".steering/20260909-mpcc-stop-viability-epochs/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -3778,6 +3798,149 @@
       "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "explicit parent derivation observation if needed for the next causal test"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-peer-clock",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-old931"
+      ],
+      "hypothesis": "Peer field or publication mapping alone explains old387/930to931",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "rejected",
+      "reason": "Both counterfactual substitutions preserve Accepted930 and rejected931; same peer170/CVfield. Anchor difference about1ns, not old4.4ms defect.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new causal peer or clock evidence"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-normal",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-old931"
+      ],
+      "hypothesis": "Bounded A/B/C/D/G candidates rescue frozen931",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "rejected",
+      "reason": "All9normal methods solver-reject with model/hard limits unchanged; physical feasibility Unknown.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new formulation witness or causal input repair"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-support-stop",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-old931"
+      ],
+      "hypothesis": "Existing supportStop candidates rescue frozen931",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "rejected",
+      "reason": "All4supportStop methods solver-reject; no physical infeasibility certificate.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new bounded candidate or causal producer"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-native-before",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-native-epoch"
+      ],
+      "hypothesis": "Raw old-epoch state reaches its claimed future control epoch",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "rejected",
+      "reason": "Before-r2:zero-age2pass,5/15msage4fail. Straight2m/s omits10/30mm; curved yaw omits0.00075/0.00225rad. Before-r1 separately retains6.09nm midpoint quadrature false failure.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "changed state-time producer"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-repair",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-native-epoch"
+      ],
+      "hypothesis": "Explicit source-to-now estimation preserves state epoch and raw monitoring",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "accepted",
+      "reason": "34native,104source contracts,26package build,60CTestgroups/2381records0errors/failures/skips. First ROSPose2Dconstructor compile failure preserved then corrected. Canonical current-pose owner separated; async copy and strict prefix checks maintained.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [
+        "raw old-epoch state fed directly to now-based actuator rollout",
+        "canonical proof prefix-start bound to raw wall-monitor pose"
+      ],
+      "revisit_condition": "new epoch/owner regression"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-held-twist",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-old931"
+      ],
+      "hypothesis": "Source-to-now held-twist estimate rescues old930/931",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "rejected",
+      "reason": "Counterfactual source shifts19.149526/6.564913mm; both terminal-reject -0.000858296754/-0.002501689556m. Old acceptance may mask omitted motion; no actual-motion accuracy claim.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "independent measurement/model evidence"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-single",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-single-r1"
+      ],
+      "hypothesis": "Fresh single six-lap acceptance",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "accepted",
+      "reason": "254.0740509033203s/penalty0/no moving override; callbackmax15.327ms/0overruns. Command/Odometry/clock source and receipts have no >50msgap or source duplicates/backward.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "relevant production change or new regression"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-runtime-epoch",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-dev2-r1"
+      ],
+      "hypothesis": "Current pose matches the declared source-to-now estimator in runtime",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "accepted",
+      "reason": "927/928/930uniquely match same-run raw Odometry projected19.999999/15/5ms: XY/yawerror0. Shifts25.892985/19.419744/6.812562mm. This is implementation validation, not ground-truth motion accuracy.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new unmatched observation"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-race",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-dev2-r1"
+      ],
+      "hypothesis": "State epoch repair establishes coupled acceptance",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "rejected",
+      "reason": "First movingD1Emergency930at1.362512395068054m/s; no finish. Normal374terminal928rejects;386Stopjoins; actual374publishes929. Finalinspected386wallpasses, terminalpeer -0.0013934640174382285m and independentStop -0.0011199987734020755m reject. Actual/inspected clocks must not be mixed.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal actual-command/application or current-world proof evidence"
+    },
+    {
+      "experiment_id": "20260909-stop-viability-timing",
+      "baseline_commit": "4b2474da1966d992057459a29c4475c6b45ea7e6",
+      "snapshot_ids": [
+        "20260909-stop-viability-dev2-r1"
+      ],
+      "hypothesis": "Control and delivery timing acceptance is complete",
+      "changed_dimension": "Odometry source-to-now constant-twist estimation before unchanged actuator prediction; current-pose owner",
+      "result": "inconclusive",
+      "reason": "D1/D2callbackmax20.969/23.696ms and0overruns; commandreceipt~40Hz/no >50msgap. Source12duplicates each, gaps2/1; Odometry/clock delivery pauses~300ms. No causal-observation warnings.",
+      "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal delivery/application phase evidence"
     }
   ]
 }

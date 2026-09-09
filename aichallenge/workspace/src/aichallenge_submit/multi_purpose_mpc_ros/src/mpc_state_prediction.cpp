@@ -50,6 +50,35 @@ State2D predict_constant_turn_rate(
   return state;
 }
 
+std::optional<MotionObservation> predict_constant_twist_observation(
+  const MotionObservation & observation, const double target_sec,
+  const double maximum_observation_age_sec) noexcept
+{
+  if (
+    !std::isfinite(observation.stamp_sec) || observation.stamp_sec < 0.0 ||
+    !std::isfinite(target_sec) || target_sec < observation.stamp_sec ||
+    !std::isfinite(maximum_observation_age_sec) || maximum_observation_age_sec <= 0.0 ||
+    target_sec - observation.stamp_sec > maximum_observation_age_sec ||
+    !std::isfinite(observation.state.x) || !std::isfinite(observation.state.y) ||
+    !std::isfinite(observation.state.yaw) ||
+    !std::isfinite(observation.longitudinal_velocity_mps) ||
+    !std::isfinite(observation.yaw_rate_radps))
+  {
+    return std::nullopt;
+  }
+  auto result = observation;
+  result.state = predict_constant_turn_rate(
+    observation.state, observation.longitudinal_velocity_mps,
+    observation.yaw_rate_radps, target_sec - observation.stamp_sec);
+  if (!std::isfinite(result.state.x) || !std::isfinite(result.state.y) ||
+    !std::isfinite(result.state.yaw))
+  {
+    return std::nullopt;
+  }
+  result.stamp_sec = target_sec;
+  return result;
+}
+
 std::optional<ResponseSteeringInference> infer_response_steering(
   const double longitudinal_velocity_mps,
   const double measured_yaw_rate_radps,

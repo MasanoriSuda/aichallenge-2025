@@ -4069,3 +4069,31 @@ payloadは`published-certified-wall-grid.bin`、`inspected-certified-wall-grid.b
 物理壁証明の全診断値は再求解なしで一致し、停止末端の他車拒否も再現する。
 2台完走は不合格で、現在姿勢の観測時刻と予測の対応、同一他車予測下の停止可用性は未解明。
 [結果と制約](../../.steering/20260909-mpcc-peer-observation-epochs/results.md)を参照。
+
+
+#### Odometryのsource時刻から判断時刻への推定（2026-09-09）
+
+受信済みOdometryの姿勢・速度・yaw rateを、古いsource時刻のまま現在時刻の状態として
+actuator予測へ渡さない。`MotionObservation`がこれらの時刻を保持し、既存の一定速度・
+一定旋回率モデルでsourceから判断時刻までを推定する。この観測間隔ではbody速度とyaw rateを
+保持する仮定であり、未観測の加速度や操舵応答を同定するものではない。
+逆行・不正値・既存のOdometry期限を超える推定は拒否する。
+
+その後、判断時刻から既存の130ms分の指令履歴・yaw応答予測を行う。設定されたactuator遅延、
+推定filter、モデル係数、hard limitは変更しない。prefixの先頭と物理snapshotのcurrent poseは
+同じ「判断時刻の推定姿勢」に結び付け、先頭・末尾の整合検査を維持する。
+async処理もこの現在姿勢を引き継ぐ。raw Odometryによる接触・Recovery監視の姿勢は独立して保持する。
+既存記録の`measured_to_control_path`という名前は維持し、先頭は判断時刻の状態推定を表す。
+元の観測は同一runのOdometryと区別する。独立したsteering reportの時刻問題は別の検証事項である。
+
+既知の一定運動のnative再現では、5/15ms古い入力に対応する10/30mmの移動が欠落した。
+修正後6ケースと既存を含む34ケース、source契約104件が通過。保存world930/931に同じ推定を
+適用する反実仮想は両方とも停止末端の他車証明を拒否するため、完走改善や真の運動精度とは区別する。
+[設計・検証範囲](../../.steering/20260909-mpcc-stop-viability-epochs/design.md)を参照。
+
+
+修正後の26package build、60CTestgroup・2381記録はエラー・失敗・skipなし。
+単車6周254.074051秒・penalty0・callback最大15.327msで通過。dev2では実際の3つの観測が
+sourceからの投影と位置・yawとも完全一致した一方、D1 decision930で走行中Emergencyとなった。
+停止軌道386の現在worldでの他車証明拒否は再生できる。2台完走、指令の実適用位相、
+残りの動作・提出評価は未達である。[全結果](../../.steering/20260909-mpcc-stop-viability-epochs/results.md)を参照。

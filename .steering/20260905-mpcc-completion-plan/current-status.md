@@ -10,27 +10,39 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: inspect same actual derived Stop387Accepted930 / rejected931
-from `output/20260909-peer-epochs-dev2-r1`, including exact ego source epochs.
-The observation gap for source-free certified plans is repaired: complete
-artifact/context/frame, physical snapshot/proof and separately owned grid now
-survive without fabricating a solver source or parent dynamic proof. Native
-18/18, source contracts104/104,26package build,60CTestgroups/2374records pass.
-Recorded native and runtime physical proofs reproduce every diagnostic field
-with zero solves. Dev2actual publication387and both930/931Requests are present;
-legacy solver-source status remains missing as required. This is an observation
-repair only, with no control/model/gain/solver/safety changes.
+Current next step: audit actual Stop/normal command application and current-world
+revalidation at `output/20260909-stop-viability-dev2-r1` D1decision930. A source-to-now
+Odometry producer defect is repaired: raw older state previously omitted5/15ms
+motion before the fixed0.13s actuator prediction. Native four failures;34state/
+longitudinal cases and104source contracts pass after explicit stamped constant-
+twist observation propagation. Canonical now pose and raw safety monitoring have
+independent owners; async clones preserve both. No actuator delay/gain/solver/
+hard limit change.26build/60CTestgroups/2381records pass; first Pose2Dconstructor
+compile failure is preserved separately.
 
-New dev2firstmoving D1Emergency931 at1.3129826481757174m/s, no finish.
-930full solved-suffix terminal proof+0.007091597519957693m ->931terminal peer
--0.0003133950625793247m after30ms. Independent Stop+0.008026033410105438m
-->-0.0006277465960242701m. Same peer generation170/velocity/radius;
-publication clock mapping remains equivalent. D1/D2callback20.668/26.215ms,
-0/1overrun; D2reported overrun window is after firstD1Emergency. Commands
-~40Hz/no receiptgaps>50ms; source duplicates and odometry/clock delivery gaps
-remain. All containers stopped/protected JSON restored. No repeat of previous
-single trial for this observation-only slice. Full MPCC acceptance stays open.
-See [peer epochs and physical Stop observation](../20260909-mpcc-peer-observation-epochs/results.md).
+Single6laps254.074051s/penalty0,no moving override,callback15.327ms/0overruns;
+command/Odometry/clock receipt and source checks have no >50msgaps/duplicates.
+Dev2rejects firstD1Emergency930at1.362512395068054m/s. All three captured current
+poses uniquely reproduce from their source Odometry atnow, XY/yaw errors0.
+D1/D2callback20.969/23.696ms/0overruns, commandreceipt~40Hz/no >50msgap; source
+12duplicates each and Odometry/clock~300ms delivery pauses remain.
+Normal374at928loses terminal proof; independentStop accepts and386joins. Actual
+publication returns to374at929, but930final inspected386terminal peer rejects
+-0.0013934640174382285m; independentStop-0.0011199987734020755m. Actual374and386
+are separately recorded; do not mix their clocks or infer source selection caused
+failure. Runtime also reports actual374independentStop peer reject. Current-world
+control speed1.355983828 vs386expected1.229635254m/s needs causal input/application
+phase audit. Previously observed Unity10Hz actuation phase remains unmeasured;
+a published25msbrake pulse is not proof it was applied. No hold/delay/gain tuning.
+All runtime stopped/protected JSON restored. Full acceptance remains open.
+See [state epoch repair and latest results](../20260909-mpcc-stop-viability-epochs/results.md).
+
+Previous observation repair4b2474da: complete source-free CertifiedPlan evidence,
+18native/104source/26build/2374records pass;384sealedartifacts. Actual387/930Accepted
+->931rejected pair replays with zero solves and original physical diagnostic fields
+exact. Native tracker old928/929source projection also matches exactly. Legacy
+solver-source absence and original parent dynamic-proof absence remain explicit.
+See [peer epoch observation](../20260909-mpcc-peer-observation-epochs/results.md).
 
 Previous publication clock36c2a01a: realStore4.403881ms rewind repaired;
 33native/26build/2373records pass. Single6laps251.993591s/0penalty passes;

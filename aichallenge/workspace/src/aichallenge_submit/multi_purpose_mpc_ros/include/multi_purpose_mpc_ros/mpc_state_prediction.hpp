@@ -21,6 +21,24 @@ State2D predict_constant_turn_rate(
   double yaw_rate_radps,
   double prediction_delay_sec);
 
+/// Body-twist observation whose pose, longitudinal speed and yaw rate share
+/// one source epoch. Extrapolation holds the measured body twist; it does not
+/// identify unobserved acceleration or steering dynamics.
+struct MotionObservation
+{
+  double stamp_sec{};
+  State2D state;
+  double longitudinal_velocity_mps{};
+  double yaw_rate_radps{};
+};
+
+/// Resolve older Odometry to the decision epoch before the separate actuator
+/// delay rollout. The existing observation-age contract also bounds this step.
+/// Returned body speed/yaw rate are explicitly held estimates at target_sec.
+std::optional<MotionObservation> predict_constant_twist_observation(
+  const MotionObservation & observation, double target_sec,
+  double maximum_observation_age_sec) noexcept;
+
 struct YawResponsePrediction
 {
   State2D state;

@@ -1,0 +1,2911 @@
+{
+  "baseline_commit": "4b2474da",
+  "scope": "Explicit source-to-now motion estimation and canonical current-pose ownership; native known-motion defect repaired; single accepted/dev2 rejected; live current-pose projection exactly matched; command application phase open",
+  "build_packages": 26,
+  "package_records": 2381,
+  "package_errors": 0,
+  "package_failures": 0,
+  "package_skips": 0,
+  "artifacts": [
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/certified_plan_input.hpp",
+      "bytes": 19496,
+      "sha256": "d78b6e22abb54056990daf364110dddbece817b7a2c6424897e63805495e229e"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/replay_certified_plan.cpp",
+      "bytes": 9355,
+      "sha256": "f958e126e79b34fe24c9341f835cf207d3f2ba639521c8a52b1da73d193d0b84"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/replay_revalidation.cpp",
+      "bytes": 17929,
+      "sha256": "f8dc33fe91a3a639de9a707fd922cbac8334874dc09d78780272bf792e243432"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/revalidation_input.hpp",
+      "bytes": 6871,
+      "sha256": "cfbeb749d9f1f8f76d7d6f17d4cf87d112e5fe51521e783c20f88262075bc1fa"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/compare_931.py",
+      "bytes": 1437,
+      "sha256": "b93406130c4cc89ae505b32f7197ba7f58efccedeacde7b70c1930fae09b4039"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/compile_pair.py",
+      "bytes": 1798,
+      "sha256": "40146e8cdc5de7fe518655736e677d7b45b9a6016872421af365bedd82016314"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/extract_inputs.py",
+      "bytes": 2916,
+      "sha256": "d7fa076c6d0422cc8cc16ce95ff537addeec26b47ec75a4f201f0630affa5a4d"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/extract_runtime_inputs.py",
+      "bytes": 2919,
+      "sha256": "a7a57c6e609d9261a1d59015059df1d40704b4913654fc73678b7983db65c22a"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/match_runtime_epochs.py",
+      "bytes": 2797,
+      "sha256": "bcc1a1e0b183e9019d7213f1f562c62ce0ad60af449a12a122d3d8125540a15c"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/native_epoch.py",
+      "bytes": 1354,
+      "sha256": "de8f1d94b57892b869b7f537eacc79542e9c69a49a239ca2bd4e72db67d834ce"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/register_results.py",
+      "bytes": 4628,
+      "sha256": "2797f11bc229b6fdf670eb2441cecad2680eebc31072a31e2a1d2e942e93f243"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/replay_normal_requests.py",
+      "bytes": 3778,
+      "sha256": "dc2f737560141c2dd396b6e261f67c96597be1e2307dbcced88ed141668dd882"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/replay_pair.cpp",
+      "bytes": 14024,
+      "sha256": "4ad1365f3f597aa701eb3d32e3833cb129e916001ae115eddbd77f6aaedbb913"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/replay_recorded_plans.py",
+      "bytes": 2617,
+      "sha256": "a15223ceacdc5fe713747ba4967401a8fcb3e32246e6973f49c78efe850de3f2"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/reproduce_epoch.cpp",
+      "bytes": 2676,
+      "sha256": "8ffe05772755f165dcaaa9fda8f727bf4fc97eb3e278ee9dcf7b084a868bb098"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/run_campaign.py",
+      "bytes": 12063,
+      "sha256": "d044ca1514e6d37c6217c511c23ba7a722180fedb6ff21f90ea951dd7cabfa01"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-viability-epochs/seal_evidence.py",
+      "bytes": 2004,
+      "sha256": "c85e30c8de70ddc99d1413d7efb44730e21655d3106812f52337824ddcda2bbb"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "bytes": 4528,
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2944786,
+      "sha256": "d2c0432116179b17288b956ad6b7acf58a3aed61792d96dec99d92216dec8b47"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_state_prediction.cpp",
+      "bytes": 9567,
+      "sha256": "4be57ea66536a1bc0225f9e40d3382a2ed636766e63cc816f1baf4e7b96ae13b"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpc_state_prediction.cpp",
+      "bytes": 19086,
+      "sha256": "412787b37d3c1bede8cffb54ae749a1c4431a5244401064f0ecf59251a2fde23"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/manifest.json",
+      "bytes": 782,
+      "sha256": "da732d8b965ce770bb92ec09adc45804a5ff6f71724ac441eccf4d3463476701"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/comparison.log",
+      "bytes": 8316,
+      "sha256": "c1475cc895bad97d381c245d407e4624a6d5294358983cb53c63a09b91f30307"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/mpcc_architecture_snapshots/000000000931-4b2a7e481ae86669-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 262874,
+      "sha256": "8bed6d872dea58eb9c611a71a5a42ef98fdf9fec0f12a01927d36d04848d77b9"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/mpcc_architecture_snapshots/000000000931-4b2a7e481ae86669-cruise-side-negative-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/mpcc_architecture_snapshots/000000000931-4cac52a4fa6b4656-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273024,
+      "sha256": "cdb3d8e82fa1309aae03c96ce96b3126bb21f3b1c2cc179346c7bff8d2b23dd6"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/mpcc_architecture_snapshots/000000000931-4cac52a4fa6b4656-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273438,
+      "sha256": "6dc3859e9cda6232a4572b3d8645dae00208d59230f14c665d3c6017e25194dc"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/mpcc_architecture_snapshots/000000000931-cbef94236e80cdf9-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 272477,
+      "sha256": "49a5a768a9d2503f015a386852390510706fe3b3b8ddfb888ac9da5e91059679"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/normal/mpcc_architecture_snapshots/000000000931-cbef94236e80cdf9-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/stop/comparison.log",
+      "bytes": 3571,
+      "sha256": "779b38eb636f044e75ad66bdfe15c5db6ee3ef19be59126118b7d817c49f6de8"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/stop/mpcc_architecture_snapshots/000000000931-a17d2902ee8b4dcd-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 253009,
+      "sha256": "19cd363917a7e33a404d3b5fd75fc42e644b25dbf5d44e96ce4471a6efbf70f0"
+    },
+    {
+      "path": "output/20260909-stop-viability-931-comparison/stop/mpcc_architecture_snapshots/000000000931-a17d2902ee8b4dcd-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-build-r1/build.log",
+      "bytes": 7356,
+      "sha256": "350757529a7a253082754c19e7cefa34d65360544929779e4a148bc648327d63"
+    },
+    {
+      "path": "output/20260909-stop-viability-build-r1/manifest.json",
+      "bytes": 202,
+      "sha256": "88ee36db8c06a1214aca3ebaafc73582780ef66e3e7a6990201bcd51f4fea2ed"
+    },
+    {
+      "path": "output/20260909-stop-viability-build-r1/mpc_controller_cpp.cpp",
+      "bytes": 2944730,
+      "sha256": "840d3fa2fe0e7e8f1cd141b413c30ea0f5a2604ae515b16b93aa29ea3afb208b"
+    },
+    {
+      "path": "output/20260909-stop-viability-build-r1/source.patch",
+      "bytes": 16291,
+      "sha256": "0b34f582a6112f6a6048910d871efc8c5c34259fe14c78b8e535b5367278969f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "b95667c1513e558206fdc09b23866898f564f2d7473568d53131dafaa56392bb"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/authority-timing-summary.json",
+      "bytes": 10290,
+      "sha256": "89db2aafae846d55aad87c1a2f833e488b8a407d904652f6949f2b8a4c213efb"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/awsim.log",
+      "bytes": 1773,
+      "sha256": "b1f92de8740aa9e35705833c3528bec4503886f283e386d94f81ac97426d559b"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32512,
+      "sha256": "db812e64db8a9cc000767a0c27e6018139f31508112c5d54b55d0e65adf88043"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/binaries/mpc_controller_cpp",
+      "bytes": 8685480,
+      "sha256": "76d07a8e57c606164192a70eae223f273fd7f6d60a04fefb312719862a6d50de"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1573232,
+      "sha256": "022a7bcb2bd3a9b5b1ea37329ffd642f4f507f69f0c77d1366a0b7343858a6ee"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/build.log",
+      "bytes": 4627,
+      "sha256": "051a3a06257677b792bef7ed4b8baf659fff36881fd947bc4145e49c1fd71f2d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/compose-six-lap.yml",
+      "bytes": 207,
+      "sha256": "a03aaf8ad4140a66b291e5e64d99a92e0525882e09e013c8f235369318f221a3"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/autoware.log",
+      "bytes": 389875,
+      "sha256": "cce803116b3f029a939081d55acb61f1778802df9b6ff2b8e3e9a5f69981b9f7"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/motion_analytics-26-09-09-14-24-14.html",
+      "bytes": 4851416,
+      "sha256": "be83e4b8532902a5a2870b492af2b4ac91fbcc69eb686f76aeb17d6534764ded"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000011-9d1fe5aa7b3b981d-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 256994,
+      "sha256": "61a5d0bf7404abccc5028ac5fda7ac959da5b70c1b5ad4f736cc205997b4908e"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000011-9d1fe5aa7b3b981d-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000197-3e01db5642f5ceee-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 248746,
+      "sha256": "ea1aea5208fbdd1f9a39971fb9741065e9403f75716cb36410dac3e78fc88782"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000197-3e01db5642f5ceee-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000300-e101c8e3f1e1b8d6-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271338,
+      "sha256": "028ffab4e6b36a20861a173f7d9f0f0ebadc91cfb000ca16dac5532261b8835f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000300-e101c8e3f1e1b8d6-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000339-b38807afb02203ed-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 264109,
+      "sha256": "44d0fd1221243a1d4596ea96b4808e20c9c28c78a9e031961b4b3844e2bd72d3"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000339-b38807afb02203ed-cruise-side-negative-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000377-4f6bcac93ed0d4e6-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 274828,
+      "sha256": "b95dd087ffc5567486f5812a80f20e2cdabda8e00d53cec20ba3db6a33f6c3ed"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000377-4f6bcac93ed0d4e6-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000389-4c4ddc80f35a0c8f-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271740,
+      "sha256": "67fdf34a1221089b13fc37f7b30c7564adf011da73ccf1ae78736f3753baae66"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000389-4c4ddc80f35a0c8f-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000544-74447078823d3f8b-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 36447,
+      "sha256": "38b2f8b8aaaa6ab670db5633d489264f045f22953b6c33944e60ad09633ff981"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000544-74447078823d3f8b-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000644-9085626af2a19b48-cruise-side-positive-initial-solve-rejected/snapshot.yaml",
+      "bytes": 261402,
+      "sha256": "24e9bb874b685b4babbee9a1aefcf8d4376e4c6a285138fc86801b80ab7de4c9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000644-9085626af2a19b48-cruise-side-positive-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000650-ade1fcf11c73bc9c-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 262024,
+      "sha256": "ef09268173aa2b1a764e22e2e8f32dd28c2efe72efed5df13afc85c450767879"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000650-ade1fcf11c73bc9c-cruise-side-negative-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000663-8b8b04beee6f1c8f-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 257897,
+      "sha256": "6248063254bec215a26d383ea2dba8b7881144bd611a0d38d44e696e5e6daa0f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000663-8b8b04beee6f1c8f-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000688-a7935113724095dc-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 257111,
+      "sha256": "15b93c8e5eee490431ede3f4b7d1270f2541ec6ec749a1caf5d2c9f30238bc59"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000688-a7935113724095dc-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000699-ad6847b52d705a95-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 283616,
+      "sha256": "cb8c0a799cc56ebe4e6c9914cc5a29169183c7e17ff49745ea78b652787edabd"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000699-ad6847b52d705a95-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/inspected-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-inspected-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 507137,
+      "sha256": "a914da8d30e4d67534cc7cf1a2a06df6d21626079db737596de13602329dc139"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 403923,
+      "sha256": "3c2eadac1de93f553d527000f8598605799154eb822933e5bb0757edbff6830b"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/2026-09-09-14-23-39-612452-msuda-System-Product-Name-69/launch.log",
+      "bytes": 17615,
+      "sha256": "57d6647faa70b5871f27bf0c1fcc53ff0287412cfbfa6bc3b1e0d6a07effcce6"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/component_container_102_1788931420820.log",
+      "bytes": 1488,
+      "sha256": "d14de8dbf4986374a06fc94e6788c4d9ee50eb00376c82da3fafc44ce2671639"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/ekf_localizer_94_1788931420829.log",
+      "bytes": 65,
+      "sha256": "0b8e2605c9364f2188709b0beb90a000a74606cb2e7114cb413baf6607c6152d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/gnss_poser_88_1788931420813.log",
+      "bytes": 205,
+      "sha256": "1dd89dea158bb698b5bc3880ca243b9f06ed7a26c67ab13b4bedbcc09dc825b9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/gyro_odometer_90_1788931420831.log",
+      "bytes": 65,
+      "sha256": "e7ecd08c37ef97f9a4499993208c43e78dbadae35ad38c88bafce83fdf4819a9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/imu_corrector_86_1788931420836.log",
+      "bytes": 65,
+      "sha256": "b16e54ee9e25108acdf06b7eb453a6910a2f0b1b3befcfb4a78ee6573e068855"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/imu_gnss_poser_node_92_1788931420831.log",
+      "bytes": 977,
+      "sha256": "e111d092e171a53c495976f2cb54e07a804b5be24edfc0c8810e1d40e918f2ad"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/mpc_controller_cpp_100_1788931420989.log",
+      "bytes": 350471,
+      "sha256": "7d9fc7f7fec980028fd9cb6edc5de9b1816e9c474f533e4966063098be5732a8"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/python3_108_1788931421066.log",
+      "bytes": 4238,
+      "sha256": "8d247da4049ee3d5c9d9228a6fc3f3a83dae4ce50457e7630c93675e92f04f55"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/python3_110_1788931421101.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/python3_338_1788931437470.log",
+      "bytes": 2711,
+      "sha256": "9e768a413efae419c0f3467d48c8d44ba2a34ee9918ef8d8b6430496ae9e8a0e"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/python3_69_1788931420697.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/relay_106_1788931420836.log",
+      "bytes": 65,
+      "sha256": "901357d7148b820a0078995974634333088ac0503c79f0c96ac7379b5c25df90"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/robot_state_publisher_82_1788931420837.log",
+      "bytes": 705,
+      "sha256": "7200d1e8ef53c09a012e23e4ed583d852ec81b50c9d9a863d54f72e46a413476"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/rviz2_104_1788931420947.log",
+      "bytes": 744,
+      "sha256": "84bc733949df507cae03bf385735327d5987f7d2cb8ecd53845fb50376470b55"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/simple_trajectory_generator_node_98_1788931420816.log",
+      "bytes": 1415,
+      "sha256": "0c7c5e7909e3a3dab3ac576cea1a718bdd3a4b4bd2ec97d1ed786105db60d337"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/twist2accel_96_1788931420828.log",
+      "bytes": 65,
+      "sha256": "f6358eebea16737360e06d81f2047ea1fd73d6b989ff5ae90fc59e72c812821b"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/ros/log/vehicle_velocity_converter_84_1788931420815.log",
+      "bytes": 65,
+      "sha256": "c250edcae5ac9c89d1fcabbad808417d31594bb2997f39344517cc1e7d0eef63"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "1032428fc30bd107c8291e89a7640a3cf6dd71880108733f37aa53b614ec86fb"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2155167,
+      "sha256": "89ffb74105ce9b65f3bc8a1710d905896823908c73759bd057b2cbcceaf44811"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "7889b7a9dba3b3d1d9d3940ea26c44581c37121319f497058a7c974f4f173318"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d1-topic-timing.json",
+      "bytes": 2368,
+      "sha256": "c20f9a53b3a5df40c49ee7c0a9efcec0ea8a0e11de917e7421954907b1669da6"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/autoware.log",
+      "bytes": 226304,
+      "sha256": "7750d4e784570ce28b07492c3006c51be4e7051779bf55ada1619be9a51eb4c5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/motion_analytics-26-09-09-14-24-13.html",
+      "bytes": 4851202,
+      "sha256": "e8168123e848dec496ef814e5ca13b0afbe2193f92d3ef360de84b85fcb1a121"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000180-36cd630b4f8ce2ef-track-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274419,
+      "sha256": "976effb7f2d90fd300dcd6b2f4e52eacd0fccc647ccba493c7f136e13ed19805"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000180-36cd630b4f8ce2ef-track-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000188-cfb7629db4fc97ce-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 249769,
+      "sha256": "d757f91bd286ec83e7f7fcea6f1db975b8875dfa66eb99c3ffb80225d8a565d7"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000188-cfb7629db4fc97ce-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000243-00321f9e65b78936-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 250839,
+      "sha256": "4261011e5d034cd43e735d38b58b934b4ec23c65a8558f547945cf5faf397c75"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000243-00321f9e65b78936-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000297-07cb414b3db4cb5d-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 272992,
+      "sha256": "713abda944c88cd4b0b6aa04f9bad45bfd76ddec4e6dd1b7667172af08f7a7f5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000297-07cb414b3db4cb5d-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000297-267c9e55a52aeeba-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273126,
+      "sha256": "4f05c5cf083d3aa5b601cb36f98fa9d2c64492c30787ce4e02a9eb275d668dba"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000297-267c9e55a52aeeba-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000330-73037b56b43717e6-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 282294,
+      "sha256": "ecd313be53b005cf037b3494dce47326c3f5174c37746c9746b69b4a6f629a1c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000330-73037b56b43717e6-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000393-34063119e5fc09d9-cruise-side-negative-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 277244,
+      "sha256": "1c1d4da89cdb537ba6860d03a6ddc9990d130663b4b5150364927cfa9ab4fd01"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000393-34063119e5fc09d9-cruise-side-negative-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000411-b8745a435838fb3c-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 36132,
+      "sha256": "a08c0a4caccce4624e559d8043ebfe86620dd568dc32c701de987cbe3e3f73c0"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000411-b8745a435838fb3c-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000414-89066723447849ae-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 256000,
+      "sha256": "0f1b7689af2194ec421c79d234125f233cea9544d224d6388eebe5d80af6a14d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000414-89066723447849ae-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000523-6a8a30b6a2ef38b2-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 36293,
+      "sha256": "14952caf0a107d5a50de0ef1946e0ff3ff9915b8ee9815c837b4683ae1d8ad84"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000523-6a8a30b6a2ef38b2-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/2026-09-09-14-23-39-926520-msuda-System-Product-Name-69/launch.log",
+      "bytes": 17615,
+      "sha256": "69f500e05b6db653739380808cfd6ef37e0ed613cbd2003106a29f450dc8f548"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/component_container_102_1788931421284.log",
+      "bytes": 1488,
+      "sha256": "90b2c1227bf20dc76580bfe40b5cfc14e891c0290811fe52948c214171ee3ffe"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/ekf_localizer_94_1788931421317.log",
+      "bytes": 65,
+      "sha256": "3895e88b3c6042da5ba86af902c0b1e2fd8e57dc583ab012ccf67771b277b16f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/gnss_poser_88_1788931421275.log",
+      "bytes": 205,
+      "sha256": "c3fa4aebf4574b8a2eaedb1b74e08294e77feaaa4ff26de3252e424d2958d9cb"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/gyro_odometer_90_1788931421312.log",
+      "bytes": 65,
+      "sha256": "609c698d2b31210255ff26c768a16b95c12aad1536c63efb58476c27706be6a1"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/imu_corrector_86_1788931421272.log",
+      "bytes": 65,
+      "sha256": "c5bc142caab746c9cc2d5074fbec961d2f83ee03e970aaf154040bc706947aa9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/imu_gnss_poser_node_92_1788931421284.log",
+      "bytes": 977,
+      "sha256": "34d1735eae47206f45ef7ff4c82e8ba2bced4b84738eed582fb5527c2d4a843f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/mpc_controller_cpp_100_1788931421545.log",
+      "bytes": 196169,
+      "sha256": "b1fb980656174bcb7205244555f938536547f6dbbac85f019d8557ff391712e0"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/python3_108_1788931421589.log",
+      "bytes": 4238,
+      "sha256": "5425879a5b506eab1ac77da969fa7eeac7b0a3089e81c248f94c0e6730b0d548"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/python3_110_1788931421585.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/python3_338_1788931437125.log",
+      "bytes": 2711,
+      "sha256": "72ff88aea5cff5cbeb1ae358319c0c23dbed4c3ace1573a77d5ddb75fc40dc74"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/python3_69_1788931421105.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/relay_106_1788931421343.log",
+      "bytes": 65,
+      "sha256": "89d4c5eb2b66981c86150b95092090e27d81b3d3aa2d821d7ad80bff5e8af26d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/robot_state_publisher_82_1788931421284.log",
+      "bytes": 705,
+      "sha256": "2ed60d6e69e93757960852d873594b05da7c2f648b86d3b3368640c741ed9da2"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/rviz2_104_1788931421445.log",
+      "bytes": 744,
+      "sha256": "124dda16d4f2487e4635d7cf56e0f952f5550c766c813c3074efaf4bd99c99ce"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/simple_trajectory_generator_node_98_1788931421278.log",
+      "bytes": 1415,
+      "sha256": "09f106e79d991b751cf5ba617670396a3f216cba4e1ee428affc80641a8aa904"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/twist2accel_96_1788931421262.log",
+      "bytes": 65,
+      "sha256": "c861d99ede8f36eae0b7bef7e407fcecb2e3e94a6e7311a1709b7d966d760d5e"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/ros/log/vehicle_velocity_converter_84_1788931421329.log",
+      "bytes": 65,
+      "sha256": "f7fbc369d6ec912e5a3d125632a297df1d91b41b8710ee917c33f48640461b29"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "d61a714f911759f2aeb75843c8f206a8c32f0bdcf67592232b048c0fd6f4b9e8"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2130588,
+      "sha256": "1ecf46c9780ec9ae3dcca1dea478b6374799b95decdbabafcef574c916e83cde"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "93e8e99865bef87fbc677c8ef9e543c1514c274bedbee3b2649a764b332ff50f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/d2-topic-timing.json",
+      "bytes": 2368,
+      "sha256": "e61a31317769ff6dccd2b248bbc11c145eee5dd2e8fb5d16b549d6aa9d5c8c34"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/down.log",
+      "bytes": 466,
+      "sha256": "35e5c6b4c1e49e171ec645d7071b8f18f6745f257a41d01612d3e7ed4ec6e355"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/generated-user-path-results/result-summary.json",
+      "bytes": 928,
+      "sha256": "57596bb6dab1e0eb18a63bffbd4663622df82f1ef6542281fa154082bb9db03e"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/ekf_localizer",
+      "bytes": 3017152,
+      "sha256": "b59c3ba635b271fe1c11cb929f130f45a66a2f714f43bc1c80ffc19545038910"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/libaichallenge_ekf_localizer_lib.so",
+      "bytes": 2162992,
+      "sha256": "25d6709773578e85b60692fb0c6d3507d619fc3135e647357076b739e47675e4"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2226888,
+      "sha256": "01f5faf04095b8e5665d5978d01ca2c039f5b5ea9b80dbdea42f1d0a84650734"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/CMakeLists.txt",
+      "bytes": 1967,
+      "sha256": "3c0afc4b2c1e16fd6411e84ab124702ee9c0b18e82995f2e9ed10f7d6107cd11"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/NOTICE",
+      "bytes": 591,
+      "sha256": "022282b0ddb9150f8f8eef93d756496e6fceaac26645f5ac8ab5885014df7524"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/README.md",
+      "bytes": 868,
+      "sha256": "0e611995e7b8269b053ea1e485567724e7e4a3f475160b359d60ffcde4f484d3"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/UPSTREAM.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/covariance.hpp",
+      "bytes": 937,
+      "sha256": "6fb6d3f54f710093f871bbe1b3a791ce10614ce6a894cedbfa34c470c4370bc1"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/ekf_localizer.hpp",
+      "bytes": 9173,
+      "sha256": "52150445c4f7614ba87516a0fa1b54a4a76adb61b6fd850c088f452f69b58ffd"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_transition.hpp",
+      "bytes": 1103,
+      "sha256": "69d17f4d8b16a916a4ac4bc04ac813096682707648c7067f3846493438828bf9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/launch/ekf_localizer.launch.xml",
+      "bytes": 3823,
+      "sha256": "a5adf69bc5ee3774f287928b1a766abc71fb7118b56a81c68fa187f8fe23e07c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/package.xml",
+      "bytes": 1287,
+      "sha256": "f4d7a8c512446c3a0641a91d5ad519df87684916af56388c249166929fd4d7dc"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/covariance.cpp",
+      "bytes": 1839,
+      "sha256": "5e7472cc05e7a73bf260cc2f8770834c72cb48d3704bdd8283ff8195d70b4000"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer.cpp",
+      "bytes": 22971,
+      "sha256": "8097cb77806f0c53e1d37e9b2f9c35efc5486aa3e42376d7af8ec0f83941e5dc"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer_node.cpp",
+      "bytes": 891,
+      "sha256": "9183e015dc463be207cfdcde81c79765a3d22dc8b18b1b015dc9274819210737"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/mahalanobis.cpp",
+      "bytes": 987,
+      "sha256": "b2a2a90892c02266b15a4a2bbaf7fe4c9a5a543fccabc6b7836e6facbc18b9c0"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/measurement.cpp",
+      "bytes": 2196,
+      "sha256": "dacc346cbcfbfdac9efaa3d6be3628bbdf577ddfbae63959bafcda485b857f59"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/state_transition.cpp",
+      "bytes": 3369,
+      "sha256": "2e5c81b1c5a2228806725d32feace05b7ffba34fc341dfe594e38d21b4bd8654"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/warning_message.cpp",
+      "bytes": 2017,
+      "sha256": "13640a809651f7a0c71a5f378b26786e2f07a0fdf9d794ff37d739508645da4d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/src/test_ekf_localizer.cpp",
+      "bytes": 10768,
+      "sha256": "c41a98be09c027d21b0ac0eb78d08c62fca658df25f0ba88cab9d1d5e2074dc7"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_aged_object_queue.cpp",
+      "bytes": 2477,
+      "sha256": "9bbdf1204af2264635ea93f96b96e9ee9d123bcf629b1a7eaf5d7528fd72a529"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_covariance.cpp",
+      "bytes": 2178,
+      "sha256": "e2fa32f59d8572185b18ebfd306500279a28826273a98e9419555b3c57c7b88d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_clock.cpp",
+      "bytes": 5977,
+      "sha256": "567b679be46f8a1a3a464f2d351ded8029049aa25f9f86aa91028a0fb9c41719"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_mahalanobis.cpp",
+      "bytes": 1482,
+      "sha256": "cc31e52681756dd068c72f6c1a80ea249eb6215c15dbb69c8c51567ddbac7ae2"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_measurement.cpp",
+      "bytes": 2617,
+      "sha256": "954ed79a2a28a2116ed3a0ca531bdc25f83e48bcbc197321d266df0922f7e661"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_numeric.cpp",
+      "bytes": 1507,
+      "sha256": "a8da5388facefe07b59a7807e28a28f39c94b7bd73b397383fda6c2f6d92ef56"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_state_transition.cpp",
+      "bytes": 3161,
+      "sha256": "84a8cab921a6f1b0d94c212a8e638eb621cdadb5d470a6e5a55a78020440ab69"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_string.cpp",
+      "bytes": 909,
+      "sha256": "7d5fddf1bdac43b7f0a5bd393f277fddf485e2d8d3b65457b1fdc946eeb71ed0"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_warning_message.cpp",
+      "bytes": 2055,
+      "sha256": "9c7b8883eb339c17d60639aac6fcf3d72b969bcd5d66b5fce9d4e20088eef4d5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/.gitignore",
+      "bytes": 37,
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/CACHEDIR.TAG",
+      "bytes": 191,
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/README.md",
+      "bytes": 302,
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/v/cache/nodeids",
+      "bytes": 484,
+      "sha256": "dbf6e134667cc83efdd0884f38ba6dddac1aa40080f802178a13ddf189b21329"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/CMakeLists.txt",
+      "bytes": 394,
+      "sha256": "cabc352f6806cdd80ac4e366723d85cadd2ef1b00f016d5939398a74599e3ff6"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner.param.yaml",
+      "bytes": 1938,
+      "sha256": "d4f307b9bb58635dd0496845dfb8a6346977c19bfbc5ac1d2ace7c4120a378e5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner_tree.xml",
+      "bytes": 2621,
+      "sha256": "ef7ce6d5610f3bdb670e52ec3559d22940bd3be63cb3c9602948b0207be68d8f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/converter.param.yaml",
+      "bytes": 327,
+      "sha256": "17d1def2c550d81200548b61d000e2d42ad9609b21164fa0f61c3dcc6f5e4faa"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/map/lanelet2_map_loader.param.yaml",
+      "bytes": 129,
+      "sha256": "cf8304daf3684ea25c3edf0544a33c0be32b306123ad35590019c8f6ca08ae4b"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/mission_planning/mission_planner/mission_planner.param.yaml",
+      "bytes": 212,
+      "sha256": "c048d0175ed7c810a635da80465222f676e42f5f73493909034162e3c28fd457"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/common/nearest_search.param.yaml",
+      "bytes": 132,
+      "sha256": "b6c156d6f3cc74b16c95f40f35cf86ddef2b8b3a19ee2630b741cc10f4085726"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/avoidance/avoidance.param.yaml",
+      "bytes": 4704,
+      "sha256": "522287ec99e5bfef1b1d96788fb90a0e249398b1aac70e948a9affdb55c30416"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/drivable_area_expansion.param.yaml",
+      "bytes": 3154,
+      "sha256": "1f4cf4862f076a30ca4e830c8c3efbf910801de35e7d2f5c6bb4a28369499f66"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_change/lane_change.param.yaml",
+      "bytes": 1161,
+      "sha256": "3562d08a5d22112dbe5da44f6070b750752da1d0282d0ae475d7a62e18c7f30b"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_following/lane_following.param.yaml",
+      "bytes": 84,
+      "sha256": "6115c2b5fdd761e453f42398cd8b05701ff1cb1120481409cc40fe6b8336b8e9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_out/pull_out.param.yaml",
+      "bytes": 1043,
+      "sha256": "20dc36eff032a06b37e150ed60652101ec01e07924a41d55bb3f749aad22519c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_over/pull_over.param.yaml",
+      "bytes": 3288,
+      "sha256": "dad3fdfe63460034550abbf1c93937ab635d2ea36a2d4ce71125d1cadf5d9831"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/side_shift/side_shift.param.yaml",
+      "bytes": 213,
+      "sha256": "4a0aa18c500e40c9e3b1848392c5289f41ed3be56d7afe93f693e55fd936cbb5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/vehicle_velocity_converter.param.yaml",
+      "bytes": 167,
+      "sha256": "c068e333ebe0bf94ab67a7e4ee94c1fa7c64c41e4e46cc0d140f66efb553afa5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/accel_map.csv",
+      "bytes": 539,
+      "sha256": "59ef66e4a2a6ad85e3e3f3e894af6b6ed55345fdfbef1295f49bac2c1bdc5f2f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/brake_map.csv",
+      "bytes": 405,
+      "sha256": "7c9d8e9db7f00cf64bcf6f80ca67b65048da8487f4c53b3dcc37b4a971ad18cf"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/steer_map.csv",
+      "bytes": 1469,
+      "sha256": "26ead52a49148b347b7bbe5edb3c9cca6bd030f89585781f13b4e8870872571a"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml",
+      "bytes": 990,
+      "sha256": "0a82a035882bef28d3c35856f6d8b82a6207711eac5b7ecc94928309523e4537"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/joycon.launch.xml",
+      "bytes": 316,
+      "sha256": "f949739493762605db0ce0d9d5526cba2a3fcfa3410fc1dd65a7bb0997bebaa9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/mpc.launch.xml",
+      "bytes": 1029,
+      "sha256": "bc0c319f6352ddd5d40518ff52877b138321e57ca0603436e1b13bb6b74fa7d1"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pilot_net.launch.xml",
+      "bytes": 488,
+      "sha256": "bf5b4f272aecf99c96996380e1241737d82874158fbb45fb2d9d880ad00fde78"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pure_pursuit.launch.xml",
+      "bytes": 1018,
+      "sha256": "738fa5d0714ca9355b14e0dade3b09a6d55a5b904c187abf1307b3930d2e7bdb"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/rl_train.launch.xml",
+      "bytes": 143,
+      "sha256": "6c3e3aacb7d99ded76c03498a1602bac0834881b031d77168baa500c971e62a6"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/tiny_lidar_net.launch.xml",
+      "bytes": 955,
+      "sha256": "79465471ea4c5d0c6a370651ed9b14b12fa4cdf970427624be400f65e9b448a5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12963,
+      "sha256": "e2855514d6c4fc6f4cea480d517605095ef0638d119186991d92d90a606bb909"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/lanelet2_map.osm",
+      "bytes": 116731,
+      "sha256": "126a62f2ef21560ace0eb39a0f52a6a5e86ef6b9951b0ead1511e46e4b418dc4"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/wide_lanelet2_map.osm",
+      "bytes": 138570,
+      "sha256": "c6bf9625bd5a6589991095c3eced22be048ba30740a1b75479e7cfe2b90c7e75"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/package.xml",
+      "bytes": 2019,
+      "sha256": "0596ef3df8a882be95cff9ff8c2b1efc78fde63a11897dd4e5ca02f68bfed50c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 18802,
+      "sha256": "27025f14e21657016d1bb640ce203cfcf43c41987de8bd85ed43805be560ff59"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 18869,
+      "sha256": "6b96d03f80c055fc815ccbd88a1c23c7fdf62ac4c0ca96bf5b5ef292fa9be2f8"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 5249,
+      "sha256": "bc6f30df073266b186ca1525aeba872dba25d376a99e39e3a13bd4027f857631"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 5316,
+      "sha256": "e8fd6f02f09e59a3856af0a544d9667f2719d0ffdb1d1fa8c6cb9812a1c1c4d4"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_localization_timing_contract.py",
+      "bytes": 1684,
+      "sha256": "7f54ea148127b65302c28881300557398a37573afa88b5280bb34641f5400a27"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39500,
+      "sha256": "e35a1a28301688262411cbdc1abf58a8e6a90ee5f5ac97904b6a9a8ebe1754d3"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "bytes": 4528,
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 10520,
+      "sha256": "9a0b1754cd45410f71ebccee853b37ba15c8e8c5dc7e32a17222deb55f7ca678"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2944786,
+      "sha256": "d2c0432116179b17288b956ad6b7acf58a3aed61792d96dec99d92216dec8b47"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_state_prediction.cpp",
+      "bytes": 9567,
+      "sha256": "4be57ea66536a1bc0225f9e40d3382a2ed636766e63cc816f1baf4e7b96ae13b"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 135131,
+      "sha256": "38f73a6dcce40602f83ae8935f623b9c53e90f3a882158d5dd43cab429859096"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpc_state_prediction.cpp",
+      "bytes": 19086,
+      "sha256": "412787b37d3c1bede8cffb54ae749a1c4431a5244401064f0ecf59251a2fde23"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 61089,
+      "sha256": "f4d31f86d17275e43201ad9d6860143978aa7498cc6dbb6f530de207aba525cb"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 37877,
+      "sha256": "6c89c17af54a4a92846bc4194ac87508ab7ce478ff0145ad8b3f2a5a52371680"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 181162,
+      "sha256": "c9627bf8eb2dcad29da2e942b9c8452e03c2d6da4a3414536e8e9c3c42928ec9"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17463,
+      "sha256": "400587843725512bb8f6001470a77fdd2fa39798b1cb0fdf9909dda182781efe"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/test/test_gnss_heading.cpp",
+      "bytes": 6810,
+      "sha256": "6b06a36dc60c4413e0d389cb98795fb582102bd3841a74626fad3d06c1d308fd"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/launch.log",
+      "bytes": 699,
+      "sha256": "86db1f739870561b7b3476828aa8dd010adc9588e9e73dbcda62a5ea4811e861"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/manifest.json",
+      "bytes": 56569,
+      "sha256": "9f9bc4880748cce8ef52fb3f1379d08a338d9c21937b99168a558b5512761389"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/monitor-summary.json",
+      "bytes": 1867,
+      "sha256": "a1415f17b34adad0b8714bedcd3fbb5bdb178d9fa8e6a58c0b0587d2ef7c581c"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/mpcc-source.patch",
+      "bytes": 16303,
+      "sha256": "e025e66d863b8460c44fbdf9205df08a4b36f0989d52467d0b39fdfb544c313e"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/package.log",
+      "bytes": 495003,
+      "sha256": "066b216b7cef5c6134bb44c0f2c8d6638a206244aa9cb2330318d1eb515378b4"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/run_campaign.py",
+      "bytes": 12063,
+      "sha256": "d044ca1514e6d37c6217c511c23ba7a722180fedb6ff21f90ea951dd7cabfa01"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-stop-viability-dev2-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-stop-viability-inputs-r1/d1.json",
+      "bytes": 437477,
+      "sha256": "c5da92ac1f58df236b91ca365c25988bf95e9b3bab9c340ac643619bbaedbf53"
+    },
+    {
+      "path": "output/20260909-stop-viability-inputs-r1/d2.json",
+      "bytes": 455851,
+      "sha256": "eee81e291076fc916f5f894f6653dbbaff901f70f77bfddfe70dcd6e6c666661"
+    },
+    {
+      "path": "output/20260909-stop-viability-inputs-r1/epoch-matches.json",
+      "bytes": 3483,
+      "sha256": "8ec19954270c053450382db7f738f833af3e255cccfc6b5e37bc48bda0eb7fda"
+    },
+    {
+      "path": "output/20260909-stop-viability-inputs-r1/manifest.json",
+      "bytes": 740,
+      "sha256": "f0c004a1bd36b97d00d93252d2c1e41bd9c1fffac9013a9dc644c87c2ad1137e"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-after-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-after-r1/manifest.json",
+      "bytes": 1333,
+      "sha256": "60170e1a0da460b1bd666698982f8b6a020451906bcaf5ea275f1c73e7d33c05"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-after-r1/mpc_longitudinal_prediction.cpp",
+      "bytes": 8868,
+      "sha256": "7f4560814fb3cba7d73c83bfdae25ca1399105186cfffc00a23efd20c432dc1d"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-after-r1/mpc_state_prediction.cpp",
+      "bytes": 9567,
+      "sha256": "4be57ea66536a1bc0225f9e40d3382a2ed636766e63cc816f1baf4e7b96ae13b"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-after-r1/native.log",
+      "bytes": 1674,
+      "sha256": "7db70accc4b798a016c406c486c33c1a6c86d58a69afc8de3f86f65638c5d27b"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-after-r1/regression",
+      "bytes": 541032,
+      "sha256": "72708790dcb322a014d83846ae1dea63f5d8b94c7671a1ada3509498431c4d5a"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-after-r1/reproduce_epoch.cpp",
+      "bytes": 2676,
+      "sha256": "8ffe05772755f165dcaaa9fda8f727bf4fc97eb3e278ee9dcf7b084a868bb098"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r1/manifest.json",
+      "bytes": 1334,
+      "sha256": "c1245d3794a105a416fba6a0e9a0ebfcfbb722050baf7d700dc5c5e2835c0abd"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r1/mpc_longitudinal_prediction.cpp",
+      "bytes": 8868,
+      "sha256": "7f4560814fb3cba7d73c83bfdae25ca1399105186cfffc00a23efd20c432dc1d"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r1/mpc_state_prediction.cpp",
+      "bytes": 8389,
+      "sha256": "fea60d1c5671c37f7a5fa4dc9cd2f0f6cc4c3400f7e9bfab42a50b722dfb00f3"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r1/native.log",
+      "bytes": 5800,
+      "sha256": "2456c237a59ccd306b4afe6162b7d435fea640699503f6b29b45a1b37a8f989f"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r1/regression",
+      "bytes": 536800,
+      "sha256": "5917137881c46dd9b7b0c6d71caf3982b1118decc9518569b49397bdc6ab064f"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r1/reproduce_epoch.cpp",
+      "bytes": 2321,
+      "sha256": "e75e73ff0ebf55bff10f7b529085dcc3d1e373ff167e3543e2ffbcaee1e119f6"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r2/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r2/manifest.json",
+      "bytes": 1334,
+      "sha256": "3a60842985c59079abcbcbdc596cfd3fe5cf532e18a2b94af53b18bfcb81dc09"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r2/mpc_longitudinal_prediction.cpp",
+      "bytes": 8868,
+      "sha256": "7f4560814fb3cba7d73c83bfdae25ca1399105186cfffc00a23efd20c432dc1d"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r2/mpc_state_prediction.cpp",
+      "bytes": 8389,
+      "sha256": "fea60d1c5671c37f7a5fa4dc9cd2f0f6cc4c3400f7e9bfab42a50b722dfb00f3"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r2/native.log",
+      "bytes": 5203,
+      "sha256": "86611c18b5a240ef568cb6604b28144f5d1d9f5bbe2d3d1730a8f3f7da02daba"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r2/regression",
+      "bytes": 536800,
+      "sha256": "4699179548dffc3cd1c45bd2e171e49aa03999ccf8428a1cf67e1b3369546f6f"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-before-r2/reproduce_epoch.cpp",
+      "bytes": 2584,
+      "sha256": "607c408c469a459e39fd2eaced85f86cfadf0e95bedba61ef8266a5695c1bcf4"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-package-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-package-r1/manifest.json",
+      "bytes": 1399,
+      "sha256": "f244dc301a58ad187a18122abcaddd282e4df423bf60b192063f05b75f822199"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-package-r1/mpc_longitudinal_prediction.cpp",
+      "bytes": 8868,
+      "sha256": "7f4560814fb3cba7d73c83bfdae25ca1399105186cfffc00a23efd20c432dc1d"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-package-r1/mpc_state_prediction.cpp",
+      "bytes": 9567,
+      "sha256": "4be57ea66536a1bc0225f9e40d3382a2ed636766e63cc816f1baf4e7b96ae13b"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-package-r1/native.log",
+      "bytes": 6569,
+      "sha256": "cddcf5f12156ca470d2b7d3ee16371d810b5f8005f53657622f38a6b74f5cbc6"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-package-r1/regression",
+      "bytes": 723704,
+      "sha256": "17d47b35f3c48de4296a4b938afff7d27e33102f1cb649030a5bfdff08c3759a"
+    },
+    {
+      "path": "output/20260909-stop-viability-native-epoch-package-r1/test_mpc_state_prediction.cpp",
+      "bytes": 19086,
+      "sha256": "412787b37d3c1bede8cffb54ae749a1c4431a5244401064f0ecf59251a2fde23"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/d1/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/inspected.yaml",
+      "bytes": 51129,
+      "sha256": "1e20c68c1a219df780e7e81a2e32563087c094e2bf2cbcf53e3db061a73e359f"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/d1/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1305,
+      "sha256": "810d16470e3631feed570f10be2f15c713d9de299c229fb74ac98367c70d154d"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/d1/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/d1/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 69896,
+      "sha256": "b9cde00f08e244417751b1136dc5a58d594f1b571f88603e1be0cb5bd36dd80f"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/d1/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/d1/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected.yaml",
+      "bytes": 51120,
+      "sha256": "30c708d768eb913cfaff7a0266579d142f7b7aef999288b81245e6081a041a8f"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/d1/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/native.log",
+      "bytes": 1334,
+      "sha256": "a5fba2f99be28f52df5960f56cd4879a921abfcde31efe921de748e5a7f333ce"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/d1/000000000928-c5408fcf45b085df-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 70323,
+      "sha256": "a7db7d347046d1a82475ffbb806ee7931559a57bf13e8b2644affa8ecd6a3595"
+    },
+    {
+      "path": "output/20260909-stop-viability-normal-revalidation-r1/manifest.json",
+      "bytes": 32857,
+      "sha256": "5570e9475631964fb25acb804586cbc894f3c9d5d16c1a5fac2b2d647e357978"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r1/manifest.json",
+      "bytes": 17358,
+      "sha256": "2ace8733c0e9a8b2115d942e35792df54ef9d78aa65d1543e45b573335d0a1a8"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r1/previous_accepted_revalidation_evidence.yaml",
+      "bytes": 2228,
+      "sha256": "ac62ee5710bde27f1ae1f7a4a3a6e094e7c91d4c0bc23f29a9ff5ce463ada18b"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r1/replay",
+      "bytes": 1031496,
+      "sha256": "44ec34f068d44c2d100ddefe2885fd6c686306b703bdf257b15266c3da001eb5"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r1/revalidation_evidence.yaml",
+      "bytes": 2389,
+      "sha256": "7d4dd332aabd06d7ad54b5ad27eb77e5524a66b929c99d4ba4a4886031bc69d8"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r2/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r2/manifest.json",
+      "bytes": 17465,
+      "sha256": "631874bb8d8d77f1bbe09295c4a45499442b3d54ee3b9907ddb1078b6d56c237"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r2/previous_accepted_revalidation_evidence.yaml",
+      "bytes": 2840,
+      "sha256": "0fc9d2ae5b5ee715bff6493a34a41e4fdd4c8a6e2612067db44ad845c34dd31f"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r2/replay",
+      "bytes": 1044320,
+      "sha256": "4836c8da8619d97e8ab4be4fe051422eb75c9b44e5e3ccb3fa0cc1f23bd9dd65"
+    },
+    {
+      "path": "output/20260909-stop-viability-pair-tool-r2/revalidation_evidence.yaml",
+      "bytes": 3002,
+      "sha256": "a20ae7bbb4f2999933b59ed5f7021466b794d67f3d49a1636d930bd82a42db61"
+    },
+    {
+      "path": "output/20260909-stop-viability-plan-revalidation-r1/d1/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/native.log",
+      "bytes": 2071,
+      "sha256": "8cc741deb7b0dc49f86acc5df6f1f297b63eda971c1467d0cc51c6c8a601ae18"
+    },
+    {
+      "path": "output/20260909-stop-viability-plan-revalidation-r1/d1/000000000930-022e4757948de120-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 2071,
+      "sha256": "8cc741deb7b0dc49f86acc5df6f1f297b63eda971c1467d0cc51c6c8a601ae18"
+    },
+    {
+      "path": "output/20260909-stop-viability-plan-revalidation-r1/manifest.json",
+      "bytes": 44602,
+      "sha256": "e753945340c56070e2963865e0d8237f4dcb854a12e196649bdfa7d3a35ae43d"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-checks/0.log",
+      "bytes": 3284,
+      "sha256": "25316e9ae2b0906edc7bcf5c2ce58a214a8ec3c451561b5b724ff8295d7ae7d8"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-checks/1.log",
+      "bytes": 5877,
+      "sha256": "a8316746049de66d618945a6e855e3919d13b1351c0679434622ac6d87f28c90"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-checks/2.log",
+      "bytes": 507,
+      "sha256": "bb603fc90558492a3ca1673f32d28040539be5868275a85ad4c8910229279219"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-checks/3.log",
+      "bytes": 2383,
+      "sha256": "d0020bc07e2b0fe83966f4a78b689ff5d3976fba97a51adb2ec8093e7020ac76"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-checks/4.log",
+      "bytes": 2368,
+      "sha256": "c20f9a53b3a5df40c49ee7c0a9efcec0ea8a0e11de917e7421954907b1669da6"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-checks/5.log",
+      "bytes": 2368,
+      "sha256": "e61a31317769ff6dccd2b248bbc11c145eee5dd2e8fb5d16b549d6aa9d5c8c34"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-checks/manifest.json",
+      "bytes": 1507,
+      "sha256": "d5e62deea9ac5651a973250b16198e33dad011099a519652288c52fb6c410a29"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-inputs-r1/d1.json",
+      "bytes": 920674,
+      "sha256": "0bd176f5731f6f2e6e5ca7b43d3c4e72e1c29a877e7c35d74ac7b7864b675b37"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-inputs-r1/d2.json",
+      "bytes": 907562,
+      "sha256": "7a8358efb8526df1c7a8718ceff0729b5a6558d03d87112e69c2013c571e19d2"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-inputs-r1/manifest.json",
+      "bytes": 752,
+      "sha256": "9adf6bd2ad549ed73ba6537a23f0fcc1cb53cc5e3ead0a6cbbcdb4916ccfabab"
+    },
+    {
+      "path": "output/20260909-stop-viability-runtime-inputs-r1/runtime-epoch-matches.json",
+      "bytes": 3939,
+      "sha256": "17836fd1a6adab5f1512a903e4e1d74ed85da74eab23f4935ed1910b77ea05f4"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "a411dfc50de62c348ab39a4c86fe917cf963576d12f4cfb87bd6f130b7daf49a"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/authority-timing-summary.json",
+      "bytes": 49181,
+      "sha256": "a0bb3d479c773cf96c629fb77dc3d2444ed590216dfa50360bf4e0a845a04aeb"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/awsim.log",
+      "bytes": 1772,
+      "sha256": "cd3cb4e7930170b932419c7d1804f47ef183b22f81ab7b8c2cf72f8690a9fe9f"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32512,
+      "sha256": "db812e64db8a9cc000767a0c27e6018139f31508112c5d54b55d0e65adf88043"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/binaries/mpc_controller_cpp",
+      "bytes": 8685480,
+      "sha256": "76d07a8e57c606164192a70eae223f273fd7f6d60a04fefb312719862a6d50de"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1573232,
+      "sha256": "022a7bcb2bd3a9b5b1ea37329ffd642f4f507f69f0c77d1366a0b7343858a6ee"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/build.log",
+      "bytes": 4627,
+      "sha256": "051a3a06257677b792bef7ed4b8baf659fff36881fd947bc4145e49c1fd71f2d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/compose-six-lap.yml",
+      "bytes": 209,
+      "sha256": "7378058ae83d652ec4b5cd09e303f65f02098e901123d20321547e8a5fa1cd3b"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/autoware.log",
+      "bytes": 2770150,
+      "sha256": "3a5df9878b2dd6e17a9a474588550563c52d01ed7420e7b4146a864fcdac1999"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/motion_analytics-26-09-09-14-22-51.html",
+      "bytes": 4920377,
+      "sha256": "360725c3cf197e8cf368fa22fbe65881abaea25bd90eb491595e43c3f92b2660"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000030-1d9aa0a12b8f57ce-track-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 264501,
+      "sha256": "f55a1607b32bb6b905bc6f53ebd4b93724130e77e5a9c9a457fe02e2db1664e0"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000030-1d9aa0a12b8f57ce-track-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000196-f3bf71946b8f2a31-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 243939,
+      "sha256": "e764b89a2c360124258eabf15f0428daee7aa2e9faca823d1852db9bdafacdea"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000196-f3bf71946b8f2a31-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000206-7d4002f498c9946f-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 246436,
+      "sha256": "db00bb3ec36307a0631760f73827731ab6e24918146714e37ef0a35a5394c586"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000206-7d4002f498c9946f-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000316-4e31766382efc098-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 260867,
+      "sha256": "158ee1aa0c2c2c71a9f4f7b577e325c877c7a8ab90f9aa943747b246a08280ff"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000316-4e31766382efc098-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000353-e05fb477b3500dac-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 258119,
+      "sha256": "6a72c004b0fc84e57d63c04d52d72d86df095e48f39923842c4d483d0df7c452"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000353-e05fb477b3500dac-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000397-a1a0f238b6011b43-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 256420,
+      "sha256": "01d25e9a04393d43581bbb164f230bc389fac3344e42c68029887293683f3cd3"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000397-a1a0f238b6011b43-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000420-a5bb6629d31fd043-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 269992,
+      "sha256": "3ce20bdf12c65786c98362ffb795012ba950995dc0ddab57b1adc477ef1d8e20"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000420-a5bb6629d31fd043-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000528-2c7c7e75d0540bb4-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 36009,
+      "sha256": "12e3c0e7ad1b230c564bcb0ebcf1c9eb55be5805b7c3ef3db312ff08338ae598"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/mpcc_architecture_snapshots/000000000528-2c7c7e75d0540bb4-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/2026-09-09-14-17-50-032904-msuda-System-Product-Name-70/launch.log",
+      "bytes": 16875,
+      "sha256": "89e9fed9912e0449a17233daf48087e74ddde29e220524b56cbf056a9fa04f6a"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/component_container_103_1788931071219.log",
+      "bytes": 1488,
+      "sha256": "4eb77099b62a73c68d5785aaf01bbc720ad7e2d12f6acdbd767375024d9e9138"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/ekf_localizer_95_1788931071224.log",
+      "bytes": 65,
+      "sha256": "3db4211103acfb6dbf29e06c7a45ae1f7780dc2c59f319470f868a94916060e9"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/gnss_poser_89_1788931071215.log",
+      "bytes": 205,
+      "sha256": "f99c605ca9c86c1d5385c7522f65d8e625728b4bfd13e5f93fb0bfb456f39da0"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/gyro_odometer_91_1788931071251.log",
+      "bytes": 65,
+      "sha256": "4195a7b214410e92856d8334ba0cae418c87ae2e76246342b2b869c45a4cf24f"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/imu_corrector_87_1788931071232.log",
+      "bytes": 65,
+      "sha256": "b72dc720d69a6ea81c46cb7a6182f35650ad34be19a56d72f20e6af91498fb54"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/imu_gnss_poser_node_93_1788931071221.log",
+      "bytes": 977,
+      "sha256": "4838005e2117e78b831f4d5542f35e0cb8ce58bc8968a1f128b2de4b7e30e1c5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/mpc_controller_cpp_101_1788931071404.log",
+      "bytes": 2642457,
+      "sha256": "4cf1f58c5d2ba749511778e5c692add08589a88be76e9cca3cc6213f78af8880"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/python3_109_1788931071465.log",
+      "bytes": 4061,
+      "sha256": "98a0fc5d67ed94d7635107e2d5895c53812327976969745e9181a32daf5b212f"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/python3_111_1788931071456.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/python3_113_1788931071436.log",
+      "bytes": 143,
+      "sha256": "999098b9ad02c7ee495fcb7685d09e7825d58110a7a1bd203117a2809fa8fd5a"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/python3_361_1788931087381.log",
+      "bytes": 2711,
+      "sha256": "74648dfd6729ea34df829e5ccb0910fcc7fd5543961b4c2610786d1567758b1e"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/python3_70_1788931071102.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/relay_107_1788931071268.log",
+      "bytes": 65,
+      "sha256": "626d4824ec77f41b8762646cf44eecd772df2f49cce9ca038b329f5c74b08fce"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/robot_state_publisher_83_1788931071215.log",
+      "bytes": 705,
+      "sha256": "cdf4743fbd21852212b54fafb1e16b82eab4c3d4630c02b8c76b1c35ad1e60dd"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/rviz2_105_1788931071356.log",
+      "bytes": 744,
+      "sha256": "c863095d7c189df3d8e6207f0ceea11607b69ee79070de8b6f0eef5ac9f173a5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/simple_trajectory_generator_node_99_1788931071229.log",
+      "bytes": 1915,
+      "sha256": "f5a037344000277919f1b9c1914d9be8c081134c8a4d7fb6067d9f24f1171567"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/twist2accel_97_1788931071234.log",
+      "bytes": 65,
+      "sha256": "d66dc2429a7571b4397d17939f1c59d408bafe0bd8afc79cc49e06d9814f8412"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/ros/log/vehicle_velocity_converter_85_1788931071235.log",
+      "bytes": 65,
+      "sha256": "12c653ba1f02169c13fb7393340cefe080db867e99dcc681fa13f275ca0ba36a"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8525,
+      "sha256": "b1f3055140dbaddd723251b04af82d5b71b84fcaddb31d05124b891018b95765"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 38026914,
+      "sha256": "a2588aa43e088bb6e071602641795da9a1192b11d09d16b06a7bd0047f9ef0e6"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "ba73b2534862099dc4d86fad818e5c58199d690bce0c9b4b08565c01a74b8c03"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/d1-topic-timing.json",
+      "bytes": 2383,
+      "sha256": "d0020bc07e2b0fe83966f4a78b689ff5d3976fba97a51adb2ec8093e7020ac76"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/down.log",
+      "bytes": 501,
+      "sha256": "7dbeed36e4833782a867d6a633f14b86691100493d899d22644f9d3a0553cc29"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/finish-results/d1-result-details.json",
+      "bytes": 854,
+      "sha256": "5eadc1a1f37c560024c2af58d7b7d2c33a244bcddcad8f083f4c586133bf57a4"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/generated-user-path-results/result-summary.json",
+      "bytes": 1050,
+      "sha256": "76b6a4c525182223bc4de417d710bd2b7afa69d8b56307bd4ea279c036f0ed09"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/ekf_localizer",
+      "bytes": 3017152,
+      "sha256": "b59c3ba635b271fe1c11cb929f130f45a66a2f714f43bc1c80ffc19545038910"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/libaichallenge_ekf_localizer_lib.so",
+      "bytes": 2162992,
+      "sha256": "25d6709773578e85b60692fb0c6d3507d619fc3135e647357076b739e47675e4"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2226888,
+      "sha256": "01f5faf04095b8e5665d5978d01ca2c039f5b5ea9b80dbdea42f1d0a84650734"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/CMakeLists.txt",
+      "bytes": 1967,
+      "sha256": "3c0afc4b2c1e16fd6411e84ab124702ee9c0b18e82995f2e9ed10f7d6107cd11"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/NOTICE",
+      "bytes": 591,
+      "sha256": "022282b0ddb9150f8f8eef93d756496e6fceaac26645f5ac8ab5885014df7524"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/README.md",
+      "bytes": 868,
+      "sha256": "0e611995e7b8269b053ea1e485567724e7e4a3f475160b359d60ffcde4f484d3"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/UPSTREAM.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/covariance.hpp",
+      "bytes": 937,
+      "sha256": "6fb6d3f54f710093f871bbe1b3a791ce10614ce6a894cedbfa34c470c4370bc1"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/ekf_localizer.hpp",
+      "bytes": 9173,
+      "sha256": "52150445c4f7614ba87516a0fa1b54a4a76adb61b6fd850c088f452f69b58ffd"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_transition.hpp",
+      "bytes": 1103,
+      "sha256": "69d17f4d8b16a916a4ac4bc04ac813096682707648c7067f3846493438828bf9"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/launch/ekf_localizer.launch.xml",
+      "bytes": 3823,
+      "sha256": "a5adf69bc5ee3774f287928b1a766abc71fb7118b56a81c68fa187f8fe23e07c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/package.xml",
+      "bytes": 1287,
+      "sha256": "f4d7a8c512446c3a0641a91d5ad519df87684916af56388c249166929fd4d7dc"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/covariance.cpp",
+      "bytes": 1839,
+      "sha256": "5e7472cc05e7a73bf260cc2f8770834c72cb48d3704bdd8283ff8195d70b4000"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer.cpp",
+      "bytes": 22971,
+      "sha256": "8097cb77806f0c53e1d37e9b2f9c35efc5486aa3e42376d7af8ec0f83941e5dc"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer_node.cpp",
+      "bytes": 891,
+      "sha256": "9183e015dc463be207cfdcde81c79765a3d22dc8b18b1b015dc9274819210737"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/mahalanobis.cpp",
+      "bytes": 987,
+      "sha256": "b2a2a90892c02266b15a4a2bbaf7fe4c9a5a543fccabc6b7836e6facbc18b9c0"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/measurement.cpp",
+      "bytes": 2196,
+      "sha256": "dacc346cbcfbfdac9efaa3d6be3628bbdf577ddfbae63959bafcda485b857f59"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/state_transition.cpp",
+      "bytes": 3369,
+      "sha256": "2e5c81b1c5a2228806725d32feace05b7ffba34fc341dfe594e38d21b4bd8654"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/warning_message.cpp",
+      "bytes": 2017,
+      "sha256": "13640a809651f7a0c71a5f378b26786e2f07a0fdf9d794ff37d739508645da4d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/src/test_ekf_localizer.cpp",
+      "bytes": 10768,
+      "sha256": "c41a98be09c027d21b0ac0eb78d08c62fca658df25f0ba88cab9d1d5e2074dc7"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_aged_object_queue.cpp",
+      "bytes": 2477,
+      "sha256": "9bbdf1204af2264635ea93f96b96e9ee9d123bcf629b1a7eaf5d7528fd72a529"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_covariance.cpp",
+      "bytes": 2178,
+      "sha256": "e2fa32f59d8572185b18ebfd306500279a28826273a98e9419555b3c57c7b88d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_clock.cpp",
+      "bytes": 5977,
+      "sha256": "567b679be46f8a1a3a464f2d351ded8029049aa25f9f86aa91028a0fb9c41719"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_mahalanobis.cpp",
+      "bytes": 1482,
+      "sha256": "cc31e52681756dd068c72f6c1a80ea249eb6215c15dbb69c8c51567ddbac7ae2"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_measurement.cpp",
+      "bytes": 2617,
+      "sha256": "954ed79a2a28a2116ed3a0ca531bdc25f83e48bcbc197321d266df0922f7e661"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_numeric.cpp",
+      "bytes": 1507,
+      "sha256": "a8da5388facefe07b59a7807e28a28f39c94b7bd73b397383fda6c2f6d92ef56"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_state_transition.cpp",
+      "bytes": 3161,
+      "sha256": "84a8cab921a6f1b0d94c212a8e638eb621cdadb5d470a6e5a55a78020440ab69"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_string.cpp",
+      "bytes": 909,
+      "sha256": "7d5fddf1bdac43b7f0a5bd393f277fddf485e2d8d3b65457b1fdc946eeb71ed0"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_warning_message.cpp",
+      "bytes": 2055,
+      "sha256": "9c7b8883eb339c17d60639aac6fcf3d72b969bcd5d66b5fce9d4e20088eef4d5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/.gitignore",
+      "bytes": 37,
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/CACHEDIR.TAG",
+      "bytes": 191,
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/README.md",
+      "bytes": 302,
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/v/cache/nodeids",
+      "bytes": 484,
+      "sha256": "dbf6e134667cc83efdd0884f38ba6dddac1aa40080f802178a13ddf189b21329"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/CMakeLists.txt",
+      "bytes": 394,
+      "sha256": "cabc352f6806cdd80ac4e366723d85cadd2ef1b00f016d5939398a74599e3ff6"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner.param.yaml",
+      "bytes": 1938,
+      "sha256": "d4f307b9bb58635dd0496845dfb8a6346977c19bfbc5ac1d2ace7c4120a378e5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner_tree.xml",
+      "bytes": 2621,
+      "sha256": "ef7ce6d5610f3bdb670e52ec3559d22940bd3be63cb3c9602948b0207be68d8f"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/converter.param.yaml",
+      "bytes": 327,
+      "sha256": "17d1def2c550d81200548b61d000e2d42ad9609b21164fa0f61c3dcc6f5e4faa"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/map/lanelet2_map_loader.param.yaml",
+      "bytes": 129,
+      "sha256": "cf8304daf3684ea25c3edf0544a33c0be32b306123ad35590019c8f6ca08ae4b"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/mission_planning/mission_planner/mission_planner.param.yaml",
+      "bytes": 212,
+      "sha256": "c048d0175ed7c810a635da80465222f676e42f5f73493909034162e3c28fd457"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/common/nearest_search.param.yaml",
+      "bytes": 132,
+      "sha256": "b6c156d6f3cc74b16c95f40f35cf86ddef2b8b3a19ee2630b741cc10f4085726"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/avoidance/avoidance.param.yaml",
+      "bytes": 4704,
+      "sha256": "522287ec99e5bfef1b1d96788fb90a0e249398b1aac70e948a9affdb55c30416"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/drivable_area_expansion.param.yaml",
+      "bytes": 3154,
+      "sha256": "1f4cf4862f076a30ca4e830c8c3efbf910801de35e7d2f5c6bb4a28369499f66"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_change/lane_change.param.yaml",
+      "bytes": 1161,
+      "sha256": "3562d08a5d22112dbe5da44f6070b750752da1d0282d0ae475d7a62e18c7f30b"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_following/lane_following.param.yaml",
+      "bytes": 84,
+      "sha256": "6115c2b5fdd761e453f42398cd8b05701ff1cb1120481409cc40fe6b8336b8e9"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_out/pull_out.param.yaml",
+      "bytes": 1043,
+      "sha256": "20dc36eff032a06b37e150ed60652101ec01e07924a41d55bb3f749aad22519c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_over/pull_over.param.yaml",
+      "bytes": 3288,
+      "sha256": "dad3fdfe63460034550abbf1c93937ab635d2ea36a2d4ce71125d1cadf5d9831"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/side_shift/side_shift.param.yaml",
+      "bytes": 213,
+      "sha256": "4a0aa18c500e40c9e3b1848392c5289f41ed3be56d7afe93f693e55fd936cbb5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/vehicle_velocity_converter.param.yaml",
+      "bytes": 167,
+      "sha256": "c068e333ebe0bf94ab67a7e4ee94c1fa7c64c41e4e46cc0d140f66efb553afa5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/accel_map.csv",
+      "bytes": 539,
+      "sha256": "59ef66e4a2a6ad85e3e3f3e894af6b6ed55345fdfbef1295f49bac2c1bdc5f2f"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/brake_map.csv",
+      "bytes": 405,
+      "sha256": "7c9d8e9db7f00cf64bcf6f80ca67b65048da8487f4c53b3dcc37b4a971ad18cf"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/steer_map.csv",
+      "bytes": 1469,
+      "sha256": "26ead52a49148b347b7bbe5edb3c9cca6bd030f89585781f13b4e8870872571a"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml",
+      "bytes": 990,
+      "sha256": "0a82a035882bef28d3c35856f6d8b82a6207711eac5b7ecc94928309523e4537"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/joycon.launch.xml",
+      "bytes": 316,
+      "sha256": "f949739493762605db0ce0d9d5526cba2a3fcfa3410fc1dd65a7bb0997bebaa9"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/mpc.launch.xml",
+      "bytes": 1029,
+      "sha256": "bc0c319f6352ddd5d40518ff52877b138321e57ca0603436e1b13bb6b74fa7d1"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pilot_net.launch.xml",
+      "bytes": 488,
+      "sha256": "bf5b4f272aecf99c96996380e1241737d82874158fbb45fb2d9d880ad00fde78"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pure_pursuit.launch.xml",
+      "bytes": 1018,
+      "sha256": "738fa5d0714ca9355b14e0dade3b09a6d55a5b904c187abf1307b3930d2e7bdb"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/rl_train.launch.xml",
+      "bytes": 143,
+      "sha256": "6c3e3aacb7d99ded76c03498a1602bac0834881b031d77168baa500c971e62a6"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/tiny_lidar_net.launch.xml",
+      "bytes": 955,
+      "sha256": "79465471ea4c5d0c6a370651ed9b14b12fa4cdf970427624be400f65e9b448a5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12963,
+      "sha256": "e2855514d6c4fc6f4cea480d517605095ef0638d119186991d92d90a606bb909"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/lanelet2_map.osm",
+      "bytes": 116731,
+      "sha256": "126a62f2ef21560ace0eb39a0f52a6a5e86ef6b9951b0ead1511e46e4b418dc4"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/wide_lanelet2_map.osm",
+      "bytes": 138570,
+      "sha256": "c6bf9625bd5a6589991095c3eced22be048ba30740a1b75479e7cfe2b90c7e75"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/package.xml",
+      "bytes": 2019,
+      "sha256": "0596ef3df8a882be95cff9ff8c2b1efc78fde63a11897dd4e5ca02f68bfed50c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 18802,
+      "sha256": "27025f14e21657016d1bb640ce203cfcf43c41987de8bd85ed43805be560ff59"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 18869,
+      "sha256": "6b96d03f80c055fc815ccbd88a1c23c7fdf62ac4c0ca96bf5b5ef292fa9be2f8"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 5249,
+      "sha256": "bc6f30df073266b186ca1525aeba872dba25d376a99e39e3a13bd4027f857631"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 5316,
+      "sha256": "e8fd6f02f09e59a3856af0a544d9667f2719d0ffdb1d1fa8c6cb9812a1c1c4d4"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_localization_timing_contract.py",
+      "bytes": 1684,
+      "sha256": "7f54ea148127b65302c28881300557398a37573afa88b5280bb34641f5400a27"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39500,
+      "sha256": "e35a1a28301688262411cbdc1abf58a8e6a90ee5f5ac97904b6a9a8ebe1754d3"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "bytes": 4528,
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 10520,
+      "sha256": "9a0b1754cd45410f71ebccee853b37ba15c8e8c5dc7e32a17222deb55f7ca678"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2944786,
+      "sha256": "d2c0432116179b17288b956ad6b7acf58a3aed61792d96dec99d92216dec8b47"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_state_prediction.cpp",
+      "bytes": 9567,
+      "sha256": "4be57ea66536a1bc0225f9e40d3382a2ed636766e63cc816f1baf4e7b96ae13b"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 135131,
+      "sha256": "38f73a6dcce40602f83ae8935f623b9c53e90f3a882158d5dd43cab429859096"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpc_state_prediction.cpp",
+      "bytes": 19086,
+      "sha256": "412787b37d3c1bede8cffb54ae749a1c4431a5244401064f0ecf59251a2fde23"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 61089,
+      "sha256": "f4d31f86d17275e43201ad9d6860143978aa7498cc6dbb6f530de207aba525cb"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 37877,
+      "sha256": "6c89c17af54a4a92846bc4194ac87508ab7ce478ff0145ad8b3f2a5a52371680"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 181162,
+      "sha256": "c9627bf8eb2dcad29da2e942b9c8452e03c2d6da4a3414536e8e9c3c42928ec9"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17463,
+      "sha256": "400587843725512bb8f6001470a77fdd2fa39798b1cb0fdf9909dda182781efe"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/test/test_gnss_heading.cpp",
+      "bytes": 6810,
+      "sha256": "6b06a36dc60c4413e0d389cb98795fb582102bd3841a74626fad3d06c1d308fd"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/launch.log",
+      "bytes": 770,
+      "sha256": "a819481de71e8229810bc5c3ee4769a40da88438d08fae39fda1ad06d792bf35"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/manifest.json",
+      "bytes": 56784,
+      "sha256": "975972eab91430cf247ed56166f40976a498beadc259e03205301f2b5d269e5b"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/monitor-summary.json",
+      "bytes": 1431,
+      "sha256": "0f3b8b279948359551f0f6657d86f5d8cc0ee1a7dae70668ce2ab2aa5001e338"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/mpcc-source.patch",
+      "bytes": 16303,
+      "sha256": "e025e66d863b8460c44fbdf9205df08a4b36f0989d52467d0b39fdfb544c313e"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/package.log",
+      "bytes": 495003,
+      "sha256": "066b216b7cef5c6134bb44c0f2c8d6638a206244aa9cb2330318d1eb515378b4"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/run_campaign.py",
+      "bytes": 12063,
+      "sha256": "d044ca1514e6d37c6217c511c23ba7a722180fedb6ff21f90ea951dd7cabfa01"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-stop-viability-single-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-build-r1.log",
+      "bytes": 7356,
+      "sha256": "350757529a7a253082754c19e7cefa34d65360544929779e4a148bc648327d63"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-build.log",
+      "bytes": 4627,
+      "sha256": "051a3a06257677b792bef7ed4b8baf659fff36881fd947bc4145e49c1fd71f2d"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-dev2.log",
+      "bytes": 2477,
+      "sha256": "d0e7985a0182f553b31c3525fcb0316b636437320fafeaa9a995434cac0602f5"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-input-comparison.log",
+      "bytes": 760,
+      "sha256": "f18b98143b6e9d1b3dfb7c8bd20038e04993f20c2493c74477cf2afc74839147"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-native-after-r1.log",
+      "bytes": 1814,
+      "sha256": "3eb9d2a6669bad95b0282cb1bb3a316c523208b54c7671c439b093c90df5ef6c"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-native-before-r1.log",
+      "bytes": 6436,
+      "sha256": "d68a8263398074e071f78a1789a75a26b140bf859f7d9ce6736d52645216fb53"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-native-package-r1.log",
+      "bytes": 6709,
+      "sha256": "b4717a4e45731fa829c06564c5ff06df6db52000ede2fd6711627d903dc2e8b6"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-package.log",
+      "bytes": 495003,
+      "sha256": "066b216b7cef5c6134bb44c0f2c8d6638a206244aa9cb2330318d1eb515378b4"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-pair-r1.log",
+      "bytes": 4757,
+      "sha256": "acf97008a413a12786e59bdde2448594141e3b9e8e56aefdcf887172b27f8478"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-pair-r2-native.log",
+      "bytes": 11682,
+      "sha256": "250413b9416a24626ed87db83df9f8b5a39947b663f07e12a19e31139240c506"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-runtime-checks.log",
+      "bytes": 1385,
+      "sha256": "39d226f4fa206a8c69e2dc0a33e259380e8223e3433b4910a9961a9a50fd1271"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-runtime-epochs.log",
+      "bytes": 3321,
+      "sha256": "84a2cf85527a823a088c45b2ea2b3311d4c65eb123d9f2c7008286d21713f8dc"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-single.log",
+      "bytes": 7136,
+      "sha256": "92f5206dd6501fe15fe79136b72c5b5891c1a291214f5596b89b03ca518fb2b6"
+    },
+    {
+      "path": "output/20260909-stop-viability-validation/mpcc-stop-viability-source-contract.log",
+      "bytes": 180,
+      "sha256": "dbfb1dea51197f598c302cc87a9a99afe9feb28d34e240608e945f11fd87c7a9"
+    }
+  ]
+}

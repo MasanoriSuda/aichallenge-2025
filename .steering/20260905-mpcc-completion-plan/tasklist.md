@@ -2,6 +2,12 @@
 
 最新の進捗・完遂順序は[current-status.md](current-status.md)。
 
+2026-09-09計画具体化: [最新M1〜M6計画](../20260909-mpcc-longitudinal-model-contract/completion-plan.md)
+へ実装対象・依存順・削除経路・受入れ条件を集約した。native静止反例により全horizonの
+flat response拡張を棄却。観測単車と独立dev2の比較、最小実行時physics観測を保存した。
+計画・比較観測は完了。因果的なモデル採用、本番修正、P2 dev2とP3/P4は未完。
+観測runの6周253.053833秒を通常性能や新モデル合格へ転用しない。
+
 2026-09-09観測bundle追記: 失敗worldと実行元を原子的に保存し、25package build・
 60CTestgroup/2362記録、native14/source104が合格。dev2 D2 decision1629で実行元1100を
 取得し、停止末端の後方D1との動的余裕不足を再求解なしで再現（1.555秒、-0.006771m）。

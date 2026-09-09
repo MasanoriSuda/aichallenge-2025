@@ -4125,3 +4125,28 @@ artifact・async・最終serializeへ一貫して持たせる。gain/遅延/solv
 代用しない。古いschemaは診断として保存し、新モデルのauthorityへ流用しない。
 [直接監査](../../.steering/20260909-mpcc-actuation-application/results.md)と
 [完遂計画](../../.steering/20260909-mpcc-actuation-application/completion-plan.md)を参照する。
+
+### 2026-09-09: 縦モデル比較と実効物理値
+
+上記のresponse残差を一定値のまま全horizonへ延長する案は、native静止反例で棄却。
+負の補正は無入力静止から逆向き速度を作り、静止制動−3で得た約+3の残差は次の
+加速指令へそのまま足せない。残差は入力と停止時の飽和に依存し、一定外乱とは限らない。
+
+観測単車の学習/保留区間と独立dev2では、rolling/dragと前輪横力を含む比較の
+速度増分誤差は小さくなった。ただし中点の未来実測v/横速度/yaw/操舵を使うため、
+因果的な予測モデルの合格ではない。fit係数を設定値として転記しない。
+raw VelocityReportのEuler角差分には巻き戻りがあり、解析で補正したがROS出力は変更していない。
+
+ローカルAWSIMの実行時観測ではmass160kg、rolling0.37、drag0.03、skid0.236。
+YAMLのgripSteerFactor0.6はruntimeが下限0.7へclampしていたため、実効値は0.7。
+2受信器の観測時は片側前輪が非接地。WheelCollider sprungMassは前輪合計約25.881kgで、
+その瞬間の接地輪だけが横力・駆動力を加える。均等4輪接地を常時仮定しない。
+これはローカル2点の観測であり、2026公式車両定数や接地/遅延の保証範囲ではない。
+既存の操舵gain、solver、margin、authorityへ変更は加えていない。
+
+次は現在までのROS観測だけで使える物理入力・適用不確かさのモデルを選択し、
+接線・非線形proof・Stop・artifact・async・serializeを同じ契約へ移行する。
+状態拡張が必要なら旧七状態を第二normal authorityとして残さない。
+モデル採用、統合多車両、全intent、gate、同じ提出tar由来のevalは未完。
+[比較結果](../../.steering/20260909-mpcc-longitudinal-model-contract/results.md)と
+[対象コード・合格条件付きの完遂計画](../../.steering/20260909-mpcc-longitudinal-model-contract/completion-plan.md)を参照する。

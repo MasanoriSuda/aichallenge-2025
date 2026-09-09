@@ -10,11 +10,24 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: compare and unify wire acceleration versus physical acceleration
-through prefix prediction, canonical seven-state horizon, Stop and serialization.
-See [updated completion plan](../20260909-mpcc-actuation-application/completion-plan.md)
-and [direct input audit](../20260909-mpcc-actuation-application/results.md).
-No new controller/model/gain/solver change in this observation slice.
+Current next step: causal longitudinal/contact/application model comparison before
+production selection. See [concrete completion plan](../20260909-mpcc-longitudinal-model-contract/completion-plan.md)
+and [new model comparisons](../20260909-mpcc-longitudinal-model-contract/results.md).
+Planning and comparison observations are complete; M1 model selection and M2–M6
+implementation/integrated/submission acceptance remain open. No controller change.
+
+Native flat negative response creates unforced backward motion at rest; real
+observer at rest under -3braking estimates +2.99984residual, which cannot be reused
+as an input-independent acceleration loss for a later +1drive input. Proposal rejected.
+Measured-midpoint wheel-force fit improves held-out moving increment MAE, but has
+future-state information and unobserved contact; it is not a production predictor.
+Instrumented single6laps253.053833s/penalty0 is diagnostic only. Runtime2receiver
+physics samples confirm mass160, front sprungMass~25.881kg total, onefrontwheel
+ungrounded each. YAML grip .6 is clamped to .7 by the runtime. No gain tuning follows.
+OriginalDLL/protectedJSON restored, no containers running. Prior26build/2381tests
+are existing1c4f377e evidence, not re-run or promoted as new-model acceptance.
+
+Previous direct input audit ae2efe6a:
 
 Generated-only Unity probes preserve original3608 CIL methods after removing4
 observation calls. Direct receiver/application run `20260909-actuation-observed-dev2-r2`

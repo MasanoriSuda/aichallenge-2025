@@ -550,6 +550,26 @@
       "snapshot_id": "20260909-actuation-native-model",
       "manifest": ".steering/20260909-mpcc-actuation-application/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-model-rest",
+      "manifest": ".steering/20260909-mpcc-longitudinal-model-contract/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-model-single",
+      "manifest": ".steering/20260909-mpcc-longitudinal-model-contract/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-model-moving-fit",
+      "manifest": ".steering/20260909-mpcc-longitudinal-model-contract/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-longitudinal-model-physics",
+      "manifest": ".steering/20260909-mpcc-longitudinal-model-contract/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -4120,6 +4140,118 @@
       "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
       "deleted_code": [],
       "revisit_condition": "new causal model/producer or bounded witness"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-model-flat-rest",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-rest"
+      ],
+      "hypothesis": "A flat observed moving loss may be carried over all future states and inputs",
+      "changed_dimension": "Observation-only native/rest and moving conditional model comparison; one-time generated helper physics probe",
+      "result": "rejected",
+      "reason": "Current native transition, explicit diagnostic flat -.37: rest wire0 yields -.074m/s after.2s. Motion-opposing isolated component preserves0. Real observer under stationary brake-3 yields residual+2.9998417301328315; extrapolating it to wire+1 gives+3.9998417301328315. No production repair.",
+      "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
+      "deleted_code": [],
+      "revisit_condition": "a causal input/state-dependent physical response model with independent rest tests"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-model-single-observation",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-single"
+      ],
+      "hypothesis": "An instrumented single run can supply moving longitudinal response observations",
+      "changed_dimension": "Observation-only native/rest and moving conditional model comparison; one-time generated helper physics probe",
+      "result": "accepted",
+      "reason": "Six laps253.0538330078125s/penalty0/no moving override in monitor.11459receives/2630applications,10616exact wire matches.97318extracted ROS rows. Observation-only, not uninstrumented performance or new-model acceptance.",
+      "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
+      "deleted_code": [],
+      "revisit_condition": "changed binary/config/probe or missing observations"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-model-flat-generalization",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-moving-fit"
+      ],
+      "hypothesis": "One moving training residual generalizes across single and dev2",
+      "changed_dimension": "Observation-only native/rest and moving conditional model comparison; one-time generated helper physics probe",
+      "result": "rejected",
+      "reason": "Single15..90s training flat=-1.2782374350670689m/s2 improves single holdout but independent pre-Emergency dev2D2 increment MAE worsens .01834937804855 to .02638893119782m/s. Separate native rest rejection remains.",
+      "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
+      "deleted_code": [],
+      "revisit_condition": "new causal conditional response model, never the same fixed offset retuned to the failure"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-model-euler-raw",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-moving-fit"
+      ],
+      "hypothesis": "Raw VelocityReport.heading_rate directly represents an unwrapped body yaw derivative",
+      "changed_dimension": "Observation-only native/rest and moving conditional model comparison; one-time generated helper physics probe",
+      "result": "rejected",
+      "reason": "Decoded producer directly subtracts absolute Euler angles. Single has5winding samples. Analysisr2 recovers each principal increment before midpoint; r1 kept. Euler/body and float-quantization limitations remain. Controller uses Odometry, not established933cause.",
+      "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
+      "deleted_code": [],
+      "revisit_condition": "changed sensor producer or independently synchronized body-angular evidence"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-model-wheel-conditional-fit",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-moving-fit"
+      ],
+      "hypothesis": "Measured-state-conditioned wheel force terms reduce moving increment error",
+      "changed_dimension": "Observation-only native/rest and moving conditional model comparison; one-time generated helper physics probe",
+      "result": "accepted",
+      "reason": "Train15..90s2143intervals;holdout90..250s4571. MAE wire->wheel .0464864567->.0105816938m/s; independent pre-Emergency dev2D1 .0241227135->.0071666354,D2 .0183493780->.0017682871. No refit; raw Euler winding handled explicitly.",
+      "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
+      "deleted_code": [],
+      "revisit_condition": "new independent observations or causal model evaluation"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-model-wheel-promotion",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-moving-fit"
+      ],
+      "hypothesis": "The measured-state-conditioned fit is ready for canonical production MPC",
+      "changed_dimension": "Observation-only native/rest and moving conditional model comparison; one-time generated helper physics probe",
+      "result": "inconclusive",
+      "reason": "Fit uses future measured midpoint v,vy,yaw,steering and diagnostic actual application, neither available as future controller input. Low-speed/rest excluded. Contact/force epoch and independently propagated lateral states unresolved; no parameter promotion.",
+      "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
+      "deleted_code": [],
+      "revisit_condition": "causal held-out prediction, input/contact uncertainty contract and complete physical proof"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-model-runtime-physics",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-physics"
+      ],
+      "hypothesis": "Effective local vehicle values and contact can be read with bounded diagnostic probes",
+      "changed_dimension": "Observation-only native/rest and moving conditional model comparison; one-time generated helper physics probe",
+      "result": "accepted",
+      "reason": "Two receivers each1body+4wheels captured then teardown, no probe errors. mass160;front sprungMass~25.881kg, onefrontwheel ungrounded each. YAML grip .6 clamped runtime .7; explicit Player.log warnings. Same3608method-normalized main DLL and4calls as prior probe; new read-only helper, no timing parity claim.",
+      "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
+      "deleted_code": [],
+      "revisit_condition": "changed local simulator/config or synchronized full force observation"
+    },
+    {
+      "experiment_id": "20260909-longitudinal-model-uniform-contact",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-longitudinal-model-physics"
+      ],
+      "hypothesis": "Equal and continuously grounded four-wheel force is a valid observed plant assumption",
+      "changed_dimension": "Observation-only native/rest and moving conditional model comparison; one-time generated helper physics probe",
+      "result": "rejected",
+      "reason": "At both moving observations onefrontwheel reports ungrounded; front total sprungMass fraction~.16176, groundedfront~.08985. Decoded Wheel.UpdateWheelForce returns without lateral/drive force if ungrounded. Only two samples, not full-time contact history or force measurement.",
+      "production_impact": "No controller/model/gain/delay/solver/limit/authority changes. Full MPCC acceptance open; concrete completion plan updated.",
+      "deleted_code": [],
+      "revisit_condition": "different proven contact regime or a model covering contact uncertainty"
     }
   ]
 }

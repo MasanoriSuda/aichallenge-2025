@@ -7,9 +7,15 @@
 #include "multi_purpose_mpc_ros/persistent_osqp.hpp"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
+{
+struct Request;
+}
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot
 {
@@ -100,6 +106,57 @@ struct PublishedExecutionObservation
   PublicationEvidence publication;
 };
 
+enum class AuthorityFailureBoundary
+{
+  TerminalContingency,
+  FinalAuthority,
+};
+
+const char * to_string(AuthorityFailureBoundary boundary) noexcept;
+
+struct AuthorityFailureObservation
+{
+  mpcc_rate_resolved_shadow::Snapshot current_world;
+  AuthorityFailureBoundary boundary{AuthorityFailureBoundary::FinalAuthority};
+  std::string detail;
+  PublishedExecutionObservation published_execution;
+  std::filesystem::path output_root{"mpcc_architecture_snapshots"};
+  /// Exact rejected evaluation input, not a reconstructed later observation.
+  /// The inspected plan is separate from the actual publication ledger above.
+  std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> revalidation_request;
+};
+
+enum class ObservationAdmission
+{
+  Queued,
+  Duplicate,
+  Invalid,
+  Stopped,
+};
+
+/// Preserve the first observation in each fixed intent/side/boundary bucket.
+/// Unlike a receding planning worker, later observations cannot replace an
+/// accepted pending event. All filesystem I/O and completion callbacks run on
+/// the private worker, which also binds the failure side of publication
+/// evidence to the queued world. Shutdown drains admitted events before joining.
+class FirstAuthorityFailureRecorder
+{
+public:
+  using Completion = std::function<void(
+      const AuthorityFailureObservation &, const RecordResult &)>;
+  explicit FirstAuthorityFailureRecorder(Completion completion = {});
+  ~FirstAuthorityFailureRecorder();
+  FirstAuthorityFailureRecorder(const FirstAuthorityFailureRecorder &) = delete;
+  FirstAuthorityFailureRecorder & operator=(const FirstAuthorityFailureRecorder &) = delete;
+
+  ObservationAdmission submit(AuthorityFailureObservation observation);
+  void stop() noexcept;
+
+private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
 /// Atomically persist one failed current world and its corresponding published
 /// source/artifact/clock. Deduplicate only the complete failure record; an
 /// unrelated earlier publication must not consume this record's source slot.
@@ -111,7 +168,9 @@ RecordResult record_authority_failure(
   const std::string & failure_detail,
   const PublishedExecutionObservation & published_execution,
   const std::filesystem::path & output_root =
-  std::filesystem::path{"mpcc_architecture_snapshots"}) noexcept;
+  std::filesystem::path{"mpcc_architecture_snapshots"},
+  const std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> &
+  revalidation_request = {}) noexcept;
 
 /// Save the original solver input AND the actual immutable artifact, without
 /// resolving the input again. Shares the existing bounded failure deduplication

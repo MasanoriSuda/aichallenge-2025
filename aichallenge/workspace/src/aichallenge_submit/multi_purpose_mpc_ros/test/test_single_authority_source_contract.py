@@ -3933,15 +3933,11 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
         submitter_start,
     )
     submitter = SOURCE[submitter_start:submitter_end]
-    submission = submitter.index(
-        "rate_resolved_terminal_failure_snapshot_worker_->submit_latest("
-    )
-    persistence = submitter.index(
-        "mpcc_architecture_snapshot::record_authority_failure("
-    )
-    assert submission < persistence
-    assert "[snapshot = std::move(snapshot)" in submitter
-    assert "recorded asynchronously" in submitter
+    assert "rate_resolved_terminal_failure_snapshot_worker_->submit(" in submitter
+    assert "FirstAuthorityFailureRecorder" in SOURCE
+    assert "submit_latest(" not in submitter
+    assert "record_authority_failure(" not in submitter
+    assert "std::move(snapshot)" in submitter
     assert "record_published_execution(" not in submitter
     assert "record_proof_failure(" not in submitter
 
@@ -3964,7 +3960,7 @@ def test_terminal_failure_snapshot_io_is_off_the_control_callback() -> None:
     )
     production = SOURCE[production_start:production_end]
     assert "record_rate_resolved_terminal_contingency_failure_snapshot(" in production
-    assert "if (!terminal_snapshot_submitted)" in production
+    assert "terminal_snapshot_submitted" not in production
     assert "mpcc_architecture_snapshot::record_authority_failure(" not in production
 
 

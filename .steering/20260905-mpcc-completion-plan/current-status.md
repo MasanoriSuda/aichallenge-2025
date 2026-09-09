@@ -10,7 +10,23 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: preserve the final-authority observation at dev2 D1 951 and
+Current next step: causal audit of exact dev2 D1 world945 / actual and inspected361,
+now recorded with its exact rejected Request. The first-event observer repair
+passes16native/104source tests,25-package build and60CTestgroups/2371records.
+Fixed dev2 captures the first moving Emergency945at1.5802064876844846m/s.
+Zero-solve replay reproduces steering-unreachable, terminal peer-0.003647424709m
+and independent Stop peer-0.001124094799m. Original361wall/dynamic pass;
+current pose/speed/steering join differs. Both Domain callbackoverruns0,
+commandreceipt40Hz/no gap>50ms, but source/observation delivery pauses remain.
+Coupled race rejected. Later1137is downstream of first Emergency, before teardown.
+Use exact publication/request clocks and same-run serialized commands to test
+reachability ownership; compare A/B/C/D and full-rest candidate architecture on
+this new world before another failure-family patch. No offline candidate is
+promoted. All runtime stopped and user JSON restored. See
+[final authority observation](../20260909-mpcc-final-authority-observation/results.md).
+
+Previous e5b8c455 evidence and now-repaired recording gap:
+The then-next step was to preserve the final-authority observation at dev2 D1 951 and
 the actual Stop 379, distinct from first terminal world 949 / normal 365.
 The metadata repair in [Stop proof provenance](../20260909-mpcc-stop-proof-provenance/results.md)
 passes its failing native regression, 25-package build and 60 CTest groups /

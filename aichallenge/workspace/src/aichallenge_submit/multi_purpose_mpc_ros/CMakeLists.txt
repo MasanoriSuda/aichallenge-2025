@@ -146,6 +146,7 @@ target_include_directories(${PROJECT_NAME}_mpcc_architecture_snapshot PUBLIC
   ${EIGEN3_INCLUDE_DIRS}
 )
 target_link_libraries(${PROJECT_NAME}_mpcc_architecture_snapshot
+  Threads::Threads
   ${PROJECT_NAME}_mpcc_rate_resolved_adapter
   ${PROJECT_NAME}_mpcc_rate_resolved_execution_artifact
   ${PROJECT_NAME}_mpcc_execution_contract

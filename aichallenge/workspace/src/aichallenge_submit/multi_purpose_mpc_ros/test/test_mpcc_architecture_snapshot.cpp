@@ -1,6 +1,7 @@
 #include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
 
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 
 #include <gtest/gtest.h>
 
@@ -9,11 +10,13 @@
 
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot
@@ -421,6 +424,181 @@ TEST(MpccArchitectureSnapshot, EachWrittenFailureOwnsItsActualPublishedArtifact)
     EXPECT_EQ(record_authority_failure(world, outcome, "duplicate boundary", observed, root).status,
       RecordStatus::Duplicate);
   }
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, FirstBoundaryRecorderPreservesQueuedFinalWorldAndArtifact)
+{
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  const auto root = output_root("first-authority-boundaries");
+  std::filesystem::remove_all(root);
+  auto world = *make_publication_observation().source;
+  const auto observation = [&](std::uint64_t decision, AuthorityFailureBoundary boundary) {
+      AuthorityFailureObservation value;
+      value.current_world = world;
+      value.current_world.identity.sequence = decision;
+      auto & context = value.current_world.identity.source_context;
+      context.decision_id = decision;
+      context = mpcc_execution_contract::seal_problem_context(context);
+      value.boundary = boundary;
+      value.output_root = root;
+      value.published_execution = make_publication_observation();
+      auto source = *value.published_execution.source;
+      source.identity.sequence = decision * 10U;
+      auto artifact = *value.published_execution.artifact;
+      artifact.identity = source.identity;
+      value.published_execution.source =
+        std::make_shared<const mpcc_rate_resolved_shadow::Snapshot>(source);
+      value.published_execution.artifact =
+        std::make_shared<const execution::ExecutionArtifact>(artifact);
+      bind_failure_world(value.published_execution, value.current_world);
+      return value;
+    };
+  std::promise<void> entered, release;
+  auto ready = entered.get_future();
+  const auto released = release.get_future().share();
+  std::vector<std::pair<std::uint64_t, RecordResult>> completed;
+  const auto callback_thread = std::this_thread::get_id();
+  bool io_off_callback = true;
+  FirstAuthorityFailureRecorder recorder(
+    [&](const AuthorityFailureObservation & value, const RecordResult & result) {
+      io_off_callback = io_off_callback && std::this_thread::get_id() != callback_thread;
+      completed.emplace_back(value.current_world.identity.sequence, result);
+      if (value.current_world.identity.sequence == 1001U) {
+        entered.set_value();
+        released.wait();
+      }
+    });
+  auto invalid = observation(1000U, AuthorityFailureBoundary::TerminalContingency);
+  invalid.current_world.wall_grid.reset();
+  EXPECT_EQ(recorder.submit(std::move(invalid)), ObservationAdmission::Invalid);
+  ASSERT_EQ(recorder.submit(observation(1001U, AuthorityFailureBoundary::TerminalContingency)),
+    ObservationAdmission::Queued);
+  ready.wait();
+  EXPECT_EQ(recorder.submit(observation(1002U, AuthorityFailureBoundary::TerminalContingency)),
+    ObservationAdmission::Duplicate);
+  EXPECT_EQ(recorder.submit(observation(1002U, AuthorityFailureBoundary::FinalAuthority)),
+    ObservationAdmission::Queued);
+  EXPECT_EQ(recorder.submit(observation(1003U, AuthorityFailureBoundary::FinalAuthority)),
+    ObservationAdmission::Duplicate);
+  release.set_value();
+  recorder.stop();
+  ASSERT_EQ(completed.size(), 2U);
+  EXPECT_EQ(completed[0].first, 1001U);
+  EXPECT_EQ(completed[1].first, 1002U);
+  EXPECT_TRUE(io_off_callback);
+  ASSERT_EQ(completed[1].second.status, RecordStatus::Written) << completed[1].second.detail;
+  const auto node = YAML::LoadFile(completed[1].second.snapshot_file.string());
+  EXPECT_EQ(node["source"]["sequence"].as<std::uint64_t>(), 1002U);
+  EXPECT_EQ(node["publication_bundle"]["execution_evidence"]["source_sequence"].as<std::uint64_t>(),
+    10020U);
+  EXPECT_EQ(node["failure_outcome"].as<std::string>(), "normal-authority-unavailable");
+  EXPECT_EQ(recorder.submit(observation(1004U, AuthorityFailureBoundary::FinalAuthority)),
+    ObservationAdmission::Stopped);
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, ExactRejectedRequestKeepsInspectedAndPublishedArtifactsSeparate)
+{
+  namespace retained = mpcc_rate_resolved_retained_revalidation;
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  auto published = make_publication_observation();
+  auto world = *published.source;
+  world.identity.sequence = 951U;
+  world.identity.source_context.decision_id = 951U;
+  world.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    world.identity.source_context);
+  bind_failure_world(published, world);
+  auto inspected_source = *published.source;
+  inspected_source.identity.sequence = 379U;
+  auto inspected_artifact = *published.artifact;
+  inspected_artifact.identity = inspected_source.identity;
+  auto plan = std::make_shared<mpcc_rate_resolved_certified_plan::CertifiedPlan>();
+  plan->solver_source_snapshot =
+    std::make_shared<const mpcc_rate_resolved_shadow::Snapshot>(inspected_source);
+  plan->execution_artifact = std::make_shared<const execution::ExecutionArtifact>(inspected_artifact);
+  retained::Request request;
+  request.plan = plan;
+  request.decision_id = 951U;
+  request.now_sec = world.identity.snapshot_sec;
+  request.control_origin_sec = world.control_prediction_origin_sec;
+  request.current_intent = world.identity.source_context.intent;
+  request.execution_clock = {retained::ExecutionClockKind::PublishedPlan, 12.51, 0.03712345678901234};
+  request.current_speed_mps = 1.718736123456789;
+  request.control_origin_speed_mps = 1.861113123456789;
+  request.current_time_steering_rad = -0.050562123456789;
+  request.current_steering_rad = -0.128003123456789;
+  request.current_response_steering_rad = -0.061234567890123;
+  request.previous_published_steering_rad = request.current_steering_rad;
+  request.previous_published_command_age_sec = 0.014999999;
+  request.control_origin_physical_progress_m = 30.677949123456789;
+  request.path_length_m = 997.1234567890123;
+  request.progress_continuity_tolerance_m = 1.5;
+  request.circular = true;
+  request.minimum_acceleration_mps2 = -3.0;
+  request.maximum_acceleration_mps2 = 1.37;
+  const auto & replay = *world.replay_world;
+  request.control_pose = replay.control_prefix.back();
+  request.measured_to_control_path = replay.control_prefix;
+  request.measured_to_control_elapsed_sec = replay.control_prefix_elapsed_sec;
+  request.current_wall_grid = world.wall_grid;
+  request.current_footprint = replay.physical_footprint;
+  request.stop_lateral_policy = replay.terminal_stop_lateral_policy;
+  request.obstacles = {replay.observation_generation, replay.observed_sec, {}, replay.current};
+  for (const auto & peer : replay.obstacles) {
+    request.obstacles.obstacles.push_back({peer.id,
+      {peer.x_m, peer.y_m, peer.velocity_x_mps, peer.velocity_y_mps, peer.radius_m}});
+  }
+  const auto root = output_root("exact-inspected-request");
+  std::filesystem::remove_all(root);
+  const auto fingerprint = fingerprint_interaction_snapshot(world);
+  for (int variant = 0; variant < 4; ++variant) {
+    auto observed_request = request;
+    if (variant == 1) {
+      ++observed_request.decision_id;
+    } else if (variant == 2) {
+      auto invalid_plan = std::make_shared<mpcc_rate_resolved_certified_plan::CertifiedPlan>(*plan);
+      auto invalid_artifact = inspected_artifact;
+      ++invalid_artifact.identity.sequence;
+      invalid_plan->execution_artifact =
+        std::make_shared<const execution::ExecutionArtifact>(invalid_artifact);
+      observed_request.plan = invalid_plan;
+    } else if (variant == 3) {
+      observed_request.plan.reset();
+    }
+    const auto recorded = record_authority_failure(world, "inspection-fixture-" + std::to_string(variant),
+      "Synthetic request fixture; no certified-plan or physical acceptance claim", published, root,
+      std::make_shared<const retained::Request>(observed_request));
+    ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+    std::string detail;
+    const auto loaded = load_recorded_interaction_snapshot(recorded.snapshot_file, &detail);
+    ASSERT_TRUE(loaded) << detail;
+    EXPECT_EQ(loaded->interaction_fingerprint, fingerprint);
+    const auto node = YAML::LoadFile(recorded.snapshot_file.string());
+    const auto evidence = node["revalidation_evidence"];
+    EXPECT_EQ(evidence["schema"].as<std::string>(), "mpcc-revalidation-observation/v1");
+    EXPECT_EQ(evidence["status"].as<std::string>(), variant == 1 ? "invalid" : "present");
+    EXPECT_EQ(node["publication_bundle"]["execution_evidence"]["source_sequence"].as<std::uint64_t>(),
+      published.artifact->identity.sequence);
+    EXPECT_DOUBLE_EQ(evidence["request"]["current_time_steering_rad"].as<double>(),
+      request.current_time_steering_rad);
+    EXPECT_DOUBLE_EQ(evidence["request"]["current_speed_mps"].as<double>(), request.current_speed_mps);
+    EXPECT_DOUBLE_EQ(evidence["request"]["previous_published_command_age_sec"].as<double>(),
+      request.previous_published_command_age_sec);
+    EXPECT_DOUBLE_EQ(evidence["request"]["execution_clock"]["first_published_artifact_elapsed_sec"].as<double>(),
+      request.execution_clock.first_published_artifact_elapsed_sec);
+    EXPECT_TRUE(std::filesystem::exists(recorded.snapshot_file.parent_path()/"revalidation-wall-grid.bin"));
+    if (variant >= 2) {
+      EXPECT_EQ(evidence["inspected_plan_status"].as<std::string>(), variant == 2 ? "invalid" : "missing");
+      EXPECT_FALSE(evidence["inspected_artifact"]);
+    } else {
+      EXPECT_EQ(evidence["inspected_plan_status"].as<std::string>(), "present");
+      EXPECT_EQ(evidence["inspected_artifact"]["source_sequence"].as<std::uint64_t>(), 379U);
+      EXPECT_FALSE(evidence["inspected_artifact"]["publication"]);
+      EXPECT_TRUE(std::filesystem::exists(recorded.snapshot_file.parent_path()/"inspected-wall-grid.bin"));
+    }
+  }
+  EXPECT_EQ(fingerprint_interaction_snapshot(world), fingerprint);
   std::filesystem::remove_all(root);
 }
 

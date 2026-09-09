@@ -1,4 +1,9 @@
 #include "multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp"
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
+
+#include <condition_variable>
+#include <deque>
+#include <thread>
 
 #include "multi_purpose_mpc_ros/mpcc_execution_contract.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
@@ -2112,6 +2117,155 @@ static bool published_execution_valid(
       publication.publication_artifact_elapsed_sec < 0.0);
 }
 
+static YAML::Node revalidation_evidence_node(
+  const shadow::Snapshot & world,
+  const mpcc_rate_resolved_retained_revalidation::Request * request,
+  const recovery_footprint::OccupancyGrid * & inspected_grid,
+  const recovery_footprint::OccupancyGrid * & observed_grid)
+{
+  YAML::Node node;
+  node["schema"] = "mpcc-revalidation-observation/v1";
+  if (request == nullptr) {
+    node["status"] = "missing";
+    node["reason"] = "exact rejected evaluation request unavailable";
+    return node;
+  }
+  const auto & r = *request;
+  auto value = node["request"];
+  value["decision_id"] = r.decision_id;
+  value["now_sec"] = r.now_sec;
+  value["control_origin_sec"] = r.control_origin_sec;
+  value["current_intent"] = contract::to_string(r.current_intent);
+  using Clock = mpcc_rate_resolved_retained_revalidation::ExecutionClockKind;
+  const char * clock = "unknown";
+  switch (r.execution_clock.kind) {
+    case Clock::Unknown: break;
+    case Clock::BootstrapCandidate: clock = "bootstrap-candidate"; break;
+    case Clock::TimeAlignedCandidate: clock = "time-aligned-candidate"; break;
+    case Clock::PublishedPlan: clock = "published-plan"; break;
+  }
+  value["execution_clock"]["kind"] = clock;
+  value["execution_clock"]["first_published_control_origin_sec"] =
+    r.execution_clock.first_published_control_origin_sec;
+  value["execution_clock"]["first_published_artifact_elapsed_sec"] =
+    r.execution_clock.first_published_artifact_elapsed_sec;
+  value["control_origin_physical_progress_m"] = r.control_origin_physical_progress_m;
+  value["path_length_m"] = r.path_length_m;
+  value["progress_continuity_tolerance_m"] = r.progress_continuity_tolerance_m;
+  value["circular"] = r.circular;
+  value["current_speed_mps"] = r.current_speed_mps;
+  value["control_origin_speed_mps"] = r.control_origin_speed_mps;
+  value["current_time_steering_rad"] = r.current_time_steering_rad;
+  value["current_steering_rad"] = r.current_steering_rad;
+  value["current_response_steering_rad"] = r.current_response_steering_rad;
+  value["previous_published_steering_rad"] = r.previous_published_steering_rad;
+  value["previous_published_command_age_sec"] = r.previous_published_command_age_sec;
+  value["minimum_acceleration_mps2"] = r.minimum_acceleration_mps2;
+  value["maximum_acceleration_mps2"] = r.maximum_acceleration_mps2;
+  const auto pose_node = [](const recovery_footprint::Pose2D & pose) {
+      YAML::Node item;
+      item["x_m"] = pose.x_m; item["y_m"] = pose.y_m; item["yaw_rad"] = pose.yaw_rad;
+      return item;
+    };
+  value["control_pose"] = pose_node(r.control_pose);
+  value["measured_to_control_path"] = YAML::Node(YAML::NodeType::Sequence);
+  for (const auto & pose : r.measured_to_control_path) {
+    value["measured_to_control_path"].push_back(pose_node(pose));
+  }
+  value["measured_to_control_elapsed_sec"] = std_vector_node(r.measured_to_control_elapsed_sec);
+  auto footprint = value["current_footprint"];
+  footprint["front_extent_m"] = r.current_footprint.front_extent_m;
+  footprint["rear_extent_m"] = r.current_footprint.rear_extent_m;
+  footprint["left_extent_m"] = r.current_footprint.left_extent_m;
+  footprint["right_extent_m"] = r.current_footprint.right_extent_m;
+  footprint["margin_m"] = r.current_footprint.margin_m;
+  auto policy = value["stop_lateral_policy"];
+  policy["wheelbase_m"] = r.stop_lateral_policy.wheelbase_m;
+  policy["maximum_abs_steering_rad"] = r.stop_lateral_policy.maximum_abs_steering_rad;
+  policy["maximum_abs_steering_rate_radps"] = r.stop_lateral_policy.maximum_abs_steering_rate_radps;
+  policy["maximum_lateral_acceleration_mps2"] = r.stop_lateral_policy.maximum_lateral_acceleration_mps2;
+  policy["steering_command_gain"] = r.stop_lateral_policy.steering_command_gain;
+  policy["lateral_gain"] = r.stop_lateral_policy.lateral_gain;
+  policy["heading_gain"] = r.stop_lateral_policy.heading_gain;
+  auto obstacles = value["obstacles"];
+  obstacles["generation"] = r.obstacles.generation;
+  obstacles["observed_sec"] = r.obstacles.observed_sec;
+  obstacles["current"] = r.obstacles.current;
+  obstacles["obstacles"] = YAML::Node(YAML::NodeType::Sequence);
+  for (const auto & peer : r.obstacles.obstacles) {
+    YAML::Node item;
+    item["id"] = peer.id;
+    item["x_m"] = peer.circle.x_m; item["y_m"] = peer.circle.y_m;
+    item["velocity_x_mps"] = peer.circle.velocity_x_mps;
+    item["velocity_y_mps"] = peer.circle.velocity_y_mps;
+    item["radius_m"] = peer.circle.radius_m;
+    obstacles["obstacles"].push_back(item);
+  }
+  value["follow_target_available"] = r.follow_target.has_value();
+  if (r.follow_target) {
+    const auto & target = *r.follow_target;
+    auto follow = value["follow_target"];
+    follow["target_id"] = target.target_id;
+    follow["observation_generation"] = target.observation_generation;
+    follow["observed_sec"] = target.observed_sec;
+    follow["current_target_gap_m"] = target.current_target_gap_m;
+    follow["hard_gap_m"] = target.hard_gap_m;
+    follow["target_speed_mps"] = target.target_speed_mps;
+    follow["elapsed_time_sec"] = std_vector_node(target.elapsed_time_sec);
+    follow["target_progress_from_current_origin_m"] =
+      std_vector_node(target.target_progress_from_current_origin_m);
+    follow["current"] = target.current;
+  }
+  auto grid = value["current_wall_grid"];
+  grid["available"] = r.current_wall_grid != nullptr;
+  if (r.current_wall_grid) {
+    observed_grid = r.current_wall_grid.get();
+    grid["width"] = observed_grid->width; grid["height"] = observed_grid->height;
+    grid["resolution_m"] = observed_grid->resolution_m;
+    grid["origin_x_m"] = observed_grid->origin_x_m; grid["origin_y_m"] = observed_grid->origin_y_m;
+    grid["y_axis"] = observed_grid->y_axis == recovery_footprint::YAxisConvention::RowZeroAtMinimumY ?
+      "row-zero-at-minimum-y" : "row-zero-at-maximum-y";
+    grid["cell_count"] = observed_grid->cells.size();
+    grid["payload"] = "revalidation-wall-grid.bin";
+  }
+
+  // Status authenticates an observed input/inspected artifact association. It
+  // is not a claim that this request or trajectory passed physical proof.
+  const bool same_boundary = r.decision_id == world.identity.source_context.decision_id &&
+    r.now_sec == world.identity.snapshot_sec && r.control_origin_sec == world.control_prediction_origin_sec;
+  if (!same_boundary) {
+    node["status"] = "invalid";
+    node["reason"] = "revalidation request does not belong to this decision clock";
+  } else {
+    node["status"] = "present";
+    node["reason"] = "exact evaluation input; not proof or publication authority";
+  }
+  if (!r.plan || !r.plan->execution_artifact || !r.plan->solver_source_snapshot) {
+    node["inspected_plan_status"] = "missing";
+    return node;
+  }
+  const auto & source = *r.plan->solver_source_snapshot;
+  const auto & artifact = *r.plan->execution_artifact;
+  namespace execution = mpcc_rate_resolved_execution_artifact;
+  if (!interaction_snapshot_complete(source) ||
+    execution::validate(artifact) != execution::RejectReason::None ||
+    !execution::same_identity(source.identity, artifact.identity))
+  {
+    node["inspected_plan_status"] = "invalid";
+    node["inspected_plan_reason"] = "inspected source/artifact identity or shape invalid";
+    return node;
+  }
+  node["inspected_plan_status"] = "present";
+  node["inspected_source"] = source_node(source, "inspected-wall-grid.bin");
+  node["inspected_interaction_fingerprint"] = fingerprint_interaction_snapshot(source);
+  auto artifact_node = execution_evidence_node(artifact, {});
+  artifact_node.remove("publication");
+  artifact_node["schema"] = "mpcc-inspected-execution-artifact/v1";
+  node["inspected_artifact"] = artifact_node;
+  inspected_grid = source.wall_grid.get();
+  return node;
+}
+
 static RecordResult record_snapshot(
   const shadow::Snapshot & source,
   const problem::AssemblyRequest * const assembly_request,
@@ -2124,7 +2278,10 @@ static RecordResult record_snapshot(
   const std::filesystem::path & output_root,
   const YAML::Node & execution_evidence = YAML::Node(),
   const YAML::Node & publication_bundle = YAML::Node(),
-  const recovery_footprint::OccupancyGrid * const published_grid = nullptr) noexcept
+  const recovery_footprint::OccupancyGrid * const published_grid = nullptr,
+  const YAML::Node & revalidation_evidence = YAML::Node(),
+  const recovery_footprint::OccupancyGrid * const inspected_grid = nullptr,
+  const recovery_footprint::OccupancyGrid * const observed_grid = nullptr) noexcept
 {
   RecordResult result;
   try {
@@ -2214,7 +2371,9 @@ static RecordResult record_snapshot(
         return static_cast<bool>(stream);
       };
     if (!write_grid(source.wall_grid.get(), grid_payload) ||
-      !write_grid(published_grid, "published-wall-grid.bin"))
+      !write_grid(published_grid, "published-wall-grid.bin") ||
+      !write_grid(inspected_grid, "inspected-wall-grid.bin") ||
+      !write_grid(observed_grid, "revalidation-wall-grid.bin"))
     {
       result.status = RecordStatus::IoFailure;
       result.detail = "cannot write atomic world/publication grid payloads";
@@ -2242,6 +2401,9 @@ static RecordResult record_snapshot(
     }
     if (publication_bundle.IsMap()) {
       root["publication_bundle"] = publication_bundle;
+    }
+    if (revalidation_evidence.IsMap()) {
+      root["revalidation_evidence"] = revalidation_evidence;
     }
     if (exact_problem != nullptr) {
       root["assembly_request"] = assembly_request_node(*assembly_request);
@@ -2354,12 +2516,128 @@ RecordResult record_published_execution(
   }
 }
 
+const char * to_string(const AuthorityFailureBoundary boundary) noexcept
+{
+  switch (boundary) {
+    case AuthorityFailureBoundary::TerminalContingency:
+      return "terminal-contingency-unavailable";
+    case AuthorityFailureBoundary::FinalAuthority:
+      return "normal-authority-unavailable";
+  }
+  return "unknown";
+}
+
+struct FirstAuthorityFailureRecorder::Impl
+{
+  explicit Impl(Completion callback)
+  : completion(std::move(callback)), worker([this]() {run();}) {}
+
+  void run() noexcept
+  {
+    while (true) {
+      AuthorityFailureObservation observation;
+      {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [this]() {return stopping || !pending.empty();});
+        if (pending.empty()) {
+          return;
+        }
+        observation = std::move(pending.front());
+        pending.pop_front();
+      }
+      // The queued world owns this failure join. Hashing the full immutable
+      // snapshot, like serialization and I/O, stays off the control callback.
+      auto & publication = observation.published_execution.publication;
+      publication.failure_decision_id = observation.current_world.identity.source_context.decision_id;
+      publication.failure_interaction_fingerprint =
+        fingerprint_interaction_snapshot(observation.current_world);
+      publication.failure_observation_sec = observation.current_world.identity.snapshot_sec;
+      publication.failure_control_origin_sec = observation.current_world.control_prediction_origin_sec;
+      const auto result = record_authority_failure(
+        observation.current_world, to_string(observation.boundary),
+        observation.detail, observation.published_execution, observation.output_root,
+        observation.revalidation_request);
+      if (completion) {
+        try {
+          completion(observation, result);
+        } catch (...) {
+          // A diagnostic callback cannot terminate recording of admitted events.
+        }
+      }
+    }
+  }
+
+  Completion completion;
+  std::mutex mutex;
+  std::condition_variable condition;
+  std::deque<AuthorityFailureObservation> pending;
+  std::set<std::string> admitted;
+  bool stopping{false};
+  std::thread worker;
+};
+
+FirstAuthorityFailureRecorder::FirstAuthorityFailureRecorder(Completion completion)
+: impl_(std::make_unique<Impl>(std::move(completion))) {}
+
+FirstAuthorityFailureRecorder::~FirstAuthorityFailureRecorder()
+{
+  stop();
+}
+
+ObservationAdmission FirstAuthorityFailureRecorder::submit(
+  AuthorityFailureObservation observation)
+{
+  const auto intent = observation.current_world.identity.source_context.intent;
+  const int side = physical_homotopy_side(observation.current_world);
+  if (!contract::canonical_normal_intent_supported(intent) || side < -1 || side > 1 ||
+    (observation.boundary != AuthorityFailureBoundary::TerminalContingency &&
+    observation.boundary != AuthorityFailureBoundary::FinalAuthority) ||
+    observation.output_root.empty() || !interaction_snapshot_complete(observation.current_world))
+  {
+    return ObservationAdmission::Invalid;
+  }
+  // The key space is finite: supported intents x three sides x two boundaries.
+  // Decisions, target IDs and paths do not create additional queue buckets.
+  const auto key = failure_key(
+    observation.current_world, PipelineStage::PhysicalProof, to_string(observation.boundary));
+  std::lock_guard<std::mutex> lock(impl_->mutex);
+  if (impl_->stopping) {
+    return ObservationAdmission::Stopped;
+  }
+  if (impl_->admitted.count(key) != 0U) {
+    return ObservationAdmission::Duplicate;
+  }
+  impl_->pending.push_back(std::move(observation));
+  try {
+    impl_->admitted.insert(key);
+  } catch (...) {
+    impl_->pending.pop_back();
+    throw;
+  }
+  impl_->condition.notify_one();
+  return ObservationAdmission::Queued;
+}
+
+void FirstAuthorityFailureRecorder::stop() noexcept
+{
+  {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    impl_->stopping = true;
+  }
+  impl_->condition.notify_one();
+  if (impl_->worker.joinable()) {
+    impl_->worker.join();
+  }
+}
+
 RecordResult record_authority_failure(
   const shadow::Snapshot & current_world,
   const std::string & failure_outcome,
   const std::string & failure_detail,
   const PublishedExecutionObservation & published_execution,
-  const std::filesystem::path & output_root) noexcept
+  const std::filesystem::path & output_root,
+  const std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> &
+  revalidation_request) noexcept
 {
   try {
     const auto failure_fingerprint = fingerprint_interaction_snapshot(current_world);
@@ -2394,9 +2672,14 @@ RecordResult record_authority_failure(
       bundle["execution_evidence"] = execution_evidence_node(*artifact, publication);
       grid = source->wall_grid.get();
     }
+    const recovery_footprint::OccupancyGrid * inspected_grid = nullptr;
+    const recovery_footprint::OccupancyGrid * observed_grid = nullptr;
+    const auto revalidation = revalidation_evidence_node(
+      current_world, revalidation_request.get(), inspected_grid, observed_grid);
     return record_snapshot(
       current_world, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
-      failure_outcome, failure_detail, output_root, YAML::Node(), bundle, grid);
+      failure_outcome, failure_detail, output_root, YAML::Node(), bundle, grid,
+      revalidation, inspected_grid, observed_grid);
   } catch (const std::exception & exception) {
     return {RecordStatus::IoFailure, {}, exception.what()};
   } catch (...) {

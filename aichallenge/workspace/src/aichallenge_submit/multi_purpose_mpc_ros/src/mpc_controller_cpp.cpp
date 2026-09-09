@@ -7768,6 +7768,9 @@ struct RateResolvedRetainedShadowEvaluation
   /// identity remains the source intent, while publication authority is Stop.
   bool certified_terminal_contingency_selected{false};
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan> selected_plan;
+  /// Observation only: preserve the exact input of a rejected current-world
+  /// evaluation, including the inspected plan and its publication clock.
+  std::shared_ptr<const rate_resolved_retained::Request> revalidation_request;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
   selected_sibling_plan;
   bool selected_from_executed{false};
@@ -8211,7 +8214,33 @@ struct MPC
       rate_resolved_return_execution_shadow_worker_ =
         std::make_unique<LatestOnlyWorker>();
       rate_resolved_terminal_failure_snapshot_worker_ =
-        std::make_unique<LatestOnlyWorker>();
+        std::make_unique<mpcc_architecture_snapshot::FirstAuthorityFailureRecorder>(
+        [](const mpcc_architecture_snapshot::AuthorityFailureObservation & observation,
+          const mpcc_architecture_snapshot::RecordResult & recorded) {
+          const auto & context = observation.current_world.identity.source_context;
+          if (recorded.status == mpcc_architecture_snapshot::RecordStatus::Written) {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "Rate-resolved architecture snapshot recorded asynchronously: "
+              "decision=%lu, intent=%s, outcome=%s, file=%s",
+              static_cast<unsigned long>(context.decision_id),
+              mpcc_contract::to_string(context.intent),
+              mpcc_architecture_snapshot::to_string(observation.boundary),
+              recorded.snapshot_file.string().c_str());
+          } else if (
+            recorded.status == mpcc_architecture_snapshot::RecordStatus::IoFailure ||
+            recorded.status == mpcc_architecture_snapshot::RecordStatus::InvalidInput)
+          {
+            RCLCPP_WARN(
+              rclcpp::get_logger("mpc_controller"),
+              "Rate-resolved architecture snapshot async recorder rejected: "
+              "decision=%lu, intent=%s, outcome=%s, detail=%s",
+              static_cast<unsigned long>(context.decision_id),
+              mpcc_contract::to_string(context.intent),
+              mpcc_architecture_snapshot::to_string(observation.boundary),
+              recorded.detail.c_str());
+          }
+        });
     }
     if (
       !mpc_waypoint_preview::is_valid_offset(cfg.wp_id_offset) ||
@@ -25254,59 +25283,46 @@ struct MPC
     const std::uint64_t decision_id,
     const mpcc_contract::ControlIntent intent,
     std::string outcome, std::string detail,
-    rate_resolved_certified::LatestPublishedSourceSnapshot published_source = {})
+    rate_resolved_certified::LatestPublishedSourceSnapshot published_source = {},
+    std::shared_ptr<const rate_resolved_retained::Request> revalidation_request = {})
   {
     if (rate_resolved_terminal_failure_snapshot_worker_ == nullptr) {
       return false;
     }
-    const auto submission =
-      rate_resolved_terminal_failure_snapshot_worker_->submit_latest(
-      [snapshot = std::move(snapshot), decision_id, intent,
-        outcome = std::move(outcome), detail = std::move(detail),
-        published_source = std::move(published_source)]() {
-        // One atomic failure record owns its publication evidence. A generic
-        // first-source bucket must never discard another failure's artifact.
-        mpcc_architecture_snapshot::PublishedExecutionObservation execution;
-        const auto & plan = published_source.plan;
-        if (plan != nullptr) {
-          execution.source = plan->solver_source_snapshot;
-          execution.artifact = plan->execution_artifact;
-        }
-        auto & publication = execution.publication;
-        publication.failure_decision_id = decision_id;
-        publication.failure_interaction_fingerprint =
-          mpcc_architecture_snapshot::fingerprint_interaction_snapshot(snapshot);
-        publication.failure_observation_sec = snapshot.identity.snapshot_sec;
-        publication.failure_control_origin_sec = snapshot.control_prediction_origin_sec;
-        publication.source_kind = rate_resolved_certified::to_string(published_source.kind);
-        publication.publication_decision_id = published_source.publication_decision_id;
-        publication.publication_control_origin_sec =
-          published_source.publication_control_origin_sec;
-        publication.publication_artifact_elapsed_sec =
-          published_source.publication_artifact_elapsed_sec;
-        const auto recorded = mpcc_architecture_snapshot::record_authority_failure(
-          snapshot, outcome, detail, execution);
-        if (recorded.status == mpcc_architecture_snapshot::RecordStatus::Written) {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "Rate-resolved architecture snapshot recorded asynchronously: "
-            "decision=%lu, intent=%s, outcome=%s, file=%s",
-            static_cast<unsigned long>(decision_id),
-            mpcc_contract::to_string(intent), outcome.c_str(),
-            recorded.snapshot_file.string().c_str());
-        } else if (
-          recorded.status == mpcc_architecture_snapshot::RecordStatus::IoFailure ||
-          recorded.status == mpcc_architecture_snapshot::RecordStatus::InvalidInput)
-        {
-          RCLCPP_WARN(
-            rclcpp::get_logger("mpc_controller"),
-            "Rate-resolved architecture snapshot async recorder rejected: "
-            "decision=%lu, intent=%s, outcome=%s, detail=%s",
-            static_cast<unsigned long>(decision_id),
-            mpcc_contract::to_string(intent), outcome.c_str(), recorded.detail.c_str());
-        }
-      });
-    return submission.accepted;
+    mpcc_architecture_snapshot::AuthorityFailureBoundary boundary;
+    if (outcome == "terminal-contingency-unavailable") {
+      boundary = mpcc_architecture_snapshot::AuthorityFailureBoundary::TerminalContingency;
+    } else if (outcome == "normal-authority-unavailable") {
+      boundary = mpcc_architecture_snapshot::AuthorityFailureBoundary::FinalAuthority;
+    } else {
+      return false;
+    }
+    if (decision_id != snapshot.identity.source_context.decision_id ||
+      intent != snapshot.identity.source_context.intent)
+    {
+      return false;
+    }
+    mpcc_architecture_snapshot::PublishedExecutionObservation execution;
+    if (published_source.plan != nullptr) {
+      execution.source = published_source.plan->solver_source_snapshot;
+      execution.artifact = published_source.plan->execution_artifact;
+    }
+    auto & publication = execution.publication;
+    // The private recorder binds failure identity and hashes the queued world.
+    publication.source_kind = rate_resolved_certified::to_string(published_source.kind);
+    publication.publication_decision_id = published_source.publication_decision_id;
+    publication.publication_control_origin_sec = published_source.publication_control_origin_sec;
+    publication.publication_artifact_elapsed_sec = published_source.publication_artifact_elapsed_sec;
+    mpcc_architecture_snapshot::AuthorityFailureObservation observation;
+    observation.current_world = std::move(snapshot);
+    observation.boundary = boundary;
+    observation.detail = std::move(detail);
+    observation.published_execution = std::move(execution);
+    observation.revalidation_request = std::move(revalidation_request);
+    const auto admission = rate_resolved_terminal_failure_snapshot_worker_->submit(
+      std::move(observation));
+    return admission == mpcc_architecture_snapshot::ObservationAdmission::Queued ||
+           admission == mpcc_architecture_snapshot::ObservationAdmission::Duplicate;
   }
 
   bool record_rate_resolved_terminal_contingency_failure_snapshot(
@@ -25474,7 +25490,8 @@ struct MPC
         "terminal-contingency-unavailable", detail.str(),
         rate_resolved_track_cruise_certified_plan_store_ != nullptr ?
         rate_resolved_track_cruise_certified_plan_store_->latest_published_source_snapshot() :
-        rate_resolved_certified::LatestPublishedSourceSnapshot{}))
+        rate_resolved_certified::LatestPublishedSourceSnapshot{},
+        retained.revalidation_request))
     {
       reject("snapshot observation worker rejected submission");
       return false;
@@ -25541,7 +25558,8 @@ struct MPC
         requested_intent, "normal-authority-unavailable", detail.str(),
         rate_resolved_track_cruise_certified_plan_store_ != nullptr ?
         rate_resolved_track_cruise_certified_plan_store_->latest_published_source_snapshot() :
-        rate_resolved_certified::LatestPublishedSourceSnapshot{}))
+        rate_resolved_certified::LatestPublishedSourceSnapshot{},
+        retained.revalidation_request))
     {
       reject("snapshot observation worker rejected submission");
     }
@@ -26807,6 +26825,10 @@ struct MPC
     }
     evaluation.obstacle_count = request->obstacles.obstacles.size();
     const auto result = rate_resolved_retained::evaluate(request.value());
+    if (!result.proof.has_value()) {
+      evaluation.revalidation_request =
+        std::make_shared<const rate_resolved_retained::Request>(request.value());
+    }
     evaluation.runtime = result.runtime;
     evaluation.decision_id = request->decision_id;
     evaluation.observation_origin_sec = request->now_sec;
@@ -30208,9 +30230,8 @@ struct MPC
     // proposed intent.  This never solves, stores, publishes or changes
     // production authority.
     const auto failure_snapshot_started = SteadyClock::now();
-    const bool terminal_snapshot_submitted =
-      record_rate_resolved_terminal_contingency_failure_snapshot(
-      problem, submission_draft, now_sec, intent, ordinary_retained);
+    static_cast<void>(record_rate_resolved_terminal_contingency_failure_snapshot(
+      problem, submission_draft, now_sec, intent, ordinary_retained));
     if (
       ordinary_retained.reason == rate_resolved_retained::Reason::Accepted &&
       ordinary_retained.production_authority.has_value() &&
@@ -30447,13 +30468,12 @@ struct MPC
     // before command selection converts that missing authority into external
     // Emergency Stop.  The snapshot cannot feed any production store.
     const auto normal_authority_snapshot_started = SteadyClock::now();
-    // A terminal failure already enqueued this decision and its publication.
-    // A second submit_latest job could replace it with a duplicate generic key.
-    if (!terminal_snapshot_submitted) {
-      record_rate_resolved_normal_authority_failure_snapshot(
-        problem, submission_draft, now_sec, intent, effective_intent, retained,
-        published_stop_retained);
-    }
+    // An ordinary terminal rejection and final authority loss are different
+    // first-event categories. The observer preserves both admitted records;
+    // neither a previous bucket nor pending I/O can suppress this boundary.
+    record_rate_resolved_normal_authority_failure_snapshot(
+      problem, submission_draft, now_sec, intent, effective_intent, retained,
+      published_stop_retained);
     normal_authority_snapshot_ms =
       std::chrono::duration<double, std::milli>(
       SteadyClock::now() - normal_authority_snapshot_started).count();
@@ -31267,7 +31287,7 @@ struct MPC
   rate_resolved_preentry_execution_shadow_worker_;
   std::unique_ptr<LatestOnlyWorker>
   rate_resolved_return_execution_shadow_worker_;
-  std::unique_ptr<LatestOnlyWorker>
+  std::unique_ptr<mpcc_architecture_snapshot::FirstAuthorityFailureRecorder>
   rate_resolved_terminal_failure_snapshot_worker_;
   std::optional<RateResolvedTerminalViabilityBoundarySample>
   rate_resolved_last_accepted_terminal_viability_boundary_;

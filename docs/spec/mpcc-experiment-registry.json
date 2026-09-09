@@ -375,6 +375,31 @@
       "snapshot_id": "20260909-stop-provenance-dev2-r1",
       "manifest": ".steering/20260909-mpcc-stop-proof-provenance/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-final-authority-native",
+      "manifest": ".steering/20260909-mpcc-final-authority-observation/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-final-authority-actual365",
+      "manifest": ".steering/20260909-mpcc-final-authority-observation/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-final-authority-dev2-r1",
+      "manifest": ".steering/20260909-mpcc-final-authority-observation/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-final-authority-world945-actual361",
+      "manifest": ".steering/20260909-mpcc-final-authority-observation/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-final-authority-world1137-actual575",
+      "manifest": ".steering/20260909-mpcc-final-authority-observation/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -2764,6 +2789,121 @@
       "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
       "deleted_code": [],
       "revisit_condition": "new production change or demonstrated cause of the recorded failure"
+    },
+    {
+      "experiment_id": "20260909-final-authority-old-scheduling",
+      "baseline_commit": "e5b8c455",
+      "snapshot_ids": [
+        "20260909-final-authority-native"
+      ],
+      "hypothesis": "Accepted terminal submission guarantees final observation",
+      "changed_dimension": "First-event observation owner or exact captured evidence only",
+      "result": "rejected",
+      "reason": "Native existing recorder deduplicates second terminal; explicit final writes. Blocked LatestOnlyWorker drops first accepted pending final job. Controller used that submission to suppress final recording.",
+      "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "first-event observer repair"
+    },
+    {
+      "experiment_id": "20260909-final-authority-new-scheduling",
+      "baseline_commit": "e5b8c455",
+      "snapshot_ids": [
+        "20260909-final-authority-native"
+      ],
+      "hypothesis": "First boundary ownership survives a busy writer",
+      "changed_dimension": "First-event observation owner or exact captured evidence only",
+      "result": "accepted",
+      "reason": "16native cases/104source contracts,25-package build/60CTestgroups/2371records pass; pending final preserved, shutdown drains, invalid supplemental evidence retains valid world.",
+      "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
+      "deleted_code": [
+        "terminal submission suppresses final authority record",
+        "LatestOnlyWorker replacement for first-failure observation"
+      ],
+      "revisit_condition": "new ownership or serialization defect"
+    },
+    {
+      "experiment_id": "20260909-final-authority-actual365",
+      "baseline_commit": "e5b8c455",
+      "snapshot_ids": [
+        "20260909-final-authority-actual365"
+      ],
+      "hypothesis": "Original published365replays without a substitute solve",
+      "changed_dimension": "First-event observation owner or exact captured evidence only",
+      "result": "accepted",
+      "reason": "Original wall/dynamic pass with zero solves/minpeer0.2508901557m/terminal3.5688619844m/s. Missing old951/379cannot be reconstructed.",
+      "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new exact old failure evidence"
+    },
+    {
+      "experiment_id": "20260909-final-authority-capture945",
+      "baseline_commit": "e5b8c455",
+      "snapshot_ids": [
+        "20260909-final-authority-world945-actual361"
+      ],
+      "hypothesis": "First moving final failure has exact world, publication and inspected Request",
+      "changed_dimension": "First-event observation owner or exact captured evidence only",
+      "result": "accepted",
+      "reason": "D1first moving Emergency945/v1.5802064876844846. Atomic worldfp7865628471136372292/published361/inspected361/exact Request all present. Both Domain callbackoverruns0.",
+      "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new missing boundary or final selection path"
+    },
+    {
+      "experiment_id": "20260909-final-authority-replay945",
+      "baseline_commit": "e5b8c455",
+      "snapshot_ids": [
+        "20260909-final-authority-world945-actual361"
+      ],
+      "hypothesis": "Exact captured Request reproduces rejection without solving",
+      "changed_dimension": "First-event observation owner or exact captured evidence only",
+      "result": "accepted",
+      "reason": "Zero-solve current945/361reproduces steering-unreachable, terminalpeer-0.003647424709m and independent Stop peer-0.001124094799m; original source wall/dynamic pass. Helper r1link failure retained; r2only adds libraries. Control cause remains unresolved.",
+      "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "paired publisher timeline or bounded architecture comparison"
+    },
+    {
+      "experiment_id": "20260909-final-authority-later1137",
+      "baseline_commit": "e5b8c455",
+      "snapshot_ids": [
+        "20260909-final-authority-world1137-actual575"
+      ],
+      "hypothesis": "Later observed terminal rejection remains reproducible",
+      "changed_dimension": "First-event observation owner or exact captured evidence only",
+      "result": "accepted",
+      "reason": "1137/575exact Request replays terminal wall rejection27with zero solves. Occurs after first945Emergency but before explicit teardown; not an earliest-failure replacement.",
+      "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal need to inspect downstream behavior"
+    },
+    {
+      "experiment_id": "20260909-final-authority-race",
+      "baseline_commit": "e5b8c455",
+      "snapshot_ids": [
+        "20260909-final-authority-dev2-r1"
+      ],
+      "hypothesis": "Fixed dev2 satisfies race acceptance",
+      "changed_dimension": "First-event observation owner or exact captured evidence only",
+      "result": "rejected",
+      "reason": "No finish/lap; D1moving Emergency945. D1/D2callbackmax18.836/21.067ms and0overruns. Commands40Hz/no receiptgap>50ms.",
+      "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new causal production change"
+    },
+    {
+      "experiment_id": "20260909-final-authority-delivery",
+      "baseline_commit": "e5b8c455",
+      "snapshot_ids": [
+        "20260909-final-authority-dev2-r1"
+      ],
+      "hypothesis": "Command source and odometry delivery are continuous",
+      "changed_dimension": "First-event observation owner or exact captured evidence only",
+      "result": "rejected",
+      "reason": "D1/D2source command duplicates/backward14/12,gaps>50ms3/2,max80/85ms. Odometry receiptmax305.603504/309.693813ms; clockmax307.422876/306.540012ms. No causal attribution to945without paired timeline.",
+      "production_impact": "Observation only; no solver/control/proof/publisher change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "paired source/receipt/publisher observation"
     }
   ]
 }

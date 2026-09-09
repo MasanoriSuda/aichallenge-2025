@@ -3993,3 +3993,29 @@ terminal Stop証明として使う。denseな実適用操作も同じcontinuatio
 走行中の継続受入れは未達。最初のterminal記録923は通常解328を保存しており、925のworldや代替停止解395を
 保存したものではない。D1にはcallback最大31.967ms・超過3回もある。
 [受入れ結果と次の監査](../../.steering/20260909-mpcc-complete-rest-candidates/results.md)を参照。
+
+#### 最終的な制御権喪失の観測（2026-09-09）
+
+通常候補のterminal証明拒否と、全候補の採用判定後の最終的な制御権喪失は別の観測境界とする。
+前者の記録投入済みフラグで後者を省かない。planning用の`LatestOnlyWorker`は従来どおり
+新しい未実行ジョブへ置き換えるが、失敗観測には`FirstAuthorityFailureRecorder`を使用する。
+対応intent・3通りのside・2種類の境界という有限のbucketについて、投入時に最初の観測を確保し、
+異なるbucketを順に保存する。保存待ちを後続観測で置き換えず、終了時は受理済み記録を排出する。
+ファイルI/O・snapshot全体のfingerprint算出・完了通知は記録スレッド上で行う。
+
+authority-loss snapshotには任意の`revalidation_evidence`を追加する。
+schemaは`mpcc-revalidation-observation/v1`。拒否された`retained::evaluate`へ実際に渡した
+Requestを保持し、速度、現在物理操舵、指令と応答の操舵、前回送信からのcontrol時刻上の経過時間、
+経路上の位置、遅延中の姿勢列、実行clock、wall、他車・Follow観測と停止方策を保存する。
+そこで検証したplanのsource/artifactは、`publication_bundle`の最後に送信したsource/artifactと区別する。
+前者のartifactは`mpcc-inspected-execution-artifact/v1`で、publication情報を持たない。
+`status=present`は観測時刻の対応を意味し、証明や制御権の合格を意味しない。
+不一致・欠落は明示し、補足情報の不正によって有効なcurrent-world記録を捨てない。
+既存のsnapshot loader、ROS topic、評価JSONと提出物の契約は維持する。
+
+[設計と検証状況](../../.steering/20260909-mpcc-final-authority-observation/design.md)を参照。
+16件のnative記録テスト、104件のsource契約テスト、25package buildと60CTestgroup・2371記録が通過。
+固定dev2ではD1の最初の走行中Emergency945について、current-world・実公開361・検査対象361・
+正確なRequestが保存され、再求解なしで操舵到達性拒否と停止経路の他車拒否を再現した。
+両Domainのcallback超過は0だが2台完走は不合格で、時刻・観測配信の途切れも残る。
+[結果と次の原因調査](../../.steering/20260909-mpcc-final-authority-observation/results.md)を参照。

@@ -465,6 +465,26 @@
       "snapshot_id": "20260909-ego-viability-dev2-r1",
       "manifest": ".steering/20260909-mpcc-ego-viability-transition/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-publication-clock-native",
+      "manifest": ".steering/20260909-mpcc-publication-clock-handoff/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-publication-clock-world937",
+      "manifest": ".steering/20260909-mpcc-publication-clock-handoff/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-publication-clock-single-r1",
+      "manifest": ".steering/20260909-mpcc-publication-clock-handoff/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-publication-clock-dev2-r1",
+      "manifest": ".steering/20260909-mpcc-publication-clock-handoff/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -3440,6 +3460,162 @@
       "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "causal timing investigation or relevant producer repair"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-native-before",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-native"
+      ],
+      "hypothesis": "Same-artifact Bundle-to-exact handoff preserves the published clock",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "rejected",
+      "reason": "Actual Store: 32 cases pass; new boundary fails with 0.0044038810139195306 s cursor rewind, matching captured 936/937.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new Store implementation or publication semantics"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-repair",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-native"
+      ],
+      "hypothesis": "Transfer the published proof/command anchor on same-artifact handoff",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "accepted",
+      "reason": "All 33 Store cases pass; 26-package build; MPCC 60 CTest groups/2373 records, 0 errors/failures/skips. Ordinary continuous clock and stale decision rejection preserved.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [
+        "same-artifact old execution anchor retained across newer Bundle publication"
+      ],
+      "revisit_condition": "new publication clock regression"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-anchor-only",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-world937"
+      ],
+      "hypothesis": "Correcting the anchor alone rescues old exact 937",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "rejected",
+      "reason": "Zero-solve cursor 0.4094038720139199 s; terminal still rejects at -0.0014001134308958552 m. All measured state and peers unchanged.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "demonstrated additional causal producer change"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-normal",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-world937"
+      ],
+      "hypothesis": "A/B/C/D/G normal candidates rescue sealed 937",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "rejected",
+      "reason": "All nine bounded arms solver-reject with unchanged model/hard limits. No physical infeasibility certificate; Unknown.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new bounded formulation or causal input defect"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-support-stop",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-world937"
+      ],
+      "hypothesis": "Existing support Stop methods rescue sealed 937",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "rejected",
+      "reason": "All four solver-reject; no physical infeasibility certificate.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new bounded witness or causal input defect"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-single",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-single-r1"
+      ],
+      "hypothesis": "Fresh single-car six-lap acceptance",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "accepted",
+      "reason": "251.993591 s, penalty 0, no observed moving override, max callback 13.748 ms/0 overruns; command/Odometry/clock receipt and source checks have no >50 ms gaps or source duplicate/backward.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "relevant production change or new regression"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-runtime-clock",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-dev2-r1"
+      ],
+      "hypothesis": "The repaired handoff preserves mapping at new 928/929 boundary",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "accepted",
+      "reason": "Same-376 anchors are equivalent: cursor advances 29.999999 ms with the observation. Anchor-only substitution preserves exact 929 result. Throttled observation is not all-cycle evidence.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new inconsistent paired boundary"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-race",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-dev2-r1"
+      ],
+      "hypothesis": "Published-clock repair establishes coupled race acceptance",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "rejected",
+      "reason": "First moving D1 Emergency 930 at 1.3035718076716887 m/s; no finish. D1/D2 max callback 28.673/27.375 ms and 1/3 overruns are in reported windows after first Emergency.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal production change or missing diagnostic evidence"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-peer-switch",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-dev2-r1"
+      ],
+      "hypothesis": "Peer update can flip exact 928/929 terminal acceptance",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "accepted",
+      "reason": "Zero-solve originals: 928 +0.01128045374819564 m; 929 -0.0007831556743211898 m. Later peer field makes 928 reject -0.00023400897409575627 m; earlier peer field makes 929 accept +0.011806859326646713 m. Counterfactual only, no producer-fault or authority claim.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "audit actual peer source/receipt/velocity clocks"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-derived385",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-dev2-r1"
+      ],
+      "hypothesis": "Final 930 has complete derived Stop 385 artifact/proof evidence",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "inconclusive",
+      "reason": "929 independent Stop accepts +0.002328087195587747 m and derived 385 joins. Final Request present but actual-publication and inspected artifact serialization require missing solver source. Prior Accepted 928/376 invalid for 385.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "preserve actual derived artifact and proof/derivation provenance without a replacement solve"
+    },
+    {
+      "experiment_id": "20260909-publication-clock-delivery",
+      "baseline_commit": "17bcf24bf30ab3775a680037d796a07161d99d95",
+      "snapshot_ids": [
+        "20260909-publication-clock-dev2-r1"
+      ],
+      "hypothesis": "Source and receipt streams are continuous",
+      "changed_dimension": "Actual published source clock handoff; named sealed-world comparisons",
+      "result": "rejected",
+      "reason": "Command receipt about 40 Hz; D1 one gap 50.877094 ms, D2 maximum 35.742760 ms. Source duplicates/backward 3 each, gaps 2/1; Odometry maxima 95.826387/100.583076 ms, clock 96.961260/98.612309 ms.",
+      "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal source/receipt investigation or relevant producer repair"
     }
   ]
 }

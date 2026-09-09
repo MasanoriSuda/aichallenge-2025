@@ -445,7 +445,11 @@ StoreReason Store::mark_executed(
     published_bundle_artifact_elapsed_sec_ =
       std::numeric_limits<double>::quiet_NaN();
   }
-  if (!same_executed_identity) {
+  // A current-world Bundle may publish a different source cursor even when
+  // its immutable artifact matches the older executed plan. Exact continuation
+  // then inherits the clock used by that published command and its proof.
+  // Ordinary uninterrupted execution keeps the original equivalent anchor.
+  if (!same_executed_identity || same_source) {
     first_published_control_origin_sec_ = publication_control_origin_sec;
     first_published_artifact_elapsed_sec_ =
       publication_artifact_elapsed_sec;

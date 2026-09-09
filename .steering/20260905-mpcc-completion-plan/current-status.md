@@ -10,23 +10,33 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: audit execution-clock ownership and observation age on exact
-same-374 inputs Accepted 936 and rejected 937 after the EKF timestamp repair.
-The participant EKF now uses one calculation epoch and replaces the underlay
-launch. Its real-library baseline failed 2 clock-advance cases; repaired native
-cases pass. 26 packages build; EKF 102 records have 0 failures and 30 cppcheck
-wrapper skips; MPCC 2372 records pass. Recorded-input 54-tick / 2268-value parity
-is exact. Host cppcheck retains one unchanged upstream Eigen false positive.
-Fresh single: 6 laps / 255.779419 s / penalty 0, no observed moving override,
-callback max 15.460 ms / 0 overruns. Dev2 still rejects D1 decision 937 at
-1.3724878243982674 m/s. Same artifact 374 is preserved at both boundaries;
-936 terminal +0.004820239 m becomes 937 -0.001481757 m after 30 ms. Peer-only
-substitution preserves both outcomes. Execution-clock anchors differ and imply
-25.596 ms artifact advance; audit ownership before calling this a defect.
-D1/D2 callback max 19.636 / 21.167 ms, 0 overruns; command receipts ~40 Hz/no gap
-above 50 ms. Source duplicates and observation-delivery pauses remain. Runtime
-stopped and protected user JSON restored. Full MPCC acceptance is NOT achieved.
-See [EKF repair and current transition](../20260909-mpcc-ego-viability-transition/results.md).
+Current next step: audit the peer update on exact same-376 Accepted 928 /
+terminal-rejected 929, and preserve derived Stop 385 / final 930 proof/artifact.
+Publication clock handoff is repaired after 17bcf24b: actual Store reproduced
+4.403881 ms rewind on same-artifact Bundle-to-exact transfer; all 33 native
+cases now pass. 26-package build and 60 CTest groups / 2373 records pass.
+Old 937 anchor-only replay remains terminal-rejected; no full-cause claim.
+Fresh single: six laps / 251.993591 s / penalty 0, no observed moving override,
+callback maximum 13.748 ms / 0 overruns. Commands ~40 Hz and command/Odometry/
+clock receipts have no >50 ms gap or source duplicate/backward in this run.
+Dev2 rejects first moving D1 Emergency 930 at 1.3035718076716887 m/s.
+928/929 clock anchors are equivalent; terminal +0.011280454 m becomes
+-0.000783156 m after 30 ms. This time peer-only substitution flips both
+outcomes. 929 independent Stop is accepted and derived 385 joins, but final
+930 artifact/proof is absent because the observer requires a solver source.
+Exact 930 Request survives; do not substitute a new solve or prior source 376.
+D1/D2 callback maxima 28.673 / 27.375 ms and 1 / 3 overruns occur in reported
+windows after the first D1 Emergency. Source and receipt timing remain open.
+All runtime stopped and user JSON restored. Full MPCC acceptance is NOT achieved.
+See [clock handoff and new peer transition](../20260909-mpcc-publication-clock-handoff/results.md).
+
+Previous EKF repair 17bcf24b: real installed library clock failure fixed with
+one calculation epoch in participant package; 26 packages build, EKF 102 records
+0 failures / 30 cppcheck wrapper skips; MPCC 2372 records pass. Recorded-input
+54-tick / 2268-value parity is exact. Host cppcheck preserves one unchanged
+upstream Eigen false positive. Single six laps passes; dev2 937 rejects.
+Controller treatment of older Odometry remains unresolved. See
+[EKF results](../20260909-mpcc-ego-viability-transition/results.md).
 
 Previous b19 paired observation: same-376 Accepted 934 / rejected 935 reproduce
 without solving; peer-only substitution did not flip either outcome. At final

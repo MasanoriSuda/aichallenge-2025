@@ -1,0 +1,2626 @@
+{
+  "baseline_commit": "17bcf24b",
+  "scope": "Published Bundle-to-exact clock handoff; real Store before/after; exact937 causal replay; new-world comparison; fixed single/dev2 acceptance; full completion open",
+  "build_packages": 26,
+  "package_records": 2373,
+  "package_errors": 0,
+  "package_failures": 0,
+  "package_skips": 0,
+  "artifacts": [
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/compare_missions.cpp",
+      "bytes": 2846,
+      "sha256": "85f25f7987bf8562b42c9946d27d1a045326c9cc51e3f110a65cb370437294e9"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/compare_937.py",
+      "bytes": 1453,
+      "sha256": "7129495ecd5eadb25f0ca79f106b1d1aebc083d8dfa844dce33027d1accf270e"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/compile_replay.py",
+      "bytes": 1723,
+      "sha256": "7889d25db492a644b8fa2691af42845d68a60662a4ff601f8f4e1a068a09864d"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/extract_timeline.py",
+      "bytes": 2213,
+      "sha256": "e5f5d42c40b4c5a09da8ddab6603f163cdbaa45a5bb9e201d8b7f6a1e2803d61"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/native_clock.py",
+      "bytes": 1229,
+      "sha256": "ba9e14b22eb72acd5e6a183d82b6b2599ade5b80f7877a21ed13e48b2bb65ea2"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/register_results.py",
+      "bytes": 5167,
+      "sha256": "8cafa35df99fc10f70010965f1556cb908057a2a817f2cab3e67cc8cc71c91d7"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/replay_new_requests.py",
+      "bytes": 3785,
+      "sha256": "5ea82d6c4944ce8506796e4c543f700a34f2c24aaec6096608b7342fa0831789"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/replay_requests.py",
+      "bytes": 3773,
+      "sha256": "9ee1b402e1c8a06a85793f2fd14e10b8ff06a53a41c4a0a77d0eb9737a2782c3"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/replay_revalidation.cpp",
+      "bytes": 17929,
+      "sha256": "f8dc33fe91a3a639de9a707fd922cbac8334874dc09d78780272bf792e243432"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/revalidation_input.hpp",
+      "bytes": 6871,
+      "sha256": "cfbeb749d9f1f8f76d7d6f17d4cf87d112e5fe51521e783c20f88262075bc1fa"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/run_campaign.py",
+      "bytes": 12070,
+      "sha256": "2d45df05ba7b68995a5697915c2c3d34f6976b8089292af5aea0053c8638f80b"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/seal_evidence.py",
+      "bytes": 1755,
+      "sha256": "0c9c1fc9a0825241aab7564096759b06444f695ca88bcd886579cf1d8dfae407"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 24265,
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 37877,
+      "sha256": "6c89c17af54a4a92846bc4194ac87508ab7ce478ff0145ad8b3f2a5a52371680"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/manifest.json",
+      "bytes": 795,
+      "sha256": "ad2864aec6f2968c60bf43e3d43b4f794ed56c138f3e1cda8e7c30d4aca73763"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/comparison.log",
+      "bytes": 8327,
+      "sha256": "f80b94832535abc135eb314720de0833795ddba7e1e9c4b33f80ede3638f5660"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/mpcc_architecture_snapshots/000000000937-1969104b107887db-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273148,
+      "sha256": "5d636d200367584ce9a34628bec5335c4af0d8ddf8e9a8b0f4825e200f8d26e1"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/mpcc_architecture_snapshots/000000000937-1969104b107887db-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 272910,
+      "sha256": "3ff6c8b58660c8b6ac971754d9b5557496db76629febb30f7fe7f0ce114b7f8b"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/mpcc_architecture_snapshots/000000000937-d23451e25120df41-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 263189,
+      "sha256": "e6cf560f7f6b5702656cde3ada10bbfd782fd6ca33695d5c41ef5a36d69583cf"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/mpcc_architecture_snapshots/000000000937-d23451e25120df41-cruise-side-negative-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/mpcc_architecture_snapshots/000000000937-de010839c43cd9b5-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273431,
+      "sha256": "7043ead9034a2ab15da82f18ab15d419f6f2f271a02cea8dd1f840ac25dd24ff"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/normal/mpcc_architecture_snapshots/000000000937-de010839c43cd9b5-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/stop/comparison.log",
+      "bytes": 3735,
+      "sha256": "942631b0b1b49c36641380fd7def10b6271a2d74cf8bc58ab67a5b0a0025ab4b"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/stop/mpcc_architecture_snapshots/000000000937-2f7b5c7173910ca0-cruise-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 247685,
+      "sha256": "6b3235cdec83fff69c8f7259880b98464fb87a98580a358853ff38994506c585"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/stop/mpcc_architecture_snapshots/000000000937-2f7b5c7173910ca0-cruise-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/stop/mpcc_architecture_snapshots/000000000937-54da133b60377c35-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 255667,
+      "sha256": "72fdd40c5739ce5c5c5cae8a212e8826803765abd0b593a60ef12dca33aaa9d6"
+    },
+    {
+      "path": "output/20260909-publication-clock-937-comparison/stop/mpcc_architecture_snapshots/000000000937-54da133b60377c35-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/d1/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/inspected.yaml",
+      "bytes": 50994,
+      "sha256": "b7f62c7434468ea3c146ccca5929658bd1ced8ea57fac140201f4f710d4123b2"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/d1/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1272,
+      "sha256": "338a68968efd7b4f5dcfab177736c3d3ca09ee55d8b089506417e3290924dee6"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/d1/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/d1/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 69877,
+      "sha256": "08b6b2cfd508b900e742e08bd3528d6a90cee59b745d01020ebb1e0a88ecfa34"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/d1/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/d1/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected.yaml",
+      "bytes": 50985,
+      "sha256": "0bfbfbdae45429a585763a2314ce4c2186f03fe4da3f577b33af67e7c2fd91b3"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/d1/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/native.log",
+      "bytes": 1334,
+      "sha256": "4afd778dd7f4fbf882c4449c2cd54626932eb5f3c0ecf69390faa48886f156bc"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/d1/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 70284,
+      "sha256": "f755f5ecc7b14e476176c23dfdcd161d7dc77a8b79f9d7af2b919e4729985d86"
+    },
+    {
+      "path": "output/20260909-publication-clock-current-revalidation-r1/manifest.json",
+      "bytes": 28105,
+      "sha256": "be5466c1ddbe9f87558d68120f8ef5589844e112481a901459789d1a6f72ca0b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "b95667c1513e558206fdc09b23866898f564f2d7473568d53131dafaa56392bb"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/authority-timing-summary.json",
+      "bytes": 9783,
+      "sha256": "8f4891356205591546fd2e5b4a86bde54ef5f3a7348deb4c0cb768db96fd0116"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/awsim.log",
+      "bytes": 1773,
+      "sha256": "b1f92de8740aa9e35705833c3528bec4503886f283e386d94f81ac97426d559b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/binaries/mpc_controller_cpp",
+      "bytes": 8657256,
+      "sha256": "820a379f510a9f3916dc87766551fa8825deb0250afa9167afad24f02350db50"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1511816,
+      "sha256": "bbe6292d209c289d1ea516989cc99885991dcd64d1c8e2e9598a0be4b1456c21"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/build.log",
+      "bytes": 4369,
+      "sha256": "dd25638ed610a4c2e86b82d791d57fba384fceff47efbd1b1cb31c1ed4eed9bd"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/compose-six-lap.yml",
+      "bytes": 210,
+      "sha256": "81c704a1fcf8cbb1f08de42325dc897324b3b5c9c3748cf13ef36dc189b220e9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/autoware.log",
+      "bytes": 411969,
+      "sha256": "2f983ed63ab8043b092232149aad117ec8cb1b94e67fab155c8c19ee01700292"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/motion_analytics-26-09-09-12-58-52.html",
+      "bytes": 4851448,
+      "sha256": "93d59d3cdf6438046addb5e9e117c8c9a1d430db075de3f665c3e706ca5e3f81"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000196-a08bf62cdb4d3f62-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 248572,
+      "sha256": "30f3455be398cfa12a36635084fa78845370360698626584ed0ae9ef3441426e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000196-a08bf62cdb4d3f62-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000211-b62b694f007de593-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 251356,
+      "sha256": "ec08f4a22f508a370164fe327cce42f51a6b01a4d5609cc0967f238da2101a8f"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000211-b62b694f007de593-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000219-bef6fffb0e71e383-track-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 266198,
+      "sha256": "fb1f93285dfe5ba3656614710f4c8321a8fe79889296286fc67cc67950b0b29d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000219-bef6fffb0e71e383-track-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000298-15f51901fbdc8c4f-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271388,
+      "sha256": "84a6443a95220261d081e06604ecb0ae2ff5a71f5df5eb5bbd4a08f3b52a3124"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000298-15f51901fbdc8c4f-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000343-fc211360a77ee508-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 263574,
+      "sha256": "1b3eaead63af37ef5acde1168c01146c997cc9e4a8565581f70b6ccdf4492460"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000343-fc211360a77ee508-cruise-side-negative-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000379-b9d8c3e371a99a6c-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 274777,
+      "sha256": "3a86016ec9c741087e5a3229b5ef1ef79f4a2329f26a744eb3717fe83d1d4ac1"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000379-b9d8c3e371a99a6c-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000380-6a284482641960f1-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271644,
+      "sha256": "203dac1c30573ea9adb80aeb4f4355acb0ed3d53cb086fa11ea5e314a96b303b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000380-6a284482641960f1-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000546-07c4bc483301993c-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 36178,
+      "sha256": "3ce2fdb413d0206bccb4cb211daf3b50ed602dc6325ba2d3be667e31434d52ec"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000546-07c4bc483301993c-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000645-ba5301214c355acd-cruise-side-negative-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 276489,
+      "sha256": "a13cda87195b18bf4c8207a5e3583cb2253623f87fcac737fb212b376c9e8a66"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000645-ba5301214c355acd-cruise-side-negative-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000701-78891f7257b0e4b8-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 250641,
+      "sha256": "4f8760025ae53e72baa3e722f1f205c53a8acb3af2a504c638a86115e9d375bf"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000701-78891f7257b0e4b8-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 238233,
+      "sha256": "40d55cb14b46e1e79338f79d6bd0429aee9a0435c568dfcc976f193d938fcb18"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000929-379dbb6931747f8d-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-16e04f7fcd49f957-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-16e04f7fcd49f957-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-16e04f7fcd49f957-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-16e04f7fcd49f957-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 114230,
+      "sha256": "533d540d95cdbf78bc8eeac92b46f287818eefe895649d1ccab19cb5a1894959"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/mpcc_architecture_snapshots/000000000930-16e04f7fcd49f957-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/2026-09-09-12-58-17-710299-msuda-System-Product-Name-69/launch.log",
+      "bytes": 18651,
+      "sha256": "a423f895e52b821975cf0562fbf181b8357d4eb613b164d5b2128df25768eda9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/component_container_102_1788926298911.log",
+      "bytes": 1488,
+      "sha256": "1cb17fa760adfb0fa9ba17d8a90c8544a07d49e2d2f27fba99b043187c6e5818"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/ekf_localizer_94_1788926298929.log",
+      "bytes": 65,
+      "sha256": "f974ce31779354ee1b518efa9dc3f41fe07b68519a141c18b6ba17c15669d8e6"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/gnss_poser_88_1788926298911.log",
+      "bytes": 205,
+      "sha256": "f994210b14bb7b26cd9605aae8c89c40dc8bf8022bfcc22dc23ef8c7cfeb5ae9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/gyro_odometer_90_1788926298904.log",
+      "bytes": 65,
+      "sha256": "e1596bf0302b6ab1da6d52b5b4f9d8a3abcb66835d474398d0a9db4365cb15e6"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/imu_corrector_86_1788926298929.log",
+      "bytes": 65,
+      "sha256": "3964b8089d2fb30b4dd078c9373094404158958645ac4176affe38913a4be3a3"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/imu_gnss_poser_node_92_1788926298902.log",
+      "bytes": 977,
+      "sha256": "574e71441020fcfa3bf8b0a41d9ecd27914c17fab7e6f69e79f819cae980b98d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/mpc_controller_cpp_100_1788926299076.log",
+      "bytes": 369914,
+      "sha256": "fa3ad96317e60642f462e2a545d42b2c7e931098c1c8640e6c9e489220757870"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/python3_108_1788926299168.log",
+      "bytes": 4171,
+      "sha256": "c6756a56ff514845cece44a41aa203dab5da2bdd00b12b4a729f7353b0712e0a"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/python3_110_1788926299151.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/python3_338_1788926315569.log",
+      "bytes": 2711,
+      "sha256": "f109b7a0bff21a2a9d370171bf6bb4dfcc1faa1f6c84fff326eb15a99628b921"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/python3_69_1788926298786.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/relay_106_1788926298940.log",
+      "bytes": 65,
+      "sha256": "94f82356ec547f258f919c3dbdb3f3c6cc6338c373c7b42d72e1fb3a21440e93"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/robot_state_publisher_82_1788926298932.log",
+      "bytes": 705,
+      "sha256": "2fbce411840bca7715bb0944234aacf28d3be8b2c6aaef54b6d26af4622602a1"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/rviz2_104_1788926299063.log",
+      "bytes": 744,
+      "sha256": "2d5ed6ee917ecb5ac0d4970f7984fe3a3b0aba787b1cce6cdf71c0a879d03bf9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/simple_trajectory_generator_node_98_1788926298902.log",
+      "bytes": 1415,
+      "sha256": "5e69bb490b05fb9e2897cb51535e5a5c45d4f04303a4e419c951879d377c8b23"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/twist2accel_96_1788926298900.log",
+      "bytes": 65,
+      "sha256": "20bc151c13a4d7a4e9b6b94608acf36cfebc4cc7f1e3993daf918b8ea2d50b77"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/ros/log/vehicle_velocity_converter_84_1788926298900.log",
+      "bytes": 65,
+      "sha256": "eef2586fe0bf39d072eb7c1a916e036446da8c72c5f7629ce5c25f753c11220b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "c44e23a9c4db5253725988a449932b75c49498dc06a954ef54b6113e4968c07e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2166346,
+      "sha256": "69c5c0b51c2e803203485c368ba6af711bd534e0df5d2214e20e94034b736696"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "8b8d2cbe940463369f18a155231c289a8ff2ddb250da936661d760366177bcc2"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d1-topic-timing.json",
+      "bytes": 2370,
+      "sha256": "6edc53d3d90c174471dbe5f67283c10d836784e2fa0dc3af0c7d3b528f278560"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/autoware.log",
+      "bytes": 234435,
+      "sha256": "2255039ec6322216e693fe94a69480e5e81cdc56f85ca0e91ca98b6ca3a4b9ff"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/motion_analytics-26-09-09-12-58-51.html",
+      "bytes": 4851325,
+      "sha256": "fb94f90442f5eee96554863f6c4ed719dbb829bfcf9a3fa5fa4059878cafe1eb"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000183-40a3b350a2b2ccdb-track-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274752,
+      "sha256": "a0c0eb6ceab79ebfe2933863cd3daea3d32e5773da8a85edddc4f85ab47a97fe"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000183-40a3b350a2b2ccdb-track-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000193-d257879a794cb2b6-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 249528,
+      "sha256": "bc356ab64a6f31d52694c77ff538f1c32536e05122ff25e6d30bbdeffb7e20f0"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000193-d257879a794cb2b6-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000227-61755c2e319eece1-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 252209,
+      "sha256": "17a7add8517240791ad1abe6e7643d872e64aeb4f89545a66f73415075eb9c46"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000227-61755c2e319eece1-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-b075fa6175bbb4fd-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 272997,
+      "sha256": "d08eede8f32ca3b65af2aeea4e7e5f52e8760e579249a25b347ad2670461019a"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-b075fa6175bbb4fd-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-f93aacc4771202de-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 272412,
+      "sha256": "229abb92d357016fbb22c41c563047f9e3b8d398ddf71a15cf56328c03265a84"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-f93aacc4771202de-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000411-04b7be40903ec0c6-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 36129,
+      "sha256": "a152b051d5f147a638f038ed472ccf1bdcfecb311768609976e918a8fbcbfd5d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000411-04b7be40903ec0c6-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000526-f49d95089b47b279-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 36103,
+      "sha256": "0afb5980b9721c4dc3427d15a59a40c787776339f779054befb51fee72bdc679"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000526-f49d95089b47b279-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000543-c6fe4d21e62c1f0a-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 270726,
+      "sha256": "d8577951b5fd429d58cf85d2664846be61e5c7426cd9f6be68feffcf82f9940a"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/mpcc_architecture_snapshots/000000000543-c6fe4d21e62c1f0a-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/2026-09-09-12-58-18-015840-msuda-System-Product-Name-69/launch.log",
+      "bytes": 17639,
+      "sha256": "f92d0ff7afd1b3afe2e510e212be648fee829e9e16a06fce92793a5a52318607"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/component_container_102_1788926299382.log",
+      "bytes": 1488,
+      "sha256": "3e06192e56212377205e5f99a6217408ffe0f1bf54ae09f0363b5e06d6562895"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/ekf_localizer_94_1788926299357.log",
+      "bytes": 65,
+      "sha256": "6477cb86dbacc2b223cf429e1c0c0f05e0384bbf59e23f42eb997023cd95e48e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/gnss_poser_88_1788926299397.log",
+      "bytes": 205,
+      "sha256": "f68b1e9a4e2715fc93fd349405b4784f16b41bcf512de3a01f1a4377f958856c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/gyro_odometer_90_1788926299349.log",
+      "bytes": 65,
+      "sha256": "d00007c1eb85c892a777f105b043a510b4333f01eae60ea9c4996a67db71c58e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/imu_corrector_86_1788926299364.log",
+      "bytes": 65,
+      "sha256": "274493a103f40a58ee9b441bc739e590f0dc4a0cd546ca8d5b38a7b2bc27304a"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/imu_gnss_poser_node_92_1788926299392.log",
+      "bytes": 977,
+      "sha256": "7a8e9d9527244768538884c460ae78bdb7e7d8e68839e0fb059126960d5007ce"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/mpc_controller_cpp_100_1788926299592.log",
+      "bytes": 203819,
+      "sha256": "0ba1d48b5a67edc02d4670d29069d4b66fc7cda1604f1e2a929180f5bd5252d3"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/python3_108_1788926299634.log",
+      "bytes": 4259,
+      "sha256": "b267575021120ee2c04371c4f923efd07c6bea2d8904b4593da8901977573d45"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/python3_110_1788926299619.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/python3_338_1788926315207.log",
+      "bytes": 2711,
+      "sha256": "88131575962e3492b2f6594b580318ad3d6f6191171d0c2db6ffdb3ac595aa28"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/python3_69_1788926299196.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/relay_106_1788926299400.log",
+      "bytes": 65,
+      "sha256": "8e58437dba4e2b1fd59e5d4665c88c54c6df0ddb81bdbc9079133d8e2b6bdf89"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/robot_state_publisher_82_1788926299381.log",
+      "bytes": 705,
+      "sha256": "df77eeccf8643ec8f584ded8d601a41c3fbaa5faeec09e428be91288d4e8af0d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/rviz2_104_1788926299517.log",
+      "bytes": 744,
+      "sha256": "f9de330ad821aa87b801feb8ef9352ae4cec1a4f4df180c5435af212bd8881fa"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/simple_trajectory_generator_node_98_1788926299418.log",
+      "bytes": 1415,
+      "sha256": "5fc0647aacb102acd1302684ec2581ba7c07abcf98e8f16a8c32f092fb783017"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/twist2accel_96_1788926299345.log",
+      "bytes": 65,
+      "sha256": "f47697cf551ab3056f5830cd0f9ad5dd1a6f01a790c412c85c842117fa878ea3"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/ros/log/vehicle_velocity_converter_84_1788926299357.log",
+      "bytes": 65,
+      "sha256": "6a2973058a75816fe2da2c5c61d92fcbc9c43c10f1388c4e0f908bf8311cbae0"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "71911f1dc394dbba65cb20d2b32aac1907f318792b77bb35ed1f2803eee76143"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2159736,
+      "sha256": "d9e289667b6756ad09492a6e0210596d92fae598863cb0caa762d93b08abbfa4"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "299be58504c865a3e932468639303215f33ec71d75139b79f6487dc2b2ad3738"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/d2-topic-timing.json",
+      "bytes": 2375,
+      "sha256": "8c4fd5102a59c0df83b990d00b5de18c3fd3390242bbf1ca4b68a94d20c38c50"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/down.log",
+      "bytes": 466,
+      "sha256": "317c8b1843fc8298ebfd92efec8d0d63432a7495693661508d85cc23478aac2e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/generated-user-path-results/result-summary.json",
+      "bytes": 928,
+      "sha256": "57596bb6dab1e0eb18a63bffbd4663622df82f1ef6542281fa154082bb9db03e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/ekf_localizer",
+      "bytes": 3017152,
+      "sha256": "b59c3ba635b271fe1c11cb929f130f45a66a2f714f43bc1c80ffc19545038910"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/libaichallenge_ekf_localizer_lib.so",
+      "bytes": 2162992,
+      "sha256": "25d6709773578e85b60692fb0c6d3507d619fc3135e647357076b739e47675e4"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2226888,
+      "sha256": "01f5faf04095b8e5665d5978d01ca2c039f5b5ea9b80dbdea42f1d0a84650734"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/CMakeLists.txt",
+      "bytes": 1967,
+      "sha256": "3c0afc4b2c1e16fd6411e84ab124702ee9c0b18e82995f2e9ed10f7d6107cd11"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/NOTICE",
+      "bytes": 591,
+      "sha256": "022282b0ddb9150f8f8eef93d756496e6fceaac26645f5ac8ab5885014df7524"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/README.md",
+      "bytes": 868,
+      "sha256": "0e611995e7b8269b053ea1e485567724e7e4a3f475160b359d60ffcde4f484d3"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/UPSTREAM.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/covariance.hpp",
+      "bytes": 937,
+      "sha256": "6fb6d3f54f710093f871bbe1b3a791ce10614ce6a894cedbfa34c470c4370bc1"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/ekf_localizer.hpp",
+      "bytes": 9173,
+      "sha256": "52150445c4f7614ba87516a0fa1b54a4a76adb61b6fd850c088f452f69b58ffd"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_transition.hpp",
+      "bytes": 1103,
+      "sha256": "69d17f4d8b16a916a4ac4bc04ac813096682707648c7067f3846493438828bf9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/launch/ekf_localizer.launch.xml",
+      "bytes": 3823,
+      "sha256": "a5adf69bc5ee3774f287928b1a766abc71fb7118b56a81c68fa187f8fe23e07c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/package.xml",
+      "bytes": 1287,
+      "sha256": "f4d7a8c512446c3a0641a91d5ad519df87684916af56388c249166929fd4d7dc"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/covariance.cpp",
+      "bytes": 1839,
+      "sha256": "5e7472cc05e7a73bf260cc2f8770834c72cb48d3704bdd8283ff8195d70b4000"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer.cpp",
+      "bytes": 22971,
+      "sha256": "8097cb77806f0c53e1d37e9b2f9c35efc5486aa3e42376d7af8ec0f83941e5dc"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer_node.cpp",
+      "bytes": 891,
+      "sha256": "9183e015dc463be207cfdcde81c79765a3d22dc8b18b1b015dc9274819210737"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/mahalanobis.cpp",
+      "bytes": 987,
+      "sha256": "b2a2a90892c02266b15a4a2bbaf7fe4c9a5a543fccabc6b7836e6facbc18b9c0"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/measurement.cpp",
+      "bytes": 2196,
+      "sha256": "dacc346cbcfbfdac9efaa3d6be3628bbdf577ddfbae63959bafcda485b857f59"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/state_transition.cpp",
+      "bytes": 3369,
+      "sha256": "2e5c81b1c5a2228806725d32feace05b7ffba34fc341dfe594e38d21b4bd8654"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/warning_message.cpp",
+      "bytes": 2017,
+      "sha256": "13640a809651f7a0c71a5f378b26786e2f07a0fdf9d794ff37d739508645da4d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/src/test_ekf_localizer.cpp",
+      "bytes": 10768,
+      "sha256": "c41a98be09c027d21b0ac0eb78d08c62fca658df25f0ba88cab9d1d5e2074dc7"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_aged_object_queue.cpp",
+      "bytes": 2477,
+      "sha256": "9bbdf1204af2264635ea93f96b96e9ee9d123bcf629b1a7eaf5d7528fd72a529"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_covariance.cpp",
+      "bytes": 2178,
+      "sha256": "e2fa32f59d8572185b18ebfd306500279a28826273a98e9419555b3c57c7b88d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_clock.cpp",
+      "bytes": 5977,
+      "sha256": "567b679be46f8a1a3a464f2d351ded8029049aa25f9f86aa91028a0fb9c41719"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_mahalanobis.cpp",
+      "bytes": 1482,
+      "sha256": "cc31e52681756dd068c72f6c1a80ea249eb6215c15dbb69c8c51567ddbac7ae2"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_measurement.cpp",
+      "bytes": 2617,
+      "sha256": "954ed79a2a28a2116ed3a0ca531bdc25f83e48bcbc197321d266df0922f7e661"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_numeric.cpp",
+      "bytes": 1507,
+      "sha256": "a8da5388facefe07b59a7807e28a28f39c94b7bd73b397383fda6c2f6d92ef56"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_state_transition.cpp",
+      "bytes": 3161,
+      "sha256": "84a8cab921a6f1b0d94c212a8e638eb621cdadb5d470a6e5a55a78020440ab69"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_string.cpp",
+      "bytes": 909,
+      "sha256": "7d5fddf1bdac43b7f0a5bd393f277fddf485e2d8d3b65457b1fdc946eeb71ed0"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_warning_message.cpp",
+      "bytes": 2055,
+      "sha256": "9c7b8883eb339c17d60639aac6fcf3d72b969bcd5d66b5fce9d4e20088eef4d5"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/.gitignore",
+      "bytes": 37,
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/CACHEDIR.TAG",
+      "bytes": 191,
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/README.md",
+      "bytes": 302,
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/v/cache/nodeids",
+      "bytes": 484,
+      "sha256": "dbf6e134667cc83efdd0884f38ba6dddac1aa40080f802178a13ddf189b21329"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/CMakeLists.txt",
+      "bytes": 394,
+      "sha256": "cabc352f6806cdd80ac4e366723d85cadd2ef1b00f016d5939398a74599e3ff6"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner.param.yaml",
+      "bytes": 1938,
+      "sha256": "d4f307b9bb58635dd0496845dfb8a6346977c19bfbc5ac1d2ace7c4120a378e5"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner_tree.xml",
+      "bytes": 2621,
+      "sha256": "ef7ce6d5610f3bdb670e52ec3559d22940bd3be63cb3c9602948b0207be68d8f"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/converter.param.yaml",
+      "bytes": 327,
+      "sha256": "17d1def2c550d81200548b61d000e2d42ad9609b21164fa0f61c3dcc6f5e4faa"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/map/lanelet2_map_loader.param.yaml",
+      "bytes": 129,
+      "sha256": "cf8304daf3684ea25c3edf0544a33c0be32b306123ad35590019c8f6ca08ae4b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/mission_planning/mission_planner/mission_planner.param.yaml",
+      "bytes": 212,
+      "sha256": "c048d0175ed7c810a635da80465222f676e42f5f73493909034162e3c28fd457"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/common/nearest_search.param.yaml",
+      "bytes": 132,
+      "sha256": "b6c156d6f3cc74b16c95f40f35cf86ddef2b8b3a19ee2630b741cc10f4085726"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/avoidance/avoidance.param.yaml",
+      "bytes": 4704,
+      "sha256": "522287ec99e5bfef1b1d96788fb90a0e249398b1aac70e948a9affdb55c30416"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/drivable_area_expansion.param.yaml",
+      "bytes": 3154,
+      "sha256": "1f4cf4862f076a30ca4e830c8c3efbf910801de35e7d2f5c6bb4a28369499f66"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_change/lane_change.param.yaml",
+      "bytes": 1161,
+      "sha256": "3562d08a5d22112dbe5da44f6070b750752da1d0282d0ae475d7a62e18c7f30b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_following/lane_following.param.yaml",
+      "bytes": 84,
+      "sha256": "6115c2b5fdd761e453f42398cd8b05701ff1cb1120481409cc40fe6b8336b8e9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_out/pull_out.param.yaml",
+      "bytes": 1043,
+      "sha256": "20dc36eff032a06b37e150ed60652101ec01e07924a41d55bb3f749aad22519c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_over/pull_over.param.yaml",
+      "bytes": 3288,
+      "sha256": "dad3fdfe63460034550abbf1c93937ab635d2ea36a2d4ce71125d1cadf5d9831"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/side_shift/side_shift.param.yaml",
+      "bytes": 213,
+      "sha256": "4a0aa18c500e40c9e3b1848392c5289f41ed3be56d7afe93f693e55fd936cbb5"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/vehicle_velocity_converter.param.yaml",
+      "bytes": 167,
+      "sha256": "c068e333ebe0bf94ab67a7e4ee94c1fa7c64c41e4e46cc0d140f66efb553afa5"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/accel_map.csv",
+      "bytes": 539,
+      "sha256": "59ef66e4a2a6ad85e3e3f3e894af6b6ed55345fdfbef1295f49bac2c1bdc5f2f"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/brake_map.csv",
+      "bytes": 405,
+      "sha256": "7c9d8e9db7f00cf64bcf6f80ca67b65048da8487f4c53b3dcc37b4a971ad18cf"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/steer_map.csv",
+      "bytes": 1469,
+      "sha256": "26ead52a49148b347b7bbe5edb3c9cca6bd030f89585781f13b4e8870872571a"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml",
+      "bytes": 990,
+      "sha256": "0a82a035882bef28d3c35856f6d8b82a6207711eac5b7ecc94928309523e4537"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/joycon.launch.xml",
+      "bytes": 316,
+      "sha256": "f949739493762605db0ce0d9d5526cba2a3fcfa3410fc1dd65a7bb0997bebaa9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/mpc.launch.xml",
+      "bytes": 1029,
+      "sha256": "bc0c319f6352ddd5d40518ff52877b138321e57ca0603436e1b13bb6b74fa7d1"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pilot_net.launch.xml",
+      "bytes": 488,
+      "sha256": "bf5b4f272aecf99c96996380e1241737d82874158fbb45fb2d9d880ad00fde78"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pure_pursuit.launch.xml",
+      "bytes": 1018,
+      "sha256": "738fa5d0714ca9355b14e0dade3b09a6d55a5b904c187abf1307b3930d2e7bdb"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/rl_train.launch.xml",
+      "bytes": 143,
+      "sha256": "6c3e3aacb7d99ded76c03498a1602bac0834881b031d77168baa500c971e62a6"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/tiny_lidar_net.launch.xml",
+      "bytes": 955,
+      "sha256": "79465471ea4c5d0c6a370651ed9b14b12fa4cdf970427624be400f65e9b448a5"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12963,
+      "sha256": "e2855514d6c4fc6f4cea480d517605095ef0638d119186991d92d90a606bb909"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/lanelet2_map.osm",
+      "bytes": 116731,
+      "sha256": "126a62f2ef21560ace0eb39a0f52a6a5e86ef6b9951b0ead1511e46e4b418dc4"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/wide_lanelet2_map.osm",
+      "bytes": 138570,
+      "sha256": "c6bf9625bd5a6589991095c3eced22be048ba30740a1b75479e7cfe2b90c7e75"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/package.xml",
+      "bytes": 2019,
+      "sha256": "0596ef3df8a882be95cff9ff8c2b1efc78fde63a11897dd4e5ca02f68bfed50c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 18802,
+      "sha256": "27025f14e21657016d1bb640ce203cfcf43c41987de8bd85ed43805be560ff59"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 18869,
+      "sha256": "6b96d03f80c055fc815ccbd88a1c23c7fdf62ac4c0ca96bf5b5ef292fa9be2f8"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 5249,
+      "sha256": "bc6f30df073266b186ca1525aeba872dba25d376a99e39e3a13bd4027f857631"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 5316,
+      "sha256": "e8fd6f02f09e59a3856af0a544d9667f2719d0ffdb1d1fa8c6cb9812a1c1c4d4"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_localization_timing_contract.py",
+      "bytes": 1684,
+      "sha256": "7f54ea148127b65302c28881300557398a37573afa88b5280bb34641f5400a27"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39448,
+      "sha256": "e1e52feeb082a54e70ba57020157589ca389dd6fd59bc553e64aaf1a22f57991"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 10186,
+      "sha256": "9c91ebbcefa5cbe45a2fab959b37276c7a4bc8eba6a3ca9b5ee0a5a2fd9e421b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2943024,
+      "sha256": "98fffc37df6bc6bab0af8ed48a8562da1a424d3c27bd8fb034bfe8678fa0291d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 123454,
+      "sha256": "1a6b26073c85dcc8a51446454c75064939d3c13b1affcee71be60bd77421885a"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 24265,
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 55561,
+      "sha256": "b99355c90141d04714b05786f94ba167a68f84f35632918ed26fe041c5e36fe4"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 37877,
+      "sha256": "6c89c17af54a4a92846bc4194ac87508ab7ce478ff0145ad8b3f2a5a52371680"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 181162,
+      "sha256": "c9627bf8eb2dcad29da2e942b9c8452e03c2d6da4a3414536e8e9c3c42928ec9"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17463,
+      "sha256": "400587843725512bb8f6001470a77fdd2fa39798b1cb0fdf9909dda182781efe"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/test/test_gnss_heading.cpp",
+      "bytes": 6810,
+      "sha256": "6b06a36dc60c4413e0d389cb98795fb582102bd3841a74626fad3d06c1d308fd"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/launch.log",
+      "bytes": 702,
+      "sha256": "f17352d3714ae198c6f776b85b4c7c593ef8e62eb50645f82355320abc5470f2"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/manifest.json",
+      "bytes": 56223,
+      "sha256": "d3a0bcae5ca03af03dbd9ea12a282615968b2ea8a0062e2ba87ff987e6a22ea4"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/monitor-summary.json",
+      "bytes": 1855,
+      "sha256": "2f83c5e7e93c4ae2db8500a17444c85a4d40278300fa1d752778b9a2336eb980"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/mpcc-source.patch",
+      "bytes": 3770,
+      "sha256": "d29826219de2a73592d3736c43303212dbd3a41f767e6016cbfb6309c0eedee4"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/package.log",
+      "bytes": 493149,
+      "sha256": "2d31b005c9fc662409419fdbd6b82a9c83c7bf3a522b2fce7e89579ecbcb11b3"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/run_campaign.py",
+      "bytes": 12070,
+      "sha256": "2d45df05ba7b68995a5697915c2c3d34f6976b8089292af5aea0053c8638f80b"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-publication-clock-dev2-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-publication-clock-native-after/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-native-after/manifest.json",
+      "bytes": 16320,
+      "sha256": "7ca830b0dda44e5249a1fbcb401d615aedc9df36030ec4d61ef17c3a11be5212"
+    },
+    {
+      "path": "output/20260909-publication-clock-native-after/regression",
+      "bytes": 918960,
+      "sha256": "ba7346485d7419c0bacf27b258ef21f0f54a903e76e5197b2a81a7f88f15d399"
+    },
+    {
+      "path": "output/20260909-publication-clock-native-after/test.log",
+      "bytes": 6592,
+      "sha256": "055bcca680bace8a9eb9e9943e7d15d4690364a0a20d422bec2a994d7140dc92"
+    },
+    {
+      "path": "output/20260909-publication-clock-native-before/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-native-before/manifest.json",
+      "bytes": 16321,
+      "sha256": "1993b6a052224c11a7f6bfc58a1163f751e05fe0f86c11e7b714bf316d5a569f"
+    },
+    {
+      "path": "output/20260909-publication-clock-native-before/regression",
+      "bytes": 918960,
+      "sha256": "a87e942ea6460a065004eeba6308bf891ed65ff4ab0c20e01124c722d0035a0d"
+    },
+    {
+      "path": "output/20260909-publication-clock-native-before/test.log",
+      "bytes": 7206,
+      "sha256": "4d90f69a830ef84af69717592d8be5623432949e784a81e1e6151749e2e9db10"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/inspected.yaml",
+      "bytes": 50578,
+      "sha256": "2de05fe59d365e1f0d80ce4c90b29a1aaed05fd5a4583453efd1a2d16191e26a"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1304,
+      "sha256": "cdfc3a4e09ff3837075ffe75dc7f07a522bb82fe4dbb657db4e2b3c45b6c8eec"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 69297,
+      "sha256": "62a773c728e9f30139a19d7be7709785b395438b1c9937e95ce979e5f14da926"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/inspected.yaml",
+      "bytes": 50569,
+      "sha256": "035f32d054b0cf0775b02a19f6de4faf67401418c0ee8b76ccffa489b0bdfbb7"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/native.log",
+      "bytes": 1344,
+      "sha256": "ba03ee69c06ad4d64b943898575d02fad67b052583c199366acd99e8afe15a85"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 69738,
+      "sha256": "e8b006ceded70449405cca55478113710bf716b2869e8251a9be7116e3af8e31"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/inspected.yaml",
+      "bytes": 51130,
+      "sha256": "0d95767011fe20cfeee2605d64061e3c8b09758810f8d84058118f9920fe1eff"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1304,
+      "sha256": "cdfc3a4e09ff3837075ffe75dc7f07a522bb82fe4dbb657db4e2b3c45b6c8eec"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 69853,
+      "sha256": "5393d0e5363dc172e8745530a1d36e1e69ca41509b3c36579e0f032a615c9e75"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected.yaml",
+      "bytes": 51121,
+      "sha256": "4a2d184a5a77a553fa57ad1718635e4e5e057df4ce0d43fa24fd4c73785274b3"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/native.log",
+      "bytes": 1344,
+      "sha256": "ba03ee69c06ad4d64b943898575d02fad67b052583c199366acd99e8afe15a85"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 70294,
+      "sha256": "4d30f461a8575cab215a3dae595d700c66249d8435a06a8ffd2fc33df0f6ff42"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-r1/manifest.json",
+      "bytes": 31148,
+      "sha256": "5a484722e4c987f0f158c97ffa94dfb459ea8e3fb36bfedb9906290474d238ee"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-tool-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-tool-r1/manifest.json",
+      "bytes": 17354,
+      "sha256": "6f86dedd9af8bd75e66fc9d00eae4509f727fe02bc92a10323974ea6bf27b914"
+    },
+    {
+      "path": "output/20260909-publication-clock-revalidation-tool-r1/replay",
+      "bytes": 1694408,
+      "sha256": "d0c0a88cc17d1a02d1ff63ced18d4b019283eb985522713aee672d4b5a8f2e9f"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "6fae45e83cced84d5d94a51e743cb0d2336f4b241f9815489221afdfc3f92772"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/authority-timing-summary.json",
+      "bytes": 48817,
+      "sha256": "1ff6b2f66e05315cfe7f86d80fa5a7d7bae358ac7af56a6885710b4db56e27b8"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/awsim.log",
+      "bytes": 1772,
+      "sha256": "cd3cb4e7930170b932419c7d1804f47ef183b22f81ab7b8c2cf72f8690a9fe9f"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/binaries/mpc_controller_cpp",
+      "bytes": 8657256,
+      "sha256": "820a379f510a9f3916dc87766551fa8825deb0250afa9167afad24f02350db50"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1511816,
+      "sha256": "bbe6292d209c289d1ea516989cc99885991dcd64d1c8e2e9598a0be4b1456c21"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/build.log",
+      "bytes": 4369,
+      "sha256": "dd25638ed610a4c2e86b82d791d57fba384fceff47efbd1b1cb31c1ed4eed9bd"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/compose-six-lap.yml",
+      "bytes": 212,
+      "sha256": "82b30c63673f08f378f35488011fbc7e5ad7ba46a0dde36962dafc8704cef308"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/autoware.log",
+      "bytes": 2803842,
+      "sha256": "948fa69c7651ae994e412c207898e1a57e2bf7f8d6d74c65476da747c242f58b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/motion_analytics-26-09-09-12-56-56.html",
+      "bytes": 4919841,
+      "sha256": "f1b505e407c1e9fcdccda8e73905181a0bb79e454608c5d3fcc8c52b8959ed57"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000135-733325db94185795-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 258259,
+      "sha256": "6485e0a9a79c260fc6ad7b80644d1fff5c97c52dc37050aa1f9e7beb568f5101"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000135-733325db94185795-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000181-64df4f0c40c19936-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 243802,
+      "sha256": "c9ee430ef08a0ec8ecf58560e324982cdee0bb152a3cc0a3035679c22f6c1598"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000181-64df4f0c40c19936-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000298-b10a0edead161d2a-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 243081,
+      "sha256": "1eefa9ceca06e398c0eabf0019472c8082d9034e642d9c17cfd340c2e29c3de7"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000298-b10a0edead161d2a-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000420-c07564a1ccd78c39-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 270230,
+      "sha256": "f945080f08445e952a5920c0fbfb0b711d1799bdcd22c0bea335510c40bbf5db"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000420-c07564a1ccd78c39-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000530-eb7afa069a523e34-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35832,
+      "sha256": "959deee3efc048d6d12a77fce63b25766a6d8c1438fbe6caa2584d5813067fb5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000000530-eb7afa069a523e34-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000001519-9854e6a7ed4ec75c-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 255485,
+      "sha256": "79360741098f6ce1235614d74d84c1fac9c76f53e941df70ff6fbd0e33fd360d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000001519-9854e6a7ed4ec75c-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000002153-c9c93ffab7c81ccd-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 252060,
+      "sha256": "37bd5eff083a3d3b30662b0c20be5830fcec9622dcc0a2d01682e8e112d11023"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000002153-c9c93ffab7c81ccd-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000002403-c11f1a25a02db508-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 259251,
+      "sha256": "c06e1e9a5176939401271460d175eda827c24dd33162c03b3fcae06025267141"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/mpcc_architecture_snapshots/000000002403-c11f1a25a02db508-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/2026-09-09-12-51-58-763779-msuda-System-Product-Name-69/launch.log",
+      "bytes": 16899,
+      "sha256": "33e379a9bc1baa527138f78f9d373c7f79b831d2756349b4f7185f832194333c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/component_container_102_1788925919970.log",
+      "bytes": 1488,
+      "sha256": "22affcafbd727a67766359a80bb0a57f9702324886c7034342f5f4b550281319"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/ekf_localizer_94_1788925919994.log",
+      "bytes": 65,
+      "sha256": "13a335b5336f175c2a62e93034bff37652dbb9a5313b448a349f1856a8a93ee4"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/gnss_poser_88_1788925919955.log",
+      "bytes": 205,
+      "sha256": "044936fed855b2548ac17f7e589df6072ec4670f50ba44b29d686f4b42ed9401"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/gyro_odometer_90_1788925919964.log",
+      "bytes": 65,
+      "sha256": "5b67626c907647b6475385f2197a6be521ef91cc97746ff9ecbe50753cb9003e"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/imu_corrector_86_1788925919955.log",
+      "bytes": 65,
+      "sha256": "c0d93d42efccc09e2263a5530d2b42f1acd34415b7c74469cf637737671a8090"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/imu_gnss_poser_node_92_1788925919957.log",
+      "bytes": 977,
+      "sha256": "014640afd18798a3616c2fc236b148a1bd85a73422eb0ab0e874f683eceb9f2e"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/mpc_controller_cpp_100_1788925920152.log",
+      "bytes": 2673728,
+      "sha256": "38f716d6f41f205195d383116890f94212de5c56da3bc85f8ca7ffdb0a564f1f"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/python3_108_1788925920207.log",
+      "bytes": 4082,
+      "sha256": "9a0ed96ae57a273cb8dd9ddf1359ecb5ec118d996ad7c5b130b8f259efde183d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/python3_110_1788925920232.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/python3_112_1788925920200.log",
+      "bytes": 143,
+      "sha256": "e9bcd7097fd5aa36ee95fe33a27d7b00e0b63845c335c35bf3343c9ccb094cef"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/python3_360_1788925936156.log",
+      "bytes": 2711,
+      "sha256": "ac4babc328a89bc3e6678d02673676da3b889ee39fdc094dc1e9127edf3aac82"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/python3_69_1788925919837.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/relay_106_1788925920020.log",
+      "bytes": 65,
+      "sha256": "aa45045700f27efd3a3d77aba3ee9bf56a93de106518eaa8b0d5ee232cd180e9"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/robot_state_publisher_82_1788925919955.log",
+      "bytes": 705,
+      "sha256": "0506ce06a9ed4b0975e906a268d5d6878ed686700e43bf5bf97c4b2674295744"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/rviz2_104_1788925920077.log",
+      "bytes": 744,
+      "sha256": "4dd8e91379ef605bb1146ce4de4ac087dcfe92964488be4ea61727c281d42760"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/simple_trajectory_generator_node_98_1788925919972.log",
+      "bytes": 1915,
+      "sha256": "292c4e01efce1611ef16b70f4d23208c41f3534e84e559be5e95f0bc85130c88"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/twist2accel_96_1788925919989.log",
+      "bytes": 65,
+      "sha256": "69ae89e1ca269a4f198ce28655cae1f09168fa5de54b1cbc369b3ffa51eff222"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/ros/log/vehicle_velocity_converter_84_1788925919955.log",
+      "bytes": 65,
+      "sha256": "79c6dd496b9d5c6513b21b69e5a90c7be3d56e1cd725a55997e8547c1fa5bdac"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8525,
+      "sha256": "0d7483dd42a2e3987e8b57a3610b0a219a81a58fa5e1d4fedfcde0e264a2280b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 37708789,
+      "sha256": "ede1c30333777cda172dbe0700a6e205f498377370f6138b6c76e5070902e8f7"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "714bb8bf751b1bf74ebfa83463b7519e53a3bd795d678918a0d7ea4d34122d20"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/d1-topic-timing.json",
+      "bytes": 2390,
+      "sha256": "8cbffa2a202bcedacbee7e3d05b8f05bb9e50672847eb89d4934eccc3f16d8a3"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/down.log",
+      "bytes": 501,
+      "sha256": "1a198ec5eebd9ea4369f4ed1fe4a936abbe0de30bd96ceaf6a303c3bd6bff527"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/finish-results/d1-result-details.json",
+      "bytes": 865,
+      "sha256": "af343abb1588f44ee3de7d3fccbb52567cba69386c67db777ddfb04e1b8d24d0"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/generated-user-path-results/result-summary.json",
+      "bytes": 1070,
+      "sha256": "3d5637311e21e6b36e13fb4778ed33590f7fb28bad0a3109eb7171a76fa8fa35"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/ekf_localizer",
+      "bytes": 3017152,
+      "sha256": "b59c3ba635b271fe1c11cb929f130f45a66a2f714f43bc1c80ffc19545038910"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/libaichallenge_ekf_localizer_lib.so",
+      "bytes": 2162992,
+      "sha256": "25d6709773578e85b60692fb0c6d3507d619fc3135e647357076b739e47675e4"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2226888,
+      "sha256": "01f5faf04095b8e5665d5978d01ca2c039f5b5ea9b80dbdea42f1d0a84650734"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/CMakeLists.txt",
+      "bytes": 1967,
+      "sha256": "3c0afc4b2c1e16fd6411e84ab124702ee9c0b18e82995f2e9ed10f7d6107cd11"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/NOTICE",
+      "bytes": 591,
+      "sha256": "022282b0ddb9150f8f8eef93d756496e6fceaac26645f5ac8ab5885014df7524"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/README.md",
+      "bytes": 868,
+      "sha256": "0e611995e7b8269b053ea1e485567724e7e4a3f475160b359d60ffcde4f484d3"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/UPSTREAM.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/covariance.hpp",
+      "bytes": 937,
+      "sha256": "6fb6d3f54f710093f871bbe1b3a791ce10614ce6a894cedbfa34c470c4370bc1"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/ekf_localizer.hpp",
+      "bytes": 9173,
+      "sha256": "52150445c4f7614ba87516a0fa1b54a4a76adb61b6fd850c088f452f69b58ffd"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_transition.hpp",
+      "bytes": 1103,
+      "sha256": "69d17f4d8b16a916a4ac4bc04ac813096682707648c7067f3846493438828bf9"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/launch/ekf_localizer.launch.xml",
+      "bytes": 3823,
+      "sha256": "a5adf69bc5ee3774f287928b1a766abc71fb7118b56a81c68fa187f8fe23e07c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/package.xml",
+      "bytes": 1287,
+      "sha256": "f4d7a8c512446c3a0641a91d5ad519df87684916af56388c249166929fd4d7dc"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/covariance.cpp",
+      "bytes": 1839,
+      "sha256": "5e7472cc05e7a73bf260cc2f8770834c72cb48d3704bdd8283ff8195d70b4000"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer.cpp",
+      "bytes": 22971,
+      "sha256": "8097cb77806f0c53e1d37e9b2f9c35efc5486aa3e42376d7af8ec0f83941e5dc"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer_node.cpp",
+      "bytes": 891,
+      "sha256": "9183e015dc463be207cfdcde81c79765a3d22dc8b18b1b015dc9274819210737"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/mahalanobis.cpp",
+      "bytes": 987,
+      "sha256": "b2a2a90892c02266b15a4a2bbaf7fe4c9a5a543fccabc6b7836e6facbc18b9c0"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/measurement.cpp",
+      "bytes": 2196,
+      "sha256": "dacc346cbcfbfdac9efaa3d6be3628bbdf577ddfbae63959bafcda485b857f59"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/state_transition.cpp",
+      "bytes": 3369,
+      "sha256": "2e5c81b1c5a2228806725d32feace05b7ffba34fc341dfe594e38d21b4bd8654"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/warning_message.cpp",
+      "bytes": 2017,
+      "sha256": "13640a809651f7a0c71a5f378b26786e2f07a0fdf9d794ff37d739508645da4d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/src/test_ekf_localizer.cpp",
+      "bytes": 10768,
+      "sha256": "c41a98be09c027d21b0ac0eb78d08c62fca658df25f0ba88cab9d1d5e2074dc7"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_aged_object_queue.cpp",
+      "bytes": 2477,
+      "sha256": "9bbdf1204af2264635ea93f96b96e9ee9d123bcf629b1a7eaf5d7528fd72a529"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_covariance.cpp",
+      "bytes": 2178,
+      "sha256": "e2fa32f59d8572185b18ebfd306500279a28826273a98e9419555b3c57c7b88d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_clock.cpp",
+      "bytes": 5977,
+      "sha256": "567b679be46f8a1a3a464f2d351ded8029049aa25f9f86aa91028a0fb9c41719"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_mahalanobis.cpp",
+      "bytes": 1482,
+      "sha256": "cc31e52681756dd068c72f6c1a80ea249eb6215c15dbb69c8c51567ddbac7ae2"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_measurement.cpp",
+      "bytes": 2617,
+      "sha256": "954ed79a2a28a2116ed3a0ca531bdc25f83e48bcbc197321d266df0922f7e661"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_numeric.cpp",
+      "bytes": 1507,
+      "sha256": "a8da5388facefe07b59a7807e28a28f39c94b7bd73b397383fda6c2f6d92ef56"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_state_transition.cpp",
+      "bytes": 3161,
+      "sha256": "84a8cab921a6f1b0d94c212a8e638eb621cdadb5d470a6e5a55a78020440ab69"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_string.cpp",
+      "bytes": 909,
+      "sha256": "7d5fddf1bdac43b7f0a5bd393f277fddf485e2d8d3b65457b1fdc946eeb71ed0"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_warning_message.cpp",
+      "bytes": 2055,
+      "sha256": "9c7b8883eb339c17d60639aac6fcf3d72b969bcd5d66b5fce9d4e20088eef4d5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/.gitignore",
+      "bytes": 37,
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/CACHEDIR.TAG",
+      "bytes": 191,
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/README.md",
+      "bytes": 302,
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/v/cache/nodeids",
+      "bytes": 484,
+      "sha256": "dbf6e134667cc83efdd0884f38ba6dddac1aa40080f802178a13ddf189b21329"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/CMakeLists.txt",
+      "bytes": 394,
+      "sha256": "cabc352f6806cdd80ac4e366723d85cadd2ef1b00f016d5939398a74599e3ff6"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner.param.yaml",
+      "bytes": 1938,
+      "sha256": "d4f307b9bb58635dd0496845dfb8a6346977c19bfbc5ac1d2ace7c4120a378e5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner_tree.xml",
+      "bytes": 2621,
+      "sha256": "ef7ce6d5610f3bdb670e52ec3559d22940bd3be63cb3c9602948b0207be68d8f"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/converter.param.yaml",
+      "bytes": 327,
+      "sha256": "17d1def2c550d81200548b61d000e2d42ad9609b21164fa0f61c3dcc6f5e4faa"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/map/lanelet2_map_loader.param.yaml",
+      "bytes": 129,
+      "sha256": "cf8304daf3684ea25c3edf0544a33c0be32b306123ad35590019c8f6ca08ae4b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/mission_planning/mission_planner/mission_planner.param.yaml",
+      "bytes": 212,
+      "sha256": "c048d0175ed7c810a635da80465222f676e42f5f73493909034162e3c28fd457"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/common/nearest_search.param.yaml",
+      "bytes": 132,
+      "sha256": "b6c156d6f3cc74b16c95f40f35cf86ddef2b8b3a19ee2630b741cc10f4085726"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/avoidance/avoidance.param.yaml",
+      "bytes": 4704,
+      "sha256": "522287ec99e5bfef1b1d96788fb90a0e249398b1aac70e948a9affdb55c30416"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/drivable_area_expansion.param.yaml",
+      "bytes": 3154,
+      "sha256": "1f4cf4862f076a30ca4e830c8c3efbf910801de35e7d2f5c6bb4a28369499f66"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_change/lane_change.param.yaml",
+      "bytes": 1161,
+      "sha256": "3562d08a5d22112dbe5da44f6070b750752da1d0282d0ae475d7a62e18c7f30b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_following/lane_following.param.yaml",
+      "bytes": 84,
+      "sha256": "6115c2b5fdd761e453f42398cd8b05701ff1cb1120481409cc40fe6b8336b8e9"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_out/pull_out.param.yaml",
+      "bytes": 1043,
+      "sha256": "20dc36eff032a06b37e150ed60652101ec01e07924a41d55bb3f749aad22519c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_over/pull_over.param.yaml",
+      "bytes": 3288,
+      "sha256": "dad3fdfe63460034550abbf1c93937ab635d2ea36a2d4ce71125d1cadf5d9831"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/side_shift/side_shift.param.yaml",
+      "bytes": 213,
+      "sha256": "4a0aa18c500e40c9e3b1848392c5289f41ed3be56d7afe93f693e55fd936cbb5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/vehicle_velocity_converter.param.yaml",
+      "bytes": 167,
+      "sha256": "c068e333ebe0bf94ab67a7e4ee94c1fa7c64c41e4e46cc0d140f66efb553afa5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/accel_map.csv",
+      "bytes": 539,
+      "sha256": "59ef66e4a2a6ad85e3e3f3e894af6b6ed55345fdfbef1295f49bac2c1bdc5f2f"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/brake_map.csv",
+      "bytes": 405,
+      "sha256": "7c9d8e9db7f00cf64bcf6f80ca67b65048da8487f4c53b3dcc37b4a971ad18cf"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/steer_map.csv",
+      "bytes": 1469,
+      "sha256": "26ead52a49148b347b7bbe5edb3c9cca6bd030f89585781f13b4e8870872571a"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml",
+      "bytes": 990,
+      "sha256": "0a82a035882bef28d3c35856f6d8b82a6207711eac5b7ecc94928309523e4537"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/joycon.launch.xml",
+      "bytes": 316,
+      "sha256": "f949739493762605db0ce0d9d5526cba2a3fcfa3410fc1dd65a7bb0997bebaa9"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/mpc.launch.xml",
+      "bytes": 1029,
+      "sha256": "bc0c319f6352ddd5d40518ff52877b138321e57ca0603436e1b13bb6b74fa7d1"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pilot_net.launch.xml",
+      "bytes": 488,
+      "sha256": "bf5b4f272aecf99c96996380e1241737d82874158fbb45fb2d9d880ad00fde78"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pure_pursuit.launch.xml",
+      "bytes": 1018,
+      "sha256": "738fa5d0714ca9355b14e0dade3b09a6d55a5b904c187abf1307b3930d2e7bdb"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/rl_train.launch.xml",
+      "bytes": 143,
+      "sha256": "6c3e3aacb7d99ded76c03498a1602bac0834881b031d77168baa500c971e62a6"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/tiny_lidar_net.launch.xml",
+      "bytes": 955,
+      "sha256": "79465471ea4c5d0c6a370651ed9b14b12fa4cdf970427624be400f65e9b448a5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12963,
+      "sha256": "e2855514d6c4fc6f4cea480d517605095ef0638d119186991d92d90a606bb909"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/lanelet2_map.osm",
+      "bytes": 116731,
+      "sha256": "126a62f2ef21560ace0eb39a0f52a6a5e86ef6b9951b0ead1511e46e4b418dc4"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/wide_lanelet2_map.osm",
+      "bytes": 138570,
+      "sha256": "c6bf9625bd5a6589991095c3eced22be048ba30740a1b75479e7cfe2b90c7e75"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/package.xml",
+      "bytes": 2019,
+      "sha256": "0596ef3df8a882be95cff9ff8c2b1efc78fde63a11897dd4e5ca02f68bfed50c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 18802,
+      "sha256": "27025f14e21657016d1bb640ce203cfcf43c41987de8bd85ed43805be560ff59"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 18869,
+      "sha256": "6b96d03f80c055fc815ccbd88a1c23c7fdf62ac4c0ca96bf5b5ef292fa9be2f8"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 5249,
+      "sha256": "bc6f30df073266b186ca1525aeba872dba25d376a99e39e3a13bd4027f857631"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 5316,
+      "sha256": "e8fd6f02f09e59a3856af0a544d9667f2719d0ffdb1d1fa8c6cb9812a1c1c4d4"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_localization_timing_contract.py",
+      "bytes": 1684,
+      "sha256": "7f54ea148127b65302c28881300557398a37573afa88b5280bb34641f5400a27"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39448,
+      "sha256": "e1e52feeb082a54e70ba57020157589ca389dd6fd59bc553e64aaf1a22f57991"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 10186,
+      "sha256": "9c91ebbcefa5cbe45a2fab959b37276c7a4bc8eba6a3ca9b5ee0a5a2fd9e421b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2943024,
+      "sha256": "98fffc37df6bc6bab0af8ed48a8562da1a424d3c27bd8fb034bfe8678fa0291d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 123454,
+      "sha256": "1a6b26073c85dcc8a51446454c75064939d3c13b1affcee71be60bd77421885a"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 24265,
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 55561,
+      "sha256": "b99355c90141d04714b05786f94ba167a68f84f35632918ed26fe041c5e36fe4"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 37877,
+      "sha256": "6c89c17af54a4a92846bc4194ac87508ab7ce478ff0145ad8b3f2a5a52371680"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 181162,
+      "sha256": "c9627bf8eb2dcad29da2e942b9c8452e03c2d6da4a3414536e8e9c3c42928ec9"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17463,
+      "sha256": "400587843725512bb8f6001470a77fdd2fa39798b1cb0fdf9909dda182781efe"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/test/test_gnss_heading.cpp",
+      "bytes": 6810,
+      "sha256": "6b06a36dc60c4413e0d389cb98795fb582102bd3841a74626fad3d06c1d308fd"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/launch.log",
+      "bytes": 776,
+      "sha256": "baf4ccf06ed32630f788c2fd34c64213aa31a66a1ae9c8873c9451897ac75f85"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/manifest.json",
+      "bytes": 56433,
+      "sha256": "191bf9fc967058534c757da4f58e2f8a16b2ceec5fab889630d57b2fdfafd85b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/monitor-summary.json",
+      "bytes": 1441,
+      "sha256": "8a946ef6eab497456d4e81d545617a461e642beb56d256bae46885251a683e4b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/mpcc-source.patch",
+      "bytes": 3770,
+      "sha256": "d29826219de2a73592d3736c43303212dbd3a41f767e6016cbfb6309c0eedee4"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/package.log",
+      "bytes": 493149,
+      "sha256": "2d31b005c9fc662409419fdbd6b82a9c83c7bf3a522b2fce7e89579ecbcb11b3"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/run_campaign.py",
+      "bytes": 12070,
+      "sha256": "2d45df05ba7b68995a5697915c2c3d34f6976b8089292af5aea0053c8638f80b"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-publication-clock-single-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-publication-clock-timeline/manifest.json",
+      "bytes": 464,
+      "sha256": "ad4f30dd9fc6d7dd9b2c50460d3bcaa7a0b6bdf20612d0ca36b3ded2ad879b6e"
+    },
+    {
+      "path": "output/20260909-publication-clock-timeline/timeline.json",
+      "bytes": 19562,
+      "sha256": "e4a6c06431de568c1c8fcef6f5f485e07f1733ff0cd730f25fc4cb6931131794"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-build.log",
+      "bytes": 4369,
+      "sha256": "dd25638ed610a4c2e86b82d791d57fba384fceff47efbd1b1cb31c1ed4eed9bd"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-comparison.log",
+      "bytes": 17331,
+      "sha256": "1e845f0daeb9365196828f2ff8fa42ab63bec818f5e54cf86546d4feb56853b2"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-current-replay-timing.log",
+      "bytes": 10762,
+      "sha256": "8630f003a547164202c9577b1e92cff34c5a1d7a8e7be1e4ac5b7ebf4edb149f"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-dev2-authority.log",
+      "bytes": 348,
+      "sha256": "d2173f71333f83064ef63092c5f291c30fdbfe4a35caff3ec753d10a3e40ea30"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-dev2.log",
+      "bytes": 2465,
+      "sha256": "d9b48a432e477332c7a5d467b11775497c062f014312792b8f81f34395d968e7"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-native-after.log",
+      "bytes": 6732,
+      "sha256": "5f5d68b0f1c17711742c3360045a4a6af45ba7959f5b096643b7b786bfb37127"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-native-before.log",
+      "bytes": 7347,
+      "sha256": "873072520e7322ad6b0a5aac43a0a1e386b7868f77bad585a0b3145fae668efb"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-package.log",
+      "bytes": 493149,
+      "sha256": "2d31b005c9fc662409419fdbd6b82a9c83c7bf3a522b2fce7e89579ecbcb11b3"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-single-authority.log",
+      "bytes": 790,
+      "sha256": "65c861b43e446400dc1489fe769402306ca112ab84e0f322c9a1810e7dcd93f7"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-single-timing.log",
+      "bytes": 2529,
+      "sha256": "b16ab57224485ba2b5134e3bbe734a7abdb624dee70b716bbdd6045dbac15594"
+    },
+    {
+      "path": "output/20260909-publication-clock-validation/mpcc-publication-clock-single.log",
+      "bytes": 7147,
+      "sha256": "c97736b163481b675f24587e460b08cfaf423af84479df38db6143dd13d98c7d"
+    }
+  ]
+}

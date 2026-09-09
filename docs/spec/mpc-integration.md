@@ -4030,3 +4030,16 @@ Requestを保持し、速度、現在物理操舵、指令と応答の操舵、�
 既存の記録処理で同時に保存する。欠落・不一致は明示し、失敗側は保存する。
 schemaは同じ`mpcc-revalidation-observation/v1`で、既存loaderへの必須項目追加はない。
 [前後の観測の設計と検証](../../.steering/20260909-mpcc-peer-viability/design.md)を参照。
+
+
+#### Published Bundleから同じartifactを再実行する時刻（2026-09-09）
+
+最新のcurrent-world Bundleが使用したsourceの時刻とcursorの対応は、同じartifactの
+exact continuationへ移るときにも維持する。以前のexecuted planとartifact identityが同じでも、
+過去の時刻基準を復活させない。最終指令と証明に使ったpublication時刻・cursorをStoreへ引き継ぎ、
+以後の通常継続ではその対応を保つ。未公開candidateには実行の権限を与えない。
+
+EKF修正後のdev2 D1では、Accepted 936の公開後に古い基準が復活し、937のcursorが
+4.403881 ms戻った。実Storeのnative testで再現した。同じ937の入力で基準だけを直した再生も
+terminal peer証明は不合格であり、この修正だけで2台の受入れが成立するとは判断しない。
+詳細と検証範囲は[publication clock handoff](../../.steering/20260909-mpcc-publication-clock-handoff/design.md)を参照。

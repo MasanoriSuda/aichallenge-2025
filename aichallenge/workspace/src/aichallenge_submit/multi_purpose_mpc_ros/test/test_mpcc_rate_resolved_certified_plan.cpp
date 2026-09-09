@@ -755,6 +755,46 @@ TEST(MpccRateResolvedCertifiedPlan, PublishedOriginBelongsToPlanNotDecision)
   EXPECT_EQ(store.state().latest_execution_decision_id, 101U);
 }
 
+TEST(
+  MpccRateResolvedCertifiedPlan,
+  ExactContinuationOfPublishedBundlePreservesItsCausalClock)
+{
+  certified::Store store;
+  const auto source = build_plan(374U);
+  ASSERT_NE(source.plan, nullptr);
+  ASSERT_EQ(
+    store.mark_executed(source.plan, 926U, 9.779999784000001, 0.12499999699999975),
+    certified::StoreReason::Accepted);
+  ASSERT_EQ(
+    store.record_published_bundle_source(
+      source.plan, 935U, 10.009999779000001, 0.3594038730139186),
+    certified::StoreReason::Accepted);
+
+  const double publication_time = 10.029999778;
+  const double published_cursor = 0.3794038720139188;
+  ASSERT_EQ(
+    store.mark_executed(source.plan, 936U, publication_time, published_cursor),
+    certified::StoreReason::Accepted);
+  const auto resumed = store.executed_snapshot();
+  ASSERT_EQ(resumed.plan, source.plan);
+  EXPECT_EQ(store.published_bundle_source_snapshot().plan, nullptr);
+  const double next_control_time = 10.059999778000002;
+  const double actual_cursor = resumed.first_published_artifact_elapsed_sec +
+    next_control_time - resumed.first_published_control_origin_sec;
+  EXPECT_NEAR(actual_cursor, published_cursor + next_control_time - publication_time, 1e-12);
+
+  // A later ordinary publication preserves the transferred time association.
+  ASSERT_EQ(
+    store.mark_executed(source.plan, 937U, next_control_time,
+      published_cursor + next_control_time - publication_time),
+    certified::StoreReason::Accepted);
+  const auto continued = store.executed_snapshot();
+  EXPECT_DOUBLE_EQ(continued.first_published_control_origin_sec,
+    resumed.first_published_control_origin_sec);
+  EXPECT_DOUBLE_EQ(continued.first_published_artifact_elapsed_sec,
+    resumed.first_published_artifact_elapsed_sec);
+}
+
 TEST(MpccRateResolvedCertifiedPlan, ConditionalClearOnlyClearsExecutedPlan)
 {
   certified::Store store;

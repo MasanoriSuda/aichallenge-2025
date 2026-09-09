@@ -2118,8 +2118,8 @@ static bool published_execution_valid(
 }
 
 static YAML::Node revalidation_evidence_node(
-  const shadow::Snapshot & world,
   const mpcc_rate_resolved_retained_revalidation::Request * request,
+  const bool same_boundary, const std::string & payload_prefix,
   const recovery_footprint::OccupancyGrid * & inspected_grid,
   const recovery_footprint::OccupancyGrid * & observed_grid)
 {
@@ -2127,7 +2127,7 @@ static YAML::Node revalidation_evidence_node(
   node["schema"] = "mpcc-revalidation-observation/v1";
   if (request == nullptr) {
     node["status"] = "missing";
-    node["reason"] = "exact rejected evaluation request unavailable";
+    node["reason"] = "exact evaluation request unavailable";
     return node;
   }
   const auto & r = *request;
@@ -2226,16 +2226,14 @@ static YAML::Node revalidation_evidence_node(
     grid["y_axis"] = observed_grid->y_axis == recovery_footprint::YAxisConvention::RowZeroAtMinimumY ?
       "row-zero-at-minimum-y" : "row-zero-at-maximum-y";
     grid["cell_count"] = observed_grid->cells.size();
-    grid["payload"] = "revalidation-wall-grid.bin";
+    grid["payload"] = payload_prefix + "revalidation-wall-grid.bin";
   }
 
   // Status authenticates an observed input/inspected artifact association. It
   // is not a claim that this request or trajectory passed physical proof.
-  const bool same_boundary = r.decision_id == world.identity.source_context.decision_id &&
-    r.now_sec == world.identity.snapshot_sec && r.control_origin_sec == world.control_prediction_origin_sec;
   if (!same_boundary) {
     node["status"] = "invalid";
-    node["reason"] = "revalidation request does not belong to this decision clock";
+    node["reason"] = "revalidation request does not match the required decision, clock or source association";
   } else {
     node["status"] = "present";
     node["reason"] = "exact evaluation input; not proof or publication authority";
@@ -2256,7 +2254,7 @@ static YAML::Node revalidation_evidence_node(
     return node;
   }
   node["inspected_plan_status"] = "present";
-  node["inspected_source"] = source_node(source, "inspected-wall-grid.bin");
+  node["inspected_source"] = source_node(source, payload_prefix + "inspected-wall-grid.bin");
   node["inspected_interaction_fingerprint"] = fingerprint_interaction_snapshot(source);
   auto artifact_node = execution_evidence_node(artifact, {});
   artifact_node.remove("publication");
@@ -2281,7 +2279,10 @@ static RecordResult record_snapshot(
   const recovery_footprint::OccupancyGrid * const published_grid = nullptr,
   const YAML::Node & revalidation_evidence = YAML::Node(),
   const recovery_footprint::OccupancyGrid * const inspected_grid = nullptr,
-  const recovery_footprint::OccupancyGrid * const observed_grid = nullptr) noexcept
+  const recovery_footprint::OccupancyGrid * const observed_grid = nullptr,
+  const YAML::Node & previous_revalidation_evidence = YAML::Node(),
+  const recovery_footprint::OccupancyGrid * const previous_inspected_grid = nullptr,
+  const recovery_footprint::OccupancyGrid * const previous_observed_grid = nullptr) noexcept
 {
   RecordResult result;
   try {
@@ -2373,7 +2374,9 @@ static RecordResult record_snapshot(
     if (!write_grid(source.wall_grid.get(), grid_payload) ||
       !write_grid(published_grid, "published-wall-grid.bin") ||
       !write_grid(inspected_grid, "inspected-wall-grid.bin") ||
-      !write_grid(observed_grid, "revalidation-wall-grid.bin"))
+      !write_grid(observed_grid, "revalidation-wall-grid.bin") ||
+      !write_grid(previous_inspected_grid, "previous-inspected-wall-grid.bin") ||
+      !write_grid(previous_observed_grid, "previous-revalidation-wall-grid.bin"))
     {
       result.status = RecordStatus::IoFailure;
       result.detail = "cannot write atomic world/publication grid payloads";
@@ -2404,6 +2407,9 @@ static RecordResult record_snapshot(
     }
     if (revalidation_evidence.IsMap()) {
       root["revalidation_evidence"] = revalidation_evidence;
+    }
+    if (previous_revalidation_evidence.IsMap()) {
+      root["previous_accepted_revalidation_evidence"] = previous_revalidation_evidence;
     }
     if (exact_problem != nullptr) {
       root["assembly_request"] = assembly_request_node(*assembly_request);
@@ -2556,7 +2562,7 @@ struct FirstAuthorityFailureRecorder::Impl
       const auto result = record_authority_failure(
         observation.current_world, to_string(observation.boundary),
         observation.detail, observation.published_execution, observation.output_root,
-        observation.revalidation_request);
+        observation.revalidation_request, observation.previous_accepted_revalidation_request);
       if (completion) {
         try {
           completion(observation, result);
@@ -2637,7 +2643,9 @@ RecordResult record_authority_failure(
   const PublishedExecutionObservation & published_execution,
   const std::filesystem::path & output_root,
   const std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> &
-  revalidation_request) noexcept
+  revalidation_request,
+  const std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> &
+  previous_accepted_revalidation_request) noexcept
 {
   try {
     const auto failure_fingerprint = fingerprint_interaction_snapshot(current_world);
@@ -2674,12 +2682,39 @@ RecordResult record_authority_failure(
     }
     const recovery_footprint::OccupancyGrid * inspected_grid = nullptr;
     const recovery_footprint::OccupancyGrid * observed_grid = nullptr;
+    const auto * const current = revalidation_request.get();
+    const bool same_boundary = current != nullptr &&
+      current->decision_id == current_world.identity.source_context.decision_id &&
+      current->now_sec == current_world.identity.snapshot_sec &&
+      current->control_origin_sec == current_world.control_prediction_origin_sec;
     const auto revalidation = revalidation_evidence_node(
-      current_world, revalidation_request.get(), inspected_grid, observed_grid);
+      current, same_boundary, "", inspected_grid, observed_grid);
+    const auto * const previous = previous_accepted_revalidation_request.get();
+    // The predecessor is a separately observed input, never a reconstruction
+    // using the failure's newer pose, peers or wall. The caller observed an
+    // ordinary Accepted result; this association grants no publication role.
+    const bool same_source_predecessor = same_boundary && previous != nullptr &&
+      previous->decision_id > 0U && previous->decision_id < current->decision_id &&
+      std::isfinite(previous->now_sec) && previous->now_sec <= current->now_sec &&
+      std::isfinite(previous->control_origin_sec) &&
+      previous->control_origin_sec <= current->control_origin_sec &&
+      previous->current_intent == current->current_intent &&
+      previous->plan && previous->plan->execution_artifact &&
+      current->plan && current->plan->execution_artifact &&
+      mpcc_rate_resolved_execution_artifact::same_identity(
+        previous->plan->execution_artifact->identity, current->plan->execution_artifact->identity);
+    const recovery_footprint::OccupancyGrid * previous_inspected_grid = nullptr;
+    const recovery_footprint::OccupancyGrid * previous_observed_grid = nullptr;
+    auto previous_revalidation = revalidation_evidence_node(
+      previous, same_source_predecessor, "previous-",
+      previous_inspected_grid, previous_observed_grid);
+    previous_revalidation["observation_role"] = "previous-ordinary-terminal-accepted";
+    previous_revalidation["failure_decision_id"] = current_world.identity.source_context.decision_id;
     return record_snapshot(
       current_world, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
       failure_outcome, failure_detail, output_root, YAML::Node(), bundle, grid,
-      revalidation, inspected_grid, observed_grid);
+      revalidation, inspected_grid, observed_grid, previous_revalidation,
+      previous_inspected_grid, previous_observed_grid);
   } catch (const std::exception & exception) {
     return {RecordStatus::IoFailure, {}, exception.what()};
   } catch (...) {

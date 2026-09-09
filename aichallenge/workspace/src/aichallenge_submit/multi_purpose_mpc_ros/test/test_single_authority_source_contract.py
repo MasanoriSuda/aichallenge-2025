@@ -4077,6 +4077,15 @@ def test_terminal_failure_pairs_last_accepted_same_source_before_overwrite() -> 
     )
     assert record < update
     assert "ordinary_retained.terminal_stop_certified" in production
+    boundary_end = production.index("failure_snapshot_ms =", update)
+    assert "canonical_normal_intent_supported(intent)" in production[record:boundary_end]
+    assert "ControlIntent::ShiftOut" not in production[record:boundary_end]
+    evaluator = SOURCE[SOURCE.index("RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan("):
+                       SOURCE.index("  evaluate_rate_resolved_track_cruise_retained_shadow(")]
+    # Actual accepted inputs must survive return, including adapter failures.
+    finish = evaluator[:evaluator.index("    if (plan == nullptr")]
+    assert "std::move(request.value())" in finish
+    assert "result.proof" not in finish
 
 
 def test_terminal_stop_geometry_rejection_reports_every_shape_owner() -> None:

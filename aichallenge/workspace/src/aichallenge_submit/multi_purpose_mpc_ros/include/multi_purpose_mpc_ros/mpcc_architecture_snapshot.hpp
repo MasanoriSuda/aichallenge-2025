@@ -124,6 +124,10 @@ struct AuthorityFailureObservation
   /// Exact rejected evaluation input, not a reconstructed later observation.
   /// The inspected plan is separate from the actual publication ledger above.
   std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> revalidation_request;
+  /// Earlier ordinary evaluation observed Accepted with terminal proof. This
+  /// is not a publication claim; retain its own observations and source clock.
+  std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request>
+  previous_accepted_revalidation_request;
 };
 
 enum class ObservationAdmission
@@ -170,7 +174,9 @@ RecordResult record_authority_failure(
   const std::filesystem::path & output_root =
   std::filesystem::path{"mpcc_architecture_snapshots"},
   const std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> &
-  revalidation_request = {}) noexcept;
+  revalidation_request = {},
+  const std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> &
+  previous_accepted_revalidation_request = {}) noexcept;
 
 /// Save the original solver input AND the actual immutable artifact, without
 /// resolving the input again. Shares the existing bounded failure deduplication

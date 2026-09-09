@@ -10,7 +10,25 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: bounded current-world peer/terminal viability audit of new
+Current next step: causal ego/clock/command audit of exact same376accepted934and
+terminal-rejected935, plus derivedStop388provenance at final938. Observation-only
+slice after9d76066c passes17native/104source/25package build/60CTestgroups2372records.
+The prior Cruise accepted-input gap is repaired with one retained ordinary input
+and atomic failure pairing. No control/proof limit change. World941A/B/C/D/Gand
+support/full-rest comparisons reject, stillUnknown. Wire covariance uses metres
+standarddeviation; a sqrt/unit fix was falsified.
+Freshdev2:934acceptedterminal+0.017855530645m,935terminalpeer-0.000355659220m,
+15msapart, both exact inputs replay withoutsolving. Peer-only substitution keeps
+both outcomes, so ego/clock/command changes remain candidates.935independentStop
+is stillaccepted. FinalmovingEmergency938/v1.34m/s: actual376, inspected388solver
+source missing; priorordinaryAccepted937/376 cannot substitute for388. D1/D2
+callbackmax21.762/19.321ms/0overruns,40Hzcommandreceipts/no gaps>50ms; source and
+odometry/clock pauses remain. Runtime stopped/user JSON restored. See
+[peer viability and paired observation](../20260909-mpcc-peer-viability/results.md).
+Whole MPCC acceptance is NOT achieved.
+
+Previous GNSS repair and941boundary:
+The then-next step was bounded current-world peer/terminal viability audit of new
 GNSS-repaired dev2 D1world941/actual370. Cumulative low-speed GNSS heading defect
 is locally repaired:4of5newactual-nodecasesfail before, all5pass after;
 25packages build, MPCC2371records pass, GNSS30records0failures/6cppcheckwrapper

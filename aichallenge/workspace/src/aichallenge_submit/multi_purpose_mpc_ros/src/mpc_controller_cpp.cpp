@@ -25319,6 +25319,15 @@ struct MPC
     observation.detail = std::move(detail);
     observation.published_execution = std::move(execution);
     observation.revalidation_request = std::move(revalidation_request);
+    if (rate_resolved_last_accepted_terminal_viability_boundary_.has_value()) {
+      const auto & previous = *rate_resolved_last_accepted_terminal_viability_boundary_;
+      if (previous.intent == intent && previous.evaluation.decision_id < decision_id) {
+        // The writer checks the full immutable source identity. A different
+        // source remains explicit invalid evidence, never a substituted plan.
+        observation.previous_accepted_revalidation_request =
+          previous.evaluation.revalidation_request;
+      }
+    }
     const auto admission = rate_resolved_terminal_failure_snapshot_worker_->submit(
       std::move(observation));
     return admission == mpcc_architecture_snapshot::ObservationAdmission::Queued ||
@@ -26794,7 +26803,12 @@ struct MPC
   {
     const auto started = SteadyClock::now();
     RateResolvedRetainedShadowEvaluation evaluation;
+    std::optional<rate_resolved_retained::Request> request;
     auto finish = [&]() {
+        if (request.has_value()) {
+          evaluation.revalidation_request =
+            std::make_shared<const rate_resolved_retained::Request>(std::move(request.value()));
+        }
         evaluation.elapsed_ms =
           std::chrono::duration<double, std::milli>(
           SteadyClock::now() - started).count();
@@ -26811,7 +26825,7 @@ struct MPC
       evaluation.sequence = plan->execution_artifact->identity.sequence;
     }
     evaluation.selected_plan = plan;
-    auto request = build_rate_resolved_current_world_request(
+    request = build_rate_resolved_current_world_request(
       plan, evaluation_intent, now_sec,
       execution_clock);
     if (!request.has_value()) {
@@ -26825,10 +26839,6 @@ struct MPC
     }
     evaluation.obstacle_count = request->obstacles.obstacles.size();
     const auto result = rate_resolved_retained::evaluate(request.value());
-    if (!result.proof.has_value()) {
-      evaluation.revalidation_request =
-        std::make_shared<const rate_resolved_retained::Request>(request.value());
-    }
     evaluation.runtime = result.runtime;
     evaluation.decision_id = request->decision_id;
     evaluation.observation_origin_sec = request->now_sec;
@@ -30236,8 +30246,7 @@ struct MPC
       ordinary_retained.reason == rate_resolved_retained::Reason::Accepted &&
       ordinary_retained.production_authority.has_value() &&
       ordinary_retained.terminal_stop_certified &&
-      (intent == mpcc_contract::ControlIntent::ShiftOut ||
-      intent == mpcc_contract::ControlIntent::Pass))
+      mpcc_contract::canonical_normal_intent_supported(intent))
     {
       rate_resolved_last_accepted_terminal_viability_boundary_ =
         RateResolvedTerminalViabilityBoundarySample{

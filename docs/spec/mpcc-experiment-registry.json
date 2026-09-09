@@ -425,6 +425,21 @@
       "snapshot_id": "20260909-exact-join-dev2-r1",
       "manifest": ".steering/20260909-mpcc-exact-join-causality/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-peer-viability-world941",
+      "manifest": ".steering/20260909-mpcc-peer-viability/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-peer-viability-native",
+      "manifest": ".steering/20260909-mpcc-peer-viability/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-peer-viability-dev2-r1",
+      "manifest": ".steering/20260909-mpcc-peer-viability/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -3114,6 +3129,149 @@
       "production_impact": "GNSS heading anchor ownership only; no MPCC solver/control/proof limit change; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "bounded comparison or exact prior viable observation"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-normal",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-world941"
+      ],
+      "hypothesis": "A/B/C/D/Gnormal candidates rescue941",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "rejected",
+      "reason": "All nine arms solver-reject. Same world and hard constraints. No impossibility certificate.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "different bounded formulation or evidenced earlier input defect"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-support-stop",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-world941"
+      ],
+      "hypothesis": "Existing supportStop candidates rescue941",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "rejected",
+      "reason": "Two solver-reject;two exactdynamicreject with firstoverlap-0.00034656m.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "different bounded witness or causal input defect"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-rest-missions",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-world941"
+      ],
+      "hypothesis": "Four explicit full-rest formulations rescue941",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "rejected",
+      "reason": "Free/inherited and free/zero solver-reject; max-law/inherited and max-law/zero exactpeer-reject-0.000325794/-0.000325568m. Unknown feasibility.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new formulation or causal input evidence"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-covariance-units",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-world941"
+      ],
+      "hypothesis": "Shadow covariance_m2name identifies a consumer unit defect",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "rejected",
+      "reason": "Wire V2XVehiclePosition defines standard deviations metres. Current radius sum uses wire values consistently; sqrtwouldbeincorrect.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "actual producer/wire contract change or contradictory numeric evidence"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-observer",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-native"
+      ],
+      "hypothesis": "Previous ordinary acceptance survives and is atomically paired with failure",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "accepted",
+      "reason": "17native snapshot cases,104source contracts,25package build and60CTestgroups/2372records0errors/failures/skips. Initial fixture compiletypeerror preserved; final namedCellvalues pass package. No control/proof change.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [
+        "accepted Request discard",
+        "ShiftOut/Pass-only accepted boundary coverage"
+      ],
+      "revisit_condition": "new missing or inconsistent observed boundary"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-paired-replay",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-dev2-r1"
+      ],
+      "hypothesis": "Exact same376input reproduces934Accepted to935terminalrejection",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "accepted",
+      "reason": "934obs9.854999779terminal+0.017855530645m;935obs9.869999779terminal-0.000355659220m. Zero solves;935independentStopstillaccepted+0.007945880181m. No publication claim.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "ego/clock/command causal comparison on these exact inputs"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-peer-causality",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-dev2-r1"
+      ],
+      "hypothesis": "The peer update alone flips934to935acceptance",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "rejected",
+      "reason": "Reprojecting the other observed CVpeerfield to each unchanged ego clock preserves both outcomes:934accepted+0.028189770500m,935rejected-0.000997344491m. Counterfactual only, no authority.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "different paired scene or interaction with separately evidenced ego change"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-race",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-dev2-r1"
+      ],
+      "hypothesis": "Fixed dev2race acceptance",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "rejected",
+      "reason": "FirstmovingD1Emergency938v1.34m/s;no finish/lap. CallbackD1/D2max21.762/19.321ms,0overruns.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal production change or recorded diagnostic need"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-delivery",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-dev2-r1"
+      ],
+      "hypothesis": "Source/observation delivery is continuous",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "rejected",
+      "reason": "40Hzcommands and0receiptgap>50ms; source12duplicate/backwardand2gapseach. Odometryreceiptpauses340.522/333.068ms,clock331.446/327.150ms.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "paired timing/CPU/input investigation or relevant delivery repair"
+    },
+    {
+      "experiment_id": "20260909-peer-viability-final388",
+      "baseline_commit": "9d76066c",
+      "snapshot_ids": [
+        "20260909-peer-viability-dev2-r1"
+      ],
+      "hypothesis": "Final938inspectedStop388has complete solver-source replay evidence",
+      "changed_dimension": "Named immutable-world comparison or exact previous ordinary observation",
+      "result": "inconclusive",
+      "reason": "Actualpublication376and exact rejected Request retained; inspectedplan388solver source missing. PriorordinaryAccepted937/376 is explicitly invalid as same-artifact predecessor. Do not invent388from376.",
+      "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "recover actual derived artifact and derivation provenance without substitution"
     }
   ]
 }

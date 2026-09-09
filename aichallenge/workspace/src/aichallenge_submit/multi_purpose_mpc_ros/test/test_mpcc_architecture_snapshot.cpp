@@ -452,6 +452,23 @@ TEST(MpccArchitectureSnapshot, FirstBoundaryRecorderPreservesQueuedFinalWorldAnd
       value.published_execution.artifact =
         std::make_shared<const execution::ExecutionArtifact>(artifact);
       bind_failure_world(value.published_execution, value.current_world);
+      namespace retained = mpcc_rate_resolved_retained_revalidation;
+      auto plan = std::make_shared<mpcc_rate_resolved_certified_plan::CertifiedPlan>();
+      plan->solver_source_snapshot = value.published_execution.source;
+      plan->execution_artifact = value.published_execution.artifact;
+      retained::Request current;
+      current.plan = plan;
+      current.decision_id = decision;
+      current.now_sec = value.current_world.identity.snapshot_sec;
+      current.control_origin_sec = value.current_world.control_prediction_origin_sec;
+      current.current_intent = context.intent;
+      value.revalidation_request = std::make_shared<const retained::Request>(current);
+      auto previous = current;
+      --previous.decision_id;
+      previous.now_sec -= 0.025;
+      previous.control_origin_sec -= 0.025;
+      value.previous_accepted_revalidation_request =
+        std::make_shared<const retained::Request>(previous);
       return value;
     };
   std::promise<void> entered, release;
@@ -493,6 +510,10 @@ TEST(MpccArchitectureSnapshot, FirstBoundaryRecorderPreservesQueuedFinalWorldAnd
   EXPECT_EQ(node["publication_bundle"]["execution_evidence"]["source_sequence"].as<std::uint64_t>(),
     10020U);
   EXPECT_EQ(node["failure_outcome"].as<std::string>(), "normal-authority-unavailable");
+  const auto previous = node["previous_accepted_revalidation_evidence"];
+  ASSERT_EQ(previous["status"].as<std::string>(), "present");
+  EXPECT_EQ(previous["request"]["decision_id"].as<std::uint64_t>(), 1001U);
+  EXPECT_EQ(previous["inspected_artifact"]["source_sequence"].as<std::uint64_t>(), 10020U);
   EXPECT_EQ(recorder.submit(observation(1004U, AuthorityFailureBoundary::FinalAuthority)),
     ObservationAdmission::Stopped);
   std::filesystem::remove_all(root);
@@ -599,6 +620,101 @@ TEST(MpccArchitectureSnapshot, ExactRejectedRequestKeepsInspectedAndPublishedArt
     }
   }
   EXPECT_EQ(fingerprint_interaction_snapshot(world), fingerprint);
+  std::filesystem::remove_all(root);
+}
+
+TEST(MpccArchitectureSnapshot, PreviousAcceptedRequestKeepsItsOwnWorldAndRejectsFalsePairing)
+{
+  namespace retained = mpcc_rate_resolved_retained_revalidation;
+  auto published = make_publication_observation();
+  auto world = *published.source;
+  world.identity.source_context.decision_id = 941U;
+  world.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    world.identity.source_context);
+  bind_failure_world(published, world);
+  auto plan = std::make_shared<mpcc_rate_resolved_certified_plan::CertifiedPlan>();
+  plan->solver_source_snapshot = published.source;
+  plan->execution_artifact = published.artifact;
+  retained::Request current;
+  current.plan = plan;
+  current.decision_id = 941U;
+  current.now_sec = world.identity.snapshot_sec;
+  current.control_origin_sec = world.control_prediction_origin_sec;
+  current.current_intent = world.identity.source_context.intent;
+  current.current_wall_grid = world.wall_grid;
+  current.control_pose = {11.123456789012345, 21.0, -0.07};
+  current.current_speed_mps = 1.4016329817392303;
+  current.obstacles = {167U, current.now_sec, {{"d2", {31.0, 41.0, -1.0, 1.0, 1.931}}}, true};
+  auto previous = current;
+  previous.decision_id = 939U;
+  previous.now_sec -= 0.025;
+  previous.control_origin_sec -= 0.025;
+  previous.current_speed_mps = 1.3912345678901234;
+  previous.control_pose = {11.023456789012345, 20.0, -0.08};
+  previous.obstacles = {166U, previous.now_sec, {{"d2", {30.0, 40.0, -0.9, 1.1, 1.931}}}, true};
+  auto old_grid = std::make_shared<recovery_footprint::OccupancyGrid>(*world.wall_grid);
+  ASSERT_FALSE(old_grid->cells.empty());
+  using Cell = recovery_footprint::CellState;
+  old_grid->cells[0] = old_grid->cells[0] == Cell::Free ? Cell::Occupied : Cell::Free;
+  previous.current_wall_grid = old_grid;
+  const auto root = output_root("previous-ordinary-accepted-request");
+  std::filesystem::remove_all(root);
+  const auto fingerprint = fingerprint_interaction_snapshot(world);
+  for (int variant = 0; variant < 7; ++variant) {
+    auto observed = previous;
+    if (variant == 1) {
+      observed.decision_id = current.decision_id;
+    } else if (variant == 2) {
+      observed.now_sec = current.now_sec + 0.001;
+    } else if (variant == 3) {
+      auto other_plan = std::make_shared<mpcc_rate_resolved_certified_plan::CertifiedPlan>(*plan);
+      auto other_artifact = *plan->execution_artifact;
+      ++other_artifact.identity.sequence;
+      other_plan->execution_artifact =
+        std::make_shared<const mpcc_rate_resolved_execution_artifact::ExecutionArtifact>(other_artifact);
+      observed.plan = other_plan;
+    } else if (variant == 4) {
+      observed.plan.reset();
+    } else if (variant == 5) {
+      observed.control_origin_sec = current.control_origin_sec + 0.001;
+    }
+    const auto recorded = record_authority_failure(world,
+      "previous-request-" + std::to_string(variant),
+      "Synthetic serialization fixture; no physical acceptance claim", published, root,
+      std::make_shared<const retained::Request>(current), variant == 6 ? nullptr :
+      std::make_shared<const retained::Request>(observed));
+    ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+    const auto loaded = load_recorded_interaction_snapshot(recorded.snapshot_file);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->interaction_fingerprint, fingerprint);
+    const auto node = YAML::LoadFile(recorded.snapshot_file.string());
+    const auto before = node["previous_accepted_revalidation_evidence"];
+    const auto after = node["revalidation_evidence"];
+    EXPECT_EQ(after["status"].as<std::string>(), "present");
+    EXPECT_EQ(before["status"].as<std::string>(),
+      variant == 0 ? "present" : variant == 6 ? "missing" : "invalid");
+    EXPECT_DOUBLE_EQ(after["request"]["control_pose"]["x_m"].as<double>(), current.control_pose.x_m);
+    if (variant != 6) {
+      EXPECT_DOUBLE_EQ(before["request"]["control_pose"]["x_m"].as<double>(), previous.control_pose.x_m);
+      EXPECT_DOUBLE_EQ(before["request"]["current_speed_mps"].as<double>(), previous.current_speed_mps);
+      EXPECT_EQ(before["request"]["obstacles"]["generation"].as<std::uint64_t>(), 166U);
+      EXPECT_EQ(after["request"]["obstacles"]["generation"].as<std::uint64_t>(), 167U);
+      EXPECT_EQ(before["request"]["current_wall_grid"]["payload"].as<std::string>(),
+        "previous-revalidation-wall-grid.bin");
+      const auto byte = [&](const std::string & name) {
+          std::ifstream stream(recorded.snapshot_file.parent_path()/name, std::ios::binary);
+          return stream.get();
+        };
+      EXPECT_NE(byte("previous-revalidation-wall-grid.bin"), byte("revalidation-wall-grid.bin"));
+    }
+    if (variant == 0) {
+      EXPECT_EQ(before["inspected_plan_status"].as<std::string>(), "present");
+      EXPECT_FALSE(before["inspected_artifact"]["publication"]);
+      EXPECT_TRUE(std::filesystem::exists(recorded.snapshot_file.parent_path()/"previous-inspected-wall-grid.bin"));
+      EXPECT_DOUBLE_EQ(before["request"]["now_sec"].as<double>(), previous.now_sec);
+      EXPECT_DOUBLE_EQ(after["request"]["now_sec"].as<double>(), current.now_sec);
+    }
+  }
   std::filesystem::remove_all(root);
 }
 

@@ -4019,3 +4019,14 @@ Requestを保持し、速度、現在物理操舵、指令と応答の操舵、�
 正確なRequestが保存され、再求解なしで操舵到達性拒否と停止経路の他車拒否を再現した。
 両Domainのcallback超過は0だが2台完走は不合格で、時刻・観測配信の途切れも残る。
 [結果と次の原因調査](../../.steering/20260909-mpcc-final-authority-observation/results.md)を参照。
+
+失敗の直前に同じ軌道のordinary評価が合格していた場合は、任意の
+`previous_accepted_revalidation_evidence`へ、その評価に実際に渡したRequestも保存する。
+対象は対応するnormal intent全体で、保持する合格評価は最新の1件だけとする。
+合格の条件は`Accepted`・production authorityあり・terminal停止証明あり。
+この評価の合格は最終指令の送信を意味せず、送信の証拠には引き続き`publication_bundle`を使う。
+失敗側と同じimmutable artifact・intentで、判断IDと観測／制御時刻が前後関係を満たすかを検査する。
+各Requestのwall・他車・姿勢・clockを混ぜず、元のinspected sourceと別名のgrid payloadとともに
+既存の記録処理で同時に保存する。欠落・不一致は明示し、失敗側は保存する。
+schemaは同じ`mpcc-revalidation-observation/v1`で、既存loaderへの必須項目追加はない。
+[前後の観測の設計と検証](../../.steering/20260909-mpcc-peer-viability/design.md)を参照。

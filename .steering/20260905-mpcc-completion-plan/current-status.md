@@ -10,7 +10,28 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: audit dev2world923/actual328and authority switching before925.
+Current next step: preserve the final-authority observation at dev2 D1 951 and
+the actual Stop 379, distinct from first terminal world 949 / normal 365.
+The metadata repair in [Stop proof provenance](../20260909-mpcc-stop-proof-provenance/results.md)
+passes its failing native regression, 25-package build and 60 CTest groups /
+2369 local records. It binds Stop physical proof to the solved artifact's
+residual tolerance; strict validation and production candidates are unchanged.
+Single six laps pass in253.608948s/penalty0, callbackmax15.511ms/0overruns,
+command receipt40Hz/max34.638166ms. However source command timestamps have
+11duplicates/backward and two gaps>50ms; odometry/clock delivery pauses225/226ms.
+Dev2 rejects at D1decision951/speed1.718736m/s after949selectedStop379.
+Both Domains callbackoverruns0/max17.646/21.194ms, commandreceipt40Hz/no gap>50ms;
+source timestamps and odometry delivery still have gaps. No coupled finish.
+949 captures actual normal365, not379's artifact or951's exact observation.
+The terminal snapshot submission suppresses a generic final-authority record,
+but the downstream terminal bucket already contains949. Reproduce and repair
+that observation gap before guessing current-world Stop authority transitions.
+The earlier923comparison has physical Stop witnesses; four explicit candidate
+missions show923needs a different accepted candidate from1629, while4264remains
+Unknown. No offline formulation was promoted. Runtime is stopped and protected
+user artifacts restored. Full acceptance remains open.
+
+Preceding complete-rest baseline ae6862aa and its923/328/925failure:
 The complete-rest candidate producer is implemented and locally validated:
 25packagebuild,60CTestgroups/2368local records pass. Same-world1629production
 join/command passes;4264still rejects. Single-r1finishes6laps252.778778s/penalty0,

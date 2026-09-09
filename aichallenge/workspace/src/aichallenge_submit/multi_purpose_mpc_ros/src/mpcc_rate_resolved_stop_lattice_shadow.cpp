@@ -51,7 +51,9 @@ physical::Snapshot build_wall_snapshot(
       input.path_curvature_radpm);
   }
   result.hard_wall_clearance_m = replay.hard_wall_clearance_m;
-  result.bound_tolerance_m = replay.bound_tolerance_m;
+  // ReplayWorld predates the solve. The exact trajectory owns the accepted
+  // artifact residual bound, which both physical proofs must authenticate.
+  result.bound_tolerance_m = trajectory.lateral_bound_tolerance_m;
   result.swept_step_m = replay.swept_step_m;
   return result;
 }
@@ -230,7 +232,9 @@ static Result evaluate_impl(
         if (!dynamic_result.valid || !dynamic_result.clear) {
           result.reason = Reason::DynamicProofRejected;
           std::ostringstream detail;
-          detail << source_detail << "/obstacle="
+          detail << source_detail << "/source-validation="
+                 << dynamic::to_string(dynamic_result.source_validation_reason)
+                 << "/obstacle="
                  << dynamic_result.blocking_obstacle_id
                  << "/minimum=" << dynamic_result.minimum_clearance_m;
           result.detail = detail.str();

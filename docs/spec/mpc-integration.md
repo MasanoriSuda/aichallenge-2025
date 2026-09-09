@@ -3413,6 +3413,17 @@ post-solve lateral certificate toleranceを所有しない。最終exact traject
 `physical_lateral_bound_tolerance_m()`から得た同一値をcertificate pairとして所有する。dynamic proofはこのpairの一致を検証し、
 pre-solve snapshotのplaceholder値との一致を要求してはならない。
 
+2026-09-09のStop producer監査では、`stop_lattice_shadow::build_wall_snapshot`にも
+同じ所有規則を適用した。停止候補のphysical snapshotは、観測時のbaselineではなく実際に
+求解・再構成した`trajectory.lateral_bound_tolerance_m`を保持する。異なるbaselineを持つ
+有効な観測から停止解を生成するnative regressionで修正前のdynamic proof拒否を再現し、
+修正後は観測を変更せずwall/dynamic/certified-planが通ることを確認した。strictな
+`CertificateToleranceMismatch`検証は維持し、Stop拒否detailへsource-validation reasonを
+記録する。これはcandidate生成、目的関数、物理marginや制御権の変更ではない。
+同時に監査したdev2 world923 / normal328 / Stop395 / Emergency925の切り替え原因は
+別途未確定であり、このnative修正をその走行失敗の原因確定や完遂の証拠にしない。
+詳細は[証明所有の監査結果](../../.steering/20260909-mpcc-stop-proof-provenance/results.md)を参照。
+
 `output/20260831-072258/d1`のsequence 942では、exact wall proofはacceptedだったが、ReplayWorldの`1e-5 m`と
 accepted artifact由来の約`4.16e-5 m`が異なるため、旧dynamic proofは障害物を1点も調べず
 `invalid/blocked/obstacle=`となった。同一snapshotのbounded production populationは左右とも完全なManeuverBundleをcertifyでき、

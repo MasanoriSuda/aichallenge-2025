@@ -345,6 +345,36 @@
       "snapshot_id": "20260909-complete-rest-dev2-world923-executed328",
       "manifest": ".steering/20260909-mpcc-complete-rest-candidates/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-provenance-native",
+      "manifest": ".steering/20260909-mpcc-stop-proof-provenance/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-stop-provenance-world923-actual328",
+      "manifest": ".steering/20260909-mpcc-stop-proof-provenance/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-provenance-world1629",
+      "manifest": ".steering/20260909-mpcc-stop-proof-provenance/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-provenance-world4264",
+      "manifest": ".steering/20260909-mpcc-stop-proof-provenance/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-provenance-single-r1",
+      "manifest": ".steering/20260909-mpcc-stop-proof-provenance/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-stop-provenance-dev2-r1",
+      "manifest": ".steering/20260909-mpcc-stop-proof-provenance/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -2564,6 +2594,176 @@
       "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "bounded923/328replay, exact switching chronology and demonstrated causal change"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-metadata-before",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-native"
+      ],
+      "hypothesis": "Stop proof binds the solved artifact residual",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "rejected",
+      "reason": "Valid observation baseline4.2e-5 differs from solved artifact: new native fails before repair with obstacle empty/minimum inf. Other four focused cases pass.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "post-solve certificate producer repair"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-metadata-after",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-native"
+      ],
+      "hypothesis": "Correct producer closes the provenance mismatch without loosening validator",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "accepted",
+      "reason": "Five focused Stop cases pass;25-package build and60CTestgroups/2369scoped records pass. Strict mismatch tests retained.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [
+        "pre-solve ReplayWorld tolerance copied into solved Stop physical certificate"
+      ],
+      "revisit_condition": "new proof ownership failure"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-probe",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-world923-actual328"
+      ],
+      "hypothesis": "Frozen2056/2162/923explain live invalid dynamic proof",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "inconclusive",
+      "reason": "All three paired source-copy probes reject at solve before proof; cannot attribute the live failure to metadata from these observations.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "captured solved Stop artifact or exact source-validation reason"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-actual328",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-world923-actual328"
+      ],
+      "hypothesis": "Recorded328original proof can be reproduced without a replacement solve",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "accepted",
+      "reason": "Zero solves: original wall/dynamic pass, min1.182361692m; terminal4.166666642m/s is not rest. First helper link failure preserved; r2 fixes only linker dependency. Current923steering and actual395artifact remain missing.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "new current physical observation or actual publication evidence"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-923-normal",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-world923-actual328"
+      ],
+      "hypothesis": "A/B/C/D/Gnormal candidates rescue923",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "rejected",
+      "reason": "Nine normal arms reject; rough-right C solves then fails wall proof. Remaining normal arms reject at solver.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "different bounded candidate/formulation or earlier causal world"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-923-stop-support",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-world923-actual328"
+      ],
+      "hypothesis": "Existing Stop comparisons contain a physical witness",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "accepted",
+      "reason": "Two inherited-objective maximum-braking arms accept; two zero-objective arms fail physical wall. CLI historical title does not make their braking controls free. No current-state join or runtime publication.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "exact accepted candidate source/artifact comparison"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-923-missions",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-world923-actual328"
+      ],
+      "hypothesis": "Shared-clock/all-peer Stop formulations cover923",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "accepted",
+      "reason": "Of four explicit offline candidates, maximum-braking/inherited-objective passes full proofs: first a-2.959595971m/s2, minpeer0.664353915m. Free inherited/feasibility solve-reject; maximum feasibility wall-reject. No current-state join or publication.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "evidenced production candidate architecture or newly captured current observation"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-1629-missions",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-world1629"
+      ],
+      "hypothesis": "Shared-clock/all-peer free controls preserve a stopping witness",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "accepted",
+      "reason": "Inherited and zero-objective free controls pass; both maximum-law candidates solver-reject. Zero-objective free first a-0.659250633m/s2, minpeer1.836994342m. All candidate identities/artifacts retained; no runtime promotion.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "new production candidate or actual async observation"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-4264-missions",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-world4264"
+      ],
+      "hypothesis": "The same four Stop formulations rescue4264",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "rejected",
+      "reason": "All four reject at solver or exact wall proof. Scene feasibility remains Unknown.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "different bounded physical witness or earlier causal observation"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-single-r1",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-single-r1"
+      ],
+      "hypothesis": "Certificate ownership repair preserves fixed single race acceptance",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "accepted",
+      "reason": "d1:finished=True,moving_override_traces=0,callbackmax=15.511ms/overruns=0. Throttled trace counts are observations; details and timing remain in the sealed run.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "new production change or demonstrated cause of the recorded failure"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-single-clock",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-single-r1"
+      ],
+      "hypothesis": "Finished single has continuous source/observation delivery",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "rejected",
+      "reason": "Command receipt40.000657Hz/max34.638166ms; source duplicates/backward11,gaps>50ms=2,max114.999998ms. Odometry receiptmax225.143433ms; clock receiptmax226.051092ms. No moving override; delivery cause remains unproven.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "new paired source/receipt/CPU observation or relevant delivery repair"
+    },
+    {
+      "experiment_id": "20260909-stop-provenance-dev2-r1",
+      "baseline_commit": "ae6862aa",
+      "snapshot_ids": [
+        "20260909-stop-provenance-dev2-r1"
+      ],
+      "hypothesis": "Certificate ownership repair preserves fixed dev2 race acceptance",
+      "changed_dimension": "named certificate producer repair, sealed offline formulation or fixed runtime observation",
+      "result": "rejected",
+      "reason": "d1:finished=False,moving_override_traces=2,callbackmax=17.646ms/overruns=0; d2:finished=False,moving_override_traces=0,callbackmax=21.194ms/overruns=0. Throttled trace counts are observations; details and timing remain in the sealed run.",
+      "production_impact": "Only solved-certificate producer metadata and source-validation diagnostic change; offline formulations have no publication authority; full acceptance remains open",
+      "deleted_code": [],
+      "revisit_condition": "new production change or demonstrated cause of the recorded failure"
     }
   ]
 }

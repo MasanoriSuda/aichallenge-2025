@@ -1,0 +1,2038 @@
+{
+  "baseline_commit": "ae6862aa",
+  "scope": "Solved-certificate producer ownership; original 328 replay, 923 architecture/missions and fixed runtime; full MPCC completion remains open",
+  "build_packages": 25,
+  "ctest_groups": 60,
+  "colcon_records": 2369,
+  "architecture_native_cases": 48,
+  "errors": 0,
+  "failures": 0,
+  "skipped": 0,
+  "artifacts": [
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/compare_923.py",
+      "bytes": 1432,
+      "sha256": "bad9c1ec34ee95ecd09aa8993999d3b658714d5b65bfa92885aeed479d281149"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/compare_missions.cpp",
+      "bytes": 2846,
+      "sha256": "85f25f7987bf8562b42c9946d27d1a045326c9cc51e3f110a65cb370437294e9"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/compare_missions.py",
+      "bytes": 3771,
+      "sha256": "1a27f4a94c5f09aa9cd8e68e02250c40e32262ca3b42ba84fa3d4a3cc5d85fbd"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/extract_923_observation.py",
+      "bytes": 1530,
+      "sha256": "e306409dd39926aa4fac39312b10a2d0340f4359fc3358fe15cd0483495382ec"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/extract_timeline.py",
+      "bytes": 2205,
+      "sha256": "b9dd35a03d9cec2763927760ceb571d0e0d54361b78adf99e7cf8afb51ab8a3d"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/native_certificate.py",
+      "bytes": 1239,
+      "sha256": "552a745a328af1be1e4a75c58da56174c0bcd8b9f034d10b1bbc7c44f9776ff7"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/probe_certificate.cpp",
+      "bytes": 1827,
+      "sha256": "4dd82893e423ab5a9711a28586d72893a040941cf478dd078f7ace2adbc25d79"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/probe_certificate.py",
+      "bytes": 3489,
+      "sha256": "08b975a0b5a6ec7c14275f976c56aa009f4c7f158576d0fbadef1c1ec5bea560"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/register_results.py",
+      "bytes": 6440,
+      "sha256": "4d2cece9e5909766f1cb98208710c7f02888747f508eb4d65a8b534256010cbb"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/replay_original_328.cpp",
+      "bytes": 10520,
+      "sha256": "968623475efde56359260e24f1d088e3e66ffcf916528787dbe1840f0041072c"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/replay_original_328.py",
+      "bytes": 1515,
+      "sha256": "3e79bd92f2e50b2862671591a936d02ea89a309d3bac8a600c5efc28e9b26765"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/run_campaign.py",
+      "bytes": 11291,
+      "sha256": "42426d4cc7bc0efa74592185c1f90b66665ead411afc3c234c1b0ada1986e629"
+    },
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/seal_evidence.py",
+      "bytes": 1961,
+      "sha256": "41b325ad697b14e280f6d40ad021592bde91ae9e8a031ce08fae3838df2fcb44"
+    },
+    {
+      "path": "output/20260909-complete-rest-dev2-r1/d2/mpcc_architecture_snapshots/000000000923-78d215baa3a7c48a-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-complete-rest-dev2-r1/d2/mpcc_architecture_snapshots/000000000923-78d215baa3a7c48a-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 102092,
+      "sha256": "59ee6dd4b0761478a450bd1c90adde78552e3f4624922a20ea8318b435d6e52e"
+    },
+    {
+      "path": "output/20260909-complete-rest-dev2-r1/d2/mpcc_architecture_snapshots/000000000923-78d215baa3a7c48a-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-complete-rest-dev2-r1/d2-executed-328/extraction-manifest.json",
+      "bytes": 666,
+      "sha256": "4b42a9c0a274e55d675c0422fd86b3fe3312f26249a5622282774716ca32aab7"
+    },
+    {
+      "path": "output/20260909-complete-rest-dev2-r1/d2-executed-328/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-complete-rest-dev2-r1/d2-executed-328/snapshot.yaml",
+      "bytes": 50818,
+      "sha256": "49c312ec3d776deac0782c435f4537ccda67eb08bdb7f332fc1e635f8b470837"
+    },
+    {
+      "path": "output/20260909-stop-provenance-328-original/build.log",
+      "bytes": 789,
+      "sha256": "75d68c2bd01ecbfd7f48b27f45797a83e26065a007ee84d9314b62f3b0f95222"
+    },
+    {
+      "path": "output/20260909-stop-provenance-328-original-r2/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-328-original-r2/manifest.json",
+      "bytes": 16890,
+      "sha256": "54af0cfb07a8ca0195a7d740c47d803728f4522366e4d2e42d0b88d746bf9513"
+    },
+    {
+      "path": "output/20260909-stop-provenance-328-original-r2/native.log",
+      "bytes": 178,
+      "sha256": "37663445d2bd27dbd19ba418002475f8d93b45a77cddabb3ac5a38ec838abebb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-328-original-r2/replay",
+      "bytes": 1541752,
+      "sha256": "029ccb90f3056089d01a1a25df49968f422e15612c067e2d4d4ac58052cf0beb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-328-original-r2/report.yaml",
+      "bytes": 200378,
+      "sha256": "d3fd264183b6f12b83d1f45639d6b35a1fbeaced8e2b5df2b389528eee0f019d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/manifest.json",
+      "bytes": 797,
+      "sha256": "bf36a4b2813c1a09ae55a8b92552adbe11685819ccc530bd4f56d1e1b80b8a51"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/comparison.log",
+      "bytes": 8305,
+      "sha256": "ce676c44aeb073f4d1ac021dd29904e8e655b15e472fbd3f0fa32f9a12448939"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-3c6f14698c947e2e-cruise-side-positive-wall-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 270731,
+      "sha256": "22412bc00f26b0cdee6cd7a152616989578714b8a9e7d5605ad60e6b5a07331a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-3c6f14698c947e2e-cruise-side-positive-wall-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-6eec9e98b73d1cd8-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273799,
+      "sha256": "adc0d5748f9dd66d8a59bab14b0e468012c588f6b19def8071d6697b9b98e60a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-6eec9e98b73d1cd8-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-78d215baa3a7c48a-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 276252,
+      "sha256": "8caeda5fd01a756cf98e4c1940862b88f10cc4de684779225bf3d063c3d77002"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-78d215baa3a7c48a-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-e93decb50c63af56-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273817,
+      "sha256": "77fbeed75c038821c1ad0350daeeef1e5133f0934ae3249d820a65be463c17ad"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-e93decb50c63af56-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-ed2fc7c64f091d4a-cruise-side-negative-post-refinement-linearization-physical-dynamic-sqp-audit-solve-rejected/snapshot.yaml",
+      "bytes": 277545,
+      "sha256": "527bb205c544c94fd9fad061aa2b9c2cbd10b8999328b89edfd3bc0fd912dbd2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-ed2fc7c64f091d4a-cruise-side-negative-post-refinement-linearization-physical-dynamic-sqp-audit-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-ed2fc7c64f091d4a-cruise-side-negative-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 277653,
+      "sha256": "1c34e0913ca9f317245415db550c5ba3364a9c6321f80b801f69e7befcc9f9ab"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/normal/mpcc_architecture_snapshots/000000000923-ed2fc7c64f091d4a-cruise-side-negative-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-comparison/stop/comparison.log",
+      "bytes": 4262,
+      "sha256": "24e369738b574a4ec23fead1d1ead70fb5f6e1764957e4d740239887e6b289ae"
+    },
+    {
+      "path": "output/20260909-stop-provenance-923-observation/observation.json",
+      "bytes": 716,
+      "sha256": "3b14aa8ceeb17616fd8991e8ea770165cb02bd359689a5340f7ba845dece274c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/2056/mpcc_architecture_snapshots/000000002056-4539bb0cf2250abb-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 255427,
+      "sha256": "89dbd705aaceead10a60733afa46afd953335625a7004ca21406d1d988a8c6ad"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/2056/mpcc_architecture_snapshots/000000002056-4539bb0cf2250abb-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/2056/native.log",
+      "bytes": 1045,
+      "sha256": "dd42ebc26a13a4f1044181dc43d8d946c75a79b7315e9071df29fb2c8651c012"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/2056/report.yaml",
+      "bytes": 1103,
+      "sha256": "fa4ff31613927fccbc4d2038a69ef7404f017988269df1475e04fa2028eb374b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/2162/mpcc_architecture_snapshots/000000002162-d1a04bb5c2e3be47-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 251878,
+      "sha256": "66d8377013c9bd6e735ab64f1f1e05b4ac0509ddffba395386e54863c9c58f2e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/2162/mpcc_architecture_snapshots/000000002162-d1a04bb5c2e3be47-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/2162/native.log",
+      "bytes": 980,
+      "sha256": "c9d355badba3be2ab19e790cb6180abe131e7cfac3fffd56e87bf61b61b8e22d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/2162/report.yaml",
+      "bytes": 1038,
+      "sha256": "348ce995bb9d0589cac3b4469293ec53d72950cda5bb454b746015b4f596eba6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/923/mpcc_architecture_snapshots/000000000923-c92b8c29bd829cd0-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 273919,
+      "sha256": "cb6daad5c134ac915efa0c0b62f4349c63744c8ff7e10f97c9eb55149df17ffe"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/923/mpcc_architecture_snapshots/000000000923-c92b8c29bd829cd0-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/923/native.log",
+      "bytes": 1067,
+      "sha256": "ccff44f7570dcbfef196508172b85651201285268f5dcdb27d5f655729dfc1cc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/923/report.yaml",
+      "bytes": 1125,
+      "sha256": "13cf86f99e3c9dd51d44d069b6f611c6e8c425aef31340f9d186e5f27b789dbc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/manifest.json",
+      "bytes": 17827,
+      "sha256": "f8722c63c25a8920450e82c0434d0eeb217caca611a18009ebc6466f95397fab"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/probe",
+      "bytes": 1319640,
+      "sha256": "850a102e0ebef70e78682243eacf6946b923c05ea97f5a7555c916a3d5c5c5ba"
+    },
+    {
+      "path": "output/20260909-stop-provenance-certificate/stop_shadow_observation.cpp",
+      "bytes": 16780,
+      "sha256": "7e10584e873089811b05ada85ff8c0d59cd64cfd8633e36237e652bf1ae3c501"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "b95667c1513e558206fdc09b23866898f564f2d7473568d53131dafaa56392bb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/authority-timing-summary.json",
+      "bytes": 11106,
+      "sha256": "c9530e0a5ea901fe4637f63a718ec9ae966dfb6108d48c1e3c86918db2502581"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/awsim.log",
+      "bytes": 1773,
+      "sha256": "b1f92de8740aa9e35705833c3528bec4503886f283e386d94f81ac97426d559b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/binaries/mpc_controller_cpp",
+      "bytes": 8622720,
+      "sha256": "e7d4049067e86ddd11a730a95ffc04f4989ba2f2a95411c2ea2df90e95f09e9f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1473200,
+      "sha256": "bde0f40488b1b75f7a043cc8d8d84c2372860eea8f8a2b450820d5f244f77daf"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/build.log",
+      "bytes": 4283,
+      "sha256": "0717adfab2494b357c5ef48159217388101080b28a19cc123a65299071a355a0"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/compose-six-lap.yml",
+      "bytes": 208,
+      "sha256": "cb78a7698546e105fa19295ae1cfc81be7e12c5215cd01f2ed78fdd1959d9eee"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/autoware.log",
+      "bytes": 351533,
+      "sha256": "10d5928f9d551be039e21025ef23d44021e2ffd2f8bc3028150ace754c474131"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/motion_analytics-26-09-09-10-03-17.html",
+      "bytes": 4851210,
+      "sha256": "190177d732652ef68b5af17fdf4fac28998f215b7afdf61b54cb536d52359df3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000006-451faaa4905524c3-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 256450,
+      "sha256": "bc5f0b7bb0a971aa2abe37144d0574c122fd3e25a1477d116def20afd54cd703"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000006-451faaa4905524c3-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000033-230279d9b609b688-track-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 283368,
+      "sha256": "1908deb84297b6ab1a6b1d6875e47f09bdfddb1b175be4604b795004611d2bba"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000033-230279d9b609b688-track-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000210-6d6ab563370f4ab5-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 251071,
+      "sha256": "2297e417723e8951dcf36b2587182f7b4d015c4773242184d7ea6f0ff0980068"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000210-6d6ab563370f4ab5-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000225-2a00e2d7f32f908c-track-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274877,
+      "sha256": "3a7764f0d5be09fdaafe17ef12bd4caea7881a30c1da960d4530603dbcc1c5ce"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000225-2a00e2d7f32f908c-track-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000256-06f8a6bc4153e70f-track-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 265418,
+      "sha256": "c0f572b6c057f602cad294cdb301f9350f5f7d020b91ba6de90e827e618dd203"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000256-06f8a6bc4153e70f-track-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000295-1710b718acb658b0-cruise-side-positive-initial-solve-rejected/snapshot.yaml",
+      "bytes": 254700,
+      "sha256": "e8b2a6ac4f8e9325f7c7b90669c17bdb133e6f4afc056fe16ac525da24082fc3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000295-1710b718acb658b0-cruise-side-positive-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000295-3fe063847cbe9992-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 270645,
+      "sha256": "9a489a16fc8db5ad332e9ac7c546b80cd357089e1ef2aaecef42e0d30b636168"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000295-3fe063847cbe9992-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000295-834d1d075cba4e17-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 274611,
+      "sha256": "506046cb76bb00dc801604695a5c9365ed8e150c15b11fee9bcf5884e14e457e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000295-834d1d075cba4e17-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000338-ea09cbc55e7ad309-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 263790,
+      "sha256": "79332e4cd9fcd5f392cde54cbe613f67650f29c0a133b4a89c5e672fe65d1058"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000338-ea09cbc55e7ad309-cruise-side-negative-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000382-969e4f5f2baed2b0-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271563,
+      "sha256": "2b8392776379f373330f733f42e05ff58df13a9279ceafc32d00255ec5fcbf78"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000382-969e4f5f2baed2b0-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000441-d1269c0310ca4c44-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 282948,
+      "sha256": "5454f12fec2f52f4be7e0f765703d3491ac9a57fc526f5ef4444a563c9323e30"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000441-d1269c0310ca4c44-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000541-24e36259911ad9d8-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 261456,
+      "sha256": "4cffab4be79f1b62732e8f8a241b9fdb7b7dcb77b6e78fdcef486f3e4ea13183"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000541-24e36259911ad9d8-cruise-side-negative-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000550-b5d6872db9a0125f-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35945,
+      "sha256": "40972cb4a46bca293525d1590dc683b83f207f671f9884a08d308441f4f722d6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000550-b5d6872db9a0125f-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000621-3cab92051c1181fa-cruise-side-positive-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 263680,
+      "sha256": "1678f5c78c1d5deb77f7251212bfd15f4d17aaf36b25c53ace2e0e17985f0ffb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000621-3cab92051c1181fa-cruise-side-positive-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000641-9d71a06f97ca53ed-shiftout-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 275050,
+      "sha256": "0a4683ccea1a50e3ef0b7606973bf1c9d96b9b5b765e58433f3e43c894edda93"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000641-9d71a06f97ca53ed-shiftout-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000641-ff559f1ea3918bf1-shiftout-side-positive-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 40859,
+      "sha256": "be0b7b336c5ab32ab4794936eb17a94d3c9a9b767f25ba0dedf29c5b9ded9e91"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000641-ff559f1ea3918bf1-shiftout-side-positive-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000691-81e65fe84643fdc5-shiftout-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 253124,
+      "sha256": "4e080c8a90df07750272a9a26063fde80d62c05901fc4e09936789beab5f7461"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000691-81e65fe84643fdc5-shiftout-side-negative-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000949-0e00a7abb8bbcd8c-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000949-0e00a7abb8bbcd8c-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 102380,
+      "sha256": "2090de9d9e1898658306b4ebe79930cf7699143094d89f7d1f52dfd3a764056a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000949-0e00a7abb8bbcd8c-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000952-26a868e1e6930c4c-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 40283,
+      "sha256": "053f1e3209750a86cc7b58de22ad12269679b65ef4c490225aa8c9d06d4bed9c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/mpcc_architecture_snapshots/000000000952-26a868e1e6930c4c-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/2026-09-09-10-02-42-370594-msuda-System-Product-Name-71/launch.log",
+      "bytes": 18639,
+      "sha256": "ef1414301f781aced8199adcb5215256320836b56363aaa3ba72f36764129d05"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/component_container_104_1788915763585.log",
+      "bytes": 1488,
+      "sha256": "d5dd685c935b31ed44d0a19b6373cf6a005fc2872aa308d46857932c03624576"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/ekf_localizer_96_1788915763597.log",
+      "bytes": 65,
+      "sha256": "88099ee7bde481b60d8a4c16e96d8d65918404b3b879b602b9000ad98f705821"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/gnss_poser_90_1788915763595.log",
+      "bytes": 205,
+      "sha256": "9bc161e24b4520a3caac48e9cfaeafbacc730f9c7ac0965ae5b2316f422f2066"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/gyro_odometer_92_1788915763584.log",
+      "bytes": 65,
+      "sha256": "504a77c517c3c0fdac2f03c052bc50cd2a7e2775ac5f3c23b10f43ccf7f6a514"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/imu_corrector_88_1788915763578.log",
+      "bytes": 65,
+      "sha256": "c1ebd668acf7e6958080c647398b70540c96fd5b2bf6b2a4055aa982a659c63c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/imu_gnss_poser_node_94_1788915763582.log",
+      "bytes": 977,
+      "sha256": "f3e222f09e2ebdb8b6101a03c6538ccc33da61b02f54abd4f6ab1546a264e41d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/mpc_controller_cpp_102_1788915763774.log",
+      "bytes": 311540,
+      "sha256": "db84674b0ba45f7fa5ded582bb7c6d32b35de548c58379228870715f74a5d1c2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/python3_110_1788915763828.log",
+      "bytes": 4159,
+      "sha256": "a92e4ef6c8d4cd9e3268362ccd3bf9e3d3a6286d0d1269fd9b967473ee7d0bde"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/python3_112_1788915763870.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/python3_340_1788915780362.log",
+      "bytes": 2711,
+      "sha256": "2d6bc7b2fec4a40fe4d0f1fb1e012494e43ec24902f9c516a42b6bae079b06ee"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/python3_71_1788915763467.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/relay_108_1788915763629.log",
+      "bytes": 65,
+      "sha256": "2341a991230e6691c63aeb51f044ab7e70595a609a2154ee1b4635a07e6c9309"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/robot_state_publisher_84_1788915763611.log",
+      "bytes": 705,
+      "sha256": "86d6d9d9391f70937517d8c7a7c80638301af17f13e2d62f36805be527251602"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/rviz2_106_1788915763718.log",
+      "bytes": 744,
+      "sha256": "71b7c79eab9e3ad5617775172d87654d7da6425154d797c172c95de7689eb030"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/simple_trajectory_generator_node_100_1788915763583.log",
+      "bytes": 1415,
+      "sha256": "31984bcef89d6d94b01637eaf91e6d1fdcb726cdfbd835d87354cc14ae771115"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/twist2accel_98_1788915763605.log",
+      "bytes": 65,
+      "sha256": "791aa886ce4fc91eb17d4d122733be2975acf936efcd75175f3077a163d28a82"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/ros/log/vehicle_velocity_converter_86_1788915763578.log",
+      "bytes": 65,
+      "sha256": "cfc25667093679c1617626a6f7cb3423b576183d9137ed20d93386fb15d17319"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "406ac6783d660fb514d96fb0762137eaf15e7d305603ed03781abbfdd49d6d88"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2142388,
+      "sha256": "7fdca6a9fc0c71ecb6019c777fa2e49bf491d9bbc904ca5482d4c1b582059d34"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "95cee334a8e6a383c0e7021865082a6ddb9614c442883bd5765f0900a0bcb441"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d1-topic-timing.json",
+      "bytes": 2372,
+      "sha256": "943e6667725e377fdee83ba5a69a2f42627238150be64221db01b1307864404f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/autoware.log",
+      "bytes": 250433,
+      "sha256": "a796d44aa7eacd2f8778da80535bae472b6dda34908e7084f6491df36f662b84"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/motion_analytics-26-09-09-10-03-16.html",
+      "bytes": 4851200,
+      "sha256": "3ab30f9f1bf2e52d5456c09a98620fc276c16b6563e0e790742ce4de255c0310"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000213-bea76800cf9b89d9-track-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274012,
+      "sha256": "0e2100bebaca3f2308afa390815f336ac6389b3e5499f90b07b3f732729884cd"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000213-bea76800cf9b89d9-track-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000230-049853b457400e48-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 248717,
+      "sha256": "cac914bdb5bbde9b58af3c4ffd3473456612dbdd1f44efe6db15f53faacd03d5"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000230-049853b457400e48-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000275-0f53be1f9191f947-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 250164,
+      "sha256": "a23e0194c83a5bb10b17db0c41e07b4b6f2a5c767437b2fe4c0b2c9fc89ff60a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000275-0f53be1f9191f947-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-02c5bf3a914ff1f8-cruise-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274062,
+      "sha256": "987e8cef7af6f16d28a33903528e3bf8b9b5cf57478d994ee6f17aefe9b58c0c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-02c5bf3a914ff1f8-cruise-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-c790382be771dbd2-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273212,
+      "sha256": "c9ab7d9a81524204f28ed40b1d1d78a41dbef257950402be3de05fcb0662197f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-c790382be771dbd2-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-f979116a163cfdf3-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273535,
+      "sha256": "77032268ac80b4c5d4d7bd2f13ebef72e47a2d5bba040e1d2703966b0e206f46"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-f979116a163cfdf3-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000530-01519beb5fd3676b-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35717,
+      "sha256": "a9214f87d9d274773bdede32e8e4978f5fe8510034193714e36c087fc58eafa6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000530-01519beb5fd3676b-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000536-fc73dbdc5204a874-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 270363,
+      "sha256": "9bafc49437ae63063c887bc22c297c0e9130a0dd2b36a945c9cbf280be90c696"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000536-fc73dbdc5204a874-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000667-a08b30c6128a4186-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 247836,
+      "sha256": "931975726fe5b4d64d045bbca04f885969dc63474ec17596aa3ca27afe6ef8b8"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/mpcc_architecture_snapshots/000000000667-a08b30c6128a4186-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/2026-09-09-10-02-42-680695-msuda-System-Product-Name-69/launch.log",
+      "bytes": 18637,
+      "sha256": "d071637159fce58b20bf8fe0d3d5a084a5da1eb5bae86f6023715783f23f2840"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/component_container_102_1788915764091.log",
+      "bytes": 1488,
+      "sha256": "aa0faf3bad6c6375e63aead0151b4aa958fb2571334c4eb3a77f50a4f22863b9"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/ekf_localizer_94_1788915764067.log",
+      "bytes": 65,
+      "sha256": "875f2964f596aab2e84be1cb1a26ba0e67571580fadc11f1e94c066cdd2489e4"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/gnss_poser_88_1788915764018.log",
+      "bytes": 205,
+      "sha256": "233c50d36f9b3c1b3c78a1c4b8640ac2f4f587d9b7048bee3bc3f3d60b3c95b6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/gyro_odometer_90_1788915764053.log",
+      "bytes": 65,
+      "sha256": "01e3a6882f208d555442591f23907b06531a60304c9ac8412eacdc554f9f54b0"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/imu_corrector_86_1788915764041.log",
+      "bytes": 65,
+      "sha256": "5a71c0e9a7d154e5f597bfe5d695dc0e906c7cc5af6ecbd0ef395ad30ea1b360"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/imu_gnss_poser_node_92_1788915764022.log",
+      "bytes": 977,
+      "sha256": "15ea93bde431bcb491984c73f751b5f5c1c41682805739c9277fd4b14e0b826b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/mpc_controller_cpp_100_1788915764256.log",
+      "bytes": 218115,
+      "sha256": "0f29aef692c247c552fc77bc792de7071a1b734c99714b053b213b5606b9d428"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/python3_108_1788915764285.log",
+      "bytes": 4159,
+      "sha256": "bdb9c1fd8f2aade838dbfa46b900e6398519b530a43133e057baa185e26f168d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/python3_110_1788915764317.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/python3_338_1788915780081.log",
+      "bytes": 2711,
+      "sha256": "ee1f1546d52eb6d226efc0d833454666cb27d3dd4eb8492681babb5e33d85197"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/python3_69_1788915763866.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/relay_106_1788915764109.log",
+      "bytes": 65,
+      "sha256": "da0995290ff28ec5fe7c97e273fc1853d9aad70ae2e9858dc96701ef10d13623"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/robot_state_publisher_82_1788915764021.log",
+      "bytes": 705,
+      "sha256": "786128d240223563c6c4b335d0500a9b5fc157f4c2317e66fa98e000abef659d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/rviz2_104_1788915764231.log",
+      "bytes": 744,
+      "sha256": "8cd70530df5bf5fe8ad7260b8a5add772036ecb5d70ac338e2b007e6df9056c4"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/simple_trajectory_generator_node_98_1788915764039.log",
+      "bytes": 1415,
+      "sha256": "af64cace84e2865c3a946ed9732cbccd981c7e90d6fd3207b988f8ce332769c3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/twist2accel_96_1788915764041.log",
+      "bytes": 65,
+      "sha256": "4e5f2003fd8fe75257251cbb2e743af85b2a853a3d79d363a59f363dba74582b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/ros/log/vehicle_velocity_converter_84_1788915764018.log",
+      "bytes": 65,
+      "sha256": "4f91d9a5f659ab837ce7adfab5cb1a88e4a429e96189fa75f2cf17e8af83894f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "e935f42948b8429dbe4c989360fe154d3ddca72f88d42b7af13d7f6ea0222b7e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2091084,
+      "sha256": "412d50ffa7d643f518f128d2a22c10c5cfff9b79d64f84fd36c487627be9f743"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "0de7005d8c5bd77b1a55f0919f86d2e7a9229f1619224357e8bffba083f143fc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/d2-topic-timing.json",
+      "bytes": 2374,
+      "sha256": "704d1cebca879b2ad3c57cc655bedaee4459f28a4f54140aecc08e229763e025"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/down.log",
+      "bytes": 466,
+      "sha256": "317c8b1843fc8298ebfd92efec8d0d63432a7495693661508d85cc23478aac2e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/generated-user-path-results/result-summary.json",
+      "bytes": 928,
+      "sha256": "57596bb6dab1e0eb18a63bffbd4663622df82f1ef6542281fa154082bb9db03e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2222776,
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12951,
+      "sha256": "23c509c645b8ff3c61652c10477cf8e0a8b94697ec0ef150e468a84f21693112"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39429,
+      "sha256": "2601fdc9552112addbca7368618bcecdf8906c21b82e680584c82aa4f482433f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 7768,
+      "sha256": "b26181ca1fb1d81e4ba78b8883ca42eae3e168a4ec1d5c87a11e04f783352d9d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2941138,
+      "sha256": "b9015ca14dce5ff8028a83df4ed1d872fc9585f6cc003f63996f0644c210c803"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 108147,
+      "sha256": "9ac43b304518130a6516d25c9dd29b3ef46fa9b31ed1e7871bdc629c312b514f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "bytes": 15874,
+      "sha256": "436f1ef431519feaab42c828a127cd6121f62409ccfbb60333f1cdabe9bf41cb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 39448,
+      "sha256": "fceaf14b1565a281c1ba9eb79ba67f2a31fe142d90eebf1b1bb641524062eb39"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 36145,
+      "sha256": "3613dced6d83d36f1fc19d5b4b166d13fe62b2fa292672073ede9d9c05941117"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 180559,
+      "sha256": "f8b45cf603cdb7f81bd62319f84d3b170c3c6d1ddc4d76bba74dc6ac8500c0b3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17288,
+      "sha256": "09ea17484854ac8b323cb606ffe4871f0f5308b1f46e959e0a2fcef2ef79e1da"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/launch.log",
+      "bytes": 700,
+      "sha256": "2cab2713f2a78a0d114cd46effd7b2bbdfca9d1a2e2ad67dfa9864250359706b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/manifest.json",
+      "bytes": 24114,
+      "sha256": "bd789aa857fd84f3ca71b38a2235feca61b21cc6db62c4dcde4a41fabeef4e0a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/monitor-summary.json",
+      "bytes": 1869,
+      "sha256": "9a951119792254c0bef38f918cbebd5aa293a9eea24c4632144251f5db96ebfc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/mpcc-source.patch",
+      "bytes": 3883,
+      "sha256": "0197560bee463e1cf2bdb3192f22613485ce1dbcc6ce7a275a6530087897eafe"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/package.log",
+      "bytes": 492294,
+      "sha256": "6d359ab219712b9ca05770fe35b2876b97fc4fcf58a15adddf73e1059b0a9ea6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/run_campaign.py",
+      "bytes": 11291,
+      "sha256": "42426d4cc7bc0efa74592185c1f90b66665ead411afc3c234c1b0ada1986e629"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-stop-provenance-dev2-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/1629/0-artifact.yaml",
+      "bytes": 16272,
+      "sha256": "4ab9a4c13f791555a7819c856566ffa6be096a476495939190424ae0589abde6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/1629/1-artifact.yaml",
+      "bytes": 16247,
+      "sha256": "48afae74d73bc4faee81f711b44a41bc502448a7f5572168a6b1352a61781dbd"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/1629/mpcc_architecture_snapshots/000000001629-a1bdc987de074e7f-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 256247,
+      "sha256": "690d4c8c03fae3deca3895660469bd60421aa40fd07335e2989f628a1f6dda84"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/1629/mpcc_architecture_snapshots/000000001629-a1bdc987de074e7f-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/1629/native.log",
+      "bytes": 2452,
+      "sha256": "18a4cbad7af7d2e579a87daebbf1c4b68b82963ec4eba7f9ae5f9df160c32b00"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/1629/report.yaml",
+      "bytes": 2714,
+      "sha256": "d8194eaf6242715c25a0fff2c5b2378ffb8d9b52e9d188a08acfca4664db0ed1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/1629/source-0/000000001629-3017dcbcdf05bdd9-cruise-side-neutral-physical-proof-offline-mission-observation/snapshot.yaml",
+      "bytes": 39597,
+      "sha256": "a11c5433b0537b8332e0b4ba08e2df9a94024db3c70a1d1bce939f25e0336820"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/1629/source-0/000000001629-3017dcbcdf05bdd9-cruise-side-neutral-physical-proof-offline-mission-observation/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/4264/mpcc_architecture_snapshots/000000004264-9e65e3ac2f55e34c-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 264622,
+      "sha256": "c01930d665e840d37a41593490e0ee1f8540096103ce989dbad0910436ae5f14"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/4264/mpcc_architecture_snapshots/000000004264-9e65e3ac2f55e34c-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/4264/native.log",
+      "bytes": 2371,
+      "sha256": "14e8daa8af0ab8fb62592d47141d4e31805c25cccfd7e85d5b67e7c7139d71f2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/4264/report.yaml",
+      "bytes": 2594,
+      "sha256": "6a4109954416d485650ca7a2c9fd2f1dc9949e271340dc021401131868e21919"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/2-artifact.yaml",
+      "bytes": 16534,
+      "sha256": "ce05637e1409ee490eb7052f5b446f90ba3fa82254908d0e72143f731fa3ed0e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/mpcc_architecture_snapshots/000000000923-0e1039a1d7f5103c-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 249262,
+      "sha256": "1133ffd3e57234298aa076ff028d6c2258ccef44c27f4cee5d720cc8a29d2d46"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/mpcc_architecture_snapshots/000000000923-0e1039a1d7f5103c-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/mpcc_architecture_snapshots/000000000923-c92b8c29bd829cd0-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 273919,
+      "sha256": "74f53d4fd141c630ba97a111a166316be4f89124baa9723dc45af382ab4c816b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/mpcc_architecture_snapshots/000000000923-c92b8c29bd829cd0-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/native.log",
+      "bytes": 2655,
+      "sha256": "602a3d4e942a30b4fc569d28662b00d9a7ecb853622ffdff23bf243d48e66211"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/report.yaml",
+      "bytes": 2897,
+      "sha256": "77b2383269e6bb4623ea2eb7c063558457554f503589ed8fb3cacebcba3ae22a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/source-2/000000000923-9ed0e6ac93e269aa-cruise-side-neutral-physical-proof-offline-mission-observation/snapshot.yaml",
+      "bytes": 38988,
+      "sha256": "8b3d5161f535af36b1734c2580ef3860f43d015d2883c22e40553adee7d20813"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/923/source-2/000000000923-9ed0e6ac93e269aa-cruise-side-neutral-physical-proof-offline-mission-observation/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/compare",
+      "bytes": 1324024,
+      "sha256": "57f77ef89b38f87b0c1a55d85d807c56f18144eb6672d5a59f08ca6d7634854d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/manifest.json",
+      "bytes": 18091,
+      "sha256": "87b944fe24b013c3e8916008b17a30275a9b5e9a1086fb44cfd27b1f0c6c9719"
+    },
+    {
+      "path": "output/20260909-stop-provenance-missions/stop_candidate_copy.cpp",
+      "bytes": 34576,
+      "sha256": "4cf2eec00fb7d0c60464e196e5eca7a0a7765a4779e797bc7d1ff62969c515b3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-native-after/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-native-after/manifest.json",
+      "bytes": 17158,
+      "sha256": "2b51e054a20c3e8e4ec6b635abb237c146436d6cbeb2803ff328c6efb8b37345"
+    },
+    {
+      "path": "output/20260909-stop-provenance-native-after/regression",
+      "bytes": 2520136,
+      "sha256": "31277169f274d3ca35c1588e4c48a179346dd85678b73dc274b177db50c319e5"
+    },
+    {
+      "path": "output/20260909-stop-provenance-native-after/test.log",
+      "bytes": 1382,
+      "sha256": "64ab137f411a031d206f82bcf3369a361a83500f3f9130ea52dab6b09ffce405"
+    },
+    {
+      "path": "output/20260909-stop-provenance-native-before/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-native-before/manifest.json",
+      "bytes": 17159,
+      "sha256": "cf16ad06614b7e5a9a916083cb01616a9b57e65fd2d974ed61fb6c3d9eefd439"
+    },
+    {
+      "path": "output/20260909-stop-provenance-native-before/regression",
+      "bytes": 2520136,
+      "sha256": "c6ff406ded9efb26426f3d85a880dffdef4652e30dce00a725c2f19522c342dc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-native-before/test.log",
+      "bytes": 1749,
+      "sha256": "d3d30d31ce90c823276d029f296ae78e11c9231e76e4ef2b3c79fca60e3e979a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "72b501aaa2fa4d72ec7ea1cbc9708490128d7e2f0b7ca48ecd63f5af692c0943"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/authority-timing-summary.json",
+      "bytes": 49850,
+      "sha256": "5efd4d13480add0480e082fc9c7f3c498ec763cb4afcef3f9df5e0e33ea62051"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/awsim.log",
+      "bytes": 1772,
+      "sha256": "cd3cb4e7930170b932419c7d1804f47ef183b22f81ab7b8c2cf72f8690a9fe9f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/binaries/mpc_controller_cpp",
+      "bytes": 8622720,
+      "sha256": "e7d4049067e86ddd11a730a95ffc04f4989ba2f2a95411c2ea2df90e95f09e9f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1473200,
+      "sha256": "bde0f40488b1b75f7a043cc8d8d84c2372860eea8f8a2b450820d5f244f77daf"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/build.log",
+      "bytes": 4283,
+      "sha256": "0717adfab2494b357c5ef48159217388101080b28a19cc123a65299071a355a0"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/compose-six-lap.yml",
+      "bytes": 210,
+      "sha256": "93eb348e3487159389fcb3db12923219a81939bc7e748320e51162c904643cbd"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/autoware.log",
+      "bytes": 2718916,
+      "sha256": "b93085e625f394801ae6bbf19d444a988c6d1218eb17581502e97c284a888bb8"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/motion_analytics-26-09-09-10-01-35.html",
+      "bytes": 4920147,
+      "sha256": "ba1b90d4d9338c8de48d4ef92564c0f89f8f5788ab03d55337925473c49d2329"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000007-d4afff95cee8cf6d-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 256496,
+      "sha256": "0795c1aa1ac074f76b38f2c1fc61b4cb9193d3f979d88d7f5bcdd8e3cbaef310"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000007-d4afff95cee8cf6d-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000136-260b5f13e619dd95-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 243992,
+      "sha256": "17c61d1dfa878896ca85323e37c11e0bf63594ecacdd10608ca6b0aecfbcf202"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000136-260b5f13e619dd95-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000308-3c9c2b2c49a0ba72-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 264487,
+      "sha256": "228fb2344d3d689254e96efde2bcda7a4b22154cf3d45bbc3d45cc81a358fae9"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000308-3c9c2b2c49a0ba72-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000368-d741d2fc8e7d02ef-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 256731,
+      "sha256": "a8e8c4511a21149df42f03e57d2cde457f4380cf7cbac16ce705fae176c1d9c9"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000368-d741d2fc8e7d02ef-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000532-fca812796d3808f2-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35455,
+      "sha256": "f3e45e01a00422eba64eb8d36f84a668dc7ec47c0cd79ec3ebaf87ee364a1b28"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000000532-fca812796d3808f2-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000002226-1b79f481592bef72-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 255807,
+      "sha256": "e7bf821bd751dfbf21e398b40349e6bb9a2e770e85fbc4747e6f13e8eb03030f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000002226-1b79f481592bef72-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000002402-2cfccc36ba391005-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 259418,
+      "sha256": "10aa1cad142dd2373c6fbadcfb194d257cfcdd5dc3b6e5cb426f5ce46bb6e2db"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000002402-2cfccc36ba391005-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000002411-d71f84f5969d187b-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 252055,
+      "sha256": "a716431aa898e3f4a9a716217744ff8d1ddce93308f318cd24cb46ac09f51aab"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/mpcc_architecture_snapshots/000000002411-d71f84f5969d187b-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/2026-09-09-09-56-35-101146-msuda-System-Product-Name-69/launch.log",
+      "bytes": 16883,
+      "sha256": "f8eb91049b14e3d9c37383c9dd5e78011f53d4f2c15e733fe5588924b3f7dc14"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/component_container_102_1788915396308.log",
+      "bytes": 1488,
+      "sha256": "4b19b7f79d3906082894dc468dda0fd8bd5aaa1e68573a3e13f363dc0702912e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/ekf_localizer_94_1788915396309.log",
+      "bytes": 65,
+      "sha256": "d2629a3d54704a91dea197c47c77d6b89a34be95c22fe64ff62b4ca7db86f398"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/gnss_poser_88_1788915396301.log",
+      "bytes": 205,
+      "sha256": "92080e3e494a22016336a929ca4534eda770edf633957882bd9ec368de1b7588"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/gyro_odometer_90_1788915396307.log",
+      "bytes": 65,
+      "sha256": "daefa8e78ae59cba75285b43edafafefb829a07358502e5a539c86f6548123e6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/imu_corrector_86_1788915396305.log",
+      "bytes": 65,
+      "sha256": "5f427cd7264126ca8c8809585624d1d66a40c2fe855376bd7edfab9491fac912"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/imu_gnss_poser_node_92_1788915396336.log",
+      "bytes": 977,
+      "sha256": "dc85c63fbdb52ec889113e302939ed64897821230164ddd9ded90d40db7419e2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/mpc_controller_cpp_100_1788915396478.log",
+      "bytes": 2594297,
+      "sha256": "c1569b3d2243ae82a9964f2a15f799c42828f1b521828d92df642389d6d8c4a0"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/python3_108_1788915396541.log",
+      "bytes": 4068,
+      "sha256": "e1eb9449b9194810ddea3cba18d0c4e1703763d52247429e65eb71d328620fd3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/python3_110_1788915396551.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/python3_112_1788915396509.log",
+      "bytes": 143,
+      "sha256": "1533d4b4bac33d3efce0bcf8fc7a6d3af7267898fd1f14a632885695c3b11a4e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/python3_360_1788915412580.log",
+      "bytes": 2711,
+      "sha256": "ee0fe6065e7b0255a518207c128eb27a1746c13b0355069496b58551eb1dd8d8"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/python3_69_1788915396183.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/relay_106_1788915396340.log",
+      "bytes": 65,
+      "sha256": "917158017b8aacef8022067675166f3f95c72f5495b1d56b087070b40a51eb2f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/robot_state_publisher_82_1788915396301.log",
+      "bytes": 705,
+      "sha256": "6de92be8dbd5368927d56b881dd54be4fe2642f5e331871e26a449d4f9d14856"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/rviz2_104_1788915396435.log",
+      "bytes": 744,
+      "sha256": "967aafc7e02cfd200e3e73c9c5d5df31928c6a5e004ef569e02e479333601d60"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/simple_trajectory_generator_node_98_1788915396326.log",
+      "bytes": 1915,
+      "sha256": "3550fb2de5efd2456842ef40c299a7e9c3e47d10549eaca2ebf3b0d2f5568457"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/twist2accel_96_1788915396332.log",
+      "bytes": 65,
+      "sha256": "0d716c6358ff53d80fe6589bc3daed391ae5e9a189e27984dd7fb5de9bd0cb0b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/ros/log/vehicle_velocity_converter_84_1788915396324.log",
+      "bytes": 65,
+      "sha256": "db506116839a280d4273f9132b3b35638344d78a5b14534242cac6c69c4df5d2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8525,
+      "sha256": "6e7ec2c944fd9b87c0b72af06cad88ca9d64516e937c35039ae587ae690cef64"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 37943641,
+      "sha256": "037da7d0bb132ca1752812bddb53966fb96628521d9435fd9a85eb6be04a9dde"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "a3a4324a4e69299679c8f7583f439a8e6a3abbbc4cc1baad1b4e2e34d1d97568"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/d1-topic-timing.json",
+      "bytes": 2389,
+      "sha256": "8eced917eaffecdcbf1990836f3b6519bcce1f19cfe2a76b4b7d2bf1068793c4"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/down.log",
+      "bytes": 501,
+      "sha256": "ab812ae4c407ebed366bb1c5a25ece4a11b2792fdc71fbeaf40cba2b282fd33f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/finish-results/d1-result-details.json",
+      "bytes": 858,
+      "sha256": "4ff59e1b4ad0628a1c46b86f47ddeecf56ccbc7597bcfe5a9d6de3f028c923bb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/generated-user-path-results/result-summary.json",
+      "bytes": 1056,
+      "sha256": "abc6459fb5f522c8aa12e26eba400f5442efeabd6a3fe06017437a4c61c61537"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2222776,
+      "sha256": "920fae30da58e3c64affdee1cf8e1b34fcd6cefedbef24bbb758865e91c8d2b1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12951,
+      "sha256": "23c509c645b8ff3c61652c10477cf8e0a8b94697ec0ef150e468a84f21693112"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39429,
+      "sha256": "2601fdc9552112addbca7368618bcecdf8906c21b82e680584c82aa4f482433f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 7768,
+      "sha256": "b26181ca1fb1d81e4ba78b8883ca42eae3e168a4ec1d5c87a11e04f783352d9d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2941138,
+      "sha256": "b9015ca14dce5ff8028a83df4ed1d872fc9585f6cc003f63996f0644c210c803"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 108147,
+      "sha256": "9ac43b304518130a6516d25c9dd29b3ef46fa9b31ed1e7871bdc629c312b514f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "bytes": 15874,
+      "sha256": "436f1ef431519feaab42c828a127cd6121f62409ccfbb60333f1cdabe9bf41cb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 39448,
+      "sha256": "fceaf14b1565a281c1ba9eb79ba67f2a31fe142d90eebf1b1bb641524062eb39"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 36145,
+      "sha256": "3613dced6d83d36f1fc19d5b4b166d13fe62b2fa292672073ede9d9c05941117"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 180559,
+      "sha256": "f8b45cf603cdb7f81bd62319f84d3b170c3c6d1ddc4d76bba74dc6ac8500c0b3"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17288,
+      "sha256": "09ea17484854ac8b323cb606ffe4871f0f5308b1f46e959e0a2fcef2ef79e1da"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/launch.log",
+      "bytes": 772,
+      "sha256": "9bd04b31ce719811cb99dd0a7134269d58b6b17b873c81cd239b07e95af11f3d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/manifest.json",
+      "bytes": 24169,
+      "sha256": "629a9900028d7828cc93d07a8ad99ce2bc3dff473cea3499751e1e32c621c3ce"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/monitor-summary.json",
+      "bytes": 1435,
+      "sha256": "11c98e13c2d3fe63e0e3392ab38394f7f2e31e16aca47e64fa2da0fa38b2fbcf"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/mpcc-source.patch",
+      "bytes": 3883,
+      "sha256": "0197560bee463e1cf2bdb3192f22613485ce1dbcc6ce7a275a6530087897eafe"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/package.log",
+      "bytes": 492294,
+      "sha256": "6d359ab219712b9ca05770fe35b2876b97fc4fcf58a15adddf73e1059b0a9ea6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/run_campaign.py",
+      "bytes": 11291,
+      "sha256": "42426d4cc7bc0efa74592185c1f90b66665ead411afc3c234c1b0ada1986e629"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-stop-provenance-single-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-timeline/manifest.json",
+      "bytes": 465,
+      "sha256": "06a632889158902b92b519cc2dce601f2e444e7ff4536f079faf341f2e7b25f9"
+    },
+    {
+      "path": "output/20260909-stop-provenance-timeline/timeline.json",
+      "bytes": 79235,
+      "sha256": "3310944bc1d8e35f67943d94342d67a2f727b65e9099cc17d7a0178480bc43d0"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-328-original-r2.log",
+      "bytes": 318,
+      "sha256": "96c41d8c420ccce6e33550c2f8987f3e3a011006390116656edd7ea3afa96bfb"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-328-original.log",
+      "bytes": 16185,
+      "sha256": "b8cc55be2816a4c051333cd8851e8c0d88a616cf5b3b63c108be097faf7ea8f2"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-build.log",
+      "bytes": 4283,
+      "sha256": "0717adfab2494b357c5ef48159217388101080b28a19cc123a65299071a355a0"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-certificate.log",
+      "bytes": 3254,
+      "sha256": "bbac48c89e83c7e382385b8303898621c143aaa7823c6d9675b85ff201c1169c"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-dev2-analysis.log",
+      "bytes": 348,
+      "sha256": "e08eb19c3253ed3da8069637305ffda7e709bae583175cc5650aee0f0364bb11"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-dev2-r1.log",
+      "bytes": 2479,
+      "sha256": "fc5edc26ba7d6dd25c1a89edb1701426d1a1433f446b8743dfe6bae8003b6745"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-dev2-timing.log",
+      "bytes": 4885,
+      "sha256": "6d29fae6ecc9397b076785be7282ebf6bf448726ea57495c15689dda2c8d0b7d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-missions.log",
+      "bytes": 7640,
+      "sha256": "3fde7df11ccff709a428a529379ee97dfac10c47cdadd778f852ccae50c3d96d"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-native-after.log",
+      "bytes": 1522,
+      "sha256": "3a0b95138c544e40bf7599298613caf97d0ecce3e6d37444bc3f897e82cbb524"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-native-before.log",
+      "bytes": 1890,
+      "sha256": "28118fd581b4ce6b59d27f51819919b16a339bcf342302a5643d10730a6458a9"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-observation.log",
+      "bytes": 334,
+      "sha256": "456ab3d8544c04be4570608c982531208643aa433ad2dc8635702f3f72779d95"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-package.log",
+      "bytes": 492294,
+      "sha256": "6d359ab219712b9ca05770fe35b2876b97fc4fcf58a15adddf73e1059b0a9ea6"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-single-analysis.log",
+      "bytes": 783,
+      "sha256": "7669a4ba9a2816a8429bcbe60194c249dff0d5d8104855706154932cb6a1384e"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-single-r1.log",
+      "bytes": 7140,
+      "sha256": "f46c1895e2e257323f868e4ba6c94fe1c8c80a07cc1109af2860e3080d036194"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-single-timing.log",
+      "bytes": 2528,
+      "sha256": "8e71749c6a123d236df04a72a41b7727edcf589b9fc6706912710ce457299dcf"
+    },
+    {
+      "path": "output/20260909-stop-provenance-validation/mpcc-stop-provenance-timeline-comparison.log",
+      "bytes": 10299,
+      "sha256": "d0e5114c62aee7075306c248991a7c787e2f40725f233e449e024fd94f674a5e"
+    }
+  ]
+}

@@ -1260,6 +1260,31 @@ TEST(MpccArchitectureComparison, CurrentWorldStopBuildsCertifiedObservation)
   EXPECT_EQ(stop_solver.evaluate(missing_rest).outcome, shadow::Outcome::BuildRejected);
 }
 
+TEST(MpccArchitectureComparison, CurrentWorldStopBindsCertificateToSolvedTrajectory)
+{
+  auto source = stoppable_source_snapshot();
+  // The observation is sealed before solve; its baseline is not the residual
+  // bound computed from the actual accepted execution artifact.
+  source.replay_world->bound_tolerance_m = 4.2e-5;
+  ASSERT_TRUE(architecture::interaction_snapshot_complete(source));
+  const auto original_fingerprint = architecture::fingerprint_interaction_snapshot(source);
+  shadow::SolverContext stop_solver;
+  const auto result = stop_lattice_shadow::evaluate_current_world(
+    source, stop_solver, {}, stop_lattice_shadow::EvaluationMode::DirectSevenStateOnly);
+
+  ASSERT_TRUE(result.accepted()) << result.detail;
+  const auto & plan = *result.certified_stop_plan;
+  const auto expected = mpcc_rate_resolved_execution_artifact::physical_lateral_bound_tolerance_m(
+    *plan.execution_artifact);
+  EXPECT_NE(expected, source.replay_world->bound_tolerance_m);
+  EXPECT_DOUBLE_EQ(plan.physical_snapshot->bound_tolerance_m, expected);
+  EXPECT_DOUBLE_EQ(plan.physical_snapshot->trajectory.lateral_bound_tolerance_m, expected);
+  EXPECT_DOUBLE_EQ(plan.solver_source_snapshot->replay_world->bound_tolerance_m, 4.2e-5);
+  EXPECT_EQ(architecture::fingerprint_interaction_snapshot(source), original_fingerprint);
+  EXPECT_TRUE(result.dynamic_valid);
+  EXPECT_TRUE(result.dynamic_clear);
+}
+
 TEST(MpccArchitectureComparison, CurrentWorldStopSolvesFreeControlsWithEveryObservedPeer)
 {
   auto source = stoppable_source_snapshot();

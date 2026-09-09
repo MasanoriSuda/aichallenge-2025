@@ -440,6 +440,31 @@
       "snapshot_id": "20260909-peer-viability-dev2-r1",
       "manifest": ".steering/20260909-mpcc-peer-viability/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-ego-viability-old-pair",
+      "manifest": ".steering/20260909-mpcc-ego-viability-transition/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-ego-viability-native",
+      "manifest": ".steering/20260909-mpcc-ego-viability-transition/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-ego-viability-parity",
+      "manifest": ".steering/20260909-mpcc-ego-viability-transition/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-ego-viability-single-r1",
+      "manifest": ".steering/20260909-mpcc-ego-viability-transition/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-ego-viability-dev2-r1",
+      "manifest": ".steering/20260909-mpcc-ego-viability-transition/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -2281,7 +2306,7 @@
     },
     {
       "experiment_id": "20260909-rear-peer-profile164",
-      "baseline_commit": "4afa9948",
+      "baseline_commit": "4afa99489facd4c5249d79b2327986df9b9df967",
       "snapshot_ids": [
         "20260909-rear-peer-world1629"
       ],
@@ -2295,7 +2320,7 @@
     },
     {
       "experiment_id": "20260909-rear-peer-tangent-domain",
-      "baseline_commit": "4afa9948",
+      "baseline_commit": "4afa99489facd4c5249d79b2327986df9b9df967",
       "snapshot_ids": [
         "20260909-rear-peer-native"
       ],
@@ -2311,7 +2336,7 @@
     },
     {
       "experiment_id": "20260909-rear-peer-same-world-normal",
-      "baseline_commit": "4afa9948",
+      "baseline_commit": "4afa99489facd4c5249d79b2327986df9b9df967",
       "snapshot_ids": [
         "20260909-rear-peer-world1629"
       ],
@@ -2325,7 +2350,7 @@
     },
     {
       "experiment_id": "20260909-rear-peer-rear-qp8",
-      "baseline_commit": "4afa9948",
+      "baseline_commit": "4afa99489facd4c5249d79b2327986df9b9df967",
       "snapshot_ids": [
         "20260909-rear-peer-world1629"
       ],
@@ -2339,7 +2364,7 @@
     },
     {
       "experiment_id": "20260909-rear-peer-free-controls4",
-      "baseline_commit": "4afa9948",
+      "baseline_commit": "4afa99489facd4c5249d79b2327986df9b9df967",
       "snapshot_ids": [
         "20260909-rear-peer-world1629"
       ],
@@ -2353,7 +2378,7 @@
     },
     {
       "experiment_id": "20260909-rear-peer-single-r1",
-      "baseline_commit": "4afa9948",
+      "baseline_commit": "4afa99489facd4c5249d79b2327986df9b9df967",
       "snapshot_ids": [
         "20260909-rear-peer-single-r1"
       ],
@@ -2367,7 +2392,7 @@
     },
     {
       "experiment_id": "20260909-rear-peer-dev2-r1",
-      "baseline_commit": "4afa9948",
+      "baseline_commit": "4afa99489facd4c5249d79b2327986df9b9df967",
       "snapshot_ids": [
         "20260909-rear-peer-dev2-world968-executed354"
       ],
@@ -2381,7 +2406,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-968-initial-pose",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-rear-peer-dev2-world968-executed354"
       ],
@@ -2395,7 +2420,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-pose-producer",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-complete-stop-native",
         "20260909-rear-peer-dev2-world968-executed354"
@@ -2412,7 +2437,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-free-before",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-complete-stop-native",
         "20260909-complete-stop-free-artifact"
@@ -2427,7 +2452,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-complete-terminal",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-complete-stop-native",
         "20260909-complete-stop-free-artifact"
@@ -2444,7 +2469,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-initial-multicycle",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-complete-stop-free-multicycle"
       ],
@@ -2458,7 +2483,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-publisher-clock",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-complete-stop-native",
         "20260909-complete-stop-free-multicycle"
@@ -2473,7 +2498,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-conditional188",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-complete-stop-free-multicycle"
       ],
@@ -2487,7 +2512,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-single-r1",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-complete-stop-single-r1"
       ],
@@ -2501,7 +2526,7 @@
     },
     {
       "experiment_id": "20260909-complete-stop-dev2-r1",
-      "baseline_commit": "8d6ebf8a",
+      "baseline_commit": "8d6ebf8ab87fc30767d4dd82b2eec8a804f5b151",
       "snapshot_ids": [
         "20260909-complete-stop-world4264-executed3695"
       ],
@@ -2515,7 +2540,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-actual3695",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-world4264-comparison"
       ],
@@ -2529,7 +2554,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-initial-before",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-native",
         "20260909-complete-rest-world4264-comparison"
@@ -2544,7 +2569,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-initial-after",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-native",
         "20260909-complete-rest-world4264-comparison"
@@ -2561,7 +2586,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-4264-retimed",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-world4264-comparison"
       ],
@@ -2575,7 +2600,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-1629-retimed",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-world1629-retimed"
       ],
@@ -2589,7 +2614,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-producer",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-native",
         "20260909-complete-rest-production-replay"
@@ -2606,7 +2631,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-production-replay",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-production-replay"
       ],
@@ -2620,7 +2645,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-single-r1",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-single-r1"
       ],
@@ -2634,7 +2659,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-async-publication",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-dev2-world923-executed328"
       ],
@@ -2648,7 +2673,7 @@
     },
     {
       "experiment_id": "20260909-complete-rest-dev2-r1",
-      "baseline_commit": "3c1cd03b",
+      "baseline_commit": "3c1cd03b97e43c172f6b52d0f125597f696e9ee6",
       "snapshot_ids": [
         "20260909-complete-rest-dev2-world923-executed328"
       ],
@@ -2662,7 +2687,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-metadata-before",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-native"
       ],
@@ -2676,7 +2701,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-metadata-after",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-native"
       ],
@@ -2692,7 +2717,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-probe",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-world923-actual328"
       ],
@@ -2706,7 +2731,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-actual328",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-world923-actual328"
       ],
@@ -2720,7 +2745,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-923-normal",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-world923-actual328"
       ],
@@ -2734,7 +2759,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-923-stop-support",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-world923-actual328"
       ],
@@ -2748,7 +2773,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-923-missions",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-world923-actual328"
       ],
@@ -2762,7 +2787,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-1629-missions",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-world1629"
       ],
@@ -2776,7 +2801,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-4264-missions",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-world4264"
       ],
@@ -2790,7 +2815,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-single-r1",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-single-r1"
       ],
@@ -2804,7 +2829,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-single-clock",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-single-r1"
       ],
@@ -2818,7 +2843,7 @@
     },
     {
       "experiment_id": "20260909-stop-provenance-dev2-r1",
-      "baseline_commit": "ae6862aa",
+      "baseline_commit": "ae6862aaa5138933c40cf46bcde5f4f8ca1e7558",
       "snapshot_ids": [
         "20260909-stop-provenance-dev2-r1"
       ],
@@ -2832,7 +2857,7 @@
     },
     {
       "experiment_id": "20260909-final-authority-old-scheduling",
-      "baseline_commit": "e5b8c455",
+      "baseline_commit": "e5b8c455606371f4b7dfe6b2b45dbaddf7cbd08f",
       "snapshot_ids": [
         "20260909-final-authority-native"
       ],
@@ -2846,7 +2871,7 @@
     },
     {
       "experiment_id": "20260909-final-authority-new-scheduling",
-      "baseline_commit": "e5b8c455",
+      "baseline_commit": "e5b8c455606371f4b7dfe6b2b45dbaddf7cbd08f",
       "snapshot_ids": [
         "20260909-final-authority-native"
       ],
@@ -2863,7 +2888,7 @@
     },
     {
       "experiment_id": "20260909-final-authority-actual365",
-      "baseline_commit": "e5b8c455",
+      "baseline_commit": "e5b8c455606371f4b7dfe6b2b45dbaddf7cbd08f",
       "snapshot_ids": [
         "20260909-final-authority-actual365"
       ],
@@ -2877,7 +2902,7 @@
     },
     {
       "experiment_id": "20260909-final-authority-capture945",
-      "baseline_commit": "e5b8c455",
+      "baseline_commit": "e5b8c455606371f4b7dfe6b2b45dbaddf7cbd08f",
       "snapshot_ids": [
         "20260909-final-authority-world945-actual361"
       ],
@@ -2891,7 +2916,7 @@
     },
     {
       "experiment_id": "20260909-final-authority-replay945",
-      "baseline_commit": "e5b8c455",
+      "baseline_commit": "e5b8c455606371f4b7dfe6b2b45dbaddf7cbd08f",
       "snapshot_ids": [
         "20260909-final-authority-world945-actual361"
       ],
@@ -2905,7 +2930,7 @@
     },
     {
       "experiment_id": "20260909-final-authority-later1137",
-      "baseline_commit": "e5b8c455",
+      "baseline_commit": "e5b8c455606371f4b7dfe6b2b45dbaddf7cbd08f",
       "snapshot_ids": [
         "20260909-final-authority-world1137-actual575"
       ],
@@ -2919,7 +2944,7 @@
     },
     {
       "experiment_id": "20260909-final-authority-race",
-      "baseline_commit": "e5b8c455",
+      "baseline_commit": "e5b8c455606371f4b7dfe6b2b45dbaddf7cbd08f",
       "snapshot_ids": [
         "20260909-final-authority-dev2-r1"
       ],
@@ -2933,7 +2958,7 @@
     },
     {
       "experiment_id": "20260909-final-authority-delivery",
-      "baseline_commit": "e5b8c455",
+      "baseline_commit": "e5b8c455606371f4b7dfe6b2b45dbaddf7cbd08f",
       "snapshot_ids": [
         "20260909-final-authority-dev2-r1"
       ],
@@ -2947,7 +2972,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-predecessor",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-world945"
       ],
@@ -2961,7 +2986,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-normal",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-world945"
       ],
@@ -2975,7 +3000,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-support-stop",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-world945"
       ],
@@ -2989,7 +3014,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-rest-missions",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-world945"
       ],
@@ -3003,7 +3028,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-physical-controls",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-world945"
       ],
@@ -3017,7 +3042,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-gnss-before",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-gnss-native"
       ],
@@ -3031,7 +3056,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-gnss-after",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-gnss-native"
       ],
@@ -3048,7 +3073,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-gnss-replay",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-gnss-recorded"
       ],
@@ -3062,7 +3087,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-single-race",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-single-r1"
       ],
@@ -3076,7 +3101,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-single-delivery",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-single-r1"
       ],
@@ -3090,7 +3115,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-dev2-race",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-dev2-r1"
       ],
@@ -3104,7 +3129,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-dev2-delivery",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-dev2-r1"
       ],
@@ -3118,7 +3143,7 @@
     },
     {
       "experiment_id": "20260909-exact-join-replay941",
-      "baseline_commit": "466bba5e",
+      "baseline_commit": "466bba5ead9bd22ac27723f443b0db0acf0b96d7",
       "snapshot_ids": [
         "20260909-exact-join-dev2-r1"
       ],
@@ -3132,7 +3157,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-normal",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-world941"
       ],
@@ -3146,7 +3171,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-support-stop",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-world941"
       ],
@@ -3160,7 +3185,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-rest-missions",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-world941"
       ],
@@ -3174,7 +3199,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-covariance-units",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-world941"
       ],
@@ -3188,7 +3213,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-observer",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-native"
       ],
@@ -3205,7 +3230,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-paired-replay",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-dev2-r1"
       ],
@@ -3219,7 +3244,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-peer-causality",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-dev2-r1"
       ],
@@ -3233,7 +3258,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-race",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-dev2-r1"
       ],
@@ -3247,7 +3272,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-delivery",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-dev2-r1"
       ],
@@ -3261,7 +3286,7 @@
     },
     {
       "experiment_id": "20260909-peer-viability-final388",
-      "baseline_commit": "9d76066c",
+      "baseline_commit": "9d76066c8987dd5b6f753c93bc30170d70f51fd6",
       "snapshot_ids": [
         "20260909-peer-viability-dev2-r1"
       ],
@@ -3272,6 +3297,149 @@
       "production_impact": "Observation only; no solver/control/proof limit change; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "recover actual derived artifact and derivation provenance without substitution"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-ego-sensitivity",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-old-pair"
+      ],
+      "hypothesis": "Named ego groups affect exact 935 terminal viability",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "accepted",
+      "reason": "Previous speeds or poses/progress separately rescue the hybrid request; steering, command or clock groups do not. Counterfactuals are not measured trajectories or authority.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "different paired scene or causal producer evidence"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-native-baseline",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-native"
+      ],
+      "hypothesis": "Installed EKF state and output share one calculation epoch",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "rejected",
+      "reason": "Real installed timer callback: fixed-clock control passes; both 5 ms mid-callback advances violate state/stored/output epoch. Six clock reads. Positive-advance cases only.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "installed binary or clock implementation changes"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-repair",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-native"
+      ],
+      "hypothesis": "One sampled EKF epoch removes the demonstrated producer inconsistency",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "accepted",
+      "reason": "Four real-node clock tests pass, including queued measurements and observed Odometry; 23 original math tests pass. 26-package build; EKF 102 records, 0 failures, 30 cppcheck wrapper skips; MPCC 2372 records pass. One unchanged upstream Eigen cppcheck false positive retained.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [
+        "underlay EKF launch/dependency",
+        "independent prediction/measurement/state-output clocks"
+      ],
+      "revisit_condition": "new clock or filter regression"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-parity",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-parity"
+      ],
+      "hypothesis": "The repair preserves filter mathematics on shared recorded input",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "accepted",
+      "reason": "54 ticks, 2268 state/covariance values, maximum absolute difference 0. Shared initialization and frozen callback clocks; not original hidden-state reconstruction.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "filter equations or configuration change"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-single",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-single-r1"
+      ],
+      "hypothesis": "Fresh single-car six-lap acceptance",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "accepted",
+      "reason": "255.779419 s, penalty 0, no observed moving override; callback maximum 15.460 ms, 0 overruns. Throttled telemetry limits remain.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "relevant production change or new regression evidence"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-race",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-dev2-r1"
+      ],
+      "hypothesis": "EKF repair establishes coupled race acceptance",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "rejected",
+      "reason": "First moving D1 Emergency 937 at 1.3724878243982674 m/s; no finish. Callback maxima D1/D2 19.636/21.167 ms, 0 overruns.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal production change or justified missing observation"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-paired-replay",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-dev2-r1"
+      ],
+      "hypothesis": "Exact same-374 inputs reproduce Accepted 936 and rejected 937",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "accepted",
+      "reason": "Zero solves, terminal clearance +0.004820238906648067 to -0.0014817573213388169 m; independent Stop +0.007846802037691836 to -0.0005679827768239054 m. Original artifact certified.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal ego/clock/publication comparison"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-peer-causality",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-dev2-r1"
+      ],
+      "hypothesis": "Peer field update alone flips 936 to 937",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "rejected",
+      "reason": "Peer-only cross-substitution projected to each unchanged ego clock preserves both outcomes and reported terminal clearances. No authority.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "different paired input or demonstrated interaction"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-clock-owner",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-dev2-r1"
+      ],
+      "hypothesis": "The observed execution-clock anchor change is a producer defect",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "inconclusive",
+      "reason": "Observation advances 30 ms; artifact cursor advances 25.596119 ms because same-source anchors differ. Ownership and publication chronology not yet audited.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "exact source/publication clock ownership and native invariant reproduction"
+    },
+    {
+      "experiment_id": "20260909-ego-viability-delivery",
+      "baseline_commit": "b19d6d7ce0cf40d4e55850ac856e9581734e1a6f",
+      "snapshot_ids": [
+        "20260909-ego-viability-dev2-r1"
+      ],
+      "hypothesis": "Observation and command source times are continuous",
+      "changed_dimension": "One EKF calculation epoch; preserved exact runtime inputs",
+      "result": "rejected",
+      "reason": "Command receipts about 40 Hz with no gap over 50 ms, but source duplicates/backward and gaps remain. D1/D2 Odometry receipt maxima 277.653/282.086 ms, clock 281.079/280.086 ms.",
+      "production_impact": "Participant EKF replaces underlay launch; no MPCC parameters or authority changes; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal timing investigation or relevant producer repair"
     }
   ]
 }

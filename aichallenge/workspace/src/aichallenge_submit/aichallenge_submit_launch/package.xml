@@ -16,7 +16,7 @@
   <exec_depend>imu_corrector</exec_depend>
   <exec_depend>imu_gnss_poser</exec_depend>
   <exec_depend>gyro_odometer</exec_depend>
-  <exec_depend>ekf_localizer</exec_depend>
+  <exec_depend>aichallenge_ekf_localizer</exec_depend>
   <exec_depend>twist2accel</exec_depend>
   <exec_depend>raw_vehicle_cmd_converter</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>

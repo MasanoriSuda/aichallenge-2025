@@ -96,7 +96,7 @@
       <param name="heading_csv_path" value="$(find-pkg-share multi_purpose_mpc_ros)/env/final_ver3/traj_mincurv.csv"/>
     </node>
 
-    <include file="$(find-pkg-share ekf_localizer)/launch/ekf_localizer.launch.xml">
+    <include file="$(find-pkg-share aichallenge_ekf_localizer)/launch/ekf_localizer.launch.xml">
       <arg name="enable_yaw_bias_estimation" value="false"/>
       <arg name="tf_rate" value="30.0"/>
       <arg name="twist_smoothing_steps" value="1"/>

@@ -150,6 +150,7 @@ eval イメージビルド時にこのディレクトリ全体が提出 tar.gz �
 | `gyro_odometer` | Autoware アンダーレイを上書きするカスタム実装 |
 | `imu_corrector` | IMU 補正 |
 | `imu_gnss_poser` | IMU + GNSS 融合による自己位置初期化 |
+| `aichallenge_ekf_localizer` | 共通の処理時刻を使う参加者内EKF（ノード名`ekf_localizer`） |
 | `laserscan_generator` | LiDAR スキャン生成 |
 | `multi_purpose_mpc_ros` | MPC 制御器（Python） |
 | `multi_purpose_mpc_ros_msgs` | MPC 制御器用カスタムメッセージ |
@@ -169,6 +170,14 @@ eval イメージビルド時にこのディレクトリ全体が提出 tar.gz �
 固定変換をmap座標へ回転する。閾値未満の受信で基準位置を上書きしない。
 停止中や最初の十分な移動より前には、この位置差だけでは方位を観測できない。
 初期化のraceline方位と`/set_initial_pose`の責務、GNSS共分散の設定は維持する。
+
+EKFは参加者内の`aichallenge_ekf_localizer`を起動する。基底イメージの旧EKFは、1回の処理中に
+時計を複数回読み、予測した状態と出力stampが5msずれる場合が実ライブラリのテストで再現した。
+参加者版は予測時間差・観測遅延・状態の出力で1つの処理時刻を使い、TFにも保持したposeのstampを使う。
+元のフィルタ式・共分散設定・平滑化・ROS名・QoSは維持し、旧版との同時起動をしない。
+公式旧版の出典はpackage内`NOTICE`と`UPSTREAM.json`、実環境との照合・テストは
+[EKF時刻の検証](../../.steering/20260909-mpcc-ego-viability-transition/results.md)に記録する。
+これは制御側のOdometry受信後の経過時間補償や、MPCCの2台受入れを完了したという主張ではない。
 2026-09-09の低速方位修正は[原因と検証計画](../../.steering/20260909-mpcc-exact-join-causality/design.md)を参照。
 
 #### `aichallenge_system/`（評価インフラパッケージ群、7 パッケージ + 補助ディレクトリ）

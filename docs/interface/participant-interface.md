@@ -217,12 +217,19 @@ Boostを使用しない提出物に `/awsim/cmd` は必須ではない。使用�
 提出パッケージは以下をすべて満たす必要があります。
 
 1. AWSIM センサ入力を subscribe: `/sensing/imu/imu_raw`（Imu）、`/sensing/gnss/nav_sat_fix`（NavSatFix）、`/vehicle/status/velocity_status`（VelocityReport）
-2. `/localization/kinematic_state`（`nav_msgs/Odometry`）を produce する（`ekf_localizer` が publish）
+2. `/localization/kinematic_state`（`nav_msgs/Odometry`）を produce する（ノード名`ekf_localizer`が publish）
 3. `/planning/scenario_planning/trajectory`（`autoware_auto_planning_msgs/Trajectory`）を produce する
 4. `/control/command/control_cmd`（`autoware_auto_control_msgs/AckermannControlCommand`）を publish する
 5. `/set_initial_pose`（`std_srvs/srv/Trigger`）を advertise する（`imu_gnss_poser` が実装）
 
 いずれかのトピック名・型を変更すると、対応する localization / planning / control の連結が切れ、車両の起動・走行・評価ができなくなります。
+
+自己位置の時刻は、状態を予測・更新した時点を表す。EKFの1回の処理では、予測の時間差、
+観測遅延、pose／twist／Odometryのstampに共通の時刻を使う。TFも保持しているposeのstampを使う。
+処理終了時の時計で古い状態を付け替えない。2026-09-09の移行では参加者内の
+`aichallenge_ekf_localizer`へ起動元とpackage依存を変更し、ノード名・topic・service・QoS・引数は維持する。
+提出物には同packageを含め、旧underlay版との同時起動をしない。基底イメージの手編集は不要。
+[時刻不整合の再現と移行設計](../../.steering/20260909-mpcc-ego-viability-transition/design.md)を参照。
 
 ---
 

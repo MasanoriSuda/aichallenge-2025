@@ -1,0 +1,3741 @@
+{
+  "baseline_commit": "b19d6d7c",
+  "scope": "EKF native clock repair and input parity; single accepted; dev2 rejected; exact936/937 replay; full MPCC completion open",
+  "build_packages": 26,
+  "package_records": 2372,
+  "package_errors": 0,
+  "package_failures": 0,
+  "package_skips": 0,
+  "artifacts": [
+    {
+      "path": ".steering/20260909-mpcc-stop-proof-provenance/compare_missions.cpp",
+      "bytes": 2846,
+      "sha256": "85f25f7987bf8562b42c9946d27d1a045326c9cc51e3f110a65cb370437294e9"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/compile_revalidation_replay.py",
+      "bytes": 1719,
+      "sha256": "352d5fdbfab3d2d48a42374e312e097294d507177dc384c17d39040caf2efb30"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/extract_ekf_inputs.py",
+      "bytes": 1684,
+      "sha256": "837f26cecc27a1abd1aab17d0b82ef1229045199e2d609de27befe63f41a7166"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/extract_timeline.py",
+      "bytes": 2210,
+      "sha256": "5b75ae2fe3034efcfa88b92ccb305d641e392ad6bba575c96a693c086f85bcfd"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/fetch_ekf_package.py",
+      "bytes": 1477,
+      "sha256": "6da769a6687a523c6946d8a3d742f070d503ccec3bd82f22e125636e43357010"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/fetch_ekf_source.py",
+      "bytes": 1292,
+      "sha256": "0c76624e71103ac0773ee71425b7c5e3fe8eb0b6b42be5be2ca0f031e95c7597"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/inspect_ekf.py",
+      "bytes": 1078,
+      "sha256": "2f35149c335a98c990e02b9b786b21200abead272e118edc5c708b9fa4535255"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/probe_ekf_clock.cpp",
+      "bytes": 3398,
+      "sha256": "a68bb22158fcbfb9bffe72e2806ed62858b0194c8cadfb4886abced31c19e66e"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/probe_ekf_clock.py",
+      "bytes": 1659,
+      "sha256": "4b97fe84fb83858e0393c78ec245f0df9bd543dcca065cd39bbd6663de64e40d"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/register_results.py",
+      "bytes": 4821,
+      "sha256": "efbb0a0c2dec4dbf30e757e2092fef0d32ea72b0d43ecfc8655a18f9481f8409"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/replay_captured_requests.py",
+      "bytes": 3765,
+      "sha256": "38b7e5e54b8c1963d432aa3fb37731c417811f70612ef22e90adc58b4dd2534a"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/replay_current_requests.py",
+      "bytes": 3774,
+      "sha256": "eb1e69f8cc81b3ce95fa3873bcb3811db3202220274e48e3085b403c0c01242c"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/replay_ekf_equivalence.cpp",
+      "bytes": 4971,
+      "sha256": "65911505a05c0b0ebd6d0b92f984ec4dfb80e500d9d4d4baaf6d93e193f7dc5f"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/replay_ekf_equivalence.py",
+      "bytes": 2284,
+      "sha256": "67f5abc17930f541b6c8e66183d1e90bd587c2f553775eddf5cc9b8221dbb855"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/replay_revalidation.cpp",
+      "bytes": 19904,
+      "sha256": "9cb850ae53e8c1e4b39c71e6e139f3c8771f506730abb67d82408e0830d04388"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/revalidation_input.hpp",
+      "bytes": 6871,
+      "sha256": "cfbeb749d9f1f8f76d7d6f17d4cf87d112e5fe51521e783c20f88262075bc1fa"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/run_campaign.py",
+      "bytes": 12260,
+      "sha256": "5c7f590b2b15a4f78d1fc2d63e522dbfc731d9ada0bf0dfde87d798cbdcef5fe"
+    },
+    {
+      "path": ".steering/20260909-mpcc-ego-viability-transition/seal_evidence.py",
+      "bytes": 1605,
+      "sha256": "cf238a1f3d94dfdfec2791522b2f28e757d29ae2cf763036a3e659752dc137a4"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/CMakeLists.txt",
+      "bytes": 1967,
+      "sha256": "3c0afc4b2c1e16fd6411e84ab124702ee9c0b18e82995f2e9ed10f7d6107cd11"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/NOTICE",
+      "bytes": 591,
+      "sha256": "022282b0ddb9150f8f8eef93d756496e6fceaac26645f5ac8ab5885014df7524"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/README.md",
+      "bytes": 868,
+      "sha256": "0e611995e7b8269b053ea1e485567724e7e4a3f475160b359d60ffcde4f484d3"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/UPSTREAM.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/covariance.hpp",
+      "bytes": 937,
+      "sha256": "6fb6d3f54f710093f871bbe1b3a791ce10614ce6a894cedbfa34c470c4370bc1"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/ekf_localizer.hpp",
+      "bytes": 9173,
+      "sha256": "52150445c4f7614ba87516a0fa1b54a4a76adb61b6fd850c088f452f69b58ffd"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_transition.hpp",
+      "bytes": 1103,
+      "sha256": "69d17f4d8b16a916a4ac4bc04ac813096682707648c7067f3846493438828bf9"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/launch/ekf_localizer.launch.xml",
+      "bytes": 3823,
+      "sha256": "a5adf69bc5ee3774f287928b1a766abc71fb7118b56a81c68fa187f8fe23e07c"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/package.xml",
+      "bytes": 1287,
+      "sha256": "f4d7a8c512446c3a0641a91d5ad519df87684916af56388c249166929fd4d7dc"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/covariance.cpp",
+      "bytes": 1839,
+      "sha256": "5e7472cc05e7a73bf260cc2f8770834c72cb48d3704bdd8283ff8195d70b4000"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer.cpp",
+      "bytes": 22971,
+      "sha256": "8097cb77806f0c53e1d37e9b2f9c35efc5486aa3e42376d7af8ec0f83941e5dc"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer_node.cpp",
+      "bytes": 891,
+      "sha256": "9183e015dc463be207cfdcde81c79765a3d22dc8b18b1b015dc9274819210737"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/mahalanobis.cpp",
+      "bytes": 987,
+      "sha256": "b2a2a90892c02266b15a4a2bbaf7fe4c9a5a543fccabc6b7836e6facbc18b9c0"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/measurement.cpp",
+      "bytes": 2196,
+      "sha256": "dacc346cbcfbfdac9efaa3d6be3628bbdf577ddfbae63959bafcda485b857f59"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/state_transition.cpp",
+      "bytes": 3369,
+      "sha256": "2e5c81b1c5a2228806725d32feace05b7ffba34fc341dfe594e38d21b4bd8654"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/warning_message.cpp",
+      "bytes": 2017,
+      "sha256": "13640a809651f7a0c71a5f378b26786e2f07a0fdf9d794ff37d739508645da4d"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/src/test_ekf_localizer.cpp",
+      "bytes": 10768,
+      "sha256": "c41a98be09c027d21b0ac0eb78d08c62fca658df25f0ba88cab9d1d5e2074dc7"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_aged_object_queue.cpp",
+      "bytes": 2477,
+      "sha256": "9bbdf1204af2264635ea93f96b96e9ee9d123bcf629b1a7eaf5d7528fd72a529"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_covariance.cpp",
+      "bytes": 2178,
+      "sha256": "e2fa32f59d8572185b18ebfd306500279a28826273a98e9419555b3c57c7b88d"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_clock.cpp",
+      "bytes": 5977,
+      "sha256": "567b679be46f8a1a3a464f2d351ded8029049aa25f9f86aa91028a0fb9c41719"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_mahalanobis.cpp",
+      "bytes": 1482,
+      "sha256": "cc31e52681756dd068c72f6c1a80ea249eb6215c15dbb69c8c51567ddbac7ae2"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_measurement.cpp",
+      "bytes": 2617,
+      "sha256": "954ed79a2a28a2116ed3a0ca531bdc25f83e48bcbc197321d266df0922f7e661"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_numeric.cpp",
+      "bytes": 1507,
+      "sha256": "a8da5388facefe07b59a7807e28a28f39c94b7bd73b397383fda6c2f6d92ef56"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_state_transition.cpp",
+      "bytes": 3161,
+      "sha256": "84a8cab921a6f1b0d94c212a8e638eb621cdadb5d470a6e5a55a78020440ab69"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_string.cpp",
+      "bytes": 909,
+      "sha256": "7d5fddf1bdac43b7f0a5bd393f277fddf485e2d8d3b65457b1fdc946eeb71ed0"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_warning_message.cpp",
+      "bytes": 2055,
+      "sha256": "9c7b8883eb339c17d60639aac6fcf3d72b969bcd5d66b5fce9d4e20088eef4d5"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/inspected.yaml",
+      "bytes": 50578,
+      "sha256": "2de05fe59d365e1f0d80ce4c90b29a1aaed05fd5a4583453efd1a2d16191e26a"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1304,
+      "sha256": "cdfc3a4e09ff3837075ffe75dc7f07a522bb82fe4dbb657db4e2b3c45b6c8eec"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 69301,
+      "sha256": "f6639c00b418795c8a8ee1f19088c8f8dce2a4c49d1f81cd894ec6fc9da037ef"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/inspected.yaml",
+      "bytes": 50569,
+      "sha256": "035f32d054b0cf0775b02a19f6de4faf67401418c0ee8b76ccffa489b0bdfbb7"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/native.log",
+      "bytes": 1344,
+      "sha256": "ba03ee69c06ad4d64b943898575d02fad67b052583c199366acd99e8afe15a85"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 69350,
+      "sha256": "35b67393c8a88438aa0e9e2f7b8387123c63d57c5f22ff5e1e261de80b96b1cb"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/inspected.yaml",
+      "bytes": 51130,
+      "sha256": "0d95767011fe20cfeee2605d64061e3c8b09758810f8d84058118f9920fe1eff"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1304,
+      "sha256": "cdfc3a4e09ff3837075ffe75dc7f07a522bb82fe4dbb657db4e2b3c45b6c8eec"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 69857,
+      "sha256": "1724c5787384dd99e8273fede299b2cc8ccd38a4fdc94dad66230983146a5b54"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected.yaml",
+      "bytes": 51121,
+      "sha256": "4a2d184a5a77a553fa57ad1718635e4e5e057df4ce0d43fa24fd4c73785274b3"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/native.log",
+      "bytes": 1344,
+      "sha256": "ba03ee69c06ad4d64b943898575d02fad67b052583c199366acd99e8afe15a85"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/d1/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 69906,
+      "sha256": "2261265496a318e4e004cfb5dee50350f6c12953939912a7f6274fcfcf8fa5b6"
+    },
+    {
+      "path": "output/20260909-ego-viability-current-revalidation-r1/manifest.json",
+      "bytes": 31184,
+      "sha256": "46d23a3ce8dee1e9e24efcab7dfe529bc98e6548a4ea66c9e4a3eafc33d64a66"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "b95667c1513e558206fdc09b23866898f564f2d7473568d53131dafaa56392bb"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/authority-timing-summary.json",
+      "bytes": 10288,
+      "sha256": "3451cdaf867105fb2b6ba7ab9c9cc687c40f1f42801ee2a297fba3e4af1f4766"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/awsim.log",
+      "bytes": 1773,
+      "sha256": "b1f92de8740aa9e35705833c3528bec4503886f283e386d94f81ac97426d559b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/binaries/mpc_controller_cpp",
+      "bytes": 8657256,
+      "sha256": "3d5879163a1a22fbf984bc4c84391bd1f3ccab59f164a47983a2e71d64a97e22"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1511816,
+      "sha256": "bbe6292d209c289d1ea516989cc99885991dcd64d1c8e2e9598a0be4b1456c21"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/build.log",
+      "bytes": 4369,
+      "sha256": "7f7ed80bb62280b155c1a2ecf2ef22173cfe83874bb259f955fdd996fb062632"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/compose-six-lap.yml",
+      "bytes": 206,
+      "sha256": "9fa0e609d20ab79226340dc04a8367e3dcc638433153325e65d35dde60907e28"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/autoware.log",
+      "bytes": 413064,
+      "sha256": "ee51c8d57eb26c93f62581a9959a69dc24e5f2ba93ab4eb4dade78cb75def03d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/motion_analytics-26-09-09-12-33-57.html",
+      "bytes": 4851350,
+      "sha256": "44a4ea1535e6e6c9f0458bf40f9058ba6a9c1d405a355c8e4c50f6d1f78db1b6"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000007-4c1f5220c3f537d2-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 257019,
+      "sha256": "3467c01e2e64e7ec3230f6a10c4a174b2977df6633953c5afca635855d207900"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000007-4c1f5220c3f537d2-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000203-92db2bb90ae07cd1-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 248729,
+      "sha256": "e20484c0eb6481b5eefdef195babe88621a44c5959a04479fc6810f7a292a4ab"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000203-92db2bb90ae07cd1-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000215-94af7df33610bc60-track-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274811,
+      "sha256": "317a0123e9fbcd6ff2c30d7fa487df1b5ecae2ac6903f4ea4d1303912ceaa7fb"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000215-94af7df33610bc60-track-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000296-29013437677edd06-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273783,
+      "sha256": "2b848e11e113153bbb94c0ba131e40d06f37a3fbd493b7a762ac2e4970ea5960"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000296-29013437677edd06-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000296-2e944684d9b6ce6a-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 274621,
+      "sha256": "d8578eeeac558c2f824b0c3873d7aae9e0a71a799455f97b8392d74412bd28b6"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000296-2e944684d9b6ce6a-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000296-ef43ba19c36490ab-cruise-side-positive-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 270759,
+      "sha256": "53fd46bdce7c5029200e696ee7784139e3cabe21ef494de81a18529ecb011133"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000296-ef43ba19c36490ab-cruise-side-positive-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000297-07162989f941ced0-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 251193,
+      "sha256": "bb2dc41efa1938a4c699c6dc0535db682306944fb2413bce52352100780f210e"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000297-07162989f941ced0-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000384-c1ed6d8c69bd9dbd-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271364,
+      "sha256": "55b275ca57d4a125565b57ae8323882318f6a7c16c43dbdad3cb3098d2b29999"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000384-c1ed6d8c69bd9dbd-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000419-f51102ad5c7fcb61-cruise-side-positive-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 262809,
+      "sha256": "42154d221561a202b41db2b8f1798a2b7007ae30e9a99a57f5c4bdc949bf4c08"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000419-f51102ad5c7fcb61-cruise-side-positive-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000522-a509fa9746a4c940-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 261290,
+      "sha256": "93730e751cae515df34e295d8a2da91eea3aa994fe4fe31407d438456b7b9644"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000522-a509fa9746a4c940-cruise-side-negative-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000549-921af3d0065908fe-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 36271,
+      "sha256": "3a7516ffec1d4caa682b275e45db7b0d9d3e461338f7990283a2838b393879cb"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000549-921af3d0065908fe-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000688-bb9e8d3874eaccfe-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 250345,
+      "sha256": "00dcc629e6d2c10076b177dc23ba8fe23c6d6a7fb876b282ac88a8619ab03487"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000688-bb9e8d3874eaccfe-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 238463,
+      "sha256": "14571b9cd2bf273f15daf6a41f35b39e82aac6e17aa93901ebb30f1b3f242642"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 239015,
+      "sha256": "fcebc09ac9ff565eea476cc48c0ed9a81c982790c556882880b136821e1c3c15"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/mpcc_architecture_snapshots/000000000937-291e74c062722978-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/2026-09-09-12-33-22-503101-msuda-System-Product-Name-69/launch.log",
+      "bytes": 18623,
+      "sha256": "fa94ccc1a7acc8577e307cd8477d41773cdbc26a85e8a809cfa409b2f989445a"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/component_container_102_1788924803754.log",
+      "bytes": 1488,
+      "sha256": "f63f48eb2f301b08ba5962c19a52a9caab8f2d2e14c7b57ee06581386e0c4ca8"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/ekf_localizer_94_1788924803760.log",
+      "bytes": 65,
+      "sha256": "dc4e746cce8d3708290cdb2f0e9c8a207d2c4a14351ac7884d84ea745a3dc950"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/gnss_poser_88_1788924803752.log",
+      "bytes": 205,
+      "sha256": "4d1cb0175714d46b91cf86cc55faec50af5ff7949dc4a0233c9a6f55a6950978"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/gyro_odometer_90_1788924803760.log",
+      "bytes": 65,
+      "sha256": "cd2fa56877c340fc673c9048ac7a4385d11f14b55dbf7579b21ecad53e2d3dcd"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/imu_corrector_86_1788924803728.log",
+      "bytes": 65,
+      "sha256": "9bcb53a20dc7a823b140aa3147fa3608c0cacb32d96de59d6394762544b7c9c4"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/imu_gnss_poser_node_92_1788924803726.log",
+      "bytes": 977,
+      "sha256": "1afcbc218ccbeb2a71bc986fd960c394d6baa87885252915483486db87a681ab"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/mpc_controller_cpp_100_1788924803905.log",
+      "bytes": 370868,
+      "sha256": "720be4cad724619e50e0a915b29f9a9e69b2d7e78ca1035bd6394febb45edb87"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/python3_108_1788924804016.log",
+      "bytes": 4147,
+      "sha256": "2023542070d9ce580b1f1f9340ab58c8ebf9d9df5e06538978253df0a8b3a0cb"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/python3_110_1788924803961.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/python3_338_1788924820502.log",
+      "bytes": 2711,
+      "sha256": "19eee109bd41d883de03037d76c9757c97a7a9b123eb61e7bcad2b10688ed100"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/python3_69_1788924803611.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/relay_106_1788924803782.log",
+      "bytes": 65,
+      "sha256": "823c7d4d764784ca46557e247a0ac797daf461901498778b289e4745a58ba0bb"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/robot_state_publisher_82_1788924803726.log",
+      "bytes": 705,
+      "sha256": "0add4497ae28a74746527c35d0611debec8f2a5471dc721b8abef433e983f543"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/rviz2_104_1788924803871.log",
+      "bytes": 744,
+      "sha256": "55f9e504382efa8c2f4c4c9623485516651d9d7200611f34831d889842f04b72"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/simple_trajectory_generator_node_98_1788924803729.log",
+      "bytes": 1415,
+      "sha256": "fbde1d2d30f1ac8595864372ec57fb05d2f3d4fb26db6e8fc431f0d564d09b89"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/twist2accel_96_1788924803730.log",
+      "bytes": 65,
+      "sha256": "fd044384b8bc5f6716a0eb56320c94054ac3f0e53a776211b6f56460ae9038b2"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/ros/log/vehicle_velocity_converter_84_1788924803729.log",
+      "bytes": 65,
+      "sha256": "77bcc7f8d4e3b55b224b76fd30131d706901946111ca73c2a5993672305848cf"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "9fa6b292dc8a680eb7f7b8b4b2ec344c799127d5931bd5929e7a7aca1b831e4b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2138914,
+      "sha256": "ba9d58930d02fda0691dd1236b72985732c0edbaab6e11e4b524d9167482c599"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "e2e62e0076b59beaf6cb3bcf816afa72c0abb23c59cc3ae443df23a31f3e7bd7"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d1-topic-timing.json",
+      "bytes": 2368,
+      "sha256": "31231c0f23bc59f8ee747678ef0aa8f57465091bd3af3645f24486f336803c09"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/autoware.log",
+      "bytes": 229906,
+      "sha256": "321b4d49610472bb2738510c2ddf74cccaffa8f1c05e13982dc9999eaea4133b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/motion_analytics-26-09-09-12-33-56.html",
+      "bytes": 4851206,
+      "sha256": "cd22dc5ba096e81ff10ec367c77f577273ba977b9429eee096d52adc5d70b52a"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000176-04ec9ade8fcc9c55-track-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274769,
+      "sha256": "498bc6c103abdc94be718c46c0befaea11f3236200e8f4fd26eeea1e78fe46ba"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000176-04ec9ade8fcc9c55-track-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000189-af4e358867430879-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 249380,
+      "sha256": "6969403876d53d41a50c90b66d5872d6d588a9641da9cf5ea5fb2072704829aa"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000189-af4e358867430879-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000203-d1cbb93dd2d826a4-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 250410,
+      "sha256": "c654f5f229a7f8b6e11b3186b7c17a703d915791a413b981fcae1d520b5af6c6"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000203-d1cbb93dd2d826a4-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-5d4761e1dee23343-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 272792,
+      "sha256": "ee3ace2549d7985d7c2291e264333c8bd75939f853fc1c0a26958449d552282d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-5d4761e1dee23343-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-83e068cb9dbd6750-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273037,
+      "sha256": "cf5267e34c23089112996384129e0c107457f9b6b07d52c05b3841427895008e"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000296-83e068cb9dbd6750-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000419-3aa202b3600e5274-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 36126,
+      "sha256": "0008af0a7df2e7c1b291ae8e3c2452eb967c10b9aba2b3c1f20e9f11809301e2"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000419-3aa202b3600e5274-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000513-f0443cdc6c8c83b5-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 270701,
+      "sha256": "f6775a399ed7ad0d12c7a002df9bf6546a3ec2e169a8e6b9bc1148a718cedcd2"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/mpcc_architecture_snapshots/000000000513-f0443cdc6c8c83b5-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/2026-09-09-12-33-22-812909-msuda-System-Product-Name-69/launch.log",
+      "bytes": 17607,
+      "sha256": "90c3b57bf7a9a70402f85f4f4df35e42eb5284ba619f3bd984154215e39aee3b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/component_container_102_1788924804191.log",
+      "bytes": 1488,
+      "sha256": "9d5925b10fd447fc8b98e9a5bc46d094f95ce6309a3f495c09ac903be6f0e316"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/ekf_localizer_94_1788924804189.log",
+      "bytes": 65,
+      "sha256": "c7c846b31c0688f83cb8b99e4beabfdfbff3fe9df6c7ef3751ece449918d6639"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/gnss_poser_88_1788924804130.log",
+      "bytes": 205,
+      "sha256": "13dc0bd007891f143798557f4fc660e535c74a96d03a043d7d567e4482a4e79b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/gyro_odometer_90_1788924804188.log",
+      "bytes": 65,
+      "sha256": "726436743fa67413036813bd126ee7a62dc3b03d059b0e9ff6b4f938f5f9ac89"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/imu_corrector_86_1788924804134.log",
+      "bytes": 65,
+      "sha256": "3a4137b6fcb9f7b01f277ff4e90cc300e14a2b3f1fe9ba559f188d4f8081c7b0"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/imu_gnss_poser_node_92_1788924804181.log",
+      "bytes": 977,
+      "sha256": "3faa46f3ca0dedbc701777dd1357dfcc75e6b8bfb37590d8165d30b593d8d94d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/mpc_controller_cpp_100_1788924804364.log",
+      "bytes": 199682,
+      "sha256": "9e41e221092c3f94c3c34ab0dba55e5147ba0ab4cdf866fdf3da95d96d353641"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/python3_108_1788924804386.log",
+      "bytes": 4231,
+      "sha256": "692d3ab72c1570019fdfbf55639528b7bf327fb5d745098d399a886a37af527c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/python3_110_1788924804427.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/python3_338_1788924820175.log",
+      "bytes": 2711,
+      "sha256": "bead9a58f9a75fc137e74242c6d675f3e4bf9e79815246060cfee21509f69b6d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/python3_69_1788924803980.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/relay_106_1788924804201.log",
+      "bytes": 65,
+      "sha256": "a0d76b3e8309b7b1aee844fb299c34589ffb29ba433618a90817e201a0020cf1"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/robot_state_publisher_82_1788924804122.log",
+      "bytes": 705,
+      "sha256": "2b85f9ec9197af584ff3504e83dfd91524895cc9083c0127770fa083728379db"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/rviz2_104_1788924804335.log",
+      "bytes": 744,
+      "sha256": "e8a5a12a332098e4fc60ce783384933f8f07a4b09e98accfe19f74a90b60eb7d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/simple_trajectory_generator_node_98_1788924804194.log",
+      "bytes": 1415,
+      "sha256": "40b95ee2bb1de9bd022605e2b7289609e3003a297952055d02c1adec4bbf7aa0"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/twist2accel_96_1788924804191.log",
+      "bytes": 65,
+      "sha256": "02958823c26d29324235b2097804ca3052772d927d730bbbecf9e41f8ada274a"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/ros/log/vehicle_velocity_converter_84_1788924804174.log",
+      "bytes": 65,
+      "sha256": "efbae21db9284d15c5d8c55f22a5ed42152cec9ee714898e5f2a51f11b43cdd3"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "02029c8cf0249769db046863fda21819cadeb8dd54e18a2540e521eb37adcdd1"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2094825,
+      "sha256": "9f1789a746afef04c5105010dba87f21cfd4fc47f744c46bb7fbdd3e7464078b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "05b9f8c0adb55451f52c648df2d1d987ad099a47e03119daa0a919d5af9db300"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/d2-topic-timing.json",
+      "bytes": 2370,
+      "sha256": "678739172ca0d3b8c0edbd1e1cfd0fc701f22d84aff2229c060fbe900624458b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/down.log",
+      "bytes": 466,
+      "sha256": "317c8b1843fc8298ebfd92efec8d0d63432a7495693661508d85cc23478aac2e"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/generated-user-path-results/result-summary.json",
+      "bytes": 928,
+      "sha256": "57596bb6dab1e0eb18a63bffbd4663622df82f1ef6542281fa154082bb9db03e"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/ekf_localizer",
+      "bytes": 3017152,
+      "sha256": "b59c3ba635b271fe1c11cb929f130f45a66a2f714f43bc1c80ffc19545038910"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/libaichallenge_ekf_localizer_lib.so",
+      "bytes": 2162992,
+      "sha256": "25d6709773578e85b60692fb0c6d3507d619fc3135e647357076b739e47675e4"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2226888,
+      "sha256": "01f5faf04095b8e5665d5978d01ca2c039f5b5ea9b80dbdea42f1d0a84650734"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/CMakeLists.txt",
+      "bytes": 1967,
+      "sha256": "3c0afc4b2c1e16fd6411e84ab124702ee9c0b18e82995f2e9ed10f7d6107cd11"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/NOTICE",
+      "bytes": 591,
+      "sha256": "022282b0ddb9150f8f8eef93d756496e6fceaac26645f5ac8ab5885014df7524"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/README.md",
+      "bytes": 868,
+      "sha256": "0e611995e7b8269b053ea1e485567724e7e4a3f475160b359d60ffcde4f484d3"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/UPSTREAM.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/covariance.hpp",
+      "bytes": 937,
+      "sha256": "6fb6d3f54f710093f871bbe1b3a791ce10614ce6a894cedbfa34c470c4370bc1"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/ekf_localizer.hpp",
+      "bytes": 9173,
+      "sha256": "52150445c4f7614ba87516a0fa1b54a4a76adb61b6fd850c088f452f69b58ffd"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_transition.hpp",
+      "bytes": 1103,
+      "sha256": "69d17f4d8b16a916a4ac4bc04ac813096682707648c7067f3846493438828bf9"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/launch/ekf_localizer.launch.xml",
+      "bytes": 3823,
+      "sha256": "a5adf69bc5ee3774f287928b1a766abc71fb7118b56a81c68fa187f8fe23e07c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/package.xml",
+      "bytes": 1287,
+      "sha256": "f4d7a8c512446c3a0641a91d5ad519df87684916af56388c249166929fd4d7dc"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/covariance.cpp",
+      "bytes": 1839,
+      "sha256": "5e7472cc05e7a73bf260cc2f8770834c72cb48d3704bdd8283ff8195d70b4000"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer.cpp",
+      "bytes": 22971,
+      "sha256": "8097cb77806f0c53e1d37e9b2f9c35efc5486aa3e42376d7af8ec0f83941e5dc"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer_node.cpp",
+      "bytes": 891,
+      "sha256": "9183e015dc463be207cfdcde81c79765a3d22dc8b18b1b015dc9274819210737"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/mahalanobis.cpp",
+      "bytes": 987,
+      "sha256": "b2a2a90892c02266b15a4a2bbaf7fe4c9a5a543fccabc6b7836e6facbc18b9c0"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/measurement.cpp",
+      "bytes": 2196,
+      "sha256": "dacc346cbcfbfdac9efaa3d6be3628bbdf577ddfbae63959bafcda485b857f59"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/state_transition.cpp",
+      "bytes": 3369,
+      "sha256": "2e5c81b1c5a2228806725d32feace05b7ffba34fc341dfe594e38d21b4bd8654"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/warning_message.cpp",
+      "bytes": 2017,
+      "sha256": "13640a809651f7a0c71a5f378b26786e2f07a0fdf9d794ff37d739508645da4d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/src/test_ekf_localizer.cpp",
+      "bytes": 10768,
+      "sha256": "c41a98be09c027d21b0ac0eb78d08c62fca658df25f0ba88cab9d1d5e2074dc7"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_aged_object_queue.cpp",
+      "bytes": 2477,
+      "sha256": "9bbdf1204af2264635ea93f96b96e9ee9d123bcf629b1a7eaf5d7528fd72a529"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_covariance.cpp",
+      "bytes": 2178,
+      "sha256": "e2fa32f59d8572185b18ebfd306500279a28826273a98e9419555b3c57c7b88d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_clock.cpp",
+      "bytes": 5977,
+      "sha256": "567b679be46f8a1a3a464f2d351ded8029049aa25f9f86aa91028a0fb9c41719"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_mahalanobis.cpp",
+      "bytes": 1482,
+      "sha256": "cc31e52681756dd068c72f6c1a80ea249eb6215c15dbb69c8c51567ddbac7ae2"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_measurement.cpp",
+      "bytes": 2617,
+      "sha256": "954ed79a2a28a2116ed3a0ca531bdc25f83e48bcbc197321d266df0922f7e661"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_numeric.cpp",
+      "bytes": 1507,
+      "sha256": "a8da5388facefe07b59a7807e28a28f39c94b7bd73b397383fda6c2f6d92ef56"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_state_transition.cpp",
+      "bytes": 3161,
+      "sha256": "84a8cab921a6f1b0d94c212a8e638eb621cdadb5d470a6e5a55a78020440ab69"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_string.cpp",
+      "bytes": 909,
+      "sha256": "7d5fddf1bdac43b7f0a5bd393f277fddf485e2d8d3b65457b1fdc946eeb71ed0"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_warning_message.cpp",
+      "bytes": 2055,
+      "sha256": "9c7b8883eb339c17d60639aac6fcf3d72b969bcd5d66b5fce9d4e20088eef4d5"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/.gitignore",
+      "bytes": 37,
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/CACHEDIR.TAG",
+      "bytes": 191,
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/README.md",
+      "bytes": 302,
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/v/cache/nodeids",
+      "bytes": 484,
+      "sha256": "dbf6e134667cc83efdd0884f38ba6dddac1aa40080f802178a13ddf189b21329"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/CMakeLists.txt",
+      "bytes": 394,
+      "sha256": "cabc352f6806cdd80ac4e366723d85cadd2ef1b00f016d5939398a74599e3ff6"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner.param.yaml",
+      "bytes": 1938,
+      "sha256": "d4f307b9bb58635dd0496845dfb8a6346977c19bfbc5ac1d2ace7c4120a378e5"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner_tree.xml",
+      "bytes": 2621,
+      "sha256": "ef7ce6d5610f3bdb670e52ec3559d22940bd3be63cb3c9602948b0207be68d8f"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/converter.param.yaml",
+      "bytes": 327,
+      "sha256": "17d1def2c550d81200548b61d000e2d42ad9609b21164fa0f61c3dcc6f5e4faa"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/map/lanelet2_map_loader.param.yaml",
+      "bytes": 129,
+      "sha256": "cf8304daf3684ea25c3edf0544a33c0be32b306123ad35590019c8f6ca08ae4b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/mission_planning/mission_planner/mission_planner.param.yaml",
+      "bytes": 212,
+      "sha256": "c048d0175ed7c810a635da80465222f676e42f5f73493909034162e3c28fd457"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/common/nearest_search.param.yaml",
+      "bytes": 132,
+      "sha256": "b6c156d6f3cc74b16c95f40f35cf86ddef2b8b3a19ee2630b741cc10f4085726"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/avoidance/avoidance.param.yaml",
+      "bytes": 4704,
+      "sha256": "522287ec99e5bfef1b1d96788fb90a0e249398b1aac70e948a9affdb55c30416"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/drivable_area_expansion.param.yaml",
+      "bytes": 3154,
+      "sha256": "1f4cf4862f076a30ca4e830c8c3efbf910801de35e7d2f5c6bb4a28369499f66"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_change/lane_change.param.yaml",
+      "bytes": 1161,
+      "sha256": "3562d08a5d22112dbe5da44f6070b750752da1d0282d0ae475d7a62e18c7f30b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_following/lane_following.param.yaml",
+      "bytes": 84,
+      "sha256": "6115c2b5fdd761e453f42398cd8b05701ff1cb1120481409cc40fe6b8336b8e9"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_out/pull_out.param.yaml",
+      "bytes": 1043,
+      "sha256": "20dc36eff032a06b37e150ed60652101ec01e07924a41d55bb3f749aad22519c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_over/pull_over.param.yaml",
+      "bytes": 3288,
+      "sha256": "dad3fdfe63460034550abbf1c93937ab635d2ea36a2d4ce71125d1cadf5d9831"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/side_shift/side_shift.param.yaml",
+      "bytes": 213,
+      "sha256": "4a0aa18c500e40c9e3b1848392c5289f41ed3be56d7afe93f693e55fd936cbb5"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/vehicle_velocity_converter.param.yaml",
+      "bytes": 167,
+      "sha256": "c068e333ebe0bf94ab67a7e4ee94c1fa7c64c41e4e46cc0d140f66efb553afa5"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/accel_map.csv",
+      "bytes": 539,
+      "sha256": "59ef66e4a2a6ad85e3e3f3e894af6b6ed55345fdfbef1295f49bac2c1bdc5f2f"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/brake_map.csv",
+      "bytes": 405,
+      "sha256": "7c9d8e9db7f00cf64bcf6f80ca67b65048da8487f4c53b3dcc37b4a971ad18cf"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/steer_map.csv",
+      "bytes": 1469,
+      "sha256": "26ead52a49148b347b7bbe5edb3c9cca6bd030f89585781f13b4e8870872571a"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml",
+      "bytes": 990,
+      "sha256": "0a82a035882bef28d3c35856f6d8b82a6207711eac5b7ecc94928309523e4537"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/joycon.launch.xml",
+      "bytes": 316,
+      "sha256": "f949739493762605db0ce0d9d5526cba2a3fcfa3410fc1dd65a7bb0997bebaa9"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/mpc.launch.xml",
+      "bytes": 1029,
+      "sha256": "bc0c319f6352ddd5d40518ff52877b138321e57ca0603436e1b13bb6b74fa7d1"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pilot_net.launch.xml",
+      "bytes": 488,
+      "sha256": "bf5b4f272aecf99c96996380e1241737d82874158fbb45fb2d9d880ad00fde78"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pure_pursuit.launch.xml",
+      "bytes": 1018,
+      "sha256": "738fa5d0714ca9355b14e0dade3b09a6d55a5b904c187abf1307b3930d2e7bdb"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/rl_train.launch.xml",
+      "bytes": 143,
+      "sha256": "6c3e3aacb7d99ded76c03498a1602bac0834881b031d77168baa500c971e62a6"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/tiny_lidar_net.launch.xml",
+      "bytes": 955,
+      "sha256": "79465471ea4c5d0c6a370651ed9b14b12fa4cdf970427624be400f65e9b448a5"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12963,
+      "sha256": "e2855514d6c4fc6f4cea480d517605095ef0638d119186991d92d90a606bb909"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/lanelet2_map.osm",
+      "bytes": 116731,
+      "sha256": "126a62f2ef21560ace0eb39a0f52a6a5e86ef6b9951b0ead1511e46e4b418dc4"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/wide_lanelet2_map.osm",
+      "bytes": 138570,
+      "sha256": "c6bf9625bd5a6589991095c3eced22be048ba30740a1b75479e7cfe2b90c7e75"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/package.xml",
+      "bytes": 2019,
+      "sha256": "0596ef3df8a882be95cff9ff8c2b1efc78fde63a11897dd4e5ca02f68bfed50c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 18802,
+      "sha256": "27025f14e21657016d1bb640ce203cfcf43c41987de8bd85ed43805be560ff59"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 18869,
+      "sha256": "6b96d03f80c055fc815ccbd88a1c23c7fdf62ac4c0ca96bf5b5ef292fa9be2f8"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 5249,
+      "sha256": "bc6f30df073266b186ca1525aeba872dba25d376a99e39e3a13bd4027f857631"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 5316,
+      "sha256": "e8fd6f02f09e59a3856af0a544d9667f2719d0ffdb1d1fa8c6cb9812a1c1c4d4"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_localization_timing_contract.py",
+      "bytes": 1684,
+      "sha256": "7f54ea148127b65302c28881300557398a37573afa88b5280bb34641f5400a27"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39448,
+      "sha256": "e1e52feeb082a54e70ba57020157589ca389dd6fd59bc553e64aaf1a22f57991"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 10186,
+      "sha256": "9c91ebbcefa5cbe45a2fab959b37276c7a4bc8eba6a3ca9b5ee0a5a2fd9e421b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2943024,
+      "sha256": "98fffc37df6bc6bab0af8ed48a8562da1a424d3c27bd8fb034bfe8678fa0291d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 123454,
+      "sha256": "1a6b26073c85dcc8a51446454c75064939d3c13b1affcee71be60bd77421885a"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 55561,
+      "sha256": "b99355c90141d04714b05786f94ba167a68f84f35632918ed26fe041c5e36fe4"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 36145,
+      "sha256": "3613dced6d83d36f1fc19d5b4b166d13fe62b2fa292672073ede9d9c05941117"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 181162,
+      "sha256": "c9627bf8eb2dcad29da2e942b9c8452e03c2d6da4a3414536e8e9c3c42928ec9"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17463,
+      "sha256": "400587843725512bb8f6001470a77fdd2fa39798b1cb0fdf9909dda182781efe"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/test/test_gnss_heading.cpp",
+      "bytes": 6810,
+      "sha256": "6b06a36dc60c4413e0d389cb98795fb582102bd3841a74626fad3d06c1d308fd"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/launch.log",
+      "bytes": 698,
+      "sha256": "929bd79975378c6dc75e8099390cb7561bcd05c43e7e6121aef84668f4a32489"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/manifest.json",
+      "bytes": 55420,
+      "sha256": "4c6cd74d7711b55ff60f2431844bf676df9441a68f8b13ead860e750653ae701"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/monitor-summary.json",
+      "bytes": 1867,
+      "sha256": "f46a513c4e1ea02684b0e24a9d640bfa7f945ba5848356bc0890a457edee1306"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/mpcc-source.patch",
+      "bytes": 1741,
+      "sha256": "7223884fca2e1565727ab92c636970df2e1ed79fc665bab893dfa224e0d9376e"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/package.log",
+      "bytes": 519282,
+      "sha256": "2f0a15b6e3b2f9483b9c5ac3f7f23f76cd2ffe35d31109d1c68eddfc1ac9abe3"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/run_campaign.py",
+      "bytes": 12260,
+      "sha256": "5c7f590b2b15a4f78d1fc2d63e522dbfc731d9ada0bf0dfde87d798cbdcef5fe"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-ego-viability-dev2-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/CMakeLists.txt",
+      "bytes": 356,
+      "sha256": "06be607d06641fd63d528c68417dba9f1701bca2818dd1c0bb51cc45eb387105"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeCache.txt",
+      "bytes": 30361,
+      "sha256": "fabef01fbd687066bb8e71557ed6dd108538a2658f5a438a91db7cbe261bae1b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CMakeCCompiler.cmake",
+      "bytes": 2441,
+      "sha256": "e226df1b454d69c8a4cdf53fc6c03ccdd621608d14eefe53d00aba36b1490d9c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CMakeCXXCompiler.cmake",
+      "bytes": 5439,
+      "sha256": "2b45b213952e8ff33366da3750a3a8ccdc914d32dde4b4cbb2051e959ab192ee"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CMakeDetermineCompilerABI_C.bin",
+      "bytes": 15968,
+      "sha256": "d735201e76a4b9c9e9a24ac9318aa4dd720969d4a0d82e18f4448af54925e837"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CMakeDetermineCompilerABI_CXX.bin",
+      "bytes": 15992,
+      "sha256": "080138e7a8a5eb2e6633fb21664306f5673c090a9ea3a99181fd92db43a65cca"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CMakeSystem.cmake",
+      "bytes": 402,
+      "sha256": "d4ab78dec65371debf381837e24ed1110bb190e0df942eaabe673de66cfd8b79"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CompilerIdC/CMakeCCompilerId.c",
+      "bytes": 24853,
+      "sha256": "f88399a39d56b310a14aa58ca95c614022a5899dc39317b98006d9f8dc71cbee"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CompilerIdC/a.out",
+      "bytes": 16088,
+      "sha256": "ed11a0c711a24abaad7830ae4680dacdcc53e9097d97397bb7c433c5986a9abc"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CompilerIdCXX/CMakeCXXCompilerId.cpp",
+      "bytes": 24597,
+      "sha256": "bd1f2250416e16ed26d6db1890f822a01d487df29d20e87407ef4ce72c314ba0"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/3.22.1/CompilerIdCXX/a.out",
+      "bytes": 16096,
+      "sha256": "89b5d405df0a95e80a23ffdbb7fa74a92c8740ba1396c9fa4120ab3e6017b4aa"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/CMakeDirectoryInformation.cmake",
+      "bytes": 682,
+      "sha256": "6c175a0aeb51292878c3d5fe6e1c8661d7168c20a135a30ce09a79b7861bec52"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/CMakeOutput.log",
+      "bytes": 49884,
+      "sha256": "0cb9c6520e8790eb29d3fa8976568d6109e105c9563777ddb87e28b73f7c5b07"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/CMakeRuleHashes.txt",
+      "bytes": 105,
+      "sha256": "98cec4b21e9db9164687da2cbf51df20a114a5460e1c365a74273396838a9fb3"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/Makefile.cmake",
+      "bytes": 113069,
+      "sha256": "aa9e30828ee6cc0e8ff832fa770119dd325ee6ca82a768b2eb6894c128659600"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/Makefile2",
+      "bytes": 6764,
+      "sha256": "47b1d16d91541140339d5ce2d3e1a3cb1f4207fb0129fdd63100051507af9a85"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/TargetDirectories.txt",
+      "bytes": 509,
+      "sha256": "10e4e43c74c864c1a9d3d862b895d2ee36ba7590927cfe8d6c126c4feb2e0c27"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/cmake.check_cache",
+      "bytes": 85,
+      "sha256": "a26189e394421da57f45706a07713c5720acd200a41711b0c0c590c3c63371c4"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/mpcc_ekf_clock_probe_uninstall.dir/DependInfo.cmake",
+      "bytes": 423,
+      "sha256": "be55c7517e44d606499d3e136ed00c5504f78c2c2db34126515040d1341a1429"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/mpcc_ekf_clock_probe_uninstall.dir/build.make",
+      "bytes": 3123,
+      "sha256": "d1599bc9f341298143b87cb4b1a684b063d021f98df4c8effeb456f4592eebfd"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/mpcc_ekf_clock_probe_uninstall.dir/cmake_clean.cmake",
+      "bytes": 242,
+      "sha256": "badbc98479daa18ab932270061b88c1df26b1d4dc3be9b573352ed67d465e31d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/mpcc_ekf_clock_probe_uninstall.dir/compiler_depend.make",
+      "bytes": 140,
+      "sha256": "d410a2ee632f85aa91f8f9a9d86f46c71ab8501888ab026771fff39c44aa3984"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/mpcc_ekf_clock_probe_uninstall.dir/compiler_depend.ts",
+      "bytes": 134,
+      "sha256": "c49058521e4c64d1b5cd32109c8fb44665389c099ed045f6048b032cc0ef7996"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/mpcc_ekf_clock_probe_uninstall.dir/progress.make",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/DependInfo.cmake",
+      "bytes": 566,
+      "sha256": "1d7a8d98eb292c4da270fef62fbd8e73909a02683d983c57991577e07dd7ad8f"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/build.make",
+      "bytes": 30886,
+      "sha256": "1c2eb05250abef3086c95d5373a3cf78708984a29fd198f80bc6ed1aa7e7d457"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/cmake_clean.cmake",
+      "bytes": 274,
+      "sha256": "851142471f68c303e4b4596cb81f09ac1cfb7fac3ad61a99a5fe520002e6e530"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/compiler_depend.make",
+      "bytes": 108,
+      "sha256": "4b19f371e38d934bb58ec7d4d0c06f8f32bd8079fc3100a87ed784bad332450d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/compiler_depend.ts",
+      "bytes": 112,
+      "sha256": "31b28327b2db836613e6b2f79c47c41693332e58e99a1ed7ff51fa2d94681ce6"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/depend.make",
+      "bytes": 89,
+      "sha256": "603a4d6d5d6f01c8d71f85e5cc0424d257ab8dd06e11783a2a152a32ce0dccce"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/flags.make",
+      "bytes": 2949,
+      "sha256": "b3b576577b5419548f86625e39993904e2b4be21727069edfc67bbc577e069f6"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/link.txt",
+      "bytes": 24620,
+      "sha256": "dba570b88aecc28794956fc6cef5caf26fe48a11301cc1cd6e6332f863c69140"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/probe.cpp.o",
+      "bytes": 378896,
+      "sha256": "94ca149a3df9d587e6e8aafdc89cdcd0119cd7a277627f56c348ac2bbe1b35b1"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/probe.cpp.o.d",
+      "bytes": 103622,
+      "sha256": "560928cb7f3b29f1d0693d7686cb140c8bdc1ba31e7a049928003be63eab4332"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/probe.dir/progress.make",
+      "bytes": 43,
+      "sha256": "c06e644090b09d41eaddf59d10bcf03c6db6499eb51fa0d03e5128e5a165cc3c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/progress.marks",
+      "bytes": 2,
+      "sha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/uninstall.dir/DependInfo.cmake",
+      "bytes": 423,
+      "sha256": "be55c7517e44d606499d3e136ed00c5504f78c2c2db34126515040d1341a1429"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/uninstall.dir/build.make",
+      "bytes": 2550,
+      "sha256": "511f019c451b92559ccf84388edecba9c37878ee62601c47d934e33be12fe1f4"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/uninstall.dir/cmake_clean.cmake",
+      "bytes": 153,
+      "sha256": "e51440eea639df67acafb145cd82e07a0d47a18935f82ef48527ded743c08d36"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/uninstall.dir/compiler_depend.make",
+      "bytes": 119,
+      "sha256": "544b5020e80145b8265862c76a0811c3dd31a0820e2834b26038f646fa99c80b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/uninstall.dir/compiler_depend.ts",
+      "bytes": 113,
+      "sha256": "5f7329b918c868b9e2549e3175c8cab0d6c02deccfa5f2700ee294575108f150"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CMakeFiles/uninstall.dir/progress.make",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CTestConfiguration.ini",
+      "bytes": 2385,
+      "sha256": "5440e0f946464a0e183ce91f934a9c6094efe6a3e1f4ed4798685ca90014d74f"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CTestCustom.cmake",
+      "bytes": 104,
+      "sha256": "604987db904b472a78182f761db384fc8115f0ade6bb2cfed0d2242259f36bf0"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/CTestTestfile.cmake",
+      "bytes": 319,
+      "sha256": "67691af2baedcec2992b3ee2bf791a03e42aeaab96988600e6f091d4b046e10b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/Makefile",
+      "bytes": 6602,
+      "sha256": "1d75be9ef95a0bcbeeff29e4d4b76f0273dc1ccf433e1be637419c596ddaed8a"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/ament_cmake_core/stamps/templates_2_cmake.py.stamp",
+      "bytes": 3691,
+      "sha256": "696037d4de7b593bce6ca467480ee35076eb3efc49a94fa0af7e909fe0c96ebb"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/ament_cmake_package_templates/templates.cmake",
+      "bytes": 1996,
+      "sha256": "dcb3eca620474fc2b1109edbb1cde9087a95a8610643b8eb8b543a8236e3e758"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/ament_cmake_uninstall_target/ament_cmake_uninstall_target.cmake",
+      "bytes": 2132,
+      "sha256": "af98dbf8ffac9bd492b30183a02b56fd991c5ec79b4f51e397ac6458cd4b01db"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/cmake_install.cmake",
+      "bytes": 1676,
+      "sha256": "adce5e4309da62232f629189d27e97cfe6f0ddb4b39581c218cf0159d3934d94"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build/probe",
+      "bytes": 270888,
+      "sha256": "a376fe031ef2b9aafd26ce002bed25162375a5d0de5994da7aabcef5a96c7de2"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/build.log",
+      "bytes": 2111,
+      "sha256": "45b24898d55daa5408b93d1793ccec17fce1719885d96b174438739a43b3e9e5"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/manifest.json",
+      "bytes": 424,
+      "sha256": "d405b32f11e922a5abec6cc3a6fe2d03e04a3326a8d65b250a4a4d9748a720c6"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/native.log",
+      "bytes": 644,
+      "sha256": "09472a5a124a824bd2d6b6c24747eb1bcd7ef983e0be2f25c50d83c960b34297"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-clock-native-r1/probe.cpp",
+      "bytes": 3398,
+      "sha256": "a68bb22158fcbfb9bffe72e2806ed62858b0194c8cadfb4886abced31c19e66e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-inputs/inputs.json",
+      "bytes": 177723,
+      "sha256": "20d390a271f2f4cea379f9adc2aa68302bd9916d9dbf2c1c63ca07555714c8e8"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-inputs/manifest.json",
+      "bytes": 453,
+      "sha256": "7adee909c315e1fdcb1e7453b2e1144c0fe88e811b74f63d6bae73195baebe1c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/covariance.hpp",
+      "bytes": 925,
+      "sha256": "a4d2326bc090ffcf62087707e8f8e29de86514fc5547f766aa630db01c7cc951"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/ekf_localizer.hpp",
+      "bytes": 8991,
+      "sha256": "b40d949b68b1fd2862c162bbdb223c36c230ae585b703cb75d44b57d9e1efcb4"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/ekf_localizer.launch.xml",
+      "bytes": 3811,
+      "sha256": "ba09e038b54727d2b9b88a4fc743577b1f55e58789d6e8dbd75c43fb1b1b277b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/frequency.asm",
+      "bytes": 15868,
+      "sha256": "b80f38b8206a9dc727769d15013882977dd3b6836528963e46afeb4144e4589b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/libekf_localizer_lib.so",
+      "bytes": 2162792,
+      "sha256": "f04460c6bd0cb7de8ebe1ffa2f6c77e67306465d9d1d30f285c9960600e5432c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/manifest.json",
+      "bytes": 2265,
+      "sha256": "df33e67758385edc7ccc85a6d54c700379e49498f16c8c38efd46103da323171"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/package.xml",
+      "bytes": 1442,
+      "sha256": "7e5ded167ee41ce49f289a999532e3796ce1919cde597e9466637a16ca54b7ee"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/publish.asm",
+      "bytes": 220987,
+      "sha256": "38eaf5c29c7b9ad32af6f1d4d9dde4451c7ef9df31b1e763a2ec17cf0dc44559"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/state_transition.hpp",
+      "bytes": 1091,
+      "sha256": "cc8b4d5b8b99f94fe21cc4938fb73187ae8fe63025b48f004cf4f0f82c601dfb"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/symbols.log",
+      "bytes": 3752733,
+      "sha256": "de07b8f6251f119567b084eaafbd99913a3294868084b7ad616966e2a0c237d4"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/timer.asm",
+      "bytes": 176931,
+      "sha256": "a9c91bc1922e15c5703feee4eef099ad65b19b4725a6bf44662b0ab2e2893793"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-installed/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/CMakeLists.txt",
+      "bytes": 634,
+      "sha256": "740269d721aa992e6472fd8e7e148ec29607b787c1f75fd09accfa63efd6bfd1"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeCache.txt",
+      "bytes": 30666,
+      "sha256": "4dd37eef3a22bfdd3e21982aeb810ea75598187f4a2815afbcfeaf4e181b0fd3"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CMakeCCompiler.cmake",
+      "bytes": 2441,
+      "sha256": "e226df1b454d69c8a4cdf53fc6c03ccdd621608d14eefe53d00aba36b1490d9c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CMakeCXXCompiler.cmake",
+      "bytes": 5439,
+      "sha256": "2b45b213952e8ff33366da3750a3a8ccdc914d32dde4b4cbb2051e959ab192ee"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CMakeDetermineCompilerABI_C.bin",
+      "bytes": 15968,
+      "sha256": "d735201e76a4b9c9e9a24ac9318aa4dd720969d4a0d82e18f4448af54925e837"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CMakeDetermineCompilerABI_CXX.bin",
+      "bytes": 15992,
+      "sha256": "080138e7a8a5eb2e6633fb21664306f5673c090a9ea3a99181fd92db43a65cca"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CMakeSystem.cmake",
+      "bytes": 402,
+      "sha256": "d4ab78dec65371debf381837e24ed1110bb190e0df942eaabe673de66cfd8b79"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CompilerIdC/CMakeCCompilerId.c",
+      "bytes": 24853,
+      "sha256": "f88399a39d56b310a14aa58ca95c614022a5899dc39317b98006d9f8dc71cbee"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CompilerIdC/a.out",
+      "bytes": 16088,
+      "sha256": "ed11a0c711a24abaad7830ae4680dacdcc53e9097d97397bb7c433c5986a9abc"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CompilerIdCXX/CMakeCXXCompilerId.cpp",
+      "bytes": 24597,
+      "sha256": "bd1f2250416e16ed26d6db1890f822a01d487df29d20e87407ef4ce72c314ba0"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/3.22.1/CompilerIdCXX/a.out",
+      "bytes": 16096,
+      "sha256": "89b5d405df0a95e80a23ffdbb7fa74a92c8740ba1396c9fa4120ab3e6017b4aa"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/CMakeDirectoryInformation.cmake",
+      "bytes": 670,
+      "sha256": "79601bdc694a2532a489bd6dcc30363b65cfccab2e37a8aeb7deccb092d23921"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/CMakeOutput.log",
+      "bytes": 49764,
+      "sha256": "1bc648e44e701301bd28ffb99a32facd4b5f85f274f06472d1c9817178576152"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/CMakeRuleHashes.txt",
+      "bytes": 95,
+      "sha256": "2775d8527f7c118713b507c8864908669ca21ebb20ea36aa1bcb4f6c67546c80"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/Makefile.cmake",
+      "bytes": 114103,
+      "sha256": "0c5dbedbdb18761b8ef2475a7a4804edac13b424642dd702b6865c5398614199"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/Makefile2",
+      "bytes": 7818,
+      "sha256": "b35bc2bb521a7526439ad16471b7f33aad7f110029c1cbb6ae046e27127050ff"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/TargetDirectories.txt",
+      "bytes": 536,
+      "sha256": "a86b74019c5b8adde5dc676d053659223b986a1b02d35bf57ad354f304372d18"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/cmake.check_cache",
+      "bytes": 85,
+      "sha256": "a26189e394421da57f45706a07713c5720acd200a41711b0c0c590c3c63371c4"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/ekf_parity_uninstall.dir/DependInfo.cmake",
+      "bytes": 423,
+      "sha256": "be55c7517e44d606499d3e136ed00c5504f78c2c2db34126515040d1341a1429"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/ekf_parity_uninstall.dir/build.make",
+      "bytes": 2889,
+      "sha256": "19456766a4773a7ebbb9a587062b00f1f7747fc4d441f03bdcd030422cff96dd"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/ekf_parity_uninstall.dir/cmake_clean.cmake",
+      "bytes": 222,
+      "sha256": "632139655d5becc489f495d628f074ba085fa7d6b4bc731fa2cc97c686029b7c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/ekf_parity_uninstall.dir/compiler_depend.make",
+      "bytes": 130,
+      "sha256": "0df85c5daf75b05bbe5cef11ce9d2f8f694f97ad37350520fe01b5b4a3a8a349"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/ekf_parity_uninstall.dir/compiler_depend.ts",
+      "bytes": 124,
+      "sha256": "7a32e0ad7fbfa5ae57847dc0593e43a884f22186dc18b71f3b710f189c0fc84c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/ekf_parity_uninstall.dir/progress.make",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/DependInfo.cmake",
+      "bytes": 559,
+      "sha256": "c2c6c181d90948c27c2c2e9e5e615e10c6812079473ab0231e337702e4ae69f7"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/build.make",
+      "bytes": 30147,
+      "sha256": "27fbb8f4d66f712930acfc0d9bbeea981505762ca5562cdc9829048671f54690"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/cmake_clean.cmake",
+      "bytes": 266,
+      "sha256": "559579bcdeab6036148c2fc848fef4a759577e64dec48e0dad6913752edacbcf"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/compiler_depend.make",
+      "bytes": 106,
+      "sha256": "74c665cac1a4e770f21b6695d32298651cbd6fab249fae968dcb2856a8c8ecf4"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/compiler_depend.ts",
+      "bytes": 110,
+      "sha256": "805dcf3ec4f9174646d516e49791ead10cf2a939468638996f71b8dfb969a6e0"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/depend.make",
+      "bytes": 87,
+      "sha256": "cc5808c14f1056d846cc64e09c86980bfebefd139ffc7c8d53ae0d3de79676e7"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/flags.make",
+      "bytes": 2949,
+      "sha256": "b3b576577b5419548f86625e39993904e2b4be21727069edfc67bbc577e069f6"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/link.txt",
+      "bytes": 24664,
+      "sha256": "48c4fa968442d9ee5d9d7f9ca85d2736b96b5e0a95c1bbab7b1006b5f47c1679"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/progress.make",
+      "bytes": 43,
+      "sha256": "c06e644090b09d41eaddf59d10bcf03c6db6499eb51fa0d03e5128e5a165cc3c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/replay.cpp.o",
+      "bytes": 1039760,
+      "sha256": "c2c7b23cdc37921943df02531fe01d4eaa610676608a06b6733bb592ed648def"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/old.dir/replay.cpp.o.d",
+      "bytes": 104995,
+      "sha256": "0dd3784bc424d0c05fba7b04b0269e74c9604d9414f5691731d269414a4be053"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/progress.marks",
+      "bytes": 2,
+      "sha256": "7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/DependInfo.cmake",
+      "bytes": 569,
+      "sha256": "efca54679edd874740c782f086289fa46610791b2f22c104986220284f0defc7"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/build.make",
+      "bytes": 30002,
+      "sha256": "01a5a77a9eb494ddfc75315507e3750c955f8f542c4bbc8a8d24391bd2b0d5b9"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/cmake_clean.cmake",
+      "bytes": 291,
+      "sha256": "ec2815c2630c72733d886c026897ca2efa93fb1547c0c59d1cdcc508e47691af"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/compiler_depend.make",
+      "bytes": 111,
+      "sha256": "66379e0d7758d2afc03cae26f84d185ddeedffc248c35f4c1801bbbddab845c6"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/compiler_depend.ts",
+      "bytes": 115,
+      "sha256": "67a5e42f792a5dfef4c376c6c81477358e7c4ccdf261b8f09ba66bc67d05b97d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/depend.make",
+      "bytes": 92,
+      "sha256": "debb73be7c840d69e4c9d0e8e690f900208ea183819e6095f81c976c11db2535"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/flags.make",
+      "bytes": 2992,
+      "sha256": "c46255d80913fb0a69d75f3bba52685e036e1bc2e402179909c76250216210c0"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/link.txt",
+      "bytes": 22989,
+      "sha256": "911af53dbec31bb467997bbe161e457a330d3457bf52fc2faf2e6987f60527f8"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/progress.make",
+      "bytes": 43,
+      "sha256": "2c0c69e4af70b4caed2b8e1bd9f161f3ee9eb525d5f041631eee6d0661e5a02f"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/replay.cpp.o",
+      "bytes": 1039760,
+      "sha256": "c2c7b23cdc37921943df02531fe01d4eaa610676608a06b6733bb592ed648def"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/repaired.dir/replay.cpp.o.d",
+      "bytes": 105185,
+      "sha256": "e1716c68a89d2961693a8bd6d37e8d4ad044cb944d1574364bfcfcbcd631916e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/uninstall.dir/DependInfo.cmake",
+      "bytes": 423,
+      "sha256": "be55c7517e44d606499d3e136ed00c5504f78c2c2db34126515040d1341a1429"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/uninstall.dir/build.make",
+      "bytes": 2502,
+      "sha256": "6391bd8142eccc986f38ae5fc3d1211ada6ebad9eea0155e2259cfd804bade54"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/uninstall.dir/cmake_clean.cmake",
+      "bytes": 153,
+      "sha256": "e51440eea639df67acafb145cd82e07a0d47a18935f82ef48527ded743c08d36"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/uninstall.dir/compiler_depend.make",
+      "bytes": 119,
+      "sha256": "544b5020e80145b8265862c76a0811c3dd31a0820e2834b26038f646fa99c80b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/uninstall.dir/compiler_depend.ts",
+      "bytes": 113,
+      "sha256": "5f7329b918c868b9e2549e3175c8cab0d6c02deccfa5f2700ee294575108f150"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CMakeFiles/uninstall.dir/progress.make",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CTestConfiguration.ini",
+      "bytes": 2367,
+      "sha256": "ee135fbfeffe59bd1b37e86a2134de03b9f6e4bd46500003372a2049cd4d0404"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CTestCustom.cmake",
+      "bytes": 104,
+      "sha256": "604987db904b472a78182f761db384fc8115f0ade6bb2cfed0d2242259f36bf0"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/CTestTestfile.cmake",
+      "bytes": 307,
+      "sha256": "f1e3c72ffb8e944b3f8b962af391b076cc51c6e6aee2e53cb3ad261945db152d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/Makefile",
+      "bytes": 7206,
+      "sha256": "0af96b09a7d6df86d7410dc58f2106ce6a501951d25237b766861938c28cc24b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/ament_cmake_core/stamps/templates_2_cmake.py.stamp",
+      "bytes": 3691,
+      "sha256": "696037d4de7b593bce6ca467480ee35076eb3efc49a94fa0af7e909fe0c96ebb"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/ament_cmake_package_templates/templates.cmake",
+      "bytes": 1996,
+      "sha256": "dcb3eca620474fc2b1109edbb1cde9087a95a8610643b8eb8b543a8236e3e758"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/ament_cmake_uninstall_target/ament_cmake_uninstall_target.cmake",
+      "bytes": 2126,
+      "sha256": "0085346f60cb74f4aec9f7d1e9d32d5a767b1eababaa9afde244e189d6bc90de"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/cmake_install.cmake",
+      "bytes": 1664,
+      "sha256": "8a25eea56425e9c9b945599514562b7a3f3e651d3e90577736d9b5f81edc4ae0"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/old",
+      "bytes": 686128,
+      "sha256": "5f8c77e572e0b49adf201359fdbcf5639915385b0baf638f037fbe0ce6fe3cef"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build/repaired",
+      "bytes": 686128,
+      "sha256": "31188b3e101d260ff96f279479748da69d9be9d5fc67eb9453bef387d2e10437"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/build.log",
+      "bytes": 2371,
+      "sha256": "655e137fa1db6842902145624f3ae4d1a7593722613b85cce540bc91cefa13ae"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/old.log",
+      "bytes": 59,
+      "sha256": "0cd816146a4b5140ba79d8538755948d2eab9e55d7b1a1a5243a02c671992106"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/old.yaml",
+      "bytes": 66812,
+      "sha256": "fc86319111bebcd4184f37ac46b54ecb60db6473de3c363435031922ed44cc76"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/repaired.log",
+      "bytes": 59,
+      "sha256": "0cd816146a4b5140ba79d8538755948d2eab9e55d7b1a1a5243a02c671992106"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/repaired.yaml",
+      "bytes": 66812,
+      "sha256": "fc86319111bebcd4184f37ac46b54ecb60db6473de3c363435031922ed44cc76"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/replay.cpp",
+      "bytes": 4971,
+      "sha256": "65911505a05c0b0ebd6d0b92f984ec4dfb80e500d9d4d4baaf6d93e193f7dc5f"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-parity-r1/report.json",
+      "bytes": 381,
+      "sha256": "a18d5f190e63db3ac50f48c8cb38e38809c9bea687a3cf5d3abc227a0f864cde"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/CMakeLists.txt",
+      "bytes": 2024,
+      "sha256": "1263eb1f28d7beb4886bf995166a44b62525e108f8ead828de7a7297d7a1859e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/README.md",
+      "bytes": 10241,
+      "sha256": "a72246dca6c1d877616008c94068aa4950cc2bbbe08f9b0cf9d5b6348874c57b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/covariance.hpp",
+      "bytes": 925,
+      "sha256": "a4d2326bc090ffcf62087707e8f8e29de86514fc5547f766aa630db01c7cc951"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/ekf_localizer.hpp",
+      "bytes": 8991,
+      "sha256": "b40d949b68b1fd2862c162bbdb223c36c230ae585b703cb75d44b57d9e1efcb4"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/state_transition.hpp",
+      "bytes": 1091,
+      "sha256": "cc8b4d5b8b99f94fe21cc4938fb73187ae8fe63025b48f004cf4f0f82c601dfb"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/include/ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/installed-header-comparison.json",
+      "bytes": 1065,
+      "sha256": "a98008a2556e51c959f830a8a8d9d1cf705c7f2980f08af8bb4a636420708e05"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/launch/ekf_localizer.launch.xml",
+      "bytes": 3811,
+      "sha256": "7471d1b6057803587ad7f7f4f1356fd09c04f31860db01a8aec9741d3222bb8c"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/package.xml",
+      "bytes": 1442,
+      "sha256": "7e5ded167ee41ce49f289a999532e3796ce1919cde597e9466637a16ca54b7ee"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/src/covariance.cpp",
+      "bytes": 1815,
+      "sha256": "0cf35a74ffb7fef9c9fed66da18e2e6533e5cf96df2424cb6197ad0c758d386a"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/src/ekf_localizer.cpp",
+      "bytes": 22647,
+      "sha256": "c9de19366c9d044158436d27dbc902ba46242d006153b6e45904939e8a67020b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/src/ekf_localizer_node.cpp",
+      "bytes": 879,
+      "sha256": "cf62116cb570f2a3b1be88ca22890a9cbc3291516e38793071bfc51971c88f88"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/src/mahalanobis.cpp",
+      "bytes": 975,
+      "sha256": "3306cc954fa636682fbdf59e3dd31df47a86cf25063aeac7275bfb87c23c30fd"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/src/measurement.cpp",
+      "bytes": 2172,
+      "sha256": "1b7749922907c4d6e0d166cd1b019919799c0583eb9c78cc869b51d519b12222"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/src/state_transition.cpp",
+      "bytes": 3345,
+      "sha256": "d73e1748235e272d38dbe7ab9fe4af20320b3a1fbabb125b0cf1713999b92abd"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/src/warning_message.cpp",
+      "bytes": 2005,
+      "sha256": "b89c96091a47812275aed2956acf80db40e6715bf508149ae8ab5093f9d2d1fb"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/src/test_ekf_localizer.cpp",
+      "bytes": 10756,
+      "sha256": "ad2ce9599b0ac24189f67aeab1ea2f1bf00db41a5f3c10306316adc8474fe617"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_aged_object_queue.cpp",
+      "bytes": 2465,
+      "sha256": "07567b2d3d09b1a980d6192a241c402b81e7df9980ee1b03a0b0000acb1eb13b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_covariance.cpp",
+      "bytes": 2166,
+      "sha256": "1b0368f8251c50da32b6682c4f7e15c0415294a5718102d2667475645dfd521e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_mahalanobis.cpp",
+      "bytes": 1470,
+      "sha256": "90bd8714644732e5759868a039459777b92086691ba9ed0b752dbaa5feece9fe"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_measurement.cpp",
+      "bytes": 2605,
+      "sha256": "4601a7bfc39831118a39772644bbbcdd70deda8bec8a7d144c46515e827ad7f1"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_numeric.cpp",
+      "bytes": 1495,
+      "sha256": "67fa24fe5fce3f5573d11267a4624c55df3dffed578d2501b5db75049fef649d"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_state_transition.cpp",
+      "bytes": 3137,
+      "sha256": "7a303452e069d0b4a380538fcb7f409879da7d2815c6d8d25790a230766f486a"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_string.cpp",
+      "bytes": 897,
+      "sha256": "9d0b42cd9b7af42b9f895799304aaa19d46db0736c220dba38f0982e12c21dbd"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/test/test_warning_message.cpp",
+      "bytes": 2043,
+      "sha256": "6843de27ab3a7189bcaa29e3a1210c7f0660e2b0f23dd8ed1a7d37cbb4cb6b81"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-source-package/upstream-manifest.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-upstream/1e90380a3570d02e16d40287e0adf51a27cf34d0/ekf_localizer.cpp",
+      "bytes": 22647,
+      "sha256": "c9de19366c9d044158436d27dbc902ba46242d006153b6e45904939e8a67020b"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-upstream/1e90380a3570d02e16d40287e0adf51a27cf34d0/ekf_localizer.hpp",
+      "bytes": 8991,
+      "sha256": "b40d949b68b1fd2862c162bbdb223c36c230ae585b703cb75d44b57d9e1efcb4"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-upstream/3fd7b7c542baea2de5963efc049efe51f29ad41f/ekf_localizer.cpp",
+      "bytes": 27020,
+      "sha256": "52d53115bca5b6d8c0ca5f7a10f90158372c5baea689d532cc173535215852f7"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-upstream/3fd7b7c542baea2de5963efc049efe51f29ad41f/ekf_localizer.hpp",
+      "bytes": 9758,
+      "sha256": "f8305ad46c9d18895ee90a319e2c3e2c6b41b9146fbb39dbef75eef1b10e6801"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-upstream/751f128e7a8a6d224f6c44f235e130444eb81130/ekf_localizer.cpp",
+      "bytes": 22826,
+      "sha256": "5e90ee9d06900387102bb94a8bd5b0cb660f1641c3e75fe2d127de55db052665"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-upstream/751f128e7a8a6d224f6c44f235e130444eb81130/ekf_localizer.hpp",
+      "bytes": 9025,
+      "sha256": "c28e8ab0d74b0f4e451356275843da03c77ace48f541ab180781c93e3ccd5574"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-upstream/commits.json",
+      "bytes": 367501,
+      "sha256": "1088974e04ffae50dd9feea15171f66d46047cd17e67a4977404e26833e8036e"
+    },
+    {
+      "path": "output/20260909-ego-viability-ekf-upstream/source-comparison.json",
+      "bytes": 3014,
+      "sha256": "8533f6d41bb64aebfbee1e3e025c530857bcf9d6761bcb6152d8864e67cd7c02"
+    },
+    {
+      "path": "output/20260909-ego-viability-revalidation-tool-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-ego-viability-revalidation-tool-r1/manifest.json",
+      "bytes": 17347,
+      "sha256": "8408cf1c03b26838f7af9c71b637f3470518ee64b7236f4118cf323736e96e89"
+    },
+    {
+      "path": "output/20260909-ego-viability-revalidation-tool-r1/replay",
+      "bytes": 1698936,
+      "sha256": "5cb0374685bd4cd9874dbaa3a079f48a593ff060de1106a596b281505cdd03e9"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/d1/000000000935-2d4df848d2347891-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/inspected.yaml",
+      "bytes": 51215,
+      "sha256": "9d85ebeaabb2d3212acf4a03ea7eac6e7c5dafc2c91037f73eecf1df94e5c537"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/d1/000000000935-2d4df848d2347891-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1301,
+      "sha256": "56180d19c0c1affb18ad8a82c25bc15c307523f7004a5d15a06604f928d2f68e"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/d1/000000000935-2d4df848d2347891-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/d1/000000000935-2d4df848d2347891-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 69853,
+      "sha256": "b580001db4f775776b85381c741542fb5586442aa16efd7fc1919b3b5d3c31a3"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/d1/000000000935-2d4df848d2347891-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/d1/000000000935-2d4df848d2347891-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected.yaml",
+      "bytes": 51206,
+      "sha256": "a1005cef9abc9fe5e63179e27279d423c367af3d2d54960efeb33103e513c219"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/d1/000000000935-2d4df848d2347891-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/native.log",
+      "bytes": 1332,
+      "sha256": "b47a0061fdbb2336184de9156a642947df80a91a1fbdffedebc0d927da66ba5b"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/d1/000000000935-2d4df848d2347891-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 71444,
+      "sha256": "b87468ec5ed7a13660a1ce260b162fb209a1e4b907ff2bb78d36d2cde4922dd3"
+    },
+    {
+      "path": "output/20260909-ego-viability-sensitivity-r1/manifest.json",
+      "bytes": 31523,
+      "sha256": "170a45f5ccaf94b86e43bf33745f9dfb7132c8096d4d778951fe809a63c93dba"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "1c6ba4370cce550ca43ba9daccabc58a0a552756ed2819de6a1bab6035f12319"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/authority-timing-summary.json",
+      "bytes": 50388,
+      "sha256": "b6094f9dbbac2e71283f2e4ad5ea807f6445c31732061598a777a4cb11a98b11"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/awsim.log",
+      "bytes": 1772,
+      "sha256": "cd3cb4e7930170b932419c7d1804f47ef183b22f81ab7b8c2cf72f8690a9fe9f"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/binaries/mpc_controller_cpp",
+      "bytes": 8657256,
+      "sha256": "3d5879163a1a22fbf984bc4c84391bd1f3ccab59f164a47983a2e71d64a97e22"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1511816,
+      "sha256": "bbe6292d209c289d1ea516989cc99885991dcd64d1c8e2e9598a0be4b1456c21"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/build.log",
+      "bytes": 4369,
+      "sha256": "7f7ed80bb62280b155c1a2ecf2ef22173cfe83874bb259f955fdd996fb062632"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/compose-six-lap.yml",
+      "bytes": 208,
+      "sha256": "c2dea0761235df2be96404629b54660189e3d0c728cf0ffb191d110e70c146ee"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/autoware.log",
+      "bytes": 2720174,
+      "sha256": "699b404e339d43820319dd6ffcd7def5db381a1dc4a6632df59c64b7ad7695d7"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/motion_analytics-26-09-09-12-32-16.html",
+      "bytes": 4920817,
+      "sha256": "c68fb847f27a9cc4f48016ac39901efb63dd5cc7aa53292cb08fcab4339549b5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000023-4339f7ef8b85ac06-track-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 264361,
+      "sha256": "2c84b68147a8dc37017cdd5aa959f195cc77384b4f2aff55b152408f70d0fb57"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000023-4339f7ef8b85ac06-track-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000118-b84043ea0935736b-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 245978,
+      "sha256": "d975d349cf56e2b2270d45df460dc627bb9c9eb32ed19e97eaf15fb2ff699833"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000118-b84043ea0935736b-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000121-e0091d45735343e4-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 243574,
+      "sha256": "5e3037561e31f4dce1266278313a098e8f464ec42ebc0b61ff883040ecd7d2b5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000121-e0091d45735343e4-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000309-c6e0150e7e335338-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 264640,
+      "sha256": "90c7157f759546e6c57446db0eeaa604816012a37562e37cc56a89c2723fa8fc"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000309-c6e0150e7e335338-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000315-410f4260ff0b35ed-cruise-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 257409,
+      "sha256": "589f5d06d091d8b8f2cd767aa1b66e2b932d5ca2ee8df77905f928c2262a5088"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000315-410f4260ff0b35ed-cruise-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000393-958c003aed4d609c-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 256687,
+      "sha256": "25c86e054c3372e4286102b456606d92b757d94ec3584dbfb04489e22e5513f6"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000393-958c003aed4d609c-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000532-c3f1a6393abda51e-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 35912,
+      "sha256": "77283b5fec619e5bc8b7fbfc45e59f2a4902c29e95c8c7eda5d74c7c1c0bffc0"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000000532-c3f1a6393abda51e-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000002413-68ee840b200cfd77-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 259260,
+      "sha256": "5cdb89ecd8bc0ad5c1a433533c405952f9890f80123be55eed9f917291507d0d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000002413-68ee840b200cfd77-cruise-side-neutral-wall-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000002731-121df5e06b4a2926-cruise-side-neutral-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 255392,
+      "sha256": "fe008916e06971ae84fba16a7b79ace839c04da9aaf03d48f99b1d408fd326c6"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/mpcc_architecture_snapshots/000000002731-121df5e06b4a2926-cruise-side-neutral-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/2026-09-09-12-27-13-266356-msuda-System-Product-Name-69/launch.log",
+      "bytes": 16867,
+      "sha256": "8159f79ca9dbab37c272a7aa826a31cff472ed3e55a63b2295b916a5990d97ea"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/component_container_102_1788924434475.log",
+      "bytes": 1488,
+      "sha256": "32c2b0352347c295656370cb9e535976a89d0aa3881ad77f2253f28fe3f5ae6a"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/ekf_localizer_94_1788924434485.log",
+      "bytes": 65,
+      "sha256": "f9210ef2c132f3c6ca096e2f980e72cee0f82151a71e2d7093e12b054cd735c8"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/gnss_poser_88_1788924434504.log",
+      "bytes": 205,
+      "sha256": "060052bc7095d65827114833d2b08ac0f5bb76744182731cc627f3083e6df520"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/gyro_odometer_90_1788924434477.log",
+      "bytes": 65,
+      "sha256": "2ab95250a5e1af3f1877f8c06d4f26ad8be8d4497e71f027168d104771aace19"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/imu_corrector_86_1788924434507.log",
+      "bytes": 65,
+      "sha256": "7797101d8e575788fab0c18891840d172c32e62d75582de12dce0e0f1a36a4c5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/imu_gnss_poser_node_92_1788924434472.log",
+      "bytes": 977,
+      "sha256": "d021eff35aafc993592fe106f808879e5e9c787b617e970a1bdbb1c1459f90b0"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/mpc_controller_cpp_100_1788924434661.log",
+      "bytes": 2595310,
+      "sha256": "e1cb7d58258c10161bb76c8873bfcac3ea620e35d986d81a9a0e474bcb3cade2"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/python3_108_1788924434715.log",
+      "bytes": 4054,
+      "sha256": "890bc932efed9a51cb7e8e18aa6b3a191906bf55868c53773cbeaaa7307efcab"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/python3_110_1788924434709.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/python3_112_1788924434661.log",
+      "bytes": 143,
+      "sha256": "a2e9d09636e08f3e0902403798dac0b55d6add45a9d72c2f71da9dce2a264c0c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/python3_360_1788924450705.log",
+      "bytes": 2711,
+      "sha256": "1c88ff40bd43b53370753e7d89d90833a2d039ed21deda10b6d80326a13798b8"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/python3_69_1788924434355.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/relay_106_1788924434485.log",
+      "bytes": 65,
+      "sha256": "66e323cc33b67ad15993e28aff56c0bf75beb58c12f4b5c6fdf4ce35bbafa9cb"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/robot_state_publisher_82_1788924434505.log",
+      "bytes": 705,
+      "sha256": "01caa9986fc954e97a5f74c215ac4b985d97620c09bd61a7c121163165d8bf28"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/rviz2_104_1788924434618.log",
+      "bytes": 744,
+      "sha256": "2c30277be67af7415c67d65d6b75b0fdc1297cdc4757902c3bf7f4ac7e61a1e4"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/simple_trajectory_generator_node_98_1788924434472.log",
+      "bytes": 1915,
+      "sha256": "bcff9b575618f56c6bc60d13d0fc19d6753f23799ade84b47afa7e31d6ee4766"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/twist2accel_96_1788924434487.log",
+      "bytes": 65,
+      "sha256": "af37a8e56046ee54e96a679c65528abe46b2d4142f0f540fc907008d677b62c8"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/ros/log/vehicle_velocity_converter_84_1788924434471.log",
+      "bytes": 65,
+      "sha256": "035b0f64924809a09232ab278573ba30abbe5a7bd9e5ac0851706a2537452eb1"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8525,
+      "sha256": "c9632702d96d72f26b57545646c0eed410fa25a77061558d6436d101c8150e4c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 38243152,
+      "sha256": "863102d8feede4548df4885b128c4329132d0c007b6a59c18efc3d90907a9621"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "12e1e48b90e25a36875fd94ce84dd8c369916e9ce9a1cdf9d5719bab7ec268b1"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/d1-topic-timing.json",
+      "bytes": 2386,
+      "sha256": "cbee90934dc229a3ef50a973b6e82881dba80db04215d507ed2aa9910cb42775"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/down.log",
+      "bytes": 501,
+      "sha256": "eab3324a6e73e41ee74365cea7fd41fcdb400236663536bc2502470fe92362dc"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/finish-results/d1-result-details.json",
+      "bytes": 858,
+      "sha256": "45eebfa2b765912be218ca7ff6f77144be2f8efaf9e355327c6bb35e809e6640"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/generated-user-path-results/result-summary.json",
+      "bytes": 1058,
+      "sha256": "a1df0a18548304a746e3b8831149a22b3f98d50d1ecf7e523deca87e91a5f3e5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/ekf_localizer",
+      "bytes": 3017152,
+      "sha256": "b59c3ba635b271fe1c11cb929f130f45a66a2f714f43bc1c80ffc19545038910"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/libaichallenge_ekf_localizer_lib.so",
+      "bytes": 2162992,
+      "sha256": "25d6709773578e85b60692fb0c6d3507d619fc3135e647357076b739e47675e4"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2226888,
+      "sha256": "01f5faf04095b8e5665d5978d01ca2c039f5b5ea9b80dbdea42f1d0a84650734"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/CMakeLists.txt",
+      "bytes": 1967,
+      "sha256": "3c0afc4b2c1e16fd6411e84ab124702ee9c0b18e82995f2e9ed10f7d6107cd11"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/NOTICE",
+      "bytes": 591,
+      "sha256": "022282b0ddb9150f8f8eef93d756496e6fceaac26645f5ac8ab5885014df7524"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/README.md",
+      "bytes": 868,
+      "sha256": "0e611995e7b8269b053ea1e485567724e7e4a3f475160b359d60ffcde4f484d3"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/UPSTREAM.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/covariance.hpp",
+      "bytes": 937,
+      "sha256": "6fb6d3f54f710093f871bbe1b3a791ce10614ce6a894cedbfa34c470c4370bc1"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/ekf_localizer.hpp",
+      "bytes": 9173,
+      "sha256": "52150445c4f7614ba87516a0fa1b54a4a76adb61b6fd850c088f452f69b58ffd"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_transition.hpp",
+      "bytes": 1103,
+      "sha256": "69d17f4d8b16a916a4ac4bc04ac813096682707648c7067f3846493438828bf9"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/launch/ekf_localizer.launch.xml",
+      "bytes": 3823,
+      "sha256": "a5adf69bc5ee3774f287928b1a766abc71fb7118b56a81c68fa187f8fe23e07c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/package.xml",
+      "bytes": 1287,
+      "sha256": "f4d7a8c512446c3a0641a91d5ad519df87684916af56388c249166929fd4d7dc"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/covariance.cpp",
+      "bytes": 1839,
+      "sha256": "5e7472cc05e7a73bf260cc2f8770834c72cb48d3704bdd8283ff8195d70b4000"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer.cpp",
+      "bytes": 22971,
+      "sha256": "8097cb77806f0c53e1d37e9b2f9c35efc5486aa3e42376d7af8ec0f83941e5dc"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer_node.cpp",
+      "bytes": 891,
+      "sha256": "9183e015dc463be207cfdcde81c79765a3d22dc8b18b1b015dc9274819210737"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/mahalanobis.cpp",
+      "bytes": 987,
+      "sha256": "b2a2a90892c02266b15a4a2bbaf7fe4c9a5a543fccabc6b7836e6facbc18b9c0"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/measurement.cpp",
+      "bytes": 2196,
+      "sha256": "dacc346cbcfbfdac9efaa3d6be3628bbdf577ddfbae63959bafcda485b857f59"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/state_transition.cpp",
+      "bytes": 3369,
+      "sha256": "2e5c81b1c5a2228806725d32feace05b7ffba34fc341dfe594e38d21b4bd8654"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/warning_message.cpp",
+      "bytes": 2017,
+      "sha256": "13640a809651f7a0c71a5f378b26786e2f07a0fdf9d794ff37d739508645da4d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/src/test_ekf_localizer.cpp",
+      "bytes": 10768,
+      "sha256": "c41a98be09c027d21b0ac0eb78d08c62fca658df25f0ba88cab9d1d5e2074dc7"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_aged_object_queue.cpp",
+      "bytes": 2477,
+      "sha256": "9bbdf1204af2264635ea93f96b96e9ee9d123bcf629b1a7eaf5d7528fd72a529"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_covariance.cpp",
+      "bytes": 2178,
+      "sha256": "e2fa32f59d8572185b18ebfd306500279a28826273a98e9419555b3c57c7b88d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_clock.cpp",
+      "bytes": 5977,
+      "sha256": "567b679be46f8a1a3a464f2d351ded8029049aa25f9f86aa91028a0fb9c41719"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_mahalanobis.cpp",
+      "bytes": 1482,
+      "sha256": "cc31e52681756dd068c72f6c1a80ea249eb6215c15dbb69c8c51567ddbac7ae2"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_measurement.cpp",
+      "bytes": 2617,
+      "sha256": "954ed79a2a28a2116ed3a0ca531bdc25f83e48bcbc197321d266df0922f7e661"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_numeric.cpp",
+      "bytes": 1507,
+      "sha256": "a8da5388facefe07b59a7807e28a28f39c94b7bd73b397383fda6c2f6d92ef56"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_state_transition.cpp",
+      "bytes": 3161,
+      "sha256": "84a8cab921a6f1b0d94c212a8e638eb621cdadb5d470a6e5a55a78020440ab69"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_string.cpp",
+      "bytes": 909,
+      "sha256": "7d5fddf1bdac43b7f0a5bd393f277fddf485e2d8d3b65457b1fdc946eeb71ed0"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_warning_message.cpp",
+      "bytes": 2055,
+      "sha256": "9c7b8883eb339c17d60639aac6fcf3d72b969bcd5d66b5fce9d4e20088eef4d5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/.gitignore",
+      "bytes": 37,
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/CACHEDIR.TAG",
+      "bytes": 191,
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/README.md",
+      "bytes": 302,
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/v/cache/nodeids",
+      "bytes": 484,
+      "sha256": "dbf6e134667cc83efdd0884f38ba6dddac1aa40080f802178a13ddf189b21329"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/CMakeLists.txt",
+      "bytes": 394,
+      "sha256": "cabc352f6806cdd80ac4e366723d85cadd2ef1b00f016d5939398a74599e3ff6"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner.param.yaml",
+      "bytes": 1938,
+      "sha256": "d4f307b9bb58635dd0496845dfb8a6346977c19bfbc5ac1d2ace7c4120a378e5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner_tree.xml",
+      "bytes": 2621,
+      "sha256": "ef7ce6d5610f3bdb670e52ec3559d22940bd3be63cb3c9602948b0207be68d8f"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/converter.param.yaml",
+      "bytes": 327,
+      "sha256": "17d1def2c550d81200548b61d000e2d42ad9609b21164fa0f61c3dcc6f5e4faa"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/map/lanelet2_map_loader.param.yaml",
+      "bytes": 129,
+      "sha256": "cf8304daf3684ea25c3edf0544a33c0be32b306123ad35590019c8f6ca08ae4b"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/mission_planning/mission_planner/mission_planner.param.yaml",
+      "bytes": 212,
+      "sha256": "c048d0175ed7c810a635da80465222f676e42f5f73493909034162e3c28fd457"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/common/nearest_search.param.yaml",
+      "bytes": 132,
+      "sha256": "b6c156d6f3cc74b16c95f40f35cf86ddef2b8b3a19ee2630b741cc10f4085726"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/avoidance/avoidance.param.yaml",
+      "bytes": 4704,
+      "sha256": "522287ec99e5bfef1b1d96788fb90a0e249398b1aac70e948a9affdb55c30416"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/drivable_area_expansion.param.yaml",
+      "bytes": 3154,
+      "sha256": "1f4cf4862f076a30ca4e830c8c3efbf910801de35e7d2f5c6bb4a28369499f66"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_change/lane_change.param.yaml",
+      "bytes": 1161,
+      "sha256": "3562d08a5d22112dbe5da44f6070b750752da1d0282d0ae475d7a62e18c7f30b"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_following/lane_following.param.yaml",
+      "bytes": 84,
+      "sha256": "6115c2b5fdd761e453f42398cd8b05701ff1cb1120481409cc40fe6b8336b8e9"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_out/pull_out.param.yaml",
+      "bytes": 1043,
+      "sha256": "20dc36eff032a06b37e150ed60652101ec01e07924a41d55bb3f749aad22519c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_over/pull_over.param.yaml",
+      "bytes": 3288,
+      "sha256": "dad3fdfe63460034550abbf1c93937ab635d2ea36a2d4ce71125d1cadf5d9831"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/side_shift/side_shift.param.yaml",
+      "bytes": 213,
+      "sha256": "4a0aa18c500e40c9e3b1848392c5289f41ed3be56d7afe93f693e55fd936cbb5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/vehicle_velocity_converter.param.yaml",
+      "bytes": 167,
+      "sha256": "c068e333ebe0bf94ab67a7e4ee94c1fa7c64c41e4e46cc0d140f66efb553afa5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/accel_map.csv",
+      "bytes": 539,
+      "sha256": "59ef66e4a2a6ad85e3e3f3e894af6b6ed55345fdfbef1295f49bac2c1bdc5f2f"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/brake_map.csv",
+      "bytes": 405,
+      "sha256": "7c9d8e9db7f00cf64bcf6f80ca67b65048da8487f4c53b3dcc37b4a971ad18cf"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/steer_map.csv",
+      "bytes": 1469,
+      "sha256": "26ead52a49148b347b7bbe5edb3c9cca6bd030f89585781f13b4e8870872571a"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml",
+      "bytes": 990,
+      "sha256": "0a82a035882bef28d3c35856f6d8b82a6207711eac5b7ecc94928309523e4537"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/joycon.launch.xml",
+      "bytes": 316,
+      "sha256": "f949739493762605db0ce0d9d5526cba2a3fcfa3410fc1dd65a7bb0997bebaa9"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/mpc.launch.xml",
+      "bytes": 1029,
+      "sha256": "bc0c319f6352ddd5d40518ff52877b138321e57ca0603436e1b13bb6b74fa7d1"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pilot_net.launch.xml",
+      "bytes": 488,
+      "sha256": "bf5b4f272aecf99c96996380e1241737d82874158fbb45fb2d9d880ad00fde78"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pure_pursuit.launch.xml",
+      "bytes": 1018,
+      "sha256": "738fa5d0714ca9355b14e0dade3b09a6d55a5b904c187abf1307b3930d2e7bdb"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/rl_train.launch.xml",
+      "bytes": 143,
+      "sha256": "6c3e3aacb7d99ded76c03498a1602bac0834881b031d77168baa500c971e62a6"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/tiny_lidar_net.launch.xml",
+      "bytes": 955,
+      "sha256": "79465471ea4c5d0c6a370651ed9b14b12fa4cdf970427624be400f65e9b448a5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12963,
+      "sha256": "e2855514d6c4fc6f4cea480d517605095ef0638d119186991d92d90a606bb909"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/lanelet2_map.osm",
+      "bytes": 116731,
+      "sha256": "126a62f2ef21560ace0eb39a0f52a6a5e86ef6b9951b0ead1511e46e4b418dc4"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/wide_lanelet2_map.osm",
+      "bytes": 138570,
+      "sha256": "c6bf9625bd5a6589991095c3eced22be048ba30740a1b75479e7cfe2b90c7e75"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/package.xml",
+      "bytes": 2019,
+      "sha256": "0596ef3df8a882be95cff9ff8c2b1efc78fde63a11897dd4e5ca02f68bfed50c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 18802,
+      "sha256": "27025f14e21657016d1bb640ce203cfcf43c41987de8bd85ed43805be560ff59"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 18869,
+      "sha256": "6b96d03f80c055fc815ccbd88a1c23c7fdf62ac4c0ca96bf5b5ef292fa9be2f8"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 5249,
+      "sha256": "bc6f30df073266b186ca1525aeba872dba25d376a99e39e3a13bd4027f857631"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 5316,
+      "sha256": "e8fd6f02f09e59a3856af0a544d9667f2719d0ffdb1d1fa8c6cb9812a1c1c4d4"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_localization_timing_contract.py",
+      "bytes": 1684,
+      "sha256": "7f54ea148127b65302c28881300557398a37573afa88b5280bb34641f5400a27"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39448,
+      "sha256": "e1e52feeb082a54e70ba57020157589ca389dd6fd59bc553e64aaf1a22f57991"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 10186,
+      "sha256": "9c91ebbcefa5cbe45a2fab959b37276c7a4bc8eba6a3ca9b5ee0a5a2fd9e421b"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2943024,
+      "sha256": "98fffc37df6bc6bab0af8ed48a8562da1a424d3c27bd8fb034bfe8678fa0291d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 123454,
+      "sha256": "1a6b26073c85dcc8a51446454c75064939d3c13b1affcee71be60bd77421885a"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 55561,
+      "sha256": "b99355c90141d04714b05786f94ba167a68f84f35632918ed26fe041c5e36fe4"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 36145,
+      "sha256": "3613dced6d83d36f1fc19d5b4b166d13fe62b2fa292672073ede9d9c05941117"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 181162,
+      "sha256": "c9627bf8eb2dcad29da2e942b9c8452e03c2d6da4a3414536e8e9c3c42928ec9"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17463,
+      "sha256": "400587843725512bb8f6001470a77fdd2fa39798b1cb0fdf9909dda182781efe"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/test/test_gnss_heading.cpp",
+      "bytes": 6810,
+      "sha256": "6b06a36dc60c4413e0d389cb98795fb582102bd3841a74626fad3d06c1d308fd"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/launch.log",
+      "bytes": 768,
+      "sha256": "288aed1df7b7405a14c087194349630ebb9498361c5ae96057ab343e0188241f"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/manifest.json",
+      "bytes": 55629,
+      "sha256": "5bc506149faeb2d48290459a4e7dfa7d1444c6d5b853ae0ef062f307a20a4c5b"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/monitor-summary.json",
+      "bytes": 1435,
+      "sha256": "4c3725860ee53aae4c0c823bf1df540b37864ddc8a65f325daf2d601eb87b88a"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/mpcc-source.patch",
+      "bytes": 1741,
+      "sha256": "7223884fca2e1565727ab92c636970df2e1ed79fc665bab893dfa224e0d9376e"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/package.log",
+      "bytes": 519282,
+      "sha256": "2f0a15b6e3b2f9483b9c5ac3f7f23f76cd2ffe35d31109d1c68eddfc1ac9abe3"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/run_campaign.py",
+      "bytes": 12260,
+      "sha256": "5c7f590b2b15a4f78d1fc2d63e522dbfc731d9ada0bf0dfde87d798cbdcef5fe"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-ego-viability-single-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-ego-viability-timeline/manifest.json",
+      "bytes": 465,
+      "sha256": "e3e9beb2dec7046352805bdb771f3f03302ae0a80800ee60d791f1584d7d1bfd"
+    },
+    {
+      "path": "output/20260909-ego-viability-timeline/timeline.json",
+      "bytes": 19598,
+      "sha256": "fcaa6e0bdaad602bb7960c8f6ecca835b1bc44fed7d17025805f54cfbd3e2bc1"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-current-revalidation.log",
+      "bytes": 16575,
+      "sha256": "f4bb8bf0d33ee30061d90f2936b85a4d9541d8516adacfadff5344d7522e9a3a"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-dev2-authority.log",
+      "bytes": 348,
+      "sha256": "d10facef00f0da7bc2f2670ba1675bfcfa9277b0d8355997675ccd27aefad1ab"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-dev2.log",
+      "bytes": 2477,
+      "sha256": "02c2364b8c360ad8cccc63386ed9f2ce20d3e8b11167aee68954c71d8f7e9b24"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-build-r2.log",
+      "bytes": 4369,
+      "sha256": "7f7ed80bb62280b155c1a2ecf2ef22173cfe83874bb259f955fdd996fb062632"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-build.log",
+      "bytes": 4842,
+      "sha256": "ab8f1e867975be4693de1bdab80cf57fce04705d1545b93964950f50b86c2d65"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-clock.log",
+      "bytes": 784,
+      "sha256": "3b72a8782c4ef47070d0d8dbd654aafd63f5db991e23f8c012c1fdf7819ccc64"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-cppcheck.log",
+      "bytes": 553,
+      "sha256": "b74648b3d92646df2a4b2b810be716192fe42e5fd70f85ff1709ebcb9d15b118"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-header.log",
+      "bytes": 9130,
+      "sha256": "1c5c3fecb65ce1c0026cc17eaef84998ea8a1a84e84d70640e11f72e3431636b"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-installed.log",
+      "bytes": 182,
+      "sha256": "5c55593702b9bac005f12d182b1213a0959154b2a5b7e0943694e3f3621fa34b"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-location.log",
+      "bytes": 172,
+      "sha256": "709327c2a5e42ad530f34862d79ea880c54b8263d483fb41b8eef553c3ca0389"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-package.log",
+      "bytes": 519282,
+      "sha256": "2f0a15b6e3b2f9483b9c5ac3f7f23f76cd2ffe35d31109d1c68eddfc1ac9abe3"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-parity.log",
+      "bytes": 545,
+      "sha256": "3b339a8fba1e220047a067c87a0b85331deea65435ee9e544a57defb034f0c79"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-symbols.log",
+      "bytes": 1365,
+      "sha256": "0a605294df4d1116d6e36f47856583cc1ae58f33567b66dac80f0ff07f1045b1"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-ekf-upstream-cppcheck.log",
+      "bytes": 346,
+      "sha256": "e422bb61268e98bc13c07940584e7f50a6c46167aebba7284d94cef4a28242a6"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-sensitivity.log",
+      "bytes": 5945,
+      "sha256": "276fdd1937d68a417ea7e1d105a12476dec0ea1dfa27bd9982328baaa46b6dd7"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-single-authority.log",
+      "bytes": 782,
+      "sha256": "702882eadbc34193e58d04aadfe4525224f85f6bb28dcaa02917e6ac502e8898"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-single-timing.log",
+      "bytes": 2525,
+      "sha256": "b5e588cc0dc2fbf4acf1971ff449459e4847c28b3ce4167d13bdca687d2d04d2"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-single.log",
+      "bytes": 7140,
+      "sha256": "e4964e5ae0ba593192da2c298d4357479b385dd4b97338a98cdb8530470ce9d8"
+    },
+    {
+      "path": "output/20260909-ego-viability-validation/mpcc-ego-viability-timeline.log",
+      "bytes": 5534,
+      "sha256": "e7f8f17b24b676584f22f0fca2cce90046f1260e08595b95a4f5618a64a096b3"
+    }
+  ]
+}

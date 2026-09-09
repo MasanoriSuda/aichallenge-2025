@@ -10,22 +10,31 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: causal ego/clock/command audit of exact same376accepted934and
-terminal-rejected935, plus derivedStop388provenance at final938. Observation-only
-slice after9d76066c passes17native/104source/25package build/60CTestgroups2372records.
-The prior Cruise accepted-input gap is repaired with one retained ordinary input
-and atomic failure pairing. No control/proof limit change. World941A/B/C/D/Gand
-support/full-rest comparisons reject, stillUnknown. Wire covariance uses metres
-standarddeviation; a sqrt/unit fix was falsified.
-Freshdev2:934acceptedterminal+0.017855530645m,935terminalpeer-0.000355659220m,
-15msapart, both exact inputs replay withoutsolving. Peer-only substitution keeps
-both outcomes, so ego/clock/command changes remain candidates.935independentStop
-is stillaccepted. FinalmovingEmergency938/v1.34m/s: actual376, inspected388solver
-source missing; priorordinaryAccepted937/376 cannot substitute for388. D1/D2
-callbackmax21.762/19.321ms/0overruns,40Hzcommandreceipts/no gaps>50ms; source and
-odometry/clock pauses remain. Runtime stopped/user JSON restored. See
-[peer viability and paired observation](../20260909-mpcc-peer-viability/results.md).
-Whole MPCC acceptance is NOT achieved.
+Current next step: audit execution-clock ownership and observation age on exact
+same-374 inputs Accepted 936 and rejected 937 after the EKF timestamp repair.
+The participant EKF now uses one calculation epoch and replaces the underlay
+launch. Its real-library baseline failed 2 clock-advance cases; repaired native
+cases pass. 26 packages build; EKF 102 records have 0 failures and 30 cppcheck
+wrapper skips; MPCC 2372 records pass. Recorded-input 54-tick / 2268-value parity
+is exact. Host cppcheck retains one unchanged upstream Eigen false positive.
+Fresh single: 6 laps / 255.779419 s / penalty 0, no observed moving override,
+callback max 15.460 ms / 0 overruns. Dev2 still rejects D1 decision 937 at
+1.3724878243982674 m/s. Same artifact 374 is preserved at both boundaries;
+936 terminal +0.004820239 m becomes 937 -0.001481757 m after 30 ms. Peer-only
+substitution preserves both outcomes. Execution-clock anchors differ and imply
+25.596 ms artifact advance; audit ownership before calling this a defect.
+D1/D2 callback max 19.636 / 21.167 ms, 0 overruns; command receipts ~40 Hz/no gap
+above 50 ms. Source duplicates and observation-delivery pauses remain. Runtime
+stopped and protected user JSON restored. Full MPCC acceptance is NOT achieved.
+See [EKF repair and current transition](../20260909-mpcc-ego-viability-transition/results.md).
+
+Previous b19 paired observation: same-376 Accepted 934 / rejected 935 reproduce
+without solving; peer-only substitution did not flip either outcome. At final
+938, actual publication 376 is preserved but inspected derived Stop 388 lacks
+solver-source provenance. Do not substitute a new solve. World 941 architecture
+comparisons remain rejected/Unknown, and covariance unit-change hypothesis is
+falsified (wire values are standard deviations in metres). See
+[peer viability](../20260909-mpcc-peer-viability/results.md).
 
 Previous GNSS repair and941boundary:
 The then-next step was bounded current-world peer/terminal viability audit of new

@@ -1,0 +1,7 @@
+Based on Autoware Foundation autoware_universe, localization/ekf_localizer,
+commit 1e90380a3570d02e16d40287e0adf51a27cf34d0 (Apache License 2.0).
+https://github.com/autowarefoundation/autoware_universe/tree/1e90380a3570d02e16d40287e0adf51a27cf34d0/localization/ekf_localizer
+Original copyright and author notices are retained in each source file.
+Local modifications: participant package/include/library identity, one callback
+epoch for prediction and measurement/publication, pose-time TF, clock regression
+tests. No noise/model/smoothing parameter change. See UPSTREAM.json and README.md.

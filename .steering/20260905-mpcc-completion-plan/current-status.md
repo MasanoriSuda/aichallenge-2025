@@ -10,25 +10,36 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: audit the peer update on exact same-376 Accepted 928 /
-terminal-rejected 929, and preserve derived Stop 385 / final 930 proof/artifact.
-Publication clock handoff is repaired after 17bcf24b: actual Store reproduced
-4.403881 ms rewind on same-artifact Bundle-to-exact transfer; all 33 native
-cases now pass. 26-package build and 60 CTest groups / 2373 records pass.
-Old 937 anchor-only replay remains terminal-rejected; no full-cause claim.
-Fresh single: six laps / 251.993591 s / penalty 0, no observed moving override,
-callback maximum 13.748 ms / 0 overruns. Commands ~40 Hz and command/Odometry/
-clock receipts have no >50 ms gap or source duplicate/backward in this run.
-Dev2 rejects first moving D1 Emergency 930 at 1.3035718076716887 m/s.
-928/929 clock anchors are equivalent; terminal +0.011280454 m becomes
--0.000783156 m after 30 ms. This time peer-only substitution flips both
-outcomes. 929 independent Stop is accepted and derived 385 joins, but final
-930 artifact/proof is absent because the observer requires a solver source.
-Exact 930 Request survives; do not substitute a new solve or prior source 376.
-D1/D2 callback maxima 28.673 / 27.375 ms and 1 / 3 overruns occur in reported
-windows after the first D1 Emergency. Source and receipt timing remain open.
-All runtime stopped and user JSON restored. Full MPCC acceptance is NOT achieved.
-See [clock handoff and new peer transition](../20260909-mpcc-publication-clock-handoff/results.md).
+Current next step: inspect same actual derived Stop387Accepted930 / rejected931
+from `output/20260909-peer-epochs-dev2-r1`, including exact ego source epochs.
+The observation gap for source-free certified plans is repaired: complete
+artifact/context/frame, physical snapshot/proof and separately owned grid now
+survive without fabricating a solver source or parent dynamic proof. Native
+18/18, source contracts104/104,26package build,60CTestgroups/2374records pass.
+Recorded native and runtime physical proofs reproduce every diagnostic field
+with zero solves. Dev2actual publication387and both930/931Requests are present;
+legacy solver-source status remains missing as required. This is an observation
+repair only, with no control/model/gain/solver/safety changes.
+
+New dev2firstmoving D1Emergency931 at1.3129826481757174m/s, no finish.
+930full solved-suffix terminal proof+0.007091597519957693m ->931terminal peer
+-0.0003133950625793247m after30ms. Independent Stop+0.008026033410105438m
+->-0.0006277465960242701m. Same peer generation170/velocity/radius;
+publication clock mapping remains equivalent. D1/D2callback20.668/26.215ms,
+0/1overrun; D2reported overrun window is after firstD1Emergency. Commands
+~40Hz/no receiptgaps>50ms; source duplicates and odometry/clock delivery gaps
+remain. All containers stopped/protected JSON restored. No repeat of previous
+single trial for this observation-only slice. Full MPCC acceptance stays open.
+See [peer epochs and physical Stop observation](../20260909-mpcc-peer-observation-epochs/results.md).
+
+Previous publication clock36c2a01a: realStore4.403881ms rewind repaired;
+33native/26build/2373records pass. Single6laps251.993591s/0penalty passes;
+dev2firstD1Emergency930/actual385missing remains a rejected historical run.
+Peer-only cross substitution of old928/929flips both outcomes, but subsequent
+rawV2X/nativefilter replay reproduces source-time projection exactly. Array or
+receipt epoch relabelling is falsified for those observations; no tracker gain
+or model repair follows from filter lag. See
+[publication clock](../20260909-mpcc-publication-clock-handoff/results.md).
 
 Previous EKF repair 17bcf24b: real installed library clock failure fixed with
 one calculation epoch in participant package; 26 packages build, EKF 102 records

@@ -485,6 +485,26 @@
       "snapshot_id": "20260909-publication-clock-dev2-r1",
       "manifest": ".steering/20260909-mpcc-publication-clock-handoff/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-peer-epochs-peer-motion",
+      "manifest": ".steering/20260909-mpcc-peer-observation-epochs/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-peer-epochs-fixture",
+      "manifest": ".steering/20260909-mpcc-peer-observation-epochs/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-peer-epochs-validation",
+      "manifest": ".steering/20260909-mpcc-peer-observation-epochs/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-peer-epochs-dev2-r1",
+      "manifest": ".steering/20260909-mpcc-peer-observation-epochs/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -3616,6 +3636,148 @@
       "production_impact": "Store clock transfer only; no new authority/model/limits; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "causal source/receipt investigation or relevant producer repair"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-peer-time",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-peer-motion"
+      ],
+      "hypothesis": "Per-vehicle source time is replaced by array or receipt epoch in old928/929",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "rejected",
+      "reason": "Actual production filter reproduces both velocities exactly; projecting raw XY using vehicle source epoch yields zero XY error. Receipt is bag observation, not controller receipt. Filter lag is not itself a bug.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new raw source/receipt evidence"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-native-before",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-fixture"
+      ],
+      "hypothesis": "A valid source-free CertifiedPlan retains its physical evidence",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "rejected",
+      "reason": "Before-r2:17old cases pass; new actual accepted wall-proof fixture fails because physical evidence is omitted. Before-r1 link failure is separately preserved.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "changed recorder"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-repair",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-validation"
+      ],
+      "hypothesis": "Additive source-free physical-plan capture preserves existing contracts",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "accepted",
+      "reason": "Final18native,104source cases pass;26package build and60CTestgroups/2374records0errors/failures/skips. Invalid publication isolated; solver absence explicit; no authority change.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [
+        "solver-source prerequisite for saving existing physical artifact/proof"
+      ],
+      "revisit_condition": "new observation regression"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-roundtrip",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-fixture"
+      ],
+      "hypothesis": "Complete recorded physical evidence reproduces its original proof",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "accepted",
+      "reason": "Source-free decoder validates context/pose/frame/grid identities; every wall diagnostic field exactly matches after reading actual fixture record, zero solves. Compile and filename-glob failures remain separate evidence.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "changed schema or physical evaluator"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-capture",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-dev2-r1"
+      ],
+      "hypothesis": "Actual derived Stop artifact/publication and accepted/rejected Requests survive",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "accepted",
+      "reason": "Actual387published at930 preserved with all physical evidence. Same387Accepted930/rejected931 retained independently; legacy solver-source missing remains. All three physical proof roles replay exactly with zero solves.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new missing actual-plan boundary"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-transition",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-dev2-r1"
+      ],
+      "hypothesis": "Same387keeps terminal acceptance at931",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "rejected",
+      "reason": "After30ms, terminal+0.007091597519957693m becomes -0.0003133950625793247m; independent Stop+0.008026033410105438m becomes -0.0006277465960242701m. Wall continuation passes. Same peer170/CVfield and equivalent publication mapping.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal ego/time/peer proof investigation"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-normal-peer",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-dev2-r1"
+      ],
+      "hypothesis": "Peer-only update explains new377/927Accepted to928rejected",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "rejected",
+      "reason": "Counterfactual peer-only cross-substitution keeps both outcomes; anchor-only preserves928rejection. Original377wall/dynamic pass, horizon ends3.52075m/s. Independent Stop928accepts and derived387joins.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new independent causal input evidence"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-race",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-dev2-r1"
+      ],
+      "hypothesis": "Observation repair establishes coupled six-lap acceptance",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "rejected",
+      "reason": "First moving D1Emergency931at1.3129826481757174m/s; no finish/details. Observation repair changes no control semantics.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal production change or named missing observation"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-timing",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-dev2-r1"
+      ],
+      "hypothesis": "Callback and message delivery acceptance is complete",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "inconclusive",
+      "reason": "D1/D2max20.668/26.215ms,0/1overrun; D2reported window after firstEmergency. Command receipt~40Hz/no >50msgap; source duplicates/backward9/10 and Odometry/clock delivery pauses remain.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "causal timing evidence or producer repair"
+    },
+    {
+      "experiment_id": "20260909-peer-epochs-parent-proof",
+      "baseline_commit": "36c2a01a7455d914171d80a8d5e6e4cad59c93be",
+      "snapshot_ids": [
+        "20260909-peer-epochs-dev2-r1"
+      ],
+      "hypothesis": "Original parent solver/dynamic proof is available for derived387",
+      "changed_dimension": "Observation-only complete physical plan; named native/source epoch/exact replay comparisons",
+      "result": "inconclusive",
+      "reason": "Complete actual artifact and accepted physical wall proof are available; CertifiedPlan has no parent solver snapshot or original dynamic-proof object. No fabricated source or replacement solve. Current Requests are replayable.",
+      "production_impact": "Passive immutable plan observation; no authority/model/limits/gains/solver change; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "explicit parent derivation observation if needed for the next causal test"
     }
   ]
 }

@@ -519,6 +519,102 @@ TEST(MpccArchitectureSnapshot, FirstBoundaryRecorderPreservesQueuedFinalWorldAnd
   std::filesystem::remove_all(root);
 }
 
+TEST(MpccArchitectureSnapshot, PhysicalPlanWithoutSolverSourceKeepsCompleteObservation)
+{
+  namespace certified = mpcc_rate_resolved_certified_plan;
+  namespace physical = mpcc_rate_resolved_physical_wall;
+  namespace retained = mpcc_rate_resolved_retained_revalidation;
+  auto published = make_publication_observation();
+  auto world = *published.source;
+  world.identity.snapshot_sec = 12.8;
+  world.identity.source_context.decision_id = 55U;
+  world.identity.source_context = mpcc_execution_contract::seal_problem_context(
+    world.identity.source_context);
+  world.control_prediction_origin_sec = 12.9;
+  world.replay_world->observed_sec = 12.8;
+  bind_failure_world(published, world);
+
+  // A real physical proof is available even when no solver snapshot exists.
+  // This straight-line fixture tests observation loss, not race feasibility.
+  physical::Snapshot snapshot;
+  snapshot.identity.artifact = published.artifact->identity;
+  snapshot.identity.captured_sec = 12.6;
+  snapshot.current_pose = {0.0, 0.0, 0.0};
+  snapshot.control_prefix = {snapshot.current_pose};
+  snapshot.identity.pose_snapshot_id = physical::fingerprint_control_pose_path(
+    snapshot.control_prefix, snapshot.current_pose);
+  snapshot.course_frame_knots = world.wall_course_frame_knots;
+  snapshot.identity.course_frame_window_id = physical::fingerprint_course_frame_window(
+    snapshot.course_frame_knots);
+  auto grid = std::make_shared<recovery_footprint::OccupancyGrid>();
+  grid->width = 40U; grid->height = 40U; grid->resolution_m = 0.5;
+  grid->origin_x_m = -10.0; grid->origin_y_m = -10.0;
+  grid->cells.assign(1600U, recovery_footprint::CellState::Free);
+  snapshot.wall_grid = grid;
+  snapshot.wall_grid_fingerprint = recovery_footprint::occupancy_grid_fingerprint(*grid);
+  snapshot.footprint = {0.1, 0.1, 0.1, 0.1, 0.01};
+  snapshot.hard_wall_clearance_m = 0.05;
+  snapshot.bound_tolerance_m = 1e-6;
+  snapshot.swept_step_m = 0.05;
+  auto & trajectory = snapshot.trajectory;
+  trajectory.progress_origin_m = 3.0;
+  trajectory.elapsed_time_sec = {0.1}; trajectory.path_distance_m = {0.2};
+  trajectory.lateral_m = {0.0}; trajectory.lag_m = {0.0};
+  trajectory.heading_offset_rad = {0.0}; trajectory.velocity_mps = {2.0};
+  trajectory.progress_m = {3.2}; trajectory.lateral_lower_m = {-1.0};
+  trajectory.lateral_upper_m = {1.0}; trajectory.minimum_lateral_bound_reserve_m = 1.0;
+  snapshot.terminal_stop_course_geometry = {{0.0, 1.0}, {0.0}, {-1.0, -1.0}, {1.0, 1.0}};
+  ASSERT_TRUE(physical::snapshot_valid(snapshot));
+  const auto proof = physical::evaluate(snapshot);
+  ASSERT_EQ(proof.outcome, physical::Outcome::Accepted);
+  const auto built = certified::build(published.artifact, snapshot, proof);
+  ASSERT_EQ(built.reason, certified::RejectReason::None);
+  ASSERT_NE(built.plan, nullptr);
+  ASSERT_EQ(built.plan->solver_source_snapshot, nullptr);
+  published.source.reset();
+  published.certified_plan = built.plan;
+
+  retained::Request request;
+  request.plan = built.plan;
+  request.decision_id = 55U; request.now_sec = 12.8; request.control_origin_sec = 12.9;
+  request.current_intent = world.identity.source_context.intent;
+  const auto root = output_root("physical-plan-without-solver-source");
+  std::filesystem::remove_all(root);
+  const auto recorded = record_authority_failure(world, "derived-plan-observation", "fixture",
+    published, root, std::make_shared<const retained::Request>(request));
+  ASSERT_EQ(recorded.status, RecordStatus::Written) << recorded.detail;
+  const auto document = YAML::LoadFile(recorded.snapshot_file.string());
+  // Legacy solver-source fields remain explicit missing, never fabricated.
+  EXPECT_EQ(document["publication_bundle"]["status"].as<std::string>(), "missing");
+  for (const auto * role : {"publication_bundle", "revalidation_evidence"}) {
+    const auto evidence = document[role]["certified_plan_evidence"];
+    ASSERT_TRUE(evidence) << role;
+    EXPECT_EQ(evidence["status"].as<std::string>(), "present");
+    EXPECT_EQ(evidence["solver_source_status"].as<std::string>(), "absent");
+    EXPECT_EQ(evidence["artifact"]["source_sequence"].as<std::uint64_t>(),
+      published.artifact->identity.sequence);
+    EXPECT_DOUBLE_EQ(evidence["physical_snapshot"]["trajectory"]["path_distance_m"][0].as<double>(), 0.2);
+    EXPECT_EQ(evidence["physical_snapshot"]["wall_grid"]["fingerprint"].as<std::uint64_t>(),
+      snapshot.wall_grid_fingerprint);
+    const auto payload = evidence["physical_snapshot"]["wall_grid"]["payload"].as<std::string>();
+    EXPECT_EQ(std::filesystem::file_size(recorded.snapshot_file.parent_path()/payload), grid->cells.size());
+  }
+  auto invalid_publication = published;
+  auto invalid_artifact = std::make_shared<mpcc_rate_resolved_execution_artifact::ExecutionArtifact>(
+    *published.artifact);
+  invalid_artifact->semantic_initial_state.reset();
+  invalid_publication.artifact = invalid_artifact;
+  const auto invalid_record = record_authority_failure(world, "invalid-derived-publication", "fixture",
+    invalid_publication, root, std::make_shared<const retained::Request>(request));
+  ASSERT_EQ(invalid_record.status, RecordStatus::Written) << invalid_record.detail;
+  const auto invalid_document = YAML::LoadFile(invalid_record.snapshot_file.string());
+  EXPECT_EQ(invalid_document["publication_bundle"]["certified_plan_evidence"]["status"].as<std::string>(),
+    "invalid");
+  EXPECT_EQ(invalid_document["revalidation_evidence"]["certified_plan_evidence"]["status"].as<std::string>(),
+    "present");
+  std::filesystem::remove_all(root);
+}
+
 TEST(MpccArchitectureSnapshot, ExactRejectedRequestKeepsInspectedAndPublishedArtifactsSeparate)
 {
   namespace retained = mpcc_rate_resolved_retained_revalidation;

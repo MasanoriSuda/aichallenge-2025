@@ -25306,6 +25306,7 @@ struct MPC
     if (published_source.plan != nullptr) {
       execution.source = published_source.plan->solver_source_snapshot;
       execution.artifact = published_source.plan->execution_artifact;
+      execution.certified_plan = published_source.plan;
     }
     auto & publication = execution.publication;
     // The private recorder binds failure identity and hashes the queued world.

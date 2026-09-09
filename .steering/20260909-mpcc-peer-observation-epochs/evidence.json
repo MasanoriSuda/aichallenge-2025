@@ -1,0 +1,1931 @@
+{
+  "baseline_commit": "36c2a01a",
+  "scope": "Peer source epoch hypothesis falsified; source-free physical-plan observation repaired; actual387/930Accepted/931rejected replayed without solves; full acceptance open",
+  "build_packages": 26,
+  "package_records": 2374,
+  "package_errors": 0,
+  "package_failures": 0,
+  "package_skips": 0,
+  "artifacts": [
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/replay_revalidation.cpp",
+      "bytes": 17929,
+      "sha256": "f8dc33fe91a3a639de9a707fd922cbac8334874dc09d78780272bf792e243432"
+    },
+    {
+      "path": ".steering/20260909-mpcc-publication-clock-handoff/revalidation_input.hpp",
+      "bytes": 6871,
+      "sha256": "cfbeb749d9f1f8f76d7d6f17d4cf87d112e5fe51521e783c20f88262075bc1fa"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/certified_plan_input.hpp",
+      "bytes": 19496,
+      "sha256": "d78b6e22abb54056990daf364110dddbece817b7a2c6424897e63805495e229e"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/compile_plan_replay.py",
+      "bytes": 1715,
+      "sha256": "51388038142a8086d7f7307566a996d0a1ca669588f6b980bd3e009ec416caac"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/extract_peer_inputs.py",
+      "bytes": 2614,
+      "sha256": "a2b1c907f59957a055dd56f3ea623f919532c69c21fbccbf626397c1992dccd5"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/native_recorder.py",
+      "bytes": 2440,
+      "sha256": "b03210efd8e19d3e2e093c8f1f7861d989b18fb09cc6d121861ba328eec37877"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/register_results.py",
+      "bytes": 4828,
+      "sha256": "e05948886d6c587b3c35869d6ad83e750b06ed8b2dba43efebe7bdd85eee6192"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/replay_certified_plan.cpp",
+      "bytes": 9355,
+      "sha256": "f958e126e79b34fe24c9341f835cf207d3f2ba639521c8a52b1da73d193d0b84"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/replay_motion.cpp",
+      "bytes": 2275,
+      "sha256": "ec80ab2c717d308d5d93d0287b1adc0fae52b33bc81ca64b188519081d6bb486"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/replay_motion.py",
+      "bytes": 1566,
+      "sha256": "d68dda09546b953e0f707da0723027abe6033cb2ee4a58ef9d54e0cdd61164fd"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/replay_normal_requests.py",
+      "bytes": 3772,
+      "sha256": "d753b7c9ef4e0b5b00fb2c82af99145e24b3298f62ef4a61dc628fb4d6b8ea88"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/replay_recorded_plans.py",
+      "bytes": 2611,
+      "sha256": "fae360c8aab1bc04466b71dceca852a684505463f13c86aa83a97499273709cf"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/run_campaign.py",
+      "bytes": 12020,
+      "sha256": "b34a28faeec7723cb47fb1344f8babcff6bd1ddc14f1ab56173a6a1dce699da8"
+    },
+    {
+      "path": ".steering/20260909-mpcc-peer-observation-epochs/seal_evidence.py",
+      "bytes": 1744,
+      "sha256": "8ca92101520c46f96428010a8e2b18d1a58dc5d5a8050613dc155581b7813060"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39500,
+      "sha256": "e35a1a28301688262411cbdc1abf58a8e6a90ee5f5ac97904b6a9a8ebe1754d3"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 10520,
+      "sha256": "9a0b1754cd45410f71ebccee853b37ba15c8e8c5dc7e32a17222deb55f7ca678"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2943080,
+      "sha256": "d17134385498c268c86f74a8f5419bec3fa8647a26f0918edac3c6875b74f662"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 135131,
+      "sha256": "38f73a6dcce40602f83ae8935f623b9c53e90f3a882158d5dd43cab429859096"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 61089,
+      "sha256": "f4d31f86d17275e43201ad9d6860143978aa7498cc6dbb6f530de207aba525cb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/artifact-restoration.json",
+      "bytes": 483,
+      "sha256": "b95667c1513e558206fdc09b23866898f564f2d7473568d53131dafaa56392bb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/authority-timing-summary.json",
+      "bytes": 11974,
+      "sha256": "75bcb8fd6f24bd898c9d30e372bb571b90eaa1dffb69b320df4186079e8693cb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/awsim.log",
+      "bytes": 1773,
+      "sha256": "b1f92de8740aa9e35705833c3528bec4503886f283e386d94f81ac97426d559b"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/binaries/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "bytes": 32368,
+      "sha256": "089252dc88cc446f41f0873458c8a105f2980b41de67123c17ee37cf2b8e84b2"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/binaries/mpc_controller_cpp",
+      "bytes": 8685288,
+      "sha256": "b6e102faea5fa5757b811b890a6d87d66c30bfccd7b33662eb82474ac99e45d2"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/binaries/mpcc_architecture_compare",
+      "bytes": 1573232,
+      "sha256": "022a7bcb2bd3a9b5b1ea37329ffd642f4f507f69f0c77d1366a0b7343858a6ee"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/build.log",
+      "bytes": 5023,
+      "sha256": "f3840b72dbbfe3d9b645307e2a753f31620671e7ed715ede30c47c69ef384e5a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/compose-six-lap.yml",
+      "bytes": 204,
+      "sha256": "41abd057d2c8d85fb0625665bf48f270656245ab61ccffd2ff3e432bc618ac70"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/autoware.log",
+      "bytes": 386243,
+      "sha256": "c6629c26e196cc04370f03de7b36301535a42e33197a3fb2b03088ee49a299e3"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/motion_analytics-26-09-09-13-47-23.html",
+      "bytes": 4851324,
+      "sha256": "e0b588de0c69a517886e26dfee7cf12249b189bbee4e5058a0f3e3611c98b87f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000023-3e364e096fb32a64-track-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 283390,
+      "sha256": "282cbe9c34ab44e6c60ded2bc9da0cce6d1822666cd3fe11017f859a4c788545"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000023-3e364e096fb32a64-track-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000206-ee5ada4f5f1a8a75-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 248613,
+      "sha256": "f3bfdea851a2bbdbb191316cd198ed6932c9961dc90ecea301ee601055690fc9"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000206-ee5ada4f5f1a8a75-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000257-3d5e154442262da5-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 251380,
+      "sha256": "c5de27ecc5cab9f4603c41660ee9dd47bf3d0274ad2541f872e512dc2ee9e551"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000257-3d5e154442262da5-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000301-ff768fe2f7985764-cruise-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 247384,
+      "sha256": "ff15caa8baea4bfc233346f22ebe7fd8f6f0284d2fcbc65d8cdb3488104aa53f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000301-ff768fe2f7985764-cruise-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000302-33dccc56f65656b4-cruise-side-negative-initial-solve-rejected/snapshot.yaml",
+      "bytes": 254324,
+      "sha256": "1f8018c7b7c51c6f5aab584cd8cf549979e893d9e224a9b1984c1b9a76e2f373"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000302-33dccc56f65656b4-cruise-side-negative-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000302-5d0d97c9fed5b71b-cruise-side-positive-initial-solve-rejected/snapshot.yaml",
+      "bytes": 254331,
+      "sha256": "5c34fdc12e94f8db3da33c0ece9f5de013dc797646c8294af02050958f3b059c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000302-5d0d97c9fed5b71b-cruise-side-positive-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000302-979f6e955b671d60-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273673,
+      "sha256": "d3d3f88a376a62ba0a15a15138b5fd038ff8b1ebe1324b33c406a518e49331af"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000302-979f6e955b671d60-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000317-52534f19a91200fc-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 283515,
+      "sha256": "1f5dc55db684928818a53311e1b4d6dfdf9d7b935ebb8351f07afdd703b56c2b"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000317-52534f19a91200fc-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000346-de645f71c437ccee-cruise-side-negative-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 263183,
+      "sha256": "9ca001a5fb097257f660ec6a6f163388fd238a5c5d52c7b4933b2d1794af3322"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000346-de645f71c437ccee-cruise-side-negative-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000381-8a01b5c4c52a8040-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 274803,
+      "sha256": "57794bff6cb5d128b262ee067d813a28f015d1e8aeff49d210694615ab5c6d39"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000381-8a01b5c4c52a8040-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000390-60cce3c8214736eb-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 271601,
+      "sha256": "59d7d72acf9e1fb7e244c48bebac0b933cef4c20b39e3f3e53d7a35e798d4957"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000390-60cce3c8214736eb-cruise-side-neutral-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000412-1d2e2e35b664a54b-cruise-side-positive-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 261223,
+      "sha256": "7b0bce3a3072d76d33432ffdb3ed2745e6e4051c9f2bc7b691523ca89be2f85f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000412-1d2e2e35b664a54b-cruise-side-positive-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000544-a725f3a1e9632a20-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 36609,
+      "sha256": "8d277d520912d64abed46af76eda54225518c23ee443d20c22a2133343fe761f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000544-a725f3a1e9632a20-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/inspected-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-inspected-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous-revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/published-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/snapshot.yaml",
+      "bytes": 505602,
+      "sha256": "6fb0ceb820a1cfbae569716ffee1d88a79889338762d13321e8400e8ed34ab40"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 198759,
+      "sha256": "0137cbbc9d86506f1bec1583c8a03905dae7f06cb97ad8655a2e5fe5b37d6193"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/mpcc_architecture_snapshots/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/2026-09-09-13-46-48-349464-msuda-System-Product-Name-69/launch.log",
+      "bytes": 17591,
+      "sha256": "6149ac1726a07af1685c6a9ce3e94cfca480979aff51b7cec4ff9724ddbcf733"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/component_container_102_1788929209555.log",
+      "bytes": 1488,
+      "sha256": "58e4ab86f5c808bd94416e9fb51e756a9c6b4cc5e51f86356d24180903521027"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/ekf_localizer_94_1788929209555.log",
+      "bytes": 65,
+      "sha256": "b0afab87403c262b1364374a224002e4b6e9284f539b3d91fabed030efcff0ba"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/gnss_poser_88_1788929209551.log",
+      "bytes": 205,
+      "sha256": "a7a685fbd87a684d56b3d577ed2e79a306ad6872a687fb2b3acd2c3eb61092ad"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/gyro_odometer_90_1788929209593.log",
+      "bytes": 65,
+      "sha256": "af5282e02b1206e1cb7eb8aef598f563ceb432e8c20e3cb13d50af52d914f5cc"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/imu_corrector_86_1788929209553.log",
+      "bytes": 65,
+      "sha256": "6f79975ec045099ee462af21844f1cd6ffb4abe7e2c4d6ddb63c33e529046924"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/imu_gnss_poser_node_92_1788929209539.log",
+      "bytes": 977,
+      "sha256": "6129f49f102f443fff787d70b44bd49acbf40e2727b1e907015cacf9dbe93e4c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/mpc_controller_cpp_100_1788929209732.log",
+      "bytes": 346966,
+      "sha256": "b09a246876df549a0bfd4f1ac32b97ed3214967cf8a0024f26bb5b59dd8c46e0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/python3_108_1788929209770.log",
+      "bytes": 4217,
+      "sha256": "bbe4b116923a46cd7fa8fa75e0d71eeaadca32296ee2589031b1d5d5c84586e2"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/python3_110_1788929209796.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/python3_338_1788929226345.log",
+      "bytes": 2711,
+      "sha256": "7718853072a888236b556bd0402d5d0f3e85e7f683b70f9ae3a1463a07cb7ed2"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/python3_69_1788929209423.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/relay_106_1788929209577.log",
+      "bytes": 65,
+      "sha256": "b76fe18d8a75fca8b615a3845dc699c7d60312b1b688c477ecd886a6993745af"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/robot_state_publisher_82_1788929209559.log",
+      "bytes": 705,
+      "sha256": "d50ede2bc3a01875a172260d8518db66233da1c61f0ebc5fdcd9604919de6953"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/rviz2_104_1788929209656.log",
+      "bytes": 744,
+      "sha256": "c0e53c3dcba81f640487534ffe6ab0cb3cc50d0509f458c7f0177429f3de4aea"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/simple_trajectory_generator_node_98_1788929209536.log",
+      "bytes": 1415,
+      "sha256": "6d36f20d1569032e11b1d66dc2a533234cf37ea91862f60c33efa432f874dcca"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/twist2accel_96_1788929209536.log",
+      "bytes": 65,
+      "sha256": "efddf8d66d9248f74fa8b97e48642f84f49d434b58326374bba9d140fdf93ed4"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/ros/log/vehicle_velocity_converter_84_1788929209542.log",
+      "bytes": 65,
+      "sha256": "bff8ce5e93824ed503018a7bae095d1cac5334d62aea4819ff53ed55bd669c25"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "a43443d9f739581d38ea732c9ee7154c592a263bf84f64884c21fd0211e10dc3"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2141748,
+      "sha256": "106f4c89a0b52ad1a8e5232925d892ea59f4ea8adcaf3ddbf30c5347f01f17ee"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "e6db7ed905bfd18b7d3a8173e296aeba2c51c71a8dbd6e9c82cc07de5464e93c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d1-topic-timing.json",
+      "bytes": 2363,
+      "sha256": "7d8c1b504083c43100c32f2901492452fd9219305a6988913e38a5bc40737c67"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/autoware.log",
+      "bytes": 233212,
+      "sha256": "f4ae102d5f3b212a6fae662c316ee0fde8015486644fd40bbbd7acd05af15554"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/motion_analytics-26-09-09-13-47-22.html",
+      "bytes": 4851211,
+      "sha256": "62c57b88fa53bac34255ef19e410c771794c4bfb42be355cb7b3ff0457309f18"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000180-82bd0b57c543c660-track-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274185,
+      "sha256": "3f34cf32420729917d49c4608842ca36717abaab2b44a28075cc3b42ebebfe5f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000180-82bd0b57c543c660-track-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000190-627fa1f9dd547d2c-track-side-neutral-initial-solve-rejected/snapshot.yaml",
+      "bytes": 249610,
+      "sha256": "2640e7f6f0813fe734ed292e3ba67fe70612031235c9775bff619ce8ed1b1739"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000190-627fa1f9dd547d2c-track-side-neutral-initial-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000204-432bf7beebf274ba-track-side-neutral-successive-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 250521,
+      "sha256": "4af13d3914e87bf5d2748857ea8dd3cc36ddd190cb490606462651c2365a0aa4"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000204-432bf7beebf274ba-track-side-neutral-successive-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000301-0c4d2916f8a16ca6-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273796,
+      "sha256": "9bec774e1246eb5bbb1785da4ed681c4c850ed0ccaf48df8709fa750b8db5c74"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000301-0c4d2916f8a16ca6-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000301-c8a612dc0e31876c-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml",
+      "bytes": 273654,
+      "sha256": "bc0d20198ba8a2b2f8731f1d50e3427661c4f7fbb811ab1f7837717e452d405f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000301-c8a612dc0e31876c-cruise-side-positive-dynamic-obstacle-refinement-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000301-e11c2d5cc165e6da-cruise-side-negative-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 276257,
+      "sha256": "e5003ebd0626831c7f27bd6af240791450c1a0835fdc7d9555cdbf655fa19ffb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000301-e11c2d5cc165e6da-cruise-side-negative-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000301-f44f520456e8ec92-cruise-side-neutral-wall-refinement-coupled-solve-rejected/snapshot.yaml",
+      "bytes": 274276,
+      "sha256": "71c747a33562895ac92d48b463c18cfee8d69d98a5939f19f491879af0a0e814"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000301-f44f520456e8ec92-cruise-side-neutral-wall-refinement-coupled-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000336-2fc01639a115f145-cruise-side-neutral-physical-proof-physical-proof-rejected/snapshot.yaml",
+      "bytes": 282523,
+      "sha256": "638f1c83c832369061c54bb5305af2a9e103304e6f22bdc126a19d1a0aaf9db1"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000336-2fc01639a115f145-cruise-side-neutral-physical-proof-physical-proof-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000371-70f2d88b4d2f1200-cruise-side-negative-post-refinement-linearization-solve-rejected/snapshot.yaml",
+      "bytes": 276293,
+      "sha256": "12c77c107c456e8a6bf5202d807aa80c4f9b2df664cd823bea24c9065f8ae31c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000371-70f2d88b4d2f1200-cruise-side-negative-post-refinement-linearization-solve-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000424-b93792865c65b398-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/snapshot.yaml",
+      "bytes": 36126,
+      "sha256": "08c27a09732a625d25f79d8a7e3f09b1f9158f42bbb79c059c692bbc121dd330"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000424-b93792865c65b398-cruise-side-neutral-physical-proof-outer-exact-physical-wall-rejected/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000523-c17409953855a1b9-track-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "bytes": 36622,
+      "sha256": "b0aa3d86259bc130faf7072b017f4511634b5803858de3524d5f72af3e3a6aba"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/mpcc_architecture_snapshots/000000000523-c17409953855a1b9-track-side-neutral-physical-proof-normal-authority-unavailable/wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/2026-09-09-13-46-48-696342-msuda-System-Product-Name-69/launch.log",
+      "bytes": 17591,
+      "sha256": "1ab1b4979b4c6cc365c247ebb852fd606bb08b148d323ed21cce4fe20adde4d0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/component_container_102_1788929210075.log",
+      "bytes": 1488,
+      "sha256": "c1794f512c64cdd647333efce2ffc7270ce0d6375daa4dc0a5f18c24ce60d95d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/ekf_localizer_94_1788929210064.log",
+      "bytes": 65,
+      "sha256": "e226977d313c4a7129478806d92dbc612446187871c35ec4b5c3ff357c98982f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/gnss_poser_88_1788929210101.log",
+      "bytes": 205,
+      "sha256": "81696a0f5f6ba2c5e10cde6267b668a81a7c51fc6643cf720e28a84886dccb23"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/gyro_odometer_90_1788929210059.log",
+      "bytes": 65,
+      "sha256": "9216e6042fd50e4e83342a678c3e1d0db89d1fae003842eb711c37540b7d6bb6"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/imu_corrector_86_1788929210086.log",
+      "bytes": 65,
+      "sha256": "ee5a80b88abc94613befcb841fbf33c537dfd6bf63a0cf64a6ba15b0a1aa9e65"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/imu_gnss_poser_node_92_1788929210057.log",
+      "bytes": 977,
+      "sha256": "a7d7cf588a5faa0db96b17802b2571083a1d8795df80ea27a809b38aca3dd4d0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/mpc_controller_cpp_100_1788929210284.log",
+      "bytes": 202611,
+      "sha256": "45397c4cfee2555a5601c709e09d55f4841e2b93c524601e1645711ab43fc54a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/python3_108_1788929210346.log",
+      "bytes": 4217,
+      "sha256": "94e6ca55b055d6c57c08174bc714df4732f0f5e36a8dba02686bb2764901ac79"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/python3_110_1788929210364.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/python3_338_1788929226029.log",
+      "bytes": 2711,
+      "sha256": "7ea525b8900efd7b873d5a3b8f703ec736db2d14ec3b9e8cc6558b331b0af564"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/python3_69_1788929209917.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/relay_106_1788929210069.log",
+      "bytes": 65,
+      "sha256": "974eff1948ba85193a6392a161cadecefe1408a552240f4c5c7af681e13ed04a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/robot_state_publisher_82_1788929210088.log",
+      "bytes": 705,
+      "sha256": "c2e5816bb10145d02c4205d8b5fca549c635673385510543f70e61d1d70a8d22"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/rviz2_104_1788929210237.log",
+      "bytes": 744,
+      "sha256": "69f766cffae97e4873d5f689f5ba16fa99e19a01131abeeb751f4469a4da281f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/simple_trajectory_generator_node_98_1788929210069.log",
+      "bytes": 1415,
+      "sha256": "d1bc0c63410e7000d60655c78dd0f1bfbeab2e8879d815b5d3690585935e3f1e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/twist2accel_96_1788929210094.log",
+      "bytes": 65,
+      "sha256": "b1897b2a3468953afafbf5dae103806d55497136f9cf98a295bab8581fe76195"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/ros/log/vehicle_velocity_converter_84_1788929210117.log",
+      "bytes": 65,
+      "sha256": "76ce142510d43fd1e1c6ae44b7c147ce175d3e60187c2499db9495bd74add028"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/rosbag2_autoware/metadata.yaml",
+      "bytes": 8199,
+      "sha256": "1dfc48c5658f546e044b8f430f1f1123920cd29b3a63119d185430806f2055f1"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/rosbag2_autoware/rosbag2_autoware_0.mcap",
+      "bytes": 2106343,
+      "sha256": "a9eb8ea8dae9f969efd008e5e465467dcffdbc319adfd7931f3773edfa4f9ea2"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2/rosbag_autostart.log",
+      "bytes": 2982,
+      "sha256": "6aa04453781d3966c11af5370b6ce5a6fb74024172a2a8436948f9e4e5a92b42"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/d2-topic-timing.json",
+      "bytes": 2366,
+      "sha256": "cbd3998b20946c9ce6797273e2d9b4212ff675ca19e674d3f4a9a8f64816c8c6"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/dev-six-lap.sh",
+      "bytes": 643,
+      "sha256": "d27f6be662e8570cf40f0507d6c68dc40e66bc242e1c80e2904f7a3e44778eeb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/down.log",
+      "bytes": 466,
+      "sha256": "35e5c6b4c1e49e171ec645d7071b8f18f6745f257a41d01612d3e7ed4ec6e355"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/generated-user-path-results/result-summary.json",
+      "bytes": 928,
+      "sha256": "57596bb6dab1e0eb18a63bffbd4663622df82f1ef6542281fa154082bb9db03e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/Makefile",
+      "bytes": 5767,
+      "sha256": "e787027ccc8e2251037df4b5ec72f1196d4075f2d7d1d2b1ae70ea5f3397a885"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/run_autoware.bash",
+      "bytes": 1312,
+      "sha256": "ec5cbb98c9ec4f78cd9a81a0e65f764d8674157560b051449ab7a68e4c9701ae"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/run_simulator.bash",
+      "bytes": 712,
+      "sha256": "940687cc9a72667ced05b8e7c92bb832d016488b97ee3068a221730986115a43"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/simulator/AWSIM/AWSIM_Data/StreamingAssets/Vehicle/vehicle.yaml",
+      "bytes": 4245,
+      "sha256": "e6c360b86b74850e1e189498753e3df730c15ce84ff74a2316e2048c56499220"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/simulator_scripts/dev.sh",
+      "bytes": 658,
+      "sha256": "939c7b605b7b860c40b4ac146e21e64e8b712b383732a06e68267a0db4c332fa"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/simulator_scripts/eval.sh",
+      "bytes": 574,
+      "sha256": "f6c6b3d1b85210f700b84b13c5577b737190cd2a46acb1b4da78fb43d0481cad"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/ekf_localizer",
+      "bytes": 3017152,
+      "sha256": "b59c3ba635b271fe1c11cb929f130f45a66a2f714f43bc1c80ffc19545038910"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/build/aichallenge_ekf_localizer/libaichallenge_ekf_localizer_lib.so",
+      "bytes": 2162992,
+      "sha256": "25d6709773578e85b60692fb0c6d3507d619fc3135e647357076b739e47675e4"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/build/racing_kart_gnss_poser/libgnss_poser_node.so",
+      "bytes": 2226888,
+      "sha256": "01f5faf04095b8e5665d5978d01ca2c039f5b5ea9b80dbdea42f1d0a84650734"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/CMakeLists.txt",
+      "bytes": 1967,
+      "sha256": "3c0afc4b2c1e16fd6411e84ab124702ee9c0b18e82995f2e9ed10f7d6107cd11"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/NOTICE",
+      "bytes": 591,
+      "sha256": "022282b0ddb9150f8f8eef93d756496e6fceaac26645f5ac8ab5885014df7524"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/README.md",
+      "bytes": 868,
+      "sha256": "0e611995e7b8269b053ea1e485567724e7e4a3f475160b359d60ffcde4f484d3"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/UPSTREAM.json",
+      "bytes": 11373,
+      "sha256": "f50bbbeed197561468144c08a031ae7d1d6716f2144288beee7cdb8697fed203"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/aged_object_queue.hpp",
+      "bytes": 1595,
+      "sha256": "a590ff6ba9e73b74174145b6f55d4a1e017f62e7e78b482167491a3b0271147e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/covariance.hpp",
+      "bytes": 937,
+      "sha256": "6fb6d3f54f710093f871bbe1b3a791ce10614ce6a894cedbfa34c470c4370bc1"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/ekf_localizer.hpp",
+      "bytes": 9173,
+      "sha256": "52150445c4f7614ba87516a0fa1b54a4a76adb61b6fd850c088f452f69b58ffd"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/hyper_parameters.hpp",
+      "bytes": 2687,
+      "sha256": "f1d726b1856de01f8872050f82bff94aca8f4d99c4eccc79f17805658d0edeea"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/mahalanobis.hpp",
+      "bytes": 981,
+      "sha256": "cbcbe65624f23ae71eb9c5545b49102abec6f80118494b4a62ab47fb1dfc2b13"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/matrix_types.hpp",
+      "bytes": 840,
+      "sha256": "2072399473236f16ca52addefd72d77d29020541f7f9994a2c0951b7d5310d7e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/measurement.hpp",
+      "bytes": 1093,
+      "sha256": "7551b7691682f9819cca14e6ac92f2027410154baee52ee4fb8cd85e42885960"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/numeric.hpp",
+      "bytes": 916,
+      "sha256": "6e15f2cf88856e2f5c9757fb52e4d3725603e29c12d6bc39f0e1929641d7ac8d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_index.hpp",
+      "bytes": 797,
+      "sha256": "71308e68751a7ffe33d4e0897e7a90c14c207b0fc00f52b9ac0fe09a16f38692"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/state_transition.hpp",
+      "bytes": 1103,
+      "sha256": "69d17f4d8b16a916a4ac4bc04ac813096682707648c7067f3846493438828bf9"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/string.hpp",
+      "bytes": 872,
+      "sha256": "2c0ee74388981ff78df8aab553266ff47b52bee54ede362b7ce07a5dccf2b6a5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning.hpp",
+      "bytes": 1255,
+      "sha256": "2448941ea932c92679186b768a82f2d9a98ae45a9ee680fba8939e1958c31a76"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/include/aichallenge_ekf_localizer/warning_message.hpp",
+      "bytes": 1214,
+      "sha256": "dd3a4745528ed6a81e7841ff723a12bb27431bfab30e64d50767877cd675501d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/launch/ekf_localizer.launch.xml",
+      "bytes": 3823,
+      "sha256": "a5adf69bc5ee3774f287928b1a766abc71fb7118b56a81c68fa187f8fe23e07c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/package.xml",
+      "bytes": 1287,
+      "sha256": "f4d7a8c512446c3a0641a91d5ad519df87684916af56388c249166929fd4d7dc"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/covariance.cpp",
+      "bytes": 1839,
+      "sha256": "5e7472cc05e7a73bf260cc2f8770834c72cb48d3704bdd8283ff8195d70b4000"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer.cpp",
+      "bytes": 22971,
+      "sha256": "8097cb77806f0c53e1d37e9b2f9c35efc5486aa3e42376d7af8ec0f83941e5dc"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/ekf_localizer_node.cpp",
+      "bytes": 891,
+      "sha256": "9183e015dc463be207cfdcde81c79765a3d22dc8b18b1b015dc9274819210737"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/mahalanobis.cpp",
+      "bytes": 987,
+      "sha256": "b2a2a90892c02266b15a4a2bbaf7fe4c9a5a543fccabc6b7836e6facbc18b9c0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/measurement.cpp",
+      "bytes": 2196,
+      "sha256": "dacc346cbcfbfdac9efaa3d6be3628bbdf577ddfbae63959bafcda485b857f59"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/state_transition.cpp",
+      "bytes": 3369,
+      "sha256": "2e5c81b1c5a2228806725d32feace05b7ffba34fc341dfe594e38d21b4bd8654"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/src/warning_message.cpp",
+      "bytes": 2017,
+      "sha256": "13640a809651f7a0c71a5f378b26786e2f07a0fdf9d794ff37d739508645da4d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/src/test_ekf_localizer.cpp",
+      "bytes": 10768,
+      "sha256": "c41a98be09c027d21b0ac0eb78d08c62fca658df25f0ba88cab9d1d5e2074dc7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_aged_object_queue.cpp",
+      "bytes": 2477,
+      "sha256": "9bbdf1204af2264635ea93f96b96e9ee9d123bcf629b1a7eaf5d7528fd72a529"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_covariance.cpp",
+      "bytes": 2178,
+      "sha256": "e2fa32f59d8572185b18ebfd306500279a28826273a98e9419555b3c57c7b88d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_clock.cpp",
+      "bytes": 5977,
+      "sha256": "567b679be46f8a1a3a464f2d351ded8029049aa25f9f86aa91028a0fb9c41719"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_ekf_localizer.test",
+      "bytes": 120,
+      "sha256": "fc9e58e5b97c07cfaa863637d143675095e36215f6133959493d34ccb0df8ac5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_mahalanobis.cpp",
+      "bytes": 1482,
+      "sha256": "cc31e52681756dd068c72f6c1a80ea249eb6215c15dbb69c8c51567ddbac7ae2"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_measurement.cpp",
+      "bytes": 2617,
+      "sha256": "954ed79a2a28a2116ed3a0ca531bdc25f83e48bcbc197321d266df0922f7e661"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_numeric.cpp",
+      "bytes": 1507,
+      "sha256": "a8da5388facefe07b59a7807e28a28f39c94b7bd73b397383fda6c2f6d92ef56"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_state_transition.cpp",
+      "bytes": 3161,
+      "sha256": "84a8cab921a6f1b0d94c212a8e638eb621cdadb5d470a6e5a55a78020440ab69"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_string.cpp",
+      "bytes": 909,
+      "sha256": "7d5fddf1bdac43b7f0a5bd393f277fddf485e2d8d3b65457b1fdc946eeb71ed0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_ekf_localizer/test/test_warning_message.cpp",
+      "bytes": 2055,
+      "sha256": "9c7b8883eb339c17d60639aac6fcf3d72b969bcd5d66b5fce9d4e20088eef4d5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/.gitignore",
+      "bytes": 37,
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/CACHEDIR.TAG",
+      "bytes": 191,
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/README.md",
+      "bytes": 302,
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/.pytest_cache/v/cache/nodeids",
+      "bytes": 484,
+      "sha256": "dbf6e134667cc83efdd0884f38ba6dddac1aa40080f802178a13ddf189b21329"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/CMakeLists.txt",
+      "bytes": 394,
+      "sha256": "cabc352f6806cdd80ac4e366723d85cadd2ef1b00f016d5939398a74599e3ff6"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner.param.yaml",
+      "bytes": 1938,
+      "sha256": "d4f307b9bb58635dd0496845dfb8a6346977c19bfbc5ac1d2ace7c4120a378e5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/behavior_path_planner_tree.xml",
+      "bytes": 2621,
+      "sha256": "ef7ce6d5610f3bdb670e52ec3559d22940bd3be63cb3c9602948b0207be68d8f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/converter.param.yaml",
+      "bytes": 327,
+      "sha256": "17d1def2c550d81200548b61d000e2d42ad9609b21164fa0f61c3dcc6f5e4faa"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/map/lanelet2_map_loader.param.yaml",
+      "bytes": 129,
+      "sha256": "cf8304daf3684ea25c3edf0544a33c0be32b306123ad35590019c8f6ca08ae4b"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/mission_planning/mission_planner/mission_planner.param.yaml",
+      "bytes": 212,
+      "sha256": "c048d0175ed7c810a635da80465222f676e42f5f73493909034162e3c28fd457"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/common/nearest_search.param.yaml",
+      "bytes": 132,
+      "sha256": "b6c156d6f3cc74b16c95f40f35cf86ddef2b8b3a19ee2630b741cc10f4085726"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/avoidance/avoidance.param.yaml",
+      "bytes": 4704,
+      "sha256": "522287ec99e5bfef1b1d96788fb90a0e249398b1aac70e948a9affdb55c30416"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/drivable_area_expansion.param.yaml",
+      "bytes": 3154,
+      "sha256": "1f4cf4862f076a30ca4e830c8c3efbf910801de35e7d2f5c6bb4a28369499f66"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_change/lane_change.param.yaml",
+      "bytes": 1161,
+      "sha256": "3562d08a5d22112dbe5da44f6070b750752da1d0282d0ae475d7a62e18c7f30b"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/lane_following/lane_following.param.yaml",
+      "bytes": 84,
+      "sha256": "6115c2b5fdd761e453f42398cd8b05701ff1cb1120481409cc40fe6b8336b8e9"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_out/pull_out.param.yaml",
+      "bytes": 1043,
+      "sha256": "20dc36eff032a06b37e150ed60652101ec01e07924a41d55bb3f749aad22519c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/pull_over/pull_over.param.yaml",
+      "bytes": 3288,
+      "sha256": "dad3fdfe63460034550abbf1c93937ab635d2ea36a2d4ce71125d1cadf5d9831"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/side_shift/side_shift.param.yaml",
+      "bytes": 213,
+      "sha256": "4a0aa18c500e40c9e3b1848392c5289f41ed3be56d7afe93f693e55fd936cbb5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/config/vehicle_velocity_converter.param.yaml",
+      "bytes": 167,
+      "sha256": "c068e333ebe0bf94ab67a7e4ee94c1fa7c64c41e4e46cc0d140f66efb553afa5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/accel_map.csv",
+      "bytes": 539,
+      "sha256": "59ef66e4a2a6ad85e3e3f3e894af6b6ed55345fdfbef1295f49bac2c1bdc5f2f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/brake_map.csv",
+      "bytes": 405,
+      "sha256": "7c9d8e9db7f00cf64bcf6f80ca67b65048da8487f4c53b3dcc37b4a971ad18cf"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/data/steer_map.csv",
+      "bytes": 1469,
+      "sha256": "26ead52a49148b347b7bbe5edb3c9cca6bd030f89585781f13b4e8870872571a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/aichallenge_submit.launch.xml",
+      "bytes": 990,
+      "sha256": "0a82a035882bef28d3c35856f6d8b82a6207711eac5b7ecc94928309523e4537"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/joycon.launch.xml",
+      "bytes": 316,
+      "sha256": "f949739493762605db0ce0d9d5526cba2a3fcfa3410fc1dd65a7bb0997bebaa9"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/mpc.launch.xml",
+      "bytes": 1029,
+      "sha256": "bc0c319f6352ddd5d40518ff52877b138321e57ca0603436e1b13bb6b74fa7d1"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pilot_net.launch.xml",
+      "bytes": 488,
+      "sha256": "bf5b4f272aecf99c96996380e1241737d82874158fbb45fb2d9d880ad00fde78"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/pure_pursuit.launch.xml",
+      "bytes": 1018,
+      "sha256": "738fa5d0714ca9355b14e0dade3b09a6d55a5b904c187abf1307b3930d2e7bdb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/rl_train.launch.xml",
+      "bytes": 143,
+      "sha256": "6c3e3aacb7d99ded76c03498a1602bac0834881b031d77168baa500c971e62a6"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/control/tiny_lidar_net.launch.xml",
+      "bytes": 955,
+      "sha256": "79465471ea4c5d0c6a370651ed9b14b12fa4cdf970427624be400f65e9b448a5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/launch/reference.launch.xml",
+      "bytes": 12963,
+      "sha256": "e2855514d6c4fc6f4cea480d517605095ef0638d119186991d92d90a606bb909"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/lanelet2_map.osm",
+      "bytes": 116731,
+      "sha256": "126a62f2ef21560ace0eb39a0f52a6a5e86ef6b9951b0ead1511e46e4b418dc4"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/map/wide_lanelet2_map.osm",
+      "bytes": 138570,
+      "sha256": "c6bf9625bd5a6589991095c3eced22be048ba30740a1b75479e7cfe2b90c7e75"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/package.xml",
+      "bytes": 2019,
+      "sha256": "0596ef3df8a882be95cff9ff8c2b1efc78fde63a11897dd4e5ca02f68bfed50c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 18802,
+      "sha256": "27025f14e21657016d1bb640ce203cfcf43c41987de8bd85ed43805be560ff59"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_e2e_control_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 18869,
+      "sha256": "6b96d03f80c055fc815ccbd88a1c23c7fdf62ac4c0ca96bf5b5ef292fa9be2f8"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.2.pyc",
+      "bytes": 5249,
+      "sha256": "bc6f30df073266b186ca1525aeba872dba25d376a99e39e3a13bd4027f857631"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/__pycache__/test_localization_timing_contract.cpython-310-pytest-9.0.3.pyc",
+      "bytes": 5316,
+      "sha256": "e8fd6f02f09e59a3856af0a544d9667f2719d0ffdb1d1fa8c6cb9812a1c1c4d4"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/aichallenge_submit_launch/test/test_localization_timing_contract.py",
+      "bytes": 1684,
+      "sha256": "7f54ea148127b65302c28881300557398a37573afa88b5280bb34641f5400a27"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/imu_gnss_poser/config/imu_gnss_poser.param.yaml",
+      "bytes": 476,
+      "sha256": "7b91e83b175bf8a86f45aee3fe6cb74188b02333a75e1148853518df96dde171"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "bytes": 39500,
+      "sha256": "e35a1a28301688262411cbdc1abf58a8e6a90ee5f5ac97904b6a9a8ebe1754d3"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config.yaml",
+      "bytes": 86645,
+      "sha256": "613a3fc088f7b51a343506a12d167bff2619feddcab2325dda8dd1142b03084d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/config_for_cloud.yaml",
+      "bytes": 81406,
+      "sha256": "05a6747e6253abde8f7cbf52801d94d6416fe1be3c185e074baf8beffa7e01f1"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/config/ref_vel.yaml",
+      "bytes": 410,
+      "sha256": "282948a20c90ea7ca2ff6f91e19e5a43ef602ebe8ef23cd3e3fda5aea1625509"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.pgm",
+      "bytes": 570024,
+      "sha256": "4958e3f1d977e75d202ef76e099836ca0622ea42e42c5bb2fea92616cb7e9211"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/occupancy_grid_map.yaml",
+      "bytes": 262,
+      "sha256": "d392ca9abfa1bfdf126d8e1a92f6d1c072ef240374a23e628159d0f8a9d9f612"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv.csv",
+      "bytes": 42373,
+      "sha256": "8320166da7960c136e0ef52dcb4a744668bb17415ab9d2b27eaa488a83bc15b1"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/env/final_ver3/traj_mincurv_org.csv",
+      "bytes": 30765,
+      "sha256": "9d15efde0b777c624ad0318d153112caa21b7c2296a29d8eae281a1ad4862a48"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "bytes": 10520,
+      "sha256": "9a0b1754cd45410f71ebccee853b37ba15c8e8c5dc7e32a17222deb55f7ca678"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "bytes": 7101,
+      "sha256": "030fee072979d716dd3faf0d3e973cc3984ffdd2666b1cb5054bfefb4506431b"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "bytes": 7003,
+      "sha256": "b643d5e77b9b2053ed31a6eeec5e9010bb7c8bb2391f6fed9aa2b68016617c1f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "bytes": 8587,
+      "sha256": "f0dc20daa2f8b41c7e3cef1517d769b5f39f2290b92928546486f85f75869ef0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "bytes": 2943080,
+      "sha256": "d17134385498c268c86f74a8f5419bec3fa8647a26f0918edac3c6875b74f662"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "bytes": 131258,
+      "sha256": "8f8439c2d6abc4e62fda89418de7ddedd8eba553894dedb7f42af4cb420ef358"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "bytes": 135131,
+      "sha256": "38f73a6dcce40602f83ae8935f623b9c53e90f3a882158d5dd43cab429859096"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "bytes": 23535,
+      "sha256": "142e5bf525555eb0ef7fa4bdcb2a2168a6074e6f7b168b3fe310b3268924974a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "bytes": 31065,
+      "sha256": "1c8dcf359b670d624b98ec2ebe36fe4b983edfc285f2fa7ca944f7768e031c6d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "bytes": 24541,
+      "sha256": "35b5076aaa4f92b74d9134f0537cac2a82b0e380520cea5b242c538232586497"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 49699,
+      "sha256": "91137f26ba7b104dd1f25c7eb4dfaae404a264081dad82a91c33b0471b1e9e4e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "bytes": 217563,
+      "sha256": "d7391dc9b46ebde04d32fa04deb40039f28d82b6994261417ae00c06a9f0b85c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "bytes": 33164,
+      "sha256": "9bb9588f01dd4ba03083bd63de4a6c5e1e9c65ee41dc9544096e837dff1ef4d9"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "bytes": 16772,
+      "sha256": "52a60741b81f71e7acfef64800cf35c6e33f51655e14e32202f69426334d6aeb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/awsim_peer_body_envelope.json",
+      "bytes": 23132,
+      "sha256": "258dd65fc23b58da0f7bf347c1876090cf3ecd1b4b6f59862f2a7a5118dad85d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/fixtures/mpcc_zero_stop_qp.yaml",
+      "bytes": 68057,
+      "sha256": "fe9ea34f2d3a30009fd1d51964be58fec09324f7411ec1b8ba6348686cd3960d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_comparison.cpp",
+      "bytes": 75674,
+      "sha256": "2c173eaa5b13f1d138ebd59dfeaf2672764ec1e72d91f5840bd0393fb08901dc"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 61089,
+      "sha256": "f4d31f86d17275e43201ad9d6860143978aa7498cc6dbb6f530de207aba525cb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_on_trajectory_connector.cpp",
+      "bytes": 7838,
+      "sha256": "d34f36d5ab8f128e088a526d77e7eb3ee536f99a3a30b1700f2890b92b76b47f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved.cpp",
+      "bytes": 15057,
+      "sha256": "e1c154147872d9dbaa4d7f25666c1e833f3f775202268af927f83246978099be"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_certified_plan.cpp",
+      "bytes": 37877,
+      "sha256": "6c89c17af54a4a92846bc4194ac87508ab7ce478ff0145ad8b3f2a5a52371680"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_command_candidate.cpp",
+      "bytes": 18910,
+      "sha256": "03e79928c180815d4307c9e715cd49f04cc9f1b63cf63acf8230474070c460c7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_dynamic_proof.cpp",
+      "bytes": 7621,
+      "sha256": "98f9ec6b07b7490e1a4eef43e29606d994cca3b01c61fb5aea16725022c7441c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_execution_source.cpp",
+      "bytes": 11569,
+      "sha256": "0baac2be10c1c3d956026776980dbed56168a33aadbe7589814497a33b41b7ff"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_normal_branch_bank.cpp",
+      "bytes": 10309,
+      "sha256": "b41f34e3ec7bfb60f064f1d788e57e01afba7843fa5a386f6981a93646d7c2bc"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "bytes": 10984,
+      "sha256": "e21dd5ac9c0cce686726b6f67e917b3de4dee857ae9c51a4fccdf36b8b108db2"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_adapter.cpp",
+      "bytes": 36600,
+      "sha256": "65edf8bbc1b2a272deb054cfa296e059fdc6921a22382f457c00fecc0020f304"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_physical_wall.cpp",
+      "bytes": 10464,
+      "sha256": "771e8c4df2c02c80cea232c559de21aa0a877b7d33f306fe1925df23e7b03115"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "bytes": 73584,
+      "sha256": "ed94e7d67a855512126e94b04ec853ef2b135dcc76f92a64a87e2098d80d4cf1"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_shadow.cpp",
+      "bytes": 110843,
+      "sha256": "4fc177ae6cd800d3b416717c0146b18a675f2d645d835057e69b55cae0c53cf3"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_stateless_maneuver.cpp",
+      "bytes": 43423,
+      "sha256": "81026bd23313413d5dc2caeb74426edbf75c1ac7038a43af67fd504f58fb3693"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_single_authority_source_contract.py",
+      "bytes": 181162,
+      "sha256": "c9627bf8eb2dcad29da2e942b9c8452e03c2d6da4a3414536e8e9c3c42928ec9"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/launch/gnss_poser.launch.xml",
+      "bytes": 2289,
+      "sha256": "68938042066ca124421caf525eebb58385c4ed146c02da871099c8b43098c6dd"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/src/gnss_poser_core.cpp",
+      "bytes": 17463,
+      "sha256": "400587843725512bb8f6001470a77fdd2fa39798b1cb0fdf9909dda182781efe"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser/test/test_gnss_heading.cpp",
+      "bytes": 6810,
+      "sha256": "6b06a36dc60c4413e0d389cb98795fb582102bd3841a74626fad3d06c1d308fd"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/docker-compose.gpu.yml",
+      "bytes": 502,
+      "sha256": "69b0b1f20b820d7d245ce42b631dace42649854af36e6cb5ebd7b190b1121502"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/docker-compose.sound.yml",
+      "bytes": 175,
+      "sha256": "676c556f2a4294f1777e5b7d12be54eaef5596b5a1edf9b7e07bb5aa42c68bac"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/docker-compose.yml",
+      "bytes": 4927,
+      "sha256": "ff4c66afc3b4c4c79ff1745ae220d0806481a69d18cf6e1c3bf87cb29878e2d5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/inputs/docker-entrypoint.sh",
+      "bytes": 471,
+      "sha256": "5ac71125a968adcf5d1eaa3c15f488529677ddc6a453654063bd357fa55a3d06"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/launch.log",
+      "bytes": 696,
+      "sha256": "fd02cb2b698e7b273053f33c26f4d6d8a3691cf4304da67de671d721309586cf"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/manifest.json",
+      "bytes": 54931,
+      "sha256": "8f282b7adf779ca9c5fea91e6eb98c64dc8ed64d935b7beb7d9884ba140bf536"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/monitor-summary.json",
+      "bytes": 1866,
+      "sha256": "bd161c73bbd8819415dffcf614d96732899b416bf30ab5da5daffbdc75a93aec"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/mpcc-source.patch",
+      "bytes": 27883,
+      "sha256": "4280f8840c3af78f7861345f09071c1a71306bdb6fbf77d0967d96296d2743be"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/package.log",
+      "bytes": 493353,
+      "sha256": "1736e404361e1e47ae6df65ebc8496e32c2af41fabdd81b9adb317d43e538e2a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/run_campaign.py",
+      "bytes": 12020,
+      "sha256": "b34a28faeec7723cb47fb1344f8babcff6bd1ddc14f1ab56173a6a1dce699da8"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/user-inputs/result-summary.json",
+      "bytes": 1739,
+      "sha256": "274ef27b831218b69aec335d79fa7c5416172d3b976187f325a1c1d33c153e58"
+    },
+    {
+      "path": "output/20260909-peer-epochs-dev2-r1/user-inputs/safety-gate-result.json",
+      "bytes": 323,
+      "sha256": "a297f288d5e9bc39f241c41d9b6b39891ccaabec76a594cf088a6b766fc2038e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-inputs-r1/d1.json",
+      "bytes": 204719,
+      "sha256": "18f30861d8c027e07d8be822d332326af03fa00c4f63fd60651cafed08174a8d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-inputs-r1/d2.json",
+      "bytes": 215529,
+      "sha256": "a26ffd067a2d087258ef77831768aaf15e60e6245f02fbed1c1ed88541b33734"
+    },
+    {
+      "path": "output/20260909-peer-epochs-inputs-r1/manifest.json",
+      "bytes": 762,
+      "sha256": "1784d988ab99891afaab151745d283516dda2915e4aea369caa893e73255c947"
+    },
+    {
+      "path": "output/20260909-peer-epochs-motion-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-motion-r1/captured-matches.json",
+      "bytes": 1310,
+      "sha256": "468a61c9b1a78cd79f0f3637856b4153d084ec0914797fe77ce28f9826adab85"
+    },
+    {
+      "path": "output/20260909-peer-epochs-motion-r1/d1.log",
+      "bytes": 28,
+      "sha256": "deb9bed6e53d8215c77e51abd7f8a4bd4e2dd02954ae54f57ef33eee135d5ab6"
+    },
+    {
+      "path": "output/20260909-peer-epochs-motion-r1/d1.yaml",
+      "bytes": 33792,
+      "sha256": "32f1370a589ac3730270a1053bca7afebeba58e1a42c1faf6246ff37962d45dd"
+    },
+    {
+      "path": "output/20260909-peer-epochs-motion-r1/d2.log",
+      "bytes": 28,
+      "sha256": "3045af9303cae76cc4b607ccc2f0b9647a29346189a70acd2af6f80d397c6c4f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-motion-r1/d2.yaml",
+      "bytes": 34841,
+      "sha256": "f37c37aa1f741b0485a4713d3284c2b5373548bbffb8dc7983388ac49632c934"
+    },
+    {
+      "path": "output/20260909-peer-epochs-motion-r1/manifest.json",
+      "bytes": 15679,
+      "sha256": "efbfaaa1913e4fe2b3a45288819ed441aeff08711f877e910e1225f035873571"
+    },
+    {
+      "path": "output/20260909-peer-epochs-motion-r1/replay",
+      "bytes": 115224,
+      "sha256": "ce0944d8ce6e056fb14cc1db915d112ca30c992e9afa892149d990086a0bf11f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r1/build.log",
+      "bytes": 9423,
+      "sha256": "577ca6692b1157429ee4bd3e4bfe784fa113ac6b94eff50a1339787611e0afa0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r1/mpcc_architecture_snapshot.cpp",
+      "bytes": 135080,
+      "sha256": "f55f0d4ac3fa918a9ac12b2b4056d295c4429779bf46a245cc8e24db1b2de826"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r1/mpcc_architecture_snapshot.hpp",
+      "bytes": 10518,
+      "sha256": "0a9f496e56cd73fc7778d244fcbc5f01d9745ef05cd3548e7a5099efaad589e7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r1/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 60210,
+      "sha256": "7a9e9acc44b36d53205ddf221639825869650294af4c8d58527ab8bb9c7cae49"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r2/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r2/manifest.json",
+      "bytes": 16650,
+      "sha256": "5320f03d01a9e95ecdf949557d5356a057c2f08bfefb2665280b368a904d68b5"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r2/mpcc_architecture_snapshot.cpp",
+      "bytes": 135108,
+      "sha256": "025d4e62eba9298f75943b7ece604d0ade73014aba48a271a43dfeb4e67bde6e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r2/mpcc_architecture_snapshot.hpp",
+      "bytes": 10518,
+      "sha256": "0a9f496e56cd73fc7778d244fcbc5f01d9745ef05cd3548e7a5099efaad589e7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r2/native.log",
+      "bytes": 3575,
+      "sha256": "bbef621d3c104e090b7efc1d24f294e2f1d6906aa202e11a2210008f08c57364"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r2/regression",
+      "bytes": 1599888,
+      "sha256": "7c82185cfa89683ef5a0142ef35d2652a2170a92cad32061779bce418ae4621e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r2/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 60210,
+      "sha256": "7a9e9acc44b36d53205ddf221639825869650294af4c8d58527ab8bb9c7cae49"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r3/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r3/manifest.json",
+      "bytes": 16650,
+      "sha256": "2070ac61c5179ae081e70911eb93594afe8b00be7dc5cce3898959e879424faa"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r3/mpcc_architecture_snapshot.cpp",
+      "bytes": 135131,
+      "sha256": "38f73a6dcce40602f83ae8935f623b9c53e90f3a882158d5dd43cab429859096"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r3/mpcc_architecture_snapshot.hpp",
+      "bytes": 10520,
+      "sha256": "9a0b1754cd45410f71ebccee853b37ba15c8e8c5dc7e32a17222deb55f7ca678"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r3/native.log",
+      "bytes": 3575,
+      "sha256": "b116681ce8c88d967cc1e0cf96dede38ec7844c61a5f1e63fdd6a482643c1c4f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r3/regression",
+      "bytes": 1605608,
+      "sha256": "5c529995c48648c9c63f3aae680f09f94cf2cb24e1047846533dff3056f36fc7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-after-r3/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 61089,
+      "sha256": "f4d31f86d17275e43201ad9d6860143978aa7498cc6dbb6f530de207aba525cb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before/build.log",
+      "bytes": 1915,
+      "sha256": "e7186efe6fdc7edfd043ad9313f7496a1ee42b0d91f6ba300919c5f1c1659ee7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before/mpcc_architecture_snapshot.cpp",
+      "bytes": 123454,
+      "sha256": "1a6b26073c85dcc8a51446454c75064939d3c13b1affcee71be60bd77421885a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before/mpcc_architecture_snapshot.hpp",
+      "bytes": 10518,
+      "sha256": "0a9f496e56cd73fc7778d244fcbc5f01d9745ef05cd3548e7a5099efaad589e7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 60210,
+      "sha256": "7a9e9acc44b36d53205ddf221639825869650294af4c8d58527ab8bb9c7cae49"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before-r2/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before-r2/manifest.json",
+      "bytes": 16651,
+      "sha256": "8631308bf49b5b788a4d636c060a6d64c0ee43b5efaf346593701148729cf47e"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before-r2/mpcc_architecture_snapshot.cpp",
+      "bytes": 123454,
+      "sha256": "1a6b26073c85dcc8a51446454c75064939d3c13b1affcee71be60bd77421885a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before-r2/mpcc_architecture_snapshot.hpp",
+      "bytes": 10518,
+      "sha256": "0a9f496e56cd73fc7778d244fcbc5f01d9745ef05cd3548e7a5099efaad589e7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before-r2/native.log",
+      "bytes": 3910,
+      "sha256": "0b6bc95ecc94a1e278b55bf8a64363c13e5d200413fc7587702560d4f3698b1a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before-r2/regression",
+      "bytes": 1580384,
+      "sha256": "83cffd62c8ffa173bbdd209c017a246cebd127e1fecf30d97123b4feb9aee3d3"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-before-r2/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 60210,
+      "sha256": "7a9e9acc44b36d53205ddf221639825869650294af4c8d58527ab8bb9c7cae49"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/fixture/000000000042-e2cd9610e6c0b220-cruise-side-positive-physical-proof-derived-plan-observation/inspected-certified-wall-grid.bin",
+      "bytes": 1600,
+      "sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/fixture/000000000042-e2cd9610e6c0b220-cruise-side-positive-physical-proof-derived-plan-observation/published-certified-wall-grid.bin",
+      "bytes": 1600,
+      "sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/fixture/000000000042-e2cd9610e6c0b220-cruise-side-positive-physical-proof-derived-plan-observation/snapshot.yaml",
+      "bytes": 22086,
+      "sha256": "f0f345c56acb9ee6c9b6c2cf39bfc79be9eff6012d4fbba37a8e36ad4740ad16"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/fixture/000000000042-e2cd9610e6c0b220-cruise-side-positive-physical-proof-derived-plan-observation/wall-grid.bin",
+      "bytes": 4,
+      "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/fixture/000000000042-e2cd9610e6c0b220-cruise-side-positive-physical-proof-invalid-derived-publication/inspected-certified-wall-grid.bin",
+      "bytes": 1600,
+      "sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/fixture/000000000042-e2cd9610e6c0b220-cruise-side-positive-physical-proof-invalid-derived-publication/published-certified-wall-grid.bin",
+      "bytes": 1600,
+      "sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/fixture/000000000042-e2cd9610e6c0b220-cruise-side-positive-physical-proof-invalid-derived-publication/snapshot.yaml",
+      "bytes": 22074,
+      "sha256": "593720170168087402f77c7821ce3f705fb9431d2f325ac551e2dbf2b48f915c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/fixture/000000000042-e2cd9610e6c0b220-cruise-side-positive-physical-proof-invalid-derived-publication/wall-grid.bin",
+      "bytes": 4,
+      "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/manifest.json",
+      "bytes": 16618,
+      "sha256": "5bb60ff0e0d055e5910b29931ca15a5fbbba15d889604306e7c8040ed944974c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/mpcc_architecture_snapshot.cpp",
+      "bytes": 135131,
+      "sha256": "38f73a6dcce40602f83ae8935f623b9c53e90f3a882158d5dd43cab429859096"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/mpcc_architecture_snapshot.hpp",
+      "bytes": 10520,
+      "sha256": "9a0b1754cd45410f71ebccee853b37ba15c8e8c5dc7e32a17222deb55f7ca678"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/native.log",
+      "bytes": 660,
+      "sha256": "facc37e515e4e4c8e404bb07b170dac01a32192bd2b0fec3d48c9881e4158daf"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/regression",
+      "bytes": 1605712,
+      "sha256": "d710b7233864d253b97ed7a11ddd483e7851ed4d1c8fd103328df3d5c096e800"
+    },
+    {
+      "path": "output/20260909-peer-epochs-native-recorder-fixture-r1/test_mpcc_architecture_snapshot.cpp",
+      "bytes": 61229,
+      "sha256": "d98198422f5f2a4f8519e68637f36d203ef23d4d48ca0e5702769d5d362e0a45"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/d1/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/inspected.yaml",
+      "bytes": 50999,
+      "sha256": "0633e77f7be5ea46e46034a94f57feea44d4e3f77982f62d66ba472848cacbf0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/d1/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1308,
+      "sha256": "772c26328d96e367777119076c43519d6f028ca0c46d641c8f239f99924d707c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/d1/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/previous-inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/d1/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 69855,
+      "sha256": "a74a034fdb3beec0abfd5353805dea58a0672b3aed0a2723eb15727e07f83504"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/d1/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected-wall-grid.bin",
+      "bytes": 570009,
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/d1/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/inspected.yaml",
+      "bytes": 50990,
+      "sha256": "16f05fe49d0829dd0c3aa2309df0be918c0487790dc3ccfbecedd6a76f009951"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/d1/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/native.log",
+      "bytes": 1305,
+      "sha256": "ac49ed8b38a81522e37605ee8630b8564d320cffeda66ef086af55d2288a6e16"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/d1/000000000928-2a8bd1223ca58009-cruise-side-neutral-physical-proof-terminal-contingency-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 70255,
+      "sha256": "6c217cb1cddd5b7df141c58da5fd708a6ee42aa530a11bccab15bcd067cdb563"
+    },
+    {
+      "path": "output/20260909-peer-epochs-normal-revalidation-r1/manifest.json",
+      "bytes": 35274,
+      "sha256": "a529f400012826deaadc32b16a6fe967aa8c4ae68bb3a448820a1891524f6821"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-revalidation-r1/d1/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/native.log",
+      "bytes": 1961,
+      "sha256": "19cf35b357c9811d5a2552a3d7eec39c1f7a3d7fd620a0baf161b4bc4ceccac8"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-revalidation-r1/d1/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/previous_accepted_revalidation_evidence/result.yaml",
+      "bytes": 1961,
+      "sha256": "19cf35b357c9811d5a2552a3d7eec39c1f7a3d7fd620a0baf161b4bc4ceccac8"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-revalidation-r1/d1/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/publication_bundle/native.log",
+      "bytes": 563,
+      "sha256": "ab4a430dfda2503da03caa597c663f8d155196dd16d9e8c824d07387a7c34b90"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-revalidation-r1/d1/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/publication_bundle/result.yaml",
+      "bytes": 563,
+      "sha256": "ab4a430dfda2503da03caa597c663f8d155196dd16d9e8c824d07387a7c34b90"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-revalidation-r1/d1/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/native.log",
+      "bytes": 2071,
+      "sha256": "d8e59d3bfea71be0f2d32a9ce14250a983ffad5b716c04c25622859f757a398d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-revalidation-r1/d1/000000000931-7fd55359978f50d0-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/result.yaml",
+      "bytes": 2071,
+      "sha256": "d8e59d3bfea71be0f2d32a9ce14250a983ffad5b716c04c25622859f757a398d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-revalidation-r1/manifest.json",
+      "bytes": 49538,
+      "sha256": "fd0ae9b8e666927dd0e339fda50f610bbbcb17c0bbfbc93ea1919bcc0d985b7a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-tool-r1/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-tool-r1/fixture-result.yaml",
+      "bytes": 522,
+      "sha256": "edf8a67342773d77d4805eb1d9036c322a88c1d04162bd91765610066d782f23"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-tool-r1/fixture-run.json",
+      "bytes": 771,
+      "sha256": "a35365617231b92f22b4637165507dd2b7155e9a813b3a4d757a99594c4ea0df"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-tool-r1/manifest.json",
+      "bytes": 17340,
+      "sha256": "00b4dbe25fb82afdb5fc77c5401a4f6f948411241cbb116dba0dafe9a4e2052d"
+    },
+    {
+      "path": "output/20260909-peer-epochs-plan-tool-r1/replay",
+      "bytes": 998392,
+      "sha256": "8356d157d552cb9cf9e7a66144bddb6e11b51822339200e87f0ea2f10a5094cb"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-build.log",
+      "bytes": 5023,
+      "sha256": "f3840b72dbbfe3d9b645307e2a753f31620671e7ed715ede30c47c69ef384e5a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-dev2.log",
+      "bytes": 2477,
+      "sha256": "dc21066c4eb4b7e509ad2f2e1fbad860a6d6c8e1a9f69846657cfbef260e83aa"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-extract.log",
+      "bytes": 656,
+      "sha256": "71526e66af9a30cc15653ccda94ff554a360444b53ece8e08aae72dcba4845cc"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-motion.log",
+      "bytes": 162,
+      "sha256": "6c36ec9e0562b96bc2c36fcdd071fc7969690cb7aed57380c95d0efad46b0fb0"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-native-after-r1.log",
+      "bytes": 16030,
+      "sha256": "3435de650ad70bd0fbe33ff98931cb609e5df419a579572849a3eddead02d8c7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-native-after-r2.log",
+      "bytes": 3715,
+      "sha256": "87991da3775f0c4c5e39f42442d14f6099626773f87550bf3bcb9350d5c47089"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-native-after-r3.log",
+      "bytes": 3715,
+      "sha256": "287776026aa5ad8d64cc36fafbae57683c233cce0970852b29e9d513181791e6"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-native-before-r2.log",
+      "bytes": 4551,
+      "sha256": "ad0187454c8e877fc8516ffda4b20101e164e4ec1b2abc363b644c403d2fa2a2"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-native-before.log",
+      "bytes": 15843,
+      "sha256": "63ea3ba9cec28a62eed3f18e84ff54d52081d10be115d77b51af4683c309d4bd"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-package.log",
+      "bytes": 493353,
+      "sha256": "1736e404361e1e47ae6df65ebc8496e32c2af41fabdd81b9adb317d43e538e2a"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-runtime-replay.log",
+      "bytes": 18948,
+      "sha256": "3a485a1e8c136fb05eb702d23e66df8b711370611892e635d95d0300112a60e7"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-epochs-source-contract.log",
+      "bytes": 180,
+      "sha256": "b977b6f95e97c8950ceb3822534f9d73c088cc82b573aedae0759939a9cbdcfe"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-plan-replay-build-r1.log",
+      "bytes": 801,
+      "sha256": "89f8c33ad0555cebe9cf0247db88b8b1baca4ba5b208b75c06c946049c6252d9"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-plan-roundtrip-r1.log",
+      "bytes": 227,
+      "sha256": "d362d9e3e3947d292830df5b56e0e33139222f792e6076dfc3087aad50779a5f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-plan-roundtrip-r2.log",
+      "bytes": 663,
+      "sha256": "00661f60993942f83f6b2d0f1ca3bc7285fbd748456d5390ad7c88b483c1f8da"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-authority.log",
+      "bytes": 348,
+      "sha256": "a1678e5ccdeb79935038fcac11417e92970a718ee83bea46e99aa6633e17695f"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-build.log",
+      "bytes": 4575,
+      "sha256": "c789df0fa3f2619c0c07f6411ed1715e314b5c1153c91797d010227d8a5b849c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-comparison.log",
+      "bytes": 2322,
+      "sha256": "a67ab44e20e92c9876f89ea02f2e6b56343189f22bcae2f9e48340ee3dd79fee"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-dev2.log",
+      "bytes": 2477,
+      "sha256": "0a2d766ed22267733b27831a927892caf7b21d7eec769540095e859dac965b61"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-native-r2.log",
+      "bytes": 3519,
+      "sha256": "4d88b27d04babaf3895df093cfd8d2f014dfaf802d192215284549a16f131de4"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-native.log",
+      "bytes": 15833,
+      "sha256": "636a981456f2a5f0a2355686d2763f5a52d5c7e0ec986041bd00aed35a331269"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-package.log",
+      "bytes": 492934,
+      "sha256": "c7842c557127466aa4534f745bada5e493e25087369df8661c664d75f3d8654c"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-replay-build.log",
+      "bytes": 140,
+      "sha256": "5cbc9d7b93857264beec453fc3829db2d21a223558e9e80db10db0d87d3e26b6"
+    },
+    {
+      "path": "output/20260909-peer-epochs-validation/mpcc-peer-viability-replay.log",
+      "bytes": 10702,
+      "sha256": "23199767745c6376923a03f6af4a962aaf286e93325b7d30d6948ebd29d5743f"
+    }
+  ]
+}

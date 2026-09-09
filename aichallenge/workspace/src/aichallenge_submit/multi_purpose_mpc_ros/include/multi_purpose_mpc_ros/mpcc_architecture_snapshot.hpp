@@ -17,6 +17,11 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
 struct Request;
 }
 
+namespace multi_purpose_mpc_ros::mpcc_rate_resolved_certified_plan
+{
+struct CertifiedPlan;
+}
+
 namespace multi_purpose_mpc_ros::mpcc_architecture_snapshot
 {
 
@@ -104,6 +109,9 @@ struct PublishedExecutionObservation
   std::shared_ptr<const mpcc_rate_resolved_shadow::Snapshot> source;
   std::shared_ptr<const mpcc_rate_resolved_execution_artifact::ExecutionArtifact> artifact;
   PublicationEvidence publication;
+  /// Full immutable physical evidence, including plans derived without a
+  /// solver snapshot. This pointer has no authority or solver ownership.
+  std::shared_ptr<const mpcc_rate_resolved_certified_plan::CertifiedPlan> certified_plan{};
 };
 
 enum class AuthorityFailureBoundary

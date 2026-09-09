@@ -153,6 +153,7 @@ target_link_libraries(${PROJECT_NAME}_mpcc_architecture_snapshot
   ${PROJECT_NAME}_persistent_osqp
   ${PROJECT_NAME}_recovery_footprint
   yaml-cpp
+  ${PROJECT_NAME}_mpcc_rate_resolved_certified_plan
 )
 
 add_library(${PROJECT_NAME}_mpcc_stateless_maneuver STATIC

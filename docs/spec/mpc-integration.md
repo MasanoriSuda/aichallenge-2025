@@ -4043,3 +4043,29 @@ EKF修正後のdev2 D1では、Accepted 936の公開後に古い基準が復活�
 4.403881 ms戻った。実Storeのnative testで再現した。同じ937の入力で基準だけを直した再生も
 terminal peer証明は不合格であり、この修正だけで2台の受入れが成立するとは判断しない。
 詳細と検証範囲は[publication clock handoff](../../.steering/20260909-mpcc-publication-clock-handoff/design.md)を参照。
+
+
+#### solver入力を持たない停止軌道の物理証拠（2026-09-09）
+
+現在worldから生成したStop successorは、有効なexecution artifactと物理壁証明を
+持つ一方、solver snapshotを持たない。この場合も実在する証拠を保存する。
+`publication_bundle`、`revalidation_evidence`、`previous_accepted_revalidation_evidence`に
+任意の`certified_plan_evidence`（`mpcc-certified-plan-observation/v1`）を追加する。
+完全なproblem context・course frame付きartifact、物理snapshot、壁証明の全診断値、
+独立所有のwall gridを保存する。公開側は実際に送信したplanとの一致と時刻の対応も検査する。
+各状態は`present/missing/invalid`、solver入力の有無は別の`solver_source_status`で明示する。
+既存のsolver-source記録が`missing`であることを、補足の物理証拠で上書きしない。
+
+payloadは`published-certified-wall-grid.bin`、`inspected-certified-wall-grid.bin`、
+`previous-inspected-certified-wall-grid.bin`で、各ownerの地図を同じ原子的記録処理で保存する。
+制御側の追加処理はimmutable planの共有参照保持だけで、検証・符号化・I/Oは記録workerが行う。
+有限のfirst-boundary FIFO、最終制御権、既存loaderとROS・評価JSON契約を維持する。
+この記録は`authority=false`であり、存在しない親solver入力や元の動的証明を推定しない。
+[設計・再現と検証](../../.steering/20260909-mpcc-peer-observation-epochs/design.md)を参照。
+
+
+この観測修正はnative18件・source契約104件、26package buildと2374test記録が通過。
+固定dev2で実Stop387と、同一軌道のAccepted930／30ms後の拒否931を保存した。
+物理壁証明の全診断値は再求解なしで一致し、停止末端の他車拒否も再現する。
+2台完走は不合格で、現在姿勢の観測時刻と予測の対応、同一他車予測下の停止可用性は未解明。
+[結果と制約](../../.steering/20260909-mpcc-peer-observation-epochs/results.md)を参照。

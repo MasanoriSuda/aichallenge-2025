@@ -405,19 +405,8 @@ YAML::Node outcome_node(const persistent_osqp::SolveOutcome & outcome)
   return node;
 }
 
-YAML::Node source_node(
-  const shadow::Snapshot & source, const std::string & wall_grid_file)
+YAML::Node problem_context_node(const contract::MpccProblemContext & context)
 {
-  YAML::Node node;
-  const auto & identity = source.identity;
-  const auto & context = identity.source_context;
-  node["sequence"] = identity.sequence;
-  node["snapshot_sec"] = identity.snapshot_sec;
-  node["control_prediction_origin_sec"] =
-    source.control_prediction_origin_sec;
-  node["course_progress_origin_m"] = source.course_progress_origin_m;
-  node["execution_prefix_steps"] = source.execution_prefix_steps;
-  node["publication_interval_sec"] = source.publication_interval_sec;
   YAML::Node problem_context;
   problem_context["decision_id"] = context.decision_id;
   problem_context["intent"] = contract::to_string(context.intent);
@@ -442,7 +431,23 @@ YAML::Node source_node(
   problem_context["bounds_schema_id"] = context.bounds_schema_id;
   problem_context["cost_schema_id"] = context.cost_schema_id;
   problem_context["fingerprint"] = context.fingerprint;
-  node["problem_context"] = problem_context;
+  return problem_context;
+}
+
+YAML::Node source_node(
+  const shadow::Snapshot & source, const std::string & wall_grid_file)
+{
+  YAML::Node node;
+  const auto & identity = source.identity;
+  const auto & context = identity.source_context;
+  node["sequence"] = identity.sequence;
+  node["snapshot_sec"] = identity.snapshot_sec;
+  node["control_prediction_origin_sec"] =
+    source.control_prediction_origin_sec;
+  node["course_progress_origin_m"] = source.course_progress_origin_m;
+  node["execution_prefix_steps"] = source.execution_prefix_steps;
+  node["publication_interval_sec"] = source.publication_interval_sec;
+  node["problem_context"] = problem_context_node(context);
   node["semantic_request"] = semantic_request_node(source.request);
   node["nominal_path_distance_m"] = std_vector_node(
     source.nominal_path_distance_m);
@@ -2090,6 +2095,146 @@ YAML::Node execution_evidence_node(
   return node;
 }
 
+static YAML::Node course_frame_observation_node(
+  const std::vector<mpc_stage_geometry::CourseFrameKnot> & knots)
+{
+  YAML::Node output(YAML::NodeType::Sequence);
+  for (const auto & knot : knots) {
+    YAML::Node item;
+    item["progress_m"] = knot.progress_m;
+    item["x_m"] = knot.x_m; item["y_m"] = knot.y_m;
+    item["heading_rad"] = knot.heading_rad; item["waypoint"] = knot.waypoint;
+    output.push_back(item);
+  }
+  return output;
+}
+
+static YAML::Node certified_plan_evidence_node(
+  const std::shared_ptr<const mpcc_rate_resolved_certified_plan::CertifiedPlan> & plan,
+  const std::string & payload,
+  const recovery_footprint::OccupancyGrid * & physical_grid)
+{
+  namespace certified = mpcc_rate_resolved_certified_plan;
+  YAML::Node node;
+  node["schema"] = "mpcc-certified-plan-observation/v1";
+  node["authority"] = false;
+  if (!plan) {
+    node["status"] = "missing";
+    node["reason"] = "certified plan unavailable";
+    return node;
+  }
+  const auto validity = certified::validate(*plan);
+  if (validity != certified::RejectReason::None) {
+    node["status"] = "invalid";
+    node["reason"] = certified::to_string(validity);
+    return node;
+  }
+  node["status"] = "present";
+  node["reason"] = "immutable artifact and its accepted physical evidence; no solver-source inference";
+  node["solver_source_status"] = plan->solver_source_snapshot ? "present" : "absent";
+  const auto & artifact = *plan->execution_artifact;
+  auto value = execution_evidence_node(artifact, {});
+  value.remove("publication");
+  value["schema"] = "mpcc-inspected-execution-artifact/v1";
+  value["problem_context"] = problem_context_node(artifact.identity.source_context);
+  value["course_frame_knots"] = artifact.course_frame.knots ?
+    course_frame_observation_node(*artifact.course_frame.knots) :
+    YAML::Node(YAML::NodeType::Sequence);
+  node["artifact"] = value;
+  const auto identity_node = [](const mpcc_rate_resolved_physical_wall::Identity & identity) {
+      YAML::Node value;
+      value["artifact_sequence"] = identity.artifact.sequence;
+      value["artifact_problem_fingerprint"] = identity.artifact.source_context.fingerprint;
+      value["artifact_snapshot_sec"] = identity.artifact.snapshot_sec;
+      value["pose_snapshot_id"] = identity.pose_snapshot_id;
+      value["course_frame_window_id"] = identity.course_frame_window_id;
+      value["captured_sec"] = identity.captured_sec;
+      return value;
+    };
+  const auto pose_node = [](const recovery_footprint::Pose2D & pose) {
+      YAML::Node value;
+      value["x_m"] = pose.x_m; value["y_m"] = pose.y_m; value["yaw_rad"] = pose.yaw_rad;
+      return value;
+    };
+  const auto & physical = *plan->physical_snapshot;
+  auto snapshot = node["physical_snapshot"];
+  snapshot["identity"] = identity_node(physical.identity);
+  snapshot["current_pose"] = pose_node(physical.current_pose);
+  snapshot["control_prefix"] = YAML::Node(YAML::NodeType::Sequence);
+  for (const auto & pose : physical.control_prefix) {
+    snapshot["control_prefix"].push_back(pose_node(pose));
+  }
+  snapshot["course_frame_knots"] = course_frame_observation_node(physical.course_frame_knots);
+  snapshot["footprint"]["front_extent_m"] = physical.footprint.front_extent_m;
+  snapshot["footprint"]["rear_extent_m"] = physical.footprint.rear_extent_m;
+  snapshot["footprint"]["left_extent_m"] = physical.footprint.left_extent_m;
+  snapshot["footprint"]["right_extent_m"] = physical.footprint.right_extent_m;
+  snapshot["footprint"]["margin_m"] = physical.footprint.margin_m;
+  snapshot["trajectory"]["progress_origin_m"] = physical.trajectory.progress_origin_m;
+  snapshot["trajectory"]["elapsed_time_sec"] = physical.trajectory.elapsed_time_sec;
+  snapshot["trajectory"]["path_distance_m"] = physical.trajectory.path_distance_m;
+  snapshot["trajectory"]["lateral_m"] = physical.trajectory.lateral_m;
+  snapshot["trajectory"]["lag_m"] = physical.trajectory.lag_m;
+  snapshot["trajectory"]["heading_offset_rad"] = physical.trajectory.heading_offset_rad;
+  snapshot["trajectory"]["velocity_mps"] = physical.trajectory.velocity_mps;
+  snapshot["trajectory"]["progress_m"] = physical.trajectory.progress_m;
+  snapshot["trajectory"]["lateral_lower_m"] = physical.trajectory.lateral_lower_m;
+  snapshot["trajectory"]["lateral_upper_m"] = physical.trajectory.lateral_upper_m;
+  snapshot["trajectory"]["minimum_lateral_bound_reserve_m"] = physical.trajectory.minimum_lateral_bound_reserve_m;
+  snapshot["trajectory"]["progress_regression_tolerance_m"] = physical.trajectory.progress_regression_tolerance_m;
+  snapshot["trajectory"]["velocity_lower_bound_tolerance_mps"] = physical.trajectory.velocity_lower_bound_tolerance_mps;
+  snapshot["trajectory"]["stationary_path_suffix_allowed"] = physical.trajectory.stationary_path_suffix_allowed;
+  snapshot["trajectory"]["stationary_velocity_tolerance_mps"] = physical.trajectory.stationary_velocity_tolerance_mps;
+  snapshot["trajectory"]["lateral_bound_tolerance_m"] = physical.trajectory.lateral_bound_tolerance_m;
+  snapshot["terminal_stop_course_geometry"]["progress_m"] = physical.terminal_stop_course_geometry.progress_m;
+  snapshot["terminal_stop_course_geometry"]["curvature_radpm"] = physical.terminal_stop_course_geometry.curvature_radpm;
+  snapshot["terminal_stop_course_geometry"]["lateral_lower_m"] = physical.terminal_stop_course_geometry.lateral_lower_m;
+  snapshot["terminal_stop_course_geometry"]["lateral_upper_m"] = physical.terminal_stop_course_geometry.lateral_upper_m;
+  snapshot["hard_wall_clearance_m"] = physical.hard_wall_clearance_m;
+  snapshot["bound_tolerance_m"] = physical.bound_tolerance_m;
+  snapshot["swept_step_m"] = physical.swept_step_m;
+  auto grid = snapshot["wall_grid"];
+  physical_grid = physical.wall_grid.get();
+  grid["available"] = physical_grid != nullptr;
+  grid["fingerprint"] = physical.wall_grid_fingerprint;
+  if (physical_grid) {
+    grid["width"] = physical_grid->width; grid["height"] = physical_grid->height;
+    grid["resolution_m"] = physical_grid->resolution_m;
+    grid["origin_x_m"] = physical_grid->origin_x_m; grid["origin_y_m"] = physical_grid->origin_y_m;
+    grid["y_axis"] = physical_grid->y_axis == recovery_footprint::YAxisConvention::RowZeroAtMinimumY ?
+      "row-zero-at-minimum-y" : "row-zero-at-maximum-y";
+    grid["cell_count"] = physical_grid->cells.size(); grid["payload"] = payload;
+  }
+  auto proof = node["physical_proof"];
+  proof["identity"] = identity_node(plan->physical_identity);
+  proof["outcome"] = mpcc_rate_resolved_physical_wall::to_string(plan->physical_outcome);
+  proof["completed_sec"] = plan->physical_completed_sec;
+  proof["diagnostic"]["reason"] = contract::physical_wall_certificate_reason_name(plan->physical_diagnostic.reason);
+  proof["diagnostic"]["stage_index"] = plan->physical_diagnostic.stage_index;
+  proof["diagnostic"]["waypoint_id"] = plan->physical_diagnostic.waypoint_id;
+  proof["diagnostic"]["path_distance_m"] = plan->physical_diagnostic.path_distance_m;
+  proof["diagnostic"]["lateral_m"] = plan->physical_diagnostic.lateral_m;
+  proof["diagnostic"]["lag_m"] = plan->physical_diagnostic.lag_m;
+  proof["diagnostic"]["lower_bound_m"] = plan->physical_diagnostic.lower_bound_m;
+  proof["diagnostic"]["upper_bound_m"] = plan->physical_diagnostic.upper_bound_m;
+  proof["diagnostic"]["bound_reserve_m"] = plan->physical_diagnostic.bound_reserve_m;
+  proof["diagnostic"]["heading_offset_rad"] = plan->physical_diagnostic.heading_offset_rad;
+  proof["diagnostic"]["reference_progress_m"] = plan->physical_diagnostic.reference_progress_m;
+  proof["diagnostic"]["solved_progress_m"] = plan->physical_diagnostic.solved_progress_m;
+  proof["diagnostic"]["progress_delta_m"] = plan->physical_diagnostic.progress_delta_m;
+  proof["diagnostic"]["pose_x_m"] = plan->physical_diagnostic.pose_x_m;
+  proof["diagnostic"]["pose_y_m"] = plan->physical_diagnostic.pose_y_m;
+  proof["diagnostic"]["pose_yaw_rad"] = plan->physical_diagnostic.pose_yaw_rad;
+  proof["diagnostic"]["out_of_map"] = plan->physical_diagnostic.out_of_map;
+  proof["diagnostic"]["contact_cell_count"] = plan->physical_diagnostic.contact_cell_count;
+  proof["diagnostic"]["swept_rejected_path_index"] = plan->physical_diagnostic.swept_rejected_path_index;
+  proof["diagnostic"]["swept_checked_pose_count"] = plan->physical_diagnostic.swept_checked_pose_count;
+  proof["diagnostic"]["swept_rejected_substep"] = plan->physical_diagnostic.swept_rejected_substep;
+  proof["diagnostic"]["swept_rejected_subdivision_count"] = plan->physical_diagnostic.swept_rejected_subdivision_count;
+  proof["diagnostic"]["swept_rejected_segment_ratio"] = plan->physical_diagnostic.swept_rejected_segment_ratio;
+  return node;
+}
+
 static bool published_execution_valid(
   const shadow::Snapshot & source,
   const mpcc_rate_resolved_execution_artifact::ExecutionArtifact & artifact,
@@ -2121,7 +2266,8 @@ static YAML::Node revalidation_evidence_node(
   const mpcc_rate_resolved_retained_revalidation::Request * request,
   const bool same_boundary, const std::string & payload_prefix,
   const recovery_footprint::OccupancyGrid * & inspected_grid,
-  const recovery_footprint::OccupancyGrid * & observed_grid)
+  const recovery_footprint::OccupancyGrid * & observed_grid,
+  const recovery_footprint::OccupancyGrid * & certified_grid)
 {
   YAML::Node node;
   node["schema"] = "mpcc-revalidation-observation/v1";
@@ -2238,6 +2384,8 @@ static YAML::Node revalidation_evidence_node(
     node["status"] = "present";
     node["reason"] = "exact evaluation input; not proof or publication authority";
   }
+  node["certified_plan_evidence"] = certified_plan_evidence_node(
+    r.plan, payload_prefix + "inspected-certified-wall-grid.bin", certified_grid);
   if (!r.plan || !r.plan->execution_artifact || !r.plan->solver_source_snapshot) {
     node["inspected_plan_status"] = "missing";
     return node;
@@ -2282,7 +2430,10 @@ static RecordResult record_snapshot(
   const recovery_footprint::OccupancyGrid * const observed_grid = nullptr,
   const YAML::Node & previous_revalidation_evidence = YAML::Node(),
   const recovery_footprint::OccupancyGrid * const previous_inspected_grid = nullptr,
-  const recovery_footprint::OccupancyGrid * const previous_observed_grid = nullptr) noexcept
+  const recovery_footprint::OccupancyGrid * const previous_observed_grid = nullptr,
+  const recovery_footprint::OccupancyGrid * const published_certified_grid = nullptr,
+  const recovery_footprint::OccupancyGrid * const inspected_certified_grid = nullptr,
+  const recovery_footprint::OccupancyGrid * const previous_certified_grid = nullptr) noexcept
 {
   RecordResult result;
   try {
@@ -2376,7 +2527,10 @@ static RecordResult record_snapshot(
       !write_grid(inspected_grid, "inspected-wall-grid.bin") ||
       !write_grid(observed_grid, "revalidation-wall-grid.bin") ||
       !write_grid(previous_inspected_grid, "previous-inspected-wall-grid.bin") ||
-      !write_grid(previous_observed_grid, "previous-revalidation-wall-grid.bin"))
+      !write_grid(previous_observed_grid, "previous-revalidation-wall-grid.bin") ||
+      !write_grid(published_certified_grid, "published-certified-wall-grid.bin") ||
+      !write_grid(inspected_certified_grid, "inspected-certified-wall-grid.bin") ||
+      !write_grid(previous_certified_grid, "previous-inspected-certified-wall-grid.bin"))
     {
       result.status = RecordStatus::IoFailure;
       result.detail = "cannot write atomic world/publication grid payloads";
@@ -2680,6 +2834,34 @@ RecordResult record_authority_failure(
       bundle["execution_evidence"] = execution_evidence_node(*artifact, publication);
       grid = source->wall_grid.get();
     }
+    const recovery_footprint::OccupancyGrid * published_certified_grid = nullptr;
+    const recovery_footprint::OccupancyGrid * inspected_certified_grid = nullptr;
+    const recovery_footprint::OccupancyGrid * previous_certified_grid = nullptr;
+    auto complete_publication = certified_plan_evidence_node(
+      published_execution.certified_plan, "published-certified-wall-grid.bin", published_certified_grid);
+    if (complete_publication["status"].as<std::string>() == "present") {
+      const bool association = artifact && published_execution.certified_plan &&
+        artifact == published_execution.certified_plan->execution_artifact &&
+        publication.failure_decision_id == current_world.identity.source_context.decision_id &&
+        publication.failure_interaction_fingerprint == failure_fingerprint &&
+        publication.failure_observation_sec == current_world.identity.snapshot_sec &&
+        publication.failure_control_origin_sec == current_world.control_prediction_origin_sec &&
+        (publication.source_kind == "exact-executed" || publication.source_kind == "current-world-bundle") &&
+        publication.publication_decision_id > 0U &&
+        publication.publication_decision_id < publication.failure_decision_id &&
+        std::isfinite(publication.publication_control_origin_sec) &&
+        publication.publication_control_origin_sec >= 0.0 &&
+        publication.publication_control_origin_sec <= publication.failure_control_origin_sec &&
+        std::isfinite(publication.publication_artifact_elapsed_sec) &&
+        publication.publication_artifact_elapsed_sec >= 0.0;
+      complete_publication["publication"] = execution_evidence_node(
+        *published_execution.certified_plan->execution_artifact, publication)["publication"];
+      if (!association) {
+        complete_publication["status"] = "invalid";
+        complete_publication["reason"] = "physical plan does not match actual publication and failure clocks";
+      }
+    }
+    bundle["certified_plan_evidence"] = complete_publication;
     const recovery_footprint::OccupancyGrid * inspected_grid = nullptr;
     const recovery_footprint::OccupancyGrid * observed_grid = nullptr;
     const auto * const current = revalidation_request.get();
@@ -2688,7 +2870,7 @@ RecordResult record_authority_failure(
       current->now_sec == current_world.identity.snapshot_sec &&
       current->control_origin_sec == current_world.control_prediction_origin_sec;
     const auto revalidation = revalidation_evidence_node(
-      current, same_boundary, "", inspected_grid, observed_grid);
+      current, same_boundary, "", inspected_grid, observed_grid, inspected_certified_grid);
     const auto * const previous = previous_accepted_revalidation_request.get();
     // The predecessor is a separately observed input, never a reconstruction
     // using the failure's newer pose, peers or wall. The caller observed an
@@ -2707,14 +2889,15 @@ RecordResult record_authority_failure(
     const recovery_footprint::OccupancyGrid * previous_observed_grid = nullptr;
     auto previous_revalidation = revalidation_evidence_node(
       previous, same_source_predecessor, "previous-",
-      previous_inspected_grid, previous_observed_grid);
+      previous_inspected_grid, previous_observed_grid, previous_certified_grid);
     previous_revalidation["observation_role"] = "previous-ordinary-terminal-accepted";
     previous_revalidation["failure_decision_id"] = current_world.identity.source_context.decision_id;
     return record_snapshot(
       current_world, nullptr, nullptr, nullptr, nullptr, PipelineStage::PhysicalProof,
       failure_outcome, failure_detail, output_root, YAML::Node(), bundle, grid,
       revalidation, inspected_grid, observed_grid, previous_revalidation,
-      previous_inspected_grid, previous_observed_grid);
+      previous_inspected_grid, previous_observed_grid,
+      published_certified_grid, inspected_certified_grid, previous_certified_grid);
   } catch (const std::exception & exception) {
     return {RecordStatus::IoFailure, {}, exception.what()};
   } catch (...) {

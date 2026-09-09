@@ -315,6 +315,36 @@
       "snapshot_id": "20260909-complete-stop-world4264-executed3695",
       "manifest": ".steering/20260909-mpcc-complete-stop-suffix/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-rest-native",
+      "manifest": ".steering/20260909-mpcc-complete-rest-candidates/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-complete-rest-world4264-comparison",
+      "manifest": ".steering/20260909-mpcc-complete-rest-candidates/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-rest-world1629-retimed",
+      "manifest": ".steering/20260909-mpcc-complete-rest-candidates/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-rest-production-replay",
+      "manifest": ".steering/20260909-mpcc-complete-rest-candidates/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-rest-single-r1",
+      "manifest": ".steering/20260909-mpcc-complete-rest-candidates/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-complete-rest-dev2-world923-executed328",
+      "manifest": ".steering/20260909-mpcc-complete-rest-candidates/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -2387,6 +2417,153 @@
       "production_impact": "current physical pose and terminal proof preserved; free candidate producer offline; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "demonstrated current-world candidate producer change or required bounded causal replay"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-actual3695",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-world4264-comparison"
+      ],
+      "hypothesis": "published artifact is preserved without re-solving",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "accepted",
+      "reason": "Original wall/dynamic pass; current4264delay/publisher clear but continuation/terminal wall reject. Exact Stop initial pose error0.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new measured world/executed artifact"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-initial-before",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-native",
+        "20260909-complete-rest-world4264-comparison"
+      ],
+      "hypothesis": "initial soft reference always lies in nonlinear frame domain",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "rejected",
+      "reason": "Native13mm overshoot fails;4264reference transition overshoots12.779200mm. A/B/C/D/G and free-rest all fail before solve.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "shared initial and iterated tangent-domain selection"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-initial-after",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-native",
+        "20260909-complete-rest-world4264-comparison"
+      ],
+      "hypothesis": "one tangent-domain selector preserves physical model and original objective",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "accepted",
+      "reason": "All20adapter cases pass; same4264can now reach solve, which still rejects wall QP. No raw iterate or hard-bound relaxation.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [
+        "separate incomplete initial tangent selection"
+      ],
+      "revisit_condition": "new domain/reference mismatch"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-4264-retimed",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-world4264-comparison"
+      ],
+      "hypothesis": "bounded complete-rest timings rescue4264",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "rejected",
+      "reason": "4.543438906s and5s x maximum-law/free-controls x depth0/3 all reject wall proof or wall QP. Original1.780641s cannot brake8.709218m/s torest atmin-3. Scene feasibility remains Unknown.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new physical candidate/witness or earlier causal observation"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-1629-retimed",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-world1629-retimed"
+      ],
+      "hypothesis": "free controls through rest can preserve rear-peer clearance",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "accepted",
+      "reason": "5s maximum-law0/3reject rear QP; free0/3accept exact wall, peer, rest and current command join. All outcomes retained.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "changed production generation or real async observation"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-producer",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-native",
+        "20260909-complete-rest-production-replay"
+      ],
+      "hypothesis": "production current-world candidate can own complete-rest/all-peer identity",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "accepted",
+      "reason": "Old native rear-peer failure-0.0110606m; new native and invalid clock/rest/secondary guards pass. Short wall-profile domain regression fixed without editing acceptance.25build/60groups/2368local records pass.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [
+        "current-world fixed maximum-braking candidate and secondary lattice execution path"
+      ],
+      "revisit_condition": "new source/geometry/peer/clock mismatch"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-production-replay",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-production-replay"
+      ],
+      "hypothesis": "new production candidate joins the same measured world",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "accepted",
+      "reason": "1629one candidate35.444582ms, full join/command available, min2.433887479m.4264still wall-QP rejected125.019816ms; no runtime publication in replay.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "actual async/runtime or changed candidate"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-single-r1",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-single-r1"
+      ],
+      "hypothesis": "new producer preserves single6lap acceptance",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "accepted",
+      "reason": "6laps252.778778s/penalty0/moving override0;10375reportedcycles max18.373ms/0overruns;10398commands40.001061Hz receiptmax39.216995ms/no gaps>50ms.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "new production change"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-async-publication",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-dev2-world923-executed328"
+      ],
+      "hypothesis": "certified candidate crosses actual async publication boundary",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "accepted",
+      "reason": "D1decision844/source308at0.02m/s and D2decision827/source309at0.05m/s published certified normal commands. Does not establish moving multi-tick Stop/restart.923alternate395joined/selected alone is not publication proof.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "moving Stop continuation or new identity concern"
+    },
+    {
+      "experiment_id": "20260909-complete-rest-dev2-r1",
+      "baseline_commit": "3c1cd03b",
+      "snapshot_ids": [
+        "20260909-complete-rest-dev2-world923-executed328"
+      ],
+      "hypothesis": "new producer establishes coupled race acceptance",
+      "changed_dimension": "named tangent domain, complete-rest candidate/clock/all-peer architecture or fixed runtime campaign",
+      "result": "rejected",
+      "reason": "First visible moving Emergency D2decision925at1.823493m/s. Atomic first terminal world923preserves normal328; not925world nor395Stop artifact. D1max31.967ms/3overruns, D2max22.277ms/0. No lap/finish; commands40Hz/no gaps>50ms.",
+      "production_impact": "current-world maximum-law producer replaced; sole certified authority preserved; full acceptance open",
+      "deleted_code": [],
+      "revisit_condition": "bounded923/328replay, exact switching chronology and demonstrated causal change"
     }
   ]
 }

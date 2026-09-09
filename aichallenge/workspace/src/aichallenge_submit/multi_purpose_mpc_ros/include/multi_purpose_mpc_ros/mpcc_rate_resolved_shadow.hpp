@@ -26,6 +26,11 @@ namespace multi_purpose_mpc_ros::mpcc_rate_resolved_shadow
 namespace artifact = mpcc_rate_resolved_execution_artifact;
 using Identity = artifact::Identity;
 
+/// Distinct terminal and stage-clock meaning for the current-world Stop
+/// candidate. The original normal context remains the async submission owner.
+inline constexpr char kCompleteRestBoundsSchemaSuffix[] =
+  "/free-controls-rest-uniform-max-dt-v1";
+
 /// Owned current-world vehicle observation used only to reproduce an
 /// architecture comparison.  It carries no candidate, certificate or command
 /// authority.  The radius is the exact peer-only physical radius resolved by
@@ -571,6 +576,7 @@ struct Result
   std::size_t dynamic_obstacle_pass_side_row_count{};
   std::size_t dynamic_obstacle_ahead_row_count{};
   std::size_t dynamic_obstacle_diagonal_row_count{};
+  std::size_t dynamic_obstacle_guidance_peer_count{};
   bool dynamic_obstacle_physical_axis_support_applied{false};
   bool dynamic_obstacle_physical_diagonal_guidance_applied{false};
   double dynamic_obstacle_forced_constraint_fraction{1.0};

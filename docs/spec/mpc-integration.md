@@ -3952,3 +3952,33 @@ terminal Stop証明として使う。denseな実適用操作も同じcontinuatio
 6周253.323883秒・penalty0・移動中override0。一方、dev2はD1decision4264で
 生成Stopが壁判定により不合格。actual3695と現在worldを保存し、次の候補生成の課題として
 保持する。[全結果](../../.steering/20260909-mpcc-complete-stop-suffix/results.md)を参照。
+
+#### 完全停止まで解くcurrent-world候補（2026-09-09、走行受入れ検証中）
+
+`evaluate_current_world`は、途中の速度を最大制動へ固定する候補を、元の7状態・物理制約・
+重みを保持して操作列を解く候補へ置き換える。元の最大stage dtを停止用の一様な時間刻みとし、
+全horizonの末尾速度を0に制約する。未来の進行変数の範囲は、元のboundsと、与えられた壁profile・
+経路frameの共通範囲に限定する。時刻変更後の他車予測は同じ観測originから再計算する。
+この候補は`bounds_schema_id`の`/free-controls-rest-uniform-max-dt-v1`で通常候補と区別し、
+求解側も停止条件・全horizon・宣言した時間刻みの一致を検査する。async提出元の通常identityと、
+停止候補・artifact・証明のidentityを区別して保持する。
+
+全観測他車のCartesian分離制約を同じ壁のみの解から生成し、一つのQPへ結合する。
+主対象の明示された側方・前後関係は保持し、追加の他車にも車体全体の分離制約を課す。
+個別refineは既存の他車行を消すため、各他車の行集合を明示的に連結する。
+壁・全他車・正確な運動・現在状態・指令の証明は引き続き採用条件とする。
+過去比較用の最大制動・操舵lattice APIは残るが、current-world本番入口からは一つの直接候補だけを返す。
+
+別の初期線形化の不整合も修正した。元のsoft参照のtheta+nu*dtが経路frameを越す場合、
+目的関数や制約を変えず、初期・反復共通の定義域内で線形化点を選択する。
+保存4264では12.7792mmの超過を再現した。この修正だけで4264の壁拒否は解消しない。
+
+25package build、60CTestgroup・2368記録は通過。本番入口の再生では1629の候補と現在指令への接続が通過し、
+4264は拒否された。これらを走行完遂の証拠とは扱わない。
+[設計・未完了の受入れ](../../.steering/20260909-mpcc-complete-rest-candidates/design.md)を参照。
+
+同じ変更の固定走行では、単車6周252.778778秒・ペナルティ0、moving overrideなし、callback最大18.373ms・超過0。
+2台はD2decision925で移動中Emergencyとなり不合格。停止候補のasync公開はほぼ停止中に確認したが、
+走行中の継続受入れは未達。最初のterminal記録923は通常解328を保存しており、925のworldや代替停止解395を
+保存したものではない。D1にはcallback最大31.967ms・超過3回もある。
+[受入れ結果と次の監査](../../.steering/20260909-mpcc-complete-rest-candidates/results.md)を参照。

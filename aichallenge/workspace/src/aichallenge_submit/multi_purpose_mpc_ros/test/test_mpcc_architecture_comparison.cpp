@@ -1247,6 +1247,97 @@ TEST(MpccArchitectureComparison, CurrentWorldStopBuildsCertifiedObservation)
     mpcc_rate_resolved_execution_artifact::same_identity(
       result.certified_stop_plan->solver_source_snapshot->identity,
       result.certified_stop_plan->execution_artifact->identity));
+  const auto & candidate = *result.certified_stop_plan->solver_source_snapshot;
+  for (std::size_t stage = 1U; stage < candidate.request.states.size(); ++stage) {
+    EXPECT_LE(candidate.request.states[stage].upper[model::kProgressIndex],
+      candidate.wall_reference_progress_m.back());
+  }
+  auto mismatched_clock = candidate;
+  mismatched_clock.request.inputs.front().stage_dt_sec = source.request.inputs.front().stage_dt_sec;
+  EXPECT_EQ(stop_solver.evaluate(mismatched_clock).outcome, shadow::Outcome::BuildRejected);
+  auto missing_rest = candidate;
+  missing_rest.request.states.back().upper[model::kVelocityIndex] = 1.0;
+  EXPECT_EQ(stop_solver.evaluate(missing_rest).outcome, shadow::Outcome::BuildRejected);
+}
+
+TEST(MpccArchitectureComparison, CurrentWorldStopSolvesFreeControlsWithEveryObservedPeer)
+{
+  auto source = stoppable_source_snapshot();
+  constexpr int horizon = 20;
+  auto & context = source.identity.source_context;
+  context.intent = contract::ControlIntent::Cruise;
+  context.intent_generation = 0U;
+  context.target_id.clear();
+  context.target_obstacle_generation = 0U;
+  context.execution_side_sign = 0;
+  context.dynamic_obstacle_constraint_active = false;
+  context.dynamic_obstacle_id.clear();
+  context.dynamic_obstacle_generation = 0U;
+  context.dynamic_obstacle_side_sign = 0;
+  context.horizon_steps = horizon;
+  context = contract::seal_problem_context(context);
+  source.dynamic_obstacle_refinement_active = false;
+  source.dynamic_obstacle_pass_side_sign = 0;
+  source.dynamic_obstacle_stages.clear();
+  source.request.horizon_steps = horizon;
+  source.request.states.resize(horizon + 1U, source.request.states.back());
+  source.request.inputs.resize(horizon, source.request.inputs.back());
+  source.nominal_path_distance_m.resize(horizon + 1U);
+  source.wall_reference_progress_m.resize(horizon + 1U);
+  source.wall_lower_m.assign(horizon + 1U, -2.0);
+  source.wall_upper_m.assign(horizon + 1U, 2.0);
+  for (int i = 0; i <= horizon; ++i) {
+    source.request.states[i].reference[4] = 0.5 * i;
+    source.request.states[i].upper[4] = 10.0;
+    source.nominal_path_distance_m[i] = 0.5 * i;
+    source.wall_reference_progress_m[i] = 0.5 * i;
+  }
+  for (auto & input : source.request.inputs) {
+    input.stage_dt_sec = 0.25;
+  }
+  source.wall_course_frame_knots = {
+    {99.0, -1.0, 0.0, 0.0, 1}, {130.0, 30.0, 0.0, 0.0, 2}};
+  source.request.course_frame = {
+    std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
+      source.wall_course_frame_knots), source.course_progress_origin_m};
+  auto & world = *source.replay_world;
+  world.current_pose = {-0.2, 0.0, 0.0};
+  world.control_prefix = {world.current_pose, {0.0, 0.0, 0.0}};
+  world.obstacles = {
+    {"rear", -6.0, 0.0, 2.2, 0.0, 0.0, 0.0, 0.01, 0.01, 0.2, 13U},
+    {"side", 3.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.2, 13U}};
+  ASSERT_TRUE(architecture::interaction_snapshot_complete(source));
+  const auto original_fingerprint = architecture::fingerprint_interaction_snapshot(source);
+  shadow::SolverContext stop_solver;
+
+  const auto result = stop_lattice_shadow::evaluate_current_world(
+    source, stop_solver, {}, stop_lattice_shadow::EvaluationMode::DirectSevenStateOnly);
+
+  ASSERT_TRUE(result.accepted()) << result.detail;
+  EXPECT_TRUE(mpcc_rate_resolved_execution_artifact::same_identity(
+    result.source_normal_identity, source.identity));
+  const auto & candidate = *result.certified_stop_plan->solver_source_snapshot;
+  const auto & execution = *result.certified_stop_plan->execution_artifact;
+  EXPECT_NE(candidate.identity.source_context.fingerprint, context.fingerprint);
+  EXPECT_EQ(candidate.replay_world->obstacles.size(), 2U);
+  EXPECT_GT(candidate.request.states[1].upper[3], candidate.request.states[1].lower[3]);
+  EXPECT_TRUE(candidate.request.states[1].weight.isApprox(source.request.states[1].weight));
+  EXPECT_DOUBLE_EQ(candidate.request.states.back().lower[3], 0.0);
+  EXPECT_DOUBLE_EQ(candidate.request.states.back().upper[3], 0.0);
+  EXPECT_NEAR(execution.predicted_states.back().velocity_mps, 0.0,
+    execution.physical_global_tolerance);
+  EXPECT_EQ(architecture::fingerprint_interaction_snapshot(source), original_fingerprint);
+  shadow::SolverContext replay_solver;
+  const auto guided = replay_solver.evaluate(candidate);
+  ASSERT_EQ(guided.outcome, shadow::Outcome::Solved) << guided.detail;
+  EXPECT_EQ(guided.dynamic_obstacle_guidance_peer_count, 2U);
+  EXPECT_EQ(guided.dynamic_obstacle_diagonal_row_count, 2U * horizon);
+  auto stale_secondary = source;
+  ++stale_secondary.replay_world->obstacles.back().observation_generation;
+  const auto stale = stop_lattice_shadow::evaluate_current_world(
+    stale_secondary, replay_solver, {}, stop_lattice_shadow::EvaluationMode::DirectSevenStateOnly);
+  EXPECT_EQ(stale.reason, stop_lattice_shadow::Reason::CandidateBuildRejected);
+  EXPECT_EQ(stale.attempted_candidate_count, 0U);
 }
 
 TEST(MpccArchitectureComparison, LiveStopShadowStopsAfterSupersededSolve)

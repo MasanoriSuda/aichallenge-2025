@@ -54,6 +54,14 @@ StopCandidateResult build_current_world_maximum_braking_candidate(
   const persistent_osqp::PhysicalConstraintTolerance
   & solver_tolerance) noexcept;
 
+/// Free canonical controls through terminal rest, retaining source weights,
+/// physical boxes, geometry and observation origin. Uses the source maximum
+/// stage dt as an explicitly resealed Stop clock and recomputes peer stages.
+/// Construction is not a physical certificate and grants no authority.
+StopCandidateResult build_current_world_complete_rest_candidate(
+  const shadow::Snapshot & source,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept;
+
 struct Schedule
 {
   int initial_rate_sign{};

@@ -29,6 +29,37 @@ constexpr std::size_t kMaximumPhysicalProofSqpCorrections = 3U;
 // distinguish a one-shot wall tangent defect from physical infeasibility.
 constexpr std::size_t kMaximumWallRestorationSqpCorrections = 3U;
 
+mpcc_rate_resolved_dynamic_obstacle::Result refine_dynamic_peer_batch(
+  const mpcc_rate_resolved_dynamic_obstacle::Request & primary,
+  const std::vector<mpcc_rate_resolved_dynamic_obstacle::Request> & additional)
+{
+  namespace dynamic = mpcc_rate_resolved_dynamic_obstacle;
+  auto result = dynamic::refine(primary);
+  if (!result.problem) {
+    return result;
+  }
+  for (auto request : additional) {
+    // Every separating plane uses the same current witness and broad QP.
+    // refine() replaces its peer rows, so concatenate each complete row set
+    // explicitly; feeding one peer's result into refine() loses that peer.
+    request.wall_only_problem = primary.wall_only_problem;
+    request.wall_only_primal = primary.wall_only_primal;
+    request.constraint_target_problem = primary.constraint_target_problem;
+    const auto peer = dynamic::refine(request);
+    if (!peer.problem) {
+      return peer;
+    }
+    auto & rows = result.problem->dynamic_obstacle_constraints;
+    rows.insert(rows.end(), peer.problem->dynamic_obstacle_constraints.begin(),
+      peer.problem->dynamic_obstacle_constraints.end());
+    result.stay_behind_row_count += peer.stay_behind_row_count;
+    result.pass_side_row_count += peer.pass_side_row_count;
+    result.ahead_row_count += peer.ahead_row_count;
+    result.diagonal_row_count += peer.diagonal_row_count;
+  }
+  return result;
+}
+
 void retain_physical_adapter_diagnostic(
   LatestStateFeedbackResult & destination,
   const mpcc_rate_resolved_physical_adapter::Result & source) noexcept
@@ -2944,6 +2975,26 @@ Result SolverContext::evaluate_impl(
   }
   Result result;
   result.identity = snapshot.identity;
+  const auto & bounds_schema = snapshot.identity.source_context.bounds_schema_id;
+  const std::string rest_suffix{kCompleteRestBoundsSchemaSuffix};
+  const bool complete_rest_candidate = bounds_schema.size() >= rest_suffix.size() &&
+    bounds_schema.compare(bounds_schema.size() - rest_suffix.size(),
+      rest_suffix.size(), rest_suffix) == 0;
+  if (complete_rest_candidate &&
+    (snapshot.request.states.empty() ||
+    snapshot.execution_prefix_steps != snapshot.request.horizon_steps ||
+    snapshot.request.states.back().lower[mpcc_rate_resolved::kVelocityIndex] != 0.0 ||
+    snapshot.request.states.back().upper[mpcc_rate_resolved::kVelocityIndex] != 0.0 ||
+    !snapshot.replay_world ||
+    std::any_of(snapshot.request.inputs.begin(), snapshot.request.inputs.end(),
+      [&snapshot](const auto & input) {
+        return input.stage_dt_sec != snapshot.request.maximum_stage_dt_sec;
+      })))
+  {
+    result.outcome = Outcome::BuildRejected;
+    result.detail = "complete-rest identity requires full rest and its declared stage clock";
+    return result;
+  }
   if (witness_physical_separation_audit &&
     (snapshot.request.states.empty() ||
     snapshot.execution_prefix_steps != snapshot.request.horizon_steps ||
@@ -3714,6 +3765,7 @@ Result SolverContext::evaluate_impl(
     snapshot.dynamic_obstacle_refinement_active;
   std::optional<mpcc_rate_resolved_dynamic_obstacle::Request>
     physical_dynamic_sqp_request_template;
+  std::vector<mpcc_rate_resolved_dynamic_obstacle::Request> additional_peer_templates;
   if (snapshot.dynamic_obstacle_refinement_active) {
     const auto & source_context = snapshot.identity.source_context;
     if (
@@ -3843,6 +3895,7 @@ Result SolverContext::evaluate_impl(
       !dynamic_request.forced_diagonal_start_stage.has_value();
     dynamic_request.witness_physical_separation =
       witness_physical_separation_audit ||
+      (complete_rest_candidate && automatic_topology && dynamic_request.pass_side_sign == 0) ||
       (automatic_topology && snapshot.execution_prefix_steps == snapshot.request.horizon_steps &&
       mpcc_rate_resolved_adapter::is_braking_feasibility_request(snapshot.request));
     dynamic_request.stages = snapshot.dynamic_obstacle_stages;
@@ -3852,9 +3905,51 @@ Result SolverContext::evaluate_impl(
     dynamic_request.separation_tolerance_m =
       solver_.physical_constraint_tolerance().absolute;
     physical_dynamic_sqp_request_template = dynamic_request;
+    if (complete_rest_candidate) {
+      const auto & world = *snapshot.replay_world;
+      const auto & footprint = world.physical_footprint;
+      for (const auto & peer : world.obstacles) {
+        if (peer.id == source_context.dynamic_obstacle_id) {
+          continue;
+        }
+        if (peer.id.empty() || peer.observation_generation != world.observation_generation ||
+          !std::isfinite(peer.radius_m) || peer.radius_m < 0.0)
+        {
+          result.outcome = Outcome::AssemblyRejected;
+          result.detail = "complete-rest additional peer provenance invalid";
+          return finish();
+        }
+        // Secondary peers own physical separation, while the primary keeps
+        // any explicit tactical side/longitudinal contract above.
+        mpcc_rate_resolved_dynamic_obstacle::Request request;
+        request.active = true;
+        request.witness_physical_separation = true;
+        request.physical_separation_geometry =
+          mpcc_rate_resolved_dynamic_obstacle::PhysicalSeparationGeometry{
+          footprint.front_extent_m, footprint.rear_extent_m,
+          footprint.left_extent_m, footprint.right_extent_m, footprint.margin_m, peer.radius_m};
+        request.separation_tolerance_m = dynamic_request.separation_tolerance_m;
+        request.stages.resize(snapshot.request.inputs.size());
+        mpcc_rate_resolved_dynamic_obstacle::CartesianPrediction prediction;
+        prediction.course_frame = snapshot.request.course_frame;
+        double elapsed = snapshot.control_prediction_origin_sec - world.observed_sec;
+        for (std::size_t stage = 0U; stage < snapshot.request.inputs.size(); ++stage) {
+          elapsed += snapshot.request.inputs[stage].stage_dt_sec;
+          prediction.target_positions_m.emplace_back(
+            peer.x_m + peer.velocity_x_mps * elapsed, peer.y_m + peer.velocity_y_mps * elapsed);
+          request.stages[stage] = {true, 0.0, 0.0,
+            footprint.front_extent_m + footprint.margin_m + peer.radius_m,
+            footprint.left_extent_m + footprint.margin_m + peer.radius_m};
+        }
+        request.cartesian_prediction = std::move(prediction);
+        additional_peer_templates.push_back(std::move(request));
+      }
+    }
     const auto refinement =
-      mpcc_rate_resolved_dynamic_obstacle::refine(
-      dynamic_request);
+      refine_dynamic_peer_batch(dynamic_request, additional_peer_templates);
+    if (refinement.problem) {
+      result.dynamic_obstacle_guidance_peer_count = additional_peer_templates.size() + 1U;
+    }
     result.dynamic_obstacle_refinement_reason = refinement.reason;
     result.dynamic_obstacle_refinement_applied = refinement.applied;
     result.dynamic_obstacle_resolved_side_sign =
@@ -4179,7 +4274,7 @@ Result SolverContext::evaluate_impl(
       dynamic_request.constraint_target_problem = iteration_problem;
       dynamic_request.wall_only_primal = outcome.result->primal;
       const auto dynamic_refinement =
-        mpcc_rate_resolved_dynamic_obstacle::refine(dynamic_request);
+        refine_dynamic_peer_batch(dynamic_request, additional_peer_templates);
       if (!dynamic_refinement.problem.has_value()) {
         result.outcome = Outcome::AssemblyRejected;
         result.solved = false;

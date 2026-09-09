@@ -390,6 +390,135 @@ StopCandidateResult build_current_world_maximum_braking_candidate(
     source, solver_tolerance, "current-world Stop");
 }
 
+StopCandidateResult build_current_world_complete_rest_candidate(
+  const shadow::Snapshot & source,
+  const persistent_osqp::PhysicalConstraintTolerance & solver_tolerance) noexcept
+{
+  if (!architecture::interaction_snapshot_complete(source)) {
+    return reject_stop(Reason::InvalidSource, "current-world interaction snapshot incomplete");
+  }
+  auto candidate = source;
+  auto & request = candidate.request;
+  const double dt = request.maximum_stage_dt_sec;
+  if (!std::isfinite(dt) || dt < request.minimum_stage_dt_sec ||
+    !std::isfinite(request.initial_state[model::kVelocityIndex]) ||
+    request.initial_state[model::kVelocityIndex] < 0.0 ||
+    request.states.back().lower[model::kVelocityIndex] > 0.0 ||
+    request.states.back().upper[model::kVelocityIndex] < 0.0)
+  {
+    return reject_stop(Reason::InvalidBrakingEnvelope, "source bounds exclude complete rest");
+  }
+  double minimum_terminal_velocity = request.initial_state[model::kVelocityIndex];
+  for (auto & input : request.inputs) {
+    const auto bounds = mpcc_rate_resolved_adapter::resolve_exact_physical_boundary_bounds(
+      input.lower[model::kAccelerationIndex], input.upper[model::kAccelerationIndex],
+      solver_tolerance);
+    if (!bounds || bounds->lower >= 0.0) {
+      return reject_stop(Reason::InvalidBrakingEnvelope, "complete-rest braking bound unavailable");
+    }
+    input.stage_dt_sec = dt;
+    minimum_terminal_velocity = std::max(0.0, minimum_terminal_velocity + bounds->lower * dt);
+  }
+  if (minimum_terminal_velocity > 0.0) {
+    return reject_stop(Reason::InvalidBrakingEnvelope, "source maximum stage clock ends before rest");
+  }
+  candidate.execution_prefix_steps = request.horizon_steps;
+  // A freely optimized progress state must stay in the supplied wall/course
+  // domain. A source can declare wider boxes than its wall profile because
+  // its old prescribed braking trajectory never reached that boundary.
+  // Intersect hard boxes before solving; do not clamp an accepted trajectory
+  // or extend geometry beyond the immutable observation.
+  const double progress_lower = std::max(candidate.wall_reference_progress_m.front(),
+    candidate.wall_course_frame_knots.front().progress_m - candidate.course_progress_origin_m);
+  const double progress_upper = std::min(candidate.wall_reference_progress_m.back(),
+    candidate.wall_course_frame_knots.back().progress_m - candidate.course_progress_origin_m);
+  for (std::size_t stage = 1U; stage < request.states.size(); ++stage) {
+    auto & state = request.states[stage];
+    state.lower[model::kProgressIndex] = std::max(state.lower[model::kProgressIndex], progress_lower);
+    state.upper[model::kProgressIndex] = std::min(state.upper[model::kProgressIndex], progress_upper);
+    if (state.lower[model::kProgressIndex] > state.upper[model::kProgressIndex]) {
+      return reject_stop(Reason::InvalidSource, "complete-rest progress domain is empty");
+    }
+  }
+  request.states.back().reference[model::kVelocityIndex] = 0.0;
+  request.states.back().lower[model::kVelocityIndex] = 0.0;
+  request.states.back().upper[model::kVelocityIndex] = 0.0;
+  request.course_frame = {
+    std::make_shared<const std::vector<mpc_stage_geometry::CourseFrameKnot>>(
+      candidate.wall_course_frame_knots), candidate.course_progress_origin_m};
+
+  const auto & world = *candidate.replay_world;
+  auto & context = candidate.identity.source_context;
+  const shadow::ReplayDynamicObstacle * primary = nullptr;
+  std::vector<std::string> observed_ids;
+  for (const auto & peer : world.obstacles) {
+    if (peer.id.empty() || peer.observation_generation != world.observation_generation ||
+      !std::isfinite(peer.radius_m) || peer.radius_m < 0.0 ||
+      !std::isfinite(peer.x_m) || !std::isfinite(peer.y_m) ||
+      !std::isfinite(peer.velocity_x_mps) || !std::isfinite(peer.velocity_y_mps) ||
+      std::find(observed_ids.begin(), observed_ids.end(), peer.id) != observed_ids.end())
+    {
+      return reject_stop(Reason::InvalidSource, "complete-rest peer provenance invalid");
+    }
+    observed_ids.push_back(peer.id);
+    if (context.dynamic_obstacle_constraint_active ? peer.id == context.dynamic_obstacle_id :
+      (primary == nullptr || peer.id < primary->id))
+    {
+      primary = &peer;
+    }
+  }
+  if (context.dynamic_obstacle_constraint_active && primary == nullptr) {
+    return reject_stop(Reason::InvalidSource, "complete-rest primary peer absent");
+  }
+  if (primary != nullptr) {
+    if (!world.current || world.observation_generation == 0U) {
+      return reject_stop(Reason::InvalidSource, "complete-rest peer world unavailable");
+    }
+    if (!context.dynamic_obstacle_constraint_active) {
+      candidate.dynamic_obstacle_pass_side_sign = 0;
+      context.dynamic_obstacle_side_sign = 0;
+    }
+    candidate.dynamic_obstacle_refinement_active = true;
+    context.dynamic_obstacle_constraint_active = true;
+    context.dynamic_obstacle_id = primary->id;
+    context.dynamic_obstacle_generation = world.observation_generation;
+    candidate.dynamic_obstacle_stages.clear();
+    double elapsed = candidate.control_prediction_origin_sec - world.observed_sec;
+    for (int stage = 0; stage < request.horizon_steps; ++stage) {
+      elapsed += request.inputs[stage].stage_dt_sec;
+      const auto frame = mpc_stage_geometry::sample_course_frame(
+        candidate.wall_course_frame_knots,
+        candidate.course_progress_origin_m + candidate.wall_reference_progress_m[stage + 1]);
+      if (!frame) {
+        return reject_stop(Reason::InvalidSource, "complete-rest peer stage frame unavailable");
+      }
+      const auto relative = contract::project_planar_pose_to_frenet(
+        {primary->x_m + primary->velocity_x_mps * elapsed,
+          primary->y_m + primary->velocity_y_mps * elapsed, frame->heading_rad},
+        {frame->x_m, frame->y_m, frame->heading_rad});
+      if (!relative) {
+        return reject_stop(Reason::InvalidSource, "complete-rest peer projection unavailable");
+      }
+      candidate.dynamic_obstacle_stages.push_back({true,
+        candidate.wall_reference_progress_m[stage + 1] + relative->lag_m, relative->lateral_m,
+        world.physical_footprint.front_extent_m + world.physical_footprint.margin_m + primary->radius_m,
+        world.physical_footprint.left_extent_m + world.physical_footprint.margin_m + primary->radius_m});
+    }
+  }
+  // Both terminal meaning and the changed clock belong to this candidate;
+  // neither may alias the rolling normal source in warm starts or artifacts.
+  context.bounds_schema_id += shadow::kCompleteRestBoundsSchemaSuffix;
+  context = contract::seal_problem_context(context);
+  if (!architecture::interaction_snapshot_complete(candidate)) {
+    return reject_stop(Reason::InvalidSource, "complete-rest interaction snapshot incomplete");
+  }
+  StopCandidateResult result;
+  result.reason = Reason::Accepted;
+  result.candidate = std::move(candidate);
+  result.detail = "accepted/free-controls-through-rest";
+  return result;
+}
+
 ScheduleResult build_schedule(
   const shadow::Snapshot & maximum_braking_stop,
   const int initial_rate_sign,

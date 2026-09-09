@@ -10,13 +10,30 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: complete-rest candidate generation and real async promotion.
-The current consumer now preserves a complete current-state stopping suffix
-instead of replacing it by maximum braking. On world1629the captured free
-candidate joins with dynamic clearance2.491691m; conditional one-solve188tick
-replay reaches rest (170solved suffix/18existing generated terminal). The free
-candidate producer is still offline. Distinct immutable terminal semantics,
-all-peer QP guidance and actual async adoption must be verified before promotion.
+Current next step: audit dev2world923/actual328and authority switching before925.
+The complete-rest candidate producer is implemented and locally validated:
+25packagebuild,60CTestgroups/2368local records pass. Same-world1629production
+join/command passes;4264still rejects. Single-r1finishes6laps252.778778s/penalty0,
+moving override0,callbackmax18.373ms/0overruns,command40Hz/receiptmax39.216995ms.
+Dev2-r1rejects: D2first visible moving Emergency925at1.823493m/s; no finish.
+D1callbackmax31.967ms/3overruns, D2max22.277ms/0. Both command streams40Hz and
+no gap>50ms. One causal observation warning per Domain is startup at0m/s
+(D1spawned,D2before state observation), not a moving-race failure.
+Actual async Stop publication is confirmed near rest (D1source308/decision844,
+D2source309/decision827). Moving multi-tick Stop/restart acceptance stays open.
+First terminal snapshot is923(fp8706044921014371466) with normal328published
+source, not925world and not alternate395. At923alternate395/908joined/selected;
+its final command/artifact is not inferred from that log. At925normal328has
+cursor2.1s/pose mismatch1.430411m/current control speed1.883513vs expected3.224031,
+only publisher-interval continuation and rejected terminal wall proof.
+All runtime is stopped. Preserve before/after/rejected outcomes and investigate
+source switching/current-state proof plus callback overrun before another run.
+See [complete-rest results](../20260909-mpcc-complete-rest-candidates/results.md).
+
+The preceding complete-suffix consumer remains locally validated. On its old
+world1629capture, conditional one-solve188tick replay reached rest (170solved
+suffix/18existing generated terminal). Preserve this as old offline evidence,
+not runtime evidence for the new producer.
 
 A separate Stop pose producer displaced world968's body37.925mm; its stale
 projection/bundle coordinate is repaired. The corrected successor correctly

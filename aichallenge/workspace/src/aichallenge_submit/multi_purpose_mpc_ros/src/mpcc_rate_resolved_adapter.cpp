@@ -44,6 +44,34 @@ bool valid_input_stage(const InputStage & stage) noexcept
     std::isfinite(stage.stage_dt_sec);
 }
 
+
+// A tangent owns a transition, so its state and virtual speed must jointly
+// lie in the immutable course domain. Soft references and QP residuals can
+// both violate this domain even when each independent box is respected.
+// Select only the tangent input; never rewrite costs, bounds or a solution.
+std::optional<double> select_virtual_speed_tangent(
+  const mpcc_rate_resolved::CourseFrame & frame,
+  const double progress, const double dt,
+  const double reference, const double lower, const double upper) noexcept
+{
+  if (!frame.knots) {
+    return reference;
+  }
+  if (frame.knots->size() < 2U || !std::isfinite(dt) || dt <= 0.0 ||
+    !std::isfinite(progress) || !std::isfinite(reference))
+  {
+    return std::nullopt;
+  }
+  const double minimum = std::max(lower,
+    (frame.knots->front().progress_m - frame.progress_origin_m - progress) / dt);
+  const double maximum = std::min(upper,
+    (frame.knots->back().progress_m - frame.progress_origin_m - progress) / dt);
+  if (!std::isfinite(minimum) || !std::isfinite(maximum) || minimum > maximum) {
+    return std::nullopt;
+  }
+  return std::clamp(reference, minimum, maximum);
+}
+
 double steering_from_curvature(
   const double wheelbase_m, const double yaw_response_gain,
   const double curvature_radpm) noexcept
@@ -471,12 +499,19 @@ std::optional<Result> build(
     const int input_offset = model::kInputDimension * stage;
     const double steering_reference =
       result.steering_reference_rad[index];
+    const auto virtual_speed_tangent = select_virtual_speed_tangent(
+      request.course_frame, state_reference[model::kProgressIndex],
+      legacy_input.stage_dt_sec, legacy_input.reference[2],
+      legacy_input.lower[2], legacy_input.upper[2]);
+    if (!virtual_speed_tangent) {
+      return reject(RejectReason::LinearizationUnavailable, stage);
+    }
     const auto linearization = model::linearize_temporal_frenet(
       model::LinearizationRequest{
         state_reference[0], state_reference[1], state_reference[2],
         state_reference[3], state_reference[4], steering_reference,
         response_steering_reference_rad[index],
-        legacy_input.reference[0], 0.0, legacy_input.reference[2],
+        legacy_input.reference[0], 0.0, *virtual_speed_tangent,
         legacy_input.path_curvature_radpm, request.wheelbase_m,
         request.yaw_response_gain,
         request.yaw_response_time_constant_sec,
@@ -611,40 +646,17 @@ RelinearizationResult relinearize_around_primal(
         problem.input_lower[problem_input + element],
         problem.input_upper[problem_input + element]);
     }
-    if (request.course_frame.knots) {
-      // The nonlinear transition owns a coupled domain: theta + nu * dt
-      // must remain inside the immutable course. Separate state/input boxes
-      // can leave its tangent endpoint outside that domain by an accepted QP
-      // residual. Select a valid tangent input without modifying the raw
-      // iterate, hard constraints, course geometry or physical tolerances.
-      const auto & frame = request.course_frame;
-      const auto & knots = *frame.knots;
-      if (knots.size() < 2U || !std::isfinite(semantic_input.stage_dt_sec) ||
-        semantic_input.stage_dt_sec <= 0.0)
-      {
-        result.reason = RelinearizationReason::LinearizationUnavailable;
-        result.stage = stage;
-        return result;
-      }
-      const double progress = linearization_state[model::kProgressIndex];
-      const double minimum_speed = std::max(
-        problem.input_lower[problem_input + model::kVirtualProgressSpeedIndex],
-        (knots.front().progress_m - frame.progress_origin_m - progress) /
-        semantic_input.stage_dt_sec);
-      const double maximum_speed = std::min(
-        problem.input_upper[problem_input + model::kVirtualProgressSpeedIndex],
-        (knots.back().progress_m - frame.progress_origin_m - progress) /
-        semantic_input.stage_dt_sec);
-      if (!std::isfinite(minimum_speed) || !std::isfinite(maximum_speed) ||
-        minimum_speed > maximum_speed)
-      {
-        result.reason = RelinearizationReason::LinearizationUnavailable;
-        result.stage = stage;
-        return result;
-      }
-      auto & virtual_speed = linearization_input[model::kVirtualProgressSpeedIndex];
-      virtual_speed = std::clamp(virtual_speed, minimum_speed, maximum_speed);
+    const auto virtual_speed_tangent = select_virtual_speed_tangent(
+      request.course_frame, linearization_state[model::kProgressIndex],
+      semantic_input.stage_dt_sec, linearization_input[model::kVirtualProgressSpeedIndex],
+      problem.input_lower[problem_input + model::kVirtualProgressSpeedIndex],
+      problem.input_upper[problem_input + model::kVirtualProgressSpeedIndex]);
+    if (!virtual_speed_tangent) {
+      result.reason = RelinearizationReason::LinearizationUnavailable;
+      result.stage = stage;
+      return result;
     }
+    linearization_input[model::kVirtualProgressSpeedIndex] = *virtual_speed_tangent;
     const auto linearization = model::linearize_temporal_frenet(
       model::LinearizationRequest{
         linearization_state[model::kLateralIndex],

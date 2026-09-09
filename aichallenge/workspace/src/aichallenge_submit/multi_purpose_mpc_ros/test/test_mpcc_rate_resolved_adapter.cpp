@@ -493,6 +493,52 @@ TEST(MpccRateResolvedAdapter, SelectsTangentTransitionInsideImmutableCourseDomai
   }
 }
 
+TEST(MpccRateResolvedAdapter, InitialTangentRespectsCourseDomainWithoutChangingObjectiveOrBounds)
+{
+  namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;
+  auto request = curved_request(2);
+  for (auto & input : request.inputs) {
+    input.path_curvature_radpm = 0.0;
+    input.reference[adapter::kLegacyCurvatureIndex] = 0.0;
+  }
+  request.inputs.back().reference[model::kVirtualProgressSpeedIndex] = 3.13;
+  request.course_frame = {
+    std::make_shared<const std::vector<geometry::CourseFrameKnot>>(
+      std::vector<geometry::CourseFrameKnot>{
+        {50.0, 89613.0, 43161.0, 0.0, 0},
+        {50.3, 89613.3, 43161.0, 0.0, 1},
+        {50.6, 89613.6, 43161.0, 0.0, 2}}), 50.0};
+  // A soft speed reference need not interpolate adjacent stage positions.
+  // The old initial adapter evaluates theta=0.3, nu=3.13, dt=0.1 at
+  // theta=0.613 outside the immutable frame, before there is any QP iterate.
+  const auto built = adapter::build(request, kSolverTolerance);
+  ASSERT_TRUE(built.has_value());
+  const auto & problem = built->problem;
+  const int input = model::kInputDimension;
+  EXPECT_DOUBLE_EQ(problem.input_reference[input + model::kVirtualProgressSpeedIndex], 3.13);
+  EXPECT_DOUBLE_EQ(problem.input_lower[input + model::kVirtualProgressSpeedIndex], 0.0);
+  EXPECT_DOUBLE_EQ(problem.input_upper[input + model::kVirtualProgressSpeedIndex], 6.0);
+  EXPECT_DOUBLE_EQ(problem.state_reference[model::kStateDimension + model::kProgressIndex], 0.3);
+  EXPECT_DOUBLE_EQ(problem.state_weight[model::kStateDimension + model::kProgressIndex], 1.0);
+  const auto & tangent = problem.linearizations.back();
+  model::StateVector state = problem.state_reference.segment<model::kStateDimension>(model::kStateDimension);
+  model::InputVector control = problem.input_reference.tail<model::kInputDimension>();
+  const model::StateVector unchanged_soft_endpoint =
+    tangent.state_matrix * state + tangent.input_matrix * control - tangent.equality_offset;
+  EXPECT_NEAR(unchanged_soft_endpoint[model::kProgressIndex], 0.613, 1e-9);
+  control[model::kVirtualProgressSpeedIndex] = 3.0;
+  const model::StateVector supported_endpoint =
+    tangent.state_matrix * state + tangent.input_matrix * control - tangent.equality_offset;
+  EXPECT_NEAR(supported_endpoint[model::kProgressIndex], 0.6, 1e-9);
+
+  // No valid tangent exists if the declared input cannot stay in the frame.
+  request.inputs.back().lower[model::kVirtualProgressSpeedIndex] = 3.1;
+  adapter::BuildDiagnostic rejected;
+  EXPECT_FALSE(adapter::build(request, kSolverTolerance, &rejected).has_value());
+  EXPECT_EQ(rejected.reason, adapter::RejectReason::LinearizationUnavailable);
+  EXPECT_EQ(rejected.stage, 1);
+}
+
 TEST(MpccRateResolvedAdapter, RejectsEmptyTangentInputAndCourseDomainIntersection)
 {
   namespace geometry = multi_purpose_mpc_ros::mpc_stage_geometry;

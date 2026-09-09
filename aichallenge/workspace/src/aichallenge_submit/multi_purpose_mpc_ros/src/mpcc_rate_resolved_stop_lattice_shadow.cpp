@@ -154,7 +154,7 @@ static Result evaluate_impl(
       lattice::build_maximum_braking_candidate(
       selected_source, *selected_normal_execution,
       private_solver_context.physical_constraint_tolerance()) :
-      lattice::build_current_world_maximum_braking_candidate(
+      lattice::build_current_world_complete_rest_candidate(
       selected_source,
       private_solver_context.physical_constraint_tolerance());
     if (!stop.accepted()) {
@@ -205,7 +205,7 @@ static Result evaluate_impl(
           exact.minimum_lateral_bound_reserve_m;
         if (
           exact.velocity_mps.empty() ||
-          exact.velocity_mps.back() > std::max(
+          std::abs(exact.velocity_mps.back()) > std::max(
             1e-9, solved.execution_artifact->physical_global_tolerance))
         {
           result.reason = Reason::StopNotReached;
@@ -253,10 +253,9 @@ static Result evaluate_impl(
         return true;
       };
 
-    // The frozen failure audit proves that a free seven-state Stop is
-    // feasible where fixed lateral/path suffixes collide with the wall. Solve
-    // the canonical Stop first; the steering-rate lattice remains a secondary
-    // candidate generator only when that direct solution cannot be certified.
+    // The current-world producer owns free canonical controls through rest.
+    // The historical publisher-boundary comparison retains its fixed braking
+    // law and optional steering lattice; it is not the production candidate.
     result.direct_seven_state_attempted = true;
     result.population_size = 1U;
     ++result.attempted_candidate_count;
@@ -268,7 +267,7 @@ static Result evaluate_impl(
       result.direct_seven_state_accepted = true;
       return finish();
     }
-    if (mode == EvaluationMode::DirectSevenStateOnly) {
+    if (selected_normal_execution == nullptr || mode == EvaluationMode::DirectSevenStateOnly) {
       return finish();
     }
     if (abort_if_superseded()) {

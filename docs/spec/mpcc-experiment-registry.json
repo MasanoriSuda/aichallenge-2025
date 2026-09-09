@@ -525,6 +525,31 @@
       "snapshot_id": "20260909-stop-viability-dev2-r1",
       "manifest": ".steering/20260909-mpcc-stop-viability-epochs/evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-actuation-original930",
+      "manifest": ".steering/20260909-mpcc-actuation-application/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-actuation-instrumentation",
+      "manifest": ".steering/20260909-mpcc-actuation-application/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-actuation-observed-r1",
+      "manifest": ".steering/20260909-mpcc-actuation-application/evidence.json",
+      "replay_ready": false
+    },
+    {
+      "snapshot_id": "20260909-actuation-observed-r2",
+      "manifest": ".steering/20260909-mpcc-actuation-application/evidence.json",
+      "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260909-actuation-native-model",
+      "manifest": ".steering/20260909-mpcc-actuation-application/evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -3941,6 +3966,160 @@
       "production_impact": "No authority/gains/actuator delay/model/hard-limit/solver changes; state estimate explicitly timestamped; full acceptance open",
       "deleted_code": [],
       "revisit_condition": "causal delivery/application phase evidence"
+    },
+    {
+      "experiment_id": "20260909-actuation-published374",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-original930"
+      ],
+      "hypothesis": "Actual374 with its929 published clock rescues original930 world",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "rejected",
+      "reason": "Diagnostic assembly,zero solves: steering-unreachable; terminal -0.0025014656576010097m and independentStop -0.0011199987734020755m. Original inspected386 preserved. Two helper input-schema failures preserved before validr3.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "new causal state/model/command evidence"
+    },
+    {
+      "experiment_id": "20260909-actuation-cil",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-instrumentation"
+      ],
+      "hypothesis": "Four generated-only probes preserve original decoded control flow",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "accepted",
+      "reason": "3608methods compare equal after removing Receive1/Choose1/Apply2calls, including branch/EH targets. Initial token/NaN comparison failure and disposable-container dpkg failure preserved. No runtime timing equivalence claim.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "probe or original binary change"
+    },
+    {
+      "experiment_id": "20260909-actuation-missing-log",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-observed-r1"
+      ],
+      "hypothesis": "Direct application phase captured in first diagnostic run",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "inconclusive",
+      "reason": "FirstD1Emergency938; Unity defaultPlayer.log not captured. No application-time claim forr1.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "explicit persisted UnityPlayer.log; exercised inr2"
+    },
+    {
+      "experiment_id": "20260909-actuation-selection",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-observed-r2"
+      ],
+      "hypothesis": "Received and applied identities can be observed without participant authority changes",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "accepted",
+      "reason": "1906receives/438applications; all438selected sequence/source-ns/float32input joins match; probeerrors0. Receiver/Domain mapping from581/609unique wire keys. OriginalDLL and protectedJSON unchanged.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "new mismatch or instrumentation change"
+    },
+    {
+      "experiment_id": "20260909-actuation-fixed-delay",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-observed-r2"
+      ],
+      "hypothesis": "Every published acceleration is applied exactly0.13s later",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "rejected",
+      "reason": "D1/D2received946/960,applied217/221,overwritten729/739; selected-source-age median30.650449/25.096941ms and max103.655550ms. Application period max183.330866ms, not a bound.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "different verified receiver/application contract"
+    },
+    {
+      "experiment_id": "20260909-actuation-missed-stop",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-observed-r2"
+      ],
+      "hypothesis": "A missed certifiedStop pulse is necessary to explain first933Emergency",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "rejected",
+      "reason": "Before933no moving brake publication. FirstEmergency packet430at9.834999780 and431overwritten; packet432applies9.923955841. First request to brake88.956061ms. Original374/386run phase remains unknown.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "different exact-run evidence; never transfer this phase"
+    },
+    {
+      "experiment_id": "20260909-actuation-wire-net",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-observed-r2"
+      ],
+      "hypothesis": "Constant applied wire acceleration equals body velocity derivative",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "rejected",
+      "reason": "9.309999791..9.799999780s raw15velocity samples gain0.365482807m/s versus wire integration0.651501815m/s; actual input1.32959557..1.32959855m/s². Not a full plant fit.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "causal unified longitudinal model or independent calibration"
+    },
+    {
+      "experiment_id": "20260909-actuation-native-before",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-native-model"
+      ],
+      "hypothesis": "Canonical seven-state transition represents known rolling-resistance component",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "rejected",
+      "reason": "Native current library,straight forwardv2m/s,wire+1/-1,dt.2: both74mm/s velocity mismatches against isolated decodedrollingR.37. Pre-repair failures,not package-test failures or full-plant accuracy proof.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "shared wire/net model repair"
+    },
+    {
+      "experiment_id": "20260909-actuation-peer-only",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-observed-r2"
+      ],
+      "hypothesis": "Peer-field substitution alone removes371932to933viability transition",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "rejected",
+      "reason": "Exactzero-solve932Accepted+0.0019944623102432502m vs933rejected-0.0013267385265398612m. Cross-substituting peer field projectedtoeachtime preserves both outcomes.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "new peer/source evidence"
+    },
+    {
+      "experiment_id": "20260909-actuation-normal",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-observed-r2"
+      ],
+      "hypothesis": "Current A/B/C/D/G normal methods rescue fixed933world",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "rejected",
+      "reason": "All9normal methods solver-reject with unchanged model/hardconstraints. Physical feasibility Unknown.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "new causal model/producer or bounded witness"
+    },
+    {
+      "experiment_id": "20260909-actuation-support-stop",
+      "baseline_commit": "1c4f377e05373364d9ccfe1858280b2bd5b2e39a",
+      "snapshot_ids": [
+        "20260909-actuation-observed-r2"
+      ],
+      "hypothesis": "Existing supportStop methods rescue fixed933world",
+      "changed_dimension": "Diagnostic receiver/application observation and native model comparison; participant source unchanged",
+      "result": "rejected",
+      "reason": "All4supportStop methods solver-reject. No physical infeasibility certificate.",
+      "production_impact": "No participant authority/model/gain/delay/solver/limit change. Generated probe DLL only in isolated diagnostic mount,removedafterrun. Full acceptance open.",
+      "deleted_code": [],
+      "revisit_condition": "new causal model/producer or bounded witness"
     }
   ]
 }

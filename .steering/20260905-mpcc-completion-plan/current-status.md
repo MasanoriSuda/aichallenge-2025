@@ -10,7 +10,36 @@ preserves complete peer-body geometry and separate semantic physical initial sta
 The new side-peer/Cartesian-plane/Stop numerical and candidate-scope repairs are
 locally validated; coupled acceptance remains open.
 
-Current next step: audit actual Stop/normal command application and current-world
+Current next step: compare and unify wire acceleration versus physical acceleration
+through prefix prediction, canonical seven-state horizon, Stop and serialization.
+See [updated completion plan](../20260909-mpcc-actuation-application/completion-plan.md)
+and [direct input audit](../20260909-mpcc-actuation-application/results.md).
+No new controller/model/gain/solver change in this observation slice.
+
+Generated-only Unity probes preserve original3608 CIL methods after removing4
+observation calls. Direct receiver/application run `20260909-actuation-observed-dev2-r2`
+records1906receives/438applications, all438selection identities/inputs match,
+probeerrors0. Unique source-ns/float32 matches identifyD1/D2(581/609).
+Selected packet age median30.650449/25.096941ms, maximum103.655550ms;
+application interval maximum183.330866ms is observed, not a bound.
+Do not interpret0.13s prediction origin as actual fixed longitudinal application.
+
+FirstD1Emergency933atnow9.834999780has no earlier moving brake pulse.
+First brake packets430/431are overwritten by432; actual brake begins9.923955841,
+88.956061ms afterfirst request. Old374/386run phase remains unknown.
+Nearly constant actual applied1.3296m/s² produces0.365483m/s velocity gain over
+0.49s versus canonical wire integration0.651502m/s. Native isolated decoded
+rolling-resistancecomponent shows two0.074m/s mismatches. This establishes a
+model/input discrepancy, not a full plant fit or repaired coupled acceptance.
+Exact371/932Accepted->933rejected pair replays withzero solves; peer-only
+substitution preserves both outcomes. All9normal+4supportStop arms reject/Unknown.
+Original930actual374+actual929clock incurrent930world also rejects; choosing374
+instead of386alone is not sufficient. Schema helper failures, initial token
+comparison and observation-r1missingUnityPlayer.log remain preserved.
+All runtime stopped, probe mounts removed, originalDLL/userJSON restored.
+
+Previous state epoch repair (1c4f377e) and still relevant baseline evidence:
+The prior next step was audit of actual Stop/normal command application and current-world
 revalidation at `output/20260909-stop-viability-dev2-r1` D1decision930. A source-to-now
 Odometry producer defect is repaired: raw older state previously omitted5/15ms
 motion before the fixed0.13s actuator prediction. Native four failures;34state/

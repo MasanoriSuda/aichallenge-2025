@@ -4097,3 +4097,31 @@ async処理もこの現在姿勢を引き継ぐ。raw Odometryによる接触・
 sourceからの投影と位置・yawとも完全一致した一方、D1 decision930で走行中Emergencyとなった。
 停止軌道386の現在worldでの他車証明拒否は再生できる。2台完走、指令の実適用位相、
 残りの動作・提出評価は未達である。[全結果](../../.steering/20260909-mpcc-stop-viability-epochs/results.md)を参照。
+
+
+### 2026-09-09: 縦指令の実適用とモデル契約の未完事項
+
+現在の`state_prediction_delay_sec=0.13`は既存の操舵/制御応答予測長であり、
+縦指令が必ず0.13秒後に全packet順次適用されるという実測値ではない。
+現行縦observerはこのoriginを共用しているため、実適用との対応は未解決事項として扱う。
+
+ローカルAWSIMの観測専用コピーによるrun
+`output/20260909-actuation-observed-dev2-r2`では、受信1906件のうち438件が適用され、
+選択した受信番号・source ns・加速度は全438件で一致した。通常のAckermann入力は
+最新値選択で、適用周期中央値は約100ms、観測最大183.331ms。
+選択packetのsource→適用中央値はD1 30.650ms/D2 25.097msだった。
+観測ログを追加した別runの値であり、保証上限・未計測runのphase・通常性能の証拠へ転用しない。
+
+同runの最初のD1decision933より前にブレーキ公開はなく、停止パルスの上書きだけでは
+その境界を説明できない。ほぼ一定の実入力1.3296m/s²に対して、0.49秒のraw速度増加は
+0.365483m/s、wire入力を直接積分した値は0.651502m/sだった。
+ローカルplantはrolling resistance等を入力へ加えるが、七状態の速度微分はwire値を
+そのまま使う。prefixだけのresponse補正では、この全horizonの意味の不一致は閉じない。
+既知抵抗componentを分離したnative正負2caseも0.074m/sの差を再現した。
+これは新モデルの採用根拠を揃えるための失敗証拠であり、現行受入れ済みの主張ではない。
+
+修正候補は因果的な応答推定とwire/netの意味を、QP・非線形proof・Stop・immutable
+artifact・async・最終serializeへ一貫して持たせる。gain/遅延/solver/許容差の調整で
+代用しない。古いschemaは診断として保存し、新モデルのauthorityへ流用しない。
+[直接監査](../../.steering/20260909-mpcc-actuation-application/results.md)と
+[完遂計画](../../.steering/20260909-mpcc-actuation-application/completion-plan.md)を参照する。

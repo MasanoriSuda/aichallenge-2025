@@ -405,4 +405,49 @@ Result build(
   return result;
 }
 
+Result build_certified_terminal(
+  const retained::Request & request, const retained::Result & revalidation,
+  const std::uint64_t artifact_sequence)
+{
+  Result result;
+  if (revalidation.reason != retained::Reason::Accepted || !revalidation.proof ||
+    !revalidation.current_control_state_available || !revalidation.terminal_stop_certified ||
+    revalidation.terminal_stop_uses_solved_suffix)
+  {
+    return result;
+  }
+  const auto & proof = *revalidation.proof;
+  if (!request.plan || request.plan != proof.plan || !request.plan->execution_artifact ||
+    proof.decision_id != request.decision_id || proof.obstacle_generation != request.obstacles.generation ||
+    proof.observed_sec != request.obstacles.observed_sec ||
+    proof.observation_origin_sec != request.now_sec || proof.control_origin_sec != request.control_origin_sec ||
+    !proof.terminal_stop_certified || proof.terminal_stop_uses_solved_suffix ||
+    proof.terminal_stop_publisher_interval_sample_count == 0U ||
+    proof.terminal_stop_publisher_interval_sample_count > proof.terminal_stop_actuation_samples.size())
+  {
+    result.reason = Reason::InvalidIdentity;
+    return result;
+  }
+  retained::StopSuccessorResult stop;
+  stop.reason = retained::StopSuccessorReason::Accepted;
+  stop.decision_id = request.decision_id;
+  stop.obstacle_generation = request.obstacles.generation;
+  stop.source_sequence = request.plan->execution_artifact->identity.sequence;
+  stop.exact_trajectory = proof.terminal_stop_trajectory;
+  stop.actuation_samples = proof.terminal_stop_actuation_samples;
+  stop.initial_course_progress_m = request.plan->execution_artifact->course_progress_origin_m +
+    revalidation.current_control_state.progress_m;
+  stop.lifted_control_origin_progress_m = revalidation.lifted_control_origin_physical_progress_m;
+  stop.initial_lateral_m = revalidation.current_control_state.lateral_m;
+  stop.initial_lag_m = revalidation.current_control_state.lag_m;
+  stop.initial_heading_offset_rad = revalidation.current_control_state.heading_offset_rad;
+  stop.initial_lateral_lower_m = revalidation.terminal_stop_initial_lateral_lower_m;
+  stop.initial_lateral_upper_m = revalidation.terminal_stop_initial_lateral_upper_m;
+  auto materialized_request = request;
+  // The first terminal interval holds the command already selected and
+  // certified by this proof. Its source's historical steering is unrelated.
+  materialized_request.current_steering_rad = proof.actuation.steering_rad;
+  return build(materialized_request, stop, artifact_sequence);
+}
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_stop_successor_bundle

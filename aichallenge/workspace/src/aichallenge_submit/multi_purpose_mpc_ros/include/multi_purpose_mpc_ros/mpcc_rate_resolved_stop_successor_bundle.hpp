@@ -58,12 +58,20 @@ struct Result
   std::shared_ptr<const certified::CertifiedPlan> plan;
 };
 
-/// Seal one accepted current-world Stop rollout as a new immutable seven-state
+/// Seal one accepted current-world Stop rollout as a new immutable nine-state
 /// execution plan.  This function has no Store or publisher access: only the
 /// existing canonical normal boundary may grant authority to the result.
 Result build(
   const retained::Request & request,
   const retained::StopSuccessorResult & stop_successor,
+  std::uint64_t artifact_sequence);
+
+/// Materialize the exact terminal contingency which certified an accepted
+/// publisher command. This does not rebuild immediate braking or execute the
+/// old source suffix. The caller must revalidate the new plan before publishing.
+Result build_certified_terminal(
+  const retained::Request & request,
+  const retained::Result & revalidation,
   std::uint64_t artifact_sequence);
 
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_stop_successor_bundle

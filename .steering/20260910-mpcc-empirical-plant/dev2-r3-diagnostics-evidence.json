@@ -1,0 +1,135 @@
+{
+  "authority": false,
+  "run": "20260910-nine-state-dev2-r3",
+  "baseline_commit": "2b0293d13849e3cdacb16b1b6b65f486d2b0fea0",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r3-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/inspected.yaml",
+      "sha256": "796abdc880495530a64ad56e346d0c04b12c45063f3098c4e5d3e8eea79b9af1"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/native.log",
+      "sha256": "d1e59e34344641ef5fefe2aecbabe1658b4086f3d21d89da270d57aa9c43307f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/result.yaml",
+      "sha256": "7e9871fdb9b4cdd814fd92d71d4f003d3472c88bda46d8f3ae7823e146b093fb"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-revalidation-r1/manifest.json",
+      "sha256": "fa38852c2a35cbd537ffafa245d7d606820a09dc25151c783fc4520a80490ef6"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-publication-r1/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-publication-r1/replay_revalidation.cpp",
+      "sha256": "0e4a24342a7e82eecf837f5557416025678c6aed0e7a1ca7194901fe152f6a64"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-publication-r1/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-publication-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/inspected.yaml",
+      "sha256": "796abdc880495530a64ad56e346d0c04b12c45063f3098c4e5d3e8eea79b9af1"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-publication-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/native.log",
+      "sha256": "d1e59e34344641ef5fefe2aecbabe1658b4086f3d21d89da270d57aa9c43307f"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-publication-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/result.yaml",
+      "sha256": "ae5adba0208ae0b45a5194bb874ca86d1d6d8178162d4b3933ca5aa888aa75e9"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-publication-revalidation-r1/manifest.json",
+      "sha256": "5dcd727068afe2c376f0bdaa1a9ed592f13416e221b41cd2014649e68a54723b"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-r1/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-r1/replay_revalidation.cpp",
+      "sha256": "217abb3a9b6f18a3772d3c763b4d14a4ccff369929fa7ec854cdade704f3aa80"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-r1/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/inspected.yaml",
+      "sha256": "796abdc880495530a64ad56e346d0c04b12c45063f3098c4e5d3e8eea79b9af1"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/native.log",
+      "sha256": "d1e59e34344641ef5fefe2aecbabe1658b4086f3d21d89da270d57aa9c43307f"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/result.yaml",
+      "sha256": "9eac94b39dabcbee1a8df37f9032906bfcd677f2d5602e36696c4f92d6d91501"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-revalidation-r1/manifest.json",
+      "sha256": "df9ba888b8b64365be183204c5ad6d0281045595de77330a4b2dcba80fc2720b"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-production-r1/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-production-r1/replay_revalidation.cpp",
+      "sha256": "d2d438b6f2bed4dcc6d680e20a37c8f57e595199e63782f38a6c228f7395d78e"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-production-r1/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-production-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/inspected.yaml",
+      "sha256": "796abdc880495530a64ad56e346d0c04b12c45063f3098c4e5d3e8eea79b9af1"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-production-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/native.log",
+      "sha256": "d1e59e34344641ef5fefe2aecbabe1658b4086f3d21d89da270d57aa9c43307f"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-production-revalidation-r1/d2/000000000957-fe504f4730c57b5e-cruise-side-neutral-physical-proof-normal-authority-unavailable/revalidation_evidence/result.yaml",
+      "sha256": "faec6f4c889bf64f6ac800ae4c54f313588e75b0af62cfd32bc27761a4679adf"
+    },
+    {
+      "path": "output/20260910-nine-state-stop-materialization-production-revalidation-r1/manifest.json",
+      "sha256": "4efb19ed672dbeaab48351631ce0f0b47dd94c8c949aea7582bdb73d6ebe2524"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-metrics/d1-callback-samples.json",
+      "sha256": "04998264877eed23c6cc137d880142a10fa896643821f67d8c04b61c712afe44"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-metrics/d1-command-clock-anomalies.json",
+      "sha256": "124b9a334428a4046ac1490d9f165561063b45f03dfb13b22f6616e859a651e1"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-metrics/d1-prediction-samples.json",
+      "sha256": "d70db0e9c6f284685cf9d8fe12a1014f732e67570cbc4a7a97dfdb1b32590cd4"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-metrics/d2-callback-samples.json",
+      "sha256": "cb066380f3e761ccd950c858c68017830ffa795742c7655c50fd2236e6dfbe91"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-metrics/d2-command-clock-anomalies.json",
+      "sha256": "7c0fa975e11202b0cc0f167ce63acb57ef0212bcafe6c65daf269ad093919cf8"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-metrics/d2-prediction-samples.json",
+      "sha256": "868cb8d79eced05fc9d93c44872eca86918541d396867d4a45afa35fadf095d3"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r3-metrics/report.json",
+      "sha256": "5d4f9920bd771d191698c4d29af3fcd794ee29a3306c12c85c57f9f4bbde2039"
+    }
+  ]
+}

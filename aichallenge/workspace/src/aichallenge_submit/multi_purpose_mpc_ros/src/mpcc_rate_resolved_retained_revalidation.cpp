@@ -1329,6 +1329,8 @@ static Result evaluate_with_stop_profile(
       terminal_stop.publisher_interval_end_steering_rad;
     result.terminal_stop_final_steering_rad =
       terminal_stop.braking_suffix_final_steering_rad;
+    result.terminal_stop_initial_lateral_lower_m = terminal_stop.initial_lateral_lower_m;
+    result.terminal_stop_initial_lateral_upper_m = terminal_stop.initial_lateral_upper_m;
     if (!terminal_stop.exact_trajectory.has_value()) {
       return complete_continuation_proof(
         Reason::TerminalContingencyUnavailable);

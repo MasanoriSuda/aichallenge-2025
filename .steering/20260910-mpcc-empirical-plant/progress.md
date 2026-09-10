@@ -115,3 +115,14 @@ The shared finite-acceleration prediction, model identity, dense sweep and
 bounded individual callback timing are implemented. Buildr14passes26packages,
 testsr10passes2392records; source388oldCV/990/991replays retain their outcomes.
 Fresh runtime remains required. Do not mark M4–M6 complete.
+
+## Certified Stop publication repair
+
+2b0293d1dev2-r3fails D2decision957. [Failure and timing](first-dev2-r3-failure.md)
+localize the lost certified terminal sequence. The selected feedback Stop now
+materializes that exact sequence and revalidates before execution; stateless
+sources are recorded as published Bundles, including Stop. Full source execution
+is recorded only when the command actually owns that source trajectory.
+Buildr15passes26packages; testsr11passes2393records; production-API replay of
+the reconstructed954alternate preserves its first command exactly and certifies
+the materialized full rest suffix. Fresh runtime and M4–M6 remain open.

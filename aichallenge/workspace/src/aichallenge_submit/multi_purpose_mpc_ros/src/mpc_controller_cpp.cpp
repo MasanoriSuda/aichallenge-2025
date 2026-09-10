@@ -7781,6 +7781,8 @@ struct RateResolvedRetainedShadowEvaluation
   /// Observation only: preserve the exact input of a rejected current-world
   /// evaluation, including the inspected plan and its publication clock.
   std::shared_ptr<const rate_resolved_retained::Request> revalidation_request;
+  // Move the complete accepted terminal proof to the final Stop boundary.
+  std::shared_ptr<const rate_resolved_retained::Result> revalidated_result;
   std::shared_ptr<const rate_resolved_certified::CertifiedPlan>
   selected_sibling_plan;
   bool selected_from_executed{false};
@@ -26923,7 +26925,7 @@ struct MPC
         problem, plan, request.value());
     }
     evaluation.obstacle_count = request->obstacles.obstacles.size();
-    const auto result = rate_resolved_retained::evaluate(request.value());
+    auto result = rate_resolved_retained::evaluate(request.value());
     evaluation.runtime = result.runtime;
     evaluation.decision_id = request->decision_id;
     evaluation.observation_origin_sec = request->now_sec;
@@ -27089,6 +27091,8 @@ struct MPC
         result.proof->follow_minimum_gap_m;
       evaluation.stateless_current_world_bundle =
         result.proof->stateless_current_world_bundle();
+      evaluation.revalidated_result =
+        std::make_shared<const rate_resolved_retained::Result>(std::move(result));
     }
     return finish();
   }
@@ -27127,7 +27131,8 @@ struct MPC
         // A newly accepted normal candidate is free to replace it through
         // the existing current-world join and publication transaction.
         if (last_published_authority_intent_ == mpcc_contract::ControlIntent::Stop &&
-          evaluation.selected_from_executed && evaluation.production_authority.has_value())
+          (evaluation.selected_from_executed || evaluation.selected_from_published_bundle_source) &&
+          evaluation.production_authority.has_value())
         {
           evaluation.certified_terminal_contingency_selected = true;
         }
@@ -29920,8 +29925,45 @@ struct MPC
 
   MpcControlCycleResult rate_resolved_track_cruise_control(
     const MpcProblem & problem, const mpcc_contract::ControlIntent intent,
-    const RateResolvedRetainedShadowEvaluation & retained)
+    const RateResolvedRetainedShadowEvaluation & input)
   {
+    std::optional<RateResolvedRetainedShadowEvaluation> terminal_execution;
+    if (input.certified_terminal_contingency_selected && input.production_authority &&
+      !input.terminal_stop_uses_solved_suffix)
+    {
+      if (!input.revalidation_request || !input.revalidated_result ||
+        rate_resolved_track_cruise_shadow_next_sequence_ == std::numeric_limits<std::uint64_t>::max())
+      {
+        return canonical_normal_emergency_stop(problem, intent, "certified terminal Stop evidence unavailable");
+      }
+      const auto sequence = rate_resolved_track_cruise_shadow_next_sequence_++;
+      const auto terminal = stop_successor_bundle::build_certified_terminal(
+        *input.revalidation_request, *input.revalidated_result, sequence);
+      if (!terminal.plan) {
+        return canonical_normal_emergency_stop(problem, intent,
+          std::string{"certified terminal Stop materialization/"} + stop_successor_bundle::to_string(terminal.reason));
+      }
+      auto joined = evaluate_current_world_stop_successor_plan(problem, input.revalidation_request->now_sec, intent, terminal.plan);
+      if (!joined.production_authority || !joined.terminal_stop_uses_solved_suffix ||
+        joined.stateless_current_world_bundle ||
+        joined.production_authority->command.predicted_speed_mps !=
+        input.production_authority->command.predicted_speed_mps ||
+        joined.production_authority->command.steering_tire_angle_rad !=
+        input.production_authority->command.steering_tire_angle_rad ||
+        joined.production_authority->command.acceleration_mps2 !=
+        input.production_authority->command.acceleration_mps2)
+      {
+        return canonical_normal_emergency_stop(problem, intent, "materialized terminal Stop did not preserve certified command/rest");
+      }
+      joined.certified_terminal_contingency_selected = true;
+      RCLCPP_INFO(rclcpp::get_logger("mpc_controller"),
+        "Certified terminal Stop materialized: decision=%lu, source=%lu, plan=%lu, duration=%.6f, complete_rest=1",
+        static_cast<unsigned long>(active_control_decision_id_),
+        static_cast<unsigned long>(input.sequence), static_cast<unsigned long>(sequence),
+        input.revalidated_result->proof->terminal_stop_trajectory.elapsed_time_sec.back());
+      terminal_execution = std::move(joined);
+    }
+    const auto & retained = terminal_execution ? *terminal_execution : input;
     if (!retained.production_authority.has_value()) {
       return canonical_normal_emergency_stop(
         problem, intent,
@@ -29993,7 +30035,7 @@ struct MPC
       !retained.stateless_current_world_bundle;
     const bool promote_certified_stop_to_executed =
       retained.certified_terminal_contingency_selected &&
-      !retained.selected_from_executed;
+      !retained.selected_from_executed && !retained.stateless_current_world_bundle;
     pending_canonical_normal_actuation_ = CanonicalNormalPendingActuation{
       command.decision_id, command, published_authority_intent,
       retained.selected_plan,
@@ -30002,7 +30044,7 @@ struct MPC
       retained.selected_plan->solver_source_snapshot : nullptr,
       retained.control_origin_sec, retained.cursor_elapsed_sec,
       promote_normal_to_executed || promote_certified_stop_to_executed,
-      normal_execution_evidence && retained.stateless_current_world_bundle,
+      retained.stateless_current_world_bundle,
       normal_execution_evidence ?
       retained.overtake_sibling_adoption_token : std::nullopt,
       normal_execution_evidence ?

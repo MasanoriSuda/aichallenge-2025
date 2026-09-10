@@ -355,3 +355,8 @@ Full acceptance remains P2partial/P3/P4open.
 捨てるCV予測が接近を見逃す比較を保存し、有限1秒加速度予測を物理QP/proof/
 Stop/retainedへ共通化。buildr14:26packages、testsr10:2392records合格。
 修正を固定した新しいdev2から統合受入れを継続する。M4–M6は未完。
+
+2026-09-10更新: dev2-r3はD2decision957で不合格。採用したfeedback Stopの認証済み
+停止列を破棄して元軌道を実行済みとする欠陥を修正。buildr15:26packages、
+testsr11:2393records、本番APIによる954再構成の停止列格納・再証明が合格。
+新しいdev2からM4–M6を継続する。詳細は20260910-mpcc-empirical-plant/first-dev2-r3-failure.md。

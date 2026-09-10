@@ -765,6 +765,11 @@
       "snapshot_id": "20260910-nine-state-dev2-r2-and-peer-prediction",
       "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r2-diagnostics-evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r3-stop-publication",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r3-diagnostics-evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -5370,6 +5375,48 @@
       "production_impact": "Finite1s acceleration shared by all physical peer consumers; integrated acceptance pending",
       "deleted_code": [],
       "revisit_condition": "Independent run with fixed model"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r3",
+      "baseline_commit": "2b0293d13849e3cdacb16b1b6b65f486d2b0fea0",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r3-stop-publication"
+      ],
+      "hypothesis": "Finite causal acceleration repair suffices for dev2",
+      "changed_dimension": "Fresh fixed-input run on2b0293d1",
+      "result": "rejected",
+      "reason": "D2first moving Emergency957, no6lapacceptance.",
+      "production_impact": "Observation only",
+      "deleted_code": [],
+      "revisit_condition": "New causal publication fix and fresh run"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r3-stop-candidate-clock",
+      "baseline_commit": "2b0293d13849e3cdacb16b1b6b65f486d2b0fea0",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r3-stop-publication"
+      ],
+      "hypothesis": "Candidate clock alone restores current957Stop414",
+      "changed_dimension": "TimeAlignedCandidate clock with same captured current957state/source414",
+      "result": "rejected",
+      "reason": "Steering join rejects; terminal peer clearance-0.001598554m.",
+      "production_impact": "Observation only",
+      "deleted_code": [],
+      "revisit_condition": "New earlier execution evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r3-materialized-terminal",
+      "baseline_commit": "2b0293d13849e3cdacb16b1b6b65f486d2b0fea0",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r3-stop-publication"
+      ],
+      "hypothesis": "Execute the exact certified terminal sequence of selected feedback Stop",
+      "changed_dimension": "Reconstructed954current query/source414; materialize accepted0.6sterminal samples, same world/model/hard limits; zero solves",
+      "result": "accepted",
+      "reason": "Production API first speed/steer/accel exactly preserved, fullsuffix current join/native replay pass, second command brakes-3. Not actual live execution of this alternate.",
+      "production_impact": "Exact terminal materialization at Stop publication boundary; integrated acceptance pending",
+      "deleted_code": [],
+      "revisit_condition": "Fresh integrated run with final publication repair"
     }
   ]
 }

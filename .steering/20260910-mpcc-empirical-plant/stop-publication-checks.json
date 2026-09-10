@@ -1,0 +1,41 @@
+{
+  "baseline_commit": "2b0293d13849e3cdacb16b1b6b65f486d2b0fea0",
+  "files": [
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "f5642080c692ea6a8e2a7f1159e8fc4363890a11cf8392488773b644b57636fe",
+      "preserved": "output/20260910-nine-state-stop-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp",
+      "sha256": "c0364be0c57498691256882b8de9b3f0e9acd9ced3f2ccba590b4d8d1efc4725",
+      "preserved": "output/20260910-nine-state-stop-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "b312b238d0ad393178f18100620770e668089a3e02627e085b8766f751dbd65c",
+      "preserved": "output/20260910-nine-state-stop-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "e28291bd48836e911de9a7b68294a1df7b9e698c3873cd5ce11d1016504572c3",
+      "preserved": "output/20260910-nine-state-stop-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "757033b130ea9cddf6e85a01ed3289b46753e9c16e0367673c5d3627dda9fd19",
+      "preserved": "output/20260910-nine-state-stop-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "ba4f38b30ca9f6827b7642f126f9f59515d3806af74f2bcee179cd79e101da96",
+      "preserved": "output/20260910-nine-state-stop-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp"
+    }
+  ],
+  "patch_sha256": "2fdf9fedb192ca1109e36aee01adce943c8a5c1198488707694b2a924437f7a4",
+  "build": "r15:26packages/4min29s; setuptools deprecation only",
+  "tests": "r11:2393 records, 0 errors/failures/skips",
+  "source_replay": "Reconstructed954alternate414: production API preserves first speed/steer/acceleration exactly; materialized0.6s full rest suffix join/native replay pass. Second acceleration-3. Actual957old414stillrejects.",
+  "runtime": "Not yet run on this candidate; M4-M6 remain open",
+  "evidence": "output/20260910-nine-state-stop-publication-candidate-r1"
+}

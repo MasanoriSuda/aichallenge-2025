@@ -357,6 +357,8 @@ struct Result
   int terminal_stop_rejected_sample{-1};
   double terminal_stop_publisher_interval_end_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
+  double terminal_stop_initial_lateral_lower_m{std::numeric_limits<double>::quiet_NaN()};
+  double terminal_stop_initial_lateral_upper_m{std::numeric_limits<double>::quiet_NaN()};
   double terminal_stop_final_steering_rad{
     std::numeric_limits<double>::quiet_NaN()};
   recovery::PathClearanceResult terminal_stop_path_clearance;

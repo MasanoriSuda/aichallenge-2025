@@ -1448,6 +1448,96 @@ TEST(
   EXPECT_TRUE(successor.dynamic_clearance.clear);
 }
 
+TEST(MpccRateResolvedRetainedRevalidation, MaterializedFeedbackStopExecutesBrakingAfterFirstPublication)
+{
+  auto request = accepted_request(certified_plan());
+  request.previous_published_steering_rad = 0.079;
+  request.previous_published_command_age_sec = 0.025;
+  const auto original = retained::evaluate(request);
+  ASSERT_EQ(original.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(original.proof);
+  ASSERT_TRUE(original.proof->latest_state_feedback_bundle);
+  ASSERT_TRUE(original.terminal_stop_certified);
+  ASSERT_FALSE(original.terminal_stop_uses_solved_suffix);
+  const auto selected = production::build(original);
+  ASSERT_TRUE(selected.authority);
+  const auto bundle = stop_bundle::build_certified_terminal(request, original, 101U);
+  ASSERT_EQ(bundle.reason, stop_bundle::Reason::Available);
+  ASSERT_TRUE(bundle.plan);
+  const auto & execution = *bundle.plan->execution_artifact;
+  ASSERT_GE(execution.control_stages.size(), 2U);
+  EXPECT_DOUBLE_EQ(execution.semantic_initial_steering_rad,
+    selected.authority->command.steering_tire_angle_rad);
+  EXPECT_DOUBLE_EQ(execution.control_stages.front().acceleration_mps2,
+    selected.authority->command.acceleration_mps2);
+  EXPECT_DOUBLE_EQ(execution.control_stages[1U].acceleration_mps2, request.minimum_acceleration_mps2);
+  EXPECT_TRUE(execution.terminal_body_rest_required);
+  const auto native = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::build(
+    execution, request.current_intent, execution.identity.source_context.stage_geometry_id);
+  ASSERT_TRUE(native.exact_trajectory);
+  EXPECT_DOUBLE_EQ(native.exact_trajectory->velocity_mps.back(), 0.0);
+  EXPECT_DOUBLE_EQ(execution.predicted_states.back().lateral_velocity_mps, 0.0);
+  EXPECT_DOUBLE_EQ(execution.predicted_states.back().yaw_rate_radps, 0.0);
+
+  auto current = request;
+  current.plan = bundle.plan;
+  current.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto joined = retained::evaluate(current);
+  ASSERT_EQ(joined.reason, retained::Reason::Accepted);
+  ASSERT_TRUE(joined.proof);
+  EXPECT_TRUE(joined.terminal_stop_uses_solved_suffix);
+  EXPECT_FALSE(joined.proof->stateless_current_world_bundle());
+  const auto initial_command = production::build(joined);
+  ASSERT_TRUE(initial_command.authority);
+  EXPECT_DOUBLE_EQ(initial_command.authority->command.steering_tire_angle_rad,
+    selected.authority->command.steering_tire_angle_rad);
+  EXPECT_DOUBLE_EQ(initial_command.authority->command.acceleration_mps2,
+    selected.authority->command.acceleration_mps2);
+
+  // Advance the observed body by the exact first publisher interval. The
+  // second command must be the certified brake, not the old source input.
+  const auto & terminal = original.proof->terminal_stop_trajectory;
+  const std::size_t i = original.proof->terminal_stop_publisher_interval_sample_count - 1U;
+  const auto & state = original.proof->terminal_stop_actuation_samples[i];
+  const auto frame = multi_purpose_mpc_ros::mpc_stage_geometry::sample_course_frame(
+    bundle.plan->physical_snapshot->course_frame_knots, terminal.progress_m[i]);
+  ASSERT_TRUE(frame);
+  const auto pose = contract::reconstruct_planar_pose_from_frenet(
+    {frame->x_m, frame->y_m, frame->heading_rad},
+    {terminal.lateral_m[i], terminal.lag_m[i], terminal.heading_offset_rad[i]});
+  ASSERT_TRUE(pose);
+  current.execution_clock = {retained::ExecutionClockKind::PublishedPlan, request.control_origin_sec, 0.0};
+  current.now_sec += execution.publication_interval_sec;
+  current.control_origin_sec = current.now_sec;
+  ++current.decision_id;
+  ++current.obstacles.generation;
+  current.obstacles.observed_sec = current.now_sec;
+  current.control_pose = {pose->x_m, pose->y_m, pose->yaw_rad};
+  current.measured_to_control_path = {current.control_pose};
+  current.control_origin_physical_progress_m = terminal.progress_m[i] + terminal.lag_m[i];
+  current.current_speed_mps = current.control_origin_speed_mps = state.end_velocity_mps;
+  current.current_steering_rad = current.previous_published_steering_rad =
+    selected.authority->command.steering_tire_angle_rad;
+  current.current_time_steering_rad = current.current_response_steering_rad = state.end_response_steering_rad;
+  current.current_lateral_velocity_mps = state.end_lateral_velocity_mps;
+  current.current_yaw_rate_radps = state.end_yaw_rate_radps;
+  current.previous_published_command_age_sec = execution.publication_interval_sec;
+  const auto next = retained::evaluate(current);
+  ASSERT_EQ(next.reason, retained::Reason::Accepted);
+  const auto next_command = production::build(next);
+  ASSERT_TRUE(next_command.authority);
+  EXPECT_DOUBLE_EQ(next_command.authority->command.acceleration_mps2, request.minimum_acceleration_mps2);
+
+  auto wrong_clock = request;
+  wrong_clock.now_sec += 0.001;
+  EXPECT_EQ(stop_bundle::build_certified_terminal(wrong_clock, original, 102U).reason,
+    stop_bundle::Reason::InvalidIdentity);
+  auto missing = original;
+  missing.proof.reset();
+  EXPECT_EQ(stop_bundle::build_certified_terminal(request, missing, 103U).reason,
+    stop_bundle::Reason::StopSuccessorUnavailable);
+}
+
 TEST(
   MpccRateResolvedRetainedRevalidation,
   ReifiesCurrentWorldStopAsCanonicalSevenStateAuthority)

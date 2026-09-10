@@ -2975,3 +2975,86 @@ TEST(MpccAppliedProgram, CapturedMovingSpeedDependenceStaysClearForEveryInputThr
     EXPECT_EQ(prediction.tube->source_to_rest.back().endpoint_body[i].upper, 0);
   }
 }
+
+
+TEST(MpccAppliedProgram, CapturedObliqueWallSeparationPreservesTheEntireInputTube)
+{
+  namespace vm = multi_purpose_mpc_ros::mpcc_vehicle_model;
+  namespace num = vm::numerical;
+  namespace fixture = multi_purpose_mpc_ros::test;
+  const auto observation = fixture::oriented_wall_observation();
+  const auto program = fixture::oriented_wall_program();
+  const auto model = fixture::vehicle_model();
+  const auto grid = fixture::wall_packet_grid();
+  const auto footprint = physical::resolve_clearance_footprint({1.615, .51, .768, .768, .05}, .2);
+  ASSERT_TRUE(footprint);
+  const auto &o = observation.initial.state;
+  const recovery::Pose2D origin{o.x_m, o.y_m, o.yaw_rad};
+  const double co = std::cos(o.yaw_rad), so = std::sin(o.yaw_rad);
+  const auto world = [&](const recovery::Pose2D &p) {
+    return recovery::Pose2D{o.x_m + co*p.x_m - so*p.y_m,
+      o.y_m + so*p.x_m + co*p.y_m, o.yaw_rad + p.yaw_rad};
+  };
+  const auto old = fixture::oriented_wall_checkpoint();
+  num::Box old_body, old_corners;
+  for (size_t i = 0; i < 8; ++i) {
+    old_body[i] = {old.body[i].lower, old.body[i].upper};
+    old_corners[i] = {old.corners[i].lower, old.corners[i].upper};
+  }
+  const auto old_box = num::footprint(old_body, *footprint);
+  const auto cells = recovery::sample_footprint(grid, old_box.extents, world(old_box.pose));
+  ASSERT_NE(std::find(cells.contact_cells.begin(), cells.contact_cells.end(), 476325U),
+    cells.contact_cells.end());
+  ASSERT_FALSE(num::separating_cell_clearance(old_corners, grid, 476325U, {o.x_m, o.y_m}));
+  const auto gap = num::separating_oriented_cell_clearance(old_body, *footprint,
+    old_corners, grid, 476325U, origin);
+  ASSERT_TRUE(gap); EXPECT_GT(*gap, 0);
+  const auto offsets = num::footprint_vertex_offsets(*footprint);
+  vm::AppliedFootprintValidation context;
+  for (size_t i = 0; i < 8; ++i) context.local_offsets[i] = {offsets[i].lo, offsets[i].hi};
+  bool directional = false;
+  size_t checked = 0;
+  context.validate = [&](const auto &body, const auto &corners, double, double) {
+    num::Box box, vertices;
+    for (size_t i = 0; i < 8; ++i) {
+      box[i] = {body[i].lower, body[i].upper}; vertices[i] = {corners[i].lower, corners[i].upper};
+    }
+    const auto b = num::footprint(box, *footprint);
+    const auto occupied = recovery::sample_footprint(grid, b.extents, world(b.pose));
+    if (!occupied.valid || occupied.out_of_map) return false;
+    for (auto cell : occupied.contact_cells) {
+      if (directional) {
+        if (!num::separating_oriented_cell_clearance(box, *footprint, vertices, grid, cell, origin)) return false;
+      } else if (!num::separating_cell_clearance(vertices, grid, cell, {o.x_m, o.y_m})) return false;
+    }
+    ++checked; return true;
+  };
+  const vm::InputApplicationProfile profile{"awsim-2025-empirical-receiver-age-250ms-v1", .25, .25, .1};
+  const auto rejected = vm::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &context);
+  EXPECT_EQ(rejected.reason, vm::AppliedInputRejectReason::ValidationRejected);
+  EXPECT_FALSE(rejected.tube);
+  directional = true; checked = 0;
+  const auto accepted = vm::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &context);
+  ASSERT_TRUE(accepted.tube) << static_cast<int>(accepted.reason);
+  EXPECT_GT(checked, 150U);
+  EXPECT_NEAR(accepted.tube->rest_sec, 10.764999778, 1e-12);
+  context.validate = [](const auto &, const auto &, double, double) {return true;};
+  const auto original = vm::predict_applied_inputs_to_rest(observation, program, profile, model, {}, &context);
+  ASSERT_TRUE(original.tube);
+  ASSERT_EQ(accepted.tube->source_to_rest.size(), original.tube->source_to_rest.size());
+  for (size_t j = 0; j < accepted.tube->source_to_rest.size(); ++j) {
+    const auto &a = accepted.tube->source_to_rest[j], &b = original.tube->source_to_rest[j];
+    for (size_t i = 0; i < 8; ++i) {
+      EXPECT_DOUBLE_EQ(a.swept_body[i].lower, b.swept_body[i].lower);
+      EXPECT_DOUBLE_EQ(a.swept_body[i].upper, b.swept_body[i].upper);
+      EXPECT_DOUBLE_EQ(a.endpoint_body[i].lower, b.endpoint_body[i].lower);
+      EXPECT_DOUBLE_EQ(a.endpoint_body[i].upper, b.endpoint_body[i].upper);
+      EXPECT_DOUBLE_EQ((*a.swept_footprint)[i].lower, (*b.swept_footprint)[i].lower);
+      EXPECT_DOUBLE_EQ((*a.swept_footprint)[i].upper, (*b.swept_footprint)[i].upper);
+    }
+  }
+  for (size_t i : {3U, 4U, 5U}) {
+    EXPECT_EQ(accepted.tube->source_to_rest.back().endpoint_body[i].lower, 0);
+    EXPECT_EQ(accepted.tube->source_to_rest.back().endpoint_body[i].upper, 0);
+  }
+}

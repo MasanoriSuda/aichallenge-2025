@@ -173,6 +173,16 @@ buildr53=26、testsr43=2449記録/62groupで失敗0。実公開元263の同じ�
 停止格納・再検証まで通過した。新規実走25msとM4–M6は未完。
 [前進速度の数値区間と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r25-speed-partition-design.md)を参照。
 
+2026-09-11のdev2-r26はD1decision928、1.20m/sで認証を失い、統合受入れは未完。
+一定操舵停止の元の全応答は斜め方向には壁と分離しているが、外接矩形の隅が壁cellに
+重なった。既存の壁認証に、元観測・中点車体・grid各座標軸への区間投影を加えた。
+元の車体範囲・剛体頂点範囲を使い、全頂点と占有/未知cell全体を既存epsilon込みで
+厳密に分離できる場合のみ通す。入力・物理モデル・余裕・他車・Follow・全応答停止・
+指令同一性は維持する。buildr54=26、testsr44=2451記録/62groupで失敗0。
+実公開元143の通常指令と、その認証から格納した同じ停止指令列は再検証まで通過した。
+別途生成した旋回停止は引き続き壁拒否。実走25msとM4–M6の完了は主張しない。
+[元入力の監査と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/r26-wall-direction-audit.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

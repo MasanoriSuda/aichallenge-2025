@@ -359,8 +359,8 @@ Result certify_terminal_stop(const retained::Request &request,
         *request.current_wall_grid, wall.extents, to_world(wall.pose));
     if (!cells.valid || cells.out_of_map) return Reason::WallRejected;
     for (const auto cell : cells.contact_cells)
-      if (!numeric::separating_cell_clearance(box(corners), *request.current_wall_grid,
-            cell, {observation.initial.state.x_m, observation.initial.state.y_m}))
+      if (!numeric::separating_oriented_cell_clearance(state, *wall_footprint, box(corners), *request.current_wall_grid,
+            cell, {observation.initial.state.x_m, observation.initial.state.y_m, observation.initial.state.yaw_rad}))
         return Reason::WallRejected;
     const auto ego = numeric::footprint(state, request.current_footprint);
     for (const auto &obstacle : request.obstacles.obstacles) {

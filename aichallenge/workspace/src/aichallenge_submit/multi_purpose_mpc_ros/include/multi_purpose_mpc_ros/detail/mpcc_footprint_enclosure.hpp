@@ -86,6 +86,64 @@ inline std::optional<double> separating_cell_clearance(
   return std::isfinite(gap) && gap > 0 ? std::optional<double>{gap} : std::nullopt;
 }
 
+// Both pose and rigid-vertex boxes contain the same complete response set.
+// Project them along the grid axes, original body axes and midpoint vehicle axes. Directions are
+// proposals only: separation requires outward-rounded support bounds for every
+// footprint vertex and the whole occupied/unknown square, including epsilon.
+inline std::optional<double> separating_oriented_cell_clearance(
+    const Box &states, const recovery::FootprintExtents &original,
+    const Box &vertices, const recovery::OccupancyGrid &grid, size_t cell_index,
+    const recovery::Pose2D &origin) {
+  if (!original.valid() || !grid.valid() || cell_index >= grid.cells.size() ||
+      !std::isfinite(origin.x_m) || !std::isfinite(origin.y_m) ||
+      !std::isfinite(origin.yaw_rad)) return std::nullopt;
+  for (size_t i = 0; i < 3; ++i)
+    if (!std::isfinite(states[i].lo) || !std::isfinite(states[i].hi) ||
+        states[i].lo > states[i].hi) return std::nullopt;
+  for (const auto &v : vertices)
+    if (!std::isfinite(v.lo) || !std::isfinite(v.hi) || v.lo > v.hi)
+      return std::nullopt;
+  if (const auto gap = separating_cell_clearance(vertices, grid, cell_index,
+                                                {origin.x_m, origin.y_m}))
+    return gap;
+  const auto center = grid.grid_to_world(cell_index / grid.width, cell_index % grid.width);
+  if (!center) return std::nullopt;
+  const I x = I(center->x_m) - I(origin.x_m), y = I(center->y_m) - I(origin.y_m);
+  const I half = I(grid.resolution_m) * I(.5) + I(1e-9);
+  const I co = cosine(I(origin.yaw_rad)), so = sine(I(origin.yaw_rad));
+  const I c = cosine(states[2]), s = sine(states[2]);
+  const auto offsets = footprint_vertex_offsets(original);
+  const double middle = origin.yaw_rad + states[2].lo + (states[2].hi - states[2].lo) / 2;
+  if (!std::isfinite(middle)) return std::nullopt;
+  const double ca = std::cos(middle), sa = std::sin(middle);
+  const double c0 = std::cos(origin.yaw_rad), s0 = std::sin(origin.yaw_rad);
+  const std::array<std::pair<double, double>, 12> directions{{
+    {c0, s0}, {-c0, -s0}, {-s0, c0}, {s0, -c0},
+    {ca, sa}, {-ca, -sa}, {-sa, ca}, {sa, -ca},
+    {1, 0}, {-1, 0}, {0, 1}, {0, -1}}};
+  for (const auto &[nx, ny] : directions) {
+    // Combine the frame coefficients before applying the shared XY ranges.
+    const I ax = I(nx) * co + I(ny) * so, ay = -I(nx) * so + I(ny) * co;
+    const I translation = ax * states[0] + ay * states[1];
+    const I forward = ax * c + ay * s, left = -ax * s + ay * c;
+    double body_support = -INFINITY, corner_support = -INFINITY;
+    for (size_t i = 0; i < 8; i += 2) {
+      body_support = std::max(body_support,
+        (translation + forward * offsets[i] + left * offsets[i + 1]).hi);
+      corner_support = std::max(corner_support,
+        (I(nx) * vertices[i] + I(ny) * vertices[i + 1]).hi);
+    }
+    const I gap = I(nx) * x + I(ny) * y -
+      half * (I(std::abs(nx)) + I(std::abs(ny))) - I(std::min(body_support, corner_support));
+    if (!std::isfinite(gap.lo) || gap.lo <= 0) continue;
+    const double norm = up(std::sqrt((I(nx) * I(nx) + I(ny) * I(ny)).hi));
+    if (!std::isfinite(norm) || norm <= 0) continue;
+    const double distance = down(gap.lo / norm);
+    if (std::isfinite(distance) && distance > 0) return distance;
+  }
+  return std::nullopt;
+}
+
 // A second enclosure can separate a circle from the entire pose population
 // even when the enclosing rectangle's unused corners overlap it. The normal
 // from that rectangle's nearest point is only a candidate direction. Authority

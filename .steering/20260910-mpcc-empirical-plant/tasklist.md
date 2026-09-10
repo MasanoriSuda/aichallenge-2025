@@ -23,7 +23,8 @@
 - [x] Diagnose r23rear-peer rejection; bounded source-horizon Stop, immutable speed ceiling and complete applied proof; buildr51/testsr41.
 - [x] Diagnose r24wall population; add shared rigid-corner displacement enclosure under original gates; buildr52/testsr42/native r127/r128.
 - [x] Reconstruct r25actual published263 and diagnose moving-speed dependence; bounded two-interval numerical representation, buildr53/testsr43/native137-139.
-- [ ] Validate fresh moving failures and actual publication timing after the forward-speed partition repair.
+- [x] Diagnose r26unused wall rectangle corners; whole-population directional support, buildr54/testsr44/native146-148.
+- [ ] Validate fresh moving failures and actual publication timing after directional wall separation.
 - [ ] Validate integrated applied-program behavior and25ms timing in fresh runs.
 - [ ] Complete publication/application schedule and live multi-tick Stop acceptance.
 - [ ] Fresh single/dev2 acceptance and causal repair of any first failure.

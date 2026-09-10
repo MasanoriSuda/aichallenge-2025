@@ -979,6 +979,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/speed-partition-evidence.json",
       "replay_ready": true,
       "reason": "Original964world/current source observation, distinct inspected212 and actual263publication/clock; moving-speed dependence audit"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-oriented-wall-r26",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/oriented-wall-evidence.json",
+      "replay_ready": true,
+      "reason": "OriginalD1928world and laterD2996, exact inspected131 distinct from previous actual143; whole-population wall directions"
     }
   ],
   "experiments": [
@@ -10174,6 +10180,390 @@
         "Collapsing the entire forward-moving speed interval into one box before the next nonlinear map"
       ],
       "revisit_condition": "A changed numerical representation, world/input population or independent counterexample. Rejected branch-only checking needs new missing-dependence evidence; no margin/profile/timing relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-integrated-r26",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Forward-speed partition closes integrated authority",
+      "changed_dimension": "Fresh same-build dev2",
+      "result": "rejected",
+      "reason": "D1928/1.20mps firstmovingEmergency,150.382308ms callback;D2later996. Live25ms andraceacceptance fail.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-exact-pair",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Exact current and true preceding publication can be replayed",
+      "changed_dimension": "Unmodified captured requests",
+      "result": "accepted",
+      "reason": "Previous927/source143 accepts14.327656ms. Current928/source131 rejects fullwall. No source relabeling.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-persistent-a-1",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: persistent-a",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=persistent-a stage=solver-rejected candidate=3868393263274442411 solver=solve-rejected solve_ms=156.519 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000293753, dua_res=0.0854529, failed_iterate_row=477, value=0.946101, bounds=[-inf,0.94553], violation=0.000571506, tolerance=0.0019461, normalized=0.293667, architecture_snapshot=mpcc_architecture_snapshots/000000000928-35af4b2d64fcbeab-cruise-side-neutral-wall-refinement-solve-rejected/snapshot.yaml; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-stateless-left-b-2",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: stateless-left-b",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=stateless-left-b stage=solver-rejected candidate=8059912027867938171 solver=solve-rejected solve_ms=157.706 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000176023, dua_res=0.119213, failed_iterate_row=477, value=0.945872, bounds=[-inf,0.94553], violation=0.000342458, tolerance=0.00194587, normalized=0.175992, architecture_snapshot=mpcc_architecture_snapshots/000000000928-6fda8f493df77d7b-cruise-side-positive-wall-refinement-solve-rejected/snapshot.yaml; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-stateless-right-b-3",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: stateless-right-b",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=stateless-right-b stage=solver-rejected candidate=12307389329881178846 solver=solve-rejected solve_ms=172.65 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000184295, dua_res=0.104167, failed_iterate_row=477, value=0.945888, bounds=[-inf,0.94553], violation=0.000358552, tolerance=0.00194589, normalized=0.184261, architecture_snapshot=mpcc_architecture_snapshots/000000000928-aacca163600022de-cruise-side-negative-wall-refinement-solve-rejected/snapshot.yaml; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-rough-left-c-4",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: rough-left-c",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=rough-left-c stage=solver-rejected candidate=2991071296776039289 solver=solve-rejected solve_ms=98.3683 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00537163, dua_res=0.1964, failed_iterate_row=475, value=0.95598, bounds=[-inf,0.94553], violation=0.0104507, tolerance=0.00195598, normalized=5.34293; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-rough-right-c-5",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: rough-right-c",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=rough-right-c stage=solver-rejected candidate=11287961275641155611 solver=solve-rejected solve_ms=107.254 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0051797, dua_res=0.137522, failed_iterate_row=471, value=0.955607, bounds=[-inf,0.94553], violation=0.0100773, tolerance=0.00195561, normalized=5.15301; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-offline-left-d-6",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: offline-left-d",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=offline-left-d stage=solver-rejected candidate=2991071296776039289 solver=solve-rejected solve_ms=98.2095 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.00537163, dua_res=0.1964, failed_iterate_row=475, value=0.95598, bounds=[-inf,0.94553], violation=0.0104507, tolerance=0.00195598, normalized=5.34293; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-offline-right-d-7",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: offline-right-d",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=offline-right-d stage=solver-rejected candidate=11287961275641155611 solver=solve-rejected solve_ms=106.379 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0051797, dua_res=0.137522, failed_iterate_row=471, value=0.955607, bounds=[-inf,0.94553], violation=0.0100773, tolerance=0.00195561, normalized=5.15301; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-production-left-g-8",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: production-left-g",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=production-left-g stage=solver-rejected candidate=8059912027867938171 solver=solve-rejected solve_ms=81.7773 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000176023, dua_res=0.119213, failed_iterate_row=477, value=0.945872, bounds=[-inf,0.94553], violation=0.000342458, tolerance=0.00194587, normalized=0.175992; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-architecture-production-right-g-9",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: production-right-g",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=production-right-g stage=solver-rejected candidate=12307389329881178846 solver=solve-rejected solve_ms=98.3852 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved wall-refined QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.000184295, dua_res=0.104167, failed_iterate_row=477, value=0.945888, bounds=[-inf,0.94553], violation=0.000358552, tolerance=0.00194589, normalized=0.184261; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=469853459535283807 solver=solve-rejected solve_ms=112.416 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.15144, dua_res=0.00663391, failed_iterate_row=369, value=1.51024, bounds=[-3.7114,1.18008], violation=0.330153, tolerance=0.00251024, normalized=131.523, row_semantic=state-box/stage=20/element=0, first_vtheta=coupled/inconclusive/declared:[0,11.1111]/implied:[0,11.1111]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000000928-0685413b6816c65f-cruise-side-neutral-initial-solve-rejected/snapshot.yaml; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-complete-rest-current-world-complete-rest-y-2",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Same-world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Candidate/solver architecture, original hard world",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=7100954345665821968 solver=solved solve_ms=31.9097 terminal_progress=11.2899 terminal_velocity=0 lateral_reserve=0.290603 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.90106,1.32927]/mean=0.0564796/bounds=5 steer_rate=[-0.711941,0.714183]/mean=-0.0173188/bounds=4/sign_changes=8 sequence=[0.25:0.854787:-0.707844;0.25:1.32927:-0.710436;0.25:1.32906:-0.301813;0.25:1.32917:0.65405;0.25:1.17975:0.714183;0.25:1.32694:0.635997;0.25:1.3257:0.281104;0.25:1.31361:-0.711941;0.25:1.19715:-0.61313;0.25:1.23019:0.112973;0.25:1.25688:0.0425762;0.25:1.13796:-0.0763472;0.25:0.701505:0.281561;0.25:0.0980605:0.368862;0.25:-0.536654:0.133761;0.25:-2.73427:-0.155476;0.25:-2.77105:-0.138912;0.25:-2.8092:0.0424498;0.25:-2.72822:-0.0861008;0.25:-2.90106:-0.111895] detail=accepted; No complete applied authority or physical infeasibility conclusion.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-actual143-rebind",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Using actual143publication suffices",
+      "changed_dimension": "Explicit node-equivalent rebind, original publicationclock",
+      "result": "rejected",
+      "reason": "Original143normal and nominally accepted Stop both lose fullwall at10.479999778.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r140-retain-only",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Previous certified common programme alone remains currently provable",
+      "changed_dimension": "Same certified programme, current original world/observation",
+      "result": "rejected",
+      "reason": "Previous927programme rest10.724999779; originalcurrent rebind predicts rest10.764999778 but fullwall rejects10.624999778.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r141-turning-support",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Directional projection proves the separately generated published Stop",
+      "changed_dimension": "128directions, all original body/corner intervals",
+      "result": "rejected",
+      "reason": "121unproved cell/time comparisons,first10.479999778,minimum−.080671464m.128nativepaths clear with1142784enclosedvalues, not proof.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r142-split2",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "More speed intervals alone close the new wall failure",
+      "changed_dimension": "Original inputs/modes, 2/4/8numerical speed intervals, native value inclusion required",
+      "result": "rejected",
+      "reason": "{\"nominal\": \"accepted\", \"joined_first_wall\": 10.479999778, \"joined_contact_steps\": 63, \"max_parts\": 4, \"first_branch_wall\": 10.479999778, \"branch_contact_steps\": 63, \"body_component_matches\": 1488, \"first_wall\": 10.479999778, \"contact_steps\": 63, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1142784, \"rest_sec\": 10.794999778}; Misnamed body_component_matches counts finite values.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r142-split4",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "More speed intervals alone close the new wall failure",
+      "changed_dimension": "Original inputs/modes, 2/4/8numerical speed intervals, native value inclusion required",
+      "result": "rejected",
+      "reason": "{\"nominal\": \"accepted\", \"joined_first_wall\": 10.489999778, \"joined_contact_steps\": 61, \"max_parts\": 6, \"first_branch_wall\": 10.489999778, \"branch_contact_steps\": 61, \"body_component_matches\": 1488, \"first_wall\": 10.479999778, \"contact_steps\": 63, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1142784, \"rest_sec\": 10.794999778}; Misnamed body_component_matches counts finite values.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r142-split8",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "More speed intervals alone close the new wall failure",
+      "changed_dimension": "Original inputs/modes, 2/4/8numerical speed intervals, native value inclusion required",
+      "result": "rejected",
+      "reason": "{\"nominal\": \"accepted\", \"joined_first_wall\": 10.494999778, \"joined_contact_steps\": 60, \"max_parts\": 10, \"first_branch_wall\": 10.494999778, \"branch_contact_steps\": 60, \"body_component_matches\": 1488, \"first_wall\": 10.479999778, \"contact_steps\": 63, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1142784, \"rest_sec\": 10.794999778}; Misnamed body_component_matches counts finite values.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r143-prior_programme_corners",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "An oblique plane separates the original whole programme from the wall",
+      "changed_dimension": "128candidate directions, original complete response boxes/programme",
+      "result": "accepted",
+      "reason": "{\"first_cells\": [476325], \"first_support_rejection\": null, \"support_rejections\": 0, \"minimum_support_gap\": 0.008351449549315547, \"first_wall\": 10.624999778, \"contact_steps\": 28, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1105920, \"rest_sec\": 10.764999778}; Geometry diagnostic only.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r143-constant_first_corners",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "An oblique plane separates the original whole programme from the wall",
+      "changed_dimension": "128candidate directions, original complete response boxes/programme",
+      "result": "accepted",
+      "reason": "{\"first_cells\": [476325], \"first_support_rejection\": null, \"support_rejections\": 0, \"minimum_support_gap\": 0.009750319510061443, \"first_wall\": 10.699999777999999, \"contact_steps\": 13, \"native_first\": null, \"native_contacts\": 0, \"enclosed_native_values\": 1105920, \"rest_sec\": 10.764999778}; Geometry diagnostic only.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r144-eight-directions",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Grid/midpoint axes alone close actual143authority",
+      "changed_dimension": "Original complete certificate with generated directional wall function",
+      "result": "rejected",
+      "reason": "Actual143normal still fails4arms; separately generatedStopalsofails. No production edits.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-r145-original-axes",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Original observation-frame axes preserve the needed XY projection",
+      "changed_dimension": "Generated directional wall function adds original coordinate axes; all original gates unchanged",
+      "result": "accepted",
+      "reason": "Actual143normal14.420313ms/oneattempt andexactStopjoin12.728067ms fullypass. Separate generatedStopstillwallreject.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
+    },
+    {
+      "experiment_id": "20260911-nine-state-oriented-wall-r26-production-local",
+      "baseline_commit": "963f9aa3203c0c15252b8e20f11318424cf87632",
+      "snapshot_ids": [
+        "20260911-nine-state-oriented-wall-r26"
+      ],
+      "hypothesis": "Shared directional wall certificate preserves full population and contracts",
+      "changed_dimension": "Only existing wall support producer, frozen geometry/input regressions",
+      "result": "accepted",
+      "reason": "Buildr54=26/testsr44=2451/62groups/zeroerrors-fails-skips; native146-148earlierpositives andactual143normal/materialization/joinpass. Original input tube unchanged. Actualr18historygap rejected and all real wall/peer/Follow/identity negatives preserved.",
+      "production_impact": "Additional directional projection in the existing full applied certificate; no input/range/model/margin/budget/authority relaxation. Integrated acceptance remains open.",
+      "deleted_code": [
+        "Rejecting contact with the outer rectangle without checking original-body-frame separating support"
+      ],
+      "revisit_condition": "Changed geometry/representation or independent missing-dependence evidence. Rejected original Stop/direction/subdivision experiments may not be repeated as new evidence unchanged. No profile/margin/timeout relaxation."
     }
   ]
 }

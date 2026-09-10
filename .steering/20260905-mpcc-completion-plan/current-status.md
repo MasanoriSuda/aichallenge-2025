@@ -1,23 +1,23 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。直近dev2-r25（13be2d87）はD1964、1.86m/sでEmergency・25ms未達。**
+**全体は未完。直近dev2-r26（963f9aa3）はD1928、1.20m/sでEmergency・25ms未達。**
 
-前進速度を二つの数値区間で保持し、全応答の位置との依存関係が失われる問題を修正した。
-元の入力・逆向き状態・静止分岐・安全余裕・全認証条件を保つ。
+元の全入力応答を保った方向付き壁判定を追加した。外接矩形の隅だけが壁と重なる場合、
+元の車体・剛体頂点の区間と占有/未知cell全体を分離できるときのみ認証する。
+入力母集団・物理モデル・安全余裕・全認証条件を維持している。
 
-- buildr53:26package、testsr43:2449記録/62group、error/failure/skip0。
-- 保存964の実公開元263は通常認証・停止格納・再検証まで通過。通常再生18.29ms、停止16.31ms。
-- 期限切れの最終検査元212とは区別し、元観測と実公開時刻から263の検査を再構成した。
-- 過去の正常ケースと実履歴欠損の拒否を維持。壁・他車・Follow・指令同一性のテストも合格。
-- 次は新規dev2-r26。再生23–25msのケースもあり、実走25msの受入れは未完。
+- buildr54:26package、testsr44:2451記録/62group、error/failure/skip0。
+- 実公開元143の通常指令と同じ認証から格納した停止は、完全再検証まで通過。
+- 別途生成された旋回停止は壁拒否を維持。過去の正常ケースと履歴欠損の拒否も維持。
+- 元の応答範囲の同一性、回転車体の接触・接線・不正地図・他車・Follow・指令同一性を検証。
+- 次は新規dev2-r27。実送信時刻と25ms、および統合走行の受入れは未完。
 
-[設計と監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r25-speed-partition-design.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/speed-partition-evidence.json)、
+[設計と監査](../20260910-mpcc-empirical-plant/receiver-input-enclosure/r26-wall-direction-audit.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/oriented-wall-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
-実送信と認証時刻の整合、M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
-同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
-モデル誤差・接触・輸送の保証は未検証。安全余裕・合格基準は維持する。
+M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
+dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。
 
 ## Superseded checkpoint and historical evidence
 

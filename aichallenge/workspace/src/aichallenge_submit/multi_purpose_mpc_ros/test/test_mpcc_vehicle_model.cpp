@@ -924,3 +924,51 @@ TEST(MpccVehicleModel, ForwardPartitionCoversNativeBoundaryAndUnsplittablePopula
     }
   }
 }
+
+
+TEST(MpccVehicleModel, OrientedCellSupportRetainsRotatedContactAndInvalidGeometryRejections)
+{
+  namespace num = vehicle::numerical;
+  namespace rec = multi_purpose_mpc_ros::recovery_footprint;
+  rec::OccupancyGrid grid;
+  grid.width = grid.height = 20; grid.resolution_m = .25;
+  grid.cells.assign(400, rec::CellState::Unknown);
+  const size_t cell = 210;
+  const rec::FootprintExtents footprint{1.615, .51, .768, .768, .25};
+  const auto offsets = num::footprint_vertex_offsets(footprint);
+  for (const auto axis : {rec::YAxisConvention::RowZeroAtMaximumY, rec::YAxisConvention::RowZeroAtMinimumY}) {
+    grid.y_axis = axis;
+    const auto center = grid.grid_to_world(10, 10); ASSERT_TRUE(center);
+    for (const auto occupancy : {rec::CellState::Occupied, rec::CellState::Unknown}) {
+      grid.cells[cell] = occupancy;
+      for (double angle : {0., M_PI/4, -M_PI/4, 2.3, -2.3}) {
+        const auto body = num::point(vehicle::State{});
+        num::Box vertices;
+        double xmin = INFINITY, contact_y = 0;
+        for (size_t k = 0; k < 8; k += 2) {
+          vertices[k] = num::cosine(num::I(angle))*offsets[k] - num::sine(num::I(angle))*offsets[k+1];
+          vertices[k+1] = num::sine(num::I(angle))*offsets[k] + num::cosine(num::I(angle))*offsets[k+1];
+          const double x = (offsets[k].lo+offsets[k].hi)/2, y = (offsets[k+1].lo+offsets[k+1].hi)/2;
+          const double vx = std::cos(angle)*x - std::sin(angle)*y;
+          if (vx < xmin) {xmin = vx; contact_y = std::sin(angle)*x + std::cos(angle)*y;}
+        }
+        for (double distance : {-.01, 0., 1e-9}) {
+          const rec::Pose2D origin{center->x_m + .125 - xmin + distance, center->y_m - contact_y, angle};
+          EXPECT_FALSE(num::separating_oriented_cell_clearance(body, footprint, vertices, grid, cell, origin))
+            << "angle=" << angle << " distance=" << distance;
+        }
+        rec::Pose2D origin{center->x_m + .125 - xmin + 1e-4, center->y_m - contact_y, angle};
+        EXPECT_TRUE(num::separating_oriented_cell_clearance(body, footprint, vertices, grid, cell, origin));
+        EXPECT_FALSE(num::separating_oriented_cell_clearance(body, footprint, vertices, grid, 400, origin));
+        auto bad_body = body; bad_body[0] = {1, -1};
+        EXPECT_FALSE(num::separating_oriented_cell_clearance(bad_body, footprint, vertices, grid, cell, origin));
+        auto bad_vertices = vertices; bad_vertices[0] = num::I(NAN);
+        EXPECT_FALSE(num::separating_oriented_cell_clearance(body, footprint, bad_vertices, grid, cell, origin));
+        auto bad_footprint = footprint; bad_footprint.margin_m = NAN;
+        EXPECT_FALSE(num::separating_oriented_cell_clearance(body, bad_footprint, vertices, grid, cell, origin));
+        origin.yaw_rad = NAN;
+        EXPECT_FALSE(num::separating_oriented_cell_clearance(body, footprint, vertices, grid, cell, origin));
+      }
+    }
+  }
+}

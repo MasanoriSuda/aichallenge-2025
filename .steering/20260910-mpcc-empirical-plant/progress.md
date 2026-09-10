@@ -299,3 +299,16 @@ publishedStop16.308743ms accept; earlierpositives pass, signedr16pass, realr18ga
 reject5. Later r24D2990nowpeer-clearsunder tighterbodybounds; r22D21083stillrejects.
 Registry189snapshots/609experiments,315evidencefiles. Commit thenfreshdev2-r26;
 actualpublicationclock and25ms/allM4–M6remainopen.
+
+2026-09-11:963f9aa3dev2-r26failsD1928/1.20mps/WP30,actualprevious927/source143,
+inspected131distinct;D2later996. Firstcallback150.382308ms. A/B/C/D/Gordinary
+armsreject; secondcomplete-restYnominalaccepts31.9097ms, noappliedauthority.
+R140previousprogrammealonefails; r141turningStop128directionsfails; r1422/4/8
+speedbinsfail. R143previousprogramme/captured-firstconstantStopwhole-population
+oblique separation passes. R144grid/midpointaxesfail; r145original-frameaxes
+closeactual143normal anditsimmutableStopjoin, separate generatedStopstillfails.
+Production wall support preserves original tube/inputs/footprint/margins/cells,
+CA1peers/Follow/fullrest/identity. Buildr54=26/23.8s,testsr44=2451/62groups/zero
+errors-fails-skips/29.74s;native146-148earlierpositive/realhistorygapregressions
+pass. See receiver-input-enclosure/oriented-wall-evidence.json. Commit then
+freshdev2-r27; actualpublicationclock/live25ms/allM4–M6remainopen.

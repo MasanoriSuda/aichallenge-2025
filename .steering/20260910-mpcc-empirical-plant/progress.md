@@ -137,3 +137,11 @@ old positive-speed/strict-distance adapter. See `rest-publication-design.md`.
 Constrained temporal rest representation passes buildr16:26packages,
 testsr12:2394records, and exact852/853production replay. Native zero rest and
 all current wall/peer checks remain. Fresh runtime/M4–M6are still open.
+
+2026-09-10: f1f213fcdev2-r5reaches ShiftOut/Pass and canonical Rejoin after
+relative-progress watchdog abort. Ego moves46.198m; faster peer84.979m, so this
+is not physical standstill. The old monitor's tactical-phase stop is classified
+separately from final Recovery override. Sixlaps remain incomplete and7adjacent
+callback-overrun pairs reject timing. Observation-only nested timing passes
+buildr17/testsr13:26packages/2394records. Next: bounded ShiftOut timing capture,
+then causal repair and M4–M6. See timing-attribution-design.md in current steering.

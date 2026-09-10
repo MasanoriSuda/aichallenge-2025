@@ -8017,6 +8017,10 @@ struct ControlCallbackTimingObservation
   double post_mpc_ms{};
   double recovery_ms{};
   double publish_ms{};
+  double problem_initialization_ms{};
+  double publication_successor_ms{};
+  double prediction_marker_ms{};
+  std::size_t prediction_marker_points{};
   const char * checkpoint{"entry"};
 };
 
@@ -30714,10 +30718,13 @@ struct MPC
     return output;
   }
 
+  double last_problem_initialization_ms{};
+
   MpcControlCycleResult get_control(
     const double now_sec, const std::uint64_t decision_id)
   {
     active_control_decision_id_ = decision_id;
+    last_problem_initialization_ms = 0.0;
     pending_canonical_normal_actuation_.reset();
     pending_rate_resolved_publication_successor_.reset();
     last_overtake_authority_trace_.reset();
@@ -30745,10 +30752,13 @@ struct MPC
       const auto & tracking_waypoint =
         model->reference_path->get_waypoint(tracking_wp_id);
       model->spatial_state = model->t2s(tracking_waypoint, model->temporal_state);
+      const auto problem_initialization_started = SteadyClock::now();
       MpcProblem problem =
         init_problem(
           N, model->safety_margin, now_sec, tracking_wp_id, preview_wp_id,
           nullptr);
+      last_problem_initialization_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - problem_initialization_started).count();
       const auto control_intent = problem.resolved_control_intent;
       if (!problem.lateral_bounds_contract_valid) {
         static rclcpp::Clock bound_contract_log_clock{RCL_STEADY_TIME};
@@ -58392,11 +58402,15 @@ private:
         get_logger(),
         "Control callback overrun detail: decision=%lu, total=%.3fms/budget=%.3fms, "
         "regions=pre_mpc:%.3f/mpc:%.3f/post_mpc:%.3f/recovery:%.3f/"
-        "publish:%.3f/unattributed:%.3fms, checkpoint=%s, observation_only=1",
+        "publish:%.3f/unattributed:%.3fms, checkpoint=%s, "
+        "nested=problem_initialization:%.3f/publication_successor:%.3f/"
+        "prediction_marker:%.3fms/points:%zu, observation_only=1",
         static_cast<unsigned long>(timing.decision_id), elapsed_ms, period_ms,
         timing.pre_mpc_ms, timing.mpc_ms, timing.post_mpc_ms,
         timing.recovery_ms, timing.publish_ms, unattributed_ms,
-        timing.checkpoint);
+        timing.checkpoint, timing.problem_initialization_ms,
+        timing.publication_successor_ms, timing.prediction_marker_ms,
+        timing.prediction_marker_points);
     }
 
     if (!last_control_callback_telemetry_steady_.has_value()) {
@@ -58746,6 +58760,7 @@ private:
     const auto post_mpc_start = SteadyClock::now();
     callback_timing.mpc_ms = std::chrono::duration<double, std::milli>(
       post_mpc_start - mpc_start).count();
+    callback_timing.problem_initialization_ms = mpc_->last_problem_initialization_ms;
     callback_timing.checkpoint = "mpc-complete";
     auto u = mpc_cycle.control;
     const auto canonical_normal_command =
@@ -58872,12 +58887,15 @@ private:
       mpc_cycle.published_authority_intent,
       recovery_command_active || !enable_control_ ||
       executed_solution_wall_hold_active);
+    const auto publication_successor_started = SteadyClock::now();
     mpc_->record_rate_resolved_publication_successor(
       active_control_decision_id_, u[0], acc, u[1],
       published_steering.value(),
       current_time.seconds(),
       !recovery_command_active &&
       (!mpc_fallback_active || canonical_emergency_stop));
+    callback_timing.publication_successor_ms = std::chrono::duration<double, std::milli>(
+      SteadyClock::now() - publication_successor_started).count();
     if (
       !recovery_command_active && !mpc_fallback_active &&
       !executed_solution_wall_hold_active &&
@@ -58990,7 +59008,12 @@ private:
 
     const auto interval = std::max(1, static_cast<int>(mpc_cfg_.control_rate / 4.0));
     if (!mpc_->current_prediction.first.empty() && loop_ % interval == 0) {
+      const auto prediction_marker_started = SteadyClock::now();
+      callback_timing.prediction_marker_points = std::min(
+        mpc_->current_prediction.first.size(), mpc_->current_prediction.second.size());
       publish_mpc_pred_marker(mpc_->current_prediction.first, mpc_->current_prediction.second);
+      callback_timing.prediction_marker_ms = std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - prediction_marker_started).count();
     }
     callback_timing.publish_ms = std::chrono::duration<double, std::milli>(
       SteadyClock::now() - publish_start).count();

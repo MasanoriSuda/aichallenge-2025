@@ -14,6 +14,8 @@ repo = Path.cwd()
 package = Path('aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros')
 mode = sys.argv[1]
 attempt = sys.argv[2] if len(sys.argv)>2 else 'r1'
+timing_diagnostic = len(sys.argv)>3 and sys.argv[3]=='timing'
+assert len(sys.argv)<=3 or timing_diagnostic
 assert re.fullmatch(r'r[1-9][0-9]*', attempt)
 assert mode in ['single','dev2','dev3','dev4']
 target = 'dev' if mode=='single' else mode
@@ -22,8 +24,8 @@ domains = [f'd{i}' for i in range(1, vehicle_count + 1)]
 projects = [str(i) for i in range(1, vehicle_count + 1)]
 root = Path('output/20260910-nine-state-'+mode+'-'+attempt)
 assert not subprocess.check_output(['docker', 'ps', '-q']).strip(), 'Other containers running'
-test_log = Path('/tmp/mpcc-nine-state-tests-r12.log')
-build_log = Path('/tmp/mpcc-nine-state-build-r16.log')
+test_log = Path('/tmp/mpcc-nine-state-tests-r13.log')
+build_log = Path('/tmp/mpcc-nine-state-build-r17.log')
 assert 'Summary: 2394 tests, 0 errors, 0 failures, 0 skipped' in test_log.read_text()
 assert 'Summary: 26 packages finished' in build_log.read_text()
 original_dll = Path('aichallenge/simulator/AWSIM/AWSIM_Data/Managed/Assembly-CSharp.dll')
@@ -35,7 +37,8 @@ manifest = dict(run_id=root.name, kind='empirical-nine-state-'+mode,
                 initial_conditions='standard '+mode+' with6laps/600s only; noNPCs/collisions on/handicap off/wall recovery off',
                 seed='AWSIM default; explicit seed unavailable, no determinism claimed',
                 termination='all vehicles finished, first active moving Emergency/Recovery, or840s host deadline',
-                command=f'make {target} LOG_DIR=/{root}', files=[], binaries=[])
+                command=f'make {target} LOG_DIR=/{root}', timing_diagnostic=timing_diagnostic,
+                tactical_rejoin_policy='Record committed-pass longitudinal watchdog Recovery phase separately; final moving Emergency/Recovery overrides and every other Recovery entry still terminate', files=[], binaries=[])
 paths = {item['path'] for item in template['files']}
 paths.update(str(x) for x in package.rglob('*') if x.is_file() and '__pycache__' not in x.parts)
 paths.update(subprocess.check_output(['git','diff','--name-only','--','aichallenge/workspace/src/aichallenge_submit/racing_kart_gnss_poser'],text=True).splitlines())
@@ -146,7 +149,20 @@ try:
             summary[domain]['causal_input_failsafes'] = sum('missing causal body/tire/input observation' in line for line in lines)
             if launch_errors:
                 summary[domain]['launch_errors'] = launch_errors
-            failed |= bool(launch_errors) or first_override is not None or any(' -> Recovery,' in line for line in phases)
+            tactical_rejoins = [line for line in phases if 'Pass -> Recovery,' in line and
+                                'reason=committed pass longitudinal progress stalled,' in line]
+            unexpected_recovery = [line for line in phases if ' -> Recovery,' in line and line not in tactical_rejoins]
+            summary[domain]['tactical_rejoin_transitions'] = tactical_rejoins
+            summary[domain]['unexpected_recovery_transitions'] = unexpected_recovery
+            failed |= bool(launch_errors) or first_override is not None or bool(unexpected_recovery)
+            if timing_diagnostic and vehicle_state in ('ready', 'start'):
+                raw = [(int(i), float(ms)) for line in lines if 'Control callback samples:' in line
+                       for i, ms in re.findall(r'(\d+):([\d.]+)', line.split('decision_elapsed_ms=', 1)[1])]
+                pairs = [(a, b) for a, b in zip(raw, raw[1:]) if b[0] == a[0]+1 and min(a[1], b[1]) > 25.0]
+                shift_decisions = [int(re.search(r'decision=(\d+)', line)[1]) for line in lines
+                                   if 'Overtake control decision:' in line and 'phase=ShiftOut,' in line]
+                pairs = [pair for pair in pairs if shift_decisions and pair[0][0] >= min(shift_decisions)]
+                summary[domain]['adjacent_callback_overruns'] = pairs
             result = {}
             # AWSIM writes here at Finish; orchestrator collects into root only
             # during teardown. Require this run's mtime and observed Finish so
@@ -170,6 +186,10 @@ try:
             termination = ('launch failure; controller acceptance not evaluated' if
                 any('launch_errors' in row for row in summary.values()) else
                 'first active moving Emergency/Recovery; preserve earliest failure')
+            time.sleep(2)
+            break
+        if timing_diagnostic and any(row.get('adjacent_callback_overruns') for row in summary.values()):
+            termination = 'first observed adjacent callback overruns; timing attribution only, no race acceptance'
             time.sleep(2)
             break
         if complete:

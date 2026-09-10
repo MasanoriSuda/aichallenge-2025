@@ -364,3 +364,11 @@ testsr11:2393records、本番APIによる954再構成の停止列格納・再証
 2026-09-10更新: dev2-r4は停止列の実行を確認したが、D2decision853で静止状態の
 時間区間を格納できず不合格。距離ゼロの完全静止を明示する修正はbuildr16:26packages、
 testsr12:2394records、同一852/853観測の本番再生で合格。次のdev2からM4–M6を継続。
+
+2026-09-10: f1f213fcdev2-r5reaches ShiftOut/Pass and canonical Rejoin after
+relative-progress watchdog abort. Ego moves46.198m; faster peer84.979m, so this
+is not physical standstill. The old monitor's tactical-phase stop is classified
+separately from final Recovery override. Sixlaps remain incomplete and7adjacent
+callback-overrun pairs reject timing. Observation-only nested timing passes
+buildr17/testsr13:26packages/2394records. Next: bounded ShiftOut timing capture,
+then causal repair and M4–M6. See timing-attribution-design.md in current steering.

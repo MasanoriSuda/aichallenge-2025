@@ -775,6 +775,12 @@
       "snapshot_id": "20260910-nine-state-dev2-r4-temporal-rest",
       "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r4-diagnostics-evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r5-tactical-rejoin-and-timing",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r5-diagnostics-evidence.json",
+      "replay_ready": false,
+      "reason": "Public bags, raw timing and logs; no immutable QP failure snapshot for the tactical watchdog transition"
     }
   ],
   "experiments": [
@@ -5464,6 +5470,48 @@
       "production_impact": "Certified temporal rest representation only; integrated acceptance pending",
       "deleted_code": [],
       "revisit_condition": "New integrated run and actual rest/restart"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r5",
+      "baseline_commit": "f1f213fcf69f7dfbc53b5c38ece2040c859238ed",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r5-tactical-rejoin-and-timing"
+      ],
+      "hypothesis": "Temporal rest repair establishes full dev2 acceptance",
+      "changed_dimension": "Fresh fixed-input run onf1f213fc",
+      "result": "rejected",
+      "reason": "No moving external override before teardown, but incomplete6laps and7adjacent deadline-overrun pairs. Monitor stopped on tactical watchdog Rejoin.",
+      "production_impact": "Observation only; no normal command, safety or timing policy changes",
+      "deleted_code": [],
+      "revisit_condition": "New bounded timing attribution then causal repair or classified acceptance"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r5-tactical-watchdog",
+      "baseline_commit": "f1f213fcf69f7dfbc53b5c38ece2040c859238ed",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r5-tactical-rejoin-and-timing"
+      ],
+      "hypothesis": "Progress-stalled message means ego physical standstill or external Recovery",
+      "changed_dimension": "Same-run public position/velocity and final authority records",
+      "result": "rejected",
+      "reason": "D2travels46.198m whileD1travels84.979m; gap35.981→75.435m, intentional15vs40km/h caps. Certified Pass bridges to certified Rejoin; no external override before teardown.",
+      "production_impact": "Observation only; no normal command, safety or timing policy changes",
+      "deleted_code": [],
+      "revisit_condition": "Different actual authority, contact or motion evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r5-monitor-classification",
+      "baseline_commit": "f1f213fcf69f7dfbc53b5c38ece2040c859238ed",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r5-tactical-rejoin-and-timing"
+      ],
+      "hypothesis": "Known tactical watchdog Rejoin can be separated without hiding true overrides",
+      "changed_dimension": "Exact updated monitor block on pre-teardownr3/r4/r5logs",
+      "result": "accepted",
+      "reason": "r3/r4moving Emergencies still reject; r5one tactical Rejoin recorded separately. Incomplete and timing-rejectedr5does not become a pass.",
+      "production_impact": "Observation only; no normal command, safety or timing policy changes",
+      "deleted_code": [],
+      "revisit_condition": "New noncanonical/other Recovery transition"
     }
   ]
 }

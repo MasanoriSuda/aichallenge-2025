@@ -1,0 +1,55 @@
+{
+  "run": "20260910-nine-state-dev2-r5",
+  "baseline_commit": "f1f213fcf69f7dfbc53b5c38ece2040c859238ed",
+  "authority": false,
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r5-metrics/d1-callback-samples.json",
+      "sha256": "26c27f79940eb710af6a78d62d0036e87c79b280a13ead3eb57e01c1baced7e0"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r5-metrics/d1-command-clock-anomalies.json",
+      "sha256": "34034148a0ae24625d191ba983286a9e7b050214062639cc04ec0804c31676da"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r5-metrics/d1-prediction-samples.json",
+      "sha256": "2990919f7b1ad1172f5f12598ee81e22beca395e3e9268cf87da6386bd73f604"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r5-metrics/d2-callback-samples.json",
+      "sha256": "dc50130029bce798730a37641fd30fcd57518920f6d0ef9e165204a2522f5cca"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r5-metrics/d2-command-clock-anomalies.json",
+      "sha256": "d5b651fa302ad9075d863e2e7a63884fe5da8169f3b8a8fe0e793228dffc0126"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r5-metrics/d2-prediction-samples.json",
+      "sha256": "3915bad5b38ed822ad1c6cae755e717f31c92a620d91c98c32d814ef8a64fe8c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r5-metrics/report.json",
+      "sha256": "c0e12ac8c4ad8b1dc82330085ad5a26e8981949b49e21d13fefbe69624b57048"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r5-pass-progress/report.json",
+      "sha256": "c238b38610ac1466fada0f75c04ef4ff8c01dfa3ff0b4b97477b1a18ac348a7c"
+    },
+    {
+      "path": "output/20260910-nine-state-campaign-classification-r1/inputs/r3/d2/autoware.log",
+      "sha256": "6cc913a7f64a8355f2b6710ae960c969b132eef00a0f942a3ffcaad1d887ed74"
+    },
+    {
+      "path": "output/20260910-nine-state-campaign-classification-r1/inputs/r4/d2/autoware.log",
+      "sha256": "5d041e04cebff178c487d505b47efe37bb7c6f2a37d82adfad4bacf96ca4cd80"
+    },
+    {
+      "path": "output/20260910-nine-state-campaign-classification-r1/inputs/r5/d2/autoware.log",
+      "sha256": "1a17d3fa062ed507fae9f313ead3eda5ef7f677e2aec733309cda40d873afc26"
+    },
+    {
+      "path": "output/20260910-nine-state-campaign-classification-r1/report.json",
+      "sha256": "05b765bade0a834ab22a37963333f51766f71de9a4cd8229ab2b838bb4609094"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "baseline_commit": "f1f213fcf69f7dfbc53b5c38ece2040c859238ed",
+  "authority": false,
+  "files": [
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "84bcf7cb235f19c6901c5eeff431677694ed9da230f84fe15d7e324702a7f30a",
+      "preserved": "output/20260910-nine-state-timing-observation-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp"
+    }
+  ],
+  "patch_sha256": "116e8d1837905de3733a2f32e567e4f488e8163123b56e331d4e536292fb4bb2",
+  "build": "r17:26packages/4min10s",
+  "tests": "r13:2394records,0errors/failures/skips",
+  "runtime": "Bounded ShiftOut timing diagnosis pending; no new race acceptance",
+  "evidence": "output/20260910-nine-state-timing-observation-r1"
+}

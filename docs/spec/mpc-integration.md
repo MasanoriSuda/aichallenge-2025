@@ -4314,3 +4314,14 @@ artifactで、両端の前後・横・旋回速度が正確にゼロ、加速度
 停止というラベルだけで期限を延長せず、再発進には新しい認証済みnormalを要求する。
 dev2-r4のD2decision853で入口の速度ゼロ拒否と厳密増加距離の不整合を再現し、同じ
 観測の本番再生で修正を確認した。[設計と証拠](../../.steering/20260910-mpcc-empirical-plant/rest-publication-design.md)を参照。
+
+受入れ監視では、追越しの相対進捗watchdogによる戦術フェーズ`Pass → Recovery`と、
+最終指令の外部`recovery-override`を区別する。前者から認証済みRejoinへ戻る動作は
+相手に追いつけない場合の中止として記録し、watchdogや速度上限を無効化しない。
+それ以外の予期しないRecovery移行、移動中の外部Emergency/Recovery、未認証公開は
+従来どおり拒否する。途中で中断した走行を完走へ読み替えない。
+
+dev2-r5では相対進捗中止を確認した一方、ShiftOut中の連続callback超過が残った。
+既存の超過ログに問題初期化・公開後の候補生成・予測markerの時間内訳を追加し、
+制御周期・物理証明・出力を変更せず原因を測定する。
+[観測範囲と残る受入れ](../../.steering/20260910-mpcc-empirical-plant/timing-attribution-design.md)を参照。

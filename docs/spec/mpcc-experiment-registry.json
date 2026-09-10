@@ -931,6 +931,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/packet-groups-evidence.json",
       "replay_ready": true,
       "reason": "Exact D1decision1020/source619 and same-world A/B/C/D, original r17run and timing"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-stop-alternate-r18",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/stop-alternate-timing-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact first D1Stop249loss839, separate D2loss996, runtime/source clocks"
     }
   ],
   "experiments": [
@@ -7222,6 +7228,48 @@
         "Whole acceleration hull as the applied-tube propagation domain"
       ],
       "revisit_condition": "Fresh committed dev2with current build; preserve failed inputs, bounds, solver budget and25ms criterion"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-alternate-r18-integrated-r18",
+      "baseline_commit": "2c3d8d7c64d9869c3f0f974e07ad45a62df1d2df",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-alternate-r18"
+      ],
+      "hypothesis": "Packet union enables integrated restart and25ms",
+      "changed_dimension": "Observation of slow alternate request and all proof timing regions",
+      "result": "rejected",
+      "reason": "First D1moving Emergency843; Stop249lost839after259.999994ms publication gap. p99D1/D2=40.6250/35.5370ms, adjacentpairs47/53.",
+      "production_impact": "Additional bounded observation only; no solver, input, model, authority, rate or safety-policy change",
+      "deleted_code": [],
+      "revisit_condition": "Obtain exact overrun request in freshdev2-r19and deterministic cost reproduction before runtime-policy changes"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-alternate-r18-history-gap",
+      "baseline_commit": "2c3d8d7c64d9869c3f0f974e07ad45a62df1d2df",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-alternate-r18"
+      ],
+      "hypothesis": "Current declared profile must reject the uncovered interval",
+      "changed_dimension": "Observation of slow alternate request and all proof timing regions",
+      "result": "accepted",
+      "reason": "Exact839published upstreamStop and rebuiltjoin reject HistoryUnavailable under original250ms; no observation repair.",
+      "production_impact": "Additional bounded observation only; no solver, input, model, authority, rate or safety-policy change",
+      "deleted_code": [],
+      "revisit_condition": "Obtain exact overrun request in freshdev2-r19and deterministic cost reproduction before runtime-policy changes"
+    },
+    {
+      "experiment_id": "20260911-nine-state-stop-alternate-r18-slow-observation-local",
+      "baseline_commit": "2c3d8d7c64d9869c3f0f974e07ad45a62df1d2df",
+      "snapshot_ids": [
+        "20260911-nine-state-stop-alternate-r18"
+      ],
+      "hypothesis": "Preserve the first slow alternate before later selection overwrites its result",
+      "changed_dimension": "Observation of slow alternate request and all proof timing regions",
+      "result": "accepted",
+      "reason": "Four independent bounded recorder buckets, original inspected request and off-thread I/O tested. Fresh live capture pending.",
+      "production_impact": "Additional bounded observation only; no solver, input, model, authority, rate or safety-policy change",
+      "deleted_code": [],
+      "revisit_condition": "Obtain exact overrun request in freshdev2-r19and deterministic cost reproduction before runtime-policy changes"
     }
   ]
 }

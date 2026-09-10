@@ -4088,7 +4088,9 @@ def test_terminal_failure_pairs_last_accepted_same_source_before_overwrite() -> 
     )
     assert record < update
     assert "ordinary_retained.terminal_stop_certified" in production
-    boundary_end = production.index("failure_snapshot_ms =", update)
+    # The snapshot region may accumulate another observation's measured cost.
+    # Its variable marks this boundary for either assignment or accumulation.
+    boundary_end = production.index("failure_snapshot_ms", update)
     assert "canonical_normal_intent_supported(intent)" in production[record:boundary_end]
     assert "ControlIntent::ShiftOut" not in production[record:boundary_end]
     evaluator = SOURCE[SOURCE.index("RateResolvedRetainedShadowEvaluation evaluate_rate_resolved_track_cruise_plan("):

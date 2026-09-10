@@ -2799,6 +2799,8 @@ const char * to_string(const AuthorityFailureBoundary boundary) noexcept
       return "normal-authority-unavailable";
     case AuthorityFailureBoundary::MovingFinalAuthority:
       return "moving-normal-authority-unavailable";
+    case AuthorityFailureBoundary::StopAlternateOverrun:
+      return "stop-alternate-revalidation-overrun";
   }
   return "unknown";
 }
@@ -2868,12 +2870,13 @@ ObservationAdmission FirstAuthorityFailureRecorder::submit(
   if (!contract::canonical_normal_intent_supported(intent) || side < -1 || side > 1 ||
     (observation.boundary != AuthorityFailureBoundary::TerminalContingency &&
     observation.boundary != AuthorityFailureBoundary::FinalAuthority &&
-    observation.boundary != AuthorityFailureBoundary::MovingFinalAuthority) ||
+    observation.boundary != AuthorityFailureBoundary::MovingFinalAuthority &&
+    observation.boundary != AuthorityFailureBoundary::StopAlternateOverrun) ||
     observation.output_root.empty() || !interaction_snapshot_complete(observation.current_world))
   {
     return ObservationAdmission::Invalid;
   }
-  // The key space is finite: supported intents x three sides x three boundaries.
+  // The key space is finite: supported intents x three sides x four boundaries.
   // Decisions, target IDs and paths do not create additional queue buckets.
   const auto key = failure_key(
     observation.current_world, PipelineStage::PhysicalProof, to_string(observation.boundary));

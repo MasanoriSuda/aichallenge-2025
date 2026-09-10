@@ -508,12 +508,18 @@ TEST(MpccArchitectureSnapshot, FirstBoundaryRecorderPreservesQueuedFinalWorldAnd
     ObservationAdmission::Queued);
   EXPECT_EQ(recorder.submit(observation(1004U, AuthorityFailureBoundary::MovingFinalAuthority)),
     ObservationAdmission::Duplicate);
+  // Capture the slow inspected request before a later successful Stop hides it.
+  EXPECT_EQ(recorder.submit(observation(1004U, AuthorityFailureBoundary::StopAlternateOverrun)),
+    ObservationAdmission::Queued);
+  EXPECT_EQ(recorder.submit(observation(1005U, AuthorityFailureBoundary::StopAlternateOverrun)),
+    ObservationAdmission::Duplicate);
   release.set_value();
   recorder.stop();
-  ASSERT_EQ(completed.size(), 3U);
+  ASSERT_EQ(completed.size(), 4U);
   EXPECT_EQ(completed[0].first, 1001U);
   EXPECT_EQ(completed[1].first, 1002U);
   EXPECT_EQ(completed[2].first, 1003U);
+  EXPECT_EQ(completed[3].first, 1004U);
   EXPECT_TRUE(io_off_callback);
   ASSERT_EQ(completed[1].second.status, RecordStatus::Written) << completed[1].second.detail;
   const auto node = YAML::LoadFile(completed[1].second.snapshot_file.string());
@@ -531,6 +537,11 @@ TEST(MpccArchitectureSnapshot, FirstBoundaryRecorderPreservesQueuedFinalWorldAnd
   EXPECT_EQ(moving["failure_outcome"].as<std::string>(), "moving-normal-authority-unavailable");
   EXPECT_EQ(moving["publication_bundle"]["execution_evidence"]["source_sequence"].as<std::uint64_t>(),
     10030U);
+  ASSERT_EQ(completed[3].second.status, RecordStatus::Written) << completed[3].second.detail;
+  const auto slow = YAML::LoadFile(completed[3].second.snapshot_file.string());
+  EXPECT_EQ(slow["failure_outcome"].as<std::string>(), "stop-alternate-revalidation-overrun");
+  EXPECT_EQ(slow["revalidation_evidence"]["status"].as<std::string>(), "present");
+  EXPECT_EQ(slow["revalidation_evidence"]["request"]["decision_id"].as<std::uint64_t>(), 1004U);
   EXPECT_EQ(recorder.submit(observation(1004U, AuthorityFailureBoundary::FinalAuthority)),
     ObservationAdmission::Stopped);
   std::filesystem::remove_all(root);

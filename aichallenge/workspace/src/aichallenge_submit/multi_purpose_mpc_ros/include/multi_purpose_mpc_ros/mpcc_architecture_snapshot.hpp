@@ -119,6 +119,7 @@ enum class AuthorityFailureBoundary
   TerminalContingency,
   FinalAuthority,
   MovingFinalAuthority,
+  StopAlternateOverrun,
 };
 
 const char * to_string(AuthorityFailureBoundary boundary) noexcept;
@@ -130,7 +131,7 @@ struct AuthorityFailureObservation
   std::string detail;
   PublishedExecutionObservation published_execution;
   std::filesystem::path output_root{"mpcc_architecture_snapshots"};
-  /// Exact rejected evaluation input, not a reconstructed later observation.
+  /// Exact failed or slow evaluation input, not a reconstructed later observation.
   /// The inspected plan is separate from the actual publication ledger above.
   std::shared_ptr<const mpcc_rate_resolved_retained_revalidation::Request> revalidation_request;
   /// Earlier ordinary evaluation observed Accepted with terminal proof. This

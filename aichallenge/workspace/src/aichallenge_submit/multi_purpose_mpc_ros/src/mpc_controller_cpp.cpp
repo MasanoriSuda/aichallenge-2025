@@ -25415,6 +25415,8 @@ struct MPC
     mpcc_architecture_snapshot::AuthorityFailureBoundary boundary;
     if (outcome == "terminal-contingency-unavailable") {
       boundary = mpcc_architecture_snapshot::AuthorityFailureBoundary::TerminalContingency;
+    } else if (outcome == "stop-alternate-revalidation-overrun") {
+      boundary = mpcc_architecture_snapshot::AuthorityFailureBoundary::StopAlternateOverrun;
     } else if (outcome == "normal-authority-unavailable") {
       // Observation-only classification, matching the campaign's moving
       // threshold. Keep the startup bucket and preserve the first moving loss.
@@ -25460,6 +25462,51 @@ struct MPC
       std::move(observation));
     return admission == mpcc_architecture_snapshot::ObservationAdmission::Queued ||
            admission == mpcc_architecture_snapshot::ObservationAdmission::Duplicate;
+  }
+
+  void record_rate_resolved_stop_alternate_overrun_snapshot(
+    const MpcProblem & problem,
+    const std::optional<RateResolvedTrackCruiseSubmissionDraft> & submission_draft,
+    const double now_sec, const mpcc_contract::ControlIntent intent,
+    const RateResolvedRetainedShadowEvaluation & alternate)
+  {
+    if (!alternate.revalidation_request || !std::isfinite(cfg.control_rate) ||
+      cfg.control_rate <= 0.0 || alternate.elapsed_ms <= 1000.0 / cfg.control_rate)
+    {
+      return;
+    }
+    std::string rejected;
+    auto source = build_rate_resolved_current_world_interaction_snapshot(
+      problem, submission_draft, now_sec, rejected);
+    if (!source) {
+      RCLCPP_WARN(rclcpp::get_logger("mpc_controller"),
+        "Stop alternate overrun snapshot unavailable: decision=%lu, reason=%s, authority=observation-only",
+        static_cast<unsigned long>(active_control_decision_id_), rejected.c_str());
+      return;
+    }
+    const auto & runtime = alternate.runtime;
+    std::ostringstream detail;
+    detail << "authority=observation-only/source=" << alternate.sequence
+           << "/reason=" << rate_resolved_retained::to_string(alternate.reason)
+           << "/elapsed_ms=" << alternate.elapsed_ms
+           << "/pre_ms=" << runtime.pre_continuation_ms
+           << "/continuation_build_ms=" << runtime.continuation_build_ms
+           << "/continuation_proof_ms=" << runtime.continuation_proof_ms
+           << "/terminal_build_ms=" << runtime.terminal_build_ms
+           << "/terminal_dynamic_ms=" << runtime.terminal_dynamic_ms
+           << "/terminal_wall_ms=" << runtime.terminal_wall_ms
+           << "/applied_ms=" << runtime.applied_program_ms
+           << "/applied_reason=" << static_cast<int>(alternate.applied_program_reason)
+           << "/prediction_reason=" << static_cast<int>(alternate.applied_prediction_reason)
+           << "/feedback_proof=" << rate_resolved_retained::to_string(
+      alternate.feedback_shadow_proof_reason);
+    static_cast<void>(submit_rate_resolved_architecture_failure_snapshot(
+      std::move(*source), active_control_decision_id_, intent,
+      "stop-alternate-revalidation-overrun", detail.str(),
+      rate_resolved_track_cruise_certified_plan_store_ != nullptr ?
+      rate_resolved_track_cruise_certified_plan_store_->latest_published_source_snapshot() :
+      rate_resolved_certified::LatestPublishedSourceSnapshot{},
+      alternate.revalidation_request));
   }
 
   bool record_rate_resolved_terminal_contingency_failure_snapshot(
@@ -30474,6 +30521,11 @@ struct MPC
         problem, now_sec, intent, ordinary_retained);
       stop_lattice_ms = std::chrono::duration<double, std::milli>(
         SteadyClock::now() - stop_lattice_started).count();
+      const auto alternate_snapshot_started = SteadyClock::now();
+      record_rate_resolved_stop_alternate_overrun_snapshot(
+        problem, submission_draft, now_sec, intent, lattice_alternate);
+      failure_snapshot_ms += std::chrono::duration<double, std::milli>(
+        SteadyClock::now() - alternate_snapshot_started).count();
       if (lattice_alternate.production_authority.has_value()) {
         ++rate_resolved_stop_lattice_shadow_telemetry_window_.
           current_world_alternate_selected_count;
@@ -30515,7 +30567,7 @@ struct MPC
         RateResolvedTerminalViabilityBoundarySample{
         intent, ordinary_retained};
     }
-    failure_snapshot_ms = std::chrono::duration<double, std::milli>(
+    failure_snapshot_ms += std::chrono::duration<double, std::milli>(
       SteadyClock::now() - failure_snapshot_started).count();
     if (
       !retained.production_authority.has_value() &&

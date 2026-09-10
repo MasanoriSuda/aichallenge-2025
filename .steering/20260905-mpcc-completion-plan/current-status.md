@@ -1,19 +1,20 @@
 # Current status and remaining completion work
 
-2026-09-11 JST。全M1–M6の自律実行を継続。必要分のローカルcommitのみ。
-**全体は未完。7b7fef37のdev2-r17は再発進・25msとも未達。原因を一つ修正・検証済み。**
+2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
+**全体は未完。2c3d8d7cのdev2-r18は走行中Emergency・25msとも未達。**
 
-- r17は長い認証済み停止と、一部の静止Emergencyを観測。完走せず外部中断した。
-- D1decision1020/source619は、未送信のゼロ近傍加速度を含む数値近似で状態境界を拒否。
-- 実送信値の正負・ゼロ別の区間を伝播し、元の全指令、時刻、独立操舵、既存境界を維持。
-- 同じ1020入力で認証・停止生成・join成立。完全停止15.429999662、他車余裕+0.628490m。
-- buildr41:26package。testsr33:2430記録/62group、error/failure/skip0。
-  連続入力の既存検査と4保存場面も通過。診断driverも新ABIへ再ビルド済み。
-- r17のcallbackp99 D1/D2=50.8731/27.1146ms、連続超過5815/41組は不合格。
-  次は新規dev2-r18で再発進と25msを確認する。
+- D1の代替停止候補838/source241が約230ms、callback約256ms。実送信に約260msの空白。
+- 次の839/source249は元の250ms入力前提を満たさず、保存入力でも履歴欠落で拒否。
+  最初の走行中Emergencyは843、0.12m/s。時刻・指令を改変して合格にはしない。
+- 遅い候補の元入力が未保存だったため、有限の専用記録枠と処理内訳を追加した。
+  候補・制御・認証・周期は変更なし。実送信時刻と名目時刻も区別して監査する。
+- buildr42:26package。testsr35:2430記録/62group、error/failure/skip0。
+  初回r34のソース解析テスト失敗は、同じ認証境界の検査を保って修正・再検証した。
+- 次は観測用dev2-r19で遅い候補を保存し、同一入力の再生から処理コストを修正する。
+- D2の996/source497には別の相手車距離による拒否があり、保存済み。
 
-[設計と検証](../20260910-mpcc-empirical-plant/receiver-input-enclosure/packet-groups-design.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/packet-groups-evidence.json)、
+[監査と観測設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/stop-alternate-timing-design.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/stop-alternate-timing-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、同一HEAD単車/dev2各3回、
 dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。

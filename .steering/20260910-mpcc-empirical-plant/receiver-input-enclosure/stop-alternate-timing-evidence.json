@@ -1,0 +1,222 @@
+{
+  "baseline_commit": "2c3d8d7c64d9869c3f0f974e07ad45a62df1d2df",
+  "authority_change": false,
+  "integrated_acceptance": false,
+  "run": "output/20260910-nine-state-dev2-r18",
+  "first_failure": {
+    "domain": 1,
+    "first_lost_join": 839,
+    "published_source": 249,
+    "first_moving_emergency": 843,
+    "speed_mps": 0.12,
+    "preceding_callback": 838,
+    "callback_ms": 255.508604,
+    "alternate_ms": 229.759,
+    "alternate_source": 241,
+    "previous_publication_sec": 7.59499983,
+    "next_publication_sec": 7.854999824,
+    "history_gap_sec": 0.259999994,
+    "native_reason": "AppliedProgramUnavailable/InputPredictionRejected/HistoryUnavailable; same original input and explicit upstream Stop helper"
+  },
+  "separate_later_failure": {
+    "domain": 2,
+    "decision": 996,
+    "source": 497,
+    "previous_accepted_decision": 995,
+    "previous_minimum_peer_m": 0.003077122966138157,
+    "reason": "applied peer d1 rejected at12.679999729"
+  },
+  "validation": {
+    "build_r42": "26packages/4m39s",
+    "tests_r35": "2430records/62groups/zeroerrors-failures-skips",
+    "recorder": "First slow boundary retained independently from terminal/final/moving buckets; queued request and worker shutdown verified",
+    "r34_failure": "One source-string-parser test failed, reported twice by colcon; it required timing assignment with = and missed +=. Same boundary assertions retained, variable-name delimiter corrected."
+  },
+  "next": "Fresh diagnostic dev2-r19; exact slow alternate replay and architecture comparison before a causal runtime fix. All M4–M6stillopen.",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r84/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r84/manifest.json",
+      "sha256": "1dc44a7ab188bc928ce58a6f36b4d4b337d6179062879da614f6a86755e38fbe"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r84/replay",
+      "sha256": "d3deef6e59fd10c1f9c43c4c7bdeb19b7e3f5a2a5a8f9464ffc13be47f3a81a9"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r84/source-1020-smoke.yaml",
+      "sha256": "1a2f15d1b221d50e037bec71d204739bad23d5cb082509983eeaf21a00b64f92"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/commands.json",
+      "sha256": "481a42b1d8602da693f0e05f42d8df4a3d59ef6193650b4a8d73d23adffb38aa"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/d1-captured.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/d1-captured.yaml",
+      "sha256": "e1cde7523ba133f414dd61b8b6c5a180bc8d6fcd47ab101c331b9598cf06aaf6"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/d1-published.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/d1-published.yaml",
+      "sha256": "91d648808da8186c10786c73080a00ad3f33292a9f5cfcb40f9814d53c63426d"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/d2-captured.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/d2-captured.yaml",
+      "sha256": "14d3ee42f2b6b63ac82cb5f00734ca836f5db410e7e0c48139998475ee513007"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/d2-published.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/d2-published.yaml",
+      "sha256": "2df33f2a281efc7041a4a7aa379f5ae1845924ae8896c7e91fbcd376e0be7019"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/metrics/d1-callback-samples.json",
+      "sha256": "d724d287a5db02099e1c253e6123da472591ff11b0cfa1863f5f07f2458db74c"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/metrics/d1-command-clock-anomalies.json",
+      "sha256": "87f06a0d71ab57ba29f1dcc0b07cdf290270c0133dfdab71b701335a6344a259"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/metrics/d1-prediction-samples.json",
+      "sha256": "226466fb32898f4c86578f67830df54b76d1d7560b389b59aa813d7835ce6500"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/metrics/d2-callback-samples.json",
+      "sha256": "f1f8050809e4799496a7c23e28d060baf220efbf0b44b02002525ca81e5aed89"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/metrics/d2-command-clock-anomalies.json",
+      "sha256": "05166049a0430a1dcf0d6871c65ef1ee7331445c6def7117c0d09640e6a16327"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/metrics/d2-prediction-samples.json",
+      "sha256": "817031049f774372afff9636f10b72d72233adaad8ad81e6b7bf80165c64ebfe"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/metrics/report.json",
+      "sha256": "401ccfe146358380321ecd3e1db8cba407735cf2805f2ec35e9a65d5b0f37e5d"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r18/metrics.log",
+      "sha256": "489267504da7b39bebd0578f3f359de8b0b2e32af17775b888421289913739f8"
+    },
+    {
+      "path": "output/20260911-nine-state-stop-alternate-evidence/mpcc-nine-state-build-r42.log",
+      "sha256": "1fc5ab8f14e7e3d79fe4a958b994649c003ebe2c81515e9262c98873e82dbfb3"
+    },
+    {
+      "path": "output/20260911-nine-state-stop-alternate-evidence/mpcc-nine-state-tests-r34.log",
+      "sha256": "84c1d47fd7cf3b2432609a44e77a0cd911d1650acd38bdc2214b24f546319dbb"
+    },
+    {
+      "path": "output/20260911-nine-state-stop-alternate-evidence/mpcc-nine-state-tests-r35.log",
+      "sha256": "bd2928bf335e59e384edc874fe1326ab5261ad2c1a4195408cdb4f1c6a25541d"
+    },
+    {
+      "path": "output/20260911-nine-state-stop-alternate-evidence/mpcc_r18_causal.py",
+      "sha256": "d27de547a8baa9f11e6fe1e3ad9f3cab8b5fa236a4d5efdd86aaa8f8b6c2738a"
+    },
+    {
+      "path": "output/20260911-nine-state-stop-alternate-evidence/mpcc_record_stop_alternate.py",
+      "sha256": "29f7e18ad83f6b12feaaa10f469bdc617b6f35a1c4331587177135d05dee9a9a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/manifest.json",
+      "sha256": "680fd30ff97ced663aa898ad6c54c61388aa046a93c9c40b967abc7d066075f9"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/monitor-summary.json",
+      "sha256": "99b3b9010f56432a5245082213b77b1a9c9cbd7befaf0c5c647fd30a48b30017"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d1/autoware.log",
+      "sha256": "be62cb1e7765689600276d2138b79cae419fc583eaf7c134506bfaeb74cc8d48"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/autoware.log",
+      "sha256": "a2e89e4d452bf2746ca7c86a4cef1a4ad90a81ab5573663db3d4b5cc2f47b9f0"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b7cbe726c7098ab94ce00e36358856a3d33f1062018befdc5e650ab6d28befb2"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "a1b13f14ad27f61d495c45fa1e4b1c9e13c3d31907601a1b62ccd969647c264e"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r18/d2/mpcc_architecture_snapshots/000000000996-e509453daf7479b0-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    }
+  ]
+}

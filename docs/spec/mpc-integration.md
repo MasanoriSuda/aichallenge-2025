@@ -106,6 +106,13 @@ D1 decision1020の停止認証は、実送信加速度−3/+1.329596の間を一
 実再発進・25ms・残るM4–M6は未完了。
 [入力集合の修正と検証](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/packet-groups-design.md)を参照。
 
+2026-09-11のdev2-r18はD1の停止再検証に約230msを費やし、約260msの実送信間隔を生じた。
+次のdecision839は元の250ms入力前提の履歴欠落で拒否され、843で走行中Emergencyとなった。
+停止候補の元入力と処理内訳を保存する専用の有限記録枠を追加した。これは観測追加で、
+指令・候補・安全条件・周期を変えない。buildr42=26、testsr35=2430記録/62groupで失敗0。
+遅い候補の再生、実送信時刻と認証時刻の整合、再発進・周期・完走は未解決。
+[停止再検証の時刻監査](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/stop-alternate-timing-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

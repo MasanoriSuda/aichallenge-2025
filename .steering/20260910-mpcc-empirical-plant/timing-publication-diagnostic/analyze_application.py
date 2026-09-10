@@ -58,8 +58,15 @@ for identity in sorted({row['id'] for row in rx}):
         matches = [d for d, wire in keys.items() if (row['source_ns'], bits(row['input'])) in wire]
         if len(matches) == 1:
             unique[matches[0]] += 1
-    assert len(unique) == 1 and next(iter(unique.values())) > 100, unique
-    domain = next(iter(unique))
+    # Identical source stamp/float acceleration can occur on both cars; one
+    # recorder missing that packet makes a collision appear falsely unique.
+    # Infer the receiver-level mapping from the full signature and retain all
+    # contradictory matches. This is diagnostic association, not per-packet
+    # proof of Domain identity or command authority.
+    ranked = unique.most_common()
+    assert ranked and ranked[0][1] > 100, unique
+    assert ranked[0][1] > sum(count for _, count in ranked[1:]), unique
+    domain = ranked[0][0]
     used = {row['seq'] for row in selected}
     transitions = []
     for before, after in zip(selected, selected[1:]):
@@ -70,11 +77,14 @@ for identity in sorted({row['id'] for row in rx}):
             first_brake_source_to_apply_sec=(after['ros_ns']-first['source_ns'])*1e-9,
             overwritten_sequences=[row['seq'] for row in received if first['seq'] <= row['seq'] < after['seq']]))
     receivers.append(dict(domain=domain, receiver_id=identity, unique_matches=dict(unique),
+        domain_association='dominant full-run stamp/float signature; minority collisions retained in unique_matches',
         received=len(received), applied=len(selected),
         overwritten_before_last_apply=sum(row['seq'] not in used for row in received if row['seq'] < max(used)),
         selected_source_to_apply_sec=stats([(row['ros_ns']-row['source_ns'])*1e-9 for row in selected]),
         apply_intervals_sec=stats([(b['ros_ns']-a['ros_ns'])*1e-9 for a, b in zip(selected, selected[1:])]),
         braking_transitions=transitions))
+
+assert len({row['domain'] for row in receivers}) == len(receivers) == len(public), 'Receiver mapping must be one-to-one'
 
 binary = Path('output/20260910-empirical-plant-native-r2/check')
 parameters = Path('output/20260910-empirical-plant-native-r1/parameters.txt')

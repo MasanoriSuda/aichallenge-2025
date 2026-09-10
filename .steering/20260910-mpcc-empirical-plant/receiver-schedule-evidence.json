@@ -1,0 +1,356 @@
+{
+  "baseline_commit": "cbcda1125a9dca318cf0145d8551b6ccb23c12d3",
+  "production_candidate": false,
+  "integrated_acceptance": false,
+  "files": [
+    {
+      "path": "output/20260910-nine-state-application-analysis-r2/analyze_application-before.py",
+      "sha256": "0a11cdb95aa778c5f466e6164a659253aa8496da8dc4818a7ba91a7a79c12962"
+    },
+    {
+      "path": "output/20260910-nine-state-application-analysis-r3/inputs.txt",
+      "sha256": "7b04ab4200f870765ea18fddcc406ec4692886602499fb41d89520cbbc526b49"
+    },
+    {
+      "path": "output/20260910-nine-state-application-analysis-r3/manifest.json",
+      "sha256": "65943315fd0662973439fbfbcd5a3e66669c69ca56777912f0625654d6f22281"
+    },
+    {
+      "path": "output/20260910-nine-state-application-analysis-r3/predictions.txt",
+      "sha256": "e3b4e5a7082b2f78e22bc3097f57ae205f35e4f76638a60a9c7fab8ddf962d1b"
+    },
+    {
+      "path": "output/20260910-nine-state-application-analysis-r3/receiver-events.json",
+      "sha256": "23467ba8afafdf683e15e0efcb688a9f68f75dc469df2b7d145a06d85de5c3b5"
+    },
+    {
+      "path": "output/20260910-nine-state-application-analysis-r3/report.json",
+      "sha256": "ce55ee40663094215085f6a3b158416e33e7da6be78900aced5e1fbd8e394173"
+    },
+    {
+      "path": "output/20260910-nine-state-application-analysis-r3/scored.json",
+      "sha256": "1d127753380c3b00e46b208bca57d12e50e7afc817c1c62b6e1189e166829b08"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/complete-rest.log",
+      "sha256": "ef33790094eb5a977f33014f7be991aec873c2453034739535d0bf0cc41a90d6"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/exact-pair.log",
+      "sha256": "c16647230b630f9c6bc3683aa2fdf7eda5a04ce1fa8113f3e8c4f61c840a4e0f"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/exact-pair.yaml",
+      "sha256": "c16647230b630f9c6bc3683aa2fdf7eda5a04ce1fa8113f3e8c4f61c840a4e0f"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/manifest.json",
+      "sha256": "4106a05b06bae01a4cde1a25339e72cc520584e6b07856bd34a6e5b47b399ff7"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/metrics/d1-callback-samples.json",
+      "sha256": "1fdbed73caae89a681e4a2c2b81d7a9fdc4b934dacc1caebe59672f235f012b4"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/metrics/d1-command-clock-anomalies.json",
+      "sha256": "d5cb224fe8c851fc0b54e98afa7c124cbff75da9c14931ace73b00da645a88a6"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/metrics/d1-prediction-samples.json",
+      "sha256": "d2ea36f4e3fc7ff816e078d7e9f5265cfd64a07ebfcf89d9ab79facf5bda26d9"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/metrics/d2-callback-samples.json",
+      "sha256": "43d07c67cf7f79ff213d68a802bd485a0fc541f654e0d8eed77df93d0d0a7cbf"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/metrics/d2-command-clock-anomalies.json",
+      "sha256": "aba5e50bc20a24188841fcbd572b302de67e546c00de3fcc44a55aa33a2acbc4"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/metrics/d2-prediction-samples.json",
+      "sha256": "d8916ff723ea1b518627ada4e85aa9f19e65a38361d34f9750fe877c5a7d490c"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/metrics/report.json",
+      "sha256": "c1637eb1b5656854712dff99031f34d4180674aafa1b74d2d08225d8990fa71c"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/metrics.log",
+      "sha256": "17f35ae3b24a7c5a93bcac63f99f54cb12877492b5b9a766a1b3e18e7653aab5"
+    },
+    {
+      "path": "output/20260910-nine-state-application-causal-r2/mpcc_architecture_compare",
+      "sha256": "8afdc77dd460889f11dfb8f7a069e7cb03221f5cc4f5f5b031093062171e6801"
+    },
+    {
+      "path": "output/20260910-nine-state-application-public-r2/d1.json",
+      "sha256": "4cd3d39f20951785564c0333f6dac7d0c1fe95b99bb2fa06bf287c41c3da0072"
+    },
+    {
+      "path": "output/20260910-nine-state-application-public-r2/d2.json",
+      "sha256": "68a9c2cb6cd90d486d83848bb93ae62c4887d83cecf2a02c69d8768a14e41521"
+    },
+    {
+      "path": "output/20260910-nine-state-application-public-r2/manifest.json",
+      "sha256": "7cba08a92ef94017bde989b5f3f85a18f9920a964928965f37f07af2d9781f9e"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r1/instrumented-r2.log",
+      "sha256": "4b6fcd15eae2f86b49749d157f60f0a63378fcf56280b8010ad16734819ef686"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r1/instrumented-r2.yaml",
+      "sha256": "4b6fcd15eae2f86b49749d157f60f0a63378fcf56280b8010ad16734819ef686"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r1/manifest.json",
+      "sha256": "391c08dd8e84b1118ee9a08e82244600a10595a06da1a3e039600a7c311dff01"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r1/unmodified-r15.log",
+      "sha256": "54e09f83a81d5f9e3502c494e8e5618debd14c438b91abb565e25eece9aabc8c"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r1/unmodified-r15.yaml",
+      "sha256": "54e09f83a81d5f9e3502c494e8e5618debd14c438b91abb565e25eece9aabc8c"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r2/instrumented-r2.log",
+      "sha256": "67b043bd5890d5668f2688560c2009b553d222a3c06da3258a5b54be81d63afc"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r2/instrumented-r2.yaml",
+      "sha256": "67b043bd5890d5668f2688560c2009b553d222a3c06da3258a5b54be81d63afc"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r2/manifest.json",
+      "sha256": "e1b51acb48a4f8d6cfa24a732bd8ecd4fc3bc898ce4ef5b3a6ff20e716eb54ff"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r2/unmodified-r15.log",
+      "sha256": "2a9ecada19241bdf950a05f820e302c932bbee39da466df152fb0976c80845b5"
+    },
+    {
+      "path": "output/20260910-nine-state-delivery-sweep-r2/unmodified-r15.yaml",
+      "sha256": "2a9ecada19241bdf950a05f820e302c932bbee39da466df152fb0976c80845b5"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/complete-rest.log",
+      "sha256": "7bbf6bd508346adbd617f8c7abd9d7d6917bd732d682f4fd3120e47e32aa3636"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/exact-pair.log",
+      "sha256": "aba79807d2c28845cbff07d1ef50830d920a27aa49f39c0c4a865d192958df68"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/exact-pair.yaml",
+      "sha256": "aba79807d2c28845cbff07d1ef50830d920a27aa49f39c0c4a865d192958df68"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/manifest.json",
+      "sha256": "3e4aede26b01e0d58a0e727b44ece970aeab666b129f3c384156b4f95338e57f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/metrics/d1-callback-samples.json",
+      "sha256": "937d9af831a1c0c44e1828daf6c5e48d6268384e59301bb6af215565032d5a93"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/metrics/d1-command-clock-anomalies.json",
+      "sha256": "2f580f703cd1b544e3adfc68460e1155675b31c4da7383285f8b88bb2cc47acd"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/metrics/d1-prediction-samples.json",
+      "sha256": "ec508ab0e7662018e63fd7660f79d5058b00ab7eede881e3e4c375bb901ec094"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/metrics/d2-callback-samples.json",
+      "sha256": "2441671d8f0988038578e9cd01cf512b017dbad6e3cd6302f4c364e882517c62"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/metrics/d2-command-clock-anomalies.json",
+      "sha256": "684c494c5eb3538c6c4713e309d52d7196fbea1948f279b91ac4b37dd61da1a2"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/metrics/d2-prediction-samples.json",
+      "sha256": "f83d0ae1338190fe66cbddf2b5b5855449c4102cca2ae0878454d462d5cc80cc"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/metrics/report.json",
+      "sha256": "e0495bc67a867e229856cb46552663a683c2404a1844b2a23762b21a490c9154"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/metrics.log",
+      "sha256": "9c8119ec3300f35b345ecc54057217e31b5805723dc274d5cfc55c90ee373f0e"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-causal-r1/mpcc_architecture_compare",
+      "sha256": "8afdc77dd460889f11dfb8f7a069e7cb03221f5cc4f5f5b031093062171e6801"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-factors-r1/bounded.log",
+      "sha256": "e25f03b60dcb8b08da30018063618a7e8439892f149fad4b35f4ed12789f80e9"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-factors-r1/factors.log",
+      "sha256": "1341896226ebd3ee9248b8b92abed477b6f2a7ae38733bc95157f08a8972b5b0"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-factors-r1/factors.yaml",
+      "sha256": "1341896226ebd3ee9248b8b92abed477b6f2a7ae38733bc95157f08a8972b5b0"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-factors-r1/manifest.json",
+      "sha256": "4fe5369e39087a368862306d469c8e54962da39ce68710c7b739d0bcfa9784d1"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r15-observations-r1/d2.json",
+      "sha256": "e24b18f998b9bf33d70c89102d73fb834457e117839d5b09df31f5c86d8cfd93"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-application-analysis-r2.log",
+      "sha256": "f2bba6436f89dba4a5c630203f2b03593fde22680fd1e70d98b195cb399510a6"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-application-analysis-r3.log",
+      "sha256": "77a16e971d0535a78346d7ea7d34967cc65b4a4cbc4545bc15c10dd7111783dc"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-application-causal-r2.log",
+      "sha256": "a5a76d48903891607a17a9eb761781f34b98b66f833c310c3f2238dba5b96ea5"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-application-dev2-r2.log",
+      "sha256": "c1c043adc4849d00d7ba0227057578a049cc722e69af81884407db12378b7112"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-application-public-r2.log",
+      "sha256": "a389c5212edc872c3e8d958de85c0cc881c325bdf70e241446d63197531a9299"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-delivery-sweep-build-r1.log",
+      "sha256": "805b93c5b58a29de65b46a65e425eacaec5668924a43ca26123bd4b148ed338b"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-delivery-sweep-r1.log",
+      "sha256": "cfeb9d1d218a9a067c7d6f5ade62ecd862edabbf6ab56fc99fba048cd7bfe64a"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-delivery-sweep-r2.log",
+      "sha256": "b81af6e8fdeeb9a7055aa7584af23297265669044e5fd33679c00c857720b26a"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-dev2-r15-campaign.log",
+      "sha256": "861324c0e254d3cefb8a1736a59251f366f258358f764c0bde283cd524d96e0e"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-dev2-r15-causal-r1.log",
+      "sha256": "2263b4c1581807a2875b774234f254e9016f3a287b80768e2aa95ef5115344f5"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-r15-factors-build-r2.log",
+      "sha256": "984760ee09b87adadae165175def5152d1d3d2fe2ab5ff6b3facd2de0e61eef2"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-r15-factors-build.log",
+      "sha256": "f0f5f97e45a570bb980174d2a913031ae7f17192553b3bb29c09e89212d59ac6"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-r15-factors-r1.log",
+      "sha256": "caba4329c465638249a023eee6bfddb013cd5d98f4062e683ea2d7c2aa7daded"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-r15-observations-r1.log",
+      "sha256": "7578c2a03d66ef8dbffbe34cb38752d56c46548090abe610f018ad333560cdce"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc-nine-state-r15-tool-build.log",
+      "sha256": "076d7519afbe67b2c31ec48f38c7ec6414368b60256783de03caefd6bb852243"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc_r15_factors.py",
+      "sha256": "71d94445fef4ce8e79c0fa8d8b47ab1ef3b0643dd032d6a2f25f16484ad2523c"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc_r15_observations.py",
+      "sha256": "066398e585335bef1db63f5fb5efb0a16b48cd43a6e148018497ca9a58341ea0"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc_run_delivery_early.py",
+      "sha256": "092942977d48a275068152668cbe80c5b2963e5b44c0b6046612bcc414936d99"
+    },
+    {
+      "path": "output/20260910-nine-state-receiver-audit-evidence/mpcc_run_delivery_sweep.py",
+      "sha256": "1fb62370067d6edb3db9a2234aa1a172fedadb2b9a19a6a211d83155d9b0f359"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r39/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r39/manifest.json",
+      "sha256": "704fa36efc62cae4306590198c2f7ff04b86c92f9f599f211ff74f7c1e0b7d14"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r39/replay",
+      "sha256": "8fc4863f231672677fe3b39e6ddaee932a674494ba335b8ede510ea47ef8002d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r40/build.log",
+      "sha256": "b7e1dfa0973b4b1dc9c5fada16b7f9031d40898434ab37d0274367ee6a20d614"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r40/manifest.json",
+      "sha256": "f7ef456ccd30b3dff38381c7f16d2e76406d16c9deba05b8953b91799a0630af"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r40/native-driver.cpp",
+      "sha256": "225f087a8caaa67a5db74348efb65e525afc14b59135f7e68d39b581196a69c8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r41/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r41/manifest.json",
+      "sha256": "a284baad9e978d327d5b70c45765039cdbd72abf1f1f2fcb7a29ede94cf8651a"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r41/replay",
+      "sha256": "d187075bcdfcb3466a03d7cfeddef5b1440bbd5b4549adbc7529fffd113fc951"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r42/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r42/manifest.json",
+      "sha256": "2c9539f4ec2d180ef7db1ea7c3bfd223a7345572ae1971f4ad7025a22f6d6771"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r42/replay",
+      "sha256": "9e4e5e78462d375a84fcb5f63eaab66d5d835d47e424b71338f285a4f9b432b1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r43/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r43/manifest.json",
+      "sha256": "6643e1572ce93ae93bace9899aadebd201e78924276bfd36c9fc6513bf099046"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r43/replay",
+      "sha256": "df6bab3bb02baf0f6b268f654aa845c95a0166cc6caab70a30adbbb135793869"
+    }
+  ],
+  "validation": {
+    "build": "unchanged production cbcda112; buildr32/testsr27 retained, not rerun for analysis",
+    "dev2_r15": "rejected D2decision956 Stop449dynamic proof lost",
+    "application_r2": "diagnostic rejected D2decision1001 Stop576dynamic proof lost;433exact selected input matches; receiverDomain inference documented",
+    "native": "r39exact/completeRest; r40compiletypefailure preserved; r41four factor diagnostics; r42boundedA/B/C/D; r43conditionaldeliverysweeps immediate rows reproduce directStop",
+    "analysis": "initial mapping assert fails513:2; corrected explicitone-to-oneinference preserves minoritymatches; D2all507matchesuncontested"
+  },
+  "scope": "Conditional diagnostic paths and prescribed actual input scoring, no authority or fitted delay adoption",
+  "open": "Explicit receiver scheduling and complete proof integration, then all remainingM4–M6"
+}

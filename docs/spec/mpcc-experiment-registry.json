@@ -871,6 +871,24 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/side-replan-ownership-evidence.json",
       "replay_ready": true,
       "reason": "Publishedowner policy regression and bounded earlier589world architecture comparison."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r15",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r15-manifest.json",
+      "replay_ready": true,
+      "reason": "Frozen cbcda112 D2movingEmergency956 beforeShiftOut; retainedStop449dynamicreject"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-application-dev2-r2",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/application-dev2-r2-manifest.json",
+      "replay_ready": true,
+      "reason": "Instrumented currentcontroller; D2movingEmergency1001, exactreceive/selectedinputtrace"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-receiver-schedule",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-schedule-evidence.json",
+      "replay_ready": true,
+      "reason": "Nativefactor/delivery/architecture comparisons and independent application evidence; no production model selected"
     }
   ],
   "experiments": [
@@ -6525,6 +6543,102 @@
         "Three geometry-only early side-replan applicability paths"
       ],
       "revisit_condition": "New fixedcommitrun, exactnewworld/candidate or failedownershipregression; no unchanged rejectedarm retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-receiver-schedule-dev2-r15",
+      "baseline_commit": "cbcda1125a9dca318cf0145d8551b6ccb23c12d3",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r15",
+        "20260910-nine-state-application-dev2-r2",
+        "20260910-nine-state-receiver-schedule"
+      ],
+      "hypothesis": "CurrentheldStop is recursively viable in the realreceiver environment",
+      "changed_dimension": "Diagnostic input realization and explicit conditional delivery; no productionmodel/solver/safety changes",
+      "result": "rejected",
+      "reason": "D2956peerreject afterStop449publication; side-owner path not reached",
+      "production_impact": "None; nominalreceiver schedule/proof integration remainsopen",
+      "deleted_code": [],
+      "revisit_condition": "New declaredreceiver model with same-command fullproof, heldout timing evidence or earlier frozen candidate; no unchanged rejectedsolver retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-receiver-schedule-factorization",
+      "baseline_commit": "cbcda1125a9dca318cf0145d8551b6ccb23c12d3",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r15",
+        "20260910-nine-state-application-dev2-r2",
+        "20260910-nine-state-receiver-schedule"
+      ],
+      "hypothesis": "A single ego or peer factor alone explains full publication failure",
+      "changed_dimension": "Diagnostic input realization and explicit conditional delivery; no productionmodel/solver/safety changes",
+      "result": "inconclusive",
+      "reason": "Currentego/currentpeer freshStop rejects; either substitution restores it; droppingprefix makes all retainedchecks accepted, so not equivalent to fullproof",
+      "production_impact": "None; nominalreceiver schedule/proof integration remainsopen",
+      "deleted_code": [],
+      "revisit_condition": "New declaredreceiver model with same-command fullproof, heldout timing evidence or earlier frozen candidate; no unchanged rejectedsolver retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-receiver-schedule-architecture",
+      "baseline_commit": "cbcda1125a9dca318cf0145d8551b6ccb23c12d3",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r15",
+        "20260910-nine-state-application-dev2-r2",
+        "20260910-nine-state-receiver-schedule"
+      ],
+      "hypothesis": "Existingalternate architectures certify956",
+      "changed_dimension": "Diagnostic input realization and explicit conditional delivery; no productionmodel/solver/safety changes",
+      "result": "inconclusive",
+      "reason": "A and2completeRestQPs reject; B/C/D lackfronttarget. Unknown without physicalinfeasibilitycertificate",
+      "production_impact": "None; nominalreceiver schedule/proof integration remainsopen",
+      "deleted_code": [],
+      "revisit_condition": "New declaredreceiver model with same-command fullproof, heldout timing evidence or earlier frozen candidate; no unchanged rejectedsolver retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-receiver-schedule-actual-application",
+      "baseline_commit": "cbcda1125a9dca318cf0145d8551b6ccb23c12d3",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r15",
+        "20260910-nine-state-application-dev2-r2",
+        "20260910-nine-state-receiver-schedule"
+      ],
+      "hypothesis": "Instantlongitudinalpublication differs from latestvalueapplication",
+      "changed_dimension": "Diagnostic input realization and explicit conditional delivery; no productionmodel/solver/safety changes",
+      "result": "accepted",
+      "reason": "433selectedassignment/rxID/floatmatches; currentD2firstnegative source-to-apply136.270170ms. Prescribedactualinput brake-crossing speedMAE0.197511→0.040101, plantdiagnostic only",
+      "production_impact": "None; nominalreceiver schedule/proof integration remainsopen",
+      "deleted_code": [],
+      "revisit_condition": "New declaredreceiver model with same-command fullproof, heldout timing evidence or earlier frozen candidate; no unchanged rejectedsolver retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-receiver-schedule-conditional-stop",
+      "baseline_commit": "cbcda1125a9dca318cf0145d8551b6ccb23c12d3",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r15",
+        "20260910-nine-state-application-dev2-r2",
+        "20260910-nine-state-receiver-schedule"
+      ],
+      "hypothesis": "Immediate certifiedStop remains certified with unacknowledged appliedpositiveinput",
+      "changed_dimension": "Diagnostic input realization and explicit conditional delivery; no productionmodel/solver/safety changes",
+      "result": "rejected",
+      "reason": "Immediate955/1000Stopaccepted but50mspositivehold rejects; earlier994passes150ms and995fails; fivehypotheses not acontinuousbound",
+      "production_impact": "None; nominalreceiver schedule/proof integration remainsopen",
+      "deleted_code": [],
+      "revisit_condition": "New declaredreceiver model with same-command fullproof, heldout timing evidence or earlier frozen candidate; no unchanged rejectedsolver retry"
+    },
+    {
+      "experiment_id": "20260910-nine-state-receiver-schedule-raw-component-alignment",
+      "baseline_commit": "cbcda1125a9dca318cf0145d8551b6ccb23c12d3",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r15",
+        "20260910-nine-state-application-dev2-r2",
+        "20260910-nine-state-receiver-schedule"
+      ],
+      "hypothesis": "Propagating stalecomponents under immediatebrake repairs the inputcontract",
+      "changed_dimension": "Diagnostic input realization and explicit conditional delivery; no productionmodel/solver/safety changes",
+      "result": "inconclusive",
+      "reason": "Currentpublicspeedstillrisesaftermodeldeceleration; earlierbrakingalignment could improveproof byunderpredicting actualspeed, no productionadoption",
+      "production_impact": "None; nominalreceiver schedule/proof integration remainsopen",
+      "deleted_code": [],
+      "revisit_condition": "New declaredreceiver model with same-command fullproof, heldout timing evidence or earlier frozen candidate; no unchanged rejectedsolver retry"
     }
   ]
 }

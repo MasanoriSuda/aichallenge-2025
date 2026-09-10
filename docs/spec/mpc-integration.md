@@ -4389,3 +4389,13 @@ dev2-r5では相対進捗中止を確認した一方、ShiftOut中の連続callb
 超える分類は評価監視と同じ観測条件であり、制御判断には使わない。超過callbackには
 既存のprimary/lattice/Stop/output/snapshot内訳を載せ、集約ログのthrottleによる
 初回の計測欠落を防ぐ。[根拠と検証](../../.steering/20260910-mpcc-empirical-plant/moving-failure-observation-design.md)を参照。
+
+#### 加減速の最新値選択と停止証明の未完項目（2026-09-10）
+
+`cbcda112`のdev2-r15はD2decision956で停止の他車証明を失った。計測用DLLを用いた別runでも
+1001で同じ領域の失効を観測した。ローカルAWSIMでは操舵は受信callbackで更新され、その後に
+機械的遅延が入る一方、加減速はUnity Update側の約10 Hzの最新値選択を通る。公開済み指令が
+すべて順次適用されるわけではない。現在の即時縦入力という公称予測はこの不確かさを表現しておらず、
+全体受入れは未完である。固定遅延や安全余裕を変更して合格扱いにしない。
+[受信・適用監査](../../.steering/20260910-mpcc-empirical-plant/receiver-schedule-design.md)に、
+同一worldの再現、実適用trace、条件付き停止比較と次の共有モデル・証明変更の条件を保存する。

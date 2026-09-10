@@ -453,3 +453,16 @@ identity but accepts upstreamShiftOut/+10.061819599m/345samples, materialization
 rejoin/productionadapter; observation only, explicitStop handoff repair next.
 AandrightB/C/D/G also certify1294; leftarms and2fullrestclocksreject. No
 integrated acceptance or M4–M6 closure. See publication-epoch-design.md/evidence.
+
+2026-09-10: aec8d32e publication epoch producer committed. Separate explicit
+publishedStop handoff now keeps actual source identity after tactical intent
+change. New regression fails old producer; buildr29 passes26packages/4min14s.
+Testsr23 newnativepasses but2source-structure references fail; correctedtestsr24
+passes2407records/62groups/0errors/failures/skips/29.07s. All forbidden publish/
+store checks and generic normal/Stop intent equality remain. Native toolr30
+actual1294published778: requestedCruise, proofShiftOut, completeStop345samples,
+clearance10.061819599m, materialization/join/adapter and serialized packetmatch.
+R12negative933source424 stays peerreject(-0.005110710497m)/no bundle;932unchanged.
+Fresh committeddev2-r13next, covering both publicationepoch and Stop handoff
+changes. Receiver application model and all M4–M6 remain open; no failed run
+is relabelledpass. See intent-stop-design.md and intent-stop-evidence.json.

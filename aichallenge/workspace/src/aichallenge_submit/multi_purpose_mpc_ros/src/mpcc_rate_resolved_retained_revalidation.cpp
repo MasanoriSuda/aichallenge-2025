@@ -1737,6 +1737,28 @@ const char * to_string(const StopSuccessorReason reason) noexcept
   return "unknown";
 }
 
+PublishedStopSuccessorEvaluation evaluate_published_stop_successor(Request request)
+{
+  PublishedStopSuccessorEvaluation evaluation;
+  evaluation.result.decision_id = request.decision_id;
+  if (!request.plan || !request.plan->execution_artifact) return evaluation;
+  const auto & clock = request.execution_clock;
+  if (clock.kind != ExecutionClockKind::PublishedPlan ||
+    !std::isfinite(clock.first_published_control_origin_sec) ||
+    clock.first_published_control_origin_sec < 0.0 ||
+    clock.first_published_control_origin_sec > request.control_origin_sec ||
+    !std::isfinite(clock.first_published_artifact_elapsed_sec) ||
+    clock.first_published_artifact_elapsed_sec < 0.0)
+  {
+    evaluation.result.reason = StopSuccessorReason::InvalidIdentity;
+    return evaluation;
+  }
+  request.current_intent = request.plan->execution_artifact->identity.source_context.intent;
+  evaluation.request = std::move(request);
+  evaluation.result = evaluate_stop_successor(*evaluation.request);
+  return evaluation;
+}
+
 StopSuccessorResult evaluate_stop_successor(const Request & request)
 {
   StopSuccessorResult result;

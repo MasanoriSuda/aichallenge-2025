@@ -565,6 +565,18 @@ struct StopSuccessorResult
 /// provenance; its exhausted normal cursor is never extended.
 StopSuccessorResult evaluate_stop_successor(const Request & request);
 
+struct PublishedStopSuccessorEvaluation
+{
+  std::optional<Request> request;
+  StopSuccessorResult result;
+};
+
+/// Stop responsibility belongs to the last actual publication's source even
+/// when a new normal intent is requested. Requires that publication's causal
+/// clock. The returned bound request/result must be materialized and rejoined;
+/// this cannot authorize continuing the upstream normal maneuver.
+PublishedStopSuccessorEvaluation evaluate_published_stop_successor(Request request);
+
 }  // namespace multi_purpose_mpc_ros::mpcc_rate_resolved_retained_revalidation
 
 #endif  // MULTI_PURPOSE_MPC_ROS__MPCC_RATE_RESOLVED_RETAINED_REVALIDATION_HPP_

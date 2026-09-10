@@ -33,6 +33,13 @@ wire加速度は車体の正味加速度と等しくない。速度のaffine上�
 今回のprospective proofは公称decision時刻を保持するため、両者を区別する。
 履歴の公開時刻修正はUnityでの受信・選択・適用の保証ではない。10Hzの最新値選択は
 指令を上書きし得る。保存済み実適用記録は事後比較に限り、通常制御へ流用しない。
+
+新しい通常intentへの変更後も、最後に実際に公開した軌道の停止責務を保持する。
+専用のpublished-Stop評価は公開元planと因果的なPublishedPlan時計を受け取り、
+その元のintentで完全停止を証明する。生成した停止artifactは元のproof identityで
+再検証し、既存の認証済みStop権限で公開する。新しい通常intentは次の非同期問題を
+所有し、一般の通常軌道・Stop評価のintent一致条件は維持する。停止評価だけでは
+公開・plan保存の権限を与えず、完全停止のmaterializationと最終指令の再照合を要求する。
 派生候補やasync workerも元観測を保持する。必要な公開入力は
 [参加者契約](../interface/participant-interface.md)に記載する。
 

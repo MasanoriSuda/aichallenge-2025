@@ -841,6 +841,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/publication-epoch-evidence.json",
       "replay_ready": true,
       "reason": "Frozen run, exact current-world/publication input, unavailable previous evidence explicitly retained for1294. Publication epoch regression and application trace are distinct causal observations."
+    },
+    {
+      "snapshot_id": "20260910-nine-state-intent-stop",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/intent-stop-evidence.json",
+      "replay_ready": true,
+      "reason": "Same1294 actualpublished778 and independent933source424; original/corrected publishedStop request producer and output packet verified with native toolr30."
     }
   ],
   "experiments": [
@@ -6298,6 +6304,64 @@
       "production_impact": "Only historical publication epoch producer changes in this slice; no receiver delay tuning, authority bypass, hard proof/budget relaxation or integrated acceptance.",
       "deleted_code": [],
       "revisit_condition": "Changed candidate representation, physical inputs or source contract"
+    },
+    {
+      "experiment_id": "20260910-nine-state-intent-stop-producer",
+      "baseline_commit": "aec8d32e468faeaae32e37ae12dada240871d717",
+      "snapshot_ids": [
+        "20260910-nine-state-intent-stop"
+      ],
+      "hypothesis": "Published Stop preserves its upstream proof intent after a new normal request",
+      "changed_dimension": "Explicit published-source Stop identity binding/materialization only",
+      "result": "accepted",
+      "reason": "Old native regression fails invalid-identity. Dedicated publishedStop API binds the actual source and causal PublishedPlan clock; complete Stop still uses unchanged physical/peer/wall/packet checks.",
+      "production_impact": "One certified Stop publication edge, no normal intent bypass, timer/grace/margin/budget change. Integrated acceptance remains open.",
+      "deleted_code": [
+        "New requested normal intent imposed on already-published Stop obligation"
+      ],
+      "revisit_condition": "Fresh dev2-r13/currentworld counterexample or publication identity evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-intent-stop-publication",
+      "baseline_commit": "aec8d32e468faeaae32e37ae12dada240871d717",
+      "snapshot_ids": [
+        "20260910-nine-state-intent-stop"
+      ],
+      "hypothesis": "Materialized Stop retains sourceidentity and publishes only Stop role",
+      "changed_dimension": "Explicit published-source Stop identity binding/materialization only",
+      "result": "accepted",
+      "reason": "Actual778 requestedCruise -> proofShiftOut -> completeRest -> bundle/join/productionAvailable. Packet-3/-0.03859873744 matches prefix; no normal continuation authorized. Separate next normal draft unchanged.",
+      "production_impact": "One certified Stop publication edge, no normal intent bypass, timer/grace/margin/budget change. Integrated acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh dev2-r13/currentworld counterexample or publication identity evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-intent-stop-negative",
+      "baseline_commit": "aec8d32e468faeaae32e37ae12dada240871d717",
+      "snapshot_ids": [
+        "20260910-nine-state-intent-stop"
+      ],
+      "hypothesis": "Intent binding cannot erase a real dynamic collision",
+      "changed_dimension": "Explicit published-source Stop identity binding/materialization only",
+      "result": "accepted",
+      "reason": "Original933source424 remains dynamic-path-blocked/-0.005110710497m/no bundle. 932 positive unchanged.",
+      "production_impact": "One certified Stop publication edge, no normal intent bypass, timer/grace/margin/budget change. Integrated acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh dev2-r13/currentworld counterexample or publication identity evidence"
+    },
+    {
+      "experiment_id": "20260910-nine-state-intent-stop-validation",
+      "baseline_commit": "aec8d32e468faeaae32e37ae12dada240871d717",
+      "snapshot_ids": [
+        "20260910-nine-state-intent-stop"
+      ],
+      "hypothesis": "Producer change preserves existing normal and publication contracts",
+      "changed_dimension": "Explicit published-source Stop identity binding/materialization only",
+      "result": "accepted",
+      "reason": "Buildr29 pass; testsr23 firstnewnativepass but2obsolete structure references fail; correctedtestsr24 all2407 pass. Generic intent guards and forbidden publish/store checks retained.",
+      "production_impact": "One certified Stop publication edge, no normal intent bypass, timer/grace/margin/budget change. Integrated acceptance remains open.",
+      "deleted_code": [],
+      "revisit_condition": "Fresh dev2-r13/currentworld counterexample or publication identity evidence"
     }
   ]
 }

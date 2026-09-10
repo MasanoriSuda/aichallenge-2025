@@ -1097,7 +1097,7 @@ def test_certified_terminal_contingency_publishes_stop_not_normal_evidence() -> 
     assert "certified_terminal_contingency_selected" in retained
 
     pending_start = SOURCE.index("struct CanonicalNormalPendingActuation")
-    pending_end = SOURCE.index("struct PublishedStopSuccessorEvaluation")
+    pending_end = SOURCE.index("using PublishedStopSuccessorEvaluation")
     pending = SOURCE[pending_start:pending_end]
     assert "published_authority_intent" in pending
 
@@ -2856,8 +2856,8 @@ def test_certified_stop_successor_is_observed_only_after_publication_join() -> N
         assert retired_function not in SOURCE
 
 
-def test_current_world_stop_successor_remains_shadow_only() -> None:
-    """Fresh Stop rebuilding observes authority loss without owning output."""
+def test_published_stop_evaluation_cannot_publish_or_store_authority() -> None:
+    """Bound Stop evaluation needs the existing materialization/publication owner."""
 
     shadow_start = SOURCE.index(
         "evaluate_published_stop_successor_shadow("
@@ -2868,7 +2868,7 @@ def test_current_world_stop_successor_remains_shadow_only() -> None:
     )
     shadow = SOURCE[shadow_start:shadow_end]
     assert "latest_published_source_snapshot()" in shadow
-    assert "evaluate_stop_successor(" in shadow
+    assert "evaluate_published_stop_successor(" in shadow
     assert "authority=shadow" in shadow
     for forbidden in (
         "canonical_normal_emergency_stop(",

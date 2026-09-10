@@ -1,0 +1,99 @@
+{
+  "baseline_commit": "aec8d32e468faeaae32e37ae12dada240871d717",
+  "production_candidate": true,
+  "integrated_acceptance": false,
+  "files": [
+    {
+      "path": "output/20260910-nine-state-intent-stop-evidence/mpcc-nine-state-build-r29.log",
+      "sha256": "4144a16354647d050f680b08942cbc7782aad177e3b1b1478ee257ea1a315a29"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-evidence/mpcc-nine-state-intent-stop-before.log",
+      "sha256": "db9362803d4c2dae688ded30b6dc6cdfbe5d78712bcd79f90a1ad8608a1b262f"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-evidence/mpcc-nine-state-intent-stop-quality-r1.log",
+      "sha256": "bd4dc0f7e042ea2b2a59976ff3c077ba1ab69f7ad862a0f6d49101f69966b94e"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-evidence/mpcc-nine-state-intent-stop-replay-r1.log",
+      "sha256": "7903ac5f7f4dd61b9e6feaddbb3b0ecc153eaf2a3a4c2c10e14bbbf7b326aeb0"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-evidence/mpcc-nine-state-revalidation-tool-r30.log",
+      "sha256": "89fc24df63549f621f48b84758eb0c80bf1996901b8f0c7303081f9ade6c651b"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-evidence/mpcc-nine-state-tests-r23.log",
+      "sha256": "9350f3ebe57242c432f9c7ac22dcdc884916abaa50b23575c98c3e1ef43faa8c"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-evidence/mpcc-nine-state-tests-r24.log",
+      "sha256": "7199a44a6114c0f96f78997b8fe6423b21c2fbd20bf006b33d2616387029a892"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-r1/1294.log",
+      "sha256": "2ac5e45bb96f6525fe044c4534c9a5527f56c15dbcdc32f96d21694e967a0823"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-r1/1294.yaml",
+      "sha256": "2ac5e45bb96f6525fe044c4534c9a5527f56c15dbcdc32f96d21694e967a0823"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-r1/933.log",
+      "sha256": "9733f9295b2742de04f4a18cc36eca11f7873d376f7a2e084ea5aade03a30fa6"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-r1/933.yaml",
+      "sha256": "9733f9295b2742de04f4a18cc36eca11f7873d376f7a2e084ea5aade03a30fa6"
+    },
+    {
+      "path": "output/20260910-nine-state-intent-stop-r1/manifest.json",
+      "sha256": "eaede259256e46b91b91a3ffb7cd36f814ed003d34f8d7d93f02e93e7b4269fb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r30/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r30/manifest.json",
+      "sha256": "89ea07514c8d6e1329b38e39f7605e1cf27c407ed2cff077af6eeb2714662fa7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r30/replay",
+      "sha256": "6345ab3ab63cda5d32e2ce1aa9e63b87779ee04655b47cb77d8491d9205293b3"
+    }
+  ],
+  "positive": {
+    "authority": false,
+    "source": 778,
+    "intent": "cruise",
+    "stop": "accepted",
+    "clearance": 10.06181959878585,
+    "samples": 345,
+    "proof_intent": "shiftout",
+    "bundle": "available",
+    "join": "accepted",
+    "production": "available",
+    "packet_acceleration": -3,
+    "packet_steering": -0.038598737442534975
+  },
+  "negative": {
+    "authority": false,
+    "source": 424,
+    "intent": "cruise",
+    "stop": "dynamic-path-blocked",
+    "clearance": -0.005110710497153059,
+    "samples": 115,
+    "proof_intent": "cruise",
+    "bundle": "stop-successor-unavailable"
+  },
+  "validation": {
+    "before": "new native regression rejects old producer as invalid-identity",
+    "build_r29": "26 packages/4min14s/pass",
+    "tests_r23": "2407records; newnativepasses; two oldsource-structure checks fail (three colcon failure records including aggregate)",
+    "tests_r24": "2407records/62groups/0errors/failures/skips/29.07s; structure references updated, all publication/store/role restrictions retained",
+    "replay_r30": "1294 actualsource778 newpublishedStop helper +10.061819599m/345samples/rest/bundle/rejoin/adapter/packetmatch; r12source424peerreject unchanged",
+    "open": "fresh fixedcommit dev2-r13, input application schedule, allM4-M6"
+  }
+}

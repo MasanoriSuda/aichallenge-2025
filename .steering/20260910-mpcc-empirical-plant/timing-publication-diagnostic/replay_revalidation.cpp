@@ -102,26 +102,41 @@ int main(int argc, char ** argv)
         publication["publication_control_origin_sec"].as<double>(),
         publication["publication_artifact_elapsed_sec"].as<double>()};
       const auto upstream = braking.plan->execution_artifact->identity.source_context.intent;
-      for (const auto name : {"requested-intent", "published-upstream-intent"}) {
-        braking.current_intent = std::string(name) == "requested-intent" ? r.current_intent : upstream;
+      for (const auto name : {"requested-intent", "published-upstream-intent", "production-published-stop"}) {
+        braking.current_intent = std::string(name) == "published-upstream-intent" ? upstream : r.current_intent;
         auto diagnostic = row["actual_published_stop_diagnostic"][name];
         diagnostic["authority"] = false;
         diagnostic["source"] = braking.plan->execution_artifact->identity.sequence;
         diagnostic["intent"] = m::mpcc_execution_contract::to_string(braking.current_intent);
-        const auto checked = retained::evaluate_stop_successor(braking);
+        const auto prepared = std::string(name) == "production-published-stop" ?
+          retained::evaluate_published_stop_successor(braking) :
+          retained::PublishedStopSuccessorEvaluation{braking, retained::evaluate_stop_successor(braking)};
+        const auto & checked = prepared.result;
         diagnostic["stop"] = retained::to_string(checked.reason);
         diagnostic["clearance"] = checked.dynamic_clearance.minimum_clearance_m;
         diagnostic["samples"] = checked.actuation_samples.size();
-        const auto candidate = bundle::build(braking, checked, 200000U + r.decision_id);
+        if (!prepared.request) continue;
+        diagnostic["proof_intent"] = m::mpcc_execution_contract::to_string(prepared.request->current_intent);
+        const auto candidate = bundle::build(*prepared.request, checked, 200000U + r.decision_id);
         diagnostic["bundle"] = bundle::to_string(candidate.reason);
         if (candidate.plan) {
-          auto join = braking;
+          auto join = *prepared.request;
           join.plan = candidate.plan;
           join.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
           const auto result = retained::evaluate(join);
           diagnostic["join"] = retained::to_string(result.reason);
-          diagnostic["production"] = m::mpcc_rate_resolved_production_adapter::to_string(
-            m::mpcc_rate_resolved_production_adapter::build(result).reason);
+          const auto production = m::mpcc_rate_resolved_production_adapter::build(result);
+          diagnostic["production"] = m::mpcc_rate_resolved_production_adapter::to_string(production.reason);
+          if (production.authority) {
+            const auto & command = production.authority->command;
+            if (!join.plan->execution_artifact->terminal_body_rest_required ||
+              !join.publication_prefix || !model::publication_packet_matches(
+                *join.publication_prefix, join.now_sec, command.acceleration_mps2,
+                command.steering_tire_angle_rad, join.plan->execution_artifact->vehicle_model.steering_wire_gain))
+              throw std::runtime_error("published Stop lost rest or packet binding");
+            diagnostic["packet_acceleration"] = command.acceleration_mps2;
+            diagnostic["packet_steering"] = command.steering_tire_angle_rad;
+          }
         }
       }
     }

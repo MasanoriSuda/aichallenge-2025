@@ -8060,11 +8060,8 @@ struct CanonicalNormalPendingActuation
   certified_stop_successor;
 };
 
-struct PublishedStopSuccessorEvaluation
-{
-  std::optional<rate_resolved_retained::Request> request;
-  rate_resolved_retained::StopSuccessorResult result;
-};
+using PublishedStopSuccessorEvaluation =
+  rate_resolved_retained::PublishedStopSuccessorEvaluation;
 
 struct OvertakeSiblingAdoptionLiveState
 {
@@ -30164,9 +30161,8 @@ struct MPC
             published.publication_control_origin_sec,
             published.publication_artifact_elapsed_sec}, true);
         if (request.has_value()) {
-          result = rate_resolved_retained::evaluate_stop_successor(
+          evaluation = rate_resolved_retained::evaluate_published_stop_successor(
             request.value());
-          evaluation.request = request;
         }
       }
     }
@@ -30215,8 +30211,14 @@ struct MPC
     const mpcc_contract::ControlIntent intent,
     const std::shared_ptr<const rate_resolved_certified::CertifiedPlan> & plan)
   {
+    // A materialized Stop keeps its upstream immutable proof identity. Its
+    // publication role is Stop; the requested next normal intent owns a
+    // separate asynchronous problem and cannot relabel this stopping artifact.
+    const auto proof_intent = plan && plan->execution_artifact &&
+      plan->execution_artifact->terminal_body_rest_required ?
+      plan->execution_artifact->identity.source_context.intent : intent;
     return evaluate_rate_resolved_track_cruise_plan(
-      problem, now_sec, intent, plan,
+      problem, now_sec, proof_intent, plan,
       rate_resolved_retained::ExecutionClock{
         rate_resolved_retained::ExecutionClockKind::TimeAlignedCandidate,
         std::numeric_limits<double>::quiet_NaN(),
@@ -30499,6 +30501,9 @@ struct MPC
     }
     observe_published_certified_stop_successor_join(
       retained, active_control_decision_id_);
+    if (retained.certified_terminal_contingency_selected && retained.production_authority) {
+      effective_intent = retained.production_authority->command.intent;
+    }
     if (
       !retained.production_authority.has_value() &&
       last_published_authority_intent_ !=

@@ -2111,4 +2111,57 @@ TEST(MpccRateResolvedRetainedRevalidation, StopPacketPrefixSurvivesMaterializati
   EXPECT_FALSE(production::build(mutated).authority);
 }
 
+TEST(MpccRateResolvedRetainedRevalidation, PublishedStopKeepsItsSourceWhenNormalIntentChanges)
+{
+  auto original = accepted_request(certified_plan(free_grid(), contract::ControlIntent::ShiftOut));
+  original.current_intent = contract::ControlIntent::Cruise;
+  original.control_origin_sec = 1.09;
+  const auto & model = original.plan->execution_artifact->vehicle_model;
+  auto request = bind_test_packet(original, {original.now_sec, -3,
+    static_cast<float>(original.previous_published_steering_rad * model.steering_wire_gain)});
+  EXPECT_EQ(retained::evaluate(request).reason, retained::Reason::IntentMismatch);
+  EXPECT_EQ(retained::evaluate_stop_successor(request).reason, retained::StopSuccessorReason::InvalidIdentity);
+  const auto stopped = retained::evaluate_published_stop_successor(request);
+  ASSERT_TRUE(stopped.result.accepted()) << retained::to_string(stopped.result.reason);
+  ASSERT_TRUE(stopped.request);
+  EXPECT_EQ(request.current_intent, contract::ControlIntent::Cruise);
+  EXPECT_EQ(stopped.request->current_intent, contract::ControlIntent::ShiftOut);
+  EXPECT_EQ(stopped.request->plan, request.plan);
+  EXPECT_EQ(stopped.request->current_wall_grid, request.current_wall_grid);
+  const auto built = stop_bundle::build(*stopped.request, stopped.result, 1001U);
+  ASSERT_TRUE(built.plan) << stop_bundle::to_string(built.reason);
+  ASSERT_TRUE(built.plan->execution_artifact->terminal_body_rest_required);
+  EXPECT_DOUBLE_EQ(built.plan->execution_artifact->predicted_states.back().velocity_mps, 0);
+  EXPECT_DOUBLE_EQ(built.plan->execution_artifact->predicted_states.back().lateral_velocity_mps, 0);
+  EXPECT_DOUBLE_EQ(built.plan->execution_artifact->predicted_states.back().yaw_rate_radps, 0);
+  auto joined_request = *stopped.request;
+  joined_request.plan = built.plan;
+  joined_request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto joined = retained::evaluate(joined_request);
+  ASSERT_EQ(joined.reason, retained::Reason::Accepted);
+  const auto output = production::build(joined);
+  ASSERT_TRUE(output.authority);
+  EXPECT_DOUBLE_EQ(output.authority->command.acceleration_mps2, -3);
+  EXPECT_EQ(output.authority->command.intent, contract::ControlIntent::ShiftOut);
+  EXPECT_EQ(contract::resolve_published_authority_intent(output.authority->command.intent, true),
+    contract::ControlIntent::Stop);
+  EXPECT_TRUE(multi_purpose_mpc_ros::mpcc_vehicle_model::publication_packet_matches(
+    *joined_request.publication_prefix, joined_request.now_sec, output.authority->command.acceleration_mps2,
+    output.authority->command.steering_tire_angle_rad, model.steering_wire_gain));
+  auto noncausal = request;
+  noncausal.execution_clock.kind = retained::ExecutionClockKind::TimeAlignedCandidate;
+  EXPECT_FALSE(retained::evaluate_published_stop_successor(noncausal).request);
+  noncausal = request;
+  noncausal.execution_clock.first_published_control_origin_sec = request.control_origin_sec+.01;
+  EXPECT_FALSE(retained::evaluate_published_stop_successor(noncausal).request);
+  auto missing = request;
+  missing.publication_prefix.reset();
+  EXPECT_EQ(retained::evaluate_published_stop_successor(missing).result.reason,
+    retained::StopSuccessorReason::InvalidCurrentWorld);
+  auto changed_wall = request;
+  changed_wall.current_footprint.front_extent_m += .1;
+  EXPECT_EQ(retained::evaluate_published_stop_successor(changed_wall).result.reason,
+    retained::StopSuccessorReason::StaticWorldMismatch);
+}
+
 }  // namespace

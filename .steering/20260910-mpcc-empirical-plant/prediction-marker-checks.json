@@ -1,0 +1,57 @@
+{
+  "baseline_commit": "08322c3b2df6e9c4fb5590e22b2696e1351a2d4b",
+  "files": [
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt",
+      "sha256": "28a3f52390918a548c3be8413c533fb8f5c9aee2953bfd7c45b4415781280d1c",
+      "preserved": "output/20260910-nine-state-prediction-marker-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/CMakeLists.txt"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "e8380340d10d3b3a20025883ed51a48644584dcb0c3e7d309a93a9f197e942bc",
+      "preserved": "output/20260910-nine-state-prediction-marker-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp",
+      "sha256": "445983d9732dd2329633cd952dcb1dc682522911541fd2318a69aee2745cd8c0",
+      "preserved": "output/20260910-nine-state-prediction-marker-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_prediction_markers.cpp",
+      "sha256": "af35cbf524e7f4829ee367c89bc1ac6ba8e89b6a515901f62dbb59822a54017b",
+      "preserved": "output/20260910-nine-state-prediction-marker-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_prediction_markers.cpp"
+    }
+  ],
+  "patch_sha256": "7415ce1bb622c5bf35779e6f07de28bde0dbd674b6c8b6b659f92428dad1917f",
+  "build": "r19:26packages",
+  "tests": "r15:Summary: 2397 tests, 0 errors, 0 failures, 0 skipped",
+  "comparison": {
+    "fixture": "synthetic 924 points; count from dev2-r7 D2decision1154",
+    "iterations": 200,
+    "arms": [
+      {
+        "arm": 0,
+        "bytes_per_topic": 214373,
+        "median_ms": 6.65117,
+        "p95_ms": 6.84314,
+        "max_ms": 7.08052
+      },
+      {
+        "arm": 1,
+        "bytes_per_topic": 214373,
+        "median_ms": 6.63234,
+        "p95_ms": 6.72131,
+        "max_ms": 7.10824
+      },
+      {
+        "arm": 2,
+        "bytes_per_topic": 22637,
+        "median_ms": 0.108704,
+        "p95_ms": 0.114816,
+        "max_ms": 0.13878
+      }
+    ]
+  },
+  "runtime": "Fresh dev2-r8 pending; no race acceptance",
+  "evidence": "output/20260910-nine-state-prediction-marker-r1"
+}

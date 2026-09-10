@@ -781,6 +781,24 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r5-diagnostics-evidence.json",
       "replay_ready": false,
       "reason": "Public bags, raw timing and logs; no immutable QP failure snapshot for the tactical watchdog transition"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r6-startup",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r6-manifest.json",
+      "replay_ready": false,
+      "reason": "No usable moving controller world; startup clock/sensors stopped"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r7-marker-timing",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r6-r7-diagnostics-evidence.json",
+      "replay_ready": false,
+      "reason": "Measured callback nested costs and logs; not a sealed failed QP"
+    },
+    {
+      "snapshot_id": "20260910-nine-state-marker-representation",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/prediction-marker-checks.json",
+      "replay_ready": false,
+      "reason": "Synthetic924point serialization fixture, not runtime trajectory coordinates"
     }
   ],
   "experiments": [
@@ -5512,6 +5530,50 @@
       "production_impact": "Observation only; no normal command, safety or timing policy changes",
       "deleted_code": [],
       "revisit_condition": "New noncanonical/other Recovery transition"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r6-startup",
+      "baseline_commit": "08322c3b2df6e9c4fb5590e22b2696e1351a2d4b",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r6-startup"
+      ],
+      "hypothesis": "Capture first adjacent ShiftOut deadline overruns",
+      "changed_dimension": "Fresh simulator startup",
+      "result": "inconclusive",
+      "reason": "Clock and odometry stop before Ready/Start; scoped3s observer receives0/0; owned campaign stopped and logs preserved",
+      "production_impact": "Only prediction MarkerArray representation changes; all command/proof/safety/rates retained",
+      "deleted_code": [],
+      "revisit_condition": "Simulator produces clock and sensors"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r7-marker-timing",
+      "baseline_commit": "08322c3b2df6e9c4fb5590e22b2696e1351a2d4b",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r7-marker-timing"
+      ],
+      "hypothesis": "Prediction visualization contributes to adjacent callback overruns",
+      "changed_dimension": "Nested observation clocks on08322c3b",
+      "result": "accepted",
+      "reason": "D2decision1154:32.823264ms callback,16.559ms marker/924points;1155:34.554804ms with marker0 and Recovery16.816ms. Timing diagnostic rejects integrated timing; negative-side ShiftOut/Pass/Return phases observed only",
+      "production_impact": "Only prediction MarkerArray representation changes; all command/proof/safety/rates retained",
+      "deleted_code": [],
+      "revisit_condition": "Changed producer measured on fresh run"
+    },
+    {
+      "experiment_id": "20260910-nine-state-marker-representation",
+      "baseline_commit": "08322c3b2df6e9c4fb5590e22b2696e1351a2d4b",
+      "snapshot_ids": [
+        "20260910-nine-state-marker-representation"
+      ],
+      "hypothesis": "Batching all prediction points reduces payload and construction/serialization without dropping geometry",
+      "changed_dimension": "Original SPHERE vs reserved SPHERE vs SPHERE_LIST, synthetic924points,200samples/20warmups;2serializations",
+      "result": "accepted",
+      "reason": "Production builder comparison: {\"fixture\": \"synthetic 924 points; count from dev2-r7 D2decision1154\", \"iterations\": 200, \"arms\": [{\"arm\": 0, \"bytes_per_topic\": 214373, \"median_ms\": 6.65117, \"p95_ms\": 6.84314, \"max_ms\": 7.08052}, {\"arm\": 1, \"bytes_per_topic\": 214373, \"median_ms\": 6.63234, \"p95_ms\": 6.72131, \"max_ms\": 7.10824}, {\"arm\": 2, \"bytes_per_topic\": 22637, \"median_ms\": 0.108704, \"p95_ms\": 0.114816, \"max_ms\": 0.13878}]}; exact round-trip coordinates. Integrated callback and RViz rendering not benchmarked",
+      "production_impact": "Only prediction MarkerArray representation changes; all command/proof/safety/rates retained",
+      "deleted_code": [
+        "C++ per-point SPHERE publication loop"
+      ],
+      "revisit_condition": "Changed geometry/serialization or fresh runtime evidence"
     }
   ]
 }

@@ -248,6 +248,21 @@ Boostを使用しない提出物に `/awsim/cmd` は必須ではない。使用�
 
 ---
 
+### MPCC予測表示の内部契約
+
+`/mpc/prediction` と
+`/planning/scenario_planning/lane_driving/motion_planning/obstacle_stop_planner/virtual_wall`
+は、現行MPC launchではMPCCが専有する `visualization_msgs/msg/MarkerArray` 表示トピック。
+制御指令として使用しない。C++実装の予測表示は各メッセージ内の `DELETEALL` に続く
+`SPHERE_LIST`（namespace `mpc_pred`、ID 0）の `points` に全予測点を順番に格納する。
+`map` 座標、球径0.5m、車両別RGBAと既存の約4Hzの送信頻度を維持する。
+毎回の置換で、旧実装の個別 `SPHERE` IDや短縮前の点も残さず消す。
+
+標準RVizのMarkerArray表示はそのまま使用できる。個別Markerの `pose.position` を
+読む独自subscriberは、単一リストの `points` を読むよう移行する。
+他の表示producerを同じトピックへ追加する場合は、`DELETEALL` の影響を避けるため
+専用トピックへ分離する。参照経路表示と最終制御指令の契約は別に維持する。
+
 ## 5. ビルド・実行環境の前提
 
 ### eval イメージが行うこと（固定事項）

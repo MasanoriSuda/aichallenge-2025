@@ -372,3 +372,11 @@ separately from final Recovery override. Sixlaps remain incomplete and7adjacent
 callback-overrun pairs reject timing. Observation-only nested timing passes
 buildr17/testsr13:26packages/2394records. Next: bounded ShiftOut timing capture,
 then causal repair and M4–M6. See timing-attribution-design.md in current steering.
+
+2026-09-10:08322c3bdev2-r6startup stalls beforeReady; preserved/inconclusive.
+Dev2-r7bounded timing shows D2decision1154marker16.559ms/924points and an adjacent
+1155overrun with Recovery16.816ms. Negative-side ShiftOut→Pass→Return→Idle is
+observed, but no integrated acceptance. Native identical-point comparison accepts
+SPHERE_LIST batching (native prototype and direct production builder comparisons retained). Producer now
+replaces complete display and clears legacy IDs; no control/proof/rate changes.
+Buildr19andtestsr15pass. Fresh dev2-r8 timing and remaining M4–M6 follow.

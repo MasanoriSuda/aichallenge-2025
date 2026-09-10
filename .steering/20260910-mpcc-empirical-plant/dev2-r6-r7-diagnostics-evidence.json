@@ -1,0 +1,54 @@
+{
+  "baseline_commit": "08322c3b2df6e9c4fb5590e22b2696e1351a2d4b",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r6/d1/autoware.log",
+      "sha256": "8206c47efb64f4d72e18928ea5cce8d8038f8e6c5b2182a6ada173f2402cee2f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r6/d2/autoware.log",
+      "sha256": "85b97abc28275c75bdfe355ff82a82da3f25fc45810453001e76b8904b1402dc"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r6/external-stop-reason.json",
+      "sha256": "4c3e0b13a53f7e566620127a38d84c43bdac68e56d714fa08b351a99560c8c5b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r6/manifest.json",
+      "sha256": "690fb66bfcf4d4ed9641947ae8858caa46e9550d1f96b97005dca6b796030194"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r6/monitor-summary.json",
+      "sha256": "a1ad82b8c6b6ff7ba8052ef7671689f6e36af148441f6d8cb0614b779330c99f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r7/d1/autoware.log",
+      "sha256": "21492b4fd0b8fde75e3690612451833f39b08986fe974b41ab303dd24b6d8d4a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r7/d2/autoware.log",
+      "sha256": "2a4b789230e2e309b7fdc918fb2259e25b5fb5c885231854b117d462407fd588"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r7/manifest.json",
+      "sha256": "cf3a43a6ce67894d7fb183a1571d2cdffc8ffe0a3e17519036e5b13be30d6372"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r7/monitor-summary.json",
+      "sha256": "83156bcbbb21b5ad90649af8ea8cd8d300b9a1b1e2295e102b64af4c8dde1282"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r7-metrics/d1-callback-samples.json",
+      "sha256": "a22ca4eec3c4843bc9bc691e6bd75d74705aa819e8cf42d1e5aa42ae7272ac19"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r7-metrics/d2-callback-samples.json",
+      "sha256": "b055eecf875f33c4423a688d57fbdb87e532326656c8d1d46f8056f7bd3eab7a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r7-metrics/report.json",
+      "sha256": "682381aec559f7c130d54258b2870fddc3608b4b2a91cd812e9b8ad2987a2a94"
+    }
+  ],
+  "authority": false
+}

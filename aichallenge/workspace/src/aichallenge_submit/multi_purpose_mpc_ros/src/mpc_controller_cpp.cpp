@@ -50,6 +50,7 @@
 #include <multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp>
 #include <multi_purpose_mpc_ros/path_core.hpp>
 #include <multi_purpose_mpc_ros/persistent_osqp.hpp>
+#include <multi_purpose_mpc_ros/prediction_markers.hpp>
 #include <multi_purpose_mpc_ros/recovery_footprint.hpp>
 #include <multi_purpose_mpc_ros/race_mpcc_foundation.hpp>
 #include <multi_purpose_mpc_ros/recovery_mpc.hpp>
@@ -54892,25 +54893,8 @@ private:
 
   void publish_mpc_pred_marker(const std::vector<double> & x_pred, const std::vector<double> & y_pred)
   {
-    MarkerArray marker_array;
-    Marker base;
-    base.header.frame_id = "map";
-    base.ns = "mpc_pred";
-    base.type = Marker::SPHERE;
-    base.action = Marker::ADD;
-    base.pose.position.z = 0.0;
-    base.scale = Vector3();
-    base.scale.x = 0.5;
-    base.scale.y = 0.5;
-    base.scale.z = 0.5;
-    base.color = pred_marker_color_;
-    for (std::size_t i = 0; i < x_pred.size() && i < y_pred.size(); ++i) {
-      Marker m = base;
-      m.id = static_cast<int>(i);
-      m.pose.position.x = x_pred[i];
-      m.pose.position.y = y_pred[i];
-      marker_array.markers.push_back(m);
-    }
+    const auto marker_array =
+      multi_purpose_mpc_ros::prediction_markers::build(x_pred, y_pred, pred_marker_color_);
     mpc_pred_pub_->publish(marker_array);
     mpc_pred_pub_dummy_->publish(marker_array);
   }

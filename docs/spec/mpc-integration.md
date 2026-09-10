@@ -110,7 +110,7 @@ reference.launch.xml (aichallenge_submit_launch)
 |-----------|-----|------|
 | `/control/command/control_cmd` | AckermannControlCommand | **既存と同一** |
 | `/control/command/control_cmd_raw` | AckermannControlCommand | ゲイン適用前 |
-| `/mpc/prediction` | MarkerArray | 予測軌跡（可視化） |
+| `/mpc/prediction` | MarkerArray | 予測軌跡。全点のSPHERE_LISTで置換する可視化（[内部契約](../interface/participant-interface.md#mpcc予測表示の内部契約)） |
 | `/mpc/ref_path` | MarkerArray | 参照パス（可視化） |
 | `/awsim/cmd` | Float32MultiArray | 2026 SIM Boost指令。`awsim_boost.enabled`時のみ |
 | `/awsim/control_mode_request_topic` | Bool | SIMのAUTONOMOUS engage要求。Readyで即時送信し、Start後は発進確認まで有限再送 |

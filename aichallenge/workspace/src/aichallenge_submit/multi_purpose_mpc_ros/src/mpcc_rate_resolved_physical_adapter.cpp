@@ -346,6 +346,9 @@ Result build(
   }
   race::ExactPhysicalExecutionTrajectory exact;
   exact.progress_origin_m = artifact.course_progress_origin_m;
+  exact.stationary_path_suffix_allowed = artifact.terminal_body_rest_required;
+  exact.stationary_velocity_tolerance_mps = 0.0;
+
   exact.elapsed_time_sec.reserve(rollout_sample_count);
   exact.path_distance_m.reserve(rollout_sample_count);
   exact.lateral_m.reserve(rollout_sample_count);
@@ -556,6 +559,9 @@ ContinuationResult build_continuation(
 
   race::ExactPhysicalExecutionTrajectory exact;
   exact.progress_origin_m = artifact.course_progress_origin_m;
+  exact.stationary_path_suffix_allowed = artifact.terminal_body_rest_required;
+  exact.stationary_velocity_tolerance_mps = 0.0;
+
   exact.elapsed_time_sec.reserve(rollout_sample_count);
   result.actuation_samples.reserve(rollout_sample_count);
   exact.path_distance_m.reserve(rollout_sample_count);

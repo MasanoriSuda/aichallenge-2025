@@ -770,6 +770,11 @@
       "snapshot_id": "20260910-nine-state-dev2-r3-stop-publication",
       "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r3-diagnostics-evidence.json",
       "replay_ready": true
+    },
+    {
+      "snapshot_id": "20260910-nine-state-dev2-r4-temporal-rest",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/dev2-r4-diagnostics-evidence.json",
+      "replay_ready": true
     }
   ],
   "experiments": [
@@ -5417,6 +5422,48 @@
       "production_impact": "Exact terminal materialization at Stop publication boundary; integrated acceptance pending",
       "deleted_code": [],
       "revisit_condition": "Fresh integrated run with final publication repair"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r4",
+      "baseline_commit": "d7fffe15e8b3722aa95b22cfd4713e1a9da8cf93",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r4-temporal-rest"
+      ],
+      "hypothesis": "Materialized certified terminal inputs suffice for dev2",
+      "changed_dimension": "Fresh fixed-input run ond7fffe15",
+      "result": "rejected",
+      "reason": "Stop322used846..852; first moving Emergency853 at complete predicted rest/source expiry.",
+      "production_impact": "Observation only",
+      "deleted_code": [],
+      "revisit_condition": "New causal temporal-rest repair and fresh run"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r4-rest-entry-only",
+      "baseline_commit": "d7fffe15e8b3722aa95b22cfd4713e1a9da8cf93",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r4-temporal-rest"
+      ],
+      "hypothesis": "Nonnegative-speed entry alone represents certified rest",
+      "changed_dimension": "Exact852/853current-state proofs; remove only positive-speed prerequisite",
+      "result": "rejected",
+      "reason": "Rest proof passes, artifact strict-increasing path-distance check rejects.",
+      "production_impact": "Observation only",
+      "deleted_code": [],
+      "revisit_condition": "Explicit physical representation of temporal rest"
+    },
+    {
+      "experiment_id": "20260910-nine-state-dev2-r4-temporal-rest",
+      "baseline_commit": "d7fffe15e8b3722aa95b22cfd4713e1a9da8cf93",
+      "snapshot_ids": [
+        "20260910-nine-state-dev2-r4-temporal-rest"
+      ],
+      "hypothesis": "Certified complete rest is a temporal zero-distance interval",
+      "changed_dimension": "Only nonnegative-speed entry, constrained exact-body-rest distance equality and matching native stationary suffix; zero solves",
+      "result": "accepted",
+      "reason": "Exact852/853immutable rest artifacts, native/fullsuffix joins and production commands accept. Same0/-3 commands; no horizon/constraint/tolerance relaxation.",
+      "production_impact": "Certified temporal rest representation only; integrated acceptance pending",
+      "deleted_code": [],
+      "revisit_condition": "New integrated run and actual rest/restart"
     }
   ]
 }

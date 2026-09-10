@@ -126,3 +126,14 @@ is recorded only when the command actually owns that source trajectory.
 Buildr15passes26packages; testsr11passes2393records; production-API replay of
 the reconstructed954alternate preserves its first command exactly and certifies
 the materialized full rest suffix. Fresh runtime and M4–M6 remain open.
+
+
+## Temporal complete-rest publication
+
+d7fffe15dev2-r4executes materialized Stop322at846..852, then fails853when
+control-origin u/vy/r are0and the original cursor expires. Current Stop proof
+passes, but its temporal zero-distance interval cannot be represented by the
+old positive-speed/strict-distance adapter. See `rest-publication-design.md`.
+Constrained temporal rest representation passes buildr16:26packages,
+testsr12:2394records, and exact852/853production replay. Native zero rest and
+all current wall/peer checks remain. Fresh runtime/M4–M6are still open.

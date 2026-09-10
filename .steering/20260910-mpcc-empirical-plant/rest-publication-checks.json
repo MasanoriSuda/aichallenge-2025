@@ -1,0 +1,31 @@
+{
+  "baseline_commit": "d7fffe15e8b3722aa95b22cfd4713e1a9da8cf93",
+  "files": [
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "sha256": "3cb75dba17ba09ea524f8ad3a3c5503e0798102dd2a438c3c996cd28f21e3fa5",
+      "preserved": "output/20260910-nine-state-rest-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "sha256": "865bb4bc4e7e2b13b78dede6aa770e0803bc651ffa254eda82804b7e676f2c4b",
+      "preserved": "output/20260910-nine-state-rest-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "d04b0e4d9072599b72ba66bf3ad892ba0e3d2de673600b374b73e4664ac5c639",
+      "preserved": "output/20260910-nine-state-rest-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp"
+    },
+    {
+      "path": "aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "0b216c2d8c64d523bc7432acb5a3f0af94a78458c9b7f5a88cd43d46a7b72c07",
+      "preserved": "output/20260910-nine-state-rest-publication-candidate-r1/sources/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/test/test_mpcc_rate_resolved_retained_revalidation.cpp"
+    }
+  ],
+  "patch_sha256": "26d124840fc1cc7b8666c82a856d1ffb70d1ff815bc4e34598d39d468b3b9731",
+  "build": "r16:26packages/17.9s; setuptools deprecation only",
+  "tests": "r12:2394 records, 0 errors/failures/skips",
+  "source_replay": "Exact852/853 original322 native/physical plan reload; current Stop proof accepted. Production temporal rest artifact, native replay and current-world fullsuffix join accept at0m/s and wire-3. Original852accepted/853cursor-unavailable preserved.",
+  "runtime": "Fresh integrated run pending; M4-M6 open",
+  "evidence": "output/20260910-nine-state-rest-publication-candidate-r1"
+}

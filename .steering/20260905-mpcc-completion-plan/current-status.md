@@ -360,3 +360,7 @@ Stop/retainedへ共通化。buildr14:26packages、testsr10:2392records合格。
 停止列を破棄して元軌道を実行済みとする欠陥を修正。buildr15:26packages、
 testsr11:2393records、本番APIによる954再構成の停止列格納・再証明が合格。
 新しいdev2からM4–M6を継続する。詳細は20260910-mpcc-empirical-plant/first-dev2-r3-failure.md。
+
+2026-09-10更新: dev2-r4は停止列の実行を確認したが、D2decision853で静止状態の
+時間区間を格納できず不合格。距離ゼロの完全静止を明示する修正はbuildr16:26packages、
+testsr12:2394records、同一852/853観測の本番再生で合格。次のdev2からM4–M6を継続。

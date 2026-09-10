@@ -136,8 +136,7 @@ Result build(
     !finite(request.now_sec) || !finite(request.control_origin_sec) ||
     request.control_origin_sec < request.now_sec ||
     !finite(request.control_origin_speed_mps) ||
-    request.control_origin_speed_mps <=
-    std::max(1e-9, source_artifact.physical_global_tolerance) ||
+    request.control_origin_speed_mps < 0.0 ||
     !finite(request.current_steering_rad) ||
     !finite(request.current_response_steering_rad) ||
     !finite(request.current_lateral_velocity_mps) || !finite(request.current_yaw_rate_radps))

@@ -310,10 +310,19 @@ RejectReason validate(const ExecutionArtifact & artifact) noexcept
       return RejectReason::InvalidPredictedState;
     }
     const double path_distance_m = artifact.nominal_path_distance_m[index];
+    // A certified Stop remains a timed input interval after complete body
+    // rest. Equal distance must not disguise moving or accelerating states.
+    const bool rest_interval = index > 0U && artifact.terminal_body_rest_required &&
+      artifact.predicted_states[index - 1U].velocity_mps == 0.0 && state.velocity_mps == 0.0 &&
+      artifact.predicted_states[index - 1U].lateral_velocity_mps == 0.0 && state.lateral_velocity_mps == 0.0 &&
+      artifact.predicted_states[index - 1U].yaw_rate_radps == 0.0 && state.yaw_rate_radps == 0.0 &&
+      artifact.control_stages[index - 1U].acceleration_mps2 <= 0.0 &&
+      artifact.control_stages[index - 1U].virtual_progress_speed_mps == 0.0;
     if (
       !std::isfinite(path_distance_m) || path_distance_m < 0.0 ||
       (index == 0U && std::abs(path_distance_m) > tolerance) ||
-      (index > 0U && path_distance_m <= previous_path_distance_m))
+      (index > 0U && (path_distance_m < previous_path_distance_m ||
+      (path_distance_m == previous_path_distance_m && !rest_interval))))
     {
       return RejectReason::InvalidPathDistance;
     }

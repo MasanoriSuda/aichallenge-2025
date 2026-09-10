@@ -1538,6 +1538,64 @@ TEST(MpccRateResolvedRetainedRevalidation, MaterializedFeedbackStopExecutesBraki
     stop_bundle::Reason::StopSuccessorUnavailable);
 }
 
+TEST(MpccRateResolvedRetainedRevalidation, PublishesCertifiedRestAfterSourceCursorExpires)
+{
+  auto request = accepted_request(certified_plan());
+  request.now_sec = request.control_origin_sec = 2.0;
+  request.obstacles.observed_sec = request.now_sec;
+  request.control_origin_physical_progress_m = 50.45;
+  request.control_pose = {50.45, 0.20, 0.0};
+  request.measured_to_control_path = {request.control_pose};
+  request.current_speed_mps = request.control_origin_speed_mps = 0.0;
+  request.current_lateral_velocity_mps = request.current_yaw_rate_radps = 0.0;
+  request.current_time_steering_rad = request.current_response_steering_rad = 0.10;
+  request.current_steering_rad = request.previous_published_steering_rad = 0.10;
+  ASSERT_EQ(retained::evaluate(request).reason, retained::Reason::CursorUnavailable);
+  const auto stop = retained::evaluate_stop_successor(request);
+  ASSERT_TRUE(stop.accepted());
+  const auto bundle = stop_bundle::build(request, stop, 101U);
+  ASSERT_EQ(bundle.reason, stop_bundle::Reason::Available);
+  ASSERT_TRUE(bundle.plan);
+  const auto & execution = *bundle.plan->execution_artifact;
+  ASSERT_EQ(execution.control_stages.size(), 1U);
+  EXPECT_EQ(execution.nominal_path_distance_m, (std::vector<double>{0.0, 0.0}));
+  EXPECT_DOUBLE_EQ(execution.control_stages.front().duration_sec, execution.publication_interval_sec);
+  const auto native = multi_purpose_mpc_ros::mpcc_rate_resolved_physical_adapter::build(
+    execution, request.current_intent, execution.identity.source_context.stage_geometry_id);
+  ASSERT_TRUE(native.exact_trajectory);
+  EXPECT_TRUE(native.exact_trajectory->stationary_path_suffix_allowed);
+  EXPECT_DOUBLE_EQ(native.exact_trajectory->stationary_velocity_tolerance_mps, 0.0);
+  EXPECT_DOUBLE_EQ(native.exact_trajectory->velocity_mps.back(), 0.0);
+
+  auto current = request;
+  current.plan = bundle.plan;
+  current.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto joined = retained::evaluate(current);
+  ASSERT_EQ(joined.reason, retained::Reason::Accepted);
+  EXPECT_TRUE(joined.terminal_stop_uses_solved_suffix);
+  const auto command = production::build(joined);
+  ASSERT_TRUE(command.authority);
+  EXPECT_DOUBLE_EQ(command.authority->command.predicted_speed_mps, 0.0);
+  EXPECT_DOUBLE_EQ(command.authority->command.acceleration_mps2, request.minimum_acceleration_mps2);
+
+  // Repeated distance may not represent moving, rotating or launching body
+  // states, nor may an ordinary artifact claim the terminal Stop exception.
+  for (int mutation = 0; mutation < 6; ++mutation) {
+    auto invalid = execution;
+    if (mutation == 0) { invalid.terminal_body_rest_required = false; }
+    if (mutation == 1) { invalid.predicted_states.back().velocity_mps = 0.01; }
+    if (mutation == 2) { invalid.predicted_states.back().lateral_velocity_mps = 0.01; }
+    if (mutation == 3) { invalid.predicted_states.back().yaw_rate_radps = 0.01; }
+    if (mutation == 4) { invalid.control_stages.front().acceleration_mps2 = 0.01; }
+    if (mutation == 5) { invalid.nominal_path_distance_m.back() = -0.01; }
+    EXPECT_EQ(artifact::validate(invalid), artifact::RejectReason::InvalidPathDistance);
+  }
+  current.obstacles.obstacles.push_back({"occupying-peer", {50.45, 0.20, 0.0, 0.0, 0.2}});
+  const auto blocked = retained::evaluate(current);
+  EXPECT_NE(blocked.reason, retained::Reason::Accepted);
+  EXPECT_FALSE(production::build(blocked).authority);
+}
+
 TEST(
   MpccRateResolvedRetainedRevalidation,
   ReifiesCurrentWorldStopAsCanonicalSevenStateAuthority)

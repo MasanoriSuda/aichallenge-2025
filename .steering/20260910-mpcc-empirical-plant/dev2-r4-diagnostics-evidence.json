@@ -1,0 +1,131 @@
+{
+  "authority": false,
+  "run": "20260910-nine-state-dev2-r4",
+  "baseline_commit": "d7fffe15e8b3722aa95b22cfd4713e1a9da8cf93",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-rest-publication-diagnostic-r1/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-diagnostic-r1/production-result.yaml",
+      "sha256": "fbbf813a01e2f0b342669fddae8939d85dd852e0c7cfbd5ea83922287f4f5d4e"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-diagnostic-r1/replay_revalidation.cpp",
+      "sha256": "49711b6c4818cd54f7ca1db288f00abbfb9d045be9882b4671b9c7ff070812cb"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-diagnostic-r1/result.yaml",
+      "sha256": "d36e2af5cfe1ae5aa5034b7190590d5bf692799f7f8778ad1c90fe53087f48ce"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-diagnostic-r1/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r1/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r1/replay_revalidation.cpp",
+      "sha256": "5761c413d5b00f89e0e2114bb672e735e17875840e1020c801f8e492453e8f50"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r1/rest_diagnostic_bundle.cpp",
+      "sha256": "f62dec23304304b82a784bffbfef48949ecacecfae79573ec488ff305009eb99"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r1/rest_diagnostic_bundle.hpp",
+      "sha256": "4a564840d99e91879e9502fcc6cf750f7ded42cd4232e32d0a6de3767fd3fd71"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r1/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r2/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r2/replay_revalidation.cpp",
+      "sha256": "5761c413d5b00f89e0e2114bb672e735e17875840e1020c801f8e492453e8f50"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r2/rest_diagnostic_bundle.cpp",
+      "sha256": "f62dec23304304b82a784bffbfef48949ecacecfae79573ec488ff305009eb99"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r2/rest_diagnostic_bundle.hpp",
+      "sha256": "e65c0183dd7fdfb22af92389c9973a1ef478caaf6c56c6417fd2029eb098fd62"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r2/result.yaml",
+      "sha256": "45b671d3c1ae02f0520a1c394aa631a77777cca7fae0034cb9d12c4995ba87e9"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r2/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r5/compile_replay.py",
+      "sha256": "e9a1a7e2ae29fa050b2438636f18977ce6fe048ed9cd629001dc6b556091fe0a"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r5/replay_revalidation.cpp",
+      "sha256": "8ae1e8e1c64ab536e643e340714c5a11608775d9fc7761d21119ab4f9577a5cd"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r5/rest_diagnostic_bundle.cpp",
+      "sha256": "ff71f0b3d12e2d655c60494f4763dac3a4fe7468a92b8a5e14bda57ce1a349cc"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r5/rest_diagnostic_bundle.hpp",
+      "sha256": "e65c0183dd7fdfb22af92389c9973a1ef478caaf6c56c6417fd2029eb098fd62"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r5/rest_execution_artifact.cpp",
+      "sha256": "d45bd3ae3c6c7eab13aa1fd54e238d1ceee48bf19897f3b5148f8cfcd976b9d1"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r5/rest_physical_adapter.cpp",
+      "sha256": "865bb4bc4e7e2b13b78dede6aa770e0803bc651ffa254eda82804b7e676f2c4b"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r5/result.yaml",
+      "sha256": "8f38ea4bc746703a253e56bbcfe7e7680571cc7945ab62481606aa3fbd20c2ac"
+    },
+    {
+      "path": "output/20260910-nine-state-rest-publication-comparison-r5/revalidation_input.hpp",
+      "sha256": "4e88fb2dedd0cfe7f2528a2df28d106ba2b77bbc646e1532dd21fef9b3078215"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r4-metrics/d1-callback-samples.json",
+      "sha256": "98de34d7defe5e5ce9c96c654f34fac4b59343c35c849d337f93146b3fcff423"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r4-metrics/d1-command-clock-anomalies.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r4-metrics/d1-prediction-samples.json",
+      "sha256": "b433c05b150f96280519d984f5a2b98d716a78261d082a3142e8264408a23ede"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r4-metrics/d2-callback-samples.json",
+      "sha256": "e041b53eba98af390dcc62c087ab760bef00d10cf2c6ae72726227b9149663f0"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r4-metrics/d2-command-clock-anomalies.json",
+      "sha256": "6acbe9eb3cafa16a128a3262c387308cf1e00f225f07f130a4fafd9851aa8ac3"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r4-metrics/d2-prediction-samples.json",
+      "sha256": "c8c59d5453af9faf84af32245e1df0444cfa9c66405eced530661ecf614f974f"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r4-metrics/report.json",
+      "sha256": "afec1504f55b9a01ae39801c033187d1ff9960c334944702b5d96b7cd12e4616"
+    }
+  ]
+}

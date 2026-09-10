@@ -103,6 +103,7 @@ std::uint64_t nominal_fingerprint(const retained::Proof &proof) {
     number(value);
   number(proof.terminal_stop_certified);
   number(proof.terminal_stop_uses_solved_suffix);
+  number(proof.terminal_stop_constant_steering_program);
   number(proof.terminal_stop_publisher_interval_sample_count);
   number(proof.cursor.control_stage_index);
   number(proof.cursor.remaining_control_stage_count);

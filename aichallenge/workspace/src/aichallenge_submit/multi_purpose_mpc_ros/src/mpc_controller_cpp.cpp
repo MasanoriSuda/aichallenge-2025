@@ -7741,6 +7741,7 @@ struct RateResolvedRetainedShadowEvaluation
   bool terminal_stop_attempted{false};
   bool terminal_stop_certified{false};
   bool terminal_stop_normal_path_reference{false};
+  bool terminal_stop_constant_steering_program{false};
   bool terminal_stop_uses_solved_suffix{false};
   unsigned terminal_stop_reference_attempts{};
   bool terminal_stop_approximate_support_exceeded{false};
@@ -27173,6 +27174,7 @@ struct MPC
     evaluation.terminal_stop_attempted = result.terminal_stop_attempted;
     evaluation.terminal_stop_certified = result.terminal_stop_certified;
     evaluation.terminal_stop_normal_path_reference = result.terminal_stop_normal_path_reference;
+    evaluation.terminal_stop_constant_steering_program = result.terminal_stop_constant_steering_program;
     evaluation.terminal_stop_uses_solved_suffix = result.terminal_stop_uses_solved_suffix;
     evaluation.terminal_stop_reference_attempts = result.terminal_stop_reference_attempts;
     evaluation.terminal_stop_approximate_support_exceeded =
@@ -28273,7 +28275,8 @@ struct MPC
           race_mpcc::exact_physical_execution_trajectory_reason_name(
             retained.terminal_stop_exact_reason),
           retained.terminal_stop_uses_solved_suffix ? "solved-stop-suffix" :
-          (retained.terminal_stop_normal_path_reference ? "normal-path-profile" : "track-reference-path"),
+          (retained.terminal_stop_constant_steering_program ? "constant-steering-program" :
+          retained.terminal_stop_normal_path_reference ? "normal-path-profile" : "track-reference-path"),
           retained.terminal_stop_reference_attempts,
           retained.terminal_stop_rejected_sample,
           retained.terminal_stop_publisher_interval_end_steering_rad,
@@ -28920,7 +28923,8 @@ struct MPC
       rate_resolved_shadow::artifact::to_string(
         window.last_retained.actuation_reason),
       window.last_retained.terminal_stop_uses_solved_suffix ? "solved-stop-suffix" :
-      (window.last_retained.terminal_stop_normal_path_reference ?
+      (window.last_retained.terminal_stop_constant_steering_program ? "constant-steering-program" :
+      window.last_retained.terminal_stop_normal_path_reference ?
       "normal-path-profile" : "track-reference-path"),
       window.last_retained.terminal_stop_reference_attempts,
       window.last_retained.observation_origin_sec,

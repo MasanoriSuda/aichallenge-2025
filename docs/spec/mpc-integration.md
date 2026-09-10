@@ -128,6 +128,14 @@ buildr43=26、testsr36=2432記録/62groupで失敗0。r19の走行中の壁・�
 testsr37=2433記録/62groupで失敗0。別の相手車拒否、実走25ms・再発進・完走は未解決。
 [区間境界と壁回帰](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/wall-enclosure-design.md)を参照。
 
+2026-09-11のdev2-r21はD1decision953、1.88m/sで壁の停止認証を失った。最初の通常指令を保ち、
+次の送信周期から既存の最小加速度と同じ操舵値で停止する候補を追加した。従来の2種類の
+横位置追従は停止可能性の必要条件ではない。新候補にも元の通常軌道・壁・相手車・Follow・
+入力全応答・完全停止・最終指令同一性の認証をすべて要求する。完成済みの停止軌道は維持する。
+過去の壁拒否2件と相手車拒否1件は完全認証・停止計画引き継ぎまで合格。
+buildr45=26、testsr38=2434記録/62groupで失敗0。実走25ms・再発進・完走は未検証。
+[停止候補の比較](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/common-stop-candidate-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

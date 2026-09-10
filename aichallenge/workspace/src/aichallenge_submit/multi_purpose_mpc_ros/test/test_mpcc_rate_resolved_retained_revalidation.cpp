@@ -2427,6 +2427,38 @@ TEST(MpccRateResolvedRetainedRevalidation, AppliedProgramIsRequiredAtTheCommandB
   EXPECT_FALSE(result.proof->applied_program->matches(different_profile));
 }
 
+TEST(MpccRateResolvedRetainedRevalidation, CommonTerminalCandidatePreservesFirstPacketAndCompleteStop)
+{
+  auto request = applied_request();
+  request.applied_program_required = true;
+  request.input_application_profile = vehicle::InputApplicationProfile{"test-receiver", .25, .25, .02};
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof && result.proof->applied_program);
+  ASSERT_TRUE(result.terminal_stop_constant_steering_program);
+  ASSERT_TRUE(production::build(result).authority);
+  const auto & expected = request.publication_prefix->proposed_packet;
+  const auto & programme = result.proof->applied_program->prepared().program;
+  ASSERT_GT(programme.commands.size(), 1U);
+  EXPECT_DOUBLE_EQ(programme.commands.front().published_sec, expected.published_sec);
+  EXPECT_DOUBLE_EQ(programme.commands.front().wire_acceleration_mps2, expected.wire_acceleration_mps2);
+  for (const auto & packet : programme.commands)
+    EXPECT_DOUBLE_EQ(packet.wire_steering_rad, expected.wire_steering_rad);
+  EXPECT_DOUBLE_EQ(programme.commands.back().wire_acceleration_mps2, request.minimum_acceleration_mps2);
+  EXPECT_GT(result.proof->applied_program->tube().rest_sec, programme.commands.back().published_sec);
+  auto changed = result;
+  changed.proof->terminal_stop_constant_steering_program = false;
+  EXPECT_FALSE(production::build(changed).authority);
+  const auto stop = stop_bundle::build_certified_terminal(request, result, 20001U);
+  ASSERT_TRUE(stop.plan);
+  request.plan = stop.plan;
+  request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto joined = retained::evaluate(request);
+  ASSERT_TRUE(joined.proof && joined.proof->applied_program);
+  EXPECT_TRUE(joined.terminal_stop_uses_solved_suffix);
+  EXPECT_FALSE(joined.terminal_stop_constant_steering_program);
+  EXPECT_TRUE(production::build(joined).authority);
+}
+
 TEST(MpccRateResolvedRetainedRevalidation, MaterializedAppliedStopPreservesProgramThroughEveryResponseRest)
 {
   auto request = applied_request(); request.applied_program_required = true;

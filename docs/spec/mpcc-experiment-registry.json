@@ -949,6 +949,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/wall-enclosure-evidence.json",
       "replay_ready": true,
       "reason": "Exact first D1964/source260wall failure, separate accepted963/source277, native reference-arm audit and conservative wall regression"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-common-stop-r21",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/common-stop-candidate-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact first D1953/source261wall failure, separate previous952/source270, terminal programme comparison under the original physical gates"
     }
   ],
   "experiments": [
@@ -7760,6 +7766,262 @@
         "Discarding the already computed natural interval image when mean-value image is wider"
       ],
       "revisit_condition": "Changed world/input or new failing enclosure/native/runtime evidence; no relaxation of the physical gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-integrated-r21",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Numerical image intersection resolves integrated moving authority",
+      "changed_dimension": "Fresh same-build dev2",
+      "result": "rejected",
+      "reason": "First D1Emergency953/1.88mps; p99 and adjacent overruns fail. Source261captured, previous actualpublished270separate.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-exact-arm-r95",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Final reference arm reproduces the original wall failure",
+      "changed_dimension": "Diagnostic exact reference arm",
+      "result": "accepted",
+      "reason": "Exact wall rejection11.739999760; 64 sampled schedules clear but finite sampling cannot certify all responses.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-persistent-a-1",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: persistent-a",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=4824247561825784522 solver=solved solve_ms=38.9703 terminal_progress=5.15629 terminal_velocity=3.09205 lateral_reserve=0.461924 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-stateless-left-b-2",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: stateless-left-b",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=stateless-left-b stage=accepted candidate=14223969910466543034 solver=solved solve_ms=32.8837 terminal_progress=5.19017 terminal_velocity=3.07034 lateral_reserve=0.461939 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-stateless-right-b-3",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: stateless-right-b",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "rejected",
+      "reason": "arm=stateless-right-b stage=solver-rejected candidate=8426368531640615114 solver=solve-rejected solve_ms=176.534 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.933718, dua_res=99.2632, failed_iterate_row=584, value=0.584012, bounds=[-inf,-5.27605], violation=5.86006, tolerance=0.00627605, normalized=933.718, row_semantic=dynamic-obstacle-physical-plane/stage=7/element=-1, architecture_snapshot=mpcc_architecture_snapshots/000000000953-74f07988e2f800ca-cruise-side-negative-dynamic-obstacle-refinement-solve-rejected/snapshot.yaml; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-rough-left-c-4",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: rough-left-c",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=rough-left-c stage=accepted candidate=3030301007360601487 solver=solved solve_ms=35.0898 terminal_progress=5.11862 terminal_velocity=3.08495 lateral_reserve=0.461938 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=5 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=5 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=0/attempts=5/accepted; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-rough-right-c-5",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: rough-right-c",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "rejected",
+      "reason": "arm=rough-right-c stage=solver-rejected candidate=7192551849069468135 solver=solve-rejected solve_ms=60.8653 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.936839, dua_res=22.5133, failed_iterate_row=578, value=0.581895, bounds=[-inf,-5.61969], violation=6.20158, tolerance=0.00661969, normalized=936.839, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-offline-left-d-6",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: offline-left-d",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=offline-left-d stage=accepted candidate=3030301007360601487 solver=solved solve_ms=69.7988 terminal_progress=5.09717 terminal_velocity=3.10704 lateral_reserve=0.461986 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=5 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=5 sqp_depth=3 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/normal-avoidance-lattice/depth=3/attempts=5/accepted, progress_wall=accepted/applied=1/solved=1/mismatch=13.8434m, physical_wall=accepted/applied=1/solved=1/failure_stage=-1/samples=1755/cache_hits=17/cache_misses=83/cache_scanned=7301/bucket_hard=0/lag_pose_box=0/heading_pose_box=0, successive_linearization=accepted/applied=1/bootstrap=1/solved=1, post_refinement_linearization=invalid-request/requested=0/applied=0/bootstrap=0/solved=0/count=0/proof=1/1, physical_dynamic_sqp_audit=applied/solved=1/limit=3/count=3/detail=bounded dynamics/obstacle/wall SQP solved; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-offline-right-d-7",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: offline-right-d",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "rejected",
+      "reason": "arm=offline-right-d stage=solver-rejected candidate=7192551849069468135 solver=solve-rejected solve_ms=60.3993 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=3 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.936839, dua_res=22.5133, failed_iterate_row=578, value=0.581895, bounds=[-inf,-5.61969], violation=6.20158, tolerance=0.00661969, normalized=936.839, row_semantic=dynamic-obstacle-physical-plane/stage=1/element=-1; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-production-left-g-8",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: production-left-g",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=production-left-g stage=accepted candidate=14223969910466543034 solver=solved solve_ms=32.8929 terminal_progress=5.19017 terminal_velocity=3.07034 lateral_reserve=0.461939 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=1 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted/candidate=direct-side; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-architecture-production-right-g-9",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: production-right-g",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "rejected",
+      "reason": "arm=production-right-g stage=solver-rejected candidate=8426368531640615114 solver=solve-rejected solve_ms=100.058 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=direct-side candidate_count=4 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified bounded normal candidate/best=direct-side/rate-resolved dynamic-obstacle QP rejected: stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.933718, dua_res=99.2632, failed_iterate_row=584, value=0.584012, bounds=[-inf,-5.27605], violation=5.86006, tolerance=0.00627605, normalized=933.718, row_semantic=dynamic-obstacle-physical-plane/stage=7/element=-1; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Mission/candidate/solver architecture; unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=13955108962523573571 solver=solved solve_ms=14.0421 terminal_progress=0.696656 terminal_velocity=0 lateral_reserve=0.462128 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.93693,-2.80523]/mean=-2.83408/bounds=0 steer_rate=[-0.707059,0.699342]/mean=0.191163/bounds=1/sign_changes=3 sequence=[0.045:-2.88055:-0.699712;0.045:-2.80523:-0.699746;0.045:-2.80852:-0.691207;0.045:-2.81156:0.292038;0.045:-2.81426:0.699124;0.045:-2.81665:0.691411;0.045:-2.81882:0.686391;0.045:-2.82083:0.683677;0.045:-2.82273:0.682967;0.045:-2.82458:0.684007;0.045:-2.82641:0.686513;0.045:-2.82825:0.690185;0.045:-2.83015:0.694607;0.045:-2.83226:0.699342;0.045:-2.83462:0.0376117;0.045:-2.83731:-0.618715;0.045:-2.84066:-0.694502;0.045:-2.84409:-0.707059;0.045:-2.84725:0.34993;0.045:-2.93693:0.356406] detail=accepted; Nominal only, no applied/live authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-prior-programme-r97-r99",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "Retaining the previous programme solves the next join",
+      "changed_dimension": "Derived prior materialization / exact publication-clock suffix",
+      "result": "rejected",
+      "reason": "r97diagnostic aborted before reporting preparation reason; r98/r99show derived current join steering step exceeds original bound. Remaining original publication-clock suffix still wall-rejects. FirstPacketMismatch hypothesis falsified.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-common-programme-r100",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "One constant steering word can satisfy the stopping obligation",
+      "changed_dimension": "Terminal programme diagnostic",
+      "result": "accepted",
+      "reason": "Unchanged actual firstpacket and world: full numerical wall/state/CA1peer/rest passes; no standalone normal authority.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-all-proof-variant-r101",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "New terminal programme can satisfy every existing nominal and applied gate",
+      "changed_dimension": "Terminal candidate generation only",
+      "result": "accepted",
+      "reason": "Isolated source variant accepts r21D1953,r20D1964,r19D21071 through production adapter, materialization and join; no live runtime claim.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
+    },
+    {
+      "experiment_id": "20260911-nine-state-common-stop-r21-production-local",
+      "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+      "snapshot_ids": [
+        "20260911-nine-state-common-stop-r21"
+      ],
+      "hypothesis": "The integrated candidate preserves existing authority and failure contracts",
+      "changed_dimension": "Same bounded terminal candidate with proof kind fingerprint and accumulated costs",
+      "result": "accepted",
+      "reason": "83focusedtests/buildr45/testsr38pass. Fresh native driver passes three prior failures and positive regressions; real r18history gap remains rejected. Complete solved/delayed Stops preserved.",
+      "production_impact": "Only terminal candidate population changes. Actual first normal packet and every physical gate remain unchanged. No live acceptance claimed.",
+      "deleted_code": [
+        "Assumption that only two lateral tracking references can supply a feasible stopping programme"
+      ],
+      "revisit_condition": "Changed world/input or new failing native/runtime evidence; do not relax the physical or timing gate"
     }
   ]
 }

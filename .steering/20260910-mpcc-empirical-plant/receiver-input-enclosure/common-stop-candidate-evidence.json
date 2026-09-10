@@ -1,0 +1,1791 @@
+{
+  "baseline_commit": "4210fa890a37df6dcb3bef08d6006eb4347d996b",
+  "integrated_acceptance": false,
+  "run": "output/20260910-nine-state-dev2-r21",
+  "first_failure": {
+    "domain": 1,
+    "decision": 953,
+    "speed_mps": 1.88,
+    "waypoint": 32,
+    "previous_decision": 952,
+    "previous_published_source": 270,
+    "exact_inspected_source": 261,
+    "reason": "AppliedProgram/WallRejected at11.739999760"
+  },
+  "change": "Add a common constant serialized steering Stop programme after the immutable first normal packet. Next packet uses existing minimum acceleration. Every original nominal/applied physical and joining gate remains required. Complete solved Stops bypass this candidate.",
+  "causal_evidence": "Final-reference native r95 reproduces exact original wall rejection. Finite sampled schedules clear but not a proof. r100common programme passes full numerical gate; isolated r101passes all nominal/applied/production/materialization/join gates on r21D1953,r20D1964,r19D21071.",
+  "rejected_alternative": "Derived materialized previous952source270joining current953has preparation9SteeringStepOutsideBounds; first step0.0473783rad exceeds0.0257925rad. Original publication-clock remaining programme still rejects wall11.704999760. Do not relabel these derived inputs as actual953source261.",
+  "validation": {
+    "build": "r45:26packages",
+    "package": "r38:2434records/62groups/zeroerrors-failures-skips",
+    "focused": "83tests passed",
+    "native": {
+      "wall-r21": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 952,
+          "source": 270,
+          "captured_request": {
+            "elapsed_ms": 10.637582,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.824999760999999,
+            "program_commands": 2,
+            "samples": 230,
+            "peer_clearance_m": 0.7807584055114809,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 10.281995,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.824999760999999,
+            "program_commands": 2,
+            "samples": 230,
+            "peer_clearance_m": 0.7807584055114809,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 953,
+          "source": 261,
+          "captured_request": {
+            "elapsed_ms": 9.695937,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.87499976,
+            "program_commands": 2,
+            "samples": 231,
+            "peer_clearance_m": 0.7978390058828739,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 9.686419,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.87499976,
+            "program_commands": 2,
+            "samples": 231,
+            "peer_clearance_m": 0.7978390058828739,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "wall-r20": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 963,
+          "source": 277,
+          "captured_request": {
+            "elapsed_ms": 11.651031,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.424999751,
+            "program_commands": 2,
+            "samples": 260,
+            "peer_clearance_m": 1.390907809840646,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 11.300666,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.424999751,
+            "program_commands": 2,
+            "samples": 260,
+            "peer_clearance_m": 1.390907809840646,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 964,
+          "source": 260,
+          "captured_request": {
+            "elapsed_ms": 10.15069,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.45499975,
+            "program_commands": 2,
+            "samples": 263,
+            "peer_clearance_m": 1.41015037083353,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 10.132976,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.45499975,
+            "program_commands": 2,
+            "samples": 263,
+            "peer_clearance_m": 1.41015037083353,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "peer-r19": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000001071-d426f9a520aa2c4e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1070,
+          "source": 692,
+          "captured_request": {
+            "elapsed_ms": 8.264453,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.619999691,
+            "program_commands": 2,
+            "samples": 169,
+            "peer_clearance_m": 0.04887960476041098,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 8.067163,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.619999691,
+            "program_commands": 2,
+            "samples": 169,
+            "peer_clearance_m": 0.04887960476041098,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1071,
+          "source": 692,
+          "captured_request": {
+            "elapsed_ms": 8.093413,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.664999691,
+            "program_commands": 2,
+            "samples": 170,
+            "peer_clearance_m": 0.005183089134396246,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 8.074628,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.664999691,
+            "program_commands": 2,
+            "samples": 170,
+            "peer_clearance_m": 0.005183089134396246,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "accepted-r17": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r17/d1/mpcc_architecture_snapshots/000000001020-7b13fc78d1f505da-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 1019,
+          "source": 544,
+          "captured_request": {
+            "elapsed_ms": 6.583592,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.409999661999999,
+            "program_commands": 2,
+            "samples": 66,
+            "peer_clearance_m": 0.6299779555727445,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 6.440143,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.409999661999999,
+            "program_commands": 2,
+            "samples": 66,
+            "peer_clearance_m": 0.6299779555727445,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1020,
+          "source": 619,
+          "captured_request": {
+            "elapsed_ms": 6.635239,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.429999662,
+            "program_commands": 1,
+            "samples": 67,
+            "peer_clearance_m": 0.6284901853970306,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 6.621904,
+            "reason": "accepted",
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.429999662,
+            "program_commands": 1,
+            "samples": 67,
+            "peer_clearance_m": 0.6284901853970306,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "signed-r16": {
+        "authority": false,
+        "source": 124,
+        "decision": 795,
+        "captured": {
+          "elapsed_ms": 0.028033,
+          "reason": "intent-mismatch",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 1,
+          "program_reason": 1,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "intent-mismatch"
+        },
+        "published_upstream_retained": {
+          "elapsed_ms": 0.863298,
+          "reason": "accepted",
+          "production": "available",
+          "applied_certificate": true,
+          "rest_sec": 7.9149998230000005,
+          "minimum_peer_clearance_m": 1.0726770723374652,
+          "applied_reason": 0,
+          "program_reason": 0,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "invalid-current-state"
+        },
+        "published_stop": "accepted",
+        "bundle": "available",
+        "joined_published_stop": {
+          "elapsed_ms": 0.340479,
+          "reason": "accepted",
+          "production": "available",
+          "applied_certificate": true,
+          "rest_sec": 7.9149998230000005,
+          "minimum_peer_clearance_m": 1.0726770723374652,
+          "applied_reason": 0,
+          "program_reason": 0,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "invalid-current-state"
+        }
+      },
+      "gap-r18": {
+        "authority": false,
+        "source": 249,
+        "decision": 839,
+        "captured": {
+          "elapsed_ms": 0.029996,
+          "reason": "intent-mismatch",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 1,
+          "program_reason": 1,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "intent-mismatch"
+        },
+        "published_upstream_retained": {
+          "elapsed_ms": 1.551579,
+          "reason": "applied-program-unavailable",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 3,
+          "program_reason": 0,
+          "prediction_reason": 5,
+          "rejected_sec": null,
+          "nominal_only": "accepted",
+          "direct_applied_reason": 3,
+          "direct_prediction": 5
+        },
+        "published_stop": "accepted",
+        "bundle": "available",
+        "joined_published_stop": {
+          "elapsed_ms": 0.90158,
+          "reason": "applied-program-unavailable",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 3,
+          "program_reason": 0,
+          "prediction_reason": 5,
+          "rejected_sec": null,
+          "nominal_only": "accepted",
+          "direct_applied_reason": 3,
+          "direct_prediction": 5
+        }
+      },
+      "d1-r19-cost": {
+        "authority": false,
+        "capture_status": "present",
+        "recorded_detail": "authority=observation-only/source=182/reason=steering-unreachable/elapsed_ms=187.114/pre_ms=0.066775/continuation_build_ms=1.5446/continuation_proof_ms=15.2134/terminal_build_ms=0/terminal_dynamic_ms=0/terminal_wall_ms=0/applied_ms=169.332/applied_reason=5/prediction_reason=0/feedback_proof=applied-program-unavailable",
+        "decision": 854,
+        "source": 182,
+        "attempts": [
+          {
+            "elapsed_ms": 15.147798,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.550051,
+              "continuation_build": 1.505162,
+              "continuation_proof": 4.79567,
+              "delay_wall": 0.135955,
+              "dynamic": 0.34677,
+              "wall": 4.312915,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 8.168524
+            }
+          },
+          {
+            "elapsed_ms": 13.953078,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.536266,
+              "continuation_build": 0.585698,
+              "continuation_proof": 4.775763,
+              "delay_wall": 0.13341,
+              "dynamic": 0.326752,
+              "wall": 4.315571,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 8.03304
+            }
+          },
+          {
+            "elapsed_ms": 13.915688,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.53329,
+              "continuation_build": 0.586138,
+              "continuation_proof": 4.780392,
+              "delay_wall": 0.135004,
+              "dynamic": 0.328616,
+              "wall": 4.316742,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 7.976683
+            }
+          },
+          {
+            "elapsed_ms": 13.863479,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.532118,
+              "continuation_build": 0.58142,
+              "continuation_proof": 4.772957,
+              "delay_wall": 0.130604,
+              "dynamic": 0.32521,
+              "wall": 4.317123,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 7.96441
+            }
+          },
+          {
+            "elapsed_ms": 13.866304,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.459999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.532198,
+              "continuation_build": 0.582181,
+              "continuation_proof": 4.771184,
+              "delay_wall": 0.130835,
+              "dynamic": 0.3251,
+              "wall": 4.315219,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 7.968448
+            }
+          }
+        ]
+      },
+      "d2-r19-cost": {
+        "authority": false,
+        "capture_status": "present",
+        "recorded_detail": "authority=observation-only/source=145/reason=steering-unreachable/elapsed_ms=139.706/pre_ms=0.095289/continuation_build_ms=1.8797/continuation_proof_ms=19.1261/terminal_build_ms=0/terminal_dynamic_ms=0/terminal_wall_ms=0/applied_ms=118.292/applied_reason=5/prediction_reason=0/feedback_proof=applied-program-unavailable",
+        "decision": 836,
+        "source": 145,
+        "attempts": [
+          {
+            "elapsed_ms": 13.113063,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.552235,
+              "continuation_build": 1.534136,
+              "continuation_proof": 4.969086,
+              "delay_wall": 0.140654,
+              "dynamic": 0.336821,
+              "wall": 4.491581,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.916621
+            }
+          },
+          {
+            "elapsed_ms": 11.647375,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.540954,
+              "continuation_build": 0.523602,
+              "continuation_proof": 4.732351,
+              "delay_wall": 0.12843,
+              "dynamic": 0.321443,
+              "wall": 4.282458,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.829408
+            }
+          },
+          {
+            "elapsed_ms": 11.574298,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.537046,
+              "continuation_build": 0.517711,
+              "continuation_proof": 4.736099,
+              "delay_wall": 0.126497,
+              "dynamic": 0.323897,
+              "wall": 4.285675,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.769726
+            }
+          },
+          {
+            "elapsed_ms": 11.571583,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.533831,
+              "continuation_build": 0.523942,
+              "continuation_proof": 4.732231,
+              "delay_wall": 0.126056,
+              "dynamic": 0.320181,
+              "wall": 4.285964,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.770027
+            }
+          },
+          {
+            "elapsed_ms": 11.580389,
+            "reason": "steering-unreachable",
+            "proof_present": false,
+            "feedback": true,
+            "feedback_proof_reason": "applied-program-unavailable",
+            "applied_reason": 5,
+            "prediction_reason": 8,
+            "rejected_sec": 8.024999825,
+            "terminal_attempted": true,
+            "terminal_certified": false,
+            "terminal_reason": 0,
+            "terminal_exact_reason": 0,
+            "terminal_reference_attempts": 0,
+            "terminal_uses_solved_suffix": true,
+            "runtime_ms": {
+              "pre": 0.536225,
+              "continuation_build": 0.520666,
+              "continuation_proof": 4.735969,
+              "delay_wall": 0.129733,
+              "dynamic": 0.32004,
+              "wall": 4.286166,
+              "terminal_build": 0,
+              "terminal_dynamic": 0,
+              "terminal_wall": 0,
+              "applied": 5.774225
+            }
+          }
+        ]
+      }
+    },
+    "numerical": "Native interval kernel unchanged from4210fa89; broad continuous/hybrid enclosure-r14 remains applicable"
+  },
+  "current_limits": "r21p99D1/D2=34.10823516/41.23963692ms; adjacent overruns42/36. Publication-clock agreement, real Stop/rest/restart, M4–M6 remain open. Freshdev2-r22next. Replay times are not live25ms acceptance.",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r21/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "cef01e7c52de54904e7c8ac249752fa2676121c2eeaac6520378c5b975d37026"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/launch.log",
+      "sha256": "cd0b281e2dda92b0e9a83a1fa20507cb91c7fb424baee3ca5358a2a0a5712b2b"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/manifest.json",
+      "sha256": "7c22428c740f57ba567b0965bcb1cc8dd214697312f8c8da0d43a8165811b7c8"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/monitor-summary.json",
+      "sha256": "fe7ac82ca215af46ed917c869a6646bc4544ac79000f22f2e8093bc36a748357"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r21/mpcc-source.patch",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r100/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r100/manifest.json",
+      "sha256": "7f4ce56fff72367648cddd0e49455ee3a6383a0f508ab2d2bffca2d5f75dc122"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r100/r21-published-programme.yaml",
+      "sha256": "1c0ffe51f65372bf744e7a68e5841cb0f05f498d3362a12f448f0ff4c3afc172"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r100/replay",
+      "sha256": "92fa517788edecc0eae1b10209771159262e101d71050c8b062402a6cbf774ca"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/generator.py",
+      "sha256": "8928fbc698533175cdb4beb751d8d5296e56fdce26158e8f3d2ce1f46a9fadae"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/manifest.json",
+      "sha256": "c5ea8aa901af552a957c3d9a4dc81fb0dedccd59acd90db2c2e101e9ac34ec31"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "e25fddc542b6381798c784d938e0050d477f3b4ae9b0764dde770efc38f5e8f1"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/r19d2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/r19d2.yaml",
+      "sha256": "0606b8215795742c4428476135952132b98db32550bc0bb9c26a18edd3e2f1fe"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/r20d1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/r20d1.yaml",
+      "sha256": "789492cd07e889892c3348cbcf675839580642b75eff053cc5aa52b85dab2c6f"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/r21d1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/r21d1.yaml",
+      "sha256": "2348c9060e4ccb612962aed43a22385ef542f9af3d4f35c783244028cfc2abe0"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r101/replay",
+      "sha256": "b890a2e4cef18e2a189787fd3a2be49bd00d750bd4f6a7b55ce4c1bac0f52861"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r102/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r102/manifest.json",
+      "sha256": "9fb7ab6a60f25e6ef004d5ac11847ec93a4a9cb5a30f2b6deb0aedfe9bf4a7fd"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r102/replay",
+      "sha256": "380599b693db043feb79172b5db3d8361cc216cbae04a6051e0f11674b678e2d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r103/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r103/manifest.json",
+      "sha256": "a17df78d4d411ff6880caefbaa60302bd124fb173851849baa9212c007a72062"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r103/replay",
+      "sha256": "83875db095bcd4774a272a934462472f6368d7b989d6a0fef8be30eb8105fa1b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r104/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r104/manifest.json",
+      "sha256": "5f5e49662993e1a3e33743e72666f59a74237ab8e7e466dfaac34603217da9bf"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r104/replay",
+      "sha256": "5f6bc0a1c31d4c7f3dfd57c9eded400a5c73e2aa063c422fda62069e66817811"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r97/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r97/manifest.json",
+      "sha256": "e45842d671128b2dc3b23aef41b58a26086146a4d86b882dde351a6e41bef36c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r97/replay",
+      "sha256": "7bf7ea23151531e4acf39995b831c8cecc0d5e592410e1d55a21f8c4c1ccd1e3"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r98/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r98/manifest.json",
+      "sha256": "d318ff44f6e85d9bc463e1b74e757b014142b2620d15be5b2f40c39e5d837878"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r98/r21-published-programme.yaml",
+      "sha256": "5819df5cbcf47911730bc340e9745d13a36610a450772c6c2e327aae42b1d60e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r98/replay",
+      "sha256": "a22890c3515a2e0e4be9677d1484ef983395acb95b85d1985d5b8af5979597fb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r99/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r99/manifest.json",
+      "sha256": "dde63bf39ff3863342656534fb0bcb1a8043adcce248c75b50416de39caa23dc"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r99/r21-published-programme.yaml",
+      "sha256": "3400a2f81e6d3e6f2cfbb11e7ae8aff0615b388a574767e3c50841bf2584576d"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r99/replay",
+      "sha256": "60768fe7b2fe7f8e06df6da6f7226b3eba1b9dbb629b15a1b67c2883bc4b77a6"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-evidence/mpcc-common-stop-focused-r1.log",
+      "sha256": "d1ed7d2dc56312b2c8778133ac28795e16113187cfb35e1277f94124e277611f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-evidence/mpcc-nine-state-build-r45.log",
+      "sha256": "c16efb4905d9ca82bf9bbd3e714efd2e2af6106a95e22759ef40a447216eb5d2"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-evidence/mpcc-nine-state-tests-r38.log",
+      "sha256": "8b01fc7c6bf2cbf6d79c874a8913eb9c84f7601920f389d79a1e356b5a5d3c05"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-evidence/mpcc_common_stop_native_suite.py",
+      "sha256": "5eef824c35a43be9b0506fa789c82cdf2d36d336eda98b57f26c9d89bf749416"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-evidence/mpcc_record_common_stop.py",
+      "sha256": "eb7e90df61a8a054825119345150911d582a899680c0b561a3e69ead5eee100b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/accepted-r17.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/accepted-r17.yaml",
+      "sha256": "bf3453094e41a49dc8e6477054eaf042412be9082cf7691e7058bd2682e5c034"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/commands.json",
+      "sha256": "3cc3210e48d34c002f84d64d39a129bf9b68c41ade52a74fb7ba97a31033b3eb"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/compile-r102.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/compile-r103.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/compile-r104.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/d1-r19-cost.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/d1-r19-cost.yaml",
+      "sha256": "acc70ee5456146ad64637186c0e9c4f4b32a9f3b399897cc41f1503694a4358e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/d2-r19-cost.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/d2-r19-cost.yaml",
+      "sha256": "be678347fa490938ac883c480b1e58f2c6ed714443a8bc204fb9e41a3b1ef9ec"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/files.json",
+      "sha256": "12bd8c3f5879fd72db22c0484aed822825f6bcebc577becc4911494fddf738cf"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros.so",
+      "sha256": "2f9e9f09888de16443d689a651d92a6184746407405f523def87e03d6d2b6d4c"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_boost_start_dash.so",
+      "sha256": "16f5e37b07209aef64088993ad544261bd556702ee394ee54c2bcf1fa96e29d9"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_control_mode_guard.so",
+      "sha256": "2f3790bca465a63e121105e4fc0bc96535b6edefb1dbff6ed896e4de030518f2"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_bounded_single_job_executor.so",
+      "sha256": "ca1e7df3df184f761e5ad594cbe44764cb531d13d6b6eb987ee7871d3667b249"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan.so",
+      "sha256": "ce489bd98b8d0b855a5e6b842ff12ae378dece831253def49529643bcf28e0fb"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan_adapter.so",
+      "sha256": "376476c63bdda01b91604b19452a16319320e3de2562ccd64927a6f66a976e0c"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_revalidation.so",
+      "sha256": "754b45878217fe33a560124c1521b8e9ec448b269de408a21282143c9deb9202"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_world_revalidation.so",
+      "sha256": "608e8991a459d47eb00cb6f1491d1b3225c432d5b71da067998fb010bfdbb00e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_follow_canonical_async.so",
+      "sha256": "16b17f5148aaabf53dfc9616217914e0923f83ae3b79b819cc5105cff4bc7dac"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_latest_only_worker.so",
+      "sha256": "4ea3676fa3fb92a6b61aef2f4549b9c1401a2848a5102ebc2faa4254672cf388"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_stage_geometry.so",
+      "sha256": "0387d075bfe4dac3f0a44ec2ab9adbcb9b02adab62154230245a646d72e9a514"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "sha256": "db812e64db8a9cc000767a0c27e6018139f31508112c5d54b55d0e65adf88043"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_velocity_limit.so",
+      "sha256": "5edfd8b8848f3810edb7c7b11963b0c60f601538dbf059fc4a991ddc45d99395"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_association.so",
+      "sha256": "f605749b6b1d1dc2920d61540e946ebf45bdcc0a191504919294806d38efcebe"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_preview.so",
+      "sha256": "51acc1153014fba2c6f38cf304a6a8033e43707fec5f083ddaad345e2e03b00e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_comparison.a",
+      "sha256": "fd329cc3c696ac98ceb2c5206acf9547700a7b8c6def4c064ce3866c4ee8512f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_snapshot.a",
+      "sha256": "c41d7c8e9b8aee7b60b50c52082bb179781aa7285738d4ee438ddea9c8f4934e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_certified_stop_successor_observation.a",
+      "sha256": "621b4f2e8d6d3224c3084980248625f1c04a0be1c78ea7cfde90cbd61e790c3d"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_execution_contract.so",
+      "sha256": "100686e2eb897b01442195e8d17faa7ef3a354ab2ed61430e9761cd772af57fc"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_latest_state_feedback.a",
+      "sha256": "54a428855c52451b7cd412de820f8e190408f76446a621b2be12e1e0f6f7d992"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_on_trajectory_connector.a",
+      "sha256": "2860432af2629c54f69756a2771eb70fc2d3ee8bc8862c682135eb0ac5587f82"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_overtake_sibling_adoption.a",
+      "sha256": "49cb2198bf9d9751ba58afcd6f9e98ae23718e44f5f63e78994a33dc8d223028"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_progress.so",
+      "sha256": "d064d8d232f31cc7be383243b6df983fcef70c6b0c6a7d6796851d06c11451e6"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.a",
+      "sha256": "e7c029456c8dd126cf41daf1b60298f0fbeee39c63d45eb9ca6f8f5a49c49186"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.so",
+      "sha256": "c01addb1368825d92a3337e6f4946201b42bafcf72f9802c36eb0bc441cffb12"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_adapter.a",
+      "sha256": "87de34de6da68634540063a4c7f4f7e76dc069e49e684a24bde2af1eee76cb67"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_certified_plan.a",
+      "sha256": "6ede9c573e7fb85641c3728d3acc9d9bca0f49e2b076b84a6caadbdcd8f1a9d6"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_command_candidate.a",
+      "sha256": "bcc0796ca19a609f8ac9dc8ad6f5d988269f451213d40ad77532c6fb8bb23792"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_dynamic_proof.a",
+      "sha256": "99092fe7fd1502e32951cd62dea1a0af679444e8cd0b8a14336f76ece1f8d25b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_artifact.a",
+      "sha256": "820ee6b8478704b2518184c0be9f3818a4cb49307e112932582bd4cc8b978bea"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_source.a",
+      "sha256": "65a8d51933811ad552daa26319c6edc04f181f3b755675c1a7778aab6993a731"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_normal_branch_bank.a",
+      "sha256": "66c6eea82bd89cfa4e4cd10c0f571bd387420c706f87409b61ccaca5208b2aaf"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_overtake_branch_bank.a",
+      "sha256": "0262ea8ae93d91eb706b411bcbefef60020e4d6201a558f00c58bd834a93e547"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_adapter.a",
+      "sha256": "70070b6a7ce14fccf59990704a1ddee204714f025d0acae9e6213460256c0c7b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_wall.a",
+      "sha256": "f4aa95ce288b650e23f1569d5faf2775640a723285efb444ef7ff4a2306ea6d3"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_problem.a",
+      "sha256": "79db324f8a13adf327e12c95d8678c4adaf14074e2cae5eaa581a1ea0cbe9914"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_production_adapter.a",
+      "sha256": "2c100ea84710cb3032742f9af4aa11dfc7f837ae2740de62456271acb1c1c85a"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_retained_revalidation.a",
+      "sha256": "d43a84c4584814f13bfa0175154423b6700d40e74947f240ab7280d22c9831aa"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_shadow.a",
+      "sha256": "068a4b9df465db4465be5150ef1e2269c016c5a2d6a29858eb32e9d74d20058a"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_control_lattice.a",
+      "sha256": "f360472032396b6e5617af632eaa2d3b633a844b548a77e457ada8dd3f98dc0c"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_lattice_shadow.a",
+      "sha256": "f21db286f49f515ddb36c25f0b88280770ee115f981a1923f3e74861dc8a01c0"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_successor_bundle.a",
+      "sha256": "36bc3329471dd76003b68ff8de68c807e00169602e4d8a274585df23bd22f11e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_stateless_maneuver.a",
+      "sha256": "6a3324e7dae8478245dd76445a407dd201d696b6beab742d2dddc3ca47c453ed"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_steering_state_contract.so",
+      "sha256": "03eaf0f72437c114269b7f9252fabff6ff8267da7657671c6bc1f133e151d886"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "57fd8728ba7e88e669a8a66c688033608670edcda64a293bca0146e40dfa062c"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_decision_trace.so",
+      "sha256": "5e439e7d0c7a06a22b1c9d50ba0b5078a2ba4383249179ad07cda96e462a71f6"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_execution_orchestrator.so",
+      "sha256": "8fdb9e8fcd846b3195dd59b3033cb6f77934593e5ccfc0c3a7f058ea52b53451"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_path_core.so",
+      "sha256": "520c4afe066b0d7e55a84c32b2a13961ca912771a00d97a960820a00e6aa28c5"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_persistent_osqp.so",
+      "sha256": "4a8c23ce5fecdf903b401b25537ccef660dad85cbd79f77b21746718f361a944"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_race_mpcc_foundation.so",
+      "sha256": "8e333d2a791fcd20e17ba14689afa75e15cb6658c85e1a0277cc331444626450"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_footprint.so",
+      "sha256": "d060bf3ad237a337f05b3c8e94bce75964fbaea1346a8dc0a31ca53727995ff4"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_mpc.so",
+      "sha256": "f8bb0ec2af86c20e784c792c5cf9a23576f3edddd90c9c8f31c4847394a7da59"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_runtime_speed_profile.so",
+      "sha256": "f3bde7a7d3deb6df958555323c3c5c12deb22263963938c9e10fef328def4316"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_start_grid_grace.so",
+      "sha256": "4579a4d9b9a97c635206f5417ff369486c15e4d2dc6305b392fa9a298e3b88e1"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_stuck_recovery_core.so",
+      "sha256": "1af4df45e4353d8d7680462cd5b964c695c00bc3403b1ffed041ee8d36303ba0"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_v2x_overtake_core.so",
+      "sha256": "1a43451a6033eb064a91789f5964682d57c23f83967b8183dde3d8c5079fd260"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_boost_start_dash.hpp",
+      "sha256": "6377ee258ce094dd481807b3570045253e0de438684c0f72f5fa1f706cd746c8"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_control_mode_guard.hpp",
+      "sha256": "5f4afa91011e2e66d06087604d90ada5946a434d099c497ec67adafa8393bf01"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "994779bfa1d00f20514b91beb9efaff5425ffd369514487605a1ca86b5e56a95"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp",
+      "sha256": "9528cced3509cef66a0d6516ba982cb43f951895e3500fd4a853d4b4cd66d647"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp",
+      "sha256": "949760419e4af9e86f72ddc70ec29078156e1687c42f2e41209e262f5598ec54"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/external_speed_loss_monitor.hpp",
+      "sha256": "82a5a738a12dfa667c6733baf1a8a460f945b02ed91439d703233dccff52164f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/latest_only_worker.hpp",
+      "sha256": "39f4f298180d8f68d94795961498b46546def7309ac1f2b3b85be33fd6097e35"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp",
+      "sha256": "3cddd30e326339caaa731541bb11f848594975a8cc3c89b3955f46d2fbfe1176"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_stage_geometry.hpp",
+      "sha256": "142723ce37e57380e0aff8a90edb78f5dace8f39768ab84cc7b827cef30a6744"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_velocity_limit.hpp",
+      "sha256": "546d086bbcf361e6306c0d7d8a37582b231d51b8c3f2493712cb3e98e5abbf54"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_association.hpp",
+      "sha256": "0fb2ac6660a90f6a1dfae3b851441eeeb317389601235f9ecfaa3c23c2daa007"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_preview.hpp",
+      "sha256": "8b800bf50f09944346fcb2658fffd6dd20f7e925a69273738823fb85aa90a259"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp",
+      "sha256": "827a5491270ef35682271c842c6ce2215ab02b63ff474a0502151989adf703df"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp",
+      "sha256": "f28ddd28e53bbbd21d70bd565bb199505f05a368b9beb8bfb052516eaf2f2bb7"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp",
+      "sha256": "5eef64d2cce3ee7da13c1cf625f6550eb4e64ac77a99dae93f06c65178cd2bff"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "sha256": "5782909e01b8caf818e66a92b4c8339af08447acf03456ff3e1ec511a9cb4557"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp",
+      "sha256": "491bdcffd46304bacc3b0b5c45a9868548aaa78c2f549526129349468e718231"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp",
+      "sha256": "83431e813c50c8df07e5dbf28d45f84f726d7bd74ce9492f3a55957f7b8da43f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp",
+      "sha256": "6b4ed1169b37d66d6bbc411c3ca604d7e9764ed2e4de2ee311a36c253b32fcc4"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp",
+      "sha256": "93eb1a2c4332ebb40a53ecd5b91cf90f66a1821036d2f6ad20523dfa653eab73"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp",
+      "sha256": "6e744a67b5be270df16338ed6a497abe47da54d45f187aca2fd3d8ffe6d7c02f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_progress.hpp",
+      "sha256": "e21c57a0e3a4cd2d1b30ace01c0c84587b42d4a58a03b02881544d78418cbc8d"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "sha256": "4191fa5f1c5382df303be3bf5491b28ed574d015fffb9a1fa1c3514c29d33341"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "sha256": "b7a425fc0efd4ffd8b60c12f19025aa3f3a546642557619bd4c548122796b4af"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp",
+      "sha256": "0f7d46d68cd6ee525e32cca1955b2e8b99342507b1bde0e249762f7a4a693ee2"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp",
+      "sha256": "94bbdafc08578fbebf85af15b90583f1c7452cdf3ab842689281249d0d191b48"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp",
+      "sha256": "c1d150c48b877ceeb29392dde137754279d2c03d9bf3990e7b2fa430fa07b946"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp",
+      "sha256": "e32649cd1f157eac6266c2e80a4ab8a4731e864b92f2cd7b20c292045097dae2"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp",
+      "sha256": "fb31dbf1370c6fa8d4e539d4da090ae677be08934425210ed3c6320b8acf11ea"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "sha256": "81eef27e7e53d57731971258f1477e46f4ce6354467352c26059859c9f2a2a57"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp",
+      "sha256": "3f158a9210e3b5de76ec4df6abb0b4c6eecc575a3d7553850e1c3c16279164bc"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp",
+      "sha256": "464fc3fbf29043c28eb1e27fa12593be6c8dcbd5b87961a312aaf4e178866b1e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp",
+      "sha256": "cb5dd1b7c5e898f20b0ad712edde7da8ae1a3aaa31125e7cebcb4b23d50b6daa"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp",
+      "sha256": "ad68f2f69c5363e9602eda375958fc825aaa4d1581bae6e220f9a8920c237d4e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp",
+      "sha256": "8f872a0c8a86f65db032918e191baef626fbcf6466ec9c27e53cc3c979195f8d"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp",
+      "sha256": "2735504de4cf98be0a0fdf9bf08ee337ba0a9d898549e706b9660c8f63ae03ed"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp",
+      "sha256": "e650a5491e34e5c64820cd379ca26289a9fdacb09e65accb6d3e82fd644db64d"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "3e38067df4b04cc39f912db9db6e4c638a5eee1ef825998d11256424003826ac"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp",
+      "sha256": "ec16338fe4cc96a8eaf0676362ab53a94c79ddeb05135b2a93749017f12cdad6"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp",
+      "sha256": "84eaaf7054fbe43addaa0d1833f2dc7face00fcb34aaef8c022da6c888c32b20"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp",
+      "sha256": "fda7709abdc9d50c80279e7e0b0f4dd4e9ef8a295959b0caaae3d3427e51b9eb"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp",
+      "sha256": "c0364be0c57498691256882b8de9b3f0e9acd9ced3f2ccba590b4d8d1efc4725"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp",
+      "sha256": "3adc114489f24bf75e8fddeab46e8d4eb937a4f3b7bfd506d7b03f1ac6789e9f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp",
+      "sha256": "e786ef0ea30461c7ad1ca6d43b371c77484cc1c8f3fa7f2e64761b6a6dbfcb47"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp",
+      "sha256": "00e48a55c54aaebc70dc9c5352116f12556de4e5261d32a7ad9818e41b9b96ac"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stop_input_program.hpp",
+      "sha256": "4f229f7f22dad4a40d4901c1bf9e43075c93468434e1e1f4a0ba5150470ae520"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp",
+      "sha256": "d83d7d2185e11200ff1e1f656018994fb3424599011a0c3904c0c5aa66b0b536"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp",
+      "sha256": "8afc0766959fa3477a4a17ed37f2f32c65eaf2bf66ced4cbcdc081ad92d35735"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_wire_command.hpp",
+      "sha256": "c0734bed816636bd6db4bbc3cb56bff4df7c90868297949ecedba545ba315a86"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_decision_trace.hpp",
+      "sha256": "91d7fef94540c0b6ce89ec0139cfb76f8021085eb16563b01b88c076c356e52f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp",
+      "sha256": "21eae46391377403be955bddab2f38fc2b5857ca3287b6c271db539cb6e51a0c"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/path_core.hpp",
+      "sha256": "648e041b4400b57d268967d4df2f2075516b3eda682de5e9ea39178bf9f80e56"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/persistent_osqp.hpp",
+      "sha256": "c6d015467d5aa82267bc1fdb6bad25efc9cc644fad057e89d49e6a34f4afaab3"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp",
+      "sha256": "445983d9732dd2329633cd952dcb1dc682522911541fd2318a69aee2745cd8c0"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/race_mpcc_foundation.hpp",
+      "sha256": "918837e27ff9b3a2b65924b4fb22ef958f879bfe7f67f47fc2bcb88a6a2c28a1"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp",
+      "sha256": "41dd3feb125fbda04e1e340d7088180fc031ac2de8ede0fcedad4c724a82052b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_mpc.hpp",
+      "sha256": "f3b918005ea4979ca93dee7c869945556e05555fb51d5cd89d9680721c9f0f73"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/runtime_speed_profile.hpp",
+      "sha256": "247ac0bb446518c83181a8e21ecfb8b738e02fe90818b38c7151045390b31311"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/start_grid_grace.hpp",
+      "sha256": "d263d2e4644b0ebbcfbdda0df0bb6335b1e3beadd8143d29ef34e094985afd23"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp",
+      "sha256": "334696d66637e231e8721d553de390252958985a090026ebed4766a99e2dfa4e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/v2x_overtake_core.hpp",
+      "sha256": "d8b5d96d02c2759fb0204ee8fbbe73a430e680e39d99c3d63d5ae634ad086f4a"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "f5bb1d6ed3fe8e9dff4dd7c03c27947d569f3a43102f6961759e418d8a4d27ae"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_applied_input_prediction.cpp",
+      "sha256": "0f668168485065d199ab2447e13fc365c51286b5d22733968616aa0bf376a31c"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_compare.cpp",
+      "sha256": "d6bdc82964b018fbf8c1201bd49d66670a3437591114e119f3cdd91696f82ddd"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "b8b04216f3395ef7b7b95b0207b3d91ba8ddd78a2422a85168533a5daf83c32b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "279020e563325c0001ac1574386ebaf70a74bb661ede22cbf66c17c16da35039"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_certified_stop_successor_observation.cpp",
+      "sha256": "6788f885a2a98efcc2acc960e798913f00e3639be390905cf90f72414c92bd06"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_execution_contract.cpp",
+      "sha256": "04e2bfe3868b70a7413427a4da9e10d896ceaff3da9214c4d5b33c81a3f93805"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_latest_state_feedback.cpp",
+      "sha256": "80a3763903df1a57286fb8920a757cdc1fb7fa77288be792eaa30d5a2a3ed012"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_maneuver_replay.cpp",
+      "sha256": "5c3fbe0193a06f32cf509a7ea94ce038aa91918e19634224219c612ea59b56b8"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_on_trajectory_connector.cpp",
+      "sha256": "b58a8dc7a1a66db0c293028fd9ade33089313df4175f21314b3c601377e8d200"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_overtake_sibling_adoption.cpp",
+      "sha256": "a7a153f33cc97dc0436f9ed4eb2ac925b15e7c3e70b0e17f0a9752b3fc49ac7e"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_prepared_suffix_replay.cpp",
+      "sha256": "c1b0698a5e321a480c28940e9fec7dbe87df7536532dab65e0d213469a1f9b80"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_progress.cpp",
+      "sha256": "c0a12fc5f8c2d7f59a0d22d6162adef6a7aff410b046f12281c5996d403554c7"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_qp_replay.cpp",
+      "sha256": "221d714ce6bba36c629d2ada6378c2288fcc7e0fda5d4c96babefbac7fb7cf00"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "sha256": "c0e544311e4be6c0bde46b1170de7240c8ee7e8aef357793b9fdee99a6e4fa1b"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "sha256": "819ed260d526674e054197ddd014d50652b03d059d001a71d4d6aae7185ce3b2"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "c0f697ce174ed12ae8ebeb6ab87d69588179cf4599fb64cbe1cad00db31c9750"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp",
+      "sha256": "985a0d1486eed1a216ad6a59ac7ddc2c6e5fdb59b4a1de91d3224f1bd233bf83"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_obstacle.cpp",
+      "sha256": "57d007dc8d778466a4b0927dd5cfdd1cfbc92ac8aee3f70adc923e304df00698"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "fb762cff5ef44a824652c6fb23859a5b193c22b8e169d48d16a688cb4316d291"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "sha256": "9fc64832fc88f09fb87b5d8698035beb1116a98e116bf4ba36a3fcd2783c5a75"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_source.cpp",
+      "sha256": "caf792a10e99ad20a0e7744d615a8d828bf0828bf82f2c02dbb830a3c2ffb353"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_normal_branch_bank.cpp",
+      "sha256": "a3acd9dbf24757b42e55783aaaff8dfea51bac4c480650fcdeca1658533058be"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "sha256": "f6c7ba9bd6cf7a022c92ad45c1cd2903857021117fa8f25470403485574e0412"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "sha256": "983407accd00e52c523cb32106d6054d59df519bc164a01ef7e9e50d79107286"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_wall.cpp",
+      "sha256": "10881540d46e51a8efa277026e421528ba1d93d9df20d3094b69c943d4bba8a9"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_problem.cpp",
+      "sha256": "1a81899496f7a33d699c92cbd61e926bf7548520e0fcb442499c6218b3cbe3d3"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_production_adapter.cpp",
+      "sha256": "e6d22be4e4e0366d31e650c8c3fc574914820770128c0fdf5f6c014eca057964"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "1e138ef996f3846d64b83f21be4995dd7525b15ed8fee4dd8f15b3a738e94aaa"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "sha256": "946f8c080197fed9aa53f1583f11162f2ef0749f42642ed7bfdfbdea9b6196fe"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a9b458c34a29a607d7a30217fb0e713c1fb77f90db12e66c17d7c91072e8f4d2"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "sha256": "11e83eb28126834a8837289518f0023bd6dd72669f4b5622214639a8c82e1f92"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "00a31e1e4b63fc9fe6d669f10568be58e850c510d3b5acc7172ff0d96e764ceb"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_wall_refinement.cpp",
+      "sha256": "cf521297f83fb6371548607b7437d090b7bb2aaca41243fba5354ff170167b58"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stateless_maneuver.cpp",
+      "sha256": "c7d940bfab89072cb120df5945dd99eb8c35cb5aee1f6cf9009c1624517ee3d8"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_steering_state_contract.cpp",
+      "sha256": "b530641c709927a3864c513eaf1752fc7f5d21e84a6c371a3b7bd2819853a3f9"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stop_input_program.cpp",
+      "sha256": "ce2a115cf4a461660494c7cf6e17d3b5a14d163f0ce8ed2144959c821cf8ecca"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r16/d2/mpcc_architecture_snapshots/000000000795-01e3e7cbcf62d2f4-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "ec728c76a7c82708b8e8e64c8837b0a17d3dc69d3d4ef258ecb0208bdb4ee97c"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r17/d1/mpcc_architecture_snapshots/000000001020-7b13fc78d1f505da-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b77c6467c1f38503207c9afe37abcacb493b14530fb92032315ea48542d077ce"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b7cbe726c7098ab94ce00e36358856a3d33f1062018befdc5e650ab6d28befb2"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d1/mpcc_architecture_snapshots/000000000854-47564d1699d6a423-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml",
+      "sha256": "3b426e2abaaebe1e1ed3f4416c5cddd61f9889d25a15097ee3cd88ef5f2617b7"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000000836-10c6439274b4fabe-cruise-side-neutral-physical-proof-stop-alternate-revalidation-overrun/snapshot.yaml",
+      "sha256": "d792304c36a0724cb42021510a76df4606636352afa1aabec588d576d2aad180"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000001071-d426f9a520aa2c4e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "02578477116e07e451922a4ac84860d27480015d743316371ee87b30e645b99a"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "c85a1768009807665aad446597a76a212d999a425685735374a85c27d766693f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "cef01e7c52de54904e7c8ac249752fa2676121c2eeaac6520378c5b975d37026"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/frozen-inputs/task-tmp/mpcc_common_stop_native_suite.py",
+      "sha256": "5eef824c35a43be9b0506fa789c82cdf2d36d336eda98b57f26c9d89bf749416"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/gap-r18.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/gap-r18.yaml",
+      "sha256": "2e82d0cc19b646d98889562bca50026a4e21204da9d2cd41899d285a96018178"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/peer-r19.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/peer-r19.yaml",
+      "sha256": "1f8e84fce468b6115c0bc92032494070a77f568ea231807ca23ee639ce607afa"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/signed-r16.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/signed-r16.yaml",
+      "sha256": "18c8b08365e25481b5792b6612fdd2a588fad22b721df4ba4b7ebb78ddb982b6"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/wall-r20.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/wall-r20.yaml",
+      "sha256": "221cc23d0113493a948e0c559b229e419c5e7f4e4ac930a69c445e7e9a55185f"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/wall-r21.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-common-stop-native-r1/wall-r21.yaml",
+      "sha256": "47cce5f4250fd9192c99efc486ac580722bd5b21325030c419ca5a3b88ada299"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/architecture.log",
+      "sha256": "2ad6f50ab99e74006614f134df661b7157ad35d91659481131dced93db18f162"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/complete-rest.log",
+      "sha256": "1710169330911de6989882e544f8b677c3279d1f19546e48d0dbcabea431a014"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/exact-pair.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/exact-pair.yaml",
+      "sha256": "f7d0a578ee113fe2549cff5a035d79a7aa9957e4f5195cf858934deb6a7e97ed"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/manifest.json",
+      "sha256": "48c8e1b3723e0561bd6a22fcc605622c925b394faf5db5f6a82f857833c78417"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/metrics/d1-callback-samples.json",
+      "sha256": "8eda3964ce8c0e71ca5c5661bfc5d06fc7656425ff9131cf32ea0ae533b2906e"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/metrics/d1-command-clock-anomalies.json",
+      "sha256": "7c10eb15b96d7c398ffbbf9392f6f5f6add1d290bc933a4dc126add3e6a08129"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/metrics/d1-prediction-samples.json",
+      "sha256": "0e5696216abce104746d1b2396adf7e90ca18983ff58de727fcca5a242f1c4f7"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/metrics/d2-callback-samples.json",
+      "sha256": "9e13d40f5f8a22ae9d898a30f511d480d9cd99f3da6307d634fb67453ce0d666"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/metrics/d2-command-clock-anomalies.json",
+      "sha256": "2ca66eb68c9958d07ad97d18b50b1d85b0a44996b86144ef03c6a620cd51ae95"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/metrics/d2-prediction-samples.json",
+      "sha256": "741718ecdb72713dabd33b441f2ab90ec7fd400fa1d986a47d24c1b85a945e86"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/metrics/report.json",
+      "sha256": "5520ddf03564cca59e348a7eddf086132d9f2813999c6d3a370e368432f7712a"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/metrics.log",
+      "sha256": "ceaa5ac5dcd0029371533bc6ac5d212260facb9a067409ec35c3de9ed76a6240"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r21/mpcc_architecture_compare",
+      "sha256": "df529027c48ef982e34dc3547f252657cb45c57fd646d55ddf90bdd39d1118b6"
+    }
+  ]
+}

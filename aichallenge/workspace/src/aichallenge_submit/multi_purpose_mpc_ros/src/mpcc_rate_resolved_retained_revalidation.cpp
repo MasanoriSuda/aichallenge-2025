@@ -726,11 +726,13 @@ static bool publication_prefix_consistent(const Request & request)
 
 static Result evaluate_with_stop_profile(
   const Request & request,
-  const mpcc_rate_resolved_physical_adapter::StopLateralTargetProfile * const stop_profile)
+  const mpcc_rate_resolved_physical_adapter::StopLateralTargetProfile * const stop_profile,
+  const bool constant_program = false)
 {
   const auto evaluation_started = SteadyClock::now();
   Result result;
   result.terminal_stop_normal_path_reference = stop_profile != nullptr;
+  result.terminal_stop_constant_steering_program = constant_program;
   result.execution_clock_kind = request.execution_clock.kind;
   result.first_published_control_origin_sec =
     request.execution_clock.first_published_control_origin_sec;
@@ -1371,6 +1373,7 @@ static Result evaluate_with_stop_profile(
     result.terminal_stop_certified = true;
     result.terminal_stop_uses_solved_suffix = true;
     result.terminal_stop_normal_path_reference = false;
+    result.terminal_stop_constant_steering_program = false;
     result.terminal_stop_reference_attempts = 0U;
     result.terminal_stop_reason =
       mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason::None;
@@ -1388,7 +1391,7 @@ static Result evaluate_with_stop_profile(
     // Publication is causal: the current serialized command can remain on the
     // actuator for one publisher interval even if the next solve fails. Every
     // retained normal transaction therefore receives authority only when that
-    // exact interval followed by a max-braking/path-tracking terminal sequence
+    // exact interval followed by a fully certified terminal stopping sequence
     // is rebuilt from the current state and proved against this same immutable
     // world observation. A wall-clear FullSuffix is not a substitute: its
     // terminal state is neither rest nor a recursively certified successor,
@@ -1397,21 +1400,29 @@ static Result evaluate_with_stop_profile(
     result.terminal_stop_attempted = true;
     result.terminal_stop_reference_attempts = 1U;
     const auto terminal_build_started = SteadyClock::now();
-    const auto terminal_stop =
-      mpcc_rate_resolved_physical_adapter::build_stop_contingency(
-      execution, command_cursor, current_world_actuation,
-      mpcc_rate_resolved_physical_adapter::ContinuationInitialState{
-        current_control_state.lateral_m,
-        current_control_state.lag_m,
-        current_control_state.heading_offset_rad,
-        current_control_state.velocity_mps,
-        current_control_state.progress_m,
-        continuation_initial_steering_rad,
-        request.current_response_steering_rad,
-      request.current_lateral_velocity_mps, request.current_yaw_rate_radps},
-      source.terminal_stop_course_geometry,
-      request.stop_lateral_policy,
-      request.minimum_acceleration_mps2, 0.0, stop_profile);
+    const mpcc_rate_resolved_physical_adapter::ContinuationInitialState terminal_initial{
+      current_control_state.lateral_m, current_control_state.lag_m,
+      current_control_state.heading_offset_rad, current_control_state.velocity_mps,
+      current_control_state.progress_m, continuation_initial_steering_rad,
+      request.current_response_steering_rad, request.current_lateral_velocity_mps,
+      request.current_yaw_rate_radps};
+    const auto terminal_stop = [&]() {
+      if (constant_program && request.publication_prefix) {
+        const auto first = request.publication_prefix->proposed_packet;
+        auto brake = first;
+        brake.published_sec += execution.publication_interval_sec;
+        brake.wire_acceleration_mps2 = static_cast<float>(request.minimum_acceleration_mps2);
+        const mpcc_vehicle_model::PublishedInputProgram program{
+          execution.publication_interval_sec, {first, brake}, true};
+        return mpcc_rate_resolved_physical_adapter::build_stop_program(
+          execution, command_cursor, current_world_actuation, terminal_initial,
+          source.terminal_stop_course_geometry, program, 0.0);
+      }
+      return mpcc_rate_resolved_physical_adapter::build_stop_contingency(
+        execution, command_cursor, current_world_actuation, terminal_initial,
+        source.terminal_stop_course_geometry, request.stop_lateral_policy,
+        request.minimum_acceleration_mps2, 0.0, stop_profile);
+    }();
     const auto terminal_built = SteadyClock::now();
     result.runtime.terminal_build_ms = elapsed_ms(
       terminal_build_started, terminal_built);
@@ -1638,6 +1649,7 @@ static Result evaluate_with_stop_profile(
   proof.follow_minimum_gap_m = result.follow_minimum_gap_m;
   proof.terminal_stop_certified = result.terminal_stop_certified;
   proof.terminal_stop_normal_path_reference = result.terminal_stop_normal_path_reference;
+  proof.terminal_stop_constant_steering_program = result.terminal_stop_constant_steering_program;
   proof.terminal_stop_uses_solved_suffix = result.terminal_stop_uses_solved_suffix;
   proof.terminal_stop_static_checked_pose_count =
     terminal_stop_clearance.checked_pose_count;
@@ -1688,40 +1700,55 @@ Result evaluate(const Request & request)
   {
     return evaluate_with_stop_profile(request, nullptr);
   }
+  // Terminal feasibility need not steer back to a reference before rest.
+  // Keep the chosen first normal packet and prove one common steering word
+  // through braking against the same complete nominal and applied worlds.
+  // A complete solved Stop may require delayed braking and remains untouched.
+  std::optional<Result> common;
+  if (!request.plan->execution_artifact->terminal_body_rest_required &&
+    request.applied_program_required && request.publication_prefix &&
+    request.input_application_profile)
+  {
+    common = evaluate_with_stop_profile(request, nullptr, true);
+    if (common->proof || !common->terminal_stop_attempted) {
+      return std::move(*common);
+    }
+  }
+  const auto accumulate = [](Result & into, const Result & from) {
+    into.terminal_stop_reference_attempts += from.terminal_stop_reference_attempts;
+    using Runtime = Result::RuntimeBreakdown;
+    for (const auto field : {
+      &Runtime::applied_program_ms, &Runtime::pre_continuation_ms, &Runtime::continuation_build_ms,
+      &Runtime::continuation_proof_ms, &Runtime::continuation_delay_wall_ms,
+      &Runtime::continuation_dynamic_ms, &Runtime::continuation_wall_ms,
+      &Runtime::terminal_build_ms, &Runtime::terminal_dynamic_ms, &Runtime::terminal_wall_ms})
+    {
+      into.runtime.*field += from.runtime.*field;
+    }
+  };
+  const auto finish = [&](Result result) {
+    if (common) {
+      accumulate(result, *common);
+    }
+    return result;
+  };
   const auto profile = mpcc_rate_resolved_physical_adapter::build_terminal_stop_reference(
     *request.plan->execution_artifact,
     request.plan->physical_snapshot->terminal_stop_course_geometry);
   if (!profile.has_value()) {
-    return evaluate_with_stop_profile(request, nullptr);
+    return finish(evaluate_with_stop_profile(request, nullptr));
   }
   auto normal_path = evaluate_with_stop_profile(request, &profile.value());
-  // Latest-state feedback preserves SteeringUnreachable as its outer failure
-  // label. Use the proof stage itself, rather than that presentation label,
-  // to distinguish a terminal-reference failure from a failed command join.
+  // The outer feedback label is not the proof result. Distinct references
+  // remain candidates only when a Stop was constructed from a reference.
   if (!normal_path.terminal_stop_attempted || normal_path.terminal_stop_certified ||
     normal_path.terminal_stop_uses_solved_suffix)
   {
-    // A complete solved Stop suffix never consulted either lateral reference.
-    // Its applied-input rejection cannot change by selecting the track
-    // reference and repeating the identical controls/world/proof a second time.
-    return normal_path;
+    return finish(std::move(normal_path));
   }
-  // Stop is a feasibility obligation. The solved lateral prefix and its
-  // explicit map-bounded terminal tail own the preferred reference.
-  // The track reference is a second, independently proved hypothesis;
-  // it never supplies authority when its own complete current-world proof fails.
   auto track = evaluate_with_stop_profile(request, nullptr);
-  track.terminal_stop_reference_attempts += normal_path.terminal_stop_reference_attempts;
-  using Runtime = Result::RuntimeBreakdown;
-  for (const auto field : {
-    &Runtime::applied_program_ms, &Runtime::pre_continuation_ms, &Runtime::continuation_build_ms,
-    &Runtime::continuation_proof_ms, &Runtime::continuation_delay_wall_ms,
-    &Runtime::continuation_dynamic_ms, &Runtime::continuation_wall_ms,
-    &Runtime::terminal_build_ms, &Runtime::terminal_dynamic_ms, &Runtime::terminal_wall_ms})
-  {
-    track.runtime.*field += normal_path.runtime.*field;
-  }
-  return track;
+  accumulate(track, normal_path);
+  return finish(std::move(track));
 }
 
 NormalPathStopObservation observe_normal_path_stop(const Request & request)

@@ -310,6 +310,7 @@ struct Proof
   /// this current-decision Stop trajectory is independently certified.
   bool terminal_stop_certified{false};
   bool terminal_stop_normal_path_reference{false};
+  bool terminal_stop_constant_steering_program{false};
   bool terminal_stop_uses_solved_suffix{false};
   std::size_t terminal_stop_static_checked_pose_count{};
   std::size_t terminal_stop_dynamic_checked_pose_count{};
@@ -374,6 +375,7 @@ struct Result
   bool terminal_stop_attempted{false};
   bool terminal_stop_certified{false};
   bool terminal_stop_normal_path_reference{false};
+  bool terminal_stop_constant_steering_program{false};
   bool terminal_stop_uses_solved_suffix{false};
   unsigned terminal_stop_reference_attempts{};
   bool terminal_stop_approximate_support_exceeded{false};

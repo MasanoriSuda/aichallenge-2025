@@ -55,7 +55,22 @@ void audit(YAML::Node row, const retained::Request & request)
     model.steering_wire_gain, request.minimum_acceleration_mps2, request.maximum_acceleration_mps2,
     a.maximum_abs_steering_rad, a.maximum_abs_steering_rate_radps,
     a.physical_global_tolerance, nominal.proof->terminal_stop_actuation_samples});
-  if (!prepared.prepared) throw std::runtime_error("original program unavailable");
+  row["prepare_reason"] = static_cast<int>(prepared.reason);
+  if (!prepared.prepared) {
+    const auto & packet = request.publication_prefix->proposed_packet;
+    row["proposed_packet"].push_back(packet.published_sec);
+    row["proposed_packet"].push_back(packet.wire_acceleration_mps2);
+    row["proposed_packet"].push_back(packet.wire_steering_rad);
+    row["maximum_steering_rate"] = a.maximum_abs_steering_rate_radps;
+    row["actuator_tolerance"] = a.physical_global_tolerance;
+    for (const auto & sample : nominal.proof->terminal_stop_actuation_samples) {
+      YAML::Node point;
+      point.push_back(sample.elapsed_time_sec); point.push_back(sample.duration_sec);
+      point.push_back(sample.acceleration_mps2); point.push_back(sample.end_steering_rad);
+      point.push_back(sample.steering_rate_radps); row["nominal_samples"].push_back(point);
+    }
+    return;
+  }
   const auto & program = prepared.prepared->program;
   const auto prediction = vehicle::predict_applied_inputs_to_rest(
     observation, program, *request.input_application_profile, model);
@@ -139,6 +154,7 @@ void audit(YAML::Node row, const retained::Request & request)
   });
 }
 
+#ifndef MPCC_WALL_AUDIT_NO_MAIN
 int main(int argc, char ** argv)
 {
   if (argc != 3) return 2;
@@ -156,3 +172,4 @@ int main(int argc, char ** argv)
   YAML::Emitter emitter; emitter.SetDoublePrecision(17); emitter << out;
   std::ofstream(argv[2]) << emitter.c_str() << '\n';
 }
+#endif

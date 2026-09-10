@@ -19,7 +19,7 @@ std::vector<m::mpc_stage_geometry::CourseFrameKnot> knots(const YAML::Node & n) 
  return out;
 }
 m::recovery_footprint::Pose2D pose(const YAML::Node & n){return {n["x_m"].as<double>(),n["y_m"].as<double>(),n["yaw_rad"].as<double>()};}
-std::shared_ptr<const certified::CertifiedPlan> read_plan(const YAML::Node & evidence,const std::filesystem::path & path) {
+std::shared_ptr<const certified::CertifiedPlan> read_plan(const YAML::Node & evidence,const std::filesystem::path & path, const YAML::Node & source_node = YAML::Node()) {
  if(evidence["schema"].as<std::string>()!="mpcc-certified-plan-observation/v1" || evidence["status"].as<std::string>()!="present")throw std::runtime_error("missing exact certified plan");
  const auto node=evidence["artifact"],c=node["problem_context"];
  artifact::ExecutionArtifact value;
@@ -152,7 +152,14 @@ std::shared_ptr<const certified::CertifiedPlan> read_plan(const YAML::Node & evi
  if(!native.exact_trajectory)throw std::runtime_error("original native replay failed");
  const auto proof=physical::evaluate(p);
  if(physical::to_string(proof.outcome)!=evidence["physical_proof"]["outcome"].as<std::string>())throw std::runtime_error("original wall proof mismatch");
- const auto built=certified::build(std::make_shared<const artifact::ExecutionArtifact>(value),p,proof);
+ std::shared_ptr<const m::mpcc_rate_resolved_shadow::Snapshot> source;
+ if(source_node && source_node.IsMap()) {
+  YAML::Node wrapped; wrapped["source"]=source_node;
+  const auto loaded=snap::load_source_snapshot(wrapped,path);
+  if(!loaded)throw std::runtime_error("original solver source cannot reload");
+  source=std::make_shared<const m::mpcc_rate_resolved_shadow::Snapshot>(*loaded);
+ }
+ const auto built=certified::build(std::make_shared<const artifact::ExecutionArtifact>(value),p,proof,source);
  if(!built.plan)throw std::runtime_error("original certified plan cannot reload");
  return built.plan;
 }
@@ -162,7 +169,7 @@ int main(int argc,char **argv) {
  YAML::Node output;output["authority"]=false;output["solver_invocations"]=0;output["input"]=path.string();
  for(const auto & key:{"previous_accepted_revalidation_evidence","revalidation_evidence"}) {
   const auto n=root[key];auto request=mpcc_observation::read_request(n["request"],path.parent_path());
-  request.plan=read_plan(n["certified_plan_evidence"],path);
+  request.plan=read_plan(n["certified_plan_evidence"],path,n["inspected_source"]);
   const auto replay=retained::evaluate(request);const auto stop=retained::evaluate_stop_successor(request);
   auto row=output[key];row["decision"]=request.decision_id;row["source"]=request.plan->execution_artifact->identity.sequence;
   row["control_speed"]=request.control_origin_speed_mps;row["control_vy"]=request.current_lateral_velocity_mps;row["control_yaw_rate"]=request.current_yaw_rate_radps;

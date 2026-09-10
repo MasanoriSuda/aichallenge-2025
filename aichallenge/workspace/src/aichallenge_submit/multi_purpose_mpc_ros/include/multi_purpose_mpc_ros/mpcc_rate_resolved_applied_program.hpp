@@ -39,6 +39,8 @@ private:
                                       const retained::Proof &,
                                       const vehicle::InputApplicationProfile &);
   std::uint64_t nominal_fingerprint_{};
+  bool source_horizon_program_{};
+  std::optional<double> forward_velocity_ceiling_mps_;
   program::Prepared prepared_;
   vehicle::AppliedInputTube tube_;
   std::shared_ptr<const retained::Request> request_;

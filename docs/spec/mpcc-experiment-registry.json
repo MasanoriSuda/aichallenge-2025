@@ -961,6 +961,12 @@
       "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/peer-separation-evidence.json",
       "replay_ready": true,
       "reason": "Exact first D11024/source338 and separate previous1023/source365, original common programme and enclosing rectangle versus interval support separation"
+    },
+    {
+      "snapshot_id": "20260911-nine-state-source-horizon-r23",
+      "manifest": ".steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-stop-evidence.json",
+      "replay_ready": true,
+      "reason": "Exact first D11018/source316, separate previous1017/source342; original terminal programme controls and source-horizon comparison"
     }
   ],
   "experiments": [
@@ -8316,6 +8322,1046 @@
         "Exclusive use of one enlarged footprint rectangle for peer separation"
       ],
       "revisit_condition": "Changed world/input or a new failing geometric/native/runtime counterexample; no margin or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-integrated-r23",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Geometric separation closes moving authority",
+      "changed_dimension": "Fresh same-build dev2",
+      "result": "rejected",
+      "reason": "First D1Emergency1018/2.90mps; p99/adjacent overruns fail. Captured316 and previous actual342 are distinct. D2has no moving override before teardown.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-exact-r109",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Frozen native replay reproduces actual last-reference rejection",
+      "changed_dimension": "Exact original request replay",
+      "result": "accepted",
+      "reason": "D11018peer13.519999723matches; separateprevious1017source342accepts fullproof.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-persistent-a-1",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: persistent-a",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=persistent-a stage=accepted candidate=7448999789036435560 solver=solved solve_ms=21.2774 terminal_progress=7.56028 terminal_velocity=4.14675 lateral_reserve=1.37686 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 detail=accepted; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-stateless-left-b-2",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: stateless-left-b",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=stateless-left-b stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-stateless-right-b-3",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: stateless-right-b",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=stateless-right-b stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-rough-left-c-4",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: rough-left-c",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=rough-left-c stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-rough-right-c-5",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: rough-right-c",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=rough-right-c stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=0/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-offline-left-d-6",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: offline-left-d",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=offline-left-d stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-offline-right-d-7",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: offline-right-d",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=offline-right-d stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=0 lattice_ahead=1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=normal-avoidance-lattice candidate_count=210 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=no certified normal-avoidance lattice/depth=3/attempts=210/best=dynamic-target-unavailable: canonical current-epoch target tube unavailable; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-production-left-g-8",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: production-left-g",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=production-left-g stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-architecture-production-right-g-9",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: production-right-g",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "inconclusive",
+      "reason": "arm=production-right-g stage=candidate-rejected candidate=0 solver=build-rejected solve_ms=0 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=candidate-seal-unavailable: no normal avoidance candidate/positive=dynamic-target-unavailable/canonical current-epoch target tube unavailable;negative=dynamic-target-unavailable/canonical current-epoch target tube unavailable;; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-complete-rest-current-world-complete-rest-y-1",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "rejected",
+      "reason": "arm=current-world-complete-rest-y stage=solver-rejected candidate=1090737702119531295 solver=solve-rejected solve_ms=112.151 terminal_progress=0 terminal_velocity=0 lateral_reserve=0 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=0 bundle=0 detail=stage=status, status=maximum iterations reached, status_val=-2, iter=4000, pri_res=0.0515258, dua_res=0.00046693, failed_iterate_row=432, value=-3.07963, bounds=[-2.9596,1.3296], violation=0.120034, tolerance=0.00407963, normalized=29.4228, row_semantic=input-box/stage=18/element=0, first_vtheta=coupled/inconclusive/declared:[0,10.5915]/implied:[0,10.5915]/limit_state:[-1,-1], architecture_snapshot=mpcc_architecture_snapshots/000000001018-0f2314293df5e31f-cruise-side-neutral-initial-solve-rejected/snapshot.yaml; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-complete-rest-current-world-complete-rest-y-2",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Same frozen world nominal feasibility: current-world-complete-rest-y",
+      "changed_dimension": "Mission/candidate/solver architecture with unchanged hard world",
+      "result": "accepted",
+      "reason": "arm=current-world-complete-rest-y stage=accepted candidate=3999121026889751610 solver=solved solve_ms=22.8933 terminal_progress=15.2201 terminal_velocity=0 lateral_reserve=0.565929 external_violation=0 external_normalized=0 external_row=-1 lattice_transition=-1 lattice_ahead=-1 direct_final=0 direct_stage=source-rejected continuation=0 continuation_steps=0 continuation_ms=0 candidate_source=none candidate_count=0 sqp_depth=0 stop_target=0 stop_target_attempts=1 bundle=1 stop_controls=20 accel=[-2.64932,1.2565]/mean=-0.434301/bounds=0 steer_rate=[-0.521095,0.397943]/mean=-0.00850254/bounds=0/sign_changes=5 sequence=[0.25:1.2565:-0.0946116;0.25:0.674701:0.25538;0.25:0.928648:-0.121216;0.25:0.675114:-0.277772;0.25:0.707209:-0.27892;0.25:0.887856:-0.142802;0.25:1.03313:0.0142127;0.25:1.01244:0.103162;0.25:0.835606:0.232742;0.25:0.105877:0.397943;0.25:-0.753454:0.383733;0.25:0.395013:0.0651426;0.25:-2.62003:-0.315441;0.25:-1.9679:-0.521095;0.25:-1.87001:-0.393908;0.25:-1.96311:-0.0309711;0.25:-2.2033:0.221534;0.25:-1.48109:0.123744;0.25:-1.68988:0.0468307;0.25:-2.64932:0.162261] detail=accepted; Nominal only; absent canonical target arms are inconclusive, not physical infeasibility.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-support-r106",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "More separation directions suffice for immediate Stop",
+      "changed_dimension": "Geometry-only interval support comparison",
+      "result": "rejected",
+      "reason": "128directions still leave minimum−0.07196370m; no geometric proof. Frozen kernel only, not old production authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-braking-r111",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "One of six original-bound braking values suffices",
+      "changed_dimension": "Isolated common terminal braking [-3,-2.75,-2.5,-2,-1.5,-1]",
+      "result": "rejected",
+      "reason": "All final evaluations fail; r112separately identifies actual common-arm reasons.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial0",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 11.189408, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.889999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial1",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 10.940792, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.889999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial2",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 10.948176, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.874999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial3",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2.75, \"steering_direction\": -1, \"elapsed_ms\": 11.143022, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.949999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial4",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2.75, \"steering_direction\": 0, \"elapsed_ms\": 11.213704, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.949999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial5",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2.75, \"steering_direction\": 1, \"elapsed_ms\": 11.105882, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.929999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial6",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2.5, \"steering_direction\": -1, \"elapsed_ms\": 11.370167, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.014999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial7",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2.5, \"steering_direction\": 0, \"elapsed_ms\": 11.406025, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.014999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial8",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2.5, \"steering_direction\": 1, \"elapsed_ms\": 11.426092, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.994999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial9",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2, \"steering_direction\": -1, \"elapsed_ms\": 12.338171, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.214999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial10",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2, \"steering_direction\": 0, \"elapsed_ms\": 12.524771, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.219999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial11",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -2, \"steering_direction\": 1, \"elapsed_ms\": 12.615341, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.209999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial12",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -1.5, \"steering_direction\": -1, \"elapsed_ms\": 14.364247, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.569999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial13",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -1.5, \"steering_direction\": 0, \"elapsed_ms\": 14.478602, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.579999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial14",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -1.5, \"steering_direction\": 1, \"elapsed_ms\": 14.729833, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.569999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial15",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -1, \"steering_direction\": -1, \"elapsed_ms\": 1.714393, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial16",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -1, \"steering_direction\": 0, \"elapsed_ms\": 1.700687, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r112-trial17",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"braking\": -1, \"steering_direction\": 1, \"elapsed_ms\": 18.66111, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 15.114999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial0",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 1, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 11.123697, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.889999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial1",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 1, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 11.013059, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.889999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial2",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 1, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 11.022708, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.874999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial3",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 4, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 1.022827, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial4",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 4, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 1.022667, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial5",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 4, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 1.021595, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial6",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 8, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 1.023017, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial7",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 8, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 1.021784, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial8",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 8, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 1.021725, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial9",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 16, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 1.021344, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial10",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 16, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 1.019862, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial11",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 16, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 1.019461, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial12",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 32, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 1.029289, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial13",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 32, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 1.017878, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r113-trial14",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "inconclusive",
+      "reason": "{\"brake_after_intervals\": 32, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 1.052542, \"reason\": \"terminal-contingency-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 4, \"applied_reason\": 1, \"prepare_reason\": 1, \"rejected_sec\": null, \"peer\": \"\"}; Sparse delayed schedule is invalid before physical proof; no feasibility conclusion.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial0",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 1, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 11.122155, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.889999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial1",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 1, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 10.990698, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.889999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial2",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 1, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 10.819739, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.874999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial3",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 4, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 11.467772, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.999999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial4",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 4, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 11.521164, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 14.004999723000001, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial5",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "rejected",
+      "reason": "{\"brake_after_intervals\": 4, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 11.571768, \"reason\": \"applied-program-unavailable\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 7, \"prepare_reason\": 0, \"rejected_sec\": 13.984999723, \"peer\": \"d2\"}; Original gate rejects; no authority.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial6",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 8, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 12.395572, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.149999723, \"minimum_peer_m\": 0.036211160119965724, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial7",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 8, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 12.223249, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.149999723, \"minimum_peer_m\": 0.05564323928791981, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial8",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 8, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 12.319679, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.149999723, \"minimum_peer_m\": 0.04194148187948343, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial9",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 16, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 13.662576, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.394999723, \"minimum_peer_m\": 0.34987815118996224, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial10",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 16, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 13.756081, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.394999723, \"minimum_peer_m\": 0.3790573152881711, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial11",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 16, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 13.811396, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.394999723, \"minimum_peer_m\": 0.37479551740606354, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial12",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 32, \"braking\": -3, \"steering_direction\": -1, \"elapsed_ms\": 16.767325, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.884999723, \"minimum_peer_m\": 1.0657855078724006, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial13",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 32, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 16.725538, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.884999723, \"minimum_peer_m\": 1.080629479956936, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r114-trial14",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 32, \"braking\": -3, \"steering_direction\": 1, \"elapsed_ms\": 16.828209, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.884999723, \"minimum_peer_m\": 1.052932877656616, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-r115-trial0",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Terminal control programme within original hard bounds",
+      "changed_dimension": "Steering/braking programme only; original first packet and immutable world",
+      "result": "accepted",
+      "reason": "{\"brake_after_intervals\": 1, \"braking\": -3, \"steering_direction\": 0, \"elapsed_ms\": 12.95837, \"reason\": \"accepted\", \"terminal_attempted\": true, \"terminal_reason\": 0, \"applied_reason\": 0, \"prepare_reason\": 0, \"rejected_sec\": null, \"peer\": \"\", \"rest_sec\": 14.239999723, \"normal_duration_sec\": 0.2942349724764131, \"original_remaining_source_speed_ceiling\": 11.11111111111111, \"peak_full_response_speed\": 3.232361572910326, \"programme\": [[12.374999723, 1.329595923423767, 0.11087042093276978], [12.399999723, 1.329595923423767, 0.11087042093276978], [12.424999723, 1.329595923423767, 0.11087042093276978], [12.449999723, 1.329595923423767, 0.11087042093276978], [12.474999723, 1.329595923423767, 0.11087042093276978], [12.499999723, 1.329595923423767, 0.11087042093276978], [12.524999723, 1.329595923423767, 0.11087042093276978], [12.549999723, 1.329595923423767, 0.11087042093276978], [12.574999723, 1.329595923423767, 0.11087042093276978], [12.599999723, 1.329595923423767, 0.11087042093276978], [12.624999723, 1.329595923423767, 0.11087042093276978], [12.649999723, -3, 0.11087042093276978]], \"minimum_peer_m\": 0.16965268844082892, \"production\": \"available\", \"materialization\": \"available\", \"join\": \"accepted\"}; Full existing nominal/applied proof and production/materialization/join gates. Old brake_after_intervals=1trial label is unused; actual timestamps give .275sec. Original source bound reported only in this isolated trial; now enforced in production.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
+    },
+    {
+      "experiment_id": "20260911-nine-state-source-horizon-r23-production-local",
+      "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+      "snapshot_ids": [
+        "20260911-nine-state-source-horizon-r23"
+      ],
+      "hypothesis": "Source-horizon programme preserves every physical/source/speed/identity gate",
+      "changed_dimension": "Source-horizon candidate, ceiling provenance and proposal ordering",
+      "result": "accepted",
+      "reason": "Build/package/fresh native pass; original r23firstfailure closes fullproof/production/materialization/join. Real r18input history gap remains rejected.",
+      "production_impact": "One additional source-bound terminal programme under all original gates; cap is immutable through Stop successors. No integrated acceptance claimed.",
+      "deleted_code": [
+        "Immediate braking as the only constant-steering Stop hypothesis"
+      ],
+      "revisit_condition": "Changed world/input or a new failing source-horizon/native/runtime counterexample; no margin, speed or timing relaxation"
     }
   ]
 }

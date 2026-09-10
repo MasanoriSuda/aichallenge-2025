@@ -238,6 +238,12 @@ std::uint64_t applied_program_provenance_fingerprint(
   hash.string("applied-stop-provenance-v1");
   hash.integer(input); hash.integer(provenance.nominal_solution_id);
   hash.integer(provenance.nominal_problem_fingerprint); hash.number(provenance.proved_rest_sec);
+  if (provenance.forward_velocity_ceiling_mps) {
+    const double ceiling = *provenance.forward_velocity_ceiling_mps;
+    if (!std::isfinite(ceiling) || ceiling <= 0) return 0;
+    hash.string("source-forward-velocity-ceiling-v1");
+    hash.number(ceiling);
+  }
   return hash.value == 0 ? 1 : hash.value;
 }
 

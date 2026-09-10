@@ -1,0 +1,2688 @@
+{
+  "baseline_commit": "749a871c5208d748c252e310ecf84821b85d3555",
+  "integrated_acceptance": false,
+  "run": "output/20260910-nine-state-dev2-r23",
+  "first_failure": {
+    "domain": 1,
+    "decision": 1018,
+    "speed_mps": 2.9,
+    "waypoint": 35,
+    "wall_sec": 1789073210.2163765,
+    "previous_decision": 1017,
+    "previous_published_source": 342,
+    "exact_inspected_source": 316,
+    "final_reference_reason": "AppliedProgram/PeerRejected d2 at13.519999723",
+    "first_common_programme_reason": "AppliedProgram/PeerRejected d2 at13.889999723"
+  },
+  "chronology": "D2 had no moving override before teardown. Previous1017/source342 is a separate publication; no cross-association repaired.",
+  "change": "Add one dense constant-steering Stop programme bounded by the remaining current solved horizon, then original maximum braking to complete rest. Exact first packet, immutable source minimum remaining speed ceiling, nominal and full-response ceiling proof, inherited materialized bound and schema v2. Rear-peer contact with stationary footprint at nominal stopping-time estimate ranks candidates only; no authority, cached duration, fixed delay setting or safety-bound change.",
+  "diagnostic_limits": "r113delayed variants omit periodic packet copies and reject InvalidActuation before physical proof: inconclusive. r115brake_after_intervals=1label is obsolete; actual prefix .275sec/11packets; cap reported but not enforced in diagnostic. Production enforces it and binds it through successors. Frozen r106geometry-only diagnostic still cannot prove separation with128directions.",
+  "diagnostic_trials": {
+    "112": {
+      "authority": false,
+      "meaning": "Bounded diagnostic two-packet terminal programme population. Original immutable first normal packet and all nominal/applied gates unchanged. Next braking and reachable steering vary within original control bounds. No production change.",
+      "trials": [
+        {
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 11.189408,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.889999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 10.940792,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.889999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 10.948176,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.874999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2.75,
+          "steering_direction": -1,
+          "elapsed_ms": 11.143022,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.949999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2.75,
+          "steering_direction": 0,
+          "elapsed_ms": 11.213704,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.949999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2.75,
+          "steering_direction": 1,
+          "elapsed_ms": 11.105882,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.929999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2.5,
+          "steering_direction": -1,
+          "elapsed_ms": 11.370167,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.014999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2.5,
+          "steering_direction": 0,
+          "elapsed_ms": 11.406025,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.014999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2.5,
+          "steering_direction": 1,
+          "elapsed_ms": 11.426092,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.994999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2,
+          "steering_direction": -1,
+          "elapsed_ms": 12.338171,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.214999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2,
+          "steering_direction": 0,
+          "elapsed_ms": 12.524771,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.219999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -2,
+          "steering_direction": 1,
+          "elapsed_ms": 12.615341,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.209999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -1.5,
+          "steering_direction": -1,
+          "elapsed_ms": 14.364247,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.569999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -1.5,
+          "steering_direction": 0,
+          "elapsed_ms": 14.478602,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.579999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -1.5,
+          "steering_direction": 1,
+          "elapsed_ms": 14.729833,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.569999723,
+          "peer": "d2"
+        },
+        {
+          "braking": -1,
+          "steering_direction": -1,
+          "elapsed_ms": 1.714393,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "braking": -1,
+          "steering_direction": 0,
+          "elapsed_ms": 1.700687,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "braking": -1,
+          "steering_direction": 1,
+          "elapsed_ms": 18.66111,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 15.114999723,
+          "peer": "d2"
+        }
+      ]
+    },
+    "113": {
+      "authority": false,
+      "meaning": "Bounded diagnostic two-packet terminal programme population. Original immutable first normal packet and all nominal/applied gates unchanged. The exact first acceleration persists for a fixed programmed prefix before maximum braking; reachable terminal steering also varies. Every full-rest physical condition remains required. This is an offline future programme comparison, not an execution grace or unproved hold. No production change.",
+      "trials": [
+        {
+          "brake_after_intervals": 1,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 11.123697,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.889999723,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 1,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 11.013059,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.889999723,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 1,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 11.022708,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.874999723,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 4,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 1.022827,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 4,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 1.022667,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 4,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 1.021595,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 8,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 1.023017,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 8,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 1.021784,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 8,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 1.021725,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 16,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 1.021344,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 16,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 1.019862,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 16,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 1.019461,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 32,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 1.029289,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 32,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 1.017878,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        },
+        {
+          "brake_after_intervals": 32,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 1.052542,
+          "reason": "terminal-contingency-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 4,
+          "applied_reason": 1,
+          "prepare_reason": 1,
+          "rejected_sec": null,
+          "peer": ""
+        }
+      ]
+    },
+    "114": {
+      "authority": false,
+      "meaning": "Bounded diagnostic two-packet terminal programme population. Original immutable first normal packet and all nominal/applied gates unchanged. The exact first acceleration persists for a fixed programmed prefix before maximum braking; reachable terminal steering also varies. Every full-rest physical condition remains required. This is an offline future programme comparison, not an execution grace or unproved hold. No production change.",
+      "trials": [
+        {
+          "brake_after_intervals": 1,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 11.122155,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.889999723,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 1,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 10.990698,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.889999723,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 1,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 10.819739,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.874999723,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 4,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 11.467772,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.999999723,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 4,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 11.521164,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 14.004999723000001,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 4,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 11.571768,
+          "reason": "applied-program-unavailable",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 7,
+          "prepare_reason": 0,
+          "rejected_sec": 13.984999723,
+          "peer": "d2"
+        },
+        {
+          "brake_after_intervals": 8,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 12.395572,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.149999723,
+          "minimum_peer_m": 0.036211160119965724,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        },
+        {
+          "brake_after_intervals": 8,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 12.223249,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.149999723,
+          "minimum_peer_m": 0.05564323928791981,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        },
+        {
+          "brake_after_intervals": 8,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 12.319679,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.149999723,
+          "minimum_peer_m": 0.04194148187948343,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        },
+        {
+          "brake_after_intervals": 16,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 13.662576,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.394999723,
+          "minimum_peer_m": 0.34987815118996224,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        },
+        {
+          "brake_after_intervals": 16,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 13.756081,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.394999723,
+          "minimum_peer_m": 0.3790573152881711,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        },
+        {
+          "brake_after_intervals": 16,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 13.811396,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.394999723,
+          "minimum_peer_m": 0.37479551740606354,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        },
+        {
+          "brake_after_intervals": 32,
+          "braking": -3,
+          "steering_direction": -1,
+          "elapsed_ms": 16.767325,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.884999723,
+          "minimum_peer_m": 1.0657855078724006,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        },
+        {
+          "brake_after_intervals": 32,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 16.725538,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.884999723,
+          "minimum_peer_m": 1.080629479956936,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        },
+        {
+          "brake_after_intervals": 32,
+          "braking": -3,
+          "steering_direction": 1,
+          "elapsed_ms": 16.828209,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.884999723,
+          "minimum_peer_m": 1.052932877656616,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        }
+      ]
+    },
+    "115": {
+      "authority": false,
+      "meaning": "Bounded diagnostic two-packet terminal programme population. Original immutable first normal packet and all nominal/applied gates unchanged. The first packet persists only to the remaining certified source-horizon boundary rounded down to existing publication periods; maximum braking follows. The original inspected solver source is identity-validated and its remaining velocity ceiling is reported against every response. Every full-rest physical condition remains required. This is an offline future programme comparison, not an execution grace or unproved hold. No production change.",
+      "trials": [
+        {
+          "brake_after_intervals": 1,
+          "braking": -3,
+          "steering_direction": 0,
+          "elapsed_ms": 12.95837,
+          "reason": "accepted",
+          "terminal_attempted": true,
+          "terminal_reason": 0,
+          "applied_reason": 0,
+          "prepare_reason": 0,
+          "rejected_sec": null,
+          "peer": "",
+          "rest_sec": 14.239999723,
+          "normal_duration_sec": 0.2942349724764131,
+          "original_remaining_source_speed_ceiling": 11.11111111111111,
+          "peak_full_response_speed": 3.232361572910326,
+          "programme": [
+            [
+              12.374999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.399999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.424999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.449999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.474999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.499999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.524999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.549999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.574999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.599999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.624999723,
+              1.329595923423767,
+              0.11087042093276978
+            ],
+            [
+              12.649999723,
+              -3,
+              0.11087042093276978
+            ]
+          ],
+          "minimum_peer_m": 0.16965268844082892,
+          "production": "available",
+          "materialization": "available",
+          "join": "accepted"
+        }
+      ]
+    }
+  },
+  "validation": {
+    "build": "mpcc-nine-state-build-r51.log",
+    "package": "mpcc-nine-state-tests-r41.log",
+    "native": {
+      "peer-r23": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 1017,
+          "source": 342,
+          "captured_request": {
+            "elapsed_ms": 26.397747,
+            "reason": "accepted",
+            "source_horizon_program": true,
+            "terminal_attempts": 1,
+            "forward_velocity_ceiling_mps": 10.314648547329856,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.944999723,
+            "program_commands": 69,
+            "samples": 719,
+            "peer_clearance_m": 1.3466659165295858,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 24.877419,
+            "reason": "accepted",
+            "source_horizon_program": true,
+            "terminal_attempts": 1,
+            "forward_velocity_ceiling_mps": 10.314648547329856,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.944999723,
+            "program_commands": 69,
+            "samples": 719,
+            "peer_clearance_m": 1.3466659165295858,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1018,
+          "source": 316,
+          "captured_request": {
+            "elapsed_ms": 12.859609,
+            "reason": "accepted",
+            "source_horizon_program": true,
+            "terminal_attempts": 1,
+            "forward_velocity_ceiling_mps": 11.11111111111111,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.239999723,
+            "program_commands": 12,
+            "samples": 374,
+            "peer_clearance_m": 0.16965268844082892,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 12.811629,
+            "reason": "accepted",
+            "source_horizon_program": true,
+            "terminal_attempts": 1,
+            "forward_velocity_ceiling_mps": 11.11111111111111,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.239999723,
+            "program_commands": 12,
+            "samples": 374,
+            "peer_clearance_m": 0.16965268844082892,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "wall-r22": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 1023,
+          "source": 365,
+          "captured_request": {
+            "elapsed_ms": 13.346651,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 13.57499973,
+            "program_commands": 2,
+            "samples": 301,
+            "peer_clearance_m": 0.14943943369418045,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 13.10033,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 13.57499973,
+            "program_commands": 2,
+            "samples": 301,
+            "peer_clearance_m": 0.14943943369418045,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1024,
+          "source": 338,
+          "captured_request": {
+            "elapsed_ms": 23.862218,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 2,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 13.614999728999999,
+            "program_commands": 2,
+            "samples": 303,
+            "peer_clearance_m": 0.006229782068236656,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 23.816823,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 2,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 13.614999728999999,
+            "program_commands": 2,
+            "samples": 303,
+            "peer_clearance_m": 0.006229782068236656,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "peer-r22": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1082,
+          "source": 597,
+          "captured_request": {
+            "elapsed_ms": 11.510061,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.664999682,
+            "program_commands": 2,
+            "samples": 289,
+            "peer_clearance_m": 0.24907738556940817,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 11.251897,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.664999682,
+            "program_commands": 2,
+            "samples": 289,
+            "peer_clearance_m": 0.24907738556940817,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1083,
+          "source": 597,
+          "captured_request": {
+            "elapsed_ms": 24.364579,
+            "reason": "applied-program-unavailable",
+            "source_horizon_program": false,
+            "terminal_attempts": 4,
+            "applied_reason": 7,
+            "program_reason": 0,
+            "prediction_reason": 8,
+            "rejected_sec": 15.014999681,
+            "rejected_peer": "d1",
+            "production": "retained-proof-unavailable"
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 24.281984,
+            "reason": "applied-program-unavailable",
+            "source_horizon_program": false,
+            "terminal_attempts": 4,
+            "applied_reason": 7,
+            "program_reason": 0,
+            "prediction_reason": 8,
+            "rejected_sec": 15.014999681,
+            "rejected_peer": "d1",
+            "production": "retained-proof-unavailable"
+          }
+        }
+      },
+      "wall-r21": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 952,
+          "source": 270,
+          "captured_request": {
+            "elapsed_ms": 10.984095,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.824999760999999,
+            "program_commands": 2,
+            "samples": 230,
+            "peer_clearance_m": 0.7807584055114809,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 10.26601,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.824999760999999,
+            "program_commands": 2,
+            "samples": 230,
+            "peer_clearance_m": 0.7807584055114809,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 953,
+          "source": 261,
+          "captured_request": {
+            "elapsed_ms": 9.869848,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.87499976,
+            "program_commands": 2,
+            "samples": 231,
+            "peer_clearance_m": 0.7978390058828739,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 9.769991,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 11.87499976,
+            "program_commands": 2,
+            "samples": 231,
+            "peer_clearance_m": 0.7978390058828739,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "wall-r20": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 963,
+          "source": 277,
+          "captured_request": {
+            "elapsed_ms": 11.19466,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.424999751,
+            "program_commands": 2,
+            "samples": 260,
+            "peer_clearance_m": 1.390907809840646,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 10.976261,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.424999751,
+            "program_commands": 2,
+            "samples": 260,
+            "peer_clearance_m": 1.390907809840646,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 964,
+          "source": 260,
+          "captured_request": {
+            "elapsed_ms": 10.089069,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.45499975,
+            "program_commands": 2,
+            "samples": 263,
+            "peer_clearance_m": 1.41015037083353,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 9.990183,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 12.45499975,
+            "program_commands": 2,
+            "samples": 263,
+            "peer_clearance_m": 1.41015037083353,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "peer-r19": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000001071-d426f9a520aa2c4e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1070,
+          "source": 692,
+          "captured_request": {
+            "elapsed_ms": 8.310868,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.619999691,
+            "program_commands": 2,
+            "samples": 169,
+            "peer_clearance_m": 0.04887960476041098,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 8.125681,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.619999691,
+            "program_commands": 2,
+            "samples": 169,
+            "peer_clearance_m": 0.04887960476041098,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1071,
+          "source": 692,
+          "captured_request": {
+            "elapsed_ms": 8.284509,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.664999691,
+            "program_commands": 2,
+            "samples": 170,
+            "peer_clearance_m": 0.005183089134396246,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 8.23727,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 14.664999691,
+            "program_commands": 2,
+            "samples": 170,
+            "peer_clearance_m": 0.005183089134396246,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "accepted-r17": {
+        "authority": false,
+        "solver_invocations": 0,
+        "input": "/output/20260910-nine-state-dev2-r17/d1/mpcc_architecture_snapshots/000000001020-7b13fc78d1f505da-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+        "previous_accepted_revalidation_evidence": {
+          "capture_status": "invalid",
+          "capture_reason": "revalidation request does not match the required decision, clock or source association",
+          "decision": 1019,
+          "source": 544,
+          "captured_request": {
+            "elapsed_ms": 6.665175,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.409999661999999,
+            "program_commands": 2,
+            "samples": 66,
+            "peer_clearance_m": 0.6299779555727445,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 6.524892,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 1,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.409999661999999,
+            "program_commands": 2,
+            "samples": 66,
+            "peer_clearance_m": 0.6299779555727445,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        },
+        "revalidation_evidence": {
+          "capture_status": "present",
+          "capture_reason": "exact evaluation input; not proof or publication authority",
+          "decision": 1020,
+          "source": 619,
+          "captured_request": {
+            "elapsed_ms": 6.844942,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 0,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.429999662,
+            "program_commands": 1,
+            "samples": 67,
+            "peer_clearance_m": 0.6284901853970306,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          },
+          "with_empirical_profile": {
+            "elapsed_ms": 6.804085,
+            "reason": "accepted",
+            "source_horizon_program": false,
+            "terminal_attempts": 0,
+            "applied_reason": 0,
+            "program_reason": 0,
+            "prediction_reason": 0,
+            "rejected_sec": null,
+            "rejected_peer": "",
+            "production": "available",
+            "rest_sec": 15.429999662,
+            "program_commands": 1,
+            "samples": 67,
+            "peer_clearance_m": 0.6284901853970306,
+            "materialization": "available",
+            "join": "accepted",
+            "join_applied_reason": 0
+          }
+        }
+      },
+      "signed-r16": {
+        "authority": false,
+        "source": 124,
+        "decision": 795,
+        "captured": {
+          "elapsed_ms": 0.022462,
+          "reason": "intent-mismatch",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 1,
+          "program_reason": 1,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "intent-mismatch"
+        },
+        "published_upstream_retained": {
+          "elapsed_ms": 0.86456,
+          "reason": "accepted",
+          "production": "available",
+          "applied_certificate": true,
+          "rest_sec": 7.9149998230000005,
+          "minimum_peer_clearance_m": 1.0726770723374652,
+          "applied_reason": 0,
+          "program_reason": 0,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "invalid-current-state"
+        },
+        "published_stop": "accepted",
+        "bundle": "available",
+        "joined_published_stop": {
+          "elapsed_ms": 0.243877,
+          "reason": "accepted",
+          "production": "available",
+          "applied_certificate": true,
+          "rest_sec": 7.9149998230000005,
+          "minimum_peer_clearance_m": 1.0726770723374652,
+          "applied_reason": 0,
+          "program_reason": 0,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "invalid-current-state"
+        }
+      },
+      "gap-r18": {
+        "authority": false,
+        "source": 249,
+        "decision": 839,
+        "captured": {
+          "elapsed_ms": 0.030337,
+          "reason": "intent-mismatch",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 1,
+          "program_reason": 1,
+          "prediction_reason": 0,
+          "rejected_sec": null,
+          "nominal_only": "intent-mismatch"
+        },
+        "published_upstream_retained": {
+          "elapsed_ms": 1.588736,
+          "reason": "applied-program-unavailable",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 3,
+          "program_reason": 0,
+          "prediction_reason": 5,
+          "rejected_sec": null,
+          "nominal_only": "accepted",
+          "direct_applied_reason": 3,
+          "direct_prediction": 5
+        },
+        "published_stop": "accepted",
+        "bundle": "available",
+        "joined_published_stop": {
+          "elapsed_ms": 0.935202,
+          "reason": "applied-program-unavailable",
+          "production": "retained-proof-unavailable",
+          "applied_certificate": false,
+          "applied_reason": 3,
+          "program_reason": 0,
+          "prediction_reason": 5,
+          "rejected_sec": null,
+          "nominal_only": "accepted",
+          "direct_applied_reason": 3,
+          "direct_prediction": 5
+        }
+      }
+    }
+  },
+  "run_callback": {
+    "d1": {
+      "count": 1396,
+      "mean_ms": 8.564305297277938,
+      "p95_ms": 23.0744815,
+      "p99_ms": 37.63235774999999,
+      "maximum_ms": 136.968542,
+      "overflow": 0,
+      "adjacent_overrun_pairs": 29,
+      "meaning": "All emitted individual callback measurements, including startup/finish. Final incomplete telemetry window is unobserved. Duration ends before its own telemetry emission."
+    },
+    "d2": {
+      "count": 1371,
+      "mean_ms": 8.723309725018236,
+      "p95_ms": 23.6002535,
+      "p99_ms": 33.175305999999985,
+      "maximum_ms": 78.448611,
+      "overflow": 0,
+      "adjacent_overrun_pairs": 16,
+      "meaning": "All emitted individual callback measurements, including startup/finish. Final incomplete telemetry window is unobserved. Duration ends before its own telemetry emission."
+    }
+  },
+  "current_limits": "Freshdev2-r24next. Peer-model evolution, actual publication-clock agreement, live recursive Stop/rest/restart and25ms, M4–M6remain open. Replay times do not establish live acceptance.",
+  "files": [
+    {
+      "path": "output/20260910-nine-state-dev2-r23/artifact-restoration.json",
+      "sha256": "7da3bc633d2ca4ba9b5351bd41f0837a9637983b0c1b842a13c23286c17aaa2c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-inspected-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/previous-revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-certified-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/published-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/revalidation-wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "83969baf6b389b578d93cd4d827021b91ad08712ef677265d30ccb8279fd4dbf"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/wall-grid.bin",
+      "sha256": "190563b756797efb857b7e5155017cdbcdcfee615f6975802e373edfac81f13c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/launch.log",
+      "sha256": "a343f0913e3a3285644e137badd36bcccf8503dd027ac43e14ef8af51714230a"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/manifest.json",
+      "sha256": "095bfe8cfda4c24b5eb8731f7e1ed2364241e68d68b1fc8a2aba308cbbef0a12"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/monitor-summary.json",
+      "sha256": "b1725375b1d5a48b7d6ffde2482d475fbbf912388cc7fb842443b1f2fe8da04c"
+    },
+    {
+      "path": "output/20260910-nine-state-dev2-r23/mpcc-source.patch",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/generator.py",
+      "sha256": "8460bf2672e2cb07d05c49e4d85e11eecf10000e5ede314721dff9caba84007b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/manifest.json",
+      "sha256": "73704b2c38864c508139de6de52e33f0aecb2ef5b4ed55906fdb7c10f5b4701b"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "790f8ad6a40986a55f9e8d50703f3ad446e28e7f4e9fdef13de5481f8599cc60"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-0.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-0.yaml",
+      "sha256": "0f8e51d723e7b477d359602c5c7bbe26a5b69aae5bc1bdc468edb334c2364362"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-1.yaml",
+      "sha256": "181e2e5666b3e2ada8afd10b8c80bc4c7c5fa5834de285a56baa3c768ee09f27"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-2.yaml",
+      "sha256": "242977681524c2ee59d3c392b25afec8f5b011841f974291719c6992327adbfe"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-3.yaml",
+      "sha256": "75a6edc7b80674f37b49d95ff03172219c187cecd07cb8c61794b560858586c8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-4.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-4.yaml",
+      "sha256": "164f726be09d5c3c23eb9caec0625401390ddf6226aa4f1d627c455a1db2c85c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-5.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/r23d1-brake-5.yaml",
+      "sha256": "891ad5f9734f7b6633706c3b1f8277a55de465069d5a9bb5c661bbe16d6f1326"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r111/replay",
+      "sha256": "2211edda2e3f2b7d66a485dba30af36c83487e27a88428572343f8ad9658b165"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r112/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r112/driver.cpp",
+      "sha256": "1ee32b391d35b7f9d1b97749b940c2a591250942f3c6cb296422b395ae8d92d2"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r112/generator.py",
+      "sha256": "4f6e4724256f9f57ecb94e40ded4fc2edc5857fd8616f680192a55d443c83885"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r112/manifest.json",
+      "sha256": "6b9cd57a71aa8e6792a9fe91742dfc3b30dfeed89c594663ae237bafd11848e5"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r112/r23d1.yaml",
+      "sha256": "457e835cb777741bf1f09719a7641ceab2747459e7e3d8e94981b4fd75013407"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r112/replay",
+      "sha256": "9adf2102dad1a156b9710f035a95c90f121339acef6245304237ecf7411821cb"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r112/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r112/variant.cpp",
+      "sha256": "907883c97d87f3adf9c68ccb0b8c5bda334c77c95d733efc76af775ed3044a14"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r113/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r113/driver.cpp",
+      "sha256": "7119ddfd513f55a66fefdabf6cbd12319ed0dbca31cb6fd5bba0378116ee9e2c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r113/generator.py",
+      "sha256": "c273adfbe6c306b5b82a186c700c600468793de22a671118102812df1a8e5ef7"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r113/manifest.json",
+      "sha256": "b9b50f25ed98b44b9166bd4908575294bedc6b0f2b24ec866895dc88436020d8"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r113/r23d1.yaml",
+      "sha256": "4b131451daf30092b19f20e036694ae0f8a64e288e35fff8688c3be7a1f50762"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r113/replay",
+      "sha256": "adeabe0107f6b0fc62a6055d42efb6ee13ce0b581e2895f0e057959fb676cbba"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r113/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r113/variant.cpp",
+      "sha256": "93011ea34fa5b8468319313ecd32ebf42d0b946c72ca771a60a05aa6ca89ecaf"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r114/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r114/driver.cpp",
+      "sha256": "7119ddfd513f55a66fefdabf6cbd12319ed0dbca31cb6fd5bba0378116ee9e2c"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r114/generator.py",
+      "sha256": "17e4a899ae5386a1ff2fb8f8912978f6b5ca22871c4c1788d9cf28f621cf485e"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r114/manifest.json",
+      "sha256": "a8ee53b1d1795a02b54163ffda0db36f34cfc46b76289a58e18fd0bf836e8b77"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r114/r23d1.yaml",
+      "sha256": "f49cb08af2d78c7343a602fb2f2bfc4e96e805254bac67dee32a2f50fd8ab3ca"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r114/replay",
+      "sha256": "229fc3ffcf3609e12e58652a5004c0b3c38afaacc5c823a85cec4721cd1c64c4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r114/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r114/variant.cpp",
+      "sha256": "028f17d987b234f58c8e71b5537d2f0dba94480f04baf1da650a719fcc559fbe"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r115/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r115/driver.cpp",
+      "sha256": "d4981f49e8cbba322df84eb6607d298b3cd7615e8576e9adab89087968e8ba60"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r115/generator.py",
+      "sha256": "85204f465499a294bf57d7869291ab6bb2e87b150255e088733524791dd20982"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r115/manifest.json",
+      "sha256": "7f4b6d362eba7601ff0befc2f8bb758a58ccce912a72bc7fdcabf192877b3948"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r115/r23d1.yaml",
+      "sha256": "54599e9125c973984f8e4ceb8823da22210f4cf1f6e9004a7870bc6f29a76dc4"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r115/replay",
+      "sha256": "db6ab6b919fa6531b8eb3eb8c563b31b30e1fa709bdabf9375f6e10319ef1322"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r115/run.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r115/variant.cpp",
+      "sha256": "37b391e0ec810bfbcfa4ab0c47d337ec3f7db925d68df4a1e65cfe638998a095"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r116/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r116/manifest.json",
+      "sha256": "ed77d528bd7f2ce9a2f36f19474812d34dccd63a930de6510b1394fbeac02e34"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r116/replay",
+      "sha256": "59e589990e85dd3dd90bfe6df551dda0cfab3ac3c8bedc6d4bc5a5b37b24e055"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r117/build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r117/manifest.json",
+      "sha256": "938f6df3d7d0ab20ed603a72559bd5e986f0bf367b07e40e7265513aea89b5ff"
+    },
+    {
+      "path": "output/20260910-nine-state-revalidation-tool-r117/replay",
+      "sha256": "17144d3508d4458ad317f0ea668b8cb28693ad91681714fc3625a0785f894ec6"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/architecture.log",
+      "sha256": "6b979e1747abbaabbd6b377c516ada5a1a35d6ffe4edc442dbf715fdf75c1b92"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/complete-rest.log",
+      "sha256": "44bfa73a65da666dd4042fb4b8206aa4a194ce3ef4c94b05a877c83105b1654e"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/diagnostic-common-geometry.yaml",
+      "sha256": "12ce89b17566bb56546bc62c59ca402e90a0fe0cd9f44de62f37536326100f98"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/exact-pair.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/exact-pair.yaml",
+      "sha256": "417534a29f084c207a5c16893f7951c490f248c3cabaafff2e09695658d3512e"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/manifest.json",
+      "sha256": "4d5d5481c73b654ffccf34638e9cb9b109855539d52035894b7afc0f4a8d1722"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/metrics/d1-callback-samples.json",
+      "sha256": "bf8941571011d77570dc10dbbdbfed76d2f316c0802fab308259337c0d603703"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/metrics/d1-command-clock-anomalies.json",
+      "sha256": "dbbc05e2bb1caa7c36931f7cf217454d7e3847c20de21fa122bae85df5d0f259"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/metrics/d1-prediction-samples.json",
+      "sha256": "d8be893281883d8b859a382e59315eff60138f0b6b3413577be43d48f55f0570"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/metrics/d2-callback-samples.json",
+      "sha256": "0abedda9e240beecaf3fef3a8f3c68a352a3772eb185c711ae1770421dcb750a"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/metrics/d2-command-clock-anomalies.json",
+      "sha256": "5b5473e158a6c0ec474a784c2db93d1216a5517b1b46f6379aca5bd7bd984384"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/metrics/d2-prediction-samples.json",
+      "sha256": "605c3c638674f437a0aaa49b2c5a6866204845f155007412a5064489116852a9"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/metrics/report.json",
+      "sha256": "403799dde95d2f615ae211016b0e9199cfc1d70bcc2af249493f89c26c94b8bd"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/metrics.log",
+      "sha256": "ed84b5812dd7965f450d71529611d049d89390f91730dade6220c4efeaec2c9b"
+    },
+    {
+      "path": "output/20260911-nine-state-dev2-causal-r23/mpcc_architecture_compare",
+      "sha256": "df529027c48ef982e34dc3547f252657cb45c57fd646d55ddf90bdd39d1118b6"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc-nine-state-build-r48.log",
+      "sha256": "371068f51e948e792175dc80f141cc93760fd79f0c02bd134841fdf145c4df9a"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc-nine-state-build-r49.log",
+      "sha256": "92cf28d700fd5f816ce993425d6a5d5a3821d7975a9cbd1b85c9b7f7788d9f08"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc-nine-state-build-r50.log",
+      "sha256": "87766f1ca6273afe1b69684c62f408e41f8f619179d7cfff8e301b8c28603e16"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc-nine-state-build-r51.log",
+      "sha256": "6a7915ed5a709d615010f3f9abfaebe564d064b385a84c9fde8d7b2bac3ea55f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc-nine-state-tests-r40.log",
+      "sha256": "c69a28d36855865795f21788ab621fd8d438f79c9d1e65512e3530eb02fc0bc8"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc-nine-state-tests-r41.log",
+      "sha256": "b10582b42d8e9eee669b1dcef69bb18bceecb8fc580c52cdf70e10866e0ad164"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc_implement_source_horizon.py",
+      "sha256": "4c539317432f1e3b61c637e5aecf9a88d531c80425cacc52ec45d63f6af17819"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc_record_source_horizon.py",
+      "sha256": "30f476a1377475e27358be1e4b2bedcd4015e102564b5c7ab472e08d1a00fffe"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc_source_horizon_native_suite.py",
+      "sha256": "b3c825689fc556413ee83015861c1768eca7d1db147828264bb65741b1fc3da9"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-evidence/mpcc_source_horizon_tests.py",
+      "sha256": "08d1cebef6849eb89700d0c0e6e9a66e1862a99e82f1db3a341522d9d7379892"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/accepted-r17.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/accepted-r17.yaml",
+      "sha256": "cf564c296d6bafcff99b783aec355a3e548e17858c7b8d4302b42ec047446f40"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/commands.json",
+      "sha256": "dfd0cba91a12f98697561ecb64938d55ab9866cd3be5f8b6a5535e8f679e5cb8"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/compile-r116.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/compile-r117.log",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/files.json",
+      "sha256": "d5b9597aa0c5c38752e0094e7a5db314e19d22648e6267bd31e7d0f24c21a81a"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros.so",
+      "sha256": "2f9e9f09888de16443d689a651d92a6184746407405f523def87e03d6d2b6d4c"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_boost_start_dash.so",
+      "sha256": "16f5e37b07209aef64088993ad544261bd556702ee394ee54c2bcf1fa96e29d9"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_awsim_control_mode_guard.so",
+      "sha256": "2f3790bca465a63e121105e4fc0bc96535b6edefb1dbff6ed896e4de030518f2"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_bounded_single_job_executor.so",
+      "sha256": "ca1e7df3df184f761e5ad594cbe44764cb531d13d6b6eb987ee7871d3667b249"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan.so",
+      "sha256": "ce489bd98b8d0b855a5e6b842ff12ae378dece831253def49529643bcf28e0fb"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_execution_plan_adapter.so",
+      "sha256": "376476c63bdda01b91604b19452a16319320e3de2562ccd64927a6f66a976e0c"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_revalidation.so",
+      "sha256": "754b45878217fe33a560124c1521b8e9ec448b269de408a21282143c9deb9202"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_canonical_retained_world_revalidation.so",
+      "sha256": "608e8991a459d47eb00cb6f1491d1b3225c432d5b71da067998fb010bfdbb00e"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_follow_canonical_async.so",
+      "sha256": "16b17f5148aaabf53dfc9616217914e0923f83ae3b79b819cc5105cff4bc7dac"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_latest_only_worker.so",
+      "sha256": "4ea3676fa3fb92a6b61aef2f4549b9c1401a2848a5102ebc2faa4254672cf388"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_stage_geometry.so",
+      "sha256": "0387d075bfe4dac3f0a44ec2ab9adbcb9b02adab62154230245a646d72e9a514"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_state_prediction.so",
+      "sha256": "db812e64db8a9cc000767a0c27e6018139f31508112c5d54b55d0e65adf88043"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_velocity_limit.so",
+      "sha256": "5edfd8b8848f3810edb7c7b11963b0c60f601538dbf059fc4a991ddc45d99395"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_association.so",
+      "sha256": "f605749b6b1d1dc2920d61540e946ebf45bdcc0a191504919294806d38efcebe"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpc_waypoint_preview.so",
+      "sha256": "51acc1153014fba2c6f38cf304a6a8033e43707fec5f083ddaad345e2e03b00e"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_comparison.a",
+      "sha256": "fd329cc3c696ac98ceb2c5206acf9547700a7b8c6def4c064ce3866c4ee8512f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_architecture_snapshot.a",
+      "sha256": "59e322bea65c17e2455fdebeb3260e3c3a77838e352f92386ee98e8adb5873c1"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_certified_stop_successor_observation.a",
+      "sha256": "621b4f2e8d6d3224c3084980248625f1c04a0be1c78ea7cfde90cbd61e790c3d"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_execution_contract.so",
+      "sha256": "100686e2eb897b01442195e8d17faa7ef3a354ab2ed61430e9761cd772af57fc"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_latest_state_feedback.a",
+      "sha256": "54a428855c52451b7cd412de820f8e190408f76446a621b2be12e1e0f6f7d992"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_on_trajectory_connector.a",
+      "sha256": "2860432af2629c54f69756a2771eb70fc2d3ee8bc8862c682135eb0ac5587f82"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_overtake_sibling_adoption.a",
+      "sha256": "49cb2198bf9d9751ba58afcd6f9e98ae23718e44f5f63e78994a33dc8d223028"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_progress.so",
+      "sha256": "d064d8d232f31cc7be383243b6df983fcef70c6b0c6a7d6796851d06c11451e6"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.a",
+      "sha256": "e7c029456c8dd126cf41daf1b60298f0fbeee39c63d45eb9ca6f8f5a49c49186"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved.so",
+      "sha256": "c01addb1368825d92a3337e6f4946201b42bafcf72f9802c36eb0bc441cffb12"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_adapter.a",
+      "sha256": "87de34de6da68634540063a4c7f4f7e76dc069e49e684a24bde2af1eee76cb67"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_certified_plan.a",
+      "sha256": "6ede9c573e7fb85641c3728d3acc9d9bca0f49e2b076b84a6caadbdcd8f1a9d6"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_command_candidate.a",
+      "sha256": "d9dec6651244aada4f398d3dcac50fa1d5fdec979f253223b54584a4e2a09fb3"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_dynamic_proof.a",
+      "sha256": "99092fe7fd1502e32951cd62dea1a0af679444e8cd0b8a14336f76ece1f8d25b"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_artifact.a",
+      "sha256": "820ee6b8478704b2518184c0be9f3818a4cb49307e112932582bd4cc8b978bea"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_execution_source.a",
+      "sha256": "65a8d51933811ad552daa26319c6edc04f181f3b755675c1a7778aab6993a731"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_normal_branch_bank.a",
+      "sha256": "66c6eea82bd89cfa4e4cd10c0f571bd387420c706f87409b61ccaca5208b2aaf"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_overtake_branch_bank.a",
+      "sha256": "0262ea8ae93d91eb706b411bcbefef60020e4d6201a558f00c58bd834a93e547"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_adapter.a",
+      "sha256": "70070b6a7ce14fccf59990704a1ddee204714f025d0acae9e6213460256c0c7b"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_physical_wall.a",
+      "sha256": "f4aa95ce288b650e23f1569d5faf2775640a723285efb444ef7ff4a2306ea6d3"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_problem.a",
+      "sha256": "79db324f8a13adf327e12c95d8678c4adaf14074e2cae5eaa581a1ea0cbe9914"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_production_adapter.a",
+      "sha256": "233bb6dac809b972212c7f514fa6271bb81b26e1e6be387e1987c683cc766fe7"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_retained_revalidation.a",
+      "sha256": "685a41b31e0d0d1f3043ef2aa0f6cd0988ccee94049c85b89c2826f6a4e1be49"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_shadow.a",
+      "sha256": "068a4b9df465db4465be5150ef1e2269c016c5a2d6a29858eb32e9d74d20058a"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_control_lattice.a",
+      "sha256": "f360472032396b6e5617af632eaa2d3b633a844b548a77e457ada8dd3f98dc0c"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_lattice_shadow.a",
+      "sha256": "f21db286f49f515ddb36c25f0b88280770ee115f981a1923f3e74861dc8a01c0"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_rate_resolved_stop_successor_bundle.a",
+      "sha256": "f0472685c939202092ac6a47d095ea391d97b3d4dec7f8e9a24fd5bf2993a55f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_stateless_maneuver.a",
+      "sha256": "6a3324e7dae8478245dd76445a407dd201d696b6beab742d2dddc3ca47c453ed"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_steering_state_contract.so",
+      "sha256": "03eaf0f72437c114269b7f9252fabff6ff8267da7657671c6bc1f133e151d886"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_mpcc_vehicle_model.so",
+      "sha256": "7f6bdc04ef4ee40c5ab655591ecb12ca1dc50e2499d4f70ee2de3b6c43777727"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_decision_trace.so",
+      "sha256": "5e439e7d0c7a06a22b1c9d50ba0b5078a2ba4383249179ad07cda96e462a71f6"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_overtake_execution_orchestrator.so",
+      "sha256": "8fdb9e8fcd846b3195dd59b3033cb6f77934593e5ccfc0c3a7f058ea52b53451"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_path_core.so",
+      "sha256": "520c4afe066b0d7e55a84c32b2a13961ca912771a00d97a960820a00e6aa28c5"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_persistent_osqp.so",
+      "sha256": "4a8c23ce5fecdf903b401b25537ccef660dad85cbd79f77b21746718f361a944"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_race_mpcc_foundation.so",
+      "sha256": "8e333d2a791fcd20e17ba14689afa75e15cb6658c85e1a0277cc331444626450"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_footprint.so",
+      "sha256": "d060bf3ad237a337f05b3c8e94bce75964fbaea1346a8dc0a31ca53727995ff4"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_recovery_mpc.so",
+      "sha256": "f8bb0ec2af86c20e784c792c5cf9a23576f3edddd90c9c8f31c4847394a7da59"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_runtime_speed_profile.so",
+      "sha256": "f3bde7a7d3deb6df958555323c3c5c12deb22263963938c9e10fef328def4316"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_start_grid_grace.so",
+      "sha256": "4579a4d9b9a97c635206f5417ff369486c15e4d2dc6305b392fa9a298e3b88e1"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_stuck_recovery_core.so",
+      "sha256": "1af4df45e4353d8d7680462cd5b964c695c00bc3403b1ffed041ee8d36303ba0"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/build/multi_purpose_mpc_ros/libmulti_purpose_mpc_ros_v2x_overtake_core.so",
+      "sha256": "1a43451a6033eb064a91789f5964682d57c23f83967b8183dde3d8c5079fd260"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_boost_start_dash.hpp",
+      "sha256": "6377ee258ce094dd481807b3570045253e0de438684c0f72f5fa1f706cd746c8"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/awsim_control_mode_guard.hpp",
+      "sha256": "5f4afa91011e2e66d06087604d90ada5946a434d099c497ec67adafa8393bf01"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/bounded_single_job_executor.hpp",
+      "sha256": "994779bfa1d00f20514b91beb9efaff5425ffd369514487605a1ca86b5e56a95"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_footprint_enclosure.hpp",
+      "sha256": "d74bfd0a9b237ebbed9674ca82e7989a6c9123679c9e814367aa85907c946d24"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/detail/mpcc_vehicle_enclosure.hpp",
+      "sha256": "949760419e4af9e86f72ddc70ec29078156e1687c42f2e41209e262f5598ec54"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/external_speed_loss_monitor.hpp",
+      "sha256": "82a5a738a12dfa667c6733baf1a8a460f945b02ed91439d703233dccff52164f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/latest_only_worker.hpp",
+      "sha256": "39f4f298180d8f68d94795961498b46546def7309ac1f2b3b85be33fd6097e35"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_longitudinal_prediction.hpp",
+      "sha256": "3cddd30e326339caaa731541bb11f848594975a8cc3c89b3955f46d2fbfe1176"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_stage_geometry.hpp",
+      "sha256": "142723ce37e57380e0aff8a90edb78f5dace8f39768ab84cc7b827cef30a6744"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_state_prediction.hpp",
+      "sha256": "b89bcbcb2d89a2b7056cd4d00cf9bbd273058e99d2d55fc06a9fd98f73914d91"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_velocity_limit.hpp",
+      "sha256": "546d086bbcf361e6306c0d7d8a37582b231d51b8c3f2493712cb3e98e5abbf54"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_association.hpp",
+      "sha256": "0fb2ac6660a90f6a1dfae3b851441eeeb317389601235f9ecfaa3c23c2daa007"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpc_waypoint_preview.hpp",
+      "sha256": "8b800bf50f09944346fcb2658fffd6dd20f7e925a69273738823fb85aa90a259"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_prediction.hpp",
+      "sha256": "d0d06b2166cf157d707bd14df57993e50a499874aef7534689293d2e7ef96fa3"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_applied_input_yaml.hpp",
+      "sha256": "d2fa56bed49fb3616475b5ea8cb59daf56b76fd3620529c22cba17bcf7e254cc"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_comparison.hpp",
+      "sha256": "5eef64d2cce3ee7da13c1cf625f6550eb4e64ac77a99dae93f06c65178cd2bff"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_architecture_snapshot.hpp",
+      "sha256": "5782909e01b8caf818e66a92b4c8339af08447acf03456ff3e1ec511a9cb4557"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_certified_stop_successor_observation.hpp",
+      "sha256": "491bdcffd46304bacc3b0b5c45a9868548aaa78c2f549526129349468e718231"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_execution_contract.hpp",
+      "sha256": "83431e813c50c8df07e5dbf28d45f84f726d7bd74ce9492f3a55957f7b8da43f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_latest_state_feedback.hpp",
+      "sha256": "6b4ed1169b37d66d6bbc411c3ca604d7e9764ed2e4de2ee311a36c253b32fcc4"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_on_trajectory_connector.hpp",
+      "sha256": "93eb1a2c4332ebb40a53ecd5b91cf90f66a1821036d2f6ad20523dfa653eab73"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_overtake_sibling_adoption.hpp",
+      "sha256": "6e744a67b5be270df16338ed6a497abe47da54d45f187aca2fd3d8ffe6d7c02f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_progress.hpp",
+      "sha256": "e21c57a0e3a4cd2d1b30ace01c0c84587b42d4a58a03b02881544d78418cbc8d"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved.hpp",
+      "sha256": "4191fa5f1c5382df303be3bf5491b28ed574d015fffb9a1fa1c3514c29d33341"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_adapter.hpp",
+      "sha256": "b7a425fc0efd4ffd8b60c12f19025aa3f3a546642557619bd4c548122796b4af"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_applied_program.hpp",
+      "sha256": "3d978b0487a55113bdb4ec135cdc3866a162d59cf1522e60e9270b64df39afc4"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_certified_plan.hpp",
+      "sha256": "94bbdafc08578fbebf85af15b90583f1c7452cdf3ab842689281249d0d191b48"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_command_candidate.hpp",
+      "sha256": "c1d150c48b877ceeb29392dde137754279d2c03d9bf3990e7b2fa430fa07b946"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_obstacle.hpp",
+      "sha256": "e32649cd1f157eac6266c2e80a4ab8a4731e864b92f2cd7b20c292045097dae2"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_dynamic_proof.hpp",
+      "sha256": "fb31dbf1370c6fa8d4e539d4da090ae677be08934425210ed3c6320b8acf11ea"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_artifact.hpp",
+      "sha256": "81eef27e7e53d57731971258f1477e46f4ce6354467352c26059859c9f2a2a57"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_execution_source.hpp",
+      "sha256": "3f158a9210e3b5de76ec4df6abb0b4c6eecc575a3d7553850e1c3c16279164bc"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_normal_branch_bank.hpp",
+      "sha256": "464fc3fbf29043c28eb1e27fa12593be6c8dcbd5b87961a312aaf4e178866b1e"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_overtake_branch_bank.hpp",
+      "sha256": "cb5dd1b7c5e898f20b0ad712edde7da8ae1a3aaa31125e7cebcb4b23d50b6daa"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_adapter.hpp",
+      "sha256": "ad68f2f69c5363e9602eda375958fc825aaa4d1581bae6e220f9a8920c237d4e"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_physical_wall.hpp",
+      "sha256": "8f872a0c8a86f65db032918e191baef626fbcf6466ec9c27e53cc3c979195f8d"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_problem.hpp",
+      "sha256": "2735504de4cf98be0a0fdf9bf08ee337ba0a9d898549e706b9660c8f63ae03ed"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_production_adapter.hpp",
+      "sha256": "e650a5491e34e5c64820cd379ca26289a9fdacb09e65accb6d3e82fd644db64d"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp",
+      "sha256": "d88936c5de7627177c0d1bb2a167be2776ad15130809e54a44a09dda4d99af84"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp",
+      "sha256": "ec16338fe4cc96a8eaf0676362ab53a94c79ddeb05135b2a93749017f12cdad6"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_control_lattice.hpp",
+      "sha256": "84eaaf7054fbe43addaa0d1833f2dc7face00fcb34aaef8c022da6c888c32b20"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_lattice_shadow.hpp",
+      "sha256": "fda7709abdc9d50c80279e7e0b0f4dd4e9ef8a295959b0caaae3d3427e51b9eb"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_stop_successor_bundle.hpp",
+      "sha256": "c0364be0c57498691256882b8de9b3f0e9acd9ced3f2ccba590b4d8d1efc4725"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_rate_resolved_wall_refinement.hpp",
+      "sha256": "3adc114489f24bf75e8fddeab46e8d4eb937a4f3b7bfd506d7b03f1ac6789e9f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stateless_maneuver.hpp",
+      "sha256": "e786ef0ea30461c7ad1ca6d43b371c77484cc1c8f3fa7f2e64761b6a6dbfcb47"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_steering_state_contract.hpp",
+      "sha256": "00e48a55c54aaebc70dc9c5352116f12556de4e5261d32a7ad9818e41b9b96ac"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_stop_input_program.hpp",
+      "sha256": "4f229f7f22dad4a40d4901c1bf9e43075c93468434e1e1f4a0ba5150470ae520"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model.hpp",
+      "sha256": "416bf089180e05ebd86cdd4d571cdf2dadf242c8379f0a30411d9b2cddb4f5b0"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_kernel.hpp",
+      "sha256": "0c0d262e85520e723abda29d37c52f48871613a400263e79b6fd4574a70dad35"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_model_yaml.hpp",
+      "sha256": "d83d7d2185e11200ff1e1f656018994fb3424599011a0c3904c0c5aa66b0b536"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_vehicle_prediction.hpp",
+      "sha256": "8afc0766959fa3477a4a17ed37f2f32c65eaf2bf66ced4cbcdc081ad92d35735"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/mpcc_wire_command.hpp",
+      "sha256": "c0734bed816636bd6db4bbc3cb56bff4df7c90868297949ecedba545ba315a86"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_decision_trace.hpp",
+      "sha256": "91d7fef94540c0b6ce89ec0139cfb76f8021085eb16563b01b88c076c356e52f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/overtake_execution_orchestrator.hpp",
+      "sha256": "21eae46391377403be955bddab2f38fc2b5857ca3287b6c271db539cb6e51a0c"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/path_core.hpp",
+      "sha256": "648e041b4400b57d268967d4df2f2075516b3eda682de5e9ea39178bf9f80e56"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/persistent_osqp.hpp",
+      "sha256": "c6d015467d5aa82267bc1fdb6bad25efc9cc644fad057e89d49e6a34f4afaab3"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/prediction_markers.hpp",
+      "sha256": "445983d9732dd2329633cd952dcb1dc682522911541fd2318a69aee2745cd8c0"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/race_mpcc_foundation.hpp",
+      "sha256": "918837e27ff9b3a2b65924b4fb22ef958f879bfe7f67f47fc2bcb88a6a2c28a1"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_footprint.hpp",
+      "sha256": "41dd3feb125fbda04e1e340d7088180fc031ac2de8ede0fcedad4c724a82052b"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/recovery_mpc.hpp",
+      "sha256": "f3b918005ea4979ca93dee7c869945556e05555fb51d5cd89d9680721c9f0f73"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/runtime_speed_profile.hpp",
+      "sha256": "247ac0bb446518c83181a8e21ecfb8b738e02fe90818b38c7151045390b31311"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/start_grid_grace.hpp",
+      "sha256": "d263d2e4644b0ebbcfbdda0df0bb6335b1e3beadd8143d29ef34e094985afd23"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/stuck_recovery_core.hpp",
+      "sha256": "334696d66637e231e8721d553de390252958985a090026ebed4766a99e2dfa4e"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/include/multi_purpose_mpc_ros/v2x_overtake_core.hpp",
+      "sha256": "d8b5d96d02c2759fb0204ee8fbbe73a430e680e39d99c3d63d5ae634ad086f4a"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpc_controller_cpp.cpp",
+      "sha256": "936199481bced05b326ad8f7fcaa01b853b3d3edb38f6c33c8edac789c4756ec"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_applied_input_prediction.cpp",
+      "sha256": "247e33b45ef2ebd48927f1d78b83cef6d9ca87eb56ab036de62719d3f317821c"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_compare.cpp",
+      "sha256": "d6bdc82964b018fbf8c1201bd49d66670a3437591114e119f3cdd91696f82ddd"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_comparison.cpp",
+      "sha256": "b8b04216f3395ef7b7b95b0207b3d91ba8ddd78a2422a85168533a5daf83c32b"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_architecture_snapshot.cpp",
+      "sha256": "279020e563325c0001ac1574386ebaf70a74bb661ede22cbf66c17c16da35039"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_certified_stop_successor_observation.cpp",
+      "sha256": "6788f885a2a98efcc2acc960e798913f00e3639be390905cf90f72414c92bd06"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_execution_contract.cpp",
+      "sha256": "04e2bfe3868b70a7413427a4da9e10d896ceaff3da9214c4d5b33c81a3f93805"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_latest_state_feedback.cpp",
+      "sha256": "80a3763903df1a57286fb8920a757cdc1fb7fa77288be792eaa30d5a2a3ed012"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_maneuver_replay.cpp",
+      "sha256": "5c3fbe0193a06f32cf509a7ea94ce038aa91918e19634224219c612ea59b56b8"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_on_trajectory_connector.cpp",
+      "sha256": "b58a8dc7a1a66db0c293028fd9ade33089313df4175f21314b3c601377e8d200"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_overtake_sibling_adoption.cpp",
+      "sha256": "a7a153f33cc97dc0436f9ed4eb2ac925b15e7c3e70b0e17f0a9752b3fc49ac7e"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_prepared_suffix_replay.cpp",
+      "sha256": "c1b0698a5e321a480c28940e9fec7dbe87df7536532dab65e0d213469a1f9b80"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_progress.cpp",
+      "sha256": "c0a12fc5f8c2d7f59a0d22d6162adef6a7aff410b046f12281c5996d403554c7"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_qp_replay.cpp",
+      "sha256": "221d714ce6bba36c629d2ada6378c2288fcc7e0fda5d4c96babefbac7fb7cf00"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved.cpp",
+      "sha256": "c0e544311e4be6c0bde46b1170de7240c8ee7e8aef357793b9fdee99a6e4fa1b"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_adapter.cpp",
+      "sha256": "819ed260d526674e054197ddd014d50652b03d059d001a71d4d6aae7185ce3b2"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_applied_program.cpp",
+      "sha256": "7a727cc73df5fafbfe8e3c92c24144a222deb73a87e434aa6ea101ea12ef5fea"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_certified_plan.cpp",
+      "sha256": "813682a1117ff54fd790ff3f973cff0865bd5fdf162f4576b58fd70b71440589"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_command_candidate.cpp",
+      "sha256": "985a0d1486eed1a216ad6a59ac7ddc2c6e5fdb59b4a1de91d3224f1bd233bf83"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_obstacle.cpp",
+      "sha256": "57d007dc8d778466a4b0927dd5cfdd1cfbc92ac8aee3f70adc923e304df00698"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_dynamic_proof.cpp",
+      "sha256": "fb762cff5ef44a824652c6fb23859a5b193c22b8e169d48d16a688cb4316d291"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_artifact.cpp",
+      "sha256": "9fc64832fc88f09fb87b5d8698035beb1116a98e116bf4ba36a3fcd2783c5a75"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_execution_source.cpp",
+      "sha256": "caf792a10e99ad20a0e7744d615a8d828bf0828bf82f2c02dbb830a3c2ffb353"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_normal_branch_bank.cpp",
+      "sha256": "a3acd9dbf24757b42e55783aaaff8dfea51bac4c480650fcdeca1658533058be"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_overtake_branch_bank.cpp",
+      "sha256": "f6c7ba9bd6cf7a022c92ad45c1cd2903857021117fa8f25470403485574e0412"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_adapter.cpp",
+      "sha256": "983407accd00e52c523cb32106d6054d59df519bc164a01ef7e9e50d79107286"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_physical_wall.cpp",
+      "sha256": "10881540d46e51a8efa277026e421528ba1d93d9df20d3094b69c943d4bba8a9"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_problem.cpp",
+      "sha256": "1a81899496f7a33d699c92cbd61e926bf7548520e0fcb442499c6218b3cbe3d3"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_production_adapter.cpp",
+      "sha256": "e6d22be4e4e0366d31e650c8c3fc574914820770128c0fdf5f6c014eca057964"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_retained_revalidation.cpp",
+      "sha256": "9e294f4e1fd173a1b7af144f4affaa832cce071a231d16fafc2cdf4dcad9ae12"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_shadow.cpp",
+      "sha256": "946f8c080197fed9aa53f1583f11162f2ef0749f42642ed7bfdfbdea9b6196fe"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_control_lattice.cpp",
+      "sha256": "a9b458c34a29a607d7a30217fb0e713c1fb77f90db12e66c17d7c91072e8f4d2"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_lattice_shadow.cpp",
+      "sha256": "11e83eb28126834a8837289518f0023bd6dd72669f4b5622214639a8c82e1f92"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_stop_successor_bundle.cpp",
+      "sha256": "8b3db5133bbb39b99ed7488d5e784c939fb8e886130771996dec475fe6727067"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_rate_resolved_wall_refinement.cpp",
+      "sha256": "cf521297f83fb6371548607b7437d090b7bb2aaca41243fba5354ff170167b58"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stateless_maneuver.cpp",
+      "sha256": "c7d940bfab89072cb120df5945dd99eb8c35cb5aee1f6cf9009c1624517ee3d8"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_steering_state_contract.cpp",
+      "sha256": "b530641c709927a3864c513eaf1752fc7f5d21e84a6c371a3b7bd2819853a3f9"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_stop_input_program.cpp",
+      "sha256": "ce2a115cf4a461660494c7cf6e17d3b5a14d163f0ce8ed2144959c821cf8ecca"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_model.cpp",
+      "sha256": "817aec595dc44befcc8935ea307ad03f1c0c42dbf6ea0c81304d04e5d9b56712"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/aichallenge/workspace/src/aichallenge_submit/multi_purpose_mpc_ros/src/mpcc_vehicle_prediction.cpp",
+      "sha256": "1b322b6071cb09d08a2d8cad52f1af9a58a0f69a004f7079123d6ef0b1400c88"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/diagnostic/mpcc_source_horizon_native_suite.py",
+      "sha256": "b3c825689fc556413ee83015861c1768eca7d1db147828264bb65741b1fc3da9"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r16/d2/mpcc_architecture_snapshots/000000000795-01e3e7cbcf62d2f4-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "ec728c76a7c82708b8e8e64c8837b0a17d3dc69d3d4ef258ecb0208bdb4ee97c"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r17/d1/mpcc_architecture_snapshots/000000001020-7b13fc78d1f505da-cruise-side-neutral-physical-proof-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b77c6467c1f38503207c9afe37abcacb493b14530fb92032315ea48542d077ce"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r18/d1/mpcc_architecture_snapshots/000000000839-e61bd50321b2e3ed-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "b7cbe726c7098ab94ce00e36358856a3d33f1062018befdc5e650ab6d28befb2"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r19/d2/mpcc_architecture_snapshots/000000001071-d426f9a520aa2c4e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "02578477116e07e451922a4ac84860d27480015d743316371ee87b30e645b99a"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r20/d1/mpcc_architecture_snapshots/000000000964-00f3f0857fbed73a-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "c85a1768009807665aad446597a76a212d999a425685735374a85c27d766693f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r21/d1/mpcc_architecture_snapshots/000000000953-42f32b98f72b92ca-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "cef01e7c52de54904e7c8ac249752fa2676121c2eeaac6520378c5b975d37026"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r22/d1/mpcc_architecture_snapshots/000000001024-e35af739688b881e-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "ddc32d119df6b7cc1f0102f3cd60006cbf4ac4e94075a3b02d91f3f6dcd5a606"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r22/d2/mpcc_architecture_snapshots/000000001083-f87fc145ce0be638-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "7bcdfa3172eb624355e88365433bfd76e2a5b3d81800b11e957f5444ffc47c1f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/frozen-inputs/output/20260910-nine-state-dev2-r23/d1/mpcc_architecture_snapshots/000000001018-676029d77579f868-cruise-side-neutral-physical-proof-moving-normal-authority-unavailable/snapshot.yaml",
+      "sha256": "83969baf6b389b578d93cd4d827021b91ad08712ef677265d30ccb8279fd4dbf"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/gap-r18.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/gap-r18.yaml",
+      "sha256": "64dd42e916c6ce84b1b85e7bc447bf96ebce5c014f9c8c9041ef10c25f502a0f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/peer-r19.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/peer-r19.yaml",
+      "sha256": "47bb918790d8e95fe9a1ab1831c2630d573da2fdebb363b7d08e42f07a06a050"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/peer-r22.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/peer-r22.yaml",
+      "sha256": "2a69b634b1e02723a38d2fd367f2615572309901fe4718d49862d52f283461bd"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/peer-r23.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/peer-r23.yaml",
+      "sha256": "061d3233e60ed1d1051563deca0e279ffd32d8503781c313cb4b8fd468f6533f"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/signed-r16.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/signed-r16.yaml",
+      "sha256": "7653686cfb46cbe3780cdc5294a3846d404cd1d9b12eb17b121e4803e7bcac11"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/wall-r20.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/wall-r20.yaml",
+      "sha256": "e78d906b1c76657144aebefd7cb67a0b7345dd079770e1e12ea8e7e1d2b48b9e"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/wall-r21.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/wall-r21.yaml",
+      "sha256": "729056dd6c35bf22ca01b04d67e59bb0cb672cad3ebced974a3bb5489e17641a"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/wall-r22.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/20260911-nine-state-source-horizon-native-r1/wall-r22.yaml",
+      "sha256": "3a3143287006caa41f372aba937d4012582021180f16683ec0ac737f929a0170"
+    }
+  ]
+}

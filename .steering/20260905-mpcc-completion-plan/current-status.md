@@ -1,18 +1,17 @@
 # Current status and remaining completion work
 
 2026-09-11 JST。全M1–M6を自律実行中。必要分のローカルcommitのみ。
-**全体は未完。直近dev2-r22はD11024、2.73m/sでEmergency・25ms未達。**
+**全体は未完。直近dev2-r23はD11018、2.90m/sでEmergency・25ms未達。**
 
-- 全車体姿勢を包む長方形の余分な角による相手車拒否を再現した。
-  元の全範囲・車体余裕・相手車円を維持し、全頂点の区間射影による分離証明を追加した。
-- 元D11024は完全認証・最終指令・停止計画引き継ぎまで合格。
-  後続D2の相手車拒否と実際の入力履歴欠落は引き続き拒否する。
-- buildr46で新テストのリンク依存欠落を検出・修正。buildr47:26package、
-  testsr39:2437記録/62group、error/failure/skip0。新規native再生も合格。
-- 次は新規dev2-r23。ローカル再生時間を実走25msの合格には扱わない。
+- 元の解の残り時間を使う停止候補を追加。最初の同じ指令列の後に既存最大制動で停止する。
+- 元の速度上限を全応答と後続Stopに保持し、同じ壁・相手車・Follow・状態・入力認証を要求する。
+  通常権限の1周期と、停止列の全区間認証は別々に維持する。
+- buildr51:26package、testsr41:2441記録/62group、error/failure/skip0。
+  保存形式v2は速度上限を必須とし、旧v1のfingerprintを維持する。
+- 次は新規dev2-r24。ローカル再生時間を実走25msの合格には扱わない。
 
-[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/peer-separation-design.md)、
-[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/peer-separation-evidence.json)、
+[設計](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-stop-design.md)、
+[証拠](../20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-stop-evidence.json)、
 [tasklist](../20260910-mpcc-empirical-plant/tasklist.md)を参照。
 相手車モデルの更新、実送信と認証時刻の整合、M4全intent・実Stop/rest/restart・Recovery/Rejoin/Boost/async、
 同一HEAD単車/dev2各3回、dev3/dev4六周、gate1–3、同一tar/image/eval、文書・commitまで継続する。

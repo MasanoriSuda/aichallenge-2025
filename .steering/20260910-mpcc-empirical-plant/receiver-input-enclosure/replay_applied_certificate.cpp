@@ -25,7 +25,7 @@ int main(int argc, char ** argv)
     row["capture_status"] = evidence["status"].as<std::string>();
     row["capture_reason"] = evidence["reason"].as<std::string>();
     auto request = mpcc_observation::read_request(evidence["request"], path.parent_path());
-    request.plan = read_plan(evidence["certified_plan_evidence"], path);
+    request.plan = read_plan(evidence["certified_plan_evidence"], path, evidence["inspected_source"]);
     row["decision"] = request.decision_id;
     row["source"] = request.plan->execution_artifact->identity.sequence;
     for (const bool profiled : {false, true}) {
@@ -40,6 +40,10 @@ int main(int argc, char ** argv)
       result_row["elapsed_ms"] = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();
       result_row["reason"] = retained::to_string(result.reason);
+      result_row["source_horizon_program"] = result.terminal_stop_source_horizon_program;
+      result_row["terminal_attempts"] = result.terminal_stop_reference_attempts;
+      if(result.terminal_stop_forward_velocity_ceiling_mps)
+        result_row["forward_velocity_ceiling_mps"] = *result.terminal_stop_forward_velocity_ceiling_mps;
       result_row["applied_reason"] = static_cast<int>(result.applied_program_reason);
       result_row["program_reason"] = static_cast<int>(result.applied_program_prepare_reason);
       result_row["prediction_reason"] = static_cast<int>(result.applied_input_prediction_reason);

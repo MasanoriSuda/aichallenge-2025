@@ -104,6 +104,10 @@ std::uint64_t nominal_fingerprint(const retained::Proof &proof) {
   number(proof.terminal_stop_certified);
   number(proof.terminal_stop_uses_solved_suffix);
   number(proof.terminal_stop_constant_steering_program);
+  number(proof.terminal_stop_source_horizon_program);
+  number(proof.terminal_stop_forward_velocity_ceiling_mps.has_value());
+  if (proof.terminal_stop_forward_velocity_ceiling_mps)
+    number(*proof.terminal_stop_forward_velocity_ceiling_mps);
   number(proof.terminal_stop_publisher_interval_sample_count);
   number(proof.cursor.control_stage_index);
   number(proof.cursor.remaining_control_stage_count);
@@ -199,6 +203,10 @@ bool Certificate::matches(const retained::Request &request) const noexcept {
       !request.publication_prefix || !request.plan ||
       !request.plan->execution_artifact)
     return false;
+  const auto expected_ceiling = source_horizon_program_ ? retained::source_horizon_velocity_ceiling(request) :
+    (request.plan->execution_artifact->applied_stop_program ?
+    request.plan->execution_artifact->applied_stop_program->forward_velocity_ceiling_mps : std::nullopt);
+  if (expected_ceiling != forward_velocity_ceiling_mps_) return false;
   if (request.applied_program_required && !request.input_application_profile)
     return false;
   if (request.input_application_profile) {
@@ -260,6 +268,18 @@ Result certify_terminal_stop(const retained::Request &request,
     return result;
   const auto &execution = *request.plan->execution_artifact;
   const auto &physical_source = *request.plan->physical_snapshot;
+  const auto expected_ceiling = nominal.terminal_stop_source_horizon_program ?
+    retained::source_horizon_velocity_ceiling(request) :
+    (execution.applied_stop_program ? execution.applied_stop_program->forward_velocity_ceiling_mps : std::nullopt);
+  if ((nominal.terminal_stop_source_horizon_program &&
+    (!nominal.terminal_stop_constant_steering_program || nominal.terminal_stop_uses_solved_suffix || !expected_ceiling)) ||
+    nominal.terminal_stop_forward_velocity_ceiling_mps != expected_ceiling) return result;
+  if (expected_ceiling) {
+    if (!std::isfinite(*expected_ceiling) || *expected_ceiling <= 0 ||
+      request.control_origin_speed_mps > *expected_ceiling) return result;
+    for (const double velocity : nominal.terminal_stop_trajectory.velocity_mps)
+      if (!std::isfinite(velocity) || velocity > *expected_ceiling) return result;
+  }
   program::Request input{execution.identity,
                          request.decision_id,
                          request.control_origin_sec,
@@ -294,6 +314,8 @@ Result certify_terminal_stop(const retained::Request &request,
   }
   auto certificate = std::shared_ptr<Certificate>(new Certificate);
   certificate->nominal_fingerprint_ = nominal_fingerprint(nominal);
+  certificate->source_horizon_program_ = nominal.terminal_stop_source_horizon_program;
+  certificate->forward_velocity_ceiling_mps_ = expected_ceiling;
   certificate->prepared_ = *prepared.prepared;
   certificate->request_ = std::make_shared<const retained::Request>(request);
   const auto & observation = request.publication_prefix->observation;
@@ -323,6 +345,7 @@ Result certify_terminal_stop(const retained::Request &request,
         return Reason::StateBoundRejected;
     }
     if (state[3].lo < -tolerance ||
+        (expected_ceiling && state[3].hi > *expected_ceiling) ||
         std::max(std::abs(state[6].lo), std::abs(state[6].hi)) >
             execution.maximum_abs_steering_rad + tolerance ||
         std::max(std::abs(state[7].lo), std::abs(state[7].hi)) >

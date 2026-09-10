@@ -143,6 +143,15 @@ buildr45=26、testsr38=2434記録/62groupで失敗0。実走25ms・再発進・�
 buildr47=26、testsr39=2437記録/62groupで失敗0。実走25ms・再発進・完走は未検証。
 [相手車との幾何分離](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/peer-separation-design.md)を参照。
 
+2026-09-11のdev2-r23はD1decision1018、2.90m/sで後方車両に対する停止認証を失った。
+元の解の残り時間を既存送信周期で切り下げ、その間は最初の同じ指令を繰り返し、
+既存の最大制動で完全停止する候補を追加した。元の速度上限を全応答・後続Stopへ結合する。
+元の解の時間範囲は候補生成の上限であり、通常指令の権限は既存の公開1周期に限定できる。
+停止候補は別途その全区間の壁・他車・Follow・状態・入力・完全停止・同一指令を認証する。
+後方車の接近から候補の順序を選ぶ計算は権限を与えない。固定の待ち時間設定は増やさない。
+buildr51=26、testsr41=2441記録/62groupで失敗0。実走25ms・再発進・完走は未検証。
+[元の解の時間範囲を使う停止候補](../../.steering/20260910-mpcc-empirical-plant/receiver-input-enclosure/source-horizon-stop-design.md)を参照。
+
 ## 現在のアーキテクチャ
 
 ### ノード構成（Planning + Control）

@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "multi_purpose_mpc_ros/mpcc_rate_resolved_retained_revalidation.hpp"
 
@@ -724,15 +725,69 @@ static bool publication_prefix_consistent(const Request & request)
   return true;
 }
 
+std::optional<double> source_horizon_velocity_ceiling(const Request & request) noexcept
+{
+  if (!request.plan || !request.plan->execution_artifact ||
+    !request.plan->solver_source_snapshot) return std::nullopt;
+  const auto & execution = *request.plan->execution_artifact;
+  const auto & source = *request.plan->solver_source_snapshot;
+  if (!artifact::same_identity(source.identity, execution.identity) ||
+    !mpcc_rate_resolved_shadow::semantic_initial_state_matches(source, execution) ||
+    source.request.states.size() != execution.control_stages.size() + 1U)
+    return std::nullopt;
+  const auto cursor = resolve_execution_cursor(execution, request.control_origin_sec, request.execution_clock);
+  if (!cursor.available || cursor.control_stage_index >= execution.control_stages.size()) return std::nullopt;
+  double ceiling = std::numeric_limits<double>::infinity();
+  for (std::size_t i = cursor.control_stage_index + 1U; i < source.request.states.size(); ++i) {
+    const double value = source.request.states[i].upper(3);
+    if (!std::isfinite(value) || value <= 0) return std::nullopt;
+    ceiling = std::min(ceiling, value);
+  }
+  return std::isfinite(ceiling) ? std::optional<double>{ceiling} : std::nullopt;
+}
+
+// Proposal ordering only: a peer approaching the stationary current footprint
+// can make immediate braking a poor first hypothesis. One native braking step
+// estimates the stop duration; every actual programme still needs full proof.
+static bool rear_peer_prefers_source_horizon(const Request & request)
+{
+  if (!request.publication_prefix || !request.input_application_profile ||
+    !request.plan || !request.plan->execution_artifact) return false;
+  const auto & state = request.publication_prefix->current;
+  const auto & model = request.plan->execution_artifact->vehicle_model;
+  const auto next = mpcc_vehicle_model::advance(state,
+    {request.minimum_acceleration_mps2, 0.0}, model, model.maximum_step_sec);
+  if (!next || state.forward_velocity_mps <= 0) return false;
+  const double delta = state.forward_velocity_mps - next->state.forward_velocity_mps;
+  if (!std::isfinite(delta) || delta <= 0) return false;
+  const double stop_time = state.forward_velocity_mps * model.maximum_step_sec / delta;
+  const double now = request.now_sec - request.obstacles.observed_sec;
+  const double future = now + request.control_origin_sec - request.now_sec + stop_time +
+    request.input_application_profile->acceleration_age_sec;
+  if (!std::isfinite(future)) return false;
+  for (const auto & peer : request.obstacles.obstacles) {
+    const auto center = peer.circle.predicted_center(now);
+    const double along = (center[0] - request.control_pose.x_m) * std::cos(request.control_pose.yaw_rad) +
+      (center[1] - request.control_pose.y_m) * std::sin(request.control_pose.yaw_rad);
+    if (along >= 0) continue;
+    const auto clearance = recovery::circle_obstacle_clearance_at_time(
+      request.current_footprint, request.control_pose, peer.circle, future);
+    if (clearance && *clearance < 0) return true;
+  }
+  return false;
+}
+
 static Result evaluate_with_stop_profile(
   const Request & request,
   const mpcc_rate_resolved_physical_adapter::StopLateralTargetProfile * const stop_profile,
-  const bool constant_program = false)
+  const bool constant_program = false,
+  const bool source_horizon_program = false)
 {
   const auto evaluation_started = SteadyClock::now();
   Result result;
   result.terminal_stop_normal_path_reference = stop_profile != nullptr;
   result.terminal_stop_constant_steering_program = constant_program;
+  result.terminal_stop_source_horizon_program = source_horizon_program;
   result.execution_clock_kind = request.execution_clock.kind;
   result.first_published_control_origin_sec =
     request.execution_clock.first_published_control_origin_sec;
@@ -1374,6 +1429,10 @@ static Result evaluate_with_stop_profile(
     result.terminal_stop_uses_solved_suffix = true;
     result.terminal_stop_normal_path_reference = false;
     result.terminal_stop_constant_steering_program = false;
+    result.terminal_stop_source_horizon_program = false;
+    if (execution.applied_stop_program)
+      result.terminal_stop_forward_velocity_ceiling_mps =
+        execution.applied_stop_program->forward_velocity_ceiling_mps;
     result.terminal_stop_reference_attempts = 0U;
     result.terminal_stop_reason =
       mpcc_rate_resolved_physical_adapter::StopContingencyRejectReason::None;
@@ -1409,11 +1468,24 @@ static Result evaluate_with_stop_profile(
     const auto terminal_stop = [&]() {
       if (constant_program && request.publication_prefix) {
         const auto first = request.publication_prefix->proposed_packet;
-        auto brake = first;
-        brake.published_sec += execution.publication_interval_sec;
-        brake.wire_acceleration_mps2 = static_cast<float>(request.minimum_acceleration_mps2);
-        const mpcc_vehicle_model::PublishedInputProgram program{
-          execution.publication_interval_sec, {first, brake}, true};
+        std::size_t prefix_intervals = 1U;
+        if (source_horizon_program) {
+          result.terminal_stop_forward_velocity_ceiling_mps = source_horizon_velocity_ceiling(request);
+          const double intervals = std::floor(continuation_trajectory.elapsed_time_sec.back() /
+            execution.publication_interval_sec);
+          if (!result.terminal_stop_forward_velocity_ceiling_mps || !std::isfinite(intervals) ||
+            intervals <= 1 || intervals > continuation.actuation_samples.size())
+            return mpcc_rate_resolved_physical_adapter::StopContingencyResult{};
+          prefix_intervals = static_cast<std::size_t>(intervals);
+        }
+        mpcc_vehicle_model::PublishedInputProgram program{execution.publication_interval_sec, {}, true};
+        for (std::size_t i = 0; i <= prefix_intervals; ++i) {
+          auto packet = first;
+          packet.published_sec += i * execution.publication_interval_sec;
+          if (i == prefix_intervals)
+            packet.wire_acceleration_mps2 = static_cast<float>(request.minimum_acceleration_mps2);
+          program.commands.push_back(packet);
+        }
         return mpcc_rate_resolved_physical_adapter::build_stop_program(
           execution, command_cursor, current_world_actuation, terminal_initial,
           source.terminal_stop_course_geometry, program, 0.0);
@@ -1650,6 +1722,8 @@ static Result evaluate_with_stop_profile(
   proof.terminal_stop_certified = result.terminal_stop_certified;
   proof.terminal_stop_normal_path_reference = result.terminal_stop_normal_path_reference;
   proof.terminal_stop_constant_steering_program = result.terminal_stop_constant_steering_program;
+  proof.terminal_stop_source_horizon_program = result.terminal_stop_source_horizon_program;
+  proof.terminal_stop_forward_velocity_ceiling_mps = result.terminal_stop_forward_velocity_ceiling_mps;
   proof.terminal_stop_uses_solved_suffix = result.terminal_stop_uses_solved_suffix;
   proof.terminal_stop_static_checked_pose_count =
     terminal_stop_clearance.checked_pose_count;
@@ -1704,16 +1778,6 @@ Result evaluate(const Request & request)
   // Keep the chosen first normal packet and prove one common steering word
   // through braking against the same complete nominal and applied worlds.
   // A complete solved Stop may require delayed braking and remains untouched.
-  std::optional<Result> common;
-  if (!request.plan->execution_artifact->terminal_body_rest_required &&
-    request.applied_program_required && request.publication_prefix &&
-    request.input_application_profile)
-  {
-    common = evaluate_with_stop_profile(request, nullptr, true);
-    if (common->proof || !common->terminal_stop_attempted) {
-      return std::move(*common);
-    }
-  }
   const auto accumulate = [](Result & into, const Result & from) {
     into.terminal_stop_reference_attempts += from.terminal_stop_reference_attempts;
     using Runtime = Result::RuntimeBreakdown;
@@ -1726,6 +1790,22 @@ Result evaluate(const Request & request)
       into.runtime.*field += from.runtime.*field;
     }
   };
+  std::optional<Result> common;
+  if (!request.plan->execution_artifact->terminal_body_rest_required &&
+    request.applied_program_required && request.publication_prefix &&
+    request.input_application_profile)
+  {
+    const bool horizon_available = source_horizon_velocity_ceiling(request).has_value();
+    const bool horizon_first = horizon_available && rear_peer_prefers_source_horizon(request);
+    common = evaluate_with_stop_profile(request, nullptr, true, horizon_first);
+    if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
+    if (horizon_available) {
+      auto alternative = evaluate_with_stop_profile(request, nullptr, true, !horizon_first);
+      accumulate(alternative, *common);
+      common = std::move(alternative);
+      if (common->proof || !common->terminal_stop_attempted) return std::move(*common);
+    }
+  }
   const auto finish = [&](Result result) {
     if (common) {
       accumulate(result, *common);

@@ -311,6 +311,8 @@ struct Proof
   bool terminal_stop_certified{false};
   bool terminal_stop_normal_path_reference{false};
   bool terminal_stop_constant_steering_program{false};
+  bool terminal_stop_source_horizon_program{false};
+  std::optional<double> terminal_stop_forward_velocity_ceiling_mps;
   bool terminal_stop_uses_solved_suffix{false};
   std::size_t terminal_stop_static_checked_pose_count{};
   std::size_t terminal_stop_dynamic_checked_pose_count{};
@@ -376,6 +378,8 @@ struct Result
   bool terminal_stop_certified{false};
   bool terminal_stop_normal_path_reference{false};
   bool terminal_stop_constant_steering_program{false};
+  bool terminal_stop_source_horizon_program{false};
+  std::optional<double> terminal_stop_forward_velocity_ceiling_mps;
   bool terminal_stop_uses_solved_suffix{false};
   unsigned terminal_stop_reference_attempts{};
   bool terminal_stop_approximate_support_exceeded{false};
@@ -500,6 +504,10 @@ struct Result
 /// Revalidate only the current-world join to an immutable, already physically
 /// certified suffix.  This function deliberately cannot produce a command.
 Result evaluate(const Request & request);
+
+/// Minimum finite positive forward-speed bound in the remaining exact solver
+/// source. Missing/mismatched provenance cannot enable a source-horizon Stop.
+std::optional<double> source_horizon_velocity_ceiling(const Request & request) noexcept;
 
 /// Current-world counterfactual only. No Proof/plan/command escapes this API.
 struct NormalPathStopObservation

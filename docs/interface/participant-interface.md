@@ -318,3 +318,10 @@ async互換性・artifact検証・最終publish前照合へ引き継ぐ。profil
 既存契約は同じであり、変更はMPCC内部の保存/認証データに限る。
 受信age250msは2025 AWSIM実測から選んだ経験的profileで、2026公式/実車の保証ではない。
 詳細と未完了の統合受入れは[統合仕様](../spec/mpc-integration.md)を参照。
+
+元の解の時間範囲から生成する停止候補では、元sourceの残り状態の最小速度上限を
+`applied_stop_program.forward_velocity_ceiling_mps`に保存し、全応答と後続Stopで再検査する。
+この項目を持つ保存形式は`applied-stop-provenance-v2`。項目の欠落・非正値・非有限値と
+schemaの不一致を拒否し、fingerprintへ結合する。項目を持たない従来形式はv1と元の
+fingerprintを維持する。v1だけを理解する旧readerはv2を拒否するため、再生readerも
+同時更新する。通常指令の公開1周期の権限と、別途全停止まで認証する停止列は区別する。

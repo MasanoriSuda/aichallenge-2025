@@ -493,6 +493,7 @@ Result build_certified_terminal(
     data->profile = applied.tube().profile;
     data->program = applied.prepared().program;
     data->proved_rest_sec = applied.tube().rest_sec;
+    data->forward_velocity_ceiling_mps = proof.terminal_stop_forward_velocity_ceiling_mps;
     provenance = std::move(data);
   }
   auto materialized_request = request;

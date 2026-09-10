@@ -1,3 +1,4 @@
+#include "multi_purpose_mpc_ros/mpcc_rate_resolved_shadow.hpp"
 #include "multi_purpose_mpc_ros/mpcc_wire_command.hpp"
 #include "mpcc_vehicle_model_fixture.hpp"
 #include "mpcc_wall_input_fixture.hpp"
@@ -2425,6 +2426,195 @@ TEST(MpccRateResolvedRetainedRevalidation, AppliedProgramIsRequiredAtTheCommandB
   auto different_profile = request;
   different_profile.input_application_profile->steering_receipt_age_sec = .2;
   EXPECT_FALSE(result.proof->applied_program->matches(different_profile));
+}
+
+void attach_velocity_source(retained::Request & request, double ceiling)
+{
+  auto plan = std::make_shared<certified::CertifiedPlan>(*request.plan);
+  const auto & execution = *plan->execution_artifact;
+  const auto & initial = *execution.semantic_initial_state;
+  auto source = std::make_shared<multi_purpose_mpc_ros::mpcc_rate_resolved_shadow::Snapshot>();
+  source->identity = execution.identity;
+  source->request.vehicle_model = execution.vehicle_model;
+  source->request.initial_state << initial.lateral_m, initial.lag_m, initial.heading_offset_rad,
+    initial.velocity_mps, initial.progress_m;
+  source->request.current_steering_rad = initial.steering_rad;
+  source->request.current_response_steering_rad = initial.response_steering_rad;
+  source->request.current_lateral_velocity_mps = initial.lateral_velocity_mps;
+  source->request.current_yaw_rate_radps = initial.yaw_rate_radps;
+  source->request.states.resize(execution.control_stages.size() + 1U);
+  for (auto & state : source->request.states) state.upper(3) = ceiling;
+  plan->solver_source_snapshot = source;
+  request.plan = plan;
+}
+
+retained::Request source_horizon_request()
+{
+  auto request = applied_request();
+  request.applied_program_required = true;
+  request.input_application_profile = vehicle::InputApplicationProfile{"test-receiver", .25, .25, .02};
+  attach_velocity_source(request, 4);
+  // A rear peer will approach the current footprint after nominal braking.
+  // It remains behind the moving, fully certified vehicle in this free world.
+  const auto & current = request.publication_prefix->current;
+  const auto & model = request.plan->execution_artifact->vehicle_model;
+  const auto next = vehicle::advance(current, {-3, 0}, model, model.maximum_step_sec);
+  if (!next) throw std::runtime_error("invalid ranking fixture");
+  const double stop_time = current.forward_velocity_mps * model.maximum_step_sec /
+    (current.forward_velocity_mps - next->state.forward_velocity_mps);
+  const double future = request.control_origin_sec - request.obstacles.observed_sec + stop_time + .25;
+  request.obstacles.obstacles.push_back({"rear-approach",
+    {request.control_pose.x_m - .5, request.control_pose.y_m, .5 / future, 0, .01}});
+  return request;
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, SourceHorizonUsesDenseOriginalPacketsAndCarriesVelocityCeiling)
+{
+  auto request = source_horizon_request();
+  ASSERT_EQ(certified::validate(*request.plan), certified::RejectReason::None);
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof && result.proof->applied_program) << retained::to_string(result.reason);
+  ASSERT_TRUE(result.terminal_stop_source_horizon_program);
+  EXPECT_EQ(result.terminal_stop_reference_attempts, 1U);
+  EXPECT_EQ(result.proof->terminal_stop_forward_velocity_ceiling_mps, std::optional<double>{4});
+  const auto & programme = result.proof->applied_program->prepared().program;
+  ASSERT_GT(programme.commands.size(), 2U);
+  const auto & first = request.publication_prefix->proposed_packet;
+  const double period = request.plan->execution_artifact->publication_interval_sec;
+  for (std::size_t i = 0; i < programme.commands.size(); ++i) {
+    const auto & packet = programme.commands[i];
+    EXPECT_DOUBLE_EQ(packet.published_sec, first.published_sec + i * period);
+    EXPECT_DOUBLE_EQ(packet.wire_steering_rad, first.wire_steering_rad);
+    EXPECT_DOUBLE_EQ(packet.wire_acceleration_mps2,
+      i + 1 == programme.commands.size() ? -3 : first.wire_acceleration_mps2);
+  }
+  const double prefix = programme.commands.back().published_sec - first.published_sec;
+  // The normal proof keeps its authorized publisher interval. The separately
+  // certified terminal programme must cover every later command through rest.
+  EXPECT_LE(result.proof->continuation_trajectory.elapsed_time_sec.back(), period + 1e-12);
+  EXPECT_GT(result.proof->terminal_stop_trajectory.elapsed_time_sec.back(), prefix);
+  EXPECT_GT(result.proof->applied_program->tube().rest_sec, request.now_sec + prefix);
+  const auto & execution = *request.plan->execution_artifact;
+  double horizon = -result.proof->cursor.stage_elapsed_sec;
+  for (std::size_t i = result.proof->cursor.control_stage_index; i < execution.control_stages.size(); ++i)
+    horizon += execution.control_stages[i].duration_sec;
+  EXPECT_LE(prefix, horizon + 1e-12);
+  EXPECT_GT(prefix + period, horizon);
+  EXPECT_TRUE(production::build(result).authority);
+  auto changed = result;
+  changed.proof->applied_program.reset();
+  EXPECT_FALSE(production::build(changed).authority);
+  changed = result;
+  changed.proof->terminal_stop_trajectory.elapsed_time_sec.back() = prefix;
+  EXPECT_FALSE(production::build(changed).authority);
+  changed = result;
+  changed.proof->terminal_stop_forward_velocity_ceiling_mps.reset();
+  EXPECT_FALSE(production::build(changed).authority);
+  changed = result; changed.proof->terminal_stop_source_horizon_program = false;
+  EXPECT_FALSE(production::build(changed).authority);
+  auto other = request; attach_velocity_source(other, 5);
+  EXPECT_FALSE(result.proof->applied_program->matches(other));
+  const auto stop = stop_bundle::build_certified_terminal(request, result, 20002U);
+  ASSERT_TRUE(stop.plan);
+  ASSERT_TRUE(stop.plan->execution_artifact->applied_stop_program);
+  EXPECT_EQ(stop.plan->execution_artifact->applied_stop_program->forward_velocity_ceiling_mps,
+    std::optional<double>{4});
+  request.plan = stop.plan;
+  request.execution_clock = {retained::ExecutionClockKind::TimeAlignedCandidate, NAN, NAN};
+  const auto joined = retained::evaluate(request);
+  ASSERT_TRUE(joined.proof && joined.proof->applied_program) << retained::to_string(joined.reason);
+  EXPECT_TRUE(joined.terminal_stop_uses_solved_suffix);
+  EXPECT_EQ(joined.proof->terminal_stop_forward_velocity_ceiling_mps, std::optional<double>{4});
+  EXPECT_TRUE(production::build(joined).authority);
+  const auto successor = stop_bundle::build_certified_terminal(request, joined, 20003U);
+  ASSERT_TRUE(successor.plan);
+  EXPECT_EQ(successor.plan->execution_artifact->applied_stop_program->forward_velocity_ceiling_mps,
+    std::optional<double>{4});
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, SourceHorizonRejectsMissingMismatchedAndInvalidBounds)
+{
+  auto request = source_horizon_request();
+  EXPECT_EQ(retained::source_horizon_velocity_ceiling(request), std::optional<double>{4});
+  auto plan = std::make_shared<certified::CertifiedPlan>(*request.plan);
+  auto source = std::make_shared<multi_purpose_mpc_ros::mpcc_rate_resolved_shadow::Snapshot>(*plan->solver_source_snapshot);
+  plan->solver_source_snapshot = source; request.plan = plan;
+  source->request.states.back().upper(3) = 3;
+  EXPECT_EQ(retained::source_horizon_velocity_ceiling(request), std::optional<double>{3});
+  source->request.states.back().upper(3) = NAN;
+  EXPECT_FALSE(retained::source_horizon_velocity_ceiling(request));
+  source->request.states.back().upper(3) = -1;
+  EXPECT_FALSE(retained::source_horizon_velocity_ceiling(request));
+  source->request.states.back().upper(3) = 4;
+  source->identity.sequence++;
+  EXPECT_FALSE(retained::source_horizon_velocity_ceiling(request));
+  source->identity.sequence--;
+  source->request.current_steering_rad += .1;
+  EXPECT_FALSE(retained::source_horizon_velocity_ceiling(request));
+  plan->solver_source_snapshot.reset();
+  EXPECT_FALSE(retained::source_horizon_velocity_ceiling(request));
+  const auto legacy = retained::evaluate(request);
+  ASSERT_TRUE(legacy.proof);
+  EXPECT_FALSE(legacy.terminal_stop_source_horizon_program);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, SourceHorizonCeilingChecksTheWholeAppliedResponse)
+{
+  auto request = source_horizon_request();
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof && result.proof->applied_program);
+  auto nominal = *result.proof;
+  // A lower source ceiling still covers the nominal terminal trajectory but
+  // cannot cover the complete receipt-response population at publication.
+  double nominal_peak = request.control_origin_speed_mps;
+  for (double value : nominal.terminal_stop_trajectory.velocity_mps) nominal_peak = std::max(nominal_peak, value);
+  double applied_peak = 0;
+  for (const auto & sample : result.proof->applied_program->tube().source_to_rest)
+    applied_peak = std::max(applied_peak, sample.swept_body[3].upper);
+  ASSERT_GT(applied_peak, nominal_peak);
+  const double ceiling = (nominal_peak + applied_peak) / 2;
+  attach_velocity_source(request, ceiling);
+  nominal.plan = request.plan;
+  nominal.terminal_stop_forward_velocity_ceiling_mps = ceiling;
+  const auto rejected = applied::certify_terminal_stop(request, nominal, *request.input_application_profile);
+  EXPECT_FALSE(rejected.certificate);
+  EXPECT_EQ(rejected.reason, applied::Reason::StateBoundRejected);
+  EXPECT_EQ(rejected.prediction_reason, vehicle::AppliedInputRejectReason::ValidationRejected);
+  nominal.terminal_stop_forward_velocity_ceiling_mps = ceiling + 1;
+  EXPECT_EQ(applied::certify_terminal_stop(request, nominal, *request.input_application_profile).reason,
+    applied::Reason::InvalidNominalProof);
+}
+
+TEST(MpccRateResolvedRetainedRevalidation, AppliedProvenanceVersionsBindAndValidateVelocityCeiling)
+{
+  auto request = source_horizon_request();
+  const auto result = retained::evaluate(request);
+  ASSERT_TRUE(result.proof);
+  const auto stop = stop_bundle::build_certified_terminal(request, result, 20004U);
+  ASSERT_TRUE(stop.plan);
+  const auto & execution = *stop.plan->execution_artifact;
+  const auto & provenance = *execution.applied_stop_program;
+  YAML::Emitter encoded; encoded.SetDoublePrecision(17);
+  encoded << vehicle::encode_applied_program_provenance(provenance);
+  auto node = YAML::Load(encoded.c_str());
+  EXPECT_EQ(node["schema"].as<std::string>(), "applied-stop-provenance-v2");
+  const auto decoded = vehicle::decode_applied_program_provenance(node, execution.vehicle_model);
+  ASSERT_TRUE(decoded);
+  const auto fingerprint = vehicle::applied_program_provenance_fingerprint(provenance, execution.vehicle_model);
+  EXPECT_EQ(vehicle::applied_program_provenance_fingerprint(*decoded, execution.vehicle_model), fingerprint);
+  node["forward_velocity_ceiling_mps"] = -1;
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
+  node.remove("forward_velocity_ceiling_mps");
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
+  node["forward_velocity_ceiling_mps"] = 4;
+  node["schema"] = "applied-stop-provenance-v1";
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
+  node.remove("forward_velocity_ceiling_mps");
+  const auto legacy = vehicle::decode_applied_program_provenance(node, execution.vehicle_model);
+  ASSERT_TRUE(legacy); EXPECT_FALSE(legacy->forward_velocity_ceiling_mps);
+  EXPECT_NE(vehicle::applied_program_provenance_fingerprint(*legacy, execution.vehicle_model), fingerprint);
+  node["schema"] = "applied-stop-provenance-v3";
+  EXPECT_FALSE(vehicle::decode_applied_program_provenance(node, execution.vehicle_model));
 }
 
 TEST(MpccRateResolvedRetainedRevalidation, CommonTerminalCandidatePreservesFirstPacketAndCompleteStop)

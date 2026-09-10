@@ -118,7 +118,10 @@ decode_input_program(const YAML::Node &node) {
 inline YAML::Node
 encode_applied_program_provenance(const AppliedProgramProvenance &value) {
   YAML::Node node;
-  node["schema"] = "applied-stop-provenance-v1";
+  node["schema"] = value.forward_velocity_ceiling_mps ?
+    "applied-stop-provenance-v2" : "applied-stop-provenance-v1";
+  if (value.forward_velocity_ceiling_mps)
+    node["forward_velocity_ceiling_mps"] = *value.forward_velocity_ceiling_mps;
   node["nominal_solution_id"] = value.nominal_solution_id;
   node["nominal_problem_fingerprint"] = value.nominal_problem_fingerprint;
   node["proved_rest_sec"] = value.proved_rest_sec;
@@ -130,8 +133,11 @@ encode_applied_program_provenance(const AppliedProgramProvenance &value) {
 inline std::optional<AppliedProgramProvenance>
 decode_applied_program_provenance(const YAML::Node &node,
                                   const Parameters &parameters) {
-  if (node["schema"].as<std::string>() != "applied-stop-provenance-v1")
+  const auto schema = node["schema"].as<std::string>();
+  if (schema != "applied-stop-provenance-v1" && schema != "applied-stop-provenance-v2")
     return std::nullopt;
+  if ((schema == "applied-stop-provenance-v2") !=
+      static_cast<bool>(node["forward_velocity_ceiling_mps"])) return std::nullopt;
   const auto observation = decode_observation_provenance(node["observation"]);
   const auto profile = decode_input_application_profile(node["profile"]);
   const auto program = decode_input_program(node["program"]);
@@ -143,7 +149,9 @@ decode_applied_program_provenance(const YAML::Node &node,
       *observation,
       *profile,
       *program,
-      node["proved_rest_sec"].as<double>()};
+      node["proved_rest_sec"].as<double>(), std::nullopt};
+  if (schema == "applied-stop-provenance-v2")
+    value.forward_velocity_ceiling_mps = node["forward_velocity_ceiling_mps"].as<double>();
   return applied_program_provenance_fingerprint(value, parameters) != 0
              ? std::optional{value}
              : std::nullopt;

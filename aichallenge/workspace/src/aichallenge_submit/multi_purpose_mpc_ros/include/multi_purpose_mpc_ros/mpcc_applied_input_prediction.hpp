@@ -43,6 +43,9 @@ struct AppliedProgramProvenance {
   InputApplicationProfile profile;
   PublishedInputProgram program;
   double proved_rest_sec{};
+  // Required throughout a source-horizon programme and every materialized
+  // successor. Absence preserves legacy immediate/solved Stop provenance.
+  std::optional<double> forward_velocity_ceiling_mps;
 };
 
 std::uint64_t applied_program_provenance_fingerprint(
